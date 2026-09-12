@@ -295,9 +295,15 @@ mod tests {
             }
             .encode();
             assert_eq!(data.len(), 37);
-            assert_eq!(&data[..32], Sha256::digest(b"example.com").as_slice());
-            assert_eq!(data[32], if user_verified { 0x1d } else { 0x19 });
-            assert_eq!(&data[33..], &[1, 2, 3, 4]);
+            assert_eq!(
+                data.get(..32),
+                Some(Sha256::digest(b"example.com").as_slice())
+            );
+            assert_eq!(
+                data.get(32).copied(),
+                Some(if user_verified { 0x1d } else { 0x19 })
+            );
+            assert_eq!(data.get(33..), Some([1, 2, 3, 4].as_slice()));
             let data = RegistrationAuthenticatorData {
                 rp_id: "example.com",
                 credential_id: &[7, 8],
@@ -306,9 +312,12 @@ mod tests {
             }
             .encode()?;
             assert_eq!(data.len(), 59);
-            assert_eq!(data[32], if user_verified { 0x5d } else { 0x59 });
-            assert_eq!(&data[33..53], &[0; 20]);
-            assert_eq!(&data[53..], &[0, 2, 7, 8, 9, 10]);
+            assert_eq!(
+                data.get(32).copied(),
+                Some(if user_verified { 0x5d } else { 0x59 })
+            );
+            assert_eq!(data.get(33..53), Some([0; 20].as_slice()));
+            assert_eq!(data.get(53..), Some([0, 2, 7, 8, 9, 10].as_slice()));
         }
         Ok(())
     }

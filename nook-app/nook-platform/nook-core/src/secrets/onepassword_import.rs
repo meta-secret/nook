@@ -198,7 +198,7 @@ pub(super) mod tests {
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 3);
 
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login")
         };
         assert_eq!(login.website_url, "https://github.com/login");
@@ -209,14 +209,17 @@ pub(super) mod tests {
             "Recovery codes elsewhere\n\n## 1Password\n- format: 1PUX\n- title: GitHub\n- vault: Personal\n- tags: work, code\n- url.gist: https://gist.github.com\n- Security.PIN: 1234\n- Security.TOTP: otpauth://secret"
         );
 
-        let SecretValue::Login(password) = &plan.items[1] else {
+        let Some(SecretValue::Login(password)) = plan.items.get(1) else {
             panic!("expected password item as login")
         };
         assert_eq!(password.website_url, "Router");
         assert_eq!(password.password, "router-secret");
 
         assert_eq!(
-            plan.items[2],
+            *plan
+                .items
+                .get(2)
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Private note".to_owned(),
                 note: "hello\n\n## 1Password\n- format: 1PUX\n- vault: Personal\n- state: archived"
@@ -256,7 +259,7 @@ pub(super) mod tests {
         assert_eq!(usize::from(plan.source_count), 4);
         assert_eq!(usize::from(plan.skipped_unsupported), 2);
         assert_eq!(plan.items.len(), 2);
-        let SecretValue::CreditCard(card) = &plan.items[1] else {
+        let Some(SecretValue::CreditCard(card)) = plan.items.get(1) else {
             panic!("expected credit card");
         };
         assert_eq!(card.number, "4111111111111111");

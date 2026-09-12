@@ -459,18 +459,18 @@ impl SecretPage {
         let anchors: Vec<(usize, String)> = self
             .records
             .iter()
+            .zip(&intrinsic)
             .enumerate()
-            .filter(|(_, item)| item.is_site_anchor())
-            .map(|(index, _)| (index, intrinsic[index].clone()))
+            .filter(|(_, (item, _))| item.is_site_anchor())
+            .map(|(index, (_, key))| (index, key.clone()))
             .filter(|(_, key)| key.contains('.') && key != "No Website")
             .collect();
 
         Ok(self
             .records
             .iter()
-            .enumerate()
-            .map(|(index, item)| {
-                let key = &intrinsic[index];
+            .zip(&intrinsic)
+            .map(|(item, key)| {
                 let SecretListItemData::Authenticator { account, .. } = &item.data else {
                     return key.clone();
                 };
@@ -490,9 +490,9 @@ impl SecretPage {
                     })
                     .map(|(anchor_index, host)| {
                         let account_match = !account.is_empty()
-                            && self.records[*anchor_index]
-                                .site_anchor_account()
-                                .eq_ignore_ascii_case(account);
+                            && self.records.get(*anchor_index).is_some_and(|anchor| {
+                                anchor.site_anchor_account().eq_ignore_ascii_case(account)
+                            });
                         (account_match, host)
                     })
                     .min_by(|left, right| {

@@ -452,8 +452,11 @@ mod tests {
             ProviderVaultDecisionReason::LinkedIdentityUnavailable
         );
         assert_eq!(
-            unavailable.identities[1].eligibility,
-            ProviderVaultIdentityEligibility::NotLinked
+            unavailable
+                .identities
+                .get(1)
+                .map(|identity| identity.eligibility),
+            Some(ProviderVaultIdentityEligibility::NotLinked)
         );
 
         let unlinked = CurrentVaultReplaceability::Replaceable

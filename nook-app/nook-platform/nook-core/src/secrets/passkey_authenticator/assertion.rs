@@ -270,14 +270,23 @@ mod tests {
         ));
         assert!(ptr::eq(
             ptr::from_ref(checked.credential),
-            ptr::from_ref(&credentials[1])
+            ptr::from_ref(
+                credentials
+                    .get(1)
+                    .unwrap_or_else(|| panic!("credential fixture must contain selected entry")),
+            )
         ));
         assert_eq!(u32::from(checked.next_count), 10);
         drop(checked);
         assert_eq!(credentials, before);
         let signed = request.prepare(&credentials)?.sign()?;
         assert_eq!(u32::from(signed.updated_credential.signature_count), 10);
-        assert_eq!(signed.credential_id, credentials[1].credential_id);
+        assert_eq!(
+            Some(&signed.credential_id),
+            credentials
+                .get(1)
+                .map(|credential| &credential.credential_id)
+        );
         assert_eq!(credentials, before);
         Ok(())
     }

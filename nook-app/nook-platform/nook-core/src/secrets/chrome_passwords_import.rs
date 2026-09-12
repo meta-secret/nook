@@ -289,7 +289,7 @@ mod tests {
     fn alias_preference_is_independent_of_header_position() -> anyhow::Result<()> {
         let csv = "website,website url,login,user name,secret\nsecond,first,second-user,first-user,password\n";
         let plan = ChromePasswordsCsvInput::new(csv).plan()?;
-        assert!(matches!(&plan.items[0], SecretValue::Login(login)
+        assert!(matches!(plan.items.first(), Some(SecretValue::Login(login))
             if login.website_url == "first" && login.username == "first-user"));
         Ok(())
     }
@@ -391,7 +391,7 @@ mod tests {
         let csv = "url,username,password\nhttps://example.com,alice,\" secret \"\n";
 
         let plan = ChromePasswordsCsvInput::new(csv).plan()?;
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login");
         };
 
@@ -412,7 +412,7 @@ mod tests {
 
         assert_eq!(usize::from(plan.source_count), 2);
         assert_eq!(usize::from(plan.skipped_unsupported), 1);
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login");
         };
         assert_eq!(login.password, "   ");

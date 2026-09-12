@@ -752,13 +752,17 @@ mod tests {
         });
         assert_eq!(change, LocalProviderRowChange::Inserted);
         assert_eq!(next.providers.len(), 2);
-        assert_eq!(next.providers[0].provider_type, StorageProviderType::Local);
-        assert_eq!(next.providers[0].label, "This device");
+        let first = next
+            .providers
+            .first()
+            .unwrap_or_else(|| panic!("catalog fixture must contain local provider"));
+        assert_eq!(first.provider_type, StorageProviderType::Local);
+        assert_eq!(first.label, "This device");
 
         let existing = AuthProvidersSnapshotData {
             providers: vec![StorageProviderData {
                 store_id: ProviderVaultScope::StoreId("vault-1".to_owned()),
-                ..next.providers[0].clone()
+                ..first.clone()
             }],
             active_vault_store_id: ActiveVaultScope::StoreId("vault-1".to_owned()),
         };
@@ -798,10 +802,10 @@ mod tests {
             );
             if change == LocalProviderRowChange::Inserted {
                 assert_eq!(
-                    next.providers[0].store_id,
-                    ProviderVaultScope::StoreId(("vault-2").to_owned())
+                    next.providers.first().map(|provider| &provider.store_id),
+                    Some(&ProviderVaultScope::StoreId(("vault-2").to_owned()))
                 );
-                assert_eq!(next.providers[1], existing.providers[0]);
+                assert_eq!(next.providers.get(1), existing.providers.first());
             } else {
                 assert_eq!(next, existing);
             }

@@ -457,8 +457,16 @@ mod tests {
             .select(),
             ProviderSelection::Selected("github".into())
         );
-        assert!(!(providers[0]).supports_replication(ReplicationType::Shared));
-        assert!((providers[1]).supports_replication(ReplicationType::Shared));
+        assert!(
+            providers
+                .first()
+                .is_some_and(|provider| !provider.supports_replication(ReplicationType::Shared))
+        );
+        assert!(
+            providers
+                .get(1)
+                .is_some_and(|provider| provider.supports_replication(ReplicationType::Shared))
+        );
     }
 
     #[test]
@@ -699,8 +707,14 @@ mod tests {
             .select(),
             ProviderSelection::Unavailable
         );
-        assert_eq!(providers[0].id, "first");
-        assert_eq!(providers[1].id, "second");
+        assert_eq!(
+            providers.first().map(|provider| provider.id.as_str()),
+            Some("first")
+        );
+        assert_eq!(
+            providers.get(1).map(|provider| provider.id.as_str()),
+            Some("second")
+        );
     }
     impl StagedStorageConnection {
         fn ready(self) -> anyhow::Result<StorageConnectArgs> {

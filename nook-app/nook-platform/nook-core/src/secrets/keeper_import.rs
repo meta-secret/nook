@@ -172,7 +172,10 @@ mod tests {
         assert_eq!(usize::from(plan.source_count), 2);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a login")),
             SecretValue::Login(LoginSecret {
                 website_url: "https://github.com/login".to_owned(),
                 username: "alice".to_owned(),
@@ -186,7 +189,10 @@ mod tests {
             })
         );
         assert_eq!(
-            plan.items[1],
+            *plan
+                .items
+                .get(1)
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Recovery".to_owned(),
                 note: "# Offline note\n\n## Keeper\n- folder: Personal\n- shared folder: Team"
@@ -210,7 +216,10 @@ mod tests {
         assert_eq!(usize::from(plan.skipped_unsupported), 1);
         assert_eq!(plan.items.len(), 2);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a login")),
             SecretValue::Login(LoginSecret {
                 website_url: "Router".to_owned(),
                 username: "admin".to_owned(),
@@ -224,7 +233,10 @@ mod tests {
             })
         );
         assert_eq!(
-            plan.items[1],
+            *plan
+                .items
+                .get(1)
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Wi-Fi memo".to_owned(),
                 note: "Guest network details\n\n## Keeper\n- field.$type: general".to_owned(),

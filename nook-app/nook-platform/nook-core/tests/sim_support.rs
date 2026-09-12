@@ -109,10 +109,14 @@ impl SimWorld {
     }
 
     pub fn genesis(&self) -> &EventLogDevice {
-        &self.devices[0]
+        self.devices
+            .first()
+            .unwrap_or_else(|| panic!("simulation world must contain genesis"))
     }
     pub fn device(&self, index: usize) -> &EventLogDevice {
-        &self.devices[index]
+        self.devices
+            .get(index)
+            .unwrap_or_else(|| panic!("simulation device index must exist"))
     }
 
     pub fn append(
@@ -175,7 +179,11 @@ impl SimWorld {
     }
 
     pub fn roster_view(&self, index: usize) -> VaultResult<RosterView> {
-        roster_view(&self.devices[index])
+        roster_view(
+            self.devices
+                .get(index)
+                .unwrap_or_else(|| panic!("simulation device index must exist")),
+        )
     }
 }
 
@@ -242,7 +250,10 @@ impl JoinApproval<Pending> {
         // age-armored on parse, so produce syntactically valid ciphertexts by
         // wrapping the keys with the approver's own vault crypto.
         let prepared: VaultResult<_> = (|| {
-            let approver = &world.devices[approver_index];
+            let approver = world
+                .devices
+                .get(approver_index)
+                .unwrap_or_else(|| panic!("approver index must exist"));
             Ok((
                 approver.crypto.encrypt_value(&approver.secrets_key)?,
                 approver.crypto.encrypt_value(&approver.members_key)?,
@@ -367,7 +378,11 @@ impl Timeline {
     /// Run the steps against `world` in the given index order.
     pub fn run(&self, mut world: SimWorld, order: &[usize]) -> Result<SimWorld, SimRejection> {
         for &index in order {
-            world = (self.steps[index].run)(world)?;
+            let step = self
+                .steps
+                .get(index)
+                .unwrap_or_else(|| panic!("simulation step index must exist"));
+            world = (step.run)(world)?;
         }
         Ok(world)
     }
@@ -390,7 +405,14 @@ impl Timeline {
                 .run(make_world()?, &order)
                 .map_err(SimRejection::into_cause)?;
             if let Err(reason) = invariant(&world) {
-                let names: Vec<&str> = order.iter().map(|&i| self.steps[i].name.as_str()).collect();
+                let names: Vec<&str> = order
+                    .iter()
+                    .map(|&index| {
+                        self.steps
+                            .get(index)
+                            .map_or("<missing-step>", |step| step.name.as_str())
+                    })
+                    .collect();
                 panic!(
                     "invariant failed after step order [{}]: {reason}",
                     names.join(" -> ")
@@ -414,13 +436,13 @@ fn permutations(items: &[usize]) -> Vec<Vec<usize>> {
         return vec![items.to_vec()];
     }
     let mut out = Vec::new();
-    for i in 0..items.len() {
+    for (i, item) in items.iter().copied().enumerate() {
         let mut rest: Vec<usize> = Vec::with_capacity(items.len() - 1);
-        rest.extend_from_slice(&items[..i]);
-        rest.extend_from_slice(&items[i + 1..]);
+        rest.extend(items.iter().take(i).copied());
+        rest.extend(items.iter().skip(i + 1).copied());
         for mut tail in permutations(&rest) {
             let mut perm = Vec::with_capacity(items.len());
-            perm.push(items[i]);
+            perm.push(item);
             perm.append(&mut tail);
             out.push(perm);
         }

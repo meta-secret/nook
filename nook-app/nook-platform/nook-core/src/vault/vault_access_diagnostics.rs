@@ -525,8 +525,8 @@ mod tests {
             VaultKeyAccessDiagnosticStatus::EnrolledDecryptable
         );
         assert_eq!(
-            report.secrets[0].status,
-            VaultRecordDecryptabilityStatus::Decryptable
+            report.secrets.first().map(|secret| secret.status),
+            Some(VaultRecordDecryptabilityStatus::Decryptable)
         );
         Ok(())
     }
@@ -678,8 +678,8 @@ mod tests {
         .diagnose()?;
 
         assert_eq!(
-            report.secrets[0].status,
-            VaultRecordDecryptabilityStatus::CorruptCiphertext
+            report.secrets.first().map(|secret| secret.status),
+            Some(VaultRecordDecryptabilityStatus::CorruptCiphertext)
         );
         Ok(())
     }
@@ -752,10 +752,16 @@ mod tests {
 
         assert_eq!(report.events.len(), 1);
         assert_eq!(
-            report.events[0].epoch_status,
-            VaultEpochDiagnosticStatus::CurrentEpoch
+            report.events.first().map(|event| event.epoch_status),
+            Some(VaultEpochDiagnosticStatus::CurrentEpoch)
         );
-        assert_eq!(usize::from(report.events[0].encrypted_payloads), 1);
+        assert_eq!(
+            report
+                .events
+                .first()
+                .map(|event| usize::from(event.encrypted_payloads)),
+            Some(1)
+        );
         Ok(())
     }
 
@@ -846,8 +852,8 @@ mod tests {
         .diagnose()?;
 
         assert_eq!(
-            report.events[0].epoch_status,
-            VaultEpochDiagnosticStatus::UnsupportedEpoch
+            report.events.first().map(|event| event.epoch_status),
+            Some(VaultEpochDiagnosticStatus::UnsupportedEpoch)
         );
         Ok(())
     }

@@ -73,7 +73,9 @@ impl AuthProvidersSnapshotData {
         if snapshot.providers.len() != 1 {
             return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
         }
-        let provider = &snapshot.providers[0];
+        let Some(provider) = snapshot.providers.first() else {
+            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
+        };
         if matches!(
             provider.provider_type,
             StorageProviderType::Local | StorageProviderType::LocalFolder
@@ -122,13 +124,25 @@ mod tests {
     fn provider_admission_enforces_count_type_and_exact_store() -> anyhow::Result<()> {
         let fixture = OnboardingFixture::new()?;
         let mut duplicate = fixture.snapshot.clone();
-        duplicate.providers.push(duplicate.providers[0].clone());
+        let Some(provider) = duplicate.providers.first().cloned() else {
+            anyhow::bail!("onboarding fixture must contain one provider");
+        };
+        duplicate.providers.push(provider);
         let mut local = fixture.snapshot.clone();
-        local.providers[0].provider_type = StorageProviderType::Local;
+        let Some(local_provider) = local.providers.first_mut() else {
+            anyhow::bail!("onboarding fixture must contain one provider");
+        };
+        local_provider.provider_type = StorageProviderType::Local;
         let mut folder = fixture.snapshot.clone();
-        folder.providers[0].provider_type = StorageProviderType::LocalFolder;
+        let Some(folder_provider) = folder.providers.first_mut() else {
+            anyhow::bail!("onboarding fixture must contain one provider");
+        };
+        folder_provider.provider_type = StorageProviderType::LocalFolder;
         let mut wrong_store = fixture.snapshot.clone();
-        wrong_store.providers[0].store_id =
+        let Some(wrong_store_provider) = wrong_store.providers.first_mut() else {
+            anyhow::bail!("onboarding fixture must contain one provider");
+        };
+        wrong_store_provider.store_id =
             ProviderVaultScope::StoreId(format!(" {} ", fixture.delivery.store_id));
         for snapshot in [
             AuthProvidersSnapshotData::default(),

@@ -472,7 +472,13 @@ mod tests {
             members_key: &members_key,
         })?;
         assert_eq!(roster.len(), 1);
-        assert_eq!(roster[0].device_id, *identity.device_id());
+        assert_eq!(
+            roster
+                .first()
+                .unwrap_or_else(|| panic!("roster fixture must contain one member"))
+                .device_id,
+            *identity.device_id()
+        );
 
         let operation = VaultOperation::MemberRenamed {
             device_id: identity.device_id().clone(),

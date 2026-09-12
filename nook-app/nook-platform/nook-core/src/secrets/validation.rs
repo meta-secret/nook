@@ -101,7 +101,10 @@ mod tests {
             query: "W9Y",
         });
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].id.as_str(), "secret_SMypl8K0w9Y");
+        assert_eq!(
+            filtered.first().map(|item| item.id.as_str()),
+            Some("secret_SMypl8K0w9Y")
+        );
         Ok(())
     }
 
@@ -137,7 +140,10 @@ mod tests {
             query: "K0w9Y",
         });
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].id.as_str(), "secret_SMypl8K0w9Y");
+        assert_eq!(
+            filtered.first().map(|item| item.id.as_str()),
+            Some("secret_SMypl8K0w9Y")
+        );
         Ok(())
     }
 

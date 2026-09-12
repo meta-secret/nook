@@ -33,7 +33,7 @@ fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> any
         },
     );
     assert!(!architecture.can_create_secret_with_records(&[]));
-    assert!(!architecture.can_create_secret_with_records(&shares[..1]));
+    assert!(!architecture.can_create_secret_with_records(shares.get(..1).unwrap_or_default()));
     assert!(architecture.can_create_secret_with_records(&shares));
 
     let store_id = StoreId::generate()?;

@@ -202,7 +202,7 @@ mod tests {
         .plan()?;
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login")
         };
         assert_eq!(login.website_url, "https://github.com/login");
@@ -231,13 +231,16 @@ mod tests {
         assert_eq!(usize::from(plan.skipped_unsupported), 1);
         assert_eq!(plan.items.len(), 2);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Private note".to_owned(),
                 note: "hello".to_owned(),
             })
         );
-        let SecretValue::CreditCard(card) = &plan.items[1] else {
+        let Some(SecretValue::CreditCard(card)) = plan.items.get(1) else {
             panic!("expected credit card");
         };
         assert_eq!(card.title, "Card");
@@ -286,7 +289,7 @@ mod tests {
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 2);
 
-        let SecretValue::Login(first) = &plan.items[0] else {
+        let Some(SecretValue::Login(first)) = plan.items.first() else {
             panic!("expected first login")
         };
         assert_eq!(first.website_url, "https://my.1password.com/signin");
@@ -297,7 +300,7 @@ mod tests {
             "bla bla bla\n\n## Bitwarden\n- name: 1password.com"
         );
 
-        let SecretValue::Login(second) = &plan.items[1] else {
+        let Some(SecretValue::Login(second)) = plan.items.get(1) else {
             panic!("expected second login")
         };
         assert_eq!(second.website_url, "http://rabbitmq.9dev.io:15672/");
@@ -310,7 +313,7 @@ mod tests {
     #[test]
     fn accepts_null_optional_login_fields() -> anyhow::Result<()> {
         let plan = BitwardenExport { json: r#"{"items":[{"type":1,"name":"Example","notes":null,"login":{"username":null,"password":"pw","totp":null,"uris":[{"uri":null}]}}]}"#, password: BitwardenExportAccess::WithoutPassword }.plan()?;
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login")
         };
         assert_eq!(login.website_url, "Example");

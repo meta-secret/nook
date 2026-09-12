@@ -281,7 +281,12 @@ mod tests {
         let payloads = SecretEpochReencryption::new(&[record], &old_key, &new_key).reencrypt()?;
         let new_crypto = VaultCrypto::new(&new_key)?;
         let plaintext = new_crypto.decrypt_value(&AgeArmoredCiphertext::from_trusted_armored(
-            payloads[0].ciphertext.as_str().to_owned(),
+            payloads
+                .first()
+                .unwrap_or_else(|| panic!("reencryption fixture must contain one payload"))
+                .ciphertext
+                .as_str()
+                .to_owned(),
         ))?;
         assert!(plaintext.as_str().contains("hunter2"));
         Ok(())

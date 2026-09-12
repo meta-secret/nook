@@ -536,7 +536,11 @@ mod tests {
         snapshot = snapshot
             .seal_credentials(&identity)
             .map_err(super::ProviderCredentialRejection::into_cause)?;
-        let StoredGithubPat::Token(stored) = &snapshot.providers[0].github_pat else {
+        let Some(StorageProviderData {
+            github_pat: StoredGithubPat::Token(stored),
+            ..
+        }) = snapshot.providers.first()
+        else {
             return Err(io::Error::other("sealed GitHub PAT must be present").into());
         };
         assert!(ProviderCredentialField::has_armor_marker(stored));
@@ -547,8 +551,11 @@ mod tests {
             .open_credentials(&identity)
             .map_err(super::ProviderCredentialRejection::into_cause)?;
         assert_eq!(
-            opened.providers[0].github_pat,
-            StoredGithubPat::Token(pat.to_owned())
+            opened
+                .providers
+                .first()
+                .map(|provider| &provider.github_pat),
+            Some(&StoredGithubPat::Token(pat.to_owned()))
         );
         Ok(())
     }
@@ -563,7 +570,10 @@ mod tests {
         snapshot = snapshot
             .seal_credentials(&identity)
             .map_err(super::ProviderCredentialRejection::into_cause)?;
-        let StoredOAuthFileConfiguration::Configured(oauth) = &snapshot.providers[0].oauth_file
+        let Some(StorageProviderData {
+            oauth_file: StoredOAuthFileConfiguration::Configured(oauth),
+            ..
+        }) = snapshot.providers.first()
         else {
             return Err((io::Error::other("test as_ref value must exist")).into());
         };
@@ -582,8 +592,10 @@ mod tests {
         opened = opened
             .open_credentials(&identity)
             .map_err(super::ProviderCredentialRejection::into_cause)?;
-        let StoredOAuthFileConfiguration::Configured(opened_oauth) =
-            &opened.providers[0].oauth_file
+        let Some(StorageProviderData {
+            oauth_file: StoredOAuthFileConfiguration::Configured(opened_oauth),
+            ..
+        }) = opened.providers.first()
         else {
             return Err((io::Error::other("test as_ref value must exist")).into());
         };
@@ -614,11 +626,20 @@ mod tests {
         snapshot = snapshot
             .seal_credentials(&identity)
             .map_err(super::ProviderCredentialRejection::into_cause)?;
-        let sealed_once = snapshot.providers[0].github_pat.clone();
+        let sealed_once = snapshot
+            .providers
+            .first()
+            .map(|provider| provider.github_pat.clone());
         snapshot = snapshot
             .seal_credentials(&identity)
             .map_err(super::ProviderCredentialRejection::into_cause)?;
-        assert_eq!(snapshot.providers[0].github_pat, sealed_once);
+        assert_eq!(
+            snapshot
+                .providers
+                .first()
+                .map(|provider| provider.github_pat.clone()),
+            sealed_once
+        );
         Ok(())
     }
 
@@ -644,7 +665,10 @@ mod tests {
             access: "ya29.valid-access",
             refresh: "invalid plaintext refresh",
         });
-        let oauth = (match &mut snapshot.providers[0].oauth_file {
+        let Some(provider) = snapshot.providers.first_mut() else {
+            return Err(io::Error::other("OAuth fixture provider must exist").into());
+        };
+        let oauth = (match &mut provider.oauth_file {
             StoredOAuthFileConfiguration::Configured(config) => Ok(config),
             StoredOAuthFileConfiguration::NotApplicable => {
                 Err(io::Error::other("test as_mut value must exist"))
@@ -672,7 +696,11 @@ mod tests {
         snapshot = snapshot
             .seal_credentials_for(&extension.public_key())
             .map_err(super::ProviderCredentialRejection::into_cause)?;
-        let StoredGithubPat::Token(stored) = &snapshot.providers[0].github_pat else {
+        let Some(StorageProviderData {
+            github_pat: StoredGithubPat::Token(stored),
+            ..
+        }) = snapshot.providers.first()
+        else {
             return Err(io::Error::other("sealed GitHub PAT must be present").into());
         };
         assert!(ProviderCredentialField::has_armor_marker(stored));
@@ -683,8 +711,11 @@ mod tests {
             .open_credentials(&extension)
             .map_err(super::ProviderCredentialRejection::into_cause)?;
         assert_eq!(
-            opened.providers[0].github_pat,
-            StoredGithubPat::Token(pat.to_owned())
+            opened
+                .providers
+                .first()
+                .map(|provider| &provider.github_pat),
+            Some(&StoredGithubPat::Token(pat.to_owned()))
         );
         Ok(())
     }
@@ -709,7 +740,10 @@ mod tests {
         snapshot.authenticate_credentials_for(&recipient)?;
         ExpectedCredentialFailure::AnyError
             .verify(snapshot.authenticate_credentials_for(&other))?;
-        snapshot.providers[0].label = "Substituted".to_owned();
+        let Some(provider) = snapshot.providers.first_mut() else {
+            return Err(io::Error::other("pairing fixture provider must exist").into());
+        };
+        provider.label = "Substituted".to_owned();
         assert_ne!(snapshot.companion_pairing_manifest_digest()?, digest);
         Ok(())
     }
@@ -796,7 +830,10 @@ mod tests {
         snapshot = snapshot
             .seal_credentials(&identity)
             .map_err(super::ProviderCredentialRejection::into_cause)?;
-        let oauth = (match &mut snapshot.providers[0].oauth_file {
+        let Some(provider) = snapshot.providers.first_mut() else {
+            return Err(io::Error::other("OAuth fixture provider must exist").into());
+        };
+        let oauth = (match &mut provider.oauth_file {
             StoredOAuthFileConfiguration::Configured(config) => Ok(config),
             StoredOAuthFileConfiguration::NotApplicable => {
                 Err(io::Error::other("OAuth fixture is required"))

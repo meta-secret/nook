@@ -196,7 +196,8 @@ impl PasskeyAccessProfile {
 
     fn short_identifier(prefix: &str, bytes: &[u8]) -> String {
         let digest = Sha256::digest(bytes);
-        format!("{prefix}_{}", hex::encode(&digest[..8]))
+        let short = digest.into_iter().take(8).collect::<Vec<_>>();
+        format!("{prefix}_{}", hex::encode(short))
     }
 }
 

@@ -387,7 +387,7 @@ mod tests {
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(usize::from(plan.skipped_unsupported), 1);
         assert_eq!(plan.items.len(), 1);
-        assert!(matches!(&plan.items[0], SecretValue::Login(login)
+        assert!(matches!(plan.items.first(), Some(SecretValue::Login(login))
             if login.notes == "note\n\n## KeePassXC\n- totp: otpauth://totp/account?secret=!"));
         Ok(())
     }
@@ -402,14 +402,17 @@ mod tests {
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 2);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Offline".to_owned(),
                 note: "note".to_owned(),
             })
         );
         assert!(
-            matches!(&plan.items[1], SecretValue::Authenticator(auth) if auth.account == "alice")
+            matches!(plan.items.get(1), Some(SecretValue::Authenticator(auth)) if auth.account == "alice")
         );
         Ok(())
     }
@@ -457,7 +460,10 @@ mod tests {
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 3);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a login")),
             SecretValue::Login(LoginSecret {
                 website_url: "https://github.com/login".to_owned(),
                 username: "alice".to_owned(),
@@ -470,12 +476,15 @@ mod tests {
             })
         );
         assert!(matches!(
-            &plan.items[1],
-            SecretValue::Authenticator(auth)
+            plan.items.get(1),
+            Some(SecretValue::Authenticator(auth))
                 if auth.issuer == "GitHub" && auth.account == "alice"
         ));
         assert_eq!(
-            plan.items[2],
+            *plan
+                .items
+                .get(2)
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Recovery".to_owned(),
                 note: "# Offline note\n\nKeep offline\n\n## KeePassXC\n- group: Root/Personal"
@@ -497,7 +506,10 @@ mod tests {
 
         assert_eq!(plan.items.len(), 1);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a login")),
             SecretValue::Login(LoginSecret {
                 website_url: "https://example.com".to_owned(),
                 username: "alice".to_owned(),

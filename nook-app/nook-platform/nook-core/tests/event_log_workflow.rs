@@ -189,15 +189,18 @@ fn applied_pending_and_duplicate_appends_keep_publication_behavior() -> VaultRes
     );
     let pending_outbox = pending.session.store.pending_outbox("github");
     assert_eq!(pending_outbox.len(), 1);
-    assert_eq!(pending_outbox[0].0, event_id);
+    let pending_event = pending_outbox
+        .first()
+        .unwrap_or_else(|| panic!("pending outbox event must exist"));
+    assert_eq!(pending_event.0, event_id);
     assert_eq!(
-        LocalEventBytes::Stored(pending_outbox[0].1.clone()),
+        LocalEventBytes::Stored(pending_event.1.clone()),
         applied.session.store.get_bytes(&event_id)
     );
 
     let before_events = applied.remote_events();
     let before_outbox = applied.session.store.pending_outbox("github");
-    assert!(before_outbox.contains(&pending_outbox[0]));
+    assert!(before_outbox.contains(pending_event));
     applied.session.heads = genesis_heads;
     assert_eq!(
         match applied.append_signed(vec![operation]) {
@@ -304,7 +307,13 @@ fn child_event_with_genesis(
     secret_id: &str,
     ciphertext: &str,
 ) -> VaultResult<(EventId, Vec<u8>, EventId, Vec<u8>)> {
-    let genesis_head = EventId::parse(&device.session.heads[0])?;
+    let genesis_head = EventId::parse(
+        device
+            .session
+            .heads
+            .first()
+            .unwrap_or_else(|| panic!("genesis head must exist")),
+    )?;
     let genesis_bytes = match device.session.store.get_bytes(&genesis_head) {
         LocalEventBytes::Stored(bytes) => bytes.into(),
         LocalEventBytes::UnknownEvent => return Err(EventError::MissingGenesisBytes.into()),
@@ -656,7 +665,12 @@ fn event_union_is_associative_commutative_and_idempotent_across_orders() -> Vaul
         }
     }?;
 
-    let shared_head = root.session.heads[0].clone();
+    let shared_head = root
+        .session
+        .heads
+        .first()
+        .cloned()
+        .unwrap_or_else(|| panic!("genesis head must exist"));
     a.session.heads = vec![shared_head.clone()];
     match a.append_secret("secret_unionaaaa", "from-a") {
         Ok(outcome) => {
@@ -825,7 +839,12 @@ fn provider_delivery_order_does_not_change_event_set_or_projection() -> VaultRes
         }
     }?;
 
-    let shared_head = root.session.heads[0].clone();
+    let shared_head = root
+        .session
+        .heads
+        .first()
+        .cloned()
+        .unwrap_or_else(|| panic!("genesis head must exist"));
     laptop.session.heads = vec![shared_head.clone()];
     match laptop.append_secret("secret_provideraa", "github") {
         Ok(outcome) => {

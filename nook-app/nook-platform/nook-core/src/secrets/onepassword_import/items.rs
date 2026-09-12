@@ -386,7 +386,12 @@ impl OnePasswordItem {
                         || (designation == "password" && field.field_type.eq_ignore_ascii_case("P"))
                 })
             })
-            .filter(|index| !self.details.login_fields[*index].value.is_empty());
+            .filter(|index| {
+                self.details
+                    .login_fields
+                    .get(*index)
+                    .is_some_and(|field| !field.value.is_empty())
+            });
         match index {
             Some(index) => OnePasswordCredentialSource::LoginField(index),
             None => OnePasswordCredentialSource::SectionFields,
@@ -557,7 +562,10 @@ impl OnePasswordExpiry<'_> {
     fn month_year(&self) -> (String, String) {
         let digits: String = self.raw.chars().filter(char::is_ascii_digit).collect();
         if digits.len() == 6 {
-            return (digits[4..6].to_owned(), digits[..4].to_owned());
+            return (
+                digits.chars().skip(4).collect(),
+                digits.chars().take(4).collect(),
+            );
         }
         if let Some((month, year)) = self.raw.split_once(['/', '-']) {
             return (month.trim().to_owned(), year.trim().to_owned());

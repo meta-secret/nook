@@ -590,7 +590,10 @@ mod tests {
 
         assert!(ready.can_create_secret());
         assert!(!ready.can_create_secret_with_records(&[]));
-        assert!(!ready.can_create_secret_with_records(&shares[..1]));
+        let one_share = shares
+            .get(..1)
+            .unwrap_or_else(|| panic!("sentinel fixture must contain one share"));
+        assert!(!ready.can_create_secret_with_records(one_share));
         assert!(ready.can_create_secret_with_records(&shares));
         Ok(())
     }
@@ -627,7 +630,11 @@ mod tests {
         );
 
         assert_eq!(
-            architecture.validate_records(&shares[..1]),
+            architecture.validate_records(
+                shares
+                    .get(..1)
+                    .unwrap_or_else(|| panic!("sentinel fixture must contain one share"))
+            ),
             Err(ValidationError::InvalidSentinelShareSet)
         );
 
@@ -646,13 +653,22 @@ mod tests {
 
         let mut duplicate_index = shares;
         let first_envelope = SentinelShareEnvelope::parse_sentinel_share_envelope(
-            duplicate_index[0].value.as_str(),
+            duplicate_index.first().map_or_else(
+                || panic!("sentinel fixture must contain a first share"),
+                |share| share.value.as_str(),
+            ),
         )?;
         let mut second_envelope = SentinelShareEnvelope::parse_sentinel_share_envelope(
-            duplicate_index[1].value.as_str(),
+            duplicate_index.get(1).map_or_else(
+                || panic!("sentinel fixture must contain a second share"),
+                |share| share.value.as_str(),
+            ),
         )?;
         second_envelope.share_index = first_envelope.share_index;
-        duplicate_index[1].value =
+        let Some(second_share) = duplicate_index.get_mut(1) else {
+            anyhow::bail!("sentinel fixture must contain two shares");
+        };
+        second_share.value =
             StoredRecordPayload::from_trusted(serde_json::to_string(&second_envelope)?);
         assert_eq!(
             architecture.validate_records(&duplicate_index),

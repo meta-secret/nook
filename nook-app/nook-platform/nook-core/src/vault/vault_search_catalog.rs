@@ -120,7 +120,9 @@ impl SecretSearchCatalogEntry {
     fn payload_digest(payload: &StoredRecordPayload) -> SecretSearchCatalogPayloadDigest {
         let digest = Sha256::digest(payload.as_str().as_bytes());
         let mut truncated = [0_u8; PAYLOAD_DIGEST_BYTES];
-        truncated.copy_from_slice(&digest[..PAYLOAD_DIGEST_BYTES]);
+        for (target, source) in truncated.iter_mut().zip(digest) {
+            *target = source;
+        }
         truncated.into()
     }
 
@@ -217,7 +219,9 @@ impl Default for SecretSearchCatalog {
 
 impl SecretSearchCatalog {
     fn bucket_for(id: &SecretId) -> crate::SecretSearchCatalogBucket {
-        (Sha256::digest(id.as_str().as_bytes())[0] % SECRET_SEARCH_CATALOG_BUCKET_COUNT).into()
+        let digest: [u8; 32] = Sha256::digest(id.as_str().as_bytes()).into();
+        let [first, ..] = digest;
+        (first % SECRET_SEARCH_CATALOG_BUCKET_COUNT).into()
     }
 
     fn bucket_mask_for(id: &SecretId) -> SecretSearchCatalogBucketMask {
@@ -439,8 +443,8 @@ mod tests {
         let page = catalog.query("needle-account", SecretTypeFilter::All, 0.into(), 50.into());
         assert_eq!(usize::from(page.total), 1);
         assert_eq!(
-            page.records[0].id,
-            SecretId::from_vault_record("secret_catalog09876")
+            page.records.first().map(|record| &record.id),
+            Some(&SecretId::from_vault_record("secret_catalog09876"))
         );
         Ok(())
     }

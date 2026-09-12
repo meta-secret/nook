@@ -316,7 +316,10 @@ mod tests {
 
         let parsed = VaultYamlTestData::deserialize_stored_yaml(stored.as_str())?;
         assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].key.as_str(), format!("member:{auth_id}"));
+        assert_eq!(
+            parsed.first().map(|record| record.key.as_str()),
+            Some(format!("member:{auth_id}").as_str())
+        );
         Ok(())
     }
 
@@ -471,9 +474,15 @@ mod tests {
 
         let parsed = VaultYamlTestData::deserialize_stored_yaml(yaml.as_str())?;
         assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].key.as_str(), auth_id);
+        assert_eq!(
+            parsed.first().map(|record| record.key.as_str()),
+            Some(auth_id.as_str())
+        );
 
-        let envelopes = crate::AuthEnvelopes::parse(parsed[0].value.as_str())?;
+        let record = parsed
+            .first()
+            .unwrap_or_else(|| panic!("vault YAML fixture must contain one record"));
+        let envelopes = crate::AuthEnvelopes::parse(record.value.as_str())?;
         assert!(
             envelopes
                 .secrets_key

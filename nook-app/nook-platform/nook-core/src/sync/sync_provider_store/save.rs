@@ -475,7 +475,10 @@ mod tests {
         let snapshot = ProviderSaveRequest::fixture(StorageProviderType::Github)
             .apply()
             .saved()?;
-        let provider = &snapshot.providers[0];
+        let provider = snapshot
+            .providers
+            .first()
+            .unwrap_or_else(|| panic!("saved provider must exist"));
         assert_eq!(provider.id, "provider-new");
         assert_eq!(provider.label, "GitHub · owner/repo");
         assert_eq!(
@@ -503,7 +506,12 @@ mod tests {
             "owner/repo",
             "earlier",
         ));
-        request.snapshot.providers[0].store_id = ProviderVaultScope::StoreId("vault-1".to_owned());
+        let provider = request
+            .snapshot
+            .providers
+            .first_mut()
+            .unwrap_or_else(|| panic!("save fixture provider must exist"));
+        provider.store_id = ProviderVaultScope::StoreId("vault-1".to_owned());
         assert_eq!(request.apply(), ProviderSaveOutcome::Duplicate);
     }
 
@@ -525,12 +533,18 @@ mod tests {
 
         let snapshot = request.apply().saved()?;
 
-        assert_eq!(snapshot.providers[0], other_vault_provider);
+        assert_eq!(snapshot.providers.first(), Some(&other_vault_provider));
         assert_eq!(snapshot.providers.len(), 2);
-        assert_eq!(snapshot.providers[1].id, "provider-new");
         assert_eq!(
-            snapshot.providers[1].store_id,
-            ProviderVaultScope::StoreId(("vault-1").to_owned())
+            snapshot
+                .providers
+                .get(1)
+                .map(|provider| provider.id.as_str()),
+            Some("provider-new")
+        );
+        assert_eq!(
+            snapshot.providers.get(1).map(|provider| &provider.store_id),
+            Some(&ProviderVaultScope::StoreId(("vault-1").to_owned()))
         );
         Ok(())
     }
@@ -549,7 +563,13 @@ mod tests {
             handle_id: StoredLocalFolderHandle::HandleId("handle-1".to_owned()),
         });
         let snapshot = request.apply().saved()?;
-        assert_eq!(snapshot.providers[0].label, "Local backup · Backups");
+        assert_eq!(
+            snapshot
+                .providers
+                .first()
+                .map(|provider| provider.label.as_str()),
+            Some("Local backup · Backups")
+        );
         Ok(())
     }
 
@@ -560,12 +580,18 @@ mod tests {
         let snapshot = request.apply().saved()?;
         assert_eq!(snapshot.providers.len(), 1);
         assert_eq!(
-            snapshot.providers[0].provider_type,
-            StorageProviderType::Local
+            snapshot
+                .providers
+                .first()
+                .map(|provider| provider.provider_type),
+            Some(StorageProviderType::Local)
         );
         assert_eq!(
-            snapshot.providers[0].store_id,
-            ProviderVaultScope::StoreId(("vault-1").to_owned())
+            snapshot
+                .providers
+                .first()
+                .map(|provider| &provider.store_id),
+            Some(&ProviderVaultScope::StoreId(("vault-1").to_owned()))
         );
         Ok(())
     }
@@ -590,7 +616,10 @@ mod tests {
         else {
             return Err("expected saved OAuth provider outcome");
         };
-        let StoredOAuthFileConfiguration::Configured(persisted) = &snapshot.providers[0].oauth_file
+        let Some(StorageProviderData {
+            oauth_file: StoredOAuthFileConfiguration::Configured(persisted),
+            ..
+        }) = snapshot.providers.first()
         else {
             return Err("expected persisted OAuth config");
         };

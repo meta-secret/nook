@@ -130,7 +130,10 @@ pub(super) mod tests {
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 2);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a login")),
             SecretValue::Login(LoginSecret {
                 website_url: "https://example.com/login".to_owned(),
                 username: "alice@example.com".to_owned(),
@@ -139,7 +142,7 @@ pub(super) mod tests {
                     .to_owned(),
             })
         );
-        let SecretValue::Authenticator(authenticator) = &plan.items[1] else {
+        let Some(SecretValue::Authenticator(authenticator)) = plan.items.get(1) else {
             panic!("expected authenticator");
         };
         assert_eq!(authenticator.issuer, "Example");
@@ -198,7 +201,10 @@ pub(super) mod tests {
 
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(plan.items.len(), 1);
-        assert!(matches!(plan.items[0], SecretValue::Authenticator(_)));
+        assert!(matches!(
+            plan.items.first(),
+            Some(SecretValue::Authenticator(_))
+        ));
         assert_eq!(usize::from(plan.skipped_unsupported), 1);
         Ok(())
     }
@@ -208,7 +214,7 @@ pub(super) mod tests {
         let csv = "Title,URL,Username,Password\nExample,https://example.com,alice,\" secret \"\n";
 
         let plan = ApplePasswordsCsvInput::new(csv).plan()?;
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login");
         };
 
@@ -296,7 +302,7 @@ pub(super) mod tests {
         .build()?;
 
         let plan = ApplePasswordsExportInput::from_bytes(&zip).plan()?;
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login");
         };
         assert_eq!(login.username, "alice");

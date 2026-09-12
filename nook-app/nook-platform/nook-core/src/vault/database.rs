@@ -356,7 +356,10 @@ mod tests {
         db.insert(sid("site"), api_key("new"));
 
         assert_eq!(db.list().len(), 1);
-        assert_eq!(db.list()[0].data, api_key("new"));
+        assert_eq!(
+            db.list().first().map(|item| &item.data),
+            Some(&api_key("new"))
+        );
         Ok(())
     }
 
@@ -393,8 +396,12 @@ mod tests {
 
         let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE)?;
         let from_yaml = Database::from_stored_yaml(&stored_yaml, TEST_PASSPHRASE)?;
-        assert_eq!(from_yaml.list()[0].id.as_str(), key);
-        assert_eq!(from_yaml.list()[0].data, api_key(value));
+        let records = from_yaml.list();
+        let record = records
+            .first()
+            .unwrap_or_else(|| panic!("database fixture must contain one item"));
+        assert_eq!(record.id.as_str(), key);
+        assert_eq!(record.data, api_key(value));
         Ok(())
     }
 
@@ -405,7 +412,10 @@ mod tests {
 
         let stored = db.to_stored_yaml(TEST_PASSPHRASE)?;
         let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE)?;
-        assert_eq!(restored.list()[0].data, api_key(""));
+        assert_eq!(
+            restored.list().first().map(|item| &item.data),
+            Some(&api_key(""))
+        );
         Ok(())
     }
 
@@ -442,7 +452,11 @@ mod tests {
 
         let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE)?;
         assert_eq!(
-            restored.list()[0].data,
+            restored
+                .list()
+                .first()
+                .unwrap_or_else(|| panic!("database fixture must contain one item"))
+                .data,
             api_key("line-one\nline-two\nline-three")
         );
         Ok(())
@@ -470,9 +484,15 @@ mod tests {
         ]);
         let records = Database::stored_records_from_armored(&armored, &secret_types);
         assert_eq!(records.len(), 2);
-        assert_eq!(records[0].key.as_str(), "a-first");
-        assert_eq!(records[1].key.as_str(), "z-last");
-        assert_ne!(records[0].value.as_str(), records[1].value.as_str());
+        let first = records
+            .first()
+            .unwrap_or_else(|| panic!("record fixture must contain first item"));
+        let second = records
+            .get(1)
+            .unwrap_or_else(|| panic!("record fixture must contain second item"));
+        assert_eq!(first.key.as_str(), "a-first");
+        assert_eq!(second.key.as_str(), "z-last");
+        assert_ne!(first.value.as_str(), second.value.as_str());
         Ok(())
     }
 

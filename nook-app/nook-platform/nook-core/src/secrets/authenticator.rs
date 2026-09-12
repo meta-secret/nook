@@ -156,11 +156,17 @@ impl AuthenticatorSecret {
                 mac.finalize().into_bytes().to_vec()
             }
         };
-        let offset = usize::from(digest[digest.len() - 1] & 0x0f);
-        let binary = (u32::from(digest[offset] & 0x7f) << 24)
-            | (u32::from(digest[offset + 1]) << 16)
-            | (u32::from(digest[offset + 2]) << 8)
-            | u32::from(digest[offset + 3]);
+        let Some(last) = digest.last() else {
+            return Err(ValidationError::AuthenticatorSecretInvalid);
+        };
+        let offset = usize::from(last & 0x0f);
+        let Some([first, second, third, fourth]) = digest.get(offset..offset + 4) else {
+            return Err(ValidationError::AuthenticatorSecretInvalid);
+        };
+        let binary = (u32::from(first & 0x7f) << 24)
+            | (u32::from(*second) << 16)
+            | (u32::from(*third) << 8)
+            | u32::from(*fourth);
         let (modulus, width) = match self.digits {
             TotpDigits::Six => (1_000_000, 6),
             TotpDigits::Seven => (10_000_000, 7),

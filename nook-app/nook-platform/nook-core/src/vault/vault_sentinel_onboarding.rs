@@ -213,7 +213,13 @@ mod tests {
                 .starts_with("sentinel_share:")
         );
         assert_eq!(
-            (match &accepted.provider_snapshot.providers[0].oauth_file {
+            (match &accepted
+                .provider_snapshot
+                .providers
+                .first()
+                .unwrap_or_else(|| panic!("provider snapshot fixture must contain one provider"))
+                .oauth_file
+            {
                 StoredOAuthFileConfiguration::Configured(config) => &config.access_token,
                 StoredOAuthFileConfiguration::NotApplicable =>
                     return Err(IoError::other("provider OAuth fixture must exist").into()),

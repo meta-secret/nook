@@ -17,7 +17,12 @@ fn concurrent_replace_creates_conflict() -> VaultResult<()> {
             Err(rejected.cause)
         }
     }?;
-    let head = device.session.heads[0].clone();
+    let head = device
+        .session
+        .heads
+        .first()
+        .cloned()
+        .unwrap_or_else(|| panic!("event head must exist"));
 
     device.session.heads = vec![head.clone()];
     match device.append_signed(vec![VaultOperation::SecretReplaced {
@@ -74,7 +79,12 @@ fn concurrent_replace_creates_conflict() -> VaultResult<()> {
 #[test]
 fn causal_join_observes_all_heads_and_collapses_branch_vector() -> VaultResult<()> {
     let mut device = EventLogDevice::genesis("main")?;
-    let genesis_head = device.session.heads[0].clone();
+    let genesis_head = device
+        .session
+        .heads
+        .first()
+        .cloned()
+        .unwrap_or_else(|| panic!("genesis head must exist"));
 
     device.session.heads = vec![genesis_head.clone()];
     let branch_a = match device.append_secret("secret_branchaaaa", "a") {
@@ -236,7 +246,12 @@ fn duplicate_union_is_idempotent() -> VaultResult<()> {
 #[test]
 fn join_merge_single_head() -> VaultResult<()> {
     let mut device = EventLogDevice::genesis("main")?;
-    let genesis_head = device.session.heads[0].clone();
+    let genesis_head = device
+        .session
+        .heads
+        .first()
+        .cloned()
+        .unwrap_or_else(|| panic!("genesis head must exist"));
 
     device.session.heads = vec![genesis_head.clone()];
     let a_id = match device.append_secret("secret_concurrenta", "a") {
@@ -456,7 +471,12 @@ fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultRe
         }
     }?;
 
-    let shared_head = root.session.heads[0].clone();
+    let shared_head = root
+        .session
+        .heads
+        .first()
+        .cloned()
+        .unwrap_or_else(|| panic!("genesis head must exist"));
     local.session.heads = vec![shared_head.clone()];
     match local.append_secret("secret_localflush1", "local draft") {
         Ok(outcome) => {
@@ -544,7 +564,12 @@ fn three_device_decentralized_convergence() -> VaultResult<()> {
     }?;
 
     // Each device appends concurrently from the shared genesis head.
-    let shared_head = a.session.heads[0].clone();
+    let shared_head = a
+        .session
+        .heads
+        .first()
+        .cloned()
+        .unwrap_or_else(|| panic!("genesis head must exist"));
     a.session.heads = vec![shared_head.clone()];
     match a.append_secret("secret_deviceaaaa", "from-a") {
         Ok(outcome) => {
@@ -670,7 +695,12 @@ fn partial_sync_then_completion() -> VaultResult<()> {
         }
     }?;
 
-    let head = a.session.heads[0].clone();
+    let head = a
+        .session
+        .heads
+        .first()
+        .cloned()
+        .unwrap_or_else(|| panic!("event head must exist"));
     a.session.heads = vec![head.clone()];
     match a.append_secret("secret_partial0001", "first") {
         Ok(outcome) => {
@@ -728,7 +758,12 @@ fn partial_sync_then_completion() -> VaultResult<()> {
 #[test]
 fn union_order_does_not_change_projection() -> VaultResult<()> {
     let mut a = EventLogDevice::genesis("a")?;
-    let head = a.session.heads[0].clone();
+    let head = a
+        .session
+        .heads
+        .first()
+        .cloned()
+        .unwrap_or_else(|| panic!("event head must exist"));
     a.session.heads = vec![head.clone()];
     match a.append_secret("secret_order00001", "x") {
         Ok(outcome) => {

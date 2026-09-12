@@ -404,7 +404,10 @@ mod tests {
         .collect();
 
         assert_eq!(linked.len(), 1);
-        assert_eq!(linked[0].label, "Personal");
+        assert_eq!(
+            linked.first().map(|vault| vault.label.as_str()),
+            Some("Personal")
+        );
         Ok(())
     }
 
@@ -891,8 +894,11 @@ mod tests {
 
         assert_eq!(profile.verified_vaults.len(), 2);
         assert_eq!(
-            profile.verified_vaults[1].verified_at,
-            timestamp("2026-03-01T00:00:00.000Z")
+            profile
+                .verified_vaults
+                .get(1)
+                .map(|vault| &vault.verified_at),
+            Some(&timestamp("2026-03-01T00:00:00.000Z"))
         );
         Ok(())
     }

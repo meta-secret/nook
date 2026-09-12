@@ -186,7 +186,7 @@ mod tests {
             BackupCodeInput::new(&codes).normalize()?,
             ["A", "a", "密碼"]
         );
-        assert_eq!(codes[0], " A ");
+        assert_eq!(codes.first().map(String::as_str), Some(" A "));
         Ok(())
     }
 
@@ -216,7 +216,10 @@ mod tests {
             input.normalize(),
             Err(ValidationError::AuthenticatorBackupCodesInvalid)
         ));
-        assert_eq!(codes[0].len(), MAX_AUTHENTICATOR_BACKUP_CODE_LEN + 1);
+        assert_eq!(
+            codes.first().map(String::len),
+            Some(MAX_AUTHENTICATOR_BACKUP_CODE_LEN + 1)
+        );
     }
 
     #[test]
@@ -241,7 +244,10 @@ mod tests {
             .apply(),
             Err(ValidationError::AuthenticatorBackupCodesInvalid)
         ));
-        assert_eq!(existing[0].len(), MAX_AUTHENTICATOR_BACKUP_CODE_LEN + 1);
+        assert_eq!(
+            existing.first().map(String::len),
+            Some(MAX_AUTHENTICATOR_BACKUP_CODE_LEN + 1)
+        );
         assert_eq!(incoming, [" valid "]);
         Ok(())
     }

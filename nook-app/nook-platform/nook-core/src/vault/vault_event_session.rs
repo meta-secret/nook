@@ -153,9 +153,10 @@ impl VaultEventSession {
                 created_at: &created_at,
                 operations: input.operations,
             })?;
-            self.prepare_publication(vec![(event, bytes)])
+            let event_id = event.id()?;
+            Ok((self.prepare_publication(vec![(event, bytes)])?, event_id))
         })();
-        let prepared = match prepared {
+        let (prepared, event_id) = match prepared {
             Ok(prepared) => prepared,
             Err(cause) => {
                 return Err(VaultEventSessionRejection {
@@ -164,7 +165,6 @@ impl VaultEventSession {
                 });
             }
         };
-        let event_id = prepared.events[0].event_id.clone();
         Ok(VaultEventAppended {
             session: self.publish(prepared, input.destination),
             event_id,

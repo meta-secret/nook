@@ -123,11 +123,17 @@ fn passkey_round_trips_through_encrypted_vault_storage() -> anyhow::Result<()> {
 
     let stored = database.to_stored_records_with_crypto(&crypto)?;
     assert_eq!(
-        stored[0].secret_type,
+        stored
+            .first()
+            .unwrap_or_else(|| panic!("stored fixture must contain one record"))
+            .secret_type,
         RecordTypeDeclaration::Secret(SecretType::Passkey)
     );
-    assert!(!stored[0].value.as_str().contains("alice@example.com"));
-    assert!(!stored[0].value.as_str().contains("login.example.com"));
+    let stored_record = stored
+        .first()
+        .unwrap_or_else(|| panic!("stored fixture must contain one record"));
+    assert!(!stored_record.value.as_str().contains("alice@example.com"));
+    assert!(!stored_record.value.as_str().contains("login.example.com"));
 
     let yaml = VaultRecordSet::serialize(&stored, VaultFormat::Yaml)?;
     let parsed = VaultFormatDocument::new(yaml.as_str()).deserialize(VaultFormat::Yaml)?;
@@ -185,7 +191,10 @@ fn incremental_delete_secret() -> anyhow::Result<()> {
     let (restored, _) = load_vault(&yaml, &crypto)?;
 
     assert_eq!(restored.list().len(), 1);
-    assert_eq!(restored.list()[0].id, sid("github.com"));
+    assert_eq!(
+        restored.list().first().map(|item| &item.id),
+        Some(&sid("github.com"))
+    );
     Ok(())
 }
 
@@ -223,8 +232,12 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() -> anyhow::Re
     })?;
 
     assert_eq!(db.list().len(), 1);
-    assert_eq!(db.list()[0].id.as_str(), new_id);
-    assert_eq!(db.list()[0].data, api_key("new-token"));
+    let items = db.list();
+    let item = items
+        .first()
+        .unwrap_or_else(|| panic!("database fixture must contain one item"));
+    assert_eq!(item.id.as_str(), new_id);
+    assert_eq!(item.data, api_key("new-token"));
 
     assert!(!state.secrets.contains_key(&old_secret_id));
     assert!(state.secrets.contains_key(&new_secret_id));
@@ -373,7 +386,10 @@ fn generated_password_can_be_stored_and_reloaded() -> anyhow::Result<()> {
 
     let yaml = save_armored_cache(&armored)?;
     let (restored, _) = load_vault(&yaml, &crypto)?;
-    assert_eq!(restored.list()[0].data, api_key(&password));
+    assert_eq!(
+        restored.list().first().map(|item| &item.data),
+        Some(&api_key(&password))
+    );
     Ok(())
 }
 
@@ -466,13 +482,14 @@ fn stored_records_from_armored_matches_serialize_order() -> anyhow::Result<()> {
         .collect();
     let records = Database::stored_records_from_armored(&armored, &secret_types);
 
-    assert_eq!(records[0].key, sid("github.com"));
-    assert_eq!(records[1].key, sid("work-vpn"));
-    assert!(
-        records[0]
-            .value
-            .as_str()
-            .contains("BEGIN AGE ENCRYPTED FILE")
-    );
+    let first = records
+        .first()
+        .unwrap_or_else(|| panic!("record fixture must contain first record"));
+    let second = records
+        .get(1)
+        .unwrap_or_else(|| panic!("record fixture must contain second record"));
+    assert_eq!(first.key, sid("github.com"));
+    assert_eq!(second.key, sid("work-vpn"));
+    assert!(first.value.as_str().contains("BEGIN AGE ENCRYPTED FILE"));
     Ok(())
 }

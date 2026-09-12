@@ -74,8 +74,11 @@ mod tests {
             vec!["draft", "remote"]
         );
         assert_eq!(
-            merged.providers[0].provider_type,
-            StorageProviderType::Github
+            merged
+                .providers
+                .first()
+                .map(|provider| provider.provider_type),
+            Some(StorageProviderType::Github)
         );
     }
 }

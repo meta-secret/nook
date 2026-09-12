@@ -328,8 +328,12 @@ mod tests {
 
         assert_eq!(usize::from(page.total), 3);
         assert_eq!(page.records.len(), 1);
-        assert_eq!(page.records[0].id.as_str(), "secret_b");
-        assert_eq!(page.records[0].summary(), "bob");
+        let record = page
+            .records
+            .first()
+            .unwrap_or_else(|| panic!("search page must contain one record"));
+        assert_eq!(record.id.as_str(), "secret_b");
+        assert_eq!(record.summary(), "bob");
         Ok(())
     }
 
@@ -353,7 +357,10 @@ mod tests {
 
         assert_eq!(usize::from(page.total), 2);
         assert_eq!(page.records.len(), 1);
-        assert_eq!(page.records[0].id.as_str(), "secret_c");
+        assert_eq!(
+            page.records.first().map(|record| record.id.as_str()),
+            Some("secret_c")
+        );
         Ok(())
     }
 
@@ -377,8 +384,12 @@ mod tests {
 
         assert_eq!(usize::from(page.total), 2);
         assert_eq!(page.records.len(), 1);
-        assert_eq!(page.records[0].id.as_str(), "secret_c");
-        assert_eq!(page.records[0].secret_type(), SecretType::SecureNote);
+        let record = page
+            .records
+            .first()
+            .unwrap_or_else(|| panic!("search page must contain one record"));
+        assert_eq!(record.id.as_str(), "secret_c");
+        assert_eq!(record.secret_type(), SecretType::SecureNote);
         Ok(())
     }
 
@@ -400,7 +411,10 @@ mod tests {
         )?;
 
         assert_eq!(usize::from(page.total), 1);
-        assert_eq!(page.records[0].id.as_str(), "secret_b");
+        assert_eq!(
+            page.records.first().map(|record| record.id.as_str()),
+            Some("secret_b")
+        );
         Ok(())
     }
 
@@ -423,7 +437,10 @@ mod tests {
         )?;
         let debug = format!("{:?}", page.records);
 
-        assert_eq!(page.records[0].summary(), "alice");
+        assert_eq!(
+            page.records.first().map(SecretListItem::summary).as_deref(),
+            Some("alice")
+        );
         assert!(!debug.contains("credential-must-not-cross-page-boundary"));
         Ok(())
     }

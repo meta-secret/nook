@@ -58,12 +58,24 @@ fn local_save_then_fan_out_replicates_to_all_providers() -> anyhow::Result<()> {
         completed.actions,
     );
     let actions: HashMap<_, _> = results.into_iter().collect();
-    assert_eq!(actions["provider-alpha"], VaultSyncAction::PushLocal);
-    assert_eq!(actions["provider-beta"], VaultSyncAction::PushLocal);
-    assert_eq!(remotes["provider-alpha"].blob(), v3);
-    assert_eq!(remotes["provider-beta"].blob(), v3);
     assert_eq!(
-        u64::from(VaultFormatDocument::new(remotes["provider-alpha"].blob()).version()?),
+        actions.get("provider-alpha"),
+        Some(&VaultSyncAction::PushLocal)
+    );
+    assert_eq!(
+        actions.get("provider-beta"),
+        Some(&VaultSyncAction::PushLocal)
+    );
+    let alpha = remotes
+        .get("provider-alpha")
+        .unwrap_or_else(|| panic!("alpha remote must exist"));
+    let beta = remotes
+        .get("provider-beta")
+        .unwrap_or_else(|| panic!("beta remote must exist"));
+    assert_eq!(alpha.blob(), v3);
+    assert_eq!(beta.blob(), v3);
+    assert_eq!(
+        u64::from(VaultFormatDocument::new(alpha.blob()).version()?),
         3
     );
     Ok(())
@@ -175,8 +187,14 @@ fn resolve_conflict_keep_local_then_fan_out_unifies_providers() -> anyhow::Resul
         completed.stores.remotes,
         completed.actions,
     );
-    assert_eq!(results[0].1, VaultSyncAction::PushLocal);
-    assert_eq!(remotes["other"].blob(), local_blob);
+    assert_eq!(
+        results.first().map(|result| result.1),
+        Some(VaultSyncAction::PushLocal)
+    );
+    assert_eq!(
+        remotes.get("other").map(MemoryVaultStore::blob),
+        Some(local_blob.as_str())
+    );
     Ok(())
 }
 
@@ -227,15 +245,21 @@ fn sequential_fan_out_stops_updating_local_when_remote_is_newer() -> anyhow::Res
         completed.actions,
     );
     let actions: HashMap<_, _> = results.into_iter().collect();
-    assert_eq!(actions["stale"], VaultSyncAction::PushLocal);
-    assert_eq!(actions["ahead"], VaultSyncAction::AdoptRemote);
-    assert_eq!(local.blob(), remotes["ahead"].blob());
+    assert_eq!(actions.get("stale"), Some(&VaultSyncAction::PushLocal));
+    assert_eq!(actions.get("ahead"), Some(&VaultSyncAction::AdoptRemote));
+    let ahead = remotes
+        .get("ahead")
+        .unwrap_or_else(|| panic!("ahead remote must exist"));
+    let stale = remotes
+        .get("stale")
+        .unwrap_or_else(|| panic!("stale remote must exist"));
+    assert_eq!(local.blob(), ahead.blob());
     assert_eq!(
         u64::from(VaultFormatDocument::new(local.blob()).version()?),
         5
     );
     assert_eq!(
-        u64::from(VaultFormatDocument::new(remotes["stale"].blob()).version()?),
+        u64::from(VaultFormatDocument::new(stale.blob()).version()?),
         5
     );
     assert_eq!(
@@ -264,8 +288,14 @@ fn later_provider_failure_retains_earlier_fan_out_effect() -> anyhow::Result<()>
         return Err(anyhow::anyhow!("invalid provider must reject"));
     };
     let remotes = rejected.stores.remotes;
-    assert_eq!(remotes["a-first"].blob(), local_blob);
-    assert_eq!(remotes["b-invalid"].blob(), "not-a-vault");
+    assert_eq!(
+        remotes.get("a-first").map(MemoryVaultStore::blob),
+        Some(local_blob.as_str())
+    );
+    assert_eq!(
+        remotes.get("b-invalid").map(MemoryVaultStore::blob),
+        Some("not-a-vault")
+    );
     Ok(())
 }
 

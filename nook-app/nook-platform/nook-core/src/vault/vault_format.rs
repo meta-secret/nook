@@ -666,8 +666,14 @@ mod tests {
         let stored = VaultFormatTestData::serialize_stored_yaml(&records)?;
         let parsed = VaultFormatTestData::deserialize_stored_yaml(stored.as_str())?;
 
-        assert_eq!(parsed[0].value, records[0].value);
-        assert!(parsed[0].value.as_str().contains('\n'));
+        let parsed_record = parsed
+            .first()
+            .unwrap_or_else(|| panic!("parsed fixture must contain one record"));
+        let source_record = records
+            .first()
+            .unwrap_or_else(|| panic!("source fixture must contain one record"));
+        assert_eq!(parsed_record.value, source_record.value);
+        assert!(parsed_record.value.as_str().contains('\n'));
         Ok(())
     }
 
@@ -726,7 +732,11 @@ mod tests {
 
         let parsed_entries = VaultFormatTestData::read_vault_password_entries(yaml.as_str())?;
         assert_eq!(parsed_entries.len(), 1);
-        let parsed_envelope = parsed_entries[0].envelope.clone();
+        let parsed_envelope = parsed_entries
+            .first()
+            .unwrap_or_else(|| panic!("password fixture must contain one envelope"))
+            .envelope
+            .clone();
         assert_eq!(parsed_envelope.version, envelope.version);
         assert_eq!(parsed_envelope.kdf, envelope.kdf);
         assert_eq!(

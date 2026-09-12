@@ -461,8 +461,14 @@ mod tests {
                 .iter()
                 .all(|(_, action)| *action == VaultSyncAction::PushLocal)
         );
-        assert_eq!(remotes["github-a"].blob(), local_blob);
-        assert_eq!(remotes["github-b"].blob(), local_blob);
+        assert_eq!(
+            remotes.get("github-a").map(MemoryVaultStore::blob),
+            Some(local_blob.as_str())
+        );
+        assert_eq!(
+            remotes.get("github-b").map(MemoryVaultStore::blob),
+            Some(local_blob.as_str())
+        );
         Ok(())
     }
 

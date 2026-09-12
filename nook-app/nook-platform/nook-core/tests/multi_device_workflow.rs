@@ -126,7 +126,14 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
         let user_records = VaultRecordView::new(&loaded).user_records()?;
         let unlocked = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
         assert_eq!(unlocked.list().len(), 1);
-        assert_eq!(unlocked.list()[0].data, api_key("hunter2"));
+        assert_eq!(
+            unlocked
+                .list()
+                .first()
+                .unwrap_or_else(|| panic!("unlocked fixture must contain one secret"))
+                .data,
+            api_key("hunter2")
+        );
     }
     Ok(())
 }
@@ -161,7 +168,10 @@ fn oob_enroll_writes_self_member_roster_only() -> anyhow::Result<()> {
         members_key: &keys.members_key,
     })?;
     assert_eq!(roster.len(), 1);
-    assert_eq!(roster[0].device_id, device.device_id().to_owned());
+    assert_eq!(
+        roster.first().map(|member| &member.device_id),
+        Some(device.device_id())
+    );
     Ok(())
 }
 
@@ -210,9 +220,12 @@ fn member_roster_entries_expose_pk_id_and_public_key() -> anyhow::Result<()> {
         members_key: &keys.members_key,
     })?;
     assert_eq!(roster.len(), 1);
-    assert_eq!(roster[0].auth_id, device.auth_id());
-    assert_eq!(roster[0].public_key, device.public_key());
-    assert_eq!(roster[0].device_id, device.device_id().to_owned());
+    let member = roster
+        .first()
+        .unwrap_or_else(|| panic!("roster fixture must contain one member"));
+    assert_eq!(member.auth_id, device.auth_id());
+    assert_eq!(member.public_key, device.public_key());
+    assert_eq!(member.device_id, device.device_id().to_owned());
     Ok(())
 }
 
@@ -269,7 +282,10 @@ fn rename_member_label_survives_yaml_roundtrip() -> anyhow::Result<()> {
     })?;
     assert_eq!(roster.len(), 1);
     assert_eq!(
-        roster[0].label,
+        roster
+            .first()
+            .unwrap_or_else(|| panic!("roster fixture must contain one member"))
+            .label,
         MemberLabelState::Named("Kitchen iPad".to_owned())
     );
     Ok(())
@@ -319,6 +335,9 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<(
         members_key: &keys.members_key,
     })?;
     assert_eq!(roster.len(), 1);
-    assert_eq!(roster[0].auth_id, genesis.auth_id());
+    assert_eq!(
+        roster.first().map(|member| member.auth_id.clone()),
+        Some(genesis.auth_id())
+    );
     Ok(())
 }
