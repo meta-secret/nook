@@ -201,7 +201,12 @@ export async function recoverInterruptedAuthorizationCleanup(
       (pending) => ({ kind: 'resolved' as const, pending }),
       () => ({ kind: 'rejected' as const }),
     )
-  const cleanup = await dependencies.beginAccountPickerAuthorizationCleanup()
+  let cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
+  try {
+    cleanup = await dependencies.beginAccountPickerAuthorizationCleanup()
+  } catch {
+    return err([AuthorizationCleanupFailureKind.Rejected])
+  }
   const lookup = await pendingLookup
   if (lookup.kind === 'rejected') {
     dependencies.releaseAccountPickerAuthorizationCleanup(

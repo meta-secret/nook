@@ -10,8 +10,8 @@ import type { WebsiteLoginFillResponse } from '../../lib/login-fill-messages'
 import { AuthenticationWorkflowKind } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 import {
+  extensionPairingStateLoader,
   ExtensionSetupLoadKind,
-  ExtensionPairingStateQueryMessage as ExtensionPairingStateQueryMessageSchema,
 } from '../../lib/pairing-state'
 
 import { WidgetHostKind, saveOfferState, widgetState } from './state'
@@ -162,8 +162,7 @@ class WorkflowUi {
   }
 
   async loadPilotVaultConnection(): Promise<PilotVaultConnection> {
-    const setup =
-      await ExtensionPairingStateQueryMessageSchema.loadExtensionSetupState()
+    const setup = await extensionPairingStateLoader.loadExtensionSetupState()
     return setup.kind === ExtensionSetupLoadKind.Ready
       ? { connected: true, vaultName: setup.setup.selectedVaultName }
       : { connected: false }

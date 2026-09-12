@@ -2,8 +2,8 @@ import { mount } from 'svelte'
 import type { ComponentProps, MountOptions } from 'svelte'
 import { extensionLocaleCatalog } from '../lib/i18n'
 import {
+  extensionPairingStateLoader,
   ExtensionSetupLoadKind,
-  ExtensionPairingStateQueryMessage as ExtensionPairingStateQueryMessageSchema,
 } from '../lib/pairing-state'
 import {
   ExtensionSessionDeviceStateKind,
@@ -25,8 +25,7 @@ async function loadCompanionVaultConnection(): Promise<
       vaultName: string
     }
 > {
-  const setup =
-    await ExtensionPairingStateQueryMessageSchema.loadExtensionSetupState()
+  const setup = await extensionPairingStateLoader.loadExtensionSetupState()
   return setup.kind === ExtensionSetupLoadKind.Ready
     ? { isConnected: true, vaultName: setup.setup.selectedVaultName }
     : { isConnected: false }

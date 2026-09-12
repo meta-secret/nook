@@ -516,6 +516,14 @@ describe('service worker routing', () => {
       err([AuthorizationCleanupFailureKind.MarkerLookupFailed]),
     )
     expect(events).toEqual(['marker-read-started', 'authorization-invalidated'])
+    const rejectedStartDependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      beginAccountPickerAuthorizationCleanup: () =>
+        Promise.reject(new Error('authorization cleanup unavailable')),
+    }
+    expect(
+      await recoverInterruptedAuthorizationCleanup(rejectedStartDependencies),
+    ).toEqual(err([AuthorizationCleanupFailureKind.Rejected]))
     const rejectedDependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
       completeAccountPickerAuthorizationCleanup: () =>
