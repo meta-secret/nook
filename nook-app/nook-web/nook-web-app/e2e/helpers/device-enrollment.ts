@@ -377,7 +377,6 @@ export async function tryGithubVaultConnect(
   page: Page,
   target: JoinerVaultReadyTarget,
 ) {
-  await refreshGithubVaultOnLoginGate(page)
   await dismissSyncConflictIfVisible(page)
   await dismissJoinEnrollmentDialog(page)
 
@@ -409,7 +408,6 @@ export async function tryOauthFileVaultConnect(
   page: Page,
   target: JoinerVaultReadyTarget,
 ) {
-  await refreshGithubVaultOnLoginGate(page)
   await dismissSyncConflictIfVisible(page)
   await dismissJoinEnrollmentDialog(page)
 
