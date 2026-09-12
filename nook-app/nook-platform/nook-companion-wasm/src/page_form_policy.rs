@@ -264,7 +264,7 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
-    fn page_form_wasm_exports_match_core_policy() {
+    fn page_form_wasm_exports_match_one_time_code_policy() {
         let otp = NookPageInputFieldObservation::new(
             nook_companion_core::PageInputType::Text,
             false,
@@ -286,7 +286,11 @@ mod tests {
             !AuthenticationControlText::new("oninput=validate_requestSubmit()")
                 .looks_like_one_time_code_auto_submit_signal()
         );
+    }
 
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn page_form_wasm_exports_match_authentication_route_policy() {
         let username = NookPageInputFieldObservation::new(
             nook_companion_core::PageInputType::Text,
             false,
@@ -356,6 +360,11 @@ mod tests {
             true,
             true,
         ));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn page_form_wasm_exports_match_observation_priority_policy() {
         let login = nook_companion_core::AuthenticationPageObservation {
             current_password_field_count: 1.into(),
             ..Default::default()

@@ -542,14 +542,26 @@ mod tests {
         let plan = result.plan()?;
         let assignments = plan.take_assignments();
         assert_eq!(assignments.len(), 2);
-        assert_eq!(assignments[0].field_index().as_core(), field::Index::ZERO);
+        let username_assignment = assignments
+            .first()
+            .ok_or_else(|| wasm_bindgen::JsError::new("missing username assignment"))?;
+        let password_assignment = assignments
+            .get(1)
+            .ok_or_else(|| wasm_bindgen::JsError::new("missing password assignment"))?;
         assert_eq!(
-            assignments[0].credential(),
+            username_assignment.field_index().as_core(),
+            field::Index::ZERO
+        );
+        assert_eq!(
+            username_assignment.credential(),
             credential_fill::CredentialKind::Username
         );
-        assert_eq!(assignments[1].field_index().as_core(), field::Index::ONE);
         assert_eq!(
-            assignments[1].credential(),
+            password_assignment.field_index().as_core(),
+            field::Index::ONE
+        );
+        assert_eq!(
+            password_assignment.credential(),
             credential_fill::CredentialKind::CurrentPassword
         );
         Ok(())

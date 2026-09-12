@@ -560,7 +560,10 @@ mod tests {
                 observed_at: "2026-09-05T00:00:01.000Z".to_owned(),
             })
             .map_err(|error| format!("create failed: {error:?}"))?;
-        let grant = ordered_extension_pairing_grants(created.clone())[0].clone();
+        let grant = ordered_extension_pairing_grants(created.clone())
+            .into_iter()
+            .next()
+            .ok_or_else(|| "created pairing state did not contain a grant".to_owned())?;
         assert_eq!(grant.event_count, ExtensionEventCount::from(2));
         assert!(matches!(
             first_extension_pairing_grant(created.clone()),
@@ -587,7 +590,10 @@ mod tests {
         .map_err(|error| format!("refresh failed: {error:?}"))?;
         let refreshed_grants = ordered_extension_pairing_grants(refreshed.clone());
         assert_eq!(
-            refreshed_grants[0].event_count,
+            refreshed_grants
+                .first()
+                .ok_or_else(|| "refreshed pairing state did not contain a grant".to_owned())?
+                .event_count,
             ExtensionEventCount::from(4)
         );
         assert!(matches!(
@@ -623,8 +629,10 @@ mod tests {
         let validated = validate_companion_authentication_outcome_decision(outcome);
         assert_eq!(validated, outcome);
         assert_eq!(
-            classify_companion_authentication_outcome_with_default_timeout(Default::default())
-                .verdict,
+            classify_companion_authentication_outcome_with_default_timeout(
+                nook_companion_core::AuthenticationOutcomeObservation::default()
+            )
+            .verdict,
             nook_companion_core::AuthenticationOutcomeVerdict::Insufficient
         );
         assert_eq!(
@@ -752,6 +760,7 @@ mod wasm_tests {
     struct RuntimeResponseFixture {
         workflow: WorkflowFixture,
         login_matches: LoginMatchesFixture,
+        selected_facts: nook_companion_core::AuthenticationWorkflowSelectedFacts,
     }
 
     #[derive(Deserialize)]
@@ -866,6 +875,9 @@ mod wasm_tests {
             login_matches: LoginMatchesFixture {
                 kind: "ready",
                 count: 2,
+            },
+            selected_facts: nook_companion_core::AuthenticationWorkflowSelectedFacts::Selected {
+                facts: Box::default(),
             },
         };
         let js_input = serde_wasm_bindgen::to_value(&fixture).map_err(js_error)?;
