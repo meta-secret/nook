@@ -44,7 +44,12 @@ pub(super) fn assignment_body<'a>(bake: &'a str, name: &str) -> anyhow::Result<&
         .with_context(|| format!("missing Bake assignment {name}"))?;
     let mut end = rest.len();
     for (idx, _) in rest.match_indices('\n') {
-        let line = rest[idx + 1..].lines().next().unwrap_or("");
+        let line = rest
+            .get(idx + 1..)
+            .with_context(|| format!("Bake assignment {name} line must be valid UTF-8"))?
+            .split('\n')
+            .next()
+            .with_context(|| format!("Bake assignment {name} must expose its next line"))?;
         if line.starts_with("target \"") {
             end = idx;
             break;
@@ -57,7 +62,10 @@ pub(super) fn assignment_body<'a>(bake: &'a str, name: &str) -> anyhow::Result<&
             break;
         }
     }
-    Ok(rest[..end].trim())
+    Ok(rest
+        .get(..end)
+        .with_context(|| format!("Bake assignment {name} boundary must be valid UTF-8"))?
+        .trim())
 }
 
 pub(super) fn split_fallback_arms(body: &str) -> anyhow::Result<(&str, &str)> {

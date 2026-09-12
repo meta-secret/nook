@@ -34,11 +34,15 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
         assert!(*floor >= expected);
     }
     assert_eq!(
-        excluded["nook-fuzz"],
+        excluded
+            .get("nook-fuzz")
+            .context("coverage policy must explain the nook-fuzz exclusion")?,
         "Intentional non-testable cargo-fuzz harness; covered behavior belongs to nook-auth2."
     );
     assert_eq!(
-        excluded["arrayref"],
+        excluded
+            .get("arrayref")
+            .context("coverage policy must explain the arrayref exclusion")?,
         "Vendored third-party patch; upstream source is outside Nook's authored coverage policy."
     );
     Ok(())
@@ -91,7 +95,10 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(nightly.contains("ARG RUST_DYLINT_COVERAGE_FLOOR"));
     assert!(nightly.contains("--fail-under-lines \"${RUST_DYLINT_COVERAGE_FLOOR:?}\""));
     assert!(docker_tasks.contains(".package_lines_percent[\"nook_domain_api\"] | numbers"));
-    assert!(docker_tasks.matches("RUST_DYLINT_COVERAGE_FLOOR=").count() == 2);
+    assert_eq!(
+        docker_tasks.matches("RUST_DYLINT_COVERAGE_FLOOR=").count(),
+        2
+    );
     assert!(nightly.contains("target/llvm-cov-target/debug/libnook_domain_api-c0ffee.so"));
     assert!(product.contains(".package_lines_percent[\"nook-companion-wasm\"]"));
     assert!(product.contains("llvm-cov clean --workspace"));

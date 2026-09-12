@@ -51,10 +51,14 @@ fn docker_stage<'a>(dockerfile: &'a str, stage: &str) -> &'a str {
     let marker_start = dockerfile
         .find(&marker)
         .unwrap_or_else(|| panic!("Dockerfile stage must exist: {stage}"));
-    let stage_start = dockerfile[..marker_start]
+    let stage_start = dockerfile
+        .get(..marker_start)
+        .unwrap_or_else(|| panic!("Dockerfile marker must be a character boundary: {stage}"))
         .rfind("FROM ")
         .unwrap_or_else(|| panic!("Dockerfile stage must start with FROM: {stage}"));
-    let remainder = &dockerfile[stage_start..];
+    let remainder = dockerfile
+        .get(stage_start..)
+        .unwrap_or_else(|| panic!("Dockerfile stage must start on a character boundary: {stage}"));
     remainder
         .split_once("\nFROM ")
         .map_or(remainder, |(body, _)| body)

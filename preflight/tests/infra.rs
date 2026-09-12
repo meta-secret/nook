@@ -175,8 +175,10 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
                 "{path} resolves a production base outside Zot: {resolved}"
             );
             let remainder: Vec<_> = tokens.collect();
-            if remainder.len() >= 2 && remainder[remainder.len() - 2].eq_ignore_ascii_case("AS") {
-                stages.insert(remainder[remainder.len() - 1]);
+            if let [.., marker, stage] = remainder.as_slice()
+                && marker.eq_ignore_ascii_case("AS")
+            {
+                stages.insert(*stage);
             }
         }
     }
@@ -644,7 +646,9 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() -> anyhow::Result<()> {
     let start = tasks
         .find("NEO4J_CREDENTIAL_RECONCILIATION_BEGIN")
         .context("Neo4j task must delimit credential reconciliation")?;
-    let reconciliation = &tasks[start..];
+    let reconciliation = tasks
+        .get(start..)
+        .context("Neo4j reconciliation marker must be a character boundary")?;
 
     for required in [
         "tr -d '\\r\\n' > \"$secret_dir/password\"",
@@ -693,7 +697,10 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() -> anyhow::Result<()> {
         "a failed retained-storage probe must abort credential reconciliation"
     );
     assert!(
-        !tasks[retained_probe..storage_apply].contains("kubectl get pvc"),
+        !tasks
+            .get(retained_probe..storage_apply)
+            .context("Neo4j retained-storage section must have valid boundaries")?
+            .contains("kubectl get pvc"),
         "an empty PVC from interrupted bootstrap is not retained Neo4j data"
     );
     assert!(
@@ -748,11 +755,15 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
     let coordinator_start = worker_manifest
         .find("        - name: coordinator\n")
         .ok_or_else(|| anyhow::anyhow!("Hive coordinator container"))?;
-    let coordinator = &worker_manifest[coordinator_start..];
+    let coordinator = worker_manifest
+        .get(coordinator_start..)
+        .context("Hive coordinator marker must be a character boundary")?;
     let coordinator_end = coordinator
         .find("        - name: auth-broker\n")
         .ok_or_else(|| anyhow::anyhow!("container after Hive coordinator"))?;
-    let coordinator = &coordinator[..coordinator_end];
+    let coordinator = coordinator
+        .get(..coordinator_end)
+        .context("Hive coordinator boundary must be valid UTF-8")?;
     assert!(
         coordinator.contains(
             "            - name: workspace\n              mountPath: /workspace\n              \

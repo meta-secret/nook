@@ -251,7 +251,12 @@ fn assignment_body<'a>(bake: &'a str, name: &str) -> &'a str {
     );
     let mut end = rest.len();
     for (idx, _) in rest.match_indices('\n') {
-        let line = rest[idx + 1..].lines().next().unwrap_or("");
+        let line = rest
+            .get(idx + 1..)
+            .unwrap_or_else(|| panic!("Bake assignment {name} line must be valid UTF-8"))
+            .split('\n')
+            .next()
+            .unwrap_or_else(|| panic!("Bake assignment {name} must expose its next line"));
         if line.starts_with("target \"") {
             end = idx;
             break;
@@ -264,7 +269,9 @@ fn assignment_body<'a>(bake: &'a str, name: &str) -> &'a str {
             break;
         }
     }
-    rest[..end].trim()
+    rest.get(..end)
+        .unwrap_or_else(|| panic!("Bake assignment {name} boundary must be valid UTF-8"))
+        .trim()
 }
 
 fn target_body<'a>(bake: &'a str, name: &str) -> &'a str {
@@ -276,13 +283,18 @@ fn target_body<'a>(bake: &'a str, name: &str) -> &'a str {
         .find('{')
         .unwrap_or_else(|| panic!("target {name} missing body"));
     let mut depth = 0usize;
-    for (idx, ch) in rest[start..].char_indices() {
+    let body = rest
+        .get(start..)
+        .unwrap_or_else(|| panic!("Bake target {name} body must start on a character boundary"));
+    for (idx, ch) in body.char_indices() {
         match ch {
             '{' => depth += 1,
             '}' => {
                 depth -= 1;
                 if depth == 0 {
-                    return &rest[start..=start + idx];
+                    return rest.get(start..=start + idx).unwrap_or_else(|| {
+                        panic!("Bake target {name} body must end on a character boundary")
+                    });
                 }
             }
             _ => {}
