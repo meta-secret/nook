@@ -3,6 +3,7 @@ import { expect, test } from './fixtures'
 import {
   clearBrowserVault,
   connectLocalVault,
+  disableVaultIdleLock,
   expandSettingsSection,
   flushNookLogPersistQueue,
   mockBip39Wordlist,
@@ -761,6 +762,7 @@ test.describe('local vault', () => {
     page,
     context,
   }) => {
+    await disableVaultIdleLock(page)
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     const items = Array.from({ length: 55 }, (_, index) => ({
       type: 1,

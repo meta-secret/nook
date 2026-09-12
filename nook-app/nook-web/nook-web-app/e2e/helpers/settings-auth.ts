@@ -26,6 +26,41 @@ import {
   waitForVaultOperationsIdle,
 } from './vault-runtime'
 
+export type DeviceProtectionAuthorizationObservation = {
+  readonly overlayVisible: boolean
+  readonly unlockVisible: boolean
+  readonly pickerVisible: boolean
+  readonly lockedAccessVisible: boolean
+  readonly authorizeReady: boolean
+  readonly workspaceUnlocked: boolean
+}
+
+export type DeviceProtectionAuthorizationGateState =
+  | 'overlay'
+  | 'unlock'
+  | 'picker'
+  | 'locked-access'
+  | 'authorize'
+  | 'unlocked'
+  | 'waiting'
+
+export function deviceProtectionAuthorizationGateState({
+  overlayVisible,
+  unlockVisible,
+  pickerVisible,
+  lockedAccessVisible,
+  authorizeReady,
+  workspaceUnlocked,
+}: DeviceProtectionAuthorizationObservation): DeviceProtectionAuthorizationGateState {
+  if (overlayVisible) return 'overlay'
+  if (unlockVisible) return 'unlock'
+  if (pickerVisible) return 'picker'
+  if (lockedAccessVisible) return 'locked-access'
+  if (workspaceUnlocked) return 'unlocked'
+  if (authorizeReady) return 'authorize'
+  return 'waiting'
+}
+
 /** Expand the login enrollment accordion on the login gate. */
 export async function expandLoginEnrollmentPanel(page: Page) {
   const toggle = page.getByTestId('login-enrollment-toggle')
@@ -443,24 +478,43 @@ export async function authorizeDeviceProtection(
     }
   }
 
+  const authorizationGateState = async () => {
+    const observation: DeviceProtectionAuthorizationObservation = {
+      overlayVisible: await overlay.isVisible(),
+      unlockVisible: await unlockVaultButton.isVisible(),
+      pickerVisible: await vaultPicker.isVisible(),
+      lockedAccessVisible: await lockedAccessDashboard.isVisible(),
+      authorizeReady: await authorizeButtonReady(),
+      workspaceUnlocked: await isAuthenticatedWorkspace(),
+    }
+    return deviceProtectionAuthorizationGateState(observation)
+  }
+
   // Locked /devices-access keeps Access inside LoginGate with no Unlock.
   // Multi-vault lock shows the vault picker before Unlock. Wait for a real
   // unlock affordance, locked Access (leave via back), or true auth.
   await expect
     .poll(
       async () => {
-        if (await overlay.isVisible()) return 'overlay'
-        if (await unlockVaultButton.isVisible()) return 'unlock'
-        if (await vaultPicker.isVisible()) return 'picker'
-        if (await lockedAccessDashboard.isVisible()) return 'locked-access'
-        if (await isAuthenticatedWorkspace()) return 'unlocked'
-        return 'waiting'
+        return authorizationGateState()
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .not.toBe('waiting')
 
   if (await isAuthenticatedWorkspace()) {
+    await waitForVaultOperationsIdle(page)
+    return
+  }
+
+  if (await authorizeButtonReady()) {
+    await button.click()
+    await expect(loginGate).toBeHidden({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(authenticatedShell).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await waitForVaultOperationsIdle(page)
     return
   }

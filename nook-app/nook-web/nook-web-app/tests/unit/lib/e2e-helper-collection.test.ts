@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { LogLevel } from '$lib/runtime/log-level'
+import { deviceProtectionAuthorizationGateState } from '../../../e2e/helpers/settings-auth'
 
 const appRoot = process.cwd()
 const importProcessOptions: SpawnSyncOptionsWithStringEncoding = {
@@ -55,6 +56,19 @@ class PlaywrightCollectorProbe {
 }
 
 describe('Playwright collection imports', () => {
+  test('recognizes a ready device-protection authorization action', () => {
+    expect(
+      deviceProtectionAuthorizationGateState({
+        overlayVisible: false,
+        unlockVisible: false,
+        pickerVisible: false,
+        lockedAccessVisible: false,
+        authorizeReady: true,
+        workspaceUnlocked: false,
+      }),
+    ).toBe('authorize')
+  })
+
   test('shares the canonical trace transport without loading WASM', () => {
     expect(LogLevel.Trace).toBe('trace')
   })
