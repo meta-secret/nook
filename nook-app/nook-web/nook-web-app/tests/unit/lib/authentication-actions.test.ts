@@ -8,13 +8,27 @@ import type { AuthenticationWorkflowApproval } from '../../../../nook-web-extens
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { emptyPasswordFormSummary } from '../../../../nook-web-shared/src/extension/password-form-summary-state'
 
+type RevalidationRequest = ConstructorParameters<
+  typeof import('../../../../nook-web-extension/src/content/autofill/workflow-revalidation').RevalidatedAuthenticationAction
+>[0]
+type RevalidationOutcome = Awaited<
+  ReturnType<
+    typeof import('../../../../nook-web-extension/src/content/autofill/workflow-revalidation').RevalidatedAuthenticationAction.prototype.execute
+  >
+>
+
 const actionMocks = vi.hoisted(() => ({
   clearLoginCredentials: vi.fn(),
   fillLoginCredentials: vi.fn(() => true),
   fillGeneratedPassword: vi.fn(() => true),
   fillOneTimeCode: vi.fn(() => true),
   findWorkflowPasskeyControl: vi.fn(),
-  performRevalidation: vi.fn(),
+  performRevalidation: vi.fn(
+    async (request: RevalidationRequest): Promise<RevalidationOutcome> => {
+      void request
+      return { kind: 'rejected' }
+    },
+  ),
   sendAuthenticatorCode: vi.fn(),
   sendLoginFill: vi.fn(),
   sendGeneratePassword: vi.fn(),
@@ -61,9 +75,7 @@ vi.mock(
     },
     RevalidatedAuthenticationAction: class {
       constructor(
-        private readonly request: ConstructorParameters<
-          typeof import('../../../../nook-web-extension/src/content/autofill/workflow-revalidation').RevalidatedAuthenticationAction
-        >[0],
+        private readonly request: RevalidationRequest,
       ) {}
       execute() {
         return actionMocks.performRevalidation(this.request)
@@ -168,15 +180,50 @@ import { widgetState } from '../../../../nook-web-extension/src/content/autofill
 import { authenticatorInteraction } from '../../../../nook-web-extension/src/content/autofill/authenticator-actions'
 import { loginPasskeyInteraction } from '../../../../nook-web-extension/src/content/autofill/login-passkey-actions'
 
-const workflow = {
+const workflow: PasswordFormObservation = {
   root: document,
   formScope: { kind: 'unowned' },
   summary: { ...emptyPasswordFormSummary, newPasswordFieldCount: 1 },
-} as unknown as PasswordFormObservation
+}
+
+const approvalFacts: AuthenticationWorkflowApproval['facts'] = {
+  fields: {
+    usernameFieldCount: 1,
+    currentPasswordFieldCount: 1,
+    newPasswordFieldCount: 0,
+    genericPasswordFieldCount: 0,
+    oneTimeCodeFieldCount: 0,
+    actionablePasswordFieldCount: 1,
+    readonlyPasswordFieldCount: 0,
+  },
+  ceremony: {
+    oneTimeCodeProgression: 'advance-control-required',
+    manualCheckpoint: 'absent',
+    advanceControl: 'present',
+  },
+  authenticator: {
+    authenticatorSetup: 'absent',
+    backupCodesCopy: '',
+    passkeyControl: 'absent',
+    passkeyAccountAvailability: 'unavailable',
+    matchingPasskeyAccountCount: 0,
+  },
+  credentialSubmission: { kind: 'absent' },
+}
 
 const approval: AuthenticationWorkflowApproval = {
   workflowKey: 'login:credentials',
-  facts: {} as AuthenticationWorkflowApproval['facts'],
+  facts: approvalFacts,
+}
+
+function revalidationOutcomeKind(
+  kind: string,
+): RevalidationOutcome['kind'] {
+  return kind === 'acted'
+    ? 'acted'
+    : kind === 'control-missing'
+      ? 'control-missing'
+      : 'action-failed'
 }
 
 function controls() {
@@ -232,12 +279,7 @@ beforeEach(() => {
       revalidateCurrentWorkflow: () => workflow,
     })
     return {
-      kind:
-        actResult.kind === 'acted'
-          ? 'acted'
-          : actResult.kind === 'control-missing'
-            ? 'control-missing'
-            : 'action-failed',
+      kind: revalidationOutcomeKind(actResult.kind),
     }
   })
 })
@@ -266,12 +308,7 @@ describe('revalidated authentication actions', () => {
         revalidateCurrentWorkflow: () => workflow,
       })
       return {
-        kind:
-          actResult.kind === 'acted'
-            ? 'acted'
-            : actResult.kind === 'control-missing'
-              ? 'control-missing'
-              : 'action-failed',
+        kind: revalidationOutcomeKind(actResult.kind),
       }
     })
     actionMocks.sendLoginFill.mockResolvedValue({
@@ -478,7 +515,7 @@ describe('revalidated authentication actions', () => {
         observationBindingToken: 'approved-observation',
         revalidateCurrentWorkflow: () => workflow,
       })
-      return { kind: result.kind }
+      return { kind: revalidationOutcomeKind(result.kind) }
     })
     actionMocks.performRevalidation.mockImplementationOnce(async (request) => {
       const result = request.act({
@@ -486,7 +523,7 @@ describe('revalidated authentication actions', () => {
         observationBindingToken: 'approved-observation',
         revalidateCurrentWorkflow: () => workflow,
       })
-      return { kind: result.kind }
+      return { kind: revalidationOutcomeKind(result.kind) }
     })
     actionMocks.performRevalidation.mockImplementationOnce(async () => ({
       kind: 'rejected',
@@ -528,7 +565,7 @@ describe('revalidated authentication actions', () => {
         observationBindingToken: 'approved-observation',
         revalidateCurrentWorkflow: () => workflow,
       })
-      return { kind: result.kind }
+      return { kind: revalidationOutcomeKind(result.kind) }
     })
     actionMocks.performRevalidation.mockImplementationOnce(async (request) => {
       request.act({
@@ -578,7 +615,7 @@ describe('revalidated authentication actions', () => {
         observationBindingToken: 'approved-observation',
         revalidateCurrentWorkflow: () => workflow,
       })
-      return { kind: result.kind }
+      return { kind: revalidationOutcomeKind(result.kind) }
     })
 
     await expect(
