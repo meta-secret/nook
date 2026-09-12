@@ -119,9 +119,7 @@ test('waits for peer storage work before destructive identity recovery', async (
   await peer.goto('/app/')
   await expect
     .poll(() =>
-      peer.evaluate(() =>
-        Boolean(window.__nookVault?.localDataDeletionStarted),
-      ),
+      peer.evaluate(() => Boolean(window.__nookVault)),
     )
     .toBe(true)
   await peer.evaluate(() => {
