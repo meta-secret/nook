@@ -605,7 +605,10 @@ mod tests {
             ),
             nook_companion_core::ExtensionSetupAfterRemoval::NoPairedVault
         ));
+        #[cfg(target_arch = "wasm32")]
         assert!(migrate_legacy_extension_pairing_state_json("{").is_err());
+        #[cfg(not(target_arch = "wasm32"))]
+        assert!(nook_companion_core::ExtensionPairingState::migrate_legacy_json("{").is_err());
         Ok(())
     }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
