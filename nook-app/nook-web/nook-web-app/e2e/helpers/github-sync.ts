@@ -23,6 +23,7 @@ import {
   GITHUB_SYNC_TIMEOUT_MS,
   sleep,
 } from './environment'
+import { readStringProperty, requireRecord } from './guards'
 import { assertVaultReady } from './settings-auth'
 import { waitForVaultOperationsIdle } from './vault-runtime'
 
@@ -102,13 +103,14 @@ export async function deleteGithubFileIfExists(
       )
     }
 
-    const file = (await fileRes.json()) as { sha: string }
+    const file = requireRecord(await fileRes.json(), 'GitHub vault file')
+    const sha = readStringProperty(file, 'sha', 'GitHub vault file')
     const deleteRes = await githubFetch(contentsUrl, {
       method: 'DELETE',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: 'Reset nook e2e vault',
-        sha: file.sha,
+        sha,
       }),
     })
 

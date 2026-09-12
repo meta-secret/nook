@@ -12,6 +12,8 @@ const repoContextCache = new Map<string, RepoContext>()
 const vaultEtagCache = new Map<string, string>()
 const vaultContentCache = new Map<string, string>()
 
+import { readStringProperty, requireRecord } from './helpers/guards'
+
 export function githubApiHeaders(pat: string) {
   return {
     Authorization: `Bearer ${pat}`,
@@ -100,7 +102,11 @@ export async function githubRepoContext(
   }
 
   const userRes = await githubApiFetch(pat, 'https://api.github.com/user')
-  const { login } = (await userRes.json()) as { login: string }
+  const login = readStringProperty(
+    requireRecord(await userRes.json(), 'GitHub user response'),
+    'login',
+    'GitHub user response',
+  )
   const context: RepoContext = {
     headers: githubApiHeaders(pat),
     repo: `${login}/${repoName}`,
@@ -148,8 +154,9 @@ export async function fetchGithubVaultYaml(
     vaultEtagCache.set(etagKey, nextEtag)
   }
 
-  const data = (await res.json()) as { content: string }
-  const yaml = Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString(
+  const data = requireRecord(await res.json(), 'GitHub vault response')
+  const content = readStringProperty(data, 'content', 'GitHub vault response')
+  const yaml = Buffer.from(content.replace(/\n/g, ''), 'base64').toString(
     'utf-8',
   )
   vaultContentCache.set(etagKey, yaml)

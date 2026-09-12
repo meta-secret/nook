@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import { requireRecord } from './helpers/guards'
 
 const DEFAULT_FILE_NAME = 'nook-events'
 
@@ -57,7 +58,7 @@ export function createLocalE2eICloudVaultStub(
 
       await page.route('https://api.apple-cloudkit.com/**', async (route) => {
         const request = route.request()
-        const url = request.url().split('?')[0]!
+        const url = request.url().split('?')[0] ?? ''
         const method = request.method()
 
         if (url.endsWith('/users/current') && method === 'GET') {
@@ -72,10 +73,21 @@ export function createLocalE2eICloudVaultStub(
         }
 
         if (url.endsWith('/records/lookup') && method === 'POST') {
-          const body = request.postDataJSON() as {
-            records?: Array<{ recordName?: string }>
-          }
-          const [requested = fileName] = [body.records?.[0]?.recordName]
+          const body = requireRecord(
+            request.postDataJSON(),
+            'CloudKit lookup request',
+          )
+          const recordsValue = body.records
+          const firstRecord: unknown = Array.isArray(recordsValue)
+            ? recordsValue[0]
+            : undefined
+          const firstRecordValue: unknown =
+            typeof firstRecord === 'object' && firstRecord !== null
+              ? Object.getOwnPropertyDescriptor(firstRecord, 'recordName')
+                  ?.value
+              : undefined
+          const requested =
+            typeof firstRecordValue === 'string' ? firstRecordValue : fileName
           const event = eventRecord(requested)
           const records = event
             ? [event]
@@ -113,25 +125,44 @@ export function createLocalE2eICloudVaultStub(
         }
 
         if (url.endsWith('/records/modify') && method === 'POST') {
-          const body = request.postDataJSON() as {
-            operations?: Array<{
-              record?: {
-                recordType?: string
-                recordName?: string
-                fields?: {
-                  content?: { value?: string }
-                  event_id?: { value?: string }
-                }
-              }
-            }>
-          }
-          const record = body.operations?.[0]?.record
-          const content = ((v) => (v ? v : ''))(record?.fields?.content?.value)
-          if (record?.recordType === 'NookVaultEvent') {
-            const eventId = ((v) => (v ? v : ''))(
-              record.fields?.event_id?.value,
-            )
-            const [name = eventRecordName(eventId)] = [record.recordName]
+          const body = requireRecord(
+            request.postDataJSON(),
+            'CloudKit modify request',
+          )
+          const operations = body.operations
+          const operation: unknown = Array.isArray(operations)
+            ? operations[0]
+            : undefined
+          const operationRecord: unknown =
+            typeof operation === 'object' && operation !== null
+              ? Object.getOwnPropertyDescriptor(operation, 'record')?.value
+              : undefined
+          const record =
+            typeof operationRecord === 'object' && operationRecord !== null
+              ? requireRecord(operationRecord, 'CloudKit record')
+              : {}
+          const recordType = record.recordType
+          const fields =
+            typeof record.fields === 'object' && record.fields !== null
+              ? requireRecord(record.fields, 'CloudKit fields')
+              : {}
+          const contentField =
+            typeof fields.content === 'object' && fields.content !== null
+              ? requireRecord(fields.content, 'CloudKit content field')
+              : {}
+          const content =
+            typeof contentField.value === 'string' ? contentField.value : ''
+          if (recordType === 'NookVaultEvent') {
+            const eventIdField =
+              typeof fields.event_id === 'object' && fields.event_id !== null
+                ? requireRecord(fields.event_id, 'CloudKit event id field')
+                : {}
+            const eventId =
+              typeof eventIdField.value === 'string' ? eventIdField.value : ''
+            const name =
+              typeof record.recordName === 'string'
+                ? record.recordName
+                : eventRecordName(eventId)
             eventRecords.set(name, {
               eventId,
               content,

@@ -66,6 +66,7 @@ test.describe('event-log sync then add', () => {
     )
     const { stub } = target
     if (!stub) throw new Error('expected the file sync stub')
+    const eventStub = stub
 
     await installSyncRemote(page, target)
     await connectSyncGenesisDevice(page, target)
@@ -78,7 +79,7 @@ test.describe('event-log sync then add', () => {
 
     const staleVaultYaml =
       'schema_version: 1\nstore_id: store_stalee2evnt\nsecrets: []\n# e2e remote stale branch\n'
-    stub!.setVaultYaml(staleVaultYaml)
+    eventStub.setVaultYaml(staleVaultYaml)
 
     const title = uniqueSecretKey('e2e-stale-file-save')
     await addSecret(page, title, 'event-log-save-value')
@@ -86,25 +87,25 @@ test.describe('event-log sync then add', () => {
     await assertNoVaultError(page)
     await expect(page.getByTestId('vault-error')).toHaveCount(0)
     await expect
-      .poll(() => stub!.getEventFileCount(), {
+      .poll(() => eventStub.getEventFileCount(), {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       .toBeGreaterThan(eventFilesBeforeSave)
-    expect(stub!.getEventFilePaths()).toEqual(
+    expect(eventStub.getEventFilePaths()).toEqual(
       expect.arrayContaining([
         expect.stringMatching(
           /^nook-log\/v1\/events\/[A-Za-z0-9_-]{43}\.yaml$/,
         ),
       ]),
     )
-    expect(stub!.getEventFilePaths()).not.toEqual(
+    expect(eventStub.getEventFilePaths()).not.toEqual(
       expect.arrayContaining([
         expect.stringMatching(/^nook-log\/v1\/events\/[^/]+\//),
       ]),
     )
-    expect(stub!.getEventFileContents()).toEqual(
+    expect(eventStub.getEventFileContents()).toEqual(
       expect.arrayContaining([expect.stringContaining('schema_version:')]),
     )
-    expect(stub!.getVaultYaml()).toBe(staleVaultYaml)
+    expect(eventStub.getVaultYaml()).toBe(staleVaultYaml)
   })
 })

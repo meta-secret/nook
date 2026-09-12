@@ -129,7 +129,8 @@ test.describe('file sync provider event log', () => {
     await expectFileTargetsToHaveSameEvents([commonVault, commonVaultBackup])
 
     await connectSyncJoinerDevice(deviceB, commonVault)
-    const join = await sendJoinRequestLocalE2e(deviceB, commonVault.stub!)
+    if (!commonVault.stub) throw new Error('expected the file sync stub')
+    const join = await sendJoinRequestLocalE2e(deviceB, commonVault.stub)
     await approveJoinFromBanner(deviceA, join.deviceId, commonVault, 2)
     await waitForJoinerVaultReady({
       page: deviceB,

@@ -13,6 +13,7 @@ import {
   mockBip39Wordlist,
   readPersistedAppLogs,
   revealSecretInRow,
+  requireValue,
   UI_TIMEOUT_MS,
   uniqueSecretKey,
   unlockVaultOnLogin,
@@ -720,7 +721,12 @@ test.describe('local vault', () => {
     expect(download.suggestedFilename()).toBe('recovery.txt')
     const downloadPath = await download.path()
     expect(downloadPath).toBeTruthy()
-    expect(readFileSync(downloadPath!, 'utf8')).toBe(fileContents)
+    expect(
+      readFileSync(
+        requireValue(downloadPath, 'attachment download path'),
+        'utf8',
+      ),
+    ).toBe(fileContents)
 
     await flushNookLogPersistQueue(page)
     const logs = await readPersistedAppLogs(page, 500)

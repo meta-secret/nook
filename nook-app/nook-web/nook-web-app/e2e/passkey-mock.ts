@@ -1,11 +1,23 @@
 /** Deterministic WebAuthn PRF mock used by browser-flow tests. */
 export function installMockPasskeyRuntime() {
   const credentialId = Uint8Array.from({ length: 32 }, (_, index) => index + 1)
-  let userHandle = window.name.startsWith('nook-e2e-passkey:')
-    ? Uint8Array.from(
-        JSON.parse(window.name.slice('nook-e2e-passkey:'.length)) as number[],
-      )
-    : Uint8Array.from({ length: 32 }, (_, index) => 0xf0 - index)
+  let userHandle = Uint8Array.from({ length: 32 }, (_, index) => 0xf0 - index)
+  if (window.name.startsWith('nook-e2e-passkey:')) {
+    const parsed: unknown = JSON.parse(
+      window.name.slice('nook-e2e-passkey:'.length),
+    )
+    if (!Array.isArray(parsed)) {
+      throw new Error('Persisted e2e passkey handle was not an array.')
+    }
+    const values: number[] = []
+    for (const value of parsed) {
+      if (typeof value !== 'number') {
+        throw new Error('Persisted e2e passkey handle contained invalid data.')
+      }
+      values.push(value)
+    }
+    userHandle = Uint8Array.from(values)
+  }
   const saveUserHandle = () => {
     window.name = `nook-e2e-passkey:${JSON.stringify(Array.from(userHandle))}`
   }

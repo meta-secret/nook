@@ -1,4 +1,3 @@
-import type { VaultState } from '$lib/vault.svelte'
 import { expect, test, type Page } from './fixtures'
 import {
   addVaultPassword,
@@ -58,20 +57,15 @@ async function setSecurityConflict(page: Page, present: boolean) {
 
 async function setContentSyncConflict(page: Page) {
   await page.evaluate(() => {
-    const vault = (
-      window as Window & {
-        __nookVault: {
-          stageContentSyncConflictForTesting(args: {
-            readonly providerLabel: string
-            readonly localVersion: number
-            readonly remoteVersion: number
-          }): void
-        }
-      }
-    ).__nookVault
-    const contentConflictArgs: Parameters<
-      typeof vault.stageContentSyncConflictForTesting
-    >[0] = {
+    const vault = window.__nookVault
+    if (
+      !vault ||
+      !('stageContentSyncConflictForTesting' in vault) ||
+      typeof vault.stageContentSyncConflictForTesting !== 'function'
+    ) {
+      throw new Error('__nookVault conflict harness is unavailable.')
+    }
+    const contentConflictArgs = {
       providerLabel: 'Remote provider',
       localVersion: 1,
       remoteVersion: 2,
@@ -255,9 +249,8 @@ test.describe('sync conflict resolution', () => {
     await expect
       .poll(() =>
         page.evaluate(() => {
-          const vault = (
-            window as Window & { __nookVault: Pick<VaultState, 'admitManager'> }
-          ).__nookVault
+          const vault = window.__nookVault
+          if (!vault) throw new Error('__nookVault is unavailable.')
           const manager = vault.admitManager()
           return manager.isOk()
             ? manager.value.storage_mode

@@ -2,6 +2,7 @@ import { expect, type Page } from '@playwright/test'
 import fs from 'node:fs/promises'
 import { LogLevel } from '../../../nook-web-shared/src/vault-app/lib/runtime/log-level'
 import { UI_TIMEOUT_MS } from './environment'
+import { parseJson, readStringProperty, requireRecord } from './guards'
 
 export type NookLogEntry = {
   ts: string
@@ -74,28 +75,7 @@ export async function readNookLogSnapshot(
     offset: ((v) => (v ? v : 0))(options?.offset),
   }
   return page.evaluate(async (opts) => {
-    const log = (
-      window as Window & {
-        __nookLog?: {
-          flush: () => Promise<void>
-          getLevel: () => string
-          count: () => Promise<number>
-          dump: (opts?: {
-            minLevel?: string
-            limit?: number
-            offset?: number
-          }) => Promise<
-            {
-              ts: string
-              level: string
-              scope: string
-              message: string
-              data?: string
-            }[]
-          >
-        }
-      }
-    ).__nookLog
+    const log = window.__nookLog
     if (!log) throw new Error('__nookLog is not available on the page')
     await log.flush()
     const [total, entries] = await Promise.all([
@@ -152,13 +132,58 @@ export async function fetchAppLogs(
   if (!text) {
     throw new Error('`/app-logs` returned an empty JSON body')
   }
-  const payload = JSON.parse(text) as AppLogsResponse
-  if (payload.meta?.schema !== APP_LOGS_SCHEMA) {
-    throw new Error(
-      `Unexpected /app-logs schema: ${String(payload.meta?.schema)}`,
-    )
+  const payloadRecord = requireRecord(parseJson(text), 'app logs response')
+  const metaRecord = requireRecord(payloadRecord.meta, 'app logs metadata')
+  if (metaRecord.schema !== APP_LOGS_SCHEMA) {
+    throw new Error(`Unexpected /app-logs schema: ${String(metaRecord.schema)}`)
   }
-  return payload
+  const entriesValue = payloadRecord.entries
+  if (!Array.isArray(entriesValue)) {
+    throw new Error('Unexpected /app-logs entries payload')
+  }
+  const entries: NookLogEntry[] = []
+  for (const entryValue of entriesValue) {
+    const entry = requireRecord(entryValue, 'app log entry')
+    const data = entry.data
+    if (data !== undefined && typeof data !== 'string') {
+      throw new Error('Unexpected app log data payload')
+    }
+    entries.push({
+      ts: readStringProperty(entry, 'ts', 'app log entry'),
+      level: readStringProperty(entry, 'level', 'app log entry'),
+      scope: readStringProperty(entry, 'scope', 'app log entry'),
+      message: readStringProperty(entry, 'message', 'app log entry'),
+      ...(data === undefined ? {} : { data }),
+    })
+  }
+  const numbers = ['limit', 'offset', 'returned', 'total'] as const
+  const numericMetadata = Object.fromEntries(
+    numbers.map((key) => {
+      const value = metaRecord[key]
+      if (typeof value !== 'number') {
+        throw new Error(`Unexpected app log metadata: ${key}`)
+      }
+      return [key, value]
+    }),
+  )
+  return {
+    meta: {
+      schema: APP_LOGS_SCHEMA,
+      generatedAt: readStringProperty(
+        metaRecord,
+        'generatedAt',
+        'app logs metadata',
+      ),
+      activeLevel: readStringProperty(
+        metaRecord,
+        'activeLevel',
+        'app logs metadata',
+      ),
+      minLevel: readStringProperty(metaRecord, 'minLevel', 'app logs metadata'),
+      ...numericMetadata,
+    },
+    entries,
+  }
 }
 
 /** Read persisted app log entries when the runtime hook is available. */
@@ -435,7 +460,7 @@ export async function attachNookLogsForTest(
         payload.entries.slice(-APP_LOGS_FAILURE_PRINT_LIMIT),
       )
     }
-    const body = JSON.stringify(payload, (_key, value) => value, 2)
+    const body = JSON.stringify(payload, null, 2)
     const attachmentName =
       options && options.attachmentName
         ? options.attachmentName

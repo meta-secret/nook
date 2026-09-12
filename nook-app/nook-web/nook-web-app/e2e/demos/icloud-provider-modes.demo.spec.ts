@@ -5,6 +5,7 @@ import {
   openLoginProviderSetup,
   UI_TIMEOUT_MS,
 } from '../helpers'
+import { parseJson, requireStringArray } from '../helpers'
 
 const DEMO_BEAT_MS = 700
 
@@ -69,8 +70,12 @@ test('choose private or shared iCloud vault storage', async ({ page }) => {
   // On the unsupported demo origin, show the host gate rather than a premature
   // iCloud sign-in failure, and do not open a second Apple auth window.
   await expect(page.getByTestId('icloud-oauth-error')).toHaveCount(0)
-  const openedUrls = JSON.parse(
-    (await page.locator('html').getAttribute('data-demo-opened-urls')) || '[]',
+  const openedUrls = requireStringArray(
+    parseJson(
+      (await page.locator('html').getAttribute('data-demo-opened-urls')) ||
+        '[]',
+    ),
+    'opened iCloud URLs',
   )
   expect(openedUrls).toEqual([])
   await expect(page.getByTestId('icloud-mode-private')).toHaveAttribute(

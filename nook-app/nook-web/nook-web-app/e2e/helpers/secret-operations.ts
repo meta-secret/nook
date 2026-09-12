@@ -18,6 +18,7 @@ import {
   syncSecretCount,
 } from './local-sync'
 import { assertVaultReady, revealSecretInRow } from './settings-auth'
+import { requireValue } from './guards'
 import {
   waitForStorageChainIdle,
   waitForVaultOperationsIdle,
@@ -88,9 +89,9 @@ export async function addSecret(
           const activeReq = store.get('active_vault_id')
           activeReq.onerror = () => resolve(`idb-read-error:${activeReq.error}`)
           activeReq.onsuccess = () => {
-            const activeId = String(
-              ((v) => (v ? v : ''))(activeReq.result),
-            ).trim()
+            const activeValue: unknown = activeReq.result
+            const activeId =
+              typeof activeValue === 'string' ? activeValue.trim() : ''
             if (!activeId) {
               resolve('')
               return
@@ -217,7 +218,9 @@ export async function assertGenesisVaultOnGithub(
   repoName?: string,
 ) {
   const resolved: GithubE2eTarget =
-    typeof target === 'string' ? { pat: target, repoName: repoName! } : target
+    typeof target === 'string'
+      ? { pat: target, repoName: requireValue(repoName, 'GitHub repo name') }
+      : target
   const snapshot = await waitForGithubVaultState(
     resolved,
     (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,

@@ -64,11 +64,14 @@ test('fill and activate the form-less LinkedIn login surface', async ({
   await expect(username).toHaveValue('pilot@example.test')
   await expect(password).toHaveValue('demo-password-never-recorded')
   expect(
-    await duplicate
-      .locator('input')
-      .evaluateAll((fields) =>
-        fields.map((field) => (field as HTMLInputElement).value),
-      ),
+    await duplicate.locator('input').evaluateAll((fields) =>
+      fields.map((field) => {
+        if (!(field instanceof HTMLInputElement)) {
+          throw new Error('Expected duplicate login inputs.')
+        }
+        return field.value
+      }),
+    ),
   ).toEqual(['', ''])
   await expect(active.getByLabel('Keep me signed in')).toBeChecked()
   await expect(

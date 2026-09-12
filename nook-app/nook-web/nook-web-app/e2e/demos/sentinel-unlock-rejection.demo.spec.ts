@@ -75,11 +75,18 @@ test('a reset Sentinel ceremony replaces stale readiness after a rejected unlock
       await expect(deliveryInput).toHaveValue('')
     }
     const participant = participants[0]
-    const { storeId } = JSON.parse(
+    const deliveryPayload: unknown = JSON.parse(
       await deliveryOutput.first().inputValue(),
-    ) as {
-      storeId: string
+    )
+    if (
+      typeof deliveryPayload !== 'object' ||
+      deliveryPayload === null ||
+      !('storeId' in deliveryPayload) ||
+      typeof deliveryPayload.storeId !== 'string'
+    ) {
+      throw new Error('Sentinel delivery payload did not contain a store id.')
     }
+    const { storeId } = deliveryPayload
     await page.getByTestId('sentinel-genesis-delivery-acknowledgement').check()
     await page.getByTestId('sentinel-genesis-delivery-complete').click()
 

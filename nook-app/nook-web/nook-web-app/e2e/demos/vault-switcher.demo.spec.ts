@@ -4,6 +4,7 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
   UI_TIMEOUT_MS,
+  parseJson,
 } from '../helpers'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
@@ -144,9 +145,19 @@ test('list every local vault and pair the open vault with the companion', async 
           document.documentElement.attributes.getNamedItem(
             'data-demo-extension-message-types',
           )?.value
-        const routedTypes = JSON.parse(
-          ((...[v = '[]']) => v)(routedTypesAttribute),
-        ) as string[]
+        const parsedRoutedTypes: unknown = JSON.parse(
+          routedTypesAttribute ?? '[]',
+        )
+        if (!Array.isArray(parsedRoutedTypes)) {
+          throw new Error('Routed message types were not an array.')
+        }
+        const routedTypes: string[] = []
+        for (const routedType of parsedRoutedTypes) {
+          if (typeof routedType !== 'string') {
+            throw new Error('Routed message types contained a non-string.')
+          }
+          routedTypes.push(routedType)
+        }
         if (type) {
           routedTypes.push(type)
           document.documentElement.setAttribute(
@@ -251,7 +262,7 @@ test('list every local vault and pair the open vault with the companion', async 
   if (typeof encodedLauncherMessage !== 'string') {
     throw new Error('Companion launcher message was not recorded.')
   }
-  const launcherMessage = JSON.parse(encodedLauncherMessage)
+  const launcherMessage: unknown = parseJson(encodedLauncherMessage)
   if (!OpenCompanionLauncherMessageGuard.is(launcherMessage)) {
     throw new Error('Companion launcher message was malformed.')
   }

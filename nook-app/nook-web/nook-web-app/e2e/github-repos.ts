@@ -13,7 +13,7 @@ export function readRegisteredE2eGithubRepos(): string[] {
     if (!fs.existsSync(REGISTRY_PATH)) {
       return []
     }
-    const parsed = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'))
+    const parsed: unknown = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'))
     return Array.isArray(parsed)
       ? parsed.filter((entry): entry is string => typeof entry === 'string')
       : []
@@ -30,10 +30,7 @@ function writeRegisteredRepos(repos: string[]) {
     }
     return
   }
-  fs.writeFileSync(
-    REGISTRY_PATH,
-    `${JSON.stringify(unique, (_key, value) => value, 2)}\n`,
-  )
+  fs.writeFileSync(REGISTRY_PATH, `${JSON.stringify(unique, null, 2)}\n`)
 }
 
 export function registerE2eGithubRepo(repoName: string) {

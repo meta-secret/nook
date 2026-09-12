@@ -31,12 +31,38 @@ async function listLocalVaultEntries(page: import('@playwright/test').Page) {
           reject(((v) => (v ? v : new Error('idb read failed')))(getReq.error))
         getReq.onsuccess = () => {
           try {
-            const raw = getReq.result
-            const parsed =
-              typeof raw === 'string'
-                ? (JSON.parse(raw) as { vaults?: LocalVaultRegistryEntry[] })
-                : { vaults: [] }
-            resolve(((v) => (v ? v : []))(parsed.vaults))
+            const raw: unknown = getReq.result
+            const parsed: unknown =
+              typeof raw === 'string' ? JSON.parse(raw) : undefined
+            if (typeof parsed !== 'object' || parsed === null) {
+              resolve([])
+              return
+            }
+            const vaultsValue: unknown = Object.getOwnPropertyDescriptor(
+              parsed,
+              'vaults',
+            )?.value
+            if (!Array.isArray(vaultsValue)) {
+              resolve([])
+              return
+            }
+            const entries: LocalVaultRegistryEntry[] = []
+            for (const value of vaultsValue) {
+              if (typeof value !== 'object' || value === null) continue
+              const storeId: unknown = Object.getOwnPropertyDescriptor(
+                value,
+                'store_id',
+              )?.value
+              const label: unknown = Object.getOwnPropertyDescriptor(
+                value,
+                'label',
+              )?.value
+              entries.push({
+                ...(typeof storeId === 'string' ? { store_id: storeId } : {}),
+                ...(typeof label === 'string' ? { label } : {}),
+              })
+            }
+            resolve(entries)
           } catch (error) {
             reject(error)
           }

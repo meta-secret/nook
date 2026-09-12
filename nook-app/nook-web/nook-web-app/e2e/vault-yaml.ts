@@ -54,11 +54,6 @@ type StoredVaultYaml = {
   sentinel_shares?: StoredSecretRecord[]
 }
 
-type JoinRequestJson = {
-  device_id?: string
-  public_key?: string
-}
-
 type EventSecretRecord = {
   id?: string
   type?: StoredSecretRecord['type']
@@ -89,6 +84,38 @@ type VaultEventOperation = {
 type VaultEventYaml = {
   created_at?: string
   operations?: VaultEventOperation[]
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isStoredVaultYaml(value: unknown): value is StoredVaultYaml {
+  if (!isObjectRecord(value)) return false
+  for (const key of [
+    'secrets',
+    'auth',
+    'joins',
+    'members',
+    'unlock',
+    'password_entries',
+    'sentinel_shares',
+  ]) {
+    const field = value[key]
+    if (field !== undefined && field !== null && typeof field !== 'object') {
+      return false
+    }
+  }
+  return true
+}
+
+function isVaultEventYaml(value: unknown): value is VaultEventYaml {
+  if (!isObjectRecord(value)) return false
+  const operations = value.operations
+  return (
+    operations === undefined ||
+    (Array.isArray(operations) && operations.every(isObjectRecord))
+  )
 }
 
 export enum PasswordEnvelopeCiphertextStateKind {
@@ -126,10 +153,11 @@ function parseJoinValue(
   key: string,
   value: string,
 ): { deviceId: string; publicKey: string } {
-  const payload = JSON.parse(value) as JoinRequestJson
+  const parsed: unknown = JSON.parse(value)
+  const payload = isObjectRecord(parsed) ? parsed : {}
   return {
-    deviceId: ((...[v = key]) => v)(payload.device_id),
-    publicKey: ((v) => (v ? v : ''))(payload.public_key),
+    deviceId: typeof payload.device_id === 'string' ? payload.device_id : key,
+    publicKey: typeof payload.public_key === 'string' ? payload.public_key : '',
   }
 }
 
@@ -144,7 +172,8 @@ function collectPasswordEntries(vault: StoredVaultYaml): PasswordEntryYaml[] {
 }
 
 export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
-  const vault = parseYaml(yaml) as StoredVaultYaml
+  const parsed: unknown = parseYaml(yaml)
+  const vault: StoredVaultYaml = isStoredVaultYaml(parsed) ? parsed : {}
 
   const secretIds = ((v) => (v ? v : []))(vault.secrets).map(
     (record) => record.id,
@@ -221,7 +250,10 @@ function passwordEventEnvelope(
 
 function sortEventYamls(eventYamls: string[]): VaultEventYaml[] {
   return eventYamls
-    .map((yaml) => parseYaml(yaml) as VaultEventYaml)
+    .map((yaml) => {
+      const parsed: unknown = parseYaml(yaml)
+      return isVaultEventYaml(parsed) ? parsed : {}
+    })
     .sort((left, right) =>
       ((v) => (v ? v : ''))(left.created_at).localeCompare(
         ((v) => (v ? v : ''))(right.created_at),
@@ -475,7 +507,8 @@ export function assertEnrolledVaultYaml(
     )
   }
 
-  const vault = parseYaml(snapshot.raw) as StoredVaultYaml
+  const parsed: unknown = parseYaml(snapshot.raw)
+  const vault: StoredVaultYaml = isStoredVaultYaml(parsed) ? parsed : {}
   const authHasPlaintextAgeKey = ((v) => (v ? v : []))(vault.auth).some(
     (record) =>
       record.secrets_key.includes('age1') ||

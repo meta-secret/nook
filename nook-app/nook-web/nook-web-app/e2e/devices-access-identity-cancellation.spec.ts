@@ -63,13 +63,7 @@ test.describe('devices and access identity cancellation', () => {
         if (!('__nookVault' in window)) {
           throw new Error('Vault runtime is not exposed')
         }
-        return (
-          window as Window & {
-            __nookVault: {
-              readonly deviceProtectionStatus: number
-            }
-          }
-        ).__nookVault.deviceProtectionStatus
+        return window.__nookVault?.deviceProtectionStatus
       }),
     ).toBe(DeviceProtectionStatus.Unlocked)
   })

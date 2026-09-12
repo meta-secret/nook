@@ -1,5 +1,10 @@
 import { expect, test } from '../fixtures'
-import { connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
+import {
+  connectLocalVault,
+  parseJson,
+  requireStringArray,
+  UI_TIMEOUT_MS,
+} from '../helpers'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
   OpenCompanionLauncherMessage as OpenCompanionLauncherMessageGuard,
@@ -83,9 +88,19 @@ test('offer browser extension install on vault home and in Devices', async ({
           document.documentElement.attributes.getNamedItem(
             'data-demo-extension-message-types',
           )?.value
-        const routedTypes = JSON.parse(
-          ((...[v = '[]']) => v)(routedTypesAttribute),
-        ) as string[]
+        const parsedRoutedTypes: unknown = JSON.parse(
+          routedTypesAttribute ?? '[]',
+        )
+        if (!Array.isArray(parsedRoutedTypes)) {
+          throw new Error('Routed message types were not an array.')
+        }
+        const routedTypes: string[] = []
+        for (const routedType of parsedRoutedTypes) {
+          if (typeof routedType !== 'string') {
+            throw new Error('Routed message types contained a non-string.')
+          }
+          routedTypes.push(routedType)
+        }
         if (type) {
           routedTypes.push(type)
           document.documentElement.setAttribute(
@@ -151,22 +166,23 @@ test('offer browser extension install on vault home and in Devices', async ({
   if (typeof encodedLauncherMessage !== 'string') {
     throw new Error('Companion launcher message was not recorded.')
   }
-  const launcherMessage = JSON.parse(encodedLauncherMessage)
+  const launcherMessage: unknown = parseJson(encodedLauncherMessage)
   if (!OpenCompanionLauncherMessageGuard.is(launcherMessage)) {
     throw new Error('Companion launcher message was malformed.')
   }
   expect(launcherMessage.payload).toEqual({ intent: 'pair' })
-  const routedTypes = JSON.parse(
-    ((...[v = '[]']) => v)(
-      await page
+  const routedTypes = requireStringArray(
+    parseJson(
+      (await page
         .locator('html')
         .evaluate(
           (element) =>
             element.attributes.getNamedItem('data-demo-extension-message-types')
               ?.value,
-        ),
+        )) ?? '[]',
     ),
-  ) as string[]
+    'routed extension message types',
+  )
   expect(routedTypes).toEqual([
     'nook:extension-paired-vault-identity-discovery',
     'nook:open-companion-launcher',
@@ -202,17 +218,18 @@ test('offer browser extension install on vault home and in Devices', async ({
   )
   // Moving between extension setup surfaces must not replay the session-owned
   // launcher request. The browser lifecycle keeps one operation per click.
-  const routedTypesAfterSettings = JSON.parse(
-    ((...[v = '[]']) => v)(
-      await page
+  const routedTypesAfterSettings = requireStringArray(
+    parseJson(
+      (await page
         .locator('html')
         .evaluate(
           (element) =>
             element.attributes.getNamedItem('data-demo-extension-message-types')
               ?.value,
-        ),
+        )) ?? '[]',
     ),
-  ) as string[]
+    'routed extension message types after settings',
+  )
   expect(routedTypesAfterSettings).toEqual([
     extensionInstallDemoMessageTypes.pairedVaultIdentityDiscovery,
     extensionInstallDemoMessageTypes.openCompanionLauncher,

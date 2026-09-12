@@ -1,11 +1,6 @@
-import type { VaultState } from '$lib/vault.svelte'
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import {
-  DeviceAccessProtectionKind,
-  NookDeviceAccessTextKind,
-  type NookVaultManager,
-} from '$app-wasm'
+import { DeviceAccessProtectionKind, NookDeviceAccessTextKind } from '$app-wasm'
 import {
   addVaultPassword,
   attachNookLogsForTest,
@@ -15,11 +10,6 @@ import {
   saveAuthProvidersInBrowser,
   unselectedAuthProviderSeedScope,
 } from './helpers'
-
-type IdentityDirectorySnapshotRequestOwner = Pick<
-  NookVaultManager,
-  'identity_directory_snapshot_request'
->
 
 async function openRelationshipGraph(page: Page): Promise<void> {
   const graphView = page.getByTestId('devices-access-layout-graph')
@@ -406,15 +396,7 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('login-gate').getByTestId('devices-access-dashboard'),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     const dashboardVaultIsAuthenticated = () =>
-      page.evaluate(() =>
-        '__nookVault' in window
-          ? (
-              window as Window & {
-                __nookVault: { readonly isAuthenticated: boolean }
-              }
-            ).__nookVault.isAuthenticated
-          : false,
-      )
+      page.evaluate(() => window.__nookVault?.isAuthenticated ?? false)
     expect(await dashboardVaultIsAuthenticated()).toBe(false)
     await workIdentity.click()
     await expect(workIdentity).toHaveAttribute('data-selected', 'true')
@@ -648,23 +630,25 @@ test.describe('devices and access dashboard', () => {
   }) => {
     await connectLocalVault(page)
     const preparationFailure = await page.evaluate((unknownTextKind) => {
+      type CallableMember = {
+        apply: (thisArg: unknown, argArray: never[]) => unknown
+      }
+      const bindMember = (value: unknown, receiver: unknown): unknown => {
+        if (typeof value !== 'function') return value
+        const callable: CallableMember = value
+        return (...args: never[]) => callable.apply(receiver, args)
+      }
       if (!('__nookVault' in window)) {
         return 'Vault runtime is not exposed'
       }
-      const vault = (
-        window as Window & {
-          __nookVault: Pick<VaultState, 'admitManager'>
-        }
-      ).__nookVault
+      const vault = window.__nookVault
       const admission = vault.admitManager()
       if (admission.isErr()) return admission.error.translationKey
       const manager = admission.value
-      const managerPrototype = Reflect.getPrototypeOf(
-        manager,
-      ) as IdentityDirectorySnapshotRequestOwner
+      const originalRequest =
+        manager.identity_directory_snapshot_request.bind(manager)
       manager.identity_directory_snapshot_request = () => {
-        const request =
-          managerPrototype.identity_directory_snapshot_request.call(manager)
+        const request = originalRequest()
         const resolve = request.resolve.bind(request)
         request.resolve = async () => {
           const snapshot = await resolve()
@@ -686,20 +670,18 @@ test.describe('devices and access dashboard', () => {
                           },
                         }
                       }
-                      const value = Reflect.get(
+                      const value: unknown = Reflect.get(
                         accessTarget,
                         accessProperty,
                         accessTarget,
                       )
-                      return typeof value === 'function'
-                        ? value.bind(accessTarget)
-                        : value
+                      return bindMember(value, accessTarget)
                     },
                   })
                 }
               }
-              const value = Reflect.get(target, property, target)
-              return typeof value === 'function' ? value.bind(target) : value
+              const value: unknown = Reflect.get(target, property, target)
+              return bindMember(value, target)
             },
           })
         }
@@ -725,23 +707,25 @@ test.describe('devices and access dashboard', () => {
   }) => {
     await connectLocalVault(page)
     const preparationFailure = await page.evaluate((companionProtection) => {
+      type CallableMember = {
+        apply: (thisArg: unknown, argArray: never[]) => unknown
+      }
+      const bindMember = (value: unknown, receiver: unknown): unknown => {
+        if (typeof value !== 'function') return value
+        const callable: CallableMember = value
+        return (...args: never[]) => callable.apply(receiver, args)
+      }
       if (!('__nookVault' in window)) {
         return 'Vault runtime is not exposed'
       }
-      const vault = (
-        window as Window & {
-          __nookVault: Pick<VaultState, 'admitManager'>
-        }
-      ).__nookVault
+      const vault = window.__nookVault
       const admission = vault.admitManager()
       if (admission.isErr()) return admission.error.translationKey
       const manager = admission.value
-      const managerPrototype = Reflect.getPrototypeOf(
-        manager,
-      ) as IdentityDirectorySnapshotRequestOwner
+      const originalRequest =
+        manager.identity_directory_snapshot_request.bind(manager)
       manager.identity_directory_snapshot_request = () => {
-        const request =
-          managerPrototype.identity_directory_snapshot_request.call(manager)
+        const request = originalRequest()
         const resolve = request.resolve.bind(request)
         request.resolve = async () => {
           const snapshot = await resolve()
@@ -755,20 +739,18 @@ test.describe('devices and access dashboard', () => {
                       if (accessProperty === 'protection') {
                         return companionProtection
                       }
-                      const value = Reflect.get(
+                      const value: unknown = Reflect.get(
                         accessTarget,
                         accessProperty,
                         accessTarget,
                       )
-                      return typeof value === 'function'
-                        ? value.bind(accessTarget)
-                        : value
+                      return bindMember(value, accessTarget)
                     },
                   })
                 }
               }
-              const value = Reflect.get(target, property, target)
-              return typeof value === 'function' ? value.bind(target) : value
+              const value: unknown = Reflect.get(target, property, target)
+              return bindMember(value, target)
             },
           })
         }
@@ -905,30 +887,55 @@ test.describe('devices and access dashboard', () => {
             const store = transaction.objectStore('vault')
             const keyringRequest = store.get('local_identity_keyring_v1')
             keyringRequest.onsuccess = () => {
-              const keyringRaw = keyringRequest.result
+              const keyringRaw: unknown = keyringRequest.result
               if (typeof keyringRaw !== 'string') {
                 reject(new Error('Local identity keyring is missing'))
                 return
               }
-              const keyring = JSON.parse(keyringRaw) as {
-                entries: Array<{ appId: string }>
+              const keyring: unknown = JSON.parse(keyringRaw)
+              if (typeof keyring !== 'object' || keyring === null) {
+                reject(new Error('Local identity keyring was not an object'))
+                return
               }
-              const appId = keyring.entries[0]?.appId
-              if (!appId) {
+              const entriesValue: unknown = Object.getOwnPropertyDescriptor(
+                keyring,
+                'entries',
+              )?.value
+              if (!Array.isArray(entriesValue)) {
+                reject(new Error('Local identity keyring has no entries'))
+                return
+              }
+              const firstEntry: unknown = entriesValue[0]
+              if (typeof firstEntry !== 'object' || firstEntry === null) {
                 reject(new Error('Local identity keyring has no app key'))
                 return
               }
+              const appIdValue: unknown = Object.getOwnPropertyDescriptor(
+                firstEntry,
+                'appId',
+              )?.value
+              if (typeof appIdValue !== 'string' || !appIdValue) {
+                reject(new Error('Local identity keyring has no app key'))
+                return
+              }
+              const appId = appIdValue
               const profileKey = `device_access_profile:${appId}`
               const profileRequest = store.get(profileKey)
               profileRequest.onsuccess = () => {
-                const raw = profileRequest.result
+                const raw: unknown = profileRequest.result
                 if (typeof raw !== 'string') {
                   reject(new Error('Device access profile is missing'))
                   return
                 }
-                const profile = JSON.parse(raw) as { verifiedVaults: string[] }
-                profile.verifiedVaults = []
-                store.put(JSON.stringify(profile), profileKey)
+                const profile: unknown = JSON.parse(raw)
+                if (typeof profile !== 'object' || profile === null) {
+                  reject(new Error('Device access profile was not an object'))
+                  return
+                }
+                store.put(
+                  JSON.stringify({ ...profile, verifiedVaults: [] }),
+                  profileKey,
+                )
               }
               profileRequest.onerror = () => reject(profileRequest.error)
             }

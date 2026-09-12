@@ -8,6 +8,9 @@ import {
   flushNookLogPersistQueue,
   readPersistedAppLogs,
   UI_TIMEOUT_MS,
+  parseJson,
+  readStringProperty,
+  requireRecord,
 } from './helpers'
 
 async function openFreshDevice(
@@ -199,8 +202,15 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
       .nth(1)
       .getByTestId('sentinel-genesis-delivery-output')
       .inputValue()
-    const parsedDelivery = JSON.parse(deviceBDelivery) as { storeId: string }
-    memberStoreId = parsedDelivery.storeId
+    const parsedDelivery = requireRecord(
+      parseJson(deviceBDelivery),
+      'Sentinel delivery payload',
+    )
+    memberStoreId = readStringProperty(
+      parsedDelivery,
+      'storeId',
+      'Sentinel delivery payload',
+    )
     expect(memberStoreId.length).toBeGreaterThan(0)
     expect(deviceBDelivery).not.toContain('githubPat')
     expect(deviceBDelivery).not.toContain('oauthFile')

@@ -50,6 +50,7 @@ import {
   waitForVaultOperationsIdle,
   waitForVaultSyncIdle,
 } from './vault-runtime'
+import { requireRecord, requireValue } from './guards'
 
 export type E2eOauthFileStub =
   | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
@@ -74,7 +75,8 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
                 ((v) => (v ? v : new Error('idb read failed')))(getReq.error),
               )
             getReq.onsuccess = () => {
-              resolveBlob(String(((v) => (v ? v : ''))(getReq.result)))
+              const value: unknown = getReq.result
+              resolveBlob(typeof value === 'string' ? value : '')
             }
           })
         const activeReq = store.get('active_vault_id')
@@ -83,9 +85,9 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
             ((v) => (v ? v : new Error('idb read failed')))(activeReq.error),
           )
         activeReq.onsuccess = () => {
-          const activeId = String(
-            ((v) => (v ? v : ''))(activeReq.result),
-          ).trim()
+          const activeValue: unknown = activeReq.result
+          const activeId =
+            typeof activeValue === 'string' ? activeValue.trim() : ''
           if (activeId) {
             void readBlob(`vault:${activeId}`).then(resolve).catch(reject)
             return
@@ -311,7 +313,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
 
       const handler = async (route: import('@playwright/test').Route) => {
         const request = route.request()
-        const url = request.url().split('?')[0]!
+        const url = request.url().split('?')[0] ?? ''
         const method = request.method()
 
         if (url === 'https://api.github.com/user') {
@@ -380,10 +382,10 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
           `https://api.github.com/repos/${fullRepo}/contents/nook-events`
         ) {
           if (method === 'PUT') {
-            const body = request.postDataJSON() as {
-              content?: string
-              sha?: string
-            }
+            const body = requireRecord(
+              request.postDataJSON(),
+              'GitHub upload request',
+            )
             const hasExistingVault = vaultYaml.trim().length > 0
             if (hasExistingVault && body.sha !== sha) {
               await route.fulfill({
@@ -395,7 +397,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
               })
               return
             }
-            if (body.content) {
+            if (typeof body.content === 'string' && body.content) {
               vaultYaml = Buffer.from(body.content, 'base64').toString('utf8')
               bumpSha()
             }
@@ -427,8 +429,11 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
         if (url.startsWith(`${contentsPrefix}nook-log/`)) {
           const relativePath = url.slice(contentsPrefix.length)
           if (method === 'PUT') {
-            const body = request.postDataJSON() as { content?: string }
-            if (body.content) {
+            const body = requireRecord(
+              request.postDataJSON(),
+              'GitHub event upload request',
+            )
+            if (typeof body.content === 'string' && body.content) {
               const decoded = Buffer.from(body.content, 'base64').toString(
                 'utf8',
               )
@@ -592,7 +597,7 @@ export async function sendJoinRequestLocalE2e(
 
   const snapshot = parseVaultEventLogSnapshot(stub.getEventFileContents())
   assertJoinPendingYaml(snapshot)
-  const join = snapshot.joinEntries[0]!
+  const join = requireValue(snapshot.joinEntries[0], 'join request')
 
   await expect(page.getByTestId('join-enrollment-dialog')).toContainText(
     'Waiting for approval',

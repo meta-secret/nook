@@ -197,7 +197,7 @@ export function createLocalE2eFileSyncVaultStub(
         }
 
         const request = route.request()
-        const url = request.url().split('?')[0]!
+        const url = request.url().split('?')[0] ?? ''
         const method = request.method()
         const fullUrl = request.url()
 

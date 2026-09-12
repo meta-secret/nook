@@ -172,15 +172,20 @@ export async function appendAuthProviders(
               ((v) => (v ? v : new Error('idb read failed')))(getRequest.error),
             )
           getRequest.onsuccess = () => {
-            const rawSnapshot = getRequest.result as unknown
-            const snapshot =
-              rawSnapshot && typeof rawSnapshot === 'object'
-                ? (rawSnapshot as {
-                    providers: SeededAuthProvider[]
-                  })
-                : {
-                    providers: [],
-                  }
+            const rawSnapshot: unknown = getRequest.result
+            const snapshot: { providers: unknown[] } = { providers: [] }
+            if (typeof rawSnapshot === 'object' && rawSnapshot !== null) {
+              const storedProviders: unknown = Object.getOwnPropertyDescriptor(
+                rawSnapshot,
+                'providers',
+              )?.value
+              if (Array.isArray(storedProviders)) {
+                for (const storedProvider of storedProviders) {
+                  const provider: unknown = storedProvider
+                  snapshot.providers.push(provider)
+                }
+              }
+            }
             snapshot.providers.push(
               ...additions.map((provider) => {
                 return {
@@ -439,8 +444,46 @@ export async function readRawAuthProvidersFromIdb(
   return page.evaluate((scopedStateKey) => {
     return new Promise<RawAuthProvidersSnapshot>((resolve, reject) => {
       const resolveEmptySnapshot = () => resolve({ providers: [] })
-      const resolveSnapshot = (rawSnapshot: RawAuthProvidersSnapshot) =>
-        resolve(rawSnapshot)
+      const resolveSnapshot = (rawSnapshot: unknown) => {
+        if (typeof rawSnapshot !== 'object' || rawSnapshot === null) {
+          resolve({ providers: [] })
+          return
+        }
+        const providersValue: unknown = Object.getOwnPropertyDescriptor(
+          rawSnapshot,
+          'providers',
+        )?.value
+        if (!Array.isArray(providersValue)) {
+          resolve({ providers: [] })
+          return
+        }
+        const providers: RawAuthProvidersSnapshot['providers'] = []
+        for (const providerValue of providersValue) {
+          if (typeof providerValue !== 'object' || providerValue === null) {
+            continue
+          }
+          const id: unknown = Object.getOwnPropertyDescriptor(
+            providerValue,
+            'id',
+          )?.value
+          const type: unknown = Object.getOwnPropertyDescriptor(
+            providerValue,
+            'type',
+          )?.value
+          if (typeof id !== 'string' || typeof type !== 'string') continue
+          const provider: RawAuthProvidersSnapshot['providers'][number] = {
+            id,
+            type,
+          }
+          const githubPat: unknown = Object.getOwnPropertyDescriptor(
+            providerValue,
+            'githubPat',
+          )?.value
+          if (typeof githubPat === 'string') provider.githubPat = githubPat
+          providers.push(provider)
+        }
+        resolve({ providers })
+      }
       const request = indexedDB.open('nook_auth', 1)
       request.onerror = () =>
         reject(((v) => (v ? v : new Error('idb open failed')))(request.error))
@@ -453,7 +496,8 @@ export async function readRawAuthProvidersFromIdb(
           reject(((v) => (v ? v : new Error('idb read failed')))(getReq.error))
         getReq.onsuccess = () => {
           if (getReq.result) {
-            resolveSnapshot(getReq.result as RawAuthProvidersSnapshot)
+            const rawSnapshot: unknown = getReq.result
+            resolveSnapshot(rawSnapshot)
             return
           }
           if (scopedStateKey === 'providers') {
@@ -469,7 +513,8 @@ export async function readRawAuthProvidersFromIdb(
             )
           legacyReq.onsuccess = () => {
             if (legacyReq.result) {
-              resolveSnapshot(legacyReq.result as RawAuthProvidersSnapshot)
+              const rawSnapshot: unknown = legacyReq.result
+              resolveSnapshot(rawSnapshot)
               return
             }
             resolveEmptySnapshot()

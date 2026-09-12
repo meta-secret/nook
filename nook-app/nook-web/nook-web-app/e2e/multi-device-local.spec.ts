@@ -15,6 +15,7 @@ import {
   sendJoinRequestLocalE2e,
   triggerVaultSyncRefresh,
   waitForSyncRemoteVaultState,
+  requireValue,
   waitForPendingJoinBanner,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
@@ -85,7 +86,8 @@ test.describe('multi-device local vault with sync provider', () => {
         stub,
         (snapshot) => snapshot.joinEntries.length === 1,
       )
-    ).joinEntries[0]!
+    ).joinEntries[0]
+    if (!join) throw new Error('Expected a pending join entry in remote log')
 
     await triggerVaultSyncRefresh(deviceA)
     await expect(deviceA.getByTestId('vault-last-sync')).toContainText(
@@ -164,5 +166,5 @@ async function parseJoinFromStub(stub: {
   if (snapshot.joinEntries.length === 0) {
     throw new Error('Expected a pending join entry in remote event log')
   }
-  return snapshot.joinEntries[0]!
+  return requireValue(snapshot.joinEntries[0], 'pending join entry')
 }

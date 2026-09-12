@@ -61,9 +61,12 @@ test('fill and continue through the Airbnb mixed identity surface', async ({
     const alternative = page.getByRole('button', { name })
     await expect(alternative).toHaveAttribute('type', 'button')
     expect(
-      await alternative.evaluate(
-        (button) => !(button as HTMLButtonElement).form,
-      ),
+      await alternative.evaluate((button) => {
+        if (!(button instanceof HTMLButtonElement)) {
+          throw new Error('Expected an alternative login button.')
+        }
+        return !button.form
+      }),
     ).toBe(true)
   }
   await expect(page.locator('[role="dialog"]')).toHaveCount(0)

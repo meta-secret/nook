@@ -1,4 +1,3 @@
-import type { VaultState } from '$lib/vault.svelte'
 import {
   expect,
   type Browser,
@@ -19,18 +18,7 @@ export async function clearBrowserVault(page: Page) {
     .toBe(true)
 
   const cleared = await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault: Pick<
-          VaultState,
-          | 'init'
-          | 'stopVaultSync'
-          | 'waitForStorageChain'
-          | 'hasManager'
-          | 'admitManager'
-        >
-      }
-    ).__nookVault
+    const vault = window.__nookVault
     await vault.init()
     vault.stopVaultSync()
     await vault.waitForStorageChain()

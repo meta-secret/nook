@@ -8,6 +8,7 @@ import {
   installDemoChromeStub,
   type ChromeMessage,
 } from './static-chrome-stub'
+import { parseJson, requireRecord, readStringProperty } from '../helpers'
 
 const DEMO_BEAT_MS = 900
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
@@ -56,12 +57,24 @@ test('saves a confirmed authenticator without website success evidence', async (
     }
   })
 
-  const messages = JSON.parse(
+  const messages: Record<string, ChromeMessage> = {}
+  const parsedMessages = parseJson(
     await readFile(
       path.join(extensionDist, '_locales/en/messages.json'),
       'utf8',
     ),
-  ) as Record<string, ChromeMessage>
+  )
+  for (const [key, value] of Object.entries(
+    requireRecord(parsedMessages, 'localized messages'),
+  )) {
+    messages[key] = {
+      message: readStringProperty(
+        requireRecord(value, `localized message ${key}`),
+        'message',
+        `localized message ${key}`,
+      ),
+    }
+  }
   const stubArgs = {
     localizedMessages: messages,
     ...demoDomainEnumArgs,
@@ -198,14 +211,8 @@ test('saves a confirmed authenticator without website success evidence', async (
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
     'Connected to Demo vault',
   )
-  const enrollmentMessages = await page.evaluate(() =>
-    ((v) => (v ? v : []))(
-      (
-        globalThis as unknown as {
-          __nookDemoRuntimeMessageTypes?: string[]
-        }
-      ).__nookDemoRuntimeMessageTypes,
-    ),
+  const enrollmentMessages = await page.evaluate(
+    () => window.__nookDemoRuntimeMessageTypes ?? [],
   )
   expect(enrollmentMessages).toContain(
     'nook:website-authenticator-enroll-stage',

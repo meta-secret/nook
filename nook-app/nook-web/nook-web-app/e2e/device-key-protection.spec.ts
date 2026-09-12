@@ -4,6 +4,9 @@ import {
   createIsolatedContext,
   disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  parseJson,
+  requireRecord,
+  readStringProperty,
   signedSentinelInvitation,
   waitForPersistedAppLog,
 } from './helpers'
@@ -196,8 +199,71 @@ async function readActiveIdentityKeyringEntry(
     page,
     key: 'local_identity_keyring_v1',
   })
-  const directory = JSON.parse(rawDirectory) as IdentityDirectorySnapshot
-  const keyring = JSON.parse(rawKeyring) as LocalIdentityKeyringSnapshot
+  const directoryRecord = requireRecord(
+    parseJson(rawDirectory),
+    'identity directory',
+  )
+  const selectionRecord = requireRecord(
+    directoryRecord.selection,
+    'identity directory selection',
+  )
+  const kind = readStringProperty(
+    selectionRecord,
+    'kind',
+    'identity directory selection',
+  )
+  if (
+    kind !== IdentityDirectorySelectionKind.Empty &&
+    kind !== IdentityDirectorySelectionKind.Selected
+  ) {
+    throw new Error(`Unknown identity directory selection kind: ${kind}`)
+  }
+  const identityIdValue = selectionRecord.identityId
+  if (identityIdValue !== undefined && typeof identityIdValue !== 'string') {
+    throw new Error('Identity directory selection identity id was invalid.')
+  }
+  const directory: IdentityDirectorySnapshot = {
+    selection: {
+      kind,
+      ...(identityIdValue === undefined ? {} : { identityId: identityIdValue }),
+    },
+  }
+
+  const keyringRecord = requireRecord(parseJson(rawKeyring), 'identity keyring')
+  const entriesValue = keyringRecord.entries
+  if (!Array.isArray(entriesValue)) {
+    throw new Error('Identity keyring entries were not an array.')
+  }
+  const entries: LocalIdentityKeyringEntrySnapshot[] = []
+  for (const entryValue of entriesValue) {
+    const entryRecord = requireRecord(entryValue, 'identity keyring entry')
+    const wrappedRecord = requireRecord(
+      entryRecord.wrappedAppKey,
+      'identity keyring wrapped app key',
+    )
+    const protection = readStringProperty(
+      wrappedRecord,
+      'protection',
+      'identity keyring wrapped app key',
+    )
+    const ciphertext = wrappedRecord.ciphertext
+    if (ciphertext !== undefined && typeof ciphertext !== 'string') {
+      throw new Error('Identity keyring ciphertext was invalid.')
+    }
+    entries.push({
+      identityId: readStringProperty(
+        entryRecord,
+        'identityId',
+        'identity keyring entry',
+      ),
+      appId: readStringProperty(entryRecord, 'appId', 'identity keyring entry'),
+      wrappedAppKey: {
+        protection,
+        ...(ciphertext === undefined ? {} : { ciphertext }),
+      },
+    })
+  }
+  const keyring: LocalIdentityKeyringSnapshot = { entries }
   const selectedIdentityId = directory.selection.identityId
   const entry = keyring.entries.find(
     (candidate) => candidate.identityId === selectedIdentityId,
