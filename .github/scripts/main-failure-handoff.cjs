@@ -30,7 +30,7 @@ function requireString(value, label) {
 
 /** @param {unknown} value @param {string} label @returns {number} */
 function requireInteger(value, label) {
-  if (!Number.isInteger(value) || value < 1) {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
     throw new Error(`${label} must be a positive integer`)
   }
   return /** @type {number} */ (value)
