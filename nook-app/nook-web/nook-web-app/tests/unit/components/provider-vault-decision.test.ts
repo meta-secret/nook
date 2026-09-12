@@ -4,21 +4,24 @@ import { describe, expect, test, vi } from 'vitest'
 import {
   DeviceProtectionStatus,
   NookVaultManager,
-  NookSyncConflictReviewState,
   type NookProviderVaultDecisionProjection,
   ProviderVaultDecision,
   ProviderVaultDecisionReason,
   ProviderVaultIdentityEligibility,
-  VaultSyncConflictKind,
 } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import ProviderVaultDecisionPanel from '../../../../nook-web-shared/src/vault-app/lib/components/ProviderVaultDecisionPanel.svelte'
 import { VaultProviderActions } from '../../../../nook-web-shared/src/vault-app/lib/vault/providers.svelte'
 import { ProviderVaultIdentitySelectionKind } from '../../../../nook-web-shared/src/vault-app/lib/vault/provider-vault-decision'
 import { SyncConflictActions } from '../../../../nook-web-shared/src/vault-app/lib/vault/sync-resolution'
-import { LoginVaultSelectionKind } from '../../../../nook-web-shared/src/vault-app/lib/vault/state/provider.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
+import {
+  providerPersistenceDefaults,
+  storedGithubPat,
+  storedGithubRepository,
+  type StorageProvider,
+} from '$lib/auth/providers'
 
 type ProjectedIdentity = {
   readonly id: string
@@ -154,13 +157,18 @@ describe('provider vault decision panel', () => {
 })
 
 test('selected local target survives loading the selected identity providers', async () => {
-  const identityProvider = { id: 'identity-provider', label: 'Identity B' }
+  const identityProvider: StorageProvider = {
+    ...providerPersistenceDefaults(),
+    id: 'identity-provider',
+    type: 'github',
+    label: 'Identity B',
+    githubPat: storedGithubPat('test-pat'),
+    githubRepo: storedGithubRepository('identity/repo'),
+    createdAt: '2026-01-01T00:00:00Z',
+  }
   const openActiveVault = vi.fn()
   const state = VaultStateTestFixture.create()
-  state.selectedLoginVault = {
-    kind: LoginVaultSelectionKind.Selected,
-    storeId: 'store-a',
-  }
+  state.selectLoginVault('store-a')
   state.providers = []
   state.providersLoaded = false
   state.openActiveVault = openActiveVault
@@ -183,14 +191,11 @@ test('selected local target survives loading the selected identity providers', a
 
 test('clears verification after remote conflict import returns before manager admission', async () => {
   const state = VaultStateTestFixture.create()
-  state.syncConflictReview = {
-    state: NookSyncConflictReviewState.RequiresDecision,
-    conflictKind: VaultSyncConflictKind.StoreId,
-    remote_store_id: () => 'store-remote',
-    isPendingProvider: false,
+  state.stageStoreIdSyncConflictForTesting({
     providerLabel: 'Backup',
-    remoteYaml: '',
-  }
+    localStoreId: 'store-local',
+    remoteStoreId: 'store-remote',
+  })
   state.isVerifying = false
   state.errorMsg = ''
   state.clearManager()
@@ -208,7 +213,15 @@ test('clears verification after remote conflict import returns before manager ad
 test('initializes a pristine device without accessing identity-protected providers', () => {
   const applyActiveProviderCredentials = vi.fn()
   const state = VaultStateTestFixture.create()
-  state.providers = [{ id: 'stale-provider' }]
+  state.providers = [
+    {
+      ...providerPersistenceDefaults(),
+      id: 'stale-provider',
+      type: 'github',
+      label: 'Stale provider',
+      createdAt: '2026-01-01T00:00:00Z',
+    },
+  ]
   state.providersLoaded = false
   state.applyActiveProviderCredentials = applyActiveProviderCredentials
   vi.spyOn(state, 'admitManager').mockImplementation(() => {

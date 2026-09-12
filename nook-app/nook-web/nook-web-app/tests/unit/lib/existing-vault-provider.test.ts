@@ -14,10 +14,6 @@ import {
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { ExistingVaultProviderDraft } from '$lib/vault/existing-vault-provider.svelte'
-import {
-  LocalFolderDraftKind,
-  OAuthFileDraftKind,
-} from '$lib/vault/state/provider.svelte'
 
 function providerState(): ProviderActionsContext {
   const oauthFile = defaultOAuthFileConfig({
@@ -31,14 +27,8 @@ function providerState(): ProviderActionsContext {
   const state = VaultStateTestFixture.create()
   state.githubPat = 'github-token'
   state.githubRepo = 'vault-repository'
-  state.oauthFileDraft = {
-    kind: OAuthFileDraftKind.Configured,
-    config: oauthFile,
-  }
-  state.localFolderDraft = {
-    kind: LocalFolderDraftKind.Configured,
-    config: localFolder,
-  }
+  state.configureOauthFile(oauthFile)
+  state.configureLocalFolder(localFolder)
   return state
 }
 

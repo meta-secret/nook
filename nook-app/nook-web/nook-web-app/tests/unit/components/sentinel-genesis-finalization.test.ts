@@ -40,7 +40,7 @@ class GenesisFinalizationFixture {
       this.free()
     },
   } satisfies NookSentinelGenesisParticipantStatus
-  readonly status = {
+  readonly status: NookSentinelGenesisStatus = {
     phase: SentinelGenesisPhase.Inactive,
     participants: [],
     free: vi.fn(),
@@ -84,8 +84,18 @@ class GenesisFinalizationFixture {
   }
 
   retain(phase: SentinelGenesisPhase): void {
-    this.status.phase = phase
-    this.status.participants = [this.currentParticipant]
+    this.setStatusPhase(phase)
+    Object.defineProperty(this.status, 'participants', {
+      configurable: true,
+      value: [this.currentParticipant],
+    })
+  }
+
+  setStatusPhase(phase: SentinelGenesisPhase): void {
+    Object.defineProperty(this.status, 'phase', {
+      configurable: true,
+      value: phase,
+    })
   }
 
   async reject(): Promise<void> {
@@ -205,7 +215,7 @@ describe('Sentinel genesis finalization projection', () => {
   ]) {
     test(`${surface} preserves explicit completion after read failure and removes it after confirmed absence`, async () => {
       const fixture = new GenesisFinalizationFixture()
-      fixture.status.phase = SentinelGenesisPhase.AwaitingCompletionCheck
+      fixture.setStatusPhase(SentinelGenesisPhase.AwaitingCompletionCheck)
       await fixture.reject()
       const view = fixture.renderDashboard(surface)
       const button = requireButtonElement(
@@ -238,7 +248,7 @@ describe('Sentinel genesis finalization projection', () => {
       expect(fixture.state.sentinelGenesisPhase).toBe(
         SentinelGenesisPhase.AwaitingCompletionCheck,
       )
-      fixture.status.phase = SentinelGenesisPhase.Inactive
+      fixture.setStatusPhase(SentinelGenesisPhase.Inactive)
       await expect(
         new SentinelGenesisActions(
           fixture.state,
@@ -263,7 +273,7 @@ describe('Sentinel genesis finalization projection', () => {
     test(`${surface} exposes discovered pending output after an explicit Start rejection`, async () => {
       const fixture = new GenesisFinalizationFixture()
       fixture.state.sentinelGenesisPhase = SentinelGenesisPhase.Inactive
-      fixture.status.phase = SentinelGenesisPhase.AwaitingCompletionCheck
+      fixture.setStatusPhase(SentinelGenesisPhase.AwaitingCompletionCheck)
       const request: Parameters<SentinelGenesisActions['start']>[0] = {
         args: { label: 'Genesis fixture', participantCount: 3, threshold: 2 },
       }

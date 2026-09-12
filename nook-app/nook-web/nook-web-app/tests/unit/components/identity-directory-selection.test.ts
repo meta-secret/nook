@@ -56,11 +56,21 @@ let personalLocalAccess = NookIdentityLocalAccessKind.CurrentBrowser
 function free(): void {}
 
 function unknownText() {
-  return { kind: NookDeviceAccessTextKind.Unknown, free }
+  return {
+    kind: NookDeviceAccessTextKind.Unknown,
+    value: () => '',
+    free,
+    [Symbol.dispose]: free,
+  }
 }
 
 function unavailableTime() {
-  return { kind: NookPasskeyTimestampEvidenceKind.Unavailable, free }
+  return {
+    kind: NookPasskeyTimestampEvidenceKind.Unavailable,
+    value: () => '',
+    free,
+    [Symbol.dispose]: free,
+  }
 }
 
 function identitySnapshot(identity: (typeof identities)[number]) {
@@ -86,6 +96,7 @@ function identitySnapshot(identity: (typeof identities)[number]) {
         labelKind: NookIdentityMemberLabelKind.Known,
         label: () => member.label,
         free,
+        [Symbol.dispose]: free,
       })),
     vaults: () => [],
     vault_store_ids: () => [],

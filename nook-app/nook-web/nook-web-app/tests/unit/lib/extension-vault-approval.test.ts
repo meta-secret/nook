@@ -33,7 +33,6 @@ import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
-import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
@@ -64,7 +63,7 @@ function approvalFixture() {
     () => Result<NookVaultManager, VaultStorageFailure>
   >(() => ok(manager))
   const vault = VaultStateTestFixture.create()
-  vault.activeVault = { kind: ActiveVaultKind.Open, storeId: 'store-1' }
+  vault.openActiveVault('store-1')
   vault.openManager(manager)
   const immediateStorage: VaultState['enqueueStorage'] = async (operation) =>
     operation()

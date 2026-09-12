@@ -19,6 +19,7 @@ export async function clearBrowserVault(page: Page) {
 
   const cleared = await page.evaluate(async () => {
     const vault = window.__nookVault
+    if (!vault) throw new Error('__nookVault is not available on the page')
     await vault.init()
     vault.stopVaultSync()
     await vault.waitForStorageChain()

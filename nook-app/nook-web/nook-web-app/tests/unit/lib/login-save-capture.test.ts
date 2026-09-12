@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { RuntimeMessageDeliveryKind } from '../../../../nook-web-extension/src/content/autofill/login-passkey-actions'
+
+type SendLoginSaveOffer =
+  typeof import('../../../../nook-web-extension/src/content/autofill/login-passkey-actions').authenticationRuntimeTransport.sendLoginSaveOfferRuntimeMessage
 
 const saveMocks = vi.hoisted(() => ({
-  sendOffer: vi.fn(async () => ({
-    kind: 'unavailable',
-  })),
+  sendOffer: vi.fn<SendLoginSaveOffer>(),
 }))
 
 vi.mock(
@@ -22,9 +24,18 @@ vi.mock(
 import { loginSaveInteraction } from '../../../../nook-web-extension/src/content/autofill/login-save'
 import { widgetState } from '../../../../nook-web-extension/src/content/autofill/state'
 
+beforeEach(() => {
+  saveMocks.sendOffer.mockResolvedValue({
+    kind: RuntimeMessageDeliveryKind.Unavailable,
+  })
+})
+
 afterEach(() => {
   document.body.replaceChildren()
   saveMocks.sendOffer.mockClear()
+  saveMocks.sendOffer.mockResolvedValue({
+    kind: RuntimeMessageDeliveryKind.Unavailable,
+  })
   widgetState.busy = false
 })
 

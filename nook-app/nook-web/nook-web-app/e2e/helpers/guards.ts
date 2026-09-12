@@ -31,7 +31,9 @@ export function requireRecord(
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`${label} was not an object.`)
   }
-  return value
+  const record: Record<string, unknown> = {}
+  for (const [key, entry] of Object.entries(value)) record[key] = entry
+  return record
 }
 
 export function readStringProperty(

@@ -1,36 +1,39 @@
 import { ok } from 'neverthrow'
 import { describe, expect, test, vi } from 'vitest'
-import { JoinEnrollmentState } from '$app-wasm'
+import { JoinEnrollmentState, NookLocalVaultUnlockState } from '$app-wasm'
 import { LOCAL_PROVIDER_TYPE } from '$lib/auth/providers'
 import { ExistingVaultImportQueueKind } from '$lib/vault/creation-queue'
 import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
 import {
   ActiveVaultKind,
-  LocalFolderDraftKind,
-  LoginSetupKind,
-  OAuthFileDraftKind,
-  RecoveryDiscoveryKind,
 } from '$lib/vault/state/provider.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '$lib/vault.svelte'
 
 function lifecycleHarness(authenticated = false) {
   const state = VaultStateTestFixture.create()
-  state.loginSetup = {
-    kind: LoginSetupKind.Active,
-    providerType: LOCAL_PROVIDER_TYPE,
-  }
-  state.oauthFileDraft = { kind: OAuthFileDraftKind.NotConfigured }
-  state.localFolderDraft = { kind: LocalFolderDraftKind.NotConfigured }
+  state.activateLoginSetup(LOCAL_PROVIDER_TYPE)
+  state.clearOauthFile()
+  state.clearLocalFolder()
   state.githubPat = ''
   state.githubRepo = ''
-  state.activeVault = { kind: ActiveVaultKind.Open, storeId: 'current-vault' }
-  state.localVaults = [{ storeId: 'incoming-vault' }]
+  state.openActiveVault('current-vault')
+  state.localVaults = [
+    {
+      storeId: 'incoming-vault',
+      label: 'Incoming vault',
+      lastUnlockedAt: '',
+      unlockState: NookLocalVaultUnlockState.NeverUnlocked,
+      display_label: () => 'Incoming vault',
+      free: vi.fn(),
+      [Symbol.dispose]: vi.fn(),
+    },
+  ]
   state.isAuthenticated = authenticated
   state.errorMsg = ''
   state.loginRequiresExistingVault = false
   state.storageMode = LOCAL_PROVIDER_TYPE
-  state.recoveryDiscovery = { kind: RecoveryDiscoveryKind.NotFound }
+  state.clearExistingVaultRecoverySummary()
   state.loginPasswordPrompt = true
   state.joinEnrollmentPrompt = JoinEnrollmentState.None
   state.sentinelCeremonyPrompt = false
@@ -45,11 +48,11 @@ function lifecycleHarness(authenticated = false) {
     state.isAuthenticated = false
   })
   selectVaultForUnlock.mockImplementation(async (storeId: string) => {
-    state.activeVault = { kind: ActiveVaultKind.Open, storeId }
+    state.openActiveVault(storeId)
     return ok()
   })
   activateLoginSetup.mockImplementation((providerType) => {
-    state.loginSetup = { kind: LoginSetupKind.Active, providerType }
+    state.activateLoginSetup(providerType)
   })
   unlockWithPassword.mockImplementation(async () => {
     state.isAuthenticated = true

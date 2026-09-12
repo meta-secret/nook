@@ -9,6 +9,8 @@ import { tick } from 'svelte'
 import {
   NookSentinelUnlockSessionStatus,
   NookVaultManager,
+  NookVaultArchitecture,
+  DeviceProtectionStatus,
   ProviderSyncFreshness,
   SentinelVaultUnlockState,
   SentinelGenesisPhase,
@@ -19,15 +21,10 @@ import LoginGate from '$lib/components/LoginGate.svelte'
 import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
 import SentinelUnlockParticipantHelper from '$lib/components/login/SentinelUnlockParticipantHelper.svelte'
 import { LoginVaultEntryKind } from '$lib/components/login/login-unlock-state'
-import { VaultType } from '$lib/vault/architecture-model'
+import { DeviceMode, ReplicationType } from '$lib/vault/architecture-model'
 import { PasswordEntrySelectionKind } from '$lib/vault/state/session.svelte'
 import {
-  ActiveVaultKind,
   LoginSetupKind,
-  LoginVaultSelectionKind,
-  OAuthFileDraftKind,
-  OAuthSetupPresetKind,
-  RecoveryDiscoveryKind,
 } from '$lib/vault/state/provider.svelte'
 import type { NookSecretRecord } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
@@ -67,15 +64,11 @@ class SentinelFinalizationFixture {
   readonly syncFromStorage = vi.fn<VaultState['syncFromStorage']>(async () =>
     ok(ProviderSyncOutcome.Synced),
   )
-  readonly loadSecretPage = vi.fn<
-    () => Promise<SentinelActionResult<void>>
-  >(async () => ok())
-  readonly ensureProviderSaved = vi.fn<
-    () => Promise<SentinelActionResult<void>>
-  >(async () => ok())
-  readonly loadProviders = vi.fn<
-    () => Promise<SentinelActionResult<void>>
-  >(async () => ok())
+  readonly loadSecretPage = vi.fn<VaultState['loadSecretPage']>(async () => ok())
+  readonly ensureProviderSaved = vi.fn<VaultState['ensureProviderSaved']>(
+    async () => ok(),
+  )
+  readonly loadProviders = vi.fn<VaultState['loadProviders']>(async () => ok())
   readonly refreshPasswordEntriesList = vi.fn<
     () => Promise<SentinelActionResult<void>>
   >(async () => ok())
@@ -111,7 +104,7 @@ class SentinelFinalizationFixture {
     this.state.isInitializing = false
     this.state.isVerifying = false
     this.state.isAuthenticated = false
-    this.state.deviceProtectionReady = true
+    this.state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
     this.state.errorMsg = ''
     this.state.sentinelUnlockSession = this.previous
     this.state.sentinelUnlockRequest = 'current ceremony request'
@@ -119,23 +112,26 @@ class SentinelFinalizationFixture {
     this.state.sentinelCeremonyPrompt = true
     this.state.loginPasswordPrompt = false
     this.state.loginDeviceKeysCapable = true
-    this.state.vaultArchitecture = { vault_type: VaultType.Sentinel }
+    this.state.vaultArchitecture = NookVaultArchitecture.sentinel(
+      DeviceMode.Standard,
+      ReplicationType.Personal,
+      2,
+      3,
+      0,
+    )
     this.state.localVaultPresent = true
     this.state.localVaults = []
-    this.state.syncProviders = []
     this.state.passwordEntries = []
     this.state.sentinelStoredDeliveries = []
     this.state.sentinelGenesisPhase = SentinelGenesisPhase.Inactive
-    this.state.selectedLoginVault = { kind: LoginVaultSelectionKind.NotSelected }
-    this.state.activeVault = { kind: ActiveVaultKind.Closed }
+    this.state.clearSelectedLoginVaultStore()
+    this.state.clearActiveVaultStore()
     this.state.selectedPasswordEntry = {
       kind: PasswordEntrySelectionKind.NotSelected,
     }
-    this.state.recoveryDiscovery = { kind: RecoveryDiscoveryKind.NotFound }
-    this.state.oauthFileDraft = { kind: OAuthFileDraftKind.NotConfigured }
-    this.state.oauthSetupSelection = {
-      kind: OAuthSetupPresetKind.NotSelected,
-    }
+    this.state.clearExistingVaultRecoverySummary()
+    this.state.clearOauthFile()
+    this.state.clearOauthSetupPreset()
     this.state.prepareLocalLogin = vi.fn()
     this.state.refreshSentinelUnlockStatus = vi.fn()
     this.state.openManager(this.manager)
@@ -159,7 +155,8 @@ class SentinelFinalizationFixture {
     this.state.connectStorageArgs = vi.fn()
     this.state.refreshVaultArchitectureFromManager = vi.fn(() => ok())
     this.state.resolveErrorMessage = (message: string) => message
-    this.state.t = (key: string) => key
+    this.state.t = (request: Parameters<VaultState['t']>[0]) =>
+      typeof request === 'string' ? request : request.key
     vi.spyOn(this.previous, 'active', 'get').mockReturnValue(true)
     vi.spyOn(this.previous, 'ready', 'get').mockReturnValue(true)
   }
@@ -177,9 +174,7 @@ class SentinelFinalizationFixture {
   }
 
   async finalize(): Promise<void> {
-    const actions = new SentinelUnlockActions(
-      this.state,
-    )
+    const actions = new SentinelUnlockActions(this.state)
     const result = await actions.finalizeSentinelUnlock()
     if (result.isErr()) actions.presentFinalizationFailure(result.error)
   }
@@ -253,7 +248,7 @@ describe('Sentinel quorum completion presentation', () => {
 
   test('lists stored deliveries only after protection and sync activity are ready', async () => {
     const locked = new SentinelFinalizationFixture()
-    locked.state.deviceProtectionReady = false
+    locked.state.deviceProtectionStatus = DeviceProtectionStatus.Passkey
     const lockedView = render(SentinelUnlockParticipantHelper, {
       vault: locked.vault,
       expanded: true,
@@ -301,7 +296,7 @@ describe('Sentinel quorum completion presentation', () => {
     verifying.dispose()
 
     const syncing = new SentinelFinalizationFixture()
-    syncing.state.isSyncActivityVisible = true
+    syncing.state.isSyncing = true
     const syncingView = render(SentinelUnlockParticipantHelper, {
       vault: syncing.vault,
       expanded: true,
@@ -408,7 +403,7 @@ describe('Sentinel quorum completion presentation', () => {
 
   test('refreshes Sentinel status only after device protection is ready', async () => {
     const locked = new SentinelFinalizationFixture()
-    locked.state.deviceProtectionReady = false
+    locked.state.deviceProtectionStatus = DeviceProtectionStatus.Passkey
     const lockedView = locked.renderLogin(LoginSurface.Gate)
 
     await tick()
@@ -523,9 +518,8 @@ describe('Sentinel quorum completion presentation', () => {
     for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
       const view = fixture.renderLogin(surface)
       expect(
-        requireButtonElement(
-          view.getByTestId('sentinel-unlock-start-btn'),
-        ).disabled,
+        requireButtonElement(view.getByTestId('sentinel-unlock-start-btn'))
+          .disabled,
       ).toBe(true)
       expect(view.queryAllByTestId('unlock-vault-btn')).toHaveLength(0)
       expect(fixture.openVault).not.toHaveBeenCalled()

@@ -6,6 +6,7 @@ import {
   type AuthenticationPageObservationFacts,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
+import { PasswordFormScopeKind } from '../../../../nook-web-shared/src/extension/password-form-fields'
 import type { AuthenticationWorkflowSnapshotView } from '../../../../nook-web-extension/src/lib/auth-workflow-messages'
 
 const actions = vi.hoisted(() => ({
@@ -189,7 +190,7 @@ import { authenticationWidgetRenderer } from '../../../../nook-web-extension/src
 
 const workflow: PasswordFormObservation = {
   root: document,
-  formScope: { kind: 'unowned' },
+  formScope: { kind: PasswordFormScopeKind.Unowned },
   summary: {
     passwordFieldCount: 0,
     currentPasswordFieldCount: 0,

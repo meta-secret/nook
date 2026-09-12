@@ -31,6 +31,23 @@ function buildAppLogsUrl(options?: {
   return query ? `/app-logs?${query}` : '/app-logs'
 }
 
+function parseLogLevel(value: string | undefined): LogLevel {
+  switch (value?.trim().toLowerCase()) {
+    case LogLevel.Error:
+      return LogLevel.Error
+    case LogLevel.Warn:
+      return LogLevel.Warn
+    case LogLevel.Info:
+      return LogLevel.Info
+    case LogLevel.Debug:
+      return LogLevel.Debug
+    case LogLevel.Trace:
+      return LogLevel.Trace
+    default:
+      return LogLevel.Trace
+  }
+}
+
 type AppLogsResponse = {
   meta: {
     schema: typeof APP_LOGS_SCHEMA
@@ -70,7 +87,7 @@ export async function readNookLogSnapshot(
 ): Promise<AppLogsResponse> {
   const query = {
     schema: APP_LOGS_SCHEMA,
-    minLevel: ((...[v = 'trace']) => v)(options?.minLevel),
+    minLevel: parseLogLevel(options?.minLevel),
     limit: ((...[v = APP_LOGS_ATTACHMENT_LIMIT]) => v)(options?.limit),
     offset: ((v) => (v ? v : 0))(options?.offset),
   }
@@ -156,16 +173,19 @@ export async function fetchAppLogs(
       ...(data === undefined ? {} : { data }),
     })
   }
-  const numbers = ['limit', 'offset', 'returned', 'total'] as const
-  const numericMetadata = Object.fromEntries(
-    numbers.map((key) => {
-      const value = metaRecord[key]
-      if (typeof value !== 'number') {
-        throw new Error(`Unexpected app log metadata: ${key}`)
-      }
-      return [key, value]
-    }),
-  )
+  const readNumberProperty = (key: string): number => {
+    const value = metaRecord[key]
+    if (typeof value !== 'number') {
+      throw new Error(`Unexpected app log metadata: ${key}`)
+    }
+    return value
+  }
+  const numericMetadata = {
+    limit: readNumberProperty('limit'),
+    offset: readNumberProperty('offset'),
+    returned: readNumberProperty('returned'),
+    total: readNumberProperty('total'),
+  }
   return {
     meta: {
       schema: APP_LOGS_SCHEMA,

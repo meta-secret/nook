@@ -4,6 +4,8 @@ import {
   AuthenticatorCodeResponseKind,
   GeneratedPasswordResponseKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { PasswordFormScopeKind } from '../../../../nook-web-shared/src/extension/password-form-fields'
+import { RevalidatedAuthenticationActionOutcomeKind } from '../../../../nook-web-extension/src/content/autofill/workflow-revalidation'
 import type { AuthenticationWorkflowApproval } from '../../../../nook-web-extension/src/lib/auth-workflow-messages'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { emptyPasswordFormSummary } from '../../../../nook-web-shared/src/extension/password-form-summary-state'
@@ -26,7 +28,9 @@ const actionMocks = vi.hoisted(() => ({
   performRevalidation: vi.fn(
     async (request: RevalidationRequest): Promise<RevalidationOutcome> => {
       void request
-      return { kind: 'rejected' }
+      return {
+        kind: 'rejected' as RevalidationOutcome['kind'],
+      }
     },
   ),
   sendAuthenticatorCode: vi.fn(),
@@ -182,7 +186,7 @@ import { loginPasskeyInteraction } from '../../../../nook-web-extension/src/cont
 
 const workflow: PasswordFormObservation = {
   root: document,
-  formScope: { kind: 'unowned' },
+  formScope: { kind: PasswordFormScopeKind.Unowned },
   summary: { ...emptyPasswordFormSummary, newPasswordFieldCount: 1 },
 }
 
@@ -220,10 +224,10 @@ function revalidationOutcomeKind(
   kind: string,
 ): RevalidationOutcome['kind'] {
   return kind === 'acted'
-    ? 'acted'
+    ? RevalidatedAuthenticationActionOutcomeKind.Acted
     : kind === 'control-missing'
-      ? 'control-missing'
-      : 'action-failed'
+      ? RevalidatedAuthenticationActionOutcomeKind.ControlMissing
+      : RevalidatedAuthenticationActionOutcomeKind.ActionFailed
 }
 
 function controls() {
@@ -484,7 +488,7 @@ describe('revalidated authentication actions', () => {
     actionMocks.performRevalidation.mockImplementationOnce(async (request) => {
       widgetState.dismissed = true
       expect(request.approvalIsActive()).toBe(false)
-      return { kind: 'rejected' }
+      return { kind: RevalidatedAuthenticationActionOutcomeKind.Rejected }
     })
 
     await loginPasskeyInteraction.proposePasskeyWithNook({
@@ -526,7 +530,7 @@ describe('revalidated authentication actions', () => {
       return { kind: revalidationOutcomeKind(result.kind) }
     })
     actionMocks.performRevalidation.mockImplementationOnce(async () => ({
-      kind: 'rejected',
+      kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
     }))
 
     await expect(

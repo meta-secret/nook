@@ -1,4 +1,5 @@
 import { ok, type Result } from 'neverthrow'
+import { NookLocalVaultUnlockState } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
@@ -55,8 +56,8 @@ vi.mock('$lib/auth/providers', () => ({
   },
 }))
 import { VaultLoginActions } from '$lib/vault/local-login'
-import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 import { NookVaultManager } from '$app-wasm'
+import { LocalLoginPreparationState } from '$lib/vault/state/provider.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '$lib/vault.svelte'
 
@@ -72,11 +73,18 @@ describe('renameLocalVaultLabel', () => {
       new Error('catalog refresh failed'),
     )
     const state = VaultStateTestFixture.create()
-    state.activeVault = {
-      kind: ActiveVaultKind.Open,
-      storeId: 'store-1',
-    }
-    state.localVaults = [{ storeId: 'store-1', label: 'Old name' }]
+    state.openActiveVault('store-1')
+    state.localVaults = [
+      {
+        storeId: 'store-1',
+        label: 'Old name',
+        lastUnlockedAt: '',
+        unlockState: NookLocalVaultUnlockState.NeverUnlocked,
+        display_label: () => 'Old name',
+        free: vi.fn(),
+        [Symbol.dispose]: vi.fn(),
+      },
+    ]
     const manager = new NookVaultManager()
     manager.set_vault_name = setVaultName
     state.openManager(manager)
@@ -119,7 +127,7 @@ describe('selectVaultForUnlock', () => {
     state.clearManager()
     state.errorMsg = ''
     state.isVerifying = false
-    state.localLoginPreparation = 'idle'
+    state.localLoginPreparation = LocalLoginPreparationState.Idle
     state.localVaultPresent = true
     state.dismissSuccess = vi.fn()
     state.openActiveVault = vi.fn()
