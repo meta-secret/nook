@@ -5,12 +5,21 @@ import test from "node:test";
 
 import { Octokit } from "@octokit/rest";
 
-import type { RepoRef } from "../main/github.js";
 import {
   ExactHeadDeploymentAvailability,
   PullRequestAuditClient,
   PullRequestMergeability,
 } from "../main/pr-audit.js";
+import {
+  MockAgentHandoff,
+  MockCodexReview,
+  MockCursorReview,
+  MockJobConclusion,
+  type MockOptions,
+  type MockOverrides,
+  MockRunStatus,
+  repoRef,
+} from "./pr-audit.fixture.js";
 
 class PrAuditMockOctokit {
   constructor(private readonly request: MockOverrides = {}) {}
@@ -426,8 +435,6 @@ class PrAuditCreateMockOctokit {
     return Object.assign(new Octokit(), octokit);
   }
 }
-
-const repoRef = { owner: "meta-secret", repo: "nook" };
 
 void test("buildPrAudit keeps exact-head validation ready after a later unrelated CI run", async () => {
   const audit = await new PullRequestAuditClient(
@@ -944,65 +951,3 @@ void test("buildPrAudit rejects an exact-head run from another base branch", asy
   assert.equal(audit.ready, false);
   assert.match(audit.reasons.join("\n"), /not indexed for the current head/);
 });
-
-enum MockCodexReview {
-  CleanComment = "clean-comment",
-  Dismissed = "dismissed",
-  DuplicateReaction = "duplicate-reaction",
-  Impostor = "impostor",
-  ImpostorCleanComment = "impostor-clean-comment",
-  Missing = "missing",
-  Reaction = "reaction",
-  Review = "review",
-  ReviewDetailsFinding = "review-details-finding",
-  ReviewFinding = "review-finding",
-  StaleCleanComment = "stale-clean-comment",
-}
-
-enum MockCursorReview {
-  Finding = "finding",
-  Missing = "missing",
-  Stale = "stale",
-}
-
-enum MockRunStatus {
-  Completed = "completed",
-  InProgress = "in_progress",
-}
-
-enum MockJobConclusion {
-  Failure = "failure",
-  Success = "success",
-  Skipped = "skipped",
-}
-
-enum MockAgentHandoff {
-  Excluded = "excluded",
-  Included = "included",
-}
-
-type MockOptions = {
-  laterNoopRun?: boolean;
-  agentHandoff: MockAgentHandoff;
-  behindBy?: number;
-  codexReview?: MockCodexReview;
-  currentHeadFinding?: boolean;
-  cursorReview?: MockCursorReview;
-  deletedCommentIds?: number[];
-  dismissedThreads?: number;
-  handledHistoricalFinding?: boolean;
-  historicalFinding?: boolean;
-  legacyAutomationComment?: boolean;
-  legacyAutomationDeletionFails?: boolean;
-  mergeable?: boolean;
-  workflowBaseBranch?: string;
-  headRepository?: RepoRef;
-  nativeConclusion?: MockJobConclusion;
-  omitNativeJob?: boolean;
-  runStatus?: MockRunStatus;
-  resolvedInlineReviewFinding?: boolean;
-  staleBaseRun?: boolean;
-  unresolvedThreads?: number;
-};
-
-type MockOverrides = Omit<MockOptions, "agentHandoff">;
