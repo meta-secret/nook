@@ -9,7 +9,7 @@
 #   suite     — e2e-pr, e2e, sync-live, or all
 
 name: E2E (PR)
-run-name: "E2E PR #${{ inputs.pr_number }} @ ${{ inputs.source_head_sha }} · ${{ inputs.suite }}"
+run-name: "E2E PR #${{ inputs.pr_number }} · ${{ inputs.suite }}"
 
 on:
   workflow_dispatch:
