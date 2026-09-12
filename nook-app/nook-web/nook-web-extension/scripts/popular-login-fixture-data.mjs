@@ -1,3 +1,16 @@
+/** @typedef {{ name?: string, type?: string, id?: string, autocomplete?: string, placeholder?: string, 'aria-label'?: string, 'data-qa'?: string, 'data-testid'?: string }} LoginField */
+/** @typedef {{ fields: LoginField[], submit: { type?: string, name?: string, id?: string, label: string } }} LoginStep */
+/** @typedef {{ quirks: string[], steps: LoginStep[] }} LoginShell */
+/** @typedef {(partial: Record<string, string>) => LoginField} FieldBuilder */
+/** @typedef {(options?: { emailName?: string, emailType?: string, passName?: string, emailAutocomplete?: string, quirks?: string[], submitLabel?: string }) => LoginShell} EmailPasswordBuilder */
+/** @typedef {(options?: { emailName?: string, emailType?: string, passName?: string, continueLabel?: string, signInLabel?: string, quirks?: string[] }) => LoginShell} EmailFirstBuilder */
+/** @typedef {(options?: { userName?: string, passName?: string, submitLabel?: string, quirks?: string[] }) => LoginShell} UsernamePasswordBuilder */
+/** @typedef {[string, string, string, string, string[]]} LoginSiteRow */
+
+/**
+ * @param {{ field: FieldBuilder, emailPassword: EmailPasswordBuilder, usernamePassword: UsernamePasswordBuilder, emailFirst: EmailFirstBuilder }} builders
+ * @returns {{ SPECIAL: Record<string, LoginShell>, SITES: LoginSiteRow[] }}
+ */
 export function buildPopularLoginFixtureData({
   field,
   emailPassword,
@@ -283,6 +296,7 @@ export function buildPopularLoginFixtureData({
    * Curated password-manager-relevant top 100.
    * rank is 1-based popularity within this catalog.
    */
+  /** @type {LoginSiteRow[]} */
   const SITES = [
     [
       'google',

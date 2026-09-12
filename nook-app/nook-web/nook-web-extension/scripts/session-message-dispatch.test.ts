@@ -186,7 +186,9 @@ describe('ExtensionSessionMessageDispatcher', () => {
     ])
     expect(payload.stored_json).toBe('')
     expect(stagedPayloads).toHaveLength(1)
-    expect(stagedPayloads[0].stored_json).toBe('')
+    const [stagedPayload] = stagedPayloads
+    if (!stagedPayload) throw new Error('dispatcher must stage one payload')
+    expect(stagedPayload.stored_json).toBe('')
   })
   test('accepts explicit default queue state for control commands', async () => {
     for (const type of [

@@ -3,6 +3,11 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+/** @typedef {import('playwright').BrowserContext} BrowserContext */
+/** @typedef {import('playwright').Page} Page */
+/** @typedef {{ status?: string, pairedVaults?: string[], selectedVaultName?: string }} StoredExtensionSetup */
+/** @typedef {StoredExtensionSetup | string | number | boolean | string[]} ExtensionStorageValue */
+
 const require = createRequire(import.meta.url)
 const extensionRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -41,7 +46,9 @@ if (!cdpUrl || !extensionId || !simpleVaultUrl) {
     'NOOK_EXTENSION_SETUP_CDP_URL, NOOK_EXTENSION_SETUP_EXTENSION_ID, and NOOK_SIMPLE_VAULT_URL are required',
   )
 }
+const requiredSimpleVaultUrl = simpleVaultUrl
 
+/** @param {string} baseUrl @param {string} candidateUrl */
 function belongsToSimpleVault(baseUrl, candidateUrl) {
   const base = new URL(baseUrl)
   base.hash = ''
@@ -54,15 +61,18 @@ function belongsToSimpleVault(baseUrl, candidateUrl) {
   )
 }
 
+/** @param {BrowserContext} context */
 async function getServiceWorker(context) {
   const [serviceWorker] = context.serviceWorkers()
   if (serviceWorker) return serviceWorker
   return await context.waitForEvent('serviceworker', { timeout: TIMEOUT_MS })
 }
 
+/** @param {BrowserContext} context */
 async function readExtensionStorage(context) {
   const worker = await getServiceWorker(context)
   return worker.evaluate(async () => {
+    /** @returns {Promise<IDBDatabase>} */
     const openDatabase = () =>
       new Promise((resolve, reject) => {
         const request = indexedDB.open('nook_extension', 1)
@@ -77,28 +87,34 @@ async function readExtensionStorage(context) {
     let database = await openDatabase()
     if (!database.objectStoreNames.contains('pairing')) {
       database.close()
-      await new Promise((resolve, reject) => {
+      /** @type {Promise<true>} */
+      const deletion = new Promise((resolve, reject) => {
         const request = indexedDB.deleteDatabase('nook_extension')
-        request.onsuccess = () => resolve()
+        request.onsuccess = () => resolve(true)
         request.onerror = () => reject(request.error)
         request.onblocked = () =>
           reject(new Error('Unable to repair extension pairing storage.'))
       })
+      await deletion
       database = await openDatabase()
     }
     try {
       const transaction = database.transaction('pairing', 'readonly')
       const store = transaction.objectStore('pairing')
-      const keys = await new Promise((resolve, reject) => {
+      /** @type {Promise<IDBValidKey[]>} */
+      const keysRequest = new Promise((resolve, reject) => {
         const request = store.getAllKeys()
         request.onsuccess = () => resolve(request.result)
         request.onerror = () => reject(request.error)
       })
-      const values = await new Promise((resolve, reject) => {
+      const keys = await keysRequest
+      /** @type {Promise<ExtensionStorageValue[]>} */
+      const valuesRequest = new Promise((resolve, reject) => {
         const request = store.getAll()
         request.onsuccess = () => resolve(request.result)
         request.onerror = () => reject(request.error)
       })
+      const values = await valuesRequest
       return Object.fromEntries(
         keys.map((key, index) => [String(key), values[index]]),
       )
@@ -108,6 +124,7 @@ async function readExtensionStorage(context) {
   })
 }
 
+/** @param {Page} page */
 async function advanceCreateVaultWizardToFinalStep(page) {
   const chooser = page.getByTestId('login-create-vault-chooser')
   await chooser.waitFor({ state: 'visible', timeout: TIMEOUT_MS })
@@ -125,6 +142,7 @@ async function advanceCreateVaultWizardToFinalStep(page) {
   }
 }
 
+/** @param {Page} popupPage */
 async function ensurePinProtectedPopup(popupPage) {
   const companionHome = popupPage.getByTestId('extension-toolbar-menu')
   if (await companionHome.isVisible().catch(() => false)) {
@@ -153,15 +171,16 @@ async function ensurePinProtectedPopup(popupPage) {
   await companionHome.waitFor({ state: 'visible', timeout: TIMEOUT_MS })
 }
 
+/** @param {BrowserContext} context @param {Page} popupPage */
 async function createAndApproveVault(context, popupPage) {
   const openedConnectPage = context.waitForEvent('page', {
     timeout: TIMEOUT_MS,
   })
   await popupPage.getByTestId('connect-simple-vault-btn').click()
   const simplePage = await openedConnectPage
-  if (!belongsToSimpleVault(simpleVaultUrl, simplePage.url())) {
+  if (!belongsToSimpleVault(requiredSimpleVaultUrl, simplePage.url())) {
     throw new Error(
-      `Expected Simple Vault connect page under ${simpleVaultUrl}, got ${simplePage.url()}`,
+      `Expected Simple Vault connect page under ${requiredSimpleVaultUrl}, got ${simplePage.url()}`,
     )
   }
 
@@ -210,13 +229,21 @@ async function main() {
   if (
     setup &&
     typeof setup === 'object' &&
+    'status' in setup &&
     setup.status === 'ready' &&
+    'pairedVaults' in setup &&
     Array.isArray(setup.pairedVaults) &&
     setup.pairedVaults.length > 0
   ) {
+    const [firstPairedVault] = setup.pairedVaults
+    const selectedVaultName =
+      'selectedVaultName' in setup &&
+      typeof setup.selectedVaultName === 'string'
+        ? setup.selectedVaultName
+        : firstPairedVault
     console.log('already_paired=true')
     console.log(
-      `Brave profile is already paired with vault "${((...[v = setup.pairedVaults[0]]) => v)(setup.selectedVaultName)}". Leaving Brave open.`,
+      `Brave profile is already paired with vault "${selectedVaultName}". Leaving Brave open.`,
     )
     return
   }
@@ -234,6 +261,7 @@ async function main() {
         if (
           nextSetup &&
           typeof nextSetup === 'object' &&
+          'status' in nextSetup &&
           nextSetup.status === 'ready'
         ) {
           return

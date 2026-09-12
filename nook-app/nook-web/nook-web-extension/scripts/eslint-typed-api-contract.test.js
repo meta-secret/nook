@@ -3,6 +3,15 @@ import { Linter } from 'eslint'
 import ts from 'typescript-eslint'
 import { noRawObjectArgumentsRule } from '../../eslint.config.js'
 
+/** @type {'problem'} */
+const problemRuleType = 'problem'
+/** @type {'error'} */
+const errorSeverity = 'error'
+const typedNoRawObjectArgumentsRule = {
+  ...noRawObjectArgumentsRule,
+  meta: { ...noRawObjectArgumentsRule.meta, type: problemRuleType },
+}
+
 const config = {
   languageOptions: {
     parser: ts.parser,
@@ -14,15 +23,16 @@ const config = {
   plugins: {
     'nook-typed-api': {
       rules: {
-        'no-raw-object-arguments': noRawObjectArgumentsRule,
+        'no-raw-object-arguments': typedNoRawObjectArgumentsRule,
       },
     },
   },
   rules: {
-    'nook-typed-api/no-raw-object-arguments': 'error',
+    'nook-typed-api/no-raw-object-arguments': errorSeverity,
   },
 }
 
+/** @param {string} source */
 function lint(source) {
   return new Linter()
     .verify(source, config)
@@ -32,21 +42,24 @@ function lint(source) {
           'namedParameterDefault',
           'namedParameterType',
           'semanticParameterType',
-        ].includes(message.messageId),
+        ].includes(message.messageId ?? ''),
     )
 }
 
+/** @param {string} source */
 function lintParameterTypes(source) {
   return new Linter()
     .verify(source, config)
     .filter((message) =>
       ['namedParameterType', 'semanticParameterType'].includes(
-        message.messageId,
+        message.messageId ?? '',
       ),
     )
 }
 
+/** @param {string} source */
 function lintWithoutParameterContractEnforcement(source) {
+  /** @type {import('eslint').Linter.Config} */
   const migrationConfig = {
     ...config,
     rules: {

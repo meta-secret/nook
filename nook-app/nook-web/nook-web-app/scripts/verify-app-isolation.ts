@@ -287,13 +287,19 @@ const vaultArtifacts = await Promise.all(
     if (files.some((path) => path.includes('nook_companion_wasm'))) {
       throw new Error(`${root} eagerly ships the companion WASM package.`)
     }
-    return readFile(wasmFiles[0])
+    const [wasmFile] = wasmFiles
+    if (!wasmFile) throw new Error(`${root} has no vault WASM asset.`)
+    return readFile(wasmFile)
   }),
 )
-if (!vaultArtifacts[0].equals(vaultArtifacts[1])) {
+const [simpleVaultArtifact, sentinelVaultArtifact] = vaultArtifacts
+if (!simpleVaultArtifact || !sentinelVaultArtifact) {
+  throw new Error('Both vault artifacts are required for isolation checks.')
+}
+if (!simpleVaultArtifact.equals(sentinelVaultArtifact)) {
   throw new Error('Simple and Sentinel must ship the same audited vault WASM.')
 }
-const vaultWasm = vaultArtifacts[0]
+const vaultWasm = simpleVaultArtifact
 const brotliOptions: Parameters<typeof brotliCompressSync>[1] = {
   params: {
     [zlibConstants.BROTLI_PARAM_QUALITY]: 11,

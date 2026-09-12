@@ -26,9 +26,14 @@ const templatesDir = path.join(fixturesRoot, 'templates')
 const siteShellsPath = path.join(fixturesRoot, 'site-shells.json')
 const legacySitesDir = path.join(fixturesRoot, 'sites')
 
-/** @typedef {{ name: string, type?: string, id?: string, autocomplete?: string, placeholder?: string, 'aria-label'?: string, 'data-qa'?: string, 'data-testid'?: string }} Field */
+/** @typedef {{ name?: string, type?: string, id?: string, autocomplete?: string, placeholder?: string, 'aria-label'?: string, 'data-qa'?: string, 'data-testid'?: string }} Field */
 /** @typedef {{ fields: Field[], submit: { type?: string, name?: string, id?: string, label: string } }} Step */
+/** @typedef {{ quirks: string[], steps: Step[] }} LoginShell */
+/** @typedef {{ emailName?: string, emailType?: string, passName?: string, emailAutocomplete?: string, quirks?: string[], submitLabel?: string }} EmailPasswordOptions */
+/** @typedef {{ userName?: string, passName?: string, submitLabel?: string, quirks?: string[] }} UsernamePasswordOptions */
+/** @typedef {{ emailName?: string, emailType?: string, passName?: string, continueLabel?: string, signInLabel?: string, quirks?: string[] }} EmailFirstOptions */
 
+/** @param {Record<string, string>} partial @returns {Field} */
 function field(partial) {
   return {
     type: 'text',
@@ -36,6 +41,7 @@ function field(partial) {
   }
 }
 
+/** @param {EmailPasswordOptions} options */
 function emailPassword({
   emailName = 'email',
   emailType = 'email',
@@ -70,6 +76,7 @@ function emailPassword({
   }
 }
 
+/** @param {UsernamePasswordOptions} options */
 function usernamePassword({
   userName = 'username',
   passName = 'password',
@@ -102,6 +109,7 @@ function usernamePassword({
   }
 }
 
+/** @param {EmailFirstOptions} options */
 function emailFirst({
   emailName = 'email',
   emailType = 'email',
@@ -160,6 +168,7 @@ if (SITES.length !== 100) {
   process.exit(1)
 }
 
+/** @param {string} id @param {string} family @returns {LoginShell} */
 function shellFor(id, family) {
   if (SPECIAL[id]) return SPECIAL[id]
   if (SPECIAL[family]) return SPECIAL[family]
@@ -258,6 +267,7 @@ const SPECIAL_TEMPLATE_IDS = {
   icloud: 'apple',
 }
 
+/** @param {LoginShell} shell */
 function shapeKey(shell) {
   return JSON.stringify({
     quirks: ((v) => (v ? v : []))(shell.quirks),
@@ -265,6 +275,7 @@ function shapeKey(shell) {
   })
 }
 
+/** @param {LoginShell} shell @returns {{ matched: true, templateName: string } | { matched: false }} */
 function genericTemplateName(shell) {
   const steps = ((v) => (v ? v : []))(shell.steps)
   const names = ((v) => (v ? v : []))(steps[0]?.fields).map(
@@ -302,7 +313,7 @@ const catalog = SITES.map(([id, name, family, loginUrl, hosts], index) => ({
 
 writeFileSync(catalogPath, `${prettyJson(catalog)}\n`)
 
-/** @type {Map<string, { quirks: string[], steps: unknown[] }>} */
+/** @type {Map<string, LoginShell>} */
 const shellsById = new Map()
 for (const site of catalog) {
   const shell = shellFor(site.id, site.family)
@@ -314,19 +325,23 @@ for (const site of catalog) {
 
 /** @type {Map<string, string>} */
 const templateIdByShape = new Map()
-/** @type {Map<string, { id: string, quirks: string[], steps: unknown[] }>} */
+/** @type {Map<string, { id: string, quirks: string[], steps: Step[] }>} */
 const templates = new Map()
 
 for (const site of catalog) {
   const shell = shellsById.get(site.id)
+  if (!shell) throw new Error(`missing generated shell for ${site.id}`)
   const key = shapeKey(shell)
   if (templateIdByShape.has(key)) continue
   const genericTemplate = genericTemplateName(shell)
-  let [
-    templateId = genericTemplate.matched
-      ? genericTemplate.templateName
-      : site.id,
-  ] = [SPECIAL_TEMPLATE_IDS[site.id]]
+  const templateIdOverride = Reflect.get(SPECIAL_TEMPLATE_IDS, site.id)
+  const inferredTemplateId = genericTemplate.matched
+    ? genericTemplate.templateName
+    : site.id
+  let templateId =
+    typeof templateIdOverride === 'string'
+      ? templateIdOverride
+      : inferredTemplateId
   const existing = templates.get(templateId)
   if (existing && shapeKey(existing) !== key) {
     templateId = `${templateId}-${createHash('sha1').update(key).digest('hex').slice(0, 6)}`
@@ -358,7 +373,9 @@ for (const [templateId, template] of [...templates.entries()].sort((a, b) =>
 const siteShells = {}
 for (const site of catalog) {
   const shell = shellsById.get(site.id)
+  if (!shell) throw new Error(`missing generated shell for ${site.id}`)
   const template = templateIdByShape.get(shapeKey(shell))
+  if (!template) throw new Error(`missing template for ${site.id}`)
   siteShells[site.id] = {
     template,
     source: CAPTURE_IDS.has(site.id) ? 'capture' : 'research',

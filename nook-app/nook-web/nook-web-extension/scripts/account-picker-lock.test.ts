@@ -362,9 +362,7 @@ describe('account picker authorization cleanup', () => {
             ]),
           remove: (tabId: number | number[], callback?: () => void) => {
             const removedTabId = Array.isArray(tabId)
-              ? tabId.length === 0
-                ? -1
-                : tabId[0]
+              ? (tabId.at(0) ?? -1)
               : tabId
             removedTabs.push(removedTabId)
             if (rejectRemoval) {

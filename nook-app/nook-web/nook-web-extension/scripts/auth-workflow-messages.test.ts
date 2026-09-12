@@ -55,6 +55,10 @@ const validMessage = {
     ],
   },
 }
+const [validObservation] = validMessage.payload.observations
+if (!validObservation) {
+  throw new Error('authentication workflow fixture requires an observation')
+}
 
 function admittedMessage() {
   const admission =
@@ -65,9 +69,19 @@ function admittedMessage() {
   return admission.message
 }
 
-function approvalMatcherDependencies(): Parameters<
-  typeof AuthenticationWorkflowApprovalSchema.compare
->[0]['matcherDependencies'] {
+function admittedObservation() {
+  const [observation] = admittedMessage().payload.observations
+  if (!observation) {
+    throw new Error('admitted authentication workflow requires an observation')
+  }
+  return observation
+}
+
+function approvalMatcherDependencies(): NonNullable<
+  Parameters<
+    typeof AuthenticationWorkflowApprovalSchema.compare
+  >[0]['matcherDependencies']
+> {
   type MatcherDependencies = NonNullable<
     Parameters<
       typeof AuthenticationWorkflowApprovalSchema.compare
@@ -102,7 +116,8 @@ function approvalMatcherDependencies(): Parameters<
 
 describe('authentication workflow snapshot messages', () => {
   test('invalidates pending approval after an action or fact transition', () => {
-    const facts = admittedMessage().payload.observations[0]
+    const facts = admittedObservation()
+    if (!facts.fields) throw new Error('approved fixture requires field facts')
     const approved = { workflowKey: 'login:continue', facts }
     const dependencies = approvalMatcherDependencies()
     expect(
@@ -135,7 +150,9 @@ describe('authentication workflow snapshot messages', () => {
   })
 
   test('invalidates an authenticator picker across OTP challenge facts', () => {
-    const approvedFacts = admittedMessage().payload.observations[0]
+    const approvedFacts = admittedObservation()
+    if (!approvedFacts.ceremony)
+      throw new Error('approved fixture requires ceremony facts')
     const dependencies = approvalMatcherDependencies()
     expect(
       AuthenticationWorkflowApprovalSchema.compare({
@@ -162,7 +179,7 @@ describe('authentication workflow snapshot messages', () => {
   })
 
   test('accepts WebAuthn email evidence from the generated WASM contract', () => {
-    const observation = validMessage.payload.observations[0]
+    const observation = validObservation
     expect(
       AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
@@ -208,7 +225,7 @@ describe('authentication workflow snapshot messages', () => {
   })
 
   test('accepts mixed phone-or-email evidence without admitting unknown evidence', () => {
-    const observation = validMessage.payload.observations[0]
+    const observation = validObservation
     const control = {
       actionability: 'actionable',
       ownership: 'owned-form',
@@ -261,7 +278,7 @@ describe('authentication workflow snapshot messages', () => {
   })
 
   test('rejects invalid or oversized recovery copy', () => {
-    const observation = validMessage.payload.observations[0]
+    const observation = validObservation
     for (const backupCodesCopy of [42, 'x'.repeat(513)]) {
       expect(
         AuthenticationWorkflowSnapshotMessageSchema.is({
@@ -291,9 +308,9 @@ describe('authentication workflow snapshot messages', () => {
           ...validMessage.payload,
           observations: [
             {
-              ...validMessage.payload.observations[0],
+              ...validObservation,
               authenticator: {
-                ...validMessage.payload.observations[0].authenticator,
+                ...validObservation.authenticator,
                 passkeyControl: passkeyControlPresent,
               },
             },
@@ -304,7 +321,7 @@ describe('authentication workflow snapshot messages', () => {
   })
 
   test('accepts bounded passkey and OTP candidate facts', () => {
-    const observation = validMessage.payload.observations[0]
+    const observation = validObservation
     expect(
       AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
@@ -355,8 +372,8 @@ describe('authentication workflow snapshot messages', () => {
 
   test('rejects missing, negative, and fractional counts structurally', () => {
     const observationWithoutOneTimeCodeCount = {
-      ...validMessage.payload.observations[0],
-      fields: { ...validMessage.payload.observations[0].fields },
+      ...validObservation,
+      fields: { ...validObservation.fields },
     }
     expect(
       Reflect.deleteProperty(
@@ -382,9 +399,9 @@ describe('authentication workflow snapshot messages', () => {
             ...validMessage.payload,
             observations: [
               {
-                ...validMessage.payload.observations[0],
+                ...validObservation,
                 fields: {
-                  ...validMessage.payload.observations[0].fields,
+                  ...validObservation.fields,
                   oneTimeCodeFieldCount: invalidCount,
                 },
               },
@@ -403,9 +420,9 @@ describe('authentication workflow snapshot messages', () => {
           ...validMessage.payload,
           observations: [
             {
-              ...validMessage.payload.observations[0],
+              ...validObservation,
               fields: {
-                ...validMessage.payload.observations[0].fields,
+                ...validObservation.fields,
                 oneTimeCodeFieldCount: 101,
               },
             },
@@ -420,9 +437,9 @@ describe('authentication workflow snapshot messages', () => {
           ...validMessage.payload,
           observations: [
             {
-              ...validMessage.payload.observations[0],
+              ...validObservation,
               authenticator: {
-                ...validMessage.payload.observations[0].authenticator,
+                ...validObservation.authenticator,
                 passkeyAccountAvailability: 'ready',
                 matchingPasskeyAccountCount: 101,
               },
@@ -436,10 +453,7 @@ describe('authentication workflow snapshot messages', () => {
         ...validMessage,
         payload: {
           ...validMessage.payload,
-          observations: Array.from(
-            { length: 21 },
-            () => validMessage.payload.observations[0],
-          ),
+          observations: Array.from({ length: 21 }, () => validObservation),
         },
       }),
     ).toBe(true)
@@ -477,7 +491,7 @@ describe('authentication workflow snapshot messages', () => {
           ...validMessage.payload,
           observations: [
             {
-              ...validMessage.payload.observations[0],
+              ...validObservation,
               detailedAdvanceControl: {
                 kind: 'observed',
                 observations: [control],
@@ -494,7 +508,7 @@ describe('authentication workflow snapshot messages', () => {
           ...validMessage.payload,
           observations: [
             {
-              ...validMessage.payload.observations[0],
+              ...validObservation,
               detailedAdvanceControl: {
                 kind: 'observed',
                 observations: [
@@ -518,7 +532,7 @@ describe('authentication workflow snapshot messages', () => {
           ...validMessage.payload,
           observations: [
             {
-              ...validMessage.payload.observations[0],
+              ...validObservation,
               detailedAdvanceControl: {
                 kind: 'observed',
                 observations: [missingDestinationSource],
@@ -535,7 +549,7 @@ describe('authentication workflow snapshot messages', () => {
           ...validMessage.payload,
           observations: [
             {
-              ...validMessage.payload.observations[0],
+              ...validObservation,
               detailedAdvanceControl: {
                 kind: 'observed',
                 observation: control,

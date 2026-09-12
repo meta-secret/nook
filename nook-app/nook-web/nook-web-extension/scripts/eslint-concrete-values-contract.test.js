@@ -6,6 +6,10 @@ import {
   untrustedInputAdapterRules,
 } from '../../typed-api-rules.js'
 
+/** @typedef {typeof typedApiRules | typeof untrustedInputAdapterRules} ConcreteRuleSet */
+/** @typedef {{ source: string, rules: ReturnType<typeof concreteValueRule> }} LintRequest */
+
+/** @param {LintRequest} args */
 function lint(args) {
   const config = {
     languageOptions: {
@@ -23,10 +27,14 @@ function lint(args) {
   return new Linter().verify(args.source, config)
 }
 
+/** @param {ConcreteRuleSet} rules */
 function concreteValueRule(rules) {
+  const [, options] = rules['@typescript-eslint/no-restricted-types']
+  if (!options) throw new Error('concrete value rule requires options')
+  /** @type {['error', typeof options]} */
+  const configuredRule = ['error', options]
   return {
-    '@typescript-eslint/no-restricted-types':
-      rules['@typescript-eslint/no-restricted-types'],
+    '@typescript-eslint/no-restricted-types': configuredRule,
   }
 }
 

@@ -34,9 +34,15 @@ const fixturesRoot = path.join(
 const templatesDir = path.join(fixturesRoot, 'templates')
 const siteShellsPath = path.join(fixturesRoot, 'site-shells.json')
 
+/** @typedef {{ id: string, name: string, family: string, loginUrl: string, hosts: string[], rank: number }} CatalogSite */
+/** @typedef {{ id: string, name: string, family: string, loginUrl: string, hosts: string[], rank?: number, template: string, source: string }} ExpandedSite */
+/** @typedef {[string, string, string, string, string[], string]} ExtraSite */
+/** @typedef {{ fields: Array<Record<string, string>>, submit: Record<string, string> }} StoredTemplateStep */
+/** @typedef {{ id: string, quirks: string[], steps: StoredTemplateStep[] }} StoredTemplate */
+
 /** Keep hand-tuned Tier-1 / family shells from existing templates when present. */
 function loadExistingTemplates() {
-  /** @type {Map<string, { id: string, quirks: string[], steps: unknown[] }>} */
+  /** @type {Map<string, StoredTemplate>} */
   const map = new Map()
   for (const name of readdirSync(templatesDir).filter((n) =>
     n.endsWith('.json'),
@@ -56,11 +62,13 @@ function loadExistingTemplates() {
 const EXTRA = [...EXTRA_PRIMARY, ...EXTRA_SECONDARY]
 
 function main() {
+  /** @type {CatalogSite[]} */
   const seeded = JSON.parse(readFileSync(catalogPath, 'utf8'))
+  /** @type {Record<string, { template?: string, source?: string }>} */
   const existingShells = JSON.parse(readFileSync(siteShellsPath, 'utf8'))
   const existingTemplates = loadExistingTemplates()
 
-  /** @type {Map<string, any>} */
+  /** @type {Map<string, ExpandedSite>} */
   const byId = new Map()
   for (const site of seeded) {
     byId.set(site.id, {
@@ -73,6 +81,17 @@ function main() {
   }
 
   for (const [id, name, family, loginUrl, hosts, template] of EXTRA) {
+    if (
+      typeof id !== 'string' ||
+      typeof name !== 'string' ||
+      typeof family !== 'string' ||
+      typeof loginUrl !== 'string' ||
+      !Array.isArray(hosts) ||
+      !hosts.every((host) => typeof host === 'string') ||
+      typeof template !== 'string'
+    ) {
+      throw new Error('curated login entry has an invalid shape')
+    }
     if (byId.has(id)) continue
     byId.set(id, {
       id,
@@ -184,6 +203,8 @@ function main() {
   // Always write required templates
   for (const templateId of required) {
     const template = existingTemplates.get(templateId)
+    if (!template)
+      throw new Error(`Missing required template definition for ${templateId}`)
     writeFileSync(
       path.join(templatesDir, `${templateId}.json`),
       `${prettyJson({ id: templateId, quirks: ((v) => (v ? v : []))(template.quirks), steps: template.steps })}\n`,
@@ -240,6 +261,7 @@ function main() {
   writeFileSync(catalogPath, `${prettyJson(catalog)}\n`)
   writeFileSync(siteShellsPath, `${prettyJson(siteShells)}\n`)
 
+  /** @type {Record<string, number>} */
   const counts = {}
   for (const site of sites) {
     counts[site.template] = ((v) => (v ? v : 0))(counts[site.template]) + 1

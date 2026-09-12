@@ -59,9 +59,11 @@ function pickerApproval(): AuthenticationWorkflowApproval {
   if (admission.kind !== 'accepted') {
     throw new Error('picker approval fixture must be admitted')
   }
+  const [facts] = admission.message.payload.observations
+  if (!facts) throw new Error('picker approval fixture requires facts')
   return {
     workflowKey: 'login:cleanup',
-    facts: admission.message.payload.observations[0],
+    facts,
   }
 }
 
