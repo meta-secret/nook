@@ -33,7 +33,8 @@ concurrency:
     github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e' ||
     github.event.changes.base.ref.from != '') && format('pr-{0}', github.event.pull_request.number)) ||
     format('ci-{0}', github.run_id) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: >-
+    ${{ github.event_name == 'pull_request' }}
 
 jobs:
   scope:
@@ -214,6 +215,9 @@ jobs:
   # Required caller gates: Repository policy, PR validation, and Hive.
   dev-promotion-readiness:
     name: Dev promotion readiness
+    concurrency:
+      group: dev-promotion-readiness
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     needs: [scope, policy, pr, hive, research]
     if: >-
       always() &&
