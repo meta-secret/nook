@@ -30,21 +30,22 @@ function parseStringArray(value) {
 /** @param {unknown} value @returns {CursorMcpConfig} */
 function parseCursorMcpConfig(value) {
   if (!isRecord(value)) throw new Error('expected a Cursor MCP object')
+  if (!("mcpServers" in value)) return {}
   const servers = value.mcpServers
-  if (servers === undefined) return {}
   if (!isRecord(servers)) throw new Error('mcpServers must be an object')
+  if (!("playwright" in servers)) return { mcpServers: {} }
   const playwright = servers.playwright
-  if (playwright === undefined) return { mcpServers: {} }
   if (!isRecord(playwright) || typeof playwright.command !== 'string') {
     throw new Error('playwright MCP configuration is invalid')
   }
-  const args = playwright.args
-  const parsedArgs = args === undefined ? undefined : parseStringArray(args)
+  const hasArgs = Object.hasOwn(playwright, 'args')
+  const args = hasArgs ? playwright.args : []
+  const parsedArgs = parseStringArray(args)
   return {
     mcpServers: {
       playwright: {
         command: playwright.command,
-        ...(parsedArgs === undefined ? {} : { args: parsedArgs }),
+        ...(hasArgs ? { args: parsedArgs } : {}),
       },
     },
   }

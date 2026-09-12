@@ -193,14 +193,27 @@ interface PromotionEvidenceRequest {
   readonly workingDirectory: string;
 }
 
+type GitHubJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | GitHubJsonValue[]
+  | { readonly [key: string]: GitHubJsonValue };
+
+const parseGitHubJson = JSON.parse as (source: string) => GitHubJsonValue;
+
+type DatabaseIdRecord = { readonly databaseId: number };
+type DeploymentDateRecord = { readonly created_at: string };
+
 /** Decodes JSON only at the GitHub CLI transport boundary. */
 export class GitHubJsonDocument {
   constructor(private readonly source: string) {}
 
   decode<T>(schema: z.ZodType<T>): Result<T, DevFailure> {
-    let value: unknown;
+    let value: GitHubJsonValue;
     try {
-      value = JSON.parse(this.source);
+      value = parseGitHubJson(this.source);
     } catch {
       return err({
         kind: DevFailureKind.GitHub,
@@ -254,7 +267,7 @@ export class DevGitHubGateway {
     if (runs.isErr()) return err(runs.error);
     const candidates = runs.value
       .filter((run) => this.isExactRemoteBuildRun({ run, request }))
-      .sort((left, right) => right.databaseId - left.databaseId);
+      .sort(DevGitHubGateway.compareDatabaseIds);
     const run = candidates[0];
     if (!run) {
       return err({
@@ -265,7 +278,10 @@ export class DevGitHubGateway {
     }
     const runId = WorkflowRunId.parse(run.databaseId);
     if (runId.isErr()) return err(runId.error);
-    const jobs = this.remoteRunJobs(runId.value, this.request.workingDirectory);
+    const jobs = this.remoteRunJobs({
+      runId: runId.value,
+      workingDirectory: this.request.workingDirectory,
+    });
     if (jobs.isErr()) return err(jobs.error);
     const compileJob = jobs.value.find(
       (job) => job.name === DevDeliveryContract.remoteBuild.jobName,
@@ -472,7 +488,7 @@ export class DevGitHubGateway {
     if (decoded.isErr()) return err(decoded.error);
     const attempts: CiAttempt[] = [];
     for (const run of decoded.value) {
-      if (!this.isExactCiRun(run, request.sha)) continue;
+      if (!this.isExactCiRun({ run, sha: request.sha })) continue;
       const runId = WorkflowRunId.parse(run.databaseId);
       if (runId.isErr()) return err(runId.error);
       attempts.push({ runId: runId.value, status: run.status });
@@ -512,13 +528,13 @@ export class DevGitHubGateway {
     );
   }
 
-  private remoteRunJobs(
-    runId: WorkflowRunId,
-    workingDirectory: string,
-  ): Result<readonly RunJobRecord[], DevFailure> {
+  private remoteRunJobs(request: {
+    readonly runId: WorkflowRunId;
+    readonly workingDirectory: string;
+  }): Result<readonly RunJobRecord[], DevFailure> {
     const output = this.successful({
-      args: ['run', 'view', String(runId.value()), '--json', 'jobs'],
-      workingDirectory,
+      args: ['run', 'view', String(request.runId.value()), '--json', 'jobs'],
+      workingDirectory: request.workingDirectory,
     });
     if (output.isErr()) return err(output.error);
     const decoded = new GitHubJsonDocument(output.value.stdout).decode(
@@ -580,17 +596,18 @@ export class DevGitHubGateway {
       pullRequestViewSchema,
     );
     if (decoded.isErr()) return err(decoded.error);
-    return this.admitDevelopmentPullRequest(
-      decoded.value,
-      request.workingDirectory,
-    );
+    return this.admitDevelopmentPullRequest({
+      view: decoded.value,
+      workingDirectory: request.workingDirectory,
+    });
   }
 
-  private admitDevelopmentPullRequest(
-    view: PullRequestView,
-    workingDirectory: string,
-  ): Result<DevelopmentPullRequest, DevFailure> {
-    const repository = this.repository(workingDirectory);
+  private admitDevelopmentPullRequest(request: {
+    readonly view: PullRequestView;
+    readonly workingDirectory: string;
+  }): Result<DevelopmentPullRequest, DevFailure> {
+    const { view } = request;
+    const repository = this.repository(request.workingDirectory);
     if (repository.isErr()) return err(repository.error);
     if (
       view.state !== PullRequestState.Open ||
@@ -649,8 +666,8 @@ export class DevGitHubGateway {
     );
     if (decoded.isErr()) return err(decoded.error);
     const candidates = decoded.value
-      .filter((run) => this.isExactCiRun(run, request.sha))
-      .sort((left, right) => right.databaseId - left.databaseId);
+      .filter((run) => this.isExactCiRun({ run, sha: request.sha }))
+      .sort(DevGitHubGateway.compareDatabaseIds);
     const run = candidates[0];
     if (!run) {
       return err({
@@ -667,7 +684,10 @@ export class DevGitHubGateway {
     }
     const runId = WorkflowRunId.parse(run.databaseId);
     if (runId.isErr()) return err(runId.error);
-    const jobs = this.remoteRunJobs(runId.value, request.workingDirectory);
+    const jobs = this.remoteRunJobs({
+      runId: runId.value,
+      workingDirectory: request.workingDirectory,
+    });
     if (jobs.isErr()) return err(jobs.error);
     for (const name of DevDeliveryContract.promotion.requiredJobs) {
       const job = jobs.value.find((candidate) => candidate.name === name);
@@ -687,7 +707,11 @@ export class DevGitHubGateway {
     return ok();
   }
 
-  private isExactCiRun(run: CiRunRecord, sha: CommitSha): boolean {
+  private isExactCiRun(request: {
+    readonly run: CiRunRecord;
+    readonly sha: CommitSha;
+  }): boolean {
+    const { run, sha } = request;
     return (
       run.workflowName === DevDeliveryContract.promotion.workflowName &&
       run.event === 'pull_request' &&
@@ -801,8 +825,8 @@ export class DevGitHubGateway {
         workingDirectory: request.workingDirectory,
       });
       if (statuses.isErr()) return err(statuses.error);
-      const latest = [...statuses.value].sort((left, right) =>
-        right.created_at.localeCompare(left.created_at),
+      const latest = [...statuses.value].sort(
+        DevGitHubGateway.compareDeploymentDates,
       )[0];
       if (latest && latest.state === 'success') return ok();
     }
@@ -851,7 +875,7 @@ export class DevGitHubGateway {
     return RepositorySlug.parse(output.value.stdout.trim());
   }
 
-  private static reviewDecision(input: unknown): PullRequestReviewDecision {
+  private static reviewDecision(input: string | null): PullRequestReviewDecision {
     if (typeof input !== 'string') return PullRequestReviewDecision.Empty;
     switch (input) {
       case PullRequestReviewDecision.Approved:
@@ -865,6 +889,20 @@ export class DevGitHubGateway {
       default:
         return PullRequestReviewDecision.Unknown;
     }
+  }
+
+  private static compareDatabaseIds(
+    ...records: [DatabaseIdRecord, DatabaseIdRecord]
+  ): number {
+    const [left, right] = records;
+    return right.databaseId - left.databaseId;
+  }
+
+  private static compareDeploymentDates(
+    ...records: [DeploymentDateRecord, DeploymentDateRecord]
+  ): number {
+    const [left, right] = records;
+    return right.created_at.localeCompare(left.created_at);
   }
 
   private execute(

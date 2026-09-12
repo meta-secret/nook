@@ -41,15 +41,15 @@ function run(overrides = {}) {
 
 /** @param {string} value @param {string} marker @returns {string} */
 function sectionAfter(value, marker) {
-  const section = value.split(marker)[1]
-  if (section === undefined) throw new Error(`missing expected section ${marker}`)
+  const section = value.split(marker).at(1)
+  if (typeof section !== 'string') throw new Error(`missing expected section ${marker}`)
   return section
 }
 
 /** @param {string} value @param {string} marker @returns {string} */
 function sectionBefore(value, marker) {
-  const section = value.split(marker)[0]
-  if (section === undefined) throw new Error(`missing expected section ${marker}`)
+  const section = value.split(marker).at(0)
+  if (typeof section !== 'string') throw new Error(`missing expected section ${marker}`)
   return section
 }
 

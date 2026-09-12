@@ -10,6 +10,8 @@ import {
   type DevFailure,
 } from './dev-types.ts';
 
+type ProcessOutput = string | Buffer | Uint8Array | null;
+
 /** Owns the bounded host-process boundary for the dev delivery commands. */
 export class ProcessCommandRunner implements CommandRunner {
   private static readonly maxOutputBytes = 16 * 1024 * 1024;
@@ -61,7 +63,7 @@ export class ProcessCommandRunner implements CommandRunner {
     }
   }
 
-  private static text(value: unknown): string {
+  private static text(value: ProcessOutput): string {
     return typeof value === 'string'
       ? value
       : value instanceof Buffer

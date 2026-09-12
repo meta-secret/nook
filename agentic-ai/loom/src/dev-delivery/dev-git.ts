@@ -129,12 +129,12 @@ export class WorktreeInventoryDecoder {
       });
     }
     return ok(
-      new WorktreeRecord(
-        resolve(block.path),
-        head.value,
+      new WorktreeRecord({
+        path: resolve(block.path),
+        head: head.value,
         branch,
-        block.prunable,
-      ),
+        prunable: block.prunable,
+      }),
     );
   }
 }
