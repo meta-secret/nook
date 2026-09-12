@@ -53,6 +53,8 @@ Report the blocker instead of reporting an intermediate state as complete.
    - Give each task one team identity.
    - Name allowed files, forbidden files, and acceptance evidence.
    - Name acceptance command read, write, and output scopes.
+   - Record the explicit parent feature/integration worktree.
+   - Give each task a bounded task/attempt identity for its child worktree.
    - Assign one writer for shared files.
    - Treat shared generated and output paths as shared files.
    - Inventory and attribute existing dirty paths and hunks.
@@ -62,15 +64,22 @@ Report the blocker instead of reporting an intermediate state as complete.
    - Group dependency-ready tasks only when their explicit file scopes are
      disjoint.
    - Require concurrency-safe acceptance command scopes.
-   - Run those Team Agents in parallel in the current checkout and branch.
+   - Create one child worktree per task from the parent feature worktree's
+     current commit.
+   - Create one child worktree per Team Agent task from the parent frontier.
+   - Run those Team Agents in parallel in their issued child worktrees.
    - Preserve dependency order for overlapping or provider-dependent tasks.
    - Let every Team Agent run concurrency-safe focused checks.
-   - Grant one commit turn at a time.
-   - Require every writer to commit its complete scoped iteration.
-   - Run deferred checks serially after the wave has a stable committed head.
+   - Only one write-capable Team Agent at a time may mutate a given child
+     worktree.
+   - Grant one commit turn at a time for each complete worker iteration.
+   - Require every writer to commit its complete scoped iteration in its child.
+   - Verify each committed handoff before parent integration.
+   - Integrate each accepted child commit into the parent feature worktree.
+   - Run deferred checks serially after the parent has a stable committed head.
    - Require the terminal handoff to enumerate every iteration commit.
    - Have later iterations read the last one or two relevant commits and diffs.
-   - Continue directly from the resulting shared-branch state.
+   - Continue directly from the resulting parent feature-branch state.
 5. **Prepare the delivery head.**
    - Verify changed paths and focused evidence.
    - Co-validate named provider and consumer interface evidence.
@@ -95,8 +104,8 @@ Report the blocker instead of reporting an intermediate state as complete.
    - Have PR Steward use `task remote TASK_NAME=web:build` for a remote web build.
    - Have PR Steward use `task remote TASK_NAME=web:e2e` for remote browser validation.
    - Route every finding to its functional owner.
-   - Assign the responsible provider, consumer, or both in the current
-     checkout.
+   - Assign the responsible provider, consumer, or both in a fresh child
+     worktree from the current parent frontier.
    - Run disjoint, dependency-ready repair scopes in parallel.
    - Push the corrected head and obtain fresh exact-head evidence.
 7. **Finish delivery.**
@@ -118,7 +127,6 @@ Report the blocker instead of reporting an intermediate state as complete.
 
 Mission delivery must not introduce:
 
-- Team Agent worktrees;
 - a Team Agent lifecycle service, scheduler, or Git-state machinery; or
 - a persistent PR Steward service, scheduler, or notification journal; or
 - deletion-report fields or schema versions.
@@ -132,9 +140,9 @@ Mission delivery must not introduce:
 - SRE fixes CI/CD, runners, containers, deployments, and operations.
 - Security fixes security-owned policy and reviews security acceptance.
 - AI fixes Cortex, Loom, agent skills, and AI automation.
-- Gizmo sequences the shared branch and controls external delivery policy and
-  authorization. PR Steward performs only the named external pull-request
-  mechanics.
+  - Gizmo sequences the parent feature branch and controls parent-owned
+    integration/PR policy and authorization. PR Steward performs only the named
+    external pull-request mechanics.
 
 ## Validation
 
@@ -148,12 +156,13 @@ Delivery is complete only when:
 - no commit included unrelated pre-existing changes;
 - acceptance commands were concurrency-safe or ran serially on a stable
   committed head;
-- only one writer mutated the Git index or committed at a time;
+- every worker used only its issued child worktree;
+- parent integration was serialized;
 - every writer committed its complete scoped iteration;
 - terminal handoffs enumerated every iteration SHA, outcome, evidence, and
   unresolved blockers;
 - provider-consumer evidence passed on the combined branch;
-- the shared branch contains every accepted change;
+- the parent feature worktree contains every accepted change;
 - repository-owned checks pass on the exact head;
 - actionable review findings are resolved;
 - any reactive PR Steward child has stopped;

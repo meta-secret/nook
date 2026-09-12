@@ -22,16 +22,18 @@ simple shared-branch sequence.
 
 1. Group dependency-ready tasks with disjoint explicit file scopes.
    - Require concurrency-safe acceptance command scopes.
-2. Start every task in the group in the current checkout.
-3. Let each Team Agent implement and run concurrency-safe focused checks.
-4. Grant one commit turn at a time as writers finish.
+2. Create one child worktree for every task in the group from the parent
+   feature worktree's current commit.
+3. Start every task in its issued child worktree.
+4. Let each Team Agent implement and run concurrency-safe focused checks.
 5. Require every writer to commit its complete scoped iteration.
-6. Run deferred checks serially on the stable committed head.
-7. Require each terminal handoff to enumerate all iteration commits.
+6. Verify each child commit and integrate it into the parent feature worktree.
+7. Run deferred checks serially on the stable parent head.
+8. Require each terminal handoff to enumerate all iteration commits.
    - Each entry names its SHA, outcome, evidence, and unresolved blockers.
-8. Verify each commit's changed paths and evidence.
-9. Co-validate the combined shared-branch state.
-10. Start dependent tasks only after their provider commits.
+9. Verify each commit's changed paths and evidence.
+10. Co-validate the combined parent-branch state.
+11. Start dependent tasks only after their provider commits are integrated.
 
 Read-only Team Agents may run concurrently when their inspection cannot
 interfere with writers.
@@ -56,7 +58,8 @@ when no dependency remains between them.
 ## Review and validation
 
 - Route every finding to the team that owns the affected change.
-- Keep fixes inside the same shared checkout and commit-turn sequence.
+- Give fixes fresh child worktrees from the current parent frontier and integrate
+  accepted commits through the same parent sequence.
 - Team Agents run focused implementation checks.
 - Gizmo runs or authorizes shared pre-push and exact-head validation.
 - Gizmo owns PR policy, review dispositions, readiness and merge verdicts.
@@ -67,7 +70,6 @@ when no dependency remains between them.
 
 Do not create:
 
-- Team Agent worktrees;
 - a Team Agent lifecycle service, scheduler, or Git-state machinery; or
 - deletion-report schemas.
 

@@ -13,23 +13,27 @@ simple shared-branch delivery sequence.
 4. Inventory and attribute existing dirty paths and hunks.
 5. Block unowned overlap with pre-existing user or foreign changes.
 6. Group dependency-ready tasks with concurrency-safe scopes.
-7. Start each group in parallel in the current checkout.
+7. Create one child worktree per task from the parent feature worktree's
+   current commit, then start each group in parallel.
 8. Let every Team Agent implement and run safe focused checks.
 9. Grant one commit turn at a time.
 10. Require every writer to commit its complete scoped iteration.
 11. Run deferred checks serially on the stable committed head.
 12. Require each terminal handoff to enumerate all iteration commits.
     - Each entry names its SHA, outcome, evidence, and unresolved blockers.
-13. Co-validate the combined shared-branch state.
-14. Route review or validation fixes to the responsible team.
-15. Let Gizmo complete external delivery.
+13. Verify each child commit and integrate the accepted commits into the parent
+    feature worktree.
+14. Co-validate the combined parent-branch state.
+15. Route review or validation fixes to the responsible team.
+16. Let Gizmo complete external delivery.
 
 ## Rules
 
 - Every task has one team identity.
 - Writers may run in parallel only with disjoint explicit file scopes and no
   unresolved dependency.
-- Only one writer mutates the Git index or commits at a time.
+- A worker mutates only its child worktree's Git index. Gizmo serializes parent
+  integration commits.
 - Read-only inspection may run concurrently when safe.
 - Workers stay inside their assigned scope.
 - Workers report cross-team dependencies to Gizmo.
@@ -38,7 +42,6 @@ simple shared-branch delivery sequence.
 - Functional workers do not push, open pull requests, resolve review threads,
   or merge. PR Steward performs those external mechanics only through an
   explicit Gizmo authorization packet.
-- Do not create worker worktrees.
 - Do not add a Team Agent lifecycle service, scheduler, or Git-state machinery.
 
 ## Validation

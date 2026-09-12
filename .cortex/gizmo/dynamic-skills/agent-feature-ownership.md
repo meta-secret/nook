@@ -40,13 +40,16 @@ Treat every other active task as foreign work.
 - A child worker is not another delivery owner.
 - Gizmo may assign a bounded Team Agent task with explicit read scope, write
   scope, and acceptance evidence.
-- Write-capable Team Agents may share the current checkout while their explicit
-  file scopes are disjoint.
+- Every Team Agent receives an isolated child worktree from the parent feature
+  worktree's current committed frontier.
+- Write-capable Team Agents may run in parallel when their explicit file scopes
+  are disjoint.
 - Overlapping scopes and unresolved dependencies require ordered execution.
 - Before dispatch, Gizmo attributes dirty paths and hunks to their owners.
 - Pre-existing user or foreign changes block an overlapping worker scope.
   - The exact changes require an explicit handoff or same-task attribution.
-- Only one Team Agent mutates the Git index or commits at a time.
+- A worker mutates only its child worktree's Git index. Gizmo serializes
+  integration into the parent feature worktree.
 - The worker must not create another worker.
 - A missing dependency returns to Gizmo for assignment to its owner.
 - A functional worker must not mutate Workbench, branch publication, PR,
