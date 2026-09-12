@@ -724,7 +724,7 @@ class ArcManifestContract {
         'if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]',
       ),
       wasmCacheProofSource.indexOf(
-        'bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts"',
+        'bun "$repo_root/infra/contracts/verify-registry-cache-blobs.ts"',
       ),
     );
     if (promotionSolve.includes("cache-from=type=registry,ref=${cache_ref}")) {

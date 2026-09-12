@@ -72,8 +72,8 @@ tasks:
     desc: Verify shared formatter and Dockerized CI contracts.
     dir: "{{.REPO_ROOT}}"
     cmds:
-      - bash "{{.REPO_ROOT}}/.github/scripts/format-host-apply.test.sh"
-      - bun test "{{.REPO_ROOT}}/.github/scripts/dockerized-rust.test.ts"
+      - bash "{{.REPO_ROOT}}/.github/formatting/format-host-apply.test.sh"
+      - bun test "{{.REPO_ROOT}}/infra/contracts/dockerized-rust.test.ts"
 
   preflight:export:
     desc: Export the static Rust preflight reporter for downstream CI jobs.

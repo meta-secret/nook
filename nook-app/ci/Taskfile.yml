@@ -535,4 +535,4 @@ tasks:
       - >-
         bash -c 'set -euo pipefail;
         export PREVIEW_URL="${PREVIEW_URL:-$(cat "{{.REPO_ROOT}}/.cloudflare-preview-url")}";
-        bun run "{{.REPO_ROOT}}/.github/scripts/comment-preview-url.ts"'
+        bun run "{{.REPO_ROOT}}/.github/workflows/lib/comment-preview-url.ts"'

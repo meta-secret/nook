@@ -63,7 +63,7 @@ jobs:
           script: |
             const fs = require('node:fs')
             const path = require('node:path')
-            const { MainBuildStats } = require('./.github/scripts/main-build-stats.mjs')
+            const { MainBuildStats } = require('./.github/workflows/lib/main-build-stats.mjs')
 
             const eventRun = context.payload.workflow_run
             const run = (
@@ -165,7 +165,7 @@ jobs:
           RECORD_PATH: ${{ steps.record.outputs.path }}
           SOURCE_RUN_ATTEMPT: ${{ steps.record.outputs.run-attempt }}
           SOURCE_RUN_ID: ${{ steps.record.outputs.run-id }}
-        run: node .github/scripts/main-build-stats.mjs --validate "$RECORD_PATH"
+        run: node .github/workflows/lib/main-build-stats.mjs --validate "$RECORD_PATH"
 
       - name: Publish metrics to Nook Workbench
         if: steps.record.outputs.already-recorded == 'false'

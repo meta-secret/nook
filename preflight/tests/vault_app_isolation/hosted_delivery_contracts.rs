@@ -213,7 +213,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
         "name: pr-rust-${{ github.run_id }}",
         "path: coverage/current",
-        ".github/scripts/base-coverage-artifact.cjs",
+        ".github/workflows/lib/base-coverage-artifact.cjs",
         "coverage/current/tools/nook-preflight coverage-inputs",
         "--repository \"$GITHUB_WORKSPACE\"",
         "--base \"$BASE_SHA\"",

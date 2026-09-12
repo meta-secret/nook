@@ -941,7 +941,7 @@ guest_formatter = root_agentic_taskfile.match(
 )&.[](:body)
 unless guest_changed_formatter&.include?('NOOK_FORMATTER_ROOT:-/opt/nook-formatter') &&
        guest_changed_formatter.include?('bash "$formatter_root/format.sh"') &&
-       guest_formatter&.include?("bash .github/scripts/format-host-apply.sh") &&
+       guest_formatter&.include?("bash .github/formatting/format-host-apply.sh") &&
        !guest_changed_formatter.include?("bun install") &&
        !guest_formatter.include?("bun install")
   raise "Hive native sealed-guest formatting task is incomplete"
@@ -958,7 +958,7 @@ end
 unless ci_workflow.include?("agentic-ai/minds/hive/controller/reaper.test.ts")
   raise "Hive controller behavior-test changes must trigger PR and Main verification"
 end
-unless ci_workflow.include?(".github/scripts/k0s-firewall-rollback-test.ts")
+unless ci_workflow.include?("infra/contracts/k0s-firewall-rollback-test.ts")
   raise "k0s firewall rollback-test changes must trigger PR and Main verification"
 end
 unless hive_workflow.include?("run: task hive:verify") &&

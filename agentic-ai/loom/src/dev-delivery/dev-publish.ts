@@ -1,7 +1,7 @@
-import { err, ok, type Result } from "neverthrow";
+import { err, ok, type Result } from 'neverthrow';
 
-import { DevelopmentPullRequestLookupKind } from "./dev-github.ts";
-import { DevDeliveryWorkspace, DevWorkspaceGuard } from "./dev-workspace.ts";
+import { DevelopmentPullRequestLookupKind } from './dev-github.ts';
+import { DevDeliveryWorkspace, DevWorkspaceGuard } from './dev-workspace.ts';
 import {
   Ancestry,
   DevFailureKind,
@@ -11,7 +11,7 @@ import {
   type DevFailure,
   type DevPublishRequest,
   type DevSnapshot,
-} from "./dev-types.ts";
+} from './dev-types.ts';
 
 export interface DevPublishOutcome {
   readonly devSha: CommitSha;
@@ -51,10 +51,7 @@ export class DevPublishCommand {
     return result;
   }
 
-  private snapshotLocalDev(): Result<
-    DevSnapshot,
-    DevFailure
-  > {
+  private snapshotLocalDev(): Result<DevSnapshot, DevFailure> {
     const development = this.workspace.developmentWorktree();
     if (development.isErr()) return err(development.error);
     const guard = new DevWorkspaceGuard(this.workspace).requireClean(
@@ -74,7 +71,9 @@ export class DevPublishCommand {
     return ok({ devPath: development.value.path, devSha: devSha.value });
   }
 
-  private publishInsideLocks(request: DevPublishRequest): Result<DevPublishOutcome, DevFailure> {
+  private publishInsideLocks(
+    request: DevPublishRequest,
+  ): Result<DevPublishOutcome, DevFailure> {
     const current = this.snapshotLocalDev();
     if (current.isErr()) return err(current.error);
     if (
@@ -83,7 +82,8 @@ export class DevPublishCommand {
     ) {
       return err({
         kind: DevFailureKind.Race,
-        message: "Local dev changed before its manager snapshot could be published",
+        message:
+          'Local dev changed before its manager snapshot could be published',
       });
     }
 
@@ -104,7 +104,7 @@ export class DevPublishCommand {
         return err({
           kind: DevFailureKind.Race,
           message:
-            "The existing dev-to-main pull request head differs from origin/dev; refusing to change either snapshot",
+            'The existing dev-to-main pull request head differs from origin/dev; refusing to change either snapshot',
         });
       }
       const replacement = !priorPullRequestValue.headSha.equals(request.devSha);
@@ -128,7 +128,7 @@ export class DevPublishCommand {
         return err({
           kind: DevFailureKind.Conflict,
           message:
-            "origin/dev is ahead of local dev; local dev was preserved and must be reconciled before publishing",
+            'origin/dev is ahead of local dev; local dev was preserved and must be reconciled before publishing',
         });
       }
     }
@@ -147,7 +147,7 @@ export class DevPublishCommand {
     ) {
       return err({
         kind: DevFailureKind.Race,
-        message: "origin/dev did not finish at the exact manager snapshot",
+        message: 'origin/dev did not finish at the exact manager snapshot',
       });
     }
     const pullRequest = this.workspace.github.ensureDevelopmentPullRequest({

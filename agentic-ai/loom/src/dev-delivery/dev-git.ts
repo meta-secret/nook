@@ -1,7 +1,7 @@
-import { resolve } from "node:path";
-import { err, ok, type Result } from "neverthrow";
+import { resolve } from 'node:path';
+import { err, ok, type Result } from 'neverthrow';
 
-import { CommandFailureMessage } from "./dev-command.ts";
+import { CommandFailureMessage } from './dev-command.ts';
 import {
   Ancestry,
   BranchName,
@@ -18,8 +18,8 @@ import {
   type WorktreeBranch,
   WorktreeRecord,
   WorktreeState,
-} from "./dev-types.ts";
-import { CommitSha as CommitShaValue } from "./dev-types.ts";
+} from './dev-types.ts';
+import { CommitSha as CommitShaValue } from './dev-types.ts';
 
 interface GitInvocation {
   readonly args: readonly string[];
@@ -53,8 +53,8 @@ interface MutableWorktreeBlock {
 }
 
 enum WorktreeBlockKind {
-  Empty = "empty",
-  Active = "active",
+  Empty = 'empty',
+  Active = 'active',
 }
 
 type WorktreeBlock =
@@ -70,7 +70,7 @@ export class WorktreeInventoryDecoder {
     const records: WorktreeRecord[] = [];
     let block: WorktreeBlock = { kind: WorktreeBlockKind.Empty };
     for (const line of source.split(/\r?\n/u)) {
-      if (line.startsWith("worktree ")) {
+      if (line.startsWith('worktree ')) {
         if (block.kind === WorktreeBlockKind.Active) {
           const completed = this.complete(block.value);
           if (completed.isErr()) return err(completed.error);
@@ -79,9 +79,9 @@ export class WorktreeInventoryDecoder {
         block = {
           kind: WorktreeBlockKind.Active,
           value: {
-            path: line.slice("worktree ".length),
-            head: "",
-            branch: "",
+            path: line.slice('worktree '.length),
+            head: '',
+            branch: '',
             detached: false,
             prunable: false,
           },
@@ -89,12 +89,12 @@ export class WorktreeInventoryDecoder {
         continue;
       }
       if (block.kind === WorktreeBlockKind.Empty) continue;
-      if (line.startsWith("HEAD "))
-        block.value.head = line.slice("HEAD ".length);
-      if (line.startsWith("branch "))
-        block.value.branch = line.slice("branch ".length);
-      if (line === "detached") block.value.detached = true;
-      if (line.startsWith("prunable")) block.value.prunable = true;
+      if (line.startsWith('HEAD '))
+        block.value.head = line.slice('HEAD '.length);
+      if (line.startsWith('branch '))
+        block.value.branch = line.slice('branch '.length);
+      if (line === 'detached') block.value.detached = true;
+      if (line.startsWith('prunable')) block.value.prunable = true;
     }
     if (block.kind === WorktreeBlockKind.Active) {
       const completed = this.complete(block.value);
@@ -110,14 +110,14 @@ export class WorktreeInventoryDecoder {
     if (!block.path || !block.head) {
       return err({
         kind: DevFailureKind.Git,
-        message: "Git returned an incomplete worktree record",
+        message: 'Git returned an incomplete worktree record',
       });
     }
     const head = CommitShaValue.parse(block.head);
     if (head.isErr()) return err(head.error);
     let branch: WorktreeBranch;
-    if (block.branch.startsWith("refs/heads/")) {
-      const name = BranchName.parse(block.branch.slice("refs/heads/".length));
+    if (block.branch.startsWith('refs/heads/')) {
+      const name = BranchName.parse(block.branch.slice('refs/heads/'.length));
       if (name.isErr()) return err(name.error);
       branch = { kind: WorktreeBranchKind.Branch, name: name.value };
     } else if (block.detached) {
@@ -128,13 +128,22 @@ export class WorktreeInventoryDecoder {
         message: `Git returned a worktree without a branch or detached marker: ${block.path}`,
       });
     }
-    return ok(new WorktreeRecord(resolve(block.path), head.value, branch, block.prunable));
+    return ok(
+      new WorktreeRecord(
+        resolve(block.path),
+        head.value,
+        branch,
+        block.prunable,
+      ),
+    );
   }
 }
 
 /** Selects exactly one usable local development worktree. */
 export class DevelopmentWorktreeSelection {
-  select(records: readonly WorktreeRecord[]): Result<WorktreeRecord, DevFailure> {
+  select(
+    records: readonly WorktreeRecord[],
+  ): Result<WorktreeRecord, DevFailure> {
     const candidates = records.filter((record) =>
       record.isManagedDevelopmentWorktree(),
     );
@@ -142,20 +151,20 @@ export class DevelopmentWorktreeSelection {
       return err({
         kind: DevFailureKind.Configuration,
         message:
-          "No usable local dev worktree was found; create one explicitly before landing",
+          'No usable local dev worktree was found; create one explicitly before landing',
       });
     }
     if (candidates.length > 1) {
       return err({
         kind: DevFailureKind.Configuration,
-        message: `Multiple local dev worktrees were found (${candidates.map((candidate) => candidate.path).join(", ")}); refusing to choose one`,
+        message: `Multiple local dev worktrees were found (${candidates.map((candidate) => candidate.path).join(', ')}); refusing to choose one`,
       });
     }
     const candidate = candidates[0];
     if (!candidate) {
       return err({
         kind: DevFailureKind.Configuration,
-        message: "Local dev worktree selection was empty",
+        message: 'Local dev worktree selection was empty',
       });
     }
     return ok(candidate);
@@ -181,7 +190,7 @@ export class DevGitRepository {
 
   commonDirectory(): Result<string, DevFailure> {
     const output = this.successful({
-      args: ["rev-parse", "--git-common-dir"],
+      args: ['rev-parse', '--git-common-dir'],
       workingDirectory: this.request.root,
     });
     if (output.isErr()) return err(output.error);
@@ -189,7 +198,7 @@ export class DevGitRepository {
     if (!common) {
       return err({
         kind: DevFailureKind.Git,
-        message: "Git did not return a common directory",
+        message: 'Git did not return a common directory',
       });
     }
     return ok(resolve(this.request.root, common));
@@ -197,7 +206,7 @@ export class DevGitRepository {
 
   worktrees(): Result<readonly WorktreeRecord[], DevFailure> {
     const output = this.successful({
-      args: ["worktree", "list", "--porcelain"],
+      args: ['worktree', 'list', '--porcelain'],
       workingDirectory: this.request.root,
     });
     if (output.isErr()) return err(output.error);
@@ -206,7 +215,7 @@ export class DevGitRepository {
 
   stateAt(path: string): Result<WorktreeState, DevFailure> {
     const output = this.successful({
-      args: ["status", "--porcelain", "--untracked-files=all"],
+      args: ['status', '--porcelain', '--untracked-files=all'],
       workingDirectory: path,
     });
     if (output.isErr()) return err(output.error);
@@ -219,7 +228,7 @@ export class DevGitRepository {
 
   branchAt(path: string): Result<BranchName, DevFailure> {
     const output = this.successful({
-      args: ["branch", "--show-current"],
+      args: ['branch', '--show-current'],
       workingDirectory: path,
     });
     if (output.isErr()) return err(output.error);
@@ -235,18 +244,19 @@ export class DevGitRepository {
 
   headAt(path: string): Result<CommitSha, DevFailure> {
     const output = this.successful({
-      args: ["rev-parse", "HEAD"],
+      args: ['rev-parse', 'HEAD'],
       workingDirectory: path,
     });
     if (output.isErr()) return err(output.error);
     return CommitShaValue.parse(output.value.stdout.trim());
   }
 
-  remoteBranch(branch: ManagedBranch | BranchName): Result<RemoteBranchSnapshot, DevFailure> {
-    const branchValue =
-      typeof branch === "string" ? branch : branch.value();
+  remoteBranch(
+    branch: ManagedBranch | BranchName,
+  ): Result<RemoteBranchSnapshot, DevFailure> {
+    const branchValue = typeof branch === 'string' ? branch : branch.value();
     const output = this.successful({
-      args: ["ls-remote", "--refs", "origin", `refs/heads/${branchValue}`],
+      args: ['ls-remote', '--refs', 'origin', `refs/heads/${branchValue}`],
       workingDirectory: this.request.root,
     });
     if (output.isErr()) return err(output.error);
@@ -270,18 +280,22 @@ export class DevGitRepository {
     }
     const sha = CommitShaValue.parse(rawSha);
     if (sha.isErr()) return err(sha.error);
-    return ok({ presence: RemoteBranchPresence.Present, branch, sha: sha.value });
+    return ok({
+      presence: RemoteBranchPresence.Present,
+      branch,
+      sha: sha.value,
+    });
   }
 
   refreshManagedRefs(): Result<void, DevFailure> {
     const output = this.execute({
       args: [
-        "fetch",
-        "--quiet",
-        "--no-tags",
-        "origin",
-        "refs/heads/main:refs/remotes/origin/main",
-        "refs/heads/dev:refs/remotes/origin/dev",
+        'fetch',
+        '--quiet',
+        '--no-tags',
+        'origin',
+        'refs/heads/main:refs/remotes/origin/main',
+        'refs/heads/dev:refs/remotes/origin/dev',
       ],
       workingDirectory: this.request.root,
     });
@@ -298,8 +312,8 @@ export class DevGitRepository {
   ancestry(request: AncestryRequest): Result<Ancestry, DevFailure> {
     const output = this.execute({
       args: [
-        "merge-base",
-        "--is-ancestor",
+        'merge-base',
+        '--is-ancestor',
         request.ancestor.value(),
         request.descendant.value(),
       ],
@@ -320,7 +334,7 @@ export class DevGitRepository {
     if (!current.value.equals(request.expectedDevHead)) {
       return err({
         kind: DevFailureKind.Race,
-        message: "Local dev changed while landing was being prepared",
+        message: 'Local dev changed while landing was being prepared',
       });
     }
     const state = this.stateAt(request.devPath);
@@ -333,8 +347,8 @@ export class DevGitRepository {
     }
     const preview = this.execute({
       args: [
-        "merge-tree",
-        "--write-tree",
+        'merge-tree',
+        '--write-tree',
         request.expectedDevHead.value(),
         request.featureHead.value(),
       ],
@@ -345,24 +359,24 @@ export class DevGitRepository {
       return err({
         kind: DevFailureKind.Conflict,
         message:
-          "Feature cannot merge cleanly into local dev; merge latest local dev into FEATURE, rebuild it remotely, and retry",
+          'Feature cannot merge cleanly into local dev; merge latest local dev into FEATURE, rebuild it remotely, and retry',
       });
     }
 
     const merge = this.execute({
-      args: ["merge", "--no-edit", request.featureHead.value()],
+      args: ['merge', '--no-edit', request.featureHead.value()],
       workingDirectory: request.devPath,
     });
     if (merge.isErr()) return err(merge.error);
     if (merge.value.exitCode !== 0) {
       const abort = this.execute({
-        args: ["merge", "--abort"],
+        args: ['merge', '--abort'],
         workingDirectory: request.devPath,
       });
       const abortMessage =
         abort.isErr() || abort.value.exitCode !== 0
-          ? " Git merge abort also failed; inspect the shared dev worktree without discarding changes."
-          : "";
+          ? ' Git merge abort also failed; inspect the shared dev worktree without discarding changes.'
+          : '';
       return err({
         kind: DevFailureKind.Conflict,
         message: `Feature merge into local dev failed: ${new CommandFailureMessage(merge.value).text()}.${abortMessage}`,
@@ -374,7 +388,7 @@ export class DevGitRepository {
       return err({
         kind: DevFailureKind.DirtyWorktree,
         message:
-          "The local merge left dev dirty; no cleanup was attempted so foreign changes remain intact",
+          'The local merge left dev dirty; no cleanup was attempted so foreign changes remain intact',
       });
     }
     return this.headAt(request.devPath);
@@ -383,7 +397,7 @@ export class DevGitRepository {
   pushExact(request: PushRequest): Result<void, DevFailure> {
     const target = `refs/heads/${request.target}`;
     const output = this.execute({
-      args: ["push", "origin", `${request.sha.value()}:${target}`],
+      args: ['push', 'origin', `${request.sha.value()}:${target}`],
       workingDirectory: request.workingDirectory,
     });
     if (output.isErr()) return err(output.error);
@@ -404,7 +418,9 @@ export class DevGitRepository {
     });
   }
 
-  private successful(request: GitInvocation): Result<CommandOutput, DevFailure> {
+  private successful(
+    request: GitInvocation,
+  ): Result<CommandOutput, DevFailure> {
     const output = this.execute(request);
     if (output.isErr()) return err(output.error);
     if (output.value.exitCode !== 0) {

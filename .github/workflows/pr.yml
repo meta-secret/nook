@@ -470,19 +470,19 @@ jobs:
         uses: ./.github/actions/nook-node-setup
 
       - name: Test Linear UI demo publishing helper
-        run: node --test .github/scripts/linear-ui-demo.test.cjs
+        run: node --test .github/workflows/lib/linear-ui-demo.test.cjs
 
       - name: Test Main build statistics collector
-        run: node --test .github/scripts/main-build-stats.test.mjs
+        run: node --test .github/workflows/lib/main-build-stats.test.mjs
 
       - name: Test Main failure handoff
-        run: node --test .github/scripts/main-failure-handoff.test.cjs
+        run: node --test .github/workflows/lib/main-failure-handoff.test.cjs
 
       - name: Test Workbench agent records
         run: node --test .github/scripts/workbench-records.test.cjs
 
       - name: Test cache telemetry collector
-        run: node --test .github/scripts/cache-telemetry.test.mjs
+        run: node --test .github/workflows/lib/cache-telemetry.test.mjs
 
       - name: Install Bun for registry cache descriptor tests
         uses: oven-sh/setup-bun@v2
@@ -493,10 +493,10 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Test PR authored-line budget
-        run: bun test ./.github/scripts/pr-authored-budget.test.ts
+        run: bun test ./agentic-ai/loom/tests/pr-authored-budget.test.ts
 
       - name: Test registry cache descriptor integrity
-        run: bun test ./.github/scripts/registry-cache-descriptor.test.ts
+        run: bun test ./infra/contracts/registry-cache-descriptor.test.ts
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup

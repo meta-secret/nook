@@ -8,12 +8,12 @@ tasks:
   land:
     desc: Land the current clean, remotely compiled feature commit into the shared local dev worktree.
     cmds:
-      - bun "{{.REPO_ROOT}}/.github/scripts/dev-land-cli.ts"
+      - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/dev-delivery/dev-land-cli.ts"
 
   publish:
     desc: Manager-only snapshot and ordinary fast-forward publication of local dev to origin/dev.
     cmds:
-      - bun "{{.REPO_ROOT}}/.github/scripts/dev-publish-cli.ts"
+      - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/dev-delivery/dev-publish-cli.ts"
 
   promote:
     desc: Manager-only guarded promotion of the exact tested origin/dev SHA to origin/main.
@@ -22,4 +22,4 @@ tasks:
     env:
       EXPECTED_SHA: "{{.EXPECTED_SHA}}"
     cmds:
-      - bun "{{.REPO_ROOT}}/.github/scripts/dev-promote-cli.ts"
+      - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/dev-delivery/dev-promote-cli.ts"

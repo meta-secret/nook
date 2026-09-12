@@ -499,7 +499,7 @@ void test("rejects records whose summary cannot be derived from detailed jobs", 
 });
 
 void test("workflow records completed trusted Main runs in Nook Workbench", () => {
-  const root = path.join(directory, "..", "..");
+  const root = path.join(directory, "..", "..", "..");
   const collector = fs.readFileSync(
     path.join(root, ".github/workflows/main-build-stats.yml"),
     "utf8",
@@ -512,7 +512,7 @@ void test("workflow records completed trusted Main runs in Nook Workbench", () =
   assert.match(collector, /github\.event\.workflow_run\.head_branch == 'main'/);
   assert.match(
     collector,
-    /const \{ MainBuildStats \} = require\('\.\/\.github\/scripts\/main-build-stats\.mjs'\)/,
+    /const \{ MainBuildStats \} = require\('\.\/\.github\/workflows\/lib\/main-build-stats\.mjs'\)/,
   );
   assert.doesNotMatch(collector, /await import\(|pathToFileURL/);
   assert.match(collector, /MainBuildStats\.build\(/);
