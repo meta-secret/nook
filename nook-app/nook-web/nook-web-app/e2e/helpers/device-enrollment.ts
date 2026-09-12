@@ -466,69 +466,6 @@ type WaitForJoinerVaultReadyRequest = {
   readonly testInfo: TestInfo
 }
 
-type JoinerVaultReadyDebugState = {
-  readonly isAuthenticated: boolean | undefined
-  readonly isVerifying: boolean | undefined
-  readonly isSyncing: boolean | undefined
-  readonly isSaving: boolean | undefined
-  readonly isPasswordBusy: boolean | undefined
-  readonly syncProviderCount: number | undefined
-  readonly joinEnrollmentPrompt: string | undefined
-  readonly awaitingJoinApproval: boolean | undefined
-  readonly loginSetup: string | undefined
-  readonly errorMsg: string | undefined
-  readonly visibleTestIds: readonly string[]
-}
-
-async function readJoinerVaultReadyDebugState(
-  page: Page,
-): Promise<JoinerVaultReadyDebugState> {
-  return page.evaluate(() => {
-    const vault = (
-      window as unknown as {
-        __nookVault?: {
-          isAuthenticated?: boolean
-          isVerifying?: boolean
-          isSyncing?: boolean
-          isSaving?: boolean
-          isPasswordBusy?: boolean
-          syncProviders?: readonly unknown[]
-          joinEnrollmentPrompt?: unknown
-          awaitingJoinApproval?: boolean
-          loginSetup?: { kind?: unknown }
-          errorMsg?: string
-        }
-      }
-    ).__nookVault
-    const visibleTestIds = Array.from(
-      document.querySelectorAll<HTMLElement>('[data-testid]'),
-    )
-      .filter((element) => element.offsetWidth > 0 && element.offsetHeight > 0)
-      .map((element) => element.dataset.testid)
-      .filter((testId): testId is string => Boolean(testId))
-
-    return {
-      isAuthenticated: vault?.isAuthenticated,
-      isVerifying: vault?.isVerifying,
-      isSyncing: vault?.isSyncing,
-      isSaving: vault?.isSaving,
-      isPasswordBusy: vault?.isPasswordBusy,
-      syncProviderCount: vault?.syncProviders?.length,
-      joinEnrollmentPrompt:
-        vault?.joinEnrollmentPrompt === undefined
-          ? undefined
-          : String(vault.joinEnrollmentPrompt),
-      awaitingJoinApproval: vault?.awaitingJoinApproval,
-      loginSetup:
-        vault?.loginSetup?.kind === undefined
-          ? undefined
-          : String(vault.loginSetup.kind),
-      errorMsg: vault?.errorMsg,
-      visibleTestIds,
-    }
-  })
-}
-
 export async function waitForJoinerVaultReady({
   page,
   target,
@@ -562,10 +499,6 @@ export async function waitForJoinerVaultReady({
       )
       .toBe(true)
   } catch (error) {
-    const debugState = await readJoinerVaultReadyDebugState(page)
-    console.log(
-      `[joiner-vault-ready] timeout state: ${JSON.stringify(debugState)}`,
-    )
     await dumpNookLogs(page, 'waitForJoinerVaultReady')
     await attachNookLogsForTest(page, testInfo, {
       attachmentName: NookAppLogAttachmentName.Joiner,
