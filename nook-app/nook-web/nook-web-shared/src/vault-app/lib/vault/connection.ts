@@ -1,7 +1,4 @@
-import {
-  ProviderSyncActions,
-  ProviderSyncOutcome,
-} from "$lib/vault/provider-sync.svelte";
+import { ProviderSyncActions } from "$lib/vault/provider-sync.svelte";
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk } from "neverthrow";
 
@@ -122,7 +119,6 @@ export class VaultConnectionActions {
           state.errorMsg = state.t(providerSync.error.translationKey);
           return;
         }
-        if (providerSync.value !== ProviderSyncOutcome.Synced) return;
       }
 
       const assessment = await state.assessVaultConnectStatus();
