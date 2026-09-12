@@ -464,12 +464,26 @@ export async function authorizeDeviceProtection(
   const button = page.getByTestId('device-protection-unlock-btn')
 
   const isAuthenticatedWorkspace = async () => {
-    const visibility: AuthenticatedWorkspaceVisibility = {
-      authenticatedShellVisible: await authenticatedShell.isVisible(),
-      loginGateVisible: await loginGate.isVisible(),
-    }
+    // Read both surfaces in one browser turn. Separate locator calls can
+    // straddle Svelte's access-gate transition and observe a mixed frame
+    // (shell from the new state, gate from the old state) indefinitely under
+    // a busy worker.
+    const probe = await page.evaluate(() => {
+      const shell = document.querySelector(
+        '[data-testid="authenticated-shell"]',
+      )
+      const gate = document.querySelector('[data-testid="login-gate"]')
+      return {
+        visibility: {
+          authenticatedShellVisible: Boolean(
+            shell && shell.getClientRects().length > 0,
+          ),
+          loginGateVisible: Boolean(gate && gate.getClientRects().length > 0),
+        } satisfies AuthenticatedWorkspaceVisibility,
+      }
+    })
     return (
-      new AuthenticatedWorkspaceObservation(visibility).state() ===
+      new AuthenticatedWorkspaceObservation(probe.visibility).state() ===
       AuthenticatedWorkspaceState.Unlocked
     )
   }
