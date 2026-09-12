@@ -149,8 +149,9 @@ freezes the iteration head. A changed head is a blocker, never a new assignment.
   child replay missed notifications.
 - Missed and duplicate notifications are acceptable hints.
 - One child never changes its assigned PR dynamically.
-- Gizmo must reconcile the final GitHub state directly before its readiness
-  or completion verdict.
+- Gizmo must authorize PR Steward to read final GitHub state before its
+  readiness or completion verdict.
+- PR Steward returns that direct observation to Gizmo for reconciliation.
 
 ### Output contract
 
@@ -192,7 +193,9 @@ from these hints. The subscriber does not summarize or decide readiness.
   substitutes a closure result for completed checks.
 - After successful exit, send one compact handoff to Gizmo and end the child.
   Gizmo acts on the result and starts a fresh child for another iteration.
-- Gizmo retains final direct reconciliation, readiness, and merge authority.
+- Gizmo authorizes PR Steward to collect final direct GitHub evidence.
+  PR Steward returns the evidence to Gizmo for reconciliation.
+- Gizmo retains readiness and merge authority.
 - Use a harness wait that wakes on output when available. Otherwise use the
   longest host-bounded PTY read. Empty reads produce no messages or GitHub queries.
 
@@ -207,7 +210,8 @@ Run it only when assigned to diagnose the subscription.
    - Notify Gizmo only when matching NDJSON or a new blocker arrives.
 4. Correlate its `deliveryId` across GitHub, Argo, and the NATS envelope.
 5. Have PR Steward send the bounded matching notification to Gizmo.
-6. Have Gizmo perform a bounded direct GitHub reconciliation.
+6. Have Gizmo authorize PR Steward to perform a bounded direct GitHub read.
+   PR Steward returns the observation to Gizmo for reconciliation.
 7. After terminal state, send Ctrl-C to the same PTY.
    - Require the NATS drain and process exit to complete with status zero.
 
@@ -220,5 +224,5 @@ Run it only when assigned to diagnose the subscription.
 - A merge result is a verified squash merge when merge was authorized.
 - An administrator merge used the path-excluded route only with its separate
   Gizmo packet and exact-head evidence.
-- Gizmo's terminal decision used a direct GitHub reconciliation instead of
-  notification history.
+- Gizmo's terminal decision used direct GitHub evidence returned by PR Steward
+  under an explicit Gizmo packet, rather than notification history.
