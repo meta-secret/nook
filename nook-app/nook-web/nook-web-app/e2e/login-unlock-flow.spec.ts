@@ -75,7 +75,7 @@ test.describe('login unlock flow (local-first)', () => {
           extensions: { prf: { eval: { first: new Uint8Array([2]) } } },
         },
       })
-      if (typeof credential !== 'object' || credential === null) {
+      if (typeof credential !== 'object' || Object(credential) !== credential) {
         throw new Error('Expected a public-key credential.')
       }
       const methodValue: unknown = Object.getOwnPropertyDescriptor(
@@ -90,19 +90,22 @@ test.describe('login unlock flow (local-first)', () => {
       }
       const method: CredentialMethod = methodValue
       const extensionResults: unknown = method.call(credential)
-      if (typeof extensionResults !== 'object' || extensionResults === null) {
+      if (
+        typeof extensionResults !== 'object' ||
+        Object(extensionResults) !== extensionResults
+      ) {
         throw new Error('Expected public-key extension results.')
       }
       const prf: unknown = Object.getOwnPropertyDescriptor(
         extensionResults,
         'prf',
       )?.value
-      if (typeof prf !== 'object' || prf === null) return undefined
+      if (typeof prf !== 'object' || Object(prf) !== prf) return false
       const enabled: unknown = Object.getOwnPropertyDescriptor(
         prf,
         'enabled',
       )?.value
-      return typeof enabled === 'boolean' ? enabled : undefined
+      return typeof enabled === 'boolean' ? enabled : false
     })
     expect(prfEnabledAfterReload).toBe(true)
     await page.getByTestId('unlock-vault-btn').click()

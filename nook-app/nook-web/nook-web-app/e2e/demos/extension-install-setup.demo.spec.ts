@@ -89,7 +89,9 @@ test('offer browser extension install on vault home and in Devices', async ({
             'data-demo-extension-message-types',
           )?.value
         const parsedRoutedTypes: unknown = JSON.parse(
-          routedTypesAttribute ?? '[]',
+          typeof routedTypesAttribute === 'string'
+            ? routedTypesAttribute
+            : '[]',
         )
         if (!Array.isArray(parsedRoutedTypes)) {
           throw new Error('Routed message types were not an array.')
@@ -171,15 +173,16 @@ test('offer browser extension install on vault home and in Devices', async ({
     throw new Error('Companion launcher message was malformed.')
   }
   expect(launcherMessage.payload).toEqual({ intent: 'pair' })
+  const routedTypesAttribute = await page
+    .locator('html')
+    .evaluate(
+      (element) =>
+        element.attributes.getNamedItem('data-demo-extension-message-types')
+          ?.value,
+    )
   const routedTypes = requireStringArray(
     parseJson(
-      (await page
-        .locator('html')
-        .evaluate(
-          (element) =>
-            element.attributes.getNamedItem('data-demo-extension-message-types')
-              ?.value,
-        )) ?? '[]',
+      typeof routedTypesAttribute === 'string' ? routedTypesAttribute : '[]',
     ),
     'routed extension message types',
   )
@@ -218,15 +221,18 @@ test('offer browser extension install on vault home and in Devices', async ({
   )
   // Moving between extension setup surfaces must not replay the session-owned
   // launcher request. The browser lifecycle keeps one operation per click.
+  const routedTypesAfterSettingsAttribute = await page
+    .locator('html')
+    .evaluate(
+      (element) =>
+        element.attributes.getNamedItem('data-demo-extension-message-types')
+          ?.value,
+    )
   const routedTypesAfterSettings = requireStringArray(
     parseJson(
-      (await page
-        .locator('html')
-        .evaluate(
-          (element) =>
-            element.attributes.getNamedItem('data-demo-extension-message-types')
-              ?.value,
-        )) ?? '[]',
+      typeof routedTypesAfterSettingsAttribute === 'string'
+        ? routedTypesAfterSettingsAttribute
+        : '[]',
     ),
     'routed extension message types after settings',
   )

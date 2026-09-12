@@ -124,9 +124,10 @@ test('save a freshly submitted login through Nook Pilot', async ({ page }) => {
   await saveButton.click()
   await expect(widget.getByTestId('nook-auth-gate-save-saved')).toBeVisible()
   await expect(widget.getByText('Login saved')).toBeVisible()
-  const saveSequence = await page.evaluate(
-    () => window.__nookDemoRuntimeMessageTypes ?? [],
-  )
+  const saveSequence = await page.evaluate(() => {
+    const messages = window.__nookDemoRuntimeMessageTypes
+    return Array.isArray(messages) ? messages : []
+  })
   const offerIndex = saveSequence.indexOf('nook:website-login-save-offer')
   const evidenceIndex = saveSequence.indexOf(
     'nook:authentication-outcome-classify',

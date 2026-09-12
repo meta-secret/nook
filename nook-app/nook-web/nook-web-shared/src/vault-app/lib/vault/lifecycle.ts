@@ -198,7 +198,7 @@ export class VaultInitializationActions {
         manualPasskey:
           localStorage.getItem("nook_e2e_manual_passkey") === "true",
         sessionLocked:
-          typeof window !== "undefined" &&
+          typeof window === "object" &&
           (window.sessionStorage.getItem("nook_vault_session_locked") === "1" ||
             window.sessionStorage.getItem("nook_vault_session_locked") ===
               "true"),

@@ -218,16 +218,18 @@ async function readActiveIdentityKeyringEntry(
   ) {
     throw new Error(`Unknown identity directory selection kind: ${kind}`)
   }
-  const identityIdValue = selectionRecord.identityId
-  if (identityIdValue !== undefined && typeof identityIdValue !== 'string') {
-    throw new Error('Identity directory selection identity id was invalid.')
-  }
-  const directory: IdentityDirectorySnapshot = {
-    selection: {
-      kind,
-      ...(identityIdValue === undefined ? {} : { identityId: identityIdValue }),
-    },
-  }
+  const selection: IdentityDirectorySnapshot['selection'] =
+    'identityId' in selectionRecord
+      ? {
+          kind,
+          identityId: readStringProperty(
+            selectionRecord,
+            'identityId',
+            'identity directory selection',
+          ),
+        }
+      : { kind }
+  const directory: IdentityDirectorySnapshot = { selection }
 
   const keyringRecord = requireRecord(parseJson(rawKeyring), 'identity keyring')
   const entriesValue = keyringRecord.entries
@@ -246,10 +248,17 @@ async function readActiveIdentityKeyringEntry(
       'protection',
       'identity keyring wrapped app key',
     )
-    const ciphertext = wrappedRecord.ciphertext
-    if (ciphertext !== undefined && typeof ciphertext !== 'string') {
-      throw new Error('Identity keyring ciphertext was invalid.')
-    }
+    const wrappedAppKey =
+      'ciphertext' in wrappedRecord
+        ? {
+            protection,
+            ciphertext: readStringProperty(
+              wrappedRecord,
+              'ciphertext',
+              'identity keyring wrapped app key',
+            ),
+          }
+        : { protection }
     entries.push({
       identityId: readStringProperty(
         entryRecord,
@@ -257,10 +266,7 @@ async function readActiveIdentityKeyringEntry(
         'identity keyring entry',
       ),
       appId: readStringProperty(entryRecord, 'appId', 'identity keyring entry'),
-      wrappedAppKey: {
-        protection,
-        ...(ciphertext === undefined ? {} : { ciphertext }),
-      },
+      wrappedAppKey,
     })
   }
   const keyring: LocalIdentityKeyringSnapshot = { entries }

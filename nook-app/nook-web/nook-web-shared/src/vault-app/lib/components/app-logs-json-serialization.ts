@@ -15,7 +15,7 @@ export class AppLogsJsonDocument {
   constructor(private readonly document: AppLogsDocument) {}
 
   get text(): string {
-    return JSON.stringify(this.document, null, 2);
+    return JSON.stringify(this.document, (_key, value) => value, 2);
   }
 
   static error(message: string): AppLogsJsonDocument {

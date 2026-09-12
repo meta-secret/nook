@@ -1,9 +1,10 @@
 <script lang="ts">
   import { Select as SelectPrimitive } from "bits-ui";
+  import { SelectRootType } from "./select-state";
 
   type SelectSingleRootProps = Extract<
     SelectPrimitive.RootProps,
-    { type: "single" }
+    { type: `${SelectRootType.Single}` }
   >;
 
   let {

@@ -313,7 +313,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
 
       const handler = async (route: import('@playwright/test').Route) => {
         const request = route.request()
-        const url = request.url().split('?')[0] ?? ''
+        const [url = ''] = [request.url().split('?')[0]]
         const method = request.method()
 
         if (url === 'https://api.github.com/user') {

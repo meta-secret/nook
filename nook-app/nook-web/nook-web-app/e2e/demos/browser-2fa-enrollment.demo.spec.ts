@@ -211,9 +211,10 @@ test('saves a confirmed authenticator without website success evidence', async (
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
     'Connected to Demo vault',
   )
-  const enrollmentMessages = await page.evaluate(
-    () => window.__nookDemoRuntimeMessageTypes ?? [],
-  )
+  const enrollmentMessages = await page.evaluate(() => {
+    const messages = window.__nookDemoRuntimeMessageTypes
+    return Array.isArray(messages) ? messages : []
+  })
   expect(enrollmentMessages).toContain(
     'nook:website-authenticator-enroll-stage',
   )

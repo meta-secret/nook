@@ -3,11 +3,19 @@ export function parseJson(value: string): unknown {
   return JSON.parse(value) as unknown
 }
 
-export function requireValue<T>(value: T | null | undefined, label: string): T {
-  if (value === null || value === undefined) {
+export function requireValue<T>(value: T, label: string): NonNullable<T> {
+  if (!value) {
     throw new Error(`${label} was not available.`)
   }
-  return value
+  return value as NonNullable<T>
+}
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    Object(value) === value &&
+    !Array.isArray(value)
+  )
 }
 
 export function requireStringArray(value: unknown, label: string): string[] {
@@ -28,12 +36,10 @@ export function requireRecord(
   value: unknown,
   label: string,
 ): Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error(`${label} was not an object.`)
   }
-  const record: Record<string, unknown> = {}
-  for (const [key, entry] of Object.entries(value)) record[key] = entry
-  return record
+  return { ...value }
 }
 
 export function readStringProperty(

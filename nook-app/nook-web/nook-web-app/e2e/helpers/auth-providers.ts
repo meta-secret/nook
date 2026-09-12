@@ -174,7 +174,10 @@ export async function appendAuthProviders(
           getRequest.onsuccess = () => {
             const rawSnapshot: unknown = getRequest.result
             const snapshot: { providers: unknown[] } = { providers: [] }
-            if (typeof rawSnapshot === 'object' && rawSnapshot !== null) {
+            if (
+              typeof rawSnapshot === 'object' &&
+              Object(rawSnapshot) === rawSnapshot
+            ) {
               const storedProviders: unknown = Object.getOwnPropertyDescriptor(
                 rawSnapshot,
                 'providers',
@@ -445,7 +448,10 @@ export async function readRawAuthProvidersFromIdb(
     return new Promise<RawAuthProvidersSnapshot>((resolve, reject) => {
       const resolveEmptySnapshot = () => resolve({ providers: [] })
       const resolveSnapshot = (rawSnapshot: unknown) => {
-        if (typeof rawSnapshot !== 'object' || rawSnapshot === null) {
+        if (
+          typeof rawSnapshot !== 'object' ||
+          Object(rawSnapshot) !== rawSnapshot
+        ) {
           resolve({ providers: [] })
           return
         }
@@ -459,7 +465,10 @@ export async function readRawAuthProvidersFromIdb(
         }
         const providers: RawAuthProvidersSnapshot['providers'] = []
         for (const providerValue of providersValue) {
-          if (typeof providerValue !== 'object' || providerValue === null) {
+          if (
+            typeof providerValue !== 'object' ||
+            Object(providerValue) !== providerValue
+          ) {
             continue
           }
           const id: unknown = Object.getOwnPropertyDescriptor(
