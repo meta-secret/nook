@@ -749,9 +749,9 @@ gate. See [quality](../../teams/sre/workflows/quality.md#fix-check-findings--not
 4. Continue from the verified fix commit and run `task loom:pre-push`. Return any
    team-owned formatter diff for a fresh team commit. Continue from it, rerun
    hygiene, and promptly push the completed fix.
-5. Run Loom/Task validation and return to monitoring Nook's complete exact-head
-   PR checks. If the pushed fix is not validation-ready, dispatch at least one
-   relevant focused `task remote` job first.
+5. Authorize PR Steward to dispatch validation and monitor the complete
+   exact-head PR checks. If the pushed fix is not validation-ready, have PR
+   Steward dispatch at least one relevant focused `task remote` job first.
 6. Complete validation dispatches before any GitHub review wait. An opted-in
    exact-head review runs during hosted checks. Batch its findings with failed
    checks after both settle. No other review service is activated.
