@@ -133,3 +133,6 @@ Every dispatch requires:
 - a clean worktree;
 - a branch present on `origin`; and
 - a remote branch SHA equal to local `HEAD`.
+
+A captured validation head becomes stale after any later push; recapture the
+exact remote SHA before dispatch or promotion.
