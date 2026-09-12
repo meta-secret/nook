@@ -468,9 +468,9 @@ export class SkillProviderSubprocessScenario {
       const symbol = collection.checker.getSymbolAtLocation(collection.node);
       const initializer =
         symbol && collection.initializers.has(symbol)
-          ? (collection.initializers.get(symbol)
+          ? collection.initializers.get(symbol)
             ? collection.initializers.get(symbol)
-            : false)
+            : false
           : false;
       if (initializer) {
         const nestedCollection: LiteralCollection = {

@@ -105,12 +105,10 @@ export class AgentWorkflowDelegationAdmissionScenario {
   }
 }
 
-function requiredAttempt(
-  request: {
-    readonly attempts: readonly DelegationAttemptDeclaration[];
-    readonly index: number;
-  },
-): DelegationAttemptDeclaration {
+function requiredAttempt(request: {
+  readonly attempts: readonly DelegationAttemptDeclaration[];
+  readonly index: number;
+}): DelegationAttemptDeclaration {
   const attempt = request.attempts[request.index];
   if (!attempt) throw new Error('Attempt is missing.');
   return attempt;

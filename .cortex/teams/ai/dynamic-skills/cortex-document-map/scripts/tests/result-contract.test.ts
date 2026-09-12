@@ -103,19 +103,29 @@ test('acceptance verifies dev-manager graph ownership and rejects omitted eviden
   };
   const result = {
     kind: CortexDocumentMapContractKind.Result,
-    findings: [{
-      code: CortexStructureFindingCode.MissingFromIndex,
-      file: '.cortex/teams/dev-manager/knowledge-graph.md',
-      line: 1,
-      message:
-        'Document is not indexed in its owning knowledge graph .cortex/teams/dev-manager/knowledge-graph.md: .cortex/teams/dev-manager/policy.md',
-    }],
+    findings: [
+      {
+        code: CortexStructureFindingCode.MissingFromIndex,
+        file: '.cortex/teams/dev-manager/knowledge-graph.md',
+        line: 1,
+        message:
+          'Document is not indexed in its owning knowledge graph .cortex/teams/dev-manager/knowledge-graph.md: .cortex/teams/dev-manager/policy.md',
+      },
+    ],
   } as const;
-  expect(new CortexDocumentMapResultAcceptance({ auditRequest, result }).execute().isOk()).toBe(true);
-  expect(new CortexDocumentMapResultAcceptance({
-    auditRequest,
-    result: { ...result, findings: [] },
-  }).execute().isErr()).toBe(true);
+  expect(
+    new CortexDocumentMapResultAcceptance({ auditRequest, result })
+      .execute()
+      .isOk(),
+  ).toBe(true);
+  expect(
+    new CortexDocumentMapResultAcceptance({
+      auditRequest,
+      result: { ...result, findings: [] },
+    })
+      .execute()
+      .isErr(),
+  ).toBe(true);
 
   const indexedRequest: AuditCortexDocumentMapRequest = {
     ...auditRequest,
@@ -125,10 +135,14 @@ test('acceptance verifies dev-manager graph ownership and rejects omitted eviden
         : document,
     ),
   };
-  expect(new CortexDocumentMapResultAcceptance({
-    auditRequest: indexedRequest,
-    result: { ...result, findings: [] },
-  }).execute().isOk()).toBe(true);
+  expect(
+    new CortexDocumentMapResultAcceptance({
+      auditRequest: indexedRequest,
+      result: { ...result, findings: [] },
+    })
+      .execute()
+      .isOk(),
+  ).toBe(true);
 });
 
 test('round-trips the exact bounded result contract', () => {

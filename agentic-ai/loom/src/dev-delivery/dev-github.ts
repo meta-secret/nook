@@ -197,9 +197,26 @@ type GitHubJsonValue =
   | string
   | number
   | boolean
-  | null
+  | GitHubJsonTransportNull
   | GitHubJsonValue[]
   | { readonly [key: string]: GitHubJsonValue };
+
+type GitHubJsonTransportNull = Exclude<
+  ReturnType<URLSearchParams['get']>,
+  string
+>;
+
+enum GitHubReviewDecisionInputPresence {
+  Present = 'present',
+  Absent = 'absent',
+}
+
+type GitHubReviewDecisionInput =
+  | {
+      readonly presence: GitHubReviewDecisionInputPresence.Present;
+      readonly value: string;
+    }
+  | { readonly presence: GitHubReviewDecisionInputPresence.Absent };
 
 const parseGitHubJson = JSON.parse as (source: string) => GitHubJsonValue;
 
@@ -634,7 +651,9 @@ export class DevGitHubGateway {
       baseSha: baseSha.value,
       url: view.url,
       isDraft: view.isDraft,
-      reviewDecision: DevGitHubGateway.reviewDecision(view.reviewDecision),
+      reviewDecision: DevGitHubGateway.reviewDecision(
+        DevGitHubGateway.reviewDecisionInput(view.reviewDecision),
+      ),
     });
   }
 
@@ -739,7 +758,7 @@ export class DevGitHubGateway {
     );
     if (decoded.isErr()) return err(decoded.error);
     const reviewDecision = DevGitHubGateway.reviewDecision(
-      decoded.value.reviewDecision,
+      DevGitHubGateway.reviewDecisionInput(decoded.value.reviewDecision),
     );
     if (reviewDecision !== PullRequestReviewDecision.Approved) {
       return err({
@@ -875,9 +894,13 @@ export class DevGitHubGateway {
     return RepositorySlug.parse(output.value.stdout.trim());
   }
 
-  private static reviewDecision(input: string | null): PullRequestReviewDecision {
-    if (typeof input !== 'string') return PullRequestReviewDecision.Empty;
-    switch (input) {
+  private static reviewDecision(
+    input: GitHubReviewDecisionInput,
+  ): PullRequestReviewDecision {
+    if (input.presence === GitHubReviewDecisionInputPresence.Absent) {
+      return PullRequestReviewDecision.Empty;
+    }
+    switch (input.value) {
       case PullRequestReviewDecision.Approved:
         return PullRequestReviewDecision.Approved;
       case PullRequestReviewDecision.ChangesRequested:
@@ -889,6 +912,17 @@ export class DevGitHubGateway {
       default:
         return PullRequestReviewDecision.Unknown;
     }
+  }
+
+  private static reviewDecisionInput(
+    input: string | GitHubJsonTransportNull,
+  ): GitHubReviewDecisionInput {
+    return typeof input === 'string'
+      ? {
+          presence: GitHubReviewDecisionInputPresence.Present,
+          value: input,
+        }
+      : { presence: GitHubReviewDecisionInputPresence.Absent };
   }
 
   private static compareDatabaseIds(

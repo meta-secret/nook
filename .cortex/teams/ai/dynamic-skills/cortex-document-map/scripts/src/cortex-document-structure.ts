@@ -394,9 +394,10 @@ export class CortexDocumentStructure {
   private cortexGraphOwner(filePath: string): CortexGraphOwner | false {
     if (filePath.startsWith('.cortex/gizmo/')) return CortexGraphOwner.Gizmo;
     if (filePath.startsWith('.cortex/shared/')) return CortexGraphOwner.Shared;
-    const match = /^\.cortex\/teams\/(ai|dev-core|dev-manager|security|sre|web-dev)\//.exec(
-      filePath,
-    );
+    const match =
+      /^\.cortex\/teams\/(ai|dev-core|dev-manager|security|sre|web-dev)\//.exec(
+        filePath,
+      );
     const owner = match?.[1];
     if (
       owner === CortexGraphOwner.Ai ||

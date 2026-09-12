@@ -17,9 +17,15 @@ export class DevDeliveryWorkspace {
   readonly git: DevGitRepository;
   readonly github: DevGitHubGateway;
 
-  constructor(request: { readonly root: string; readonly runner: CommandRunner }) {
+  constructor(request: {
+    readonly root: string;
+    readonly runner: CommandRunner;
+  }) {
     this.root = request.root;
-    this.git = new DevGitRepository({ root: request.root, runner: request.runner });
+    this.git = new DevGitRepository({
+      root: request.root,
+      runner: request.runner,
+    });
     this.github = new DevGitHubGateway({
       runner: request.runner,
       workingDirectory: request.root,

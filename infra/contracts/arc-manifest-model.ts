@@ -1,17 +1,17 @@
 import { z } from "zod";
 
-type Optional<T> = T | void;
+type OptionalProperty<T> = { value?: T }["value"];
 
 export interface ResourceEnvelope {
-  requests?: Optional<{
-    cpu?: Optional<string>;
-    memory?: Optional<string>;
-    "ephemeral-storage"?: Optional<string>;
+  requests?: OptionalProperty<{
+    cpu?: OptionalProperty<string>;
+    memory?: OptionalProperty<string>;
+    "ephemeral-storage"?: OptionalProperty<string>;
   }>;
-  limits?: Optional<{
-    cpu?: Optional<string>;
-    memory?: Optional<string>;
-    "ephemeral-storage"?: Optional<string>;
+  limits?: OptionalProperty<{
+    cpu?: OptionalProperty<string>;
+    memory?: OptionalProperty<string>;
+    "ephemeral-storage"?: OptionalProperty<string>;
   }>;
 }
 
@@ -24,13 +24,13 @@ export type ArcEnvironmentVariable =
 
 export interface ArcContainer {
   name: string;
-  env?: Optional<ArcEnvironmentVariable[]>;
-  resources?: Optional<ResourceEnvelope>;
+  env?: OptionalProperty<ArcEnvironmentVariable[]>;
+  resources?: OptionalProperty<ResourceEnvelope>;
 }
 
 export interface ArcVolume {
   name: string;
-  hostPath?: Optional<{ path: string }>;
+  hostPath?: OptionalProperty<{ path: string }>;
 }
 
 export interface ArcValues {
@@ -39,7 +39,7 @@ export interface ArcValues {
   maxRunners: number;
   template: {
     spec: {
-      runtimeClassName?: Optional<string>;
+      runtimeClassName?: OptionalProperty<string>;
       automountServiceAccountToken: boolean;
       initContainers: ArcContainer[];
       containers: ArcContainer[];
@@ -57,14 +57,19 @@ export interface ArcContainerPodTemplate {
 }
 
 export interface WorkflowJob {
-  if?: Optional<string>;
-  "runs-on"?: Optional<string>;
-  steps?: Optional<Array<{ run?: Optional<string>; uses?: Optional<string> }>>;
-  uses?: Optional<string>;
+  if?: OptionalProperty<string>;
+  "runs-on"?: OptionalProperty<string>;
+  steps?: OptionalProperty<
+    Array<{
+      run?: OptionalProperty<string>;
+      uses?: OptionalProperty<string>;
+    }>
+  >;
+  uses?: OptionalProperty<string>;
 }
 
 export interface WorkflowManifest {
-  jobs?: Optional<Record<string, WorkflowJob>>;
+  jobs?: OptionalProperty<Record<string, WorkflowJob>>;
 }
 
 const resourceFields = z.object({

@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return typeof value === 'object' && Object(value) === value && !Array.isArray(value)
 }
 
 /** @param {string} text @returns {unknown} */
@@ -73,7 +73,7 @@ function errorText(value) {
   if (value instanceof Error) return value.message
   try {
     const serialized = JSON.stringify(value)
-    return serialized ?? 'unknown error'
+    return typeof serialized === 'string' ? serialized : 'unknown error'
   } catch {
     return 'unknown error'
   }
