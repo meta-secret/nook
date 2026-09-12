@@ -44,7 +44,9 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     let setup =
         RepositoryFixture::repository_root().read(".github/actions/nook-docker-setup/action.yml");
     assert!(
-        setup.contains("\"${{ github.action_path }}/../../workflows/lib/cache-telemetry.mjs\" start")
+        setup.contains(
+            "\"${{ github.action_path }}/../../workflows/lib/cache-telemetry.mjs\" start"
+        )
     );
     assert!(setup.contains("NOOK_CACHE_TELEMETRY_BASELINE"));
     assert!(setup.contains("if [[ \"$pr_number\" =~ ^[0-9]+$ ]]"));
