@@ -63,12 +63,7 @@ jobs:
           script: |
             const fs = require('node:fs')
             const path = require('node:path')
-            const { pathToFileURL } = require('node:url')
-            const { MainBuildStats } = await import(
-              pathToFileURL(
-                `${process.env.GITHUB_WORKSPACE}/.github/scripts/main-build-stats.mjs`,
-              ).href,
-            )
+            const { MainBuildStats } = require('./.github/scripts/main-build-stats.mjs')
 
             const eventRun = context.payload.workflow_run
             const run = (

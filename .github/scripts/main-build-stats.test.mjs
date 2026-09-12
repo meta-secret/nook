@@ -510,7 +510,11 @@ void test("workflow records completed trusted Main runs in Nook Workbench", () =
   );
   assert.match(collector, /github\.event\.workflow_run\.event == 'push'/);
   assert.match(collector, /github\.event\.workflow_run\.head_branch == 'main'/);
-  assert.match(collector, /await import\([\s\S]*main-build-stats\.mjs/);
+  assert.match(
+    collector,
+    /const \{ MainBuildStats \} = require\('\.\/\.github\/scripts\/main-build-stats\.mjs'\)/,
+  );
+  assert.doesNotMatch(collector, /await import\(|pathToFileURL/);
   assert.match(collector, /MainBuildStats\.build\(/);
   assert.doesNotMatch(collector, /main-build-stats\.cjs/);
   assert.match(
