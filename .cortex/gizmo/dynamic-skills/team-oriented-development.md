@@ -41,7 +41,8 @@ simple shared-branch delivery sequence.
 - Gizmo assigns one writer for shared files and shared command outputs.
 - Functional workers do not push, open pull requests, resolve review threads,
   or merge. PR Steward performs those external mechanics only through an
-  explicit Gizmo authorization packet.
+  explicit packet from the stage's controller. Dev PR creation/update, slow
+  evidence, readiness, and promotion require a dev-manager packet.
 - Do not add a Team Agent lifecycle service, scheduler, or Git-state machinery.
 
 ## Validation
@@ -60,5 +61,6 @@ simple shared-branch delivery sequence.
   unresolved blockers.
 - Only one writer mutated the Git index or committed at a time.
 - Provider-consumer evidence passed on the combined branch.
-- Gizmo retains external delivery policy, authorization, and verdict
-  ownership. PR Steward executes only the named mechanics.
+- Gizmo retains feature-stage policy, acceptance, and landing authorization.
+- The dev manager owns dev PR policy, slow evidence, readiness, and promotion.
+- Steward executes only the owning controller's named mechanics.

@@ -7,7 +7,7 @@ rules belong to Gizmo's linked authorities.
 ## Mandatory context selection
 
 1. Read the [root context router](knowledge-graph.md).
-2. Classify the work as Gizmo delivery control, PR Steward operations, AI,
+2. Classify the work as feature Gizmo control, dev-manager control, PR Steward operations, AI,
    development core, security, SRE, web development, or shared ownership.
 3. Load exactly one owning `AGENTS.md` and knowledge graph.
 4. Open only the documents and headings needed for the assigned work.
@@ -21,14 +21,16 @@ requires an explicit expertise task from Gizmo Prime.
 ## Context routes
 
 - [Gizmo Prime](gizmo/AGENTS.md) owns mission planning, delegation,
-  shared-branch sequencing, PR policy and authorization, review finding
-  disposition, and Workbench state.
+  feature-branch sequencing, feature review and acceptance, local landing
+  requests, and feature Workbench state.
 - [PR Steward](teams/pr-steward/AGENTS.md) owns explicitly authorized
-  mechanical pull-request operations and returns evidence to Gizmo. Its
+  mechanical operations and returns evidence to the issuing controller. Its
   [knowledge graph](teams/pr-steward/knowledge-graph.md) is a separate
   operational Team Agent context, not a functional engineering authority.
 - [Dev manager](teams/dev-manager/AGENTS.md) owns manually operated dev
-  publication, slow PR validation, repair delegation, and promotion.
+  publication, dev PR creation/update, slow evidence, readiness, repair
+  delegation, and promotion. Steward executes dev PR mechanics only under
+  the manager's packet.
 - [AI contract](teams/ai/AGENTS.md) and
   [graph](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, routing, and
   agent automation.
@@ -96,9 +98,11 @@ material until their implementations conform to the named task contracts.
 - **Parent and worker ownership**
   - Parent-owned Gizmo control operations remain with Gizmo Prime:
     - planning and shared-branch sequencing;
-    - PR policy, authorization packets, and review-finding disposition;
+    - feature authorization packets and feature review-finding disposition;
     - functional-team routing and shared-branch ownership;
-    - Workbench completion and the final delivery verdict.
+    - feature Workbench completion and the feature delivery verdict.
+  - Dev PR creation/update, slow evidence, readiness, and promotion remain
+    under dev-manager control. Steward performs only manager-authorized mechanics.
   - PR Steward owns only explicitly authorized external mechanics:
     - repository discovery, authentication checks, and run-log queries;
     - exact parent-authored Workbench publication;
@@ -170,9 +174,9 @@ material until their implementations conform to the named task contracts.
       - It accepts only declared Rust dependency files.
       - It verifies PR number, base, head ref, and remote SHA before
         publication.
-  - Gizmo owns review policy, technical dispositions, readiness and merge
-    verdicts for the returned head. PR Steward performs only the authorized
-    external observations and mutations.
+  - Gizmo owns feature review and acceptance for the returned head.
+  - The dev manager owns subsequent dev PR readiness and promotion.
+  - PR Steward performs only the owning controller's authorized mechanics.
 - **Repository constraints**
   - The source-size limit is a non-bypassable hard rule.
   - Every authored source file stays at or below the **1,000-line delivery
@@ -202,7 +206,7 @@ material until their implementations conform to the named task contracts.
 - **Parent and worker ownership**
   - Parent-owned policy and control decisions do not create functional Team
     Agent work. The bounded PR Steward operation is the sole operational
-    exception and remains a child of Gizmo Prime.
+    exception and remains a child of the owning feature Gizmo or dev manager.
 - **Validation and delivery**
   - Gizmo Prime, Team Agents, and subagents must not run product compilation or
     full repository validation locally, whether directly or through a Task
@@ -246,8 +250,9 @@ material until their implementations conform to the named task contracts.
 - A functional Team Agent needing PR information sends a request to Gizmo
   through the active harness. Include the known target, needed evidence, and
   work that depends on it.
-- Gizmo delegates that request to PR Steward with an explicit operation packet.
-  Gizmo returns the Steward's evidence or blocker to the requesting worker.
+- Gizmo routes dev PR requests to the dev manager, which authorizes Steward's
+  evidence collection. Gizmo may authorize feature compilation evidence and
+  local landing requests. Return the evidence or blocker to the worker.
 - Only PR Steward monitors PR state, checks, reviews, and workflow runs.
   This includes event subscriptions, bounded waits, and permitted polling.
 - The same boundary applies to Task, Loom, scripts, and other wrappers that
@@ -259,8 +264,8 @@ material until their implementations conform to the named task contracts.
   packet. Gizmo authorizes local integration; the dev manager authorizes publication
   and promotion. This grants no general shared-branch Git authority.
 - Functional teams diagnose evidence returned by PR Steward.
-- Gizmo authors Workbench records and decides their outcomes. PR Steward may
-  publish only the exact content and destination explicitly authorized by Gizmo.
+- Each controller authors its stage's Workbench records and decides outcomes.
+  Steward publishes only the issuing controller's exact content and destination.
 - Use the [authorization handshake](teams/pr-steward/workflows/authorization-handshake.md)
   for PR, repository, run, and Workbench operations.
 - This is an agent execution rule, not a credential sandbox. Shared tools and
@@ -270,7 +275,7 @@ material until their implementations conform to the named task contracts.
 
 ### Prohibited actions
 
-- Gizmo and functional Team Agents must not execute `gh`, even for read-only
+- Gizmo, the dev manager, and functional Team Agents must not execute `gh`, even for read-only
   inspection, authentication, or version checks.
 - A read-only worker assignment does not authorize `gh pr view` or monitoring.
 - Functional Team Agents must not start or contact PR Steward directly.
@@ -467,7 +472,8 @@ alone does not complete feature delivery. Every change passes through dev.
   reconciliation are separate systems governed by their existing authorities.
 - A request to test, monitor, and merge a PR when ready remains one active
   delivery task. Have PR Steward perform bounded observation of that PR.
-  Gizmo authorizes merge in the same task when readiness is satisfied.
+  The dev manager controls dev PR observation, readiness, and promotion in
+  that task. Steward executes each mechanical operation under a manager packet.
 - The target PR is the delivery scope. Consult `origin/main` only when the PR
   workflow requires base freshness. Do not monitor, diagnose, or repair the
   Main workflow or unrelated default-branch health unless the user explicitly

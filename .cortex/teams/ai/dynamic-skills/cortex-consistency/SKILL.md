@@ -160,7 +160,8 @@ The ownership boundary is explicit:
 - Markdown does not become executable state.
 - The rules and their executable policy remain beside this procedure.
 
-Run the compiler through the normal Cortex consistency command:
+Only in the dev manager's remote slow PR stage, run the compiler through the
+Cortex consistency command below. Never invoke it locally or in feature work.
 
 ```bash
 task loom:cortex-audit
@@ -168,7 +169,8 @@ task loom:cortex-audit
 
 The command reports failures in `contractFindings`.
 
-The co-located application is also a discoverable executable skill:
+The co-located application is also a discoverable executable skill. These
+invocations are likewise restricted to the manager's remote slow PR stage:
 
 ```bash
 task skills:tools-list

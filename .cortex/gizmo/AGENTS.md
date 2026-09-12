@@ -30,23 +30,26 @@ Gizmo owns:
 - the requested outcome and completion evidence;
 - task ownership, write-wave coordination, and shared-branch commit turns;
 - shared-file coordination;
-- pull-request policy and authorization;
+- feature compilation and local landing authorization;
 - technical review-finding disposition and functional-team routing;
-- readiness and merge verdicts;
+- feature acceptance verdicts;
 - Workbench completion; and
-- the final delivery verdict.
+- the feature delivery verdict.
+
+The dev manager controls dev PR creation/update, slow evidence, readiness,
+and promotion. PR Steward performs those mechanics only under a manager packet.
 
 Gizmo delegates all GitHub execution, including read-only commands and wrappers,
 to the separate
 [PR Steward Team Agent](../teams/pr-steward/AGENTS.md). PR Steward is not a
 sixth functional team. Its [knowledge graph](../teams/pr-steward/knowledge-graph.md)
 defines the operational context, and it never acts without an explicit
-operation packet from Gizmo.
+operation packet from the controller that owns the requested stage.
 
 Workers send missing PR-information requests to Gizmo through the active
-harness. Gizmo delegates evidence collection to PR Steward, then returns the
-result to the requesting worker. Only PR Steward runs PR monitoring or event
-subscriptions.
+harness. Gizmo routes dev PR evidence requests to the dev manager. The manager
+authorizes Steward's collection and returns the result. Gizmo may directly
+authorize feature compilation evidence and local landing requests.
 
 Gizmo does not:
 
@@ -117,7 +120,7 @@ The manager separately owns full slow validation and fast-forward promotion.
 
 ## Verdict
 
-The final verdict is bound to the exact pull-request head. A head change
+The feature verdict is bound to the exact feature head. A head change
 invalidates evidence that is not head-stable.
 
 Use [mission delivery](workflows/mission-delivery.md) for the end-to-end

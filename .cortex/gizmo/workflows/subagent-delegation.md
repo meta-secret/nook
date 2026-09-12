@@ -56,9 +56,10 @@ the active harness.
 - Gizmo verifies each child commit and integrates it into the parent feature
   worktree through the guarded module integrator.
 - Do not copy, replay, or synthesize a worker commit into an unrelated branch.
-- Gizmo owns branch sequencing, PR authorization, technical review
-  dispositions, readiness and merge verdicts. PR Steward performs only the
-  explicitly authorized external pull-request mechanics described in the
+- Gizmo owns feature sequencing, review, acceptance, and landing requests.
+  The dev manager controls dev PR creation/update, slow evidence, readiness,
+  and promotion. Steward performs dev PR mechanics only under manager packets.
+  Follow the
   [PR Steward lifecycle](../../teams/pr-steward/workflows/pull-request-lifecycle.md).
 
 ## Procedure
@@ -196,5 +197,6 @@ Before accepting Team Agent work, verify:
 - remote build-only acceptance passed for the feature SHA;
 - workers requested missing PR evidence through Gizmo without direct GitHub
   access or monitoring; and
-- Gizmo still owns every external delivery decision and authorization. Any PR
-  Steward mutation stays inside the named packet.
+- Gizmo owns feature-stage decisions and landing authorization.
+- The dev manager controls dev PR operations, readiness, and promotion.
+- Steward mutations stay inside the owning controller's packet.
