@@ -361,6 +361,44 @@ afterAll(() => {
 })
 
 describe('generated companion protocol composition', () => {
+  test('validates fresh presence without consuming a discovered endpoint', () => {
+    const initial = new NookCompanionExtensionEndpoint(
+      structuredClone(presence),
+    )
+    const discovered = initial.discover(discovery('presence-refresh'))
+    const lockedPresence: CompanionExtensionPresence = {
+      kind: 'locked',
+      vault_type: 'simple',
+      vault_store_id: extension.vaultStoreId,
+      vault_name: extension.vaultName,
+    }
+    const candidate = new NookCompanionExtensionEndpoint(
+      structuredClone(lockedPresence),
+    )
+    expect(candidate.presence).toEqual(lockedPresence)
+    candidate.free()
+    expect(discovered.status.status).toBe('unlocked')
+    discovered.free()
+  })
+
+  test('rejects invalid fresh presence without consuming a discovered endpoint', () => {
+    const initial = new NookCompanionExtensionEndpoint(
+      structuredClone(presence),
+    )
+    const discovered = initial.discover(discovery('presence-rejection'))
+    expect(
+      () =>
+        new NookCompanionExtensionEndpoint({
+          kind: 'locked',
+          vault_type: 'simple',
+          vault_store_id: '',
+          vault_name: extension.vaultName,
+        }),
+    ).toThrow()
+    expect(discovered.status.status).toBe('unlocked')
+    discovered.free()
+  })
+
   test('resolves stored Sentinel deliveries without borrowing the live manager', async () => {
     const request = extension.sentinel_stored_deliveries_request()
     const resolution = request.resolve()

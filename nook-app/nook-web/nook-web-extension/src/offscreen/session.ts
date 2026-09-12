@@ -38,7 +38,6 @@ import {
   CompanionDiscoveryEndpointKind,
   type CompanionDiscoveryEndpoint,
 } from './session-vault-operations'
-import type { CompanionExtensionPresence } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { decode_companion_identity_discovery_observation } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { CompanionVaultDiscoveryArgs } from './session-vault-operations'
 
@@ -288,6 +287,13 @@ async function handleCompanionIdentityDiscovery(
   try {
     await ensureWasm()
     const activeManager = await getManager()
+    const discovery = decode_companion_identity_discovery_observation(
+      message.payload.discovery,
+    )
+    const candidate = new NookCompanionExtensionEndpoint(
+      message.payload.presence,
+    )
+    const presence = candidate.presence
     const prior = companionEndpointAvailability
     companionEndpointAvailability = {
       kind: CompanionEndpointAvailabilityKind.Inactive,
@@ -300,18 +306,13 @@ async function handleCompanionIdentityDiscovery(
           }
         : {
             kind: CompanionDiscoveryEndpointKind.Initial,
-            endpoint: new NookCompanionExtensionEndpoint(
-              message.payload.presence,
-            ),
+            endpoint: candidate,
           }
+    if (prior.kind === CompanionEndpointAvailabilityKind.Active) {
+      candidate.free()
+    }
 
     try {
-      // The endpoint constructor owns presence admission. The typed projection
-      // remains necessary until that boundary returns its admitted presence.
-      const presence = message.payload.presence as CompanionExtensionPresence
-      const discovery = decode_companion_identity_discovery_observation(
-        message.payload.discovery,
-      )
       const companionDiscoveryArgs: CompanionVaultDiscoveryArgs = {
         activeManager,
         endpoint,
