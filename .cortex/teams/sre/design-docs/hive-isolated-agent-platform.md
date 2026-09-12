@@ -15,9 +15,11 @@ leases, attempts, results, and dependency artifacts.
 
 The platform is stateful; workers are deliberately not. Each worker Pod handles
 at most one task, exits, and is replaced by a clean Kata-backed Pod. A logical
-Main-repair task nevertheless survives Pod replacement and owns delivery until
-its reviewed pull request is squash-merged, the resulting Main revision is
-green, and the Workbench incident is completed.
+Main-repair task nevertheless survives Pod replacement and tracks its incident
+through feature integration into local dev. The manually run dev manager owns
+slow dev PR checks and fast-forward promotion of the tested SHA to main.
+Incident completion retains successful Main verification and Workbench evidence.
+Before Hive resumes, its runtime must conform to this delivery ownership model.
 
 ## 1. Architectural boundaries
 
@@ -305,8 +307,8 @@ A blocker may retire as obsolete without resolving its named prerequisite only
 when all of the following hold:
 
 - Every active transitive non-blocker consumer is a Main-repair task.
-- Every one of those repairs is already squash-merged with a successful
-  containing Main run.
+- Every repair is contained in a tested dev SHA promoted to main by fast-forward.
+- A successful containing Main run exists for every repair.
 
 **Claim and completion guards**
 
@@ -320,7 +322,7 @@ for every owning repair:
 
 - branch state;
 - merged PR;
-- squash merge;
+- verified fast-forward promotion of the exact tested dev SHA;
 - ancestry; and
 - successful containing Main run.
 
@@ -436,9 +438,11 @@ flowchart LR
   incident --> dispatcher["Token-free dispatcher"]
   dispatcher --> task["Neo4j main-repair task"]
   task --> diagnose["Diagnose and implement"]
-  diagnose --> pr["Normal PR + ci:full-e2e"]
-  pr --> review["Exact-head checks and all review surfaces"]
-  review --> merge["Serialized squash merge"]
+  diagnose --> feature["Feature build-only evidence and review"]
+  feature --> dev["Serialized local dev landing"]
+  dev --> pr["Manager publishes snapshot and controls dev PR"]
+  pr --> review["Slow checks and required review/security acceptance"]
+  review --> merge["Manager fast-forwards tested dev SHA to main"]
   merge --> main["Resulting Main verification"]
   main --> worklog["Workbench issue + worklog completion"]
   worklog --> complete["Neo4j task COMPLETED"]
@@ -499,21 +503,21 @@ A later failed rerun:
   - Retirement cancels only the current active generation.
   - Use bounded timeouts for Kubernetes Pod API calls.
 
-One logical Hive task owns the entire repair. Opening a PR is intermediate
-state, not completion. The task must:
+One logical Hive task tracks the repair incident. Delivery controllers retain
+the responsibilities in [dev delivery](../../../gizmo/architecture/dev-delivery.md).
 
-1. diagnose from retained workflow evidence;
-2. implement and run repository operations through Taskfiles;
-3. publish a deterministic repair branch and PR;
-4. apply the `ci:full-e2e` label;
-5. inspect exact-head repository checks, inline threads, review bodies, and
-   top-level PR comments;
-6. reply to each actionable item and resolve its thread after the reply exists;
-7. prove the PR head contains current `main`;
-8. acquire the short-lived `hive-merge-lock` Git ref and squash-merge the exact
-   verified head;
-9. verify the resulting Main run; and
-10. complete the Workbench incident, linked plan, and worklog.
+1. Diagnose from retained workflow evidence.
+2. Route implementation and authored tests through the feature Gizmo's teams.
+3. Obtain remote build-only evidence and required feature review.
+4. Have Gizmo authorize Steward's serialized local dev landing.
+5. Have the manually run dev manager select and publish a dev snapshot.
+6. Have the manager authorize slow dev PR checks and review collection.
+   - Preserve existing e2e opt-ins and security-required focused checks.
+   - Route accepted fixes through the same feature path.
+7. Require origin/dev to equal the frozen tested SHA and main to be its ancestor.
+8. Have the manager authorize Steward's guarded fast-forward promotion.
+9. Verify remote main equality, actual PR state, and required Main-run evidence.
+10. Complete the Workbench incident, linked plan, and worklog.
 
 An incident remains the durable desired-state signal. Neo4j owns actual execution
 state and attempt history.
@@ -563,15 +567,13 @@ That command:
   - Per-agent or short-lived tokens are optional operational choices, not an
     additional required security boundary.
   - Repository permissions remain the authorization boundary.
-- **Publication tools:** Codex uses standard `git` and `gh` commands for branch
-  publication, PR creation and inspection, replies, thread resolution,
-  exact-head squash merge, Main verification, and Workbench updates.
+- **Publication tools:** Feature Gizmo owns feature publication and landing requests.
+  The dev manager owns dev PR creation/update, slow evidence, and promotion.
+  PR Steward performs GitHub mechanics only under the owning controller's packet.
   - Traverse every relevant check, review, comment, and thread page.
   - Follow the repository's normal readiness rules.
-  - Because the sealed guest has no Docker socket, run
-    `task hive:guest:pr:ready PR=<number>` instead of the Docker-backed host
-    wrapper.
-  - Prefer these established tools over a custom typed publication API.
+  - Guest readiness tooling does not authorize independent publication.
+  - Promotion uses the guarded dev contract, never a stock PR merge method.
 - **Trust boundary:** The agent is trusted with both the credential and task
   checkout.
   - Hive does not need a broker-owned private checkout, request signing, mailbox

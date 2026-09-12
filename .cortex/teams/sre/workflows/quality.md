@@ -478,7 +478,9 @@ Use this workflow for quality, CI, and deployment changes.
     - Cancelling exclusive blockers share that barrier, so stale and replacement workers never execute concurrently.
     - Successful reruns retire active incidents; current-generation reconciliation is idempotent.
     - A single isolated dispatcher enqueues actionable incidents.
-    - One logical Hive task owns the normal PR, checks, review loop, squash merge, and replacement Main verification.
+    - Repair implementation follows the feature path into local dev.
+    - The dev manager controls slow dev PR checks and fast-forward promotion.
+    - Incident completion retains replacement Main verification.
     - The explicitly dispatched implementation worker does not claim it.
     - Hive verification materializes its real-lock test and Clippy dependency graphs in independent BuildKit stages so they execute in parallel.
     - SeaweedFS S3 `sccache` supplies compiler objects.
