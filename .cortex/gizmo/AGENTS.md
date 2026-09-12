@@ -41,6 +41,11 @@ sixth functional team. Its [knowledge graph](../teams/pr-steward/knowledge-graph
 defines the operational context, and it never acts without an explicit
 operation packet from Gizmo.
 
+Workers send missing PR-information requests to Gizmo through the active
+harness. Gizmo delegates evidence collection to PR Steward, then returns the
+result to the requesting worker. Only PR Steward runs PR monitoring or event
+subscriptions.
+
 Gizmo does not:
 
 - execute `gh` or equivalent GitHub operations directly;

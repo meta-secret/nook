@@ -213,6 +213,13 @@ Workbench record, not another coordinator or worker. See the
 - PR Steward executes every live-agent GitHub operation under a Gizmo packet.
 - This includes all `gh` commands, including read-only queries, authentication
   checks, version checks, repository discovery, and log collection.
+- A functional Team Agent needing PR information sends a request to Gizmo
+  through the active harness. Include the known target, needed evidence, and
+  work that depends on it.
+- Gizmo delegates that request to PR Steward with an explicit operation packet.
+  Gizmo returns the Steward's evidence or blocker to the requesting worker.
+- Only PR Steward monitors PR state, checks, reviews, and workflow runs.
+  This includes event subscriptions, bounded waits, and permitted polling.
 - The same boundary applies to Task, Loom, scripts, and other wrappers that
   invoke `gh` or perform GitHub API operations.
 - Gizmo owns decisions, local authoring, shared-branch sequencing, and ordinary
@@ -231,6 +238,9 @@ Workbench record, not another coordinator or worker. See the
 
 - Gizmo and functional Team Agents must not execute `gh`, even for read-only
   inspection, authentication, or version checks.
+- A read-only worker assignment does not authorize `gh pr view` or monitoring.
+- Functional Team Agents must not start or contact PR Steward directly.
+  Route requests through Gizmo even when the missing evidence blocks the task.
 - They must not bypass PR Steward through a wrapper, SDK, direct API request,
   browser, or another GitHub connector.
 - PR Steward must not author Workbench content or decide its lifecycle state.
@@ -419,8 +429,8 @@ not mission completion.
 - Repository-owned GitHub Actions, Workbench automation fields, and Hive
   reconciliation are separate systems governed by their existing authorities.
 - A request to test, monitor, and merge a PR when ready remains one active
-  delivery task. Use bounded direct waits against that PR and merge it in the
-  same task when readiness is satisfied.
+  delivery task. Have PR Steward perform bounded observation of that PR.
+  Gizmo authorizes merge in the same task when readiness is satisfied.
 - The target PR is the delivery scope. Consult `origin/main` only when the PR
   workflow requires base freshness. Do not monitor, diagnose, or repair the
   Main workflow or unrelated default-branch health unless the user explicitly
