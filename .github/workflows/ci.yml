@@ -224,7 +224,7 @@ jobs:
       needs.scope.outputs.dev-pr == 'true'
     permissions:
       contents: read
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 2
     steps:
       - name: Require successful exact-head dev gates
