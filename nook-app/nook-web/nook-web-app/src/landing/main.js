@@ -19,37 +19,106 @@ import {
   unavailableExtensionMetadata,
 } from './extension-metadata-state'
 
-const cryptoTerms = Array.from(document.querySelectorAll('.crypto-term'))
-const readoutCode = document.querySelector('.readout-code')
-const readoutTitle = document.querySelector('.readout-title')
-const readoutDetail = document.querySelector('.readout-detail')
-const themeToggle = document.querySelector('.theme-toggle')
-const extensionInstallAction = document.querySelector(
+/** @typedef {'en' | 'ru'} LandingLocale */
+/** @typedef {'dark' | 'light'} LandingTheme */
+/** @typedef {{ x: number, y: number }} DiagramPosition */
+/** @typedef {DiagramPosition & { align: 'left' | 'center' | 'right' }} SignalSlot */
+/** @typedef {{ schema_version: 2, channel: 'production', version: string, extension_id: string, install_url: string, install_method: 'chrome_web_store' } | { schema_version: 2, channel: string, version: string, extension_id: string, install_url: string, download_url: string, install_method: 'manual_zip' }} ExtensionMetadata */
+
+class LandingDocument {
+  /**
+   * @param {string} selector
+   * @returns {HTMLElement}
+   */
+  static element(selector) {
+    const element = document.querySelector(selector)
+    if (!(element instanceof HTMLElement)) {
+      throw new Error(`Landing element is unavailable: ${selector}`)
+    }
+    return element
+  }
+
+  /**
+   * @param {string} selector
+   * @returns {HTMLAnchorElement}
+   */
+  static anchor(selector) {
+    const element = document.querySelector(selector)
+    if (!(element instanceof HTMLAnchorElement)) {
+      throw new Error(`Landing link is unavailable: ${selector}`)
+    }
+    return element
+  }
+
+  /**
+   * @param {string} selector
+   * @returns {HTMLElement[]}
+   */
+  static elements(selector) {
+    const elements = Array.from(document.querySelectorAll(selector))
+    if (!elements.every((element) => element instanceof HTMLElement)) {
+      throw new Error(`Landing elements have an invalid type: ${selector}`)
+    }
+    return elements
+  }
+
+  /** @returns {LandingLocale} */
+  static locale() {
+    const locale = document.documentElement.lang
+    if (locale !== 'en' && locale !== 'ru') {
+      throw new Error('Invalid landing locale.')
+    }
+    return locale
+  }
+
+  /**
+   * @param {{ messages: Record<string, string>, key: string }} request
+   */
+  static message(request) {
+    const { messages, key } = request
+    const message = messages[key]
+    if (!message) throw new Error(`Landing message is unavailable: ${key}`)
+    return message
+  }
+}
+
+const cryptoTerms = LandingDocument.elements('.crypto-term')
+const readoutCode = LandingDocument.element('.readout-code')
+const readoutTitle = LandingDocument.element('.readout-title')
+const readoutDetail = LandingDocument.element('.readout-detail')
+const themeToggle = LandingDocument.element('.theme-toggle')
+const extensionInstallAction = LandingDocument.anchor(
   '.extension-install-action',
 )
-const extensionInstallStatus = document.querySelector(
+const extensionInstallStatus = LandingDocument.element(
   '.extension-install-status',
 )
-const extensionStoreNote = document.querySelector('.extension-store-note')
-const extensionManual = document.querySelector('.extension-manual')
-const githubStarsLink = document.querySelector('.github-stars')
-const githubStarsCount = document.querySelector('.github-stars-count')
+const extensionStoreNote = LandingDocument.element('.extension-store-note')
+const extensionManual = LandingDocument.element('.extension-manual')
+const githubStarsLink = LandingDocument.anchor('.github-stars')
+const githubStarsCount = LandingDocument.element('.github-stars-count')
 const landingColorScheme = matchMedia('(prefers-color-scheme: dark)')
+/** @type {import('./extension-metadata-state').ExtensionMetadataState<ExtensionMetadata>} */
 let extensionMetadataState = loadingExtensionMetadata()
 let githubStarsState = githubStarsNotLoaded()
 let followsSystemTheme = true
 
+/** @param {HTMLElement} term */
 function selectCryptoTerm(term) {
   for (const candidate of cryptoTerms) {
     const selected = candidate === term
     candidate.classList.toggle('is-active', selected)
     candidate.setAttribute('aria-pressed', String(selected))
   }
-  readoutCode.textContent = term.dataset.code
+  const code = term.dataset.code
+  const detail = term.dataset.detail
+  if (!code || !detail) throw new Error('Landing term metadata is unavailable.')
+  readoutCode.textContent = code
   readoutTitle.textContent = term.textContent.trim()
-  readoutDetail.textContent = term.dataset.detail
+  readoutDetail.textContent = detail
 }
 
+/** @returns {LandingLocale} */
 function resolveLandingLocale() {
   try {
     const savedLocale = localStorage.getItem('nook_locale')
@@ -71,12 +140,27 @@ function resolveLandingLocale() {
   return 'en'
 }
 
+/**
+ * @param {unknown} metadata
+ * @returns {ExtensionMetadata}
+ */
 function validateExtensionMetadata(metadata) {
   if (
     !metadata ||
+    typeof metadata !== 'object' ||
+    !('schema_version' in metadata) ||
     metadata.schema_version !== 2 ||
+    !('channel' in metadata) ||
     typeof metadata.channel !== 'string' ||
+    !('version' in metadata) ||
     typeof metadata.version !== 'string' ||
+    !('extension_id' in metadata) ||
+    typeof metadata.extension_id !== 'string' ||
+    !('install_url' in metadata) ||
+    typeof metadata.install_url !== 'string' ||
+    !('install_method' in metadata) ||
+    (metadata.install_method !== 'chrome_web_store' &&
+      metadata.install_method !== 'manual_zip') ||
     !/^[a-p]{32}$/.test(metadata.extension_id)
   ) {
     throw new Error('Invalid extension deployment metadata.')
@@ -91,7 +175,21 @@ function validateExtensionMetadata(metadata) {
     ) {
       throw new Error('Invalid Chrome Web Store installation target.')
     }
+    return {
+      schema_version: 2,
+      channel: 'production',
+      version: metadata.version,
+      extension_id: metadata.extension_id,
+      install_url: metadata.install_url,
+      install_method: 'chrome_web_store',
+    }
   } else {
+    if (
+      !('download_url' in metadata) ||
+      typeof metadata.download_url !== 'string'
+    ) {
+      throw new Error('Invalid manual extension installation target.')
+    }
     const downloadUrl = new URL(metadata.download_url)
     if (
       metadata.install_method !== 'manual_zip' ||
@@ -100,11 +198,20 @@ function validateExtensionMetadata(metadata) {
     ) {
       throw new Error('Invalid manual extension installation target.')
     }
+    return {
+      schema_version: 2,
+      channel: metadata.channel,
+      version: metadata.version,
+      extension_id: metadata.extension_id,
+      install_url: metadata.install_url,
+      download_url: metadata.download_url,
+      install_method: 'manual_zip',
+    }
   }
-  return metadata
 }
 
-function updateExtensionInstallState(locale = document.documentElement.lang) {
+/** @param {LandingLocale} [locale] */
+function updateExtensionInstallState(locale = LandingDocument.locale()) {
   const messages = landingMessages[locale]
   if (extensionMetadataState.kind === ExtensionMetadataStateKind.Unavailable) {
     extensionInstallStatus.textContent =
@@ -152,7 +259,8 @@ async function loadExtensionMetadata() {
   updateExtensionInstallState()
 }
 
-function updateGitHubStars(locale = document.documentElement.lang) {
+/** @param {LandingLocale} [locale] */
+function updateGitHubStars(locale = LandingDocument.locale()) {
   const messages = landingMessages[locale]
   if (githubStarsState.kind === GitHubStarsStateKind.NotLoaded) {
     githubStarsCount.textContent = '—'
@@ -191,19 +299,25 @@ async function loadGitHubStars() {
       },
     )
     if (!response.ok) throw new Error('GitHub repository unavailable.')
+    /** @type {unknown} */
     const repository = await response.json()
     if (
+      !repository ||
+      typeof repository !== 'object' ||
+      !('stargazers_count' in repository) ||
+      typeof repository.stargazers_count !== 'number' ||
       !Number.isSafeInteger(repository.stargazers_count) ||
       repository.stargazers_count < 0
     ) {
       throw new Error('Invalid GitHub repository metadata.')
     }
-    githubStarsState = loadedGitHubStars(repository.stargazers_count)
+    const starCount = repository.stargazers_count
+    githubStarsState = loadedGitHubStars(starCount)
     try {
       localStorage.setItem(
         'nook_github_stars',
         JSON.stringify({
-          count: githubStarsState.count,
+          count: starCount,
           updatedAt: Date.now(),
         }),
       )
@@ -216,35 +330,55 @@ async function loadGitHubStars() {
   updateGitHubStars()
 }
 
+/**
+ * @param {LandingLocale} locale
+ * @param {boolean} [persist]
+ */
 function applyLandingLocale(locale, persist = false) {
   const messages = landingMessages[locale]
   document.documentElement.lang = locale
   document.title = messages[LANDING_MESSAGE_KEYS.MetaTitle]
-  document
-    .querySelector('meta[name="description"]')
-    .setAttribute('content', messages[LANDING_MESSAGE_KEYS.MetaDescription])
+  LandingDocument.element('meta[name="description"]').setAttribute(
+    'content',
+    messages[LANDING_MESSAGE_KEYS.MetaDescription],
+  )
 
-  for (const element of document.querySelectorAll('[data-i18n]')) {
-    element.textContent = messages[element.dataset.i18n]
+  for (const element of LandingDocument.elements('[data-i18n]')) {
+    const messageKey = element.dataset.i18n
+    if (!messageKey) throw new Error('Landing message key is unavailable.')
+    element.textContent = LandingDocument.message({ messages, key: messageKey })
   }
-  for (const element of document.querySelectorAll('[data-i18n-html]')) {
-    replaceWithSafeTranslationHtml(element, messages[element.dataset.i18nHtml])
+  for (const element of LandingDocument.elements('[data-i18n-html]')) {
+    const messageKey = element.dataset.i18nHtml
+    if (!messageKey) throw new Error('Landing HTML message key is unavailable.')
+    replaceWithSafeTranslationHtml(
+      element,
+      LandingDocument.message({ messages, key: messageKey }),
+    )
   }
-  for (const element of document.querySelectorAll('[data-i18n-aria-label]')) {
-    element.setAttribute('aria-label', messages[element.dataset.i18nAriaLabel])
+  for (const element of LandingDocument.elements('[data-i18n-aria-label]')) {
+    const messageKey = element.dataset.i18nAriaLabel
+    if (!messageKey) throw new Error('Landing label key is unavailable.')
+    element.setAttribute(
+      'aria-label',
+      LandingDocument.message({ messages, key: messageKey }),
+    )
   }
   for (const term of cryptoTerms) {
-    term.dataset.detail = messages[term.dataset.i18nDetail]
+    const messageKey = term.dataset.i18nDetail
+    if (!messageKey) throw new Error('Landing detail key is unavailable.')
+    term.dataset.detail = LandingDocument.message({ messages, key: messageKey })
   }
-  for (const button of document.querySelectorAll('[data-locale]')) {
+  for (const button of LandingDocument.elements('[data-locale]')) {
     button.setAttribute(
       'aria-pressed',
       String(button.dataset.locale === locale),
     )
   }
-  for (const label of document.querySelectorAll('.system-label')) {
+  for (const label of LandingDocument.elements('.system-label')) {
     if (!('termIndex' in label.dataset)) continue
     const term = cryptoTerms[Number(label.dataset.termIndex)]
+    if (!term) throw new Error('Landing term is unavailable.')
     label.dataset.detail = term.dataset.detail
     label.setAttribute(
       'aria-label',
@@ -261,8 +395,15 @@ function applyLandingLocale(locale, persist = false) {
   updateExtensionInstallState(locale)
   updateGitHubStars(locale)
 
-  const structuredDataElement = document.querySelector('#structured-data')
+  const structuredDataElement = LandingDocument.element('#structured-data')
+  /** @type {unknown} */
   const structuredData = JSON.parse(structuredDataElement.textContent)
+  if (!structuredData || typeof structuredData !== 'object') {
+    throw new Error('Invalid landing structured data.')
+  }
+  if (!('description' in structuredData) || !('inLanguage' in structuredData)) {
+    throw new Error('Incomplete landing structured data.')
+  }
   structuredData.description = messages[LANDING_MESSAGE_KEYS.MetaDescription]
   structuredData.inLanguage = locale
   structuredDataElement.textContent = JSON.stringify(structuredData)
@@ -276,7 +417,8 @@ function applyLandingLocale(locale, persist = false) {
   }
 }
 
-function updateThemeToggleLabel(locale = document.documentElement.lang) {
+/** @param {LandingLocale} [locale] */
+function updateThemeToggleLabel(locale = LandingDocument.locale()) {
   const messageKey =
     document.documentElement.dataset.theme === 'dark'
       ? LANDING_MESSAGE_KEYS.ThemeSwitchLight
@@ -285,6 +427,10 @@ function updateThemeToggleLabel(locale = document.documentElement.lang) {
   themeToggle.setAttribute('aria-label', landingMessages[locale][messageKey])
 }
 
+/**
+ * @param {LandingTheme} theme
+ * @param {boolean} [persist]
+ */
 function applyLandingTheme(theme, persist = false) {
   document.documentElement.dataset.theme = theme
   updateThemeToggleLabel()
@@ -309,9 +455,13 @@ applyLandingLocale(resolveLandingLocale())
 void loadExtensionMetadata()
 void loadGitHubStars()
 
-for (const button of document.querySelectorAll('[data-locale]')) {
+for (const button of LandingDocument.elements('[data-locale]')) {
   button.addEventListener('click', () => {
-    applyLandingLocale(button.dataset.locale, true)
+    const locale = button.dataset.locale
+    if (locale !== 'en' && locale !== 'ru') {
+      throw new Error('Invalid landing locale control.')
+    }
+    applyLandingLocale(locale, true)
   })
 }
 
@@ -333,6 +483,10 @@ for (const term of cryptoTerms) {
   term.addEventListener('click', () => selectCryptoTerm(term))
 }
 
+/**
+ * @param {HTMLElement[]} values
+ * @returns {HTMLElement[]}
+ */
 function shuffled(values) {
   return [...values]
     .map((value) => ({ value, order: Math.random() }))
@@ -340,6 +494,7 @@ function shuffled(values) {
     .map(({ value }) => value)
 }
 
+/** @type {DiagramPosition[][]} */
 const principleLayouts = [
   [
     { x: 34, y: 18 },
@@ -358,17 +513,23 @@ const principleLayouts = [
     { x: 70, y: 29 },
   ],
 ]
-const principleList = document.querySelector('.capsule-principles')
-const principleLabels = Array.from(principleList.querySelectorAll('li'))
+const principleList = LandingDocument.element('.capsule-principles')
+const principleLabels = LandingDocument.elements('.capsule-principles li')
 const principleLayoutIndex = Math.floor(Math.random() * principleLayouts.length)
-const principlePositions = principleLayouts[principleLayoutIndex]
+const selectedPrinciplePositions = principleLayouts[principleLayoutIndex]
+if (!selectedPrinciplePositions) {
+  throw new Error('Landing principle layout is unavailable.')
+}
+const principlePositions = selectedPrinciplePositions
 principleList.dataset.layoutIndex = String(principleLayoutIndex)
 for (const [index, principle] of principleLabels.entries()) {
   const position = principlePositions[index]
+  if (!position) throw new Error('Landing principle position is unavailable.')
   principle.style.setProperty('--principle-x', `${position.x}%`)
   principle.style.setProperty('--principle-y', `${position.y}%`)
 }
 
+/** @type {SignalSlot[]} */
 const signalSlots = [
   { x: 8, y: 14, align: 'left' },
   { x: 48, y: 10, align: 'center' },
@@ -387,17 +548,26 @@ const signalSlotSectors = [
   [5, 6, 7, 8, 9],
 ]
 
-const diagramLabels = Array.from(document.querySelectorAll('.system-label'))
+const diagramLabels = LandingDocument.elements('.system-label')
 const reduceMotion = window.matchMedia(
   '(prefers-reduced-motion: reduce)',
 ).matches
 
+/**
+ * @param {number} leftIndex
+ * @param {number} rightIndex
+ */
 function slotsConflict(leftIndex, rightIndex) {
   const left = signalSlots[leftIndex]
   const right = signalSlots[rightIndex]
+  if (!left || !right) throw new Error('Landing signal slot is unavailable.')
   return positionsConflict(left, right)
 }
 
+/**
+ * @param {DiagramPosition} left
+ * @param {DiagramPosition} right
+ */
 function positionsConflict(left, right) {
   const horizontalDistance = Math.abs(left.x - right.x)
   const verticalDistance = Math.abs(left.y - right.y)
@@ -408,18 +578,29 @@ function positionsConflict(left, right) {
   )
 }
 
+/** @param {number} slotIndex */
 function signalConflictsWithPrinciples(slotIndex) {
+  const slot = signalSlots[slotIndex]
+  if (!slot) throw new Error('Landing signal slot is unavailable.')
   return principlePositions.some((position) =>
-    positionsConflict(signalSlots[slotIndex], position),
+    positionsConflict(slot, position),
   )
 }
 
+/**
+ * @param {number} count
+ * @returns {number[]}
+ */
 function pickDistributedSlots(count) {
   const sectors = signalSlotSectors.slice(0, count)
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const selected = sectors.map(
-      (sector) => sector[Math.floor(Math.random() * sector.length)],
-    )
+    const selected = sectors.map((sector) => {
+      const slotIndex = sector[Math.floor(Math.random() * sector.length)]
+      if (typeof slotIndex !== 'number') {
+        throw new Error('Landing signal sector is empty.')
+      }
+      return slotIndex
+    })
     const conflict = selected.some(
       (slotIndex, index) =>
         signalConflictsWithPrinciples(slotIndex) ||
@@ -433,15 +614,24 @@ function pickDistributedSlots(count) {
   return [0, 4, 8].slice(0, count)
 }
 
+/**
+ * @param {HTMLElement} label
+ * @param {HTMLElement} term
+ * @param {number} slotIndex
+ */
 function assignSignal(label, term, slotIndex) {
   const slot = signalSlots[slotIndex]
+  if (!slot) throw new Error('Landing signal slot is unavailable.')
   const jitterX = (Math.random() - 0.5) * 4
   const jitterY = (Math.random() - 0.5) * 3
   const x = Math.max(2, Math.min(98, slot.x + jitterX))
   const y = Math.max(8, Math.min(79, slot.y + jitterY))
 
-  label.textContent = term.dataset.code
-  label.dataset.detail = term.dataset.detail
+  const code = term.dataset.code
+  const detail = term.dataset.detail
+  if (!code || !detail) throw new Error('Landing term metadata is unavailable.')
+  label.textContent = code
+  label.dataset.detail = detail
   label.dataset.termIndex = String(cryptoTerms.indexOf(term))
   label.dataset.slotIndex = String(slotIndex)
   label.dataset.tooltipX = slot.align
@@ -479,14 +669,22 @@ const initialSlots = pickDistributedSlots(diagramLabels.length)
 
 for (const [index, label] of diagramLabels.entries()) {
   label.dataset.sectorIndex = String(index)
-  assignSignal(label, initialTerms[index], initialSlots[index])
+  const term = initialTerms[index]
+  const slotIndex = initialSlots[index]
+  if (!term || typeof slotIndex !== 'number') {
+    throw new Error('Landing initial signal is unavailable.')
+  }
+  assignSignal(label, term, slotIndex)
   label.addEventListener('click', () => {
-    selectCryptoTerm(cryptoTerms[Number(label.dataset.termIndex)])
+    const selectedTerm = cryptoTerms[Number(label.dataset.termIndex)]
+    if (!selectedTerm) throw new Error('Landing term is unavailable.')
+    selectCryptoTerm(selectedTerm)
   })
 }
 
 let signalRotationInProgress = false
 
+/** @param {HTMLElement} label */
 function rotateSignal(label) {
   if (
     document.hidden ||
@@ -532,15 +730,27 @@ function rotateSignal(label) {
   const termIndex =
     nextTermIndexes[Math.floor(Math.random() * nextTermIndexes.length)]
   const slotIndex = nextSlots[Math.floor(Math.random() * nextSlots.length)]
+  if (typeof termIndex !== 'number') {
+    throw new Error('Landing rotated term is unavailable.')
+  }
+  const term = cryptoTerms[termIndex]
+  if (!term || typeof slotIndex !== 'number') {
+    throw new Error('Landing rotated signal is unavailable.')
+  }
   label.classList.add('is-changing')
   window.setTimeout(() => {
-    assignSignal(label, cryptoTerms[termIndex], slotIndex)
+    assignSignal(label, term, slotIndex)
     label.classList.remove('is-changing')
     signalRotationInProgress = false
     scheduleSignalRotation(label, false)
   }, 420)
 }
 
+/**
+ * @param {HTMLElement} label
+ * @param {boolean} initial
+ * @param {number} [initialIndex]
+ */
 function scheduleSignalRotation(label, initial, initialIndex = 0) {
   const delay = initial
     ? 1300 + initialIndex * 1050 + Math.random() * 450
