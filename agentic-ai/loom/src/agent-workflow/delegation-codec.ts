@@ -98,7 +98,7 @@ export class DelegationJournalSchema {
   ] as const;
 
   static decodeDelegationPlan(serialized: string): DelegationPlan {
-    const transport = JSON.parse(serialized) as UntrustedYamlNode;
+    const transport = UntrustedYamlBoundary.parseJson(serialized);
     const reader = new RecordReader(
       DelegationJournalSchema.requireRecord(transport),
     );
@@ -128,7 +128,7 @@ export class DelegationJournalSchema {
   static decodeDelegationAdmissionRequest(
     serialized: string,
   ): DelegationAdmissionRequest {
-    const transport = JSON.parse(serialized) as UntrustedYamlNode;
+    const transport = UntrustedYamlBoundary.parseJson(serialized);
     const reader = new RecordReader(
       DelegationJournalSchema.requireRecord(transport),
     );
@@ -145,7 +145,7 @@ export class DelegationJournalSchema {
   }
 
   static decodeDelegationRunEvent(serialized: string): DelegationRunEvent {
-    const transport = JSON.parse(serialized) as UntrustedYamlNode;
+    const transport = UntrustedYamlBoundary.parseJson(serialized);
     const reader = new RecordReader(
       DelegationJournalSchema.requireRecord(transport),
     );
@@ -330,7 +330,7 @@ class RecordReader {
   }
   array(key: string): readonly UntrustedYamlNode[] {
     const value = this.node(key);
-    if (!Array.isArray(value))
+    if (!UntrustedYamlBoundary.isList(value))
       throw new Error(`Delegation field must be an array: ${key}`);
     return value;
   }

@@ -7,6 +7,7 @@ import {
   FailedFieldDecode,
   SuccessfulFieldDecode,
   FieldDiagnostic,
+  FieldDecodeInvariantViolation,
 } from '../src/codec/field-error.ts';
 import { RepositoryRoot } from '../src/lib/repo.ts';
 import {
@@ -42,6 +43,23 @@ describe('decode outcome helpers', () => {
         expect(error.issue).toBe(FieldIssue.ExpectedBoolean);
       }
     }
+  });
+
+  test('successful field decode owns guarded value access', () => {
+    const success = SuccessfulFieldDecode.create({ ready: true });
+    expect(SuccessfulFieldDecode.requireValue(success)).toEqual({
+      ready: true,
+    });
+
+    const failure = FailedFieldDecode.create([
+      FieldDiagnostic.create({
+        path: 'prePush.stageHostUpdates',
+        issue: FieldIssue.ExpectedBoolean,
+      }),
+    ]);
+    expect(() => SuccessfulFieldDecode.requireValue(failure)).toThrow(
+      FieldDecodeInvariantViolation,
+    );
   });
 });
 

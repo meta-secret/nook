@@ -7,6 +7,20 @@ export class SuccessfulFieldDecode<T> {
     const value = this.request;
     return { status: DecodeStatus.Ok, value };
   }
+
+  static requireValue<T>(outcome: DecodeOutcome<T>): T {
+    if (outcome.status === DecodeStatus.Failed) {
+      throw new FieldDecodeInvariantViolation();
+    }
+    return outcome.value;
+  }
+}
+
+export class FieldDecodeInvariantViolation extends Error {
+  constructor() {
+    super('Cannot read a failed field decode.');
+    this.name = 'FieldDecodeInvariantViolation';
+  }
 }
 
 export class FailedFieldDecode {

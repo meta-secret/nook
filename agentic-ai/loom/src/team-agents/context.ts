@@ -68,6 +68,12 @@ export class TeamTaskContextResolver {
     return Object.freeze(context);
   }
 
+  static isCortexAuthoringSkillPath(path: string): boolean {
+    return CORTEX_AUTHORING_SKILL_PATHS.some(
+      (authoringSkillPath) => authoringSkillPath === path,
+    );
+  }
+
   private static writesCortex(writeClaims: readonly string[]): boolean {
     return writeClaims.some((claim) => {
       const pair: TaskResourcePatternPair = {
@@ -114,9 +120,7 @@ export class TeamTaskContextResolver {
           ) ||
           (!(
             TeamTaskContextResolver.writesCortex(request.writeClaims) &&
-            CORTEX_AUTHORING_SKILL_PATHS.includes(
-              path as (typeof CORTEX_AUTHORING_SKILL_PATHS)[number],
-            )
+            TeamTaskContextResolver.isCortexAuthoringSkillPath(path)
           ) &&
             !request.readClaims.some((claim) => {
               const authorizationRequest: SkillReadAuthorizationRequest = {

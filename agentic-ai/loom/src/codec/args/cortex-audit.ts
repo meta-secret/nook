@@ -6,6 +6,7 @@ import {
   DecodeStatus,
   type DecodeOutcome,
   FailedFieldDecode,
+  SuccessfulFieldDecode,
 } from '../field-error.ts';
 
 import {
@@ -60,7 +61,8 @@ export class CortexAuditRequestDecoder {
     const collectDecodeArgs: CollectDecodeArgs<CortexAuditRequest> = {
       results: [includeDensityLint],
       build: () => ({
-        includeDensityLint: (includeDensityLint as { value: boolean }).value,
+        includeDensityLint:
+          SuccessfulFieldDecode.requireValue(includeDensityLint),
       }),
     };
     return FieldDecodeCollection.collect(collectDecodeArgs);

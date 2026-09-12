@@ -88,10 +88,11 @@ export class AgentStatsAssemblePayload {
       return FailedFieldDecode.create(errors);
     }
     const request: AgentStatsAssembleRequest = {
-      prNumber: (prNumber as { value: number }).value,
-      scratchPath: (scratchPath as { value: string }).value,
-      outputPath: (outputPath as { value: string }).value,
-      includeTestInventory: (includeTestInventory as { value: boolean }).value,
+      prNumber: SuccessfulFieldDecode.requireValue(prNumber),
+      scratchPath: SuccessfulFieldDecode.requireValue(scratchPath),
+      outputPath: SuccessfulFieldDecode.requireValue(outputPath),
+      includeTestInventory:
+        SuccessfulFieldDecode.requireValue(includeTestInventory),
     };
     return SuccessfulFieldDecode.create(request);
   }
@@ -135,7 +136,7 @@ export class AgentStatsFilePayload {
       return FailedFieldDecode.create(errors);
     }
     const request: AgentStatsFileRequest = {
-      statsFile: (statsFile as { value: string }).value,
+      statsFile: SuccessfulFieldDecode.requireValue(statsFile),
     };
     return SuccessfulFieldDecode.create(request);
   }

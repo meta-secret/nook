@@ -1,6 +1,12 @@
 /** The host syntax edge; values leave it only through a concrete decoder. */
 export class UntrustedYamlBoundary {
   private constructor() {}
+  static parseJson(serialized: string): UntrustedYamlNode {
+    return UntrustedYamlBoundary.fromHost(JSON.parse(serialized));
+  }
+  static parseYaml(serialized: string): UntrustedYamlNode {
+    return UntrustedYamlBoundary.fromHost(Bun.YAML.parse(serialized));
+  }
   static fromJson(value: unknown): UntrustedYamlNode {
     if (typeof value === 'object' && !value) return value;
     if (
@@ -36,6 +42,11 @@ export class UntrustedYamlBoundary {
       value instanceof Object &&
       !Array.isArray(value)
     );
+  }
+  static isList(
+    value: UntrustedYamlNode,
+  ): value is readonly UntrustedYamlNode[] {
+    return Array.isArray(value);
   }
   static isNonEmptyString(value: UntrustedYamlNode): value is string {
     return typeof value === 'string' && value.length > 0;

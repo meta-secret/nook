@@ -6,6 +6,7 @@ import {
   DecodeStatus,
   type DecodeOutcome,
   FailedFieldDecode,
+  SuccessfulFieldDecode,
 } from '../field-error.ts';
 
 import {
@@ -69,8 +70,8 @@ export class PrePushRequestDecoder {
     const collectDecodeArgs: CollectDecodeArgs<PrePushRequest> = {
       results: [stageHostUpdates, fetchOriginMain],
       build: () => ({
-        stageHostUpdates: (stageHostUpdates as { value: boolean }).value,
-        fetchOriginMain: (fetchOriginMain as { value: boolean }).value,
+        stageHostUpdates: SuccessfulFieldDecode.requireValue(stageHostUpdates),
+        fetchOriginMain: SuccessfulFieldDecode.requireValue(fetchOriginMain),
       }),
     };
     return FieldDecodeCollection.collect(collectDecodeArgs);

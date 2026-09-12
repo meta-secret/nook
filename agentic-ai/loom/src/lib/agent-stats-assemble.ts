@@ -69,9 +69,7 @@ export class AgentStatisticsAssembly {
 
     let parsed: UntrustedYamlNode;
     try {
-      parsed = UntrustedYamlBoundary.fromHost(
-        JSON.parse(prJson.stdout) as UntrustedYamlNode,
-      );
+      parsed = UntrustedYamlBoundary.parseJson(prJson.stdout);
     } catch {
       return err({
         code: LoomFailureCode.PrMetadataInvalid,
@@ -571,8 +569,8 @@ class ScratchEventLogFile {
     const scratchPath = this.scratchPath;
     let parsed: UntrustedYamlNode;
     try {
-      parsed = UntrustedYamlBoundary.fromHost(
-        JSON.parse(readFileSync(scratchPath, 'utf8')) as UntrustedYamlNode,
+      parsed = UntrustedYamlBoundary.parseJson(
+        readFileSync(scratchPath, 'utf8'),
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

@@ -8,6 +8,7 @@ import {
   type DecodeOutcome,
   type FieldErrorArgs,
   FailedFieldDecode,
+  FieldDecodeInvariantViolation,
   SuccessfulFieldDecode,
   FieldDiagnosticText,
   FieldDiagnostic,
@@ -91,8 +92,10 @@ export class SkillScaffoldRequestDecoder {
       return FailedFieldDecode.create(errors);
     }
     const request: SkillScaffoldRequest = {
-      skillSlug: (skillSlug as { value: string }).value,
-      skillOwner: (skillOwner as { value: SkillOwner }).value,
+      skillSlug: SuccessfulFieldDecode.requireValue(skillSlug),
+      skillOwner: SkillOwnerVocabulary.require(
+        SuccessfulFieldDecode.requireValue(skillOwner),
+      ),
     };
     return SuccessfulFieldDecode.create(request);
   }
@@ -111,6 +114,30 @@ export enum SkillOwner {
   Security = 'security',
   Sre = 'sre',
   WebDev = 'web-dev',
+}
+
+class SkillOwnerVocabulary {
+  private constructor() {}
+  static require(value: string): SkillOwner {
+    switch (value) {
+      case SkillOwner.Shared:
+        return SkillOwner.Shared;
+      case SkillOwner.Gizmo:
+        return SkillOwner.Gizmo;
+      case SkillOwner.Ai:
+        return SkillOwner.Ai;
+      case SkillOwner.DevCore:
+        return SkillOwner.DevCore;
+      case SkillOwner.Security:
+        return SkillOwner.Security;
+      case SkillOwner.Sre:
+        return SkillOwner.Sre;
+      case SkillOwner.WebDev:
+        return SkillOwner.WebDev;
+      default:
+        throw new FieldDecodeInvariantViolation();
+    }
+  }
 }
 
 export type SkillScaffoldRequest = {

@@ -61,7 +61,7 @@ export class PrLandPullRequestPayload {
       return FailedFieldDecode.create(errors);
     }
     const request: PrLandPrRequest = {
-      prNumber: (prNumber as { value: number }).value,
+      prNumber: SuccessfulFieldDecode.requireValue(prNumber),
     };
     return SuccessfulFieldDecode.create(request);
   }
@@ -119,9 +119,9 @@ export class PrLandValidationPayload {
       return FailedFieldDecode.create(errors);
     }
     const request: PrLandValidateRequest = {
-      prNumber: (prNumber as { value: number }).value,
-      remoteTask: (remoteTask as { value: RemoteTask }).value,
-      runFullE2e: (runFullE2e as { value: boolean }).value,
+      prNumber: SuccessfulFieldDecode.requireValue(prNumber),
+      remoteTask: SuccessfulFieldDecode.requireValue(remoteTask),
+      runFullE2e: SuccessfulFieldDecode.requireValue(runFullE2e),
     };
     return SuccessfulFieldDecode.create(request);
   }

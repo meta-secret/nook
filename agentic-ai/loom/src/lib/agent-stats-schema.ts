@@ -30,9 +30,7 @@ export class AgentStatisticsSchema {
 
     let parsed: UntrustedYamlNode;
     try {
-      parsed = UntrustedYamlBoundary.fromHost(
-        Bun.YAML.parse(content) as UntrustedYamlNode,
-      );
+      parsed = UntrustedYamlBoundary.parseYaml(content);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { ok: false, errors: [`YAML parse failed: ${message}`] };
@@ -869,7 +867,7 @@ export class AgentStatisticsSchema {
     const propertyArgs: UntrustedYamlPropertyArgs = request;
     const property = UntrustedYamlBoundary.property(propertyArgs);
     return property.presence === UntrustedYamlPropertyPresence.Present &&
-      Array.isArray(property.value)
+      UntrustedYamlBoundary.isList(property.value)
       ? property.value
       : [];
   }

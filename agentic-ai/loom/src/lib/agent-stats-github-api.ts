@@ -52,11 +52,7 @@ export class GithubActionEvidenceApi {
       });
     }
     try {
-      return ok(
-        UntrustedYamlBoundary.fromHost(
-          JSON.parse(output.stdout) as UntrustedYamlNode,
-        ),
-      );
+      return ok(UntrustedYamlBoundary.parseJson(output.stdout));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return err({
@@ -398,7 +394,7 @@ export class GitHubApiPages {
   constructor(private readonly request: UntrustedYamlNode) {}
   flatten(): Result<UntrustedYamlNode[], GitHubEvidenceFailure> {
     const value = this.request;
-    if (!Array.isArray(value)) {
+    if (!UntrustedYamlBoundary.isList(value)) {
       return err({
         code: LoomFailureCode.CommandFailed,
         message: 'GitHub API pagination did not return a list',
@@ -406,7 +402,7 @@ export class GitHubApiPages {
     }
     const flattened: UntrustedYamlNode[] = [];
     for (const page of value) {
-      if (Array.isArray(page)) flattened.push(...page);
+      if (UntrustedYamlBoundary.isList(page)) flattened.push(...page);
       else flattened.push(page);
     }
     return ok(flattened);

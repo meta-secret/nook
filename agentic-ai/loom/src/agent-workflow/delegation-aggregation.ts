@@ -70,10 +70,6 @@ export class DelegationRunFinalization {
     'attempt',
   ] as const;
 
-  private static readonly TERMINAL_KINDS = new Set<string>(
-    Object.values(TaskTerminalKind),
-  );
-
   private static readonly DIRECTORY_ENTRY_OPTIONS: {
     readonly withFileTypes: true;
   } = {
@@ -102,7 +98,7 @@ export class DelegationRunFinalization {
     ) {
       throw new Error('Delegation finalization request is not bounded.');
     }
-    const transport = JSON.parse(serialized) as UntrustedYamlNode;
+    const transport = UntrustedYamlBoundary.parseJson(serialized);
     if (!UntrustedYamlBoundary.isRecord(transport)) {
       throw new Error('Delegation finalization request must be an object.');
     }
@@ -154,17 +150,34 @@ export class DelegationRunFinalization {
       DelegationRunFinalization.CHILD_EVIDENCE_FIELDS,
     );
     const terminalKind = reader.string('terminalKind');
-    if (!DelegationRunFinalization.TERMINAL_KINDS.has(terminalKind)) {
-      throw new Error('Delegation barrier terminal kind is invalid.');
-    }
     return {
       identity: DelegationRunFinalization.decodeIdentity(
         reader.node('identity'),
       ),
-      terminalKind: terminalKind as TaskTerminalKind,
+      terminalKind:
+        DelegationRunFinalization.requireTaskTerminalKind(terminalKind),
       resultSha256: reader.sha256('resultSha256'),
       viewSha256: reader.sha256('viewSha256'),
     };
+  }
+
+  private static requireTaskTerminalKind(value: string): TaskTerminalKind {
+    switch (value) {
+      case TaskTerminalKind.Completed:
+        return TaskTerminalKind.Completed;
+      case TaskTerminalKind.Failed:
+        return TaskTerminalKind.Failed;
+      case TaskTerminalKind.Blocked:
+        return TaskTerminalKind.Blocked;
+      case TaskTerminalKind.Cancelled:
+        return TaskTerminalKind.Cancelled;
+      case TaskTerminalKind.TimedOut:
+        return TaskTerminalKind.TimedOut;
+      case TaskTerminalKind.Skipped:
+        return TaskTerminalKind.Skipped;
+      default:
+        throw new Error('Delegation barrier terminal kind is invalid.');
+    }
   }
 
   private static decodeIdentity(
@@ -806,7 +819,7 @@ class RecordReader {
 
   array(key: string): readonly UntrustedYamlNode[] {
     const value = this.node(key);
-    if (!Array.isArray(value)) {
+    if (!UntrustedYamlBoundary.isList(value)) {
       throw new Error(`Delegation finalization field must be an array: ${key}`);
     }
     return value;

@@ -1,5 +1,3 @@
-import { CORTEX_AUTHORING_SKILL_PATHS } from '../team-agents/context.ts';
-
 import { TeamTaskContextResolver } from '../team-agents/context.ts';
 
 import type { TeamKey } from '../team-agents/catalog.ts';
@@ -54,9 +52,7 @@ export class CortexSkillAuthorization {
     const [defaulted1 = false] = [
       request.cortexAuthoring.selectedSkillPaths.find(
         (path) =>
-          !CORTEX_AUTHORING_SKILL_PATHS.includes(
-            path as (typeof CORTEX_AUTHORING_SKILL_PATHS)[number],
-          ) &&
+          !TeamTaskContextResolver.isCortexAuthoringSkillPath(path) &&
           !request.resources.read.some((claim) => {
             const matchRequest: ResourcePathMatchRequest = { claim, path };
             return ModuleWriteClaim.resourceClaimMatchesPath(matchRequest);

@@ -6,6 +6,7 @@ import {
   DecodeStatus,
   type DecodeOutcome,
   FailedFieldDecode,
+  SuccessfulFieldDecode,
 } from '../field-error.ts';
 
 import {
@@ -119,16 +120,18 @@ export class DependencyPopularityRequestDecoder {
         minCratesIoRecentDownloads,
       ],
       build: () => ({
-        includeRepositoryManifests: (
-          includeRepositoryManifests as { value: boolean }
-        ).value,
-        minNpmWeeklyDownloads: (minNpmWeeklyDownloads as { value: number })
-          .value,
-        minGitHubStars: (minGitHubStars as { value: number }).value,
-        minCratesIoDownloads: (minCratesIoDownloads as { value: number }).value,
-        minCratesIoRecentDownloads: (
-          minCratesIoRecentDownloads as { value: number }
-        ).value,
+        includeRepositoryManifests: SuccessfulFieldDecode.requireValue(
+          includeRepositoryManifests,
+        ),
+        minNpmWeeklyDownloads: SuccessfulFieldDecode.requireValue(
+          minNpmWeeklyDownloads,
+        ),
+        minGitHubStars: SuccessfulFieldDecode.requireValue(minGitHubStars),
+        minCratesIoDownloads:
+          SuccessfulFieldDecode.requireValue(minCratesIoDownloads),
+        minCratesIoRecentDownloads: SuccessfulFieldDecode.requireValue(
+          minCratesIoRecentDownloads,
+        ),
       }),
     };
     return FieldDecodeCollection.collect(collectDecodeArgs);
