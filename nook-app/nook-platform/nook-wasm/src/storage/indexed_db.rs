@@ -32,6 +32,8 @@ pub(crate) use atomic_string::{
     IndexedDbFallbackUpdate, IndexedDbMigration, IndexedDbUpdate, StringRecordFallback,
     StringUpdateGuard, StringUpdateResult,
 };
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+pub(crate) use nook_core::ActiveVaultScope;
 mod local_vault;
 pub(crate) use local_vault::ImportVaultLabel;
 #[cfg(test)]

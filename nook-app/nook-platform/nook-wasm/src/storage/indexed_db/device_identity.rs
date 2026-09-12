@@ -1,4 +1,8 @@
 use super::StoredStringRecord;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::IdbPutStringRequest;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::storage::identity_record;
 use crate::storage::identity_record::ProtectedIdentityLookup;
 use crate::storage::identity_record::ProtectedLocalIdentity;
@@ -288,10 +292,10 @@ impl NookDatabase {
 }
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod tests {
+    use crate::storage::identity_record;
     use crate::storage::identity_record::PriorAppAuthorization;
     use crate::storage::identity_record::RecoveryTarget;
     use crate::storage::identity_record::simple_genesis;
-    use crate::storage::{identity_record, indexed_db};
     use nook_core::{
         AppKey, DeviceIdentity, DeviceKeyProtectionSetup, DeviceProtectionStatus, IdentityDirectory,
     };

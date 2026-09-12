@@ -14,6 +14,8 @@ use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::storage::identity_record::StoredIdentityProtection;
 use crate::storage::indexed_db::SentinelFinalizationJournal;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::storage::indexed_db::StoredStringRecord;
 use crate::{NookDatabase, NookError};
 use identity_record::{LocalIdentityRecovery, PendingSimpleGenesis};
 use nook_core::{AppId, IdentityId, i18n_keys};
@@ -29,6 +31,8 @@ enum PriorLocalAuthorizer {
     Authorized(nook_core::AppKey),
 }
 use crate::AuthProviderDatabase;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::IdbPutStringRequest;
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::IdentityDbSaveProtectedLocalIdentity;
 use crate::manager::device_protection::ExtensionIdentityPublication;

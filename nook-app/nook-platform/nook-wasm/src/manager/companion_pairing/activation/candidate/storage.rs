@@ -4,6 +4,8 @@ use super::{
     ActivationClock, CompanionPairingCandidateFailure, PairingActivationCandidate,
     PairingActivationStorageAdmission,
 };
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::ExtensionPairingDatabase;
 use crate::NookDatabase;
 
 use rexie::TransactionMode;
@@ -401,11 +403,7 @@ mod tests {
 mod browser_tests {
     use super::super::tests::{CandidateCommitFixture, CandidateFixture, DeterministicClock};
     use super::*;
-    use crate::{
-        NookError,
-        manager::companion_pairing::activation::tests::ActivationFixture,
-        storage::{extension_state, indexed_db},
-    };
+    use crate::{NookError, manager::companion_pairing::activation::tests::ActivationFixture};
     use rexie::TransactionMode;
     use wasm_bindgen_test::*;
 
