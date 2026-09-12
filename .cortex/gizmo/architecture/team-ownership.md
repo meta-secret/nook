@@ -20,6 +20,10 @@ coordinates delivery but does not redefine a team's technical contract.
 - Team Agents may edit the current shared checkout concurrently when their
   explicit file scopes are disjoint.
 - Overlapping scopes and unresolved dependencies require ordered execution.
+- Gizmo inventories dirty paths and hunks before dispatch.
+- Every pre-existing change has an attributed owner and task.
+- A scope overlap blocks dispatch unless the exact changes are handed off or
+  attributed to the proposed task.
 - Gizmo owns write-wave coordination, serialized commit turns, external
   delivery policy, and authorization.
 - PR Steward performs only the explicitly authorized pull-request mechanics.
@@ -113,7 +117,7 @@ Its normal scope includes:
 ## Shared files
 
 Shared files include root manifests, lockfiles, generated bindings, cross-team
-registries, and root routing documents.
+registries, root routing documents, and shared command outputs.
 
 Gizmo assigns one writer for each shared-file change. Any task that needs the
 same shared file is ordered after that writer. The assigned Team Agent edits
@@ -126,12 +130,17 @@ created.
 2. Identify the functional owner.
 3. Split only at real team or dependency boundaries.
 4. Give each task one team identity and bounded file scope.
-5. Group dependency-ready tasks whose explicit file scopes are disjoint.
-6. Run each group as a parallel write wave in the current checkout.
-7. Grant one commit turn at a time for each complete scoped iteration.
-8. Route cross-team dependencies back through Gizmo.
-9. Co-validate provider and consumer evidence on the combined branch.
-10. Route integration failures to the responsible owners.
+5. Inventory dirty paths and hunks.
+6. Attribute every dirty change to its owner and task.
+7. Block an overlapping scope without an exact handoff or same-task
+   attribution.
+8. Name each acceptance command's read, write, and output scopes.
+9. Group tasks only when file and command scopes are safe for concurrency.
+10. Run each group as a parallel write wave in the current checkout.
+11. Grant one commit turn at a time for each complete scoped iteration.
+12. Route cross-team dependencies back through Gizmo.
+13. Co-validate provider and consumer evidence on the combined branch.
+14. Route integration failures to the responsible owners.
 
 ## Team responsibility
 
@@ -156,7 +165,11 @@ Verify:
 - cross-team dependencies were routed to their owners;
 - concurrent writers had disjoint explicit file scopes;
 - overlapping or dependent writers ran in order;
-- only one writer used the Git index or committed at a time;
+- dirty paths and hunks were attributed before dispatch;
+- no writer committed unrelated pre-existing changes;
+- acceptance command scopes were safe for concurrency or ran serially on a
+  stable committed head;
+- only one writer mutated the Git index or committed at a time;
 - shared files had an explicitly assigned writer;
 - accepted worker commits are already on the shared branch; and
 - no worktree or external lifecycle system was introduced.

@@ -43,7 +43,10 @@ Treat every other active task as foreign work.
 - Write-capable Team Agents may share the current checkout while their explicit
   file scopes are disjoint.
 - Overlapping scopes and unresolved dependencies require ordered execution.
-- Only one Team Agent stages or commits at a time.
+- Before dispatch, Gizmo attributes dirty paths and hunks to their owners.
+- Pre-existing user or foreign changes block an overlapping worker scope.
+  - The exact changes require an explicit handoff or same-task attribution.
+- Only one Team Agent mutates the Git index or commits at a time.
 - The worker must not create another worker.
 - A missing dependency returns to Gizmo for assignment to its owner.
 - A functional worker must not mutate Workbench, branch publication, PR,

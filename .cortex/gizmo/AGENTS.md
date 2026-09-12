@@ -90,6 +90,12 @@ acceptance evidence.
 - Write-capable Team Agents with disjoint explicit file scopes may run in
   parallel in the current checkout.
 - Overlapping scopes and unresolved dependencies require ordered execution.
+- Dirty paths and hunks must have an owner before dispatch.
+- Pre-existing user or foreign changes block an overlapping task unless those
+  changes are handed off or attributed to the same task.
+- Acceptance commands must have concurrency-safe read, write, and output
+  scopes.
+- Unsafe commands wait for a stable committed head and run serially.
 - Read-only Team Agents may run concurrently when safe.
 - Gizmo grants one commit turn at a time.
 - Every writer commits its complete scoped iteration during its commit turn.

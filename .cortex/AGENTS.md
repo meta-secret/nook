@@ -110,9 +110,19 @@ Workbench record, not another coordinator or worker. See the
     file scopes are disjoint and they have no unresolved dependency.
   - Tasks with overlapping scopes or provider-consumer dependencies run in
     dependency order.
+  - Before dispatch, Gizmo inventories every dirty path and hunk.
+  - Gizmo attributes each dirty change to its owner and task.
+  - A proposed scope that overlaps pre-existing user or foreign changes is
+    blocked unless those exact changes are handed off or attributed to the same
+    task.
+  - Acceptance evidence names each command's read, write, and output scopes.
+  - Concurrent acceptance commands must not read changing peer scopes or write
+    overlapping outputs.
+  - Shared generated or output paths receive one assigned writer.
+  - Unsafe commands wait for a stable committed head and run serially.
   - Read-only Team Agents may run concurrently when their evidence scopes are
     safe to inspect while writers run.
-  - Only one Team Agent uses the Git index or creates a commit at a time.
+  - Only one Team Agent mutates the Git index or creates a commit at a time.
   - Every write-capable Team Agent commits its complete scoped iteration during
     the commit turn granted by Gizmo.
   - Gizmo continues directly from those commits on the shared branch.

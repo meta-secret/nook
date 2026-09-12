@@ -28,9 +28,20 @@ the active harness.
 - Run dependency-ready write-capable Team Agents in parallel when their
   explicit file scopes are disjoint.
 - Order writers whose scopes overlap or whose tasks have a dependency edge.
+- Inventory and attribute dirty paths and hunks before dispatch.
+- Block a proposed scope that overlaps pre-existing user or foreign changes.
+  - Dispatch may proceed only when those exact changes are handed off or
+    attributed to the proposed task.
+- Name each acceptance command's read, write, and output scopes.
+- Run acceptance commands concurrently only when their scopes are safe.
+  - A command must not read a peer scope while that scope may change.
+  - Its write and output scopes must not overlap a peer task or command scope.
+  - A shared generated or output path is a shared file with one writer.
+  - A command with uncertain or conflicting scope waits for a stable committed
+    head and runs serially.
 - Read-only Team Agents may run concurrently when they cannot interfere with a
   writer.
-- Only one Team Agent stages files or creates a commit at a time.
+- Only one Team Agent mutates the Git index or creates a commit at a time.
 - Every writer commits its complete scoped iteration during its Gizmo-granted
   commit turn.
 - Gizmo continues directly from those commits.
@@ -46,24 +57,38 @@ the active harness.
 1. Identify the team that owns the requested change.
 2. Discover every Team Agent task and dependency currently known.
 3. Define each bounded task with explicit file scope and acceptance evidence.
+   - Name every acceptance command's read, write, and output scopes.
    - Include the [GitHub execution boundary](../../AGENTS.md#github-execution-boundary)
      in every functional worker prompt.
    - Tell the worker to request missing PR evidence from Gizmo.
    - Explicitly prohibit direct `gh` queries, equivalent GitHub access, and
      PR monitoring, including read-only `gh pr view`.
-4. Build the next dependency-ready wave from tasks with disjoint file scopes.
-5. Start that wave through the active harness in the current checkout.
-6. Let each Team Agent implement and run focused checks.
-7. Grant one commit turn at a time as writers finish.
+4. Inspect the current dirty paths and diff hunks.
+5. Attribute every dirty change to its owner and task.
+   - If a proposed scope overlaps a pre-existing user or foreign change, block
+     that task.
+   - Proceed only after an exact handoff or same-task attribution.
+6. Build the next dependency-ready wave.
+   - Require disjoint file scopes.
+   - Require concurrency-safe acceptance command scopes.
+   - Treat shared generated and output paths as shared files.
+   - Defer unsafe checks until the relevant changes are committed.
+7. Start that wave through the active harness in the current checkout.
+8. Let each Team Agent implement and run concurrency-safe focused checks.
+9. Grant one commit turn at a time as writers finish.
    - The writer stages only its allowed files.
    - The writer commits its complete iteration.
    - Other writers do not stage or commit during that turn.
-8. Request one terminal handoff from each writer.
+   - The commit must not include an unrelated pre-existing hunk.
+10. Run deferred checks serially after the wave has a stable committed head.
+    - Route any tracked output to its assigned owner.
+    - Require that owner to commit the output as a complete new iteration.
+11. Request one terminal handoff from each writer.
    - Include the commit SHA, changed outcomes, evidence, and blockers.
-9. Verify each commit stays inside its declared scope.
-10. Co-validate the combined branch after all tasks in the wave commit.
-11. Continue with the next dependency-ready wave.
-12. Route corrections to the team that owns the affected change.
+12. Verify each commit stays inside its declared scope.
+13. Co-validate the combined branch after all tasks in the wave commit.
+14. Continue with the next dependency-ready wave.
+15. Route corrections to the team that owns the affected change.
 
 Before a later implementation or repair iteration, the Team Agent reads the
 last one or two commits relevant to its allowed files and named interfaces. It
@@ -123,6 +148,8 @@ only when a visualization is warranted. Never claim it was known earlier.
 - If a required Team Agent cannot start, report the blocker.
 - If a Team Agent produces out-of-scope changes, reject those changes and route
   a corrected task.
+- If a proposed scope overlaps pre-existing user or foreign changes without an
+  exact handoff or same-task attribution, block that dispatch.
 - If the checkout contains edits outside the declared active scopes, stop the
   affected dispatch and identify their owner.
 - Do not add a lifecycle service or Git-state protocol to recover from a
@@ -136,7 +163,11 @@ Before accepting Team Agent work, verify:
 - only the declared files changed;
 - concurrent writers had disjoint explicit file scopes;
 - dependency edges and overlapping scopes were ordered;
-- only one writer staged or committed at a time;
+- dirty paths and hunks were attributed before dispatch;
+- no commit included unrelated pre-existing changes;
+- acceptance command read, write, and output scopes were concurrency-safe;
+- unsafe checks ran serially on a stable committed head;
+- only one writer mutated the Git index or committed at a time;
 - the shared branch contains the accepted result;
 - every writer committed its complete scoped iteration;
 - later iterations inspected the last one or two relevant commits and diffs;

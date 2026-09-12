@@ -52,15 +52,22 @@ Report the blocker instead of reporting an intermediate state as complete.
 3. **Assign Team Agent work.**
    - Give each task one team identity.
    - Name allowed files, forbidden files, and acceptance evidence.
+   - Name acceptance command read, write, and output scopes.
    - Assign one writer for shared files.
+   - Treat shared generated and output paths as shared files.
+   - Inventory and attribute existing dirty paths and hunks.
+   - Block scope overlap with user or foreign changes without an exact handoff
+     or same-task attribution.
 4. **Run write waves.**
    - Group dependency-ready tasks only when their explicit file scopes are
      disjoint.
+   - Require concurrency-safe acceptance command scopes.
    - Run those Team Agents in parallel in the current checkout and branch.
    - Preserve dependency order for overlapping or provider-dependent tasks.
-   - Let every Team Agent run focused checks.
+   - Let every Team Agent run concurrency-safe focused checks.
    - Grant one commit turn at a time.
    - Require every writer to commit its complete scoped iteration.
+   - Run deferred checks serially after the wave has a stable committed head.
    - Have later iterations read the last one or two relevant commits and diffs.
    - Continue directly from the resulting shared-branch state.
 5. **Prepare the delivery head.**
@@ -136,7 +143,11 @@ Delivery is complete only when:
   planned slice;
 - concurrent writers had disjoint explicit file scopes;
 - overlapping and dependent tasks ran in order;
-- only one writer used the Git index or committed at a time;
+- dirty paths and hunks were attributed before dispatch;
+- no commit included unrelated pre-existing changes;
+- acceptance commands were concurrency-safe or ran serially on a stable
+  committed head;
+- only one writer mutated the Git index or committed at a time;
 - every writer committed its complete scoped iteration;
 - provider-consumer evidence passed on the combined branch;
 - the shared branch contains every accepted change;

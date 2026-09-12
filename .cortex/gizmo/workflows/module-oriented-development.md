@@ -13,6 +13,9 @@ creating a separate Git integration system.
 - Use one bounded Team Agent task per real ownership boundary.
 - Independent writers with disjoint explicit file scopes may run in parallel in
   the current checkout.
+- Acceptance commands must have concurrency-safe read, write, and output
+  scopes.
+- Shared generated or output paths receive one assigned writer.
 - A provider and consumer may run in parallel when both implement an already
   agreed interface.
 - A dependent consumer starts from the provider's shared-branch commit.
@@ -28,13 +31,15 @@ creating a separate Git integration system.
 1. Identify the modules and their provider-consumer order.
 2. Assign each implementation task to its functional owner.
 3. Define provider exports, consumer assumptions, and acceptance evidence.
-4. Start each dependency-ready wave with disjoint file scopes.
-5. Verify focused tests and scoped changes.
+4. Start each dependency-ready wave with disjoint file and command scopes.
+5. Run only concurrency-safe focused checks during the wave.
 6. Grant each completed writer a serialized commit turn.
-7. Start dependent consumers from their provider commits.
-8. Co-validate compilation, types, and behavior on the combined branch.
+7. Run deferred checks serially on the stable committed head.
+8. Verify focused tests and scoped changes.
+9. Start dependent consumers from their provider commits.
+10. Co-validate compilation, types, and behavior on the combined branch.
    - Use only locally permitted checks or hosted evidence.
-9. Route failures to the responsible provider, consumer, or both.
+11. Route failures to the responsible provider, consumer, or both.
 
 ## Review and corrections
 
@@ -52,7 +57,9 @@ Verify:
 - provider changes preceded dependent consumer changes;
 - parallel writers had disjoint explicit file scopes;
 - every writer stayed inside its assigned module scope;
-- only one writer staged or committed at a time;
+- acceptance commands were concurrency-safe or ran serially on a stable
+  committed head;
+- only one writer mutated the Git index or committed at a time;
 - every writer committed its complete scoped iteration;
 - focused module tests passed;
 - provider-consumer evidence passed on the combined branch;

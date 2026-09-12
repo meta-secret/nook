@@ -12,18 +12,24 @@ simple shared-branch sequence.
 3. Split tasks only at real ownership or dependency boundaries.
 4. Give each task one team identity, bounded file scope, and acceptance
    evidence.
-5. Identify shared files that need one assigned writer.
+5. Name acceptance command read, write, and output scopes.
+6. Identify shared files and shared outputs that need one assigned writer.
+7. Inventory and attribute existing dirty paths and hunks.
+8. Block overlap with pre-existing user or foreign changes without an exact
+   handoff or same-task attribution.
 
 ## Execution
 
 1. Group dependency-ready tasks with disjoint explicit file scopes.
+   - Require concurrency-safe acceptance command scopes.
 2. Start every task in the group in the current checkout.
-3. Let each Team Agent implement and run focused checks.
+3. Let each Team Agent implement and run concurrency-safe focused checks.
 4. Grant one commit turn at a time as writers finish.
 5. Require every writer to commit its complete scoped iteration.
-6. Verify each commit's changed paths and evidence.
-7. Co-validate the combined shared-branch state.
-8. Start dependent tasks only after their provider commits.
+6. Run deferred checks serially on the stable committed head.
+7. Verify each commit's changed paths and evidence.
+8. Co-validate the combined shared-branch state.
+9. Start dependent tasks only after their provider commits.
 
 Read-only Team Agents may run concurrently when their inspection cannot
 interfere with writers.
@@ -70,7 +76,11 @@ The technical result is ready when:
 - each change has one functional owner;
 - concurrent writers had disjoint explicit file scopes;
 - dependency and overlapping-scope order was preserved;
-- only one writer staged or committed at a time;
+- dirty paths and hunks were attributed before dispatch;
+- no commit included unrelated pre-existing changes;
+- acceptance commands were concurrency-safe or ran serially on a stable
+  committed head;
+- only one writer mutated the Git index or committed at a time;
 - every writer committed its complete scoped iteration;
 - combined provider-consumer evidence passed;
 - all accepted changes are already on the shared branch;
