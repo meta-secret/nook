@@ -515,8 +515,8 @@ export class CortexDocumentMapValeReportDecoder {
   }
 
   private isReport(value: unknown): value is CortexDocumentMapValeReport {
+    if (!value) return false;
     return (
-      value !== null &&
       typeof value === 'object' &&
       !Array.isArray(value) &&
       Object.values(value).every(

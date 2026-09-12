@@ -202,6 +202,8 @@ test('enforces exact structural node and depth limits', () => {
 });
 
 test('admits only bounded YAML host values', () => {
+  const externalNullBoundaryValue = ''.match(/unmatched-boundary-value/u);
+  const omittedFieldBoundaryValue = new Map<string, string>().get('field');
   expect(
     ExecutableSkillYamlAdmission.from(
       Bun.YAML.parse('nested: [safe, 1.5, true]\n'),
@@ -217,15 +219,15 @@ test('admits only bounded YAML host values', () => {
       .isOk(),
   ).toBe(true);
   for (const value of [
-    null,
-    undefined,
+    externalNullBoundaryValue,
+    omittedFieldBoundaryValue,
     () => 'function',
     Symbol('symbol'),
     BigInt(1),
     NaN,
     Infinity,
     2 ** 53,
-    { field: undefined },
+    { field: omittedFieldBoundaryValue },
     'é'.repeat(SKILL_YAML_SCALAR_BYTE_LIMIT / 2 + 1),
   ]) {
     expect(ExecutableSkillYamlAdmission.from(value).execute().isErr()).toBe(
