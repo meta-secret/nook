@@ -174,6 +174,18 @@ interface PullRequestReadRequest {
   readonly workingDirectory: string;
 }
 
+export enum DevelopmentPullRequestLookupKind {
+  Found = "found",
+  Absent = "absent",
+}
+
+export type DevelopmentPullRequestLookup =
+  | {
+      readonly kind: DevelopmentPullRequestLookupKind.Found;
+      readonly pullRequest: DevelopmentPullRequest;
+    }
+  | { readonly kind: DevelopmentPullRequestLookupKind.Absent };
+
 interface PromotionEvidenceRequest {
   readonly sha: CommitSha;
   readonly pullRequest: DevelopmentPullRequest;
@@ -361,7 +373,7 @@ export class DevGitHubGateway {
 
   findDevelopmentPullRequest(request: {
     readonly workingDirectory: string;
-  }): Result<DevelopmentPullRequest | undefined, DevFailure> {
+  }): Result<DevelopmentPullRequestLookup, DevFailure> {
     const selection = this.openPullRequests(request.workingDirectory);
     if (selection.isErr()) return err(selection.error);
     if (selection.value.length > 1) {
@@ -371,10 +383,17 @@ export class DevGitHubGateway {
       });
     }
     const selected = selection.value.at(0);
-    if (!selected) return ok(undefined);
-    return this.readPullRequest({
+    if (!selected) {
+      return ok({ kind: DevelopmentPullRequestLookupKind.Absent });
+    }
+    const pullRequest = this.readPullRequest({
       number: selected.number,
       workingDirectory: request.workingDirectory,
+    });
+    if (pullRequest.isErr()) return err(pullRequest.error);
+    return ok({
+      kind: DevelopmentPullRequestLookupKind.Found,
+      pullRequest: pullRequest.value,
     });
   }
 
@@ -802,7 +821,7 @@ export class DevGitHubGateway {
     return RepositorySlug.parse(output.value.stdout.trim());
   }
 
-  private static reviewDecision(input: string | null): PullRequestReviewDecision {
+  private static reviewDecision(input: unknown): PullRequestReviewDecision {
     if (typeof input !== "string") return PullRequestReviewDecision.Empty;
     switch (input) {
       case PullRequestReviewDecision.Approved:

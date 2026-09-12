@@ -52,36 +52,52 @@ interface MutableWorktreeBlock {
   prunable: boolean;
 }
 
+enum WorktreeBlockKind {
+  Empty = "empty",
+  Active = "active",
+}
+
+type WorktreeBlock =
+  | { readonly kind: WorktreeBlockKind.Empty }
+  | {
+      readonly kind: WorktreeBlockKind.Active;
+      readonly value: MutableWorktreeBlock;
+    };
+
 /** Decodes Git's porcelain worktree inventory without selecting a worktree. */
 export class WorktreeInventoryDecoder {
   decode(source: string): Result<readonly WorktreeRecord[], DevFailure> {
     const records: WorktreeRecord[] = [];
-    let block: MutableWorktreeBlock | undefined;
+    let block: WorktreeBlock = { kind: WorktreeBlockKind.Empty };
     for (const line of source.split(/\r?\n/u)) {
       if (line.startsWith("worktree ")) {
-        if (block) {
-          const completed = this.complete(block);
+        if (block.kind === WorktreeBlockKind.Active) {
+          const completed = this.complete(block.value);
           if (completed.isErr()) return err(completed.error);
           records.push(completed.value);
         }
         block = {
-          path: line.slice("worktree ".length),
-          head: "",
-          branch: "",
-          detached: false,
-          prunable: false,
+          kind: WorktreeBlockKind.Active,
+          value: {
+            path: line.slice("worktree ".length),
+            head: "",
+            branch: "",
+            detached: false,
+            prunable: false,
+          },
         };
         continue;
       }
-      if (!block) continue;
-      if (line.startsWith("HEAD ")) block.head = line.slice("HEAD ".length);
+      if (block.kind === WorktreeBlockKind.Empty) continue;
+      if (line.startsWith("HEAD "))
+        block.value.head = line.slice("HEAD ".length);
       if (line.startsWith("branch "))
-        block.branch = line.slice("branch ".length);
-      if (line === "detached") block.detached = true;
-      if (line.startsWith("prunable")) block.prunable = true;
+        block.value.branch = line.slice("branch ".length);
+      if (line === "detached") block.value.detached = true;
+      if (line.startsWith("prunable")) block.value.prunable = true;
     }
-    if (block) {
-      const completed = this.complete(block);
+    if (block.kind === WorktreeBlockKind.Active) {
+      const completed = this.complete(block.value);
       if (completed.isErr()) return err(completed.error);
       records.push(completed.value);
     }

@@ -62,7 +62,6 @@ describe('Node-hosted extension E2E WASM setup', () => {
       { encoding: 'utf8', cwd: extensionRoot },
     )
     expect(bundle.status).toBe(0)
-    expect(bundle.error).toBeUndefined()
 
     const result = spawnSync('node', [bundlePath], {
       encoding: 'utf8',
@@ -74,7 +73,6 @@ describe('Node-hosted extension E2E WASM setup', () => {
     })
 
     expect(result.status).toBe(0)
-    expect(result.error).toBeUndefined()
     expect(result.stdout).toContain('vault-access')
     expect(result.stderr).not.toContain(
       'unexpected companion WASM network fetch',

@@ -1,5 +1,6 @@
 import { err, ok, type Result } from "neverthrow";
 
+import { DevelopmentPullRequestLookupKind } from "./dev-github.ts";
 import { DevDeliveryWorkspace, DevWorkspaceGuard } from "./dev-workspace.ts";
 import {
   Ancestry,
@@ -92,10 +93,13 @@ export class DevPublishCommand {
       workingDirectory: this.workspace.root,
     });
     if (priorPullRequest.isErr()) return err(priorPullRequest.error);
-    if (priorPullRequest.value) {
+    if (
+      priorPullRequest.value.kind === DevelopmentPullRequestLookupKind.Found
+    ) {
+      const priorPullRequestValue = priorPullRequest.value.pullRequest;
       if (
         remote.value.presence === RemoteBranchPresence.Present &&
-        !priorPullRequest.value.headSha.equals(remote.value.sha)
+        !priorPullRequestValue.headSha.equals(remote.value.sha)
       ) {
         return err({
           kind: DevFailureKind.Race,
@@ -103,10 +107,10 @@ export class DevPublishCommand {
             "The existing dev-to-main pull request head differs from origin/dev; refusing to change either snapshot",
         });
       }
-      const replacement = !priorPullRequest.value.headSha.equals(request.devSha);
+      const replacement = !priorPullRequestValue.headSha.equals(request.devSha);
       if (replacement) {
         const priorCi = this.workspace.github.requireDevelopmentCiTerminal({
-          sha: priorPullRequest.value.headSha,
+          sha: priorPullRequestValue.headSha,
           workingDirectory: this.workspace.root,
           replacement,
         });

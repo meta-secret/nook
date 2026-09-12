@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'vitest'
-import { localizeLandingStructuredData } from '../../../src/landing/structured-data'
+import {
+  LandingLocale,
+  localizeLandingStructuredData,
+} from '../../../src/landing/structured-data'
 
 describe('landing structured data', () => {
   test('adds the locale when the source has no inLanguage field', () => {
@@ -10,12 +13,12 @@ describe('landing structured data', () => {
         description: 'Original description',
       }),
       description: 'Localized description',
-      locale: 'ru',
+      locale: LandingLocale.Russian,
     })
 
     expect(JSON.parse(localized)).toMatchObject({
       description: 'Localized description',
-      inLanguage: 'ru',
+      inLanguage: LandingLocale.Russian,
     })
   })
 
@@ -24,7 +27,7 @@ describe('landing structured data', () => {
       localizeLandingStructuredData({
         serialized: JSON.stringify({ '@type': 'WebApplication' }),
         description: 'Localized description',
-        locale: 'en',
+        locale: LandingLocale.English,
       }),
     ).toThrow('Incomplete landing structured data.')
   })

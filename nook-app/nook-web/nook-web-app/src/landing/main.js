@@ -18,9 +18,12 @@ import {
   loadingExtensionMetadata,
   unavailableExtensionMetadata,
 } from './extension-metadata-state'
-import { localizeLandingStructuredData } from './structured-data'
+import {
+  LandingLocale as LandingLocaleEnum,
+  localizeLandingStructuredData,
+} from './structured-data'
 
-/** @typedef {'en' | 'ru'} LandingLocale */
+/** @typedef {import('./structured-data').LandingLocale} LandingLocale */
 /** @typedef {'dark' | 'light'} LandingTheme */
 /** @typedef {{ x: number, y: number }} DiagramPosition */
 /** @typedef {DiagramPosition & { align: 'left' | 'center' | 'right' }} SignalSlot */
@@ -66,10 +69,9 @@ class LandingDocument {
   /** @returns {LandingLocale} */
   static locale() {
     const locale = document.documentElement.lang
-    if (locale !== 'en' && locale !== 'ru') {
-      throw new Error('Invalid landing locale.')
-    }
-    return locale
+    if (locale === LandingLocaleEnum.English) return LandingLocaleEnum.English
+    if (locale === LandingLocaleEnum.Russian) return LandingLocaleEnum.Russian
+    throw new Error('Invalid landing locale.')
   }
 
   /**
@@ -123,7 +125,10 @@ function selectCryptoTerm(term) {
 function resolveLandingLocale() {
   try {
     const savedLocale = localStorage.getItem('nook_locale')
-    if (savedLocale === 'en' || savedLocale === 'ru') return savedLocale
+    if (savedLocale === LandingLocaleEnum.English)
+      return LandingLocaleEnum.English
+    if (savedLocale === LandingLocaleEnum.Russian)
+      return LandingLocaleEnum.Russian
   } catch {
     // Browser storage may be unavailable in privacy-restricted contexts.
   }
@@ -134,11 +139,12 @@ function resolveLandingLocale() {
   ]
   for (const language of browserLanguages) {
     const baseLanguage = language?.toLowerCase().split('-')[0]
-    if (baseLanguage === 'en' || baseLanguage === 'ru') {
-      return baseLanguage
-    }
+    if (baseLanguage === LandingLocaleEnum.English)
+      return LandingLocaleEnum.English
+    if (baseLanguage === LandingLocaleEnum.Russian)
+      return LandingLocaleEnum.Russian
   }
-  return 'en'
+  return LandingLocaleEnum.English
 }
 
 /**
@@ -397,8 +403,12 @@ function applyLandingLocale(locale, persist = false) {
   updateGitHubStars(locale)
 
   const structuredDataElement = LandingDocument.element('#structured-data')
+  const serialized = structuredDataElement.textContent
+  if (typeof serialized !== 'string') {
+    throw new Error('Incomplete landing structured data.')
+  }
   structuredDataElement.textContent = localizeLandingStructuredData({
-    serialized: structuredDataElement.textContent,
+    serialized,
     description: messages[LANDING_MESSAGE_KEYS.MetaDescription],
     locale,
   })
@@ -453,10 +463,14 @@ void loadGitHubStars()
 for (const button of LandingDocument.elements('[data-locale]')) {
   button.addEventListener('click', () => {
     const locale = button.dataset.locale
-    if (locale !== 'en' && locale !== 'ru') {
+    if (locale === LandingLocaleEnum.English) {
+      applyLandingLocale(LandingLocaleEnum.English, true)
+      return
+    }
+    if (locale !== LandingLocaleEnum.Russian) {
       throw new Error('Invalid landing locale control.')
     }
-    applyLandingLocale(locale, true)
+    applyLandingLocale(LandingLocaleEnum.Russian, true)
   })
 }
 

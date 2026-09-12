@@ -16,6 +16,40 @@ import {
 
 import type { GitCommandRequest } from './git-command.ts';
 
+export enum ModuleWorktreeRole {
+  Child = 'child',
+  IntegrationParent = 'integration-parent',
+}
+
+enum ModuleWorktreeGitDirectoryOption {
+  Common = '--git-common-dir',
+  Admin = '--git-dir',
+}
+
+enum RegisteredWorktreeBranchKind {
+  Branch = 'branch',
+  Detached = 'detached',
+}
+
+type RegisteredWorktreeBranch =
+  | {
+      readonly kind: RegisteredWorktreeBranchKind.Branch;
+      readonly name: string;
+    }
+  | { readonly kind: RegisteredWorktreeBranchKind.Detached };
+
+enum WorktreeRegistrationLookupKind {
+  Found = 'found',
+  Missing = 'missing',
+}
+
+type WorktreeRegistrationLookup =
+  | {
+      readonly kind: WorktreeRegistrationLookupKind.Found;
+      readonly registration: RegisteredWorktree;
+    }
+  | { readonly kind: WorktreeRegistrationLookupKind.Missing };
+
 export class ModuleWorktree {
   private constructor(private readonly request: PrepareModuleWorktreeRequest) {}
 
@@ -166,9 +200,12 @@ export class ModuleWorktree {
       attempt: workspace.attempt,
       baselineCommit: workspace.baselineCommit,
     });
-    if (workspace.role !== 'child' && workspace.role !== 'integration-parent')
+    if (
+      workspace.role !== ModuleWorktreeRole.Child &&
+      workspace.role !== ModuleWorktreeRole.IntegrationParent
+    )
       throw new Error('Module worktree handle has an invalid role.');
-    if (workspace.role === 'child') {
+    if (workspace.role === ModuleWorktreeRole.Child) {
       const expectedWorktreeId = `${workspace.taskId}-attempt-${workspace.attempt}`;
       const expectedBranchName = `refs/heads/${ModuleWorktree.CHILD_BRANCH_PREFIX}/${workspace.planDigest}/${expectedWorktreeId}`;
       if (
@@ -204,7 +241,9 @@ export class ModuleWorktree {
     const registrations: RegisteredWorktree[] = [];
     let path = '';
     let headCommit = '';
-    let branchName: string | undefined;
+    let branchName: RegisteredWorktreeBranch = {
+      kind: RegisteredWorktreeBranchKind.Detached,
+    };
     let locked = false;
     for (const field of bytes.toString('utf8').split('\0')) {
       if (field.length === 0) {
@@ -218,14 +257,17 @@ export class ModuleWorktree {
         }
         path = '';
         headCommit = '';
-        branchName = undefined;
+        branchName = { kind: RegisteredWorktreeBranchKind.Detached };
         locked = false;
       } else if (field.startsWith('worktree ')) {
         path = field.slice('worktree '.length);
       } else if (field.startsWith('HEAD ')) {
         headCommit = field.slice('HEAD '.length);
       } else if (field.startsWith('branch ')) {
-        branchName = field.slice('branch '.length);
+        branchName = {
+          kind: RegisteredWorktreeBranchKind.Branch,
+          name: field.slice('branch '.length),
+        };
       } else if (field === 'locked' || field.startsWith('locked ')) {
         locked = true;
       }
@@ -235,10 +277,17 @@ export class ModuleWorktree {
 
   private static registrationForPath(
     workspace: ModuleWorktreeHandle,
-  ): RegisteredWorktree | undefined {
-    return ModuleWorktree.worktreeRegistrations(
+  ): WorktreeRegistrationLookup {
+    const registration = ModuleWorktree.worktreeRegistrations(
       workspace.sourceRepositoryRoot,
-    ).find((registration) => registration.path === workspace.worktreePath);
+    ).find((candidate) => candidate.path === workspace.worktreePath);
+    if (registration) {
+      return {
+        kind: WorktreeRegistrationLookupKind.Found,
+        registration,
+      };
+    }
+    return { kind: WorktreeRegistrationLookupKind.Missing };
   }
 
   private static validateHandle(workspace: ModuleWorktreeHandle): boolean {
@@ -264,17 +313,17 @@ export class ModuleWorktree {
     });
     const commonDirectory = ModuleWorktree.absoluteGitDirectory({
       cwd: sourceRepositoryRoot,
-      option: '--git-common-dir',
+      option: ModuleWorktreeGitDirectoryOption.Common,
     });
     DirectorySeparation.matches({
       first: commonDirectory,
       second: ownedWorkspaceRoot,
       labels: 'Git common directory and owned workspace root',
     });
-    if (workspace.role === 'integration-parent') {
+    if (workspace.role === ModuleWorktreeRole.IntegrationParent) {
       const adminDirectory = ModuleWorktree.absoluteGitDirectory({
         cwd: sourceRepositoryRoot,
-        option: '--git-dir',
+        option: ModuleWorktreeGitDirectoryOption.Admin,
       });
       if (
         adminDirectory !== workspace.worktreeAdminDirectory ||
@@ -325,11 +374,11 @@ export class ModuleWorktree {
     );
     const childCommonDirectory = ModuleWorktree.absoluteGitDirectory({
       cwd: canonicalWorktreePath,
-      option: '--git-common-dir',
+      option: ModuleWorktreeGitDirectoryOption.Common,
     });
     const childAdminDirectory = ModuleWorktree.absoluteGitDirectory({
       cwd: canonicalWorktreePath,
-      option: '--git-dir',
+      option: ModuleWorktreeGitDirectoryOption.Admin,
     });
     const registration = ModuleWorktree.registrationForPath(workspace);
     const childHead = ModuleWorktree.git({
@@ -345,9 +394,11 @@ export class ModuleWorktree {
         parent: join(commonDirectory, 'worktrees'),
         child: childAdminDirectory,
       }) ||
-      !registration ||
-      registration.branchName !== workspace.branchName ||
-      registration.headCommit !== childHead
+      registration.kind !== WorktreeRegistrationLookupKind.Found ||
+      registration.registration.branchName.kind !==
+        RegisteredWorktreeBranchKind.Branch ||
+      registration.registration.branchName.name !== workspace.branchName ||
+      registration.registration.headCommit !== childHead
     )
       throw new Error(
         'Module workspace identity does not match its prepared child worktree.',
@@ -387,7 +438,7 @@ export class ModuleWorktree {
       ModuleWorktree.canonicalRoots(request);
     const commonDirectory = ModuleWorktree.absoluteGitDirectory({
       cwd: sourceRepositoryRoot,
-      option: '--git-common-dir',
+      option: ModuleWorktreeGitDirectoryOption.Common,
     });
     DirectorySeparation.matches({
       first: commonDirectory,
@@ -400,14 +451,14 @@ export class ModuleWorktree {
     });
     const worktreeAdminDirectory = ModuleWorktree.absoluteGitDirectory({
       cwd: sourceRepositoryRoot,
-      option: '--git-dir',
+      option: ModuleWorktreeGitDirectoryOption.Admin,
     });
     const branchName = ModuleWorktree.git({
       cwd: sourceRepositoryRoot,
       args: ['symbolic-ref', '--quiet', 'HEAD'],
     });
     const handle: ModuleWorktreeHandle = Object.freeze({
-      role: 'integration-parent',
+      role: ModuleWorktreeRole.IntegrationParent,
       sourceRepositoryRoot,
       ownedWorkspaceRoot: workspaceRoot,
       worktreePath: sourceRepositoryRoot,
@@ -431,7 +482,7 @@ export class ModuleWorktree {
       ModuleWorktree.canonicalRoots(request);
     const commonDirectory = ModuleWorktree.absoluteGitDirectory({
       cwd: sourceRepositoryRoot,
-      option: '--git-common-dir',
+      option: ModuleWorktreeGitDirectoryOption.Common,
     });
     DirectorySeparation.matches({
       first: commonDirectory,
@@ -494,10 +545,10 @@ export class ModuleWorktree {
       });
       const worktreeAdminDirectory = ModuleWorktree.absoluteGitDirectory({
         cwd: canonicalWorktreePath,
-        option: '--git-dir',
+        option: ModuleWorktreeGitDirectoryOption.Admin,
       });
       const handle: ModuleWorktreeHandle = Object.freeze({
-        role: 'child',
+        role: ModuleWorktreeRole.Child,
         sourceRepositoryRoot,
         ownedWorkspaceRoot,
         worktreePath: canonicalWorktreePath,
@@ -554,7 +605,7 @@ export class ModuleWorktree {
   ): CleanupModuleWorktreeResult {
     const workspace = request.workspace;
     ModuleWorktree.validateHandleShape(workspace);
-    if (workspace.role !== 'child')
+    if (workspace.role !== ModuleWorktreeRole.Child)
       throw new Error('Only child module worktrees can be cleaned up here.');
     const sourceRepositoryRoot = CanonicalDirectory.resolve({
       path: workspace.sourceRepositoryRoot,
@@ -567,10 +618,16 @@ export class ModuleWorktree {
       repositoryRoot: sourceRepositoryRoot,
       branchName: workspace.branchName,
     });
-    if (!exists && !registration && !branchExists) return { removed: false };
-    if (exists !== Boolean(registration))
+    const registrationPresent =
+      registration.kind === WorktreeRegistrationLookupKind.Found;
+    if (!exists && !registrationPresent && !branchExists)
+      return { removed: false };
+    if (exists !== registrationPresent)
       throw new Error('Module worktree path and registration are asymmetric.');
-    if (registration?.locked)
+    if (
+      registration.kind === WorktreeRegistrationLookupKind.Found &&
+      registration.registration.locked
+    )
       throw new Error('Locked module worktrees cannot be cleaned up.');
     if (exists) {
       ModuleWorktree.validateHandle(workspace);
@@ -611,7 +668,8 @@ export class ModuleWorktree {
       });
     if (
       FilesystemPathPresence.exists(workspace.worktreePath) ||
-      ModuleWorktree.registrationForPath(workspace) ||
+      ModuleWorktree.registrationForPath(workspace).kind ===
+        WorktreeRegistrationLookupKind.Found ||
       ModuleWorktree.branchExists({
         repositoryRoot: sourceRepositoryRoot,
         branchName: workspace.branchName,
@@ -626,7 +684,7 @@ export class ModuleWorktree {
   static cleanupSharedIntegrationWorkspace(
     request: CleanupModuleWorktreeRequest,
   ): CleanupModuleWorktreeResult {
-    if (request.workspace.role !== 'integration-parent')
+    if (request.workspace.role !== ModuleWorktreeRole.IntegrationParent)
       throw new Error('Only the integration parent can use this cleanup path.');
     ModuleWorktree.validateHandle(request.workspace);
     return { removed: false };
@@ -635,7 +693,7 @@ export class ModuleWorktree {
   static assertPreparedModuleWorktreeIdentity(
     workspace: ModuleWorktreeHandle,
   ): void {
-    if (workspace.role !== 'child')
+    if (workspace.role !== ModuleWorktreeRole.Child)
       throw new Error('Provider handoffs require an isolated child worktree.');
     ModuleWorktree.validateHandle(workspace);
   }
@@ -643,7 +701,7 @@ export class ModuleWorktree {
   static assertIntegrationWorkspaceIdentity(
     workspace: ModuleWorktreeHandle,
   ): void {
-    if (workspace.role !== 'integration-parent')
+    if (workspace.role !== ModuleWorktreeRole.IntegrationParent)
       throw new Error('Module integration requires its parent workspace.');
     ModuleWorktree.validateHandle(workspace);
   }
@@ -668,8 +726,6 @@ export type PrepareModuleWorktreeRequest = {
   readonly attempt: number;
   readonly baselineCommit: string;
 };
-
-export type ModuleWorktreeRole = 'child' | 'integration-parent';
 
 export type ModuleWorktreeHandle = {
   readonly role: ModuleWorktreeRole;
@@ -697,13 +753,13 @@ export type CleanupModuleWorktreeResult = {
 type RegisteredWorktree = {
   readonly path: string;
   readonly headCommit: string;
-  readonly branchName: string | undefined;
+  readonly branchName: RegisteredWorktreeBranch;
   readonly locked: boolean;
 };
 
 type AbsoluteGitDirectoryRequest = {
   readonly cwd: string;
-  readonly option: '--git-common-dir' | '--git-dir';
+  readonly option: ModuleWorktreeGitDirectoryOption;
 };
 
 type BaselineCommitRequest = {

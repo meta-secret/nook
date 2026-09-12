@@ -2,8 +2,12 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+const configuredCompanionWasmPathValue =
+  process.env.NOOK_EXTENSION_E2E_WASM_PATH
 const configuredCompanionWasmPath =
-  process.env.NOOK_EXTENSION_E2E_WASM_PATH?.trim() ?? ''
+  typeof configuredCompanionWasmPathValue === 'string'
+    ? configuredCompanionWasmPathValue.trim()
+    : ''
 const companionWasmPath =
   configuredCompanionWasmPath.length > 0
     ? configuredCompanionWasmPath

@@ -94,6 +94,18 @@ const PROHIBITED_MATERIALIZATION_FILES = new Set([
   '.lfsconfig',
 ]);
 
+enum IntegrationHeadCommitKind {
+  Pending = 'pending',
+  Applied = 'applied',
+}
+
+type IntegrationHeadCommit =
+  | { readonly kind: IntegrationHeadCommitKind.Pending }
+  | {
+      readonly kind: IntegrationHeadCommitKind.Applied;
+      readonly value: string;
+    };
+
 /** Owns the module integration coordinator registry and its capability transitions. */
 export class ModuleIntegrationCoordinator {
   private constructor() {}
@@ -622,13 +634,19 @@ export class ModuleIntegrationCoordinator {
         expectedHandoffs: [expected],
         provenance,
       };
-      let headCommit: string | undefined;
+      let headCommit: IntegrationHeadCommit = {
+        kind: IntegrationHeadCommitKind.Pending,
+      };
       try {
-        headCommit =
+        const appliedHeadCommit =
           ModuleIntegrationCoordinator.applyAndValidateWave(application);
+        headCommit = {
+          kind: IntegrationHeadCommitKind.Applied,
+          value: appliedHeadCommit,
+        };
         ModuleIntegrationProvenanceRegistry.updateModuleIntegrationRef({
           provenance,
-          nextCommit: headCommit,
+          nextCommit: appliedHeadCommit,
           rollback: false,
         });
         const provisionalState =
@@ -642,11 +660,11 @@ export class ModuleIntegrationCoordinator {
                 generation: request.submission.generation,
                 planDigest: request.submission.handoff.planDigest,
                 startingFrontier: lease.startingFrontier,
-                integrationCommit: headCommit,
+                integrationCommit: appliedHeadCommit,
                 acceptedByTeam: request.submission.acceptedByTeam,
                 handoff: request.submission.handoff,
               }),
-              headCommit,
+              headCommit: appliedHeadCommit,
             },
           ]);
         const waveCountRequest: ModuleIntegrationCompletedWaveCountRequest = {
@@ -674,7 +692,7 @@ export class ModuleIntegrationCoordinator {
         const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
           authority: request.authority,
           acceptedPlan: request.acceptedPlan,
-          headCommit,
+          headCommit: appliedHeadCommit,
           integratedWriterFrontiers: capabilities,
           acceptedEvidence: stateWithWrite.acceptedEvidence,
         };
@@ -702,19 +720,20 @@ export class ModuleIntegrationCoordinator {
         );
         return ModuleIntegrationCoordinator.advancedIntegrationState(advance);
       } catch {
-        if (!headCommit)
+        if (headCommit.kind === IntegrationHeadCommitKind.Pending)
           throw new Error(
             'Child worktree handoff failed before a parent frontier was returned; parent rollback was not proven.',
           );
+        const appliedHeadCommit = headCommit.value;
         try {
           ModuleWaveTree.restore({
             workspace: request.state.workspace,
             originalHead: request.state.headCommit,
-            appliedHead: headCommit,
+            appliedHead: appliedHeadCommit,
           });
           ModuleIntegrationProvenanceRegistry.updateModuleIntegrationRef({
             provenance,
-            nextCommit: headCommit,
+            nextCommit: appliedHeadCommit,
             rollback: true,
           });
         } catch {

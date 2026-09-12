@@ -61,7 +61,7 @@ export class ProcessCommandRunner implements CommandRunner {
     }
   }
 
-  private static text(value: string | Buffer | undefined): string {
+  private static text(value: unknown): string {
     return typeof value === "string"
       ? value
       : value instanceof Buffer
