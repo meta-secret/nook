@@ -497,7 +497,11 @@ mod tests {
                 Err(rejected.cause)
             }
         }?;
-        let head = graph.heads()[0].clone();
+        let head = graph
+            .heads()
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("genesis insert must establish a graph head"))?;
         let a = signed_child(vec![head.clone()], "secret_concurrenta", &key)?;
         let b = signed_child(vec![head], "secret_concurrentb", &key)?;
         let a_id = a.id()?;
@@ -578,7 +582,7 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_insert_returns_duplicate_status() -> EventResult<()> {
+    fn duplicate_insert_returns_duplicate_status() -> anyhow::Result<()> {
         let key = signing_key();
         let store_str = STORE_STR;
 
@@ -596,7 +600,11 @@ mod tests {
                 Err(rejected.cause)
             }
         }?;
-        let head = graph.heads()[0].clone();
+        let head = graph
+            .heads()
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("genesis insert must establish a graph head"))?;
         let child = signed_child(vec![head], "secret_duplicate01", &key)?;
         assert_eq!(
             match graph.insert(crate::EventGraphInsert {
@@ -634,7 +642,7 @@ mod tests {
     }
 
     #[test]
-    fn is_ancestor_is_transitive() -> EventResult<()> {
+    fn is_ancestor_is_transitive() -> anyhow::Result<()> {
         let key = signing_key();
         let store_str = STORE_STR;
 
@@ -652,7 +660,11 @@ mod tests {
                 Err(rejected.cause)
             }
         }?;
-        let head = graph.heads()[0].clone();
+        let head = graph
+            .heads()
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("genesis insert must establish a graph head"))?;
         let child = signed_child(vec![head.clone()], "secret_child00001", &key)?;
         let child_id = child.id()?;
         match graph.insert(crate::EventGraphInsert {
@@ -691,7 +703,7 @@ mod tests {
     }
 
     #[test]
-    fn join_event_collapses_multiple_heads() -> EventResult<()> {
+    fn join_event_collapses_multiple_heads() -> anyhow::Result<()> {
         let key = signing_key();
         let store_str = STORE_STR;
 
@@ -709,7 +721,11 @@ mod tests {
                 Err(rejected.cause)
             }
         }?;
-        let head = graph.heads()[0].clone();
+        let head = graph
+            .heads()
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("genesis insert must establish a graph head"))?;
         let a = signed_child(vec![head.clone()], "secret_concurrenta", &key)?;
         let b = signed_child(vec![head], "secret_concurrentb", &key)?;
         let a_id = a.id()?;
@@ -761,7 +777,7 @@ mod tests {
     }
 
     #[test]
-    fn topological_order_is_deterministic_under_concurrency() -> EventResult<()> {
+    fn topological_order_is_deterministic_under_concurrency() -> anyhow::Result<()> {
         let key = signing_key();
         let store_str = STORE_STR;
 
@@ -779,7 +795,11 @@ mod tests {
                 Err(rejected.cause)
             }
         }?;
-        let head = graph.heads()[0].clone();
+        let head = graph
+            .heads()
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("genesis insert must establish a graph head"))?;
         match graph.insert(crate::EventGraphInsert {
             event: signed_child(vec![head.clone()], "secret_concurrenta", &key)?,
             expected_store_id: store_str,

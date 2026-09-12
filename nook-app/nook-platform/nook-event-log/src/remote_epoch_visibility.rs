@@ -333,10 +333,13 @@ mod tests {
     }
 
     #[test]
-    fn malformed_write_batch_preserves_original_order_and_bytes() -> EventResult<()> {
+    fn malformed_write_batch_preserves_original_order_and_bytes() -> anyhow::Result<()> {
         let EpochPairFixture(_, trigger, checkpoint) = EpochPairFixture::new()?;
         let mut writes = vec![trigger, checkpoint];
-        writes[1].1 = b"invalid event".to_vec().into();
+        let second = writes
+            .get_mut(1)
+            .ok_or_else(|| anyhow::anyhow!("epoch fixture must contain its checkpoint"))?;
+        second.1 = b"invalid event".to_vec().into();
         let original = writes.clone();
         assert!(matches!(
             RemoteEventWrites::new(&mut writes).order(),
@@ -365,14 +368,17 @@ mod tests {
     }
 
     #[test]
-    fn publishes_checkpoint_before_trigger() -> EventResult<()> {
+    fn publishes_checkpoint_before_trigger() -> anyhow::Result<()> {
         let EpochPairFixture(_, trigger, checkpoint) = EpochPairFixture::new()?;
         let checkpoint_id = checkpoint.0.clone();
         let mut events = vec![trigger, checkpoint];
 
         RemoteEventWrites::new(&mut events).order()?;
 
-        assert_eq!(events[0].0, checkpoint_id);
+        let first = events
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("ordered epoch writes must retain their checkpoint"))?;
+        assert_eq!(first.0, checkpoint_id);
         Ok(())
     }
 

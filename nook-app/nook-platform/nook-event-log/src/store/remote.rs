@@ -286,9 +286,12 @@ mod tests {
     }
 
     #[test]
-    fn cancelling_prepared_union_returns_destination_and_outbox() -> EventResult<()> {
+    fn cancelling_prepared_union_returns_destination_and_outbox() -> anyhow::Result<()> {
         let fixture = RemoteFixture::new()?;
-        let (id, bytes) = &fixture.records[0];
+        let (id, bytes) = fixture
+            .records
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
         let mut local = LocalEventStore::new();
         local = local.queue_outbox(crate::LocalOutboxWrite {
             provider_id: "provider",
@@ -314,9 +317,12 @@ mod tests {
     }
 
     #[test]
-    fn consuming_commit_matches_public_union_and_preserves_outbox() -> EventResult<()> {
+    fn consuming_commit_matches_public_union_and_preserves_outbox() -> anyhow::Result<()> {
         let fixture = RemoteFixture::new()?;
-        let (id, bytes) = &fixture.records[0];
+        let (id, bytes) = fixture
+            .records
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
         let mut local = LocalEventStore::new();
         local = local.queue_outbox(crate::LocalOutboxWrite {
             provider_id: "provider",
@@ -366,7 +372,10 @@ mod tests {
     #[test]
     fn conflicting_duplicate_ids_reject_without_changing_store_or_outbox() -> anyhow::Result<()> {
         let fixture = RemoteFixture::new()?;
-        let (id, bytes) = &fixture.records[0];
+        let (id, bytes) = fixture
+            .records
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
         let mut different_event = fixture.event.clone();
         different_event.body.created_at =
             IsoTimestamp::from_trusted("2026-06-29T00:00:00Z".to_owned());
@@ -418,7 +427,11 @@ mod tests {
     #[test]
     fn identical_remote_duplicates_are_admitted_once() -> anyhow::Result<()> {
         let fixture = RemoteFixture::new()?;
-        let record = fixture.records[0].clone();
+        let record = fixture
+            .records
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
         let records = vec![record.clone(), record.clone()];
         let admitted = LocalEventStore::new()
             .union_remote(LocalRemoteUnion {
@@ -437,7 +450,10 @@ mod tests {
     #[test]
     fn failed_preparation_retains_existing_bytes_and_outbox() -> anyhow::Result<()> {
         let fixture = RemoteFixture::new()?;
-        let (id, _) = &fixture.records[0];
+        let (id, _) = fixture
+            .records
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
         let mut local = LocalEventStore::new();
         let corrupt = EventStorageBytes::from(b"invalid local event".to_vec());
         local = local.put_event(crate::LocalEventWrite {
@@ -474,10 +490,13 @@ mod tests {
     }
 
     #[test]
-    fn checked_observation_and_batch_preserve_scope_without_claiming_membership() -> EventResult<()>
-    {
+    fn checked_observation_and_batch_preserve_scope_without_claiming_membership()
+    -> anyhow::Result<()> {
         let fixture = RemoteFixture::new()?;
-        let (id, bytes) = &fixture.records[0];
+        let (id, bytes) = fixture
+            .records
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
         let checked = CheckedRemoteEvent::parse(id, bytes)?;
         assert!(checked.belongs_to_store(STORE));
         assert!(!checked.belongs_to_store("store_otherstore1"));
@@ -494,9 +513,12 @@ mod tests {
     }
 
     #[test]
-    fn checked_admission_rejects_id_before_invalid_signature() -> EventResult<()> {
+    fn checked_admission_rejects_id_before_invalid_signature() -> anyhow::Result<()> {
         let mut fixture = RemoteFixture::new()?;
-        let (id, _) = &fixture.records[0];
+        let (id, _) = fixture
+            .records
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
         fixture.event.signature =
             Ed25519Signature::from_trusted(format!("ed25519:{}", "00".repeat(64)));
         let bytes = VaultEvent::serialize_event_storage_yaml(&fixture.event)?;

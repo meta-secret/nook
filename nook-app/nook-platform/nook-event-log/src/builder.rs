@@ -109,7 +109,7 @@ mod tests {
         let b = EventId::parse("sha256u:u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7s")?;
         let parents = ObservedHeads::from_event_ids(&[b.clone(), a.clone(), a]).as_parents();
         assert_eq!(parents.len(), 2);
-        assert!(parents[0] < parents[1]);
+        assert!(parents.is_sorted());
         Ok(())
     }
 

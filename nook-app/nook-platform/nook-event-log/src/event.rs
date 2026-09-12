@@ -711,7 +711,8 @@ mod tests {
             EpochCheckpointRequirement::NotRequired
         ));
 
-        let VaultOperation::VaultImported { secrets, .. } = &mut body.operations[0] else {
+        let Some(VaultOperation::VaultImported { secrets, .. }) = body.operations.first_mut()
+        else {
             return Err(anyhow::anyhow!("fixture must contain a genesis import"));
         };
         secrets.push(EncryptedSecretPayload {

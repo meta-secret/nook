@@ -325,7 +325,7 @@ mod tests {
     }
 
     #[test]
-    fn union_remote_events_and_heads_returns_causal_heads() -> EventResult<()> {
+    fn union_remote_events_and_heads_returns_causal_heads() -> anyhow::Result<()> {
         let signing_key = signing_key();
         let genesis = SignedEventFixture {
             signing_key: &signing_key,
@@ -349,7 +349,10 @@ mod tests {
             }
         }?;
         assert_eq!(heads.len(), 1);
-        assert_eq!(heads[0], id.as_str());
+        let head = heads
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("remote genesis must establish a graph head"))?;
+        assert_eq!(head, id.as_str());
         Ok(())
     }
 

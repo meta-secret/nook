@@ -98,7 +98,9 @@ mod test_support {
 
         let sequence = NEXT_SIGNING_KEY.fetch_add(1, Ordering::Relaxed);
         let mut bytes = [0_u8; 32];
-        bytes[..size_of::<u64>()].copy_from_slice(&sequence.to_le_bytes());
+        for (slot, byte) in bytes.iter_mut().zip(sequence.to_le_bytes()) {
+            *slot = byte;
+        }
         SigningKey::from_bytes(&bytes)
     }
 
