@@ -104,13 +104,18 @@ a container runtime.
   Gizmo stabilizes one exact-head Codex review through complete validation. For
   failures, comments, or conflicts,
   Gizmo dispatches scoped fixes to the responsible team agents and integrates
-  their verified handoffs. Gizmo runs exact-head readiness and squash-merges
-  without separate merge authorization.
+  their verified handoffs. Gizmo runs exact-head readiness, then has PR Steward
+  authorize the manager-controlled `dev:land`, `dev:publish`, and `dev:promote`
+  flow. Promotion uses an ordinary non-forced fast-forward of the exact tested
+  commit; it does not rewrite history.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the requested task.
 - Stay in the harness-provided isolated workspace. Return the work to the
   parent through the harness commit handoff.
-- Follow `.cortex/gizmo/workflows/pull-requests.md` (squash merge only) and
+- Follow `.cortex/gizmo/workflows/pull-requests.md` for current review and
+  authorization policy, and use the dev-manager flow for feature-to-local-dev-
+  to-origin/dev-to-origin/main delivery. Do not merge a feature directly to
+  main or rewrite history. Also follow
   `.cortex/teams/sre/workflows/ci-operations.md` (this Kubernetes-native worker
   must not invoke a container runtime).
 - Follow `.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md`:

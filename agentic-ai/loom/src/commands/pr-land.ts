@@ -48,11 +48,6 @@ type PrLandReadyArgs = {
   readonly prNumber: number;
 };
 
-type PrLandMergeCheckArgs = {
-  readonly repoRoot: string;
-  readonly prNumber: number;
-};
-
 export type PrLandFailure =
   | HostCommandFailure
   | {
@@ -115,7 +110,7 @@ export class PullRequestDeliveryCommand {
       prNumber,
       ready: passed,
       nextStep: passed
-        ? 'squash-merge with gh pr merge --squash when policy allows'
+        ? 'use task dev:land, task dev:publish, and guarded task dev:promote after manager evidence passes'
         : 'fix readiness gaps, then re-run a prLand.ready request',
       messages: [
         (result.stdout || result.stderr || `exit ${result.exitCode}`).trim(),
@@ -123,9 +118,8 @@ export class PullRequestDeliveryCommand {
     });
   }
   async mergeReadiness(): Promise<Result<PrLandReport, PrLandFailure>> {
-    const { repoRoot, prNumber } = this.request;
+    const { prNumber } = this.request;
 
-    const readinessArgs = { repoRoot, prNumber };
     const result = await this.readiness();
     if (result.isErr()) return err(result.error);
     const readiness = result.value;
@@ -135,11 +129,11 @@ export class PullRequestDeliveryCommand {
       prNumber,
       ready: readiness.ready,
       nextStep: readiness.ready
-        ? 'agent may squash-merge; Loom will not merge automatically'
+        ? 'dev-manager will promote via an ordinary non-forced fast-forward; Loom will not merge directly'
         : readiness.nextStep,
       messages: [
         ...readiness.messages,
-        'Loom never squash-merges; merge remains agent-gated',
+        'Loom does not mutate pull requests; the manager-controlled dev flow owns promotion',
       ],
     });
   }
