@@ -1,10 +1,14 @@
-const transparentTypeScriptWrappers = new Set([
-  'ChainExpression',
-  'TSAsExpression',
-  'TSTypeAssertion',
-  'TSSatisfiesExpression',
-  'TSNonNullExpression',
-])
+/** @typedef {import('@typescript-eslint/types').TSESTree.Node} AstNode */
+/** @typedef {import('@typescript-eslint/types').NodeWithParent} AstNodeWithParent */
+/** @typedef {import('@typescript-eslint/types').TSESTree.Expression} AstExpression */
+/** @typedef {import('@typescript-eslint/types').TSESTree.Identifier} AstIdentifier */
+/** @typedef {import('@typescript-eslint/types').TSESTree.MemberExpression} AstMemberExpression */
+/** @typedef {import('@typescript-eslint/types').TSESTree.Property} AstProperty */
+/** @typedef {import('@typescript-eslint/types').TSESTree.FunctionExpression | import('@typescript-eslint/types').TSESTree.ArrowFunctionExpression} AstCallable */
+/** @typedef {import('@typescript-eslint/scope-manager').Scope} AnalysisScope */
+/** @typedef {{ kind: 'not-found' } | { kind: 'found', value: string }} StaticStringLookup */
+/** @typedef {{ kind: 'not-found' } | { kind: 'found', path: string[] }} ProjectionPathLookup */
+/** @typedef {{ lengths: Set<number>, values: Map<number, Set<AstExpression>> }} ArraySummary */
 
 export const VariableLookupKind = Object.freeze({
   NotFound: 'not-found',
@@ -26,14 +30,22 @@ export const ActiveCallScopeKind = Object.freeze({
   Active: 'active',
 })
 
+/** @param {AstExpression} expression @returns {AstExpression} */
 export function unwrapTypeScriptExpression(expression) {
   let current = expression
-  while (transparentTypeScriptWrappers.has(current.type)) {
+  while (
+    current.type === 'ChainExpression' ||
+    current.type === 'TSAsExpression' ||
+    current.type === 'TSTypeAssertion' ||
+    current.type === 'TSSatisfiesExpression' ||
+    current.type === 'TSNonNullExpression'
+  ) {
     current = current.expression
   }
   return current
 }
 
+/** @param {AstExpression} expression @returns {AstExpression} */
 export function unwrapResultExpression(expression) {
   let current = unwrapTypeScriptExpression(expression)
   while (current.type === 'AwaitExpression') {
@@ -42,6 +54,9 @@ export function unwrapResultExpression(expression) {
   return current
 }
 
+/**
+ * @param {{ expression: AstExpression, staticPropertyKey: (member: AstMemberExpression) => StaticStringLookup }} args
+ */
 export function staticArrayAtAccessor(args) {
   const { expression, staticPropertyKey } = args
   if (
@@ -51,10 +66,8 @@ export function staticArrayAtAccessor(args) {
     return { kind: StaticKeyLookupKind.NotFound }
   }
   const method = staticPropertyKey(expression.callee)
-  if (
-    method.value === 'pop' &&
-    expression.arguments.length === 0
-  ) {
+  if (method.kind === StaticKeyLookupKind.NotFound) return method
+  if (method.value === 'pop' && expression.arguments.length === 0) {
     return {
       kind: StaticKeyLookupKind.Found,
       array: expression.callee.object,
@@ -62,10 +75,7 @@ export function staticArrayAtAccessor(args) {
       limit: Number.POSITIVE_INFINITY,
     }
   }
-  if (
-    method.value === 'shift' &&
-    expression.arguments.length === 0
-  ) {
+  if (method.value === 'shift' && expression.arguments.length === 0) {
     return {
       kind: StaticKeyLookupKind.Found,
       array: expression.callee.object,
@@ -73,14 +83,14 @@ export function staticArrayAtAccessor(args) {
       limit: 0,
     }
   }
-  if (
-    method.value !== 'at' ||
-    expression.arguments.length !== 1 ||
-    expression.arguments[0].type === 'SpreadElement'
-  ) {
+  if (method.value !== 'at' || expression.arguments.length !== 1) {
     return { kind: StaticKeyLookupKind.NotFound }
   }
-  const index = unwrapResultExpression(expression.arguments[0])
+  const indexArgument = expression.arguments[0]
+  if (!indexArgument || indexArgument.type === 'SpreadElement') {
+    return { kind: StaticKeyLookupKind.NotFound }
+  }
+  const index = unwrapResultExpression(indexArgument)
   const value =
     index.type === 'Literal' && typeof index.value === 'number'
       ? index.value
@@ -100,41 +110,52 @@ export function staticArrayAtAccessor(args) {
     : { kind: StaticKeyLookupKind.NotFound }
 }
 
+/** @param {{ summary: ArraySummary, index: number }} args */
 export function arrayAtSummaryValues(args) {
   const { summary, index } = args
+  /** @type {Set<AstExpression>} */
   const selected = new Set()
   for (const length of summary.lengths) {
     const selectedIndex = index < 0 ? length + index : index
-    for (const value of ((v) => (v ? v : []))(summary.values.get(selectedIndex))) {
+    for (const value of ((v) => (v ? v : []))(
+      summary.values.get(selectedIndex),
+    )) {
       selected.add(value)
     }
   }
   return [...selected]
 }
 
+/** @param {AnalysisScope} scope @returns {AnalysisScope} */
 export function executionScope(scope) {
   let current = scope
   while (
     current.upper &&
     current.type !== 'function' &&
-    current.type !== 'module' &&
-    current.type !== 'global'
+    current.type !== 'module'
   ) {
     current = current.upper
   }
   return current
 }
 
+/** @param {{ possibleAncestor: AnalysisScope, scope: AnalysisScope }} args */
 export function scopeContains(args) {
   const { possibleAncestor, scope } = args
   let current = scope
   while (current) {
     if (current === possibleAncestor) return true
-    current = current.upper
+    const upper = current.upper
+    if (!upper) return false
+    current = upper
   }
   return false
 }
 
+/**
+ * @param {import('@typescript-eslint/types').TSESTree.BindingName} pattern
+ * @param {AstIdentifier} target
+ */
 export function isObjectRestBinding(pattern, target) {
   if (pattern.type !== 'ObjectPattern') return false
   return pattern.properties.some(
@@ -143,20 +164,20 @@ export function isObjectRestBinding(pattern, target) {
   )
 }
 
+/** @param {AstIdentifier} identifier */
 export function bindingPatternHasTypeAnnotation(identifier) {
+  /** @type {AstNodeWithParent} */
   let current = identifier
   while (current) {
-    if (current.typeAnnotation) return true
+    if ('typeAnnotation' in current && current.typeAnnotation) return true
+    /** @type {AstNode} */
     const parent = current.parent
     if (
-      !parent ||
-      ![
-        'AssignmentPattern',
-        'Property',
-        'RestElement',
-        'ObjectPattern',
-        'ArrayPattern',
-      ].includes(parent.type)
+      parent.type !== 'AssignmentPattern' &&
+      parent.type !== 'Property' &&
+      parent.type !== 'RestElement' &&
+      parent.type !== 'ObjectPattern' &&
+      parent.type !== 'ArrayPattern'
     ) {
       return false
     }
@@ -165,16 +186,29 @@ export function bindingPatternHasTypeAnnotation(identifier) {
   return false
 }
 
+/** @param {AstProperty} property @returns {AstExpression[]} */
 export function objectPropertyValueExpressions(property) {
+  if (property.parent.type !== 'ObjectExpression') return []
+  if (
+    property.value.type === 'ObjectPattern' ||
+    property.value.type === 'ArrayPattern' ||
+    property.value.type === 'AssignmentPattern' ||
+    property.value.type === 'TSEmptyBodyFunctionExpression'
+  ) {
+    return []
+  }
   if (property.kind === 'init') return [property.value]
   if (property.kind !== 'get' || property.value.type !== 'FunctionExpression')
     return []
   return functionReturnExpressions(property.value)
 }
 
+/** @param {AstCallable} callable @returns {AstExpression[]} */
 export function functionReturnExpressions(callable) {
   if (callable.body.type !== 'BlockStatement') return [callable.body]
+  /** @type {AstExpression[]} */
   const expressions = []
+  /** @param {AstNode} node */
   function visit(node) {
     if (node.type === 'ReturnStatement') {
       if (node.argument) expressions.push(node.argument)
@@ -190,31 +224,52 @@ export function functionReturnExpressions(callable) {
     ) {
       return
     }
-    for (const [key, value] of Object.entries(node)) {
-      if (key === 'parent') continue
-      const children = Array.isArray(value) ? value : [value]
-      for (const child of children) {
-        if (
-          child &&
-          typeof child === 'object' &&
-          typeof child.type === 'string'
-        ) {
-          visit(child)
-        }
+    if (node.type === 'BlockStatement' || node.type === 'Program') {
+      for (const statement of node.body) visit(statement)
+      return
+    }
+    if (node.type === 'IfStatement') {
+      visit(node.consequent)
+      if (node.alternate) visit(node.alternate)
+      return
+    }
+    if (node.type === 'SwitchStatement') {
+      for (const branch of node.cases) {
+        for (const statement of branch.consequent) visit(statement)
       }
+      return
+    }
+    if (node.type === 'TryStatement') {
+      visit(node.block)
+      if (node.handler) visit(node.handler.body)
+      if (node.finalizer) visit(node.finalizer)
+      return
+    }
+    if (
+      node.type === 'DoWhileStatement' ||
+      node.type === 'ForInStatement' ||
+      node.type === 'ForOfStatement' ||
+      node.type === 'ForStatement' ||
+      node.type === 'LabeledStatement' ||
+      node.type === 'WhileStatement' ||
+      node.type === 'WithStatement'
+    ) {
+      visit(node.body)
     }
   }
   visit(callable.body)
   return expressions
 }
 
+/** @param {AstExpression} expression @returns {AstExpression[]} */
 export function inlineCallReturnExpressions(expression) {
   if (expression.type !== 'CallExpression') {
     return []
   }
   const callable = unwrapTypeScriptExpression(expression.callee)
   if (
-    ['ArrowFunctionExpression', 'FunctionExpression'].includes(callable.type)
+    callable.type === 'ArrowFunctionExpression' ||
+    callable.type === 'FunctionExpression'
   ) {
     return functionReturnExpressions(callable)
   }
@@ -232,9 +287,8 @@ export function inlineCallReturnExpressions(expression) {
       property.type !== 'Property' ||
       propertyKey.kind === StaticKeyLookupKind.NotFound ||
       propertyKey.value !== selectedKey.value ||
-      !['ArrowFunctionExpression', 'FunctionExpression'].includes(
-        property.value.type,
-      )
+      (property.value.type !== 'ArrowFunctionExpression' &&
+        property.value.type !== 'FunctionExpression')
     ) {
       return []
     }
@@ -242,6 +296,7 @@ export function inlineCallReturnExpressions(expression) {
   })
 }
 
+/** @param {AstMemberExpression} member @returns {StaticStringLookup} */
 function inlineMemberKey(member) {
   if (!member.computed && member.property.type === 'Identifier') {
     return { kind: StaticKeyLookupKind.Found, value: member.property.name }
@@ -260,6 +315,7 @@ function inlineMemberKey(member) {
   return { kind: StaticKeyLookupKind.NotFound }
 }
 
+/** @param {AstProperty} property @returns {StaticStringLookup} */
 function inlinePropertyKey(property) {
   if (!property.computed && property.key.type === 'Identifier') {
     return { kind: StaticKeyLookupKind.Found, value: property.key.name }
@@ -277,30 +333,48 @@ function inlinePropertyKey(property) {
   return { kind: StaticKeyLookupKind.NotFound }
 }
 
+/**
+ * @param {{ expression: AstMemberExpression, staticObjectKey: (property: import('@typescript-eslint/types').TSESTree.PropertyDefinition) => StaticStringLookup }} args
+ * @returns {AstExpression[]}
+ */
 export function thisClassFieldValueExpressions(args) {
   const { expression, staticObjectKey } = args
   if (expression.object.type !== 'ThisExpression') return []
   const selectedKey = inlineMemberKey(expression)
   if (selectedKey.kind === StaticKeyLookupKind.NotFound) return []
+  /** @type {AstNode} */
   let current = expression.parent
-  while (current && current.type !== 'ClassBody') current = current.parent
-  if (!current) return []
-  return current.body.flatMap((field) =>
-    field.type === 'PropertyDefinition' &&
-    !field.typeAnnotation &&
-    field.value &&
-    staticObjectKey(field).value === selectedKey.value
+  while (current.type !== 'ClassBody') {
+    if (current.type === 'Program') return []
+    current = current.parent
+  }
+  return current.body.flatMap((field) => {
+    if (
+      field.type !== 'PropertyDefinition' ||
+      field.typeAnnotation ||
+      !field.value
+    ) {
+      return []
+    }
+    const fieldKey = staticObjectKey(field)
+    return fieldKey.kind === StaticKeyLookupKind.Found &&
+      fieldKey.value === selectedKey.value
       ? [field.value]
-      : [],
-  )
+      : []
+  })
 }
 
+/**
+ * @param {{ expression: AstExpression, projectMemberExpressions: (args: { expression: AstMemberExpression, seenVariables: Set<import('@typescript-eslint/scope-manager').Variable> }) => AstExpression[], projectArrayAccessorExpressions: (expression: AstExpression) => AstExpression[] }} args
+ * @returns {AstExpression[]}
+ */
 export function inlineObjectResultExpressions(args) {
   const {
     expression,
     projectMemberExpressions,
     projectArrayAccessorExpressions,
   } = args
+  /** @param {AstExpression} selected @returns {AstExpression[]} */
   function visit(selected) {
     const unwrapped = unwrapResultExpression(selected)
     if (unwrapped.type === 'ObjectExpression') return [selected]
@@ -312,7 +386,8 @@ export function inlineObjectResultExpressions(args) {
       return [...visit(unwrapped.left), ...visit(unwrapped.right)]
     }
     if (unwrapped.type === 'SequenceExpression') {
-      return visit(unwrapped.expressions.at(-1))
+      const lastExpression = unwrapped.expressions.at(-1)
+      return lastExpression ? visit(lastExpression) : []
     }
     if (unwrapped.type === 'MemberExpression') {
       return projectMemberExpressions({
@@ -328,9 +403,13 @@ export function inlineObjectResultExpressions(args) {
   return visit(expression)
 }
 
+/**
+ * @param {{ expression: AstMemberExpression, staticPropertyKey: (member: AstMemberExpression) => StaticStringLookup }} args
+ */
 export function staticMemberPath(args) {
   const { expression, staticPropertyKey } = args
   const path = []
+  /** @type {AstExpression} */
   let current = expression
   while (current.type === 'MemberExpression') {
     const key = staticPropertyKey(current)
@@ -344,14 +423,19 @@ export function staticMemberPath(args) {
   return { kind: ProjectionPathLookupKind.Found, root: current, path }
 }
 
+/**
+ * @param {{ identifier: AstIdentifier, staticPropertyKey: (member: AstMemberExpression) => StaticStringLookup }} args
+ */
 export function memberAssignmentPath(args) {
   const { identifier, staticPropertyKey } = args
   const path = []
+  /** @type {AstNode} */
   let current = identifier
   while (
     current.parent?.type === 'MemberExpression' &&
     current.parent.object === current
   ) {
+    /** @type {AstMemberExpression} */
     const member = current.parent
     const key = staticPropertyKey(member)
     if (key.kind === StaticKeyLookupKind.NotFound) return key
@@ -372,15 +456,21 @@ export function memberAssignmentPath(args) {
   }
 }
 
+/**
+ * @param {{ expression: AstExpression, declaredVariable: (identifier: AstIdentifier) => ({ kind: 'not-found' } | { kind: 'found', variable: import('@typescript-eslint/scope-manager').Variable }) }} args
+ * @returns {StaticStringLookup}
+ */
 export function staticExpressionKey(args) {
   const { expression, declaredVariable } = args
   if (
     expression.type === 'TemplateLiteral' &&
     expression.expressions.length === 0
   ) {
+    const quasi = expression.quasis[0]
+    if (!quasi) return { kind: StaticKeyLookupKind.NotFound }
     return {
       kind: StaticKeyLookupKind.Found,
-      value: expression.quasis[0].value.raw,
+      value: quasi.value.raw,
     }
   }
   if (
@@ -411,6 +501,7 @@ export function staticExpressionKey(args) {
   return { kind: StaticKeyLookupKind.NotFound }
 }
 
+/** @param {string} method */
 export function arrayCallbackElementParameter(method) {
   if (method === 'reduce' || method === 'reduceRight') {
     return { kind: StaticKeyLookupKind.Found, value: 1 }
@@ -434,7 +525,9 @@ export function arrayCallbackElementParameter(method) {
   return { kind: StaticKeyLookupKind.NotFound }
 }
 
+/** @param {AstIdentifier} identifier */
 export function writeBindingPattern(identifier) {
+  /** @type {AstNode} */
   let current = identifier
   while (
     current.parent &&
@@ -456,6 +549,77 @@ export function writeBindingPattern(identifier) {
   return { kind: ProjectionPathLookupKind.NotFound }
 }
 
+/**
+ * @param {{ pattern: import('@typescript-eslint/types').TSESTree.DestructuringPattern | import('@typescript-eslint/types').TSESTree.TSParameterProperty, target: AstIdentifier, staticObjectKey: (property: AstProperty) => StaticStringLookup }} args
+ * @returns {ProjectionPathLookup}
+ */
+export function bindingProjectionPath(args) {
+  const { pattern, target, staticObjectKey } = args
+  if (pattern === target) {
+    return { kind: ProjectionPathLookupKind.Found, path: [] }
+  }
+  if (pattern.type === 'TSParameterProperty') {
+    return bindingProjectionPath({
+      pattern: pattern.parameter,
+      target,
+      staticObjectKey,
+    })
+  }
+  if (pattern.type === 'AssignmentPattern') {
+    return bindingProjectionPath({
+      pattern: pattern.left,
+      target,
+      staticObjectKey,
+    })
+  }
+  if (pattern.type === 'RestElement' || pattern.type === 'MemberExpression') {
+    return { kind: ProjectionPathLookupKind.NotFound }
+  }
+  if (pattern.type === 'ObjectPattern') {
+    for (const property of pattern.properties) {
+      if (property.type !== 'Property') continue
+      if (
+        property.value.type !== 'AssignmentPattern' &&
+        property.value.type !== 'ArrayPattern' &&
+        property.value.type !== 'Identifier' &&
+        property.value.type !== 'MemberExpression' &&
+        property.value.type !== 'ObjectPattern'
+      )
+        continue
+      const childLookup = bindingProjectionPath({
+        pattern: property.value,
+        target,
+        staticObjectKey,
+      })
+      if (childLookup.kind === ProjectionPathLookupKind.NotFound) continue
+      const keyLookup = staticObjectKey(property)
+      if (keyLookup.kind === StaticKeyLookupKind.NotFound) return keyLookup
+      return {
+        kind: ProjectionPathLookupKind.Found,
+        path: [keyLookup.value, ...childLookup.path],
+      }
+    }
+  }
+  if (pattern.type === 'ArrayPattern') {
+    for (const [index, element] of pattern.elements.entries()) {
+      if (!element) continue
+      const childLookup = bindingProjectionPath({
+        pattern: element,
+        target,
+        staticObjectKey,
+      })
+      if (childLookup.kind === ProjectionPathLookupKind.Found) {
+        return {
+          kind: ProjectionPathLookupKind.Found,
+          path: [String(index), ...childLookup.path],
+        }
+      }
+    }
+  }
+  return { kind: ProjectionPathLookupKind.NotFound }
+}
+
+/** @param {AstExpression} expression @returns {AstExpression[]} */
 export function namedResultAlternatives(expression) {
   const unwrapped = unwrapResultExpression(expression)
   if (unwrapped.type === 'AssignmentExpression') {
@@ -474,17 +638,20 @@ export function namedResultAlternatives(expression) {
     ]
   }
   if (unwrapped.type === 'SequenceExpression') {
-    return namedResultAlternatives(unwrapped.expressions.at(-1))
+    const lastExpression = unwrapped.expressions.at(-1)
+    return lastExpression ? namedResultAlternatives(lastExpression) : []
   }
   return [unwrapped]
 }
 
+/** @param {ArraySummary[]} summaries @returns {ArraySummary} */
 export function mergeArraySummaries(summaries) {
+  /** @type {ArraySummary} */
   const merged = { lengths: new Set(), values: new Map() }
   for (const summary of summaries) {
     for (const length of summary.lengths) merged.lengths.add(length)
     for (const [index, values] of summary.values) {
-      const selected = ((v) => (v ? v : new Set()))(merged.values.get(index))
+      const selected = merged.values.get(index) ?? new Set()
       for (const value of values) selected.add(value)
       merged.values.set(index, selected)
     }
@@ -492,9 +659,12 @@ export function mergeArraySummaries(summaries) {
   return merged
 }
 
+/** @param {{ first: ArraySummary, second: ArraySummary, limit: number }} args @returns {ArraySummary} */
 export function concatenateArraySummaries(args) {
   const { first, second, limit } = args
+  /** @type {Set<number>} */
   const lengths = new Set()
+  /** @type {Map<number, Set<AstExpression>>} */
   const values = new Map(
     [...first.values].map(([index, selected]) => [index, new Set(selected)]),
   )
@@ -505,7 +675,7 @@ export function concatenateArraySummaries(args) {
     for (const [index, selectedValues] of second.values) {
       const shiftedIndex = firstLength + index
       if (shiftedIndex > limit) continue
-      const shiftedValues = ((v) => (v ? v : new Set()))(values.get(shiftedIndex))
+      const shiftedValues = values.get(shiftedIndex) ?? new Set()
       for (const value of selectedValues) shiftedValues.add(value)
       values.set(shiftedIndex, shiftedValues)
     }
@@ -513,6 +683,7 @@ export function concatenateArraySummaries(args) {
   return { lengths, values }
 }
 
+/** @param {AstNode} node */
 function branchArms(node) {
   const arms = new Map()
   let current = node
@@ -530,6 +701,7 @@ function branchArms(node) {
   return arms
 }
 
+/** @param {AstNode} node */
 function enclosingSwitchCase(node) {
   let current = node
   while (current.parent) {
@@ -544,6 +716,7 @@ function enclosingSwitchCase(node) {
   return { kind: StaticKeyLookupKind.NotFound }
 }
 
+/** @param {AstNode} statement @returns {boolean} */
 function switchArmStatementTerminates(statement) {
   if (
     (statement.type === 'BreakStatement' && !statement.label) ||
@@ -556,15 +729,16 @@ function switchArmStatementTerminates(statement) {
     return statement.body.some(switchArmStatementTerminates)
   }
   if (statement.type === 'IfStatement') {
+    if (!statement.alternate) return false
     return (
       switchArmStatementTerminates(statement.consequent) &&
-      Boolean(statement.alternate) &&
       switchArmStatementTerminates(statement.alternate)
     )
   }
   return false
 }
 
+/** @param {{ first: AstNode, second: AstNode }} args */
 function switchCasesAreExclusive(args) {
   const first = enclosingSwitchCase(args.first)
   const second = enclosingSwitchCase(args.second)
@@ -583,6 +757,7 @@ function switchCasesAreExclusive(args) {
   )
 }
 
+/** @param {{ first: AstNode, second: AstNode }} args */
 export function nodesUseExclusiveBranches(args) {
   if (switchCasesAreExclusive(args)) return true
   const firstArms = branchArms(args.first)
@@ -592,8 +767,8 @@ export function nodesUseExclusiveBranches(args) {
   return false
 }
 
+/** @param {AstNode} statement @returns {boolean} */
 function statementAlwaysTerminates(statement) {
-  if (!statement) return false
   if (
     statement.type === 'ReturnStatement' ||
     statement.type === 'ThrowStatement'
@@ -604,6 +779,7 @@ function statementAlwaysTerminates(statement) {
     return statement.body.some(statementAlwaysTerminates)
   }
   if (statement.type === 'IfStatement') {
+    if (!statement.alternate) return false
     return (
       statementAlwaysTerminates(statement.consequent) &&
       statementAlwaysTerminates(statement.alternate)
@@ -612,6 +788,7 @@ function statementAlwaysTerminates(statement) {
   return false
 }
 
+/** @param {{ write: AstNode, following: AstNode }} args */
 export function writeExitsBeforeFollowingNode(args) {
   const { write, following } = args
   let current = write
@@ -621,8 +798,8 @@ export function writeExitsBeforeFollowingNode(args) {
       parent.type === 'IfStatement' &&
       (current === parent.consequent || current === parent.alternate) &&
       statementAlwaysTerminates(current) &&
-      (((...[v = Number.POSITIVE_INFINITY]) => v)(parent.range?.[1])) <=
-        (((...[v = Number.NEGATIVE_INFINITY]) => v)(following.range?.[0]))
+      ((...[v = Number.POSITIVE_INFINITY]) => v)(parent.range?.[1]) <=
+        ((...[v = Number.NEGATIVE_INFINITY]) => v)(following.range?.[0])
     ) {
       return true
     }
@@ -631,6 +808,7 @@ export function writeExitsBeforeFollowingNode(args) {
   return false
 }
 
+/** @param {string | number} key */
 export function staticArrayIndex(key) {
   const maximumArrayIndex = 2 ** 32 - 2
   const value =

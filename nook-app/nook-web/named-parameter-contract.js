@@ -1,10 +1,3 @@
-const transparentTypeScriptWrappers = new Set([
-  "ChainExpression",
-  "TSAsExpression",
-  "TSNonNullExpression",
-  "TSSatisfiesExpression",
-  "TSTypeAssertion",
-]);
 const transparentParameterContractWrappers = new Set([
   "Partial",
   "Readonly",
@@ -31,6 +24,18 @@ const scalarTypeBoundaryTypes = new Set([
   "TSIndexedAccessType",
   "TSTypeOperator",
 ]);
+
+/** @typedef {import('@typescript-eslint/types').TSESTree.Node} AstNode */
+/** @typedef {import('@typescript-eslint/types').NodeWithParent} AstNodeWithParent */
+/** @typedef {import('@typescript-eslint/types').TSESTree.Expression} AstExpression */
+/** @typedef {import('@typescript-eslint/types').TSESTree.TypeNode} AstTypeNode */
+/** @typedef {import('@typescript-eslint/types').TSESTree.EntityName} AstTypeName */
+/** @typedef {import('@typescript-eslint/types').TSESTree.ProgramStatement} AstDeclarationStatement */
+/** @typedef {import('@typescript-eslint/types').TSESTree.TSTypeAliasDeclaration | import('@typescript-eslint/types').TSESTree.TSInterfaceDeclaration | import('@typescript-eslint/types').TSESTree.TSEnumDeclaration | import('@typescript-eslint/types').TSESTree.TSModuleDeclaration} AstTypeDeclaration */
+/** @typedef {import('@typescript-eslint/utils').TSESLint.SourceCode} TypedSourceCode */
+/** @typedef {'namedParameterType' | 'namedParameterDefault' | 'semanticParameterType'} NamedParameterMessageId */
+/** @typedef {import('@typescript-eslint/utils').TSESLint.RuleContext<NamedParameterMessageId, readonly [{ enforceNamedParameterContracts?: boolean }] >} TypedRuleContext */
+/** @typedef {{ kind: 'not-found' } | { kind: 'found', declaration: AstTypeDeclaration }} TypeDeclarationLookup */
 
 const ParameterBindingLookupKind = Object.freeze({
   Found: "found",
@@ -84,6 +89,7 @@ const genericParameterOperationName =
 const lineDerivedParameterContractName =
   /(?:NookTyped)?(?:Args|Arguments|Parameters|Params)[_\d]/u;
 
+/** @param {string} name */
 function isGenericParameterContractName(name) {
   return (
     genericParameterContractNames.has(name) ||
@@ -92,7 +98,9 @@ function isGenericParameterContractName(name) {
   );
 }
 
+/** @param {import('@typescript-eslint/types').TSESTree.TSTypeAnnotation} annotation */
 function parameterOwnsTypeAnnotation(annotation) {
+  /** @type {AstNode} */
   let current = annotation.parent;
   while (
     current?.parent &&
@@ -102,13 +110,17 @@ function parameterOwnsTypeAnnotation(annotation) {
   ) {
     current = current.parent;
   }
-  return (
-    Array.isArray(current?.parent?.params) &&
-    current.parent.params.includes(current)
+  const parent = current.parent;
+  return Boolean(
+    parent &&
+    "params" in parent &&
+    parent.params.some((parameter) => parameter === current),
   );
 }
 
+/** @param {import('@typescript-eslint/types').TSESTree.TSTypeReference | import('@typescript-eslint/types').TSESTree.TSTypeQuery | import('@typescript-eslint/types').TSESTree.TSImportType} node */
 function referencedTypeIsParameterContract(node) {
+  /** @type {AstNodeWithParent} */
   let current = node;
   while (current.parent) {
     if (current.parent.type === "TSTypeAnnotation") {
@@ -138,6 +150,7 @@ function referencedTypeIsParameterContract(node) {
   return false;
 }
 
+/** @param {AstTypeName} typeName @returns {string} */
 function referencedTypeName(typeName) {
   let current = typeName;
   while (current.type === "TSQualifiedName") {
@@ -146,14 +159,21 @@ function referencedTypeName(typeName) {
   return current.type === "Identifier" ? current.name : "";
 }
 
+/** @param {AstTypeName} typeName @returns {string[]} */
 function referencedTypeNameParts(typeName) {
   if (typeName.type === "Identifier") return [typeName.name];
+  if (typeName.type === "ThisExpression") return [];
   return [
     ...referencedTypeNameParts(typeName.left),
     ...referencedTypeNameParts(typeName.right),
   ];
 }
 
+/**
+ * @param {AstDeclarationStatement[]} statements
+ * @param {string[]} nameParts
+ * @returns {TypeDeclarationLookup}
+ */
 function declarationInStatements(statements, nameParts) {
   const [name, ...remaining] = nameParts;
   const declaration = statements
@@ -171,7 +191,15 @@ function declarationInStatements(statements, nameParts) {
         statement.id.type === "Identifier" &&
         statement.id.name === name,
     );
-  if (!declaration) return { kind: TypeDeclarationLookupKind.NotFound };
+  if (
+    !declaration ||
+    (declaration.type !== "TSTypeAliasDeclaration" &&
+      declaration.type !== "TSInterfaceDeclaration" &&
+      declaration.type !== "TSEnumDeclaration" &&
+      declaration.type !== "TSModuleDeclaration")
+  ) {
+    return { kind: TypeDeclarationLookupKind.NotFound };
+  }
   if (remaining.length === 0) {
     return { kind: TypeDeclarationLookupKind.Found, declaration };
   }
@@ -184,19 +212,31 @@ function declarationInStatements(statements, nameParts) {
   return declarationInStatements(declaration.body.body, remaining);
 }
 
+/**
+ * @param {import('@typescript-eslint/types').TSESTree.TSTypeReference} node
+ * @returns {TypeDeclarationLookup}
+ */
 function referencedTypeDeclaration(node) {
   const nameParts = referencedTypeNameParts(node.typeName);
+  /** @type {AstNode} */
   let current = node;
-  while (current) {
-    if (Array.isArray(current.body)) {
+  while (current.type !== "Program") {
+    if (current.type === "TSModuleBlock") {
       const lookup = declarationInStatements(current.body, nameParts);
       if (lookup.kind === TypeDeclarationLookupKind.Found) return lookup;
     }
     current = current.parent;
   }
+  const lookup = declarationInStatements(current.body, nameParts);
+  if (lookup.kind === TypeDeclarationLookupKind.Found) return lookup;
   return { kind: TypeDeclarationLookupKind.NotFound };
 }
 
+/**
+ * @param {AstTypeNode} node
+ * @param {Set<string>} [seenNames]
+ * @returns {boolean}
+ */
 function typeAnnotationIsObjectShaped(node, seenNames = new Set()) {
   if (
     node.type === "TSTypeLiteral" ||
@@ -205,9 +245,6 @@ function typeAnnotationIsObjectShaped(node, seenNames = new Set()) {
     node.type === "TSTupleType"
   ) {
     return true;
-  }
-  if (node.type === "TSParenthesizedType") {
-    return typeAnnotationIsObjectShaped(node.typeAnnotation, seenNames);
   }
   if (node.type === "TSUnionType" || node.type === "TSIntersectionType") {
     return node.types.some((candidate) =>
@@ -232,12 +269,21 @@ function typeAnnotationIsObjectShaped(node, seenNames = new Set()) {
   );
 }
 
+/**
+ * @param {AstTypeDeclaration} declaration
+ * @param {Set<string>} seenNames
+ * @returns {boolean}
+ */
 function typeDeclarationIsObjectShaped(declaration, seenNames) {
   if (declaration.type === "TSInterfaceDeclaration") return true;
   if (declaration.type !== "TSTypeAliasDeclaration") return false;
   return typeAnnotationIsObjectShaped(declaration.typeAnnotation, seenNames);
 }
 
+/**
+ * @param {import('@typescript-eslint/types').TSESTree.TSTypeQuery} node
+ * @param {TypedSourceCode} sourceCode
+ */
 function typeQueryIsObjectShaped(node, sourceCode) {
   if (node.exprName.type !== "Identifier") return false;
   let scope = sourceCode.getScope(node.exprName);
@@ -249,8 +295,14 @@ function typeQueryIsObjectShaped(node, sourceCode) {
           candidate.type === "Variable" &&
           candidate.node.type === "VariableDeclarator",
       );
-      if (!definition) return false;
       if (
+        !definition ||
+        definition.type !== "Variable" ||
+        definition.node.type !== "VariableDeclarator"
+      )
+        return false;
+      if (
+        "typeAnnotation" in definition.name &&
         definition.name.typeAnnotation &&
         typeAnnotationIsObjectShaped(
           definition.name.typeAnnotation.typeAnnotation,
@@ -263,11 +315,14 @@ function typeQueryIsObjectShaped(node, sourceCode) {
         defaultObjectExpressions(definition.node.init, sourceCode).length,
       );
     }
-    scope = scope.upper;
+    const upper = scope.upper;
+    if (!upper) return false;
+    scope = upper;
   }
   return false;
 }
 
+/** @param {AstNodeWithParent} node */
 function enclosingParameterBinding(node) {
   let current = node;
   const bindingContainers = new Set([
@@ -279,27 +334,41 @@ function enclosingParameterBinding(node) {
     "TSParameterProperty",
   ]);
   while (current.parent) {
+    const parent = current.parent;
     if (
-      Array.isArray(current.parent.params) &&
-      current.parent.params.includes(current)
+      "params" in parent &&
+      parent.params.some((parameter) => parameter === current)
     ) {
       return { kind: ParameterBindingLookupKind.Found, parameter: current };
     }
-    if (!bindingContainers.has(current.parent.type)) {
+    if (!bindingContainers.has(parent.type)) {
       return { kind: ParameterBindingLookupKind.NotFound };
     }
-    current = current.parent;
+    if (parent.type === "Program") {
+      return { kind: ParameterBindingLookupKind.NotFound };
+    }
+    current = parent;
   }
   return { kind: ParameterBindingLookupKind.NotFound };
 }
 
+/** @returns {AstExpression[]} */
 function defaultObjectExpressions(
+  /** @type {AstExpression} */
   expression,
+  /** @type {TypedSourceCode} */
   sourceCode,
+  /** @type {Set<import('@typescript-eslint/scope-manager').Variable>} */
   seenVariables = new Set(),
 ) {
   let current = expression;
-  while (transparentTypeScriptWrappers.has(current.type)) {
+  while (
+    current.type === "ChainExpression" ||
+    current.type === "TSAsExpression" ||
+    current.type === "TSNonNullExpression" ||
+    current.type === "TSSatisfiesExpression" ||
+    current.type === "TSTypeAssertion"
+  ) {
     current = current.expression;
   }
   if (
@@ -320,8 +389,14 @@ function defaultObjectExpressions(
             candidate.type === "Variable" &&
             candidate.node.type === "VariableDeclarator",
         );
-        if (!definition) return [];
         if (
+          !definition ||
+          definition.type !== "Variable" ||
+          definition.node.type !== "VariableDeclarator"
+        )
+          return [];
+        if (
+          "typeAnnotation" in definition.name &&
           definition.name.typeAnnotation &&
           typeAnnotationIsObjectShaped(
             definition.name.typeAnnotation.typeAnnotation,
@@ -336,7 +411,9 @@ function defaultObjectExpressions(
           new Set(seenVariables).add(variable),
         );
       }
-      scope = scope.upper;
+      const upper = scope.upper;
+      if (!upper) break;
+      scope = upper;
     }
     return objectRuntimeDefaultNames.has(current.name) ? [current] : [];
   }
@@ -368,7 +445,9 @@ function defaultObjectExpressions(
         return [current];
       }
       if (variable) return [];
-      scope = scope.upper;
+      const upper = scope.upper;
+      if (!upper) break;
+      scope = upper;
     }
     return [current];
   }
@@ -389,6 +468,13 @@ function defaultObjectExpressions(
             candidate.node.type === "VariableDeclarator" &&
             candidate.node.init?.type === "ObjectExpression",
         );
+        if (
+          !definition ||
+          definition.type !== "Variable" ||
+          definition.node.type !== "VariableDeclarator" ||
+          definition.node.init?.type !== "ObjectExpression"
+        )
+          return [];
         const property = definition?.node.init.properties.find(
           (candidate) =>
             candidate.type === "Property" &&
@@ -396,11 +482,23 @@ function defaultObjectExpressions(
             candidate.key.type === "Identifier" &&
             candidate.key.name === current.property.name,
         );
-        return property?.type === "Property"
-          ? defaultObjectExpressions(property.value, sourceCode, seenVariables)
-          : [];
+        if (
+          property?.type !== "Property" ||
+          property.value.type === "ObjectPattern" ||
+          property.value.type === "ArrayPattern" ||
+          property.value.type === "AssignmentPattern" ||
+          property.value.type === "TSEmptyBodyFunctionExpression"
+        )
+          return [];
+        return defaultObjectExpressions(
+          property.value,
+          sourceCode,
+          seenVariables,
+        );
       }
-      scope = scope.upper;
+      const upper = scope.upper;
+      if (!upper) break;
+      scope = upper;
     }
   }
   if (current.type === "AssignmentExpression") {
@@ -423,29 +521,32 @@ function defaultObjectExpressions(
     ];
   }
   if (current.type === "SequenceExpression") {
-    return defaultObjectExpressions(
-      current.expressions.at(-1),
-      sourceCode,
-      seenVariables,
-    );
+    const lastExpression = current.expressions.at(-1);
+    if (!lastExpression) return [];
+    return defaultObjectExpressions(lastExpression, sourceCode, seenVariables);
   }
   return [];
 }
 
+/** @param {TypedRuleContext} context */
 export function namedParameterContractListeners(context) {
   const sourceCode = context.sourceCode;
+  /** @param {AstTypeNode} node */
   function inspectInlineParameterType(node) {
+    /** @type {AstNode} */
     let current = node.parent;
-    while (current && current.type !== "TSTypeAnnotation") {
+    while (current.type !== "TSTypeAnnotation") {
       if (current.type === "TSFunctionType") return;
       if (scalarTypeBoundaryTypes.has(current.type)) return;
+      if (current.type === "Program") return;
       current = current.parent;
     }
-    if (current && parameterOwnsTypeAnnotation(current)) {
+    if (parameterOwnsTypeAnnotation(current)) {
       context.report({ node, messageId: "namedParameterType" });
     }
   }
 
+  /** @param {import('@typescript-eslint/types').TSESTree.TSTypeReference} node */
   function inspectReferencedParameterType(node) {
     const name = referencedTypeName(node.typeName);
     if (
@@ -470,6 +571,7 @@ export function namedParameterContractListeners(context) {
     }
   }
 
+  /** @param {import('@typescript-eslint/types').TSESTree.TSTypeQuery} node */
   function inspectTypeQueryParameter(node) {
     if (
       referencedTypeIsParameterContract(node) &&
@@ -479,6 +581,7 @@ export function namedParameterContractListeners(context) {
     }
   }
 
+  /** @param {import('@typescript-eslint/types').TSESTree.TSImportType} node */
   function inspectImportTypeParameter(node) {
     if (!node.qualifier || !referencedTypeIsParameterContract(node)) return;
     const name = referencedTypeName(node.qualifier);
@@ -487,6 +590,7 @@ export function namedParameterContractListeners(context) {
     }
   }
 
+  /** @param {import('@typescript-eslint/types').TSESTree.AssignmentPattern} node */
   function inspectParameterDefault(node) {
     const lookup = enclosingParameterBinding(node);
     if (lookup.kind === ParameterBindingLookupKind.NotFound) return;
