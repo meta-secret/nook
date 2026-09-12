@@ -461,12 +461,7 @@ class ExtensionPairingIdentity {
     response: unknown,
   ): ExtensionSessionStatusAvailability {
     try {
-      const status: ExtensionSessionStatusAvailability = Reflect.apply(
-        decode_extension_session_status_response,
-        globalThis,
-        [response],
-      )
-      return status
+      return decode_extension_session_status_response(response)
     } catch {
       return ExtensionSessionStatusAvailability.Unavailable
     }
