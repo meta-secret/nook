@@ -486,24 +486,11 @@ When `Option<T>` is still acceptable (do not force an enum):
 
 ## Validation
 
-Development-core workers run the smallest focused Rust domain tests that prove
-the changed behavior. They also run typed bridge tests when the WASM contract
-changes. Browser E2E does not replace this domain proof.
-
-For implementation tasks, run `task format`. Format every allowed Rust or
-development-core Cortex file the worker changed. Inspect that diff and return
-one coherent commit. Do not push or mutate external delivery state.
-
-Gizmo continues from the commit and runs `task loom:pre-push`. If its
-formatter changes development-core-owned content, Gizmo returns that diff to
-development core for a fresh formatted commit instead of committing the
-formatter output.
-
-- Once the gate passes, Gizmo pushes the head.
-- Run a focused Rust or web task while the head is not validation-ready.
-- Run complete exact-head validation when the head is ready.
-- Gizmo uses `task pr:validate` for complete validation.
-- Gizmo owns readiness and merge.
+Development-core workers author focused Rust domain tests and typed bridge
+tests when the WASM contract changes. Browser E2E does not replace domain proof.
+Execute these tests in the dev manager's slow stage. Return a scoped commit
+after permitted lightweight feedback. Feature acceptance requires remote
+build-only evidence and code/security review.
 
 `task preflight` rejects known TypeScript domain mirrors. It also rejects local
 aliases of generated `Nook*` types and same-argument WASM forwarding functions.

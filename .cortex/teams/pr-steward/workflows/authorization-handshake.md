@@ -1,72 +1,59 @@
 # Pull-Request Authorization Handshake
 
-Gizmo Prime authorizes each PR Steward operation through an ephemeral active
-harness handoff. The handoff is not a scheduler, journal, retry queue, or
-second delivery state machine.
+## Authority
 
-Functional Team Agents send PR-information requests to Gizmo.
-Gizmo supplies the operation packet below and forwards returned evidence to
-the requester. A worker request alone does not authorize Steward execution.
+PR Steward executes one bounded operation under a feature Gizmo or dev-manager
+packet. The controller owns policy and verdicts. The active harness carries
+the packet. It creates no persistent scheduler, journal, or retry service.
+
+Follow [dev delivery](../../../gizmo/architecture/dev-delivery.md).
 
 ## Required actions
 
-1. **Send one operation packet.** Gizmo names the repository, target, requested
-   operation, current scope, and required evidence.
-   - PR operations include the base ref, branch, PR number, and expected head.
-   - Repository or workflow-run operations name the repository or run identity.
-     Do not invent a PR or head when neither applies.
-   - Workbench publication names the exact parent-authored source, destination,
-     commit message, and expected blob SHA when replacing a mutable record.
-   - GitHub-backed Task, Loom, and script invocations require the same packet.
-   - A reactive observation packet covers one check-observation iteration.
-     It includes initial, relevant-event, and five-minute-inactivity snapshots.
-     This permits no mutation or readiness verdict.
-2. **Confirm the live target.** PR Steward verifies the named target before
-   acting. For PR operations, re-read the pull request and exact head.
-   - A mismatch is a blocker. PR Steward never infers authority for a new
-     head, branch, repository, or operation.
-3. **Perform the named operation.** PR Steward returns the observed head SHA,
-   result, URLs or run identifiers, and any blocker.
-4. **Evaluate the result.** Gizmo interprets technical findings, routes
-   implementation work, and decides the next operation.
-5. **Send a separate merge packet.** The packet names the exact head.
-   It confirms that readiness evidence is complete.
-   It confirms that required checks and deployments are complete.
-   It confirms that review dispositions are complete.
-   It confirms that functional and security verdicts are complete.
-6. **Send a separate admin-merge packet for the path-excluded route.** Gizmo
-   may use this route only when the pull-request path policy intentionally
-   excludes the ruleset-required preview deployment.
-   - The packet records the path-policy evidence.
-   - The packet records that every applicable exact-head check passed.
-   - The packet records a passing `task pr:ready PR=<number>` result.
-   - The packet records that no applicable check, deployment, or review is
-     failed or unresolved.
-7. **Recheck merge preconditions.** PR Steward compares the live remote state
-   with the merge packet.
-   - Any mismatch stops the merge and returns a blocker.
-   - An admin packet must still prove the path exclusion and every condition
-     in step 6.
-8. **Verify merge completion.** After the authorized squash merge, PR Steward
-   reports the remote merge state and resulting commit to Gizmo.
+- **Packet identity**
+  - Name the controller, repository, operation, and required evidence.
+  - Revision-dependent operations name the expected source SHA.
+  - PR operations name the base, head branch, PR number, and expected head.
+  - Run operations name the run and attempt.
+  - Workbench publication names exact content, destination, and expected blob SHA.
+- **Allowed task authority**
+  - A feature Gizmo authorizes remote build-only execution and bounded local integration.
+  - A dev manager authorizes snapshot publication, slow PR checks, and fast-forward promotion.
+  - A landing packet names the feature SHA and assigned local dev checkout.
+  - The landing tool verifies positive build evidence and serializes integration.
+  - A publication packet names the selected committed local dev snapshot.
+  - A promotion packet names the frozen tested SHA and complete slow evidence.
+  - Promotion also requires review/security verdicts and remote main ancestry.
+- **Credential boundary**
+  - The already authorized ADMIN identity may execute guarded publication.
+  - This role boundary is policy-enforced rather than credential isolation.
+  - A dedicated GitHub App is optional hardening.
+  - Required checks remain mandatory regardless of credential capability.
+
+## Procedure
+
+1. Confirm the live repository, revision, and applicable target against the packet.
+   - Any mismatch stops the operation.
+2. Invoke only the named task or GitHub operation.
+   - Shared-branch mutation is limited to the three bounded dev tasks.
+   - Tooling enforces locks and revision guards.
+3. Return observed SHAs, run identifiers, result URLs, and blockers.
+4. Let the controller decide whether a fresh operation is authorized.
+5. For promotion, verify remote main equals the tested SHA.
+6. Read actual GitHub PR status and return it separately from the ref update.
 
 ## Prohibited actions
 
-- PR Steward must not treat a prior packet as permission for a new operation.
-- PR Steward must not merge because a check appears green while another
-  required precondition is unresolved.
-- PR Steward must not use `--admin` when an applicable check, deployment, or
-  review is failed or unresolved.
-- PR Steward must not invent a preview deployment or treat an absent
-  deployment as path-excluded without packet evidence.
-- PR Steward must not classify review findings or waive functional or security
-  acceptance.
-- PR Steward must not persist packet state or schedule later work.
+- Do not infer authority for another SHA, branch, repository, or operation.
+- Do not grant Steward general shared-branch Git authority.
+- Do not waive checks, security verdicts, or unresolved review findings.
+- Do not use automatic administrator fallback after a rejection.
+- Do not squash, rebase, force-push, or create a promotion merge commit.
+- Do not manually close a PR as a substitute for merged status.
+- Do not broaden scope or create a scheduler when an operation fails.
 
-## Validation
+## Evidence
 
-The packet and returned evidence identify the same repository and target.
-Revision-dependent operations identify one exact head.
-Every mutation has an explicit parent authorization.
-An admin merge has a separate packet with path-policy evidence.
-Gizmo retains the readiness, merge, and completion verdicts.
+The packet and result must identify the same target. Report protection
+rejections visibly. A successful push alone does not establish GitHub PR
+completion. The controller owns the final verdict.

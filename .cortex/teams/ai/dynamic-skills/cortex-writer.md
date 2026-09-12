@@ -151,13 +151,9 @@ Checklist for every new or edited `.cortex` sentence:
 
 ## Mechanical lint
 
-The normal pre-push path checks changed Cortex Markdown automatically.
-
-```bash
-task loom:pre-push
-```
-
-This changed-file gate has bounded scope.
+The changed-file density gate has bounded scope. Its implementation semantics
+are described below. Execute documentation audits in the manager's slow PR
+stage; this description grants no local pre-push permission.
 
 - It compares the working branch with its merge base against `origin/main`.
 - A pure rename within persistent Cortex keeps its source ancestry.
@@ -260,22 +256,11 @@ Full rewritten example:
 
 ## Validation
 
-- Review the diff for sentence length and branching clauses.
-  - A reviewer should be able to extract each rule without re-parsing a
-    compound sentence.
-- For docs-only captures:
-  - run link checks; and
-  - self-review against the checklist above.
-- Run the consistency GC in
-  [Cortex consistency](cortex-consistency/SKILL.md) for the touched topic.
-- For implementation tasks that include `.cortex` edits:
-  1. run required formatters and commit every allowed AI source or Cortex
-     mutation in the coherent handoff;
-  2. have Gizmo continue from the direct Team Agent commit and run
-     `task loom:pre-push`;
-  3. return any new formatter mutation in AI-owned content for a fresh AI
-     commit before Gizmo reruns hygiene and pushes; and
-  4. Gizmo authorizes PR Steward to dispatch validation for the pushed head.
-     Use focused remote evidence until the head is validation-ready.
-     Dispatch complete exact-head validation immediately when it is ready.
-- Gizmo obtains fresh exact-head remote evidence after every replacement push.
+1. Read the changed prose for clarity, hierarchy, and policy meaning.
+2. Commit the complete scoped authoring iteration.
+3. Return evidence and unresolved dependencies to the feature Gizmo.
+4. Execute mechanical link, structure, and consistency checks in the manager's
+   slow PR stage under [dev delivery](../../../gizmo/architecture/dev-delivery.md).
+
+Do not run local Loom tests, audits, broad formatting, or pre-push checks.
+Feature compilation does not establish successful documentation audit results.

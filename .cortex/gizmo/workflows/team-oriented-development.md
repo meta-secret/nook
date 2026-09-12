@@ -3,7 +3,9 @@
 ## Purpose
 
 Team-oriented delivery routes work to functional owners while keeping one
-simple shared-branch sequence.
+serialized integration sequence within each feature. Concurrent features have
+separate Gizmos and worktrees. The
+[dev delivery contract](../architecture/dev-delivery.md) owns stage boundaries.
 
 ## Planning
 
@@ -25,10 +27,11 @@ simple shared-branch sequence.
 2. Create one child worktree for every task in the group from the parent
    feature worktree's current commit.
 3. Start every task in its issued child worktree.
-4. Let each Team Agent implement and run concurrency-safe focused checks.
+4. Let each Team Agent implement and author meaningful tests.
+   - Permit only scoped rustfmt and bounded inexpensive TS diagnostics locally.
 5. Require every writer to commit its complete scoped iteration.
 6. Verify each child commit and integrate it into the parent feature worktree.
-7. Run deferred checks serially on the stable parent head.
+7. Push the stable feature head and request remote build-only execution via Steward.
 8. Require each terminal handoff to enumerate all iteration commits.
    - Each entry names its SHA, outcome, evidence, and unresolved blockers.
 9. Verify each commit's changed paths and evidence.
@@ -60,9 +63,10 @@ when no dependency remains between them.
 - Route every finding to the team that owns the affected change.
 - Give fixes fresh child worktrees from the current parent frontier and integrate
   accepted commits through the same parent sequence.
-- Team Agents run focused implementation checks.
-- Gizmo runs or authorizes shared pre-push and exact-head validation.
-- Gizmo owns PR policy, review dispositions, readiness and merge verdicts.
+- Team Agents author tests for the manager's slow stage.
+- Gizmo requests remote compilation and owns feature review dispositions.
+- Gizmo authorizes Steward's serialized local integration after feature acceptance.
+- The manually run dev manager owns publication and slow PR validation.
 - PR Steward performs authorized pull-request metadata, review observation,
   validation, readiness-evidence, merge, and merge-verification mechanics.
 
@@ -84,11 +88,11 @@ The technical result is ready when:
 - no commit included unrelated pre-existing changes;
 - acceptance commands were concurrency-safe or ran serially on a stable
   committed head;
-- only one writer mutated the Git index or committed at a time;
+- only one writer mutated each worktree's Git index at a time;
 - every writer committed its complete scoped iteration;
 - terminal handoffs enumerated every iteration SHA, outcome, evidence, and
   unresolved blockers;
 - combined provider-consumer evidence passed;
 - all accepted changes are already on the shared branch;
-- focused tests passed; and
+- remote compilation passed for the feature SHA; and
 - the branch is ready for Gizmo's external delivery sequence.

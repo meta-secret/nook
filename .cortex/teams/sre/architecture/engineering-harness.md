@@ -91,8 +91,10 @@ PR delivery helpers live in `agentic-ai/ci-agent`.
 
 - Nook has no event-driven PR auto-merger.
 - Workflows do not merge blindly from check events.
-- The task-owning agent runs the readiness audit.
-- The agent squash-merges immediately when the audit passes.
+- The dev manager requires full slow PR checks and review/security acceptance.
+- Guarded promotion must fast-forward main to the tested dev SHA.
+- This requires the integrated publication tooling defined by the
+  [dev delivery contract](../../../gizmo/architecture/dev-delivery.md).
 
 Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace the audit binary between build and readiness execution.
 

@@ -13,9 +13,8 @@ finding when GitHub supports one. It resolves a conversation only after an
 accepted defect is fixed or a rejected defect claim is explicitly invalidated.
 A clarification-needed finding remains unresolved.
 
-This skill does not initiate reviews. The PR delivery workflow dispatches
-complete validation first, then requests one exact-head Codex review without
-waiting. Review collection and hosted checks proceed concurrently, and their
+This skill does not initiate reviews. In the manager's slow dev PR cycle,
+existing validation dispatch precedes an opted-in review request. Review collection and hosted checks proceed concurrently, and their
 findings form one repair batch. Codex is the sole automatic provider. Cursor
 Bugbot remains inactive.
 
@@ -226,11 +225,9 @@ Does not apply to:
 - [ ] Only confirmed security and authority violations trigger fail-closed
       action.
 - [ ] The team agent returns focused proof and any no-change rationale.
-- [ ] Gizmo continues from verified commits and runs
-      `task loom:pre-push PR=<number>` only when an accepted fix or failed-check
-      repair changed files.
-- [ ] Gizmo authorizes PR Steward to run useful focused jobs and trigger
-      complete PR validation.
+- [ ] Gizmo pushes verified repair commits and requests remote build-only execution.
+- [ ] The dev manager requests complete slow validation after local dev
+      integration and publication of the replacement snapshot.
 - [ ] Gizmo pushes changed code or documentation only when the head changed.
 - [ ] A batch with no accepted fix or failed-check repair does not create
       replacement-head work.

@@ -20,8 +20,8 @@ It is not a free-form task diary.
 1. Gizmo starts an out-of-tree scratch event log when PR-bound work begins.
 2. Gizmo appends every local lightweight execution, focused remote run, complete
    validation run, retrigger, and merge attempt as it happens.
-3. Gizmo authorizes PR Steward to squash-merge the implementation PR after the
-   readiness verdict succeeds.
+3. The dev manager authorizes Steward's guarded fast-forward promotion after
+   full slow validation and required review/security acceptance.
 4. Gizmo authorizes PR Steward to assemble `stats/ai-agent/<pr-number>.yaml`
    with Loom after merge.
 5. Gizmo compares the record with one or two recent comparable records.
@@ -172,7 +172,7 @@ Required top-level keys:
 - `test_inventory.total` must equal the sum of `by_type`.
 - `test_inventory.head_sha` must match `source_pr.head_sha`.
 - `source_pr.head_sha` is the final PR head. `source_pr.merge_sha` is the merge
-  commit. They must not be conflated after squash merge.
+  commit. Keep feature, local integration, and tested dev SHAs distinct.
 - Review and validation summary values must match their detailed per-head
   evidence.
 - Review latency must derive from its event timestamps. Every validation cycle

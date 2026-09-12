@@ -1,5 +1,13 @@
 # CI / GitHub Actions Pipeline
 
+## Agent delivery applicability
+
+Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
+feature compilation and the manually run dev manager's slow PR cycle.
+Runtime workflow details below do not grant permission to run local tests or
+feature-stage slow checks. Paused Hive remains outside the manual manager
+lifecycle and must not be reactivated by this delivery change.
+
 ## Overview
 
 System of record for how Nook validates changes in GitHub Actions. Agents must understand this split before changing workflows or e2e.
@@ -694,8 +702,8 @@ those exact-head gates.
   - It creates disposable external-provider state.
   - It requires provider secrets.
 - No workflow merges the harness-owned PR from a check event.
-  - Gizmo runs the standard readiness audit.
-  - Gizmo squash-merges when readiness succeeds.
+  - The dev manager requires all slow checks and review/security verdicts.
+  - Promotion requires guarded fast-forward publication of the tested dev SHA.
 
 **One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
 
@@ -734,8 +742,8 @@ git fetch origin main
 .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
 ```
 
-The integrated `task loom:pre-push` call combines this contract with
-unconditional host formatting — see
+The manager's slow PR stage runs this contract. Local feature formatting stays
+bounded — see
 [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
 When re-enabled, the `ui-demo` Playwright project runs Chromium headlessly at
@@ -787,9 +795,8 @@ The Playwright project catalog and command grouping live in
 
 ## Task commands
 
-Product checks run remotely in containerized jobs. The mandatory integrated
-pre-push hygiene reuses one content-addressed tool-only formatter image across
-worktrees. The root
+Product checks run remotely in the dev manager's slow PR cycle. Feature
+feedback requires a separate build-only capability. The root
 `Taskfile.yml` is the repo entrypoint; app commands are included through
 `nook-app/Taskfile.yml`, with
 cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
@@ -798,9 +805,7 @@ cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
 `nook-web-extension/` / `nook-platform/`:
 
 ```bash
-# Gizmo-required local action after integration and before every push; route
-# team-owned formatter diffs back to their owner and repeat until clean
-task loom:pre-push                  # host-applied format + UI demo contract
+# Feature-local feedback: scoped rustfmt and bounded TS diagnostics only
 
 # Optional local mirrors (humans / deep debug — not agent merge gates)
 task check                          # format, clippy, unit tests, wasm-bindgen tests, web build (dev/no-opt wasm)
@@ -968,18 +973,10 @@ authenticator-domain to 90 percent.
 - Ordinary Team Agents format every changed file in their allowed scope and
   return coherent exact committed handoffs. They do not push, dispatch remote
   work, or operate external PR/check state.
-- Gizmo continues from the Team Agent commit and runs `task loom:pre-push`.
-- Gizmo inspects every host-applied change.
-- If formatting changes team-owned content, Gizmo returns that diff to its
-  owner for a fresh commit.
-- Gizmo repeats pre-push and pushes only after it is clean.
-- Every pushed head receives remote evidence immediately. For a
-  non-validation-ready head, Gizmo uses `task remote TASK_NAME=<name>` for at
-  least one relevant focused command; `TASK_NAMES=<a>,<b>` may reuse one job for
-  a relevant focused batch.
-- When the pushed branch is validation-ready, Gizmo immediately runs
-  `task pr:validate PR=<number>` or adds `FULL_E2E=1`. The command dispatches
-  repository-owned checks without requesting review by default.
+- Feature Gizmos request repeatable remote build-only evidence.
+- The build-only command contract must be integrated before feature acceptance.
+- Only the dev manager's dev-to-main cycle uses the full slow PR workflow.
+- Preserve the existing e2e opt-ins and security-required focused checks.
 - A final coherent head may add `CODEX_REVIEW=1` to request one idempotent
   exact-head Codex review without waiting.
 - A requested review runs concurrently with hosted checks.

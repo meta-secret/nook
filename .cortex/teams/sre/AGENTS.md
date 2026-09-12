@@ -2,6 +2,13 @@
 
 ## Mission
 
+Apply the [dev delivery stages](../../gizmo/architecture/dev-delivery.md).
+Author meaningful tests in feature work, but execute them only in the manager's
+slow PR stage. Feature validation is remote build-only execution only. Local
+feedback is limited to scoped rustfmt and bounded inexpensive TS diagnostics
+or formatting. Older instructions to run Loom tests, audits, preflight, or
+broad pre-push commands are not local or feature-stage permissions.
+
 SRE owns Nook's build, validation, cluster, deployment, and operational
 infrastructure.
 

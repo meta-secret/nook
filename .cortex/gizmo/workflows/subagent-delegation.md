@@ -9,6 +9,10 @@ the active harness.
 
 ## Rules
 
+- Follow [dev delivery](../architecture/dev-delivery.md) for stage boundaries.
+- Author tests without executing them in the feature stage.
+- Local feedback is limited to scoped rustfmt and bounded TS diagnostics.
+- Gizmo requests remote build-only execution through PR Steward.
 - Every Team Agent task has one team identity. A PR Steward task uses the
   separate `pr-steward` operational context and remains a child task of Gizmo
   for policy and authorization.
@@ -82,13 +86,13 @@ the active harness.
    commit.
 8. Start that wave through the active harness with each worker in its issued
    child worktree.
-9. Let each Team Agent implement and run concurrency-safe focused checks.
+9. Let each Team Agent implement and author behavior-focused tests.
 10. Require each worker to commit its complete iteration in its child worktree.
     - The worker stages only its allowed files.
     - The commit must be directly after the child baseline.
 11. Verify each child commit and integrate it into the parent feature worktree
     in a serialized integration turn.
-12. Run deferred checks serially after the parent has a stable committed head.
+12. Request remote compilation after the parent has a stable committed head.
     - Route any tracked output to its assigned owner.
     - Require that owner to commit the output as a complete new iteration.
 13. Request one terminal handoff from each writer.
@@ -177,7 +181,7 @@ Before accepting Team Agent work, verify:
 - no commit included unrelated pre-existing changes;
 - acceptance command read, write, and output scopes were concurrency-safe;
 - unsafe checks ran serially on a stable committed head;
-- only one writer mutated the Git index or committed at a time;
+- only one writer mutated each worktree's Git index at a time;
 - the parent feature worktree contains every accepted result;
 - every child worktree was created from the recorded parent frontier;
 - each child worktree was clean after its handoff and was cleaned up only after
@@ -189,7 +193,7 @@ Before accepting Team Agent work, verify:
   blockers;
 - later iterations inspected the last one or two relevant commits and diffs;
 - provider-consumer evidence passed on the combined branch;
-- focused acceptance checks passed;
+- remote build-only acceptance passed for the feature SHA;
 - workers requested missing PR evidence through Gizmo without direct GitHub
   access or monitoring; and
 - Gizmo still owns every external delivery decision and authorization. Any PR

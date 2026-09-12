@@ -1,5 +1,13 @@
 # Quality and Release
 
+## Agent delivery applicability
+
+Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
+feature compilation and the manually run dev manager's slow PR cycle.
+Runtime workflow details below do not grant permission to run local tests or
+feature-stage slow checks. Paused Hive remains outside the manual manager
+lifecycle and must not be reactivated by this delivery change.
+
 ## Overview
 
 Use this workflow for quality, CI, and deployment changes.
@@ -154,7 +162,7 @@ Use this workflow for quality, CI, and deployment changes.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
 10. **CI policy** — see subsections below. Gizmo follows
-    [the pull request pipeline](../../../gizmo/workflows/pull-requests.md#agent-pipeline).
+    [the pull request pipeline](../../../gizmo/workflows/pull-requests.md).
 
     #### Workflows and runners
     - Trusted native Rust and Rust ecosystem PR jobs and Main build producers
@@ -478,19 +486,14 @@ Use this workflow for quality, CI, and deployment changes.
     - Hosted jobs restore the same verified Zot refs read-only.
 
 11. **GitHub Actions agent execution:**
-    - Team Agents return formatted commits without pushing. Gizmo continues from them,
-      runs pre-push, pushes, and owns remote validation.
-    - Gizmo uses focused `task remote` when faster than complete validation.
-    - Focused tasks are not a prerequisite for complete validation.
-    - Gizmo starts complete PR checks only with `task pr:validate PR=<number>`.
-    - Do not run `task check`, `task ci:pr`, full suites, builds, or e2e on the agent machine.
-    - Local mirrors remain available to humans.
-    - See [remote execution](remote-execution.md),
-      [mission delivery](../../../gizmo/workflows/mission-delivery.md), and
-      [pull request validation](../../../gizmo/workflows/pull-requests.md#5-hosted-iteration-and-explicit-validation).
-12. Gizmo proves the final head with green hosted checks. After a complete-gate
-    failure, the Team Agent returns a formatted fix commit; Gizmo continues from it,
-    pushes, and re-validates.
+    - Feature teams author tests and return scoped commits.
+    - Feature feedback requires remote build-only capability.
+    - Missing capability is a blocker, not permission for slow feature checks.
+    - The manually run dev manager owns the full slow dev-to-main PR cycle.
+    - Local tests, Docker work, compilation, and broad pre-push are prohibited.
+    - See [dev delivery](../../../gizmo/architecture/dev-delivery.md).
+12. After a slow-stage failure, delegate repair through the normal feature path.
+    Select a replacement snapshot only after the prior slow attempt finishes.
 13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
 14. **NEVER pipe a long-running command through `| grep`/`| tail`/`| head`/`| sed` (or any filter).** This is a hard rule, not a suggestion.
     - `grep`/`tail`/`head` **buffer their input until the upstream command exits**.

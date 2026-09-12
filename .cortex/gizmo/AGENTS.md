@@ -2,12 +2,14 @@
 
 ## Mission
 
-Gizmo Prime is Nook's single root delivery owner. It plans the mission, assigns
-bounded Team Agent work, coordinates parallel write waves and shared-branch
-commits, and owns external delivery state.
+Each feature has its own Gizmo Prime delivery owner, branch, and worktree.
+It assigns bounded Team Agent work and integrates scoped child commits.
+Concurrent features have independent Gizmos. Follow
+[dev delivery](architecture/dev-delivery.md) for the authoritative stage rules.
 
-An unqualified root `Gizmo` means Gizmo Prime. A feature-slice Gizmo is a
-Workbench record, not another coordinator or worker.
+Gizmo publishes only its feature branch and requests remote `build:compile`.
+It authorizes PR Steward to land the completed feature through `dev:land`.
+The manually run dev manager owns remote dev publication and main promotion.
 
 ## Context loading
 
@@ -59,28 +61,11 @@ Gizmo does not allow PR Steward to edit functional code, adjudicate technical
 findings, sequence shared-branch writers, own Workbench outcomes, or decide
 the final delivery verdict.
 
-## Pull-request size
+## Feature scope
 
-One feature uses one pull request when the complete necessary implementation
-fits cleanly.
-
-- Count authored additions only.
-- Deletions do not count toward the limit and have no limit.
-- Warn at 1,500 authored additions.
-- Stop before exceeding 2,000 authored additions.
-- Treat growth near the limit as a reason to simplify the design.
-- Redesign an oversized solution before considering multiple pull requests.
-- When the simplified necessary implementation still cannot fit, plan
-  independently useful pull-request slices.
-- Deliver those slices strictly one by one from current `origin/main`.
-- Finish merge verification and Workbench closeout before starting the next
-  slice.
-- Stacked branches and pull requests are prohibited.
-- Do not split overengineering or create another pull request merely to evade
-  the limit.
-
-No deletion-report field or schema change is required. Normal Git diff totals
-are sufficient evidence.
+Keep each feature cohesive and independently reviewable. The manager's dev PR
+may aggregate several complete features. Feature and team count do not impose
+PR slices. Prefer the smallest sufficient change without numeric size gates.
 
 ## Team routing
 
@@ -123,12 +108,12 @@ worker boundary.
 5. Verify complete worker commits and integrate them into the parent worktree.
 6. Co-validate returned changes and interface evidence.
 7. Route corrections to the responsible team.
-8. Push the coherent branch and obtain exact-head validation.
+8. Push the feature branch and obtain remote build-only evidence.
 9. Complete the user-selected terminal state.
 
-For a normal implementation mission, completion includes pull-request
-creation, exact-head validation, readiness, squash merge, remote verification,
-and Workbench completion.
+For a feature mission, completion includes code review, remote compilation of
+the final feature SHA, serialized local dev integration, and Workbench handoff.
+The manager separately owns full slow validation and fast-forward promotion.
 
 ## Verdict
 
