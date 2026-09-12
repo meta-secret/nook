@@ -5,16 +5,16 @@
     readonly tail: number
   }
 
-  import { I18N_KEYS, type I18nKey } from '../../../generated/i18n-keys'
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
-    ExtensionConnectScope,
     ExtensionPairingDeliveryKind,
     type ExtensionConnectRequest,
   } from '$lib/extension/connect'
   import type { VaultState } from '$lib/vault.svelte'
   import { ExtensionVaultApproval } from '$lib/extension/vault-approval'
+  import { ExtensionConsentScopeTranslation } from './extension-connect-consent-state'
 
   let {
     vault,
@@ -31,19 +31,6 @@
   let error = $state('')
   let handoffError = $state('')
   let handoffRejectionReason = $state('')
-
-  function scopeTranslationKey(scope: ExtensionConnectScope): I18nKey {
-    switch (scope) {
-      case ExtensionConnectScope.VaultAccess:
-        return I18N_KEYS.ExtensionConsentScopeVaultAccess
-      case ExtensionConnectScope.PasswordFilling:
-        return I18N_KEYS.ExtensionConsentScopePasswordFilling
-      case ExtensionConnectScope.PasskeyManagement:
-        return I18N_KEYS.ExtensionConsentScopePasskeyManagement
-      case ExtensionConnectScope.SyncProviderCredentials:
-        return I18N_KEYS.ExtensionConsentScopeSyncProviderCredentials
-    }
-  }
 
   const canApprove = $derived(
     vault.isAuthenticated &&
@@ -217,7 +204,7 @@
           class="flex items-center gap-2 rounded-md border border-border/40 bg-background/70 px-3 py-2 text-sm text-foreground"
         >
           <Check class="size-3.5 text-primary" />
-          {vault.t(scopeTranslationKey(scope))}
+          {vault.t(new ExtensionConsentScopeTranslation(scope).key)}
         </li>
       {/each}
     </ul>
