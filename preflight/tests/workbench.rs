@@ -319,6 +319,10 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
     let ownership_skill = RepositoryFixture::repository_root()
         .read(".cortex/gizmo/dynamic-skills/agent-feature-ownership.md");
     let normalized_agent_map = agent_map.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized_coding_workflow = coding_workflow
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
 
     assert!(
         agent_map.contains("gizmo/dynamic-skills/agent-feature-ownership.md")
@@ -328,11 +332,18 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 
     for required in [
         "Treat every other active task as read-only",
-        "current checkout and current branch",
-        "only one write-capable Team Agent at a time",
+        "explicit parent feature/integration worktree",
+        "one child worktree per Team Agent task from the parent frontier",
+        "bounded task/attempt identity",
+        "committed handoff before parent integration",
+        "parent-owned integration/PR policy",
+        "Preserve dependency order",
+        "Grant one commit turn at a time",
+        "Team Agent lifecycle service, scheduler, or Git-state machinery",
+        "persistent PR Steward service, scheduler, or notification journal",
     ] {
         assert!(
-            coding_workflow.contains(required),
+            normalized_coding_workflow.contains(required),
             "coding workflow is missing ownership guard: {required}"
         );
     }
@@ -424,7 +435,6 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
         "File location is evidence of ownership",
         "A team stops at another team's boundary",
         "Security review does not transfer implementation ownership",
-        "Team Agents edit the current shared checkout sequentially",
     ] {
         assert!(
             ownership.contains(required),
