@@ -452,7 +452,7 @@ jobs:
         run: node --test .github/scripts/linear-ui-demo.test.cjs
 
       - name: Test Main build statistics collector
-        run: node --test .github/scripts/main-build-stats.test.cjs
+        run: node --test .github/scripts/main-build-stats.test.mjs
 
       - name: Test Main failure handoff
         run: node --test .github/scripts/main-failure-handoff.test.cjs

@@ -63,11 +63,12 @@ jobs:
           script: |
             const fs = require('node:fs')
             const path = require('node:path')
-            const {
-              buildMainBuildStats,
-              serializeMainBuildStats,
-              validateFile,
-            } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/main-build-stats.cjs`)
+            const { pathToFileURL } = require('node:url')
+            const { MainBuildStats } = await import(
+              pathToFileURL(
+                `${process.env.GITHUB_WORKSPACE}/.github/scripts/main-build-stats.mjs`,
+              ).href,
+            )
 
             const eventRun = context.payload.workflow_run
             const run = (
@@ -126,7 +127,7 @@ jobs:
             const relativePath = `workbench/stats/main-build/${run.id}-attempt-${run.run_attempt}.yaml`
             const outputPath = path.join(process.env.GITHUB_WORKSPACE, relativePath)
             if (fs.existsSync(outputPath)) {
-              validateFile(outputPath, { runId: run.id, runAttempt: run.run_attempt })
+              MainBuildStats.validateFile(outputPath, { runId: run.id, runAttempt: run.run_attempt })
               core.info(`${relativePath} is already present in Nook Workbench`)
               core.setOutput('already-recorded', 'true')
               return
@@ -138,7 +139,7 @@ jobs:
                 .filter((name) => name.endsWith('.yaml'))
                 .flatMap((name) => {
                   try {
-                    return [validateFile(path.join(statsDir, name))]
+                    return [MainBuildStats.validateFile(path.join(statsDir, name))]
                   } catch (error) {
                     core.warning(`Ignoring invalid Main baseline ${name}: ${error.message}`)
                     return []
@@ -146,7 +147,7 @@ jobs:
                 })
               : []
 
-            const record = buildMainBuildStats({
+            const record = MainBuildStats.build({
               run,
               jobs,
               sourcePullRequests,
@@ -155,7 +156,7 @@ jobs:
               recordedAt: new Date().toISOString(),
             })
             fs.mkdirSync(path.dirname(outputPath), { recursive: true })
-            fs.writeFileSync(outputPath, serializeMainBuildStats(record))
+            fs.writeFileSync(outputPath, MainBuildStats.serialize(record))
 
             core.setOutput('already-recorded', 'false')
             core.setOutput('path', relativePath)
@@ -169,7 +170,7 @@ jobs:
           RECORD_PATH: ${{ steps.record.outputs.path }}
           SOURCE_RUN_ATTEMPT: ${{ steps.record.outputs.run-attempt }}
           SOURCE_RUN_ID: ${{ steps.record.outputs.run-id }}
-        run: node .github/scripts/main-build-stats.cjs --validate "$RECORD_PATH"
+        run: node .github/scripts/main-build-stats.mjs --validate "$RECORD_PATH"
 
       - name: Publish metrics to Nook Workbench
         if: steps.record.outputs.already-recorded == 'false'
