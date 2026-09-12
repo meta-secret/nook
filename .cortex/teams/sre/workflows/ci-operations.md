@@ -1,5 +1,13 @@
 # CI Operator and Agent Operations
 
+## Agent delivery applicability
+
+Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
+feature compilation and the manually run dev manager's slow PR cycle.
+Runtime workflow details below do not grant permission to run local tests or
+feature-stage slow checks. Paused Hive remains outside the manual manager
+lifecycle and must not be reactivated by this delivery change.
+
 ## Overview
 
 This authority owns CI storage reclamation, application-log inspection, secrets,
@@ -41,7 +49,7 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
 Full reference: [logging.md § Debugging, troubleshooting, and CI verification](../../../shared/references/logging.md#debugging-troubleshooting-and-ci-verification).
 
 Local `task ci:pr` remains available as an optional warm-cache debug mirror.
-See [pull request validation](../../../gizmo/workflows/pull-requests.md#5-hosted-iteration-and-explicit-validation)
+See [pull request validation](../../../gizmo/workflows/pull-requests.md)
 and [mission delivery](../../../gizmo/workflows/mission-delivery.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
@@ -354,14 +362,12 @@ publication steps. Registry credentials are not used. Prompt:
 
 - GitHub Actions is the agent build/test environment and sole merge-validation
   pipeline.
-- Team Agents format and commit without pushing. Gizmo continues from the commit, runs
-  pre-push, pushes, and owns remote validation.
-- Gizmo starts complete PR validation with `task pr:validate`; an ordinary
-  push does not refresh that gate.
-- Agents do not run local Task mirrors of builds, tests, checks, or e2e.
-  Team Agents return focused fix commits; Gizmo obtains replacement evidence.
-- Interactive development servers and browser sessions may remain local when
-  their persistent state is intrinsic to the investigation.
+- Feature teams author tests and return scoped commits.
+- Feature Gizmos request only the required remote build-only capability.
+- The dev manager alone requests the full slow dev-to-main PR checks.
+- Local tests, Docker work, product compilation, and broad pre-push are prohibited.
+- Missing build-only tooling is a visible runtime prerequisite.
+- Repairs return through the feature path and serialized local dev integration.
 
 ## Agent checklist when touching CI or e2e
 

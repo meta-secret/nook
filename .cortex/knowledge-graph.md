@@ -9,6 +9,10 @@ Use this file only to select one owning context. Do not preload linked graphs.
 
 ## Owning contexts
 
+- [Dev manager](teams/dev-manager/knowledge-graph.md): manually operated dev
+  publication, slow validation, repair delegation, and fast-forward promotion.
+- [Dev delivery architecture](gizmo/architecture/dev-delivery.md): canonical
+  feature compilation, local integration, and dev-to-main contract.
 - [Gizmo Prime](gizmo/knowledge-graph.md): planning, delegation, integration,
   review coordination, Workbench, pull requests, readiness, and merge.
 - [PR Steward](teams/pr-steward/knowledge-graph.md): authorized mechanical

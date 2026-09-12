@@ -11,6 +11,7 @@ Load only the category required for the current delivery stage.
 Use this authority to classify team work and shared delivery state.
 
 - [Engineering team ownership](architecture/team-ownership.md)
+- [Dev delivery](architecture/dev-delivery.md)
 
 ## Dynamic skills
 

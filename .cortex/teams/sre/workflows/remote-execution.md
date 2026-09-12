@@ -19,86 +19,37 @@ ARC runners receive no:
 - Kata runtime.
 
 Untrusted fork and Dependabot lanes remain on GitHub-hosted runners. Agent
-machines remain available for editing, inspection, host-applied formatting, UI
-demos, and interactive servers.
+machines use only the lightweight feedback allowed by the dev contract.
 
-## Two remote surfaces
 
-Nook separates iterative evidence from merge authorization.
+## Feature compilation
 
-1. **Focused remote tasks**
-   - Run through `.github/workflows/remote.yml`.
-   - Provide repeatable debugging evidence.
-   - Do not authorize merge.
-2. **Complete PR validation**
-   - Runs through `.github/workflows/ci.yml` and its reusable PR component.
-   - Activates when Gizmo adds a validation label.
-   - Continues on subsequent commits while that label remains.
-   - Provides the exact-head checks and deployment required for readiness.
+Gizmo publishes its feature branch and authorizes PR Steward to dispatch
+the required remote build-only capability for that exact SHA.
 
-Unlabeled PR pushes do not start complete product validation. A retained
-validation label requests fresh evidence for each subsequent commit.
+- Compile and type-check without tests, coverage, e2e, or preflight.
+- Preserve that boundary through every transitive Task and Docker stage.
+- Do not substitute `rust:ci`, `web:verify`, or `loom:verify`.
+- Return positive compilation evidence for local integration.
 
-Every pushed head gets remote evidence immediately: complete validation when
-ready, or at least one relevant focused task otherwise.
+## Slow dev PR validation
 
-Before spending hosted validation on an expensive focused remote task, verify
-that the branch contains the current `origin/main`.
+The manually started dev manager authorizes Steward to publish the selected
+snapshot and run the full existing PR checks. Follow
+[dev delivery](../../../gizmo/architecture/dev-delivery.md).
 
-## Focused remote tasks
+- Freeze origin/dev during validation and promotion.
+- Check out the captured dev SHA in every job.
+- Preserve e2e opt-ins and security-required focused checks.
+- Use native concurrency with cancellation disabled and one pending slot.
+- Do not use per-push path reductions or an automatic dev-push slow pipeline.
+- Delegate failures back through the feature path.
+- Promote only through guarded fast-forward promotion after the complete slow verdict.
 
-Dispatch the browser-free PR web verification:
+## Runner and task reference
 
-```bash
-task remote TASK_NAME=web:verify
-```
-
-This selector prepares WASM without native Rust tests. It runs the existing
-web checks, bundled JavaScript tests, lint, and production builds.
-The standalone job has a ten-minute limit. Batched `web:verify` execution
-uses the same task limit. The inner verification stage stops after five
-minutes to leave time for runner cleanup.
-
-Dispatch one Kubernetes-native browser task:
-
-```bash
-task remote TASK_NAME=web:e2e
-```
-
-Dispatch a focused Kubernetes-native browser task. The project and spec set
-are required; the grep expression is optional and is passed to Playwright as
-an argv value:
-
-```bash
-task remote TASK_NAME=web:e2e:debug \
-  E2E_PROJECT=stable \
-  E2E_SPECS=connect.spec.ts,login-unlock-flow.spec.ts \
-  E2E_GREP='exact test title'
-```
-
-Focused E2E debugging is remote-only.
-
-The remote job passes the requested Task name and Playwright selectors into
-the browser image. Malformed task or selector input fails in Task/Playwright.
-Failure traces are retained under the remote E2E artifact.
-
-Dispatch one ARC-native Rust task:
-
-```bash
-task remote TASK_NAME=rust:ci
-```
-
-Dispatch the complete Loom suite on the exact pushed head:
-
-```bash
-task remote TASK_NAME=loom:verify
-```
-
-Reuse one ARC job for a Kubernetes-native batch:
-
-```bash
-task remote TASK_NAMES=preflight,rust:ci
-```
+The testing selectors below belong to slow validation or separately authorized
+operations. Their existence never permits feature-stage test execution.
 
 Routing rules:
 
@@ -179,79 +130,3 @@ Every dispatch requires:
 - a clean worktree;
 - a branch present on `origin`; and
 - a remote branch SHA equal to local `HEAD`.
-
-## Loom validation boundary
-
-The root [team worker contract](../../../AGENTS.md#team-worker-contract) owns
-agent-local Loom execution and handoff behavior.
-
-- This remote surface implements its hosted full-suite boundary.
-- `task remote TASK_NAME=loom:verify` binds the full suite to the exact pushed
-  head.
-- The hosted result does not replace complete PR validation or readiness.
-
-## Explicit complete PR validation
-
-When the integrated pushed head is coherent, Gizmo runs:
-
-```bash
-task pr:validate PR=<number>
-```
-
-Use `FULL_E2E=1` when the change needs the Main-equivalent browser suites.
-
-Before the initial complete PR validation dispatch, verify that the branch
-contains the current `origin/main`. Do not spend hosted validation on a stale
-base.
-
-Complete validation:
-
-- binds every result to the exact PR head;
-- runs repository-owned merge gates;
-- requests no review by default;
-- may add `CODEX_REVIEW=1` on a final coherent head to request one idempotent
-  exact-head Codex review without waiting;
-- proves preview deployment when required; and
-- becomes stale after any later push.
-
-A new PR head or an explicit base-ref retarget invalidates prior remote
-evidence.
-
-Focused task success never replaces complete validation.
-
-## Failure loop
-
-When a remote task or complete check fails:
-
-1. Inspect the exact job log.
-2. Identify the first failing product or infrastructure boundary.
-3. Obtain and integrate the responsible Team Agent's formatted exact fix.
-4. Run pre-push, returning any team-owned formatter diff, until clean.
-5. Push, then immediately validate when ready or run relevant focused proof.
-
-Treat a transient unchanged-head registry or BuildKit read failure as
-infrastructure evidence. Replay the unchanged head before changing product code.
-
-## Merge boundary
-
-A PR is ready only when `task pr:ready PR=<number>` succeeds for the current
-head. This command is the final read-only gate.
-
-Readiness requires:
-
-- successful required exact-head checks;
-- successful required deployment;
-- GitHub reports the PR as mergeable;
-- no unresolved actionable review thread or unhandled feedback; and
-- a clean Cortex session directory.
-
-Merge-time readiness does not require a current base. A later advance of
-`main` may leave the PR behind without invalidating successful exact-head
-evidence or requiring a rebase or restart solely for freshness.
-
-Gizmo then squash-merges the PR.
-
-Ordinary delivery stops at the merge boundary. Verify the resulting Main state
-only when the user requests live verification or the task owns a Main-failure
-repair. Hive repairs retain their separate replacement-Main verification
-contract.

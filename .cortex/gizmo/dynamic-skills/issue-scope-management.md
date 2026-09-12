@@ -50,26 +50,22 @@ to generate bookkeeping.
 3. Treat every other active task as read-only.
 4. Update the existing record or create a focused non-duplicate.
 5. Bound the work:
-   - Record a non-negative authored-additions estimate at or below 2,000 for
-     every PR. Deletions do not count and have no limit.
+   - Record a scope estimate for reviewability without a numeric PR gate.
    - Keep each issue inside one cohesive module, package, layer, or
      responsibility.
    - Keep acceptance criteria independently observable and testable in that PR.
    - Copy each slice's stable Gizmo ID into its canonical `gizmo_id` frontmatter.
-   - Simplify and redesign before creating a multi-PR sequence.
-   - Use sequential PRs only when necessary scope still exceeds 2,000 additions.
-   - Link every later issue to its immediate predecessor.
-   - Do not stack, rebuild, or replace an oversized PR.
-   - Stop before review work exceeds 2,000 authored additions.
+   - Link actual dependencies between features.
+   - Keep independent features in separate Gizmo worktrees.
 6. Link the parent feature, dependencies, historical issue context, and Nook
    PR.
 7. Publish a worklog before completion or blocked handoff.
 8. Re-open Workbench `main` and verify links and state.
 
-Implement only the first ready slice. Do not ready or implement its successor
-until the predecessor is squash-merged, remotely verified, and closed out.
+Independent features may proceed concurrently. Land completed features through
+serialized local dev integration under [dev delivery](../architecture/dev-delivery.md).
 
 ## Validation
 
-Run `node scripts/validate.mjs` in a Workbench checkout and inspect the rendered
-Markdown on GitHub. Full workflow: [workflows/issues.md](../workflows/issues.md).
+Run record validation in the manager's slow stage. PR Steward inspects published
+records under an explicit packet. Full workflow: [issues](../workflows/issues.md).

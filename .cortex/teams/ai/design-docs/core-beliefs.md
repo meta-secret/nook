@@ -45,22 +45,10 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Docker tasks live in `nook-app/nook-platform/docker/Taskfile.yml` and `nook-app/nook-web/docker/Taskfile.yml`.
 - Web-family tasks live in `nook-app/nook-web/Taskfile.yml` and `nook-web-extension/Taskfile.yml`.
 - Agents do not run raw compiler, bundler, or environment commands.
-- Gizmo uses `task loom:pre-push` as the only required local pre-push hygiene,
-  then promptly pushes a coherent shared-branch head. Team workers run required
-  formatters and commit every mutation in their allowed source or Cortex paths.
-- Gizmo may commit parent-owned delivery state. It routes formatter
-  mutations in team-owned content back to that team for a fresh formatted
-  commit, then continues from it and reruns pre-push hygiene.
-- Every pushed head immediately selects remote evidence. A head that is not
-  validation-ready requires at least one relevant focused `task remote` job.
-- Gizmo authorizes PR Steward to dispatch `task pr:validate` when the pushed
-  head is ready. Focused jobs are optional on that path.
-- Every replacement push requires fresh exact-head remote evidence.
-- They do not add broad local builds, tests, e2e, container product gates, or
-  duplicate local mirrors before push.
-- They use local `task web:dev` only for interactive development state.
-- **Containerized Toolchain:** All compiles, tests, and package installs run inside Docker.
-- This ensures environment parity between the host machine and GitHub Actions CI.
+- Use remote build-only execution for feature feedback.
+- Author behavior tests and execute them in the manager's slow PR stage.
+- Local feedback permits scoped rustfmt and bounded inexpensive TS diagnostics.
+- Follow the [dev contract](../../../gizmo/architecture/dev-delivery.md).
 
 ## 5. Pay Down Tech Debt Continuously
 
@@ -80,57 +68,18 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 
 - Report the outcome once with essential evidence and unresolved blockers.
 - Keep elapsed time in required delivery records unless the user requests it.
-- See [pull request task completion](../../../gizmo/workflows/pull-requests.md#10-task-completion-report).
+- See [pull request task completion](../../../gizmo/workflows/pull-requests.md#promotion-and-completion-procedure).
 
-## 8. Default to the Coding Bro Pipeline
+## 8. Deliver Through Dev
 
-- **Every implementation mission** follows
-  [mission delivery](../../../gizmo/workflows/mission-delivery.md).
-- Responsible team agents own implementation and scoped fixes.
-- **Gizmo owns delivery control.**
-  - It owns delivery planning.
-  - It assigns Team Agents.
-  - It coordinates parallel write waves.
-  - It serializes shared-branch commits.
-  - It coordinates review and validation.
-  - It decides readiness and merge.
-- The delivery pipeline has these ordered steps:
-  1. Gizmo fetches `origin/main`.
-  2. Gizmo plans from the fetched head.
-  3. Gizmo assigns dependency-ready tasks with disjoint file scopes through the
-     active harness.
-  4. Team Agents implement dependency-ready work in parallel.
-  5. Gizmo grants serialized commit turns.
-  6. Each Team Agent commits its complete iteration.
-  7. Gizmo co-validates the combined shared-branch result.
-  8. Gizmo runs Loom pre-push.
-     - Team-owned formatter mutations return to their owners.
-     - Each owner returns a fresh committed handoff.
-     - Gizmo then authorizes PR Steward to update the PR.
-  9. Gizmo authorizes PR Steward to dispatch hosted validation immediately.
-     - PR Steward uses a relevant focused task until the head is
-       validation-ready.
-     - PR Steward dispatches complete validation when the head is ready.
-  10. Gizmo assigns each bounded correction task to its owning team.
-  11. Teams run disjoint, dependency-ready corrections in parallel.
-  12. Each correcting team commits its complete iteration.
-  13. Gizmo continues from the committed fixes.
-  14. Gizmo runs Loom pre-push.
-      - Team-owned formatter mutations return to their owners.
-      - Each owner returns a fresh committed handoff.
-  15. Gizmo pushes the corrected head.
-  16. Gizmo obtains fresh exact-head validation.
-  17. The AI team reviews self-improvement before final readiness.
-      - It performs the review only when the work revealed a durable lesson or
-        Cortex defect.
-  18. The AI team commits a qualifying promotion.
-  19. Gizmo runs Loom pre-push on the promoted head.
-  20. Gizmo repeats hosted validation when the head changes.
-  21. Gizmo runs readiness.
-  22. Gizmo completes the squash merge.
-- **Do not stop at push or readiness.** Gizmo owns the PR through squash merge
-  unless concretely blocked.
-- **Question-only turns** (no code changes) skip the pipeline.
+- Each feature Gizmo follows [mission delivery](../../../gizmo/workflows/mission-delivery.md).
+- Team Agents own scoped implementation and authored tests.
+- Gizmo owns feature compilation, review, and local dev integration decisions.
+- A manually run dev manager owns publication, slow PR validation, and promotion.
+- PR Steward executes bounded operations under the owning controller's packets.
+- Promotion fast-forwards main to the tested dev SHA.
+- Preserve dev and all feature history.
+- Do not rebase, squash, or create a promotion merge commit.
 
 ## 9. Unit Tests Own Domain Correctness; E2e Is Smoke Only
 

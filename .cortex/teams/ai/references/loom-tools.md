@@ -54,7 +54,6 @@ an effort, quality, or billing measure.
 Defaultable tools use a Task alias and an in-code example:
 
 ```bash
-task loom:pre-push
 task loom:tools-list
 task loom:cortex-audit
 task loom:cortex-session-clean
@@ -187,9 +186,9 @@ instead of maintaining request bodies in Cortex.
 
 ### prePush
 
-```bash
-task loom:pre-push
-```
+This legacy task is not a local feature gate. Follow
+[dev delivery](../../../gizmo/architecture/dev-delivery.md) for permitted
+compilation and manager-stage validation.
 
 ### cortexAudit
 

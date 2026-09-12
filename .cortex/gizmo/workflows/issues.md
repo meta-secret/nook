@@ -38,9 +38,9 @@ index. Focused Markdown files replace sub-issues.
 
 ## Feature scope
 
-Create one focused issue and one immutable feature-slice Gizmo Workbench record
-for each planned PR. Use one record by default. The record is not a running
-agent or controller. Team Agent count never determines PR or Gizmo count.
+Each concurrent feature has its own Gizmo and focused Workbench records.
+An immutable plan records scope. Follow [dev delivery](../architecture/dev-delivery.md)
+for local feature completion and the manager's separate slow PR cycle.
 
 The feature `README.md` must record:
 
@@ -51,19 +51,9 @@ The feature `README.md` must record:
 - feature-level acceptance criteria;
 - current completion status.
 
-- Every planned PR must stay at or below 2,000 authored additions.
-- Deletions do not count and have no limit.
-- Simplify and redesign before dividing an oversized feature.
-- When the complete necessary implementation still cannot fit, create focused
-  issues for independently useful sequential slices.
-- Give each slice observable acceptance evidence.
-- Link each later issue to its predecessor.
-- Do not create a PR stack.
-- Review fixes use the same 2,000-authored-addition limit.
-
-See
-[pull-requests.md](pull-requests.md#pull-request-size-and-modularity) for the
-size measure and architectural rules.
+Features may proceed concurrently when their scopes and dependencies allow it.
+The manager's dev PR aggregates selected complete features. Keep estimates as
+reviewability evidence rather than numeric delivery gates.
 
 ## Trigger
 
@@ -151,14 +141,9 @@ At least one ownership unit must use that ID.
   before it runs.
 - Main-failure handoff records use `status: ready` with `automation: hive`.
 
-A single token-free dispatcher reconciles those records into Neo4j by failed Main
-SHA. The isolated task owns:
-
-- diagnosis;
-- exact-head PR checks;
-- review resolution;
-- squash merge; and
-- verification of the resulting Main run.
+Existing Hive metadata belongs to its separately documented paused platform.
+It does not start a dev manager or authorize automatic repair work.
+The manually run manager routes slow-stage failures through feature Gizmos.
 
 ## Choose update versus create
 
@@ -240,34 +225,15 @@ not a copy, transcript, or sentence-by-sentence paraphrase of the user's prompt.
 
 The plan must contain:
 
-- a `Mission controller` value fixed to `Gizmo Prime`;
-- a `Current Gizmo ID` matching the current and first PR slice;
-- for a focused issue with canonical `gizmo_id`, a `Current Gizmo ID` matching
-  that trusted issue value exactly;
-- the agent's own complete interpretation of the desired outcome;
-- material functional, workflow, security, and delivery requirements;
-- explicit constraints, assumptions, and exclusions;
-- a small ordered execution plan;
-- a `Change budget and PR sequence` section;
-- an `Estimated authored changed lines` value;
-- an `Owning modules, packages, or layers` value;
-- consecutively numbered `Ownership units`, one per capability, each referencing
-  a declared `Gizmo ID`;
-- a `Public or cross-module interfaces` value;
-- a `Delivery shape` value of `One PR` or `Multiple PRs`;
-- a `PR sequence mode` value of `One PR` or `Sequential PRs`;
-- a `Current PR estimated authored changed lines` value;
-- a `Current PR slice and acceptance evidence` value;
-- a `PR slices, estimates, and acceptance evidence` value;
-  - the first row uses the current Gizmo ID;
-  - the first predecessor is `None`;
-  - each later predecessor is the immediately preceding Gizmo ID;
-  - each estimate is at most 2,000;
-  - each scope delivers distinct observable functionality; and
-  - each row states distinct acceptance evidence;
-- expected completion evidence; and
-- a safety review confirming that no raw prompt, transcript, secret, private
-  data, raw log, local path, or unnecessary infrastructure detail is present.
+- the owning feature Gizmo or dev manager;
+- the canonical focused-issue Gizmo ID when one exists;
+- the requested outcome, scope, exclusions, and material assumptions;
+- the functional owners, allowed files, and forbidden files;
+- actual provider dependencies and public interfaces;
+- a concise procedure and expected acceptance evidence;
+- authored-test obligations and the delivery stage that executes them;
+- feature branch and integration provenance where applicable; and
+- a safety review excluding raw prompts, secrets, private data, and raw logs.
 
 Each ownership unit uses the exact field order from
 `.github/prompts/agent-plan.md`. It names one functional owner and capability
@@ -307,11 +273,6 @@ NOOK_WORKBENCH_ASSIGNED_GIZMO_ID=<focused-issue-gizmo-id> \
   2. validates and publishes the plan; and
   3. begins implementation only after publication.
 - A missing or rejected plan blocks implementation.
-- A current PR estimate above the 2,000-authored-addition limit blocks
-  implementation.
-- A complete estimate above the limit requires simplification first.
-- If necessary scope remains above the limit, the plan must use sequential PRs.
-
 ## Worklog requirement
 
 Every task-owning agent must publish one worklog before reporting completion or
@@ -326,8 +287,9 @@ task plan, and include:
 - remaining work or `None`.
 
 Update the associated issue status and `related_prs` in the same completion
-boundary. A merged Nook PR normally moves the issue to `done`; a concrete
-external blocker moves it to `blocked`.
+boundary. Feature completion records local dev integration. Manager completion records
+promotion and actual PR status. A concrete external blocker moves the owning
+record to `blocked`.
 
 ## Required handoff
 

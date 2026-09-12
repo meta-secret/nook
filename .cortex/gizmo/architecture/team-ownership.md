@@ -9,6 +9,9 @@ coordinates delivery but does not redefine a team's technical contract.
 
 ## Universal rules
 
+- Follow [dev delivery](dev-delivery.md) for feature and manager stages.
+- Each concurrent feature has a separate Gizmo and isolated Team Agent children.
+- The manually run dev manager owns dev publication and main promotion.
 - Every Team Agent task has exactly one team identity. PR Steward is a separate
   operational Team Agent context for bounded pull-request mechanics.
 - The functional owner defines behavior, contracts, tests, and acceptance.
@@ -47,7 +50,8 @@ The separate PR Steward Team Agent performs pull-request metadata.
 It observes reviews and checks.
 It retriggers exact-head validation.
 It collects readiness evidence.
-It performs authorized squash merges.
+It invokes bounded dev tasks under the owning controller's authorization.
+It performs only guarded fast-forward promotion to the tested dev SHA.
 It verifies remote merge state.
 It is not a functional engineering team.
 It does not own technical findings.
@@ -172,7 +176,7 @@ Verify:
 - no writer committed unrelated pre-existing changes;
 - acceptance command scopes were safe for concurrency or ran serially on a
   stable committed head;
-- only one writer mutated the Git index or committed at a time;
+- only one writer mutated each worktree's Git index at a time;
 - shared files had an explicitly assigned writer;
 - accepted worker commits are integrated into the parent feature worktree;
 - every child worktree was issued by Gizmo and stayed within its task scope;
