@@ -74,6 +74,10 @@ runtime_response_admission!(
     AuthenticatorPreviewAdmission,
     nook_companion_core::AuthenticatorPreviewResponseWire
 );
+runtime_response_admission!(
+    ExtensionSessionStatusAdmission,
+    nook_companion_core::ExtensionSessionStatusResponseWire
+);
 
 #[wasm_bindgen]
 #[must_use]
@@ -88,8 +92,9 @@ runtime_response_admission!(
 #[must_use]
 #[allow(clippy::needless_pass_by_value)] // wasm-bindgen owns the decoded ABI value.
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_session_status_response(
-    response: nook_companion_core::ExtensionSessionStatusResponseWire,
+    response: ExtensionSessionStatusAdmission,
 ) -> nook_companion_core::ExtensionSessionStatusAvailability {
+    let ExtensionSessionStatusAdmission(response) = response;
     ExtensionSessionStatusAvailability::decode_extension_session_status_response(&response)
 }
 
@@ -242,6 +247,7 @@ mod admission_tests {
             GeneratedPasswordAdmission::DECL,
             AuthenticatorOptionsAdmission::DECL,
             AuthenticatorPreviewAdmission::DECL,
+            ExtensionSessionStatusAdmission::DECL,
         ] {
             assert!(declaration.ends_with(" = unknown;"));
         }
@@ -262,6 +268,7 @@ mod admission_tests {
         assert!(serde_json::from_str::<GeneratedPasswordAdmission>("null").is_err());
         assert!(serde_json::from_str::<AuthenticatorOptionsAdmission>("null").is_err());
         assert!(serde_json::from_str::<AuthenticatorPreviewAdmission>("null").is_err());
+        assert!(serde_json::from_str::<ExtensionSessionStatusAdmission>("null").is_err());
     }
 }
 
