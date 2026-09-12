@@ -4,7 +4,9 @@
 
 Each feature has its own Gizmo Prime delivery owner, branch, and worktree.
 It assigns bounded Team Agent work and integrates scoped child commits.
-Concurrent features have independent Gizmos. Follow
+Concurrent features have independent Gizmos. Read the complete
+[multiagent delivery architecture](architecture/multiagent-delivery-diagrams.md)
+before planning or acting, then follow
 [dev delivery](architecture/dev-delivery.md) for the authoritative stage rules.
 
 Gizmo publishes only its feature branch and requests remote `build:compile`.
@@ -13,10 +15,15 @@ The manually run dev manager owns remote dev publication and main promotion.
 
 ## Context loading
 
-1. Read the [Gizmo knowledge graph](knowledge-graph.md).
-2. Open only the authority required for the current delivery stage.
-3. Give a Team Agent only its team entry point and task-relevant authorities.
-4. Stop loading Cortex when the delivery decision has enough evidence.
+1. Read the complete
+   [multiagent delivery architecture](architecture/multiagent-delivery-diagrams.md).
+2. Identify the current workflow level, actor, exact-SHA input, feedback path,
+   and terminal handoff.
+3. Read the [Gizmo knowledge graph](knowledge-graph.md).
+4. Open only the detailed authority required for the current delivery stage.
+5. Give a Team Agent its team entry point, the mandatory delivery architecture,
+   and task-relevant authorities.
+6. Stop loading Cortex when the delivery decision has enough evidence.
 
 ## Communication
 

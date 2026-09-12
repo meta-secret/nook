@@ -18,6 +18,22 @@ background context. A selected team authority may link a task-relevant
 foreign-team skill as read-only engineering policy. A foreign-team writer
 requires an explicit expertise task from Gizmo Prime.
 
+## Mandatory delivery architecture
+
+Before acting in any feature implementation, delegation, review, external
+check, local landing, dev validation, repair, pull-request operation, or main
+promotion stage, read the complete
+[multiagent delivery visual model](gizmo/architecture/multiagent-delivery-diagrams.md).
+It is the primary end-to-end explanation of the delivery system. Identify the
+current level, owning actor, incoming artifact, feedback path, and terminal
+handoff before taking action.
+
+This mandatory read applies to Feature Gizmos, Team Agents, reviewers, PR
+Steward, the Dev Manager, and repair Gizmos. After reading it, load only the
+detailed authority required for the selected stage. The
+[dev delivery contract](gizmo/architecture/dev-delivery.md) supplies those
+detailed authorization, evidence, and failure rules.
+
 ## Context routes
 
 - [Gizmo Prime](gizmo/AGENTS.md) owns mission planning, delegation,
@@ -74,8 +90,11 @@ unowned lifetime, plaintext persistence, or sensitive log as a P1 finding.
 
 Each concurrent feature has its own Gizmo delivery owner and isolated team
 worktrees. The manually run [dev manager](teams/dev-manager/AGENTS.md) owns
-publication and promotion. Follow the canonical
-[dev delivery contract](gizmo/architecture/dev-delivery.md).
+publication and promotion. Start with the mandatory
+[multiagent delivery visual model](gizmo/architecture/multiagent-delivery-diagrams.md),
+then follow the detailed
+[dev delivery contract](gizmo/architecture/dev-delivery.md) for the current
+stage.
 
 That contract replaces all older delivery-stage instructions below and in
 linked authorities concerning local checks, feature full validation, branch

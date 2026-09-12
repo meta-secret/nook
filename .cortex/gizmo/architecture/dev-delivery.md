@@ -16,9 +16,11 @@ architecture, only the dev manager's dev-to-main cycle uses that workflow.
 Routing, captured-SHA checkouts, and concurrency still require runtime alignment.
 
 The [multiagent delivery visual model](multiagent-delivery-diagrams.md) is the
-normative diagram set for stage ownership, component communication, feedback
-loops, and exact-SHA handoffs. This document supplies the detailed authorization
-and evidence rules behind those diagrams.
+mandatory first read and primary end-to-end explanation. Its diagrams define
+stage ownership, component communication, feedback loops, and exact-SHA
+handoffs. Read it completely before selecting a stage in this detailed
+contract. This document supplies the authorization, evidence, and failure rules
+behind that architecture.
 
 ## Runtime command contracts
 

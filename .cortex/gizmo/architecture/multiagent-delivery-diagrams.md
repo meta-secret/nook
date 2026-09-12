@@ -2,11 +2,15 @@
 
 ## Status and authority
 
-These diagrams are the visual companion to the canonical
-[dev delivery contract](dev-delivery.md). They define stage ownership,
-boundaries, feedback loops, and exact-SHA handoffs. The contract supplies
-detailed authorization, evidence, and failure rules when a diagram omits an
-operational edge case.
+This document is the mandatory first read and primary end-to-end explanation
+for multiagent delivery. Every Feature Gizmo, Team Agent, reviewer, PR Steward,
+Dev Manager, and repair Gizmo reads it completely before acting in the
+workflow.
+
+These diagrams define stage ownership, boundaries, feedback loops, and
+exact-SHA handoffs. After identifying the current level and role, follow the
+canonical [dev delivery contract](dev-delivery.md) for detailed authorization,
+evidence, and failure rules when a diagram omits an operational edge case.
 
 Flowcharts show lifecycle and retry behavior. Sequence diagrams show component
 communication without duplicating every retry. At each higher level, the
@@ -353,4 +357,3 @@ sequenceDiagram
   cycle while newer features may continue landing locally.
 - Promotion fast-forwards `main` to the exact fully validated dev SHA.
 - Squash, rebase, force-push, and promotion merge commits are prohibited.
-
