@@ -8,8 +8,12 @@ use super::NookVaultManager;
 use super::session::VaultKeyMaterial;
 use crate::BrowserTimestamp;
 use crate::VaultSnapshotLookup;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::storage::indexed_db::ImportVaultLabel;
 use nook_core::ActiveVaultScope;
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::ImportVaultBlobRequest;
 use crate::NookDatabase;
 
 use crate::{NookError, NookPasswordEntrySummary};
@@ -560,7 +564,6 @@ mod wasm_tests {
     use super::*;
     use crate::manager::VaultNameState;
 
-    use crate::storage::indexed_db;
     use nook_core::{
         Database, DeviceIdentity, SecretId, SecretValue, StorageMode, VaultCrypto, VaultName,
         VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite,

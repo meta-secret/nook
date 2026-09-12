@@ -1,8 +1,12 @@
 use super::super::{CeremonyState, NookVaultManager, VaultNameState};
 use super::StoredSentinelGenesisDelivery;
 use crate::NookDatabase;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::SentinelDbLoadSentinelGenesisShareDelivery;
 use crate::SentinelDbSaveSentinelGenesisShareDelivery;
 use crate::storage::indexed_db::SentinelFinalizationJournal;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::storage::indexed_db::StoredSentinelShareDelivery;
 
 use crate::{NookError, NookSentinelGenesisFinalizeResult};
 use nook_core::{
@@ -250,7 +254,6 @@ impl IssuanceCheckpoint {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod tests {
     use super::*;
-    use crate::storage::{event_db, indexed_db};
     use js_sys::Error as BrowserError;
     use nook_core::{DeviceIdentity, StartSentinelGenesisArgs};
     use std::future::Future;

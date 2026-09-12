@@ -2,6 +2,10 @@
 
 use super::super::verified_access::VerifiedVaultAccessFlow;
 use super::super::{CeremonyState, NookVaultManager};
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::EventDbSaveEventBytes;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::NookDatabase;
 use crate::{NookError, NookSecretRecord};
 use nook_core::{
     DeviceIdentity, MultiDeviceError, SentinelUnlockPolicy, SentinelUnlockQuorum,
@@ -424,7 +428,6 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     mod browser {
         use super::*;
-        use crate::storage::event_db;
         use nook_core::{EventId, IsoTimestamp, VaultOperation};
         use wasm_bindgen_test::wasm_bindgen_test;
 

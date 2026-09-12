@@ -673,10 +673,7 @@ mod wasm_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod projection_tests {
     use super::*;
-    use nook_core::{
-        AuthenticatorSecret, DeviceIdentity, EventPublicationDestination, LocalEventBytes,
-        LoginSecret, SecretType, SecretValue,
-    };
+    use nook_core::{AuthenticatorSecret, DeviceIdentity, LoginSecret, SecretType, SecretValue};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);

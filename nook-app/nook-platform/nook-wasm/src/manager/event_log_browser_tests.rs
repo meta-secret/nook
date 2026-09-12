@@ -17,7 +17,7 @@ use nook_core::ActiveVaultScope;
 use nook_core::AppKeyIdentityMembership;
 use nook_core::StoredSigningSeed;
 
-use crate::storage::{event_db, identity_record, indexed_db};
+use crate::storage::identity_record;
 use crate::vault_api_local::list_local_vaults;
 use nook_core::{
     AppKey, ConnectAccessStatus, DeviceAccessIdentityState, DeviceIdentity,

@@ -315,7 +315,6 @@ impl DeviceAccessProfileUpdate {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::DEVICE_ACCESS_PROFILE_VERSION_ERROR;
-    use crate::storage::indexed_db;
     use crate::{
         IdbPutStringRequest, IndexedDbFallbackUpdate, NookDatabase, StoredStringRecord,
         StringRecordFallback,

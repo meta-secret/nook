@@ -5,9 +5,16 @@
 //! identity so nothing sensitive is stored in plaintext. Pure snapshot
 //! transforms live in `nook_core`; this module adds the `IndexedDB` I/O and sealing.
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::IdentityDbSaveNewProtectedLocalIdentity;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::storage::identity_record::PriorAppAuthorization;
+
 mod publication;
 mod rollback_projection;
 use crate::NookError;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::{IdbPutStringRequest, NookDatabase};
 use publication::ProviderSnapshotStore;
 pub(crate) use publication::{PresealedProviderSnapshotPublication, ProviderSnapshotPublication};
 
@@ -15,6 +22,8 @@ use rexie::{ObjectStore, Rexie, TransactionMode};
 use serde_json::Value;
 use std::ops::Deref;
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use nook_core::AuthProvidersSnapshotData;
 use nook_core::{DeviceIdentity, NormalizedAuthSnapshot, ProviderCredentialRejection};
 
 pub(crate) struct AuthProviderDatabase {
@@ -315,7 +324,7 @@ impl AuthProviderDatabase {
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_idb_tests {
-    use crate::storage::{identity_record, indexed_db};
+    use crate::storage::identity_record;
     use futures_util::future;
     use nook_core::{
         ActiveVaultScope, GoogleDriveMode, ProviderSyncCheckpoint, ProviderVaultScope,

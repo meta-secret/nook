@@ -798,7 +798,6 @@ mod tests {
 mod browser_tests {
     use super::*;
     use crate::NookError;
-    use crate::storage::identity_record;
     use nook_core::{AppKey, DeviceAccessIdentityState, DeviceId, IdentityRecord};
     use wasm_bindgen_test::*;
 
