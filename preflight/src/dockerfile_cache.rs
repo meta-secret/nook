@@ -49,7 +49,9 @@ impl DockerfileRepository<'_> {
     fn contains_cache_mount(line: &str) -> bool {
         let mut remaining = line;
         while let Some(prefix_index) = remaining.find(MOUNT_PREFIX) {
-            let options = &remaining[prefix_index + MOUNT_PREFIX.len()..];
+            let Some(options) = remaining.get(prefix_index + MOUNT_PREFIX.len()..) else {
+                return false;
+            };
             let token = options.split_ascii_whitespace().next().unwrap_or_default();
             if token
                 .trim_end_matches('\\')
@@ -59,7 +61,10 @@ impl DockerfileRepository<'_> {
                 return true;
             }
 
-            remaining = &options[token.len()..];
+            let Some(next) = options.get(token.len()..) else {
+                return false;
+            };
+            remaining = next;
         }
 
         false

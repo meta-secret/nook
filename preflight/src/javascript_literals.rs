@@ -30,7 +30,11 @@ impl JavaScriptLiteral<'_> {
             return serde_json::from_str(literal)
                 .map_err(|_| JavaScriptLiteralFailure::InvalidEscape);
         }
-        JavaScriptLiteral::decode_javascript_escapes(&literal[1..literal.len() - 1])
+        let inner = literal
+            .strip_prefix(delimiter)
+            .and_then(|value| value.strip_suffix(delimiter))
+            .ok_or(JavaScriptLiteralFailure::InvalidDelimiter)?;
+        JavaScriptLiteral::decode_javascript_escapes(inner)
     }
 }
 
@@ -182,4 +186,21 @@ pub enum JavaScriptLiteralFailure {
     InvalidCodePoint,
     MissingCallableName,
     UnsupportedCallable,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{JavaScriptLiteral, JavaScriptLiteralFailure};
+
+    #[test]
+    fn unicode_and_truncated_escapes_keep_their_distinct_admission_results() {
+        assert_eq!(
+            JavaScriptLiteral::decode_javascript_escapes("vault-🔐").ok(),
+            Some("vault-🔐".to_owned())
+        );
+        assert!(matches!(
+            JavaScriptLiteral::decode_javascript_escapes("vault-\\u12"),
+            Err(JavaScriptLiteralFailure::TruncatedEscape)
+        ));
+    }
 }

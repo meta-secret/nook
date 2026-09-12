@@ -184,7 +184,9 @@ impl TypedJsonAssertionVisitor {
                 let mut remaining = tokens.as_str();
                 let index_prefix = format!("{binding} [");
                 while let Some(index) = remaining.find(&index_prefix) {
-                    let after_prefix = &remaining[index + index_prefix.len()..];
+                    let Some(after_prefix) = remaining.get(index + index_prefix.len()..) else {
+                        return false;
+                    };
                     if after_prefix.trim_start().starts_with('"') {
                         return true;
                     }

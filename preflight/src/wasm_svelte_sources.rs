@@ -31,12 +31,14 @@ impl WasmSvelteSources<'_> {
             .collect::<Vec<_>>();
         let mut instance = blank.clone();
         let mut module = blank;
-        WasmSvelteSources::collect_svelte_typescript(
+        if !WasmSvelteSources::collect_svelte_typescript(
             tree.root_node(),
             source,
             &mut instance,
             &mut module,
-        );
+        ) {
+            return Ok(vec![1]);
+        }
         let mut lines = Vec::new();
         for composite in [instance, module] {
             lines.extend(RustWasmNames::typescript_wasm_import_alias_lines_at_path(
@@ -54,56 +56,123 @@ impl WasmSvelteSources<'_> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::WasmSvelteSources;
+
+    #[test]
+    fn checked_source_ranges_preserve_unicode_and_reject_truncation() {
+        let source = "🔐vault";
+        let mut complete = vec![b' '; source.len()];
+        assert!(WasmSvelteSources::copy_source_range(
+            source,
+            &mut complete,
+            0,
+            source.len()
+        ));
+        assert_eq!(complete, source.as_bytes());
+
+        let mut truncated = vec![b' '; source.len() - 1];
+        assert!(!WasmSvelteSources::copy_source_range(
+            source,
+            &mut truncated,
+            0,
+            source.len()
+        ));
+    }
+}
+
 impl WasmSvelteSources<'_> {
     fn collect_svelte_typescript(
         node: tree_sitter::Node<'_>,
         source: &str,
         instance: &mut [u8],
         module: &mut [u8],
-    ) {
-        WasmSvelteSources::preserve_block_scope(node, source, instance);
+    ) -> bool {
+        if !WasmSvelteSources::preserve_block_scope(node, source, instance) {
+            return false;
+        }
         if node.kind() == "raw_text"
             && node
                 .parent()
                 .is_some_and(|parent| parent.kind() == "script_element")
         {
-            let Some(parent) = node.parent() else { return };
-            let opening = parent
-                .utf8_text(source.as_bytes())
-                .unwrap_or_default()
-                .split('>')
-                .next()
-                .unwrap_or_default();
+            let Some(parent) = node.parent() else {
+                return false;
+            };
+            let Ok(parent_text) = parent.utf8_text(source.as_bytes()) else {
+                return false;
+            };
+            let opening = parent_text.split('>').next().unwrap_or_default();
             let composite = if opening.contains("module") {
                 module
             } else {
                 instance
             };
-            composite[node.byte_range()].copy_from_slice(&source.as_bytes()[node.byte_range()]);
-            return;
+            return WasmSvelteSources::copy_source_range(
+                source,
+                composite,
+                node.start_byte(),
+                node.end_byte(),
+            );
         }
         if node.kind() == "const_tag" {
-            let start = node.start_byte() + "{@const".len();
-            let end = node.end_byte() - 1;
-            instance[start..end].copy_from_slice(&source.as_bytes()[start..end]);
-            instance[end] = b';';
-            return;
+            let (Some(start), Some(end)) = (
+                node.start_byte().checked_add("{@const".len()),
+                node.end_byte().checked_sub(1),
+            ) else {
+                return false;
+            };
+            if !WasmSvelteSources::copy_source_range(source, instance, start, end) {
+                return false;
+            }
+            let Some(terminator) = instance.get_mut(end) else {
+                return false;
+            };
+            *terminator = b';';
+            return true;
         }
         if node.kind() == "expression" {
-            instance[node.byte_range()].copy_from_slice(&source.as_bytes()[node.byte_range()]);
-            return;
+            return WasmSvelteSources::copy_source_range(
+                source,
+                instance,
+                node.start_byte(),
+                node.end_byte(),
+            );
         }
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            WasmSvelteSources::collect_svelte_typescript(child, source, instance, module);
+            if !WasmSvelteSources::collect_svelte_typescript(child, source, instance, module) {
+                return false;
+            }
         }
+        true
     }
 }
 
 impl WasmSvelteSources<'_> {
-    fn preserve_block_scope(node: tree_sitter::Node<'_>, source: &str, composite: &mut [u8]) {
-        let text = node.utf8_text(source.as_bytes()).unwrap_or_default();
+    fn copy_source_range(source: &str, composite: &mut [u8], start: usize, end: usize) -> bool {
+        let (Some(destination), Some(value)) = (
+            composite.get_mut(start..end),
+            source.as_bytes().get(start..end),
+        ) else {
+            return false;
+        };
+        destination.copy_from_slice(value);
+        true
+    }
+}
+
+impl WasmSvelteSources<'_> {
+    fn preserve_block_scope(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+        composite: &mut [u8],
+    ) -> bool {
+        let Ok(text) = node.utf8_text(source.as_bytes()) else {
+            return false;
+        };
         let header = text.split('}').next().unwrap_or_default();
         let raw = match node.kind() {
             "each_statement" => header.split_once(" as ").map(|(_, value)| value),
@@ -113,17 +182,30 @@ impl WasmSvelteSources<'_> {
             "then_block" | "catch_block" => header.split_once(' ').map(|(_, value)| value),
             _ => None,
         };
-        let Some(raw) = raw else { return };
+        let Some(raw) = raw else { return true };
         let raw = raw.trim();
         if raw.is_empty() {
-            return;
+            return true;
         }
         let initializer = matches!(raw.as_bytes().first(), Some(b'{' | b'[')).then_some("=0");
         let declaration = format!("{{let {raw}{};", initializer.unwrap_or_default());
-        if declaration.len() < node.end_byte() - node.start_byte() {
-            composite[node.start_byte()..node.start_byte() + declaration.len()]
-                .copy_from_slice(declaration.as_bytes());
-            composite[node.end_byte() - 1] = b'}';
+        let (Some(span_length), Some(declaration_end), Some(block_end)) = (
+            node.end_byte().checked_sub(node.start_byte()),
+            node.start_byte().checked_add(declaration.len()),
+            node.end_byte().checked_sub(1),
+        ) else {
+            return false;
+        };
+        if declaration.len() < span_length {
+            let Some(destination) = composite.get_mut(node.start_byte()..declaration_end) else {
+                return false;
+            };
+            destination.copy_from_slice(declaration.as_bytes());
+            let Some(terminator) = composite.get_mut(block_end) else {
+                return false;
+            };
+            *terminator = b'}';
         }
+        true
     }
 }

@@ -32,8 +32,9 @@ const OUTPUT_DIRECTORY_NAMES: &[&str] = &["coverage", "dist", "target"];
 const EXCLUDED_REPOSITORY_PREFIXES: &[&str] = &[
     ".agents/skills/impeccable",
     "workflow/processing",
-    "nook-app/nook-web/nook-web-shared/src/wasm",
     "nook-app/nook-web/nook-web-shared/src/generated",
+    "nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm",
+    "nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm",
     "nook-app/nook-platform/nook-app-common/src/generated",
 ];
 
@@ -551,6 +552,48 @@ mod tests {
             SourceRepository::new(&root)
                 .external_rust_unit_test_modules()?
                 .is_empty()
+        );
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn excludes_exact_generated_wasm_roots_but_governs_adjacent_authored_sources()
+    -> anyhow::Result<()> {
+        let root = temporary_directory()?;
+        let generated_roots = [
+            "nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm",
+            "nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm",
+        ];
+        for generated_root in generated_roots {
+            fs::create_dir_all(root.join(generated_root))?;
+            fs::write(
+                root.join(generated_root).join("generated.js"),
+                lines(AUTHORED_SOURCE_LINE_LIMIT + 1),
+            )?;
+        }
+        let authored = [
+            "nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm-owner.ts",
+            "nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm-owner.ts",
+        ];
+        for path in authored {
+            let path = root.join(path);
+            fs::create_dir_all(path.parent().ok_or_else(|| {
+                anyhow::anyhow!("authored source fixture must have a parent directory")
+            })?)?;
+            fs::write(path, lines(AUTHORED_SOURCE_LINE_LIMIT + 1))?;
+        }
+
+        assert_eq!(
+            SourceRepository::new(&root).source_size_violations()?,
+            authored
+                .into_iter()
+                .map(|path| SourceSizeViolation {
+                    path: PathBuf::from(path),
+                    lines: AUTHORED_SOURCE_LINE_LIMIT + 1,
+                    limit: AUTHORED_SOURCE_LINE_LIMIT,
+                })
+                .collect::<Vec<_>>()
         );
         fs::remove_dir_all(root)?;
         Ok(())

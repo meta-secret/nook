@@ -713,13 +713,13 @@ impl TypeScriptApplicationState<'_> {
 
         let mut cursor = node.walk();
         let operands: Vec<_> = node.named_children(&mut cursor).collect();
-        if operands.len() != 2 {
+        let [left, right] = operands.as_slice() else {
             return false;
-        }
-        (TypeScriptApplicationState::is_typeof_expression(operands[0])
-            && TypeScriptApplicationState::is_undefined_string(operands[1], source))
-            || (TypeScriptApplicationState::is_undefined_string(operands[0], source)
-                && TypeScriptApplicationState::is_typeof_expression(operands[1]))
+        };
+        (TypeScriptApplicationState::is_typeof_expression(*left)
+            && TypeScriptApplicationState::is_undefined_string(*right, source))
+            || (TypeScriptApplicationState::is_undefined_string(*left, source)
+                && TypeScriptApplicationState::is_typeof_expression(*right))
     }
 }
 
