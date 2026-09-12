@@ -12,13 +12,17 @@ duplicating each document's heading hierarchy.
 
 ## Graph topology
 
-Cortex has one root router, one Gizmo graph, five team graphs, and one shared
-graph.
+Cortex has one root router and owning graphs for delivery controllers,
+engineering teams, and shared knowledge.
 
-- The root graph selects Gizmo, AI, development core, security, SRE, web
-  development, or shared context.
-- The Gizmo graph indexes delivery-control authorities.
+- The root graph selects dev manager, Gizmo, PR Steward, AI, development core,
+  security, SRE, web development, or shared context.
+- The dev-manager graph owns dev publication, dev PR creation/update, slow
+  evidence, readiness, and fast-forward promotion policy.
+- The Gizmo graph owns feature delivery and local landing requests.
+- PR Steward owns authorized mechanics, not delivery policy.
 - Five team graphs index documents owned by their engineering teams.
+- Dev manager is a manually operated controller, not a Loom child team.
 - The shared graph indexes genuinely cross-team documents.
 - Every document has exactly one owning graph.
 - The root graph does not index child documents directly.
@@ -41,7 +45,7 @@ document is selected.
 ## Selective context loading
 
 1. Read the root router.
-2. Select Gizmo or one primary team.
+2. Select one primary owning context.
 3. Read that context's `AGENTS.md` and graph.
 4. Select one relevant category.
 5. Open only the documents needed for the assigned functionality.
@@ -73,17 +77,17 @@ they own centralized navigation.
 
 ## Application procedure
 
-1. Determine whether the document belongs to Gizmo, AI, development core,
-   security, SRE, web development, or shared knowledge.
+1. Determine whether the document belongs to dev manager, Gizmo, PR Steward,
+   AI, development core, security, SRE, web development, or shared knowledge.
 2. Place it under the owning context.
 3. Add one document-level link to that context's graph.
 4. Remove obsolete links from the previous graph.
 5. Update direct callers and the canonical skill catalog.
-6. Run the Cortex audit.
+6. Defer executable audits to the dev-manager slow PR stage.
 
 ## Validation
 
-Run:
+Only in the dev-manager remote slow PR stage, run:
 
 ```bash
 task loom:cortex-audit
@@ -93,15 +97,16 @@ task preflight:loom-contracts
 
 Loom enforces:
 
-- the Gizmo and five team graphs exist;
-- the root links Gizmo and every team graph;
+- the Gizmo, dev-manager, and five engineering team graphs exist;
+- the root links these owning graphs;
 - every document is indexed by its owner;
 - graphs do not cross ownership boundaries;
 - each graph indexes a document once; and
 - graphs contain no fragment-link duplication.
 
 Vale rejects exact `## Relationships` and `## Document map` headings in
-individual Cortex documents. Run `task vale:cortex` for this focused lint.
+individual Cortex documents. `task vale:cortex` belongs only to the dev-manager
+remote slow PR stage, not local or feature validation.
 
 The co-located read-only TypeScript application owns deterministic graph
 topology diagnostics and legacy index migration rendering. Vale owns prose and
