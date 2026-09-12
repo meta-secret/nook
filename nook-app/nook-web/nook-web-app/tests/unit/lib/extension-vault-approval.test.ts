@@ -5,13 +5,15 @@ const wasm = vi.hoisted(() => ({
   approveExtensionDevice: vi.fn(),
 }))
 
-vi.mock('$app-wasm', () => ({
+vi.mock('$app-wasm', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$app-wasm')>()),
   approve_extension_device: wasm.approveExtensionDevice,
   classify_vault_recovery_error: () => 'other',
   VaultRecoveryErrorKind: { Other: 'other' },
 }))
 
-vi.mock('$lib/auth/providers', () => ({
+vi.mock('$lib/auth/providers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/auth/providers')>()),
   activeVaultScope: vi.fn(),
   providerBelongsToVault: vi.fn(),
   seal_auth_providers_for_device_public_key: vi.fn(),
