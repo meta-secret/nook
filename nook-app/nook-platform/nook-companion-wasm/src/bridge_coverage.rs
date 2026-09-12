@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::*;
+    #[cfg(not(target_arch = "wasm32"))]
+    use nook_companion_core::VaultHostPolicy;
     use nook_companion_core::{
         ExtensionEventCount, ExtensionPairingRecord, ExtensionPairingRecordComparison,
         ExtensionPairingRecordComparisonRequest, ExtensionReadySetup, ExtensionReadySetupStatus,
@@ -65,7 +67,14 @@ mod tests {
             belongs_to_sentinel_vault("https://simple.nokey.sh/", "https://sentinel.nokey.sh/app",)
                 .map_err(|error| format!("sentinel membership failed: {error:?}"))?
         );
+        #[cfg(target_arch = "wasm32")]
         assert!(simple_vault_url("http://example.test", "/app").is_err());
+        #[cfg(not(target_arch = "wasm32"))]
+        assert!(
+            VaultHostPolicy::new("http://example.test")
+                .simple_vault_url("/app")
+                .is_err()
+        );
         Ok(())
     }
 
