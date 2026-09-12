@@ -22,8 +22,9 @@ describe('iCloud enrollment authentication', () => {
     const failure = new OAuthFailure(OAuthFailureKind.CloudKitAuthentication)
     prepareICloudSignInControl.mockResolvedValue(err(failure))
     const vault = VaultStateTestFixture.create()
-    vi.spyOn(vault, 't').mockImplementation((request) =>
-      `translated:${typeof request === 'string' ? request : request.key}`,
+    vi.spyOn(vault, 't').mockImplementation(
+      (request) =>
+        `translated:${typeof request === 'string' ? request : request.key}`,
     )
     const view = render(ICloudEnrollmentAuth, { vault })
     const toggle = view.getByTestId('enrollment-icloud-auth-toggle')

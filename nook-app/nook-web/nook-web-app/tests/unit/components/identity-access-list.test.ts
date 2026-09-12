@@ -228,12 +228,15 @@ describe('identity key inventory', () => {
     expect(protector.passkeySummary.kind).toBe(PasskeyCardSummaryKind.Present)
     if (protector.passkeySummary.kind === PasskeyCardSummaryKind.Present) {
       expect(protector.passkeySummary.summary.title).toBe('Work laptop')
-      expect(protector.passkeySummary.summary.facts.map((fact) => fact.value)).toEqual(
-        expect.arrayContaining(['passkey_1234', 'Proton Pass']),
-      )
+      expect(
+        protector.passkeySummary.summary.facts.map((fact) => fact.value),
+      ).toEqual(expect.arrayContaining(['passkey_1234', 'Proton Pass']))
     }
     expect(protector.apps).toEqual([
-      expect.objectContaining({ title: 'Nook on MacBook', appId: 'device_5678' }),
+      expect.objectContaining({
+        title: 'Nook on MacBook',
+        appId: 'device_5678',
+      }),
     ])
     expect(rows[1]).toMatchObject({
       apps: [

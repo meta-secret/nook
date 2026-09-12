@@ -78,9 +78,7 @@ vi.mock(
       ControlMissing: 'control-missing',
     },
     RevalidatedAuthenticationAction: class {
-      constructor(
-        private readonly request: RevalidationRequest,
-      ) {}
+      constructor(private readonly request: RevalidationRequest) {}
       execute() {
         return actionMocks.performRevalidation(this.request)
       }
@@ -220,9 +218,7 @@ const approval: AuthenticationWorkflowApproval = {
   facts: approvalFacts,
 }
 
-function revalidationOutcomeKind(
-  kind: string,
-): RevalidationOutcome['kind'] {
+function revalidationOutcomeKind(kind: string): RevalidationOutcome['kind'] {
   return kind === 'acted'
     ? RevalidatedAuthenticationActionOutcomeKind.Acted
     : kind === 'control-missing'

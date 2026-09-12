@@ -42,9 +42,7 @@ vi.mock(
       ControlMissing: 'control-missing',
     },
     RevalidatedAuthenticationAction: class {
-      constructor(
-        private readonly request: RevalidationRequest,
-      ) {}
+      constructor(private readonly request: RevalidationRequest) {}
       execute() {
         return mocks.revalidate(this.request)
       }
@@ -108,7 +106,13 @@ describe('backup-code workflow action', () => {
       translatedMessageWithSubstitution:
         vi.fn<EnrollmentFlowHost['translatedMessageWithSubstitution']>(),
     }
-    document.body.append(title, description, step, continueButton, openVaultButton)
+    document.body.append(
+      title,
+      description,
+      step,
+      continueButton,
+      openVaultButton,
+    )
     return host
   }
   test('starts extraction only inside a fresh Rust-approved action', async () => {
@@ -171,7 +175,9 @@ describe('backup-code workflow action', () => {
         }),
     )
     const host = connectedHost()
-    const request: ConstructorParameters<typeof RevalidatedEnrollmentAction>[0] = {
+    const request: ConstructorParameters<
+      typeof RevalidatedEnrollmentAction
+    >[0] = {
       workflow: {
         root: document,
         formScope: { kind: PasswordFormScopeKind.Unowned },

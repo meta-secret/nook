@@ -82,8 +82,7 @@ type ExtensionMetadataTransport = {
 function isExtensionMetadataTransport(
   value: unknown,
 ): value is ExtensionMetadataTransport {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    return false;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   return (
     "channel" in value &&
     "version" in value &&

@@ -14,7 +14,8 @@ const actions = vi.hoisted(() => ({
   continueWithNook: vi.fn<() => void>(),
   enrollmentCopy: vi.fn(),
   proposePasskeyWithNook: vi.fn<() => void>(),
-  revalidateEnrollment: vi.fn<(request: RevalidatedEnrollmentRequest) => void>(),
+  revalidateEnrollment:
+    vi.fn<(request: RevalidatedEnrollmentRequest) => void>(),
   startQrEnrollment: vi.fn<() => void>(),
   events: [] as string[],
 }))
@@ -248,13 +249,14 @@ type RenderPasskeyWidgetArgs = {
 }
 
 function renderPasskeyWidget({ loginMatches }: RenderPasskeyWidgetArgs): void {
-  const args: Parameters<typeof authenticationWidgetRenderer.renderWidget>[0] = {
-    snapshot,
-    workflow,
-    facts,
-    loginMatches,
-    vaultConnection: { connected: true, vaultName: 'Personal' },
-  }
+  const args: Parameters<typeof authenticationWidgetRenderer.renderWidget>[0] =
+    {
+      snapshot,
+      workflow,
+      facts,
+      loginMatches,
+      vaultConnection: { connected: true, vaultName: 'Personal' },
+    }
   authenticationWidgetRenderer.renderWidget(args)
 }
 
@@ -331,7 +333,9 @@ describe('authenticator enrollment workflow', () => {
       ...snapshot,
       action: AuthenticationWorkflowAction.EnrollAuthenticator,
     }
-    const args: Parameters<typeof authenticationWidgetRenderer.renderWidget>[0] = {
+    const args: Parameters<
+      typeof authenticationWidgetRenderer.renderWidget
+    >[0] = {
       snapshot: enrollmentSnapshot,
       workflow,
       facts,

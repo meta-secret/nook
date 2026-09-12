@@ -110,7 +110,11 @@ function isShellTemplate(value: unknown): value is ShellTemplate {
     return false
   }
   return value.steps.every((step) => {
-    if (!isRecord(step) || !Array.isArray(step.fields) || !isRecord(step.submit)) {
+    if (
+      !isRecord(step) ||
+      !Array.isArray(step.fields) ||
+      !isRecord(step.submit)
+    ) {
       return false
     }
     return (
@@ -159,10 +163,7 @@ const templates = new Map(
     .filter((name) => name.endsWith('.json'))
     .map((name) => {
       const id = name.replace(/\.json$/u, '')
-      const template = readJson(
-        path.join(templatesDir, name),
-        isShellTemplate,
-      )
+      const template = readJson(path.join(templatesDir, name), isShellTemplate)
       return [id, { ...template, id }]
     }),
 )

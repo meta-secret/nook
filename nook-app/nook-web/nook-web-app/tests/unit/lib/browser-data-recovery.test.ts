@@ -53,33 +53,39 @@ describe('local data recovery support', () => {
         if (message.type !== 'request' || !message.requestId) return
         queueMicrotask(() => {
           for (const responderId of ['ready-peer', 'failed-peer']) {
-            this.onmessage?.(messageEvent({
+            this.onmessage?.(
+              messageEvent({
+                data: {
+                  type: 'seen',
+                  requestId: message.requestId,
+                  senderId: message.senderId,
+                  responderId,
+                },
+              }),
+            )
+          }
+          this.onmessage?.(
+            messageEvent({
               data: {
-                type: 'seen',
+                type: 'ready',
                 requestId: message.requestId,
                 senderId: message.senderId,
-                responderId,
+                responderId: 'ready-peer',
+                readiness: { kind: 'ready' },
               },
-            }))
-          }
-          this.onmessage?.(messageEvent({
-            data: {
-              type: 'ready',
-              requestId: message.requestId,
-              senderId: message.senderId,
-              responderId: 'ready-peer',
-              readiness: { kind: 'ready' },
-            },
-          }))
-          this.onmessage?.(messageEvent({
-            data: {
-              type: 'ready',
-              requestId: message.requestId,
-              senderId: message.senderId,
-              responderId: 'failed-peer',
-              readiness: { kind: 'failed', error: 'peer failed' },
-            },
-          }))
+            }),
+          )
+          this.onmessage?.(
+            messageEvent({
+              data: {
+                type: 'ready',
+                requestId: message.requestId,
+                senderId: message.senderId,
+                responderId: 'failed-peer',
+                readiness: { kind: 'failed', error: 'peer failed' },
+              },
+            }),
+          )
         })
       }
 
@@ -117,23 +123,27 @@ describe('local data recovery support', () => {
       }): void {
         if (message.type !== 'request' || !message.requestId) return
         queueMicrotask(() => {
-          this.onmessage?.(messageEvent({
-            data: {
-              type: 'seen',
-              requestId: message.requestId,
-              senderId: message.senderId,
-              responderId: 'failed-peer',
-            },
-          }))
-          this.onmessage?.(messageEvent({
-            data: {
-              type: 'ready',
-              requestId: message.requestId,
-              senderId: message.senderId,
-              responderId: 'failed-peer',
-              readiness: { kind: 'failed', error: 'peer failed' },
-            },
-          }))
+          this.onmessage?.(
+            messageEvent({
+              data: {
+                type: 'seen',
+                requestId: message.requestId,
+                senderId: message.senderId,
+                responderId: 'failed-peer',
+              },
+            }),
+          )
+          this.onmessage?.(
+            messageEvent({
+              data: {
+                type: 'ready',
+                requestId: message.requestId,
+                senderId: message.senderId,
+                responderId: 'failed-peer',
+                readiness: { kind: 'failed', error: 'peer failed' },
+              },
+            }),
+          )
         })
       }
 
@@ -173,13 +183,15 @@ describe('local data recovery support', () => {
         Promise.reject(new Error('peer cleanup rejected')),
       )
     expect(subscription.isOk()).toBe(true)
-    RecoveryChannel.instance.onmessage?.(messageEvent({
-      data: {
-        type: 'request',
-        requestId: 'request-1',
-        senderId: 'other-tab',
-      },
-    }))
+    RecoveryChannel.instance.onmessage?.(
+      messageEvent({
+        data: {
+          type: 'request',
+          requestId: 'request-1',
+          senderId: 'other-tab',
+        },
+      }),
+    )
     await Promise.resolve()
     await Promise.resolve()
 

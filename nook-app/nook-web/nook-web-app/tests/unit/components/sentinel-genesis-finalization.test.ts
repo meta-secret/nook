@@ -100,9 +100,7 @@ class GenesisFinalizationFixture {
 
   async reject(): Promise<void> {
     await expect(
-      new SentinelGenesisActions(
-        this.state,
-      ).finalize(),
+      new SentinelGenesisActions(this.state).finalize(),
     ).resolves.toEqual(err(new NativeVaultStorageFailure(this.failure)))
     expect(this.manager.sentinel_genesis_status).toHaveBeenCalledOnce()
     expect(this.previousParticipant.free).toHaveBeenCalledOnce()
@@ -235,24 +233,19 @@ describe('Sentinel genesis finalization projection', () => {
       await fireEvent.click(button)
       expect(fixture.finalizeAction).toHaveBeenCalledOnce()
       await expect(
-        new SentinelGenesisActions(
-          fixture.state,
-        ).finalize(),
+        new SentinelGenesisActions(fixture.state).finalize(),
       ).resolves.toEqual(err(new NativeVaultStorageFailure(fixture.failure)))
       await view.rerender(fixture.dashboardProps())
       expect(
-        requireButtonElement(
-          view.getByTestId('sentinel-genesis-finalize'),
-        ).disabled,
+        requireButtonElement(view.getByTestId('sentinel-genesis-finalize'))
+          .disabled,
       ).toBe(false)
       expect(fixture.state.sentinelGenesisPhase).toBe(
         SentinelGenesisPhase.AwaitingCompletionCheck,
       )
       fixture.setStatusPhase(SentinelGenesisPhase.Inactive)
       await expect(
-        new SentinelGenesisActions(
-          fixture.state,
-        ).finalize(),
+        new SentinelGenesisActions(fixture.state).finalize(),
       ).resolves.toEqual(err(new NativeVaultStorageFailure(fixture.failure)))
       await view.rerender(fixture.dashboardProps())
       expect(view.queryAllByTestId('sentinel-genesis-finalize')).toHaveLength(0)
@@ -278,9 +271,7 @@ describe('Sentinel genesis finalization projection', () => {
         args: { label: 'Genesis fixture', participantCount: 3, threshold: 2 },
       }
       await expect(
-        new SentinelGenesisActions(
-          fixture.state,
-        ).start(request),
+        new SentinelGenesisActions(fixture.state).start(request),
       ).resolves.toEqual(err(new NativeVaultStorageFailure(fixture.failure)))
       expect(fixture.manager.sentinel_genesis_status).toHaveBeenCalledOnce()
       expect(fixture.state.sentinelGenesisPhase).toBe(

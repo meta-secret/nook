@@ -178,7 +178,9 @@ export class VaultProviderActions {
   connectStorageArgs(): NookStorageConnectArgs {
     const state = this.state;
     if (this.shouldUseJoinProviderForConnect()) {
-      const [syncProvider] = new ProviderSelectionActions(state).syncProviders();
+      const [syncProvider] = new ProviderSelectionActions(
+        state,
+      ).syncProviders();
       if (!syncProvider) return this.wasmStorageArgs();
       return new StorageProviderPresentation(
         $state.snapshot(syncProvider),

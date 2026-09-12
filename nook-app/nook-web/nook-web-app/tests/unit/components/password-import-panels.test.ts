@@ -9,10 +9,7 @@ import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import { NookImportResult } from '$app-wasm'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
-import {
-  requireButtonElement,
-  requireInputElement,
-} from '../test-dom-helpers'
+import { requireButtonElement, requireInputElement } from '../test-dom-helpers'
 import ApplePasswordsImportPanel from '$lib/components/ApplePasswordsImportPanel.svelte'
 import DashlaneImportPanel from '$lib/components/DashlaneImportPanel.svelte'
 import KeePassXcImportPanel from '$lib/components/KeePassXcImportPanel.svelte'
