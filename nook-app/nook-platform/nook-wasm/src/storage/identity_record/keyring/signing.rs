@@ -4,10 +4,6 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Signing material bound to independently protected local identity entries.
-#[cfg(all(test, target_arch = "wasm32"))]
-use super as keyring;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::IdbPutStringRequest;
 use crate::IdentityDbWriteIdentityDirectory;
 use crate::KeyringDbKeyringDeleteKey;
 use crate::KeyringDbKeyringReadString;
@@ -16,14 +12,8 @@ use crate::KeyringDbWriteKeyring;
 use crate::storage::event_db;
 use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::indexed_db::StoredStringRecord;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::{self, identity_record};
 use crate::{NookDatabase, NookError};
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::LocalIdentityKeyringEntry;
 use nook_core::LocalIdentityProtection;
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::MemberLabelState;
 use nook_core::ProtectedSigningMaterial;
 use nook_core::{
     AppId, AppKey, DeviceSigningPublicKey, IdentityDirectory, IdentityId, IdentitySelection,
@@ -362,13 +352,9 @@ impl LocalIdentitySigner<'_> {
 }
 #[cfg(test)]
 mod tests {
-    #[cfg(target_arch = "wasm32")]
-    use crate::storage;
+
     use crate::storage::event_db;
-    #[cfg(target_arch = "wasm32")]
-    use crate::storage::identity_record::PriorAppAuthorization;
-    #[cfg(target_arch = "wasm32")]
-    use crate::storage::indexed_db;
+
     use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use nook_core::{
         AppKey, DeviceSigningPublicKey, IdentityRecord, LocalIdentityKeyringEntry, SigningIdentity,

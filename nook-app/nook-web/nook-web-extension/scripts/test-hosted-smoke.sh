@@ -41,7 +41,7 @@ run_playwright() {
   local test_title='uses a passkey-backed extension to create, approve, lock, and unlock a Simple Vault'
   bash scripts/run-with-xvfb.sh \
     /tmp/nook-hosted-extension-xvfb.log \
-    node_modules/.bin/playwright test \
+    bun x playwright test \
     --config playwright.config.ts \
     --grep "$test_title"
 }

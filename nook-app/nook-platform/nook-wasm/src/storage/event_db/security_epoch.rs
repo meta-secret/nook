@@ -7,8 +7,6 @@
 use crate::NookError;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::storage::indexed_db::StoredStringRecord;
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::GenesisImportRequest;
 use nook_core::LocalEventBytes;
 use nook_core::{EventGraph, EventId, EventInsertStatus, LocalEventStore, VaultEvent};
 mod requests;

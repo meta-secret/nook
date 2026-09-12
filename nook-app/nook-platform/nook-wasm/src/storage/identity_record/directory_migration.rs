@@ -17,8 +17,6 @@ use nook_core::{
     DirectoryLegacyMigration, IdentityDirectory, LegacyDirectoryBase, MigratedIdentityDirectory,
     MultiDeviceError,
 };
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 impl NookDatabase {
     pub(super) async fn load_pending_genesis(
         store: &rexie::Store,

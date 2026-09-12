@@ -12,4 +12,4 @@ bun run e2e:mock-auth:build
 
 bash scripts/run-with-xvfb.sh \
   /tmp/nook-extension-xvfb.log \
-  node_modules/.bin/playwright test --config playwright.config.ts "$@"
+  bun x playwright test --config playwright.config.ts "$@"

@@ -1,7 +1,5 @@
 //! Explicit lifecycle states for ordinary and staged Simple-vault genesis.
 
-#[cfg(all(test, target_arch = "wasm32"))]
-use super::simple_genesis::PendingSimpleGenesisEvent;
 use super::{simple_genesis::PendingSimpleGenesis, staged_genesis::StagedSimpleGenesisIdentity};
 use serde::Serialize;
 

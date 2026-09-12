@@ -8,8 +8,6 @@ use super::{
     PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,
     PinnedSimpleGenesisEvent,
 };
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::IdbPutStringRequest;
 use crate::StoredStringRecord;
 use crate::storage::identity_record::PendingSimpleGenesisFlow;
 use crate::{IndexedDbUpdate, NookDatabase};
@@ -280,8 +278,7 @@ mod tests {
         SimpleGenesisEventInput,
     };
     use crate::storage::identity_record;
-    #[cfg(target_arch = "wasm32")]
-    use crate::storage::indexed_db;
+
     use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use identity_record::{OrdinarySimpleGenesisRequest, genesis_flow::PendingSimpleGenesisFlow};
     use nook_core::{

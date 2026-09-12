@@ -10,8 +10,6 @@ use crate::manager::device_protection::ExtensionIdentityPublication;
 use crate::storage::identity_record::AuthorizerSigningUpdate;
 use crate::storage::identity_record::HandoffAuthorization;
 use crate::storage::identity_record::{IdentityHandoffOperation, PairedVaultEnrollment};
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::identity_record::{VaultCreationAuthority, VaultCreationAuthorityRef};
 
 struct AuthenticatedHandoffAuthorizer {
     app_key: nook_core::AppKey,

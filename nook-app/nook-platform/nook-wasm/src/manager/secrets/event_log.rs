@@ -5,8 +5,6 @@ use super::NookVaultManager;
 use crate::NookReplacementConflict;
 use crate::NookSecurityConflict;
 #[cfg(all(test, target_arch = "wasm32"))]
-use crate::types;
-#[cfg(all(test, target_arch = "wasm32"))]
 use serde::Serialize;
 #[cfg(all(test, target_arch = "wasm32"))]
 use wasm_bindgen::JsCast;

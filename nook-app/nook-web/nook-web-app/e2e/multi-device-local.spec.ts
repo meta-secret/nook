@@ -18,6 +18,7 @@ import {
   waitForPendingJoinBanner,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
+import { refreshJoinerVaultOnLoginGate } from './helpers/joiner-vault-refresh'
 
 test.describe('multi-device local vault with sync provider', () => {
   test.describe.configure({ mode: 'serial' })
@@ -133,10 +134,10 @@ test.describe('multi-device local vault with sync provider', () => {
           if (await deviceA.getByTestId('pending-joins-banner').isVisible()) {
             return true
           }
-          await deviceA.evaluate(async () => {
-            const vault = window.__nookVault
-            await vault?.syncFromStorage(ProviderSyncFreshness.Forced)
-          })
+          await deviceA.evaluate(
+            refreshJoinerVaultOnLoginGate,
+            ProviderSyncFreshness.Forced,
+          )
           await deviceA.evaluate(async () => {
             const vault = window.__nookVault
             await vault?.refreshPendingJoinsFromProviders?.()

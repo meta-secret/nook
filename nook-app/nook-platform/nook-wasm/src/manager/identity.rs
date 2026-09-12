@@ -3,10 +3,6 @@
 use crate::BrowserProviderVaultIdentityObservations;
 use crate::NookDatabase;
 use crate::NookIdentityDirectorySnapshot;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::identity_record;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::event_db;
 use nook_core::{CurrentVaultReplaceability, StoreId};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 

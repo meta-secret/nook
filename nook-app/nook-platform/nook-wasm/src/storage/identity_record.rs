@@ -9,8 +9,6 @@ use nook_core::MigratedIdentityDirectory;
 pub(crate) use crate::IdbPutStringRequest;
 pub(crate) use crate::NookDatabase;
 use crate::NookError;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::indexed_db;
 use nook_core::{AppId, IdentityDirectory, IdentitySelection, MultiDeviceError};
 use nook_core::{
     DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, IdentityCreation,
@@ -595,10 +593,7 @@ mod tests {
 
     use crate::identity_record;
     use crate::identity_record::NookIdentityDirectorySelectionKind;
-    #[cfg(target_arch = "wasm32")]
-    use crate::storage::event_db;
-    #[cfg(target_arch = "wasm32")]
-    use nook_core::IsoTimestamp;
+
     use nook_core::{AppKey, IdentityDirectory, IdentityRecord, IdentitySelection};
     use nook_core::{IdentityCreation, IdentityVaultKeyOpening};
 

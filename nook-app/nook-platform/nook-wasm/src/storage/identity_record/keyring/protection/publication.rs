@@ -3,8 +3,6 @@ use super::{
     IdentityDbWriteIdentityDirectory, KeyringDbKeyringDeleteKey, KeyringDbWriteKeyring,
     NookDatabase, NookError, PreparedProtectedIdentity, ProtectedLocalIdentitySave, event_db,
 };
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::identity_record::PriorAppAuthorization;
 #[cfg(test)]
 use crate::storage::identity_record::StoredIdentityProtection;
 

@@ -40,6 +40,7 @@ import {
   waitForSyncRemoteState,
   type SyncE2eTarget,
 } from './sync-provider'
+import { refreshJoinerVaultOnLoginGate } from './helpers/joiner-vault-refresh'
 
 const providerLabel = e2eSyncProviderDef(resolveE2eSyncProvider()).label
 
@@ -296,9 +297,12 @@ test.describe(`multi-device join background sync (${providerLabel})`, () => {
           if (await deviceA.getByTestId('pending-joins-banner').isVisible()) {
             return true
           }
+          await deviceA.evaluate(
+            refreshJoinerVaultOnLoginGate,
+            ProviderSyncFreshness.Forced,
+          )
           await deviceA.evaluate(async () => {
             const vault = window.__nookVault
-            await vault?.syncFromStorage(ProviderSyncFreshness.Forced)
             await vault?.refreshPendingJoinsFromProviders?.()
           })
           return deviceA.getByTestId('pending-joins-banner').isVisible()

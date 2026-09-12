@@ -234,8 +234,7 @@ mod tests {
     use super::super::{SimpleGenesisCompletion, SimpleGenesisEventInput, recovery};
     use crate::storage::event_db;
     use crate::storage::identity_record;
-    #[cfg(target_arch = "wasm32")]
-    use crate::storage::indexed_db;
+
     use nook_core::{
         AppKey, AppKeyIdentityMembership, IdentityDirectory, IsoTimestamp, MemberLabelState,
         SigningIdentity, StoredSigningSeed,

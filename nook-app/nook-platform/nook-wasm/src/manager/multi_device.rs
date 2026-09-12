@@ -6,18 +6,12 @@
 //! password-mode counterpart is `connect_with_password` (`manager::password`).
 
 use super::NookVaultManager;
-#[cfg(all(test, target_arch = "wasm32"))]
-use super::VaultCryptoState;
-#[cfg(all(test, target_arch = "wasm32"))]
-use super::event_log::SecurityEpochRotationFailure;
 use super::verified_access::VerifiedVaultAccessFlow;
 use crate::BrowserTimestamp;
 use crate::LoadedVaultUnlockRequest;
 use crate::NookError;
 use crate::conversion::LoadedVault;
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::AuthKeyId;
 use nook_core::{
     BuildMembersRecordsRequest, MemberFromIdentityRequest, ResolveMemberRosterRequest,
     RosterAddMemberRequest, VaultMember,

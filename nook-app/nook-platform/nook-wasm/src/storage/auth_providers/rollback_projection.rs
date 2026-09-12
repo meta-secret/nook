@@ -3,8 +3,6 @@
 use crate::AuthProviderDatabase;
 use crate::NookDatabase;
 use crate::ProviderDbReadRawSnapshotFromStore;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::identity_record;
 use crate::storage::identity_record::StoredIdentityProtection;
 use nook_core::{
     DeviceIdentity, NormalizedAuthSnapshot, ProviderCredentialRejection,

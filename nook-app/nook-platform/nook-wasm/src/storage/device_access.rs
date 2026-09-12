@@ -8,20 +8,8 @@
 //! This companion record is deliberately separate from `device_identity_wrapped`.
 //! Corrupt or future descriptive metadata must never block device-key unlock.
 
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::IdentityDbSaveNewProtectedLocalIdentity;
 use crate::NookError;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::identity_record::PriorAppAuthorization;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::indexed_db::StoredStringRecord;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::{IdbPutStringRequest, NookDatabase, SaveWrappedDeviceIdentityRequest};
 use js_sys::Date;
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::AuthenticatorGuidEvidence;
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::DiscardedClientEnvironment;
 use nook_core::IsoTimestamp;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::{DeviceIdentityProtection, PasskeyProtectionInput};
@@ -34,8 +22,6 @@ pub(crate) use nook_core::{
     PasskeyLastUsedAtEvidence,
 };
 
-#[cfg(all(test, target_arch = "wasm32"))]
-use super::indexed_db;
 use super::indexed_db::{StringUpdateGuard, StringUpdateResult};
 
 mod migration;

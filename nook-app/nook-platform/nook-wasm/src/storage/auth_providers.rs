@@ -5,21 +5,9 @@
 //! identity so nothing sensitive is stored in plaintext. Pure snapshot
 //! transforms live in `nook_core`; this module adds the `IndexedDB` I/O and sealing.
 
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::IdentityDbSaveNewProtectedLocalIdentity;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::identity_record::PriorAppAuthorization;
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::{
-    StoredGithubPat, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
-    StoredOAuthRefreshCredential,
-};
-
 mod publication;
 mod rollback_projection;
 use crate::NookError;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::{IdbPutStringRequest, NookDatabase};
 use publication::ProviderSnapshotStore;
 pub(crate) use publication::{PresealedProviderSnapshotPublication, ProviderSnapshotPublication};
 
@@ -27,8 +15,6 @@ use rexie::{ObjectStore, Rexie, TransactionMode};
 use serde_json::Value;
 use std::ops::Deref;
 
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::AuthProvidersSnapshotData;
 use nook_core::{DeviceIdentity, NormalizedAuthSnapshot, ProviderCredentialRejection};
 
 pub(crate) struct AuthProviderDatabase {

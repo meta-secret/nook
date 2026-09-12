@@ -193,7 +193,14 @@ export class SentinelUnlockActions {
     const synchronized = await state.syncFromStorage(
       ProviderSyncFreshness.Forced,
     );
-    if (synchronized.isErr()) return storageErr(synchronized.error);
+    if (
+      synchronized.isErr() &&
+      (state.vaultArchitecture.vault_type !== VaultType.Sentinel ||
+        !(synchronized.error instanceof StorageOperationFailure) ||
+        synchronized.error.recoveryKind !==
+          VaultRecoveryErrorKind.SentinelCeremonyRequired)
+    )
+      return storageErr(synchronized.error);
     const read = await this.getSentinelUnlockStatus();
     if (read.isErr()) return storageErr(read.error);
     if (
