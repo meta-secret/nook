@@ -5,19 +5,20 @@ import {
   simple_vault_url,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
-export const SIMPLE_VAULT_BASE_URL = __NOOK_SIMPLE_VAULT_URL__
-
 /** Browser requests await canonical policy without delaying listener registration. */
 class SimpleVaultRuntime {
-  constructor(private readonly baseUrl: string) {}
+  private baseUrl(): string {
+    return __NOOK_SIMPLE_VAULT_URL__
+  }
+
   async runtimeSimpleVaultUrl(path = ''): Promise<string> {
     await companionWasmReady
-    return simple_vault_url(this.baseUrl, path)
+    return simple_vault_url(this.baseUrl(), path)
   }
   async isRuntimeSimpleVaultUrl(candidateUrl: string): Promise<boolean> {
     await companionWasmReady
     try {
-      return belongs_to_simple_vault(this.baseUrl, candidateUrl)
+      return belongs_to_simple_vault(this.baseUrl(), candidateUrl)
     } catch {
       return false
     }
@@ -25,10 +26,10 @@ class SimpleVaultRuntime {
   async isRuntimeNookVaultAppUrl(candidateUrl: string): Promise<boolean> {
     await companionWasmReady
     try {
-      return is_nook_vault_app_url(candidateUrl, this.baseUrl)
+      return is_nook_vault_app_url(candidateUrl, this.baseUrl())
     } catch {
       return false
     }
   }
 }
-export const simpleVaultRuntime = new SimpleVaultRuntime(SIMPLE_VAULT_BASE_URL)
+export const simpleVaultRuntime = new SimpleVaultRuntime()
