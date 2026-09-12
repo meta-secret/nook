@@ -15,6 +15,7 @@ import type {
   AuditCortexMarkdownSyntaxArgs,
   AuditCortexDocumentStructureArgs,
   CortexDocumentSource,
+  CortexStructureFinding,
 } from '../src/cortex-document-structure.ts';
 
 import { CortexDocumentMapContractKind } from '../src/domain.ts';
@@ -57,6 +58,20 @@ export class CortexDocumentMapCortexDocumentStructureScenario {
   static auditSyntax(documents: readonly CortexDocumentSource[]) {
     const args: AuditCortexMarkdownSyntaxArgs = { documents };
     return new CortexMarkdownSyntaxAudit(args).execute();
+  }
+
+  static hasFinding(
+    ...[findings, expected]: readonly [
+      findings: readonly CortexStructureFinding[],
+      expected: Partial<CortexStructureFinding>,
+    ]
+  ): boolean {
+    return findings.some(
+      (finding) =>
+        (!('code' in expected) || finding.code === expected.code) &&
+        (!('file' in expected) || finding.file === expected.file) &&
+        (!('message' in expected) || finding.message === expected.message),
+    );
   }
 
   static distributedDocuments(
@@ -265,7 +280,12 @@ test('requires the root knowledge graph to link the Gizmo graph', () => {
     message:
       'Root knowledge graph must link the owner graph: .cortex/gizmo/knowledge-graph.md',
   };
-  expect(findings).toContainEqual(expect.objectContaining(expectedFinding));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
+      findings,
+      expectedFinding,
+    ),
+  ).toBe(true);
 });
 
 test('maps Gizmo-owned documents to the Gizmo knowledge graph', () => {
@@ -285,7 +305,12 @@ test('maps Gizmo-owned documents to the Gizmo knowledge graph', () => {
     message:
       'Document is not indexed in its owning knowledge graph .cortex/gizmo/knowledge-graph.md: .cortex/gizmo/policy.md',
   };
-  expect(findings).toContainEqual(expect.objectContaining(expectedFinding));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
+      findings,
+      expectedFinding,
+    ),
+  ).toBe(true);
 });
 
 test('rejects section links and duplicate document entries in knowledge graphs', () => {
@@ -303,7 +328,12 @@ test('rejects section links and duplicate document entries in knowledge graphs',
     code: CortexStructureFindingCode.InvalidIndexEntry,
     file: '.cortex/teams/dev-core/knowledge-graph.md',
   };
-  expect(findings).toContainEqual(expect.objectContaining(expectedFinding));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
+      findings,
+      expectedFinding,
+    ),
+  ).toBe(true);
 });
 
 test('rejects root navigation that bypasses an owning graph', () => {
@@ -347,7 +377,12 @@ test('rejects a team graph that indexes another team document', () => {
     code: CortexStructureFindingCode.InvalidIndexEntry,
     file: '.cortex/teams/dev-core/knowledge-graph.md',
   };
-  expect(findings).toContainEqual(expect.objectContaining(expectedFinding));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
+      findings,
+      expectedFinding,
+    ),
+  ).toBe(true);
 });
 
 test('rejects cross-owner indexing between Gizmo and team graphs', () => {
@@ -365,7 +400,12 @@ test('rejects cross-owner indexing between Gizmo and team graphs', () => {
     code: CortexStructureFindingCode.InvalidIndexEntry,
     file: '.cortex/gizmo/knowledge-graph.md',
   };
-  expect(gizmoFindings).toContainEqual(expect.objectContaining(gizmoFinding));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
+      gizmoFindings,
+      gizmoFinding,
+    ),
+  ).toBe(true);
 
   const teamIndexesGizmoArgs: DistributedDocumentsArgs = {
     rootExtra: '',
@@ -381,7 +421,12 @@ test('rejects cross-owner indexing between Gizmo and team graphs', () => {
     code: CortexStructureFindingCode.InvalidIndexEntry,
     file: '.cortex/teams/dev-core/knowledge-graph.md',
   };
-  expect(teamFindings).toContainEqual(expect.objectContaining(teamFinding));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
+      teamFindings,
+      teamFinding,
+    ),
+  ).toBe(true);
 });
 
 test('accepts k-graph.md as an alias for the centralized knowledge graph', () => {

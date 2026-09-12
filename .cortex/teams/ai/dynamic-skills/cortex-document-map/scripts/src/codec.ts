@@ -21,7 +21,9 @@ import {
 } from './cortex-document-structure.ts';
 
 export class CortexDocumentMapTransport {
-  private isTransportRecord(value: CortexDocumentMapTransportRecord): boolean {
+  private isTransportRecord(
+    value: unknown,
+  ): value is Readonly<Record<string, unknown>> {
     return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
   }
 
@@ -47,9 +49,9 @@ export class CortexDocumentMapTransport {
         }),
       );
     }
-    let transport: CortexDocumentMapRequestTransport;
+    let transport: unknown;
     try {
-      transport = JSON.parse(serialized) as CortexDocumentMapRequestTransport;
+      transport = JSON.parse(serialized);
     } catch {
       return err(
         this.failure({
@@ -161,9 +163,9 @@ export class CortexDocumentMapTransport {
     const serialized = this.request;
     const capacity = this.assertResultByteLimit(serialized);
     if (capacity.isErr()) return err(capacity.error);
-    let transport: CortexDocumentMapResultTransport;
+    let transport: unknown;
     try {
-      transport = JSON.parse(serialized) as CortexDocumentMapResultTransport;
+      transport = JSON.parse(serialized);
     } catch {
       return err(
         this.resultFailure({
@@ -335,7 +337,7 @@ export class CortexDocumentMapTransport {
     });
   }
 
-  private validPath(value: string | false): value is string {
+  private validPath(value: unknown): value is string {
     return (
       typeof value === 'string' &&
       value.length <= CORTEX_DOCUMENT_MAP_PATH_LIMIT &&
@@ -343,16 +345,20 @@ export class CortexDocumentMapTransport {
     );
   }
 
-  private isRecord(value: CortexDocumentMapTransportRecord): boolean {
-    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  private isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+    return this.isTransportRecord(value);
   }
 
-  private isResultRecord(value: CortexDocumentMapTransportRecord): boolean {
-    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  private isResultRecord(
+    value: unknown,
+  ): value is Readonly<Record<string, unknown>> {
+    return this.isTransportRecord(value);
   }
 
-  private isFindingRecord(value: CortexDocumentMapTransportRecord): boolean {
-    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  private isFindingRecord(
+    value: unknown,
+  ): value is Readonly<Record<string, unknown>> {
+    return this.isTransportRecord(value);
   }
 
   private assertExactKeys(
@@ -450,7 +456,7 @@ export class CortexDocumentMapTransport {
 type DecodeFailure = { readonly path: string; readonly message: string };
 
 type ExactKeysRequest = {
-  readonly value: CortexDocumentMapTransportRecord;
+  readonly value: Readonly<Record<string, unknown>>;
   readonly expected: readonly string[];
   readonly path: string;
 };
@@ -458,42 +464,14 @@ type ExactKeysRequest = {
 type ResultExactKeysRequest = ExactKeysRequest;
 
 type DecodeDocumentRequest = {
-  readonly transport: CortexDocumentMapDocumentTransport;
+  readonly transport: unknown;
   readonly index: number;
 };
 
 type DecodeFindingRequest = {
-  readonly transport: CortexDocumentMapFindingTransport;
+  readonly transport: unknown;
   readonly index: number;
 };
-
-type CortexDocumentMapDocumentTransport = {
-  readonly relativePath: string | false;
-  readonly content: string | false;
-};
-type CortexDocumentMapRequestTransport = {
-  readonly kind: string | false;
-  readonly documents: CortexDocumentMapDocumentTransport[] | false;
-  readonly excludedDocumentPaths: (string | false)[] | false;
-};
-
-type CortexDocumentMapFindingTransport = {
-  readonly code: string | false;
-  readonly file: string | false;
-  readonly line: number | false;
-  readonly message: string | false;
-};
-
-type CortexDocumentMapResultTransport = {
-  readonly kind: string | false;
-  readonly findings: CortexDocumentMapFindingTransport[] | false;
-};
-
-type CortexDocumentMapTransportRecord =
-  | CortexDocumentMapRequestTransport
-  | CortexDocumentMapDocumentTransport
-  | CortexDocumentMapResultTransport
-  | CortexDocumentMapFindingTransport;
 
 const REQUEST_KEYS = ['kind', 'documents', 'excludedDocumentPaths'] as const;
 
@@ -507,6 +485,58 @@ const UTF8_ENCODER = new TextEncoder();
 
 const CORTEX_PATH =
   /^\.cortex\/(?!\.\.?\/)(?!.*\/\.\.?(?:\/|$))(?!.*\\)(?!.*[\u0000-\u001f\u007f-\u009f\u061c\u200e-\u200f\u2028-\u202e\u2066-\u206f])[^/]+(?:\/[^/]+)*\.md$/u;
+
+export class CortexDocumentMapValeReportDecoder {
+  private constructor(private readonly serialized: string) {}
+
+  static from(serialized: string): CortexDocumentMapValeReportDecoder {
+    return new CortexDocumentMapValeReportDecoder(serialized);
+  }
+
+  execute(): CortexDocumentMapValeReport {
+    const report: unknown = JSON.parse(this.serialized);
+    if (!this.isReport(report)) throw new Error('Invalid Vale report');
+    return report;
+  }
+
+  private isAlert(value: unknown): value is CortexDocumentMapValeAlert {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return false;
+    return (
+      'Check' in value &&
+      typeof value.Check === 'string' &&
+      'Line' in value &&
+      typeof value.Line === 'number' &&
+      'Message' in value &&
+      typeof value.Message === 'string' &&
+      'Severity' in value &&
+      typeof value.Severity === 'string'
+    );
+  }
+
+  private isReport(value: unknown): value is CortexDocumentMapValeReport {
+    return (
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      Object.values(value).every(
+        (alerts) =>
+          Array.isArray(alerts) && alerts.every((alert) => this.isAlert(alert)),
+      )
+    );
+  }
+}
+
+export type CortexDocumentMapValeAlert = {
+  readonly Check: string;
+  readonly Line: number;
+  readonly Message: string;
+  readonly Severity: string;
+};
+
+export type CortexDocumentMapValeReport = Readonly<
+  Record<string, readonly CortexDocumentMapValeAlert[]>
+>;
 
 const PROHIBITED_CONTENT =
   /[\u0000\u007f-\u009f\u061c\u200e-\u200f\u2028-\u202e\u2066-\u206f]/u;

@@ -2,6 +2,11 @@ import { expect, test } from 'bun:test';
 
 import path from 'node:path';
 
+import {
+  CortexDocumentMapValeReportDecoder,
+  type CortexDocumentMapValeReport,
+} from '../src/codec.ts';
+
 export class CortexDocumentMapValeNavigationScenario {
   private constructor(private readonly request: Uint8Array) {}
 
@@ -52,18 +57,13 @@ export class CortexDocumentMapValeNavigationScenario {
 
   private execute(): ValeReport {
     const stdout = this.request;
-    return JSON.parse(new TextDecoder().decode(stdout)) as ValeReport;
+    return CortexDocumentMapValeReportDecoder.from(
+      new TextDecoder().decode(stdout),
+    ).execute();
   }
 }
 
-type ValeAlert = {
-  readonly Check: string;
-  readonly Line: number;
-  readonly Message: string;
-  readonly Severity: string;
-};
-
-type ValeReport = Readonly<Record<string, readonly ValeAlert[]>>;
+type ValeReport = CortexDocumentMapValeReport;
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../../../../../..');
 

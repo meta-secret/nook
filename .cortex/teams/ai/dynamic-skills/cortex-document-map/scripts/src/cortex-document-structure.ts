@@ -419,6 +419,10 @@ export class CortexDocumentStructure {
     return node.type === 'heading';
   }
 
+  private isLink(node: Parent | RootContent): node is Link {
+    return node.type === 'link';
+  }
+
   private addFinding(args: AddFindingArgs): void {
     const finding: CortexStructureFinding = {
       code: args.code,
@@ -431,8 +435,8 @@ export class CortexDocumentStructure {
 
   private visitMarkdownLinks(request: MarkdownLinkVisit): void {
     const { links, node } = request;
-    if (node.type === 'link') {
-      links.push(node as Link);
+    if (this.isLink(node)) {
+      links.push(node);
     }
     if ('children' in node && Array.isArray(node.children)) {
       for (const child of node.children) {
