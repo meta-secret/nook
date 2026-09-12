@@ -41,6 +41,10 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
 - **Remote e2e failure:** read Playwright attachment `nook-app-logs.json` from
   the CI artifact/report before changing code. The attachment is created for
   every e2e result; failures also print the same entries to test output.
+- **E2e failure repair:** for every failed e2e test, analyze the underlying
+  cause and write a focused unit test at the owning boundary before fixing the
+  defect. Direct e2e-test edits are allowed only when a unit test is infeasible
+  (rare).
 - **Human local repro:** `E2E_SPEC=… task web:test:e2e:file`, then
   `fetchAppLogs(page)` or open `/app-logs?minLevel=debug&limit=1000`. Agents use
   the hosted remote catalog.

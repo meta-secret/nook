@@ -57,6 +57,10 @@ manager owns publication, slow PR validation, and promotion.
 - Failed checks and unresolved review/security verdicts block promotion.
 - Protection rejection is visible and never selects another merge method.
 - Return repair evidence to the controller for the normal feature path.
+- For every failed e2e test, return the evidence needed to analyze the
+  underlying cause and route the repair to its owning boundary. Before fixing,
+  the repair must write a focused unit test at that boundary. Direct e2e-test
+  edits are allowed only when a unit test is infeasible (rare).
 - Do not mutate scope or automatically retry publication under stale authority.
 
 ## Reactive observation
