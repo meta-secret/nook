@@ -66,6 +66,24 @@ export type PrStewardDeliveryId = Opaque<string, IdentityKind.Delivery>;
 export type PrStewardEventId = Opaque<string, IdentityKind.Event>;
 export type PrStewardHeadSha = Opaque<string, IdentityKind.Head>;
 export type PrStewardPullRequest = Opaque<number, IdentityKind.PullRequest>;
+
+function isPrStewardPullRequest(
+  value: UntrustedYamlNode,
+): value is PrStewardPullRequest {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function isPrStewardHeadSha(
+  value: UntrustedYamlNode,
+): value is PrStewardHeadSha {
+  return typeof value === 'string' && /^[0-9a-f]{40}$/u.test(value);
+}
+
+function isOpaqueText<Kind extends IdentityKind>(
+  value: string,
+): value is Opaque<string, Kind> {
+  return value.length > 0;
+}
 enum Meta {
   Author = 'author',
   CommentId = 'commentId',
@@ -107,6 +125,72 @@ type RoutingCommon = {
   readonly url: PrStewardUrl | false;
 };
 export type PrStewardRoutingRecord = RoutingCommon & RoutingVariant;
+
+type PrStewardRoutingCandidate = {
+  readonly kind: PrStewardRecordKind.Routing;
+  readonly eventId: PrStewardEventId;
+  readonly deliveryId: PrStewardDeliveryId;
+  readonly repository: typeof PR_STEWARD_REPOSITORY;
+  readonly pullRequest: PrStewardPullRequest;
+  readonly headSha: PrStewardHeadSha;
+  readonly source: PrStewardSource;
+  readonly objectId: number | false;
+  readonly githubEvent: PrStewardGithubEvent;
+  readonly action: string | false;
+  readonly state: string | false;
+  readonly url: PrStewardUrl | false;
+  readonly path: string | false;
+  readonly line: number | false;
+  readonly reviewId: number | false;
+  readonly commentId: number | false;
+  readonly runId: number | false;
+  readonly author: string | false;
+};
+
+function isPrStewardRoutingRecord(
+  value: PrStewardRoutingCandidate,
+): value is PrStewardRoutingRecord {
+  switch (value.source) {
+    case PrStewardSource.PullRequest:
+    case PrStewardSource.PullRequestReview:
+      return (
+        value.path === false &&
+        value.line === false &&
+        value.reviewId === false &&
+        value.commentId === false &&
+        value.runId === false
+      );
+    case PrStewardSource.PullRequestReviewComment:
+      return true;
+    case PrStewardSource.IssueComment:
+      return (
+        value.path === false &&
+        value.line === false &&
+        value.reviewId === false &&
+        value.runId === false
+      );
+    case PrStewardSource.CheckRun:
+    case PrStewardSource.WorkflowRun:
+      return (
+        value.path === false &&
+        value.line === false &&
+        value.reviewId === false &&
+        value.commentId === false &&
+        value.author === false
+      );
+    case PrStewardSource.CheckSuite:
+      return (
+        value.path === false &&
+        value.line === false &&
+        value.reviewId === false &&
+        value.commentId === false &&
+        value.runId === false &&
+        value.author === false
+      );
+    case PrStewardSource.WorkflowJob:
+      return false;
+  }
+}
 export enum PrStewardBlockerCode {
   GithubObservationUnavailable = 'github-observation-unavailable',
   MalformedEvent = 'malformed-event',
@@ -257,15 +341,15 @@ type RecordField = {
 
 export class PrStewardNdjsonCodec {
   static pullRequest(value: UntrustedYamlNode): PrStewardPullRequest {
-    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0)
+    if (!isPrStewardPullRequest(value))
       return this.#reject(PrStewardDecodeCode.InvalidField);
-    return value as PrStewardPullRequest;
+    return value;
   }
 
   static headSha(value: UntrustedYamlNode): PrStewardHeadSha {
-    if (typeof value !== 'string' || !/^[0-9a-f]{40}$/.test(value))
+    if (!isPrStewardHeadSha(value))
       return this.#reject(PrStewardDecodeCode.InvalidField);
-    return value as PrStewardHeadSha;
+    return value;
   }
 
   static githubEvent(source: PrStewardSource): PrStewardGithubEvent {
@@ -304,9 +388,7 @@ export class PrStewardNdjsonCodec {
       this.#reject(PrStewardDecodeCode.InvalidRecord);
     let parsed: UntrustedYamlNode;
     try {
-      parsed = UntrustedYamlBoundary.fromHost(
-        JSON.parse(line) as UntrustedYamlNode,
-      );
+      parsed = UntrustedYamlBoundary.fromHost(JSON.parse(line));
     } catch {
       this.#fail({
         code: PrStewardDecodeCode.InvalidJson,
@@ -393,8 +475,8 @@ export class PrStewardNdjsonCodec {
         author !== false)
     )
       this.#reject(PrStewardDecodeCode.InvalidCombination);
-    return {
-      kind: PrStewardRecordKind.Routing,
+    const routing = {
+      kind: PrStewardRecordKind.Routing as const,
       eventId: this.#opaqueText({
         record,
         field: Field.EventId,
@@ -406,11 +488,10 @@ export class PrStewardNdjsonCodec {
         kind: IdentityKind.Delivery,
       }),
       repository: this.#repository(record),
-      pullRequest: this.#integer({
-        record,
-        field: Field.Pr,
-      }) as PrStewardPullRequest,
-      headSha: headSha as PrStewardHeadSha,
+      pullRequest: this.pullRequest(
+        this.#required({ record, field: Field.Pr }),
+      ),
+      headSha,
       source,
       objectId: this.#optionalInteger({ record, field: Field.ObjectId }),
       commentId,
@@ -423,7 +504,10 @@ export class PrStewardNdjsonCodec {
       path,
       line,
       author,
-    } as PrStewardRoutingRecord;
+    };
+    if (!isPrStewardRoutingRecord(routing))
+      return this.#reject(PrStewardDecodeCode.InvalidCombination);
+    return routing;
   }
 
   static #blocker(
@@ -490,11 +574,14 @@ export class PrStewardNdjsonCodec {
       readonly kind: Kind;
     },
   ): Opaque<string, Kind> {
-    return this.#text({
+    const value = this.#text({
       record: request.record,
       field: request.field,
       limit: 128,
-    }) as Opaque<string, Kind>;
+    });
+    if (!isOpaqueText<Kind>(value))
+      return this.#reject(PrStewardDecodeCode.InvalidField);
+    return value;
   }
 
   static #required(request: RecordField): UntrustedYamlNode {

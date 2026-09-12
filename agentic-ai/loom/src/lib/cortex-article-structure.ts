@@ -51,47 +51,45 @@ class CortexMarkdownNodeKind {
   }
 
   procedureTraversal(): MarkdownProcedureTraversal {
-    switch (this.kind) {
-      case 'blockquote':
-      case 'code':
-      case 'footnoteDefinition':
-      case 'html':
-        return MarkdownProcedureTraversal.Excluded;
-      default:
-        return MarkdownProcedureTraversal.Inspect;
-    }
+    if (
+      this.kind === 'blockquote' ||
+      this.kind === 'code' ||
+      this.kind === 'footnoteDefinition' ||
+      this.kind === 'html'
+    )
+      return MarkdownProcedureTraversal.Excluded;
+    return MarkdownProcedureTraversal.Inspect;
   }
 
   contentRole(): MarkdownArticleContentRole {
-    switch (this.kind) {
-      case 'definition':
-      case 'footnoteDefinition':
-      case 'heading':
-      case 'html':
-      case 'thematicBreak':
-      case 'break':
-        return MarkdownArticleContentRole.Hidden;
-      case 'image':
-      case 'imageReference':
-      case 'footnoteReference':
-        return MarkdownArticleContentRole.Intrinsic;
-      case 'blockquote':
-      case 'code':
-        return MarkdownArticleContentRole.Example;
-      default:
-        return MarkdownArticleContentRole.Inspect;
-    }
+    if (
+      this.kind === 'definition' ||
+      this.kind === 'footnoteDefinition' ||
+      this.kind === 'heading' ||
+      this.kind === 'html' ||
+      this.kind === 'thematicBreak' ||
+      this.kind === 'break'
+    )
+      return MarkdownArticleContentRole.Hidden;
+    if (
+      this.kind === 'image' ||
+      this.kind === 'imageReference' ||
+      this.kind === 'footnoteReference'
+    )
+      return MarkdownArticleContentRole.Intrinsic;
+    if (this.kind === 'blockquote' || this.kind === 'code')
+      return MarkdownArticleContentRole.Example;
+    return MarkdownArticleContentRole.Inspect;
   }
 
   proseRole(): MarkdownArticleContentRole {
-    switch (this.kind) {
-      case 'image':
-      case 'imageReference':
-      case 'footnoteReference':
-        return MarkdownArticleContentRole.Hidden;
-      default:
-        return this.contentRole();
-    }
+    if (
+      this.kind === 'image' ||
+      this.kind === 'imageReference' ||
+      this.kind === 'footnoteReference'
+    )
+      return MarkdownArticleContentRole.Hidden;
+    return this.contentRole();
   }
 }
 

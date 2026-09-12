@@ -196,12 +196,13 @@ export class ModuleExpertRepositoryContext {
     while (true) {
       const read = await reader.read();
       if (read.done) break;
-      bytes += read.value.byteLength;
+      const chunk = UntrustedYamlBoundary.byteChunk(read.value);
+      bytes += chunk.byteLength;
       if (bytes > MAX_REQUEST_BYTES) {
         await reader.cancel();
         throw new Error('JSON-RPC request exceeds the byte limit.');
       }
-      chunks[chunks.length] = read.value;
+      chunks[chunks.length] = chunk;
     }
     return Buffer.concat(chunks).toString('utf8');
   }

@@ -184,7 +184,7 @@ export class ReviewEventSchema {
   private reviewEvents(parsed: UntrustedYamlMap): readonly UntrustedYamlNode[] {
     const request: PropertyRequest = { record: parsed, key: 'review_events' };
     const value = this.property(request);
-    return Array.isArray(value) ? value : [];
+    return UntrustedYamlBoundary.isList(value) ? value : [];
   }
 }
 

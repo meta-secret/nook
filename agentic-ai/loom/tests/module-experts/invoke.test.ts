@@ -29,6 +29,8 @@ import type {
   TaskTerminal,
 } from '../../src/agent-workflow/domain.ts';
 
+import { AgentAttemptTransport } from '../../src/agent-workflow/attempt-codec.ts';
+
 import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
@@ -166,8 +168,9 @@ class MissingContinuationAgentRuntime implements AgentTaskRuntime<
       detail: 'Codex turn completed.',
     };
     await invocation.observe(observation);
-    const incompleteCompletion = {
+    const incompleteCompletion: AgentExecutionCompletion = {
       threadId: 'incomplete-module-expert-thread',
+      // @ts-expect-error intentionally omits continuation data
       output: {
         resultKind: WorkflowResultKind.ModuleExpertEvidence,
         summary: 'Prompt-compliant prose without continuation data.',
@@ -178,11 +181,7 @@ class MissingContinuationAgentRuntime implements AgentTaskRuntime<
         artifacts: [],
       },
     };
-    return ok(
-      JSON.parse(
-        JSON.stringify(incompleteCompletion),
-      ) as AgentExecutionCompletion,
-    );
+    return ok(incompleteCompletion);
   }
 }
 
@@ -307,9 +306,9 @@ describe('module expert invocation runtime', () => {
         result.runDirectory,
         result.processing.result.path,
       );
-      const projectedTerminal = JSON.parse(
+      const projectedTerminal = AgentAttemptTransport.decodeTerminal(
         await readFile(resultPath, 'utf8'),
-      ) as TaskTerminal<string>;
+      );
       expect(projectedTerminal).toEqual(result.terminal);
       if (projectedTerminal.kind !== TaskTerminalKind.Completed) {
         throw new Error('Expected projected completed module expert terminal.');

@@ -11,8 +11,8 @@ import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow
 
 test('rejects direct construction of structural provenance without authority', () => {
   const configuration: AgentAttemptJournalConfiguration = {
-    adapter:
-      AgentAttemptAdapterKind.StructuralExpertInvocation as AgentAttemptAdapterKind.GenericDelegationRecorder,
+    // @ts-expect-error wrong adapter provenance is intentional for this test
+    adapter: AgentAttemptAdapterKind.StructuralExpertInvocation,
     runDirectory: resolve(import.meta.dir, 'not-created'),
     runId: 'forged-structural-run',
     workflow: DelegatedAgentWorkflowName.AgentWork,

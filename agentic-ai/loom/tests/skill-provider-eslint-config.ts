@@ -6,6 +6,7 @@ import {
   ShellSeparator,
   type ShellToken,
   type ShellWord,
+  shellWordAt,
 } from './skill-provider-command-types.ts';
 
 import type { ConfigurationReference } from './skill-provider-config-types.ts';
@@ -189,7 +190,7 @@ export class SkillProviderEslintConfigScenario {
       index < request.words.length;
       index += 1
     ) {
-      const word = request.words[index] as ShellWord;
+      const word = shellWordAt([request.words, index]);
       if (word.value === '--') {
         taskNameSeen = true;
         continue;
@@ -374,7 +375,7 @@ export class SkillProviderEslintConfigScenario {
     if (runtime !== 'bunx' && runtime !== 'npx') return false;
     let index = start;
     while (index < words.length) {
-      const word = words[index] as ShellWord;
+      const word = shellWordAt([words, index]);
       if (word.dynamic) {
         if (
           !words
@@ -432,7 +433,7 @@ export class SkillProviderEslintConfigScenario {
   ): string | true | false {
     let noConfigLookup = false;
     for (let index = 0; index < request.words.length; index += 1) {
-      const word = request.words[index] as ShellWord;
+      const word = shellWordAt([request.words, index]);
       if (
         request.tool === ConfigurationTool.Eslint &&
         word.value === '--no-config-lookup'

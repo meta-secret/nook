@@ -171,9 +171,10 @@ test('binds an isolation receipt to one exact completion and invocation', async 
 test('rejects a structurally forged isolation receipt', () => {
   const invocation =
     ModuleExpertsIsolationReceiptFixture.moduleExpertInvocation();
-  const forgedReceipt = {
+  const forgedReceipt: ModuleExpertIsolationReceipt = {
+    // @ts-expect-error forged discriminator intentionally has the wrong kind
     kind: 'module-expert-isolation-receipt',
-  } as ModuleExpertIsolationReceipt;
+  };
   const execution: IsolatedModuleExpertExecution = {
     completion: {
       threadId: 'forged-thread',

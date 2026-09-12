@@ -2,12 +2,18 @@ import { posix } from 'node:path';
 
 import { SkillProviderConfigCommandsScenario } from './skill-provider-config-commands.ts';
 
-import type { ShellLaunchArgument } from './skill-provider-command-types.ts';
-
 import type {
-  RepositoryBackedPackageSpecifierRequest,
-  RepositoryPackageDocument,
-} from './skill-provider-config-types.ts';
+  ConfigurationNode,
+  ShellLaunchArgument,
+} from './skill-provider-command-types.ts';
+import {
+  configurationNodeFromHost,
+  isConfigurationList,
+  isConfigurationMapping,
+} from './skill-provider-command-types.ts';
+import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
+
+import type { RepositoryBackedPackageSpecifierRequest } from './skill-provider-config-types.ts';
 
 export class SkillProviderConfigRuntimeScenario {
   private constructor(private readonly request: string) {}
@@ -125,15 +131,23 @@ export class SkillProviderConfigRuntimeScenario {
     SkillProviderConfigCommandsScenario.assertRunnableConfigurationBytes(
       source,
     );
-    let document: TsconfigDocument;
+    let document: Readonly<Record<string, ConfigurationNode>>;
     try {
-      document = Bun.JSONC.parse(source) as TsconfigDocument;
+      const parsed = configurationNodeFromHost(
+        UntrustedYamlBoundary.fromHost(Bun.JSONC.parse(source)),
+      );
+      document = isConfigurationMapping(parsed) ? parsed : {};
     } catch {
       throw new Error(`Runnable tsconfig is invalid: ${aliasRequest.path}`);
     }
     const options = document.compilerOptions;
-    const [mappings = {}] = [options?.paths];
-    const [baseUrl = '.'] = [options?.baseUrl];
+    const optionsMapping = options
+      ? SkillProviderConfigCommandsScenario.mapping(options)
+      : {};
+    const mappings = SkillProviderConfigCommandsScenario.mapping(
+      optionsMapping.paths ?? {},
+    );
+    const [baseUrl = '.'] = [optionsMapping.baseUrl];
     if (typeof baseUrl !== 'string')
       throw new Error(
         `Runnable tsconfig baseUrl is invalid: ${aliasRequest.path}`,
@@ -150,7 +164,7 @@ export class SkillProviderConfigRuntimeScenario {
         (wildcard < 0 && aliasRequest.request.specifier !== alias)
       )
         continue;
-      if (!Array.isArray(targets) || targets.length === 0)
+      if (!isConfigurationList(targets) || targets.length === 0)
         throw new Error(`Runnable tsconfig alias target is invalid: ${alias}`);
       const substitution = aliasRequest.request.specifier.slice(
         prefix.length,
@@ -175,18 +189,25 @@ export class SkillProviderConfigRuntimeScenario {
         return candidate;
       });
     }
-    const inherited = document.extends;
     if (!('extends' in document)) return [];
-    const parents = typeof inherited === 'string' ? [inherited] : inherited;
-    if (
-      !Array.isArray(parents) ||
-      parents.some((parent) => typeof parent !== 'string')
-    )
-      throw new Error(
-        `Runnable tsconfig extends is invalid: ${aliasRequest.path}`,
-      );
+    const inherited = document.extends ?? false;
+    if (inherited === false) return [];
+    const parents =
+      typeof inherited === 'string'
+        ? [inherited]
+        : isConfigurationList(inherited)
+          ? inherited
+          : [];
+    const parentNames: string[] = [];
+    for (const parent of parents) {
+      if (typeof parent !== 'string')
+        throw new Error(
+          `Runnable tsconfig extends is invalid: ${aliasRequest.path}`,
+        );
+      parentNames.push(parent);
+    }
     const visited = new Set(aliasRequest.visited).add(aliasRequest.path);
-    for (const parent of [...parents].reverse()) {
+    for (const parent of [...parentNames].reverse()) {
       if (!parent.startsWith('.')) continue;
       const base = posix.normalize(
         posix.join(posix.dirname(aliasRequest.path), parent),
@@ -234,20 +255,29 @@ export class SkillProviderConfigRuntimeScenario {
       SkillProviderConfigCommandsScenario.assertRunnableConfigurationBytes(
         source,
       );
-      let document: RepositoryPackageDocument;
+      let document: Readonly<Record<string, ConfigurationNode>>;
       try {
-        document = JSON.parse(source) as RepositoryPackageDocument;
+        const parsed = configurationNodeFromHost(
+          UntrustedYamlBoundary.fromHost(JSON.parse(source)),
+        );
+        document = isConfigurationMapping(parsed) ? parsed : {};
       } catch {
         continue;
       }
       if (document.name === packageName) return true;
-      for (const dependencies of [
+      for (const dependencyNode of [
         document.dependencies,
         document.devDependencies,
         document.optionalDependencies,
       ]) {
-        const [dependency = false] = [dependencies?.[packageName]];
-        if (dependency !== false && /^(?:file|workspace):/u.test(dependency))
+        const dependencies = dependencyNode
+          ? SkillProviderConfigCommandsScenario.mapping(dependencyNode)
+          : {};
+        const dependency = dependencies[packageName];
+        if (
+          typeof dependency === 'string' &&
+          /^(?:file|workspace):/u.test(dependency)
+        )
           return true;
       }
     }
@@ -358,7 +388,7 @@ export class SkillProviderConfigRuntimeScenario {
           const levels =
             ascents.length === 0 ? 0 : ascents.split('/..').length - 1;
           const base = posix.dirname(sourcePath);
-          return `${name}=${posix.normalize(posix.join(base, ...Array(levels).fill('..')))}`;
+          return `${name}=${posix.normalize(posix.join(base, ...Array<string>(levels).fill('..')))}`;
         },
       )
       .replace(

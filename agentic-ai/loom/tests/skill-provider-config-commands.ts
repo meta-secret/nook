@@ -9,6 +9,12 @@ import type {
   TaskStaticVariableRequest,
   TaskTemplateRequest,
 } from './skill-provider-command-types.ts';
+import {
+  configurationNodeFromHost,
+  isConfigurationList,
+  isConfigurationMapping,
+} from './skill-provider-command-types.ts';
+import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
 
 export class SkillProviderConfigCommandsScenario {
   private constructor(private readonly request: RunnableCommandInspection) {}
@@ -27,9 +33,10 @@ export class SkillProviderConfigCommandsScenario {
     if (inspection.path.endsWith('bunfig.toml')) {
       let document: Readonly<Record<string, ConfigurationNode>>;
       try {
-        document = Bun.TOML.parse(inspection.source) as Readonly<
-          Record<string, ConfigurationNode>
-        >;
+        const parsed = configurationNodeFromHost(
+          UntrustedYamlBoundary.fromHost(Bun.TOML.parse(inspection.source)),
+        );
+        document = isConfigurationMapping(parsed) ? parsed : {};
       } catch {
         throw new Error('Bun configuration is invalid.');
       }
@@ -38,17 +45,23 @@ export class SkillProviderConfigCommandsScenario {
       return [];
     }
     if (inspection.path.endsWith('package.json')) {
-      const document = JSON.parse(inspection.source) as {
-        readonly scripts?: Readonly<Record<string, string>>;
-      };
+      const document = configurationNodeFromHost(
+        UntrustedYamlBoundary.fromHost(JSON.parse(inspection.source)),
+      );
+      const scripts =
+        SkillProviderConfigCommandsScenario.mapping(document).scripts;
       return SkillProviderConfigCommandsScenario.bounded(
-        document.scripts ? Object.values(document.scripts) : [],
+        Object.values(
+          scripts ? SkillProviderConfigCommandsScenario.mapping(scripts) : {},
+        ).filter((value): value is string => typeof value === 'string'),
       );
     }
     if (/\.sh$/u.test(inspection.path) || posix.extname(inspection.path) === '')
       return [inspection.source.replace(/^#![^\n]*(?:\n|$)/u, '')];
     if (!/\.ya?ml$/u.test(inspection.path)) return [];
-    const document = Bun.YAML.parse(inspection.source) as ConfigurationNode;
+    const document = configurationNodeFromHost(
+      UntrustedYamlBoundary.fromHost(Bun.YAML.parse(inspection.source)),
+    );
     if (/^\.github\/workflows\//u.test(inspection.path)) {
       const request = { action: false, document };
       return SkillProviderConfigCommandsScenario.bounded(
@@ -74,7 +87,9 @@ export class SkillProviderConfigCommandsScenario {
     SkillProviderConfigCommandsScenario.assertRunnableConfigurationBytes(
       source,
     );
-    const document = Bun.YAML.parse(source) as ConfigurationNode;
+    const document = configurationNodeFromHost(
+      UntrustedYamlBoundary.fromHost(Bun.YAML.parse(source)),
+    );
     const [includeNode = false] = [
       SkillProviderConfigCommandsScenario.mapping(document).includes,
     ];
@@ -342,7 +357,7 @@ export class SkillProviderConfigCommandsScenario {
   }
 
   static collectCommandList(request: CommandCollectionRequest): void {
-    if (!Array.isArray(request.value)) return;
+    if (!isConfigurationList(request.value)) return;
     for (const entry of request.value) {
       if (typeof entry === 'string') request.target.push(entry);
       else {
@@ -359,7 +374,7 @@ export class SkillProviderConfigCommandsScenario {
   }
 
   static collectTaskDependencies(request: CommandCollectionRequest): void {
-    if (!Array.isArray(request.value)) return;
+    if (!isConfigurationList(request.value)) return;
     for (const entry of request.value) {
       if (typeof entry === 'string') request.target.push(`task ${entry}`);
       else if (
@@ -373,7 +388,7 @@ export class SkillProviderConfigCommandsScenario {
   }
 
   static collectTaskShellList(request: CommandCollectionRequest): void {
-    if (!Array.isArray(request.value)) return;
+    if (!isConfigurationList(request.value)) return;
     for (const entry of request.value) {
       if (typeof entry === 'string') {
         request.target.push(entry);
@@ -387,9 +402,7 @@ export class SkillProviderConfigCommandsScenario {
   static mapping(
     value: ConfigurationNode,
   ): Readonly<Record<string, ConfigurationNode>> {
-    return value instanceof Object && !Array.isArray(value)
-      ? (value as Readonly<Record<string, ConfigurationNode>>)
-      : {};
+    return isConfigurationMapping(value) ? value : {};
   }
 }
 

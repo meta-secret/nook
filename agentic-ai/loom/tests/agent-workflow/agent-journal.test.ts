@@ -26,6 +26,8 @@ import { AgentAttemptJournal } from '../../src/agent-workflow/agent-journal.ts';
 
 import { AgentAttemptReplay } from '../../src/agent-workflow/agent-replay.ts';
 
+import { AgentAttemptTransport } from '../../src/agent-workflow/attempt-codec.ts';
+
 import type { RmOptions } from 'node:fs';
 
 import type {
@@ -110,19 +112,22 @@ describe('agent attempt journal', () => {
         activity: WorkflowRuntimeActivityKind.CommandCompleted,
         detail: 'Transient detail is never persisted.',
       });
+      const invalidActivity = {
+        activity: 'caller-invented-activity',
+        detail: 'Invalid.',
+      };
       await expect(
-        journal.observe({
-          activity: 'caller-invented-activity',
-          detail: 'Invalid.',
-        } as never),
+        // @ts-expect-error Deliberately malformed observer activity.
+        journal.observe(invalidActivity),
       ).rejects.toThrow('activity is invalid');
-      await expect(
-        journal.observe({
-          activity: WorkflowRuntimeActivityKind.TurnCompleted,
-          detail: 'Invalid fields.',
-          prompt: 'must not cross the observer boundary',
-        } as never),
-      ).rejects.toThrow('activity fields are invalid');
+      const invalidFields = {
+        activity: WorkflowRuntimeActivityKind.TurnCompleted,
+        detail: 'Invalid fields.',
+        prompt: 'must not cross the observer boundary',
+      };
+      await expect(journal.observe(invalidFields)).rejects.toThrow(
+        'activity fields are invalid',
+      );
       const terminal: CompletedTaskTerminal<'inspect'> = {
         kind: TaskTerminalKind.Completed,
         task: 'inspect',
@@ -142,7 +147,7 @@ describe('agent attempt journal', () => {
       const parsedEvents = events
         .trim()
         .split('\n')
-        .map((line) => JSON.parse(line) as AgentAttemptEvent);
+        .map((line) => AgentAttemptTransport.decodeEvent(line));
       const replayRequest: ReplayAgentAttemptJournalRequest = {
         events: parsedEvents,
       };
@@ -165,13 +170,15 @@ describe('agent attempt journal', () => {
       expect(liveOutput).toContain(
         '[inspect/attempt-1:live-a0002] runtime-activity command-completed\n',
       );
-      const firstEvent = parsedEvents[0]!;
-      const unknownKindEvent = {
+      const firstEvent = parsedEvents[0];
+      if (!firstEvent) throw new Error('Journal event is missing.');
+      const unknownKindEvent: AgentAttemptEvent = {
         ...firstEvent,
+        // @ts-expect-error Deliberately unknown persisted event kind.
         kind: 'future-agent-event',
         sequence: 2,
         actionId: 'a0002',
-      } as never as AgentAttemptEvent;
+      };
       const shiftedEvents = parsedEvents.slice(1).map((event) => ({
         ...event,
         sequence: event.sequence + 1,
@@ -247,10 +254,12 @@ describe('agent attempt journal', () => {
       expect(() => AgentAttemptReplay.replay(extraEventFieldRequest)).toThrow(
         'event fields are invalid',
       );
-      const malformedParentEvents = parsedEvents.map((event) => ({
-        ...event,
-        parent: { kind: AgentAttemptParentKind.AgentAttempt },
-      })) as never as readonly AgentAttemptEvent[];
+      // @ts-expect-error Deliberately malformed persisted parent.
+      const malformedParentEvents: readonly AgentAttemptEvent[] =
+        parsedEvents.map((event) => ({
+          ...event,
+          parent: { kind: AgentAttemptParentKind.AgentAttempt },
+        }));
       const malformedParentRequest = {
         events: malformedParentEvents,
       };
@@ -281,10 +290,12 @@ describe('agent attempt journal', () => {
       expect(() => AgentAttemptReplay.replay(mismatchedAdapterRequest)).toThrow(
         'identity changed within the stream',
       );
-      const unknownAdapterEvents = parsedEvents.map((event) => ({
-        ...event,
-        adapter: 'caller-forged-adapter',
-      })) as never as readonly AgentAttemptEvent[];
+      // @ts-expect-error Deliberately unknown persisted adapter.
+      const unknownAdapterEvents: readonly AgentAttemptEvent[] =
+        parsedEvents.map((event) => ({
+          ...event,
+          adapter: 'caller-forged-adapter',
+        }));
       const unknownAdapterRequest = {
         events: unknownAdapterEvents,
       };
@@ -520,7 +531,8 @@ describe('agent attempt journal', () => {
       'legacy and cannot establish adapter provenance',
     );
 
-    const legacyWithoutAdapter = {
+    // @ts-expect-error Deliberately legacy event without adapter.
+    const legacyWithoutAdapter: AgentAttemptEvent = {
       kind: AgentAttemptEventKind.AttemptStarted,
       runId: 'run-1',
       workflow: DelegatedAgentWorkflowName.AgentWork,
@@ -534,7 +546,7 @@ describe('agent attempt journal', () => {
       sequence: 1,
       actionId: 'a0001',
       occurredAt: FIXED_TIME,
-    } as never as AgentAttemptEvent;
+    };
     const legacyReplayRequest = { events: [legacyWithoutAdapter] };
     expect(() => AgentAttemptReplay.replay(legacyReplayRequest)).toThrow(
       'Remove or explicitly migrate the persisted attempt',

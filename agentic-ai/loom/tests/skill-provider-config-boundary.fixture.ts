@@ -52,9 +52,13 @@ import type {
   ApplicationConsumerEdge,
   ConfigurationReference,
   ConfigurationReferenceRequest,
-  GitHubActionDocument,
   PendingConfiguration,
 } from './skill-provider-config-types.ts';
+import {
+  configurationNodeFromHost,
+  isConfigurationList,
+} from './skill-provider-command-types.ts';
+import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
 export class SkillProviderConfigBoundaryScenario {
   private constructor(private readonly request: ConfigurationScriptGraph) {}
 
@@ -449,27 +453,36 @@ export class SkillProviderConfigBoundaryScenario {
       SkillProviderConfigCommandsScenario.assertRunnableConfigurationBytes(
         source,
       );
-      const document = Bun.YAML.parse(source) as GitHubActionDocument;
-      const runs = document?.runs;
-      if (!runs || typeof runs.using !== 'string') {
+      const document = configurationNodeFromHost(
+        UntrustedYamlBoundary.fromHost(Bun.YAML.parse(source)),
+      );
+      const runs = SkillProviderConfigCommandsScenario.mapping(document).runs;
+      const runsMapping = runs
+        ? SkillProviderConfigCommandsScenario.mapping(runs)
+        : {};
+      if (typeof runsMapping.using !== 'string') {
         throw new Error(`Tracked action has no runs.using: ${manifestPath}`);
       }
-      if (runs.using === 'composite') {
-        if (!Array.isArray(runs.steps)) {
+      if (runsMapping.using === 'composite') {
+        const steps = runsMapping.steps;
+        if (!steps || !isConfigurationList(steps)) {
           throw new Error(`Composite action has no steps: ${manifestPath}`);
         }
-        for (const step of runs.steps) {
-          if (typeof step.uses !== 'string') {
+        for (const step of steps) {
+          const stepMapping = SkillProviderConfigCommandsScenario.mapping(step);
+          if (typeof stepMapping.uses !== 'string') {
             continue;
           }
-          if (step.uses.startsWith('docker://')) {
-            throw new Error(`Unsupported Docker action step: ${step.uses}`);
+          if (stepMapping.uses.startsWith('docker://')) {
+            throw new Error(
+              `Unsupported Docker action step: ${stepMapping.uses}`,
+            );
           }
-          if (!step.uses.startsWith('./')) continue;
-          const localRoot = posix.normalize(step.uses.slice(2));
+          if (!stepMapping.uses.startsWith('./')) continue;
+          const localRoot = posix.normalize(stepMapping.uses.slice(2));
           if (localRoot.startsWith('../') || posix.isAbsolute(localRoot)) {
             throw new Error(
-              `Local action escapes the repository: ${step.uses}`,
+              `Local action escapes the repository: ${stepMapping.uses}`,
             );
           }
           const candidates = [
@@ -478,7 +491,7 @@ export class SkillProviderConfigBoundaryScenario {
           ].filter((path) => graph.sources.has(path));
           if (candidates.length !== 1) {
             throw new Error(
-              `Local action manifest is unresolved: ${step.uses}`,
+              `Local action manifest is unresolved: ${stepMapping.uses}`,
             );
           }
           const nestedManifest = candidates[0];
@@ -486,20 +499,27 @@ export class SkillProviderConfigBoundaryScenario {
         }
         continue;
       }
-      if (runs.using === 'docker') {
+      if (runsMapping.using === 'docker') {
         throw new Error(`Unsupported Docker action runtime: ${manifestPath}`);
       }
-      if (!runs.using.startsWith('node') || typeof runs.main !== 'string') {
+      if (
+        !runsMapping.using.startsWith('node') ||
+        typeof runsMapping.main !== 'string'
+      ) {
         throw new Error(`Unsupported action runtime: ${manifestPath}`);
       }
       for (const field of ['pre', 'post'] as const) {
-        if (field in runs && typeof runs[field] !== 'string') {
+        if (field in runsMapping && typeof runsMapping[field] !== 'string') {
           throw new Error(
             `Invalid action ${field} entrypoint: ${manifestPath}`,
           );
         }
       }
-      for (const entrypoint of [runs.main, runs.pre, runs.post]) {
+      for (const entrypoint of [
+        runsMapping.main,
+        runsMapping.pre,
+        runsMapping.post,
+      ]) {
         if (typeof entrypoint !== 'string') continue;
         const runtimePath = posix.normalize(
           posix.join(posix.dirname(manifestPath), entrypoint),

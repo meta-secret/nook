@@ -249,8 +249,8 @@ class AgentJournalRecords<TTask extends string> {
       observationKeys.length < 2 ||
       observationKeys.length > 3 ||
       !observationKeys.every((key) =>
-        Object.values(RuntimeActivityObservationField).includes(
-          key as RuntimeActivityObservationField,
+        Object.values(RuntimeActivityObservationField).some(
+          (field) => field === key,
         ),
       ) ||
       typeof observation.detail !== 'string' ||

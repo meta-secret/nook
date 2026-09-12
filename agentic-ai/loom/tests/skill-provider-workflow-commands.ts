@@ -2,6 +2,10 @@ import type {
   ConfigurationMapping,
   ConfigurationNode,
 } from './skill-provider-command-types.ts';
+import {
+  isConfigurationList,
+  isConfigurationMapping,
+} from './skill-provider-command-types.ts';
 
 import { SkillProviderShellTokenizerScenario } from './skill-provider-shell-tokenizer.ts';
 
@@ -112,7 +116,7 @@ export class SkillProviderWorkflowCommandsScenario {
   }
 
   static githubScriptSources(steps: ConfigurationNode): readonly string[] {
-    if (!Array.isArray(steps)) return [];
+    if (!isConfigurationList(steps)) return [];
     return steps.flatMap((step) => {
       const node = SkillProviderWorkflowCommandsScenario.mapping(step);
       if (
@@ -134,7 +138,7 @@ export class SkillProviderWorkflowCommandsScenario {
   }
 
   static collectStepRuns(request: StepRunRequest): void {
-    if (!Array.isArray(request.steps)) return;
+    if (!isConfigurationList(request.steps)) return;
     for (const step of request.steps) {
       const node = SkillProviderWorkflowCommandsScenario.mapping(step);
       if (typeof node.run !== 'string') continue;
@@ -257,9 +261,7 @@ export class SkillProviderWorkflowCommandsScenario {
   }
 
   static mapping(value: ConfigurationNode): ConfigurationMapping {
-    return value instanceof Object && !Array.isArray(value)
-      ? (value as ConfigurationMapping)
-      : {};
+    return isConfigurationMapping(value) ? value : {};
   }
 }
 

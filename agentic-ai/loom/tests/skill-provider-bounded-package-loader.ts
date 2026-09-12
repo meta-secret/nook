@@ -2,6 +2,12 @@ import { posix } from 'node:path';
 
 import ts from 'typescript';
 
+import { itemAt } from './skill-provider-command-types.ts';
+
+import { stringMapFromHost } from './skill-provider-command-types.ts';
+
+import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
+
 export class SkillProviderBoundedPackageLoaderScenario {
   private constructor(
     private readonly request: ts.VariableDeclaration | false,
@@ -52,7 +58,9 @@ export class SkillProviderBoundedPackageLoaderScenario {
     while (pending.length > 0) {
       let latestIndex = 0;
       for (let index = 1; index < pending.length; index += 1) {
-        if (pending[index]!.start > pending[latestIndex]!.start) {
+        if (
+          itemAt([pending, index]).start > itemAt([pending, latestIndex]).start
+        ) {
           latestIndex = index;
         }
       }
@@ -428,7 +436,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
     }
     const literals = initializer.arguments.filter(ts.isStringLiteralLike);
     if (literals.length !== 1) return false;
-    const path = posix.normalize(literals[0]!.text);
+    const path = posix.normalize(itemAt([literals, 0]).text);
     return inspection.sources.has(path) ? path : false;
   }
 
@@ -628,7 +636,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
         node.arguments.length === 1 &&
         (() => {
           const inspection: ResolvedFileUrlImportInspection = {
-            argument: node.arguments[0]!,
+            argument: itemAt([node.arguments, 0]),
             resolvedBinding: search.resolvedBinding,
           };
           return SkillProviderBoundedPackageLoaderScenario.isResolvedFileUrlImport(
@@ -641,7 +649,7 @@ export class SkillProviderBoundedPackageLoaderScenario {
       ts.forEachChild(node, visit);
     };
     visit(search.body);
-    return imports.length === 1 ? imports[0]! : false;
+    return imports.length === 1 ? itemAt([imports, 0]) : false;
   }
 
   static isResolvedFileUrlImport(
@@ -788,7 +796,27 @@ export class SkillProviderBoundedPackageLoaderScenario {
       if (!path.endsWith('package.json') || source.length === 0) continue;
       let document: RepositoryPackageDocument;
       try {
-        document = JSON.parse(source) as RepositoryPackageDocument;
+        const parsed = UntrustedYamlBoundary.fromJson(JSON.parse(source));
+        if (!UntrustedYamlBoundary.isRecord(parsed)) continue;
+        const candidate: RepositoryPackageDocument = {};
+        if ('name' in parsed && typeof parsed.name === 'string')
+          candidate.name = parsed.name;
+        for (const key of [
+          'dependencies',
+          'devDependencies',
+          'optionalDependencies',
+        ]) {
+          if (!(key in parsed)) continue;
+          const entry = parsed[key];
+          if (!entry) continue;
+          const values = stringMapFromHost(entry);
+          if (values === false) continue;
+          if (key === 'dependencies') candidate.dependencies = values;
+          if (key === 'devDependencies') candidate.devDependencies = values;
+          if (key === 'optionalDependencies')
+            candidate.optionalDependencies = values;
+        }
+        document = candidate;
       } catch {
         continue;
       }
@@ -840,10 +868,10 @@ type CandidateValidation = {
 };
 
 type RepositoryPackageDocument = {
-  readonly dependencies?: Readonly<Record<string, string>>;
-  readonly devDependencies?: Readonly<Record<string, string>>;
-  readonly name?: string;
-  readonly optionalDependencies?: Readonly<Record<string, string>>;
+  dependencies?: Readonly<Record<string, string>>;
+  devDependencies?: Readonly<Record<string, string>>;
+  name?: string;
+  optionalDependencies?: Readonly<Record<string, string>>;
 };
 
 type SourceReplacement = {

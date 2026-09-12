@@ -2,6 +2,10 @@ import { posix } from 'node:path';
 
 import ts from 'typescript';
 
+import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
+
+import { stringMapFromHost } from './skill-provider-command-types.ts';
+
 export class SkillProviderSubprocessScenario {
   private constructor(
     private readonly request: RepositorySubprocessInspection,
@@ -331,7 +335,10 @@ export class SkillProviderSubprocessScenario {
   }
 
   static asSubprocessApi(value: string): SubprocessApi | false {
-    return SUBPROCESS_APIS.has(value) ? (value as SubprocessApi) : false;
+    const api = Object.values(SubprocessApi).find(
+      (candidate) => candidate === value,
+    );
+    return api ?? false;
   }
 
   static isBunSubprocessCall(expression: ts.Expression): boolean {
@@ -461,7 +468,7 @@ export class SkillProviderSubprocessScenario {
       const symbol = collection.checker.getSymbolAtLocation(collection.node);
       const initializer =
         symbol && collection.initializers.has(symbol)
-          ? collection.initializers.get(symbol)!
+          ? (collection.initializers.get(symbol) ?? false)
           : false;
       if (initializer) {
         const nestedCollection: LiteralCollection = {
@@ -724,7 +731,14 @@ export class SkillProviderSubprocessScenario {
     if (packageSource === false) return { literals: [], unresolved: true };
     let document: BunPackageDocument;
     try {
-      document = JSON.parse(packageSource) as BunPackageDocument;
+      const parsed = UntrustedYamlBoundary.fromHost(JSON.parse(packageSource));
+      if (!UntrustedYamlBoundary.isRecord(parsed))
+        return { literals: [], unresolved: true };
+      const scripts = parsed.scripts;
+      if (!scripts) return { literals: [], unresolved: true };
+      const scriptMap = stringMapFromHost(scripts);
+      if (scriptMap === false) return { literals: [], unresolved: true };
+      document = { scripts: scriptMap };
     } catch {
       return { literals: [], unresolved: true };
     }

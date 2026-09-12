@@ -166,11 +166,13 @@ export class SkillProviderShellTokenizerScenario {
         if (';&|()'.includes(character) || character === '\n') {
           const pair = source.slice(index, index + 2);
           if (pair === '&&' || pair === '||' || pair === ';;') index += 1;
-          tokens.push(
-            (pair === '&&' || pair === '||' || pair === ';;'
-              ? pair
-              : character) as ShellSeparator,
+          const separatorText =
+            pair === '&&' || pair === '||' || pair === ';;' ? pair : character;
+          const separator = Object.values(ShellSeparator).find(
+            (candidate) => candidate === separatorText,
           );
+          if (!separator) throw new Error('Shell separator is invalid.');
+          tokens.push(separator);
         }
         continue;
       }

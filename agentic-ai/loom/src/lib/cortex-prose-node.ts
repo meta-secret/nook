@@ -31,15 +31,10 @@ class CortexProseNodeKind {
   constructor(private readonly kind: Nodes['type']) {}
 
   textRole(): CortexProseTextRole {
-    switch (this.kind) {
-      case 'image':
-      case 'imageReference':
-        return CortexProseTextRole.Omit;
-      case 'break':
-        return CortexProseTextRole.Space;
-      default:
-        return CortexProseTextRole.Content;
-    }
+    if (this.kind === 'image' || this.kind === 'imageReference')
+      return CortexProseTextRole.Omit;
+    if (this.kind === 'break') return CortexProseTextRole.Space;
+    return CortexProseTextRole.Content;
   }
 
   pointerRole(): CortexProsePointerRole {
@@ -62,19 +57,16 @@ export class CortexProseNode {
   }
 
   inspection(context: CortexProseContext): CortexProseInspection {
-    switch (this.node.type) {
-      case 'paragraph':
-        return context === CortexProseContext.Quotation &&
-          this.quotedOutputExemption() === CortexProseExemption.Exempt
-          ? CortexProseInspection.Excluded
-          : CortexProseInspection.Inspect;
-      case 'tableCell':
-        return this.indexPointerExemption() === CortexProseExemption.Exempt
-          ? CortexProseInspection.Excluded
-          : CortexProseInspection.Inspect;
-      default:
-        return CortexProseInspection.Descend;
-    }
+    if (this.node.type === 'paragraph')
+      return context === CortexProseContext.Quotation &&
+        this.quotedOutputExemption() === CortexProseExemption.Exempt
+        ? CortexProseInspection.Excluded
+        : CortexProseInspection.Inspect;
+    if (this.node.type === 'tableCell')
+      return this.indexPointerExemption() === CortexProseExemption.Exempt
+        ? CortexProseInspection.Excluded
+        : CortexProseInspection.Inspect;
+    return CortexProseInspection.Descend;
   }
 
   childContext(context: CortexProseContext): CortexProseContext {

@@ -236,7 +236,10 @@ describe('ordinary delegation admission', () => {
     const expertInput: AdmitDelegationAttemptInput = {
       ...loadInput,
       request: AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        plan.attempts[1]!,
+        plan.attempts[1] ??
+          (() => {
+            throw new Error('Attempt is missing.');
+          })(),
       ),
     };
     await expect(
@@ -245,7 +248,10 @@ describe('ordinary delegation admission', () => {
 
     const wrongSourceRequest: DelegationAdmissionRequest = {
       ...AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        plan.attempts[0]!,
+        plan.attempts[0] ??
+          (() => {
+            throw new Error('Attempt is missing.');
+          })(),
       ),
       sourceCommit: 'b'.repeat(40),
     };
@@ -275,7 +281,10 @@ describe('ordinary delegation admission', () => {
     const rootInput: AdmitDelegationAttemptInput = {
       ...loadInput,
       request: AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        plan.attempts[0]!,
+        plan.attempts[0] ??
+          (() => {
+            throw new Error('Attempt is missing.');
+          })(),
       ),
     };
     await DelegationRunJournal.admitDelegationAttempt(rootInput);
@@ -290,7 +299,10 @@ describe('ordinary delegation admission', () => {
     const specialistInput: AdmitDelegationAttemptInput = {
       ...loadInput,
       request: AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        plan.attempts[2]!,
+        plan.attempts[2] ??
+          (() => {
+            throw new Error('Attempt is missing.');
+          })(),
       ),
     };
     await expect(

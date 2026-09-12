@@ -196,9 +196,7 @@ export class ValeOutputDocument {
     const args = this.request;
     let parsed: UntrustedYamlNode;
     try {
-      parsed = UntrustedYamlBoundary.fromHost(
-        JSON.parse(args.stdout) as UntrustedYamlNode,
-      );
+      parsed = UntrustedYamlBoundary.fromHost(JSON.parse(args.stdout));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return err({
@@ -214,14 +212,21 @@ export class ValeOutputDocument {
     }
     const admittedFiles = new Set(args.files);
     const alerts: ValeNativeAlert[] = [];
-    for (const [file, untrustedAlerts] of Object.entries(parsed)) {
+    for (const file of Object.keys(parsed)) {
+      const untrustedAlerts = parsed[file];
+      if (!untrustedAlerts) {
+        return err({
+          code: LoomFailureCode.CortexAuditFailed,
+          message: `Vale exact-file lint alerts are missing: ${file}`,
+        });
+      }
       if (!admittedFiles.has(file)) {
         return err({
           code: LoomFailureCode.CortexAuditFailed,
           message: `Vale exact-file lint returned an unexpected file: ${file}`,
         });
       }
-      if (!Array.isArray(untrustedAlerts)) {
+      if (!UntrustedYamlBoundary.isList(untrustedAlerts)) {
         return err({
           code: LoomFailureCode.CortexAuditFailed,
           message: `Vale exact-file lint alerts must be an array: ${file}`,

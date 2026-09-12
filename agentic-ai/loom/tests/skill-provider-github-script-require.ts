@@ -61,11 +61,11 @@ export class SkillProviderGithubScriptRequireScenario {
             false
         )
           throw new Error('Dynamic github-script module load is forbidden.');
-        specifiers.push(
-          SkillProviderGithubScriptRequireScenario.staticText(
-            argument,
-          ) as string,
-        );
+        const specifier =
+          SkillProviderGithubScriptRequireScenario.staticText(argument);
+        if (specifier === false)
+          throw new Error('Dynamic github-script module load is forbidden.');
+        specifiers.push(specifier);
       }
       if (
         ts.isVariableDeclaration(node) &&

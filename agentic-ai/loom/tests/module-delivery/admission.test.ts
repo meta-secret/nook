@@ -111,22 +111,24 @@ describe('module delivery admission authority', () => {
     const first = ModuleDeliveryAdmissionScenario.select(active);
     expect(first.admissions.map(({ taskId }) => taskId)).toEqual(['alpha']);
     expect(first.pendingTaskIds).toContain('beta');
-    const forgedFrontier = {
-      taskId: 'alpha',
-      attempt: 1,
-      generation: 1,
-      planDigest: active.accepted.planDigest,
-      headCommit: '89abcdef0123456789abcdef0123456789abcdef',
-      integratedTaskIds: ['alpha'],
-    } as never;
-    const unrelatedFrontier = {
-      taskId: 'beta',
-      attempt: 1,
-      generation: 1,
-      planDigest: active.accepted.planDigest,
-      headCommit: 'f'.repeat(40),
-      integratedTaskIds: ['beta'],
-    } as never;
+    const forgedFrontier: CreateModuleDeliveryAdmissionStateRequest['integratedWriterFrontiers'][number] =
+      {
+        taskId: 'alpha',
+        attempt: 1,
+        generation: 1,
+        planDigest: active.accepted.planDigest,
+        headCommit: '89abcdef0123456789abcdef0123456789abcdef',
+        integratedTaskIds: ['alpha'],
+      };
+    const unrelatedFrontier: CreateModuleDeliveryAdmissionStateRequest['integratedWriterFrontiers'][number] =
+      {
+        taskId: 'beta',
+        attempt: 1,
+        generation: 1,
+        planDigest: active.accepted.planDigest,
+        headCommit: 'f'.repeat(40),
+        integratedTaskIds: ['beta'],
+      };
     const advancedStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
@@ -157,7 +159,7 @@ describe('module delivery admission authority', () => {
       ({ taskId }) => taskId === 'alpha',
     );
     if (!sourceNode) throw new Error('Alpha node is missing.');
-    (sourceNode.resources.read as string[]).push(`${ROOT}/forged/**`);
+    Array.prototype.push.call(sourceNode.resources.read, `${ROOT}/forged/**`);
     const planRequest = {
       authority: active.authority,
       acceptedPlan: accepted,
@@ -166,7 +168,7 @@ describe('module delivery admission authority', () => {
       planRequest,
     ).plan.nodes.find(({ taskId }) => taskId === 'alpha');
     if (!exposedNode) throw new Error('Exposed alpha node is missing.');
-    (exposedNode.resources.read as string[]).push(`${ROOT}/exposed/**`);
+    Array.prototype.push.call(exposedNode.resources.read, `${ROOT}/exposed/**`);
     const admission = ModuleDeliveryAdmissionScenario.select(
       active,
     ).admissions.find(({ taskId }) => taskId === 'alpha');

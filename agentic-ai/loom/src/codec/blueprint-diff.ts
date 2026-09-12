@@ -142,12 +142,17 @@ export class RequestBlueprintComparison {
     }
     const roots = Object.keys(received);
     const familyKey = roots.find((key) =>
-      Object.values(RequestFamily).includes(key as RequestFamily),
+      Object.values(RequestFamily).some((family) => family === key),
     );
     if (typeof familyKey !== 'string') {
       return RequestBlueprintComparison.DEFAULT_BLUEPRINT;
     }
-    const family = familyKey as RequestFamily;
+    const family = Object.values(RequestFamily).find(
+      (candidate) => candidate === familyKey,
+    );
+    if (!family) {
+      return RequestBlueprintComparison.DEFAULT_BLUEPRINT;
+    }
     const payloadPropertyArgs: UntrustedYamlPropertyArgs = {
       record: received,
       key: family,

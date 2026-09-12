@@ -82,7 +82,14 @@ export class AgentWorkflowStructuredResultCodecScenario {
 
   private execute(): MutableYamlMap {
     const value = this.request;
-    return JSON.parse(JSON.stringify(value)) as MutableYamlMap;
+    const parsed = UntrustedYamlBoundary.fromHost(
+      JSON.parse(JSON.stringify(value)),
+    );
+    if (!UntrustedYamlBoundary.isRecord(parsed))
+      throw new Error('Expected a JSON map in the test fixture.');
+    const result: MutableYamlMap = {};
+    for (const [key, entry] of Object.entries(parsed)) result[key] = entry;
+    return result;
   }
 
   static continuationMap(output: MutableYamlMap): MutableYamlMap {
@@ -90,7 +97,10 @@ export class AgentWorkflowStructuredResultCodecScenario {
     if (!continuation || !UntrustedYamlBoundary.isRecord(continuation)) {
       throw new Error('Expected a continuation map in the test fixture.');
     }
-    return continuation as MutableYamlMap;
+    const result: MutableYamlMap = {};
+    for (const [key, entry] of Object.entries(continuation))
+      result[key] = entry;
+    return result;
   }
 }
 
@@ -178,14 +188,21 @@ test('rejects missing, duplicate, or invalid module expert authorizations', () =
   };
   const invalidDepth =
     AgentWorkflowStructuredResultCodecScenario.jsonMap(output);
+  if (!('moduleExpertAuthorizations' in invalidDepth))
+    throw new Error('Expected module expert authorizations.');
   const authorizationNode = invalidDepth.moduleExpertAuthorizations;
   if (
-    !Array.isArray(authorizationNode) ||
+    !UntrustedYamlBoundary.isList(authorizationNode) ||
+    !authorizationNode[0] ||
     !UntrustedYamlBoundary.isRecord(authorizationNode[0])
   ) {
     throw new Error('Expected an authorization in the test fixture.');
   }
-  const authorization = authorizationNode[0] as MutableYamlMap;
+  const authorizationNodeValue = authorizationNode[0];
+  if (!authorizationNodeValue) throw new Error('Authorization is missing.');
+  const authorization: MutableYamlMap = {};
+  for (const [key, entry] of Object.entries(authorizationNodeValue))
+    authorization[key] = entry;
   authorization.depth = 4;
 
   expect(() =>
