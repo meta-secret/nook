@@ -614,6 +614,10 @@ impl CompanionExtensionHandoffEndpoint {
             protocol: CompanionExtensionProtocol::new(presence)?,
         })
     }
+    #[must_use]
+    pub fn presence(&self) -> CompanionExtensionPresence {
+        self.protocol.presence.clone()
+    }
     pub fn discover(
         self,
         discovery: CompanionIdentityDiscoveryObservation,

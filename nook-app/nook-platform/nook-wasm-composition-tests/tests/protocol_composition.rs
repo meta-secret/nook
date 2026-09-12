@@ -153,17 +153,27 @@ fn companion_wasm_protocol_accepts_core_presence_and_discovery() -> Result<()> {
 
 #[test]
 fn nook_wasm_endpoint_accepts_the_same_core_presence_and_discovery() -> Result<()> {
-    let presence = serde_json::from_value(serde_json::to_value(
-        ProtocolComposition::unlocked_presence(),
-    )?)?;
+    let expected_presence = ProtocolComposition::unlocked_presence();
+    let presence = serde_json::from_value(serde_json::to_value(&expected_presence)?)?;
     let endpoint = nook_wasm::NookCompanionExtensionEndpoint::new(presence)
         .map_err(|_| anyhow::anyhow!("vault WASM rejected valid core presence"))?;
+    assert_eq!(endpoint.presence(), expected_presence);
     let status = endpoint
         .discover(ProtocolComposition::discovery()?)
         .map_err(|_| anyhow::anyhow!("vault WASM rejected valid core discovery"))?
         .status();
     assert!(matches!(status, CompanionIdentityStatus::Unlocked { .. }));
     Ok(())
+}
+
+#[test]
+fn core_handoff_endpoint_rejects_invalid_presence_before_projection() {
+    let invalid = CompanionExtensionPresence::Locked {
+        vault_type: ExtensionPairingVaultType::Simple,
+        vault_store_id: String::new(),
+        vault_name: "Personal".to_owned(),
+    };
+    assert!(CompanionExtensionHandoffEndpoint::new(invalid).is_err());
 }
 
 #[test]

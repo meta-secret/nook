@@ -151,6 +151,11 @@ impl NookCompanionExtensionEndpoint {
         Self::from_presence(presence).map_err(|error| NookVaultManager::companion_js_error(&error))
     }
 
+    #[wasm_bindgen(getter)]
+    pub fn presence(&self) -> CompanionExtensionPresence {
+        self.inner.presence()
+    }
+
     #[allow(clippy::needless_pass_by_value)]
     pub fn discover(
         self,
