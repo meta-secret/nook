@@ -14,7 +14,7 @@ const expected = JSON.parse(
   readFileSync(join(root, '.github/scripts/ai-debug/allowed-origins.json'), 'utf8'),
 )
 
-/** @param {string} message */
+/** @param {string} message @returns {never} */
 function fail(message) {
   console.error(message)
   process.exit(1)
@@ -23,11 +23,11 @@ function fail(message) {
 /** @param {string} text @param {string} label @returns {string[]} */
 function extractAllowedOriginsArg(text, label) {
   const match = text.match(/--allowed-origins=([^\s"]+)/)
-  if (!match || !match[1]) {
+  const originText = match?.[1]
+  if (!originText) {
     fail(`${label} is missing --allowed-origins.`)
   }
-  const origins = match[1]
-  return origins.split(';').filter(Boolean)
+  return originText.split(';').filter(Boolean)
 }
 
 /** @param {readonly string[]} actual @param {string} label */
@@ -101,7 +101,10 @@ if (fileExists(cursorMcpPath)) {
   if (!args.includes('--ignore-https-errors')) {
     fail('.cursor/mcp.json must pass --ignore-https-errors.')
   }
-  const originsArg = args.find((arg /** @type {string} */) => arg.startsWith('--allowed-origins='))
+  const originsArg = args.find(
+    /** @type {(arg: string) => boolean} */ (arg) =>
+      arg.startsWith('--allowed-origins='),
+  )
   if (!originsArg) {
     fail('.cursor/mcp.json is missing --allowed-origins.')
   }

@@ -438,7 +438,8 @@ function validateTrustedGizmoAssignment(
   assignedGizmoId,
 ) {
   if (!assignedGizmoId) return ''
-  if (slices.length === 0 || slices[0].gizmoId !== assignedGizmoId) {
+  const firstSlice = slices[0]
+  if (slices.length === 0 || !firstSlice || firstSlice.gizmoId !== assignedGizmoId) {
     return 'the current PR slice must use the trusted focused-issue Gizmo ID'
   }
   if (!ownershipGizmoIds(budgetFields.ownershipBody).includes(assignedGizmoId)) {

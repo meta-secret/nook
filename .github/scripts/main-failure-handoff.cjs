@@ -33,7 +33,7 @@ function requireInteger(value, label) {
   if (!Number.isInteger(value) || value < 1) {
     throw new Error(`${label} must be a positive integer`)
   }
-  return value
+  return /** @type {number} */ (value)
 }
 
 /** @param {unknown} value @param {string} label @returns {string} */
@@ -339,15 +339,17 @@ function buildMainFailureIssue({
   const failures = failedJobNames(jobs)
   const relatedPrs = pullRequestNumbers(sourcePullRequests)
   const marker = `<!-- main-run:${run.id}:attempt:${run.run_attempt} -->`
-  const hasNewAttempt = Boolean(existingBody) && !existingBody.includes(marker)
+  const existingBodyText = existingBody || ''
+  const hasNewAttempt =
+    existingBodyText.length > 0 && !existingBodyText.includes(marker)
   const actionableExistingBody =
     hasNewAttempt ||
-    existingBody?.includes(DEFERRED_E2E_RETIREMENT_MARKER) ||
-    existingBody?.includes(SUCCESSFUL_RERUN_RETIREMENT_MARKER)
+    existingBodyText.includes(DEFERRED_E2E_RETIREMENT_MARKER) ||
+    existingBodyText.includes(SUCCESSFUL_RERUN_RETIREMENT_MARKER)
     ? replaceFrontmatterField(
         replaceFrontmatterField(
           clearDeliveryCompletion(
-            existingBody
+            existingBodyText
               .replace(`${DEFERRED_E2E_RETIREMENT_MARKER}\n\n`, '')
               .replaceAll(`${SUCCESSFUL_RERUN_RETIREMENT_MARKER}\n`, ''),
           ),

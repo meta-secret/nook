@@ -45,8 +45,13 @@ function deterministicIssueId(repository, prNumber) {
     .digest()
     .subarray(0, 16)
 
-  bytes[6] = (bytes[6] & 0x0f) | 0x40
-  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const versionByte = bytes[6]
+  const variantByte = bytes[8]
+  if (versionByte === undefined || variantByte === undefined) {
+    throw new Error('deterministic issue ID digest is too short')
+  }
+  bytes[6] = (versionByte & 0x0f) | 0x40
+  bytes[8] = (variantByte & 0x3f) | 0x80
 
   const hex = bytes.toString('hex')
   return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join(
@@ -128,8 +133,7 @@ class LinearApi {
 
   /** @param {string} issueId @returns {Promise<LinearIssue | undefined>} */
   async issue(issueId) {
-    /** @type {{ issues: { nodes: LinearIssue[] } }} */
-    const data = await this.graphql(
+    const data = /** @type {{ issues: { nodes: LinearIssue[] } }} */ (await this.graphql(
       `query UiDemoIssue($id: ID!) {
         issues(first: 1, filter: { id: { eq: $id } }) {
           nodes {
@@ -142,26 +146,24 @@ class LinearApi {
         }
       }`,
       { id: issueId },
-    )
+    ))
     return data.issues.nodes[0]
   }
 
   /** @param {string} teamId @returns {Promise<LinearWorkflowState[]>} */
   async teamStates(teamId) {
-    /** @type {{ team: { states: { nodes: LinearWorkflowState[] } } }} */
-    const data = await this.graphql(
+    const data = /** @type {{ team: { states: { nodes: LinearWorkflowState[] } } }} */ (await this.graphql(
       `query UiDemoTeamStates($id: String!) {
         team(id: $id) { states { nodes { id name type } } }
       }`,
       { id: teamId },
-    )
+    ))
     return data.team.states.nodes
   }
 
   /** @param {LinearCreateIssueInput} input @returns {Promise<LinearIssue>} */
   async createIssue(input) {
-    /** @type {{ issueCreate: LinearIssueMutation }} */
-    const data = await this.graphql(
+    const data = /** @type {{ issueCreate: LinearIssueMutation }} */ (await this.graphql(
       `mutation CreateUiDemoIssue($input: IssueCreateInput!) {
         issueCreate(input: $input) {
           success
@@ -169,7 +171,7 @@ class LinearApi {
         }
       }`,
       { input },
-    )
+    ))
     const issue = data.issueCreate.issue
     if (!data.issueCreate.success || !issue) {
       throw new Error('Linear did not create the UI demo issue')
@@ -179,8 +181,7 @@ class LinearApi {
 
   /** @param {string} issueId @param {LinearUpdateIssueInput} input @returns {Promise<LinearIssue>} */
   async updateIssue(issueId, input) {
-    /** @type {{ issueUpdate: LinearIssueMutation }} */
-    const data = await this.graphql(
+    const data = /** @type {{ issueUpdate: LinearIssueMutation }} */ (await this.graphql(
       `mutation UpdateUiDemoIssue($id: String!, $input: IssueUpdateInput!) {
         issueUpdate(id: $id, input: $input) {
           success
@@ -188,7 +189,7 @@ class LinearApi {
         }
       }`,
       { id: issueId, input },
-    )
+    ))
     const issue = data.issueUpdate.issue
     if (!data.issueUpdate.success || !issue) {
       throw new Error('Linear did not update the UI demo issue')
@@ -198,13 +199,12 @@ class LinearApi {
 
   /** @param {LinearCommentInput} input @returns {Promise<LinearComment>} */
   async createComment(input) {
-    /** @type {{ commentCreate: LinearCommentMutation }} */
-    const data = await this.graphql(
+    const data = /** @type {{ commentCreate: LinearCommentMutation }} */ (await this.graphql(
       `mutation CreateUiDemoComment($input: CommentCreateInput!) {
         commentCreate(input: $input) { success comment { id body } }
       }`,
       { input },
-    )
+    ))
     const comment = data.commentCreate.comment
     if (!data.commentCreate.success || !comment) {
       throw new Error('Linear did not create the UI demo comment')
@@ -215,8 +215,7 @@ class LinearApi {
   /** @param {string} filePath @param {string} [filename] @returns {Promise<UploadedVideo>} */
   async uploadFile(filePath, filename = path.basename(filePath)) {
     const contents = await fs.readFile(filePath)
-    /** @type {{ fileUpload: LinearUploadMutation }} */
-    const data = await this.graphql(
+    const data = /** @type {{ fileUpload: LinearUploadMutation }} */ (await this.graphql(
       `mutation UploadUiDemo($contentType: String!, $filename: String!, $size: Int!) {
         fileUpload(contentType: $contentType, filename: $filename, size: $size) {
           success
@@ -224,7 +223,7 @@ class LinearApi {
         }
       }`,
       { contentType: VIDEO_CONTENT_TYPE, filename, size: contents.byteLength },
-    )
+    ))
     const upload = data.fileUpload.uploadFile
     if (!data.fileUpload.success || !upload) throw new Error(`Linear did not prepare ${filename}`)
 
