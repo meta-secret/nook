@@ -461,7 +461,7 @@ jobs:
         run: node --test .github/scripts/workbench-records.test.cjs
 
       - name: Test cache telemetry collector
-        run: node --test .github/scripts/cache-telemetry.test.cjs
+        run: node --test .github/scripts/cache-telemetry.test.mjs
 
       - name: Install Bun for registry cache descriptor tests
         uses: oven-sh/setup-bun@v2

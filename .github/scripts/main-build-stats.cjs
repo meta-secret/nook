@@ -1,6 +1,6 @@
 const fs = require('node:fs')
 const { isDeepStrictEqual } = require('node:util')
-const { validateTelemetryRecord } = require('./cache-telemetry.cjs')
+const { CacheTelemetry } = require('./cache-telemetry.mjs')
 
 // Producer compile/verify work only. Browser suites are parallel consumers and must not
 // inflate build_seconds relative to the historical single-job Main step.
@@ -196,7 +196,7 @@ function metricComparison(current, baselines) {
 function cacheTelemetrySummary(cacheTelemetry, run) {
   const jobs = cacheTelemetry
     .map((record) =>
-      validateTelemetryRecord(record, {
+      CacheTelemetry.validateTelemetryRecord(record, {
         runId: run.id,
         runAttempt: run.run_attempt,
       }),
@@ -630,7 +630,7 @@ function validateMainBuildStats(record, expected = {}) {
     }
     for (const job of telemetry.jobs) {
       requireString(job.job, 'cache_telemetry.job.job')
-      validateTelemetryRecord(
+      CacheTelemetry.validateTelemetryRecord(
         {
           schema_version: 1,
           github: {
