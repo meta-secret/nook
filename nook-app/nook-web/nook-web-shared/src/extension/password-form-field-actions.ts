@@ -62,16 +62,18 @@ class PasswordFormCredentialInteraction {
       };
       return passwordFieldDiscovery.hasAutocompleteToken(nookArrowArgs4);
     });
-    let passwordField = passwordFields.find((field) => {
-      const nookArrowArgs5: Parameters<
-        typeof passwordFieldDiscovery.hasAutocompleteToken
-      >[0] = {
-        field,
-        expected: "current-password",
-      };
-      return passwordFieldDiscovery.hasAutocompleteToken(nookArrowArgs5);
-    });
-    if (!passwordField) [passwordField] = newPasswordFields;
+    let passwordField = newPasswordFields[0];
+    if (!passwordField) {
+      passwordField = passwordFields.find((field) => {
+        const nookArrowArgs5: Parameters<
+          typeof passwordFieldDiscovery.hasAutocompleteToken
+        >[0] = {
+          field,
+          expected: "current-password",
+        };
+        return passwordFieldDiscovery.hasAutocompleteToken(nookArrowArgs5);
+      });
+    }
     if (!passwordField) [passwordField] = passwordFields;
     if (!passwordField) return { kind: LoginCredentialsLookupKind.Absent };
     const password = passwordField.value.trim();

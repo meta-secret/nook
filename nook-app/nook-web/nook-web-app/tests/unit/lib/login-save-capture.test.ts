@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
 const saveMocks = vi.hoisted(() => ({
-  sendOffer: vi.fn(async () => ({ kind: 'unavailable' })),
+  sendOffer: vi.fn(
+    async (_message: { payload: { username: string; password: string } }) => ({
+      kind: 'unavailable',
+    }),
+  ),
 }))
 
 vi.mock(
@@ -65,5 +69,34 @@ describe('submitted login capture', () => {
     form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }))
 
     expect(saveMocks.sendOffer).toHaveBeenCalledOnce()
+  })
+
+  test('captures the replacement password on a password-change form', () => {
+    document.body.innerHTML = `<form method="post">
+      <input autocomplete="username" value="alice@nook.test" />
+      <input name="current-password" type="password" autocomplete="current-password" value="old-password" />
+      <input name="new-password" type="password" autocomplete="new-password" value="generated-password" />
+      <input name="new-password-confirm" type="password" autocomplete="new-password" value="generated-password" />
+      <button type="submit">Update password</button>
+    </form>`
+    const form = document.querySelector('form')
+    const submitter = form?.querySelector('button')
+    if (!form || !submitter) throw new Error('expected password-change form')
+    form.addEventListener(
+      'submit',
+      loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction),
+    )
+
+    form.dispatchEvent(
+      new SubmitEvent('submit', { cancelable: true, submitter }),
+    )
+
+    expect(saveMocks.sendOffer).toHaveBeenCalledOnce()
+    expect(saveMocks.sendOffer.mock.calls[0]?.[0]).toMatchObject({
+      payload: {
+        username: 'alice@nook.test',
+        password: 'generated-password',
+      },
+    })
   })
 })

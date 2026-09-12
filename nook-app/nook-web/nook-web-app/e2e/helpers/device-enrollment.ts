@@ -383,10 +383,8 @@ export async function tryGithubVaultConnect(
 
   const quickConnect = page.getByTestId('connect-provider-btn').first()
   if (await quickConnect.isVisible()) {
-    if (await quickConnect.isEnabled()) {
-      await quickConnect.click()
-      await waitForVaultOperationsIdle(page)
-    }
+    await quickConnect.click()
+    await waitForVaultOperationsIdle(page)
     return
   }
   if (await page.getByTestId('login-provider-setup').isVisible()) {
@@ -417,10 +415,8 @@ export async function tryOauthFileVaultConnect(
 
   const quickConnect = page.getByTestId('connect-provider-btn').first()
   if (await quickConnect.isVisible()) {
-    if (await quickConnect.isEnabled()) {
-      await quickConnect.click()
-      await waitForVaultOperationsIdle(page)
-    }
+    await quickConnect.click()
+    await waitForVaultOperationsIdle(page)
     return
   }
 
