@@ -451,10 +451,12 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn vault_session_reset_clears_sensitive_and_derived_state() {
-        let mut state = VaultSessionState::default();
-        state.secrets_key = "secrets".to_owned();
-        state.members_key = "members".to_owned();
-        state.last_synced_content = "content".to_owned();
+        let mut state = VaultSessionState {
+            secrets_key: "secrets".to_owned(),
+            members_key: "members".to_owned(),
+            last_synced_content: "content".to_owned(),
+            ..VaultSessionState::default()
+        };
         state.password_entries.push(nook_core::PasswordUnlockEntry {
             id: "password-entry".to_owned(),
             label: "Backup".to_owned(),

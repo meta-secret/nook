@@ -871,14 +871,14 @@ mod tests {
         }
         .begin_or_resume()
         .await?;
-        let first = (&pending)
+        let first = pending
             .pin_event(SimpleGenesisEventInput {
                 app_key: &extension,
                 proposed_yaml: "first-event\n".to_owned(),
                 proposed_signing_seed: "first-seed".to_owned(),
             })
             .await?;
-        let resumed = (&pending)
+        let resumed = pending
             .pin_event(SimpleGenesisEventInput {
                 app_key: &authorizer,
                 proposed_yaml: "ignored-event\n".to_owned(),

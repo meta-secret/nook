@@ -193,7 +193,7 @@ mod tests {
                 providers.providers.push(provider);
                 providers = providers
                     .seal_credentials_for(&identity.public_key())
-                    .map_err(|rejection| rejection.into_cause())?;
+                    .map_err(nook_core::ProviderCredentialRejection::into_cause)?;
                 scopes.push(ExtensionConnectScope::SyncProviderCredentials);
             }
             let request = CompanionPairingRequest {
@@ -461,7 +461,7 @@ mod tests {
             .store_id = ProviderVaultScope::StoreId("store-1".to_owned());
         replacement = replacement
             .seal_credentials_for(&other.public_key())
-            .map_err(|rejection| rejection.into_cause())?;
+            .map_err(nook_core::ProviderCredentialRejection::into_cause)?;
         fixture.providers = replacement;
         fixture.refresh_manifest()?;
         assert!(matches!(

@@ -223,7 +223,7 @@ mod tests {
 
         fn interrupted_commit(
             &mut self,
-            request: InterruptedCommit<'_>,
+            request: &InterruptedCommit<'_>,
         ) -> Result<(), CompanionPairingCandidateFailure> {
             let mut transaction = self.vault.clone();
             let gate_json = CandidateSchema::encode(&request.encoded.gate)?;
@@ -301,7 +301,7 @@ mod tests {
             for writes_before_failure in 0..(encoded.events.len() + 2) {
                 let mut store = MemoryActivationStore::default();
                 assert!(matches!(
-                    store.interrupted_commit(InterruptedCommit {
+                    store.interrupted_commit(&InterruptedCommit {
                         encoded: &encoded,
                         writes_before_failure,
                     }),

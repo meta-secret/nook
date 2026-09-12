@@ -19,10 +19,10 @@ use nook_core::DeviceIdentityProtection;
 #[cfg(test)]
 use nook_core::MemberLabelState;
 use nook_core::{
-    AppId, DeviceAccessCredentialKind, DeviceAccessProtectionKind, PasskeyAuthenticatorAttachment,
-    PasskeyBackupState, StoreId,
+    AppId, AuthenticatorGuidEvidence, DeviceAccessCredentialKind, DeviceAccessProtectionKind,
+    DeviceCredentialProfile, PasskeyAuthenticatorAttachment, PasskeyBackupState,
+    PersistedDeviceIdentityState, StoreId,
 };
-use nook_core::{AuthenticatorGuidEvidence, DeviceCredentialProfile, PersistedDeviceIdentityState};
 pub use passkey_metadata::{NookPasskeyAttachmentState, NookPasskeyBackupState};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -141,7 +141,6 @@ struct LocalAccessProfile {
     profile: device_access::DeviceAccessProfile,
 }
 
-/// Named values required by `NookDeviceVaultAccess::vaults_for_identity`.
 #[cfg(test)]
 pub(crate) struct BrowserVaultsForIdentity<'a> {
     pub(crate) vaults: &'a [NookDeviceVaultAccess],
@@ -256,7 +255,7 @@ pub struct NookDeviceAccessSnapshot {
 
 #[cfg(test)]
 impl NookDeviceVaultAccess {
-    fn vaults_for_identity(request: BrowserVaultsForIdentity<'_>) -> Vec<NookDeviceVaultAccess> {
+    fn vaults_for_identity(request: &BrowserVaultsForIdentity<'_>) -> Vec<NookDeviceVaultAccess> {
         let BrowserVaultsForIdentity { vaults, identity } = request;
         vaults
             .iter()
@@ -695,14 +694,15 @@ mod tests {
             vault_row(&unrelated_store, "Unrelated vault"),
         ];
 
-        let current_rows = NookDeviceVaultAccess::vaults_for_identity(BrowserVaultsForIdentity {
+        let current_rows = NookDeviceVaultAccess::vaults_for_identity(&BrowserVaultsForIdentity {
             vaults: &vaults,
             identity: &current,
         });
-        let companion_rows = NookDeviceVaultAccess::vaults_for_identity(BrowserVaultsForIdentity {
-            vaults: &vaults,
-            identity: &companion,
-        });
+        let companion_rows =
+            NookDeviceVaultAccess::vaults_for_identity(&BrowserVaultsForIdentity {
+                vaults: &vaults,
+                identity: &companion,
+            });
         let ([current_row], [companion_row]) = (current_rows.as_slice(), companion_rows.as_slice())
         else {
             anyhow::bail!("exactly one vault row per identity must be present");

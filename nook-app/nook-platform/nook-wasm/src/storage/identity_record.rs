@@ -583,6 +583,11 @@ impl NookDatabase {
     }
 }
 
+pub(crate) use keyring::{
+    KeyringDbEntryForAppIdFromStore, KeyringDbKeyringDeleteKey, KeyringDbKeyringReadString,
+    KeyringDbLoadKeyringForStore, KeyringDbValidateKeyringDirectoryBinding, KeyringDbWriteKeyring,
+};
+
 #[cfg(test)]
 mod tests {
 
@@ -773,7 +778,7 @@ mod tests {
             migrated
                 .open_vault_dek(IdentityVaultKeyOpening {
                     app_key: &app_key,
-                    store_id: store_id
+                    store_id
                 })
                 .map_err(NookDatabase::map_domain_error)?,
             expected
@@ -910,8 +915,3 @@ mod tests {
         NookDatabase::clear_identity_directory_for_test().await
     }
 }
-
-pub(crate) use keyring::{
-    KeyringDbEntryForAppIdFromStore, KeyringDbKeyringDeleteKey, KeyringDbKeyringReadString,
-    KeyringDbLoadKeyringForStore, KeyringDbValidateKeyringDirectoryBinding, KeyringDbWriteKeyring,
-};

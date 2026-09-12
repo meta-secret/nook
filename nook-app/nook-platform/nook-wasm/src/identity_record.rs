@@ -821,7 +821,7 @@ mod tests {
             NookSelectedVaultIdentityContextKind::selected_vault_context_kind(
                 BrowserSelectedVaultContextKind {
                     identities: &snapshots,
-                    current_app_granted: current_app_granted
+                    current_app_granted
                 }
             ),
             NookSelectedVaultIdentityContextKind::LinkedWithCurrent
@@ -940,7 +940,7 @@ mod tests {
             NookSelectedVaultIdentityContextKind::selected_vault_context_kind(
                 BrowserSelectedVaultContextKind {
                     identities: &snapshots,
-                    current_app_granted: current_app_granted
+                    current_app_granted
                 }
             ),
             NookSelectedVaultIdentityContextKind::LinkedWithoutCurrent

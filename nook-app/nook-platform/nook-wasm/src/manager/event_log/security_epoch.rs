@@ -770,9 +770,8 @@ mod tests {
     fn recovery_plan_rejects_an_invalid_store_before_event_replay() -> anyhow::Result<()> {
         let plan = SecurityEpochRecoveryPlan::fixture()?;
 
-        let error = match plan.prepare_execution("", &EpochPublication::Unpublished) {
-            Err(error) => error,
-            Ok(_) => anyhow::bail!("invalid store ids must fail closed"),
+        let Err(error) = plan.prepare_execution("", &EpochPublication::Unpublished) else {
+            anyhow::bail!("invalid store ids must fail closed");
         };
 
         assert!(matches!(error, NookError::Database(message) if message.contains("store_id")));
@@ -788,11 +787,11 @@ mod tests {
         let mut plan = SecurityEpochRecoveryPlan::fixture()?;
         plan.trigger_event_yaml = "not an event".to_owned();
 
-        let error =
-            match plan.prepare_execution("store_epochstate1", &EpochPublication::Unpublished) {
-                Err(error) => error,
-                Ok(_) => anyhow::bail!("malformed triggers must fail closed"),
-            };
+        let Err(error) =
+            plan.prepare_execution("store_epochstate1", &EpochPublication::Unpublished)
+        else {
+            anyhow::bail!("malformed triggers must fail closed");
+        };
 
         assert!(
             matches!(error, NookError::Database(message) if message.starts_with("failed to parse stored event:"))
@@ -872,8 +871,7 @@ mod tests {
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
     )]
-    async fn wasm_security_epoch_guards_cover_safe_noop_and_projection_paths() -> anyhow::Result<()>
-    {
+    fn wasm_security_epoch_guards_cover_safe_noop_and_projection_paths() -> anyhow::Result<()> {
         let plan = SecurityEpochRecoveryPlan::fixture()?;
         let committed = CommittedSecurityEpochExecution {
             execution: plan

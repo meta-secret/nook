@@ -133,7 +133,7 @@ mod tests {
         assert!(
             matches!(with_user.user, DriveAccountObservation::Account(DriveAboutUser { email_address: DriveEmailDisclosure::Address(email) }) if email == "person@example.test")
         );
-        let without_user: DriveAboutResponse = serde_json::from_str(r#"{}"#)?;
+        let without_user: DriveAboutResponse = serde_json::from_str("{}")?;
         assert!(matches!(
             without_user.user,
             DriveAccountObservation::Unreported

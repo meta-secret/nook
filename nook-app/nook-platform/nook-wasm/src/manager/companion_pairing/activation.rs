@@ -298,7 +298,7 @@ mod tests {
                     providers,
                 )
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-            let records = Self::access_records(AccessRecordsRequest {
+            let records = Self::access_records(&AccessRecordsRequest {
                 manager: &manager,
                 identity: &identity,
             })?;
@@ -311,7 +311,7 @@ mod tests {
         }
 
         fn access_records(
-            request: AccessRecordsRequest<'_>,
+            request: &AccessRecordsRequest<'_>,
         ) -> anyhow::Result<NookExternalEventLogRecords> {
             let AccessRecordsRequest { manager, identity } = request;
             let (website_signing, _) = SigningIdentity::generate()?;
@@ -485,7 +485,7 @@ mod tests {
     fn rejects_event_grant_for_another_recipient() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
         let other = DeviceIdentity::generate()?;
-        fixture.records = ActivationFixture::access_records(AccessRecordsRequest {
+        fixture.records = ActivationFixture::access_records(&AccessRecordsRequest {
             manager: &fixture.manager,
             identity: &other,
         })?;
@@ -694,7 +694,7 @@ mod tests {
     fn rejects_event_for_another_vault() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
         fixture.manager.vault.store_id = "store_testtoken12".to_owned();
-        fixture.records = ActivationFixture::access_records(AccessRecordsRequest {
+        fixture.records = ActivationFixture::access_records(&AccessRecordsRequest {
             manager: &fixture.manager,
             identity: &fixture.identity,
         })?;

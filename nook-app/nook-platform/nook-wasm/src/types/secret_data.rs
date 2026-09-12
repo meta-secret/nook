@@ -475,7 +475,10 @@ mod tests {
         assert_eq!(totp.code(), "123456");
         assert_eq!(totp.seconds_remaining(), 17);
         assert_eq!(totp.period(), 30);
-        assert_eq!(totp.expires_at_unix_seconds(), 117.0);
+        assert_eq!(
+            totp.expires_at_unix_seconds().to_bits(),
+            117.0_f64.to_bits()
+        );
         Ok(())
     }
 }

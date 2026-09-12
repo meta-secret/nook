@@ -402,7 +402,7 @@ mod tests {
                             required_participants: 3.into(),
                             ready_participants: 3.into(),
                         },
-                    )
+                    );
                 }
                 _ => manager.vault.store_id = "invalid-store".to_owned(),
             }

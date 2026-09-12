@@ -575,7 +575,7 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn policy_wrappers_project_sync_and_connection_paths() {
+    fn policy_wrappers_project_edit_and_sync_start_paths() {
         let policy = NookVaultClientPolicy::new();
 
         assert_eq!(
@@ -633,6 +633,12 @@ mod tests {
             ),
             nook_core::VaultSyncTimerTickDecision::SkipNoRemoteUpdates
         );
+    }
+
+    #[wasm_bindgen_test]
+    fn policy_wrappers_project_sync_execution_paths() {
+        let policy = NookVaultClientPolicy::new();
+
         assert_eq!(
             policy.vault_sync_timer_tick_decision(
                 false,
@@ -704,6 +710,11 @@ mod tests {
             ),
             nook_core::VaultStorageSyncDecision::SyncProviders
         );
+    }
+
+    #[wasm_bindgen_test]
+    fn policy_wrappers_project_connection_paths() {
+        let policy = NookVaultClientPolicy::new();
 
         assert_eq!(
             policy.remote_vault_assess_decision(

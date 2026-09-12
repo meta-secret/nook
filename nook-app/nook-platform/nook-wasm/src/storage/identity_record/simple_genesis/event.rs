@@ -306,7 +306,7 @@ mod tests {
         }
         .begin_or_resume()
         .await?;
-        let first = (&pending)
+        let first = pending
             .pin_event(SimpleGenesisEventInput {
                 app_key: &app_key,
                 proposed_yaml: "first-event\n".to_owned(),
@@ -321,7 +321,7 @@ mod tests {
         }?;
         assert!(!stored.contains("first-seed"));
         assert!(stored.contains("signingSeedEnvelope"));
-        let resumed = (&pending)
+        let resumed = pending
             .pin_event(SimpleGenesisEventInput {
                 app_key: &app_key,
                 proposed_yaml: "other-event\n".to_owned(),

@@ -185,7 +185,7 @@ mod tests {
         };
 
         let enrollment =
-            (&context).pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?;
+            context.pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?;
 
         assert!(matches!(
             enrollment,
@@ -200,8 +200,7 @@ mod tests {
             value: ExtensionIdentityHandoffContextValue::VaultCreation,
         };
         assert!(matches!(
-            (&vault_creation)
-                .pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
+            vault_creation.pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
             PendingExtensionIdentityEnrollment::VaultCreation {
                 authorizer: VaultCreationAuthority::NewIdentity
             }
@@ -209,7 +208,7 @@ mod tests {
 
         let authorizer = AppKey::generate()?;
         assert!(matches!(
-            (&vault_creation)
+            vault_creation
                 .pending_extension_enrollment(HandoffAuthorization::Authenticated(&authorizer))?,
             PendingExtensionIdentityEnrollment::VaultCreation {
                 authorizer: VaultCreationAuthority::ExistingIdentity(_)
@@ -223,12 +222,12 @@ mod tests {
             },
         };
         assert!(matches!(
-            (&paired).pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
+            paired.pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
             PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { store_id: id }
                 if id == store_id
         ));
         assert!(matches!(
-            (&paired).pending_extension_enrollment(HandoffAuthorization::Authenticated(&authorizer))?,
+            paired.pending_extension_enrollment(HandoffAuthorization::Authenticated(&authorizer))?,
             PendingExtensionIdentityEnrollment::PairedVault { store_id: id, .. }
                 if id == store_id
         ));
@@ -239,7 +238,7 @@ mod tests {
             },
         };
         assert!(matches!(
-            (&imported).pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
+            imported.pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
             PendingExtensionIdentityEnrollment::ExistingVaultImport { store_id: id }
                 if id == store_id
         ));

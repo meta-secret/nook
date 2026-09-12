@@ -311,146 +311,6 @@ impl NookVaultManager {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use nook_core::{VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
-    use wasm_bindgen_test::wasm_bindgen_test;
-
-    #[wasm_bindgen_test]
-    fn vault_name_assignment_trims_and_clears_blank_values() {
-        let mut manager = NookVaultManager::new();
-
-        manager.assign_vault_name("  Personal  ");
-        assert!(matches!(
-            manager.vault.vault_name,
-            VaultNameState::Named(ref name) if name == "Personal"
-        ));
-
-        manager.assign_vault_name(" \t ");
-        assert!(matches!(manager.vault.vault_name, VaultNameState::Unnamed));
-    }
-
-    #[wasm_bindgen_test]
-    fn device_public_key_projects_only_a_valid_identity() -> Result<(), NookError> {
-        let mut manager = NookVaultManager::new();
-        assert!(manager.device_public_key().is_empty());
-
-        let identity = DeviceIdentity::generate()?;
-        let expected = identity.public_key().as_str().to_owned();
-        manager.device.identity_private_key = identity.secret_string().into_inner();
-        assert_eq!(manager.device_public_key(), expected);
-
-        manager.device.identity_private_key = "malformed".to_owned();
-        assert!(manager.device_public_key().is_empty());
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    fn reset_session_keeps_device_and_provider_configuration() -> Result<(), NookError> {
-        let mut manager = NookVaultManager::new();
-        let identity = DeviceIdentity::generate()?;
-        manager.device.id = "device-stable".to_owned();
-        manager.device.identity_private_key = identity.secret_string().into_inner();
-        manager.storage.access_token = "provider-token".to_owned();
-        manager.storage.remote_ref = "owner/repo".to_owned();
-        manager.storage.remote_path = "vault.yaml".to_owned();
-        manager.storage.github_root_empty = true;
-        manager.storage.use_local_cache_for_connect = true;
-        manager.vault.store_id = "store_sessionreset1".to_owned();
-        manager.sync_outbox.provider_id = "provider-cache".to_owned();
-
-        manager.reset_vault_session();
-
-        assert_eq!(manager.device.id, "device-stable");
-        assert!(!manager.device.identity_private_key.is_empty());
-        assert_eq!(manager.storage.access_token, "provider-token");
-        assert_eq!(manager.storage.remote_ref, "owner/repo");
-        assert_eq!(manager.storage.remote_path, "vault.yaml");
-        assert!(!manager.storage.github_root_empty);
-        assert!(!manager.storage.use_local_cache_for_connect);
-        assert!(manager.vault.store_id.is_empty());
-        assert!(manager.sync_outbox.provider_id.is_empty());
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    fn projection_serialization_requires_a_store_identity() {
-        let manager = NookVaultManager::new();
-        assert!(matches!(
-            manager.serialize_current_projection_yaml(),
-            Err(NookError::Database(message)) if message == "Vault store id is not initialized."
-        ));
-    }
-
-    #[wasm_bindgen_test]
-    fn capture_unlock_adopts_metadata_and_version() -> Result<(), NookError> {
-        let mut manager = NookVaultManager::new();
-        let store_id = nook_core::StoreId::generate()?;
-        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
-            &[],
-            &VaultUnlock::Keys,
-            &[],
-            VaultStoreIdentityRef::Assigned(store_id.as_str()),
-            VaultNameRef::Named("Captured"),
-            VaultVersionWrite::Initial,
-            &manager.vault.architecture,
-        )?
-        .into_inner();
-
-        manager.capture_vault_unlock(&yaml)?;
-
-        assert_eq!(manager.vault.store_id, store_id.as_str());
-        assert!(matches!(
-            manager.vault.vault_name,
-            VaultNameState::Named(ref name) if name == "Captured"
-        ));
-        assert!(matches!(manager.vault.unlock, VaultUnlock::Keys));
-        assert_eq!(manager.vault.vault_version, 0);
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    fn ensure_device_identity_requires_authorization() -> Result<(), NookError> {
-        let mut manager = NookVaultManager::new();
-        assert!(manager.ensure_device_identity().is_err());
-
-        let identity = DeviceIdentity::generate()?;
-        manager.device.identity_private_key = identity.secret_string().into_inner();
-        assert_eq!(
-            manager.ensure_device_identity()?.device_id(),
-            identity.device_id()
-        );
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    fn local_cache_reference_tracks_provider_mode_and_path() {
-        let mut manager = NookVaultManager::new();
-        manager.storage.mode = StorageMode::Github;
-        manager.storage.remote_ref = "owner/repo".to_owned();
-        manager.storage.remote_path = "vault.yaml".to_owned();
-        assert_eq!(
-            manager.local_cache_ref(),
-            StorageMode::Github.cache_ref("owner/repo", "vault.yaml")
-        );
-    }
-
-    #[wasm_bindgen_test]
-    fn stored_snapshot_and_genesis_requirement_follow_current_records() -> Result<(), NookError> {
-        let manager = NookVaultManager::new();
-        assert!(manager.stored_records_snapshot().is_empty());
-        assert!(manager.needs_genesis_persist()?);
-        Ok(())
-    }
-}
-
-// ---- Cross-cutting private helpers ----------------------------------------
-//
-// These are called from multiple submodules of `manager` and therefore live
-// here at the parent. Visibility is `pub(in crate::manager)` so the
-// submodules can call them without leaking into the rest of the crate.
-
 impl NookVaultManager {
     pub(crate) fn query_secret_page(
         &self,
@@ -826,3 +686,143 @@ impl NookVaultManager {
         Ok(content)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nook_core::{VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn vault_name_assignment_trims_and_clears_blank_values() {
+        let mut manager = NookVaultManager::new();
+
+        manager.assign_vault_name("  Personal  ");
+        assert!(matches!(
+            manager.vault.vault_name,
+            VaultNameState::Named(ref name) if name == "Personal"
+        ));
+
+        manager.assign_vault_name(" \t ");
+        assert!(matches!(manager.vault.vault_name, VaultNameState::Unnamed));
+    }
+
+    #[wasm_bindgen_test]
+    fn device_public_key_projects_only_a_valid_identity() -> Result<(), NookError> {
+        let mut manager = NookVaultManager::new();
+        assert!(manager.device_public_key().is_empty());
+
+        let identity = DeviceIdentity::generate()?;
+        let expected = identity.public_key().as_str().to_owned();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        assert_eq!(manager.device_public_key(), expected);
+
+        manager.device.identity_private_key = "malformed".to_owned();
+        assert!(manager.device_public_key().is_empty());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn reset_session_keeps_device_and_provider_configuration() -> Result<(), NookError> {
+        let mut manager = NookVaultManager::new();
+        let identity = DeviceIdentity::generate()?;
+        manager.device.id = "device-stable".to_owned();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.storage.access_token = "provider-token".to_owned();
+        manager.storage.remote_ref = "owner/repo".to_owned();
+        manager.storage.remote_path = "vault.yaml".to_owned();
+        manager.storage.github_root_empty = true;
+        manager.storage.use_local_cache_for_connect = true;
+        manager.vault.store_id = "store_sessionreset1".to_owned();
+        manager.sync_outbox.provider_id = "provider-cache".to_owned();
+
+        manager.reset_vault_session();
+
+        assert_eq!(manager.device.id, "device-stable");
+        assert!(!manager.device.identity_private_key.is_empty());
+        assert_eq!(manager.storage.access_token, "provider-token");
+        assert_eq!(manager.storage.remote_ref, "owner/repo");
+        assert_eq!(manager.storage.remote_path, "vault.yaml");
+        assert!(!manager.storage.github_root_empty);
+        assert!(!manager.storage.use_local_cache_for_connect);
+        assert!(manager.vault.store_id.is_empty());
+        assert!(manager.sync_outbox.provider_id.is_empty());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn projection_serialization_requires_a_store_identity() {
+        let manager = NookVaultManager::new();
+        assert!(matches!(
+            manager.serialize_current_projection_yaml(),
+            Err(NookError::Database(message)) if message == "Vault store id is not initialized."
+        ));
+    }
+
+    #[wasm_bindgen_test]
+    fn capture_unlock_adopts_metadata_and_version() -> Result<(), NookError> {
+        let mut manager = NookVaultManager::new();
+        let store_id = nook_core::StoreId::generate()?;
+        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
+            &[],
+            &VaultUnlock::Keys,
+            &[],
+            VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            VaultNameRef::Named("Captured"),
+            VaultVersionWrite::Initial,
+            &manager.vault.architecture,
+        )?
+        .into_inner();
+
+        manager.capture_vault_unlock(&yaml)?;
+
+        assert_eq!(manager.vault.store_id, store_id.as_str());
+        assert!(matches!(
+            manager.vault.vault_name,
+            VaultNameState::Named(ref name) if name == "Captured"
+        ));
+        assert!(matches!(manager.vault.unlock, VaultUnlock::Keys));
+        assert_eq!(manager.vault.vault_version, 0);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn ensure_device_identity_requires_authorization() -> Result<(), NookError> {
+        let mut manager = NookVaultManager::new();
+        assert!(manager.ensure_device_identity().is_err());
+
+        let identity = DeviceIdentity::generate()?;
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        assert_eq!(
+            manager.ensure_device_identity()?.device_id(),
+            identity.device_id()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn local_cache_reference_tracks_provider_mode_and_path() {
+        let mut manager = NookVaultManager::new();
+        manager.storage.mode = StorageMode::Github;
+        manager.storage.remote_ref = "owner/repo".to_owned();
+        manager.storage.remote_path = "vault.yaml".to_owned();
+        assert_eq!(
+            manager.local_cache_ref(),
+            StorageMode::Github.cache_ref("owner/repo", "vault.yaml")
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn stored_snapshot_and_genesis_requirement_follow_current_records() -> Result<(), NookError> {
+        let manager = NookVaultManager::new();
+        assert!(manager.stored_records_snapshot().is_empty());
+        assert!(manager.needs_genesis_persist()?);
+        Ok(())
+    }
+}
+
+// ---- Cross-cutting private helpers ----------------------------------------
+//
+// These are called from multiple submodules of `manager` and therefore live
+// here at the parent. Visibility is `pub(in crate::manager)` so the
+// submodules can call them without leaking into the rest of the crate.

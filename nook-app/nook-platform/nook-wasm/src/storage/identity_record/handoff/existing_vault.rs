@@ -491,7 +491,7 @@ mod tests {
             ),
         ] {
             local = local.put_event(nook_core::LocalEventWrite {
-                event_id: event_id,
+                event_id,
                 bytes: bytes.into(),
             });
         }
@@ -541,7 +541,7 @@ mod tests {
             NookDatabase::save_event_bytes(EventDbSaveEventBytes {
                 store_id: fixture.store_id.as_str(),
                 event_id: event_id.as_str(),
-                bytes: bytes,
+                bytes,
             })
             .await?;
         }
@@ -686,7 +686,7 @@ mod tests {
             NookDatabase::save_event_bytes(EventDbSaveEventBytes {
                 store_id: fixture.store_id.as_str(),
                 event_id: event_id.as_str(),
-                bytes: bytes,
+                bytes,
             })
             .await?;
         }

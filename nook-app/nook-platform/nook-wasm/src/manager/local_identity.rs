@@ -1,16 +1,7 @@
 //! Local identity creation, selection, and session adoption.
 
 use super::session::LocalIdentityCreation;
-enum PriorLocalAuthorizer {
-    Unavailable,
-    Authorized(nook_core::AppKey),
-}
-use crate::AuthProviderDatabase;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::IdbPutStringRequest;
-use crate::IdentityDbSaveNewProtectedLocalIdentity;
-use crate::IdentityDbSaveProtectedLocalIdentity;
-use crate::manager::device_protection::ExtensionIdentityPublication;
+
 #[cfg(test)]
 use crate::manager::session::ExtensionHandoffState;
 use crate::storage::device_access::DeviceAccessProfileKey;
@@ -36,6 +27,125 @@ use zeroize::Zeroize;
 use super::{EventLogSyncIssueState, NookVaultManager, StorageSession};
 
 const DEFAULT_IDENTITY_LABEL: &str = "Personal";
+
+enum PriorLocalAuthorizer {
+    Unavailable,
+    Authorized(nook_core::AppKey),
+}
+use crate::AuthProviderDatabase;
+#[cfg(all(test, target_arch = "wasm32"))]
+use crate::IdbPutStringRequest;
+use crate::IdentityDbSaveNewProtectedLocalIdentity;
+use crate::IdentityDbSaveProtectedLocalIdentity;
+use crate::manager::device_protection::ExtensionIdentityPublication;
+impl NookVaultManager {
+    fn finish_local_identity_activation(&mut self, app_id: &nook_core::AppId) {
+        self.reset_local_identity_session();
+        self.lock_device_identity();
+        self.device.id = app_id.to_string();
+        self.device.pending_local_identity_label = LocalIdentityCreation::ExistingIdentity;
+    }
+
+    fn reset_local_identity_session(&mut self) {
+        self.device.pending_extension_handoff = ExtensionIdentityPublication::Idle;
+        self.device.extension_handoff_private_key.zeroize();
+        self.device.extension_handoff_private_key.clear();
+        self.reset_vault_session();
+        self.storage.access_token.zeroize();
+        self.storage = StorageSession::default();
+        self.event_log_sync_issue = EventLogSyncIssueState::Clear;
+    }
+
+    pub(in crate::manager) fn is_creating_local_identity(&self) -> bool {
+        matches!(
+            &self.device.pending_local_identity_label,
+            LocalIdentityCreation::Creating(_)
+        )
+    }
+
+    pub(in crate::manager) async fn persist_and_adopt_local_identity(
+        &mut self,
+        app_key: nook_core::AppKey,
+        record: &nook_core::WrappedDeviceIdentity,
+    ) -> Result<String, NookError> {
+        let pending_label = self.device.pending_local_identity_label.clone();
+        let saved = match &pending_label {
+            LocalIdentityCreation::Creating(label) => {
+                let prior_app_key = if self.device.identity_private_key.is_empty() {
+                    PriorLocalAuthorizer::Unavailable
+                } else {
+                    PriorLocalAuthorizer::Authorized(self.device_identity()?)
+                };
+                AuthProviderDatabase::migrate_legacy_auth_providers_for_selected_identity().await?;
+                DeviceAccessProfileKey::selected().await?.migrate().await?;
+                NookDatabase::save_new_protected_local_identity(
+                    IdentityDbSaveNewProtectedLocalIdentity {
+                        app_key: &app_key,
+                        record,
+                        prior_app_key: match &prior_app_key {
+                            PriorLocalAuthorizer::Authorized(key) => {
+                                PriorAppAuthorization::Authorized(key)
+                            }
+                            PriorLocalAuthorizer::Unavailable => PriorAppAuthorization::Unavailable,
+                        },
+                        label,
+                    },
+                )
+                .await?
+            }
+            LocalIdentityCreation::ExistingIdentity => {
+                NookDatabase::save_protected_local_identity(IdentityDbSaveProtectedLocalIdentity {
+                    app_key: &app_key,
+                    record,
+                    label: DEFAULT_IDENTITY_LABEL,
+                })
+                .await?
+            }
+        };
+        if !saved.identity.has_app_id(app_key.app_id()) {
+            return Err(NookError::Database(
+                "Persisted local identity does not own its app key".to_owned(),
+            ));
+        }
+
+        self.reset_local_identity_session();
+        self.device.id = app_key.app_id().to_string();
+        self.device.identity_private_key.zeroize();
+        self.device.identity_private_key = app_key.secret_string().into_inner();
+        self.event_log.signing_seed = saved.signing_seed;
+        self.device.pending_local_identity_label = LocalIdentityCreation::ExistingIdentity;
+        Ok(self.device.id.clone())
+    }
+
+    pub(in crate::manager) async fn adopt_unlocked_local_identity(
+        &mut self,
+        app_key: nook_core::AppKey,
+        record: &nook_core::WrappedDeviceIdentity,
+    ) -> Result<(), NookError> {
+        let signing_seed = if matches!(
+            NookDatabase::load_entry_for_app_id(app_key.app_id()).await?,
+            StoredIdentityProtection::Protected(_)
+        ) {
+            LocalIdentitySigner { app_key: &app_key }
+                .load_or_create()
+                .await?
+        } else {
+            NookDatabase::save_protected_local_identity(IdentityDbSaveProtectedLocalIdentity {
+                app_key: &app_key,
+                record,
+                label: DEFAULT_IDENTITY_LABEL,
+            })
+            .await?
+            .signing_seed
+        };
+        self.reset_local_identity_session();
+        self.device.id = app_key.app_id().to_string();
+        self.device.identity_private_key.zeroize();
+        self.device.identity_private_key = app_key.secret_string().into_inner();
+        self.event_log.signing_seed = signing_seed;
+        Ok(())
+    }
+}
 
 impl NookVaultManager {
     fn local_identity_label(label: &str) -> Result<String, &'static str> {
@@ -373,115 +483,6 @@ mod browser_tests {
             .delete_local_browser_data()
             .await
             .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
-        Ok(())
-    }
-}
-
-impl NookVaultManager {
-    fn finish_local_identity_activation(&mut self, app_id: &nook_core::AppId) {
-        self.reset_local_identity_session();
-        self.lock_device_identity();
-        self.device.id = app_id.to_string();
-        self.device.pending_local_identity_label = LocalIdentityCreation::ExistingIdentity;
-    }
-
-    fn reset_local_identity_session(&mut self) {
-        self.device.pending_extension_handoff = ExtensionIdentityPublication::Idle;
-        self.device.extension_handoff_private_key.zeroize();
-        self.device.extension_handoff_private_key.clear();
-        self.reset_vault_session();
-        self.storage.access_token.zeroize();
-        self.storage = StorageSession::default();
-        self.event_log_sync_issue = EventLogSyncIssueState::Clear;
-    }
-
-    pub(in crate::manager) fn is_creating_local_identity(&self) -> bool {
-        matches!(
-            &self.device.pending_local_identity_label,
-            LocalIdentityCreation::Creating(_)
-        )
-    }
-
-    pub(in crate::manager) async fn persist_and_adopt_local_identity(
-        &mut self,
-        app_key: nook_core::AppKey,
-        record: &nook_core::WrappedDeviceIdentity,
-    ) -> Result<String, NookError> {
-        let pending_label = self.device.pending_local_identity_label.clone();
-        let saved = match &pending_label {
-            LocalIdentityCreation::Creating(label) => {
-                let prior_app_key = if self.device.identity_private_key.is_empty() {
-                    PriorLocalAuthorizer::Unavailable
-                } else {
-                    PriorLocalAuthorizer::Authorized(self.device_identity()?)
-                };
-                AuthProviderDatabase::migrate_legacy_auth_providers_for_selected_identity().await?;
-                DeviceAccessProfileKey::selected().await?.migrate().await?;
-                NookDatabase::save_new_protected_local_identity(
-                    IdentityDbSaveNewProtectedLocalIdentity {
-                        app_key: &app_key,
-                        record,
-                        prior_app_key: match &prior_app_key {
-                            PriorLocalAuthorizer::Authorized(key) => {
-                                PriorAppAuthorization::Authorized(key)
-                            }
-                            PriorLocalAuthorizer::Unavailable => PriorAppAuthorization::Unavailable,
-                        },
-                        label,
-                    },
-                )
-                .await?
-            }
-            LocalIdentityCreation::ExistingIdentity => {
-                NookDatabase::save_protected_local_identity(IdentityDbSaveProtectedLocalIdentity {
-                    app_key: &app_key,
-                    record,
-                    label: DEFAULT_IDENTITY_LABEL,
-                })
-                .await?
-            }
-        };
-        if !saved.identity.has_app_id(app_key.app_id()) {
-            return Err(NookError::Database(
-                "Persisted local identity does not own its app key".to_owned(),
-            ));
-        }
-
-        self.reset_local_identity_session();
-        self.device.id = app_key.app_id().to_string();
-        self.device.identity_private_key.zeroize();
-        self.device.identity_private_key = app_key.secret_string().into_inner();
-        self.event_log.signing_seed = saved.signing_seed;
-        self.device.pending_local_identity_label = LocalIdentityCreation::ExistingIdentity;
-        Ok(self.device.id.clone())
-    }
-
-    pub(in crate::manager) async fn adopt_unlocked_local_identity(
-        &mut self,
-        app_key: nook_core::AppKey,
-        record: &nook_core::WrappedDeviceIdentity,
-    ) -> Result<(), NookError> {
-        let signing_seed = if matches!(
-            NookDatabase::load_entry_for_app_id(app_key.app_id()).await?,
-            StoredIdentityProtection::Protected(_)
-        ) {
-            LocalIdentitySigner { app_key: &app_key }
-                .load_or_create()
-                .await?
-        } else {
-            NookDatabase::save_protected_local_identity(IdentityDbSaveProtectedLocalIdentity {
-                app_key: &app_key,
-                record,
-                label: DEFAULT_IDENTITY_LABEL,
-            })
-            .await?
-            .signing_seed
-        };
-        self.reset_local_identity_session();
-        self.device.id = app_key.app_id().to_string();
-        self.device.identity_private_key.zeroize();
-        self.device.identity_private_key = app_key.secret_string().into_inner();
-        self.event_log.signing_seed = signing_seed;
         Ok(())
     }
 }

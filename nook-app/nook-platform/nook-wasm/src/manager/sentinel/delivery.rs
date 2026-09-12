@@ -166,6 +166,29 @@ impl NookVaultManager {
     }
 }
 
+impl NookVaultManager {
+    pub(super) fn install_accepted_sentinel_delivery(
+        &mut self,
+        delivery: &nook_core::SentinelGenesisShareDelivery,
+        record: &nook_core::StoredSecretRecord,
+    ) -> Result<(), NookError> {
+        let mut meta = VaultMetaState::default();
+        meta.apply_record(record)?;
+        self.vault.reset();
+        self.vault.store_id = delivery.store_id.as_str().to_owned();
+        self.vault.architecture = VaultArchitecture::sentinel_personal(
+            DeviceMode::Standard,
+            nook_core::SentinelPolicy {
+                threshold: delivery.policy.threshold,
+                required_participants: delivery.policy.participant_count,
+                ready_participants: 1.into(),
+            },
+        );
+        self.vault.meta = meta;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -294,29 +317,6 @@ mod browser_tests {
                 .await
                 .is_err()
         );
-        Ok(())
-    }
-}
-
-impl NookVaultManager {
-    pub(super) fn install_accepted_sentinel_delivery(
-        &mut self,
-        delivery: &nook_core::SentinelGenesisShareDelivery,
-        record: &nook_core::StoredSecretRecord,
-    ) -> Result<(), NookError> {
-        let mut meta = VaultMetaState::default();
-        meta.apply_record(record)?;
-        self.vault.reset();
-        self.vault.store_id = delivery.store_id.as_str().to_owned();
-        self.vault.architecture = VaultArchitecture::sentinel_personal(
-            DeviceMode::Standard,
-            nook_core::SentinelPolicy {
-                threshold: delivery.policy.threshold,
-                required_participants: delivery.policy.participant_count,
-                ready_participants: 1.into(),
-            },
-        );
-        self.vault.meta = meta;
         Ok(())
     }
 }

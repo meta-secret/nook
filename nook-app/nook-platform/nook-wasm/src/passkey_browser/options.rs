@@ -677,7 +677,7 @@ mod tests {
                 prf_input: &[9; 32],
             })?;
         let creation = through_json(&creation)?;
-        assert!(matches!(&creation.public_key.rp.id, None));
+        assert!(creation.public_key.rp.id.is_none());
 
         let request =
             BrowserPasskeyClient::request_options_struct(BrowserPasskeyRequestOptionsStruct {
@@ -686,7 +686,7 @@ mod tests {
                 prf_input: &[9; 32],
             })?;
         let request = through_json(&request)?;
-        assert!(matches!(&request.public_key.rp_id, None));
+        assert!(request.public_key.rp_id.is_none());
 
         let recovery =
             BrowserPasskeyClient::recovery_options_struct(BrowserPasskeyRecoveryOptionsStruct {
@@ -694,7 +694,7 @@ mod tests {
                 prf_input: &[9; 32],
             })?;
         let recovery = through_json(&recovery)?;
-        assert!(matches!(&recovery.public_key.rp_id, None));
+        assert!(recovery.public_key.rp_id.is_none());
         Ok(())
     }
 
@@ -750,7 +750,7 @@ mod tests {
         let public_key = options.public_key;
 
         assert_eq!(public_key.rp_id.as_deref(), Some("localhost"));
-        assert!(matches!(&public_key.allow_credentials, None));
+        assert!(public_key.allow_credentials.is_none());
         assert_eq!(
             public_key.user_verification,
             UserVerificationRequirement::Required

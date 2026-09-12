@@ -372,6 +372,22 @@ impl NookDatabase {
     }
 }
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+pub(crate) use local_vault::SaveVaultBlobRequest;
+#[cfg(test)]
+pub(crate) use local_vault::UpsertRegistryEntryRequest;
+pub(crate) use local_vault::{
+    ImportVaultBlobRequest, SaveSecretSearchCatalogBucketsRequest, SecretSearchBucketMutation,
+    SetLocalVaultLabelRequest,
+};
+
+#[cfg(test)]
+pub(crate) use device_identity::SaveWrappedDeviceIdentityRequest;
+
+pub(crate) use sentinel_storage::{
+    SentinelDbLoadSentinelGenesisShareDelivery, SentinelDbSaveSentinelGenesisShareDelivery,
+};
+
 #[cfg(test)]
 mod unit_tests {
 
@@ -724,19 +740,3 @@ mod sentinel_genesis_storage_tests {
         Ok(())
     }
 }
-
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-pub(crate) use local_vault::SaveVaultBlobRequest;
-#[cfg(test)]
-pub(crate) use local_vault::UpsertRegistryEntryRequest;
-pub(crate) use local_vault::{
-    ImportVaultBlobRequest, SaveSecretSearchCatalogBucketsRequest, SecretSearchBucketMutation,
-    SetLocalVaultLabelRequest,
-};
-
-#[cfg(test)]
-pub(crate) use device_identity::SaveWrappedDeviceIdentityRequest;
-
-pub(crate) use sentinel_storage::{
-    SentinelDbLoadSentinelGenesisShareDelivery, SentinelDbSaveSentinelGenesisShareDelivery,
-};

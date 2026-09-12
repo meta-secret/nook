@@ -575,6 +575,8 @@ impl BrowserPasskeyClient {
     }
 }
 
+pub(crate) use options::{BrowserPasskeyCreationOptions, BrowserPasskeyRequestOptions};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -875,5 +877,3 @@ mod browser_tests {
         );
     }
 }
-
-pub(crate) use options::{BrowserPasskeyCreationOptions, BrowserPasskeyRequestOptions};

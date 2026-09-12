@@ -64,7 +64,7 @@ impl DirectHandoffScenario {
         })
     }
 
-    fn discovery(&self) -> Result<CompanionIdentityDiscoveryObservation, CompanionOperationError> {
+    fn discovery() -> Result<CompanionIdentityDiscoveryObservation, CompanionOperationError> {
         Ok(CompanionIdentityDiscoveryObservation {
             request: CompanionIdentityDiscoveryRequest {
                 request_id: "request-1".to_owned(),
@@ -76,7 +76,7 @@ impl DirectHandoffScenario {
     }
 
     fn handoff_begin(&mut self) -> Result<CompanionWebsiteHandoffBegin, CompanionOperationError> {
-        let discovery = self.discovery()?;
+        let discovery = Self::discovery()?;
         let status = self.endpoint.discover_inner(discovery.clone())?;
         let admission =
             CompanionIdentityStatusAdmission::admit(CompanionIdentityStatusAdmissionRequest {
@@ -303,7 +303,7 @@ fn production_endpoint_consumes_stale_and_concurrent_transactions()
     let request = concurrent
         .website
         .begin_companion_identity_handoff_inner(begin)?;
-    let mut second = concurrent.discovery()?;
+    let mut second = DirectHandoffScenario::discovery()?;
     second.request.request_id = "request-2".to_owned();
     assert!(matches!(
         concurrent.endpoint.discover_inner(second),
@@ -350,14 +350,16 @@ struct ReplayEndpoint {
     phase: ReplayEndpointPhase,
 }
 enum ReplayEndpointPhase {
-    Awaiting(CompanionExtensionHandoffEndpoint),
-    Discovered(DiscoveredCompanionHandoffEndpoint),
+    Awaiting(Box<CompanionExtensionHandoffEndpoint>),
+    Discovered(Box<DiscoveredCompanionHandoffEndpoint>),
     Consumed,
 }
 impl ReplayEndpoint {
     fn new(presence: CompanionExtensionPresence) -> Result<Self, CompanionProtocolError> {
         Ok(Self {
-            phase: ReplayEndpointPhase::Awaiting(CompanionExtensionHandoffEndpoint::new(presence)?),
+            phase: ReplayEndpointPhase::Awaiting(Box::new(CompanionExtensionHandoffEndpoint::new(
+                presence,
+            )?)),
         })
     }
     fn discover(
@@ -365,12 +367,12 @@ impl ReplayEndpoint {
         discovery: CompanionIdentityDiscoveryObservation,
     ) -> Result<CompanionIdentityStatus, CompanionProtocolError> {
         let ready = match mem::replace(&mut self.phase, ReplayEndpointPhase::Consumed) {
-            ReplayEndpointPhase::Awaiting(endpoint) => endpoint.discover(discovery)?,
-            ReplayEndpointPhase::Discovered(endpoint) => endpoint.observe(&discovery)?,
+            ReplayEndpointPhase::Awaiting(endpoint) => (*endpoint).discover(discovery)?,
+            ReplayEndpointPhase::Discovered(endpoint) => (*endpoint).observe(&discovery)?,
             ReplayEndpointPhase::Consumed => return Err(CompanionProtocolError::NonceUnavailable),
         };
         let status = ready.status();
-        self.phase = ReplayEndpointPhase::Discovered(ready);
+        self.phase = ReplayEndpointPhase::Discovered(Box::new(ready));
         Ok(status)
     }
     fn authorize_handoff(
@@ -378,7 +380,7 @@ impl ReplayEndpoint {
         auth: CompanionIdentityHandoffAuthorization,
     ) -> Result<AuthorizedCompanionIdentityHandoff, CompanionProtocolError> {
         match mem::replace(&mut self.phase, ReplayEndpointPhase::Consumed) {
-            ReplayEndpointPhase::Discovered(endpoint) => endpoint.authorize_handoff(auth),
+            ReplayEndpointPhase::Discovered(endpoint) => (*endpoint).authorize_handoff(auth),
             ReplayEndpointPhase::Awaiting(_) | ReplayEndpointPhase::Consumed => {
                 Err(CompanionProtocolError::NonceUnavailable)
             }
