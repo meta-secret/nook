@@ -53,6 +53,7 @@ operations. Their existence never permits feature-stage test execution.
 
 Routing rules:
 
+- Invoke Rust validation remotely with `task remote TASK_NAME=rust:ci`.
 - Single `preflight`, `rust:ci`, and `arc:runtime` selections may use
   `NOOK_RUNS_ON=nook-k0s`.
 - `loom:verify` uses the general `nook-k0s` scale set.
