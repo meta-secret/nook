@@ -60,6 +60,17 @@ jobs:
               return
             }
 
+            const pullRequest = context.payload.workflow_run?.pull_requests?.[0]
+            if (
+              context.payload.workflow_run?.id !== runId ||
+              !pullRequest ||
+              !/^[0-9a-f]{40}$/.test(pullRequest.base?.sha || '') ||
+              !/^[0-9a-f]{40}$/.test(pullRequest.head?.sha || '')
+            ) {
+              core.setFailed(`Run ${runId} has no pull request or valid base/head snapshots`)
+              return
+            }
+
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
               ...context.repo,
               run_id: runId,
@@ -122,40 +133,17 @@ jobs:
               return
             }
 
-            const pullRequest = context.payload.workflow_run?.pull_requests?.[0]
-            if (
-              context.payload.workflow_run?.id !== runId ||
-              !pullRequest ||
-              !/^[0-9a-f]{40}$/.test(pullRequest.base?.sha || '') ||
-              !/^[0-9a-f]{40}$/.test(pullRequest.head?.sha || '') ||
-              pullRequest.head.sha !== run.head_sha
-            ) {
-              core.setFailed(`Run ${runId} has no pull request or valid base/head snapshots`)
-              return
-            }
-
             core.setOutput('base-sha', pullRequest.base.sha)
             core.setOutput('run-id', String(runId))
-            core.setOutput('head-sha', run.head_sha)
+            core.setOutput('head-sha', pullRequest.head.sha)
             core.setOutput('pr-number', String(pullRequest.number))
 
-      - name: Checkout validated PR base
+      - name: Checkout validated PR head
         if: steps.source.outputs.eligible == 'true'
         uses: actions/checkout@v7
         with:
-          ref: ${{ steps.source.outputs.base-sha }}
+          ref: ${{ steps.source.outputs.head-sha }}
           fetch-depth: 0
-
-      - name: Recreate validated PR merge tree
-        if: steps.source.outputs.eligible == 'true'
-        env:
-          HEAD_SHA: ${{ steps.source.outputs.head-sha }}
-        run: |
-          set -euo pipefail
-          git fetch origin "$HEAD_SHA" --no-tags
-          merge_tree="$(git merge-tree --write-tree HEAD "$HEAD_SHA")"
-          [[ "$merge_tree" =~ ^[0-9a-f]{40}$ ]]
-          git read-tree --reset -u "$merge_tree"
 
       - name: Derive exact validation keys
         if: steps.source.outputs.eligible == 'true'

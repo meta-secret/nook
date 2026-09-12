@@ -156,6 +156,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "Preserve the secret-free hosted validation boundary",
         "name: Rust coverage report",
         "uses: ./.github/workflows/pr-coverage.yml",
+        "ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}",
         "workflow_call:",
         "name: Validate explicit CI request",
         "name: Reject unsupported label events",
@@ -200,9 +201,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     ] {
         assert!(
             pr.contains(required),
-            "PR CI must keep its normal split gate and label-selected Main-fix e2e contract: {required}"
+            "PR CI must keep its normal split gate and legacy label-selected feature e2e contract: {required}"
         );
     }
+    assert!(pr.contains("source_sha:"));
 
     let coverage = (root).read(".github/workflows/pr-coverage.yml");
     for required in [
@@ -344,6 +346,14 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "central CI must own PR cancellation while trusted publishers stay independent"
     );
     assert!(
+        ci.contains("name: Dev promotion readiness")
+            && ci.contains("needs: [scope, policy, pr, hive, research]")
+            && ci.contains("github.event.pull_request.head.ref == 'dev'")
+            && ci.contains("'dev-pr'")
+            && ci.contains("cancel-in-progress: >-"),
+        "dev promotion must expose one stable exact-head gate with serialized native concurrency"
+    );
+    assert!(
         linear_ui_demo.contains(
             "name: Publish trusted PR UI demos\n    if: >-\n      false &&\n      github.event_name == 'workflow_run' &&\n      github.event.workflow_run.conclusion == 'success'"
         ) && linear_ui_demo.contains(
@@ -358,9 +368,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "github.event.workflow_run.conclusion == 'success'",
         "workflowPath !== '.github/workflows/ci.yml'",
         "run.path?.replace(/@[^@]+$/, '')",
-        "ref: ${{ steps.source.outputs.base-sha }}",
-        "git merge-tree --write-tree HEAD \"$HEAD_SHA\"",
-        "git read-tree --reset -u \"$merge_tree\"",
+        "ref: ${{ steps.source.outputs.head-sha }}",
+        "core.setOutput('head-sha', pullRequest.head.sha)",
+        "name: Checkout validated PR head",
         "'Native Rust verification'",
         "'WASM build and artifact'",
         "'WASM Node tests'",
@@ -388,6 +398,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     assert!(
         trusted_handoff.contains("context.payload.workflow_run?.pull_requests?.[0]"),
         "trusted validation promotion must derive PR provenance from the immutable workflow-run event snapshot"
+    );
+    assert!(
+        !trusted_handoff.contains("pullRequest.head.sha !== run.head_sha"),
+        "trusted handoff must not reject a PR head because workflow_run.head_sha is synthetic"
     );
     assert!(
         trusted_handoff.contains("filter: 'all'")

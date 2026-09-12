@@ -4,6 +4,7 @@ set -euo pipefail
 task_timeout_minutes() {
   case "$1" in
     arc:runtime) echo 15 ;;
+    build:compile) echo 30 ;;
     preflight) echo 15 ;;
     loom:verify) echo 15 ;;
     rust:ci|hive:verify) echo 20 ;;
@@ -53,6 +54,7 @@ run_task() {
   case "$1" in
     preflight) run_with_timeout "$timeout_minutes" task preflight ;;
     arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh ;;
+    build:compile) run_with_timeout "$timeout_minutes" task build:compile ;;
     rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust ;;
     loom:verify) run_with_timeout "$timeout_minutes" task preflight:loom-verify ;;
     web:build) run_with_timeout "$timeout_minutes" task web:build ;;

@@ -6,6 +6,11 @@ name: PR Rust coverage
 
 on:
   workflow_call:
+    inputs:
+      source_sha:
+        required: false
+        default: ''
+        type: string
 
 permissions:
   actions: read
@@ -21,6 +26,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Expose Actions Node.js runtime
         uses: ./.github/actions/nook-node-setup
@@ -45,7 +54,7 @@ jobs:
         id: coverage-inputs
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           git fetch origin "$BASE_SHA" "$HEAD_SHA" --no-tags --prune --depth=1000

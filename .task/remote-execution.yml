@@ -24,6 +24,16 @@ tasks:
           echo "Remote execution requires a pushed non-main branch." >&2
           exit 2
         fi
+        if [[ "$requested_tasks" == *build:compile* ]]; then
+          if [ "$requested_tasks" != "build:compile" ]; then
+            echo "build:compile must be dispatched as the only remote task." >&2
+            exit 2
+          fi
+          if [ "$branch" = "dev" ]; then
+            echo "build:compile is a feature-branch route and cannot run on dev." >&2
+            exit 2
+          fi
+        fi
         if [ -n "$(git status --porcelain)" ]; then
           echo "Remote execution requires a clean worktree; commit the exact experiment first." >&2
           exit 2
@@ -48,6 +58,7 @@ tasks:
         workflow_args=(
           --ref "$branch"
           --raw-field "tasks=$requested_tasks"
+          --raw-field "source_sha=$local_sha"
         )
         if [ "$requested_tasks" = "web:e2e:debug" ]; then
           workflow_args+=(

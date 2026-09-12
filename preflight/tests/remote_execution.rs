@@ -85,6 +85,10 @@ fn remote_task_dispatch_uses_named_tasks_and_exact_head_only() {
         "gh workflow run remote.yml",
         "requested_tasks=\"$REQUESTED_REMOTE_TASKS\"",
         "--raw-field \"tasks=$requested_tasks\"",
+        "--raw-field \"source_sha=$local_sha\"",
+        "[ \"$branch\" = \"dev\" ]",
+        "build:compile is a feature-branch route",
+        ".github/scripts/require-current-base.sh origin main",
     ] {
         assert!(
             remote_tasks.contains(required),
@@ -193,6 +197,9 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
     let arbitrary = remote_batch_command(&["--timeout", "arbitrary:task"])?;
     assert!(arbitrary.status.success());
     assert_eq!(String::from_utf8(arbitrary.stdout)?, "30\n");
+    let build_compile = remote_batch_command(&["--timeout", "build:compile"])?;
+    assert!(build_compile.status.success());
+    assert_eq!(String::from_utf8(build_compile.stdout)?, "30\n");
 
     let batch_script =
         RepositoryFixture::repository_root().read(".github/scripts/remote-task-batch.sh");
@@ -217,6 +224,9 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
             "runtime-backed remote task must bypass the daemonless batch: {task}"
         );
     }
+    assert!(batch_script.contains(
+        "build:compile) run_with_timeout \"$timeout_minutes\" task build:compile"
+    ));
     for direct_task in [
         "web:build) task _web:build",
         "web:e2e) task _ci:main:web:e2e-only",
@@ -239,6 +249,10 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
         assert!(workflow.contains(suite_task));
     }
     assert!(workflow.contains("fail-fast: false"));
+    assert!(workflow.contains("ref: ${{ inputs.source_sha || github.sha }}"));
+    assert!(workflow.contains("name: Validate exact remote source"));
+    assert!(workflow.contains("name: Confirm prepared build-only environment"));
+    assert!(workflow.contains("build:compile is allowed only from a feature branch, never main or dev."));
     assert!(workflow.contains("needs: ci-pr-e2e-suite"));
     assert!(workflow.contains("needs.ci-pr-e2e-suite.result"));
     assert!(batch_script.contains("status == 124 || status == 137"));

@@ -5,7 +5,7 @@
 # requested with task pr:validate.
 
 name: Remote task
-run-name: Remote / ${{ inputs.tasks || inputs.task }} / ${{ inputs.dispatch_nonce || 'manual' }}
+run-name: Remote / ${{ inputs.tasks || inputs.task }} @ ${{ inputs.source_sha || github.sha }} / ${{ inputs.dispatch_nonce || 'manual' }}
 
 on:
   workflow_dispatch:
@@ -28,6 +28,10 @@ on:
         type: string
       cache_source_sha:
         description: Exact committed source for fingerprint verification (promotion task only)
+        required: false
+        type: string
+      source_sha:
+        description: Exact committed source to compile; required for the feature build:compile route
         required: false
         type: string
       dispatch_nonce:
@@ -101,7 +105,38 @@ jobs:
           printf '::notice title=Kubernetes worker::%s\n' "$KUBERNETES_NODE_NAME"
       - uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
+      - name: Validate exact remote source
+        env:
+          REQUESTED_SOURCE_INPUT: ${{ inputs.source_sha }}
+          REQUESTED_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+          REQUESTED_REMOTE_TASKS: ${{ inputs.tasks || inputs.task }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$REQUESTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Remote execution requires a 40-character exact source SHA." >&2
+            exit 2
+          fi
+          if [ "$(git rev-parse HEAD)" != "$REQUESTED_SOURCE_SHA" ]; then
+            echo "Remote checkout drifted from the requested source SHA." >&2
+            exit 2
+          fi
+          if [[ "$REQUESTED_REMOTE_TASKS" == *build:compile* ]]; then
+            if [ -z "$REQUESTED_SOURCE_INPUT" ]; then
+              echo "build:compile requires source_sha from the pushed feature dispatch." >&2
+              exit 2
+            fi
+            if [ "$REQUESTED_REMOTE_TASKS" != "build:compile" ]; then
+              echo "build:compile must be dispatched as the only remote task." >&2
+              exit 2
+            fi
+            if [ "${GITHUB_REF_NAME:-}" = "main" ] || [ "${GITHUB_REF_NAME:-}" = "dev" ]; then
+              echo "build:compile is allowed only from a feature branch, never main or dev." >&2
+              exit 2
+            fi
+          fi
       - name: Report task request
         shell: bash
         run: |
@@ -120,6 +155,15 @@ jobs:
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}
+      - name: Confirm prepared build-only environment
+        if: (inputs.tasks || inputs.task) == 'build:compile'
+        run: |
+          set -euo pipefail
+          [ "${GITHUB_ACTIONS:-}" = "true" ]
+          : "${NOOK_PR_BUILDX_BUILDER:?Buildx builder was not prepared}"
+          : "${NOOK_REGISTRY_CACHE_HOST:?Registry cache environment was not prepared}"
+          : "${GHA_CACHE_ENABLED:?Cache environment was not prepared}"
+          echo "Build-only route prepared Buildx=$NOOK_PR_BUILDX_BUILDER registry=$NOOK_REGISTRY_CACHE_HOST"
       - name: Wait for private Neo4j sidecar
         if: ${{ env.REQUEST_INCLUDES_HIVE == 'true' }}
         run: .github/scripts/wait-hive-neo4j.sh
@@ -145,6 +189,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
@@ -178,6 +226,10 @@ jobs:
       DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
@@ -329,6 +381,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.cache_source_sha }}
