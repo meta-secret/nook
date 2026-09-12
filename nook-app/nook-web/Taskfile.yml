@@ -512,8 +512,13 @@ tasks:
     desc: Stable Playwright subset at 3 workers when wasm/dist is built.
     env:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - echo "==> Playwright stable group (workers=3, CI=${CI:-}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
+      - task: _web:e2e:build-if-needed
       - cd "{{.WEB_ROOT}}" && bun run test:e2e:pr
 
   _web:test:e2e:pr:
