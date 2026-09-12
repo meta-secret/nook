@@ -53,7 +53,7 @@ import {
   waitForVaultOperationsIdle,
 } from './vault-runtime'
 import { createLocalVaultOnLogin } from './vault-setup'
-import { refreshJoinerVaultOnLoginGate } from './joiner-vault-refresh'
+import { refreshJoinerVaultOnLoginGateIfIdle } from './joiner-vault-refresh'
 import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
 import {
   E2eSyncProviderId,
@@ -356,7 +356,7 @@ export async function dismissJoinEnrollmentDialog(page: Page) {
 
 export /** Pull remote vault state on the login gate (joiner waiting for / after approval). */
 async function refreshGithubVaultOnLoginGate(page: Page) {
-  await page.evaluate(refreshJoinerVaultOnLoginGate, {
+  await page.evaluate(refreshJoinerVaultOnLoginGateIfIdle, {
     freshness: ProviderSyncFreshness.Forced,
     authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
   })

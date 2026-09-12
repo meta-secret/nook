@@ -9,12 +9,18 @@ import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { err, ok } from 'neverthrow'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { refreshJoinerVaultOnLoginGate } from '../../../e2e/helpers/joiner-vault-refresh'
+import {
+  refreshJoinerVaultOnLoginGate,
+  refreshJoinerVaultOnLoginGateIfIdle,
+} from '../../../e2e/helpers/joiner-vault-refresh'
 
-const installVault = (syncFromStorage: VaultState['syncFromStorage']) => {
+const installVault = (
+  syncFromStorage: VaultState['syncFromStorage'],
+  isVerifying = false,
+) => {
   Object.defineProperty(window, '__nookVault', {
     configurable: true,
-    value: { syncFromStorage },
+    value: { syncFromStorage, isVerifying },
   })
 }
 
@@ -23,6 +29,21 @@ afterEach(() => {
 })
 
 describe('joiner vault refresh', () => {
+  test('skips a forced refresh while auto-connect is verifying', async () => {
+    const syncFromStorage: VaultState['syncFromStorage'] = vi.fn(async () =>
+      ok(ProviderSyncOutcome.Synced),
+    )
+    installVault(syncFromStorage, true)
+
+    const outcome = await refreshJoinerVaultOnLoginGateIfIdle({
+      freshness: ProviderSyncFreshness.Forced,
+      authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
+    })
+
+    expect(outcome).toBe('busy')
+    expect(syncFromStorage).not.toHaveBeenCalled()
+  })
+
   test('uses the typed forced-refresh boundary', async () => {
     const syncFromStorage: VaultState['syncFromStorage'] = vi.fn(async () =>
       ok(ProviderSyncOutcome.Synced),

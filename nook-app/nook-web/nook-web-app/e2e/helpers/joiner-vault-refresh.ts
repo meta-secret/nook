@@ -7,6 +7,8 @@ export type RefreshJoinerVaultOnLoginGateArgs = {
   authStorageSyncFailedKey: string
 }
 
+export type RefreshJoinerVaultOnLoginGateOutcome = 'refreshed' | 'busy'
+
 export async function refreshJoinerVaultOnLoginGate(
   args: RefreshJoinerVaultOnLoginGateArgs,
 ): Promise<void> {
@@ -20,4 +22,20 @@ export async function refreshJoinerVaultOnLoginGate(
       `joiner-vault-refresh-rejected:${refreshed.error.translationKey}`,
     )
   }
+}
+
+/**
+ * Refresh only when an auto-connect is not already verifying the vault.
+ *
+ * This check and the refresh start in the same browser evaluation, so a
+ * forced polling refresh cannot re-enter the storage flow after auto-connect
+ * has begun.
+ */
+export async function refreshJoinerVaultOnLoginGateIfIdle(
+  args: RefreshJoinerVaultOnLoginGateArgs,
+): Promise<RefreshJoinerVaultOnLoginGateOutcome> {
+  const vault = (window as VaultDebugWindow).__nookVault
+  if (vault?.isVerifying) return 'busy'
+  await refreshJoinerVaultOnLoginGate(args)
+  return 'refreshed'
 }
