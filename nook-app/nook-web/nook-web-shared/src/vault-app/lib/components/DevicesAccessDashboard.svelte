@@ -7,7 +7,6 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
 -->
 <script lang="ts">
   import { err, ok } from "neverthrow";
-  import { SelectedIdentityVault, type SelectedIdentityVaultRequest } from "./devices-access/selected-identity-vault";
   import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
   import { I18N_KEYS } from "../../../generated/i18n-keys";
   import { onDestroy, untrack } from "svelte";
@@ -23,37 +22,35 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   import type { VaultState } from "$lib/vault.svelte";
   import {
     DashboardLoadKind,
+    DashboardReadyProjectionKind,
     DashboardSnapshotFailureTransition,
     type DashboardSnapshotFailureRequest,
     type DashboardLoadState,
     DashboardTextKind,
     type DashboardView,
     DevicesAccessRepresentationKind,
-  } from './devices-access-dashboard-state';
+  } from "./devices-access-dashboard-state";
   import IdentityDirectoryRail from "./devices-access/IdentityDirectoryRail.svelte";
   import IdentityKeyInventory from "./devices-access/IdentityKeyInventory.svelte";
   import IdentityRepresentationSwitch from "./devices-access/IdentityRepresentationSwitch.svelte";
-  import { AccessChainPresentation } from "./devices-access/access-chain";
-  import IdentityBridgeGraph from "./devices-access/IdentityBridgeGraph.svelte";
-  import IdentityBridgeNavigation from "./devices-access/IdentityBridgeNavigation.svelte";
   import {
     IdentityDirectoryLoadKind,
     type IdentityDirectoryLoadState,
+    type IdentityDirectoryEntry,
     IdentityDirectorySelectionKind,
     type IdentityDirectoryView,
     IdentityDirectoryReader,
     IdentityDirectoryPresentation,
+    DashboardReadyProjection,
   } from "./devices-access/identity-directory-view";
   import {
-    IdentityBridgeDeviceIconKind,
     IdentityBridgePerspective,
     IdentityBridgeVaultSelectionKind,
-    type IdentityBridgeCopy,
     type IdentityBridgeVaultSelection,
   } from "./devices-access/identity-bridge-model";
-  import { PasskeyCardPresentation } from "./devices-access/passkey-card";
   import { IdentitySessionTransition } from "./devices-access/identity-session-transition";
   import { IdentityVaultSelection } from "./devices-access/identity-vault-selection";
+  import SelectedIdentityProjection from "./devices-access/SelectedIdentityProjection.svelte";
   let {
     vault,
     onBack,
@@ -494,92 +491,51 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
       </Button>
     </div>
   {:else}
-    {@const accessView = loadState.view}
-    {@const directory = directoryLoadState.view}
-    {@const identitySelection = new IdentityDirectoryPresentation(
-      directory,
-    ).selectedIdentity()}
-    {@const selectedIdentityId =
-      directory.selection.kind === IdentityDirectorySelectionKind.Selected
-        ? directory.selection.identityId
-        : ""}
-    <div class="grid min-w-0 gap-8 md:grid-cols-[18rem_minmax(0,1fr)] md:gap-0">
-      <IdentityDirectoryRail
-        {vault}
-        identities={directory.identities}
-        {selectedIdentityId}
-        onSelectIdentity={chooseIdentity}
-        onAddIdentity={() => void beginAddIdentity()}
-      />
-
+    {@const readyProjectionRequest: ConstructorParameters<
+      typeof DashboardReadyProjection
+    >[0] = {
+      accessState: loadState,
+      directoryState: directoryLoadState,
+      selectedIdentity:
+        directoryLoadState.kind === IdentityDirectoryLoadKind.Ready
+          ? new IdentityDirectoryPresentation(
+              directoryLoadState.view,
+            ).selectedIdentity()
+          : { kind: IdentityDirectorySelectionKind.Empty },
+    }}
+    {@const readyProjection = new DashboardReadyProjection(
+      readyProjectionRequest,
+    ).state}
+    {#if readyProjection.kind !== DashboardReadyProjectionKind.Unavailable}
+      {@const accessView = readyProjection.accessView}
+      {@const directory = readyProjection.directory}
+      {@const selectedIdentityId =
+        directory.selection.kind === IdentityDirectorySelectionKind.Selected
+          ? directory.selection.identityId
+          : ""}
       <div
-        class="min-w-0 border-t border-border pt-8 md:border-t-0 md:pt-0 md:pl-8"
+        class="grid min-w-0 gap-8 md:grid-cols-[18rem_minmax(0,1fr)] md:gap-0"
       >
-        {#if identityCreationOpen}
-          <div data-testid="devices-access-add-identity-flow">
-            <div class="flex justify-end">
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={vault.isVerifying}
-                onclick={() => void cancelAddIdentity()}
-                data-testid="devices-access-cancel-add-identity"
-              >
-                {vault.t(I18N_KEYS.CommonCancel)}
-              </Button>
-            </div>
-            <DeviceProtectionGate
-              {vault}
-              frame={DeviceProtectionGateFrame.HostSection}
-              creationOnly={true}
-              initializeSession={false}
-              recoveryAppId=""
-              onBeforeProtectionAction={beginIdentityCreationProtectionAction}
-              onProtectionActionSettled={finishIdentityCreationProtectionAction}
-              onProtectionReady={() => void focusAfterProtectionReady(true)}
-            />
-          </div>
-        {:else if identitySelection.kind === IdentityDirectorySelectionKind.Empty && directory.identities.length === 0}
-          <div
-            class="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 text-center"
-            data-testid="devices-access-no-identities"
-          >
-            <Fingerprint class="size-8 text-muted-foreground" />
-            <h2 class="mt-4 text-lg font-semibold text-foreground">
-              {vault.t(I18N_KEYS.DevicesAccessNoIdentities)}
-            </h2>
-            <p
-              class="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground"
-            >
-              {vault.t(I18N_KEYS.DevicesAccessNoIdentitiesDescription)}
-            </p>
-          </div>
-        {:else if identitySelection.kind === IdentityDirectorySelectionKind.Empty}
-          <div
-            class="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 text-center"
-            data-testid="devices-access-no-session-identity"
-          >
-            <Fingerprint class="size-8 text-muted-foreground" />
-            <h2 class="mt-4 text-lg font-semibold text-foreground">
-              {vault.t(I18N_KEYS.DevicesAccessNoSessionIdentity)}
-            </h2>
-            <p
-              class="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground"
-            >
-              {vault.t(I18N_KEYS.DevicesAccessNoSessionIdentityDescription)}
-            </p>
-          </div>
-        {:else}
-          {@const identity = identitySelection.identity}
-          {@const view = { ...accessView, vaults: [...identity.vaults] }}
-          {#if vault.devicesAccessIdentityProtectionOpen}
-            <div data-testid="devices-access-identity-protection-flow">
+        <IdentityDirectoryRail
+          {vault}
+          identities={directory.identities}
+          {selectedIdentityId}
+          onSelectIdentity={chooseIdentity}
+          onAddIdentity={() => void beginAddIdentity()}
+        />
+
+        <div
+          class="min-w-0 border-t border-border pt-8 md:border-t-0 md:pt-0 md:pl-8"
+        >
+          {#if identityCreationOpen}
+            <div data-testid="devices-access-add-identity-flow">
               <div class="flex justify-end">
                 <Button
                   type="button"
                   variant="ghost"
-                  onclick={() =>
-                    (vault.devicesAccessIdentityProtectionOpen = false)}
+                  disabled={vault.isVerifying}
+                  onclick={() => void cancelAddIdentity()}
+                  data-testid="devices-access-cancel-add-identity"
                 >
                   {vault.t(I18N_KEYS.CommonCancel)}
                 </Button>
@@ -587,414 +543,151 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
               <DeviceProtectionGate
                 {vault}
                 frame={DeviceProtectionGateFrame.HostSection}
-                creationOnly={false}
+                creationOnly={true}
                 initializeSession={false}
-                recoveryAppId={view.deviceId.displayText(() => "")}
-                onBeforeProtectionAction={keepCurrentIdentitySession}
-                onProtectionReady={() => void focusAfterProtectionReady(false)}
+                recoveryAppId=""
+                onBeforeProtectionAction={beginIdentityCreationProtectionAction}
+                onProtectionActionSettled={finishIdentityCreationProtectionAction}
+                onProtectionReady={() => void focusAfterProtectionReady(true)}
               />
             </div>
           {:else}
-            {#if identity.localAccess === NookIdentityLocalAccessKind.ThisBrowser}
-              <div class="mb-6 rounded-lg border border-border bg-muted/30 p-5">
-                <p class="text-sm font-medium text-foreground">
-                  {vault.t(I18N_KEYS.DevicesAccessIdentityOnThisBrowser)}
-                </p>
-                <Button
-                  type="button"
-                  class="mt-3"
-                  onclick={() => void useIdentity(identity.identityId)}
-                  data-testid="devices-access-use-identity"
+            {#if readyProjection.kind === DashboardReadyProjectionKind.Empty}
+              {#if directory.identities.length === 0}
+                <div
+                  class="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 text-center"
+                  data-testid="devices-access-no-identities"
                 >
-                  {vault.t(I18N_KEYS.DevicesAccessUseIdentity)}
-                </Button>
-              </div>
-            {:else if identity.localAccess === NookIdentityLocalAccessKind.CurrentBrowser && vault.deviceProtectionStatus !== DeviceProtectionStatus.Unlocked && accessView.protection !== DeviceAccessProtectionKind.Missing}
-              <div class="mb-6 rounded-lg border border-border bg-muted/30 p-5">
-                <p class="text-sm font-medium text-foreground">
-                  {vault.t(I18N_KEYS.DevicesAccessIdentityLocked)}
-                </p>
-                <Button
-                  type="button"
-                  class="mt-3"
-                  onclick={() =>
-                    (vault.devicesAccessIdentityProtectionOpen = true)}
-                  data-testid="devices-access-unlock-identity"
-                >
-                  {vault.t(I18N_KEYS.DevicesAccessUnlockIdentity)}
-                </Button>
-              </div>
-            {/if}
-            <IdentityRepresentationSwitch
-              {vault}
-              identityLabel={identity.label}
-              {selectedRepresentation}
-              graphDisabled={identity.localAccess !==
-                NookIdentityLocalAccessKind.CurrentBrowser}
-              onSelectRepresentation={(representation) =>
-                (selectedRepresentation = representation)}
-            />
-
-            {#if selectedRepresentation === DevicesAccessRepresentationKind.List}
-              <div class="mt-6">
-                <IdentityKeyInventory
-                  {vault}
-                  {identity}
-                  {view}
-                  onRenamePasskey={renamePasskey}
-                />
-              </div>
-            {/if}
-
-            {#if identity.localAccess === NookIdentityLocalAccessKind.OtherInstallation}
-              <div
-                class="mt-8 rounded-lg border border-border bg-muted/30 p-5"
-                data-testid="devices-access-other-identity-notice"
-              >
-                <p class="text-sm font-medium text-foreground">
-                  {vault.t(I18N_KEYS.DevicesAccessOtherIdentityEvidenceTitle)}
-                </p>
-                <p
-                  class="mt-2 max-w-[64ch] text-sm leading-relaxed text-muted-foreground"
-                >
-                  {vault.t(
-                    I18N_KEYS.DevicesAccessOtherIdentityEvidenceUnavailable,
-                  )}
-                </p>
-              </div>
-            {:else if selectedRepresentation === DevicesAccessRepresentationKind.Graph}
-              {@const verifiedVaultCount = view.vaults.filter(
-                (entry) => entry.verified,
-              ).length}
-              {@const selectedVaultRequest: SelectedIdentityVaultRequest = {
-                selection: selectedVault,
-                vaults: identity.vaults,
-                fallbackLabel: vault.t(I18N_KEYS.DevicesAccessBridgeVault),
-              }}
-              {@const selectedVaultView = new SelectedIdentityVault(selectedVaultRequest)}
-              {@const selectedVaultIsVerified = selectedVaultView.verified}
-              {@const selectedVaultName = selectedVaultView.label}
-              {@const selectedVaultExists =
-                selectedVault.kind ===
-                IdentityBridgeVaultSelectionKind.Selected}
-              {@const deviceIdentifier = view.deviceId.displayText(() =>
-                vault.t(I18N_KEYS.DevicesAccessUnknown),
-              )}
-              {@const protectionSummaryRequest: ConstructorParameters<
-                typeof PasskeyCardPresentation
-              >[0] = {
-                vault,
-                view,
-              }}
-              {@const protectionSummary = new PasskeyCardPresentation(
-                protectionSummaryRequest,
-              ).state}
-              {@const companionIdentity =
-                view.protection === DeviceAccessProtectionKind.CompanionSession}
-              {@const identityTitle = companionIdentity
-                ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentity)
-                : vault.t(I18N_KEYS.DevicesAccessBridgeCurrentIdentity)}
-              {@const bridgeCopy = {
-                protectionStage: vault.t(
-                  I18N_KEYS.DevicesAccessBridgeProtectionEvidence,
-                ),
-                deviceStage: vault.t(
-                  I18N_KEYS.DevicesAccessBridgeDeviceEvidence,
-                ),
-                identityStage: companionIdentity
-                  ? vault.t(
-                      I18N_KEYS.DevicesAccessBridgeCompanionIdentityContext,
-                    )
-                  : vault.t(I18N_KEYS.DevicesAccessBridgeDistributedIdentity),
-                vaultStage: vault.t(I18N_KEYS.DevicesAccessBridgeVaultGrants),
-                selectedVaultStage: vault.t(
-                  I18N_KEYS.DevicesAccessBridgeSelectedVault,
-                ),
-                currentDevice:
-                  view.protection === DeviceAccessProtectionKind.PasskeyStandard
-                    ? vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice)
-                    : (() => {
-                        const deviceKeyTitleArgs: Parameters<
-                          AccessChainPresentation["deviceKeyTitle"]
-                        >[0] = { protection: view.protection };
-                        return new AccessChainPresentation(
-                          vault,
-                        ).deviceKeyTitle(deviceKeyTitleArgs);
-                      })(),
-                currentIdentity: identityTitle,
-                selectedIdentity: companionIdentity
-                  ? vault.t(
-                      I18N_KEYS.DevicesAccessBridgeCompanionIdentityContext,
-                    )
-                  : vault.t(I18N_KEYS.DevicesAccessBridgeSelectedIdentity),
-                vaultGrant: vault.t(I18N_KEYS.DevicesAccessBridgeVaultGrant),
-                deviceKey: vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice),
-                oneDeviceKey: vault.t(
-                  I18N_KEYS.DevicesAccessBridgeOneDeviceKey,
-                ),
-                identityDescription: (() => {
-                  const protectionLabelArgs: Parameters<
-                    AccessChainPresentation["protectionLabel"]
-                  >[0] = { protection: view.protection };
-                  return new AccessChainPresentation(vault).protectionLabel(
-                    protectionLabelArgs,
-                  );
-                })(),
-                identityState: (() => {
-                  const identityStateLabelArgs: Parameters<
-                    AccessChainPresentation["identityStateLabel"]
-                  >[0] = { state: view.identityState };
-                  return new AccessChainPresentation(vault).identityStateLabel(
-                    identityStateLabelArgs,
-                  );
-                })(),
-                deviceMetricLabel: vault.t(
-                  I18N_KEYS.DevicesAccessBridgeDeviceEvidence,
-                ),
-                vaultMetricLabel: vault.t(
-                  I18N_KEYS.DevicesAccessVerifiedVaultsLabel,
-                ),
-                verifiedVaultCount: (() => {
-                  const tArgs: Parameters<typeof vault.t>[0] = {
-                    key: I18N_KEYS.DevicesAccessBridgeVerifiedVaultCount,
-                    replacements: { count: String(verifiedVaultCount) },
-                  };
-                  return vault.t(tArgs);
-                })(),
-                statusMetricLabel: vault.t(I18N_KEYS.DevicesAccessStatusLabel),
-                evidenceMetricLabel: vault.t(
-                  I18N_KEYS.DevicesAccessLastSuccessfulUse,
-                ),
-                verifiedStatus: vault.t(I18N_KEYS.DevicesAccessRouteVerified),
-                unverifiedStatus: vault.t(
-                  I18N_KEYS.DevicesAccessRouteUnverified,
-                ),
-                noAuthorizedIdentity: vault.t(
-                  I18N_KEYS.DevicesAccessBridgeNoAuthorized,
-                ),
-                noAuthorizedIdentityDescription: vault.t(
-                  I18N_KEYS.DevicesAccessBridgeNoAuthorizedDesc,
-                ),
-                noVerifiedVaults: vault.t(
-                  I18N_KEYS.DevicesAccessBridgeNoVerifiedVaults,
-                ),
-                noVerifiedVaultsDescription: vault.t(
-                  I18N_KEYS.DevicesAccessBridgeNoVerifiedVaultsDesc,
-                ),
-                noSelectedVault: vault.t(
-                  I18N_KEYS.DevicesAccessBridgeNoSelectedVault,
-                ),
-                noSelectedVaultDescription: vault.t(
-                  I18N_KEYS.DevicesAccessBridgeNoSelectedVaultDesc,
-                ),
-                protectionDeviceRelation: vault.t(
-                  I18N_KEYS.DevicesAccessBridgeProtectionDeviceRelation,
-                ),
-                appKeyIdentityRelation: vault.t(
-                  I18N_KEYS.DevicesAccessBridgeAppKeyIdentityRelation,
-                ),
-                identityVaultRelation: (vaultLabel: string) =>
-                  (() => {
-                    const tArgs2: Parameters<typeof vault.t>[0] = {
-                      key: I18N_KEYS.DevicesAccessBridgeIdentityVaultRelation,
-                      replacements: {
-                        vault: vaultLabel,
-                      },
-                    };
-                    return vault.t(tArgs2);
-                  })(),
-                deviceVaultRelation: (vaultLabel: string) =>
-                  (() => {
-                    const tArgs3: Parameters<typeof vault.t>[0] = {
-                      key: I18N_KEYS.DevicesAccessBridgeDeviceVaultRelation,
-                      replacements: {
-                        vault: vaultLabel,
-                      },
-                    };
-                    return vault.t(tArgs3);
-                  })(),
-                vaultDeviceRelation: (vaultLabel: string) =>
-                  (() => {
-                    const tArgs4: Parameters<typeof vault.t>[0] = {
-                      key: I18N_KEYS.DevicesAccessBridgeVaultDeviceRelation,
-                      replacements: {
-                        vault: vaultLabel,
-                      },
-                    };
-                    return vault.t(tArgs4);
-                  })(),
-                formatEvidence: (value: string) =>
-                  (() => {
-                    const formatAccessDateArgs: Parameters<
-                      AccessChainPresentation["formatAccessDate"]
-                    >[0] = { value };
-                    return new AccessChainPresentation(vault).formatAccessDate(
-                      formatAccessDateArgs,
-                    );
-                  })(),
-                unknown: vault.t(I18N_KEYS.DevicesAccessUnknown),
-              } satisfies IdentityBridgeCopy}
-              <div
-                class="mt-8"
-                data-testid="devices-access-relationship-details"
-              >
-                <div class="flex min-w-0 flex-col gap-6">
-                  <IdentityBridgeNavigation
-                    {vault}
-                    perspective={selectedPerspective}
-                    {selectedVault}
-                    vaults={view.vaults}
-                    onPerspective={selectPerspective}
-                    onVault={selectVault}
-                  />
-
-                  <div class="min-w-0">
-                    <div class="mb-6">
-                      <p class="access-micro-label text-primary">
-                        {selectedPerspective ===
-                        IdentityBridgePerspective.Identities
-                          ? vault.t(I18N_KEYS.DevicesAccessBridgeIdentityView)
-                          : vault.t(I18N_KEYS.DevicesAccessBridgeVaultView)}
-                      </p>
-                      <h2
-                        class="mt-2 max-w-4xl text-3xl font-semibold tracking-[-0.025em] text-balance text-foreground sm:text-4xl"
-                      >
-                        {#if selectedPerspective === IdentityBridgePerspective.Identities}
-                          {(() => {
-                            const tArgs5: Parameters<typeof vault.t>[0] = {
-                              key: I18N_KEYS.DevicesAccessBridgeIdentityHeadline,
-                              replacements: {
-                                count: String(verifiedVaultCount),
-                                vaults: vault.t(
-                                  verifiedVaultCount === 1
-                                    ? I18N_KEYS.DevicesAccessBridgeVaultSingular
-                                    : I18N_KEYS.DevicesAccessBridgeVaultPlural,
-                                ),
-                              },
-                            };
-                            return vault.t(tArgs5);
-                          })()}
-                        {:else if selectedVaultExists}
-                          {(() => {
-                            const tArgs6: Parameters<typeof vault.t>[0] = {
-                              key: I18N_KEYS.DevicesAccessBridgeVaultHeadline,
-                              replacements: {
-                                count: selectedVaultIsVerified ? "1" : "0",
-                                identities: vault.t(
-                                  selectedVaultIsVerified
-                                    ? I18N_KEYS.DevicesAccessBridgeIdentitySingular
-                                    : I18N_KEYS.DevicesAccessBridgeIdentityPlural,
-                                ),
-                                vault: selectedVaultName,
-                              },
-                            };
-                            return vault.t(tArgs6);
-                          })()}
-                        {:else}
-                          {vault.t(
-                            I18N_KEYS.DevicesAccessBridgeNoSelectedVault,
-                          )}
-                        {/if}
-                      </h2>
-                      <p
-                        class="mt-3 max-w-[72ch] text-sm leading-relaxed text-pretty text-muted-foreground"
-                      >
-                        {selectedPerspective ===
-                        IdentityBridgePerspective.Identities
-                          ? vault.t(I18N_KEYS.DevicesAccessBridgeIdentityLede)
-                          : selectedVaultExists
-                            ? vault.t(I18N_KEYS.DevicesAccessBridgeVaultLede)
-                            : vault.t(
-                                I18N_KEYS.DevicesAccessBridgeNoSelectedVaultDesc,
-                              )}
-                      </p>
-                    </div>
-
-                    <IdentityBridgeGraph
-                      perspective={selectedPerspective}
-                      {selectedVault}
-                      {deviceIdentifier}
-                      identityStatus={view.identityState}
-                      {protectionSummary}
-                      protectionLabel={(() => {
-                        const protectionLabelArgs2: Parameters<
-                          AccessChainPresentation["protectionLabel"]
-                        >[0] = { protection: view.protection };
-                        return new AccessChainPresentation(
-                          vault,
-                        ).protectionLabel(protectionLabelArgs2);
-                      })()}
-                      deviceIconKind={view.protection ===
-                      DeviceAccessProtectionKind.PasskeyStandard
-                        ? IdentityBridgeDeviceIconKind.RecoverableKey
-                        : view.protection ===
-                            DeviceAccessProtectionKind.CompanionSession
-                          ? IdentityBridgeDeviceIconKind.PairedDevice
-                          : IdentityBridgeDeviceIconKind.Browser}
-                      vaults={view.vaults}
-                      copy={bridgeCopy}
-                      graphLabel={vault.t(
-                        I18N_KEYS.DevicesAccessBridgeGraphLabel,
-                      )}
-                      controlsLabel={vault.t(
-                        I18N_KEYS.DevicesAccessBridgeGraphControls,
-                      )}
-                      ariaLabelConfig={{
-                        "node.a11yDescription.default": vault.t(
-                          I18N_KEYS.DevicesAccessBridgeA11yNode,
-                        ),
-                        "node.a11yDescription.keyboardDisabled": vault.t(
-                          I18N_KEYS.DevicesAccessBridgeA11yNode,
-                        ),
-                        "node.a11yDescription.ariaLiveMessage": ({
-                          direction,
-                          x,
-                          y,
-                        }) =>
-                          (() => {
-                            const tArgs7: Parameters<typeof vault.t>[0] = {
-                              key: I18N_KEYS.DevicesAccessBridgeA11yNodeMoved,
-                              replacements: {
-                                direction,
-                                x: String(x),
-                                y: String(y),
-                              },
-                            };
-                            return vault.t(tArgs7);
-                          })(),
-                        "edge.a11yDescription.default": vault.t(
-                          I18N_KEYS.DevicesAccessBridgeA11yEdge,
-                        ),
-                        "controls.ariaLabel": vault.t(
-                          I18N_KEYS.DevicesAccessBridgeGraphControls,
-                        ),
-                        "controls.zoomIn.ariaLabel": vault.t(
-                          I18N_KEYS.DevicesAccessBridgeA11yZoomIn,
-                        ),
-                        "controls.zoomOut.ariaLabel": vault.t(
-                          I18N_KEYS.DevicesAccessBridgeA11yZoomOut,
-                        ),
-                        "controls.fitView.ariaLabel": vault.t(
-                          I18N_KEYS.DevicesAccessBridgeA11yFitView,
-                        ),
-                        "controls.interactive.ariaLabel": vault.t(
-                          I18N_KEYS.DevicesAccessBridgeA11yInteractivity,
-                        ),
-                        "minimap.ariaLabel": vault.t(
-                          I18N_KEYS.DevicesAccessBridgeA11yMinimap,
-                        ),
-                        "handle.ariaLabel": vault.t(
-                          I18N_KEYS.DevicesAccessBridgeA11yHandle,
-                        ),
-                      }}
-                    />
-                  </div>
+                  <Fingerprint class="size-8 text-muted-foreground" />
+                  <h2 class="mt-4 text-lg font-semibold text-foreground">
+                    {vault.t(I18N_KEYS.DevicesAccessNoIdentities)}
+                  </h2>
+                  <p
+                    class="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground"
+                  >
+                    {vault.t(I18N_KEYS.DevicesAccessNoIdentitiesDescription)}
+                  </p>
                 </div>
-              </div>
+              {:else}
+                <div
+                  class="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 text-center"
+                  data-testid="devices-access-no-session-identity"
+                >
+                  <Fingerprint class="size-8 text-muted-foreground" />
+                  <h2 class="mt-4 text-lg font-semibold text-foreground">
+                    {vault.t(I18N_KEYS.DevicesAccessNoSessionIdentity)}
+                  </h2>
+                  <p
+                    class="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground"
+                  >
+                    {vault.t(
+                      I18N_KEYS.DevicesAccessNoSessionIdentityDescription,
+                    )}
+                  </p>
+                </div>
+              {/if}
+            {:else}
+              <SelectedIdentityProjection
+                projection={readyProjection}
+                {vault}
+                {selectedRepresentation}
+                {selectedPerspective}
+                {selectedVault}
+                onPerspective={selectPerspective}
+                onVault={selectVault}
+              >
+                {#snippet children(
+                  identity: IdentityDirectoryEntry,
+                  view: DashboardView,
+                )}
+                  {#if vault.devicesAccessIdentityProtectionOpen}
+                    <div data-testid="devices-access-identity-protection-flow">
+                      <div class="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onclick={() =>
+                            (vault.devicesAccessIdentityProtectionOpen = false)}
+                        >
+                          {vault.t(I18N_KEYS.CommonCancel)}
+                        </Button>
+                      </div>
+                      <DeviceProtectionGate
+                        {vault}
+                        frame={DeviceProtectionGateFrame.HostSection}
+                        creationOnly={false}
+                        initializeSession={false}
+                        recoveryAppId={view.deviceId.displayText(() => "")}
+                        onBeforeProtectionAction={keepCurrentIdentitySession}
+                        onProtectionReady={() =>
+                          void focusAfterProtectionReady(false)}
+                      />
+                    </div>
+                  {:else}
+                    {#if identity.localAccess === NookIdentityLocalAccessKind.ThisBrowser}
+                      <div
+                        class="mb-6 rounded-lg border border-border bg-muted/30 p-5"
+                      >
+                        <p class="text-sm font-medium text-foreground">
+                          {vault.t(
+                            I18N_KEYS.DevicesAccessIdentityOnThisBrowser,
+                          )}
+                        </p>
+                        <Button
+                          type="button"
+                          class="mt-3"
+                          onclick={() => void useIdentity(identity.identityId)}
+                          data-testid="devices-access-use-identity"
+                        >
+                          {vault.t(I18N_KEYS.DevicesAccessUseIdentity)}
+                        </Button>
+                      </div>
+                    {:else if identity.localAccess === NookIdentityLocalAccessKind.CurrentBrowser && vault.deviceProtectionStatus !== DeviceProtectionStatus.Unlocked && accessView.protection !== DeviceAccessProtectionKind.Missing}
+                      <div
+                        class="mb-6 rounded-lg border border-border bg-muted/30 p-5"
+                      >
+                        <p class="text-sm font-medium text-foreground">
+                          {vault.t(I18N_KEYS.DevicesAccessIdentityLocked)}
+                        </p>
+                        <Button
+                          type="button"
+                          class="mt-3"
+                          onclick={() =>
+                            (vault.devicesAccessIdentityProtectionOpen = true)}
+                          data-testid="devices-access-unlock-identity"
+                        >
+                          {vault.t(I18N_KEYS.DevicesAccessUnlockIdentity)}
+                        </Button>
+                      </div>
+                    {/if}
+                    <IdentityRepresentationSwitch
+                      {vault}
+                      identityLabel={identity.label}
+                      {selectedRepresentation}
+                      graphDisabled={identity.localAccess !==
+                        NookIdentityLocalAccessKind.CurrentBrowser}
+                      onSelectRepresentation={(
+                        representation: DevicesAccessRepresentationKind,
+                      ) => (selectedRepresentation = representation)}
+                    />
+
+                    {#if selectedRepresentation === DevicesAccessRepresentationKind.List}
+                      <div class="mt-6">
+                        <IdentityKeyInventory
+                          {vault}
+                          {identity}
+                          {view}
+                          onRenamePasskey={renamePasskey}
+                        />
+                      </div>
+                    {/if}
+                  {/if}
+                {/snippet}
+              </SelectedIdentityProjection>
             {/if}
           {/if}
-        {/if}
+        </div>
       </div>
-    </div>
+    {/if}
   {/if}
 </section>

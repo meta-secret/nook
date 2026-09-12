@@ -26,6 +26,9 @@ import {
   KnownDashboardText,
   UnknownDashboardText,
   type DashboardView,
+  type DashboardLoadState,
+  DashboardReadyProjectionOwner,
+  type DashboardReadyProjectionState,
 } from "../devices-access-dashboard-state";
 import type { VaultAccessView } from "./access-chain";
 
@@ -78,6 +81,33 @@ export type IdentityDirectoryAccessView = {
   readonly directory: IdentityDirectoryView;
   readonly access: DashboardView;
 };
+
+type DevicesAccessDashboardReadyProjectionRequest = {
+  readonly accessState: DashboardLoadState<DashboardView>;
+  readonly directoryState: IdentityDirectoryLoadState;
+  readonly selectedIdentity: SelectedIdentityEntry;
+};
+
+export type DevicesAccessDashboardReadyProjectionState =
+  DashboardReadyProjectionState<
+    DashboardView,
+    IdentityDirectoryView,
+    IdentityDirectoryEntry
+  >;
+
+export class DashboardReadyProjection extends DashboardReadyProjectionOwner<
+  DashboardView,
+  IdentityDirectoryView,
+  IdentityDirectoryEntry
+> {
+  constructor(request: DevicesAccessDashboardReadyProjectionRequest) {
+    super(request);
+  }
+
+  override get state(): DevicesAccessDashboardReadyProjectionState {
+    return super.state;
+  }
+}
 
 export type IdentityDirectoryLoadState =
   | { readonly kind: IdentityDirectoryLoadKind.Loading }
