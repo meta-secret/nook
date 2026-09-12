@@ -136,9 +136,11 @@ const requireFromApp = createRequire(import.meta.url)
 
 function isPagesWorkerModule(value: unknown): value is PagesWorkerModule {
   if (
-    !(value instanceof Object) ||
+    typeof value !== 'object' ||
+    value === null ||
     !('default' in value) ||
-    !(value.default instanceof Object) ||
+    typeof value.default !== 'object' ||
+    value.default === null ||
     !('fetch' in value.default)
   ) {
     return false
