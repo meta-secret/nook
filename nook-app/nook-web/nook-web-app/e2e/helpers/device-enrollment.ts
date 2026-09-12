@@ -53,7 +53,10 @@ import {
   waitForVaultOperationsIdle,
 } from './vault-runtime'
 import { createLocalVaultOnLogin } from './vault-setup'
-import { refreshJoinerVaultOnLoginGateIfIdle } from './joiner-vault-refresh'
+import {
+  refreshJoinerVaultOnLoginGateIfIdle,
+  RefreshJoinerVaultOnLoginGateOutcome,
+} from './joiner-vault-refresh'
 import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
 import {
   E2eSyncProviderId,
@@ -359,6 +362,8 @@ async function refreshGithubVaultOnLoginGate(page: Page) {
   await page.evaluate(refreshJoinerVaultOnLoginGateIfIdle, {
     freshness: ProviderSyncFreshness.Forced,
     authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
+    busyOutcome: RefreshJoinerVaultOnLoginGateOutcome.Busy,
+    refreshedOutcome: RefreshJoinerVaultOnLoginGateOutcome.Refreshed,
   })
   await waitForVaultOperationsIdle(page)
 }

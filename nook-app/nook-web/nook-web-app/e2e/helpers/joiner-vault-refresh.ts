@@ -12,6 +12,12 @@ export enum RefreshJoinerVaultOnLoginGateOutcome {
   Busy = 'busy',
 }
 
+export type RefreshJoinerVaultOnLoginGateIfIdleArgs =
+  RefreshJoinerVaultOnLoginGateArgs & {
+    readonly busyOutcome: RefreshJoinerVaultOnLoginGateOutcome
+    readonly refreshedOutcome: RefreshJoinerVaultOnLoginGateOutcome
+  }
+
 export async function refreshJoinerVaultOnLoginGate(
   args: RefreshJoinerVaultOnLoginGateArgs,
 ): Promise<void> {
@@ -35,10 +41,21 @@ export async function refreshJoinerVaultOnLoginGate(
  * has begun.
  */
 export async function refreshJoinerVaultOnLoginGateIfIdle(
-  args: RefreshJoinerVaultOnLoginGateArgs,
+  args: RefreshJoinerVaultOnLoginGateIfIdleArgs,
 ): Promise<RefreshJoinerVaultOnLoginGateOutcome> {
+  const { freshness, authStorageSyncFailedKey, busyOutcome, refreshedOutcome } =
+    args
   const vault = (window as VaultDebugWindow).__nookVault
-  if (vault?.isVerifying) return RefreshJoinerVaultOnLoginGateOutcome.Busy
-  await refreshJoinerVaultOnLoginGate(args)
-  return RefreshJoinerVaultOnLoginGateOutcome.Refreshed
+  if (vault?.isVerifying) return busyOutcome
+  if (!vault) throw new Error('joiner-vault-runtime-unavailable')
+  const refreshed = await vault.syncFromStorage(freshness)
+  if (refreshed.isErr()) {
+    if (refreshed.error.translationKey === authStorageSyncFailedKey) {
+      return refreshedOutcome
+    }
+    throw new Error(
+      `joiner-vault-refresh-rejected:${refreshed.error.translationKey}`,
+    )
+  }
+  return refreshedOutcome
 }

@@ -39,6 +39,8 @@ describe('joiner vault refresh', () => {
     const outcome = await refreshJoinerVaultOnLoginGateIfIdle({
       freshness: ProviderSyncFreshness.Forced,
       authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
+      busyOutcome: RefreshJoinerVaultOnLoginGateOutcome.Busy,
+      refreshedOutcome: RefreshJoinerVaultOnLoginGateOutcome.Refreshed,
     })
 
     expect(outcome).toBe(RefreshJoinerVaultOnLoginGateOutcome.Busy)
