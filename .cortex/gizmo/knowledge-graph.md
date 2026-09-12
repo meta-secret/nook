@@ -12,6 +12,7 @@ Use this authority to classify team work and shared delivery state.
 
 - [Engineering team ownership](architecture/team-ownership.md)
 - [Dev delivery](architecture/dev-delivery.md)
+- [Multiagent delivery visual model](architecture/multiagent-delivery-diagrams.md)
 
 ## Dynamic skills
 

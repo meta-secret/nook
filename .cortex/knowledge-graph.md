@@ -9,6 +9,9 @@ Use this file only to select one owning context. Do not preload linked graphs.
 
 ## Owning contexts
 
+- [Multiagent delivery architecture](gizmo/architecture/multiagent-delivery-diagrams.md):
+  mandatory primary explanation for the complete feature, check, local-dev,
+  dev-validation, and promotion workflow.
 - [Dev manager](teams/dev-manager/knowledge-graph.md): manually operated dev
   publication, dev PR creation/update, slow evidence, readiness, repair
   delegation, and fast-forward promotion policy.
