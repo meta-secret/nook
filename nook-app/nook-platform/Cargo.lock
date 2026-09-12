@@ -1935,6 +1935,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "tsify",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]

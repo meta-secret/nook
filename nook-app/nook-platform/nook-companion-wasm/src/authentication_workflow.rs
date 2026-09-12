@@ -4,11 +4,20 @@ use nook_companion_core::AuthenticationEnrollmentObservation;
 use nook_companion_core::AuthenticationWorkflowMatch;
 use nook_companion_core::BackupCodeCandidatePresence;
 use nook_companion_core::{
-    AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowSnapshotResponse,
+    AuthenticationWorkflowRoutingResponse, AuthenticationWorkflowSnapshotResponse,
     WebsiteLoginOptions,
 };
+use serde::Deserialize;
+use tsify::Tsify;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticationWorkflowRoutingAdmission(
+    nook_companion_core::AuthenticationWorkflowRoutingResponseWire,
+);
 
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authentication_workflow_snapshot_response(
@@ -22,10 +31,22 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authentication_workflow_runtime_response(
-    response: nook_companion_core::AuthenticationWorkflowRuntimeResponseWire,
-) -> Result<nook_companion_core::AuthenticationWorkflowRuntimeResponse, wasm_bindgen::JsError> {
-    AuthenticationWorkflowRuntimeResponse::decode_authentication_workflow_runtime_response(response)
+    response: AuthenticationWorkflowRoutingAdmission,
+) -> Result<nook_companion_core::AuthenticationWorkflowRoutingResponse, wasm_bindgen::JsError> {
+    let AuthenticationWorkflowRoutingAdmission(response) = response;
+    AuthenticationWorkflowRoutingResponse::decode_authentication_workflow_routing_response(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[cfg(test)]
+mod routing_admission_tests {
+    use super::*;
+
+    #[test]
+    fn routing_admission_declares_unknown_and_rejects_non_contract_values() {
+        assert!(AuthenticationWorkflowRoutingAdmission::DECL.ends_with(" = unknown;"));
+        assert!(serde_json::from_str::<AuthenticationWorkflowRoutingAdmission>("null").is_err());
+    }
 }
 
 #[wasm_bindgen]

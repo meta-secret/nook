@@ -81,6 +81,7 @@ pub use authentication_workflow::{
     VersionedAuthenticationDisclosureControlObservation,
 };
 pub use authentication_workflow_response::{
+    AuthenticationWorkflowRoutingResponse, AuthenticationWorkflowRoutingResponseWire,
     AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowRuntimeResponseDecodeError,
     AuthenticationWorkflowRuntimeResponseWire, AuthenticationWorkflowSnapshotResponse,
     AuthenticationWorkflowSnapshotResponseDecodeError, AuthenticationWorkflowSnapshotResponseKind,
