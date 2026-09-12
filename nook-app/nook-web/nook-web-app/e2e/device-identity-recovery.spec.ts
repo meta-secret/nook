@@ -118,9 +118,7 @@ test('waits for peer storage work before destructive identity recovery', async (
   const peer = await page.context().newPage()
   await peer.goto('/app/')
   await expect
-    .poll(() =>
-      peer.evaluate(() => Boolean(window.__nookVault)),
-    )
+    .poll(() => peer.evaluate(() => Boolean(window.__nookVault)))
     .toBe(true)
   await peer.evaluate(() => {
     const peerVault = window.__nookVault
