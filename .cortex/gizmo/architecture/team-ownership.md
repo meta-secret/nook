@@ -28,7 +28,7 @@ coordinates delivery but does not redefine a team's technical contract.
 - A scope overlap blocks dispatch unless the exact changes are handed off or
   attributed to the proposed task.
 - Gizmo owns child-worktree allocation, write-wave coordination, parent
-  integration, external delivery policy, and authorization.
+  integration, feature acceptance, and local landing authorization.
 - PR Steward performs only the explicitly authorized pull-request mechanics.
 
 ## Teams
@@ -40,11 +40,14 @@ Gizmo owns:
 - mission scope and task routing;
 - write-wave coordination and shared-branch commit turns;
 - shared-file coordination;
-- pull-request policy and authorization;
+- feature compilation and local landing authorization;
 - technical review-finding disposition;
-- readiness and merge verdicts;
+- feature acceptance verdicts;
 - Workbench state; and
-- the final delivery verdict.
+- the feature delivery verdict.
+
+The dev manager controls dev PR creation/update, slow evidence, readiness,
+and promotion. Steward performs these mechanics only under a manager packet.
 
 The separate PR Steward Team Agent performs pull-request metadata.
 It observes reviews and checks.
@@ -159,9 +162,9 @@ Within its assigned scope, a team owns:
 - review fixes; and
 - validation fixes caused by its change.
 
-Gizmo owns external delivery policy after the technical result is ready. PR
-Steward performs the named external pull-request actions after Gizmo's
-authorization.
+Gizmo owns feature acceptance and the local landing request. The dev manager
+owns dev PR policy and promotion. PR Steward executes dev PR actions only
+after the manager's authorization.
 
 ## Validation
 

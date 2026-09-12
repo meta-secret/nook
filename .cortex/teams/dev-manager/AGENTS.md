@@ -16,6 +16,8 @@ cycle it creates a new PR for the next snapshot. Dev remains permanent.
 ## Required actions
 
 - Authorize Steward's `dev:publish` as the sole publisher to origin/dev.
+- Control dev PR creation/update, slow evidence, readiness, and promotion.
+- Authorize each dev PR mechanical operation through a manager packet.
 - Freeze origin/dev while checking and promoting the selected SHA.
 - Delegate GitHub operations to PR Steward under an explicit packet.
 - Run the full existing slow PR checks for each published snapshot.

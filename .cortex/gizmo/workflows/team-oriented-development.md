@@ -66,9 +66,9 @@ when no dependency remains between them.
 - Team Agents author tests for the manager's slow stage.
 - Gizmo requests remote compilation and owns feature review dispositions.
 - Gizmo authorizes Steward's serialized local integration after feature acceptance.
-- The manually run dev manager owns publication and slow PR validation.
-- PR Steward performs authorized pull-request metadata, review observation,
-  validation, readiness-evidence, merge, and merge-verification mechanics.
+- The manually run dev manager controls publication, dev PR creation/update,
+  slow evidence, readiness, and promotion.
+- PR Steward performs these dev PR mechanics only under a manager packet.
 
 ## Prohibited complexity
 
