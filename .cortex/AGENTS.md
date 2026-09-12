@@ -84,6 +84,17 @@ material until their implementations conform to the named task contracts.
 
 ## Team worker contract
 
+### Required subagent execution model
+
+For Gizmo, spawned bounded subagents/Team Agents are the required execution
+model. Gizmo Prime must spawn a bounded subagent for every worker-executable
+implementation or review task. Gizmo Prime may run subagents in parallel only
+when their explicit scopes are disjoint and no unresolved dependency exists;
+all existing scope, ownership, isolation, commit, and serialized-integration
+rules remain in force. The session-level generic safety guard is not repository
+policy; it does not alter this required subagent model or relax any repository
+scope, ownership, or handoff rule.
+
 ### Required actions
 
 - **Delegation boundary**
