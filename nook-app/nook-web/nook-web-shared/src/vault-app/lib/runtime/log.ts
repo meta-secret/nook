@@ -563,10 +563,7 @@ class BrowserLogRuntime {
     if (globalThis.fetch === marker.__nookFetchOuter) return;
 
     const originalFetch = globalThis.fetch as FetchWithOptionalPreconnect;
-    const fetchProperties: Pick<
-      FetchWithOptionalPreconnect,
-      "preconnect"
-    > = {
+    const fetchProperties: Pick<FetchWithOptionalPreconnect, "preconnect"> = {
       preconnect: originalFetch.preconnect,
     };
     const wrapped = Object.assign(

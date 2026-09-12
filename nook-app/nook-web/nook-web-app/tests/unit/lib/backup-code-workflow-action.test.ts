@@ -21,9 +21,8 @@ type RevalidationOutcome = Awaited<
 >
 
 const mocks = vi.hoisted(() => ({
-  revalidate: vi.fn<
-    (request: RevalidationRequest) => Promise<RevalidationOutcome>
-  >(),
+  revalidate:
+    vi.fn<(request: RevalidationRequest) => Promise<RevalidationOutcome>>(),
   startEnrollment: vi.fn<() => void>(),
 }))
 vi.mock(
@@ -171,7 +170,9 @@ describe('backup-code workflow action', () => {
       () =>
         new Promise<RevalidationOutcome>((resolve) => {
           release = () =>
-            resolve({ kind: RevalidatedAuthenticationActionOutcomeKind.Rejected })
+            resolve({
+              kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
+            })
         }),
     )
     const host = connectedHost()

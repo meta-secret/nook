@@ -4,9 +4,7 @@ import { JoinEnrollmentState, NookLocalVaultUnlockState } from '$app-wasm'
 import { LOCAL_PROVIDER_TYPE } from '$lib/auth/providers'
 import { ExistingVaultImportQueueKind } from '$lib/vault/creation-queue'
 import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
-import {
-  ActiveVaultKind,
-} from '$lib/vault/state/provider.svelte'
+import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '$lib/vault.svelte'
 
