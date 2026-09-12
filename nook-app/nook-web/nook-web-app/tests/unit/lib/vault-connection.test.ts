@@ -92,6 +92,7 @@ function connectionScenario(
   state.syncFromStorage = vi.fn<VaultState['syncFromStorage']>(async () =>
     ok(ProviderSyncOutcome.Synced),
   )
+  state.enqueueStorage = vi.fn(async (operation) => operation())
   state.startIdleSessionTracking = vi.fn()
   state.startVaultSync = vi.fn()
   state.dismissSuccess = vi.fn()
