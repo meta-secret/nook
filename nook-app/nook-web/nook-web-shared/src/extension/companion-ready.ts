@@ -17,11 +17,6 @@ type BunFileApi = {
   };
 };
 
-type NodeFsReadFileSync = {
-  readFileSync: (path: string) => ArrayLike<number>;
-  existsSync: (path: string) => boolean;
-};
-
 type CompanionWasmPathSegments = string[];
 
 enum CompanionWasmBytesKind {
@@ -40,18 +35,12 @@ type CompanionWasmBytes =
 declare const __NOOK_COMPANION_WASM_BYTES__: string;
 declare const Bun: BunFileApi;
 declare const process: {
-  versions?: { node?: string };
-  getBuiltinModule?: (specifier: string) => unknown;
   cwd?: () => string;
   env?: Record<string, string>;
 };
 
 const SEALED_COMPANION_WASM_PATH =
   "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm";
-
-function runningUnderNode(): boolean {
-  return typeof process === "object" && Boolean(process.versions?.node);
-}
 
 function chromeRuntimeUrl(path: string): string | false {
   if (
@@ -67,19 +56,6 @@ function toArrayBuffer(source: ArrayLike<number>): ArrayBuffer {
   const bytes = new Uint8Array(source.length);
   bytes.set(source);
   return bytes.buffer;
-}
-
-function isNodeFsReadFileSync(value: unknown): value is NodeFsReadFileSync {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  if (!("existsSync" in value) || !("readFileSync" in value)) {
-    return false;
-  }
-  return (
-    typeof value.existsSync === "function" &&
-    typeof value.readFileSync === "function"
-  );
 }
 
 function embeddedCompanionWasmBytes(): CompanionWasmBytes {
@@ -127,41 +103,22 @@ async function companionWasmDiskCandidates(): Promise<string[]> {
 }
 
 async function readCompanionWasmFromDisk(): Promise<CompanionWasmBytes> {
-  if (!runningUnderNode()) {
+  if (typeof Bun !== "object") {
     return { kind: CompanionWasmBytesKind.Absent };
   }
   const candidates = await companionWasmDiskCandidates();
-  if (typeof Bun === "object") {
-    for (const candidate of candidates) {
-      try {
-        const file = Bun.file(candidate);
-        if (await file.exists()) {
-          return {
-            kind: CompanionWasmBytesKind.Present,
-            bytes: await file.arrayBuffer(),
-          };
-        }
-      } catch {
-        // Try the next candidate / Node fs fallback.
+  for (const candidate of candidates) {
+    try {
+      const file = Bun.file(candidate);
+      if (await file.exists()) {
+        return {
+          kind: CompanionWasmBytesKind.Present,
+          bytes: await file.arrayBuffer(),
+        };
       }
+    } catch {
+      // Try the next Bun file candidate.
     }
-  }
-  try {
-    const nodeFs = process.getBuiltinModule?.("node:fs");
-    if (!isNodeFsReadFileSync(nodeFs)) {
-      return { kind: CompanionWasmBytesKind.Absent };
-    }
-    for (const candidate of candidates) {
-      if (!nodeFs.existsSync(candidate)) {
-        continue;
-      }
-      return {
-        kind: CompanionWasmBytesKind.Present,
-        bytes: toArrayBuffer(nodeFs.readFileSync(candidate)),
-      };
-    }
-  } catch {
-    return { kind: CompanionWasmBytesKind.Absent };
   }
   return { kind: CompanionWasmBytesKind.Absent };
 }
