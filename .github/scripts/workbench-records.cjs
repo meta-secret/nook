@@ -1,9 +1,11 @@
 /** @typedef {'plan' | 'worklog'} RecordKind */
 /** @typedef {{ kind: 'invalid' } | { kind: 'valid', value: string }} ParsedBudgetValue */
-/** @typedef {{ kind: 'invalid', message?: string } | { kind: 'valid', message: string }} ValidationResult */
+/** @typedef {{ kind: 'invalid', message: string } | { kind: 'valid', message: string }} ValidationResult */
 /** @typedef {{ valid: boolean, number: number, scope: string, gizmoId: string, gizmoName: string, predecessorGizmoId: string, estimate: number, evidence: string }} SliceContract */
 /** @typedef {{ kind: 'invalid' } | { kind: 'valid', missionController: string, currentGizmoId: string, owningBoundary: string, ownershipBody: string, estimate: number, currentPrEstimate: number, deliveryShape: string, sequenceMode: string, publicInterfaces: string, currentSlice: string, sequenceBody: string }} BudgetFields */
+/** @typedef {{ label: string, pattern: RegExp }} PlanBudgetField */
 
+/** @type {Record<RecordKind, string[]>} */
 const recordSections = {
   plan: [
     '## Interpreted request',
@@ -27,6 +29,7 @@ const recordSections = {
 const gizmoIdGrammar = '[a-z0-9]+(?:-[a-z0-9]+)*'
 const gizmoIdPattern = new RegExp(`^${gizmoIdGrammar}$`)
 
+/** @type {PlanBudgetField[]} */
 const planBudgetFields = [
   {
     label: 'Mission controller',
@@ -164,8 +167,11 @@ function validateOwnershipUnits(ownershipBody) {
   )
 
   for (let index = 0; index < lines.length; index += 1) {
-    const match = unitPattern.exec(lines[index].trim())
-    if (!match || Number(match[1]) !== index + 1) {
+    const line = lines[index]
+    if (!line) return 'ownership units must be consecutive and match the required contract shape'
+    const match = unitPattern.exec(line.trim())
+    const unitNumber = match?.[1]
+    if (!match || !unitNumber || Number(unitNumber) !== index + 1) {
       return 'ownership units must be consecutive and match the required contract shape'
     }
 
@@ -183,6 +189,19 @@ function validateOwnershipUnits(ownershipBody) {
       expertiseEvidence,
       capabilityEvidence,
     ] = match
+    if (
+      typeof capability !== 'string' ||
+      typeof functionalOwner !== 'string' ||
+      typeof expertiseProvider !== 'string' ||
+      typeof allowedCodePaths !== 'string' ||
+      typeof allowedTestPaths !== 'string' ||
+      typeof forbiddenPaths !== 'string' ||
+      typeof consumerInterfaces !== 'string' ||
+      typeof expertiseEvidence !== 'string' ||
+      typeof capabilityEvidence !== 'string'
+    ) {
+      return 'ownership units must be consecutive and match the required contract shape'
+    }
     if (isPlaceholder(capability) || isPlaceholder(capabilityEvidence)) {
       return 'ownership unit capability and acceptance evidence must be concrete'
     }
@@ -324,11 +343,15 @@ function parseSliceContract(value, numbered) {
   if (numbered) {
     const numberedMatch = contractText.match(/^(\d+)\.\s+(.+)$/)
     if (!numberedMatch) return emptyContract
-    number = Number(numberedMatch[1])
-    contractText = numberedMatch[2]
+    const numberText = numberedMatch[1]
+    const numberedText = numberedMatch[2]
+    if (!numberText || !numberedText) return emptyContract
+    number = Number(numberText)
+    contractText = numberedText
   } else {
     const optionalNumberMatch = contractText.match(/^1\.\s+(.+)$/)
-    if (optionalNumberMatch) contractText = optionalNumberMatch[1]
+    const optionalNumberText = optionalNumberMatch?.[1]
+    if (optionalNumberText) contractText = optionalNumberText
   }
 
   const contractMatch = numbered
@@ -340,14 +363,30 @@ function parseSliceContract(value, numbered) {
       )
   if (!contractMatch) return emptyContract
 
-  const gizmoId = numbered ? contractMatch[1] : ''
-  const gizmoName = numbered ? contractMatch[2].trim() : ''
-  const predecessorGizmoId = numbered ? contractMatch[3] : ''
-  const scope = contractMatch[numbered ? 4 : 1].trim()
+  const gizmoIdValue = numbered ? contractMatch[1] : ''
+  const gizmoNameValue = numbered ? contractMatch[2] : ''
+  const predecessorGizmoIdValue = numbered ? contractMatch[3] : ''
+  const scopeValue = contractMatch[numbered ? 4 : 1]
+  const estimateValue = numbered ? contractMatch[5] : ''
+  const evidenceValue = contractMatch[numbered ? 6 : 2]
+  if (
+    typeof gizmoIdValue !== 'string' ||
+    typeof gizmoNameValue !== 'string' ||
+    typeof predecessorGizmoIdValue !== 'string' ||
+    typeof scopeValue !== 'string' ||
+    typeof estimateValue !== 'string' ||
+    typeof evidenceValue !== 'string'
+  ) {
+    return emptyContract
+  }
+  const gizmoId = gizmoIdValue
+  const gizmoName = gizmoNameValue.trim()
+  const predecessorGizmoId = predecessorGizmoIdValue
+  const scope = scopeValue.trim()
   const estimate = numbered
-    ? Number(contractMatch[5].replaceAll(',', ''))
+    ? Number(estimateValue.replaceAll(',', ''))
     : 0
-  const evidence = contractMatch[numbered ? 6 : 2].trim()
+  const evidence = evidenceValue.trim()
   const validGizmoIds =
     !numbered ||
     (gizmoIdPattern.test(gizmoId) &&
@@ -385,6 +424,7 @@ function ownershipGizmoIds(ownershipBody) {
     .split('\n')
     .filter((line) => line.trim())
     .map((line) => ownershipGizmoIdPattern.exec(line)?.[1])
+    .filter((gizmoId) => typeof gizmoId === 'string')
 }
 
 /**
@@ -409,6 +449,9 @@ function validateTrustedGizmoAssignment(
 
 /** @param {{ currentGizmoId: string, ownershipBody: string }} budgetFields @param {SliceContract[]} slices */
 function validateGizmoMapping(budgetFields, slices) {
+  if (slices.length === 0) {
+    return 'at least one PR slice is required'
+  }
   const gizmoIds = slices.map((slice) => slice.gizmoId)
   const gizmoNames = slices.map((slice) => normalizedContractValue(slice.gizmoName))
   if (new Set(gizmoIds).size !== gizmoIds.length) {
@@ -421,11 +464,18 @@ function validateGizmoMapping(budgetFields, slices) {
     return 'current Gizmo ID must match the first PR slice Gizmo ID'
   }
 
-  if (slices[0].predecessorGizmoId !== 'None') {
+  const firstSlice = slices[0]
+  if (!firstSlice || firstSlice.predecessorGizmoId !== 'None') {
     return 'the first PR slice must not declare a predecessor Gizmo'
   }
   for (let index = 1; index < slices.length; index += 1) {
-    if (slices[index].predecessorGizmoId !== slices[index - 1].gizmoId) {
+    const currentSlice = slices[index]
+    const previousSlice = slices[index - 1]
+    if (
+      !currentSlice ||
+      !previousSlice ||
+      currentSlice.predecessorGizmoId !== previousSlice.gizmoId
+    ) {
       return 'each later PR slice must name the immediately preceding Gizmo ID'
     }
   }
@@ -485,9 +535,8 @@ const planForbiddenPatterns = [
 
 /** @param {string} value @returns {string[]} */
 function normalizedWords(value) {
-  const [words = []] = [
-    value.toLocaleLowerCase('en-US').match(/[\p{L}\p{N}]+/gu),
-  ]
+  const words = value.toLocaleLowerCase('en-US').match(/[\p{L}\p{N}]+/gu)
+  if (!words) return []
   return words
 }
 
@@ -546,21 +595,25 @@ function validateAgentRecord(
   const required = recordSections[kind]
   if (!required) return `unknown record kind: ${kind}`
 
-  const headings = [...candidate.matchAll(/^## (.+)$/gm)].map(
-    (match) => `## ${match[1]}`,
-  )
+  const headings = [...candidate.matchAll(/^## (.+)$/gm)].map((match) => {
+    const heading = match[1]
+    return heading ? `## ${heading}` : ''
+  })
   if (JSON.stringify(headings) !== JSON.stringify(required)) {
     return 'required sections are missing, duplicated, reordered, or extended'
   }
 
   for (let index = 0; index < required.length; index += 1) {
-    const start = candidate.indexOf(required[index]) + required[index].length
+    const currentHeading = required[index]
+    if (!currentHeading) return 'required sections are missing, duplicated, reordered, or extended'
+    const nextHeading = required[index + 1]
+    const start = candidate.indexOf(currentHeading) + currentHeading.length
     const end =
       index + 1 < required.length
-        ? candidate.indexOf(required[index + 1])
+        ? candidate.indexOf(nextHeading || '')
         : candidate.length
     if (!candidate.slice(start, end).trim()) {
-      return `section is empty: ${required[index]}`
+      return `section is empty: ${currentHeading}`
     }
   }
 
@@ -650,6 +703,9 @@ function validateAgentRecord(
       }
     }
     const firstSlice = listedSlices[0]
+    if (!firstSlice) {
+      return 'PR slices must be valid and consecutively numbered'
+    }
     if (
       normalizedContractValue(firstSlice.scope) !==
         normalizedContractValue(currentSlice.scope) ||

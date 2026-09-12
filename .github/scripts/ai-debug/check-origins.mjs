@@ -4,6 +4,10 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+/** @typedef {{ command: string, args?: string[] }} CursorPlaywrightConfig */
+/** @typedef {{ mcpServers?: { playwright?: CursorPlaywrightConfig } }} CursorMcpConfig */
+/** @typedef {{ name: string, enabled: boolean, transport: { type: string, command: string, args: string[] } }} CodexMcpServer */
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 /** @type {string[]} */
 const expected = JSON.parse(
@@ -78,6 +82,7 @@ assertSameOrigins(
 const cursorMcpPath = join(root, '.cursor/mcp.json')
 let cursorConfigured = false
 if (fileExists(cursorMcpPath)) {
+  /** @type {CursorMcpConfig} */
   const cursorMcp = JSON.parse(readFileSync(cursorMcpPath, 'utf8'))
   const playwright = cursorMcp?.mcpServers?.playwright
   if (!playwright) {
@@ -114,8 +119,9 @@ try {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   })
+  /** @type {CodexMcpServer[]} */
   const servers = JSON.parse(raw)
-  const server = servers.find(({ name /** @type {unknown} */ }) => name === 'playwright')
+  const server = servers.find(({ name }) => name === 'playwright')
   if (!server?.enabled) {
     throw new Error(
       'Playwright MCP is not enabled or visible to Codex. Trust this repository, then restart Codex so .codex/config.toml is loaded.',

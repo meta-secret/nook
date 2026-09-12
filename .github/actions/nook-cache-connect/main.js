@@ -56,6 +56,7 @@ const credentialDirectory = path.join(runnerTemp, "nook-cache-credentials");
 fs.mkdirSync(credentialDirectory, { recursive: true, mode: 0o700 });
 fs.chmodSync(credentialDirectory, 0o700);
 
+/** @param {string} filename @param {string} value @returns {string} */
 function writeCredential(filename, value) {
   const credentialPath = path.join(credentialDirectory, filename);
   fs.writeFileSync(credentialPath, value, { encoding: "utf8", mode: 0o600 });

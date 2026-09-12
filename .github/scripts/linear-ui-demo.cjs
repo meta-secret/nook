@@ -2,6 +2,26 @@ const crypto = require('node:crypto')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 
+/** @typedef {{ id: string, type: string }} LinearWorkflowState */
+/** @typedef {{ id: string, body: string }} LinearComment */
+/** @typedef {{ id: string, identifier?: string, title?: string, url?: string, comments: { nodes: LinearComment[] } }} LinearIssue */
+/** @typedef {{ labelId: string, projectId: string, repository: string, teamId: string }} UiDemoConfig */
+/** @typedef {{ headSha: string, number: number, runUrl: string, specs: string, title: string, url: string }} PullRequestInfo */
+/** @typedef {{ assetUrl: string, filename: string }} UploadedVideo */
+/** @typedef {{ repository: string, prNumber: number, prTitle: string, prUrl: string }} IssueDescriptionInput */
+/** @typedef {{ headSha: string, specs: string, runUrl: string, totalVideos: number, videos: UploadedVideo[] }} DemoCommentInput */
+/** @typedef {{ description: string, labelIds: string[], projectId: string, stateId: string, teamId: string, title: string }} LinearIssueInput */
+/** @typedef {LinearIssueInput & { id: string }} LinearCreateIssueInput */
+/** @typedef {Partial<LinearIssueInput> & { stateId?: string }} LinearUpdateIssueInput */
+/** @typedef {{ body: string, issueId: string }} LinearCommentInput */
+/** @typedef {{ errors?: Array<{ message?: string }>, data: unknown }} LinearGraphqlPayload */
+/** @typedef {{ success: boolean, issue?: LinearIssue }} LinearIssueMutation */
+/** @typedef {{ success: boolean, comment?: LinearComment }} LinearCommentMutation */
+/** @typedef {{ assetUrl: string, uploadUrl: string, headers: Array<{ key: string, value: string }> }} LinearUpload */
+/** @typedef {{ success: boolean, uploadFile?: LinearUpload }} LinearUploadMutation */
+/** @typedef {{ teamStates(teamId: string): Promise<LinearWorkflowState[]>, issue(issueId: string): Promise<LinearIssue | undefined>, createIssue(input: LinearCreateIssueInput): Promise<LinearIssue>, updateIssue(issueId: string, input: LinearUpdateIssueInput): Promise<LinearIssue>, createComment(input: LinearCommentInput): Promise<LinearComment>, uploadFile(filePath: string, filename?: string): Promise<UploadedVideo> }} UiDemoClient */
+/** @typedef {{ kind: 'issue-absent' } | { kind: 'updated', issue: LinearIssue }} UiDemoIssueTransition */
+
 const UiDemoIssueTransitionKind = Object.freeze({
   Updated: 'updated',
   IssueAbsent: 'issue-absent',
@@ -10,11 +30,14 @@ const UiDemoIssueTransitionKind = Object.freeze({
 const LINEAR_GRAPHQL_URL = 'https://api.linear.app/graphql'
 const VIDEO_CONTENT_TYPE = 'video/webm'
 
+/** @param {string} repository @param {number} prNumber @returns {string} */
 const issueMarker = (repository, prNumber) =>
   `<!-- nook-ui-demo-pr:${repository}#${prNumber} -->`
 
+/** @param {string} headSha @returns {string} */
 const headMarker = (headSha) => `<!-- nook-ui-demo-head:${headSha} -->`
 
+/** @param {string} repository @param {number} prNumber @returns {string} */
 function deterministicIssueId(repository, prNumber) {
   const bytes = crypto
     .createHash('sha256')
@@ -31,9 +54,12 @@ function deterministicIssueId(repository, prNumber) {
   )
 }
 
+/** @param {string} root @returns {Promise<string[]>} */
 async function findWebmFiles(root) {
+  /** @type {string[]} */
   const files = []
 
+  /** @param {string} directory @returns {Promise<void>} */
   async function visit(directory) {
     const entries = await fs.readdir(directory, { withFileTypes: true })
     await Promise.all(
@@ -52,6 +78,7 @@ async function findWebmFiles(root) {
   return files.sort()
 }
 
+/** @param {string} root @param {number} limit @returns {Promise<{ files: string[], total: number }>} */
 async function selectLargestWebmFiles(root, limit) {
   if (!Number.isInteger(limit) || limit < 1) {
     throw new Error('UI demo video limit must be a positive integer')
@@ -70,6 +97,7 @@ async function selectLargestWebmFiles(root, limit) {
 }
 
 class LinearApi {
+  /** @param {string} apiKey @param {typeof fetch} [fetchImpl] */
   constructor(apiKey, fetchImpl = globalThis.fetch) {
     if (!apiKey) throw new Error('LINEAR_API_KEY is required')
     if (!fetchImpl) throw new Error('A fetch implementation is required')
@@ -77,6 +105,7 @@ class LinearApi {
     this.fetch = fetchImpl
   }
 
+  /** @param {string} query @param {Record<string, unknown>} [variables] @returns {Promise<unknown>} */
   async graphql(query, variables = {}) {
     const response = await this.fetch(LINEAR_GRAPHQL_URL, {
       method: 'POST',
@@ -86,6 +115,7 @@ class LinearApi {
       },
       body: JSON.stringify({ query, variables }),
     })
+    /** @type {LinearGraphqlPayload} */
     const payload = await response.json()
 
     if (!response.ok || payload.errors?.length) {
@@ -96,7 +126,9 @@ class LinearApi {
     return payload.data
   }
 
+  /** @param {string} issueId @returns {Promise<LinearIssue | undefined>} */
   async issue(issueId) {
+    /** @type {{ issues: { nodes: LinearIssue[] } }} */
     const data = await this.graphql(
       `query UiDemoIssue($id: ID!) {
         issues(first: 1, filter: { id: { eq: $id } }) {
@@ -114,7 +146,9 @@ class LinearApi {
     return data.issues.nodes[0]
   }
 
+  /** @param {string} teamId @returns {Promise<LinearWorkflowState[]>} */
   async teamStates(teamId) {
+    /** @type {{ team: { states: { nodes: LinearWorkflowState[] } } }} */
     const data = await this.graphql(
       `query UiDemoTeamStates($id: String!) {
         team(id: $id) { states { nodes { id name type } } }
@@ -124,7 +158,9 @@ class LinearApi {
     return data.team.states.nodes
   }
 
+  /** @param {LinearCreateIssueInput} input @returns {Promise<LinearIssue>} */
   async createIssue(input) {
+    /** @type {{ issueCreate: LinearIssueMutation }} */
     const data = await this.graphql(
       `mutation CreateUiDemoIssue($input: IssueCreateInput!) {
         issueCreate(input: $input) {
@@ -134,13 +170,16 @@ class LinearApi {
       }`,
       { input },
     )
-    if (!data.issueCreate.success || !data.issueCreate.issue) {
+    const issue = data.issueCreate.issue
+    if (!data.issueCreate.success || !issue) {
       throw new Error('Linear did not create the UI demo issue')
     }
-    return data.issueCreate.issue
+    return issue
   }
 
+  /** @param {string} issueId @param {LinearUpdateIssueInput} input @returns {Promise<LinearIssue>} */
   async updateIssue(issueId, input) {
+    /** @type {{ issueUpdate: LinearIssueMutation }} */
     const data = await this.graphql(
       `mutation UpdateUiDemoIssue($id: String!, $input: IssueUpdateInput!) {
         issueUpdate(id: $id, input: $input) {
@@ -150,25 +189,33 @@ class LinearApi {
       }`,
       { id: issueId, input },
     )
-    if (!data.issueUpdate.success || !data.issueUpdate.issue) {
+    const issue = data.issueUpdate.issue
+    if (!data.issueUpdate.success || !issue) {
       throw new Error('Linear did not update the UI demo issue')
     }
-    return data.issueUpdate.issue
+    return issue
   }
 
+  /** @param {LinearCommentInput} input @returns {Promise<LinearComment>} */
   async createComment(input) {
+    /** @type {{ commentCreate: LinearCommentMutation }} */
     const data = await this.graphql(
       `mutation CreateUiDemoComment($input: CommentCreateInput!) {
         commentCreate(input: $input) { success comment { id body } }
       }`,
       { input },
     )
-    if (!data.commentCreate.success) throw new Error('Linear did not create the UI demo comment')
-    return data.commentCreate.comment
+    const comment = data.commentCreate.comment
+    if (!data.commentCreate.success || !comment) {
+      throw new Error('Linear did not create the UI demo comment')
+    }
+    return comment
   }
 
+  /** @param {string} filePath @param {string} [filename] @returns {Promise<UploadedVideo>} */
   async uploadFile(filePath, filename = path.basename(filePath)) {
     const contents = await fs.readFile(filePath)
+    /** @type {{ fileUpload: LinearUploadMutation }} */
     const data = await this.graphql(
       `mutation UploadUiDemo($contentType: String!, $filename: String!, $size: Int!) {
         fileUpload(contentType: $contentType, filename: $filename, size: $size) {
@@ -197,6 +244,7 @@ class LinearApi {
   }
 }
 
+/** @param {IssueDescriptionInput} input @returns {string} */
 function issueDescription({ repository, prNumber, prTitle, prUrl }) {
   return [
     issueMarker(repository, prNumber),
@@ -208,6 +256,7 @@ function issueDescription({ repository, prNumber, prTitle, prUrl }) {
   ].join('\n')
 }
 
+/** @param {DemoCommentInput} input @returns {string} */
 function demoComment({ headSha, specs, runUrl, totalVideos, videos }) {
   return [
     headMarker(headSha),
@@ -221,14 +270,26 @@ function demoComment({ headSha, specs, runUrl, totalVideos, videos }) {
   ].join('\n')
 }
 
+/** @param {LinearWorkflowState[]} states @param {string} type @returns {LinearWorkflowState} */
 function stateByType(states, type) {
   const state = states.find((candidate) => candidate.type === type)
   if (!state) throw new Error(`Linear team has no ${type} workflow state`)
   return state
 }
 
+/**
+ * @param {{ apiKey?: string, config: UiDemoConfig, demoDir: string, pullRequest: PullRequestInfo, client?: UiDemoClient, maxVideos?: number }} input
+ * @returns {Promise<LinearIssue>}
+ */
 async function syncUiDemoIssue({ apiKey, config, demoDir, pullRequest, client, maxVideos = 10 }) {
-  const linear = client || new LinearApi(apiKey)
+  /** @type {UiDemoClient} */
+  let linear
+  if (client) {
+    linear = client
+  } else {
+    if (!apiKey) throw new Error('LINEAR_API_KEY is required')
+    linear = new LinearApi(apiKey)
+  }
   const issueId = deterministicIssueId(config.repository, pullRequest.number)
   const states = await linear.teamStates(config.teamId)
   const startedState = stateByType(states, 'started')
@@ -280,6 +341,10 @@ async function syncUiDemoIssue({ apiKey, config, demoDir, pullRequest, client, m
   return issue
 }
 
+/**
+ * @param {{ apiKey?: string, config: UiDemoConfig, merged: boolean, prNumber: number, client?: UiDemoClient }} input
+ * @returns {Promise<UiDemoIssueTransition>}
+ */
 async function transitionUiDemoIssue({
   apiKey,
   config,
@@ -287,7 +352,14 @@ async function transitionUiDemoIssue({
   prNumber,
   client,
 }) {
-  const linear = client || new LinearApi(apiKey)
+  /** @type {UiDemoClient} */
+  let linear
+  if (client) {
+    linear = client
+  } else {
+    if (!apiKey) throw new Error('LINEAR_API_KEY is required')
+    linear = new LinearApi(apiKey)
+  }
   const issueId = deterministicIssueId(config.repository, prNumber)
   const issue = await linear.issue(issueId)
   if (!issue) return { kind: UiDemoIssueTransitionKind.IssueAbsent }

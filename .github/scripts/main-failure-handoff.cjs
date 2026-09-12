@@ -1,3 +1,13 @@
+/** @typedef {'action_required' | 'failure' | 'startup_failure' | 'timed_out' | 'cancelled' | 'success' | 'skipped'} WorkflowConclusion */
+/** @typedef {{ id: number, run_attempt: number, name: string, event: string, head_branch: string, head_sha: string, conclusion: WorkflowConclusion, html_url: string }} MainRun */
+/** @typedef {{ name: string, conclusion: WorkflowConclusion }} MainJob */
+/** @typedef {{ number: number }} SourcePullRequest */
+/** @typedef {{ run: MainRun, recordedAt: string, failures: string[] }} ProgressEntryInput */
+/** @typedef {{ body?: string, run: MainRun, recordedAt: string }} RetireSuccessfulIssueInput */
+/** @typedef {{ body: string, run: MainRun, recordedAt: string, failures: string[], relatedPrs: number[] }} UpdateExistingIssueInput */
+/** @typedef {{ run: MainRun, jobs: MainJob[], sourcePullRequests?: SourcePullRequest[], recordedAt: string, existingBody?: string }} BuildMainFailureIssueInput */
+/** @typedef {{ path: string, body: string, failedJobs: string[] }} MainFailureIssue */
+
 const FAILURE_CONCLUSIONS = new Set([
   'action_required',
   'failure',
@@ -10,6 +20,7 @@ const REPAIR_JOB_CONCLUSIONS = new Set([...FAILURE_CONCLUSIONS, 'cancelled'])
 const DEFERRED_E2E_RETIREMENT_MARKER = '<!-- hive-retired:deferred-e2e -->'
 const SUCCESSFUL_RERUN_RETIREMENT_MARKER = '<!-- hive-retired:successful-rerun -->'
 
+/** @param {unknown} value @param {string} label @returns {string} */
 function requireString(value, label) {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(`${label} must be a non-empty string`)
@@ -17,6 +28,7 @@ function requireString(value, label) {
   return value
 }
 
+/** @param {unknown} value @param {string} label @returns {number} */
 function requireInteger(value, label) {
   if (!Number.isInteger(value) || value < 1) {
     throw new Error(`${label} must be a positive integer`)
@@ -24,6 +36,7 @@ function requireInteger(value, label) {
   return value
 }
 
+/** @param {unknown} value @param {string} label @returns {string} */
 function requireTimestamp(value, label) {
   const timestamp = requireString(value, label)
   if (!Number.isFinite(Date.parse(timestamp))) {
@@ -32,6 +45,7 @@ function requireTimestamp(value, label) {
   return timestamp
 }
 
+/** @param {MainRun} run @returns {string} */
 function requireMainRun(run) {
   if (!run || typeof run !== 'object') throw new Error('run must be an object')
   if (run.name !== 'CI') throw new Error(`expected CI workflow, got ${run.name}`)
@@ -47,6 +61,7 @@ function requireMainRun(run) {
   return headSha.toLowerCase()
 }
 
+/** @param {MainRun} run @returns {string} */
 function requireMainFailure(run) {
   const headSha = requireMainRun(run)
   if (!FAILURE_CONCLUSIONS.has(run.conclusion)) {
@@ -55,11 +70,13 @@ function requireMainFailure(run) {
   return headSha
 }
 
+/** @param {MainRun} run @returns {string} */
 function incidentPathForRun(run) {
   const headSha = requireMainRun(run)
   return `issues/hive-isolated-agent-platform/main-failure-${headSha}.md`
 }
 
+/** @param {unknown} value @returns {string} */
 function safeInline(value) {
   return String(value)
     .replace(/[\r\n]+/g, ' ')
@@ -68,6 +85,7 @@ function safeInline(value) {
     .slice(0, 200)
 }
 
+/** @param {MainJob[]} jobs @returns {string[]} */
 function failedJobNames(jobs) {
   if (!Array.isArray(jobs)) throw new Error('jobs must be an array')
   const names = jobs
@@ -77,6 +95,7 @@ function failedJobNames(jobs) {
   return [...new Set(names)].sort((left, right) => left.localeCompare(right))
 }
 
+/** @param {SourcePullRequest[]} sourcePullRequests @returns {number[]} */
 function pullRequestNumbers(sourcePullRequests) {
   if (!Array.isArray(sourcePullRequests)) {
     throw new Error('sourcePullRequests must be an array')
@@ -90,26 +109,31 @@ function pullRequestNumbers(sourcePullRequests) {
   ].sort((left, right) => left - right)
 }
 
+/** @param {string} body @param {string} field @returns {number[]} */
 function parseNumberList(body, field) {
   const match = body.match(new RegExp(`^${field}:\\s*\\[([^\\]]*)\\]$`, 'm'))
-  if (!match || match[1].trim() === '') return []
-  return match[1]
+  const values = match?.[1]
+  if (!values || values.trim() === '') return []
+  return values
     .split(',')
     .map((value) => Number.parseInt(value.trim(), 10))
     .filter((value) => Number.isInteger(value) && value > 0)
 }
 
+/** @param {string} body @param {string} field @param {string} value @returns {string} */
 function replaceFrontmatterField(body, field, value) {
   const pattern = new RegExp(`^${field}:.*$`, 'm')
   if (!pattern.test(body)) throw new Error(`existing issue is missing ${field}`)
   return body.replace(pattern, `${field}: ${value}`)
 }
 
+/** @param {string} body @returns {string} */
 function clearDeliveryCompletion(body) {
   if (!body.includes('<!-- hive-delivery-complete -->')) return body
   return body.replace(/\n\n## Completion\n[\s\S]*$/, '').replace(/- \[x\]/g, '- [ ]')
 }
 
+/** @param {ProgressEntryInput} input @returns {string} */
 function progressEntry({ run, recordedAt, failures }) {
   const marker = `<!-- main-run:${run.id}:attempt:${run.run_attempt} -->`
   const jobs = failures.length === 0 ? 'workflow-level failure' : failures.join(', ')
@@ -120,20 +144,26 @@ function progressEntry({ run, recordedAt, failures }) {
   ].join('\n')
 }
 
+/** @param {string} body @param {MainRun} run @returns {boolean} */
 function isStaleMainAttempt(body, run) {
   requireMainRun(run)
-  const recorded = [...body.matchAll(/<!-- main-run:(\d+):attempt:(\d+) -->/g)].map(
-    (match) => ({
-      runId: Number.parseInt(match[1], 10),
-      attempt: Number.parseInt(match[2], 10),
-    }),
-  )
+  const recorded = []
+  for (const match of body.matchAll(/<!-- main-run:(\d+):attempt:(\d+) -->/g)) {
+    const runIdText = match[1]
+    const attemptText = match[2]
+    if (!runIdText || !attemptText) continue
+    recorded.push({
+      runId: Number.parseInt(runIdText, 10),
+      attempt: Number.parseInt(attemptText, 10),
+    })
+  }
   return recorded.some(
     (entry) =>
       entry.runId > run.id || (entry.runId === run.id && entry.attempt > run.run_attempt),
   )
 }
 
+/** @param {RetireSuccessfulIssueInput} input @returns {string} */
 function retireSuccessfulMainIssue({ body, run, recordedAt }) {
   requireMainRun(run)
   if (run.conclusion !== 'success') {
@@ -199,6 +229,7 @@ ${SUCCESSFUL_RERUN_RETIREMENT_MARKER}
   return updated.replace(findingsHeading, `\n${entry}\n${findingsHeading}`)
 }
 
+/** @param {ProgressEntryInput & { relatedPrs: number[] }} input @returns {string} */
 function newIssue({ run, recordedAt, failures, relatedPrs }) {
   const shortSha = run.head_sha.slice(0, 12)
   const progress = progressEntry({ run, recordedAt, failures })
@@ -259,6 +290,7 @@ ${progress}
 `
 }
 
+/** @param {UpdateExistingIssueInput} input @returns {string} */
 function updateExistingIssue({ body, run, recordedAt, failures, relatedPrs }) {
   if (typeof body !== 'string' || body.length === 0) {
     throw new Error('existing issue body must be non-empty')
@@ -294,6 +326,7 @@ function updateExistingIssue({ body, run, recordedAt, failures, relatedPrs }) {
   return updated
 }
 
+/** @param {BuildMainFailureIssueInput} input @returns {MainFailureIssue} */
 function buildMainFailureIssue({
   run,
   jobs,
