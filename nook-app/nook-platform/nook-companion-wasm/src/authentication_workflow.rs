@@ -165,7 +165,28 @@ pub enum CompanionAuthenticationWorkflowMatchKind {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use nook_companion_core::{AuthenticationEnrollmentObservation, AuthenticationWorkflowMatch};
+    use serde::Serialize;
+    use wasm_bindgen::{JsError, JsValue};
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    fn js_error(error: impl std::fmt::Display) -> JsError {
+        JsError::new(&error.to_string())
+    }
+
+    fn js_wire(
+        value: serde_json::Value,
+    ) -> Result<nook_companion_core::AuthenticationWorkflowSnapshotResponseWire, JsError> {
+        let value = value
+            .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
+            .map_err(js_error)?;
+        serde_wasm_bindgen::from_value(value).map_err(js_error)
+    }
+
+    fn js_value(value: serde_json::Value) -> Result<JsValue, JsError> {
+        value
+            .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
+            .map_err(js_error)
+    }
 
     #[wasm_bindgen_test]
     fn match_kind_preserves_every_closed_workflow_variant() {
@@ -274,6 +295,57 @@ mod tests {
             ),
             nook_companion_core::ApprovedAuthenticationWorkflowDecision::Rejected
         ));
+    }
+
+    #[wasm_bindgen_test]
+    fn snapshot_decoder_and_saved_login_availability_preserve_typed_boundaries()
+    -> Result<(), JsError> {
+        let matched =
+            super::decode_authentication_workflow_snapshot_response(js_wire(serde_json::json!({
+                "ok": true,
+                "snapshot": {
+                    "kind": 0,
+                    "stage": 0,
+                    "action": 0,
+                    "currentStep": 1,
+                    "totalSteps": 3,
+                    "approvalRequirement": "explicit-user-approval",
+                    "savedLoginCapability": "fill-saved-login",
+                    "observationIndex": 0
+                }
+            }))?)?;
+        assert!(matches!(
+            matched,
+            nook_companion_core::AuthenticationWorkflowSnapshotResponse::Matched { .. }
+        ));
+        assert!(matches!(
+            super::decode_authentication_workflow_snapshot_response(js_wire(
+                serde_json::json!({"ok": true}),
+            )?)?,
+            nook_companion_core::AuthenticationWorkflowSnapshotResponse::NoMatch { .. }
+        ));
+        assert!(matches!(
+            super::decode_authentication_workflow_snapshot_response(js_wire(
+                serde_json::json!({"ok": false, "reason": "rejected"}),
+            )?)?,
+            nook_companion_core::AuthenticationWorkflowSnapshotResponse::Rejected { .. }
+        ));
+
+        let ready: nook_companion_core::SavedLoginActionPresentationRequest =
+            serde_wasm_bindgen::from_value(js_value(serde_json::json!({
+                "action": 4,
+                "loginMatches": {"kind": "ready", "count": 1}
+            }))?)
+            .map_err(js_error)?;
+        assert!(super::saved_login_action_available(ready));
+        let unavailable: nook_companion_core::SavedLoginActionPresentationRequest =
+            serde_wasm_bindgen::from_value(js_value(serde_json::json!({
+                "action": 0,
+                "loginMatches": {"kind": "ready", "count": 1}
+            }))?)
+            .map_err(js_error)?;
+        assert!(!super::saved_login_action_available(unavailable));
+        Ok(())
     }
 }
 

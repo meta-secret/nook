@@ -1,6 +1,11 @@
 #[cfg(test)]
 mod tests {
     use crate::*;
+    use nook_companion_core::{
+        ExtensionEventCount, ExtensionPairingRecord, ExtensionPairingRecordComparison,
+        ExtensionPairingRecordComparisonRequest, ExtensionReadySetup, ExtensionReadySetupStatus,
+        ExtensionSyncProviderCount,
+    };
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
@@ -97,5 +102,43 @@ mod tests {
             supported.unsupported_reason(),
             nook_companion_core::OAuthOriginUnsupportedReason::UnregisteredOrigin
         );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn setup_json_and_pairing_record_comparison_exports_preserve_typed_results()
+    -> Result<(), String> {
+        let setup = ExtensionReadySetup {
+            status: ExtensionReadySetupStatus::Ready,
+            device_label: "Nook Extension".to_owned(),
+            paired_vaults: vec!["store-test".to_owned()],
+            selected_vault_store_id: "store-test".to_owned(),
+            selected_vault_name: "Personal".to_owned(),
+            sync_provider_count: ExtensionSyncProviderCount::from(1),
+            event_count: ExtensionEventCount::from(2),
+            event_log_heads: vec!["event-2".to_owned()],
+            last_local_sync_at: "2026-09-05T00:00:01.000Z".to_owned(),
+        };
+        let serialized = serde_json::to_string(&setup).map_err(|error| error.to_string())?;
+        assert!(is_extension_ready_setup_json(&serialized));
+        assert!(!is_extension_ready_setup_json("{}"));
+
+        assert_eq!(
+            compare_extension_pairing_records(ExtensionPairingRecordComparisonRequest {
+                current: ExtensionPairingRecord::Setup(setup.clone()),
+                migrated: ExtensionPairingRecord::Setup(setup.clone()),
+            }),
+            ExtensionPairingRecordComparison::Equivalent
+        );
+        let mut changed = setup.clone();
+        changed.selected_vault_name = "Work".to_owned();
+        assert_eq!(
+            compare_extension_pairing_records(ExtensionPairingRecordComparisonRequest {
+                current: ExtensionPairingRecord::Setup(changed),
+                migrated: ExtensionPairingRecord::Setup(setup),
+            }),
+            ExtensionPairingRecordComparison::Different
+        );
+        Ok(())
     }
 }
