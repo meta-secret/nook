@@ -409,7 +409,9 @@ fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues
 #[test]
 fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
     let remote_tasks = RepositoryFixture::repository_root().read(".task/remote-execution.yml");
-    assert!(remote_tasks.contains(".github/scripts/require-current-base.sh origin main"));
+    assert!(remote_tasks.contains(
+        "if [ \"$requested_tasks\" != \"build:compile\" ]; then\n          .github/scripts/require-current-base.sh origin main\n        fi"
+    ));
     assert!(remote_tasks.contains("baseRefName"));
 
     let status = Command::new("bash")

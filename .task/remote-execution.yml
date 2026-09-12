@@ -53,7 +53,9 @@ tasks:
           exit 2
         fi
 
-        .github/scripts/require-current-base.sh origin main
+        if [ "$requested_tasks" != "build:compile" ]; then
+          .github/scripts/require-current-base.sh origin main
+        fi
 
         workflow_args=(
           --ref "$branch"
