@@ -30,10 +30,6 @@ const obsoleteRustOutputs = [
     'nook-app/nook-platform/nook-auth2/src/generated/i18n_keys.rs',
   ),
 ]
-const landingMessagesPath = resolve(
-  repositoryRoot,
-  'nook-app/nook-web/nook-web-app/src/landing/messages.js',
-)
 const landingOutput = resolve(
   repositoryRoot,
   'nook-app/nook-web/nook-web-app/src/landing/generated-message-keys.ts',
@@ -94,6 +90,18 @@ function typescriptString(value) {
   return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
 }
 
+/** @param {string} value */
+function camelCase(value) {
+  const segments = value.split('_')
+  return (
+    segments[0] +
+    segments
+      .slice(1)
+      .map((segment) => `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`)
+      .join('')
+  )
+}
+
 /** @param {Catalog} catalog @param {string} key */
 function catalogValue(catalog, key) {
   /** @type {Catalog | CatalogNode} */
@@ -146,6 +154,7 @@ function bootstrapMessagesSource(catalogs) {
 
 /** @param {string[]} keys @param {(key: string) => string} naming @param {string} language */
 function validateNames(keys, naming, language) {
+  /** @type {Map<string, string>} */
   const owners = new Map()
   for (const key of keys) {
     const name = naming(key)
@@ -197,7 +206,7 @@ function typescriptSource(keys) {
     `  ${importGroupNames[prefix]}: {`,
     ...importSuffixes.map(
       (suffix) =>
-        `    ${suffix.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())}: I18N_KEYS.${typescriptName(`${prefix}.${suffix}`)},`,
+        `    ${camelCase(suffix)}: I18N_KEYS.${typescriptName(`${prefix}.${suffix}`)},`,
     ),
     '  },',
   ])
@@ -217,10 +226,7 @@ function typescriptSource(keys) {
     'export type I18nTranslator = (request: I18nTranslationRequest) => string',
     '',
     'export type PasswordImportMessageKeys = {',
-    ...importSuffixes.map(
-      (suffix) =>
-        `  ${suffix.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())}: I18nKey`,
-    ),
+    ...importSuffixes.map((suffix) => `  ${camelCase(suffix)}: I18nKey`),
     '}',
     '',
     'export const PASSWORD_IMPORT_MESSAGE_KEYS = {',
@@ -263,9 +269,27 @@ function rustSource(keys) {
 
 /** @param {string} locale @returns {Promise<Catalog>} */
 async function readCatalog(locale) {
-  return JSON.parse(
+  /** @type {unknown} */
+  const parsed = JSON.parse(
     await readFile(resolve(localeDirectory, `${locale}.json`), 'utf8'),
   )
+  if (!isCatalog(parsed)) {
+    throw new Error(`locale ${locale} must contain a catalog object`)
+  }
+  return parsed
+}
+
+/** @param {unknown} value @returns {value is Catalog} */
+function isCatalog(value) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false
+  }
+  for (const key of Object.keys(value)) {
+    /** @type {unknown} */
+    const child = Reflect.get(value, key)
+    if (typeof child !== 'string' && !isCatalog(child)) return false
+  }
+  return true
 }
 
 /** @param {string[]} englishKeys @param {string[]} russianKeys */
@@ -433,11 +457,7 @@ async function verifyNoRawBrowserMessageKeys() {
 }
 
 async function landingKeys() {
-  const source = await readFile(landingMessagesPath, 'utf8')
-  const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
-  // The URL contains only the local translation catalog read immediately above.
-  // eslint-disable-next-line no-unsanitized/method
-  const { landingMessages } = await import(moduleUrl)
+  const { landingMessages } = await import('../src/landing/messages.js')
   const englishKeys = Object.keys(landingMessages.en).sort()
   const russianKeys = Object.keys(landingMessages.ru).sort()
   compareCatalogKeys(englishKeys, russianKeys)

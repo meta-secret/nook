@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { brotliCompressSync, constants as zlibConstants } from 'node:zlib'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
@@ -82,9 +81,15 @@ const expectedLegacyRoutes = [
   '/extension-connect/*',
   '/extension-connect.html',
 ]
-const pagesRoutes = JSON.parse(
+const pagesRoutesJson: unknown = JSON.parse(
   await readFile(join(siteRoot, '_routes.json'), 'utf8'),
-) as { version?: number; include?: string[]; exclude?: string[] }
+)
+if (!isPagesRoutes(pagesRoutesJson)) {
+  throw new Error(
+    'Public site artifact must invoke its Pages Function only for retired app routes.',
+  )
+}
+const pagesRoutes = pagesRoutesJson
 if (
   pagesRoutes.version !== 1 ||
   JSON.stringify(pagesRoutes.include) !==
@@ -102,10 +107,50 @@ type PagesWorker = {
     env: { ASSETS: { fetch(request: Request): Promise<Response> } },
   ): Promise<Response>
 }
-const workerUrl = `${pathToFileURL(join(siteRoot, '_worker.js')).href}?verify=${Date.now()}`
-// This URL is derived solely from the local build output directory above.
-// eslint-disable-next-line no-unsanitized/method
-const pagesWorker = (await import(workerUrl)).default as PagesWorker
+type PagesRoutes = {
+  version?: number
+  include?: string[]
+  exclude?: string[]
+}
+
+function isPagesRoutes(value: unknown): value is PagesRoutes {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    (!('version' in value) || typeof value.version === 'number') &&
+    (!('include' in value) ||
+      (Array.isArray(value.include) &&
+        value.include.every((route) => typeof route === 'string'))) &&
+    (!('exclude' in value) ||
+      (Array.isArray(value.exclude) &&
+        value.exclude.every((route) => typeof route === 'string')))
+  )
+}
+
+type PagesWorkerModule = {
+  default: PagesWorker
+}
+
+function isPagesWorkerModule(value: unknown): value is PagesWorkerModule {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('default' in value) ||
+    typeof value.default !== 'object' ||
+    value.default === null ||
+    !('fetch' in value.default)
+  ) {
+    return false
+  }
+  return typeof value.default.fetch === 'function'
+}
+
+const pagesWorkerModule: unknown = await import('../dist/site/_worker.js')
+if (!isPagesWorkerModule(pagesWorkerModule)) {
+  throw new Error('Public site Pages Function has an invalid worker contract.')
+}
+const pagesWorker = pagesWorkerModule.default
 class StaticAssetRequestCensus {
   private count = 0
 
