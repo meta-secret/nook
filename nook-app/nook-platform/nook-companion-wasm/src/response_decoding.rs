@@ -91,11 +91,34 @@ pub struct AuthenticatorPreviewAdmission(nook_companion_core::AuthenticatorPrevi
 #[tsify(type = "unknown", from_wasm_abi)]
 pub struct ExtensionSessionStatusAdmission(nook_companion_core::ExtensionSessionStatusResponseWire);
 
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct ExtensionSessionRequestAdmission(nook_companion_core::ExtensionSessionRequestWire);
+
+#[cfg(test)]
+mod session_request_admission_tests {
+    use super::*;
+
+    #[test]
+    fn chrome_session_request_admission_is_unknown_and_schema_checked() {
+        assert!(ExtensionSessionRequestAdmission::DECL.ends_with(" = unknown;"));
+        assert!(serde_json::from_str::<ExtensionSessionRequestAdmission>("null").is_err());
+        assert!(
+            serde_json::from_str::<ExtensionSessionRequestAdmission>(
+                r#"{"type":"nook:extension-session-status","payload":{"queue":{"kind":"message-default"},"unexpected":true}}"#,
+            )
+            .is_err()
+        );
+    }
+}
+
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn validate_extension_session_request(
-    request: nook_companion_core::ExtensionSessionRequestWire,
+    request: ExtensionSessionRequestAdmission,
 ) -> nook_companion_core::ExtensionSessionRequestValidation {
+    let ExtensionSessionRequestAdmission(request) = request;
     drop(request);
     nook_companion_core::ExtensionSessionRequestValidation::Accepted
 }

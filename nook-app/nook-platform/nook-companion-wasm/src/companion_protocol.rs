@@ -15,6 +15,21 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 pub struct CompanionIdentityDiscoveryAdmission(CompanionIdentityDiscoveryObservation);
 
 #[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionExtensionPresenceAdmission(CompanionExtensionPresence);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionIdentityStatusRequestAdmission(CompanionIdentityStatusAdmissionRequest);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionHandoffResponseValueAdmission(CompanionIdentityHandoffResponse);
+
+#[derive(Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[tsify(type = "unknown", from_wasm_abi)]
 pub struct CompanionIdentityHandoffStatusAdmission {
@@ -31,7 +46,8 @@ pub struct NookCompanionExtensionProtocol {
 impl NookCompanionExtensionProtocol {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(presence: CompanionExtensionPresence) -> Result<Self, JsError> {
+    pub fn new(presence: CompanionExtensionPresenceAdmission) -> Result<Self, JsError> {
+        let CompanionExtensionPresenceAdmission(presence) = presence;
         Ok(Self {
             inner: CompanionExtensionProtocol::new(presence)
                 .map_err(|error| JsError::new(&error.to_string()))?,
@@ -62,8 +78,9 @@ impl NookCompanionExtensionProtocol {
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn admit_companion_identity_status(
-    request: CompanionIdentityStatusAdmissionRequest,
+    request: CompanionIdentityStatusRequestAdmission,
 ) -> CompanionIdentityStatusAdmission {
+    let CompanionIdentityStatusRequestAdmission(request) = request;
     CompanionIdentityStatusAdmission::admit(request)
 }
 
@@ -101,8 +118,9 @@ impl NookCompanionExtensionProtocol {
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn admit_companion_handoff_response(
-    response: CompanionIdentityHandoffResponse,
+    response: CompanionHandoffResponseValueAdmission,
 ) -> CompanionHandoffResponseAdmission {
+    let CompanionHandoffResponseValueAdmission(response) = response;
     CompanionHandoffResponseAdmission::admit(response)
 }
 
@@ -113,8 +131,14 @@ mod admission_tests {
     #[test]
     fn chrome_identity_admissions_are_unknown_and_schema_checked() {
         assert!(CompanionIdentityDiscoveryAdmission::DECL.ends_with(" = unknown;"));
+        assert!(CompanionExtensionPresenceAdmission::DECL.ends_with(" = unknown;"));
+        assert!(CompanionIdentityStatusRequestAdmission::DECL.ends_with(" = unknown;"));
+        assert!(CompanionHandoffResponseValueAdmission::DECL.ends_with(" = unknown;"));
         assert!(CompanionIdentityHandoffStatusAdmission::DECL.ends_with(" = unknown;"));
         assert!(serde_json::from_str::<CompanionIdentityDiscoveryAdmission>("null").is_err());
+        assert!(serde_json::from_str::<CompanionExtensionPresenceAdmission>("null").is_err());
+        assert!(serde_json::from_str::<CompanionIdentityStatusRequestAdmission>("null").is_err());
+        assert!(serde_json::from_str::<CompanionHandoffResponseValueAdmission>("null").is_err());
         assert!(serde_json::from_str::<CompanionIdentityHandoffStatusAdmission>("null").is_err());
     }
 
@@ -177,7 +201,7 @@ mod tests {
             .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?;
         let expires_at: CompanionEpochMilliseconds = serde_json::from_str("200")
             .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?;
-        let result = admit_companion_identity_status(CompanionIdentityStatusAdmissionRequest {
+        let request = CompanionIdentityStatusAdmissionRequest {
             discovery: CompanionIdentityDiscoveryObservation {
                 request: CompanionIdentityDiscoveryRequest {
                     request_id: "request-1".to_owned(),
@@ -202,7 +226,13 @@ mod tests {
                 },
             },
             observed_at,
-        });
+        };
+        let request = serde_json::from_value(
+            serde_json::to_value(request)
+                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
+        )
+        .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?;
+        let result = admit_companion_identity_status(request);
         assert!(matches!(
             result,
             CompanionIdentityStatusAdmission::Rejected { .. }

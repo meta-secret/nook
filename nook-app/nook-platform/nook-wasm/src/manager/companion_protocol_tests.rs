@@ -13,7 +13,35 @@ use nook_companion_core::{
 };
 use nook_core::{DeviceIdentity, SigningIdentity, VaultApplication};
 use std::mem;
+use tsify::Tsify;
 use wasm_bindgen_test::wasm_bindgen_test;
+
+#[test]
+fn chrome_companion_admissions_are_unknown_and_schema_checked() {
+    assert!(CompanionIdentityStatusRequestAdmission::DECL.ends_with(" = unknown;"));
+    assert!(CompanionHandoffResponseValueAdmission::DECL.ends_with(" = unknown;"));
+    assert!(CompanionExtensionPresenceAdmission::DECL.ends_with(" = unknown;"));
+    assert!(CompanionHandoffAuthorizationAdmission::DECL.ends_with(" = unknown;"));
+    assert!(serde_json::from_str::<CompanionIdentityStatusRequestAdmission>("null").is_err());
+    assert!(serde_json::from_str::<CompanionHandoffResponseValueAdmission>("null").is_err());
+    assert!(serde_json::from_str::<CompanionExtensionPresenceAdmission>("null").is_err());
+    assert!(serde_json::from_str::<CompanionHandoffAuthorizationAdmission>("null").is_err());
+}
+
+#[test]
+fn presence_admission_preserves_core_validation() -> Result<(), serde_json::Error> {
+    let admission = serde_json::from_str::<CompanionExtensionPresenceAdmission>(
+        r#"{"kind":"locked","vault_type":"simple","vault_store_id":"","vault_name":"Personal"}"#,
+    )?;
+    let CompanionExtensionPresenceAdmission(presence) = admission;
+    assert!(matches!(
+        NookCompanionExtensionEndpoint::from_presence(presence),
+        Err(CompanionOperationError::Protocol(
+            CompanionProtocolError::InvalidValue
+        ))
+    ));
+    Ok(())
+}
 
 fn epoch_milliseconds(
     serialized: &str,

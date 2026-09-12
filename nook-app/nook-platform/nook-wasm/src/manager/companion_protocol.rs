@@ -17,10 +17,32 @@ use nook_core::{
     DeviceId, DeviceIdentity, DevicePublicKey, DeviceSigningPublicKey, SigningIdentity,
     VaultApplication,
 };
+use serde::Deserialize;
 use std::mem;
 use std::rc::Rc;
+use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionIdentityStatusRequestAdmission(CompanionIdentityStatusAdmissionRequest);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionHandoffResponseValueAdmission(CompanionIdentityHandoffResponse);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionExtensionPresenceAdmission(CompanionExtensionPresence);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionHandoffAuthorizationAdmission(CompanionIdentityHandoffAuthorization);
 
 #[derive(Debug, thiserror::Error)]
 enum CompanionOperationError {
@@ -49,8 +71,9 @@ impl NookVaultManager {
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn admit_companion_identity_status(
-    request: CompanionIdentityStatusAdmissionRequest,
+    request: CompanionIdentityStatusRequestAdmission,
 ) -> CompanionIdentityStatusAdmission {
+    let CompanionIdentityStatusRequestAdmission(request) = request;
     CompanionIdentityStatusAdmission::admit(request)
 }
 
@@ -61,8 +84,9 @@ pub fn admit_companion_identity_status(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn admit_companion_handoff_response(
-    response: CompanionIdentityHandoffResponse,
+    response: CompanionHandoffResponseValueAdmission,
 ) -> CompanionHandoffResponseAdmission {
+    let CompanionHandoffResponseValueAdmission(response) = response;
     CompanionHandoffResponseAdmission::admit(response)
 }
 
@@ -122,7 +146,8 @@ struct CompanionAuthorizedSealOperation<'a> {
 impl NookCompanionExtensionEndpoint {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(presence: CompanionExtensionPresence) -> Result<Self, JsError> {
+    pub fn new(presence: CompanionExtensionPresenceAdmission) -> Result<Self, JsError> {
+        let CompanionExtensionPresenceAdmission(presence) = presence;
         Self::from_presence(presence).map_err(|error| NookVaultManager::companion_js_error(&error))
     }
 
@@ -181,8 +206,9 @@ impl NookDiscoveredCompanionExtensionEndpoint {
     pub async fn authorize_and_seal(
         self,
         manager: &mut NookVaultManager,
-        authorization: CompanionIdentityHandoffAuthorization,
+        authorization: CompanionHandoffAuthorizationAdmission,
     ) -> Result<CompanionIdentityHandoffResponse, JsError> {
+        let CompanionHandoffAuthorizationAdmission(authorization) = authorization;
         let authorized = self
             .inner
             .authorize_handoff(authorization)
