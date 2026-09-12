@@ -5,6 +5,7 @@ import { expect, test } from "bun:test";
 import { ok, type Result } from "neverthrow";
 
 import { DevGitRepository, DevelopmentWorktreeSelection, WorktreeInventoryDecoder } from "./dev-git.ts";
+import { DevelopmentCiAttemptPolicy, DevDeliveryContract } from "./dev-github.ts";
 import { DevLock, DevLockName } from "./dev-lock.ts";
 import {
   BranchName,
@@ -16,6 +17,7 @@ import {
   ManagedBranch,
   WorktreeBranchKind,
   WorktreeRecord,
+  WorkflowRunId,
 } from "./dev-types.ts";
 
 const SHA_A = "1111111111111111111111111111111111111111";
@@ -93,4 +95,20 @@ test("exact push uses an ordinary refspec without force or merge policy flags", 
 
 test("commit parser rejects arbitrary build-proof text", () => {
   expect(CommitSha.parse("build succeeded").isErr()).toBe(true);
+});
+
+test("publication CI policy rejects active attempts and permits terminal attempts", () => {
+  const runId = WorkflowRunId.parse(7);
+  expect(runId.isOk()).toBe(true);
+  if (runId.isErr()) return;
+  const policy = new DevelopmentCiAttemptPolicy();
+  expect(policy.requireTerminal([{ runId: runId.value, status: "queued" }]).isErr()).toBe(true);
+  expect(policy.requireTerminal([{ runId: runId.value, status: "in_progress" }]).isErr()).toBe(true);
+  expect(policy.requireTerminal([{ runId: runId.value, status: "completed" }]).isOk()).toBe(true);
+});
+
+test("promotion contract keeps the stable aggregate readiness gate", () => {
+  expect(DevDeliveryContract.promotion.requiredJobs).toEqual([
+    "Dev promotion readiness",
+  ]);
 });

@@ -10,11 +10,14 @@ import {
   type DevFailure,
   type BuildProof,
   type BuildProofRequest,
+  type CiAttempt,
   CommitSha,
-  DevelopmentPullRequest,
+  type DevelopmentCiObservationRequest,
+  type DevelopmentPullRequest,
   PullRequestNumber,
+  PullRequestReviewDecision,
   PullRequestState,
-  PullRequestStatus,
+  type PullRequestStatus,
   RepositorySlug,
   WorkflowRunId,
 } from "./dev-types.ts";
@@ -32,6 +35,20 @@ export const DevDeliveryContract = {
   },
   pagesEnvironment: "github-pages",
 } as const;
+
+/** Rejects every non-terminal prior CI attempt before a dev publication. */
+export class DevelopmentCiAttemptPolicy {
+  requireTerminal(attempts: readonly CiAttempt[]): Result<void, DevFailure> {
+    const active = attempts.find((attempt) => attempt.status !== "completed");
+    if (active) {
+      return err({
+        kind: DevFailureKind.Checks,
+        message: `The prior dev pull-request CI attempt ${active.runId.value()} is ${active.status}; wait for its terminal outcome before changing origin/dev`,
+      });
+    }
+    return ok();
+  }
+}
 
 const remoteRunSchema = z.object({
   databaseId: z.number().int().positive(),
@@ -329,6 +346,25 @@ export class DevGitHubGateway {
     });
   }
 
+  findDevelopmentPullRequest(request: {
+    readonly workingDirectory: string;
+  }): Result<DevelopmentPullRequest | undefined, DevFailure> {
+    const selection = this.openPullRequests(request.workingDirectory);
+    if (selection.isErr()) return err(selection.error);
+    if (selection.value.length > 1) {
+      return err({
+        kind: DevFailureKind.GitHub,
+        message: "More than one open dev-to-main pull request exists; refusing to choose one",
+      });
+    }
+    const selected = selection.value.at(0);
+    if (!selected) return ok(undefined);
+    return this.readPullRequest({
+      number: selected.number,
+      workingDirectory: request.workingDirectory,
+    });
+  }
+
   readPullRequestStatus(request: PullRequestReadRequest): Result<PullRequestStatus, DevFailure> {
     const output = this.successful({
       args: [
@@ -366,6 +402,43 @@ export class DevGitHubGateway {
       state,
       merged: state === PullRequestState.Merged && typeof decoded.value.mergedAt === "string",
     });
+  }
+
+  requireDevelopmentCiTerminal(
+    request: DevelopmentCiObservationRequest,
+  ): Result<void, DevFailure> {
+    const output = this.successful({
+      args: [
+        "run",
+        "list",
+        "--workflow",
+        "ci.yml",
+        "--branch",
+        "dev",
+        "--commit",
+        request.sha.value(),
+        "--event",
+        "pull_request",
+        "--limit",
+        "100",
+        "--json",
+        "databaseId,headBranch,headSha,status,conclusion,event,workflowName",
+      ],
+      workingDirectory: request.workingDirectory,
+    });
+    if (output.isErr()) return err(output.error);
+    const decoded = new GitHubJsonDocument(output.value.stdout).decode(
+      ciRunListSchema,
+    );
+    if (decoded.isErr()) return err(decoded.error);
+    const attempts: CiAttempt[] = [];
+    for (const run of decoded.value) {
+      if (!this.isExactCiRun(run, request.sha)) continue;
+      const runId = WorkflowRunId.parse(run.databaseId);
+      if (runId.isErr()) return err(runId.error);
+      attempts.push({ runId: runId.value, status: run.status });
+    }
+    return new DevelopmentCiAttemptPolicy().requireTerminal(attempts);
   }
 
   requirePromotionEvidence(request: PromotionEvidenceRequest): Result<void, DevFailure> {
@@ -496,6 +569,7 @@ export class DevGitHubGateway {
       baseSha: baseSha.value,
       url: view.url,
       isDraft: view.isDraft,
+      reviewDecision: DevGitHubGateway.reviewDecision(view.reviewDecision),
     });
   }
 
@@ -587,10 +661,13 @@ export class DevGitHubGateway {
       z.object({ reviewDecision: z.string().nullable() }),
     );
     if (decoded.isErr()) return err(decoded.error);
-    if (decoded.value.reviewDecision === "CHANGES_REQUESTED") {
+    const reviewDecision = DevGitHubGateway.reviewDecision(
+      decoded.value.reviewDecision,
+    );
+    if (reviewDecision !== PullRequestReviewDecision.Approved) {
       return err({
         kind: DevFailureKind.Reviews,
-        message: "The dev-to-main pull request has a changes-requested review",
+        message: `The current dev-to-main review decision is ${reviewDecision}; promotion requires APPROVED`,
       });
     }
 
@@ -707,6 +784,22 @@ export class DevGitHubGateway {
     });
     if (output.isErr()) return err(output.error);
     return RepositorySlug.parse(output.value.stdout.trim());
+  }
+
+  private static reviewDecision(input: string | null): PullRequestReviewDecision {
+    if (typeof input !== "string") return PullRequestReviewDecision.Empty;
+    switch (input) {
+      case PullRequestReviewDecision.Approved:
+        return PullRequestReviewDecision.Approved;
+      case PullRequestReviewDecision.ChangesRequested:
+        return PullRequestReviewDecision.ChangesRequested;
+      case PullRequestReviewDecision.ReviewRequired:
+        return PullRequestReviewDecision.ReviewRequired;
+      case PullRequestReviewDecision.Empty:
+        return PullRequestReviewDecision.Empty;
+      default:
+        return PullRequestReviewDecision.Unknown;
+    }
   }
 
   private execute(request: GitHubInvocation): Result<CommandOutput, DevFailure> {

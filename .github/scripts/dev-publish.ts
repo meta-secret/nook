@@ -88,6 +88,27 @@ export class DevPublishCommand {
 
     const remote = this.workspace.git.remoteBranch(ManagedBranch.Dev);
     if (remote.isErr()) return err(remote.error);
+    const priorPullRequest = this.workspace.github.findDevelopmentPullRequest({
+      workingDirectory: this.workspace.root,
+    });
+    if (priorPullRequest.isErr()) return err(priorPullRequest.error);
+    if (priorPullRequest.value) {
+      if (
+        remote.value.presence === RemoteBranchPresence.Present &&
+        !priorPullRequest.value.headSha.equals(remote.value.sha)
+      ) {
+        return err({
+          kind: DevFailureKind.Race,
+          message:
+            "The existing dev-to-main pull request head differs from origin/dev; refusing to change either snapshot",
+        });
+      }
+      const priorCi = this.workspace.github.requireDevelopmentCiTerminal({
+        sha: priorPullRequest.value.headSha,
+        workingDirectory: this.workspace.root,
+      });
+      if (priorCi.isErr()) return err(priorCi.error);
+    }
     if (remote.value.presence === RemoteBranchPresence.Present) {
       const ancestry = this.workspace.git.ancestry({
         ancestor: remote.value.sha,

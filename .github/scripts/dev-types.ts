@@ -167,6 +167,11 @@ export interface BuildProofRequest {
   readonly sha: CommitSha;
 }
 
+export interface DevelopmentCiObservationRequest {
+  readonly sha: CommitSha;
+  readonly workingDirectory: string;
+}
+
 export class WorkflowRunId {
   private constructor(private readonly raw: number) {}
 
@@ -238,12 +243,18 @@ export interface BuildProof {
   readonly runId: WorkflowRunId;
 }
 
+export interface CiAttempt {
+  readonly runId: WorkflowRunId;
+  readonly status: string;
+}
+
 export interface DevelopmentPullRequest {
   readonly number: PullRequestNumber;
   readonly headSha: CommitSha;
   readonly baseSha: CommitSha;
   readonly url: string;
   readonly isDraft: boolean;
+  readonly reviewDecision: PullRequestReviewDecision;
 }
 
 export interface PromotionRequest {
@@ -269,6 +280,14 @@ export enum PullRequestState {
   Open = "OPEN",
   Closed = "CLOSED",
   Merged = "MERGED",
+}
+
+export enum PullRequestReviewDecision {
+  Approved = "APPROVED",
+  ChangesRequested = "CHANGES_REQUESTED",
+  ReviewRequired = "REVIEW_REQUIRED",
+  Empty = "EMPTY",
+  Unknown = "UNKNOWN",
 }
 
 export interface PullRequestStatus {
