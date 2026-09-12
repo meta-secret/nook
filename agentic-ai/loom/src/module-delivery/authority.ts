@@ -344,8 +344,10 @@ export class ModuleSourceAuthority {
         );
       authorities.set(request.evidence, request.authority);
       const key = JSON.stringify(identity(request.evidence));
-      const authorityClosures =
-        closures.get(request.authority) ?? new Map<string, readonly string[]>();
+      let authorityClosures = closures.get(request.authority);
+      if (!authorityClosures) {
+        authorityClosures = new Map<string, readonly string[]>();
+      }
       const existing = authorityClosures.get(key);
       if (
         existing &&

@@ -338,7 +338,7 @@ export class SkillProviderSubprocessScenario {
     const api = Object.values(SubprocessApi).find(
       (candidate) => candidate === value,
     );
-    return api ?? false;
+    return api ? api : false;
   }
 
   static isBunSubprocessCall(expression: ts.Expression): boolean {
@@ -468,7 +468,9 @@ export class SkillProviderSubprocessScenario {
       const symbol = collection.checker.getSymbolAtLocation(collection.node);
       const initializer =
         symbol && collection.initializers.has(symbol)
-          ? (collection.initializers.get(symbol) ?? false)
+          ? (collection.initializers.get(symbol)
+            ? collection.initializers.get(symbol)
+            : false)
           : false;
       if (initializer) {
         const nestedCollection: LiteralCollection = {

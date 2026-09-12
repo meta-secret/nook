@@ -105,6 +105,15 @@ export class AgentWorkflowDelegationAdmissionScenario {
   }
 }
 
+function requiredAttempt(
+  attempts: readonly DelegationAttemptDeclaration[],
+  index: number,
+): DelegationAttemptDeclaration {
+  const attempt = attempts[index];
+  if (!attempt) throw new Error('Attempt is missing.');
+  return attempt;
+}
+
 const REMOVE_DIRECTORY_OPTIONS: {
   readonly recursive: true;
   readonly force: true;
@@ -236,10 +245,7 @@ describe('ordinary delegation admission', () => {
     const expertInput: AdmitDelegationAttemptInput = {
       ...loadInput,
       request: AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        plan.attempts[1] ??
-          (() => {
-            throw new Error('Attempt is missing.');
-          })(),
+        requiredAttempt(plan.attempts, 1),
       ),
     };
     await expect(
@@ -248,10 +254,7 @@ describe('ordinary delegation admission', () => {
 
     const wrongSourceRequest: DelegationAdmissionRequest = {
       ...AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        plan.attempts[0] ??
-          (() => {
-            throw new Error('Attempt is missing.');
-          })(),
+        requiredAttempt(plan.attempts, 0),
       ),
       sourceCommit: 'b'.repeat(40),
     };
@@ -281,10 +284,7 @@ describe('ordinary delegation admission', () => {
     const rootInput: AdmitDelegationAttemptInput = {
       ...loadInput,
       request: AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        plan.attempts[0] ??
-          (() => {
-            throw new Error('Attempt is missing.');
-          })(),
+        requiredAttempt(plan.attempts, 0),
       ),
     };
     await DelegationRunJournal.admitDelegationAttempt(rootInput);
@@ -299,10 +299,7 @@ describe('ordinary delegation admission', () => {
     const specialistInput: AdmitDelegationAttemptInput = {
       ...loadInput,
       request: AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        plan.attempts[2] ??
-          (() => {
-            throw new Error('Attempt is missing.');
-          })(),
+        requiredAttempt(plan.attempts, 2),
       ),
     };
     await expect(

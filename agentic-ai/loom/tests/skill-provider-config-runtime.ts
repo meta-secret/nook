@@ -145,7 +145,7 @@ export class SkillProviderConfigRuntimeScenario {
       ? SkillProviderConfigCommandsScenario.mapping(options)
       : {};
     const mappings = SkillProviderConfigCommandsScenario.mapping(
-      optionsMapping.paths ?? {},
+      optionsMapping.paths ? optionsMapping.paths : {},
     );
     const [baseUrl = '.'] = [optionsMapping.baseUrl];
     if (typeof baseUrl !== 'string')
@@ -190,7 +190,7 @@ export class SkillProviderConfigRuntimeScenario {
       });
     }
     if (!('extends' in document)) return [];
-    const inherited = document.extends ?? false;
+    const inherited = document.extends ? document.extends : false;
     if (inherited === false) return [];
     const parents =
       typeof inherited === 'string'

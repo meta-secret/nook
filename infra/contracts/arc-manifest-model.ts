@@ -2,15 +2,15 @@ import { z } from "zod";
 
 export interface ResourceEnvelope {
   requests?: {
-    cpu?: string | undefined;
-    memory?: string | undefined;
-    "ephemeral-storage"?: string | undefined;
-  } | undefined;
+    cpu?: string;
+    memory?: string;
+    "ephemeral-storage"?: string;
+  };
   limits?: {
-    cpu?: string | undefined;
-    memory?: string | undefined;
-    "ephemeral-storage"?: string | undefined;
-  } | undefined;
+    cpu?: string;
+    memory?: string;
+    "ephemeral-storage"?: string;
+  };
 }
 
 export type ArcEnvironmentVariable =
@@ -22,13 +22,13 @@ export type ArcEnvironmentVariable =
 
 export interface ArcContainer {
   name: string;
-  env?: ArcEnvironmentVariable[] | undefined;
-  resources?: ResourceEnvelope | undefined;
+  env?: ArcEnvironmentVariable[];
+  resources?: ResourceEnvelope;
 }
 
 export interface ArcVolume {
   name: string;
-  hostPath?: { path: string } | undefined;
+  hostPath?: { path: string };
 }
 
 export interface ArcValues {
@@ -37,7 +37,7 @@ export interface ArcValues {
   maxRunners: number;
   template: {
     spec: {
-      runtimeClassName?: string | undefined;
+      runtimeClassName?: string;
       automountServiceAccountToken: boolean;
       initContainers: ArcContainer[];
       containers: ArcContainer[];
@@ -55,14 +55,14 @@ export interface ArcContainerPodTemplate {
 }
 
 export interface WorkflowJob {
-  if?: string | undefined;
-  "runs-on"?: string | undefined;
-  steps?: Array<{ run?: string | undefined; uses?: string | undefined }> | undefined;
-  uses?: string | undefined;
+  if?: string;
+  "runs-on"?: string;
+  steps?: Array<{ run?: string; uses?: string }>;
+  uses?: string;
 }
 
 export interface WorkflowManifest {
-  jobs?: Record<string, WorkflowJob> | undefined;
+  jobs?: Record<string, WorkflowJob>;
 }
 
 const resourceFields = z.object({

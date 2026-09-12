@@ -29,8 +29,9 @@ export class PrStewardInvocationCodec {
       throw new Error('pull request must be a positive integer');
     }
     const configuredPath = argv[3];
-    const path =
-      configuredPath ?? join(homedir(), '.nook/events/pr-steward-client.yaml');
+    const path = configuredPath
+      ? configuredPath
+      : join(homedir(), '.nook/events/pr-steward-client.yaml');
     if (!isAbsolute(path)) throw new Error('credential path must be absolute');
     return { pullRequest, credentialPath: path };
   }
