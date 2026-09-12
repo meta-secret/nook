@@ -20,10 +20,7 @@ export async function focusIdentityContextWhenAvailable(
       focusedReviewButton = false;
       continue;
     }
-    if (
-      reviewButton !== focusedReviewButton ||
-      document.activeElement !== reviewButton
-    ) {
+    if (reviewButton !== focusedReviewButton) {
       reviewButton.focus();
       focusedReviewButton = reviewButton;
       continue;

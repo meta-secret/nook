@@ -58,4 +58,32 @@ describe('login gate identity focus restoration', () => {
       document.querySelector('[data-testid="login-review-identities"]'),
     )
   })
+
+  test('does not reclaim focus after the user navigates away', async () => {
+    document.body.innerHTML =
+      '<button data-testid="login-review-identities"></button><button data-testid="login-unlock-method-keys"></button>'
+    let frame = 0
+
+    await focusIdentityContextWhenAvailable({
+      waitForNextFrame: async () => {
+        frame += 1
+        if (frame === 2) {
+          document
+            .querySelector<HTMLButtonElement>(
+              '[data-testid="login-unlock-method-keys"]',
+            )
+            ?.focus()
+        }
+      },
+      identityContextLoading: () => false,
+      reviewButton: () =>
+        document.querySelector<HTMLButtonElement>(
+          '[data-testid="login-review-identities"]',
+        ) || false,
+    })
+
+    expect(document.activeElement?.getAttribute('data-testid')).toBe(
+      'login-unlock-method-keys',
+    )
+  })
 })
