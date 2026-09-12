@@ -56,32 +56,6 @@ impl WasmSvelteSources<'_> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::WasmSvelteSources;
-
-    #[test]
-    fn checked_source_ranges_preserve_unicode_and_reject_truncation() {
-        let source = "🔐vault";
-        let mut complete = vec![b' '; source.len()];
-        assert!(WasmSvelteSources::copy_source_range(
-            source,
-            &mut complete,
-            0,
-            source.len()
-        ));
-        assert_eq!(complete, source.as_bytes());
-
-        let mut truncated = vec![b' '; source.len() - 1];
-        assert!(!WasmSvelteSources::copy_source_range(
-            source,
-            &mut truncated,
-            0,
-            source.len()
-        ));
-    }
-}
-
 impl WasmSvelteSources<'_> {
     fn collect_svelte_typescript(
         node: tree_sitter::Node<'_>,
@@ -207,5 +181,31 @@ impl WasmSvelteSources<'_> {
             *terminator = b'}';
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WasmSvelteSources;
+
+    #[test]
+    fn checked_source_ranges_preserve_unicode_and_reject_truncation() {
+        let source = "🔐vault";
+        let mut complete = vec![b' '; source.len()];
+        assert!(WasmSvelteSources::copy_source_range(
+            source,
+            &mut complete,
+            0,
+            source.len()
+        ));
+        assert_eq!(complete, source.as_bytes());
+
+        let mut truncated = vec![b' '; source.len() - 1];
+        assert!(!WasmSvelteSources::copy_source_range(
+            source,
+            &mut truncated,
+            0,
+            source.len()
+        ));
     }
 }
