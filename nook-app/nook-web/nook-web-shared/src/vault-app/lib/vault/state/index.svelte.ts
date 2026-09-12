@@ -195,9 +195,9 @@ type VaultDelegatedCallable = (
   ...args: VaultDelegatedArguments
 ) => VaultDelegatedValue;
 
-function isVaultDelegatedCallable(
-  value: VaultDelegatedValue,
-): value is VaultDelegatedCallable {
+function isVaultDelegatedCallable<Value>(
+  value: Value,
+): value is Value & VaultDelegatedCallable {
   return typeof value === "function";
 }
 
@@ -211,7 +211,7 @@ class VaultStateSlicesImplementation {
       const definePropertyArgs: Parameters<typeof Object.defineProperty>[2] = {
         enumerable: true,
         get: () => {
-          const value: VaultDelegatedValue = state[key];
+          const value = state[key];
           if (!isVaultDelegatedCallable(value)) return value;
           return (...args: VaultDelegatedArguments): VaultDelegatedValue =>
             value.apply(state, args);
@@ -267,6 +267,8 @@ class VaultStateSlicesImplementation {
     this.delegateState(delegateStateArgs7);
   }
 }
+
+interface VaultStateSlicesImplementation extends VaultStateSliceFields {}
 
 type VaultStateSlicesConstructor = {
   new (

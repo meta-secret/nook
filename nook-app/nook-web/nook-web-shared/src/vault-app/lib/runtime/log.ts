@@ -553,24 +553,27 @@ class BrowserLogRuntime {
     if (globalThis.fetch === marker.__nookFetchOuter) return;
 
     const originalFetch = globalThis.fetch;
-    const wrapped = async (...fetchRequest: LogFetchRequest): Promise<Response> => {
-      const [input, init] = fetchRequest;
-      const response = await originalFetch(...fetchRequest);
-      if (!response.ok) {
-        const url = this.sanitizeLogUrl(this.resolveFetchUrl(input));
-        if (!this.isIgnoredErrorSource(url)) {
-          const captureDiagnosticArgs3: Parameters<
-            typeof this.captureDiagnostic
-          >[0] = {
-            level: LogLevel.Warn,
-            scope: "fetch",
-            message: `HTTP ${response.status} ${response.statusText} url=${url} method=${((...[v = "GET"]) => v)(init?.method)}`,
-          };
-          this.captureDiagnostic(captureDiagnosticArgs3);
+    const wrapped = Object.assign(
+      async (...fetchRequest: LogFetchRequest): Promise<Response> => {
+        const [input, init] = fetchRequest;
+        const response = await originalFetch(...fetchRequest);
+        if (!response.ok) {
+          const url = this.sanitizeLogUrl(this.resolveFetchUrl(input));
+          if (!this.isIgnoredErrorSource(url)) {
+            const captureDiagnosticArgs3: Parameters<
+              typeof this.captureDiagnostic
+            >[0] = {
+              level: LogLevel.Warn,
+              scope: "fetch",
+              message: `HTTP ${response.status} ${response.statusText} url=${url} method=${((...[v = "GET"]) => v)(init?.method)}`,
+            };
+            this.captureDiagnostic(captureDiagnosticArgs3);
+          }
         }
-      }
-      return response;
-    };
+        return response;
+      },
+      { preconnect: originalFetch.preconnect },
+    );
     marker.__nookFetchOuter = wrapped;
     globalThis.fetch = wrapped;
   }

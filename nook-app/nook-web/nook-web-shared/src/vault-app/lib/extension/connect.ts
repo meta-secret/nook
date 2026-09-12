@@ -31,7 +31,7 @@ type ChromeRuntimeHost = {
     message: unknown,
     callback: (response?: unknown) => void,
   ) => void;
-  lastError?: { message?: string };
+  lastError?: { message?: string } | undefined;
 };
 
 type ExtensionBrowserHost = typeof globalThis & {
@@ -202,15 +202,12 @@ export type ExtensionPairingDelivery =
       readonly reason?: ExtensionPairingRejectionReason;
     };
 
-function isAcceptedIdentityHandoffResponse(
-  value: unknown,
-): value is {
+function isAcceptedIdentityHandoffResponse(value: unknown): value is {
   readonly ok: true;
   readonly envelope: string;
   readonly nextNonce: string;
 } {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    return false;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   return (
     "ok" in value &&
     value.ok === true &&
