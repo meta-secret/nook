@@ -148,10 +148,14 @@ mod tests {
     #[cfg(target_os = "linux")]
     use std::collections::HashSet;
     use std::fs;
+    #[cfg(target_os = "linux")]
     use std::io;
+    #[cfg(target_os = "linux")]
     use std::path;
     use std::process::Command as StdCommand;
+    #[cfg(target_os = "linux")]
     use std::time;
+    #[cfg(target_os = "linux")]
     use tokio::time as async_time;
 
     use super::WorkbenchCheckout;

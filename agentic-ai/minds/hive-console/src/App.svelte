@@ -13,7 +13,6 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     CheckCircle2,
     CircleDashed,
     Clock3,
-    Filter,
     GitCommitHorizontal,
     Hexagon,
     Layers,
