@@ -1,6 +1,6 @@
 # Pull requests: run Rust/WASM/JS unit tests, Svelte/type/lint/format checks, build no-opt WASM,
-# build and deploy the preview, and the shared Rust ecosystem gates. Full browser regression e2e
-# is opt-in through the `ci:full-e2e` label for PRs that repair a Main failure. Authentication-
+# build and deploy the preview, and the shared Rust ecosystem gates. Dev PRs always request the
+# ordinary validation suite; full browser regression remains an explicit ci:full-e2e opt-in. Authentication-
 # sensitive extension changes run one focused real-extension spec. Headless UI demos are
 # temporarily disabled while their implementation remains available for later re-enable.
 # Main still runs the full local-provider and extension suites. Live-provider
@@ -8,8 +8,8 @@
 # Research-only changes are handled by web-research.yml. Cortex, Cursor,
 # Vale-policy, repository-policy-only, and agentic-AI-only changes do not need the product
 # pipeline. Agent statistics live in meta-secret/nook-workbench.
-# Central ci.yml requests this reusable component only for explicit validation labels.
-# It owns event selection and native cancellation.
+# Central ci.yml owns event selection and native cancellation. Dev callers pass an immutable source
+# SHA so every checkout and evidence path stays on the PR head rather than a merge ref.
 
 name: PR
 
@@ -22,6 +22,10 @@ on:
       validation_requested:
         required: true
         type: boolean
+      source_sha:
+        required: false
+        default: ''
+        type: string
 
 permissions:
   actions: read
@@ -68,6 +72,7 @@ jobs:
       fuzz_seconds: "20"
       isolated_cache_write: "true"
       native_coverage_provided: true
+      source_sha: ${{ inputs.source_sha }}
 
   rust:
     name: Native Rust verification
@@ -79,6 +84,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
@@ -216,6 +225,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
@@ -361,6 +374,10 @@ jobs:
       - name: Checkout
         if: needs.wasm.outputs.run-node-tests == 'true'
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Docker setup
         if: needs.wasm.outputs.run-node-tests == 'true'
@@ -411,6 +428,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Enforce the UI demo contract
         id: ui-demo-contract
@@ -746,6 +767,10 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node for host Pages deploy
         if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
@@ -912,6 +937,8 @@ jobs:
     needs: rust
     uses: ./.github/workflows/pr-coverage.yml
     secrets: inherit
+    with:
+      source_sha: ${{ inputs.source_sha }}
 
   full-e2e-shard:
     name: Full browser e2e shard (${{ matrix.shard }}/2)

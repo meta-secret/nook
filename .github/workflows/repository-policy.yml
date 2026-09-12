@@ -2,6 +2,12 @@ name: Repository policy
 
 on:
   workflow_call:
+    inputs:
+      source_sha:
+        description: Exact pull-request head SHA for source-pinned checkouts.
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -14,6 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v6
         with:
@@ -34,6 +41,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 

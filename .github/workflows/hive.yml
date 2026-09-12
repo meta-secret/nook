@@ -6,6 +6,12 @@ run-name: >-
 
 on:
   workflow_call:
+    inputs:
+      source_sha:
+        description: Exact pull-request head SHA for source-pinned checkouts.
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -33,6 +39,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Task
         uses: go-task/setup-task@v2
@@ -107,6 +117,10 @@ jobs:
     steps:
       - name: Checkout untrusted source without private credentials
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Task
         uses: go-task/setup-task@v2
@@ -133,6 +147,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Task
         uses: go-task/setup-task@v2
@@ -198,6 +216,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Task
         uses: go-task/setup-task@v2

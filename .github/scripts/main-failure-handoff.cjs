@@ -234,7 +234,7 @@ request while preserving the failing revision and workflow evidence.
   artifacts.
 - Implement the smallest root-cause fix with behavior-focused regression
   coverage.
-- Add the \`ci:full-e2e\` label because the problem was observed on Main.
+- Follow the feature remote \`build:compile\` and local dev integration path; the dev manager owns the full dev PR promotion.
 - Do not bypass checks, weaken cache isolation, or push directly to Main.
 
 ## Acceptance criteria
@@ -242,7 +242,7 @@ request while preserving the failing revision and workflow evidence.
 - [ ] The failure is explained and fixed with targeted regression coverage.
 - [ ] The fix PR passes exact-head repository-owned checks, including the
   Main-equivalent browser suites.
-- [ ] The fix is squash-merged and the incident records its PR and validation.
+- [ ] The fix is promoted through the dev PR after exact-head validation, and the incident records its PR and validation.
 
 ## Progress
 
