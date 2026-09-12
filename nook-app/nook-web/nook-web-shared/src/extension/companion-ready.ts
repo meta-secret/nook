@@ -10,10 +10,6 @@ import {
   ExtensionConnectScope,
 } from "./extension-connect-scope";
 
-type ChromeRuntime = {
-  runtime?: { getURL?: (path: string) => string };
-};
-
 type BunFileApi = {
   file: (path: string) => {
     exists: () => boolean | Promise<boolean>;
@@ -39,7 +35,6 @@ type CompanionWasmBytes =
 declare const __NOOK_COMPANION_WASM_BYTES__: string;
 declare const Bun: BunFileApi;
 declare const process: {
-  versions?: { node?: string };
   cwd?: () => string;
   env?: Record<string, string>;
 };
@@ -47,8 +42,14 @@ declare const process: {
 const SEALED_COMPANION_WASM_PATH =
   "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm";
 
-function runningUnderNode(): boolean {
-  return typeof process === "object" && Boolean(process.versions?.node);
+function chromeRuntimeUrl(path: string): string | false {
+  if (
+    typeof chrome !== "object" ||
+    typeof chrome.runtime?.getURL !== "function"
+  ) {
+    return false;
+  }
+  return chrome.runtime.getURL(path);
 }
 
 function toArrayBuffer(source: ArrayLike<number>): ArrayBuffer {
@@ -82,13 +83,9 @@ function embeddedCompanionWasmBytes(): CompanionWasmBytes {
 
 async function companionWasmDiskCandidates(): Promise<string[]> {
   const fromEnv = ((v) => (v ? v : ""))(
-    typeof process !== "object"
-      ? ""
-      : process.env?.NOOK_COMPANION_WASM_PATH?.trim(),
+    process.env?.NOOK_COMPANION_WASM_PATH?.trim(),
   );
-  const cwd = ((v) => (v ? v : ""))(
-    typeof process !== "object" ? "" : process.cwd?.(),
-  );
+  const cwd = ((v) => (v ? v : ""))(process.cwd?.());
   const join = (...parts: CompanionWasmPathSegments) => parts.join("/");
   return [
     fromEnv,
@@ -106,23 +103,21 @@ async function companionWasmDiskCandidates(): Promise<string[]> {
 }
 
 async function readCompanionWasmFromDisk(): Promise<CompanionWasmBytes> {
-  if (!runningUnderNode()) {
+  if (typeof Bun !== "object") {
     return { kind: CompanionWasmBytesKind.Absent };
   }
   const candidates = await companionWasmDiskCandidates();
-  if (typeof Bun === "object") {
-    for (const candidate of candidates) {
-      try {
-        const file = Bun.file(candidate);
-        if (await file.exists()) {
-          return {
-            kind: CompanionWasmBytesKind.Present,
-            bytes: await file.arrayBuffer(),
-          };
-        }
-      } catch {
-        // Try the next candidate / Node fs fallback.
+  for (const candidate of candidates) {
+    try {
+      const file = Bun.file(candidate);
+      if (await file.exists()) {
+        return {
+          kind: CompanionWasmBytesKind.Present,
+          bytes: await file.arrayBuffer(),
+        };
       }
+    } catch {
+      // Try the next Bun file candidate.
     }
   }
   return { kind: CompanionWasmBytesKind.Absent };
@@ -174,11 +169,8 @@ async function companionWasmModuleOrPath(): Promise<CompanionWasmModule> {
     };
   }
 
-  const chromeGlobal = (globalThis as { chrome?: ChromeRuntime }).chrome;
-  if (chromeGlobal?.runtime?.getURL) {
-    const packaged = chromeGlobal.runtime.getURL(
-      "content/nook_companion_wasm_bg.wasm",
-    );
+  const packaged = chromeRuntimeUrl("content/nook_companion_wasm_bg.wasm");
+  if (packaged) {
     const packagedBytes = await fetchCompanionWasmBytes(packaged);
     if (packagedBytes.kind === CompanionWasmBytesKind.Present) {
       return {
@@ -186,16 +178,11 @@ async function companionWasmModuleOrPath(): Promise<CompanionWasmModule> {
         moduleOrPath: packagedBytes.bytes,
       };
     }
-    // Node/Bun unit tests often stub chrome.runtime.getURL without a fetchable
-    // packaged WASM. Do not hand wasm-bindgen a chrome-extension: URL there —
-    // Bun's fetch only accepts http(s)/s3 and the stub would fail the suite.
-    if (!runningUnderNode()) {
-      return { kind: CompanionWasmModuleKind.Present, moduleOrPath: packaged };
-    }
+    throw new Error("packaged companion WASM bytes unavailable");
   }
 
-  // Node/Vite unit tests: let wasm-bindgen resolve via import.meta.url next to
-  // the generated glue. Content bundles strip that fallback at build time.
+  // Test hosts without embedded, Bun, or Chrome sources use wasm-bindgen's
+  // canonical import.meta.url resolution next to the generated glue.
   return { kind: CompanionWasmModuleKind.Absent };
 }
 
