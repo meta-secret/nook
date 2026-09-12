@@ -1,29 +1,52 @@
-const assert = require('node:assert/strict')
-const test = require('node:test')
+/** @type {(moduleName: string) => unknown} */
+const loadBuiltin = /** @type {(moduleName: string) => unknown} */ (process.getBuiltinModule.bind(process))
+/** @type {typeof import('node:assert/strict')} */
+const assert = /** @type {typeof import('node:assert/strict')} */ (loadBuiltin('node:assert/strict'))
+/** @type {typeof import('node:test')} */
+const test = /** @type {typeof import('node:test')} */ (loadBuiltin('node:test'))
 
+/** @template T @param {string} modulePath @returns {T} */
+function loadModule(modulePath) {
+  const loaded = /** @type {unknown} */ (module.require(modulePath))
+  return /** @type {T} */ (loaded)
+}
+
+/** @typedef {{ Found: 'found', Unavailable: 'unavailable' }} CoverageKinds */
+/** @typedef {{ kind: 'found', artifact: { artifactId: number, runId: number } } | { kind: 'unavailable' }} CoverageResult */
+/** @typedef {{ BaseCoverageArtifactKind: CoverageKinds, coverageArtifactName: (sha: string) => string, findBaseCoverageArtifact: (input: { github: unknown, owner: string, repo: string, baseSha: string, defaultBranch: string }) => Promise<CoverageResult> }} CoverageModule */
+/** @type {CoverageModule} */
+const coverage = loadModule('./base-coverage-artifact.cjs')
 const {
   BaseCoverageArtifactKind,
   coverageArtifactName,
   findBaseCoverageArtifact,
-} = require('./base-coverage-artifact.cjs')
+} = coverage
 
 const BASE_SHA = '0123456789abcdef0123456789abcdef01234567'
 
+/** @typedef {{ id: number, name: string, expired?: boolean, workflow_run?: { id?: number } }} FixtureArtifact */
+/** @typedef {{ id: number, name: string, path?: string, head_branch?: string, head_sha?: string, event?: string }} FixtureRun */
+/** @typedef {{ operation: 'list', options: { owner: string, repo: string, name: string, per_page: number } } | { operation: 'get', runId: number }} FixtureCall */
+/** @param {{ artifacts: FixtureArtifact[], runs: Record<number, FixtureRun> }} input */
 function githubFixture({ artifacts, runs }) {
+  /** @type {FixtureCall[]} */
   const calls = []
   return {
     calls,
     github: {
-      paginate: async (_method, options) => {
+      paginate: /** @param {unknown} _method @param {{ owner: string, repo: string, name: string, per_page: number }} options @returns {Promise<FixtureArtifact[]>} */ (_method, options) => {
         calls.push({ operation: 'list', options })
-        return artifacts
+        return Promise.resolve(artifacts)
       },
       rest: {
         actions: {
           listArtifactsForRepo: Symbol('listArtifactsForRepo'),
-          getWorkflowRun: async ({ run_id: runId }) => {
+          getWorkflowRun: /** @param {{ owner: string, repo: string, run_id: number }} input @returns {Promise<{ data: FixtureRun }>} */ (input) => {
+            const runId = input.run_id
             calls.push({ operation: 'get', runId })
-            return { data: runs[runId] }
+            const run = runs[runId]
+            if (!run) throw new Error(`missing fixture run ${runId}`)
+            return Promise.resolve({ data: run })
           },
         },
       },
@@ -31,6 +54,7 @@ function githubFixture({ artifacts, runs }) {
   }
 }
 
+/** @param {Partial<FixtureRun> & { status?: string, conclusion?: string }} [overrides] */
 function mainRun(overrides = {}) {
   return {
     id: 41,
@@ -44,7 +68,7 @@ function mainRun(overrides = {}) {
   }
 }
 
-test('builds a commit-keyed coverage artifact name', () => {
+void test('builds a commit-keyed coverage artifact name', () => {
   assert.equal(
     coverageArtifactName(BASE_SHA),
     `nook-core-auth-coverage-${BASE_SHA}`,
@@ -52,7 +76,7 @@ test('builds a commit-keyed coverage artifact name', () => {
   assert.throws(() => coverageArtifactName('main'), /full lowercase Git commit/)
 })
 
-test('uses an artifact as soon as the Main Rust job publishes it', async () => {
+void test('uses an artifact as soon as the Main Rust job publishes it', async () => {
   const name = coverageArtifactName(BASE_SHA)
   const { github, calls } = githubFixture({
     artifacts: [
@@ -79,10 +103,12 @@ test('uses an artifact as soon as the Main Rust job publishes it', async () => {
       artifact: { artifactId: 99, runId: 41 },
     },
   )
-  assert.equal(calls[0].options.name, name)
+  const firstCall = calls[0]
+  if (!firstCall || firstCall.operation !== 'list') throw new Error('missing list call')
+  assert.equal(firstCall.options.name, name)
 })
 
-test('uses a valid Rust artifact even if a later Main job failed', async () => {
+void test('uses a valid Rust artifact even if a later Main job failed', async () => {
   const name = coverageArtifactName(BASE_SHA)
   const { github } = githubFixture({
     artifacts: [
@@ -117,7 +143,7 @@ test('uses a valid Rust artifact even if a later Main job failed', async () => {
   )
 })
 
-test('rejects expired and untrusted workflow artifacts', async () => {
+void test('rejects expired and untrusted workflow artifacts', async () => {
   const name = coverageArtifactName(BASE_SHA)
   const { github } = githubFixture({
     artifacts: [

@@ -1,7 +1,9 @@
 "use strict";
 
-const fs = require("node:fs");
-const path = require("node:path");
+/** @type {typeof import("node:fs")} */
+const fs = process.getBuiltinModule("node:fs");
+/** @type {typeof import("node:path")} */
+const path = process.getBuiltinModule("node:path");
 
 const accessKey = process.env["INPUT_SCCACHE-ACCESS-KEY"] || "";
 const secretKey = process.env["INPUT_SCCACHE-SECRET-KEY"] || "";

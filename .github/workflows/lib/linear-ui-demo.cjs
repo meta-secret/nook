@@ -1,6 +1,6 @@
-const crypto = require('node:crypto')
-const fs = require('node:fs/promises')
-const path = require('node:path')
+const crypto = process.getBuiltinModule('node:crypto')
+const fs = process.getBuiltinModule('node:fs/promises')
+const path = process.getBuiltinModule('node:path')
 
 /** @typedef {{ id: string, type: string }} LinearWorkflowState */
 /** @typedef {{ id: string, body: string }} LinearComment */
@@ -29,6 +29,12 @@ const UiDemoIssueTransitionKind = Object.freeze({
 
 const LINEAR_GRAPHQL_URL = 'https://api.linear.app/graphql'
 const VIDEO_CONTENT_TYPE = 'video/webm'
+
+/** @param {Response} response @returns {Promise<unknown>} */
+async function readJson(response) {
+  const json = /** @type {() => Promise<unknown>} */ (response.json.bind(response))
+  return json()
+}
 
 /** @param {string} repository @param {number} prNumber @returns {string} */
 const issueMarker = (repository, prNumber) =>
@@ -118,7 +124,7 @@ class LinearApi {
       body: JSON.stringify({ query, variables }),
     })
     /** @type {LinearGraphqlPayload} */
-    const payload = await response.json()
+    const payload = /** @type {LinearGraphqlPayload} */ (await readJson(response))
 
     if (!response.ok || payload.errors?.length) {
       const details = payload.errors?.map(({ message }) => message).join('; ') || response.statusText

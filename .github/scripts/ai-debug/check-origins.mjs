@@ -8,11 +8,81 @@ import { fileURLToPath } from 'node:url'
 /** @typedef {{ mcpServers?: { playwright?: CursorPlaywrightConfig } }} CursorMcpConfig */
 /** @typedef {{ name: string, enabled: boolean, transport: { type: string, command: string, args: string[] } }} CodexMcpServer */
 
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** @param {string} text @returns {unknown} */
+function parseJson(text) {
+  const parse = /** @type {(source: string) => unknown} */ (JSON.parse.bind(JSON))
+  return parse(text)
+}
+
+/** @param {unknown} value @returns {string[]} */
+function parseStringArray(value) {
+  if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) {
+    throw new Error('expected a JSON array of strings')
+  }
+  return value
+}
+
+/** @param {unknown} value @returns {CursorMcpConfig} */
+function parseCursorMcpConfig(value) {
+  if (!isRecord(value)) throw new Error('expected a Cursor MCP object')
+  const servers = value.mcpServers
+  if (servers === undefined) return {}
+  if (!isRecord(servers)) throw new Error('mcpServers must be an object')
+  const playwright = servers.playwright
+  if (playwright === undefined) return { mcpServers: {} }
+  if (!isRecord(playwright) || typeof playwright.command !== 'string') {
+    throw new Error('playwright MCP configuration is invalid')
+  }
+  const args = playwright.args
+  const parsedArgs = args === undefined ? undefined : parseStringArray(args)
+  return {
+    mcpServers: {
+      playwright: {
+        command: playwright.command,
+        ...(parsedArgs === undefined ? {} : { args: parsedArgs }),
+      },
+    },
+  }
+}
+
+/** @param {unknown} value @returns {CodexMcpServer[]} */
+function parseCodexMcpServers(value) {
+  if (!Array.isArray(value)) throw new Error('Codex MCP list must be an array')
+  return value.map((entry) => {
+    if (!isRecord(entry) || typeof entry.name !== 'string' || typeof entry.enabled !== 'boolean' || !isRecord(entry.transport)) {
+      throw new Error('Codex MCP server entry is invalid')
+    }
+    const { transport } = entry
+    if (typeof transport.type !== 'string' || typeof transport.command !== 'string') {
+      throw new Error('Codex MCP transport is invalid')
+    }
+    const args = parseStringArray(transport.args)
+    return { name: entry.name, enabled: entry.enabled, transport: { type: transport.type, command: transport.command, args } }
+  })
+}
+
+/** @param {unknown} value @returns {string} */
+function errorText(value) {
+  if (typeof value === 'string') return value
+  if (value instanceof Error) return value.message
+  try {
+    const serialized = JSON.stringify(value)
+    return serialized ?? 'unknown error'
+  } catch {
+    return 'unknown error'
+  }
+}
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 /** @type {string[]} */
-const expected = JSON.parse(
+const expected = parseStringArray(parseJson(
   readFileSync(join(root, '.github/scripts/ai-debug/allowed-origins.json'), 'utf8'),
-)
+))
 
 /** @param {string} message @returns {never} */
 function fail(message) {
@@ -82,8 +152,7 @@ assertSameOrigins(
 const cursorMcpPath = join(root, '.cursor/mcp.json')
 let cursorConfigured = false
 if (fileExists(cursorMcpPath)) {
-  /** @type {CursorMcpConfig} */
-  const cursorMcp = JSON.parse(readFileSync(cursorMcpPath, 'utf8'))
+  const cursorMcp = parseCursorMcpConfig(parseJson(readFileSync(cursorMcpPath, 'utf8')))
   const playwright = cursorMcp?.mcpServers?.playwright
   if (!playwright) {
     fail('.cursor/mcp.json must define mcpServers.playwright.')
@@ -122,8 +191,7 @@ try {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   })
-  /** @type {CodexMcpServer[]} */
-  const servers = JSON.parse(raw)
+  const servers = parseCodexMcpServers(parseJson(raw))
   const server = servers.find(({ name }) => name === 'playwright')
   if (!server?.enabled) {
     throw new Error(
@@ -155,8 +223,8 @@ try {
 } catch (error) {
   codexError =
     error && typeof error === 'object' && 'stderr' in error
-      ? String(error.stderr || (error instanceof Error ? error.message : error))
-      : String(error instanceof Error ? error.message : error)
+      ? errorText(error.stderr)
+      : errorText(error)
 }
 
 if (!codexConfigured && !cursorConfigured) {
