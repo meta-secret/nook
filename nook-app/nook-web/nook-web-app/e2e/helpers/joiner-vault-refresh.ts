@@ -7,7 +7,10 @@ export type RefreshJoinerVaultOnLoginGateArgs = {
   authStorageSyncFailedKey: string
 }
 
-export type RefreshJoinerVaultOnLoginGateOutcome = 'refreshed' | 'busy'
+export enum RefreshJoinerVaultOnLoginGateOutcome {
+  Refreshed = 'refreshed',
+  Busy = 'busy',
+}
 
 export async function refreshJoinerVaultOnLoginGate(
   args: RefreshJoinerVaultOnLoginGateArgs,
@@ -35,7 +38,7 @@ export async function refreshJoinerVaultOnLoginGateIfIdle(
   args: RefreshJoinerVaultOnLoginGateArgs,
 ): Promise<RefreshJoinerVaultOnLoginGateOutcome> {
   const vault = (window as VaultDebugWindow).__nookVault
-  if (vault?.isVerifying) return 'busy'
+  if (vault?.isVerifying) return RefreshJoinerVaultOnLoginGateOutcome.Busy
   await refreshJoinerVaultOnLoginGate(args)
-  return 'refreshed'
+  return RefreshJoinerVaultOnLoginGateOutcome.Refreshed
 }

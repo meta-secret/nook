@@ -12,6 +12,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   refreshJoinerVaultOnLoginGate,
   refreshJoinerVaultOnLoginGateIfIdle,
+  RefreshJoinerVaultOnLoginGateOutcome,
 } from '../../../e2e/helpers/joiner-vault-refresh'
 
 const installVault = (
@@ -40,7 +41,7 @@ describe('joiner vault refresh', () => {
       authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
     })
 
-    expect(outcome).toBe('busy')
+    expect(outcome).toBe(RefreshJoinerVaultOnLoginGateOutcome.Busy)
     expect(syncFromStorage).not.toHaveBeenCalled()
   })
 

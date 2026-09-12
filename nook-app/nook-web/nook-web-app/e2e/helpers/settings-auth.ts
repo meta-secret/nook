@@ -35,14 +35,15 @@ export type DeviceProtectionAuthorizationObservation = {
   readonly workspaceUnlocked: boolean
 }
 
-export type DeviceProtectionAuthorizationGateState =
-  | 'overlay'
-  | 'unlock'
-  | 'picker'
-  | 'locked-access'
-  | 'authorize'
-  | 'unlocked'
-  | 'waiting'
+export enum DeviceProtectionAuthorizationGateState {
+  Overlay = 'overlay',
+  Unlock = 'unlock',
+  Picker = 'picker',
+  LockedAccess = 'locked-access',
+  Authorize = 'authorize',
+  Unlocked = 'unlocked',
+  Waiting = 'waiting',
+}
 
 export function deviceProtectionAuthorizationGateState({
   overlayVisible,
@@ -52,13 +53,17 @@ export function deviceProtectionAuthorizationGateState({
   authorizeReady,
   workspaceUnlocked,
 }: DeviceProtectionAuthorizationObservation): DeviceProtectionAuthorizationGateState {
-  if (overlayVisible) return 'overlay'
-  if (unlockVisible) return 'unlock'
-  if (pickerVisible) return 'picker'
-  if (lockedAccessVisible) return 'locked-access'
-  if (workspaceUnlocked) return 'unlocked'
-  if (authorizeReady) return 'authorize'
-  return 'waiting'
+  if (overlayVisible) return DeviceProtectionAuthorizationGateState.Overlay
+  if (unlockVisible) return DeviceProtectionAuthorizationGateState.Unlock
+  if (pickerVisible) return DeviceProtectionAuthorizationGateState.Picker
+  if (lockedAccessVisible) {
+    return DeviceProtectionAuthorizationGateState.LockedAccess
+  }
+  if (workspaceUnlocked) {
+    return DeviceProtectionAuthorizationGateState.Unlocked
+  }
+  if (authorizeReady) return DeviceProtectionAuthorizationGateState.Authorize
+  return DeviceProtectionAuthorizationGateState.Waiting
 }
 
 /** Expand the login enrollment accordion on the login gate. */
