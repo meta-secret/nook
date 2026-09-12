@@ -1,6 +1,6 @@
 //! Full provider selection avoids a second host lookup after Rust grants eligibility.
 use super::{AuthProvidersSnapshotData, SharedGrantProviderSelection, StorageProviderData};
-use crate::{OauthFilePreset, SharedStorageTargetSelection};
+use crate::{OAuthFilePreset, SharedStorageTargetSelection};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -9,7 +9,7 @@ use tsify::Tsify;
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SharedGrantProviderRequest {
     pub snapshot: AuthProvidersSnapshotData,
-    pub preset: OauthFilePreset,
+    pub preset: OAuthFilePreset,
     pub target: SharedStorageTargetSelection,
 }
 #[derive(Debug, Serialize, Deserialize, Tsify)]
@@ -41,7 +41,7 @@ mod tests {
     fn empty_catalog_requires_authorization_without_fake_selected_identifier() {
         let request = SharedGrantProviderRequest {
             snapshot: AuthProvidersSnapshotData::default(),
-            preset: OauthFilePreset::GoogleDrive,
+            preset: OAuthFilePreset::GoogleDrive,
             target: SharedStorageTargetSelection::Create,
         };
         assert!(matches!(
@@ -63,7 +63,7 @@ mod selection_tests {
         let mut row = StorageProviderData::github("selected", "Shared provider", "", "", "now");
         row.provider_type = StorageProviderType::OauthFile;
         row.oauth_file = StoredOAuthFileConfiguration::Configured(OAuthFileConfigData {
-            preset: OauthFilePreset::GoogleDrive,
+            preset: OAuthFilePreset::GoogleDrive,
             access_token: StoredOAuthAccessCredential::AccessToken("credential".into()),
             ..Default::default()
         });
@@ -72,7 +72,7 @@ mod selection_tests {
                 providers: vec![row.clone()],
                 ..Default::default()
             },
-            preset: OauthFilePreset::GoogleDrive,
+            preset: OAuthFilePreset::GoogleDrive,
             target: SharedStorageTargetSelection::Create,
         }
         .select();

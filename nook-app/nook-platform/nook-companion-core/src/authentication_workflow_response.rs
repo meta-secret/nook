@@ -161,12 +161,32 @@ pub struct AuthenticationWorkflowRuntimeResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(tag = "state", rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
+pub enum AuthenticationWorkflowSelectedFactsWire {
+    Selected {
+        facts: Box<AuthenticationPageObservationFacts>,
+    },
+    NotApplicable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[serde(tag = "state", rename_all = "camelCase")]
+#[tsify(into_wasm_abi)]
+pub enum AuthenticationWorkflowSelectedFacts {
+    Selected {
+        facts: Box<AuthenticationPageObservationFacts>,
+    },
+    NotApplicable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[tsify(from_wasm_abi)]
 pub struct AuthenticationWorkflowRoutingResponseWire {
     workflow: AuthenticationWorkflowSnapshotResponseWire,
     login_matches: WebsiteLoginMatchAvailabilityWire,
-    selected_facts: Option<AuthenticationPageObservationFacts>,
+    selected_facts: AuthenticationWorkflowSelectedFactsWire,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
@@ -175,8 +195,7 @@ pub struct AuthenticationWorkflowRoutingResponseWire {
 pub struct AuthenticationWorkflowRoutingResponse {
     pub workflow: AuthenticationWorkflowSnapshotResponse,
     pub login_matches: WebsiteLoginMatchAvailability,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub selected_facts: Option<AuthenticationPageObservationFacts>,
+    pub selected_facts: AuthenticationWorkflowSelectedFacts,
 }
 
 impl Serialize for AuthenticationWorkflowSnapshotResponseKind {
@@ -292,23 +311,29 @@ impl AuthenticationWorkflowRoutingResponse {
                 },
             )?;
         let selected_facts = match (&runtime.workflow, selected_facts) {
-            (AuthenticationWorkflowSnapshotResponse::Matched { .. }, Some(facts)) => {
+            (
+                AuthenticationWorkflowSnapshotResponse::Matched { .. },
+                AuthenticationWorkflowSelectedFactsWire::Selected { facts },
+            ) => {
                 AuthenticationObservationBindingToken::bind_authentication_page_observation_facts(
                     &AuthenticationPageObservationFactsBatch {
-                        observations: vec![facts.clone()],
+                        observations: vec![facts.as_ref().clone()],
                     },
                 )
                 .map_err(|_| AuthenticationWorkflowRuntimeResponseDecodeError)?;
-                Some(facts)
-            }
-            (AuthenticationWorkflowSnapshotResponse::Matched { .. }, None) => {
-                return Err(AuthenticationWorkflowRuntimeResponseDecodeError);
+                AuthenticationWorkflowSelectedFacts::Selected { facts }
             }
             (
                 AuthenticationWorkflowSnapshotResponse::NoMatch { .. }
                 | AuthenticationWorkflowSnapshotResponse::Rejected { .. },
+                AuthenticationWorkflowSelectedFactsWire::NotApplicable,
+            ) => AuthenticationWorkflowSelectedFacts::NotApplicable,
+            (
+                AuthenticationWorkflowSnapshotResponse::Matched { .. }
+                | AuthenticationWorkflowSnapshotResponse::NoMatch { .. }
+                | AuthenticationWorkflowSnapshotResponse::Rejected { .. },
                 _,
-            ) => None,
+            ) => return Err(AuthenticationWorkflowRuntimeResponseDecodeError),
         };
         Ok(Self {
             workflow: runtime.workflow,
@@ -340,7 +365,7 @@ mod tests {
                 }
             },
             "loginMatches": { "kind": "ready", "count": 1 },
-            "selectedFacts": selected_facts
+            "selectedFacts": { "state": "selected", "facts": selected_facts }
         });
         let wire =
             serde_json::from_value::<AuthenticationWorkflowRoutingResponseWire>(response.clone())?;
@@ -348,20 +373,21 @@ mod tests {
             AuthenticationWorkflowRoutingResponse::decode_authentication_workflow_routing_response(
                 wire,
             )?;
-        assert_eq!(decoded.selected_facts, Some(selected_facts));
+        assert_eq!(
+            decoded.selected_facts,
+            AuthenticationWorkflowSelectedFacts::Selected {
+                facts: Box::new(selected_facts)
+            }
+        );
 
         let mut missing_facts = response;
         missing_facts
             .as_object_mut()
             .ok_or_else(|| anyhow::anyhow!("routing fixture must be an object"))?
             .remove("selectedFacts");
-        let missing_facts =
-            serde_json::from_value::<AuthenticationWorkflowRoutingResponseWire>(missing_facts)?;
-        assert_eq!(
-            AuthenticationWorkflowRoutingResponse::decode_authentication_workflow_routing_response(
-                missing_facts
-            ),
-            Err(AuthenticationWorkflowRuntimeResponseDecodeError)
+        assert!(
+            serde_json::from_value::<AuthenticationWorkflowRoutingResponseWire>(missing_facts)
+                .is_err()
         );
         Ok(())
     }

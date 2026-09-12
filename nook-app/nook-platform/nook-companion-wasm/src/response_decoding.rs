@@ -13,71 +13,83 @@ use serde::Deserialize;
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
-macro_rules! runtime_response_admission {
-    ($name:ident, $wire:ty) => {
-        #[derive(Deserialize, Tsify)]
-        #[serde(transparent)]
-        #[tsify(type = "unknown", from_wasm_abi)]
-        pub struct $name($wire);
-    };
-}
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct WebsiteLoginOptionsAdmission(nook_companion_core::WebsiteLoginOptionsWireValue);
 
-runtime_response_admission!(
-    WebsiteLoginOptionsAdmission,
-    nook_companion_core::WebsiteLoginOptionsWireValue
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct WebsiteLoginSaveOfferAdmission(nook_companion_core::WebsiteLoginSaveOfferResponse);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct WebsiteLoginSavePendingAdmission(nook_companion_core::WebsiteLoginSavePendingResponse);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct WebsiteLoginSaveActionAdmission(nook_companion_core::WebsiteLoginSaveActionResponse);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct LoginPickerOpenAdmission(nook_companion_core::LoginPickerOpenResponseWire);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticatorPickerOpenAdmission(
+    nook_companion_core::AuthenticatorPickerOpenResponseWire,
 );
-runtime_response_admission!(
-    WebsiteLoginSaveOfferAdmission,
-    nook_companion_core::WebsiteLoginSaveOfferResponse
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticationOutcomeAdmission(nook_companion_core::AuthenticationOutcomeResponseWire);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticatorBackupAttachAdmission(
+    nook_companion_core::AuthenticatorBackupAttachResponseWire,
 );
-runtime_response_admission!(
-    WebsiteLoginSavePendingAdmission,
-    nook_companion_core::WebsiteLoginSavePendingResponse
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticatorEnrollmentStageAdmission(
+    nook_companion_core::AuthenticatorEnrollmentStageResponseWire,
 );
-runtime_response_admission!(
-    WebsiteLoginSaveActionAdmission,
-    nook_companion_core::WebsiteLoginSaveActionResponse
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticatorEnrollmentConfirmAdmission(
+    nook_companion_core::AuthenticatorEnrollmentConfirmResponseWire,
 );
-runtime_response_admission!(
-    LoginPickerOpenAdmission,
-    nook_companion_core::LoginPickerOpenResponseWire
-);
-runtime_response_admission!(
-    AuthenticatorPickerOpenAdmission,
-    nook_companion_core::AuthenticatorPickerOpenResponseWire
-);
-runtime_response_admission!(
-    AuthenticationOutcomeAdmission,
-    nook_companion_core::AuthenticationOutcomeResponseWire
-);
-runtime_response_admission!(
-    AuthenticatorBackupAttachAdmission,
-    nook_companion_core::AuthenticatorBackupAttachResponseWire
-);
-runtime_response_admission!(
-    AuthenticatorEnrollmentStageAdmission,
-    nook_companion_core::AuthenticatorEnrollmentStageResponseWire
-);
-runtime_response_admission!(
-    AuthenticatorEnrollmentConfirmAdmission,
-    nook_companion_core::AuthenticatorEnrollmentConfirmResponseWire
-);
-runtime_response_admission!(
-    GeneratedPasswordAdmission,
-    nook_companion_core::GeneratedPasswordResponseWire
-);
-runtime_response_admission!(
-    AuthenticatorOptionsAdmission,
-    nook_companion_core::AuthenticatorOptionsResponseWire
-);
-runtime_response_admission!(
-    AuthenticatorPreviewAdmission,
-    nook_companion_core::AuthenticatorPreviewResponseWire
-);
-runtime_response_admission!(
-    ExtensionSessionStatusAdmission,
-    nook_companion_core::ExtensionSessionStatusResponseWire
-);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct GeneratedPasswordAdmission(nook_companion_core::GeneratedPasswordResponseWire);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticatorOptionsAdmission(nook_companion_core::AuthenticatorOptionsResponseWire);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticatorPreviewAdmission(nook_companion_core::AuthenticatorPreviewResponseWire);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct ExtensionSessionStatusAdmission(nook_companion_core::ExtensionSessionStatusResponseWire);
 
 #[wasm_bindgen]
 #[must_use]

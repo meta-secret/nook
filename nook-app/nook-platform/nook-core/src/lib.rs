@@ -315,10 +315,11 @@ pub use validation::{
     DRIVE_SHARED_FOLDER_REF_PREFIX, DRIVE_STORAGE_REF_SEP, DriveBackupName, DriveEventParent,
     ExistingVaultProviderReadiness, GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget,
     GoogleDriveFolderId, GoogleDriveMode, ICloudEventTarget, ICloudMode, ICloudShareRole,
-    ICloudSharedTarget, LocalFolderSyncTarget, OAuthProviderLabel, OauthAccessToken,
-    OauthFilePreset, OauthFileSyncTarget, ProviderCredentialEvidence, ProviderCredentialReadiness,
-    ProviderLabel, ProviderTargetKey, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode,
-    StorageProviderType, SyncProviderTarget, SyncProviderTargetIdentity,
+    ICloudSharedTarget, LocalFolderSyncTarget, OAuthFilePreset, OAuthProviderLabel,
+    OauthAccessToken, OauthFilePreset, OauthFileSyncTarget, ProviderCredentialEvidence,
+    ProviderCredentialReadiness, ProviderLabel, ProviderTargetKey, STORAGE_MODE_GITHUB,
+    STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget,
+    SyncProviderTargetIdentity,
 };
 pub use vault::vault_recovery_options::{
     VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword,

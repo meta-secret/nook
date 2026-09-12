@@ -16,8 +16,8 @@ use tsify::Tsify;
 
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, OAuthAccessTokenRef,
-    OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope, StorageProviderType,
-    StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
+    OAuthFilePreset, OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope,
+    StorageProviderType, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
     StoredLocalFolderConfiguration, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
     StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
 };
@@ -57,7 +57,7 @@ pub struct ProviderSaveRequest {
     pub github_pat: String,
     pub github_repo: String,
     pub oauth_file: StoredOAuthFileConfiguration,
-    pub oauth_preset: OauthFilePreset,
+    pub oauth_preset: OAuthFilePreset,
     pub local_folder: StoredLocalFolderConfiguration,
     pub new_provider_id: String,
     pub created_at: String,

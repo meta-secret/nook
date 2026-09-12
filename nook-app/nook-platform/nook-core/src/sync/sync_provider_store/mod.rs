@@ -12,8 +12,8 @@ use tsify::Tsify;
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, ICloudMode,
-    ICloudSharedTarget, OauthFilePreset, ProviderReplicationCapability, ReplicationType,
-    StorageMode, StorageProviderType,
+    ICloudSharedTarget, OAuthFilePreset, OauthFilePreset, ProviderReplicationCapability,
+    ReplicationType, StorageMode, StorageProviderType,
 };
 
 mod active_credentials;
@@ -76,7 +76,7 @@ pub use storage_args::{ProviderLabelLabels, ProviderStorageDetailLabels, Storage
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct OAuthFileConfig {
-    pub preset: OauthFilePreset,
+    pub preset: OAuthFilePreset,
     pub access_token: StoredOAuthAccessCredential,
     pub refresh_token: StoredOAuthRefreshCredential,
     pub expires_at: StoredOAuthTokenExpiry,
@@ -313,8 +313,8 @@ pub struct NormalizedAuthSnapshot {
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
     use crate::{
-        ProviderVaultScope, StoredGithubPat, StoredGithubRepository, StoredICloudShareTarget,
-        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+        ProviderOauthPreset, ProviderVaultScope, StoredGithubPat, StoredGithubRepository,
+        StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
     };
     use serde_json::Error;
 
@@ -378,6 +378,19 @@ mod tests {
         let current: SerializedTarget = serde_json::from_value(serde_json::to_value(migrated)?)?;
         assert_eq!(current.target, StoredICloudShareTarget::Personal);
         Ok(())
+    }
+
+    #[test]
+    fn exported_provider_contracts_reference_the_canonical_oauth_preset() {
+        for declaration in [
+            OAuthFileConfig::DECL,
+            ProviderSaveRequest::DECL,
+            SharedGrantProviderRequest::DECL,
+            ProviderOauthPreset::DECL,
+        ] {
+            assert!(declaration.contains("OAuthFilePreset"));
+            assert!(!declaration.contains("OauthFilePreset"));
+        }
     }
 }
 

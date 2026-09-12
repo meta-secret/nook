@@ -83,7 +83,8 @@ pub use authentication_workflow::{
 pub use authentication_workflow_response::{
     AuthenticationWorkflowRoutingResponse, AuthenticationWorkflowRoutingResponseWire,
     AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowRuntimeResponseDecodeError,
-    AuthenticationWorkflowRuntimeResponseWire, AuthenticationWorkflowSnapshotResponse,
+    AuthenticationWorkflowRuntimeResponseWire, AuthenticationWorkflowSelectedFacts,
+    AuthenticationWorkflowSelectedFactsWire, AuthenticationWorkflowSnapshotResponse,
     AuthenticationWorkflowSnapshotResponseDecodeError, AuthenticationWorkflowSnapshotResponseKind,
     AuthenticationWorkflowSnapshotResponseWire, AuthenticationWorkflowSnapshotWire,
     WebsiteLoginMatchAvailability, WebsiteLoginMatchAvailabilityKind,
