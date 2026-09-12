@@ -665,9 +665,10 @@ mod tests {
         let classification = RemoteEventLogClassification::MultipleStores {
             store_ids: vec!["store_first1234".to_owned(), "store_second12".to_owned()],
         };
-        let error = manager
-            .guard_remote_event_log_classification("GitHub", &classification)
-            .expect_err("multiple provider stores must be rejected");
+        let Err(error) = manager.guard_remote_event_log_classification("GitHub", &classification)
+        else {
+            return Err(JsError::new("multiple provider stores must be rejected"));
+        };
         assert!(
             matches!(error, NookError::Database(message) if message.contains("store_first1234") && message.contains("store_second12"))
         );
@@ -712,9 +713,12 @@ mod tests {
         let records = NookVaultManager::export_event_records_from_store(&store)?;
 
         assert_eq!(records.len(), 1);
-        assert_eq!(records[0].event_id, event_id.as_str());
-        assert_eq!(records[0].path, event_id.storage_path());
-        assert_eq!(records[0].event.id()?, event.id()?);
+        let record = records
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("exported event record must be present"))?;
+        assert_eq!(record.event_id, event_id.as_str());
+        assert_eq!(record.path, event_id.storage_path());
+        assert_eq!(record.event.id()?, event.id()?);
         Ok(())
     }
 
@@ -738,8 +742,11 @@ mod tests {
     )]
     async fn wasm_projected_epoch_keys_reject_an_unknown_device() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
-        let error = NookVaultManager::projected_epoch_keys(&VaultMetaState::default(), &identity)
-            .expect_err("missing auth envelope must fail closed");
+        let Err(error) =
+            NookVaultManager::projected_epoch_keys(&VaultMetaState::default(), &identity)
+        else {
+            anyhow::bail!("missing auth envelope must fail closed");
+        };
         assert!(matches!(
             error,
             NookError::Database(message)
@@ -763,9 +770,9 @@ mod tests {
             local_store_id: "store_local12345".to_owned(),
             remote_store_id: "store_remote1234".to_owned(),
         };
-        let error = manager
-            .guard_remote_event_log_classification("Drive", &different)
-            .expect_err("different stores must be rejected");
+        let Err(error) = manager.guard_remote_event_log_classification("Drive", &different) else {
+            anyhow::bail!("different stores must be rejected");
+        };
         assert!(matches!(
             error,
             NookError::Database(message)
@@ -777,9 +784,9 @@ mod tests {
         let multiple = RemoteEventLogClassification::MultipleStores {
             store_ids: vec!["store_first1234".to_owned(), "store_second12".to_owned()],
         };
-        let error = manager
-            .guard_remote_event_log_classification("GitHub", &multiple)
-            .expect_err("multiple stores must be rejected");
+        let Err(error) = manager.guard_remote_event_log_classification("GitHub", &multiple) else {
+            anyhow::bail!("multiple stores must be rejected");
+        };
         assert!(matches!(
             error,
             NookError::Database(message)
@@ -865,10 +872,9 @@ mod tests {
             ..Default::default()
         };
 
-        let error = manager
-            .adopt_projected_security_epoch(&projection)
-            .await
-            .expect_err("sentinel adoption requires the ceremony");
+        let Err(error) = manager.adopt_projected_security_epoch(&projection).await else {
+            anyhow::bail!("sentinel adoption requires the ceremony");
+        };
 
         assert!(
             matches!(error, NookError::Encryption(message) if message == MultiDeviceError::SentinelCeremonyRequired.to_string())

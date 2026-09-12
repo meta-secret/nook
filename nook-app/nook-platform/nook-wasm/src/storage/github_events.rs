@@ -356,7 +356,8 @@ mod tests {
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test callback"
     )]
-    fn tree_path_filter_rejects_invalid_digests_and_accepts_case_insensitive_yaml() {
+    fn tree_path_filter_rejects_invalid_digests_and_accepts_case_insensitive_yaml()
+    -> anyhow::Result<()> {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         assert_eq!(
             GitHubEventStore::event_id_from_tree_path(&format!("{EVENT_LOG_ROOT}/{digest}.YaMl")),
@@ -365,7 +366,9 @@ mod tests {
         assert_eq!(
             GitHubEventStore::event_id_from_tree_path(&format!(
                 "{EVENT_LOG_ROOT}/{}!.yaml",
-                &digest[..42]
+                digest
+                    .get(..42)
+                    .ok_or_else(|| anyhow::anyhow!("digest prefix fixture must be present"))?
             )),
             TreeEvent::Unrelated
         );
@@ -377,6 +380,7 @@ mod tests {
             TreeEvent::Unrelated
         );
         assert!(!GitHubEventStore::is_sha256_base64url_digest("short"));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -390,8 +394,12 @@ mod tests {
         )?;
         assert!(response.truncated);
         assert_eq!(response.tree.len(), 1);
-        assert_eq!(response.tree[0].path, "nook-log/v1/events/event.yaml");
-        assert_eq!(response.tree[0].entry_type, "blob");
+        let entry = response
+            .tree
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("tree entry fixture must be present"))?;
+        assert_eq!(entry.path, "nook-log/v1/events/event.yaml");
+        assert_eq!(entry.entry_type, "blob");
         let repo: GitHubRepoResponse = serde_json::from_str(r#"{"default_branch":"main"}"#)?;
         assert_eq!(repo.default_branch, "main");
         Ok(())
@@ -402,14 +410,13 @@ mod tests {
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test callback"
     )]
-    fn github_repo_response_projects_missing_errors_and_json() {
+    fn github_repo_response_projects_missing_errors_and_json() -> anyhow::Result<()> {
         assert!(matches!(
             GitHubEventStore::github_repo_response(RepositoryResponse {
                 status: StatusCode::NOT_FOUND,
                 text: "",
                 repo: "owner/repo"
-            })
-            .unwrap(),
+            })?,
             RepositoryDiscovery::Missing
         ));
 
@@ -436,12 +443,12 @@ mod tests {
                 status: StatusCode::OK,
                 text: r#"{"default_branch":"release"}"#,
                 repo: "owner/repo",
-            })
-            .unwrap()
+            })?
         else {
             panic!("successful repository response must decode")
         };
         assert_eq!(repo.default_branch, "release");
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -449,9 +456,9 @@ mod tests {
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test callback"
     )]
-    fn github_tree_response_projects_missing_errors_truncation_and_entries() {
+    fn github_tree_response_projects_missing_errors_truncation_and_entries() -> anyhow::Result<()> {
         assert!(matches!(
-            GitHubEventStore::github_tree_response(StatusCode::NOT_FOUND, "").unwrap(),
+            GitHubEventStore::github_tree_response(StatusCode::NOT_FOUND, "")?,
             TreeDiscovery::Missing
         ));
 
@@ -476,11 +483,12 @@ mod tests {
         let TreeDiscovery::Loaded(tree) = GitHubEventStore::github_tree_response(
             StatusCode::OK,
             r#"{"truncated":false,"tree":[{"path":"event.yaml","type":"blob"}]}"#,
-        )
-        .unwrap() else {
+        )?
+        else {
             panic!("complete tree response must decode")
         };
         assert_eq!(tree.tree.len(), 1);
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -519,9 +527,9 @@ mod tests {
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test callback"
     )]
-    fn event_content_accepts_utf8_and_rejects_binary_payloads() {
+    fn event_content_accepts_utf8_and_rejects_binary_payloads() -> anyhow::Result<()> {
         assert_eq!(
-            GitHubEventStore::event_content(b"event: yaml").unwrap(),
+            GitHubEventStore::event_content(b"event: yaml")?,
             "event: yaml"
         );
         let invalid = GitHubEventStore::event_content(&[0xff, 0xfe]);
@@ -529,6 +537,7 @@ mod tests {
             invalid,
             Err(NookError::Serialization(message)) if message.contains("Event YAML must be UTF-8")
         ));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -553,10 +562,12 @@ mod tests {
         let bytes: Vec<u8> = VaultEvent::serialize_event_storage_yaml(&event)?.into();
         let requested_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let store = GitHubEventStore { pat: "", repo: "" };
-        let error = store
+        let Err(error) = store
             .put_github_event_if_absent(&requested_id, &bytes)
             .await
-            .expect_err("mismatched event id must fail before network");
+        else {
+            anyhow::bail!("mismatched event id must fail before network");
+        };
         assert!(matches!(
             error,
             NookError::Serialization(message) if message.contains("GitHub event id mismatch")

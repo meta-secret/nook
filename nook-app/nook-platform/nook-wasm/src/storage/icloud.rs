@@ -752,13 +752,21 @@ mod tests {
         };
         assert_eq!(zone.zone_name, "shared-zone");
         assert_eq!(zone.owner_record_name, "owner-record");
-        let record = &body.operations[0].record;
+        let record = &body
+            .operations
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("shared event operation must be present"))?
+            .record;
         let RecordHierarchy::Child(parent) = &record.parent else {
             anyhow::bail!("missing parent")
         };
         assert_eq!(parent.record_name, "shared-root");
         assert_eq!(
-            record.fields[ICLOUD_CONTENT_FIELD].value,
+            record
+                .fields
+                .get(ICLOUD_CONTENT_FIELD)
+                .ok_or_else(|| anyhow::anyhow!("content field must be present"))?
+                .value,
             FieldText::Text("encrypted-event".to_owned())
         );
         Ok(())
@@ -780,10 +788,11 @@ mod tests {
 
         let body: CreateBody = serde_json::from_str(&serde_json::to_string(&body)?)?;
         assert!(matches!(body.zone, ZoneSelection::DefaultZone));
-        assert!(matches!(
-            body.operations[0].record.parent,
-            RecordHierarchy::Root
-        ));
+        let operation = body
+            .operations
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("private event operation must be present"))?;
+        assert!(matches!(operation.record.parent, RecordHierarchy::Root));
         Ok(())
     }
 
@@ -818,7 +827,9 @@ mod tests {
         assert!(!ICloudEventStore::is_sha256_base64url_digest("short"));
         assert!(!ICloudEventStore::is_sha256_base64url_digest(&format!(
             "{}!",
-            &digest[..42]
+            digest
+                .get(..42)
+                .ok_or_else(|| anyhow::anyhow!("digest prefix fixture must be present"))?
         )));
 
         let private = ICloudEventTarget::Private;

@@ -655,8 +655,11 @@ mod tests {
                 envelope,
             },
         )?;
+        let entry = entries
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("rotated password entry must be present"))?;
         assert_eq!(
-            nook_core::PasswordEntryResolution::new(&entries[0], "updated").resolve()?,
+            nook_core::PasswordEntryResolution::new(entry, "updated").resolve()?,
             keys
         );
         Ok(())
@@ -705,9 +708,12 @@ mod tests {
             },
         )?;
         assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].id, "pwdentry001");
+        let entry = entries
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("retained password entry must be present"))?;
+        assert_eq!(entry.id, "pwdentry001");
         assert_eq!(
-            nook_core::PasswordEntryResolution::new(&entries[0], "keep-password").resolve()?,
+            nook_core::PasswordEntryResolution::new(entry, "keep-password").resolve()?,
             new_keys
         );
         Ok(())
@@ -723,15 +729,16 @@ mod tests {
         let envelope =
             nook_core::PasswordEnvelopeAttachment::with_work_factor(&keys, "updated", 10.into())
                 .attach()?;
-        let error = PreparedEpochRotation::rewrap_password_entries(
+        let Err(error) = PreparedEpochRotation::rewrap_password_entries(
             &[],
             &keys,
             &VaultOperation::PasswordRotated {
                 entry_id: PasswordEntryId::parse("pwdentry002")?,
                 envelope,
             },
-        )
-        .expect_err("unknown password entries must fail closed");
+        ) else {
+            anyhow::bail!("unknown password entries must fail closed");
+        };
         assert!(
             matches!(error, NookError::Database(message) if message == "Password entry not found.")
         );

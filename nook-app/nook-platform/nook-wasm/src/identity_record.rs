@@ -701,11 +701,14 @@ mod tests {
         );
         let members = snapshot.members();
         assert_eq!(members.len(), 1);
-        assert_eq!(members[0].app_id(), app_key.app_id().as_str());
-        assert_eq!(members[0].label_kind(), NookIdentityMemberLabelKind::Known);
-        assert!(members[0].current_browser());
+        let member = members
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("identity member must be present"))?;
+        assert_eq!(member.app_id(), app_key.app_id().as_str());
+        assert_eq!(member.label_kind(), NookIdentityMemberLabelKind::Known);
+        assert!(member.current_browser());
         assert_eq!(
-            members[0].local_protection(),
+            member.local_protection(),
             DeviceAccessProtectionKind::PasskeyStandard
         );
         assert_eq!(
@@ -713,7 +716,9 @@ mod tests {
             NookIdentityLocalAccessKind::CurrentBrowser
         );
         assert_eq!(
-            members[0].label().expect("member label should be present"),
+            member
+                .label()
+                .map_err(|_| anyhow::anyhow!("member label must be present"))?,
             "MacBook"
         );
         assert_eq!(snapshot.vault_store_ids(), vec![store_id.to_string()]);
@@ -723,9 +728,13 @@ mod tests {
             &CurrentAppIdentity::observe("peer-app"),
             &local_protections,
         );
-        assert!(!peer_snapshot.members()[0].current_browser());
+        let peer_members = peer_snapshot.members();
+        let peer_member = peer_members
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("peer identity member must be present"))?;
+        assert!(!peer_member.current_browser());
         assert_eq!(
-            peer_snapshot.members()[0].local_protection(),
+            peer_member.local_protection(),
             DeviceAccessProtectionKind::PasskeyStandard
         );
         assert_eq!(
@@ -848,12 +857,18 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(snapshots.len(), 2);
+        let work = snapshots
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("work identity snapshot must be present"))?;
+        let travel = snapshots
+            .get(1)
+            .ok_or_else(|| anyhow::anyhow!("travel identity snapshot must be present"))?;
         assert_eq!(
-            snapshots[0].local_access(),
+            work.local_access(),
             NookIdentityLocalAccessKind::ThisBrowser
         );
         assert_eq!(
-            snapshots[1].local_access(),
+            travel.local_access(),
             NookIdentityLocalAccessKind::OtherInstallation
         );
         assert_eq!(

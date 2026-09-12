@@ -393,7 +393,12 @@ mod tests {
             if case == 0 {
                 fixture.providers.active_vault_store_id = ActiveVaultScope::Unselected;
             } else {
-                fixture.providers.providers[0].store_id = ProviderVaultScope::Unscoped;
+                fixture
+                    .providers
+                    .providers
+                    .first_mut()
+                    .ok_or_else(|| anyhow::anyhow!("provider fixture must be present"))?
+                    .store_id = ProviderVaultScope::Unscoped;
             }
             assert!(matches!(
                 fixture.prevalidate()?,
@@ -422,7 +427,12 @@ mod tests {
     fn provider_manifest_substitution_is_rejected_before_recipient_admission() -> anyhow::Result<()>
     {
         let mut fixture = PairingFixture::new(true)?;
-        fixture.providers.providers[0].label = "Substituted".to_owned();
+        fixture
+            .providers
+            .providers
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("provider fixture must be present"))?
+            .label = "Substituted".to_owned();
         assert!(matches!(
             fixture.prevalidate()?,
             Err(CompanionPairingFailure::ProviderManifestMismatch)
@@ -444,7 +454,11 @@ mod tests {
             )],
             active_vault_store_id: ActiveVaultScope::StoreId("store-1".to_owned()),
         };
-        replacement.providers[0].store_id = ProviderVaultScope::StoreId("store-1".to_owned());
+        replacement
+            .providers
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("replacement provider must be present"))?
+            .store_id = ProviderVaultScope::StoreId("store-1".to_owned());
         replacement = replacement
             .seal_credentials_for(&other.public_key())
             .map_err(|rejection| rejection.into_cause())?;

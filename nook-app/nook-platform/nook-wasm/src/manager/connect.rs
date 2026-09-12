@@ -452,10 +452,15 @@ mod tests {
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.prepare_storage("local", "", "").await?;
 
-        let _error = manager
+        if manager
             .connect_existing_content(&identity, "legacy vault content")
             .await
-            .expect_err("legacy local content must require the event log");
+            .is_ok()
+        {
+            return Err(JsError::new(
+                "legacy local content must require the event log",
+            ));
+        }
         manager.delete_local_browser_data().await?;
         Ok(())
     }

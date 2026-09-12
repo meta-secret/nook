@@ -260,9 +260,11 @@ mod tests {
             .put(&malformed, Some(&key))
             .await
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
-        let error = LocalIdentityRecovery::load_pending(&store)
-            .await
-            .expect_err("malformed cleanup marker must be rejected");
+        let Err(error) = LocalIdentityRecovery::load_pending(&store).await else {
+            return Err(NookError::IndexedDb(
+                "malformed cleanup marker must be rejected".to_owned(),
+            ));
+        };
         assert!(
             matches!(error, NookError::IndexedDb(ref message) if message.contains("Recovery cleanup decode error")),
             "unexpected error: {error}"

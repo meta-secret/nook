@@ -344,9 +344,12 @@ mod metadata_tests {
             .list_vault_password_entries()
             .map_err(|_| anyhow::anyhow!("password listing failed"))?;
         assert_eq!(summaries.len(), 1);
-        assert_eq!(summaries[0].id(), entry.id);
-        assert_eq!(summaries[0].label(), "Recovery");
-        assert_eq!(summaries[0].created_at(), "2026-09-06T00:00:00Z");
+        let summary = summaries
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("password summary must be present"))?;
+        assert_eq!(summary.id(), entry.id);
+        assert_eq!(summary.label(), "Recovery");
+        assert_eq!(summary.created_at(), "2026-09-06T00:00:00Z");
         assert!(manager.verify_vault_password(&entry.id, "correct horse battery staple"));
         assert!(!manager.verify_vault_password(&entry.id, "wrong password"));
         assert!(!manager.verify_vault_password("pwdentry002", "correct horse battery staple"));

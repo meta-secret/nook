@@ -423,7 +423,7 @@ mod pending_sync_conflict_tests {
     }
 
     #[wasm_bindgen_test]
-    fn provider_vault_projection_exposes_only_public_decision_facts() {
+    fn provider_vault_projection_exposes_only_public_decision_facts() -> anyhow::Result<()> {
         let projection = NookProviderVaultDecisionProjection::from_core(
             CurrentVaultReplaceability::Replaceable.project_provider_vault_decision(vec![
                 nook_core::ProviderVaultIdentityObservation {
@@ -454,17 +454,24 @@ mod pending_sync_conflict_tests {
             ProviderVaultDecisionReason::ReadyToAdopt
         );
         let identities = projection.identities();
-        assert_eq!(identities[0].identity_id(), "identity-personal");
+        let personal = identities
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("personal identity projection must be present"))?;
+        let work = identities
+            .get(1)
+            .ok_or_else(|| anyhow::anyhow!("work identity projection must be present"))?;
+        assert_eq!(personal.identity_id(), "identity-personal");
         assert_eq!(
-            identities[0].eligibility(),
+            personal.eligibility(),
             ProviderVaultIdentityEligibility::NotLinked
         );
-        assert_eq!(identities[1].identity_label(), "Work");
-        assert!(!identities[1].is_current_app());
+        assert_eq!(work.identity_label(), "Work");
+        assert!(!work.is_current_app());
         assert_eq!(
-            identities[1].eligibility(),
+            work.eligibility(),
             ProviderVaultIdentityEligibility::LinkedAndPrepared
         );
+        Ok(())
     }
 }
 

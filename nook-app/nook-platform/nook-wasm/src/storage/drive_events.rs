@@ -611,10 +611,9 @@ mod tests {
             token: "",
             parent: &DriveEventParent::AppDataFolder,
         };
-        let error = store
-            .put_drive_event_if_absent(&requested_id, &bytes)
-            .await
-            .expect_err("mismatched event id must fail before network");
+        let Err(error) = store.put_drive_event_if_absent(&requested_id, &bytes).await else {
+            anyhow::bail!("mismatched event id must fail before network");
+        };
         assert!(matches!(
             error,
             NookError::Serialization(message) if message.contains("Drive event id mismatch")
@@ -750,13 +749,15 @@ mod tests {
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test callback"
     )]
-    fn digest_filter_rejects_wrong_length_and_non_base64url_bytes() {
+    fn digest_filter_rejects_wrong_length_and_non_base64url_bytes() -> anyhow::Result<()> {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         assert!(DriveEventStore::is_sha256_base64url_digest(digest));
         assert!(!DriveEventStore::is_sha256_base64url_digest("short"));
         assert!(!DriveEventStore::is_sha256_base64url_digest(&format!(
             "{}!",
-            &digest[..42]
+            digest
+                .get(..42)
+                .ok_or_else(|| anyhow::anyhow!("digest prefix fixture must be present"))?
         )));
         assert_eq!(
             DriveEventStore::drive_listed_event_id(&DriveEventFile {
@@ -768,6 +769,7 @@ mod tests {
             }),
             ListedEvent::Unrelated
         );
+        Ok(())
     }
     #[wasm_bindgen_test]
     #[expect(

@@ -703,10 +703,12 @@ mod tests {
             vaults: &vaults,
             identity: &companion,
         });
-        assert_eq!(current_rows.len(), 1);
-        assert_eq!(current_rows[0].store_id(), current_store.as_str());
-        assert_eq!(companion_rows.len(), 1);
-        assert_eq!(companion_rows[0].store_id(), companion_store.as_str());
+        let ([current_row], [companion_row]) = (current_rows.as_slice(), companion_rows.as_slice())
+        else {
+            anyhow::bail!("exactly one vault row per identity must be present");
+        };
+        assert_eq!(current_row.store_id(), current_store.as_str());
+        assert_eq!(companion_row.store_id(), companion_store.as_str());
         Ok(())
     }
 
@@ -765,7 +767,6 @@ mod tests {
                 profile: work_profile,
             },
         ];
-
         let personal_rows = NookDeviceVaultAccess::vault_access_rows(BrowserVaultAccessRows {
             registry: registry.clone(),
             profiles: &profiles,
@@ -777,16 +778,17 @@ mod tests {
             identity: VaultAccessScope::Identity(&work),
         });
 
-        assert_eq!(personal_rows.len(), 1);
-        assert_eq!(personal_rows[0].store_id(), personal_store.as_str());
+        let ([personal_row], [work_row]) = (personal_rows.as_slice(), work_rows.as_slice()) else {
+            anyhow::bail!("exactly one access row per identity must be present");
+        };
+        assert_eq!(personal_row.store_id(), personal_store.as_str());
         assert_eq!(
-            personal_rows[0].verified_at().kind(),
+            personal_row.verified_at().kind(),
             NookDeviceAccessTextKind::Known
         );
-        assert_eq!(work_rows.len(), 1);
-        assert_eq!(work_rows[0].store_id(), work_store.as_str());
+        assert_eq!(work_row.store_id(), work_store.as_str());
         assert_eq!(
-            work_rows[0].verified_at().kind(),
+            work_row.verified_at().kind(),
             NookDeviceAccessTextKind::Known
         );
         Ok(())

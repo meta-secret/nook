@@ -584,16 +584,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn base64_decode_reports_success_and_serialization_failures() {
-        assert_eq!(
-            GitHubStorageClient::base64_decode("bm9vaw==").unwrap(),
-            b"nook"
-        );
-        let error = GitHubStorageClient::base64_decode("not base64!")
-            .expect_err("invalid base64 must fail closed");
+    fn base64_decode_reports_success_and_serialization_failures() -> anyhow::Result<()> {
+        assert_eq!(GitHubStorageClient::base64_decode("bm9vaw==")?, b"nook");
         assert!(
-            matches!(error, NookError::Serialization(message) if message.contains("Base64 decode error"))
+            matches!(GitHubStorageClient::base64_decode("not base64!"), Err(NookError::Serialization(message)) if message.contains("Base64 decode error"))
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -612,9 +608,12 @@ mod tests {
         let entries: Vec<GitHubDirEntry> = serde_json::from_str(
             r#"[{"name":"vault.yaml","type":"file"},{"name":"events","type":"dir"}]"#,
         )?;
-        assert_eq!(entries[0].name, "vault.yaml");
-        assert_eq!(entries[0].entry_type, "file");
-        assert_eq!(entries[1].entry_type, "dir");
+        let [first, second] = entries.as_slice() else {
+            anyhow::bail!("file and directory fixtures must be present");
+        };
+        assert_eq!(first.name, "vault.yaml");
+        assert_eq!(first.entry_type, "file");
+        assert_eq!(second.entry_type, "dir");
 
         let without_sha = serde_json::to_value(GitHubPutBody {
             message: "Update".to_owned(),
@@ -636,29 +635,21 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn github_username_response_covers_auth_statuses_and_payloads() {
-        let unauthorized = GitHubStorageClient::github_username_response(
+    fn github_username_response_covers_auth_statuses_and_payloads() -> anyhow::Result<()> {
+        assert!(matches!(GitHubStorageClient::github_username_response(
             GitHubStorageClientGithubUsernameResponse {
                 status: StatusCode::UNAUTHORIZED,
                 text: "",
             },
-        )
-        .expect_err("401 must be reported as a GitHub error");
-        assert!(matches!(
-            unauthorized,
-            NookError::GitHub(message) if message.contains("rejected your token")
+        ), Err(NookError::GitHub(message)) if message.contains("rejected your token")
         ));
 
-        let unavailable = GitHubStorageClient::github_username_response(
+        assert!(matches!(GitHubStorageClient::github_username_response(
             GitHubStorageClientGithubUsernameResponse {
                 status: StatusCode::BAD_GATEWAY,
                 text: "",
             },
-        )
-        .expect_err("non-success status must be reported");
-        assert!(matches!(
-            unavailable,
-            NookError::GitHub(message) if message.contains("status 502")
+        ), Err(NookError::GitHub(message)) if message.contains("status 502")
         ));
 
         assert_eq!(
@@ -667,58 +658,55 @@ mod tests {
                     status: StatusCode::OK,
                     text: r#"{"login":"nook"}"#
                 }
-            )
-            .unwrap(),
+            )?,
             "nook"
         );
-        let malformed = GitHubStorageClient::github_username_response(
+        let Err(malformed) = GitHubStorageClient::github_username_response(
             GitHubStorageClientGithubUsernameResponse {
                 status: StatusCode::OK,
                 text: "not-json",
             },
-        )
-        .expect_err("malformed user JSON must fail closed");
+        ) else {
+            anyhow::bail!("malformed user JSON must fail closed");
+        };
         assert!(matches!(
             malformed,
             NookError::Serialization(message) if message.contains("Failed to parse user JSON")
         ));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn github_repo_check_result_distinguishes_existing_missing_and_failure() {
-        assert!(
-            GitHubStorageClient::github_repo_check_result(
-                GitHubStorageClientGithubRepoCheckResult {
-                    repo: "owner/repo",
-                    status: StatusCode::OK
-                }
-            )
-            .unwrap()
-        );
-        assert!(
-            !GitHubStorageClient::github_repo_check_result(
-                GitHubStorageClientGithubRepoCheckResult {
-                    repo: "owner/repo",
-                    status: StatusCode::NOT_FOUND
-                }
-            )
-            .unwrap()
-        );
-        let error = GitHubStorageClient::github_repo_check_result(
+    fn github_repo_check_result_distinguishes_existing_missing_and_failure() -> anyhow::Result<()> {
+        assert!(GitHubStorageClient::github_repo_check_result(
+            GitHubStorageClientGithubRepoCheckResult {
+                repo: "owner/repo",
+                status: StatusCode::OK
+            }
+        )?);
+        assert!(!GitHubStorageClient::github_repo_check_result(
+            GitHubStorageClientGithubRepoCheckResult {
+                repo: "owner/repo",
+                status: StatusCode::NOT_FOUND
+            }
+        )?);
+        let Err(error) = GitHubStorageClient::github_repo_check_result(
             GitHubStorageClientGithubRepoCheckResult {
                 repo: "owner/repo",
                 status: StatusCode::FORBIDDEN,
             },
-        )
-        .expect_err("forbidden repository checks must fail closed");
+        ) else {
+            anyhow::bail!("forbidden repository checks must fail closed");
+        };
         assert!(matches!(
             error,
             NookError::GitHub(message) if message.contains("owner/repo") && message.contains("403")
         ));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn github_directory_listing_covers_missing_errors_and_file_matching() {
+    fn github_directory_listing_covers_missing_errors_and_file_matching() -> anyhow::Result<()> {
         assert_eq!(
             GitHubStorageClient::github_directory_listing(
                 GitHubStorageClientGithubDirectoryListing {
@@ -727,34 +715,35 @@ mod tests {
                     repo: "owner/repo",
                     path: "vault.yaml"
                 }
-            )
-            .unwrap(),
+            )?,
             GitHubDirectoryListing::DirectoryUnavailable
         );
 
-        let unavailable = GitHubStorageClient::github_directory_listing(
+        let Err(unavailable) = GitHubStorageClient::github_directory_listing(
             GitHubStorageClientGithubDirectoryListing {
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 text: "",
                 repo: "owner/repo",
                 path: "vault.yaml",
             },
-        )
-        .expect_err("directory status failures must fail closed");
+        ) else {
+            anyhow::bail!("directory status failures must fail closed");
+        };
         assert!(matches!(
             unavailable,
             NookError::GitHub(message) if message.contains("status 500")
         ));
 
-        let malformed = GitHubStorageClient::github_directory_listing(
+        let Err(malformed) = GitHubStorageClient::github_directory_listing(
             GitHubStorageClientGithubDirectoryListing {
                 status: StatusCode::OK,
                 text: "not-json",
                 repo: "owner/repo",
                 path: "vault.yaml",
             },
-        )
-        .expect_err("malformed directory JSON must fail closed");
+        ) else {
+            anyhow::bail!("malformed directory JSON must fail closed");
+        };
         assert!(matches!(
             malformed,
             NookError::Serialization(message) if message.contains("directory listing")
@@ -772,8 +761,7 @@ mod tests {
                     repo: "owner/repo",
                     path: "vault.yaml"
                 }
-            )
-            .unwrap(),
+            )?,
             GitHubDirectoryListing::FileListed
         );
         assert_eq!(
@@ -784,22 +772,21 @@ mod tests {
                     repo: "owner/repo",
                     path: "missing.yaml"
                 }
-            )
-            .unwrap(),
+            )?,
             GitHubDirectoryListing::FileUnlisted
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn github_file_response_covers_missing_protocol_decode_and_utf8_errors() {
+    fn github_file_response_covers_missing_protocol_decode_and_utf8_errors() -> anyhow::Result<()> {
         assert!(matches!(
             GitHubStorageClient::github_file_response(GitHubStorageClientGithubFileResponse {
                 status: StatusCode::NOT_FOUND,
                 text: "",
                 repo: "owner/repo",
                 path: "vault.yaml"
-            })
-            .unwrap(),
+            })?,
             GitHubVaultDiscovery::FileMissing
         ));
 
@@ -845,50 +832,56 @@ mod tests {
                 text: r#"{"content":" b m 9 v a w = =\n"}"#,
                 repo: "owner/repo",
                 path: "vault.yaml",
-            })
-            .unwrap()
+            })?
         else {
             panic!("valid file payload must decode")
         };
         assert_eq!(file.content, "nook");
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn github_put_response_covers_status_and_sha_projection() {
-        let missing =
+    fn github_put_response_covers_status_and_sha_projection() -> anyhow::Result<()> {
+        let Err(missing) =
             GitHubStorageClient::github_put_response(GitHubStorageClientGithubPutResponse {
                 status: StatusCode::NOT_FOUND,
                 text: "",
                 repo: "owner/repo",
                 path: "vault.yaml",
             })
-            .expect_err("missing write target must fail closed");
+        else {
+            anyhow::bail!("missing write target must fail closed");
+        };
         assert!(matches!(
             missing,
             NookError::GitHub(message) if message.contains("Cannot write to owner/repo/vault.yaml")
         ));
 
-        let unavailable =
+        let Err(unavailable) =
             GitHubStorageClient::github_put_response(GitHubStorageClientGithubPutResponse {
                 status: StatusCode::CONFLICT,
                 text: "",
                 repo: "owner/repo",
                 path: "vault.yaml",
             })
-            .expect_err("write conflicts must be reported");
+        else {
+            anyhow::bail!("write conflicts must be reported");
+        };
         assert!(matches!(
             unavailable,
             NookError::GitHub(message) if message.contains("status 409")
         ));
 
-        let malformed =
+        let Err(malformed) =
             GitHubStorageClient::github_put_response(GitHubStorageClientGithubPutResponse {
                 status: StatusCode::OK,
                 text: "not-json",
                 repo: "owner/repo",
                 path: "vault.yaml",
             })
-            .expect_err("malformed write JSON must fail closed");
+        else {
+            anyhow::bail!("malformed write JSON must fail closed");
+        };
         assert!(matches!(
             malformed,
             NookError::Serialization(message) if message.contains("Failed to parse JSON")
@@ -900,10 +893,10 @@ mod tests {
                 text: r#"{"content":{"sha":"sha-2"}}"#,
                 repo: "owner/repo",
                 path: "vault.yaml"
-            })
-            .unwrap(),
+            })?,
             "sha-2"
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -911,15 +904,15 @@ mod tests {
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
     )]
-    async fn username_lookup_rejects_empty_token_before_network() {
-        let error = GitHubStorageClient::new("  ")
-            .fetch_github_username()
-            .await
-            .expect_err("empty token must fail closed");
+    async fn username_lookup_rejects_empty_token_before_network() -> anyhow::Result<()> {
+        let Err(error) = GitHubStorageClient::new("  ").fetch_github_username().await else {
+            anyhow::bail!("empty token must fail closed");
+        };
         assert!(matches!(
             error,
             NookError::GitHub(message) if message == "GitHub personal access token is required."
         ));
+        Ok(())
     }
 
     #[wasm_bindgen_test]

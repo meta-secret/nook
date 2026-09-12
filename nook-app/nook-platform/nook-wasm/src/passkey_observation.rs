@@ -287,38 +287,50 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn decodes_backup_flags_without_claiming_provider_identity() {
+    fn decodes_backup_flags_without_claiming_provider_identity() -> anyhow::Result<()> {
         let mut data = vec![0; 53];
-        data[32] = 0x08;
+        *data
+            .get_mut(32)
+            .ok_or_else(|| anyhow::anyhow!("backup flag byte must be present"))? = 0x08;
         assert_eq!(
             BrowserPasskeyObservation::backup_state(&data),
             PasskeyBackupState::Eligible
         );
-        data[32] = 0x18;
+        *data
+            .get_mut(32)
+            .ok_or_else(|| anyhow::anyhow!("backup flag byte must be present"))? = 0x18;
         assert_eq!(
             BrowserPasskeyObservation::backup_state(&data),
             PasskeyBackupState::BackedUp
         );
-        data[32] = 0;
+        *data
+            .get_mut(32)
+            .ok_or_else(|| anyhow::anyhow!("backup flag byte must be present"))? = 0;
         assert_eq!(
             BrowserPasskeyObservation::backup_state(&data),
             PasskeyBackupState::NotEligible
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn formats_only_nonzero_attested_aaguid() {
+    fn formats_only_nonzero_attested_aaguid() -> anyhow::Result<()> {
         let mut data = vec![0; 53];
-        data[32] = 0x40;
+        *data
+            .get_mut(32)
+            .ok_or_else(|| anyhow::anyhow!("attested-data flag byte must be present"))? = 0x40;
         assert_eq!(
             BrowserPasskeyObservation::aaguid(&data),
             AuthenticatorGuidEvidence::NotReported
         );
-        data[37..53].copy_from_slice(&[1; 16]);
+        data.get_mut(37..53)
+            .ok_or_else(|| anyhow::anyhow!("AAGUID fixture bytes must be present"))?
+            .copy_from_slice(&[1; 16]);
         assert_eq!(
             BrowserPasskeyObservation::aaguid(&data),
             AuthenticatorGuidEvidence::Reported("01010101-0101-0101-0101-010101010101".to_owned())
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -401,7 +413,8 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn authenticator_data_and_aaguid_fail_closed_for_short_or_unattested_data() {
+    fn authenticator_data_and_aaguid_fail_closed_for_short_or_unattested_data() -> anyhow::Result<()>
+    {
         assert_eq!(
             BrowserPasskeyObservation::authenticator_data(&ArrayBuffer::new(0)),
             AuthenticatorDataObservation::Unavailable
@@ -422,11 +435,14 @@ mod tests {
             AuthenticatorGuidEvidence::NotReported
         );
         let mut not_attested = vec![0; 53];
-        not_attested[32] = 0x08;
+        *not_attested
+            .get_mut(32)
+            .ok_or_else(|| anyhow::anyhow!("attestation flag byte must be present"))? = 0x08;
         assert_eq!(
             BrowserPasskeyObservation::aaguid(&not_attested),
             AuthenticatorGuidEvidence::NotReported
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]

@@ -315,7 +315,11 @@ mod tests {
             value: "stale-v1",
         })
         .await?;
-        let current_app_id = NookDatabase::load_keyring().await?.entries()[0]
+        let keyring = NookDatabase::load_keyring().await?;
+        let current_app_id = keyring
+            .entries()
+            .first()
+            .ok_or_else(|| NookError::Database("current keyring entry must be present".to_owned()))?
             .app_id()
             .clone();
         let recovery = LocalIdentityRecoveryRequest {
@@ -592,14 +596,24 @@ mod tests {
 
         let directory = NookDatabase::load_identity_directory().await?;
         assert_eq!(directory.identities().len(), 1);
-        assert_eq!(
-            directory.identities()[0].identity_id,
-            second.identity.identity_id
-        );
+        let remaining_identity = directory
+            .identities()
+            .first()
+            .ok_or_else(|| NookError::Database("remaining identity must be present".to_owned()))?;
+        assert_eq!(remaining_identity.identity_id, second.identity.identity_id);
         assert!(directory.retired_app_ids().contains(first_key.app_id()));
         let remaining_keyring = NookDatabase::load_keyring().await?;
         assert_eq!(remaining_keyring.entries().len(), 1);
-        assert_eq!(remaining_keyring.entries()[0].app_id(), second_key.app_id());
+        assert_eq!(
+            remaining_keyring
+                .entries()
+                .first()
+                .ok_or_else(|| NookError::Database(
+                    "remaining keyring entry must be present".to_owned()
+                ))?
+                .app_id(),
+            second_key.app_id()
+        );
         assert_ne!(first.identity.identity_id, second.identity.identity_id);
         assert_eq!(
             NookDatabase::idb_get_string(&unrelated_marker).await?,
@@ -676,10 +690,11 @@ mod tests {
             &IdentitySelection::Selected(third.identity.identity_id)
         );
         assert!(directory.retired_app_ids().contains(first_key.app_id()));
-        assert_ne!(
-            first.identity.identity_id,
-            directory.identities()[0].identity_id
-        );
+        let retained_identity = directory
+            .identities()
+            .first()
+            .ok_or_else(|| NookError::Database("retained identity must be present".to_owned()))?;
+        assert_ne!(first.identity.identity_id, retained_identity.identity_id);
         recovery.complete().await?;
         NookDatabase::clear_keyring_for_test().await?;
         NookDatabase::clear_identity_directory_for_test().await
@@ -858,7 +873,16 @@ mod tests {
         let recovered_directory = NookDatabase::load_identity_directory().await?;
         assert_eq!(recovered_directory.selection(), &IdentitySelection::Empty);
         assert_eq!(recovered_directory.identities().len(), 1);
-        assert_eq!(recovered_directory.identities()[0].identity_id, identity_id);
+        assert_eq!(
+            recovered_directory
+                .identities()
+                .first()
+                .ok_or_else(|| NookError::Database(
+                    "recovered identity must be present".to_owned()
+                ))?
+                .identity_id,
+            identity_id
+        );
         recovery.complete().await?;
         let replacement_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let replacement_wrapped = DeviceIdentityProtection::new(&replacement_key.secret_string())

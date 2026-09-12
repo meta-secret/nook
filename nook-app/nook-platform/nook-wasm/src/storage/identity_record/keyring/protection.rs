@@ -524,7 +524,15 @@ mod tests {
         assert_eq!(NookDatabase::load_keyring().await?.entries().len(), 1);
         let directory = NookDatabase::load_identity_directory().await?;
         assert_eq!(directory.identities().len(), 1);
-        assert_eq!(directory.identities()[0], first.identity);
+        assert_eq!(
+            directory
+                .identities()
+                .first()
+                .ok_or_else(|| NookError::Database(
+                    "identity fixture must be present".to_owned()
+                ))?,
+            &first.identity
+        );
 
         NookDatabase::idb_delete_key(event_db::SIGNING_SEED_KEY).await?;
         NookDatabase::clear_keyring_for_test().await?;
@@ -574,7 +582,14 @@ mod tests {
             .await?;
 
         assert_eq!(signing_seed, protected.signing_seed);
-        assert!(NookDatabase::load_keyring().await?.entries()[0].has_signing_seed());
+        assert!(
+            NookDatabase::load_keyring()
+                .await?
+                .entries()
+                .first()
+                .ok_or_else(|| NookError::Database("keyring fixture must be present".to_owned()))?
+                .has_signing_seed()
+        );
         assert!(matches!(
             NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY).await?,
             StoredStringRecord::MissingKey
@@ -639,12 +654,24 @@ mod tests {
             matches!(result, Err(NookError::Database(message)) if message.contains("established signing seed"))
         );
         let retained = NookDatabase::load_keyring().await?;
-        assert!(!retained.entries()[0].has_signing_seed());
-        let directory = NookDatabase::load_identity_directory().await?;
-        assert_eq!(
-            directory.identities()[0].members[0].signing_public_key,
-            signing_public_key
+        assert!(
+            !retained
+                .entries()
+                .first()
+                .ok_or_else(|| NookError::Database(
+                    "retained keyring entry must be present".to_owned()
+                ))?
+                .has_signing_seed()
         );
+        let directory = NookDatabase::load_identity_directory().await?;
+        let identity = directory
+            .identities()
+            .first()
+            .ok_or_else(|| NookError::Database("retained identity must be present".to_owned()))?;
+        let member = identity.members.first().ok_or_else(|| {
+            NookError::Database("retained identity member must be present".to_owned())
+        })?;
+        assert_eq!(member.signing_public_key, signing_public_key);
 
         NookDatabase::clear_keyring_for_test().await?;
         NookDatabase::clear_identity_directory_for_test().await
@@ -717,9 +744,21 @@ mod tests {
             .await?;
 
         assert!(!promoted.signing_seed.is_empty());
-        assert!(NookDatabase::load_keyring().await?.entries()[0].has_signing_seed());
+        assert!(
+            NookDatabase::load_keyring()
+                .await?
+                .entries()
+                .first()
+                .ok_or_else(|| NookError::Database(
+                    "promoted keyring entry must be present".to_owned()
+                ))?
+                .has_signing_seed()
+        );
+        let promoted_member = promoted.identity.members.first().ok_or_else(|| {
+            NookError::Database("promoted identity member must be present".to_owned())
+        })?;
         assert!(matches!(
-            promoted.identity.members[0].signing_public_key,
+            promoted_member.signing_public_key,
             DeviceSigningPublicKey::Ed25519Hex(_)
         ));
 
@@ -850,7 +889,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn newer_legacy_wrapper_reconciles_without_losing_signing_seed() -> Result<(), NookError>
     {
-        let _ = Rexie::delete("nook_db").await;
+        drop(Rexie::delete("nook_db").await);
         let (app_key, _, protected) = PinIdentityFixture {
             label: "Personal",
             pin: "first-secret",
@@ -885,7 +924,7 @@ mod tests {
             NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY).await?,
             StoredStringRecord::MissingKey
         ));
-        let _ = Rexie::delete("nook_db").await;
+        drop(Rexie::delete("nook_db").await);
         Ok(())
     }
 
@@ -898,7 +937,7 @@ mod tests {
     )]
     #[wasm_bindgen_test]
     async fn invalid_keyring_binding_preserves_legacy_protection() -> Result<(), NookError> {
-        let _ = Rexie::delete("nook_db").await;
+        drop(Rexie::delete("nook_db").await);
         let (app_key, wrapped, _) = PinIdentityFixture {
             label: "Personal",
             pin: "first-secret",
@@ -917,7 +956,7 @@ mod tests {
             NookDatabase::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY).await?,
             StoredStringRecord::Stored(_)
         ));
-        let _ = Rexie::delete("nook_db").await;
+        drop(Rexie::delete("nook_db").await);
         Ok(())
     }
 }

@@ -297,21 +297,19 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn locale_run_modes_and_storage_wrappers_project_successful_values() {
+    fn locale_run_modes_and_storage_wrappers_project_successful_values()
+    -> Result<(), wasm_bindgen::JsError> {
         let locale = NookBrowserLocale::from_tags(vec!["ru-RU".to_owned(), "en-US".to_owned()]);
         assert_eq!(locale.language_tags(), vec!["ru-RU", "en-US"]);
         assert_eq!(locale.app_locale().code(), "ru");
 
         assert_eq!(
-            NookClientRunModeUtil::parse("local").expect("local mode"),
+            NookClientRunModeUtil::parse("local")?,
             NookClientRunMode::Local
         );
+        assert_eq!(NookClientRunModeUtil::parse("dev")?, NookClientRunMode::Dev);
         assert_eq!(
-            NookClientRunModeUtil::parse("dev").expect("dev mode"),
-            NookClientRunMode::Dev
-        );
-        assert_eq!(
-            NookClientRunModeUtil::parse("prod").expect("prod mode"),
+            NookClientRunModeUtil::parse("prod")?,
             NookClientRunMode::Prod
         );
 
@@ -323,6 +321,7 @@ mod tests {
         let folder = NookGoogleDriveFolder::new("folder-1".to_owned(), "Vault".to_owned());
         assert_eq!(folder.id(), "folder-1");
         assert_eq!(folder.name(), "Vault");
+        Ok(())
     }
 
     #[wasm_bindgen_test]

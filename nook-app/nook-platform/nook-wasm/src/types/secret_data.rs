@@ -447,14 +447,13 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn secret_page_import_and_totp_wrappers_project_values() {
+    fn secret_page_import_and_totp_wrappers_project_values() -> anyhow::Result<()> {
         let mut page = NookSecretPage::from_core(nook_core::SecretPage {
             records: Vec::new(),
             total: 3.into(),
             offset: 1.into(),
             limit: 2.into(),
-        })
-        .unwrap();
+        })?;
         assert_eq!(page.total(), 3);
         assert_eq!(page.offset(), 1);
         assert_eq!(page.limit(), 2);
@@ -477,5 +476,6 @@ mod tests {
         assert_eq!(totp.seconds_remaining(), 17);
         assert_eq!(totp.period(), 30);
         assert_eq!(totp.expires_at_unix_seconds(), 117.0);
+        Ok(())
     }
 }

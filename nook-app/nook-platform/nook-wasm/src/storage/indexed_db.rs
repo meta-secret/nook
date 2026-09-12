@@ -399,7 +399,7 @@ mod unit_tests {
     }
 
     #[wasm_bindgen_test]
-    fn registry_upsert_creates_defaults_updates_labels_and_touches_unlocks() {
+    fn registry_upsert_creates_defaults_updates_labels_and_touches_unlocks() -> anyhow::Result<()> {
         let mut registry = VaultRegistry::default();
         NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
             registry: &mut registry,
@@ -408,9 +408,13 @@ mod unit_tests {
             touch_unlock: false,
         });
         assert_eq!(registry.vaults.len(), 1);
-        assert!(!registry.vaults[0].label.is_empty());
+        let created = registry
+            .vaults
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("created registry entry must be present"))?;
+        assert!(!created.label.is_empty());
         assert!(matches!(
-            registry.vaults[0].last_unlocked_at,
+            created.last_unlocked_at,
             VaultUnlockHistory::NeverUnlocked
         ));
 
@@ -420,9 +424,13 @@ mod unit_tests {
             label: RegistryLabelUpdate::Set(" Work "),
             touch_unlock: false,
         });
-        assert_eq!(registry.vaults[0].label, " Work ");
+        let updated = registry
+            .vaults
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("updated registry entry must be present"))?;
+        assert_eq!(updated.label, " Work ");
         assert!(matches!(
-            registry.vaults[0].last_unlocked_at,
+            updated.last_unlocked_at,
             VaultUnlockHistory::NeverUnlocked
         ));
         NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
@@ -432,6 +440,7 @@ mod unit_tests {
             touch_unlock: false,
         });
         assert_eq!(registry.vaults.len(), 2);
+        Ok(())
     }
 
     #[wasm_bindgen_test]

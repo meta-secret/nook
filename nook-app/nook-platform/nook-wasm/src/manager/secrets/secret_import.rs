@@ -721,7 +721,7 @@ mod import_tests {
         } = CoalescedSecretImport::new(items, &key)?;
         assert_eq!(duplicates, 1);
         assert_eq!(items.len(), 1);
-        let SecretValue::SecureNote(note) = &items[0] else {
+        let Some(SecretValue::SecureNote(note)) = items.first() else {
             return Err(anyhow::anyhow!(
                 "coalesced import item must be a secure note"
             ));

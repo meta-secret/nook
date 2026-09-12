@@ -190,13 +190,18 @@ mod tests {
 
         let decision = decision(current_key.app_id().as_str(), &store_id, &projection);
         assert_eq!(decision.decision, Decision::AdoptProviderVault);
-        assert_eq!(decision.identities[0].eligibility, Eligibility::NotLinked);
-        assert!(decision.identities[0].is_current_app);
-        assert_eq!(
-            decision.identities[1].eligibility,
-            Eligibility::LinkedAndPrepared
-        );
-        assert!(!decision.identities[1].is_current_app);
+        let current = decision
+            .identities
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("current identity decision must be present"))?;
+        let other = decision
+            .identities
+            .get(1)
+            .ok_or_else(|| anyhow::anyhow!("other identity decision must be present"))?;
+        assert_eq!(current.eligibility, Eligibility::NotLinked);
+        assert!(current.is_current_app);
+        assert_eq!(other.eligibility, Eligibility::LinkedAndPrepared);
+        assert!(!other.is_current_app);
         Ok(())
     }
 
@@ -223,10 +228,11 @@ mod tests {
         let decision = decision(current_key.app_id().as_str(), &store_id, &projection);
         assert_eq!(decision.decision, Decision::PreserveBoth);
         assert_eq!(decision.reason, Reason::LinkedIdentityUnavailable);
-        assert_eq!(
-            decision.identities[1].eligibility,
-            Eligibility::LinkedButUnavailable
-        );
+        let linked = decision
+            .identities
+            .get(1)
+            .ok_or_else(|| anyhow::anyhow!("linked identity decision must be present"))?;
+        assert_eq!(linked.eligibility, Eligibility::LinkedButUnavailable);
         Ok(())
     }
 
@@ -259,11 +265,12 @@ mod tests {
             let projection = projection(vec![identity], identity_id, vec![entry.clone()])?;
             let decision = decision(app_key.app_id().as_str(), &store_id, &projection);
             assert_eq!(decision.decision, Decision::PreserveBoth);
-            assert_eq!(
-                decision.identities[0].eligibility,
-                Eligibility::LinkedButUnavailable
-            );
-            assert!(decision.identities[0].is_current_app);
+            let current = decision
+                .identities
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("current identity decision must be present"))?;
+            assert_eq!(current.eligibility, Eligibility::LinkedButUnavailable);
+            assert!(current.is_current_app);
         }
         Ok(())
     }

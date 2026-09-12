@@ -532,7 +532,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn enrollment_inputs_and_sync_targets_keep_typed_values() {
+    fn enrollment_inputs_and_sync_targets_keep_typed_values() -> anyhow::Result<()> {
         let provider = NookEnrollmentProvider::github("repo".into(), "pat".into());
         let unnamed = NookEnrollmentIssueInput::unnamed(
             provider.clone(),
@@ -541,14 +541,14 @@ mod tests {
         );
         assert_eq!(unnamed.entry_id(), "entry-1");
         assert_eq!(unnamed.issued_at(), "2026-01-01");
-        assert_eq!(unnamed.to_core().unwrap().vault_name, "");
+        assert_eq!(unnamed.to_core()?.vault_name, "");
         let named = NookEnrollmentIssueInput::named(
             provider,
             "Personal".into(),
             "entry-2".into(),
             "2026-01-02".into(),
         );
-        assert_eq!(named.to_core().unwrap().vault_name, "Personal");
+        assert_eq!(named.to_core()?.vault_name, "Personal");
 
         let payload =
             NookDecryptedEnrollmentPayload::from_core(nook_core::DecryptedEnrollmentPayload {
@@ -572,6 +572,7 @@ mod tests {
         assert!(github.is_github());
         let empty = NookSyncProviderTarget::empty();
         assert!(empty.is_empty());
+        Ok(())
     }
 }
 

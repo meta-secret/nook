@@ -613,10 +613,10 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn architecture_rejects_duplicate_or_mismatched_share_metadata() -> anyhow::Result<()> {
-        let duplicate = |second: nook_core::SentinelShareEnvelope| {
+        let duplicate = |second: nook_core::SentinelShareEnvelope| -> anyhow::Result<()> {
             let mut manager = NookVaultManager::new();
             manager.vault.meta.sentinel_shares.insert(
-                DeviceId::parse("0123456789abcdef").expect("valid device id"),
+                DeviceId::parse("0123456789abcdef")?,
                 nook_core::SentinelShareEnvelope {
                     version: nook_core::SentinelShareVersion::CURRENT,
                     threshold: 2.into(),
@@ -625,11 +625,13 @@ mod tests {
                     ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
                 },
             );
-            manager.vault.meta.sentinel_shares.insert(
-                DeviceId::parse("fedcba9876543210").expect("valid device id"),
-                second,
-            );
-            manager.ensure_sentinel_architecture_from_shares()
+            manager
+                .vault
+                .meta
+                .sentinel_shares
+                .insert(DeviceId::parse("fedcba9876543210")?, second);
+            manager.ensure_sentinel_architecture_from_shares()?;
+            Ok(())
         };
 
         assert!(

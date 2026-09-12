@@ -448,9 +448,11 @@ mod tests {
             PasskeyCreationCeremony::RegistrationOnly,
         );
 
-        let rejection = profile
-            .set_passkey_provider_label("passkey:stale", "Bitwarden".to_owned())
-            .expect_err("stale credential rejects");
+        let Err(rejection) =
+            profile.set_passkey_provider_label("passkey:stale", "Bitwarden".to_owned())
+        else {
+            anyhow::bail!("stale credential must reject");
+        };
         let mut profile = rejection.profile;
         assert!(profile.require_passkey()?.provider_label.is_empty());
 
@@ -596,7 +598,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn provider_label_recovers_missing_metadata_only_for_the_wrapped_passkey()
     -> Result<(), NookError> {
-        let _ = Rexie::delete("nook_db").await;
+        drop(Rexie::delete("nook_db").await);
         let setup = DeviceKeyProtectionSetup::generate()?;
         let output = nook_core::WebAuthnPrfOutput::try_from(vec![21u8; 32])?;
         let secret = setup.user_handle().derive_identity(&output)?;
@@ -639,7 +641,7 @@ mod tests {
             .map_err(|_| NookError::Database("Recovered passkey profile is missing".to_owned()))?;
         assert_eq!(passkey.credential_fingerprint, credential_fingerprint);
         assert_eq!(passkey.provider_label, "Bitwarden");
-        let _ = Rexie::delete("nook_db").await;
+        drop(Rexie::delete("nook_db").await);
         Ok(())
     }
 
@@ -653,7 +655,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn stale_passkey_ceremony_cannot_overwrite_replaced_identity_metadata()
     -> Result<(), NookError> {
-        let _ = Rexie::delete("nook_db").await;
+        drop(Rexie::delete("nook_db").await);
         let setup = DeviceKeyProtectionSetup::generate()?;
         let identity = DeviceIdentity::generate()?;
         let current_credential = [8u8; 32];
@@ -699,7 +701,7 @@ mod tests {
             .map_err(|_| NookError::Database("Passkey profile is missing".to_owned()))?;
         assert_eq!(passkey.credential_fingerprint, current_fingerprint);
         assert_eq!(passkey.nook_name, "Current credential");
-        let _ = Rexie::delete("nook_db").await;
+        drop(Rexie::delete("nook_db").await);
         Ok(())
     }
 

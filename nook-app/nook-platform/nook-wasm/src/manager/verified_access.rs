@@ -81,11 +81,11 @@ mod tests {
             // independently of a protected identity selected by another test.
             let profile = DeviceAccessProfileKey::companion().load().await?;
             assert_eq!(profile.verified_vaults.len(), 1);
-            assert_eq!(profile.verified_vaults[0].device_id, device_id);
-            assert_eq!(
-                profile.verified_vaults[0].store_id.as_str(),
-                "store_testtoken11"
-            );
+            let verified = profile.verified_vaults.first().ok_or_else(|| {
+                NookError::Database("verified vault fixture must be present".to_owned())
+            })?;
+            assert_eq!(verified.device_id, device_id);
+            assert_eq!(verified.store_id.as_str(), "store_testtoken11");
         }
 
         DeviceAccessProfileKey::clear_companion().await?;

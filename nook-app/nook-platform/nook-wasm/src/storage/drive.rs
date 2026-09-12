@@ -146,16 +146,16 @@ mod tests {
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
     )]
-    async fn access_verification_rejects_empty_token_before_network() {
-        let error = DriveStorageClient::new("  ")
-            .verify_drive_access()
-            .await
-            .expect_err("empty OAuth access token must fail closed");
+    async fn access_verification_rejects_empty_token_before_network() -> anyhow::Result<()> {
+        let Err(error) = DriveStorageClient::new("  ").verify_drive_access().await else {
+            anyhow::bail!("empty OAuth access token must fail closed");
+        };
         assert!(matches!(
             error,
             NookError::Database(message)
                 if message == nook_core::ValidationError::OauthAccessTokenEmpty.to_string()
         ));
+        Ok(())
     }
 }
 /// Named values required by `DriveStorageClient::drive_error`.

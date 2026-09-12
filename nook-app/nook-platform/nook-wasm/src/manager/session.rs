@@ -426,9 +426,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn ceremony_state_returns_active_sessions() {
+    fn ceremony_state_returns_active_sessions() -> Result<(), JsError> {
         let active = CeremonyState::Active(7_u8);
-        assert_eq!(active.get("unused").expect("active ceremony"), &7);
+        assert_eq!(active.get("unused")?, &7);
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -515,13 +516,11 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn status_channel_round_trips_messages() {
+    fn status_channel_round_trips_messages() -> anyhow::Result<()> {
         let channel = StatusChannel::new();
-        channel
-            .tx
-            .send("ready".to_owned())
-            .expect("receiver exists");
-        assert_eq!(channel.rx.recv().expect("message exists"), "ready");
+        channel.tx.send("ready".to_owned())?;
+        assert_eq!(channel.rx.recv()?, "ready");
+        Ok(())
     }
 
     #[wasm_bindgen_test]

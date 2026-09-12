@@ -354,7 +354,14 @@ mod tests {
         }
 
         fn append_sentinel_membership(&mut self) -> anyhow::Result<()> {
-            let parent = EventId::parse(&self.records.0[0].event_id)?;
+            let parent = EventId::parse(
+                &self
+                    .records
+                    .0
+                    .first()
+                    .ok_or_else(|| anyhow::anyhow!("genesis record must be present"))?
+                    .event_id,
+            )?;
             let signing =
                 SigningIdentity::from_seed_hex_stored(&self.manager.event_log.signing_seed)?;
             let participant = DeviceIdentity::generate()?;
@@ -375,7 +382,14 @@ mod tests {
         }
 
         fn append_sentinel_checkpoint(&mut self) -> anyhow::Result<()> {
-            let parent = EventId::parse(&self.records.0[0].event_id)?;
+            let parent = EventId::parse(
+                &self
+                    .records
+                    .0
+                    .first()
+                    .ok_or_else(|| anyhow::anyhow!("genesis record must be present"))?
+                    .event_id,
+            )?;
             let signing =
                 SigningIdentity::from_seed_hex_stored(&self.manager.event_log.signing_seed)?;
             let trigger = Self::event_record(EventRecordRequest {
@@ -496,7 +510,13 @@ mod tests {
     #[test]
     fn rejects_duplicate_event() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
-        fixture.records.0.push(fixture.records.0[0].clone());
+        let duplicate = fixture
+            .records
+            .0
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+            .clone();
+        fixture.records.0.push(duplicate);
         assert!(matches!(
             fixture.prepare(),
             Err(CompanionPairingPreparationFailure::DuplicateEvent)
@@ -507,8 +527,12 @@ mod tests {
     #[test]
     fn rejects_event_id_substitution() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
-        fixture.records.0[0].event_id =
-            "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo".to_owned();
+        fixture
+            .records
+            .0
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+            .event_id = "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo".to_owned();
         assert!(matches!(
             fixture.prepare(),
             Err(CompanionPairingPreparationFailure::EventIdMismatch)
@@ -519,7 +543,12 @@ mod tests {
     #[test]
     fn rejects_invalid_event_identifier() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
-        fixture.records.0[0].event_id = "not-an-event-identifier".to_owned();
+        fixture
+            .records
+            .0
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+            .event_id = "not-an-event-identifier".to_owned();
         assert!(matches!(
             fixture.prepare(),
             Err(CompanionPairingPreparationFailure::IdentifierInvalid)
@@ -531,7 +560,14 @@ mod tests {
     fn rejects_event_with_invalid_signature() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
         let (other_signer, _) = SigningIdentity::generate()?;
-        let parent = EventId::parse(&fixture.records.0[0].event_id)?;
+        let parent = EventId::parse(
+            &fixture
+                .records
+                .0
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+                .event_id,
+        )?;
         let other_record = ActivationFixture::event_record(EventRecordRequest {
             manager: &fixture.manager,
             signer: &other_signer,
@@ -539,7 +575,13 @@ mod tests {
             created_at: IsoTimestamp::parse("2026-09-08T00:00:02Z")?,
             operation: VaultOperation::VaultCleared,
         })?;
-        fixture.records.0[0].event.signature = other_record.event.signature;
+        fixture
+            .records
+            .0
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+            .event
+            .signature = other_record.event.signature;
         assert!(matches!(
             fixture.prepare(),
             Err(CompanionPairingPreparationFailure::RecordInvalid)
@@ -578,7 +620,14 @@ mod tests {
     fn rejects_quarantined_unauthorized_event() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
         let (unauthorized, _) = SigningIdentity::generate()?;
-        let parent = EventId::parse(&fixture.records.0[0].event_id)?;
+        let parent = EventId::parse(
+            &fixture
+                .records
+                .0
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+                .event_id,
+        )?;
         fixture
             .records
             .0
@@ -604,7 +653,14 @@ mod tests {
         let mut fixture = ActivationFixture::new()?;
         let signing =
             SigningIdentity::from_seed_hex_stored(&fixture.manager.event_log.signing_seed)?;
-        let parent = EventId::parse(&fixture.records.0[0].event_id)?;
+        let parent = EventId::parse(
+            &fixture
+                .records
+                .0
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+                .event_id,
+        )?;
         fixture
             .records
             .0

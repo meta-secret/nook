@@ -492,7 +492,10 @@ mod tests {
                 if message == MultiDeviceError::SentinelGenesisRosterFull.to_string()
         ));
 
-        let quorum_roster = roster[..2].to_vec();
+        let quorum_roster = roster
+            .get(..2)
+            .ok_or_else(|| anyhow::anyhow!("quorum roster fixtures must be present"))?
+            .to_vec();
         assert!(matches!(
             manager.maybe_issue_sentinel_shares(&quorum_roster)?,
             SentinelShareIssuance::Issued(_)
@@ -519,7 +522,10 @@ mod browser_tests {
     #[wasm_bindgen_test]
     fn empty_multi_device_queries_are_safe() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
-        manager.vault.members_key = nook_core::VaultKeys::generate()?.members_key.as_str().to_owned();
+        manager.vault.members_key = nook_core::VaultKeys::generate()?
+            .members_key
+            .as_str()
+            .to_owned();
         assert!(manager.init_device().is_err());
         assert!(manager.list_pending_joins()?.is_empty());
         assert!(manager.list_vault_members()?.is_empty());
@@ -773,7 +779,10 @@ mod browser_tests {
         enrollee.bootstrap_event_log_genesis().await?;
         let keys = nook_core::VaultKeys::generate()?;
         let enrolled = js(enrollee
-            .enroll_with_keys(keys.secrets_key.as_str().to_owned(), keys.members_key.as_str().to_owned())
+            .enroll_with_keys(
+                keys.secrets_key.as_str().to_owned(),
+                keys.members_key.as_str().to_owned(),
+            )
             .await)?;
         assert!(enrolled.is_empty());
         assert!(!js(enrollee.list_vault_members())?.is_empty());

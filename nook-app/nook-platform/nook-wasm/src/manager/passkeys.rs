@@ -191,7 +191,15 @@ mod tests {
 
         let decrypted = manager.decrypt_passkeys()?;
         assert_eq!(decrypted.rows.len(), 1);
-        assert_eq!(decrypted.rows[0].1.rp_id, "example.com");
+        assert_eq!(
+            decrypted
+                .rows
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("decrypted passkey row must be present"))?
+                .1
+                .rp_id,
+            "example.com"
+        );
         Ok(())
     }
 }
@@ -236,7 +244,10 @@ mod browser_tests {
         let keys = nook_core::VaultKeys::generate()?;
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
-        manager.apply_vault_keys(&keys.secrets_key.as_str().to_owned(), &keys.members_key.as_str().to_owned())?;
+        manager.apply_vault_keys(
+            &keys.secrets_key.as_str().to_owned(),
+            &keys.members_key.as_str().to_owned(),
+        )?;
 
         let accounts = manager
             .list_website_passkey_accounts("example.com", "https://example.com")

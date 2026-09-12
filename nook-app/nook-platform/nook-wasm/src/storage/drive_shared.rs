@@ -343,7 +343,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn create_folder_projection_requires_id_and_falls_back_to_name() -> anyhow::Result<()> {
-        let missing_id = DriveStorageClient::create_folder_projection(
+        let Err(missing_id) = DriveStorageClient::create_folder_projection(
             DriveStorageClientCreateFolderProjection {
                 parsed: DriveFileCreateResponse {
                     id: FileIdentity::Reported("  ".to_owned()),
@@ -351,8 +351,9 @@ mod tests {
                 },
                 fallback_name: "Fallback",
             },
-        )
-        .expect_err("a folder response without an id must be rejected");
+        ) else {
+            anyhow::bail!("a folder response without an id must be rejected");
+        };
         assert!(matches!(missing_id, NookError::Drive(message) if message.contains("missing id")));
 
         let projected = DriveStorageClient::create_folder_projection(
@@ -370,7 +371,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn verify_folder_projection_enforces_folder_and_write_capability() -> anyhow::Result<()> {
-        let not_folder = DriveStorageClient::verify_folder_projection(
+        let Err(not_folder) = DriveStorageClient::verify_folder_projection(
             DriveStorageClientVerifyFolderProjection {
                 parsed: DriveFolderMetadataResponse {
                     id: FileIdentity::Reported("folder-1".to_owned()),
@@ -382,13 +383,14 @@ mod tests {
                 },
                 fallback_id: "fallback".to_owned(),
             },
-        )
-        .expect_err("non-folder metadata must be rejected");
+        ) else {
+            anyhow::bail!("non-folder metadata must be rejected");
+        };
         assert!(
             matches!(not_folder, NookError::Drive(message) if message == i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_FOLDER)
         );
 
-        let not_writable = DriveStorageClient::verify_folder_projection(
+        let Err(not_writable) = DriveStorageClient::verify_folder_projection(
             DriveStorageClientVerifyFolderProjection {
                 parsed: DriveFolderMetadataResponse {
                     id: FileIdentity::Reported("folder-1".to_owned()),
@@ -400,8 +402,9 @@ mod tests {
                 },
                 fallback_id: "fallback".to_owned(),
             },
-        )
-        .expect_err("non-writable folders must be rejected");
+        ) else {
+            anyhow::bail!("non-writable folders must be rejected");
+        };
         assert!(
             matches!(not_writable, NookError::Drive(message) if message == i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_WRITABLE)
         );

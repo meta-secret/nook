@@ -260,15 +260,23 @@ mod tests {
                 })
                 .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
             material = opened_identity.directory;
-            let grant = &material
+            let selected = material
                 .selected()
-                .map_err(NookDatabase::map_domain_error)?
-                .vault_deks[0];
+                .map_err(NookDatabase::map_domain_error)?;
+            let grant = selected.vault_deks.first().ok_or_else(|| {
+                NookError::Database("vault grant fixture must be present".to_owned())
+            })?;
+            let secrets_envelope = grant.secrets_envelopes.first().ok_or_else(|| {
+                NookError::Database("secrets envelope fixture must be present".to_owned())
+            })?;
+            let members_envelope = grant.members_envelopes.first().ok_or_else(|| {
+                NookError::Database("members envelope fixture must be present".to_owned())
+            })?;
             Ok(ImportFixture {
                 identity,
                 store_id,
-                secrets_envelope: grant.secrets_envelopes[0].envelope.clone(),
-                members_envelope: grant.members_envelopes[0].envelope.clone(),
+                secrets_envelope: secrets_envelope.envelope.clone(),
+                members_envelope: members_envelope.envelope.clone(),
             })
         }
 
