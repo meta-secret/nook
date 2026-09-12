@@ -56,22 +56,114 @@ type SiteShellRef = {
   loginUrl: string
 }
 
-const siteShells = JSON.parse(readFileSync(siteShellsPath, 'utf8')) as Record<
-  string,
-  SiteShellRef
->
-const pilotExpectations = JSON.parse(
-  readFileSync(pilotExpectationsPath, 'utf8'),
-) as Record<string, SiteFixturePilotExpectation>
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string'
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || isString(value)
+}
+
+function isRecordOf<T>(
+  value: unknown,
+  guard: (entry: unknown) => entry is T,
+): value is Record<string, T> {
+  return isRecord(value) && Object.values(value).every(guard)
+}
+
+function isSiteShellRef(value: unknown): value is SiteShellRef {
+  return (
+    isRecord(value) &&
+    isString(value.template) &&
+    isString(value.source) &&
+    isString(value.loginUrl)
+  )
+}
+
+function isSiteFixtureField(value: unknown): value is SiteFixtureField {
+  return (
+    isRecord(value) &&
+    isOptionalString(value.name) &&
+    isOptionalString(value.type) &&
+    isOptionalString(value.id) &&
+    isOptionalString(value.autocomplete) &&
+    isOptionalString(value.inputmode) &&
+    isOptionalString(value.label) &&
+    isOptionalString(value.placeholder) &&
+    isOptionalString(value['aria-label']) &&
+    isOptionalString(value['data-qa']) &&
+    isOptionalString(value['data-testid'])
+  )
+}
+
+function isShellTemplate(value: unknown): value is ShellTemplate {
+  if (!isRecord(value) || !isString(value.id)) return false
+  if (
+    !Array.isArray(value.quirks) ||
+    !value.quirks.every(isString) ||
+    !Array.isArray(value.steps)
+  ) {
+    return false
+  }
+  return value.steps.every((step) => {
+    if (!isRecord(step) || !Array.isArray(step.fields) || !isRecord(step.submit)) {
+      return false
+    }
+    return (
+      step.fields.every(isSiteFixtureField) &&
+      isString(step.submit.label) &&
+      isOptionalString(step.submit.type) &&
+      isOptionalString(step.submit.name) &&
+      isOptionalString(step.submit.id)
+    )
+  })
+}
+
+function isCatalogEntry(value: unknown): value is CatalogEntry {
+  return isRecord(value) && isString(value.id) && typeof value.rank === 'number'
+}
+
+function isPilotExpectation(
+  value: unknown,
+): value is SiteFixturePilotExpectation {
+  return Object.values(SiteFixturePilotExpectation).some(
+    (expectation) => expectation === value,
+  )
+}
+
+function readJson<T>(
+  filePath: string,
+  guard: (value: unknown) => value is T,
+): T {
+  const value = JSON.parse(readFileSync(filePath, 'utf8')) as unknown
+  if (!guard(value)) throw new Error(`invalid fixture JSON: ${filePath}`)
+  return value
+}
+
+const siteShells = readJson(
+  siteShellsPath,
+  (value): value is Record<string, SiteShellRef> =>
+    isRecordOf(value, isSiteShellRef),
+)
+const pilotExpectations = readJson(
+  pilotExpectationsPath,
+  (value): value is Record<string, SiteFixturePilotExpectation> =>
+    isRecordOf(value, isPilotExpectation),
+)
 const templates = new Map(
   readdirSync(templatesDir)
     .filter((name) => name.endsWith('.json'))
     .map((name) => {
       const id = name.replace(/\.json$/u, '')
-      const template = JSON.parse(
-        readFileSync(path.join(templatesDir, name), 'utf8'),
-      ) as ShellTemplate
-      return [id, { ...template, id }] as const
+      const template = readJson(
+        path.join(templatesDir, name),
+        isShellTemplate,
+      )
+      return [id, { ...template, id }]
     }),
 )
 
@@ -127,9 +219,11 @@ afterEach(() => {
 })
 
 describe('popular login shell templates', () => {
-  const catalog = JSON.parse(
-    readFileSync(catalogPath, 'utf8'),
-  ) as CatalogEntry[]
+  const catalog = readJson(
+    catalogPath,
+    (value): value is CatalogEntry[] =>
+      Array.isArray(value) && value.every(isCatalogEntry),
+  )
   const templateIds = [...templates.keys()].sort()
 
   test('catalog maps every site to a shared template (no per-site shell copies)', () => {
@@ -155,7 +249,8 @@ describe('popular login shell templates', () => {
   test.each(templateIds.map((id) => [id, id]))(
     'detects login workflow for template %s',
     (templateId) => {
-      const fixture = templates.get(templateId) as ShellTemplate
+      const fixture = templates.get(templateId)
+      if (!fixture) expect.fail(`missing template ${templateId}`)
       expect(fixture.steps.length).toBeGreaterThan(0)
 
       const [firstStep] = fixture.steps

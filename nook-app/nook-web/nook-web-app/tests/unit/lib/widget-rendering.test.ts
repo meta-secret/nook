@@ -1,15 +1,20 @@
 /// <reference types="chrome" />
 
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  AuthenticationWorkflowAction,
+  type AuthenticationPageObservationFacts,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
+import type { AuthenticationWorkflowSnapshotView } from '../../../../nook-web-extension/src/lib/auth-workflow-messages'
 
 const actions = vi.hoisted(() => ({
-  cancelLoginPicker: vi.fn(),
-  continueWithNook: vi.fn(),
+  cancelLoginPicker: vi.fn<() => void>(),
+  continueWithNook: vi.fn<() => void>(),
   enrollmentCopy: vi.fn(),
-  proposePasskeyWithNook: vi.fn(),
-  revalidateEnrollment: vi.fn(),
-  startQrEnrollment: vi.fn(),
+  proposePasskeyWithNook: vi.fn<() => void>(),
+  revalidateEnrollment: vi.fn<(request: RevalidatedEnrollmentRequest) => void>(),
+  startQrEnrollment: vi.fn<() => void>(),
   events: [] as string[],
 }))
 
@@ -182,7 +187,7 @@ vi.mock(
 
 import { authenticationWidgetRenderer } from '../../../../nook-web-extension/src/content/autofill/widget-rendering'
 
-const workflow = {
+const workflow: PasswordFormObservation = {
   root: document,
   formScope: { kind: 'unowned' },
   summary: {
@@ -197,9 +202,9 @@ const workflow = {
     formCount: 0,
     observedAt: 0,
   },
-} as Parameters<typeof authenticationWidgetRenderer.renderWidget>[0]['workflow']
+}
 
-const snapshot = {
+const snapshot: AuthenticationWorkflowSnapshotView = {
   kind: 0,
   stage: 0,
   action: AuthenticationWorkflowAction.UsePasskey,
@@ -208,7 +213,32 @@ const snapshot = {
   approvalRequirement: 'explicit-user-approval',
   savedLoginCapability: 'fill-saved-login',
   observationIndex: 0,
-} as Parameters<typeof authenticationWidgetRenderer.renderWidget>[0]['snapshot']
+}
+
+const facts: AuthenticationPageObservationFacts = {
+  fields: {
+    usernameFieldCount: 1,
+    currentPasswordFieldCount: 1,
+    newPasswordFieldCount: 0,
+    genericPasswordFieldCount: 0,
+    oneTimeCodeFieldCount: 0,
+    actionablePasswordFieldCount: 1,
+    readonlyPasswordFieldCount: 0,
+  },
+  ceremony: {
+    oneTimeCodeProgression: 'advance-control-required',
+    manualCheckpoint: 'absent',
+    advanceControl: 'present',
+  },
+  authenticator: {
+    authenticatorSetup: 'absent',
+    backupCodesCopy: '',
+    passkeyControl: 'absent',
+    passkeyAccountAvailability: 'unavailable',
+    matchingPasskeyAccountCount: 0,
+  },
+  credentialSubmission: { kind: 'absent' },
+}
 
 type RenderPasskeyWidgetArgs = {
   loginMatches: Parameters<
@@ -217,13 +247,13 @@ type RenderPasskeyWidgetArgs = {
 }
 
 function renderPasskeyWidget({ loginMatches }: RenderPasskeyWidgetArgs): void {
-  const args = {
+  const args: Parameters<typeof authenticationWidgetRenderer.renderWidget>[0] = {
     snapshot,
     workflow,
-    facts: {},
+    facts,
     loginMatches,
     vaultConnection: { connected: true, vaultName: 'Personal' },
-  } as Parameters<typeof authenticationWidgetRenderer.renderWidget>[0]
+  }
   authenticationWidgetRenderer.renderWidget(args)
 }
 
@@ -296,17 +326,17 @@ describe('passkey workflow saved-login fallback', () => {
 
 describe('authenticator enrollment workflow', () => {
   test('renders and dispatches the Rust-selected enrollment action', () => {
-    const enrollmentSnapshot = {
+    const enrollmentSnapshot: AuthenticationWorkflowSnapshotView = {
       ...snapshot,
       action: AuthenticationWorkflowAction.EnrollAuthenticator,
     }
-    const args = {
+    const args: Parameters<typeof authenticationWidgetRenderer.renderWidget>[0] = {
       snapshot: enrollmentSnapshot,
       workflow,
-      facts: {},
+      facts,
       loginMatches: { kind: 'unavailable' },
       vaultConnection: { connected: true, vaultName: 'Personal' },
-    } as Parameters<typeof authenticationWidgetRenderer.renderWidget>[0]
+    }
 
     authenticationWidgetRenderer.renderWidget(args)
     const primary = document.querySelector<HTMLButtonElement>(

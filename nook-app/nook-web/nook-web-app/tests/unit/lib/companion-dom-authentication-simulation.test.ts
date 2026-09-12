@@ -423,21 +423,26 @@ describe('DOM-backed companion authentication simulation', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(facts.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: expect.arrayContaining([
-        expect.objectContaining({
-          actionability: 'actionable',
-          label: expect.stringContaining('Continue with Apple'),
-          submissionMethod: 'absent',
-        }),
-        expect.objectContaining({
-          actionability: 'actionable',
-          label: expect.stringContaining('Continue with phone'),
-          submissionMethod: 'absent',
-        }),
-      ]),
-    })
+    const detailedAdvanceControl = facts.detailedAdvanceControl
+    if (detailedAdvanceControl?.kind !== 'observed') {
+      throw new Error('expected detailed advance-control observations')
+    }
+    expect(
+      detailedAdvanceControl.observations.some(
+        (observation) =>
+          observation.actionability === 'actionable' &&
+          observation.label.includes('Continue with Apple') &&
+          observation.submissionMethod === 'absent',
+      ),
+    ).toBe(true)
+    expect(
+      detailedAdvanceControl.observations.some(
+        (observation) =>
+          observation.actionability === 'actionable' &&
+          observation.label.includes('Continue with phone') &&
+          observation.submissionMethod === 'absent',
+      ),
+    ).toBe(true)
     expect(facts.ceremony).toMatchObject({
       advanceControl: 'implicit-submission',
       implicitSubmissionMethod: 'get',
@@ -510,16 +515,18 @@ describe('DOM-backed companion authentication simulation', () => {
       backupCodesHint: false,
     })
     expect(facts.ceremony.advanceControl).toBe('absent')
-    expect(facts.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: [
-        expect.objectContaining({
-          actionability: 'actionable',
-          label: expect.stringContaining('Continue'),
-          submissionMethod: 'absent',
-        }),
-      ],
-    })
+    const detailedAdvanceControl = facts.detailedAdvanceControl
+    if (detailedAdvanceControl?.kind !== 'observed') {
+      throw new Error('expected detailed advance-control observations')
+    }
+    expect(
+      detailedAdvanceControl.observations.some(
+        (observation) =>
+          observation.actionability === 'actionable' &&
+          observation.label.includes('Continue') &&
+          observation.submissionMethod === 'absent',
+      ),
+    ).toBe(true)
   })
 
   test('runs both bounded steps of the cross-origin Apple authorization surface', () => {

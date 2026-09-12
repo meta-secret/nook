@@ -35,9 +35,12 @@ describe('discovery deadline ownership', () => {
       },
     )
     const owner = new VaultDiscoveryTimeout({ timeoutMs: 10 })
+    const releaseLateHandle = (value: typeof handle): void => {
+      value.free()
+    }
     const waiting = owner.waitFor({
       operation,
-      releaseLateValue: (value) => value.free(),
+      releaseLateValue: releaseLateHandle,
     })
     await vi.advanceTimersByTimeAsync(10)
     const outcome = await waiting

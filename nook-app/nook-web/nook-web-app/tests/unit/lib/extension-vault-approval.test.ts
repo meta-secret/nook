@@ -17,7 +17,10 @@ vi.mock('$lib/auth/providers', () => ({
   seal_auth_providers_for_device_public_key: vi.fn(),
 }))
 
-import type { NookVaultManager } from '$app-wasm'
+import {
+  NookVaultManager,
+  type NookEventLogRecords,
+} from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   ExtensionConnectScope,
   ExtensionIdentityRequestSource,
@@ -32,6 +35,7 @@ import {
 } from '$lib/runtime/storage-failure'
 import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 import type { VaultState } from '$lib/vault.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 const request: ExtensionConnectRequest = {
   source: ExtensionIdentityRequestSource.ExtensionConnect,
@@ -48,21 +52,27 @@ function approvalFixture() {
   const records = {
     to_array: vi.fn(() => []),
     free: vi.fn(),
-  }
-  const manager = {
-    vaultStoreId: 'store-1',
-    export_event_log_records_js: vi.fn(async () => records),
-  } as unknown as NookVaultManager
+    [Symbol.dispose]: vi.fn(),
+  } satisfies NookEventLogRecords
+  const manager = new NookVaultManager()
+  Object.defineProperty(manager, 'vaultStoreId', {
+    configurable: true,
+    value: 'store-1',
+  })
+  manager.export_event_log_records_js = vi.fn(async () => records)
   const admitManager = vi.fn<
     () => Result<NookVaultManager, VaultStorageFailure>
   >(() => ok(manager))
-  const vault = {
-    activeVault: { kind: ActiveVaultKind.Open, storeId: 'store-1' },
-    admitManager,
-    enqueueStorage: (operation: () => unknown) => operation(),
-    localVaults: [],
-    t: vi.fn(() => 'Unnamed vault'),
-  } as unknown as VaultState
+  const vault = VaultStateTestFixture.create()
+  vault.activeVault = { kind: ActiveVaultKind.Open, storeId: 'store-1' }
+  vault.openManager(manager)
+  const immediateStorage: VaultState['enqueueStorage'] = async (operation) =>
+    operation()
+  vault.enqueueStorage = immediateStorage
+  vault.localVaults = []
+  vault.admitManager = admitManager
+  vault.t = (key: Parameters<VaultState['t']>[0]) =>
+    typeof key === 'string' ? key : 'Unnamed vault'
   return { admitManager, manager, records, vault }
 }
 
@@ -117,7 +127,7 @@ describe('extension vault approval', () => {
 
   test('rejects a manager generation change between authorization and export', async () => {
     const fixture = approvalFixture()
-    const replacement = {} as NookVaultManager
+    const replacement = new NookVaultManager()
     fixture.admitManager
       .mockReturnValueOnce(ok(fixture.manager))
       .mockReturnValueOnce(ok(fixture.manager))

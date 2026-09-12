@@ -39,7 +39,9 @@ const {
 } = await extensionPairingGrantPolicyReady
 
 function locationFromUrl(url: string): Location {
-  return new URL(url) as unknown as Location
+  const parsed = new URL(url)
+  window.history.replaceState({}, '', `${parsed.pathname}${parsed.search}`)
+  return window.location
 }
 
 afterEach(() => {
@@ -523,18 +525,18 @@ describe('extension pairing approved message', () => {
     expect(items[pairingGrantStorageKey('store-1')]).not.toHaveProperty(
       'providers',
     )
-    expect(items[setupStorageKey]).toEqual({
-      status: 'ready',
-      deviceLabel: 'Nook Extension',
-      pairedVaults: ['Personal'],
-      selectedVaultStoreId: 'store-1',
-      selectedVaultName: 'Personal',
-      syncProviderCount: 2,
-      eventCount: 3,
-      eventLogHeads: ['event-3'],
-      lastLocalSyncAt: expect.any(String),
-    })
-    expect(isExtensionReadySetupState(items[setupStorageKey])).toBe(true)
+    const setup = items[setupStorageKey]
+    if (!isExtensionReadySetupState(setup)) {
+      throw new Error('expected a ready extension setup')
+    }
+    expect(setup.deviceLabel).toBe('Nook Extension')
+    expect(setup.pairedVaults).toEqual(['Personal'])
+    expect(setup.selectedVaultStoreId).toBe('store-1')
+    expect(setup.selectedVaultName).toBe('Personal')
+    expect(setup.syncProviderCount).toBe(2)
+    expect(setup.eventCount).toBe(3)
+    expect(setup.eventLogHeads).toEqual(['event-3'])
+    expect(typeof setup.lastLocalSyncAt).toBe('string')
   })
 
   test('does not present incomplete or revoked setup as connected', () => {
@@ -672,19 +674,19 @@ describe('extension pairing approved message', () => {
       stored,
       removedVaultStoreId: 'store-2',
     }
-    expect(setupAfterPairingGrantRemoval(removalArgs)).toEqual({
-      kind: 'ready',
-      setup: expect.objectContaining({
-        selectedVaultStoreId: 'store-1',
-        selectedVaultName: 'Personal',
-        eventCount: 2,
-      }),
-    })
+    const restored = setupAfterPairingGrantRemoval(removalArgs)
+    if (restored.kind !== 'ready') {
+      throw new Error('expected a surviving paired vault')
+    }
+    expect(restored.setup.selectedVaultStoreId).toBe('store-1')
+    expect(restored.setup.selectedVaultName).toBe('Personal')
+    expect(restored.setup.eventCount).toBe(2)
     expect(selectedPairingGrantFirst(stored)[0]?.vaultStoreId).toBe('store-2')
-    expect(selectedPairingGrant(stored)).toEqual({
-      kind: 'selected',
-      grant: expect.objectContaining({ vaultStoreId: 'store-2' }),
-    })
+    const selected = selectedPairingGrant(stored)
+    if (selected.kind !== 'selected') {
+      throw new Error('expected the newest paired vault to be selected')
+    }
+    expect(selected.grant.vaultStoreId).toBe('store-2')
   })
 
   test('migrates the uniquely selected valid legacy grant into Rexie shape', () => {

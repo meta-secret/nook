@@ -127,11 +127,16 @@ describe('google-oauth', () => {
       defaultPromptRequest,
     )
     expect(requests.get(sharedScope)).toHaveBeenCalledWith(defaultPromptRequest)
-    callbacks.get(sharedScope)!({
+    const fileCallback = callbacks.get(sharedScope)
+    const appDataCallback = callbacks.get(DRIVE_APPDATA_SCOPE)
+    if (!fileCallback || !appDataCallback) {
+      throw new Error('expected Google token callbacks')
+    }
+    fileCallback({
       access_token: 'file-token',
       expires_in: 3600,
     })
-    callbacks.get(DRIVE_APPDATA_SCOPE)!({
+    appDataCallback({
       access_token: 'appdata-token',
       expires_in: 3600,
     })

@@ -1,8 +1,26 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { emptyPasswordFormSummary } from '../../../../nook-web-shared/src/extension/password-form-summary-state'
+import type { EnrollmentFlowHost } from '../../../../nook-web-extension/src/content/enrollment-flow'
+import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
+
+type RevalidationRequest = ConstructorParameters<
+  typeof import('../../../../nook-web-extension/src/content/autofill/workflow-revalidation').RevalidatedAuthenticationAction
+>[0]
+type RevalidationOutcome = Awaited<
+  ReturnType<
+    typeof import('../../../../nook-web-extension/src/content/autofill/workflow-revalidation').RevalidatedAuthenticationAction.prototype.execute
+  >
+>
+
 const mocks = vi.hoisted(() => ({
-  revalidate: vi.fn(),
-  startEnrollment: vi.fn(),
+  revalidate: vi.fn(
+    async (request: RevalidationRequest): Promise<RevalidationOutcome> => {
+      void request
+      return { kind: 'rejected' }
+    },
+  ),
+  startEnrollment: vi.fn<() => void>(),
 }))
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/workflow-revalidation',
@@ -12,9 +30,7 @@ vi.mock(
     RevalidatedAuthenticationActResultKind: { Acted: 'acted' },
     RevalidatedAuthenticationAction: class {
       constructor(
-        private readonly request: ConstructorParameters<
-          typeof import('../../../../nook-web-extension/src/content/autofill/workflow-revalidation').RevalidatedAuthenticationAction
-        >[0],
+        private readonly request: RevalidationRequest,
       ) {}
       execute() {
         return mocks.revalidate(this.request)
@@ -31,21 +47,47 @@ describe('backup-code workflow action', () => {
   function connectedHost() {
     let busy = false
     const panel = document.createElement('section')
+    const title = document.createElement('h2')
+    const description = document.createElement('p')
+    const step = document.createElement('p')
+    const continueButton = document.createElement('button')
+    const openVaultButton = document.createElement('button')
     document.body.append(panel)
-    return {
+    const host: EnrollmentFlowHost = {
       panel,
+      title,
+      description,
+      translatedMessage: (key) => key,
+      step,
+      continueButton,
+      openVaultButton,
       isBusy: () => busy,
       setBusy: (value: boolean) => {
         busy = value
       },
+      sendDecodedRuntimeMessage: vi.fn<EnrollmentFlowHost['sendDecodedRuntimeMessage']>(),
+      sendAuthenticationOutcomeRuntimeMessage: vi.fn<EnrollmentFlowHost['sendAuthenticationOutcomeRuntimeMessage']>(),
+      sendAuthenticatorBackupAttachRuntimeMessage: vi.fn<EnrollmentFlowHost['sendAuthenticatorBackupAttachRuntimeMessage']>(),
+      sendAuthenticatorEnrollmentConfirmRuntimeMessage: vi.fn<EnrollmentFlowHost['sendAuthenticatorEnrollmentConfirmRuntimeMessage']>(),
+      sendAuthenticatorEnrollmentStageRuntimeMessage: vi.fn<EnrollmentFlowHost['sendAuthenticatorEnrollmentStageRuntimeMessage']>(),
+      sendAuthenticatorCodeRuntimeMessage: vi.fn<EnrollmentFlowHost['sendAuthenticatorCodeRuntimeMessage']>(),
+      sendAuthenticatorOptionsRuntimeMessage: vi.fn<EnrollmentFlowHost['sendAuthenticatorOptionsRuntimeMessage']>(),
+      sendAuthenticatorPreviewRuntimeMessage: vi.fn<EnrollmentFlowHost['sendAuthenticatorPreviewRuntimeMessage']>(),
+      sendRuntimeMessageWithoutResponse: vi.fn<EnrollmentFlowHost['sendRuntimeMessageWithoutResponse']>(),
+      translatedMessageWithSubstitution: vi.fn<EnrollmentFlowHost['translatedMessageWithSubstitution']>(),
     }
+    document.body.append(title, description, step, continueButton, openVaultButton)
+    return host
   }
   test('starts extraction only inside a fresh Rust-approved action', async () => {
-    mocks.revalidate.mockImplementation(async (request) => request.act())
-    const workflow = {
+    mocks.revalidate.mockImplementation(async (request) => {
+      const result = request.act()
+      return { kind: result.kind === 'acted' ? 'acted' : 'action-failed' }
+    })
+    const workflow: PasswordFormObservation = {
       root: document,
       formScope: { kind: 'unowned' },
-      summary: {},
+      summary: { ...emptyPasswordFormSummary },
     }
     const host = connectedHost()
     await expect(
@@ -54,7 +96,7 @@ describe('backup-code workflow action', () => {
         host,
         action: AuthenticationWorkflowAction.SaveBackupCodes,
         start: mocks.startEnrollment,
-      } as never).execute(),
+      }).execute(),
     ).resolves.toBe(true)
     expect(mocks.revalidate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -67,8 +109,7 @@ describe('backup-code workflow action', () => {
     mocks.revalidate.mockResolvedValue(false)
     await expect(
       new RevalidatedEnrollmentAction({
-        workflow: {} as never,
-        host: connectedHost() as never,
+        host: connectedHost(),
         action: AuthenticationWorkflowAction.SaveBackupCodes,
         start: mocks.startEnrollment,
       }).execute(),
@@ -86,19 +127,19 @@ describe('backup-code workflow action', () => {
         }),
     )
     const host = connectedHost()
-    const request = {
+    const request: ConstructorParameters<typeof RevalidatedEnrollmentAction>[0] = {
       workflow: {
         root: document,
         formScope: { kind: 'unowned' },
-        summary: {},
+        summary: { ...emptyPasswordFormSummary },
       },
       host,
       action: AuthenticationWorkflowAction.SaveBackupCodes,
       start: mocks.startEnrollment,
     }
-    const first = new RevalidatedEnrollmentAction(request as never).execute()
+    const first = new RevalidatedEnrollmentAction(request).execute()
     await expect(
-      new RevalidatedEnrollmentAction(request as never).execute(),
+      new RevalidatedEnrollmentAction(request).execute(),
     ).resolves.toBe(false)
     expect(mocks.revalidate).toHaveBeenCalledOnce()
     release?.()
