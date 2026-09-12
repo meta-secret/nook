@@ -68,6 +68,7 @@ Report the blocker instead of reporting an intermediate state as complete.
    - Grant one commit turn at a time.
    - Require every writer to commit its complete scoped iteration.
    - Run deferred checks serially after the wave has a stable committed head.
+   - Require the terminal handoff to enumerate every iteration commit.
    - Have later iterations read the last one or two relevant commits and diffs.
    - Continue directly from the resulting shared-branch state.
 5. **Prepare the delivery head.**
@@ -149,6 +150,8 @@ Delivery is complete only when:
   committed head;
 - only one writer mutated the Git index or committed at a time;
 - every writer committed its complete scoped iteration;
+- terminal handoffs enumerated every iteration SHA, outcome, evidence, and
+  unresolved blockers;
 - provider-consumer evidence passed on the combined branch;
 - the shared branch contains every accepted change;
 - repository-owned checks pass on the exact head;

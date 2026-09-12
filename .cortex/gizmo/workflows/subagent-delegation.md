@@ -84,7 +84,9 @@ the active harness.
     - Route any tracked output to its assigned owner.
     - Require that owner to commit the output as a complete new iteration.
 11. Request one terminal handoff from each writer.
-   - Include the commit SHA, changed outcomes, evidence, and blockers.
+    - Enumerate every committed iteration in order.
+    - For each iteration, include its SHA, outcome, evidence, and unresolved
+      blockers.
 12. Verify each commit stays inside its declared scope.
 13. Co-validate the combined branch after all tasks in the wave commit.
 14. Continue with the next dependency-ready wave.
@@ -170,6 +172,9 @@ Before accepting Team Agent work, verify:
 - only one writer mutated the Git index or committed at a time;
 - the shared branch contains the accepted result;
 - every writer committed its complete scoped iteration;
+- each terminal handoff enumerated every iteration commit in order;
+- each iteration entry named its SHA, outcome, evidence, and unresolved
+  blockers;
 - later iterations inspected the last one or two relevant commits and diffs;
 - provider-consumer evidence passed on the combined branch;
 - focused acceptance checks passed;

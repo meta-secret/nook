@@ -18,9 +18,11 @@ simple shared-branch delivery sequence.
 9. Grant one commit turn at a time.
 10. Require every writer to commit its complete scoped iteration.
 11. Run deferred checks serially on the stable committed head.
-12. Co-validate the combined shared-branch state.
-13. Route review or validation fixes to the responsible team.
-14. Let Gizmo complete external delivery.
+12. Require each terminal handoff to enumerate all iteration commits.
+    - Each entry names its SHA, outcome, evidence, and unresolved blockers.
+13. Co-validate the combined shared-branch state.
+14. Route review or validation fixes to the responsible team.
+15. Let Gizmo complete external delivery.
 
 ## Rules
 
@@ -51,6 +53,8 @@ simple shared-branch delivery sequence.
 - Acceptance commands were concurrency-safe or ran serially on a stable
   committed head.
 - Every writer committed its complete scoped iteration.
+- Every terminal handoff enumerated each iteration SHA, outcome, evidence, and
+  unresolved blockers.
 - Only one writer mutated the Git index or committed at a time.
 - Provider-consumer evidence passed on the combined branch.
 - Gizmo retains external delivery policy, authorization, and verdict

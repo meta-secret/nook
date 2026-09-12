@@ -125,6 +125,8 @@ Workbench record, not another coordinator or worker. See the
   - Only one Team Agent mutates the Git index or creates a commit at a time.
   - Every write-capable Team Agent commits its complete scoped iteration during
     the commit turn granted by Gizmo.
+  - Its terminal handoff enumerates every iteration commit in order.
+    - Each entry names the SHA, outcome, evidence, and unresolved blockers.
   - Gizmo continues directly from those commits on the shared branch.
   - A later worker iteration reads the last one or two relevant commits and
     diffs before changing its owned scope.

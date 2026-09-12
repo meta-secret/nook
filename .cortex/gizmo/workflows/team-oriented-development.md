@@ -27,9 +27,11 @@ simple shared-branch sequence.
 4. Grant one commit turn at a time as writers finish.
 5. Require every writer to commit its complete scoped iteration.
 6. Run deferred checks serially on the stable committed head.
-7. Verify each commit's changed paths and evidence.
-8. Co-validate the combined shared-branch state.
-9. Start dependent tasks only after their provider commits.
+7. Require each terminal handoff to enumerate all iteration commits.
+   - Each entry names its SHA, outcome, evidence, and unresolved blockers.
+8. Verify each commit's changed paths and evidence.
+9. Co-validate the combined shared-branch state.
+10. Start dependent tasks only after their provider commits.
 
 Read-only Team Agents may run concurrently when their inspection cannot
 interfere with writers.
@@ -82,6 +84,8 @@ The technical result is ready when:
   committed head;
 - only one writer mutated the Git index or committed at a time;
 - every writer committed its complete scoped iteration;
+- terminal handoffs enumerated every iteration SHA, outcome, evidence, and
+  unresolved blockers;
 - combined provider-consumer evidence passed;
 - all accepted changes are already on the shared branch;
 - focused tests passed; and
