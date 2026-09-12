@@ -92,14 +92,13 @@ describe('credential submission observation facts', () => {
       </form>
     `
 
-    expect(authenticationFacts().credentialSubmission).toMatchObject({
-      kind: 'observed',
-      facts: {
-        method: 'post',
-        formIdentity: 'login',
-        destinationIdentity: expect.stringContaining('/login'),
-      },
-    })
+    const submission = authenticationFacts().credentialSubmission
+    if (submission.kind !== 'observed') {
+      throw new Error('expected an observed credential submission')
+    }
+    expect(submission.facts.method).toBe('post')
+    expect(submission.facts.formIdentity).toBe('login')
+    expect(submission.facts.destinationIdentity).toContain('/login')
   })
 
   test('binds an actionable implicit owned POST submission', () => {
@@ -111,14 +110,13 @@ describe('credential submission observation facts', () => {
       </form>
     `
 
-    expect(authenticationFacts().credentialSubmission).toMatchObject({
-      kind: 'observed',
-      facts: {
-        actionability: 'actionable',
-        method: 'post',
-        destinationIdentity: expect.stringContaining('/session'),
-      },
-    })
+    const submission = authenticationFacts().credentialSubmission
+    if (submission.kind !== 'observed') {
+      throw new Error('expected an observed credential submission')
+    }
+    expect(submission.facts.actionability).toBe('actionable')
+    expect(submission.facts.method).toBe('post')
+    expect(submission.facts.destinationIdentity).toContain('/session')
   })
 
   test('does not bind a custom button activation to the form route', () => {
@@ -145,13 +143,12 @@ describe('credential submission observation facts', () => {
       </form>
     `
 
-    expect(authenticationFacts().credentialSubmission).toMatchObject({
-      kind: 'observed',
-      facts: {
-        method: 'post',
-        destinationIdentity: expect.stringContaining('/approved-login'),
-      },
-    })
+    const submission = authenticationFacts().credentialSubmission
+    if (submission.kind !== 'observed') {
+      throw new Error('expected an observed credential submission')
+    }
+    expect(submission.facts.method).toBe('post')
+    expect(submission.facts.destinationIdentity).toContain('/approved-login')
   })
 
   test('binds readonly and effectively disabled password-field transitions', () => {

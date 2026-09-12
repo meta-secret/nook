@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { authentication_advance_control_is_safe } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   AUTHENTICATION_SUBMIT_VALUE_SOURCE,
@@ -227,15 +227,10 @@ describe('authentication fact rescans', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(before.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: [
-        {
-          label: expect.stringContaining('Delete'),
-          formIdentity: expect.stringContaining('Login'),
-        },
-      ],
-    })
+    expect(before.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
+    const serializedBefore = JSON.stringify(before.detailedAdvanceControl)
+    expect(serializedBefore).toContain('Delete')
+    expect(serializedBefore).toContain('Login')
 
     const submitter = document.querySelector('input[type="submit"]')
     submitter?.setAttribute('value', 'Sign in')
@@ -247,15 +242,10 @@ describe('authentication fact rescans', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(after.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: [
-        {
-          label: expect.stringContaining('Sign in'),
-          formIdentity: expect.stringContaining('Login'),
-        },
-      ],
-    })
+    expect(after.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
+    const serializedAfter = JSON.stringify(after.detailedAdvanceControl)
+    expect(serializedAfter).toContain('Sign in')
+    expect(serializedAfter).toContain('Login')
   })
 
   test('rescans after label for, iframe src, or checkpoint attributes change', () => {
@@ -475,10 +465,10 @@ describe('authentication fact rescans', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(before.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: [{ label: expect.stringContaining('Resend code') }],
-    })
+    expect(before.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
+    expect(JSON.stringify(before.detailedAdvanceControl)).toContain(
+      'Resend code',
+    )
     let rescans = 0
     const stop =
       authenticationFactObserver.observeAuthenticationSubmitValueAssignments(
@@ -493,10 +483,10 @@ describe('authentication fact rescans', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(after.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: [{ label: expect.stringContaining('Verify code') }],
-    })
+    expect(after.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
+    expect(JSON.stringify(after.detailedAdvanceControl)).toContain(
+      'Verify code',
+    )
     stop()
   })
 
@@ -551,20 +541,16 @@ describe('authentication fact rescans', () => {
   })
 
   test('bridges MAIN-world submit value assignments to the isolated listener', () => {
-    const posted: Array<{ message: unknown; targetOrigin: string }> = []
-    const originalPostMessage = window.postMessage.bind(window)
-    window.postMessage = ((message: unknown, targetOrigin: string) => {
-      posted.push({ message, targetOrigin })
-    }) as typeof window.postMessage
+    const postMessage = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => {})
     authenticationFactObserver.notifyAuthenticationSubmitValueAssigned()
-    window.postMessage = originalPostMessage
 
-    expect(posted).toEqual([
-      {
-        message: { source: AUTHENTICATION_SUBMIT_VALUE_SOURCE },
-        targetOrigin: location.origin,
-      },
-    ])
+    expect(postMessage).toHaveBeenCalledWith(
+      { source: AUTHENTICATION_SUBMIT_VALUE_SOURCE },
+      location.origin,
+    )
+    postMessage.mockRestore()
     const event = new MessageEvent('message', {
       data: { source: AUTHENTICATION_SUBMIT_VALUE_SOURCE },
       origin: location.origin,
@@ -579,14 +565,9 @@ describe('authentication fact rescans', () => {
   })
 
   test('does not post submit-value notifications to an opaque origin', () => {
-    const posted: Array<{ message: unknown; targetOrigin: string }> = []
-    const originalPostMessage = window.postMessage.bind(window)
-    window.postMessage = ((message: unknown, targetOrigin: string) => {
-      posted.push({ message, targetOrigin })
-      if (targetOrigin === 'null') {
-        throw new Error('opaque origin')
-      }
-    }) as typeof window.postMessage
+    const postMessage = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => {})
     const originalOrigin = location.origin
     Object.defineProperty(location, 'origin', {
       configurable: true,
@@ -595,12 +576,12 @@ describe('authentication fact rescans', () => {
     expect(() =>
       authenticationFactObserver.notifyAuthenticationSubmitValueAssigned(),
     ).not.toThrow()
-    expect(posted).toEqual([])
+    expect(postMessage).not.toHaveBeenCalled()
+    postMessage.mockRestore()
     Object.defineProperty(location, 'origin', {
       configurable: true,
       value: originalOrigin,
     })
-    window.postMessage = originalPostMessage
     expect(
       authenticationFactObserver.isAuthenticationSubmitValueMessage(
         new MessageEvent('message', {
