@@ -47,6 +47,9 @@ explicit handoff. Related scope does not transfer ownership. Follow
 - Do not close a PR manually and claim it merged.
 - Do not use per-push path filtering to reduce dev slow checks.
 - Do not cancel an active dev validation run or introduce a custom scheduler.
+- Do not create stacked branches or pull requests. When a feature genuinely
+  requires multiple slices, use one strictly sequential sequence from the
+  current `origin/main` and complete this procedure for every slice.
 
 ## PR title and description
 
@@ -122,7 +125,9 @@ Follow [mission delivery](mission-delivery.md) for feature handoffs and
 [dev promotion](../../teams/dev-manager/dynamic-skills/dev-promote.md) for
 manager operations. Apply
 [self-improvement](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review)
-only when the work reveals an evidence-backed durable lesson.
+only when the work reveals an evidence-backed durable lesson. Record the
+self-improvement review with the readiness evidence; No promotion is required
+when that review finds no evidence-backed durable lesson.
 
 ## Pull request size and modularity
 

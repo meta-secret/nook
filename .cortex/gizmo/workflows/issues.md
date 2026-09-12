@@ -242,6 +242,29 @@ enumerates exact repository-relative code, test, and forbidden paths,
 consumer interfaces, and provider-owned evidence. Otherwise every expertise
 field is `None`.
 
+The plan contract uses these validator-recognized labels:
+
+```text
+- Mission controller:
+- Current Gizmo ID:
+- Estimated authored changed lines:
+- Owning modules, packages, or layers:
+- Ownership units:
+- Public or cross-module interfaces:
+- Delivery shape:
+- PR sequence mode:
+- Current PR estimated authored changed lines:
+- Current PR slice and acceptance evidence:
+- PR slices, estimates, and acceptance evidence:
+```
+
+Each numbered ownership-unit row also uses the labels `Capability:`, `Gizmo ID:`,
+`Functional owner:`, `Expertise provider:`, `Expertise allowed code paths:`,
+`Expertise allowed test paths:`, `Expertise forbidden paths:`,
+`Expertise consumer interfaces:`, `Expertise acceptance evidence:`, and
+`Capability acceptance evidence:`. The checked-in Workbench validator remains
+the executable authority for these labels and their allowed role vocabularies.
+
 ### Publish the plan
 
 Plans are immutable start snapshots.
