@@ -99,9 +99,9 @@ acceptance evidence.
 - Read-only Team Agents may run concurrently when safe.
 - Gizmo grants one commit turn at a time.
 - Every writer commits its complete scoped iteration during its commit turn.
-- Every terminal worker handoff enumerates all iteration commits in order.
-- Each iteration entry names its SHA, outcome, evidence, and unresolved
-  blockers.
+- Every writer's terminal handoff enumerates all iteration commits in order.
+  - Each iteration entry names its SHA, outcome, evidence, and unresolved
+    blockers.
 - A later iteration reads the last one or two relevant commits and diffs.
 - Gizmo continues directly from the worker commits.
 - Workers report cross-team dependencies to Gizmo.
