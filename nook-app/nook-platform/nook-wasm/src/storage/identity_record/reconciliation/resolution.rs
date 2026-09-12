@@ -5,15 +5,11 @@
 )]
 //! Identity persistence must complete before exact-marker cleanup becomes available.
 use super::super as identity_record;
-#[cfg(all(test, target_arch = "wasm32"))]
-use super::super::super::indexed_db;
 use super::VerifiedPreviousEpoch;
 use super::{
     IdentityReconciliationStore, NookError, PendingIdentityReconciliation,
     PendingIdentityReconciliationProgress,
 };
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::IdbPutStringRequest;
 use crate::NookDatabase;
 use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::indexed_db::StoredStringRecord;
@@ -281,7 +277,7 @@ mod browser_tests {
     use crate::NookError;
     use crate::storage::identity_record::IDENTITY_DIRECTORY_KEY;
     use crate::storage::identity_record::reconciliation::IdentityReconciliationStore;
-    use crate::storage::indexed_db;
+
     use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use nook_core::{AppKey, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;

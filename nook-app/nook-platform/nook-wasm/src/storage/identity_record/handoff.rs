@@ -10,29 +10,15 @@ use crate::NookDatabase;
 #[cfg(all(test, target_arch = "wasm32"))]
 use crate::manager::PendingExtensionIdentityEnrollment;
 use crate::storage::event_db;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::indexed_db::StoredStringRecord;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::{IdbPutStringRequest, manager};
 use existing_vault::ExistingVaultHandoff;
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::MemberLabelState;
-#[cfg(all(test, target_arch = "wasm32"))]
-pub(crate) use nook_core::StoredSigningSeed;
 use nook_core::{
     DirectoryMemberSigningUpdate, DirectoryVaultEnrollment, IdentityMemberSigningUpdate,
 };
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::{DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening};
 use rexie::TransactionMode;
 
-#[cfg(all(test, target_arch = "wasm32"))]
-use super as identity_record;
 use super::IDENTITY_DIRECTORY_KEY;
 use super::{AuthorizerMemberSigning, AuthorizerSigningUpdate, HandoffSignerPublication};
 use crate::NookError;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage;
 
 pub(crate) enum IdentityHandoffOperation<'a> {
     PairedVault(PairedVaultEnrollment<'a>),
@@ -220,8 +206,8 @@ mod tests {
         IdentityHandoffCommitResult, IdentityHandoffOperation, PairedVaultEnrollment,
         PendingExtensionIdentityEnrollment,
     };
+    use crate::storage::identity_record;
     use crate::storage::identity_record::VaultCreationAuthority;
-    use crate::storage::{event_db, identity_record, indexed_db};
     use crate::{IdbPutStringRequest, NookDatabase, NookError, StoredStringRecord};
     use nook_core::{AppKey, DeviceSigningPublicKey, IdentityDirectory, SigningIdentity, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;

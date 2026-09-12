@@ -7,8 +7,6 @@
 #[cfg(test)]
 use super as keyring;
 use super::ProtectedLocalIdentitySave;
-#[cfg(all(test, target_arch = "wasm32"))]
-use super::legacy;
 use super::signing::{
     CheckedIdentitySigningMaterial, IdentitySigningEvidence, IdentitySigningSource,
     LegacySignerProtection, SigningSeedOrigin,
@@ -24,10 +22,6 @@ use crate::KeyringDbKeyringReadString;
 use crate::KeyringDbLoadKeyringForStore;
 use crate::KeyringDbValidateKeyringDirectoryBinding;
 use crate::KeyringDbWriteKeyring;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::identity_record;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::identity_record::IdentityDirectoryWrite;
 use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::{PENDING_SIMPLE_GENESIS_KEY, recovery};
 #[cfg(test)]
@@ -224,21 +218,17 @@ mod tests {
     use crate::storage::identity_record;
     use crate::storage::identity_record::{recovery, simple_genesis};
     use crate::storage::{event_db, indexed_db};
-    #[cfg(target_arch = "wasm32")]
-    use nook_core::SigningIdentity;
+
     use nook_core::{AppKey, DeviceSigningPublicKey, LocalIdentityKeyringEntry};
     use nook_core::{DirectoryMemberSigningUpdate, IdentityMemberSigningUpdate};
     use rexie::{Rexie, TransactionMode};
 
-    #[cfg(target_arch = "wasm32")]
-    use super::IdentityTransitionAdmission;
     use super::{
         ProtectedIdentityPublication, ProtectedIdentitySelection, ProtectedLocalIdentitySave,
         SigningSeedOrigin, keyring,
     };
     use crate::NookError;
-    #[cfg(target_arch = "wasm32")]
-    use crate::storage;
+
     use keyring::LOCAL_IDENTITY_KEYRING_KEY;
     use keyring::LocalIdentitySigner;
     use nook_core::DeviceIdentityProtection;

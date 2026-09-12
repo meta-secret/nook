@@ -32,8 +32,6 @@ pub(crate) use atomic_string::{
     IndexedDbFallbackUpdate, IndexedDbMigration, IndexedDbUpdate, StringRecordFallback,
     StringUpdateGuard, StringUpdateResult,
 };
-#[cfg(all(test, target_arch = "wasm32"))]
-pub(crate) use nook_core::ActiveVaultScope;
 mod local_vault;
 pub(crate) use local_vault::ImportVaultLabel;
 #[cfg(test)]
@@ -42,12 +40,8 @@ pub(crate) use local_vault::VaultSnapshotLookup;
 #[path = "sentinel_storage.rs"]
 mod sentinel_storage;
 
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::identity_record;
 use crate::{NookDatabase, NookError};
 use js_sys::Date;
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::{AppId, WrappedDeviceIdentity};
 use nook_core::{IsoTimestamp, VaultName, VaultStoreIdentity};
 use rexie::TransactionMode;
 

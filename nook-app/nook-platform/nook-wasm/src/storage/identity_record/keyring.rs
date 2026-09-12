@@ -8,11 +8,7 @@ use nook_core::LocalIdentityProtection;
 
 use crate::NookDatabase;
 use crate::NookError;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage;
 use crate::storage::event_db;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage::indexed_db;
 use nook_core::{IdentitySelection, LocalIdentityKeyring};
 use rexie::TransactionMode;
 

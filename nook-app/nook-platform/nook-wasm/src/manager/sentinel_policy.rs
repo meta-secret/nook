@@ -2,8 +2,6 @@
 
 use super::NookVaultManager;
 use crate::NookError;
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::MultiDeviceError;
 use nook_core::{SentinelConfiguration, SentinelVaultUnlockState, VaultMetaState, VaultType};
 use wasm_bindgen::prelude::wasm_bindgen;
 

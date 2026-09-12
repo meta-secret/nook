@@ -7,8 +7,6 @@
     dylint_lib = "nook_domain_api",
     forbid(invalid_unowned_function_suppression)
 )]
-#[cfg(all(test, target_arch = "wasm32"))]
-use super as auth_providers;
 use super::rollback_projection;
 use super::{SCHEMA_KEY, STATE_KEY, STORAGE_SCHEMA_VERSION, STORE};
 use crate::AuthProviderDatabase;
@@ -17,11 +15,7 @@ use crate::ProviderDbLegacySnapshotBelongsToIdentity;
 use crate::ProviderDbReadRawSnapshotFromStore;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::ProviderDbWriteSnapshotAt;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::{IdbPutStringRequest, NookDatabase};
 use nook_core::NormalizedAuthSnapshot;
-#[cfg(all(test, target_arch = "wasm32"))]
-use nook_core::{ActiveVaultScope, StoredGithubPat};
 use nook_core::{
     AppId, AuthProvidersSnapshotData, DeviceIdentity, ProviderCredentialStorageAdmission,
 };

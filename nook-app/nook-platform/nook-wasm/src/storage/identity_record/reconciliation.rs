@@ -5,12 +5,8 @@
 )]
 //! Vault-scoped reconciliation marker persistence and guarded cleanup.
 use super::super::indexed_db;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::IdbPutStringRequest;
 use crate::NookError;
 use crate::StoredStringRecord;
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::storage;
 use crate::{IndexedDbUpdate, NookDatabase};
 use indexed_db::{StringUpdateGuard, StringUpdateResult};
 use nook_core::{AgeArmoredCiphertext, IdentityVaultEventId, StoreId};
@@ -261,7 +257,7 @@ impl EpochCommittedReconciliation<'_> {
 }
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_tests {
-    use super::super::super::indexed_db;
+
     use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use nook_core::{
         AppKey, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, IdentityVaultEventId, StoreId,

@@ -243,8 +243,7 @@ mod tests {
     };
     use crate::NookError;
     use crate::storage::identity_record;
-    #[cfg(target_arch = "wasm32")]
-    use crate::storage::indexed_db;
+
     use identity_record::SimpleGenesisCompletion;
     use nook_core::MemberLabelState;
 

@@ -4,8 +4,6 @@ use super::{
     ActivationClock, CompanionPairingCandidateFailure, PairingActivationCandidate,
     PairingActivationStorageAdmission,
 };
-#[cfg(all(test, target_arch = "wasm32"))]
-use crate::ExtensionPairingDatabase;
 use crate::NookDatabase;
 
 use rexie::TransactionMode;
