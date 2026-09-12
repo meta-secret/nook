@@ -209,9 +209,9 @@ describe('websiteLoginOptions', () => {
       queue: extensionSessionProbeDeadline(Date.now() + 1_000),
       sendMessage: failedSessionList,
     }
-    await expect(
-      loginAccountAvailabilityForOrigin(failedListRequest),
-    ).resolves.toEqual({ ok: false })
+    expect(await loginAccountAvailabilityForOrigin(failedListRequest)).toEqual({
+      ok: false,
+    })
 
     const interactiveResponse = await accountPickerSessions.websiteLoginOptions(
       {

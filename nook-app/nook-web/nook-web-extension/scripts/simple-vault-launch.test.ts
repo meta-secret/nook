@@ -91,9 +91,14 @@ describe('Simple Vault browser launch', () => {
       },
     })
     try {
-      await expect(extensionSessionLifecycle.openSimpleVault()).rejects.toBe(
-        'url unavailable',
-      )
+      let rejected = false
+      try {
+        await extensionSessionLifecycle.openSimpleVault()
+      } catch (failure) {
+        rejected = true
+        expect(failure).toBe('url unavailable')
+      }
+      expect(rejected).toBe(true)
       expect(createRequests).toEqual([])
     } finally {
       resolveUrl.mockRestore()
@@ -111,9 +116,14 @@ describe('Simple Vault browser launch', () => {
       },
     })
     try {
-      await expect(extensionSessionLifecycle.openSimpleVault()).rejects.toBe(
-        'tab unavailable',
-      )
+      let rejected = false
+      try {
+        await extensionSessionLifecycle.openSimpleVault()
+      } catch (failure) {
+        rejected = true
+        expect(failure).toBe('tab unavailable')
+      }
+      expect(rejected).toBe(true)
     } finally {
       resolveUrl.mockRestore()
     }

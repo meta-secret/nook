@@ -49,9 +49,9 @@ describe('login account listing failure handling', () => {
       origin: 'https://example.test',
       sendMessage: interactiveSendMessage,
     }
-    await expect(
-      accountPickerSessions.loginAccountsForOrigin(interactiveRequest),
-    ).resolves.toEqual([
+    expect(
+      await accountPickerSessions.loginAccountsForOrigin(interactiveRequest),
+    ).toEqual([
       {
         vaultStoreId: 'healthy-vault',
         vaultName: 'healthy-vault',
@@ -79,9 +79,9 @@ describe('login account listing failure handling', () => {
       origin: 'https://example.test',
       sendMessage: unavailableSendMessage,
     }
-    await expect(
-      accountPickerSessions.loginAccountsForOrigin(unavailableRequest),
-    ).resolves.toEqual([])
+    expect(
+      await accountPickerSessions.loginAccountsForOrigin(unavailableRequest),
+    ).toEqual([])
 
     const passiveSendMessage = mock(() =>
       Promise.resolve(ok({ ok: false, reason: 'session-list-failed' })),
@@ -94,9 +94,11 @@ describe('login account listing failure handling', () => {
       queue: extensionSessionProbeDeadline(Date.now() + 1_000),
       sendMessage: passiveSendMessage,
     }
-    await expect(
-      accountPickerSessions.loginAccountAvailabilityForOrigin(passiveRequest),
-    ).resolves.toEqual({ ok: false })
+    expect(
+      await accountPickerSessions.loginAccountAvailabilityForOrigin(
+        passiveRequest,
+      ),
+    ).toEqual({ ok: false })
     expect(passiveSendMessage).toHaveBeenCalledTimes(1)
   })
 
@@ -135,9 +137,9 @@ describe('login account listing failure handling', () => {
       origin: 'https://example.test',
       sendMessage: interactiveSendMessage,
     }
-    await expect(
-      accountPickerSessions.loginAccountsForOrigin(interactiveRequest),
-    ).resolves.toEqual([
+    expect(
+      await accountPickerSessions.loginAccountsForOrigin(interactiveRequest),
+    ).toEqual([
       {
         vaultStoreId: 'healthy-vault',
         vaultName: 'healthy-vault',
@@ -166,9 +168,11 @@ describe('login account listing failure handling', () => {
       queue: extensionSessionProbeDeadline(Date.now() + 1_000),
       sendMessage: passiveSendMessage,
     }
-    await expect(
-      accountPickerSessions.loginAccountAvailabilityForOrigin(passiveRequest),
-    ).resolves.toEqual({ ok: false })
+    expect(
+      await accountPickerSessions.loginAccountAvailabilityForOrigin(
+        passiveRequest,
+      ),
+    ).toEqual({ ok: false })
     expect(passiveSendMessage).toHaveBeenCalledTimes(1)
   })
 
@@ -193,8 +197,10 @@ describe('login account listing failure handling', () => {
         ),
       ),
     }
-    await expect(
-      accountPickerSessions.loginAccountAvailabilityForOrigin(passiveRequest),
-    ).resolves.toEqual({ ok: false })
+    expect(
+      await accountPickerSessions.loginAccountAvailabilityForOrigin(
+        passiveRequest,
+      ),
+    ).toEqual({ ok: false })
   })
 })

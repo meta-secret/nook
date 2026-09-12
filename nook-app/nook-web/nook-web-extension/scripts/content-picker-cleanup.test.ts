@@ -250,7 +250,7 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
   expect(widgetState.host.kind).toBe(WidgetHostKind.Detached)
   expect(schedule).not.toHaveBeenCalled()
   expect(sendResponse).not.toHaveBeenCalled()
-  await expect(responseCapture.response).resolves.toEqual({ ok: true })
+  expect(await responseCapture.response).toEqual({ ok: true })
   expect(saveOfferState.watch.kind).toBe(SavePageWatchKind.Idle)
   expect(saveOfferState.dismissedOfferIds.has(staleOfferId)).toBe(true)
   expect(sendMessage).toHaveBeenCalledWith(
@@ -298,7 +298,7 @@ test('refresh does not rescan when staged offer dismissal is rejected', async ()
     { id: 'nook-extension' },
     sendResponse,
   )
-  await expect(responseCapture.response).resolves.toEqual({ ok: false })
+  expect(await responseCapture.response).toEqual({ ok: false })
 
   expect(remove).toHaveBeenCalledTimes(1)
   expect(schedule).not.toHaveBeenCalled()
@@ -347,7 +347,7 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
     } satisfies WebsiteLoginSaveActionResponse,
   })
   await staging
-  await expect(responseCapture.response).resolves.toEqual({ ok: true })
+  expect(await responseCapture.response).toEqual({ ok: true })
 
   expect(credentials).toEqual({ username: '', password: '' })
   expect(saveOfferState.watch.kind).toBe(SavePageWatchKind.Idle)

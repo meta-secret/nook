@@ -101,11 +101,18 @@ describe('openCompanionLauncherBestEffort', () => {
     const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(
-      extensionSessionLifecycle.openCompanionLauncher(
+    let launcherRejected = false
+    try {
+      await extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.Default,
-      ),
-    ).rejects.toThrow('launcher unavailable')
+      )
+    } catch (failure) {
+      launcherRejected = true
+      expect(failure).toBeInstanceOf(Error)
+      if (failure instanceof Error)
+        expect(failure.message).toContain('launcher unavailable')
+    }
+    expect(launcherRejected).toBe(true)
   })
 
   test('contains launcher failures for callers returning locked responses', async () => {
@@ -171,9 +178,18 @@ describe('authentication surface notifications', () => {
     const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(
-      extensionSessionLifecycle.refreshAuthenticationSurfaces(),
-    ).rejects.toThrow('authentication surface refresh delivery failed')
+    let refreshRejected = false
+    try {
+      await extensionSessionLifecycle.refreshAuthenticationSurfaces()
+    } catch (failure) {
+      refreshRejected = true
+      expect(failure).toBeInstanceOf(Error)
+      if (failure instanceof Error)
+        expect(failure.message).toContain(
+          'authentication surface refresh delivery failed',
+        )
+    }
+    expect(refreshRejected).toBe(true)
   })
 
   test('reports refresh failure when every eligible tab replies with failure', async () => {
@@ -187,9 +203,18 @@ describe('authentication surface notifications', () => {
     const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(
-      extensionSessionLifecycle.refreshAuthenticationSurfaces(),
-    ).rejects.toThrow('authentication surface refresh delivery failed')
+    let refreshRejected = false
+    try {
+      await extensionSessionLifecycle.refreshAuthenticationSurfaces()
+    } catch (failure) {
+      refreshRejected = true
+      expect(failure).toBeInstanceOf(Error)
+      if (failure instanceof Error)
+        expect(failure.message).toContain(
+          'authentication surface refresh delivery failed',
+        )
+    }
+    expect(refreshRejected).toBe(true)
   })
 
   test('reports refresh failure when any eligible tab rejects delivery', async () => {
@@ -204,9 +229,18 @@ describe('authentication surface notifications', () => {
     const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(
-      extensionSessionLifecycle.refreshAuthenticationSurfaces(),
-    ).rejects.toThrow('authentication surface refresh delivery failed')
+    let refreshRejected = false
+    try {
+      await extensionSessionLifecycle.refreshAuthenticationSurfaces()
+    } catch (failure) {
+      refreshRejected = true
+      expect(failure).toBeInstanceOf(Error)
+      if (failure instanceof Error)
+        expect(failure.message).toContain(
+          'authentication surface refresh delivery failed',
+        )
+    }
+    expect(refreshRejected).toBe(true)
   })
 
   test('ignores restricted and Nook vault tabs without autofill listeners', async () => {

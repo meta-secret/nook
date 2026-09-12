@@ -117,23 +117,23 @@ describe('provider credential staging', () => {
   test('scrubs a raw IPC snapshot after successful handoff', async () => {
     const providers = [providerStagingFixture.github()]
     let observedDuringHandoff = false
-    await expect(
-      new ProviderCredentialBuffer(providers).runWithCleanup(async () => {
+    expect(
+      await new ProviderCredentialBuffer(providers).runWithCleanup(async () => {
         observedDuringHandoff = providers[0]?.githubPat.state === 'token'
         return { ok: true }
       }),
-    ).resolves.toEqual({ ok: true })
+    ).toEqual({ ok: true })
     expect(observedDuringHandoff).toBe(true)
     expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
   test('scrubs a raw IPC snapshot after failed handoff', async () => {
     const providers = [providerStagingFixture.github()]
-    await expect(
-      new ProviderCredentialBuffer(providers).runWithCleanup(async () => {
+    expect(
+      await new ProviderCredentialBuffer(providers).runWithCleanup(async () => {
         return err(ProviderCredentialFailure.AdmissionRejected)
       }),
-    ).resolves.toEqual(err(ProviderCredentialFailure.AdmissionRejected))
+    ).toEqual(err(ProviderCredentialFailure.AdmissionRejected))
     expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
@@ -155,12 +155,12 @@ describe('provider credential staging', () => {
     ]
     const credentialBuffer = new ProviderCredentialBuffer(source)
     try {
-      await expect(
-        credentialBuffer.stage({
+      expect(
+        await credentialBuffer.stage({
           decode: async (candidate) =>
             admit_extension_storage_providers(candidate),
         }),
-      ).resolves.toEqual(err(ProviderCredentialFailure.InvalidTransport))
+      ).toEqual(err(ProviderCredentialFailure.InvalidTransport))
       expect(source[0]?.githubPat.state).toBe('token')
     } finally {
       credentialBuffer.clear()

@@ -355,7 +355,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
       payload,
     })
     expect(payload.pin).toBe('')
-    await expect(response).resolves.toEqual(ok({ pin: '123456' }))
+    expect(await response).toEqual(ok({ pin: '123456' }))
   })
   test('stages browser-owned secrets before awaiting cold WASM', async () => {
     const payload = {
@@ -507,14 +507,14 @@ describe('ExtensionSessionMessageDispatcher', () => {
         },
       },
     })
-    const ceremonyRejection = expect(ceremonyResponse).resolves.toEqual(
-      err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
-    )
+    const ceremonySettlement = ceremonyResponse
 
     await Bun.sleep(20)
     releaseBlocker()
-    await expect(blockerResponse).resolves.toEqual(ok({ ok: true }))
-    await ceremonyRejection
+    expect(await blockerResponse).toEqual(ok({ ok: true }))
+    expect(await ceremonySettlement).toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
+    )
     expect(handledTypes).toEqual([ExtensionSessionMessageType.CreatePin])
   })
 
@@ -630,7 +630,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(payload.providers).toHaveLength(1)
     expect(payload.providers).not.toHaveProperty('0.githubPat.value')
     expect(providers[0]?.githubPat.state).toBe('missing')
-    await expect(response).resolves.toEqual(ok({ ok: true }))
+    expect(await response).toEqual(ok({ ok: true }))
     expect(handledGithubPat).toBe('github_pat_accepted_secret')
   })
 
@@ -680,8 +680,8 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(handledTypes).toEqual([])
 
     finishDecode([])
-    await expect(importResponse).resolves.toEqual(ok({ ok: true }))
-    await expect(resetResponse).resolves.toEqual(ok({ ok: true }))
+    expect(await importResponse).toEqual(ok({ ok: true }))
+    expect(await resetResponse).toEqual(ok({ ok: true }))
     expect(handledTypes).toEqual([
       ExtensionSessionMessageType.ImportVault,
       ExtensionSessionMessageType.Reset,
@@ -743,7 +743,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
       new SessionOperationFailure(SessionOperationFailureKind.Closed),
     )
     finishDecode(stagedProviders)
-    await expect(importResponse).resolves.toEqual(
+    expect(await importResponse).toEqual(
       err(new SessionOperationFailure(SessionOperationFailureKind.Closed)),
     )
     await decodedProviders
@@ -751,7 +751,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(stagedProviders[0]?.githubPat).toEqual({ state: 'missing' })
 
     releaseBlocker()
-    await expect(blockerResponse).resolves.toEqual(ok({ ok: true }))
+    expect(await blockerResponse).toEqual(ok({ ok: true }))
   })
 
   test('honors a vault-import deadline and scrubs expired staging', async () => {
@@ -800,14 +800,14 @@ describe('ExtensionSessionMessageDispatcher', () => {
         priority: 'interactive',
       }),
     )
-    const importRejection = expect(importResponse).resolves.toEqual(
-      err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
-    )
+    const importSettlement = importResponse
 
     await Bun.sleep(20)
     releaseBlocker()
-    await expect(blockerResponse).resolves.toEqual(ok({ ok: true }))
-    await importRejection
+    expect(await blockerResponse).toEqual(ok({ ok: true }))
+    expect(await importSettlement).toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
+    )
     await Promise.resolve()
     expect(handledTypes).toEqual([ExtensionSessionMessageType.CreatePin])
     expect(stagedProviders[0]?.githubPat).toEqual({ state: 'missing' })
@@ -855,7 +855,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     )
     finishDecode(stagedProviders)
 
-    await expect(importResponse).resolves.toEqual(
+    expect(await importResponse).toEqual(
       err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
     )
     expect(handledTypes).toEqual([])
@@ -947,7 +947,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
       )
       expect(Boolean(keepsResponseChannelOpen)).toBe(true)
     })
-    await expect(malformedResponse).resolves.toEqual({
+    expect(await malformedResponse).toEqual({
       ok: false,
       error: 'Invalid extension session request.',
     })

@@ -90,9 +90,7 @@ describe('website passkey options', () => {
       dependencies,
     }
 
-    await expect(
-      websitePasskeyRequests.websitePasskeyOptions(args),
-    ).resolves.toEqual({
+    expect(await websitePasskeyRequests.websitePasskeyOptions(args)).toEqual({
       ok: true,
       status: WebsitePasskeyOptionsStatus.Invalid,
       options: [],

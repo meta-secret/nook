@@ -181,7 +181,7 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
+    expect(await importExtensionVaultWithDependencies(args)).toEqual(
       ok({
         ok: true,
         status: importedStatus(),
@@ -209,7 +209,7 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
+    expect(await importExtensionVaultWithDependencies(args)).toEqual(
       ok({
         ok: true,
         status: importedStatus(),
@@ -237,7 +237,7 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
+    expect(await importExtensionVaultWithDependencies(args)).toEqual(
       err(new SessionOperationFailure(SessionOperationFailureKind.Locked)),
     )
     expect(state.importedRecords).toBe(false)
@@ -260,7 +260,7 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
+    expect(await importExtensionVaultWithDependencies(args)).toEqual(
       err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
     )
     expect(state.replaced).toBe(false)
@@ -280,7 +280,7 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
+    expect(await importExtensionVaultWithDependencies(args)).toEqual(
       err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
     )
     expect(state.activatedAppIds).toEqual(['device', 'other-device'])
@@ -301,7 +301,7 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
+    expect(await importExtensionVaultWithDependencies(args)).toEqual(
       err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
     )
     expect(state.importedRecords).toBe(false)
@@ -454,7 +454,7 @@ describe('companion discovery vault restoration', () => {
       CompanionVaultOpenOutcome.Mismatched,
     )
 
-    await expect(scenario.discover()).resolves.toEqual(
+    expect(await scenario.discover()).toEqual(
       err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
     )
     expect(scenario.operationOrder).toEqual([

@@ -61,7 +61,7 @@ describe('authenticator session adapter', () => {
     const pending = session.attachAuthenticatorBackupCodesFromSession(args)
     codes.fill('')
 
-    await expect(pending).resolves.toEqual(
+    expect(await pending).toEqual(
       ok({
         ok: true,
         secretId: 'secret-1',
@@ -91,9 +91,9 @@ describe('authenticator session adapter', () => {
       mode: WebsiteAuthenticatorBackupAttachMessageMode.Replace,
     }
 
-    await expect(
-      session.attachAuthenticatorBackupCodesFromSession(args),
-    ).resolves.toEqual(
+    expect(
+      await session.attachAuthenticatorBackupCodesFromSession(args),
+    ).toEqual(
       err(
         new AuthenticatorSessionFailure(
           AuthenticatorSessionFailureKind.InvalidResponse,

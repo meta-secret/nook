@@ -116,7 +116,7 @@ describe('authentication workflow routing', () => {
     expect(events).toEqual([])
 
     resolveReady()
-    await expect(response).resolves.toMatchObject({
+    expect(await response).toMatchObject({
       workflow: { ok: true },
       loginMatches: { kind: 'ready', count: 2 },
       selectedFacts: {
@@ -152,9 +152,7 @@ describe('authentication workflow routing', () => {
         sender,
         dependencies,
       }
-    await expect(
-      authenticationWorkflowMessageResponse(request),
-    ).resolves.toEqual({
+    expect(await authenticationWorkflowMessageResponse(request)).toEqual({
       workflow: { ok: true },
       loginMatches: { kind: 'unavailable' },
     })
@@ -183,9 +181,9 @@ describe('authentication workflow routing', () => {
         dependencies,
       }
 
-      await expect(
-        authenticationWorkflowMessageResponse(request),
-      ).resolves.toMatchObject({
+      expect(
+        await authenticationWorkflowMessageResponse(request),
+      ).toMatchObject({
         workflow: {
           ok: true,
           snapshot: { observationIndex: 0, action: 4 },
@@ -218,9 +216,7 @@ describe('authentication workflow routing', () => {
     const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
       { message, sender, dependencies }
 
-    await expect(
-      authenticationWorkflowMessageResponse(request),
-    ).resolves.toMatchObject({
+    expect(await authenticationWorkflowMessageResponse(request)).toMatchObject({
       workflow: { ok: true, snapshot: { action: 0 } },
       loginMatches: { kind: 'unavailable' },
     })
@@ -247,9 +243,7 @@ describe('authentication workflow routing', () => {
         sender,
         dependencies,
       }
-    await expect(
-      authenticationWorkflowMessageResponse(request),
-    ).resolves.toEqual({
+    expect(await authenticationWorkflowMessageResponse(request)).toEqual({
       workflow: { ok: false, reason: 'workflow-snapshot-failed' },
       loginMatches: { kind: 'unavailable' },
     })
@@ -273,9 +267,13 @@ describe('authentication workflow routing', () => {
       },
     })
 
-    await expect(
-      authenticationWorkflowMessageResponse({ message, sender, dependencies }),
-    ).resolves.toEqual({
+    expect(
+      await authenticationWorkflowMessageResponse({
+        message,
+        sender,
+        dependencies,
+      }),
+    ).toEqual({
       workflow: { ok: true },
       loginMatches: { kind: 'unavailable' },
     })

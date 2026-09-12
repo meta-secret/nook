@@ -114,10 +114,10 @@ describe('account picker authorization cleanup', () => {
       message: { type: 'selected' },
     }
 
-    await expect(AccountPickerPageTarget.send(requestedFrame)).resolves.toEqual(
-      { ok: true },
-    )
-    await expect(AccountPickerPageTarget.send(wrongFrame)).resolves.toEqual({
+    expect(await AccountPickerPageTarget.send(requestedFrame)).toEqual({
+      ok: true,
+    })
+    expect(await AccountPickerPageTarget.send(wrongFrame)).toEqual({
       ok: false,
     })
     expect(deliveries).toEqual([
@@ -386,13 +386,27 @@ describe('account picker authorization cleanup', () => {
 
     expect(removedTabs).toEqual([21])
     rejectStorage = true
-    await expect(
-      accountPickerSessions.clearPendingAccountPickers(),
-    ).rejects.toThrow('account picker cleanup failed')
+    let storageRejected = false
+    try {
+      await accountPickerSessions.clearPendingAccountPickers()
+    } catch (failure) {
+      storageRejected = true
+      expect(failure).toBeInstanceOf(Error)
+      if (failure instanceof Error)
+        expect(failure.message).toContain('account picker cleanup failed')
+    }
+    expect(storageRejected).toBe(true)
     rejectStorage = false
     rejectRemoval = true
-    await expect(
-      accountPickerSessions.clearPendingAccountPickers(),
-    ).rejects.toThrow('account picker cleanup failed')
+    let removalRejected = false
+    try {
+      await accountPickerSessions.clearPendingAccountPickers()
+    } catch (failure) {
+      removalRejected = true
+      expect(failure).toBeInstanceOf(Error)
+      if (failure instanceof Error)
+        expect(failure.message).toContain('account picker cleanup failed')
+    }
+    expect(removalRejected).toBe(true)
   })
 })

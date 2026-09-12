@@ -512,9 +512,7 @@ describe('service worker routing', () => {
     } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
 
-    await expect(
-      recoverInterruptedAuthorizationCleanup(dependencies),
-    ).resolves.toEqual(
+    expect(await recoverInterruptedAuthorizationCleanup(dependencies)).toEqual(
       err([AuthorizationCleanupFailureKind.MarkerLookupFailed]),
     )
     expect(events).toEqual(['marker-read-started', 'authorization-invalidated'])
@@ -523,9 +521,9 @@ describe('service worker routing', () => {
       completeAccountPickerAuthorizationCleanup: () =>
         Promise.resolve(rejectedCleanup),
     }
-    await expect(
-      recoverInterruptedAuthorizationCleanup(rejectedDependencies),
-    ).resolves.toEqual(err([AuthorizationCleanupFailureKind.Rejected]))
+    expect(
+      await recoverInterruptedAuthorizationCleanup(rejectedDependencies),
+    ).toEqual(err([AuthorizationCleanupFailureKind.Rejected]))
   })
 
   test.each([
@@ -736,14 +734,12 @@ describe('service worker routing', () => {
     const authenticator = new ExtensionAuthenticatorSession({
       sendSessionMessage: sendSession,
     })
-    await expect(
-      authenticator.authenticatorCodeFromSession({
+    expect(
+      await authenticator.authenticatorCodeFromSession({
         grant: routedGrant,
         secretId: 'authenticator-1',
       }),
-    ).resolves.toEqual(
-      ok({ ok: true, code: '012345', expiresAt: expect.any(Number) }),
-    )
+    ).toEqual(ok({ ok: true, code: '012345', expiresAt: expect.any(Number) }))
     expect(delivered).toEqual([
       ExtensionSessionMessageType.ClassifyGrantAuthority,
       ExtensionSessionMessageType.UpdateVault,

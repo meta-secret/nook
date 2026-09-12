@@ -33,9 +33,14 @@ describe('extensionDeviceProtectionStatus', () => {
     ]
     installSessionResponses(responses)
 
-    await expect(
-      extensionWasmRuntime.extensionDeviceProtectionStatus(),
-    ).rejects.toThrow()
+    let rejected = false
+    try {
+      await extensionWasmRuntime.extensionDeviceProtectionStatus()
+    } catch (failure) {
+      rejected = true
+      expect(failure).toBeInstanceOf(Error)
+    }
+    expect(rejected).toBe(true)
   })
 
   test('rejects malformed unlocked device identity', async () => {
@@ -49,9 +54,14 @@ describe('extensionDeviceProtectionStatus', () => {
     ]
     installSessionResponses(responses)
 
-    await expect(
-      extensionWasmRuntime.extensionSessionDevice(),
-    ).rejects.toThrow()
+    let rejected = false
+    try {
+      await extensionWasmRuntime.extensionSessionDevice()
+    } catch (failure) {
+      rejected = true
+      expect(failure).toBeInstanceOf(Error)
+    }
+    expect(rejected).toBe(true)
   })
 
   test('rejects empty unlocked device identity fields', async () => {
@@ -69,8 +79,13 @@ describe('extensionDeviceProtectionStatus', () => {
     ]
     installSessionResponses(responses)
 
-    await expect(
-      extensionWasmRuntime.extensionSessionDevice(),
-    ).rejects.toThrow()
+    let rejected = false
+    try {
+      await extensionWasmRuntime.extensionSessionDevice()
+    } catch (failure) {
+      rejected = true
+      expect(failure).toBeInstanceOf(Error)
+    }
+    expect(rejected).toBe(true)
   })
 })

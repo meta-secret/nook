@@ -144,9 +144,11 @@ describe('website passkey session operations', () => {
       },
     }
 
-    await expect(
-      sessionWebsitePasskeys.handleWebsitePasskeyOperation(cancellationArgs),
-    ).resolves.toEqual(ok({ ok: true }))
+    expect(
+      await sessionWebsitePasskeys.handleWebsitePasskeyOperation(
+        cancellationArgs,
+      ),
+    ).toEqual(ok({ ok: true }))
     const canceledActivity: WebsitePasskeyRequestActivityArgs = {
       requestId: 'request-cancel',
       expiresAt: Date.now() + 60_000,
@@ -196,9 +198,11 @@ describe('website passkey session operations', () => {
       flushEvent,
     }
 
-    await expect(
-      sessionWebsitePasskeys.handleWebsitePasskeyOperation(registrationArgs),
-    ).resolves.toEqual(
+    expect(
+      await sessionWebsitePasskeys.handleWebsitePasskeyOperation(
+        registrationArgs,
+      ),
+    ).toEqual(
       ok({
         ok: true,
         credentialId: 'registration-credential',
@@ -207,9 +211,9 @@ describe('website passkey session operations', () => {
         transports: ['internal'],
       }),
     )
-    await expect(
-      sessionWebsitePasskeys.handleWebsitePasskeyOperation(assertionArgs),
-    ).resolves.toEqual(
+    expect(
+      await sessionWebsitePasskeys.handleWebsitePasskeyOperation(assertionArgs),
+    ).toEqual(
       ok({
         ok: true,
         credentialId: 'assertion-credential',
