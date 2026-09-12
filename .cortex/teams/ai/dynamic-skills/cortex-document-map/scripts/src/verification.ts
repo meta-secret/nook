@@ -363,7 +363,7 @@ export class CortexDocumentMapVerifier {
   private isGraph(value: string): boolean {
     return (
       /^(?:\.cortex\/)?(?:knowledge-graph|k-graph|INDEX)\.md$/u.test(value) ||
-      /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|security|sre|web-dev)|shared)\/knowledge-graph\.md$/u.test(
+      /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|dev-manager|security|sre|web-dev)|shared)\/knowledge-graph\.md$/u.test(
         value,
       )
     );
@@ -371,7 +371,7 @@ export class CortexDocumentMapVerifier {
 
   private owningGraph(value: string): string {
     const match =
-      /^(\.cortex\/(?:gizmo|shared|teams\/(?:ai|dev-core|security|sre|web-dev)))\//u.exec(
+      /^(\.cortex\/(?:gizmo|shared|teams\/(?:ai|dev-core|dev-manager|security|sre|web-dev)))\//u.exec(
         value,
       );
     return match
@@ -381,7 +381,7 @@ export class CortexDocumentMapVerifier {
 
   private owner(value: string): string | false {
     const match =
-      /^\.cortex\/(gizmo|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\//u.exec(
+      /^\.cortex\/(gizmo|shared|teams\/(?:ai|dev-core|dev-manager|security|sre|web-dev))\//u.exec(
         value,
       );
     if (!match) return false;
@@ -461,6 +461,7 @@ const OWNER_GRAPHS = [
   '.cortex/gizmo/knowledge-graph.md',
   '.cortex/teams/ai/knowledge-graph.md',
   '.cortex/teams/dev-core/knowledge-graph.md',
+  '.cortex/teams/dev-manager/knowledge-graph.md',
   '.cortex/teams/security/knowledge-graph.md',
   '.cortex/teams/sre/knowledge-graph.md',
   '.cortex/teams/web-dev/knowledge-graph.md',
