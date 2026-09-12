@@ -9,9 +9,11 @@ import { fireEvent, render } from '@testing-library/svelte'
 import { tick } from 'svelte'
 import {
   NookSentinelUnlockSessionStatus,
+  ProviderSyncFreshness,
   SentinelVaultUnlockState,
   SentinelGenesisPhase,
   VaultApplication,
+  VaultRecoveryErrorKind,
 } from '$app-wasm'
 import LoginGate from '$lib/components/LoginGate.svelte'
 import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
@@ -55,6 +57,7 @@ class SentinelFinalizationFixture {
     sentinel_unlock_status: vi.fn(
       () => SentinelVaultUnlockState.AwaitingShares,
     ),
+    sentinel_unlock_request_json: vi.fn(() => 'new ceremony request'),
     sentinel_stored_deliveries_request: vi.fn(
       () => this.storedDeliveriesRequest,
     ),
@@ -113,7 +116,9 @@ class SentinelFinalizationFixture {
     startIdleSessionTracking: vi.fn(),
     startVaultSync: vi.fn(),
     initDeviceIdentity: vi.fn(async () => ok()),
-    syncFromStorage: vi.fn(async () => ok(ProviderSyncOutcome.Synced)),
+    syncFromStorage: vi.fn<VaultState['syncFromStorage']>(async () =>
+      ok(ProviderSyncOutcome.Synced),
+    ),
     connectStorageArgs: vi.fn(),
     refreshVaultArchitectureFromManager: vi.fn(() => ok()),
     resolveErrorMessage: (message: string) => message,
@@ -572,6 +577,51 @@ describe('Sentinel quorum completion presentation', () => {
     const order = steps.flatMap((step) => step.mock.invocationCallOrder)
     expect(order).toEqual([...order].sort((left, right) => left - right))
     fixture.expectNoAutomaticCeremony()
+    fixture.dispose()
+  })
+})
+
+describe('Sentinel ceremony hydration', () => {
+  test('allows a locked Sentinel ceremony to start after ceremony-required sync failure', async () => {
+    const fixture = new SentinelFinalizationFixture()
+    const syncFailure = new NativeVaultStorageFailure(
+      new Error('SentinelCeremonyRequired'),
+    )
+    fixture.state.syncFromStorage.mockResolvedValue(err(syncFailure))
+    fixture.manager.start_sentinel_unlock.mockReturnValue(fixture.current)
+
+    const actions = new SentinelUnlockActions(fixture.vault)
+    const result = await actions.startSentinelUnlock()
+
+    expect(result.isOk()).toBe(true)
+    expect(fixture.state.syncFromStorage).toHaveBeenCalledWith(
+      ProviderSyncFreshness.Forced,
+    )
+    expect(fixture.manager.start_sentinel_unlock).toHaveBeenCalledOnce()
+    expect(fixture.manager.sentinel_unlock_request_json).toHaveBeenCalledOnce()
+    expect(fixture.state.sentinelUnlockRequest).toBe('new ceremony request')
+    expect(fixture.state.sentinelCeremonyPrompt).toBe(true)
+    expect(syncFailure.recoveryKind).toBe(
+      VaultRecoveryErrorKind.SentinelCeremonyRequired,
+    )
+    fixture.dispose()
+  })
+
+  test('propagates unrelated sync failures instead of starting a ceremony', async () => {
+    const fixture = new SentinelFinalizationFixture()
+    const syncFailure = new NativeVaultStorageFailure(
+      new Error('provider unavailable'),
+    )
+    fixture.state.syncFromStorage.mockResolvedValue(err(syncFailure))
+
+    const actions = new SentinelUnlockActions(fixture.vault)
+    const result = await actions.startSentinelUnlock()
+
+    expect(result.isErr()).toBe(true)
+    if (result.isErr()) expect(result.error).toBe(syncFailure)
+    expect(fixture.manager.start_sentinel_unlock).not.toHaveBeenCalled()
+    expect(fixture.manager.sentinel_unlock_request_json).not.toHaveBeenCalled()
+    expect(syncFailure.recoveryKind).toBe(VaultRecoveryErrorKind.Other)
     fixture.dispose()
   })
 })
