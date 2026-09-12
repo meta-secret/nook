@@ -6,7 +6,7 @@ afterEach(() => {
 })
 
 test('imports the runtime without reading the build constant', () => {
-  expect(simpleVaultRuntime).toBeDefined()
+  expect(typeof simpleVaultRuntime.runtimeSimpleVaultUrl).toBe('function')
 })
 
 test('fails closed when an operation has no Simple Vault build constant', async () => {
