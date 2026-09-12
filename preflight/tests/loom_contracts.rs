@@ -58,7 +58,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let root = RepositoryFixture::repository_root();
     let manifest = root.read("agentic-ai/loom/package.json");
     for required in [
-        "\"lint\": \"eslint src tests\"",
+        "\"lint\": \"eslint .\"",
         "\"check\": \"tsc --noEmit\"",
         "\"verify\": \"bun run format:check && bun run lint && bun run check && bun test\"",
         "\"eslint\":",
@@ -79,7 +79,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "'{}':",
         "'@typescript-eslint/no-explicit-any': 'error'",
         "'@typescript-eslint/no-empty-object-type': 'error'",
-        "files: ['src/**/*.ts', 'tests/**/*.ts']",
+        "files: ['**/*.{ts,js,mjs,cjs}']",
         "Model a concrete domain type",
         "generic object type",
         "must be narrowed immediately",
@@ -196,14 +196,17 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let skills_eslint = root
         .read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/eslint.config.js");
     assert!(
-        skills_eslint.contains("files: ['src/**/*.ts', 'tests/**/*.ts']")
+        skills_eslint.contains("files: ['**/*.{ts,js,mjs,cjs}']")
             && skills_eslint.contains("'max-params': ['error', { max: 1 }]")
             && skills_eslint.contains("unknown:"),
         "executable applications must retain repository TypeScript rules"
     );
     let skills_typescript =
         root.read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/tsconfig.json");
-    assert!(skills_typescript.contains("\"include\": [\"src/**/*.ts\", \"tests/**/*.ts\"]"));
+    assert!(
+        skills_typescript
+            .contains("\"include\": [\"**/*.ts\", \"**/*.js\", \"**/*.mjs\", \"**/*.cjs\"]")
+    );
     let source_gate = root.read("agentic-ai/loom/tests/skill-application-source-boundary.test.ts");
     assert!(
         source_gate.contains("ExecutableSkillSource.analyze")
