@@ -778,7 +778,7 @@ export const EXECUTABLE_RUNTIME_OPTIONS = new Set(
 );
 
 export const TASK_BOOLEAN_OPTIONS = new Set(
-  '--list --silent --verbose'.split(' '),
+  '--list --parallel --silent --verbose'.split(' '),
 );
 
 export const TASK_VALUE_OPTIONS = new Set('--dir --taskfile -d -t'.split(' '));
