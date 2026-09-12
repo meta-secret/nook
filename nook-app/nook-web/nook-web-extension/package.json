@@ -10,7 +10,7 @@
     "package:deployment": "bun scripts/deployment-package.ts",
     "check": "test -e node_modules || ln -s ../nook-web-app/node_modules node_modules; node ../nook-web-app/scripts/generate-i18n-keys.mjs --check && bun run lint && bun run typecheck && bun run test:unit",
     "typecheck": "test -e node_modules || ln -s ../nook-web-app/node_modules node_modules; ../nook-web-app/node_modules/.bin/svelte-check --tsconfig tsconfig.json && ../nook-web-app/node_modules/.bin/tsc -p tsconfig.authored.json --noEmit",
-    "test:unit": "bun test scripts src/lib",
+    "test:unit": "bun test --preload ./scripts/unit-test-runtime.ts scripts src/lib",
     "format": "../nook-web-app/node_modules/.bin/prettier --write .",
     "format:check": "../nook-web-app/node_modules/.bin/prettier --check .",
     "lint": "cd .. && nook-web-app/node_modules/.bin/eslint --config eslint.config.js nook-web-extension nook-web-shared/src/extension nook-web-shared/src/components nook-web-shared/src/generated",

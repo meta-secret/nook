@@ -35,7 +35,7 @@ const unknownText: DashboardText = new UnknownDashboardText()
 
 const knownTime: DashboardTimestamp = {
   kind: DashboardTimestampKind.Known,
-  value: '2026-03-01T12:00:00.000Z',
+  value: '2026-03-01T12:00:00.000',
 }
 
 type TranslationRequest =
