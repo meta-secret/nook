@@ -19,7 +19,7 @@ describe('login gate identity focus restoration', () => {
       reviewButton: () =>
         document.querySelector<HTMLButtonElement>(
           '[data-testid="login-review-identities"]',
-        ) ?? undefined,
+        ) || false,
     })
 
     expect(document.activeElement?.getAttribute('data-testid')).toBe(

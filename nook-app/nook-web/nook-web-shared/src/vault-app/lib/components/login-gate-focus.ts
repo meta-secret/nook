@@ -1,7 +1,7 @@
 export type IdentityContextFocusSchedule = {
   waitForNextFrame: () => Promise<void>
   identityContextLoading: () => boolean
-  reviewButton: () => HTMLButtonElement | undefined
+  reviewButton: () => HTMLButtonElement | false
 }
 
 /** Restore review focus after the login identity context has remounted. */

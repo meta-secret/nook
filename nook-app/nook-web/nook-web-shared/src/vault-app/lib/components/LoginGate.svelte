@@ -293,7 +293,7 @@
       reviewButton: () =>
         document.querySelector<HTMLButtonElement>(
           '[data-testid="login-review-identities"]',
-        ) ?? undefined,
+        ) || false,
     })
   }
 
