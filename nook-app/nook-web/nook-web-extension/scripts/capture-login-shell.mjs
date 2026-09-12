@@ -37,7 +37,10 @@ const siteShells = JSON.parse(readFileSync(siteShellsPath, 'utf8'))
 
 /** @param {string} id @returns {LoginSite | false} */
 function siteById(id) {
-  return catalog.find((site) => site.id === id) ?? false
+  for (const site of catalog) {
+    if (site.id === id) return site
+  }
+  return false
 }
 
 /** @param {LoginSite} site */

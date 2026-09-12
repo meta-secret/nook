@@ -5,7 +5,6 @@ import type { GeneratePasswordRequest } from '../../../../nook-web-shared/src/ex
 import {
   type AuthenticationPageObservationView,
   type AuthenticationWorkflowSnapshotMessage,
-  AuthenticationWorkflowSnapshotIngress,
 } from '../../lib/auth-workflow-messages'
 
 import type {
@@ -59,33 +58,21 @@ import {
   decode_website_login_save_pending_response,
   decode_website_login_options,
   type AuthenticationWorkflowRuntimeResponse,
-  type AuthenticationWorkflowRuntimeResponseWire,
   type AuthenticationWorkflowSnapshotResponse,
   type AuthenticatorBackupAttachResponse,
-  type AuthenticatorBackupAttachResponseWire,
   type AuthenticatorCodeResponse,
-  type AuthenticatorCodeResponseWire,
   type AuthenticatorEnrollmentConfirmResponse,
-  type AuthenticatorEnrollmentConfirmResponseWire,
   type AuthenticatorEnrollmentStageResponse,
-  type AuthenticatorEnrollmentStageResponseWire,
   type AuthenticatorOptionsResponse,
-  type AuthenticatorOptionsResponseWire,
   type AuthenticatorPickerOpenResponse,
-  type AuthenticatorPickerOpenResponseWire,
   type AuthenticatorPreviewResponse,
-  type AuthenticatorPreviewResponseWire,
   type GeneratedPasswordResponse,
-  type GeneratedPasswordResponseWire,
   type LoginPickerOpenResponse,
-  type LoginPickerOpenResponseWire,
   type WebsiteLoginOptions,
-  type WebsiteLoginOptionsWireValue,
   type WebsiteLoginSaveOfferResponse,
   type WebsiteLoginSaveActionResponse,
   type WebsiteLoginSavePendingResponse,
   type AuthenticationOutcomeResponse,
-  type AuthenticationOutcomeResponseWire,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export enum RuntimeMessageDeliveryKind {
@@ -102,11 +89,6 @@ export type AuthenticationWorkflowSnapshotRuntimeResponse = {
   loginMatches: AuthenticationWorkflowRuntimeResponse['loginMatches']
   selectedFacts?: AuthenticationPageObservationView
 }
-
-type AuthenticationWorkflowSnapshotRoutingWire =
-  AuthenticationWorkflowRuntimeResponseWire & {
-    selectedFacts?: unknown
-  }
 
 export type ExtensionRuntimeRequest =
   | AuthenticationOutcomeClassifyMessage
@@ -217,10 +199,9 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const responseWire = delivery.response as WebsiteLoginOptionsWireValue
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_website_login_options(responseWire),
+        response: decode_website_login_options(delivery.response),
       }
     } catch {
       return this.unavailable()
@@ -236,10 +217,9 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const response = delivery.response as WebsiteLoginSaveOfferResponse
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_website_login_save_offer_response(response),
+        response: decode_website_login_save_offer_response(delivery.response),
       }
     } catch {
       return this.unavailable()
@@ -255,10 +235,9 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const response = delivery.response as WebsiteLoginSavePendingResponse
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_website_login_save_pending_response(response),
+        response: decode_website_login_save_pending_response(delivery.response),
       }
     } catch {
       return this.unavailable()
@@ -274,10 +253,9 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const response = delivery.response as WebsiteLoginSaveActionResponse
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_website_login_save_action_response(response),
+        response: decode_website_login_save_action_response(delivery.response),
       }
     } catch {
       return this.unavailable()
@@ -293,10 +271,9 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const responseWire = delivery.response as LoginPickerOpenResponseWire
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_login_picker_open_response(responseWire),
+        response: decode_login_picker_open_response(delivery.response),
       }
     } catch {
       return this.unavailable()
@@ -312,11 +289,9 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const responseWire =
-        delivery.response as AuthenticatorPickerOpenResponseWire
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_authenticator_picker_open_response(responseWire),
+        response: decode_authenticator_picker_open_response(delivery.response),
       }
     } catch {
       return this.unavailable()
@@ -334,23 +309,12 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const routingWire =
-        delivery.response as AuthenticationWorkflowSnapshotRoutingWire
-      const { selectedFacts, ...responseWire } = routingWire
-      const authenticationWorkflowResponseWire: AuthenticationWorkflowRuntimeResponseWire =
-        responseWire
       const runtimeResponse = decode_authentication_workflow_runtime_response(
-        authenticationWorkflowResponseWire,
+        delivery.response,
       )
-      const { workflow: verdict, loginMatches } = runtimeResponse
+      const { workflow: verdict, loginMatches, selectedFacts } = runtimeResponse
       if ('snapshot' in verdict) {
-        if (
-          !AuthenticationWorkflowSnapshotIngress.isAuthenticationPageObservationView(
-            selectedFacts,
-          )
-        ) {
-          return this.unavailable()
-        }
+        if (!selectedFacts) return this.unavailable()
         return {
           kind: RuntimeMessageDeliveryKind.Delivered,
           response: { verdict, loginMatches, selectedFacts },
@@ -374,10 +338,9 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const responseWire = delivery.response as AuthenticatorPreviewResponseWire
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_authenticator_preview_response(responseWire),
+        response: decode_authenticator_preview_response(delivery.response),
       }
     } catch {
       return this.unavailable()
@@ -393,11 +356,11 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const responseWire =
-        delivery.response as AuthenticatorBackupAttachResponseWire
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_authenticator_backup_attach_response(responseWire),
+        response: decode_authenticator_backup_attach_response(
+          delivery.response,
+        ),
       }
     } catch {
       return this.unavailable()
@@ -414,10 +377,9 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const responseWire = delivery.response as AuthenticatorCodeResponseWire
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_authenticator_code_response(responseWire),
+        response: decode_authenticator_code_response(delivery.response),
       }
     } catch {
       return this.unavailable()
@@ -433,10 +395,9 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const responseWire = delivery.response as AuthenticatorOptionsResponseWire
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_authenticator_options_response(responseWire),
+        response: decode_authenticator_options_response(delivery.response),
       }
     } catch {
       return this.unavailable()
@@ -452,11 +413,11 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const responseWire =
-        delivery.response as AuthenticatorEnrollmentStageResponseWire
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_authenticator_enrollment_stage_response(responseWire),
+        response: decode_authenticator_enrollment_stage_response(
+          delivery.response,
+        ),
       }
     } catch {
       return this.unavailable()
@@ -472,12 +433,11 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const responseWire =
-        delivery.response as AuthenticatorEnrollmentConfirmResponseWire
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response:
-          decode_authenticator_enrollment_confirm_response(responseWire),
+        response: decode_authenticator_enrollment_confirm_response(
+          delivery.response,
+        ),
       }
     } catch {
       return this.unavailable()
@@ -493,11 +453,9 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const responseWire =
-        delivery.response as AuthenticationOutcomeResponseWire
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_authentication_outcome_response(responseWire),
+        response: decode_authentication_outcome_response(delivery.response),
       }
     } catch {
       return this.unavailable()
@@ -513,10 +471,9 @@ class AuthenticationRuntimeTransport {
     }
     try {
       await companionWasmReady
-      const responseWire = delivery.response as GeneratedPasswordResponseWire
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: decode_generated_password_response(responseWire),
+        response: decode_generated_password_response(delivery.response),
       }
     } catch {
       return this.unavailable()

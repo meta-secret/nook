@@ -651,9 +651,12 @@ export function mergeArraySummaries(summaries) {
   for (const summary of summaries) {
     for (const length of summary.lengths) merged.lengths.add(length)
     for (const [index, values] of summary.values) {
-      const selected = merged.values.get(index) ?? new Set()
-      for (const value of values) selected.add(value)
-      merged.values.set(index, selected)
+      const selected = merged.values.get(index)
+      if (selected) {
+        for (const value of values) selected.add(value)
+      } else {
+        merged.values.set(index, new Set(values))
+      }
     }
   }
   return merged
@@ -675,9 +678,12 @@ export function concatenateArraySummaries(args) {
     for (const [index, selectedValues] of second.values) {
       const shiftedIndex = firstLength + index
       if (shiftedIndex > limit) continue
-      const shiftedValues = values.get(shiftedIndex) ?? new Set()
-      for (const value of selectedValues) shiftedValues.add(value)
-      values.set(shiftedIndex, shiftedValues)
+      const shiftedValues = values.get(shiftedIndex)
+      if (shiftedValues) {
+        for (const value of selectedValues) shiftedValues.add(value)
+      } else {
+        values.set(shiftedIndex, new Set(selectedValues))
+      }
     }
   }
   return { lengths, values }

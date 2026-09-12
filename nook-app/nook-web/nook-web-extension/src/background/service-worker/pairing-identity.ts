@@ -17,11 +17,12 @@ import { companionWasmReady } from '../../../../nook-web-shared/src/extension/co
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
 import {
-  admit_companion_identity_status,
+  admit_companion_handoff_identity_status,
+  decode_companion_identity_discovery_observation,
   decode_extension_session_status_response,
   ExtensionSessionStatusAvailability,
   type CompanionExtensionPresence,
-  type CompanionIdentityStatusAdmissionRequest,
+  type CompanionIdentityHandoffStatusAdmission,
   type CompanionUnlockedAppKey,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { simpleVaultRuntime } from '../../lib/simple-vault-runtime'
@@ -410,18 +411,11 @@ class ExtensionPairingIdentity {
   ): Promise<CompanionIdentityHandoffTransportResponse> {
     try {
       await companionWasmReady
-      const candidate = Object(message.payload)
-      const transaction = Object(Reflect.get(candidate, 'transaction'))
-      const admissionRequest = {
-        discovery: Reflect.get(transaction, 'discovery'),
-        status: Reflect.get(transaction, 'status'),
+      const statusAdmission: CompanionIdentityHandoffStatusAdmission = {
+        request: message.payload,
         observedAt: Date.now(),
-      } satisfies CompanionIdentityStatusAdmissionRequest
-      const admission = Reflect.apply(
-        admit_companion_identity_status,
-        globalThis,
-        [admissionRequest],
-      )
+      }
+      const admission = admit_companion_handoff_identity_status(statusAdmission)
       if (
         admission.kind !== 'accepted' ||
         admission.transaction.status.status !== 'unlocked'
@@ -507,9 +501,9 @@ class ExtensionPairingIdentity {
       kind: 'unavailable',
     }
     try {
-      const discovery = Object(observation)
-      const request = Object(Reflect.get(discovery, 'request'))
-      const vaultStoreId = Reflect.get(request, 'vaultStoreId')
+      const discovery =
+        decode_companion_identity_discovery_observation(observation)
+      const vaultStoreId = discovery.request.vaultStoreId
       const pairingPolicy = await extensionPairingGrantPolicyReady
       const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
       const stored = await this.getPairingStorage()

@@ -424,9 +424,10 @@ describe('runtime message adapters', () => {
       expect(delivery.response.verdict.kind).toBe(
         AuthenticationWorkflowSnapshotResponseKind.Matched,
       )
-      expect(JSON.stringify(delivery.response.selectedFacts)).toBe(
-        JSON.stringify(selectedFacts),
-      )
+      const decodedFacts = delivery.response.selectedFacts
+      expect(decodedFacts).toMatchObject(selectedFacts)
+      expect(decodedFacts?.ceremony.oneTimeCodeHandlerSignals).toEqual([])
+      expect(decodedFacts?.ceremony.implicitSubmissionMethod).toBe('absent')
       expect(String(delivery.response.loginMatches.kind)).toBe('ready')
       if ('count' in delivery.response.loginMatches) {
         expect(delivery.response.loginMatches.count).toBe(2)

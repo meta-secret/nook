@@ -361,9 +361,15 @@ describe('account picker authorization cleanup', () => {
               ),
             ]),
           remove: (tabId: number | number[], callback?: () => void) => {
-            const removedTabId = Array.isArray(tabId)
-              ? (tabId.at(0) ?? -1)
-              : tabId
+            let removedTabId = -1
+            if (Array.isArray(tabId)) {
+              for (const selectedTabId of tabId) {
+                removedTabId = selectedTabId
+                break
+              }
+            } else {
+              removedTabId = tabId
+            }
             removedTabs.push(removedTabId)
             if (rejectRemoval) {
               Object.assign(runtime, { lastError: { message: 'denied' } })

@@ -102,8 +102,12 @@ function catalogValue(catalog, key) {
     if (typeof value === 'string')
       throw new Error(`bootstrap translation ${key} traverses a string`)
     /** @type {[string, CatalogNode] | false} */
-    const entry =
-      Object.entries(value).find(([name]) => name === segment) ?? false
+    let entry = false
+    for (const candidate of Object.entries(value)) {
+      if (candidate[0] !== segment) continue
+      entry = candidate
+      break
+    }
     if (!entry) throw new Error(`bootstrap translation ${key} is missing`)
     /** @type {CatalogNode} */
     const nextCatalogValue = entry[1]

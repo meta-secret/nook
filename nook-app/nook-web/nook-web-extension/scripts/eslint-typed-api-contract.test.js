@@ -39,11 +39,12 @@ function lint(source) {
     .verify(source, config)
     .filter(
       (message) =>
+        typeof message.messageId !== 'string' ||
         ![
           'namedParameterDefault',
           'namedParameterType',
           'semanticParameterType',
-        ].includes(message.messageId ?? ''),
+        ].includes(message.messageId),
     )
 }
 
@@ -51,10 +52,12 @@ function lint(source) {
 function lintParameterTypes(source) {
   return new TSESLint.Linter()
     .verify(source, config)
-    .filter((message) =>
-      ['namedParameterType', 'semanticParameterType'].includes(
-        message.messageId ?? '',
-      ),
+    .filter(
+      (message) =>
+        typeof message.messageId === 'string' &&
+        ['namedParameterType', 'semanticParameterType'].includes(
+          message.messageId,
+        ),
     )
 }
 
