@@ -1,4 +1,6 @@
 const GITHUB_VAULT_PATH = 'nook-events'
+export const GITHUB_EVENT_LOG_PATH = 'nook-log/v1/events'
+const GITHUB_EVENT_FILE_NAME = /^[A-Za-z0-9_-]{43}\.yaml$/i
 const GITHUB_FETCH_TIMEOUT_MS = 30_000
 const GITHUB_RATE_LIMIT_MAX_WAIT_MS = 5 * 60_000
 
@@ -124,6 +126,70 @@ export enum GithubVaultYamlFetchKind {
 export type GithubVaultYamlFetch =
   | { kind: GithubVaultYamlFetchKind.Missing }
   | { kind: GithubVaultYamlFetchKind.Available; yaml: string }
+
+export enum GithubEventLogFetchKind {
+  Missing = 'missing',
+  Available = 'available',
+}
+
+export type GithubEventLogFetch =
+  | { kind: GithubEventLogFetchKind.Missing }
+  | {
+      kind: GithubEventLogFetchKind.Available
+      eventYamls: string[]
+    }
+
+function eventLogPaths(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error('GitHub event-log response was not an array.')
+  }
+
+  const paths: string[] = []
+  for (const item of value) {
+    const entry = requireRecord(item, 'GitHub event-log entry')
+    const name = readStringProperty(entry, 'name', 'GitHub event-log entry')
+    const path = readStringProperty(entry, 'path', 'GitHub event-log entry')
+    const type = readStringProperty(entry, 'type', 'GitHub event-log entry')
+    if (
+      type === 'file' &&
+      GITHUB_EVENT_FILE_NAME.test(name) &&
+      path === `${GITHUB_EVENT_LOG_PATH}/${name}`
+    ) {
+      paths.push(path)
+    }
+  }
+  return paths.sort()
+}
+
+export async function fetchGithubEventLog(
+  pat: string,
+  repoName: string,
+): Promise<GithubEventLogFetch> {
+  const { headers, repo } = await githubRepoContext(pat, repoName)
+  const directoryUrl = `https://api.github.com/repos/${repo}/contents/${GITHUB_EVENT_LOG_PATH}`
+  const directoryRes = await githubApiFetch(pat, directoryUrl, { headers })
+  if (directoryRes.status === 404) {
+    return { kind: GithubEventLogFetchKind.Missing }
+  }
+
+  const paths = eventLogPaths(await directoryRes.json())
+  const eventYamls: string[] = []
+  for (const path of paths) {
+    const fileUrl = `https://api.github.com/repos/${repo}/contents/${path}`
+    const fileRes = await githubApiFetch(pat, fileUrl, { headers })
+    if (fileRes.status === 404) continue
+
+    const file = requireRecord(await fileRes.json(), 'GitHub event file')
+    const content = readStringProperty(file, 'content', 'GitHub event file')
+    eventYamls.push(
+      Buffer.from(content.replace(/\n/g, ''), 'base64').toString('utf-8'),
+    )
+  }
+
+  return eventYamls.length > 0
+    ? { kind: GithubEventLogFetchKind.Available, eventYamls }
+    : { kind: GithubEventLogFetchKind.Missing }
+}
 
 export async function fetchGithubVaultYaml(
   pat: string,

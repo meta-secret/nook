@@ -1,8 +1,9 @@
 import { expect, type Page } from '@playwright/test'
 import {
   GITHUB_VAULT_PATH,
+  fetchGithubEventLog,
   fetchGithubVaultYaml,
-  GithubVaultYamlFetchKind,
+  GithubEventLogFetchKind,
   githubApiFetch,
   githubApiHeaders,
   githubFetch,
@@ -10,8 +11,7 @@ import {
 } from '../github-api'
 import {
   assertGenesisVaultYaml,
-  joinCountFromYaml,
-  parseVaultYamlSnapshot,
+  parseVaultEventLogSnapshot,
   waitForVaultEventLogSnapshot,
   type VaultYamlSnapshot,
 } from '../vault-yaml'
@@ -160,13 +160,13 @@ export async function waitForVaultYaml(
     if (options?.page) {
       await assertNoVaultErrors(options.page, { allowTransient: true })
     }
-    const result = await fetchGithubVaultYaml(pat, repoName)
-    if (result.kind === GithubVaultYamlFetchKind.Available) {
-      const snapshot = parseVaultYamlSnapshot(result.yaml)
+    const result = await fetchGithubEventLog(pat, repoName)
+    if (result.kind === GithubEventLogFetchKind.Available) {
+      const snapshot = parseVaultEventLogSnapshot(result.eventYamls)
       if (predicate(snapshot)) {
         return snapshot
       }
-      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${joinCountFromYaml(result.yaml)})`
+      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
     }
     await sleep(intervalMs)
   }
