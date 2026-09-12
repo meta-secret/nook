@@ -12,8 +12,8 @@ import {
 
 export class DelegationVisualizationRequestDecoder {
   private isTransportRecord(
-    value: DelegationVisualizationTransportRecord,
-  ): boolean {
+    value: unknown,
+  ): value is Readonly<Record<string, unknown>> {
     return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
   }
 
@@ -34,24 +34,21 @@ export class DelegationVisualizationRequestDecoder {
     ) {
       return err(new DelegationVisualizationRequestDecodeError(''));
     }
-    let transport: DelegationVisualizationRequestTransport;
+    let transport: unknown;
     try {
-      transport = JSON.parse(
-        serialized,
-      ) as DelegationVisualizationRequestTransport;
+      transport = JSON.parse(serialized);
     } catch {
+      return err(new DelegationVisualizationRequestDecodeError(''));
+    }
+    if (!this.isTransportRecord(transport)) {
       return err(new DelegationVisualizationRequestDecodeError(''));
     }
     const requestKeys: ExactRequestKeys = {
       value: transport,
       expected: Object.values(DelegationVisualizationRequestField),
     };
-    if (
-      !this.isTransportRecord(transport) ||
-      !this.exactRequestKeys(requestKeys)
-    ) {
+    if (!this.exactRequestKeys(requestKeys))
       return err(new DelegationVisualizationRequestDecodeError(''));
-    }
     if (transport.kind !== DelegationVisualizationContractKind.Request) {
       return err(new DelegationVisualizationRequestDecodeError('kind'));
     }
@@ -84,16 +81,15 @@ export class DelegationVisualizationRequestDecoder {
     DelegationVisualizationRequestDecodeError
   > {
     const path = `tasks[${request.index}]`;
+    if (!this.isTransportRecord(request.candidate)) {
+      return err(new DelegationVisualizationRequestDecodeError(path));
+    }
     const taskKeys: ExactTaskKeys = {
       value: request.candidate,
       expected: Object.values(DelegationVisualizationTaskField),
     };
-    if (
-      !this.isTransportRecord(request.candidate) ||
-      !this.exactTaskKeys(taskKeys)
-    ) {
+    if (!this.exactTaskKeys(taskKeys))
       return err(new DelegationVisualizationRequestDecodeError(path));
-    }
     const { id, team, description, dependencies } = request.candidate;
     if (
       typeof id !== 'string' ||
@@ -143,7 +139,7 @@ export class DelegationVisualizationRequestDecoder {
   }
 
   private isDelegationTeam(
-    value: string | false,
+    value: unknown,
   ): value is DelegationVisualizationTeam {
     return (
       typeof value === 'string' &&
@@ -165,7 +161,7 @@ export class DelegationVisualizationRequestDecoder {
     const keys = Object.keys(request.value);
     return (
       keys.length === request.expected.length &&
-      keys.every((key) => request.expected.includes(key as never))
+      keys.every((key) => request.expected.some((expected) => expected === key))
     );
   }
 }
@@ -183,12 +179,12 @@ enum DelegationVisualizationTaskField {
 }
 
 type ExactRequestKeys = {
-  readonly value: DelegationVisualizationRequestTransport;
+  readonly value: Readonly<Record<string, unknown>>;
   readonly expected: readonly DelegationVisualizationRequestField[];
 };
 
 type ExactTaskKeys = {
-  readonly value: DelegationVisualizationTaskTransport;
+  readonly value: Readonly<Record<string, unknown>>;
   readonly expected: readonly DelegationVisualizationTaskField[];
 };
 
@@ -207,23 +203,7 @@ export class DelegationVisualizationRequestDecodeError {
 }
 
 type DecodeDelegationVisualizationTaskRequest = {
-  readonly candidate: DelegationVisualizationTaskTransport;
+  readonly candidate: unknown;
   readonly index: number;
   readonly priorTaskIds: ReadonlySet<string>;
 };
-
-type DelegationVisualizationTaskTransport = {
-  readonly id: string | false;
-  readonly team: string | false;
-  readonly description: string | false;
-  readonly dependencies: (string | false)[] | false;
-};
-
-type DelegationVisualizationRequestTransport = {
-  readonly kind: string | false;
-  readonly tasks: DelegationVisualizationTaskTransport[] | false;
-};
-
-type DelegationVisualizationTransportRecord =
-  | DelegationVisualizationRequestTransport
-  | DelegationVisualizationTaskTransport;

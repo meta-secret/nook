@@ -24,6 +24,12 @@ class DelegationVisualizationRequestFixture {
       },
     ],
   };
+
+  task(index: number) {
+    const task = this.value.tasks.at(index);
+    if (!task) throw new Error(`Missing task fixture at ${index}`);
+    return task;
+  }
 }
 
 describe('delegation visualization codec', () => {
@@ -38,8 +44,9 @@ describe('delegation visualization codec', () => {
   });
 
   test('rejects duplicate, missing, forward, and self dependencies', () => {
-    const duplicateId = new DelegationVisualizationRequestFixture().value;
-    duplicateId.tasks[1]!.id = 'first';
+    const duplicateIdFixture = new DelegationVisualizationRequestFixture();
+    duplicateIdFixture.task(1).id = 'first';
+    const duplicateId = duplicateIdFixture.value;
     expect(
       DelegationVisualizationRequestDecoder.from(JSON.stringify(duplicateId))
         .execute()
@@ -47,8 +54,9 @@ describe('delegation visualization codec', () => {
     ).toBe(true);
 
     for (const dependency of ['missing', 'second']) {
-      const invalid = new DelegationVisualizationRequestFixture().value;
-      invalid.tasks[0]!.dependencies = [dependency];
+      const invalidFixture = new DelegationVisualizationRequestFixture();
+      invalidFixture.task(0).dependencies = [dependency];
+      const invalid = invalidFixture.value;
       expect(
         DelegationVisualizationRequestDecoder.from(JSON.stringify(invalid))
           .execute()
@@ -58,24 +66,27 @@ describe('delegation visualization codec', () => {
   });
 
   test('rejects unknown teams, duplicate edges, and unknown fields', () => {
-    const unknownTeam = new DelegationVisualizationRequestFixture().value;
-    Object.assign(unknownTeam.tasks[0]!, { team: 'product' });
+    const unknownTeamFixture = new DelegationVisualizationRequestFixture();
+    Object.assign(unknownTeamFixture.task(0), { team: 'product' });
+    const unknownTeam = unknownTeamFixture.value;
     expect(
       DelegationVisualizationRequestDecoder.from(JSON.stringify(unknownTeam))
         .execute()
         .isErr(),
     ).toBe(true);
 
-    const duplicateEdge = new DelegationVisualizationRequestFixture().value;
-    duplicateEdge.tasks[1]!.dependencies = ['first', 'first'];
+    const duplicateEdgeFixture = new DelegationVisualizationRequestFixture();
+    duplicateEdgeFixture.task(1).dependencies = ['first', 'first'];
+    const duplicateEdge = duplicateEdgeFixture.value;
     expect(
       DelegationVisualizationRequestDecoder.from(JSON.stringify(duplicateEdge))
         .execute()
         .isErr(),
     ).toBe(true);
 
-    const extra = new DelegationVisualizationRequestFixture().value;
-    Object.assign(extra.tasks[0]!, { admission: true });
+    const extraFixture = new DelegationVisualizationRequestFixture();
+    Object.assign(extraFixture.task(0), { admission: true });
+    const extra = extraFixture.value;
     expect(
       DelegationVisualizationRequestDecoder.from(JSON.stringify(extra))
         .execute()
@@ -85,8 +96,9 @@ describe('delegation visualization codec', () => {
 
   test('rejects YAML-non-printable C1 description characters', () => {
     for (const character of ['\u0080', '\u0086', '\u009f']) {
-      const invalid = new DelegationVisualizationRequestFixture().value;
-      invalid.tasks[0]!.description = `blocked${character}`;
+      const invalidFixture = new DelegationVisualizationRequestFixture();
+      invalidFixture.task(0).description = `blocked${character}`;
+      const invalid = invalidFixture.value;
       expect(
         DelegationVisualizationRequestDecoder.from(JSON.stringify(invalid))
           .execute()
