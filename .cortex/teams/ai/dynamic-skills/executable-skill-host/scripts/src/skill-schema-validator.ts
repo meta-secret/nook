@@ -198,18 +198,19 @@ export class ExecutableSkillInputSchema {
   private validateArray(
     request: SkillArrayValidationRequest,
   ): SkillSchemaValidation {
-    if (!Array.isArray(request.value)) {
+    const candidate = new SkillYamlValue(request.value);
+    if (!candidate.isList()) {
       return this.invalidAt(request.path)('Expected an array.');
     }
     if (
       typeof request.schema.maxItems === 'number' &&
-      request.value.length > request.schema.maxItems
+      candidate.value.length > request.schema.maxItems
     ) {
       return this.invalidAt(`${request.path}[${request.schema.maxItems}]`)(
         `Expected at most ${request.schema.maxItems} items.`,
       );
     }
-    for (const [index, value] of request.value.entries()) {
+    for (const [index, value] of candidate.value.entries()) {
       const itemRequest: SkillSchemaValidationRequest = {
         path: `${request.path}[${index}]`,
         schema: request.schema.items,

@@ -8,6 +8,14 @@ import { type RunSkillCliRequest, ExecutableSkillCli } from '../src/cli.ts';
 
 import { SkillCommandIssue } from '../src/skill-command-domain.ts';
 
+import {
+  type UntrustedSkillYamlMap,
+  type UntrustedSkillYamlNode,
+  ExecutableSkillYamlAdmission,
+  ExecutableSkillYamlProperty,
+  SkillYamlValue,
+} from '../src/skill-yaml-codec.ts';
+
 export class ExecutableSkillHostCliFileScenario {
   private constructor(private readonly request: string) {}
 
@@ -17,12 +25,41 @@ export class ExecutableSkillHostCliFileScenario {
 
   private execute(): CliResponse {
     const yaml = this.request;
-    return Bun.YAML.parse(yaml) as CliResponse;
+    const parsed = ExecutableSkillYamlAdmission.from(
+      Bun.YAML.parse(yaml),
+    ).execute();
+    assert(parsed.isOk());
+    assert(ExecutableSkillHostCliFileScenario.isResponse(parsed.value));
+    return parsed.value;
+  }
+
+  private static isResponse(
+    value: UntrustedSkillYamlNode,
+  ): value is CliResponse {
+    const candidate = new SkillYamlValue(value);
+    if (!candidate.isMap() || !Object.hasOwn(candidate.value, 'errors')) {
+      return false;
+    }
+    const property = new ExecutableSkillYamlProperty({
+      key: 'errors',
+      map: candidate.value,
+    }).execute();
+    if (!property.found) return false;
+    const errors = new SkillYamlValue(property.value);
+    return (
+      errors.isList() &&
+      errors.value.every((value) => {
+        const error = new SkillYamlValue(value);
+        return error.isMap() && typeof error.value.issue === 'string';
+      })
+    );
   }
 }
 
-type CliResponse = {
-  readonly errors?: readonly { readonly issue: string }[];
+type CliResponse = UntrustedSkillYamlMap & {
+  readonly errors: readonly (UntrustedSkillYamlMap & {
+    readonly issue: string;
+  })[];
 };
 
 test('preserves multiline YAML in exactly one command-line token', () => {

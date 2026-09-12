@@ -26,10 +26,7 @@ import {
   ExecutableSkillInvocation,
 } from './skill-cli-invocation.ts';
 
-import {
-  type UntrustedSkillYamlNode,
-  ExecutableSkillYaml,
-} from './skill-yaml-codec.ts';
+import { ExecutableSkillYaml } from './skill-yaml-codec.ts';
 
 export class ExecutableSkillCli {
   private constructor(private readonly request: RunSkillCliRequest) {}
@@ -71,7 +68,7 @@ export type RunSkillCliRequest = {
   readonly argv: readonly string[];
 };
 
-type SkillSuccessResponse = {
+export type SkillSuccessResponse = {
   readonly ok: true;
   readonly family: string;
   readonly operation: string;
@@ -80,7 +77,7 @@ type SkillSuccessResponse = {
 
 export type FinalSkillCliResponseRequest = {
   readonly exitCode: number;
-  readonly response: UntrustedSkillYamlNode;
+  readonly response: SkillSuccessResponse | SkillCommandErrorResponse;
 };
 
 const UTF8_ENCODER = new TextEncoder();
@@ -133,7 +130,7 @@ export class ExecutableSkillRequest {
     };
     const finalRequest: FinalSkillCliResponseRequest = {
       exitCode: 0,
-      response: response as UntrustedSkillYamlNode,
+      response,
     };
     return new ExecutableSkillResponse(finalRequest).execute();
   }
@@ -168,7 +165,7 @@ export class ExecutableSkillFailureResponse {
     };
     const finalRequest: FinalSkillCliResponseRequest = {
       exitCode: request.phase === SkillCommandPhase.Execute ? 1 : 2,
-      response: response as UntrustedSkillYamlNode,
+      response,
     };
     return new ExecutableSkillResponse(finalRequest).execute();
   }
@@ -181,66 +178,15 @@ export class ExecutableSkillResponse {
     const serialized = new ExecutableSkillYamlEncoding(
       request.response,
     ).execute();
-    if (serialized.isErr()) {
-      const invalidResponse: SkillCommandErrorResponse = {
-        ok: false,
-        isError: true,
-        phase: SkillCommandPhase.Execute,
-        errors: [
-          {
-            path: 'result',
-            issue: SkillCommandIssue.InvalidResponse,
-            message: 'Skill action returned an invalid YAML response value.',
-          },
-        ],
-        recover: {
-          toolsListRequest: SKILL_TOOLS_LIST_INVOKE,
-          hint: 'Use only finite values permitted by the action result schema.',
-        },
-      };
-      return new ExecutableSkillYamlEncoding(
-        invalidResponse as UntrustedSkillYamlNode,
-      )
-        .execute()
-        .map((yaml) => ({ exitCode: 1, yaml }));
-    }
+    if (serialized.isErr()) return err(serialized.error);
     const yaml = serialized.value;
-    if (
-      UTF8_ENCODER.encode(yaml).byteLength <= SKILL_HOST_RESPONSE_BYTE_LIMIT
-    ) {
-      return ok({ exitCode: request.exitCode, yaml });
-    }
-    const response: SkillCommandErrorResponse = {
-      ok: false,
-      isError: true,
-      phase: SkillCommandPhase.Execute,
-      errors: [
-        {
-          path: 'result',
-          issue: SkillCommandIssue.ResponseTooLarge,
-          message: `Encoded YAML response exceeds ${SKILL_HOST_RESPONSE_BYTE_LIMIT} bytes.`,
-        },
-      ],
-      recover: {
-        toolsListRequest: SKILL_TOOLS_LIST_INVOKE,
-        hint: 'Reduce the request cardinality and retry the skill action.',
-      },
-    };
-    const fallback = new ExecutableSkillYamlEncoding(
-      response as UntrustedSkillYamlNode,
-    ).execute();
-    if (fallback.isErr()) return err(fallback.error);
-    const fallbackYaml = fallback.value;
-    if (
-      UTF8_ENCODER.encode(fallbackYaml).byteLength >
-      SKILL_HOST_RESPONSE_BYTE_LIMIT
-    ) {
+    if (UTF8_ENCODER.encode(yaml).byteLength > SKILL_HOST_RESPONSE_BYTE_LIMIT) {
       return err({
         kind: SkillYamlEncodingIssue.ResponseCapacity,
-        message: 'Failure response exceeds its byte limit.',
+        message: `Encoded YAML response exceeds ${SKILL_HOST_RESPONSE_BYTE_LIMIT} bytes.`,
       });
     }
-    return ok({ exitCode: 1, yaml: fallbackYaml });
+    return ok({ exitCode: request.exitCode, yaml });
   }
 }
 
