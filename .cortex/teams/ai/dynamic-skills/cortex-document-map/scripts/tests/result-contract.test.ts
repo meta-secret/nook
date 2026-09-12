@@ -72,6 +72,65 @@ const validFinding = {
   message: 'Centralized Cortex knowledge graph is missing.',
 };
 
+test('acceptance verifies dev-manager graph ownership and rejects omitted evidence', () => {
+  const contexts = [
+    'gizmo',
+    'teams/ai',
+    'teams/dev-core',
+    'teams/dev-manager',
+    'teams/security',
+    'teams/sre',
+    'teams/web-dev',
+    'shared',
+  ];
+  const auditRequest: AuditCortexDocumentMapRequest = {
+    kind: CortexDocumentMapContractKind.Request,
+    excludedDocumentPaths: [],
+    documents: [
+      {
+        relativePath: '.cortex/knowledge-graph.md',
+        content: `# Router\n\n${contexts.map((context) => `- [${context}](${context}/knowledge-graph.md)`).join('\n')}\n`,
+      },
+      ...contexts.map((context) => ({
+        relativePath: `.cortex/${context}/knowledge-graph.md`,
+        content: '# Owner Graph\n',
+      })),
+      {
+        relativePath: '.cortex/teams/dev-manager/policy.md',
+        content: '# Dev Publication Policy\n',
+      },
+    ],
+  };
+  const result = {
+    kind: CortexDocumentMapContractKind.Result,
+    findings: [{
+      code: CortexStructureFindingCode.MissingFromIndex,
+      file: '.cortex/teams/dev-manager/knowledge-graph.md',
+      line: 1,
+      message:
+        'Document is not indexed in its owning knowledge graph .cortex/teams/dev-manager/knowledge-graph.md: .cortex/teams/dev-manager/policy.md',
+    }],
+  } as const;
+  expect(new CortexDocumentMapResultAcceptance({ auditRequest, result }).execute().isOk()).toBe(true);
+  expect(new CortexDocumentMapResultAcceptance({
+    auditRequest,
+    result: { ...result, findings: [] },
+  }).execute().isErr()).toBe(true);
+
+  const indexedRequest: AuditCortexDocumentMapRequest = {
+    ...auditRequest,
+    documents: auditRequest.documents.map((document) =>
+      document.relativePath === '.cortex/teams/dev-manager/knowledge-graph.md'
+        ? { ...document, content: '# Owner Graph\n\n- [Policy](policy.md)\n' }
+        : document,
+    ),
+  };
+  expect(new CortexDocumentMapResultAcceptance({
+    auditRequest: indexedRequest,
+    result: { ...result, findings: [] },
+  }).execute().isOk()).toBe(true);
+});
+
 test('round-trips the exact bounded result contract', () => {
   const resultOutcome =
     CortexDocumentMapApplication.from(invalidRootRequest).execute();
