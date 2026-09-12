@@ -19,7 +19,7 @@ vi.mock('$lib/runtime/log', () => ({
   },
 }))
 
-import { DeviceMode, DeviceProtectionStatus } from '$app-wasm'
+import { DeviceMode, DeviceProtectionStatus, NookVaultManager } from '$app-wasm'
 import {
   PasskeyCeremonyAction,
   PasskeyCeremonyFailure,
@@ -28,36 +28,39 @@ import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
-import type { VaultState } from '$lib/vault.svelte'
+import { VaultState } from '$lib/vault.svelte'
 import { DeviceProtectionActions } from '$lib/vault/device-protection.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
+
+class DeviceProtectionTestState extends VaultState {
+  override async enqueueStorage<Value, Failure>(
+    operation: () => Result<Value, Failure> | Promise<Result<Value, Failure>>,
+  ): Promise<Result<Value, Failure | VaultStorageFailure>> {
+    return operation()
+  }
+}
 
 function deviceProtectionState(
   initialization: Result<void, VaultStorageFailure> = ok(),
 ): VaultState {
-  return {
-    hasManager: true,
-    isVerifying: false,
-    isInitializing: true,
-    errorMsg: '',
-    deviceAuthorizationInProgress: false,
-    deviceProtectionStatus: DeviceProtectionStatus.Passkey,
-    deviceProtectionLockedStatus: DeviceProtectionStatus.Passkey,
-    deviceId: '',
-    devicePublicKey: '',
-    admitManager: () => ok({}),
-    enqueueStorage: async <Value, Failure>(
-      operation: () => Result<Value, Failure> | Promise<Result<Value, Failure>>,
-    ) => operation(),
-    continueInitializationAfterDeviceUnlock: vi.fn(async () => initialization),
-    lockDeviceProtection: vi.fn(async () => ok()),
-    t: vi.fn((request: { key?: string } | string) =>
-      typeof request === 'string'
-        ? request
-        : 'key' in request && request.key
-          ? request.key
-          : 'translated',
-    ),
-  } as unknown as VaultState
+  const state = VaultStateTestFixture.createFrom(DeviceProtectionTestState)
+  state.openManager(new NookVaultManager())
+  state.isVerifying = false
+  state.isInitializing = true
+  state.deviceProtectionStatus = DeviceProtectionStatus.Passkey
+  state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey
+  vi.spyOn(state, 'continueInitializationAfterDeviceUnlock').mockImplementation(
+    async () => initialization,
+  )
+  vi.spyOn(state, 'lockDeviceProtection').mockResolvedValue(ok())
+  vi.spyOn(state, 't').mockImplementation((request) =>
+    typeof request === 'string'
+      ? request
+      : 'key' in request && request.key
+        ? request.key
+        : 'translated',
+  )
+  return state
 }
 
 describe('device protection actions', () => {
@@ -124,10 +127,11 @@ describe('device protection actions', () => {
       throw new Error('native PIN failure')
     })
     const state = deviceProtectionState()
-    Object.assign(state, {
-      admitManager: () =>
-        ok({ unlock_pin_device_identity: unlockPinDeviceIdentity }),
-    })
+    const manager = state.admitManager()
+    if (manager.isErr()) expect.fail('test manager must be available')
+    vi.spyOn(manager.value, 'unlock_pin_device_identity').mockImplementation(
+      unlockPinDeviceIdentity,
+    )
 
     await new DeviceProtectionActions(state).unlockPinDeviceProtection({
       pin: '000000',

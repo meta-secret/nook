@@ -1,10 +1,19 @@
-import { ok } from 'neverthrow'
 import { describe, expect, test, vi } from 'vitest'
-import { NookSecretTypeFilter } from '$app-wasm'
+import type { Result } from 'neverthrow'
+import { NookSecretTypeFilter, NookVaultManager } from '$app-wasm'
 import { VaultSecretActions } from '$lib/vault/secrets'
-import type { VaultState } from '$lib/vault.svelte'
+import { VaultState } from '$lib/vault.svelte'
+import { SecretComponentTestFixture } from '../components/secret-component-test-fixture'
+import type { VaultStorageFailure } from '$lib/runtime/storage-failure'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
-type PageRecord = { label: string; free: ReturnType<typeof vi.fn> }
+class SecretPageTestState extends VaultState {
+  override async enqueueStorage<T, E = VaultStorageFailure>(
+    operation: () => Result<T, E> | Promise<Result<T, E>>,
+  ): Promise<Result<T, E | VaultStorageFailure>> {
+    return operation()
+  }
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -15,14 +24,16 @@ function deferred<T>() {
 }
 
 function secretPage(label: string, offset = 0, total = 1) {
-  const record: PageRecord = { label, free: vi.fn() }
+  const record = SecretComponentTestFixture.listItem({ title: label })
   return {
     record,
     page: {
       take_items: () => [record],
       total,
       offset,
+      limit: 25,
       free: vi.fn(),
+      [Symbol.dispose]: vi.fn(),
     },
   }
 }
@@ -33,25 +44,19 @@ describe('loadSecretPage', () => {
     const newer = deferred<ReturnType<typeof secretPage>['page']>()
     const oldPage = secretPage('older result')
     const newPage = secretPage('newer result')
-    const previousRecord: PageRecord = { label: 'previous', free: vi.fn() }
-    const manager = {
-      query_prepared_secret_page_js: vi.fn((query: string) =>
-        query === 'older' ? older.promise : newer.promise,
-      ),
-    }
-    const state = {
-      hasManager: true,
-      admitManager: () => ok(manager),
-      enqueueStorage: <T>(operation: () => Promise<T>) => operation(),
-      secretPageGeneration: 0,
-      secretTypeFilter: NookSecretTypeFilter.All,
-      secretPageSize: 25,
-      secrets: [previousRecord],
-      secretTotal: 1,
-      secretPageOffset: 0,
-      secretPageRequestOffset: 0,
-      secretQuery: '',
-    } as unknown as VaultState
+    const previousRecord = SecretComponentTestFixture.listItem({
+      title: 'previous',
+    })
+    const manager = new NookVaultManager()
+    vi.spyOn(manager, 'query_prepared_secret_page_js').mockImplementation(
+      (query) => (query === 'older' ? older.promise : newer.promise),
+    )
+    const state = VaultStateTestFixture.createFrom(SecretPageTestState)
+    state.openManager(manager)
+    state.secretTypeFilter = NookSecretTypeFilter.All
+    state.secretPageSize = 25
+    state.secrets = [previousRecord]
+    state.secretTotal = 1
 
     const olderRequest = new VaultSecretActions(state).loadSecretPage({
       query: 'older',
@@ -77,25 +82,17 @@ describe('loadSecretPage', () => {
     const maintenance = deferred<ReturnType<typeof secretPage>['page']>()
     const paginatedPage = secretPage('interactive page', 25, 50)
     const refreshedPage = secretPage('refreshed page', 25, 50)
-    const manager = {
-      query_prepared_secret_page_js: vi
-        .fn()
-        .mockReturnValueOnce(pagination.promise)
-        .mockReturnValueOnce(maintenance.promise),
-    }
-    const state = {
-      hasManager: true,
-      admitManager: () => ok(manager),
-      enqueueStorage: <T>(operation: () => Promise<T>) => operation(),
-      secretPageGeneration: 0,
-      secretTypeFilter: NookSecretTypeFilter.All,
-      secretPageSize: 25,
-      secrets: [],
-      secretTotal: 50,
-      secretPageOffset: 0,
-      secretPageRequestOffset: 0,
-      secretQuery: 'vault',
-    } as unknown as VaultState
+    const manager = new NookVaultManager()
+    const queryPreparedSecretPage = vi
+      .spyOn(manager, 'query_prepared_secret_page_js')
+      .mockReturnValueOnce(pagination.promise)
+      .mockReturnValueOnce(maintenance.promise)
+    const state = VaultStateTestFixture.createFrom(SecretPageTestState)
+    state.openManager(manager)
+    state.secretTypeFilter = NookSecretTypeFilter.All
+    state.secretPageSize = 25
+    state.secretTotal = 50
+    state.secretQuery = 'vault'
 
     const paginationRequest = new VaultSecretActions(state).loadSecretPage({
       query: 'vault',
@@ -111,12 +108,8 @@ describe('loadSecretPage', () => {
     pagination.resolve(paginatedPage.page)
     await paginationRequest
 
-    expect(manager.query_prepared_secret_page_js.mock.calls[1]?.[0]).toBe(
-      'vault',
-    )
-    expect(
-      manager.query_prepared_secret_page_js.mock.calls[1]?.slice(2),
-    ).toEqual([25, 25])
+    expect(queryPreparedSecretPage.mock.calls[1]?.[0]).toBe('vault')
+    expect(queryPreparedSecretPage.mock.calls[1]?.slice(2)).toEqual([25, 25])
     expect(state.secrets).toEqual([refreshedPage.record])
     expect(state.secretPageOffset).toBe(25)
     expect(paginatedPage.record.free).toHaveBeenCalledOnce()

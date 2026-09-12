@@ -10,6 +10,7 @@ import {
   iCloudOAuthSession,
 } from '$lib/auth/icloud/oauth'
 import { oauthConfigurationNotApplicable } from '$lib/auth/providers'
+import { ICloudOAuthTestFixture } from './icloud-oauth-test-fixture'
 
 import {
   ICLOUD_CONTAINER_ID,
@@ -68,7 +69,7 @@ function mockPendingCloudKitSignIn(setUpAuth = resolvedCloudKitEffect()) {
     resolveSignIn = resolve
   })
   const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
-  vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+  ICloudOAuthTestFixture.useContainer({
     setUpAuth,
     whenUserSignsIn,
   })
@@ -139,7 +140,7 @@ describe('icloud-oauth', () => {
         ],
       })
       const shareWithUI = vi.fn().mockResolvedValue({})
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth: vi.fn().mockResolvedValue({
           userRecordName: 'owner-record',
         }),
@@ -190,7 +191,7 @@ describe('icloud-oauth', () => {
 
     it('keeps an absent current identity signed out', async () => {
       const saveRecordZones = vi.fn()
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth: resolvedCloudKitEffect(),
         whenUserSignsIn: vi.fn(),
         fetchCurrentUserIdentity: resolvedCloudKitEffect(),
@@ -224,7 +225,7 @@ describe('icloud-oauth', () => {
           },
         ],
       })
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth: vi.fn(),
         whenUserSignsIn: vi.fn(),
         acceptShares,
@@ -265,7 +266,7 @@ describe('icloud-oauth', () => {
           },
         ],
       })
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth: vi.fn(),
         whenUserSignsIn: vi.fn(),
         acceptShares,
@@ -286,7 +287,7 @@ describe('icloud-oauth', () => {
 
     it('preserves owner private-database routing on owner-device enrollment', async () => {
       const acceptShares = vi.fn()
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth: vi.fn().mockResolvedValue({
           userRecordName: 'owner-record',
         }),
@@ -340,7 +341,7 @@ describe('icloud-oauth', () => {
       )
       const whenUserSignsIn = vi.fn()
       const setUpAuth = vi.fn().mockResolvedValue({ lookupInfo: {} })
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -363,7 +364,7 @@ describe('icloud-oauth', () => {
       })
       const setUpAuth = resolvedCloudKitEffect()
       const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -371,11 +372,11 @@ describe('icloud-oauth', () => {
       const request = defaultICloudWebAuthTokenRequest()
       const pending = iCloudOAuthSession.requestICloudWebAuthToken(request)
       await vi.waitFor(() => {
-        expect(window.CloudKit!.configure).toHaveBeenCalled()
+        expect(ICloudOAuthTestFixture.cloudKit().configure).toHaveBeenCalled()
         expect(whenUserSignsIn).toHaveBeenCalled()
       })
 
-      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      const config = ICloudOAuthTestFixture.firstConfigureRequest()
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         ckWebAuthToken: 'fresh-token',
       })
@@ -391,7 +392,7 @@ describe('icloud-oauth', () => {
     it('resolves from the CloudKit token store when the sign-in callback hangs', async () => {
       const setUpAuth = resolvedCloudKitEffect()
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -399,11 +400,11 @@ describe('icloud-oauth', () => {
       const request = timedICloudWebAuthTokenRequest(100)
       const pending = iCloudOAuthSession.requestICloudWebAuthToken(request)
       await vi.waitFor(() => {
-        expect(window.CloudKit!.configure).toHaveBeenCalled()
+        expect(ICloudOAuthTestFixture.cloudKit().configure).toHaveBeenCalled()
         expect(whenUserSignsIn).toHaveBeenCalled()
       })
 
-      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      const config = ICloudOAuthTestFixture.firstConfigureRequest()
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         ckWebAuthToken: 'store-token',
       })
@@ -431,7 +432,7 @@ describe('icloud-oauth', () => {
       expect(setUpAuth).toHaveBeenCalledTimes(1)
       expect(whenUserSignsIn).toHaveBeenCalledOnce()
 
-      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      const config = ICloudOAuthTestFixture.firstConfigureRequest()
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         ckWebAuthToken: 'fresh-token',
       })
@@ -459,7 +460,7 @@ describe('icloud-oauth', () => {
 
       expect(clickSpy).toHaveBeenCalledOnce()
 
-      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      const config = ICloudOAuthTestFixture.firstConfigureRequest()
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         ckWebAuthToken: 'cloudkit-div-token',
       })
@@ -482,7 +483,7 @@ describe('icloud-oauth', () => {
       signInButton?.addEventListener('click', clickSpy)
       const setUpAuth = resolvedCloudKitEffect()
       const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -495,7 +496,7 @@ describe('icloud-oauth', () => {
       expect(clickSpy).not.toHaveBeenCalled()
       expect(whenUserSignsIn).toHaveBeenCalledOnce()
 
-      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      const config = ICloudOAuthTestFixture.firstConfigureRequest()
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         ckWebAuthToken: 'visible-control-token',
       })
@@ -516,13 +517,13 @@ describe('icloud-oauth', () => {
       )
       const setUpAuth = resolvedCloudKitEffect()
       const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
 
       await iCloudOAuthSession.prepareICloudSignInControl()
-      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      const config = ICloudOAuthTestFixture.firstConfigureRequest()
       signInButton?.addEventListener('click', () => {
         config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
           ckWebAuthToken: 'native-click-token',
@@ -548,7 +549,7 @@ describe('icloud-oauth', () => {
       const whenUserSignsIn = vi.fn().mockRejectedValue({
         _reason: 'UNKNOWN_ERROR',
       })
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -561,7 +562,7 @@ describe('icloud-oauth', () => {
         expect(whenUserSignsIn).toHaveBeenCalledOnce()
       })
 
-      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      const config = ICloudOAuthTestFixture.firstConfigureRequest()
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         ckWebAuthToken: 'opaque-callback-token',
       })
@@ -576,7 +577,7 @@ describe('icloud-oauth', () => {
       const whenUserSignsIn = vi.fn().mockRejectedValue({
         _reason: 'UNKNOWN_ERROR',
       })
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -635,7 +636,7 @@ describe('icloud-oauth', () => {
         serverErrorCode: 'AUTHENTICATION_REQUIRED',
         reason: 'request needs authorization',
       })
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -679,7 +680,7 @@ describe('icloud-oauth', () => {
       })
       const setUpAuth = resolvedCloudKitEffect()
       const whenUserSignsIn = vi.fn()
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -739,7 +740,7 @@ describe('icloud-oauth', () => {
       const whenUserSignsIn = vi.fn().mockRejectedValue({
         _reason: 'UNKNOWN_ERROR',
       })
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -771,7 +772,7 @@ describe('icloud-oauth', () => {
     it('fails when CloudKit sign-in never completes', async () => {
       const setUpAuth = resolvedCloudKitEffect()
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -790,7 +791,7 @@ describe('icloud-oauth', () => {
         statusText: 'Misdirected Request',
       })
       const whenUserSignsIn = vi.fn()
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -816,7 +817,7 @@ describe('icloud-oauth', () => {
       const request = nativeICloudWebAuthTokenRequest()
       const pending =
         iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
-      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      const config = ICloudOAuthTestFixture.firstConfigureRequest()
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         ckWebAuthToken: 'auth-required-token',
       })
@@ -839,7 +840,7 @@ describe('icloud-oauth', () => {
       const request = nativeICloudWebAuthTokenRequest()
       const pending =
         iCloudOAuthSession.requestPreparedICloudWebAuthToken(request)
-      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      const config = ICloudOAuthTestFixture.firstConfigureRequest()
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         ckWebAuthToken: 'opaque-setup-token',
       })
@@ -857,7 +858,7 @@ describe('icloud-oauth', () => {
         _reason: 'UNKNOWN_ERROR',
       })
       const whenUserSignsIn = vi.fn()
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -873,7 +874,7 @@ describe('icloud-oauth', () => {
     it('detects tokens stored directly in session storage via polling fallback', async () => {
       const setUpAuth = resolvedCloudKitEffect()
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -899,7 +900,7 @@ describe('icloud-oauth', () => {
     it('normalizes tokens with webAuthToken key', async () => {
       const setUpAuth = resolvedCloudKitEffect()
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -907,11 +908,11 @@ describe('icloud-oauth', () => {
       const request = timedICloudWebAuthTokenRequest(500)
       const pending = iCloudOAuthSession.requestICloudWebAuthToken(request)
       await vi.waitFor(() => {
-        expect(window.CloudKit!.configure).toHaveBeenCalled()
+        expect(ICloudOAuthTestFixture.cloudKit().configure).toHaveBeenCalled()
         expect(whenUserSignsIn).toHaveBeenCalled()
       })
 
-      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      const config = ICloudOAuthTestFixture.firstConfigureRequest()
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         webAuthToken: 'alt-format-token',
       })
@@ -924,7 +925,7 @@ describe('icloud-oauth', () => {
     it('allows retry after a sign-in timeout by resetting auth state', async () => {
       const setUpAuth = resolvedCloudKitEffect()
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth,
         whenUserSignsIn,
       })
@@ -940,7 +941,7 @@ describe('icloud-oauth', () => {
       const signInPromise = new Promise((resolve) => {
         resolveSignIn = resolve
       })
-      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+      ICloudOAuthTestFixture.useContainer({
         setUpAuth: resolvedCloudKitEffect(),
         whenUserSignsIn: vi.fn().mockReturnValue(signInPromise),
       })
@@ -948,7 +949,7 @@ describe('icloud-oauth', () => {
       const retryRequest = timedICloudWebAuthTokenRequest(5000)
       const pending = iCloudOAuthSession.requestICloudWebAuthToken(retryRequest)
 
-      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      const config = ICloudOAuthTestFixture.firstConfigureRequest()
       config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
         ckWebAuthToken: 'retry-token',
       })

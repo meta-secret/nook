@@ -1,20 +1,18 @@
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/svelte'
-import { SecretType, type NookSecretListItem } from '$lib/nook'
-import type { VaultState } from '$lib/vault.svelte'
+import { SecretType } from '$lib/nook'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
 import SecretDetailRow from '$lib/components/SecretDetailRow.svelte'
 import { ok } from 'neverthrow'
+import { SecretComponentTestFixture } from './secret-component-test-fixture'
 
-const vault = {
-  t(key: string): string {
-    return key
-  },
-  resolveErrorMessage(message: string): string {
-    return message
-  },
-} as unknown as VaultState
+const vault = VaultStateTestFixture.create()
+vi.spyOn(vault, 't').mockImplementation((request) =>
+  typeof request === 'string' ? request : request.key,
+)
+vi.spyOn(vault, 'resolveErrorMessage').mockImplementation((message) => message)
 
 describe('passkey item discovery', () => {
   test('shows the website ceremony path without a manual credential form', async () => {
@@ -36,13 +34,13 @@ describe('passkey item discovery', () => {
   })
 
   test('renders safe passkey metadata without reveal, copy, or edit actions', () => {
-    const item = {
+    const item = SecretComponentTestFixture.listItem({
       id: 'secret_passkey',
       type: SecretType.Passkey,
       rpId: 'login.example.com',
       passkeyUserName: 'alice@example.com',
       passkeyUserDisplayName: 'Alice',
-    } as NookSecretListItem
+    })
     const view = render(SecretDetailRow, {
       item,
       index: 0,

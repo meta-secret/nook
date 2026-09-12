@@ -2,7 +2,7 @@ import { err } from 'neverthrow'
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import OnboardDevicePasswordStep from '$lib/components/onboard-device/OnboardDevicePasswordStep.svelte'
-import type { VaultState } from '$lib/vault.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
@@ -13,7 +13,10 @@ describe('onboard device password step', () => {
     const onAddPassword = vi.fn(async () =>
       err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
     )
-    const vault = { t: (key: string) => key } as unknown as VaultState
+    const vault = VaultStateTestFixture.create()
+    vi.spyOn(vault, 't').mockImplementation((request) =>
+      typeof request === 'string' ? request : request.key,
+    )
     const view = render(OnboardDevicePasswordStep, {
       vault,
       passwordEntries: [],
@@ -26,13 +29,15 @@ describe('onboard device password step', () => {
       onAddPassword,
       onSelectPasswordEntry: vi.fn(),
     })
-    const label = view.getByTestId('vault-password-label') as HTMLInputElement
-    const password = view.getByTestId(
-      'vault-password-input',
-    ) as HTMLInputElement
-    const confirmation = view.getByTestId(
-      'vault-password-confirm',
-    ) as HTMLInputElement
+    const label = view.getByTestId('vault-password-label')
+    const password = view.getByTestId('vault-password-input')
+    const confirmation = view.getByTestId('vault-password-confirm')
+    if (!(label instanceof HTMLInputElement))
+      expect.fail('password label must be an input')
+    if (!(password instanceof HTMLInputElement))
+      expect.fail('password must be an input')
+    if (!(confirmation instanceof HTMLInputElement))
+      expect.fail('password confirmation must be an input')
     await fireEvent.input(label, { target: { value: 'Recovery' } })
     await fireEvent.input(password, {
       target: { value: 'long-enough-recovery-password' },

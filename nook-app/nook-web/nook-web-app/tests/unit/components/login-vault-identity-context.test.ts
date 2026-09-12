@@ -1,20 +1,28 @@
 import { describe, expect, test, vi } from 'vitest'
 import {
+  NookIdentityDirectorySelectionKind,
+  NookIdentityLocalAccessKind,
   NookSelectedVaultIdentityContextKind,
-  type NookIdentitySnapshot,
-  type NookVaultManager,
+  NookVaultManager,
 } from '$app-wasm'
 import { LoginVaultIdentityReader } from '../../../../nook-web-shared/src/vault-app/lib/components/login/login-vault-identity-context'
 
-function linkedIdentity(
-  identityId: string,
-  label: string,
-): NookIdentitySnapshot {
+function linkedIdentity(identityId: string, label: string) {
   return {
+    appId: 'app-test',
+    appKeyCount: 1,
+    controlEpoch: 1n,
+    fingerprint: 'fingerprint-test',
     identityId,
     label,
+    localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
+    members: vi.fn(() => []),
+    vaultCount: 1,
+    vault_store_ids: vi.fn(() => ['store_selectedvault']),
+    vaults: vi.fn(() => []),
     free: vi.fn(),
-  } as unknown as NookIdentitySnapshot
+    [Symbol.dispose]: vi.fn(),
+  }
 }
 
 function managerWithContext({
@@ -47,17 +55,25 @@ function managerWithContext({
       return linkedIdentity(...identity)
     },
     current_browser_identity: currentBrowserIdentity,
+    device_access: vi.fn(),
     free: vi.fn(),
+    [Symbol.dispose]: vi.fn(),
+    selectedIdentityId: currentIdentity?.[0] ?? '',
+    selectionKind: identities.length
+      ? NookIdentityDirectorySelectionKind.Selected
+      : NookIdentityDirectorySelectionKind.Empty,
   }
   const request = {
     resolve: vi.fn(async () => snapshot),
     free: vi.fn(),
+    [Symbol.dispose]: vi.fn(),
   }
-  const selectedVaultRequest = vi.fn(() => request)
+  const manager = new NookVaultManager()
+  const selectedVaultRequest = vi
+    .spyOn(manager, 'selected_vault_identity_context_request')
+    .mockReturnValue(request)
   return {
-    manager: {
-      selected_vault_identity_context_request: selectedVaultRequest,
-    } as unknown as NookVaultManager,
+    manager,
     selectedVaultRequest,
     currentBrowserIdentity,
   }

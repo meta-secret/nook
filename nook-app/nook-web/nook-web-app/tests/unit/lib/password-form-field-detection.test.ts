@@ -11,6 +11,15 @@ const wholeDocumentOneTimeCodeFieldQuery: Parameters<
   typeof passwordFieldDiscovery.findOneTimeCodeFields
 >[0] = {}
 
+class PasswordFieldTestFixture {
+  static input(selector: string): HTMLInputElement {
+    const input = document.querySelector(selector)
+    if (!(input instanceof HTMLInputElement))
+      throw new Error(`expected input fixture ${selector}`)
+    return input
+  }
+}
+
 function observedAuthenticationWorkflow(): PasswordFormObservation {
   const observation =
     passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
@@ -169,12 +178,8 @@ describe('authentication field detection', () => {
       root: document,
     }
     expect(passwordFormInteraction.fillLoginCredentials(fillArgs)).toBe(false)
-    expect(
-      (document.querySelector('#dormant-user') as HTMLInputElement).value,
-    ).toBe('')
-    expect(
-      (document.querySelector('#dormant-pass') as HTMLInputElement).value,
-    ).toBe('')
+    expect(PasswordFieldTestFixture.input('#dormant-user').value).toBe('')
+    expect(PasswordFieldTestFixture.input('#dormant-pass').value).toBe('')
   })
 
   test('fills live credentials and leaves inert sibling fields untouched', () => {
@@ -201,18 +206,14 @@ describe('authentication field detection', () => {
       root: document,
     }
     expect(passwordFormInteraction.fillLoginCredentials(fillArgs)).toBe(true)
-    expect(
-      (document.querySelector('#live-user') as HTMLInputElement).value,
-    ).toBe('vault-user')
-    expect(
-      (document.querySelector('#live-pass') as HTMLInputElement).value,
-    ).toBe('vault-pass')
-    expect(
-      (document.querySelector('#dormant-user') as HTMLInputElement).value,
-    ).toBe('')
-    expect(
-      (document.querySelector('#dormant-pass') as HTMLInputElement).value,
-    ).toBe('')
+    expect(PasswordFieldTestFixture.input('#live-user').value).toBe(
+      'vault-user',
+    )
+    expect(PasswordFieldTestFixture.input('#live-pass').value).toBe(
+      'vault-pass',
+    )
+    expect(PasswordFieldTestFixture.input('#dormant-user').value).toBe('')
+    expect(PasswordFieldTestFixture.input('#dormant-pass').value).toBe('')
   })
 
   test.each([
@@ -228,8 +229,8 @@ describe('authentication field detection', () => {
         <input id="username" autocomplete="username" form="approved" />
         <input id="password" type="password" autocomplete="current-password" form="approved" />
       `
-      const username = document.querySelector('#username') as HTMLInputElement
-      const password = document.querySelector('#password') as HTMLInputElement
+      const username = PasswordFieldTestFixture.input('#username')
+      const password = PasswordFieldTestFixture.input('#password')
       username.addEventListener(eventName, () => {
         if (mutation === 'reassign') password.setAttribute('form', 'other')
         if (mutation === 'disassociate') password.removeAttribute('form')
@@ -266,8 +267,8 @@ describe('authentication field detection', () => {
         {
           kind: 'labeled',
           observation: {
+            label: 'Sign in with a passkey',
             ownership: 'owned-form',
-            label: expect.stringContaining('passkey'),
           },
         },
       ],
@@ -433,9 +434,7 @@ describe('authentication field detection', () => {
       formScope: usernameOnly.formScope,
     }
     expect(passwordFormInteraction.fillLoginCredentials(fillArgs)).toBe(true)
-    expect(
-      (document.querySelector('#unrelated-pass') as HTMLInputElement).value,
-    ).toBe('')
+    expect(PasswordFieldTestFixture.input('#unrelated-pass').value).toBe('')
   })
 
   test('does not treat a generic type-button as a form-less auth container', () => {

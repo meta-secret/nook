@@ -224,7 +224,8 @@ describe('companion credential-fill WASM ABI', () => {
               const assignments = receiver.take_assignments()
               try {
                 expect(assignments).toHaveLength(1)
-                const assignment = assignments[0]!
+                const [assignment] = assignments
+                if (!assignment) expect.fail('planned assignment is absent')
                 expect(assignment).toBeInstanceOf(CredentialFillAssignment)
                 expect(assignment.credential).toBe(
                   classifierCase.expectedCredential,
@@ -481,8 +482,9 @@ describe('companion credential-fill WASM ABI', () => {
           const assignments = receiver.take_assignments()
           try {
             expect(assignments).toHaveLength(2)
-            const usernameAssignment = assignments[0]!
-            const passwordAssignment = assignments[1]!
+            const [usernameAssignment, passwordAssignment] = assignments
+            if (!usernameAssignment || !passwordAssignment)
+              expect.fail('planned assignments are absent')
             expect(usernameAssignment).toBeInstanceOf(CredentialFillAssignment)
             expect(passwordAssignment).toBeInstanceOf(CredentialFillAssignment)
             const assignedUsernameIndex = usernameAssignment.field_index

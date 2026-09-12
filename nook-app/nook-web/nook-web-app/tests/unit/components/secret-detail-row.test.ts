@@ -1,41 +1,41 @@
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test, vi } from 'vitest'
 import { render } from '@testing-library/svelte'
-import {
-  SecretType,
-  type NookSecretListItem,
-  type NookSecretRecord,
-} from '$lib/nook'
-import type { VaultState } from '$lib/vault.svelte'
+import { SecretType, type NookSecretListItem } from '$lib/nook'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import SecretDetailRow from '$lib/components/SecretDetailRow.svelte'
 import {
   SecretRevealKind,
   type SecretReveal,
 } from '$lib/components/secret-vault-state'
 import { ok } from 'neverthrow'
+import { SecretComponentTestFixture } from './secret-component-test-fixture'
 
-const vault = {
-  t(key: string): string {
-    return key === I18N_KEYS.VaultFieldsNoWebsite ? 'Localized no website' : key
-  },
-} as unknown as VaultState
+const vault = VaultStateTestFixture.create()
+vi.spyOn(vault, 't').mockImplementation((request) =>
+  (typeof request === 'string' ? request : request.key) ===
+  I18N_KEYS.VaultFieldsNoWebsite
+    ? 'Localized no website'
+    : typeof request === 'string'
+      ? request
+      : request.key,
+)
 
-const authenticatorItem = {
+const authenticatorItem = SecretComponentTestFixture.listItem({
   id: 'legacy-authenticator',
   type: SecretType.Authenticator,
   issuer: 'Legacy service',
   account: 'alice@example.com',
   backupCodeCount: 2,
-} as unknown as NookSecretListItem
+})
 
-const decryptedAuthenticator = {
-  ...authenticatorItem,
+const decryptedAuthenticator = SecretComponentTestFixture.record({
   totpSecret: 'JBSWY3DPEHPK3PXP',
   algorithm: 'SHA1',
   digits: 6,
   period: 30,
   backupCodes: ['recovery-one', 'recovery-two'],
-} as unknown as NookSecretRecord
+})
 
 function authenticatorProps(
   reveal: SecretReveal = { kind: SecretRevealKind.Hidden },
@@ -60,7 +60,7 @@ function loginItem(
   websiteHost: string,
   username = 'alice@example.com',
 ): NookSecretListItem {
-  return {
+  return SecretComponentTestFixture.listItem({
     id: 'secret_login',
     type: SecretType.Login,
     displayTitle: websiteUrl,
@@ -69,7 +69,7 @@ function loginItem(
     websiteUrl,
     websiteHost,
     username,
-  } as unknown as NookSecretListItem
+  })
 }
 
 function renderLogin(item: NookSecretListItem) {

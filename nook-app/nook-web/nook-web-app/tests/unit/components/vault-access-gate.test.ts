@@ -1,25 +1,16 @@
 import { render } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
-import type { VaultState } from '$lib/vault.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import VaultAccessGate from '../../../../nook-web-shared/src/vault-app/lib/components/app/VaultAccessGate.svelte'
 
 describe('vault access gate', () => {
   test('shows a startup failure before provider loading makes login available', () => {
-    const vault = {
-      providersLoaded: false,
-      errorMsg: 'Provider startup failed',
-      devicesAccessIdentityTransitionPending: false,
-      isAuthenticated: false,
-      storageMode: 'local',
-      githubRepo: '',
-      lastSync: {},
-      isSyncActivityVisible: false,
-      successMsg: '',
-      t: vi.fn((key: string) => key),
-      dismissSuccess: vi.fn(),
-      dismissError: vi.fn(),
-    } as unknown as VaultState
+    const vault = VaultStateTestFixture.create()
+    vault.errorMsg = 'Provider startup failed'
+    vi.spyOn(vault, 't').mockImplementation((request) =>
+      typeof request === 'string' ? request : request.key,
+    )
 
     const props = {
       vault,

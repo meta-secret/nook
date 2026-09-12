@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   AUTHENTICATION_ROUTE_HISTORY_SOURCE,
   authenticationRouteBrowser,
@@ -74,12 +74,15 @@ describe('authentication route history', () => {
 
   test('bridges MAIN-world navigation to the isolated listener', () => {
     const posted: Array<{ message: unknown; targetOrigin: string }> = []
-    const originalPostMessage = window.postMessage.bind(window)
-    window.postMessage = ((message: unknown, targetOrigin: string) => {
-      posted.push({ message, targetOrigin })
-    }) as typeof window.postMessage
+    const postMessage = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation((message, targetOrigin) => {
+        if (typeof targetOrigin !== 'string')
+          expect.fail('route notification requires a target origin')
+        posted.push({ message, targetOrigin })
+      })
     authenticationRouteBrowser.notifyAuthenticationRouteChanged()
-    window.postMessage = originalPostMessage
+    postMessage.mockRestore()
 
     expect(posted).toEqual([
       {
@@ -102,13 +105,16 @@ describe('authentication route history', () => {
 
   test('does not post route notifications to an opaque origin', () => {
     const posted: Array<{ message: unknown; targetOrigin: string }> = []
-    const originalPostMessage = window.postMessage.bind(window)
-    window.postMessage = ((message: unknown, targetOrigin: string) => {
-      posted.push({ message, targetOrigin })
-      if (targetOrigin === 'null') {
-        throw new Error('opaque origin')
-      }
-    }) as typeof window.postMessage
+    const postMessage = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation((message, targetOrigin) => {
+        if (typeof targetOrigin !== 'string')
+          expect.fail('route notification requires a target origin')
+        posted.push({ message, targetOrigin })
+        if (targetOrigin === 'null') {
+          throw new Error('opaque origin')
+        }
+      })
     const originalOrigin = location.origin
     Object.defineProperty(location, 'origin', {
       configurable: true,
@@ -122,7 +128,7 @@ describe('authentication route history', () => {
       configurable: true,
       value: originalOrigin,
     })
-    window.postMessage = originalPostMessage
+    postMessage.mockRestore()
     expect(
       authenticationRouteBrowser.isAuthenticationRouteHistoryMessage(
         new MessageEvent('message', {

@@ -1,0 +1,90 @@
+import { vi } from 'vitest'
+import {
+  SecretType,
+  type NookSecretListItem,
+  type NookSecretRecord,
+} from '$lib/nook'
+
+/** Owns complete generated secret projections used by component tests. */
+export class SecretComponentTestFixture {
+  static listItem(
+    fields: Partial<NookSecretListItem> = {},
+  ): NookSecretListItem {
+    return {
+      account: '',
+      backupCodeCount: 0,
+      cardholderName: '',
+      displayTitle: '',
+      expirationMonth: '',
+      expirationYear: '',
+      expiresAt: '',
+      fileName: '',
+      free: vi.fn(),
+      [Symbol.dispose]: vi.fn(),
+      groupKey: '',
+      id: 'secret-fixture',
+      issuer: '',
+      last4: '',
+      mimeType: '',
+      name: '',
+      passkeyUserDisplayName: '',
+      passkeyUserName: '',
+      rpId: '',
+      seedWordCount: 0,
+      sizeBytes: 0,
+      summary: '',
+      title: '',
+      type: SecretType.Login,
+      typeName: '',
+      username: '',
+      websiteHost: '',
+      websiteUrl: '',
+      ...fields,
+    }
+  }
+
+  static record(fields: Partial<NookSecretRecord> = {}): NookSecretRecord {
+    return {
+      account: '',
+      algorithm: '',
+      backupCodes: [],
+      cardNumber: '',
+      cardholderName: '',
+      contentBase64: '',
+      cvv: '',
+      digits: 0,
+      displayTitle: '',
+      expirationMonth: '',
+      expirationYear: '',
+      expiresAt: '',
+      fileName: '',
+      free: vi.fn(),
+      [Symbol.dispose]: vi.fn(),
+      groupKey: '',
+      id: 'secret-fixture',
+      issuer: '',
+      key: '',
+      last4: '',
+      matches_search: vi.fn(() => false),
+      mimeType: '',
+      name: '',
+      note: '',
+      notes: '',
+      passkeyUserDisplayName: '',
+      passkeyUserName: '',
+      password: '',
+      period: 0,
+      primaryCredential: '',
+      rpId: '',
+      seed: '',
+      sizeBytes: 0,
+      summary: '',
+      title: '',
+      totpSecret: '',
+      type: SecretType.Login,
+      username: '',
+      websiteUrl: '',
+      ...fields,
+    }
+  }
+}

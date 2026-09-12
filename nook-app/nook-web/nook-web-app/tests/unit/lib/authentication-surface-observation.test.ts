@@ -1,25 +1,94 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
+import { PasswordFormScopeKind } from '../../../../nook-web-shared/src/extension/password-form-fields'
 import {
   AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
   authenticationSurfaceObservation,
 } from '../../../../nook-web-extension/src/content/autofill/authentication-surface-observation'
+
+class TestNodeList implements NodeList {
+  readonly [index: number]: Node
+  readonly length: number
+
+  constructor(private readonly nodes: Node[]) {
+    this.length = nodes.length
+    for (const [index, node] of nodes.entries())
+      Object.defineProperty(this, index, { value: node })
+  }
+
+  item(index: number) {
+    return this.nodes.at(index) ?? document.querySelector('[data-absent-node]')
+  }
+
+  forEach(
+    callback: (value: Node, key: number, parent: NodeList) => void,
+    thisArg?: NodeList,
+  ): void {
+    this.nodes.forEach((node, index) =>
+      callback.call(thisArg, node, index, this),
+    )
+  }
+
+  [Symbol.iterator](): ArrayIterator<Node> {
+    return this.nodes.values()
+  }
+
+  entries(): ArrayIterator<[number, Node]> {
+    return this.nodes.entries()
+  }
+
+  keys(): ArrayIterator<number> {
+    return this.nodes.keys()
+  }
+
+  values(): ArrayIterator<Node> {
+    return this.nodes.values()
+  }
+}
+
+type TestMutationRecordState = {
+  type: MutationRecordType
+  target: Node
+  addedNodes?: Node[]
+  removedNodes?: Node[]
+}
+
+class TestMutationRecord implements MutationRecord {
+  readonly addedNodes: NodeList
+  readonly attributeName = ''
+  readonly attributeNamespace = ''
+  readonly nextSibling
+  readonly oldValue = ''
+  readonly previousSibling
+  readonly removedNodes: NodeList
+  readonly target: Node
+  readonly type: MutationRecordType
+
+  constructor(state: TestMutationRecordState) {
+    this.addedNodes = new TestNodeList(state.addedNodes ?? [])
+    this.nextSibling = state.target.nextSibling
+    this.previousSibling = state.target.previousSibling
+    this.removedNodes = new TestNodeList(state.removedNodes ?? [])
+    this.target = state.target
+    this.type = state.type
+  }
+}
 
 function childListMutation(
   target: Node,
   addedNodes: Node[] = [],
   removedNodes: Node[] = [],
 ): MutationRecord {
-  return {
+  return new TestMutationRecord({
     type: 'childList',
     target,
     addedNodes,
     removedNodes,
-  } as unknown as MutationRecord
+  })
 }
 
 function attributeMutation(target: Node): MutationRecord {
-  return { type: 'attributes', target } as MutationRecord
+  return new TestMutationRecord({ type: 'attributes', target })
 }
 
 function observation(
@@ -28,7 +97,7 @@ function observation(
 ): PasswordFormObservation {
   return {
     root,
-    formScope: { kind: 'owned', owner: form },
+    formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
     summary: {
       passwordFieldCount: 1,
       currentPasswordFieldCount: 1,
@@ -41,7 +110,7 @@ function observation(
       formCount: 1,
       observedAt: 1,
     },
-  } as unknown as PasswordFormObservation
+  }
 }
 
 afterEach(() => {
@@ -108,7 +177,7 @@ describe('authentication surface mutation filtering', () => {
     for (const record of [
       attributeMutation(submit),
       attributeMutation(label),
-      { type: 'characterData', target: labelText } as unknown as MutationRecord,
+      new TestMutationRecord({ type: 'characterData', target: labelText }),
     ]) {
       const request: Parameters<
         typeof authenticationSurfaceObservation.authenticationMutationImpact
@@ -183,10 +252,10 @@ describe('authentication surface mutation filtering', () => {
     const prose = document.createTextNode('12:01')
     paragraph.append(prose)
     document.body.append(paragraph)
-    const textMutation = {
+    const textMutation = new TestMutationRecord({
       type: 'characterData',
       target: prose,
-    } as unknown as MutationRecord
+    })
     const detachedHost = document.createElement('section')
     detachedHost.id = 'nook-auth-widget'
     const hostRemoval = childListMutation(document.body, [], [detachedHost])
@@ -309,10 +378,10 @@ describe('authentication surface mutation filtering', () => {
       typeof authenticationSurfaceObservation.authenticationMutationImpact
     >[0] = {
       records: [
-        {
+        new TestMutationRecord({
           type: 'characterData',
           target: labelText,
-        } as unknown as MutationRecord,
+        }),
       ],
       mountedHost: false,
       renderedWorkflow: false,
@@ -356,10 +425,10 @@ describe('authentication surface mutation filtering', () => {
 
     for (const record of [
       childListMutation(document.body, [heading, listItem, code]),
-      {
+      new TestMutationRecord({
         type: 'characterData',
         target: paragraphText,
-      } as unknown as MutationRecord,
+      }),
     ]) {
       const request: Parameters<
         typeof authenticationSurfaceObservation.authenticationMutationImpact
@@ -435,10 +504,10 @@ describe('authentication surface mutation filtering', () => {
       typeof authenticationSurfaceObservation.authenticationMutationImpact
     >[0] = {
       records: [
-        {
+        new TestMutationRecord({
           type: 'characterData',
           target: headingText,
-        } as unknown as MutationRecord,
+        }),
       ],
       mountedHost: false,
       renderedWorkflow: false,
