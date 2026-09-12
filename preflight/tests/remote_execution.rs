@@ -224,9 +224,10 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
             "runtime-backed remote task must bypass the daemonless batch: {task}"
         );
     }
-    assert!(batch_script.contains(
-        "build:compile) run_with_timeout \"$timeout_minutes\" task build:compile"
-    ));
+    assert!(
+        batch_script
+            .contains("build:compile) run_with_timeout \"$timeout_minutes\" task build:compile")
+    );
     for direct_task in [
         "web:build) task _web:build",
         "web:e2e) task _ci:main:web:e2e-only",
@@ -252,7 +253,10 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
     assert!(workflow.contains("ref: ${{ inputs.source_sha || github.sha }}"));
     assert!(workflow.contains("name: Validate exact remote source"));
     assert!(workflow.contains("name: Confirm prepared build-only environment"));
-    assert!(workflow.contains("build:compile is allowed only from a feature branch, never main or dev."));
+    assert!(
+        workflow
+            .contains("build:compile is allowed only from a feature branch, never main or dev.")
+    );
     assert!(workflow.contains("needs: ci-pr-e2e-suite"));
     assert!(workflow.contains("needs.ci-pr-e2e-suite.result"));
     assert!(batch_script.contains("status == 124 || status == 137"));
