@@ -8,7 +8,9 @@ import {
   ManagedBranch,
   RemoteBranchPresence,
   PullRequestState,
+  PullRequestReviewDecision,
   type DevFailure,
+  type DevelopmentPullRequest,
   type ManagedRemoteSnapshot,
 } from "./dev-types.ts";
 
@@ -65,6 +67,8 @@ export class DevPromoteCommand {
       workingDirectory: workspace.root,
     });
     if (pullRequest.isErr()) return err(pullRequest.error);
+    const initialReview = this.requirePromotablePullRequest(pullRequest.value);
+    if (initialReview.isErr()) return err(initialReview.error);
     if (
       !pullRequest.value.headSha.equals(this.request.expectedSha) ||
       !pullRequest.value.baseSha.equals(before.value.main)
@@ -97,6 +101,8 @@ export class DevPromoteCommand {
       workingDirectory: workspace.root,
     });
     if (livePullRequest.isErr()) return err(livePullRequest.error);
+    const finalReview = this.requirePromotablePullRequest(livePullRequest.value);
+    if (finalReview.isErr()) return err(finalReview.error);
     if (
       !livePullRequest.value.headSha.equals(this.request.expectedSha) ||
       !livePullRequest.value.baseSha.equals(immediatelyBeforePush.value.main)
@@ -177,5 +183,23 @@ export class DevPromoteCommand {
       });
     }
     return ok({ main: main.value.sha, dev: dev.value.sha });
+  }
+
+  private requirePromotablePullRequest(
+    pullRequest: DevelopmentPullRequest,
+  ): Result<void, DevFailure> {
+    if (pullRequest.isDraft) {
+      return err({
+        kind: DevFailureKind.Reviews,
+        message: "The dev-to-main pull request is still a draft",
+      });
+    }
+    if (pullRequest.reviewDecision !== PullRequestReviewDecision.Approved) {
+      return err({
+        kind: DevFailureKind.Reviews,
+        message: `The current dev-to-main review decision is ${pullRequest.reviewDecision}; promotion requires APPROVED`,
+      });
+    }
+    return ok();
   }
 }
