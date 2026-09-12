@@ -326,9 +326,11 @@ export class ProviderSyncActions {
             failure: metadata.error,
           });
       }
-      const secretRefresh1 = await state.refreshSecretsFromSession();
-      if (secretRefresh1.isErr()) {
-        return err(secretRefresh1.error);
+      if (state.isAuthenticated) {
+        const secretRefresh1 = await state.refreshSecretsFromSession();
+        if (secretRefresh1.isErr()) {
+          return err(secretRefresh1.error);
+        }
       }
       const conflicts = await state.refreshReplacementConflicts();
       if (conflicts.isErr()) {
