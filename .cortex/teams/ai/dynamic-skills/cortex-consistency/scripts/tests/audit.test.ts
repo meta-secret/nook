@@ -10,13 +10,21 @@ import {
   CortexPolicyCapability,
   CortexPolicyContractKind,
   type AuditCortexContractsArgs,
+  type CortexContractFinding,
 } from '../src/domain.ts';
 
 export class CortexConsistencyAuditScenario {
   private constructor(private readonly request: readonly string[]) {}
 
-  static adversarialAuthority(value: string): CortexContextAuthorityDocument {
-    return value as CortexContextAuthorityDocument;
+  static hasFinding(
+    ...[findings, expected]: FindingExpectation
+  ): boolean {
+    return findings.some(
+      (finding) =>
+        (!('code' in expected) || finding.code === expected.code) &&
+        (!('file' in expected) || finding.file === expected.file) &&
+        (!('message' in expected) || finding.message === expected.message),
+    );
   }
 
   static request(references: readonly string[]): AuditCortexContractsArgs {
@@ -135,22 +143,28 @@ test('rejects missing and retired native delegation runtime bindings', () => {
       },
     ],
   };
-  expect(CortexConsistencyContract.from(compileRequest).execute()).toEqual([
-    expect.objectContaining({
+  const findings = CortexConsistencyContract.from(compileRequest).execute();
+  expect(findings).toHaveLength(3);
+  expect(
+    CortexConsistencyAuditScenario.hasFinding(findings, {
       code: CortexContractFindingCode.MissingRuntimeEntrypoint,
       file: workflow,
       message:
         'Cortex workflow names an unregistered runtime entrypoint: task missing:runtime',
     }),
-    expect.objectContaining({
+  ).toBe(true);
+  expect(
+    CortexConsistencyAuditScenario.hasFinding(findings, {
       code: CortexContractFindingCode.MissingRuntimeEntrypoint,
       file: workflow,
     }),
-    expect.objectContaining({
+  ).toBe(true);
+  expect(
+    CortexConsistencyAuditScenario.hasFinding(findings, {
       code: CortexContractFindingCode.RetiredRuntimeEntrypoint,
       file: workflow,
     }),
-  ]);
+  ).toBe(true);
 });
 
 test('accepts the static skill host for native delegation rendering', () => {
@@ -196,12 +210,13 @@ test('rejects a missing registered runtime document', () => {
     },
     documents: [],
   };
-  expect(CortexConsistencyContract.from(compileRequest).execute()).toEqual([
-    expect.objectContaining({
+  const findings = CortexConsistencyContract.from(compileRequest).execute();
+  expect(
+    CortexConsistencyAuditScenario.hasFinding(findings, {
       code: CortexContractFindingCode.MissingRuntimeDocument,
       file: workflow,
     }),
-  ]);
+  ).toBe(true);
 });
 
 test('requires an exact runtime command prefix boundary', () => {
@@ -230,29 +245,32 @@ test('requires an exact runtime command prefix boundary', () => {
   expect(CortexConsistencyContract.from(compileRequest).execute()).toHaveLength(
     2,
   );
-  expect(CortexConsistencyContract.from(compileRequest).execute()).toEqual([
-    expect.objectContaining({
+  const findings = CortexConsistencyContract.from(compileRequest).execute();
+  expect(
+    CortexConsistencyAuditScenario.hasFinding(findings, {
       message:
         'Cortex workflow names an unregistered runtime entrypoint: task skills:runaway REQUEST_YAML=strict-yaml',
     }),
-    expect.objectContaining({
+  ).toBe(true);
+  expect(
+    CortexConsistencyAuditScenario.hasFinding(findings, {
       message:
         'Cortex workflow is missing its required runtime entrypoint: task skills:run',
     }),
-  ]);
+  ).toBe(true);
 });
 
 test('rejects an imported policy without an authority reference', () => {
-  expect(
+  const findings =
     CortexConsistencyContract.from(
       CortexConsistencyAuditScenario.request([]),
-    ).execute(),
-  ).toContainEqual(
-    expect.objectContaining({
+    ).execute();
+  expect(
+    CortexConsistencyAuditScenario.hasFinding(findings, {
       code: CortexContractFindingCode.MissingPolicyReference,
       file: AUTHORITY,
     }),
-  );
+  ).toBe(true);
 });
 
 test('rejects context ownership disguised by traversal', () => {
@@ -260,10 +278,7 @@ test('rejects context ownership disguised by traversal', () => {
     registry: {
       contexts: [
         {
-          authorityDocument:
-            CortexConsistencyAuditScenario.adversarialAuthority(
-              '.cortex/teams/web-dev/../../rogue/AGENTS.md',
-            ),
+          authorityDocument: '.cortex/teams/web-dev/../../rogue/AGENTS.md',
           ownsAreas: [],
           imports: [],
         },
@@ -279,14 +294,13 @@ test('rejects context ownership disguised by traversal', () => {
       },
     ],
   };
+  const findings = CortexConsistencyContract.from(compileRequest).execute();
   expect(
-    CortexConsistencyContract.from(compileRequest).execute(),
-  ).toContainEqual(
-    expect.objectContaining({
+    CortexConsistencyAuditScenario.hasFinding(findings, {
       code: CortexContractFindingCode.InvalidContextOwner,
       file: '.cortex/rogue/AGENTS.md',
     }),
-  );
+  ).toBe(true);
 });
 
 test('rejects a non-authority document under a recognized owner', () => {
@@ -300,8 +314,7 @@ test('rejects a non-authority document under a recognized owner', () => {
       ...compileRequest.registry,
       contexts: [
         {
-          authorityDocument:
-            CortexConsistencyAuditScenario.adversarialAuthority(nonAuthority),
+          authorityDocument: nonAuthority,
           ownsAreas: [CortexPolicyArea.GithubTypescript],
           imports: [POLICY],
         },
@@ -312,14 +325,13 @@ test('rejects a non-authority document under a recognized owner', () => {
       { relativePath: POLICY, references: [], commands: [] },
     ],
   };
+  const findings = CortexConsistencyContract.from(invalidRequest).execute();
   expect(
-    CortexConsistencyContract.from(invalidRequest).execute(),
-  ).toContainEqual(
-    expect.objectContaining({
+    CortexConsistencyAuditScenario.hasFinding(findings, {
       code: CortexContractFindingCode.InvalidContextOwner,
       file: nonAuthority,
     }),
-  );
+  ).toBe(true);
 });
 
 test('preserves leading traversal so it cannot alias a canonical authority', () => {
@@ -328,10 +340,7 @@ test('preserves leading traversal so it cannot alias a canonical authority', () 
     registry: {
       contexts: [
         {
-          authorityDocument:
-            CortexConsistencyAuditScenario.adversarialAuthority(
-              escapedAuthority,
-            ),
+          authorityDocument: escapedAuthority,
           ownsAreas: [],
           imports: [],
         },
@@ -343,34 +352,35 @@ test('preserves leading traversal so it cannot alias a canonical authority', () 
       { relativePath: escapedAuthority, references: [], commands: [] },
     ],
   };
+  const findings = CortexConsistencyContract.from(compileRequest).execute();
   expect(
-    CortexConsistencyContract.from(compileRequest).execute(),
-  ).toContainEqual(
-    expect.objectContaining({
+    CortexConsistencyAuditScenario.hasFinding(findings, {
       code: CortexContractFindingCode.InvalidContextOwner,
       file: escapedAuthority,
     }),
-  );
+  ).toBe(true);
 });
 
 test('rejects uncovered foreign policy and invalid policy ownership', () => {
   const roguePolicy = '.cortex/rogue/policy.md';
   const compileRequest = CortexConsistencyAuditScenario.request([]);
-  expect(
+  const [context] = compileRequest.registry.contexts;
+  if (!context) throw new Error('Expected context fixture');
+  const missingImportFindings =
     CortexConsistencyContract.from({
       ...compileRequest,
       registry: {
         ...compileRequest.registry,
-        contexts: [{ ...compileRequest.registry.contexts[0]!, imports: [] }],
+        contexts: [{ ...context, imports: [] }],
       },
-    }).execute(),
-  ).toContainEqual(
-    expect.objectContaining({
+    }).execute();
+  expect(
+    CortexConsistencyAuditScenario.hasFinding(missingImportFindings, {
       code: CortexContractFindingCode.MissingPolicyImport,
       file: AUTHORITY,
     }),
-  );
-  expect(
+  ).toBe(true);
+  const invalidOwnerFindings =
     CortexConsistencyContract.from({
       registry: {
         contexts: [],
@@ -385,13 +395,13 @@ test('rejects uncovered foreign policy and invalid policy ownership', () => {
         runtimes: [],
       },
       documents: [{ relativePath: roguePolicy, references: [], commands: [] }],
-    }).execute(),
-  ).toContainEqual(
-    expect.objectContaining({
+    }).execute();
+  expect(
+    CortexConsistencyAuditScenario.hasFinding(invalidOwnerFindings, {
       code: CortexContractFindingCode.InvalidPolicyOwner,
       file: roguePolicy,
     }),
-  );
+  ).toBe(true);
 });
 
 type PersistedRequestArgs = {
@@ -400,43 +410,45 @@ type PersistedRequestArgs = {
   readonly references?: readonly string[];
 };
 
+type FindingExpectation = readonly [
+  findings: readonly CortexContractFinding[],
+  expected: Partial<CortexContractFinding>,
+];
+
 test('requires compatibility evidence and a valid referenced schema authority', () => {
+  const missingEvidence = CortexConsistencyContract.from(
+    CortexConsistencyAuditScenario.persistedRequest({
+      schemaAuthority: SCHEMA_POLICY,
+      evidence: [],
+    }),
+  ).execute();
   expect(
-    CortexConsistencyContract.from(
-      CortexConsistencyAuditScenario.persistedRequest({
-        schemaAuthority: SCHEMA_POLICY,
-        evidence: [],
-      }),
-    ).execute(),
-  ).toContainEqual(
-    expect.objectContaining({
+    CortexConsistencyAuditScenario.hasFinding(missingEvidence, {
       code: CortexContractFindingCode.MissingCompatibilityEvidence,
     }),
-  );
+  ).toBe(true);
+  const invalidAuthority = CortexConsistencyContract.from(
+    CortexConsistencyAuditScenario.persistedRequest({
+      schemaAuthority: '.cortex/missing.md',
+      evidence: [CortexCompatibilityEvidence.LegacyDecodeTest],
+    }),
+  ).execute();
   expect(
-    CortexConsistencyContract.from(
-      CortexConsistencyAuditScenario.persistedRequest({
-        schemaAuthority: '.cortex/missing.md',
-        evidence: [CortexCompatibilityEvidence.LegacyDecodeTest],
-      }),
-    ).execute(),
-  ).toContainEqual(
-    expect.objectContaining({
+    CortexConsistencyAuditScenario.hasFinding(invalidAuthority, {
       code: CortexContractFindingCode.InvalidSchemaAuthority,
     }),
-  );
+  ).toBe(true);
+  const missingReference = CortexConsistencyContract.from(
+    CortexConsistencyAuditScenario.persistedRequest({
+      schemaAuthority: SCHEMA_POLICY,
+      evidence: [CortexCompatibilityEvidence.MigrationTest],
+    }),
+  ).execute();
   expect(
-    CortexConsistencyContract.from(
-      CortexConsistencyAuditScenario.persistedRequest({
-        schemaAuthority: SCHEMA_POLICY,
-        evidence: [CortexCompatibilityEvidence.MigrationTest],
-      }),
-    ).execute(),
-  ).toContainEqual(
-    expect.objectContaining({
+    CortexConsistencyAuditScenario.hasFinding(missingReference, {
       code: CortexContractFindingCode.MissingSchemaAuthorityReference,
     }),
-  );
+  ).toBe(true);
   expect(
     CortexConsistencyContract.from(
       CortexConsistencyAuditScenario.persistedRequest({
