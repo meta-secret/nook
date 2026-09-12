@@ -36,7 +36,7 @@ impl NookVaultManager {
         &mut self,
         input: SecretReplacementInput,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status.tx.send("REPLACE_SECRET_START".to_owned());
+        drop(self.status.tx.send("REPLACE_SECRET_START".to_owned()));
         self.ensure_vault_crypto_from_cache().await?;
         if !self
             .vault
@@ -108,7 +108,7 @@ impl NookVaultManager {
             ),
         }])
         .await?;
-        let _ = self.status.tx.send("READY".to_owned());
+        drop(self.status.tx.send("READY".to_owned()));
         Ok(self.get_records()?)
     }
 }
@@ -267,7 +267,7 @@ impl NookVaultManager {
         secret_type: nook_core::SecretType,
         data: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status.tx.send("ADD_SECRET_START".to_owned());
+        drop(self.status.tx.send("ADD_SECRET_START".to_owned()));
         self.ensure_vault_crypto_from_cache().await?;
         if !self
             .vault
@@ -308,7 +308,7 @@ impl NookVaultManager {
             ),
         }])
         .await?;
-        let _ = self.status.tx.send("READY".to_owned());
+        drop(self.status.tx.send("READY".to_owned()));
         let records = self.get_records()?;
         tracing::info!(
             scope = "wasm-secrets",
@@ -401,7 +401,7 @@ impl NookVaultManager {
 
     // Delete a secret
     pub async fn delete_secret(&mut self, id: String) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status.tx.send("DELETE_SECRET_START".to_owned());
+        drop(self.status.tx.send("DELETE_SECRET_START".to_owned()));
         self.ensure_vault_crypto_from_cache().await?;
         let id = nook_core::SecretId::parse(&id)?;
         self.vault.meta.secrets.remove(&id);
@@ -410,7 +410,7 @@ impl NookVaultManager {
             secret_id: id.clone(),
         }])
         .await?;
-        let _ = self.status.tx.send("READY".to_owned());
+        drop(self.status.tx.send("READY".to_owned()));
         let records = self.get_records()?;
         tracing::info!(
             scope = "wasm-secrets",

@@ -196,7 +196,10 @@ impl CloudKitErrorBody<'_> {
             let value_end = after_prefix
                 .find(['&', '"', '\'', ' ', '\n', '\r', '\t'])
                 .unwrap_or(after_prefix.len());
-            rest = &after_prefix[value_end..];
+            let Some(remaining) = after_prefix.get(value_end..) else {
+                break;
+            };
+            rest = remaining;
         }
         output.push_str(rest);
         output

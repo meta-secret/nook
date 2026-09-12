@@ -26,12 +26,14 @@ impl VerifiedVaultAccessFlow {
         };
         // Dashboard metadata is descriptive and must not turn a successful,
         // cryptographically verified unlock or enrollment into a failure.
-        let _ = device_access::VerifiedVaultAccessUpdate {
-            device_id,
-            store_id: &store_id,
-        }
-        .apply()
-        .await;
+        drop(
+            device_access::VerifiedVaultAccessUpdate {
+                device_id,
+                store_id: &store_id,
+            }
+            .apply()
+            .await,
+        );
         Ok(value)
     }
 }

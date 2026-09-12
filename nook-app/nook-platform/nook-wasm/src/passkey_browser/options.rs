@@ -26,7 +26,7 @@ use passkey_types::{
 };
 use serde::Serialize;
 use serde_wasm_bindgen::{Error, Serializer};
-use std::{collections::HashMap, fmt::Write as _};
+use std::collections::HashMap;
 use wasm_bindgen::{JsCast, JsError};
 use web_sys::{CredentialCreationOptions, CredentialRequestOptions};
 
@@ -444,18 +444,18 @@ impl BrowserPasskeyClient {
         if bytes.len() <= PREFIX_LEN + SUFFIX_LEN {
             let mut output = String::with_capacity(bytes.len() * 2);
             for byte in bytes {
-                let _ = write!(&mut output, "{byte:02x}");
+                output.push_str(&hex::encode([*byte]));
             }
             return output;
         }
 
         let mut output = String::with_capacity((PREFIX_LEN + SUFFIX_LEN) * 2 + 3);
         for byte in bytes.iter().take(PREFIX_LEN) {
-            let _ = write!(&mut output, "{byte:02x}");
+            output.push_str(&hex::encode([*byte]));
         }
         output.push_str("...");
         for byte in bytes.iter().skip(bytes.len() - SUFFIX_LEN) {
-            let _ = write!(&mut output, "{byte:02x}");
+            output.push_str(&hex::encode([*byte]));
         }
         output
     }

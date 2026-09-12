@@ -220,14 +220,16 @@ impl BrowserPasskeyClient {
         if rp_id.trim().is_empty() {
             return;
         }
-        let _ = BrowserPasskeyClient::try_signal_current_user_details(
-            BrowserPasskeyTrySignalCurrentUserDetails {
-                rp_id,
-                user_handle,
-                passkey_label,
-            },
-        )
-        .await;
+        drop(
+            BrowserPasskeyClient::try_signal_current_user_details(
+                BrowserPasskeyTrySignalCurrentUserDetails {
+                    rp_id,
+                    user_handle,
+                    passkey_label,
+                },
+            )
+            .await,
+        );
     }
 }
 

@@ -222,7 +222,7 @@ impl LocalIdentityRecoveryRequest {
         // Best-effort legacy migration preserves known reconciliation keys. A
         // corrupt or future-incompatible directory must never block destructive
         // device recovery.
-        let _ = NookDatabase::load_identity_directory().await;
+        drop(NookDatabase::load_identity_directory().await);
         let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(&["vault"], TransactionMode::ReadWrite)

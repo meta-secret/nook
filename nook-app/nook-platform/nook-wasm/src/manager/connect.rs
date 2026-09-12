@@ -524,10 +524,11 @@ impl NookVaultManager {
                         identity: &identity,
                     },
                 )?);
-                let _ = self
-                    .status
-                    .tx
-                    .send(format!("ASSESS_{}_{}", self.storage.mode, status));
+                drop(
+                    self.status
+                        .tx
+                        .send(format!("ASSESS_{}_{}", self.storage.mode, status)),
+                );
                 return Ok(status);
             }
             if let VaultSnapshotLookup::Stored(cached) =
@@ -567,10 +568,11 @@ impl NookVaultManager {
         } else {
             nook_core::VaultContent::new(&content).access_status(&identity)?
         };
-        let _ = self
-            .status
-            .tx
-            .send(format!("ASSESS_{}_{}", self.storage.mode, status));
+        drop(
+            self.status
+                .tx
+                .send(format!("ASSESS_{}_{}", self.storage.mode, status)),
+        );
         tracing::info!(
             scope = "wasm-connect",
             status = %status,
@@ -643,7 +645,7 @@ impl NookVaultManager {
         github_repo: String,
         genesis_intent: nook_core::VaultGenesisIntent,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status.tx.send("CONNECT_START".to_owned());
+        drop(self.status.tx.send("CONNECT_START".to_owned()));
         tracing::info!(
             scope = "wasm-connect",
             storage = %storage_mode,
@@ -686,7 +688,7 @@ impl NookVaultManager {
 
         if use_genesis || remote_content_missing {
             self.flush_event_outbox().await?;
-            let _ = self.status.tx.send("GITHUB_INIT_SUCCESS".to_owned());
+            drop(self.status.tx.send("GITHUB_INIT_SUCCESS".to_owned()));
         }
 
         self.purge_legacy_plaintext_search_catalog().await?;
@@ -722,7 +724,7 @@ impl NookVaultManager {
             self.reset_vault_session_for_handoff_retry();
             return Err(error.into());
         }
-        let _ = self.status.tx.send("READY".to_owned());
+        drop(self.status.tx.send("READY".to_owned()));
         tracing::info!(
             scope = "wasm-connect",
             storage = %storage_mode,
@@ -864,7 +866,7 @@ impl NookVaultManager {
                 self.event_log.enabled = true;
                 self.apply_event_projection_to_session().await?;
                 self.persist_projection_cache().await?;
-                let _ = self.status.tx.send("DECRYPT_SUCCESS".to_owned());
+                drop(self.status.tx.send("DECRYPT_SUCCESS".to_owned()));
                 Ok(())
             }
             Err(err) if err.requires_sentinel_ceremony() => {

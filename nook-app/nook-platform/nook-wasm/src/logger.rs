@@ -253,7 +253,7 @@ impl LoggerState {
             LogMetadata::Json(data) => format!("[{scope}] {message} {data}"),
             LogMetadata::NoFields => format!("[{scope}] {message}"),
         };
-        let _ = console_echo_js(level, &text);
+        drop(console_echo_js(level, &text));
     }
 }
 
@@ -447,7 +447,10 @@ impl LoggerState {
             LogPageLimit::Limited(limit) => end.saturating_sub(limit as usize),
             LogPageLimit::AllEntries => 0,
         };
-        Ok(filtered[start..end].to_vec())
+        filtered
+            .get(start..end)
+            .map(<[LogEntry]>::to_vec)
+            .ok_or_else(|| NookError::Database("Log page bounds were invalid.".to_owned()))
     }
 }
 
@@ -483,7 +486,7 @@ impl LoggerState {
         // already prevents re-entrancy on this thread.
         if subscriber::set_global_default(subscriber).is_ok() {
             let setter = Box::new(move |level: LevelFilter| {
-                let _ = handle.modify(|current| *current = level);
+                drop(handle.modify(|current| *current = level));
             });
             LOGGER.with(|logger| {
                 logger.borrow_mut().set_filter = LogFilterInstallation::Installed(setter);

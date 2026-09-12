@@ -45,7 +45,7 @@ impl NookVaultManager {
                 }
             } else {
                 // Locked sentinel joiners still need share/join meta for ceremony.
-                let _ = self.materialize_vault_meta_from_events().await;
+                drop(self.materialize_vault_meta_from_events().await);
             }
             let result = NookVaultSyncResult::sync_result_session(SyncResultSessionRequest {
                 manager: self,

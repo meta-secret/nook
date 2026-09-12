@@ -658,7 +658,7 @@ impl NookVaultManager {
         &mut self,
     ) -> Result<bool, NookError> {
         if self.vault.members_key.is_empty() {
-            let _ = self.ensure_vault_crypto_from_cache().await;
+            drop(self.ensure_vault_crypto_from_cache().await);
         }
         if self.vault.members_key.is_empty() {
             return Ok(false);
@@ -708,7 +708,7 @@ impl NookVaultManager {
             StorageMode::Github => {
                 self.storage.access_token = nook_core::GithubPat::parse(github_pat)?.to_string();
                 let repo_name = nook_core::GithubRepoName::parse(github_repo_name)?;
-                let _ = self.status.tx.send("GITHUB_USER_FETCH".to_owned());
+                drop(self.status.tx.send("GITHUB_USER_FETCH".to_owned()));
                 let username = GitHubStorageClient::new(&self.storage.access_token)
                     .fetch_github_username()
                     .await?;
@@ -720,7 +720,7 @@ impl NookVaultManager {
                 self.storage.remote_path.clear();
                 self.storage.drive_event_parent = DriveEventParent::AppDataFolder;
                 self.storage.icloud_event_target = ICloudEventTarget::Private;
-                let _ = self.status.tx.send("GITHUB_REPO_ENSURE".to_owned());
+                drop(self.status.tx.send("GITHUB_REPO_ENSURE".to_owned()));
                 GitHubStorageClient::new(&self.storage.access_token)
                     .ensure_github_repo_exists(&self.storage.remote_ref)
                     .await?;
@@ -732,7 +732,7 @@ impl NookVaultManager {
                     nook_core::DriveBackupName::parse_storage_ref(github_repo_name)?;
                 self.storage.drive_event_parent = DriveEventParent::from_storage_id(&known_file_id);
                 self.storage.remote_path = file_name.to_string();
-                let _ = self.status.tx.send("DRIVE_VERIFY".to_owned());
+                drop(self.status.tx.send("DRIVE_VERIFY".to_owned()));
                 DriveStorageClient::new(&self.storage.access_token)
                     .verify_drive_access()
                     .await?;
@@ -810,9 +810,9 @@ impl NookVaultManager {
     ) -> Result<String, NookError> {
         let content = match self.storage.mode {
             StorageMode::Local => {
-                let _ = self.status.tx.send("IDB_LOAD_START".to_owned());
+                drop(self.status.tx.send("IDB_LOAD_START".to_owned()));
                 let stored = NookDatabase::load_from_indexed_db().await?;
-                let _ = self.status.tx.send("IDB_LOAD_SUCCESS".to_owned());
+                drop(self.status.tx.send("IDB_LOAD_SUCCESS".to_owned()));
                 match stored {
                     VaultSnapshotLookup::Stored(content) => content,
                     VaultSnapshotLookup::NotStored => String::new(),

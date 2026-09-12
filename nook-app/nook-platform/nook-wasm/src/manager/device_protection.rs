@@ -605,15 +605,17 @@ impl NookVaultManager {
             let device_id = self.save_passkey_material(&material).await?;
             let credential_fingerprint =
                 nook_core::PasskeyAccessProfile::credential_identifier(credential_id.as_ref());
-            let _ = device_access::AppPasskeyCreation {
-                app_id: &device_id,
-                credential_fingerprint: &credential_fingerprint,
-                nook_name: &passkey_label,
-                observation,
-                ceremony,
-            }
-            .apply()
-            .await;
+            drop(
+                device_access::AppPasskeyCreation {
+                    app_id: &device_id,
+                    credential_fingerprint: &credential_fingerprint,
+                    nook_name: &passkey_label,
+                    observation,
+                    ceremony,
+                }
+                .apply()
+                .await,
+            );
             let updated_label = BrowserPasskeyClient::passkey_label_with_device_id(
                 BrowserPasskeyPasskeyLabelWithDeviceId {
                     passkey_label: &passkey_label,
@@ -722,13 +724,15 @@ impl NookVaultManager {
         )
         .await?;
         let app_id = self.device.public_app_id();
-        let _ = device_access::AppPasskeyUse {
-            app_id: &app_id,
-            credential_fingerprint: &credential_fingerprint,
-            observation,
-        }
-        .apply()
-        .await;
+        drop(
+            device_access::AppPasskeyUse {
+                app_id: &app_id,
+                credential_fingerprint: &credential_fingerprint,
+                observation,
+            }
+            .apply()
+            .await,
+        );
         Ok(())
     }
 
@@ -825,13 +829,15 @@ impl NookVaultManager {
         let prf_output = BrowserPasskeyClient::require_prf_output(&credential)?;
         self.unlock_device_identity(prf_output).await?;
         let app_id = self.device.public_app_id();
-        let _ = device_access::AppPasskeyUse {
-            app_id: &app_id,
-            credential_fingerprint: &credential_fingerprint,
-            observation,
-        }
-        .apply()
-        .await;
+        drop(
+            device_access::AppPasskeyUse {
+                app_id: &app_id,
+                credential_fingerprint: &credential_fingerprint,
+                observation,
+            }
+            .apply()
+            .await,
+        );
         Ok(())
     }
 

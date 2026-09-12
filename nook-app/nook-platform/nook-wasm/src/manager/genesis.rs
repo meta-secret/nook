@@ -170,7 +170,7 @@ impl NookVaultManager {
 
     // Initialize an empty database
     pub async fn initialize_empty(&mut self) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status.tx.send("INITIALIZE_START".to_owned());
+        drop(self.status.tx.send("INITIALIZE_START".to_owned()));
         self.vault.meta.secrets.clear();
         if self.needs_genesis_persist()? {
             let identity = self.device_identity()?;
@@ -201,7 +201,7 @@ impl NookVaultManager {
         }
         self.persist_projection_cache().await?;
         self.purge_legacy_plaintext_search_catalog().await?;
-        let _ = self.status.tx.send("READY".to_owned());
+        drop(self.status.tx.send("READY".to_owned()));
         Ok(self.get_records()?)
     }
 }

@@ -47,7 +47,7 @@ impl NookVaultManager {
         password: String,
         page_limit: u32,
     ) -> Result<NookSecretPage, JsError> {
-        let _ = self.status.tx.send("CONNECT_START".to_owned());
+        drop(self.status.tx.send("CONNECT_START".to_owned()));
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         // A backup password is an alternate vault-key credential. After an
@@ -127,7 +127,7 @@ impl NookVaultManager {
             NookDatabase::save_to_indexed_db(&yaml).await?;
         }
         self.purge_legacy_plaintext_search_catalog().await?;
-        let _ = self.status.tx.send("READY".to_owned());
+        drop(self.status.tx.send("READY".to_owned()));
         NookSecretPage::from_core(self.query_secret_page(
             "",
             SecretTypeFilter::All,

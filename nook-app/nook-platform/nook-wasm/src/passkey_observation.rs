@@ -194,22 +194,26 @@ impl BrowserPasskeyObservation<'_> {
         const ATTESTED_DATA: u8 = 0x40;
         const AAGUID_START: usize = 37;
         const AAGUID_END: usize = AAGUID_START + 16;
-        if data.len() < AAGUID_END || data[FLAGS_INDEX] & ATTESTED_DATA == 0 {
+        if data
+            .get(FLAGS_INDEX)
+            .is_none_or(|flags| flags & ATTESTED_DATA == 0)
+        {
             return AuthenticatorGuidEvidence::NotReported;
         }
-        let bytes = &data[AAGUID_START..AAGUID_END];
+        let Some(bytes) = data.get(AAGUID_START..AAGUID_END) else {
+            return AuthenticatorGuidEvidence::NotReported;
+        };
         if bytes.iter().all(|byte| *byte == 0) {
             return AuthenticatorGuidEvidence::NotReported;
         }
-        let hex = hex::encode(bytes);
-        AuthenticatorGuidEvidence::Reported(format!(
-            "{}-{}-{}-{}-{}",
-            &hex[0..8],
-            &hex[8..12],
-            &hex[12..16],
-            &hex[16..20],
-            &hex[20..32]
-        ))
+        let mut formatted = String::with_capacity(36);
+        for (index, character) in hex::encode(bytes).chars().enumerate() {
+            if matches!(index, 8 | 12 | 16 | 20) {
+                formatted.push('-');
+            }
+            formatted.push(character);
+        }
+        AuthenticatorGuidEvidence::Reported(formatted)
     }
 }
 

@@ -74,10 +74,15 @@ impl<'a> CoalescedSecretImport<'a> {
         for mut value in items {
             let fingerprint = value.fingerprint(secrets_key)?;
             if let Some(index) = indexes.get(&fingerprint).copied() {
-                let enriched = coalesced[index].enriched_with(&value);
-                coalesced[index].zeroize_plaintext();
+                let Some(existing) = coalesced.get_mut(index) else {
+                    return Err(NookError::Database(
+                        "Secret import coalescing index was invalid.".to_owned(),
+                    ));
+                };
+                let enriched = existing.enriched_with(&value);
+                existing.zeroize_plaintext();
                 value.zeroize_plaintext();
-                coalesced[index] = enriched;
+                *existing = enriched;
                 duplicates += 1;
             } else {
                 indexes.insert(fingerprint, coalesced.len());
@@ -272,7 +277,7 @@ impl NookVaultManager {
         skipped_unsupported: SecretImportUnsupportedRecordCount,
         source: SecretImportSource,
     ) -> Result<NookImportResult, JsError> {
-        let _ = self.status.tx.send(source.status().to_owned());
+        drop(self.status.tx.send(source.status().to_owned()));
         self.ensure_vault_crypto_from_cache().await?;
         if !self
             .vault
@@ -317,7 +322,7 @@ impl PreparedSecretImport {
         if !operations.is_empty() {
             manager.append_vault_operations(operations).await?;
         }
-        let _ = manager.status.tx.send("READY".to_owned());
+        drop(manager.status.tx.send("READY".to_owned()));
         tracing::info!(
             scope = "wasm-secrets",
             action = source.action(),

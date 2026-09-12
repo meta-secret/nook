@@ -25,7 +25,7 @@ impl VaultSessionLock {
 impl VaultSessionLock {
     pub(crate) fn set_vault_session_locked(state: Self) {
         if matches!(state, Self::Locked) {
-            let _ = SessionStorage::set(VAULT_SESSION_LOCKED_KEY, true);
+            drop(SessionStorage::set(VAULT_SESSION_LOCKED_KEY, true));
         } else {
             SessionStorage::delete(VAULT_SESSION_LOCKED_KEY);
         }

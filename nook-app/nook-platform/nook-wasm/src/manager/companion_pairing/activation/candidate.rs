@@ -81,9 +81,12 @@ impl PairingActivationStorageAdmission<'_> {
                 .map_err(|_| CompanionPairingCandidateFailure::EventAuthorization)?;
             role_keys.push(Zeroizing::new(key.into_inner()));
         }
-        if role_keys[0]
+        let Some([secrets_key, members_key]) = role_keys.as_slice().first_chunk::<2>() else {
+            return Err(CompanionPairingCandidateFailure::EventAuthorization);
+        };
+        if secrets_key
             .as_str()
-            .eq_ignore_ascii_case(role_keys[1].as_str())
+            .eq_ignore_ascii_case(members_key.as_str())
         {
             return Err(CompanionPairingCandidateFailure::EventAuthorization);
         }

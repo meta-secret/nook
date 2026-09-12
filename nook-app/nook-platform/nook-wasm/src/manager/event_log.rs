@@ -386,7 +386,7 @@ impl NookVaultManager {
         VaultMetaGraphProjection::new(&graph).materialize(&mut self.vault.meta)?;
         self.ensure_sentinel_architecture_from_shares()?;
         if let Ok(identity) = self.device_identity() {
-            let _ = self.maybe_sync_self_into_roster(&identity);
+            drop(self.maybe_sync_self_into_roster(&identity));
         }
         Ok(())
     }
