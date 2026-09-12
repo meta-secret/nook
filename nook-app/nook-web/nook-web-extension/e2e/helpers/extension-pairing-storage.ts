@@ -1,5 +1,5 @@
 import type { Page, Worker } from '@playwright/test'
-import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+import { companionWasmReady } from './companion-wasm-ready'
 import {
   classify_extension_persistence_databases,
   ExtensionPersistenceArea,

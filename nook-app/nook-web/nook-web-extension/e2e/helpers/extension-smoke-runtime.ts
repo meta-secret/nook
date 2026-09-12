@@ -1,4 +1,4 @@
-import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+import { companionWasmReady } from './companion-wasm-ready'
 
 await companionWasmReady
 import {
