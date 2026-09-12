@@ -15,6 +15,11 @@ The existing `.github/workflows/pr.yml` supplies the slow checks. In this
 architecture, only the dev manager's dev-to-main cycle uses that workflow.
 Routing, captured-SHA checkouts, and concurrency still require runtime alignment.
 
+The [multiagent delivery visual model](multiagent-delivery-diagrams.md) is the
+normative diagram set for stage ownership, component communication, feedback
+loops, and exact-SHA handoffs. This document supplies the detailed authorization
+and evidence rules behind those diagrams.
+
 ## Runtime command contracts
 
 - **`build:compile`**
