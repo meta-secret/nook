@@ -13,6 +13,7 @@ import {
   refreshJoinerVaultOnLoginGate,
   refreshJoinerVaultOnLoginGateIfIdle,
   RefreshJoinerVaultOnLoginGateOutcome,
+  shouldAttemptJoinerVaultConnect,
 } from '../../../e2e/helpers/joiner-vault-refresh'
 
 const installVault = (
@@ -30,6 +31,19 @@ afterEach(() => {
 })
 
 describe('joiner vault refresh', () => {
+  test('only attempts connect after a completed refresh', () => {
+    expect(
+      shouldAttemptJoinerVaultConnect(
+        RefreshJoinerVaultOnLoginGateOutcome.Busy,
+      ),
+    ).toBe(false)
+    expect(
+      shouldAttemptJoinerVaultConnect(
+        RefreshJoinerVaultOnLoginGateOutcome.Refreshed,
+      ),
+    ).toBe(true)
+  })
+
   test('skips a forced refresh while auto-connect is verifying', async () => {
     const syncFromStorage: VaultState['syncFromStorage'] = vi.fn(async () =>
       ok(ProviderSyncOutcome.Synced),

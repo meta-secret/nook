@@ -12,6 +12,12 @@ export enum RefreshJoinerVaultOnLoginGateOutcome {
   Busy = 'busy',
 }
 
+export function shouldAttemptJoinerVaultConnect(
+  outcome: RefreshJoinerVaultOnLoginGateOutcome,
+): boolean {
+  return outcome === RefreshJoinerVaultOnLoginGateOutcome.Refreshed
+}
+
 export type RefreshJoinerVaultOnLoginGateIfIdleArgs =
   RefreshJoinerVaultOnLoginGateArgs & {
     readonly busyOutcome: RefreshJoinerVaultOnLoginGateOutcome
