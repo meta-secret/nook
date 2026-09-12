@@ -33,11 +33,7 @@ concurrency:
     github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e' ||
     github.event.changes.base.ref.from != '') && format('pr-{0}', github.event.pull_request.number)) ||
     format('ci-{0}', github.run_id) }}
-  cancel-in-progress: >-
-    ${{ github.event_name == 'pull_request' &&
-    !(github.event.pull_request.head.repo.full_name == github.repository &&
-    github.event.pull_request.head.ref == 'dev' &&
-    github.event.pull_request.base.ref == 'main') }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   scope:
