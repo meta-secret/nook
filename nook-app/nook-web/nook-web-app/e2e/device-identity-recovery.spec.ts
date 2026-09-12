@@ -127,13 +127,13 @@ test('waits for peer storage work before destructive identity recovery', async (
   await peer.evaluate(() => {
     const peerVault = window.__nookVault
     if (!peerVault) throw new Error('Vault runtime is not exposed')
-    void peerVault.enqueueStorage(
-      () =>
-        new Promise<void>((resolve) => {
-          window.__releaseRecoveryStorageWork = resolve
-          localStorage.setItem('nook_e2e_recovery_storage_started', 'true')
-        }),
-    )
+    void peerVault.enqueueStorage(async () => {
+      await new Promise<void>((resolve) => {
+        window.__releaseRecoveryStorageWork = resolve
+        localStorage.setItem('nook_e2e_recovery_storage_started', 'true')
+      })
+      return peerVault.admitManager()
+    })
   })
   await expect
     .poll(() =>
@@ -182,6 +182,7 @@ test('waits for peer storage work before destructive identity recovery', async (
     if (!peerVault) throw new Error('Vault runtime is not exposed')
     await peerVault.enqueueStorage(async () => {
       sessionStorage.setItem('nook_e2e_peer_reinitialized', 'true')
+      return peerVault.admitManager()
     })
   })
   await expect

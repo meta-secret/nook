@@ -109,8 +109,8 @@ async function assertGroupsDoNotOverlap(page: Page, testIds: string[]) {
   }
   for (let left = 0; left < boxes.length; left += 1) {
     for (let right = left + 1; right < boxes.length; right += 1) {
-      const a = requireValue(boxes[left], `${testId} left box`)
-      const b = requireValue(boxes[right], `${testId} right box`)
+      const a = requireValue(boxes[left], `${testIds[left]} left box`)
+      const b = requireValue(boxes[right], `${testIds[right]} right box`)
       const overlapsX =
         a.box.x < b.box.x + b.box.width && b.box.x < a.box.x + a.box.width
       const overlapsY =

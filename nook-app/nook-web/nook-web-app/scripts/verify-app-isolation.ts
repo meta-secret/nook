@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { brotliCompressSync, constants as zlibConstants } from 'node:zlib'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
@@ -146,7 +147,9 @@ function isPagesWorkerModule(value: unknown): value is PagesWorkerModule {
   return typeof value.default.fetch === 'function'
 }
 
-const pagesWorkerModule: unknown = await import('../dist/site/_worker.js')
+const pagesWorkerModule: unknown = await import(
+  pathToFileURL(join(siteRoot, '_worker.js')).href,
+)
 if (!isPagesWorkerModule(pagesWorkerModule)) {
   throw new Error('Public site Pages Function has an invalid worker contract.')
 }
