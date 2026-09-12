@@ -181,6 +181,16 @@ type StructuredLogPersistence = {
 
 type LogFetchRequest = [input: RequestInfo | URL, init?: RequestInit];
 
+type FetchPreconnect = typeof globalThis.fetch extends {
+  preconnect: infer Preconnect;
+}
+  ? Preconnect
+  : never;
+
+type FetchWithOptionalPreconnect = typeof globalThis.fetch & {
+  readonly preconnect?: FetchPreconnect | undefined;
+};
+
 /** `createLogger` path: gate, echo once via originals, then persist. */
 type LogRecordRequest = {
   readonly level: LogLevel;
@@ -552,7 +562,13 @@ class BrowserLogRuntime {
     };
     if (globalThis.fetch === marker.__nookFetchOuter) return;
 
-    const originalFetch = globalThis.fetch;
+    const originalFetch = globalThis.fetch as FetchWithOptionalPreconnect;
+    const fetchProperties: Pick<
+      FetchWithOptionalPreconnect,
+      "preconnect"
+    > = {
+      preconnect: originalFetch.preconnect,
+    };
     const wrapped = Object.assign(
       async (...fetchRequest: LogFetchRequest): Promise<Response> => {
         const [input, init] = fetchRequest;
@@ -572,7 +588,7 @@ class BrowserLogRuntime {
         }
         return response;
       },
-      { preconnect: originalFetch.preconnect },
+      fetchProperties,
     );
     marker.__nookFetchOuter = wrapped;
     globalThis.fetch = wrapped;
