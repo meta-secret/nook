@@ -86,6 +86,23 @@ afterEach(() => {
 });
 
 describe('verifyModuleCommitHandoff', () => {
+  test('rejects provider handoffs from the integration parent', () => {
+    const fixture =
+      ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
+    fixtures.push(fixture);
+    const parent = ModuleWorktree.prepareSharedIntegrationWorkspace({
+      ...ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture),
+      taskId: 'module-delivery-integration',
+    });
+    expect(() =>
+      ModuleCommitHandoff.verifyModuleCommitHandoff({
+        workspace: parent,
+        baselineCommit: parent.baselineCommit,
+        allowedWriteClaims: ['module/**'],
+      }),
+    ).toThrow('isolated child worktree');
+  });
+
   test('accepts an underscore write-task through worktree handoff', () => {
     const active = ModuleDeliveryWorktreeHandoffScenario.createWorkspace(
       'writer_with_underscore',
@@ -226,6 +243,7 @@ describe('verifyModuleCommitHandoff', () => {
       ModuleCommitHandoff.verifyModuleCommitHandoff(addedRequest),
     ).toThrow('symlink');
 
+    git(['reset', '--hard', active.baselineCommit]);
     const cleanupRequest: CleanupModuleWorktreeRequest = { workspace: active };
     ModuleWorktree.cleanupModuleWorktree(cleanupRequest);
     const fixture = ModuleDeliveryWorktreeHandoffScenario.currentFixture();

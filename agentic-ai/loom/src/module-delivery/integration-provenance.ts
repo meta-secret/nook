@@ -668,7 +668,7 @@ export class ModuleIntegrationProvenanceRegistry {
       throw new Error(
         'Module integration state has an inconsistent task frontier.',
       );
-    ModuleWorktree.assertPreparedModuleWorktreeIdentity(state.workspace);
+    ModuleWorktree.assertIntegrationWorkspaceIdentity(state.workspace);
     if (
       state.workspace.planDigest !== state.planDigest ||
       state.workspace.baselineCommit !== state.sourceCommit ||
@@ -857,7 +857,7 @@ export class ModuleIntegrationProvenanceRegistry {
     const cleanupRequest: CleanupModuleWorktreeRequest = {
       workspace: session.workspace,
     };
-    ModuleWorktree.cleanupModuleWorktree(cleanupRequest);
+    ModuleWorktree.cleanupSharedIntegrationWorkspace(cleanupRequest);
     session.cleaned = true;
     return { removed: true };
   }
