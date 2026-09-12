@@ -33,6 +33,8 @@ function buildAppLogsUrl(options?: {
 
 function parseLogLevel(value: string | undefined): LogLevel {
   switch (value?.trim().toLowerCase()) {
+    case undefined:
+      return LogLevel.Trace
     case LogLevel.Error:
       return LogLevel.Error
     case LogLevel.Warn:

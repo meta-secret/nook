@@ -28,9 +28,10 @@ const actionMocks = vi.hoisted(() => ({
   performRevalidation: vi.fn(
     async (request: RevalidationRequest): Promise<RevalidationOutcome> => {
       void request
-      return {
-        kind: 'rejected' as RevalidationOutcome['kind'],
+      const rejectedOutcome: RevalidationOutcome = {
+        kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
       }
+      return rejectedOutcome
     },
   ),
   sendAuthenticatorCode: vi.fn(),
