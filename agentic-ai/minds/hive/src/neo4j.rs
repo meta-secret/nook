@@ -5,11 +5,12 @@ use serde::Serialize;
 use tokio::time as async_time;
 use uuid::Uuid;
 
-use self::claim_retry::{CLAIM_RETRY_LIMIT, transient_claim_retry_delay};
-use crate::install_rustls_crypto_provider;
+use self::claim_retry::CLAIM_RETRY_LIMIT;
+use crate::HIVE_TLS_PROVIDER;
 use crate::model::{
-    ActivityLease, AgentId, Artifact, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
-    CompletionArtifact, DependencyResult, EnqueueTask, LeaseToken, TaskActivity, TaskId,
+    ActiveDelivery, ActiveDeliveryQuery, ActivityLease, AgentId, Artifact, AttemptId,
+    CancellationTarget, ClaimOutcome, ClaimedTask, Completion, CompletionArtifact,
+    CompletionRelevance, DependencyResult, EnqueueTask, LeaseToken, TaskActivity, TaskId,
 };
 use crate::store::TaskStore;
 
@@ -41,7 +42,7 @@ pub struct QueueTaskStatus {
 #[async_trait]
 impl TaskStore for Neo4jTaskStore {
     async fn migrate(&self) -> crate::HiveResult<()> {
-        migration::migrate(&self.graph).await
+        self.migrate_schema().await
     }
 
     async fn register_agent(&self, agent_id: &AgentId, pod_name: &str) -> crate::HiveResult<()> {
@@ -67,10 +68,17 @@ impl TaskStore for Neo4jTaskStore {
 
     async fn active_delivery(
         &self,
-        source_commit: &str,
-        kind: &str,
-    ) -> crate::HiveResult<Option<TaskId>> {
-        self.active_delivery_task(source_commit, kind).await
+        request: ActiveDeliveryQuery<'_>,
+    ) -> crate::HiveResult<ActiveDelivery> {
+        let ActiveDeliveryQuery {
+            source_commit,
+            kind,
+        } = request;
+        self.active_delivery_task(ActiveDeliveryQuery {
+            source_commit,
+            kind,
+        })
+        .await
     }
 
     async fn cancel(&self, task_id: &TaskId, reason: &str) -> crate::HiveResult<bool> {
@@ -186,7 +194,7 @@ impl TaskStore for Neo4jTaskStore {
         let mut targets = Vec::new();
         while let Some(row) = rows.next().await? {
             targets.push(CancellationTarget {
-                task_id: TaskId::new(row.get::<String>("task_id")?)?,
+                task_id: TaskId::try_from(row.get::<String>("task_id")?)?,
                 pod_name: row.get("pod_name")?,
             });
         }
@@ -230,9 +238,9 @@ impl TaskStore for Neo4jTaskStore {
         for retry in 0..CLAIM_RETRY_LIMIT {
             let result = async {
                 let attempt_id =
-                    AttemptId::new(Uuid::new_v4().to_string())?;
+                    AttemptId::try_from(Uuid::new_v4().to_string())?;
                 let lease_token =
-                    LeaseToken::new(Uuid::new_v4().to_string())?;
+                    LeaseToken::try_from(Uuid::new_v4().to_string())?;
                 let mut transaction = self.graph.start_txn().await?;
 
                 transaction
@@ -413,9 +421,9 @@ impl TaskStore for Neo4jTaskStore {
 
             match result {
                 Ok(claimed) => return Ok(claimed),
-                Err(error) => match transient_claim_retry_delay(retry, &error) {
-                    Some(delay) => async_time::sleep(delay).await,
-                    None => return Err(error),
+                Err(error) => match Neo4jTaskStore::transient_claim_retry_delay(retry, &error) {
+                    claim_retry::ClaimRetry::RetryAfter(delay) => async_time::sleep(delay).await,
+                    claim_retry::ClaimRetry::Stop => return Err(error),
                 },
             }
         }
@@ -537,14 +545,14 @@ impl TaskStore for Neo4jTaskStore {
         Ok(rows.next().await?.is_some())
     }
 
-    async fn complete(
-        &self,
-        task: &ClaimedTask,
-        agent_id: &AgentId,
-        obsolete: bool,
-        summary: &str,
-        artifact: &CompletionArtifact,
-    ) -> crate::HiveResult<bool> {
+    async fn complete(&self, completion: Completion<'_>) -> crate::HiveResult<bool> {
+        let Completion {
+            task,
+            agent_id,
+            relevance,
+            summary,
+            artifact,
+        } = completion;
         let mut transaction = self.graph.start_txn().await?;
         let mut rows = transaction
             .execute(
@@ -589,7 +597,7 @@ impl TaskStore for Neo4jTaskStore {
                 .param("attempt_id", task.attempt_id.as_str())
                 .param("agent_id", agent_id.as_str())
                 .param("lease_token", task.lease_token.as_str())
-                .param("obsolete", obsolete)
+            .param("obsolete", matches!(relevance, CompletionRelevance::Obsolete))
                 .param(
                     "owning_repair_ids",
                     task.owning_repairs
@@ -733,7 +741,7 @@ impl TaskStore for Neo4jTaskStore {
         reason: &str,
     ) -> crate::HiveResult<bool> {
         blocker.validate()?;
-        if task.kind == "blocker" {
+        if task.kind.is_blocker() {
             return Err(crate::HiveError::message(
                 "a blocker task cannot create another blocking dependency",
             ));

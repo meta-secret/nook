@@ -1,81 +1,107 @@
-import { lstatSync, readdirSync } from 'node:fs';
+import { lstatSync, readdirSync, type Stats } from 'node:fs';
 import path from 'node:path';
-import type { CortexSessionCleanRequest } from '../codec/args/cortex-session-clean.ts';
-import { findRepoRoot } from '../lib/repo.ts';
-import {
-  LoomFailureCode,
-  loomFailureDetail,
-  type LoomFailureDetailArgs,
-} from '../loom-failure.ts';
+import { err, ok, type Result } from 'neverthrow';
 
-export type CortexSessionCleanReport = {
-  readonly sessionClean: true;
-};
-
-export type InspectCortexSessionRequest = {
-  readonly repoRoot: string;
-};
-
+export type CortexSessionCleanReport = { readonly sessionClean: true };
+export type InspectCortexSessionRequest = { readonly repoRoot: string };
 export type CortexSessionInspection =
   | { readonly sessionClean: true }
   | { readonly sessionClean: false; readonly activeEntry: string };
 
-const noThrowStatOptions = { throwIfNoEntry: false } as const;
+export enum CortexSessionFailureKind {
+  Read = 'read',
+  ActiveMemory = 'activeMemory',
+}
+export type CortexSessionFailure = {
+  readonly kind: CortexSessionFailureKind;
+  readonly message: string;
+};
 
-export function inspectCortexSession(
-  request: InspectCortexSessionRequest,
-): CortexSessionInspection {
-  const sessionRoot = path.join(request.repoRoot, '.cortex', '.session');
-  const sessionRootStat = lstatSync(sessionRoot, noThrowStatOptions);
-  if (!sessionRootStat) {
-    return { sessionClean: true };
+/** Owns inspection and admission of the repository's temporary session tree. */
+export class CortexSessionDirectory {
+  constructor(private readonly request: InspectCortexSessionRequest) {}
+
+  inspect(): Result<CortexSessionInspection, CortexSessionFailure> {
+    const sessionRoot = path.join(this.request.repoRoot, '.cortex', '.session');
+    const status = new CortexSessionEntry(sessionRoot).status();
+    if (status.isErr()) return err(status.error);
+    if (!status.value) return ok({ sessionClean: true });
+    if (!status.value.isDirectory()) {
+      return ok({
+        sessionClean: false,
+        activeEntry: path.relative(this.request.repoRoot, sessionRoot),
+      });
+    }
+    return this.firstNonDirectoryEntry(sessionRoot).map((entry) =>
+      entry === false
+        ? { sessionClean: true }
+        : {
+            sessionClean: false,
+            activeEntry: path.relative(this.request.repoRoot, entry),
+          },
+    );
   }
 
-  if (!sessionRootStat.isDirectory()) {
-    return {
-      sessionClean: false,
-      activeEntry: path.relative(request.repoRoot, sessionRoot),
-    };
+  clean(): Result<CortexSessionCleanReport, CortexSessionFailure> {
+    return this.inspect().andThen((inspection) => {
+      if (inspection.sessionClean) {
+        const report: CortexSessionCleanReport = { sessionClean: true };
+        return ok(report);
+      }
+      return err({
+        kind: CortexSessionFailureKind.ActiveMemory,
+        message: `PR readiness requires removing temporary Cortex session memory: ${inspection.activeEntry}`,
+      });
+    });
   }
 
-  const activeEntry = firstNonDirectoryEntry(sessionRoot);
-  if (activeEntry === false) {
-    return { sessionClean: true };
+  private firstNonDirectoryEntry(
+    root: string,
+  ): Result<string | false, CortexSessionFailure> {
+    const entries = new CortexSessionEntry(root).children();
+    if (entries.isErr()) return err(entries.error);
+    for (const entry of entries.value) {
+      const entryPath = path.join(root, entry);
+      const status = new CortexSessionEntry(entryPath).status();
+      if (status.isErr()) return err(status.error);
+      // Traversal must observe a consistent entry before declaring the tree clean.
+      if (!status.value)
+        return err({
+          kind: CortexSessionFailureKind.Read,
+          message: `Cortex session entry disappeared during inspection: ${entryPath}`,
+        });
+      if (!status.value.isDirectory()) return ok(entryPath);
+      const nested = this.firstNonDirectoryEntry(entryPath);
+      if (nested.isErr()) return err(nested.error);
+      if (nested.value !== false) return ok(nested.value);
+    }
+    return ok(false);
   }
-  return {
-    sessionClean: false,
-    activeEntry: path.relative(request.repoRoot, activeEntry),
-  };
 }
 
-export async function runCortexSessionClean(
-  _request: CortexSessionCleanRequest,
-): Promise<CortexSessionCleanReport> {
-  const inspectRequest: InspectCortexSessionRequest = {
-    repoRoot: findRepoRoot(),
-  };
-  const inspection = inspectCortexSession(inspectRequest);
-  if (!inspection.sessionClean) {
-    const failureArgs: LoomFailureDetailArgs = {
-      code: LoomFailureCode.ValidationFailed,
-      text: `PR readiness requires removing temporary Cortex session memory: ${inspection.activeEntry}`,
-    };
-    loomFailureDetail(failureArgs);
-  }
-  return { sessionClean: true };
-}
-
-function firstNonDirectoryEntry(root: string): string | false {
-  const entries = readdirSync(root).sort();
-  for (const entry of entries) {
-    const entryPath = path.join(root, entry);
-    if (!lstatSync(entryPath).isDirectory()) {
-      return entryPath;
-    }
-    const nestedEntry = firstNonDirectoryEntry(entryPath);
-    if (nestedEntry !== false) {
-      return nestedEntry;
+/** Native filesystem failures enter the session contract at these reads. */
+class CortexSessionEntry {
+  constructor(private readonly absolutePath: string) {}
+  status(): Result<Stats | false, CortexSessionFailure> {
+    try {
+      return ok(
+        lstatSync(this.absolutePath, { throwIfNoEntry: false }) || false,
+      );
+    } catch {
+      return err({
+        kind: CortexSessionFailureKind.Read,
+        message: `Cannot inspect Cortex session entry: ${this.absolutePath}`,
+      });
     }
   }
-  return false;
+  children(): Result<readonly string[], CortexSessionFailure> {
+    try {
+      return ok(readdirSync(this.absolutePath).sort());
+    } catch {
+      return err({
+        kind: CortexSessionFailureKind.Read,
+        message: `Cannot read Cortex session directory: ${this.absolutePath}`,
+      });
+    }
+  }
 }

@@ -2,6 +2,7 @@ import {
   ActiveCallScopeKind,
   arrayAtSummaryValues,
   arrayCallbackElementParameter,
+  bindingProjectionPath,
   bindingPatternHasTypeAnnotation,
   concatenateArraySummaries,
   executionScope,
@@ -27,8 +28,25 @@ import {
 } from './typed-api-analysis.js'
 import { namedParameterContractListeners } from './named-parameter-contract.js'
 
+/** @typedef {import('@typescript-eslint/types').TSESTree.Node} AstNode */
+/** @typedef {import('@typescript-eslint/types').TSESTree.Expression} AstExpression */
+/** @typedef {import('@typescript-eslint/types').TSESTree.Identifier} AstIdentifier */
+/** @typedef {import('@typescript-eslint/types').TSESTree.MemberExpression} AstMemberExpression */
+/** @typedef {import('@typescript-eslint/types').TSESTree.Property | import('@typescript-eslint/types').TSESTree.PropertyDefinition} AstProperty */
+/** @typedef {import('@typescript-eslint/scope-manager').Variable} AnalysisVariable */
+/** @typedef {import('@typescript-eslint/scope-manager').Reference} AnalysisReference */
+/** @typedef {import('@typescript-eslint/scope-manager').Definition} AnalysisDefinition */
+/** @typedef {import('@typescript-eslint/scope-manager').Scope} AnalysisScope */
+/** @typedef {'namedArgument' | 'namedParameterType' | 'namedParameterDefault' | 'semanticParameterType' | 'typedArgument'} RuleMessageId */
+/** @typedef {import('@typescript-eslint/utils').TSESLint.RuleContext<RuleMessageId, readonly [{ enforceNamedParameterContracts?: boolean }] >} TypedRuleContext */
+/** @typedef {{ kind: 'not-found' } | { kind: 'found', value: string }} StaticStringLookup */
+/** @typedef {{ kind: 'inactive' } | { kind: 'active', scope: AnalysisScope, node: AstNode }} ActiveCallScope */
+/** @typedef {{ expression: AstExpression, seenVariables: Set<AnalysisVariable> }} ExpressionSearch */
+/** @typedef {{ kind: 'not-found' } | { kind: 'found', expression: AstExpression }} ExpressionLookup */
+
 const directObjectArgumentRunes = new Set(['$state', '$derived', '$bindable'])
 
+/** @param {import('@typescript-eslint/types').TSESTree.CallExpression} node */
 function isDirectObjectArgumentRune(node) {
   if (
     node.callee.type === 'Identifier' &&
@@ -71,23 +89,31 @@ export const noRawObjectArgumentsRule = {
         'Nook web requires object-literal arguments to use an explicitly typed named declaration.',
     },
   },
+  /** @param {TypedRuleContext} context */
   create(context) {
     const sourceCode = context.sourceCode
     let activeValueFlowCutoff = Number.POSITIVE_INFINITY
+    /** @type {ActiveCallScope} */
     let activeCallScope = { kind: ActiveCallScopeKind.Inactive }
 
+    /** @param {AstNode} node */
     function nodeStart(node) {
-      return ((...[v = sourceCode.getIndexFromLoc(node.loc.start)]) => v)(node.range?.[0])
+      return ((...[v = sourceCode.getIndexFromLoc(node.loc.start)]) => v)(
+        node.range?.[0],
+      )
     }
 
+    /** @param {AstNode} node */
     function occursBeforeActiveCallSite(node) {
       return nodeStart(node) < activeValueFlowCutoff
     }
 
+    /** @param {AnalysisReference} reference */
     function isNonInitialWriteReference(reference) {
       return reference.isWrite() && !reference.init && reference.writeExpr
     }
 
+    /** @param {AnalysisReference} reference */
     function referenceCanReachActiveCall(reference) {
       if (activeCallScope.kind === ActiveCallScopeKind.Inactive) return true
       const referenceExecutionScope = executionScope(reference.from)
@@ -107,6 +133,7 @@ export const noRawObjectArgumentsRule = {
         })
       )
     }
+    /** @param {AstIdentifier} identifier */
     function declaredVariable(identifier) {
       let scope = sourceCode.getScope(identifier)
       while (scope) {
@@ -114,11 +141,14 @@ export const noRawObjectArgumentsRule = {
         if (variable) {
           return { kind: VariableLookupKind.Found, variable }
         }
-        scope = scope.upper
+        const upper = scope.upper
+        if (!upper) break
+        scope = upper
       }
       return { kind: VariableLookupKind.NotFound }
     }
 
+    /** @param {AstExpression} argument */
     function inspectNamedObjectArgument(argument) {
       if (argument.type !== 'Identifier') return
       const lookup = declaredVariable(argument)
@@ -136,6 +166,7 @@ export const noRawObjectArgumentsRule = {
             (definition.name.typeAnnotation ||
               definition.node.id.typeAnnotation)) ||
           (definition.type === 'Parameter' &&
+            definition.name.type === 'Identifier' &&
             bindingPatternHasTypeAnnotation(definition.name))
         ) {
           return
@@ -144,6 +175,7 @@ export const noRawObjectArgumentsRule = {
       context.report({ node: argument, messageId: 'typedArgument' })
     }
 
+    /** @param {AstExpression} expression @returns {AstExpression[]} */
     function inlineObjectExpressions(expression) {
       return inlineObjectResultExpressions({
         expression,
@@ -151,6 +183,7 @@ export const noRawObjectArgumentsRule = {
         projectArrayAccessorExpressions: arrayAccessorExpressions,
       })
     }
+    /** @param {AstExpression} expression @returns {AstExpression[]} */
     function arrayAccessorExpressions(expression) {
       const accessor = staticArrayAtAccessor({
         expression,
@@ -164,6 +197,7 @@ export const noRawObjectArgumentsRule = {
       })
       return arrayAtSummaryValues({ summary, index: accessor.index })
     }
+    /** @param {AstMemberExpression} member @returns {StaticStringLookup} */
     function staticPropertyKey(member) {
       if (!member.computed && member.property.type === 'Identifier') {
         return {
@@ -175,6 +209,7 @@ export const noRawObjectArgumentsRule = {
         ? staticExpressionKey(member.property)
         : { kind: StaticKeyLookupKind.NotFound }
     }
+    /** @param {AstProperty} property @returns {StaticStringLookup} */
     function staticObjectKey(property) {
       if (!property.computed && property.key.type === 'Identifier') {
         return {
@@ -182,11 +217,17 @@ export const noRawObjectArgumentsRule = {
           value: property.key.name,
         }
       }
-      return staticExpressionKey(property.key)
+      if (property.key.type === 'Literal')
+        return staticExpressionKey(property.key)
+      return property.computed
+        ? staticExpressionKey(property.key)
+        : { kind: StaticKeyLookupKind.NotFound }
     }
+    /** @param {AstExpression} expression @returns {StaticStringLookup} */
     function staticExpressionKey(expression) {
       return resolveStaticExpressionKey({ expression, declaredVariable })
     }
+    /** @param {ExpressionSearch} args @returns {AstExpression[]} */
     function possibleExpressionValues(args) {
       const { expression, seenVariables } = args
       const unwrapped = unwrapResultExpression(expression)
@@ -221,8 +262,10 @@ export const noRawObjectArgumentsRule = {
         ]
       }
       if (unwrapped.type === 'SequenceExpression') {
+        const lastExpression = unwrapped.expressions.at(-1)
+        if (!lastExpression) return []
         return possibleExpressionValues({
-          expression: unwrapped.expressions.at(-1),
+          expression: lastExpression,
           seenVariables,
         })
       }
@@ -258,45 +301,7 @@ export const noRawObjectArgumentsRule = {
       }
       return values
     }
-    function bindingProjectionPath(pattern, target) {
-      if (pattern === target) {
-        return { kind: ProjectionPathLookupKind.Found, path: [] }
-      }
-      if (pattern.type === 'AssignmentPattern') {
-        return bindingProjectionPath(pattern.left, target)
-      }
-      if (pattern.type === 'RestElement') {
-        return { kind: ProjectionPathLookupKind.NotFound }
-      }
-      if (pattern.type === 'ObjectPattern') {
-        for (const property of pattern.properties) {
-          if (property.type !== 'Property') continue
-          const childLookup = bindingProjectionPath(property.value, target)
-          if (childLookup.kind === ProjectionPathLookupKind.NotFound) continue
-          const keyLookup = staticObjectKey(property)
-          if (keyLookup.kind === StaticKeyLookupKind.NotFound) {
-            return { kind: ProjectionPathLookupKind.NotFound }
-          }
-          return {
-            kind: ProjectionPathLookupKind.Found,
-            path: [keyLookup.value, ...childLookup.path],
-          }
-        }
-      }
-      if (pattern.type === 'ArrayPattern') {
-        for (const [index, element] of pattern.elements.entries()) {
-          if (!element) continue
-          const childLookup = bindingProjectionPath(element, target)
-          if (childLookup.kind === ProjectionPathLookupKind.Found) {
-            return {
-              kind: ProjectionPathLookupKind.Found,
-              path: [String(index), ...childLookup.path],
-            }
-          }
-        }
-      }
-      return { kind: ProjectionPathLookupKind.NotFound }
-    }
+    /** @param {ExpressionSearch & { path: string[] }} args @returns {AstExpression[]} */
     function projectValuesAlongPath(args) {
       const { expression, path, seenVariables } = args
       let values = possibleExpressionValues({ expression, seenVariables })
@@ -312,6 +317,7 @@ export const noRawObjectArgumentsRule = {
       return values
     }
 
+    /** @param {{ definition: AnalysisDefinition, seenVariables: Set<AnalysisVariable> }} args @returns {AstExpression[]} */
     function variableDefinitionValues(args) {
       const { definition, seenVariables } = args
       if (
@@ -331,21 +337,23 @@ export const noRawObjectArgumentsRule = {
         definition.type === 'Variable' &&
         definition.node.type === 'VariableDeclarator'
       ) {
+        if (definition.name.type !== 'Identifier') return []
         const forOf = definition.node.parent?.parent
         if (
           forOf?.type === 'ForOfStatement' &&
           forOf.left === definition.node.parent
         ) {
-          const pathLookup = bindingProjectionPath(
-            definition.node.id,
-            definition.name,
-          )
+          const pathLookup = bindingProjectionPath({
+            pattern: definition.node.id,
+            target: definition.name,
+            staticObjectKey,
+          })
           if (pathLookup.kind === ProjectionPathLookupKind.NotFound) return []
           return spreadArrayElements({
             expression: forOf.right,
             seenVariables,
           }).flatMap((element) =>
-            element
+            element && element.type !== 'SpreadElement'
               ? projectValuesAlongPath({
                   expression: element,
                   path: pathLookup.path,
@@ -363,10 +371,12 @@ export const noRawObjectArgumentsRule = {
       ) {
         return []
       }
-      const pathLookup = bindingProjectionPath(
-        definition.node.id,
-        definition.name,
-      )
+      if (definition.name.type !== 'Identifier') return []
+      const pathLookup = bindingProjectionPath({
+        pattern: definition.node.id,
+        target: definition.name,
+        staticObjectKey,
+      })
       if (pathLookup.kind === ProjectionPathLookupKind.NotFound) return []
       const values = projectValuesAlongPath({
         expression: definition.node.init,
@@ -384,31 +394,43 @@ export const noRawObjectArgumentsRule = {
       return values
     }
 
+    /** @param {{ definition: AnalysisDefinition, seenVariables: Set<AnalysisVariable> }} args @returns {AstExpression[]} */
     function callbackParameterValues(args) {
       const { definition, seenVariables } = args
-      if (bindingPatternHasTypeAnnotation(definition.name)) return []
+      if (
+        definition.type !== 'Parameter' ||
+        definition.name.type !== 'Identifier' ||
+        bindingPatternHasTypeAnnotation(definition.name)
+      )
+        return []
       const callback = definition.node
       const call = callback.parent
       if (
+        (callback.type !== 'ArrowFunctionExpression' &&
+          callback.type !== 'FunctionExpression') ||
         call?.type !== 'CallExpression' ||
         call.arguments[0] !== callback ||
         call.callee.type !== 'MemberExpression'
       ) {
         return []
       }
-      const elementParameter = arrayCallbackElementParameter(
-        staticPropertyKey(call.callee).value,
-      )
+      const method = staticPropertyKey(call.callee)
+      if (method.kind === StaticKeyLookupKind.NotFound) return []
+      const elementParameter = arrayCallbackElementParameter(method.value)
       if (elementParameter.kind === StaticKeyLookupKind.NotFound) return []
       const parameter = callback.params[elementParameter.value]
       if (!parameter) return []
-      const pathLookup = bindingProjectionPath(parameter, definition.name)
+      const pathLookup = bindingProjectionPath({
+        pattern: parameter,
+        target: definition.name,
+        staticObjectKey,
+      })
       if (pathLookup.kind === ProjectionPathLookupKind.NotFound) return []
       return spreadArrayElements({
         expression: call.callee.object,
         seenVariables,
       }).flatMap((element) =>
-        element
+        element && element.type !== 'SpreadElement'
           ? projectValuesAlongPath({
               expression: element,
               path: pathLookup.path,
@@ -418,6 +440,7 @@ export const noRawObjectArgumentsRule = {
       )
     }
 
+    /** @param {{ reference: AnalysisReference, seenVariables: Set<AnalysisVariable> }} args @returns {AstExpression[]} */
     function writeReferenceValues(args) {
       const { reference, seenVariables } = args
       if (
@@ -427,25 +450,55 @@ export const noRawObjectArgumentsRule = {
       ) {
         return []
       }
+      const writeExpression = referenceWriteExpression(reference)
+      if (writeExpression.kind === VariableLookupKind.NotFound) return []
+      if (reference.identifier.type !== 'Identifier') return []
       const patternLookup = writeBindingPattern(reference.identifier)
       if (patternLookup.kind === ProjectionPathLookupKind.NotFound) {
         return possibleExpressionValues({
-          expression: reference.writeExpr,
+          expression: writeExpression.expression,
           seenVariables,
         })
       }
-      const pathLookup = bindingProjectionPath(
-        patternLookup.pattern,
-        reference.identifier,
-      )
+      const pathLookup = bindingProjectionPath({
+        pattern: patternLookup.pattern,
+        target: reference.identifier,
+        staticObjectKey,
+      })
       if (pathLookup.kind === ProjectionPathLookupKind.NotFound) return []
       return projectValuesAlongPath({
-        expression: reference.writeExpr,
+        expression: writeExpression.expression,
         path: pathLookup.path,
         seenVariables,
       })
     }
 
+    /** @param {AnalysisReference} reference @returns {ExpressionLookup} */
+    function referenceWriteExpression(reference) {
+      if (reference.identifier.type !== 'Identifier') {
+        return { kind: VariableLookupKind.NotFound }
+      }
+      const directAssignment = reference.identifier.parent
+      if (
+        directAssignment.type === 'AssignmentExpression' &&
+        directAssignment.left === reference.identifier
+      )
+        return {
+          kind: VariableLookupKind.Found,
+          expression: directAssignment.right,
+        }
+      const binding = writeBindingPattern(reference.identifier)
+      if (binding.kind === ProjectionPathLookupKind.NotFound) {
+        return { kind: VariableLookupKind.NotFound }
+      }
+      const assignment = binding.pattern.parent
+      return assignment.type === 'AssignmentExpression' &&
+        assignment.left === binding.pattern
+        ? { kind: VariableLookupKind.Found, expression: assignment.right }
+        : { kind: VariableLookupKind.NotFound }
+    }
+
+    /** @param {{ container: AstExpression, selectedKey: string, seenVariables: Set<AnalysisVariable> }} args @returns {AstExpression[]} */
     function projectedContainerValues(args) {
       const { container, selectedKey, seenVariables } = args
       if (container.type === 'ObjectExpression') {
@@ -499,14 +552,16 @@ export const noRawObjectArgumentsRule = {
           seenVariables,
           limit: arrayIndexLookup.value,
         })
-        return [...(((v) => (v ? v : []))(summary.values.get(arrayIndexLookup.value)))].flatMap(
-          (element) =>
-            possibleExpressionValues({ expression: element, seenVariables }),
+        return [
+          ...((v) => (v ? v : []))(summary.values.get(arrayIndexLookup.value)),
+        ].flatMap((element) =>
+          possibleExpressionValues({ expression: element, seenVariables }),
         )
       }
       return []
     }
 
+    /** @param {{ expression: AstMemberExpression, seenVariables: Set<AnalysisVariable> }} args @returns {AstExpression[]} */
     function projectedMemberExpressions(args) {
       const { expression, seenVariables } = args
       const selectedKeyLookup = staticPropertyKey(expression)
@@ -537,6 +592,7 @@ export const noRawObjectArgumentsRule = {
       return projected
     }
 
+    /** @param {{ expression: AstMemberExpression, selectedKey: string, seenVariables: Set<AnalysisVariable> }} args @returns {AstExpression[]} */
     function projectedMemberWriteValues(args) {
       const { expression, selectedKey, seenVariables } = args
       const target = staticMemberPath({ expression, staticPropertyKey })
@@ -545,6 +601,7 @@ export const noRawObjectArgumentsRule = {
       if (lookup.kind === VariableLookupKind.NotFound) return []
       const values = []
       for (const reference of lookup.variable.references) {
+        if (reference.identifier.type !== 'Identifier') continue
         const write = memberAssignmentPath({
           identifier: reference.identifier,
           staticPropertyKey,
@@ -569,6 +626,7 @@ export const noRawObjectArgumentsRule = {
       return values
     }
 
+    /** @param {ExpressionSearch} args @returns {boolean} */
     function expressionProducesObject(args) {
       const { expression, seenVariables } = args
       const unwrapped = unwrapResultExpression(expression)
@@ -604,8 +662,10 @@ export const noRawObjectArgumentsRule = {
         )
       }
       if (unwrapped.type === 'SequenceExpression') {
+        const lastExpression = unwrapped.expressions.at(-1)
+        if (!lastExpression) return false
         return expressionProducesObject({
-          expression: unwrapped.expressions.at(-1),
+          expression: lastExpression,
           seenVariables,
         })
       }
@@ -629,6 +689,7 @@ export const noRawObjectArgumentsRule = {
       })
     }
 
+    /** @param {{ variable: AnalysisVariable, seenVariables: Set<AnalysisVariable> }} args @returns {boolean} */
     function variableProducesObject(args) {
       const { variable, seenVariables } = args
       if (seenVariables.has(variable)) return false
@@ -652,6 +713,7 @@ export const noRawObjectArgumentsRule = {
         }
       }
       for (const reference of variable.references) {
+        if (reference.identifier.type !== 'Identifier') continue
         if (
           !occursBeforeActiveCallSite(reference.identifier) ||
           !referenceCanReachActiveCall(reference)
@@ -677,6 +739,7 @@ export const noRawObjectArgumentsRule = {
       return false
     }
 
+    /** @param {AstExpression} expression */
     function inspectInlineObjectExpressions(expression) {
       const objectExpressions = inlineObjectExpressions(expression)
       const seenObjectExpressions = new Set()
@@ -691,6 +754,7 @@ export const noRawObjectArgumentsRule = {
       return seenObjectExpressions.size > 0
     }
 
+    /** @param {import('@typescript-eslint/types').TSESTree.SpreadElement} argument */
     function inspectSpreadArgument(argument) {
       const elements = spreadArrayElements({
         expression: argument.argument,
@@ -711,6 +775,7 @@ export const noRawObjectArgumentsRule = {
       }
     }
 
+    /** @param {ExpressionSearch} args @returns {import('@typescript-eslint/types').TSESTree.ArrayExpression['elements']} */
     function spreadArrayElements(args) {
       const { expression, seenVariables } = args
       const unwrapped = unwrapResultExpression(expression)
@@ -752,8 +817,10 @@ export const noRawObjectArgumentsRule = {
         ]
       }
       if (unwrapped.type === 'SequenceExpression') {
+        const lastExpression = unwrapped.expressions.at(-1)
+        if (!lastExpression) return []
         return spreadArrayElements({
-          expression: unwrapped.expressions.at(-1),
+          expression: lastExpression,
           seenVariables,
         })
       }
@@ -766,6 +833,7 @@ export const noRawObjectArgumentsRule = {
       )
     }
 
+    /** @param {ExpressionSearch} args @returns {{ value: AstExpression, seenVariables: Set<AnalysisVariable> }[]} */
     function namedArrayValues(args) {
       const { expression, seenVariables } = args
       if (expression.type !== 'Identifier') return []
@@ -784,16 +852,22 @@ export const noRawObjectArgumentsRule = {
             ? [definition.node.init]
             : [],
         ),
-        ...variable.references.flatMap((reference) =>
-          isNonInitialWriteReference(reference) &&
-          occursBeforeActiveCallSite(reference.identifier) &&
-          referenceCanReachActiveCall(reference)
-            ? [reference.writeExpr]
-            : [],
-        ),
+        ...variable.references.flatMap((reference) => {
+          if (
+            !isNonInitialWriteReference(reference) ||
+            !occursBeforeActiveCallSite(reference.identifier) ||
+            !referenceCanReachActiveCall(reference)
+          )
+            return []
+          const writeExpression = referenceWriteExpression(reference)
+          return writeExpression.kind === VariableLookupKind.Found
+            ? [writeExpression.expression]
+            : []
+        }),
       ].map((value) => ({ value, seenVariables: nextSeenVariables }))
     }
 
+    /** @param {ExpressionSearch & { limit: number }} args @returns {ReturnType<typeof mergeArraySummaries>} */
     function arrayProjectionSummary(args) {
       const { expression, seenVariables, limit } = args
       const unwrapped = unwrapResultExpression(expression)
@@ -846,8 +920,12 @@ export const noRawObjectArgumentsRule = {
         ])
       }
       if (unwrapped.type === 'SequenceExpression') {
+        const lastExpression = unwrapped.expressions.at(-1)
+        if (!lastExpression) {
+          return { lengths: new Set([0]), values: new Map() }
+        }
         return arrayProjectionSummary({
-          expression: unwrapped.expressions.at(-1),
+          expression: lastExpression,
           seenVariables,
           limit,
         })
@@ -869,6 +947,7 @@ export const noRawObjectArgumentsRule = {
       )
     }
 
+    /** @param {import('@typescript-eslint/types').TSESTree.CallExpression | import('@typescript-eslint/types').TSESTree.NewExpression} node */
     function inspectArguments(node) {
       for (const argument of node.arguments) {
         activeValueFlowCutoff = nodeStart(argument)
@@ -894,6 +973,7 @@ export const noRawObjectArgumentsRule = {
         }
       }
     }
+    /** @param {import('@typescript-eslint/types').TSESTree.CallExpression} node */
     function inspectCallArguments(node) {
       if (isDirectObjectArgumentRune(node)) {
         // Svelte compiler runes require direct placement and, for $derived,

@@ -18,7 +18,6 @@ import {
   sync_providers_for_active_vault,
   type AuthProvidersSnapshot,
 } from '$app-wasm'
-import type { OAuthFilePreset } from '$app-wasm'
 import {
   activeVaultScope,
   DEFAULT_DRIVE_BACKUP_NAME,
@@ -309,14 +308,13 @@ describe('portable vault client policy', () => {
   })
 
   test('rejects an invalid OAuth preset without a legacy fallback', () => {
-    expect(() =>
-      staged_oauth_remote_storage_args({
-        ...defaultOAuthFileConfig({
-          preset: 'google-drive',
-          fileName: DEFAULT_DRIVE_BACKUP_NAME,
-        }),
-        preset: '' as OAuthFilePreset,
-      }),
-    ).toThrow('unknown variant ``, expected `google-drive` or `icloud`')
+    const invalidConfig = defaultOAuthFileConfig({
+      preset: 'google-drive',
+      fileName: DEFAULT_DRIVE_BACKUP_NAME,
+    })
+    Object.defineProperty(invalidConfig, 'preset', { value: '' })
+    expect(() => staged_oauth_remote_storage_args(invalidConfig)).toThrow(
+      'unknown variant ``, expected `google-drive` or `icloud`',
+    )
   })
 })

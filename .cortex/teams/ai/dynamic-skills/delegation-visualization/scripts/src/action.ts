@@ -1,7 +1,7 @@
-import { executeDelegationVisualizationApplication } from './application.ts';
+import { DelegationVisualizationApplication } from './application.ts';
 import {
-  decodeDelegationVisualizationRequest,
   DelegationVisualizationRequestDecodeError,
+  DelegationVisualizationRequestDecoder,
 } from './codec.ts';
 import {
   DelegationVisualizationContractKind,
@@ -33,12 +33,15 @@ export const DELEGATION_VISUALIZATION_RENDER_EXAMPLE = `delegationVisualization:
           - create-security-key
 `;
 
-function identifierSchema() {
-  return {
-    type: 'string',
-    maxUtf16CodeUnits: DELEGATION_VISUALIZATION_ID_LIMIT,
-    pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$',
-  } as const;
+class DelegationIdentifierSchema {
+  private static readonly maximumCodeUnits = DELEGATION_VISUALIZATION_ID_LIMIT;
+  static create() {
+    return {
+      type: 'string',
+      maxUtf16CodeUnits: DelegationIdentifierSchema.maximumCodeUnits,
+      pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$',
+    } as const;
+  }
 }
 
 export const DELEGATION_VISUALIZATION_RENDER_SCHEMA = {
@@ -60,7 +63,7 @@ export const DELEGATION_VISUALIZATION_RENDER_SCHEMA = {
         additionalProperties: false,
         required: ['id', 'team', 'description', 'dependencies'],
         properties: {
-          id: identifierSchema(),
+          id: DelegationIdentifierSchema.create(),
           team: {
             type: 'string',
             enum: Object.values(DelegationVisualizationTeam),
@@ -75,7 +78,7 @@ export const DELEGATION_VISUALIZATION_RENDER_SCHEMA = {
           dependencies: {
             type: 'array',
             maxItems: DELEGATION_VISUALIZATION_TASK_LIMIT,
-            items: identifierSchema(),
+            items: DelegationIdentifierSchema.create(),
           },
         },
       },
@@ -94,8 +97,10 @@ export const DELEGATION_VISUALIZATION_ACTION_DEFINITION = Object.freeze({
   inputSchema: DELEGATION_VISUALIZATION_RENDER_SCHEMA,
 } as const);
 
-export const decodeDelegationVisualizationActionPayload =
-  decodeDelegationVisualizationRequest;
-export const executeDelegationVisualizationAction =
-  executeDelegationVisualizationApplication;
+export const decodeDelegationVisualizationActionPayload = (
+  request: Parameters<typeof DelegationVisualizationRequestDecoder.from>[0],
+) => DelegationVisualizationRequestDecoder.from(request).execute();
+export const executeDelegationVisualizationAction = (
+  request: Parameters<typeof DelegationVisualizationApplication.from>[0],
+) => DelegationVisualizationApplication.from(request).execute();
 export { DelegationVisualizationRequestDecodeError };

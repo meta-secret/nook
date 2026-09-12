@@ -10,15 +10,12 @@ import {
   companion_authentication_workflow_match_kind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  authenticationPageObservationFacts,
-  fillLoginCredentials,
   FormSubmissionResult,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
-  submitLoginForm,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { clickAdvanceControl } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
+import { authenticationSubmissionControls } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 
 type LinkedInDomElements = {
   readonly root: HTMLElement
@@ -108,13 +105,14 @@ afterEach(() => {
 describe('LinkedIn DOM-backed authentication simulation', () => {
   test('fills and activates only the visible form-less combined surface', () => {
     const fixture = LinkedInDomFixture.install()
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(1)
     const [observation] = observations
     if (!observation) throw new Error('expected LinkedIn observation')
     expect(observation.root === fixture.root).toBe(true)
     expect(observation.formScope.kind).toBe(PasswordFormScopeKind.Unowned)
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -140,7 +138,9 @@ describe('LinkedIn DOM-backed authentication simulation', () => {
       action: AuthenticationWorkflowAction.ContinueWithNook,
     })
 
-    const fillRequest: Parameters<typeof fillLoginCredentials>[0] = {
+    const fillRequest: Parameters<
+      typeof passwordFormInteraction.fillLoginCredentials
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
@@ -149,7 +149,7 @@ describe('LinkedIn DOM-backed authentication simulation', () => {
         password: 'extension-fill-password',
       },
     }
-    expect(fillLoginCredentials(fillRequest)).toBe(true)
+    expect(passwordFormInteraction.fillLoginCredentials(fillRequest)).toBe(true)
     let primaryActivations = 0
     let alternativeActivations = 0
     fixture.signIn.addEventListener('click', () => (primaryActivations += 1))
@@ -160,12 +160,16 @@ describe('LinkedIn DOM-backed authentication simulation', () => {
         () => (alternativeActivations += 1),
       )
     }
-    const submitRequest: Parameters<typeof submitLoginForm>[0] = {
+    const submitRequest: Parameters<
+      typeof passwordFormInteraction.submitLoginForm
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
     }
-    expect(submitLoginForm(submitRequest)).toBe(FormSubmissionResult.Submitted)
+    expect(passwordFormInteraction.submitLoginForm(submitRequest)).toBe(
+      FormSubmissionResult.Submitted,
+    )
     expect(primaryActivations).toBe(1)
     expect(alternativeActivations).toBe(0)
     expect(fixture.username.value).toBe('pilot@nook.test')
@@ -197,13 +201,17 @@ describe('LinkedIn DOM-backed authentication simulation', () => {
     const fixture = LinkedInDomFixture.install(label)
     let activations = 0
     fixture.signIn.addEventListener('click', () => (activations += 1))
-    const request: Parameters<typeof clickAdvanceControl>[0] = {
+    const request: Parameters<
+      typeof authenticationSubmissionControls.clickAdvanceControl
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: fixture.root,
       formScope: { kind: PasswordFormScopeKind.Unowned },
       usernameField: fixture.username,
     }
-    expect(clickAdvanceControl(request)).toBe(false)
+    expect(authenticationSubmissionControls.clickAdvanceControl(request)).toBe(
+      false,
+    )
     expect(activations).toBe(0)
   })
 
@@ -212,13 +220,17 @@ describe('LinkedIn DOM-backed authentication simulation', () => {
     history.replaceState({}, '', '/signup')
     let activations = 0
     fixture.signIn.addEventListener('click', () => (activations += 1))
-    const request: Parameters<typeof clickAdvanceControl>[0] = {
+    const request: Parameters<
+      typeof authenticationSubmissionControls.clickAdvanceControl
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: fixture.root,
       formScope: { kind: PasswordFormScopeKind.Unowned },
       usernameField: fixture.username,
     }
-    expect(clickAdvanceControl(request)).toBe(false)
+    expect(authenticationSubmissionControls.clickAdvanceControl(request)).toBe(
+      false,
+    )
     expect(activations).toBe(0)
   })
 
@@ -227,13 +239,17 @@ describe('LinkedIn DOM-backed authentication simulation', () => {
     fixture.signIn.setAttribute('aria-disabled', 'true')
     let activations = 0
     fixture.signIn.addEventListener('click', () => (activations += 1))
-    const request: Parameters<typeof clickAdvanceControl>[0] = {
+    const request: Parameters<
+      typeof authenticationSubmissionControls.clickAdvanceControl
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: fixture.root,
       formScope: { kind: PasswordFormScopeKind.Unowned },
       usernameField: fixture.username,
     }
-    expect(clickAdvanceControl(request)).toBe(false)
+    expect(authenticationSubmissionControls.clickAdvanceControl(request)).toBe(
+      false,
+    )
     expect(activations).toBe(0)
   })
 })

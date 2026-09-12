@@ -3,7 +3,7 @@
   import { FolderOpen, RefreshCw, ShieldCheck } from '@lucide/svelte'
   import {
     localFolderDirectoryValue,
-    localFolderHandle,
+    LocalFolderPresentation,
     LocalFolderHandleKind,
   } from '$lib/auth/providers'
   import { Button } from '$lib/components/ui/button'
@@ -34,7 +34,9 @@
 
   const folderHandle = $derived(
     vault.localFolderDraft.kind === LocalFolderDraftKind.Configured
-      ? localFolderHandle(vault.localFolderDraft.config)
+      ? new LocalFolderPresentation(
+          vault.localFolderDraft.config,
+        ).localFolderHandle()
       : { kind: LocalFolderHandleKind.Unselected },
   )
   const hasFolder = $derived(
@@ -57,23 +59,8 @@
     folderBusy = true
     folderError = ''
     try {
-      await vault.chooseLocalFolderBackupDirectory()
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : vault.t(I18N_KEYS.AuthStorageLocalFolderChooseErr)
-      if (message.includes('Page.setInterceptFileChooserDialog')) {
-        folderError = vault.t(
-          I18N_KEYS.ProviderSetupLocalFolderAutomatedBrowserError,
-        )
-      } else if (
-        message.includes('Local folder backup is not supported in this browser')
-      ) {
-        folderError = vault.t(I18N_KEYS.ProviderSetupLocalFolderUnsupportedBrowser)
-      } else {
-        folderError = message
-      }
+      const selected = await vault.chooseLocalFolderBackupDirectory()
+      if (selected.isErr()) folderError = vault.t(selected.error.translationKey)
     } finally {
       folderBusy = false
     }

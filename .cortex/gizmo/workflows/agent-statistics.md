@@ -20,18 +20,22 @@ It is not a free-form task diary.
 1. Gizmo starts an out-of-tree scratch event log when PR-bound work begins.
 2. Gizmo appends every local lightweight execution, focused remote run, complete
    validation run, retrigger, and merge attempt as it happens.
-3. Gizmo authorizes PR Steward to squash-merge the implementation PR after the
-   readiness verdict succeeds.
-4. Gizmo assembles `stats/ai-agent/<pr-number>.yaml` with Loom after merge.
+3. The dev manager authorizes Steward's guarded fast-forward promotion after
+   full slow validation and required review/security acceptance.
+4. Gizmo authorizes PR Steward to assemble `stats/ai-agent/<pr-number>.yaml`
+   with Loom after merge.
 5. Gizmo compares the record with one or two recent comparable records.
-6. Gizmo publishes the YAML to Workbench `main` with Loom.
+6. Gizmo authorizes PR Steward to publish the approved YAML to Workbench
+   `main` with Loom.
 7. Gizmo opens a separate build-performance PR when waste or regression is
    actionable.
 
 ## Mechanical entrypoint — Loom
 
 - Keep judgment in this document.
-- Run assemble, validate, and publish through Loom YAML requests.
+- Gizmo prepares Loom YAML requests and owns their interpretation.
+- PR Steward runs GitHub-backed assemble and publish requests.
+- Local validation without GitHub access remains with the responsible owner.
 - Scratch JSON must include:
   - `started_at`;
   - `change_surface`;
@@ -168,7 +172,7 @@ Required top-level keys:
 - `test_inventory.total` must equal the sum of `by_type`.
 - `test_inventory.head_sha` must match `source_pr.head_sha`.
 - `source_pr.head_sha` is the final PR head. `source_pr.merge_sha` is the merge
-  commit. They must not be conflated after squash merge.
+  commit. Keep feature, local integration, and tested dev SHAs distinct.
 - Review and validation summary values must match their detailed per-head
   evidence.
 - Review latency must derive from its event timestamps. Every validation cycle

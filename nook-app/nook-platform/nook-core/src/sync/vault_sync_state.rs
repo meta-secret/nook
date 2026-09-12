@@ -111,7 +111,7 @@ mod tests {
     }
 
     #[test]
-    fn sync_timestamp_preserves_scalar_serialization() -> Result<(), serde_json::Error> {
+    fn sync_timestamp_preserves_scalar_serialization() -> serde_json::Result<()> {
         let timestamp = VaultSyncUnixMilliseconds::from(1_754_041_200_000);
         let encoded = serde_json::to_string(&timestamp)?;
         assert_eq!(encoded, "1754041200000");

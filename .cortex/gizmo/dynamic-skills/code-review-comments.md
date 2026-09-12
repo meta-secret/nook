@@ -13,9 +13,8 @@ finding when GitHub supports one. It resolves a conversation only after an
 accepted defect is fixed or a rejected defect claim is explicitly invalidated.
 A clarification-needed finding remains unresolved.
 
-This skill does not initiate reviews. The PR delivery workflow dispatches
-complete validation first, then requests one exact-head Codex review without
-waiting. Review collection and hosted checks proceed concurrently, and their
+This skill does not initiate reviews. In the manager's slow dev PR cycle,
+existing validation dispatch precedes an opted-in review request. Review collection and hosted checks proceed concurrently, and their
 findings form one repair batch. Codex is the sole automatic provider. Cursor
 Bugbot remains inactive.
 
@@ -226,11 +225,9 @@ Does not apply to:
 - [ ] Only confirmed security and authority violations trigger fail-closed
       action.
 - [ ] The team agent returns focused proof and any no-change rationale.
-- [ ] Gizmo continues from verified commits and runs
-      `task loom:pre-push PR=<number>` only when an accepted fix or failed-check
-      repair changed files.
-- [ ] Gizmo uses focused `task remote` jobs when useful, then explicitly triggers
-      complete PR validation.
+- [ ] Gizmo pushes verified repair commits and requests remote build-only execution.
+- [ ] The dev manager requests complete slow validation after local dev
+      integration and publication of the replacement snapshot.
 - [ ] Gizmo pushes changed code or documentation only when the head changed.
 - [ ] A batch with no accepted fix or failed-check repair does not create
       replacement-head work.
@@ -304,19 +301,13 @@ those threads' resolution state as the deterministic handled state.
 
 ## Validation
 
-PR Steward uses GraphQL or `gh pr view`/`gh api` to return the complete
-submitted-review, thread, and PR-comment evidence to Gizmo. Gizmo confirms that
-every substantive review thread has a final accepted or rejected defect
-disposition. It confirms zero clarification-needed findings. It confirms zero
-unresolved handled findings. The inspection identifies remaining substantive
-items. Gizmo records their defect dispositions and any proposed-remedy
-dispositions.
+PR Steward collects complete submitted-review, thread, and PR-comment evidence.
+Return new or changed findings with evidence references. Gizmo confirms that
+every substantive finding has a final defect disposition. Clarification-needed
+or unresolved handled findings remain blockers.
 
-Gizmo reports:
-
-- complete repository-owned validation state;
-- the unresolved-thread query result and disposition summary; and
-- any unthreaded substantive review-body item and its disposition in the
-  handoff.
+Keep complete validation results and finding dispositions in delivery records.
+The terminal handoff names only unresolved items, the outcome, and essential
+evidence references. A concise handoff never replaces the final direct query.
 
 This workflow does not request reviewers or wait for checks to change state.

@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { render } from '@testing-library/svelte'
 import {
   DeviceAccessIdentityState,
@@ -11,33 +11,31 @@ import {
   type DashboardText,
   type DashboardTimestamp,
   type DashboardView,
-  DashboardTextKind,
+  KnownDashboardText,
+  UnknownDashboardText,
   DashboardTimestampKind,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
 import { AccessChainStage } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/access-chain'
 import {
-  buildIdentityAccessCards,
+  IdentityAccessPresentation,
   IdentityAccessKeyKind,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-access-list'
 import type { IdentityDirectoryEntry } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-directory-view'
 import {
-  buildIdentityKeyInventory,
+  IdentityKeyInventory,
   IdentityKeyInventoryRowKind,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-key-inventory'
-import IdentityKeyInventory from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/IdentityKeyInventory.svelte'
+import IdentityKeyInventoryComponent from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/IdentityKeyInventory.svelte'
 import { PasskeyCardSummaryKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/passkey-card'
-import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
-const known = (value: string): DashboardText => ({
-  kind: DashboardTextKind.Known,
-  value,
-})
+const known = (value: string): DashboardText => new KnownDashboardText(value)
 
-const unknownText: DashboardText = { kind: DashboardTextKind.Unknown }
+const unknownText: DashboardText = new UnknownDashboardText()
 
 const knownTime: DashboardTimestamp = {
   kind: DashboardTimestampKind.Known,
-  value: '2026-03-01T12:00:00.000Z',
+  value: '2026-03-01T12:00:00.000',
 }
 
 type TranslationRequest =
@@ -47,13 +45,12 @@ type TranslationRequest =
       readonly replacements: Readonly<Record<string, string>>
     }
 
-const vault = {
-  locale: 'en',
-  t: (request: TranslationRequest) =>
-    typeof request === 'string'
-      ? request
-      : `${request.key}(${JSON.stringify(request.replacements)})`,
-} as VaultState
+const vault = VaultStateTestFixture.create()
+vi.spyOn(vault, 't').mockImplementation((request: TranslationRequest) =>
+  typeof request === 'string'
+    ? request
+    : `${request.key}(${JSON.stringify(request.replacements)})`,
+)
 
 function passkeyView(): DashboardView {
   return {
@@ -72,13 +69,14 @@ function passkeyView(): DashboardView {
 
 describe('identity access cards', () => {
   test('names a passkey by its editable Nook name', () => {
-    const buildIdentityAccessCardsArgs: Parameters<
-      typeof buildIdentityAccessCards
+    const buildIdentityAccessCardsArgs: ConstructorParameters<
+      typeof IdentityAccessPresentation
     >[0] = {
       vault,
       view: passkeyView(),
     }
-    const cards = buildIdentityAccessCards(buildIdentityAccessCardsArgs)
+    const cards = new IdentityAccessPresentation(buildIdentityAccessCardsArgs)
+      .cards
     expect(cards).toHaveLength(1)
     expect(cards[0]).toMatchObject({
       kind: IdentityAccessKeyKind.Passkey,
@@ -117,21 +115,22 @@ describe('identity access cards', () => {
   })
 
   test('keeps the app as subordinate context when a passkey protects it', () => {
-    const buildIdentityAccessCardsArgs: Parameters<
-      typeof buildIdentityAccessCards
+    const buildIdentityAccessCardsArgs: ConstructorParameters<
+      typeof IdentityAccessPresentation
     >[0] = {
       vault,
       view: passkeyView(),
     }
-    const cards = buildIdentityAccessCards(buildIdentityAccessCardsArgs)
+    const cards = new IdentityAccessPresentation(buildIdentityAccessCardsArgs)
+      .cards
     expect(cards.map((card) => card.kind)).toEqual([
       IdentityAccessKeyKind.Passkey,
     ])
   })
 
   test('keeps an unnamed passkey title when the keeper is unknown', () => {
-    const buildIdentityAccessCardsArgs: Parameters<
-      typeof buildIdentityAccessCards
+    const buildIdentityAccessCardsArgs: ConstructorParameters<
+      typeof IdentityAccessPresentation
     >[0] = {
       vault,
       view: {
@@ -139,7 +138,8 @@ describe('identity access cards', () => {
         passkeyName: unknownText,
       },
     }
-    const cards = buildIdentityAccessCards(buildIdentityAccessCardsArgs)
+    const cards = new IdentityAccessPresentation(buildIdentityAccessCardsArgs)
+      .cards
     expect(cards[0]?.title).toBe(I18N_KEYS.DevicesAccessPasskeyUnnamed)
   })
 })
@@ -149,15 +149,15 @@ describe('identity key inventory', () => {
     const addAppLabel = 'Add app'
     const addAppHelper =
       'Another Nook installation must request identity enrollment before it can be added.'
-    const renderedVault = {
-      ...vault,
-      t: (request: TranslationRequest) => {
+    const renderedVault = VaultStateTestFixture.create()
+    vi.spyOn(renderedVault, 't').mockImplementation(
+      (request: TranslationRequest) => {
         const key = typeof request === 'string' ? request : request.key
         if (key === 'devices_access.add_key') return addAppLabel
         if (key === 'devices_access.add_key_unavailable') return addAppHelper
         return vault.t(request)
       },
-    } as VaultState
+    )
     const identity: IdentityDirectoryEntry = {
       identityId: 'identity_personal',
       label: 'Personal',
@@ -173,7 +173,7 @@ describe('identity key inventory', () => {
       vaults: [],
     }
 
-    const rendered = render(IdentityKeyInventory, {
+    const rendered = render(IdentityKeyInventoryComponent, {
       vault: renderedVault,
       identity,
       view: passkeyView(),
@@ -211,35 +211,33 @@ describe('identity key inventory', () => {
       ],
       vaults: [],
     }
-    const buildIdentityKeyInventoryArgs: Parameters<
-      typeof buildIdentityKeyInventory
+    const buildIdentityKeyInventoryArgs: ConstructorParameters<
+      typeof IdentityKeyInventory
     >[0] = { vault, identity, view }
 
-    const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
+    const rows = new IdentityKeyInventory(buildIdentityKeyInventoryArgs).rows
 
     expect(rows.map((row) => row.kind)).toEqual([
       IdentityKeyInventoryRowKind.Protector,
       IdentityKeyInventoryRowKind.Apps,
     ])
-    expect(rows[0]).toMatchObject({
-      title: 'Work laptop',
-      passkeySummary: {
-        kind: PasskeyCardSummaryKind.Present,
-        summary: {
-          title: 'Work laptop',
-          facts: expect.arrayContaining([
-            expect.objectContaining({ value: 'passkey_1234' }),
-            expect.objectContaining({ value: 'Proton Pass' }),
-          ]),
-        },
-      },
-      apps: [
-        {
-          title: 'Nook on MacBook',
-          appId: 'device_5678',
-        },
-      ],
-    })
+    const protector = rows[0]
+    if (!protector) expect.fail('protector row is required')
+    expect(protector.title).toBe('Work laptop')
+    expect(protector.kind).toBe(IdentityKeyInventoryRowKind.Protector)
+    expect(protector.passkeySummary.kind).toBe(PasskeyCardSummaryKind.Present)
+    if (protector.passkeySummary.kind === PasskeyCardSummaryKind.Present) {
+      expect(protector.passkeySummary.summary.title).toBe('Work laptop')
+      expect(
+        protector.passkeySummary.summary.facts.map((fact) => fact.value),
+      ).toEqual(expect.arrayContaining(['passkey_1234', 'Proton Pass']))
+    }
+    expect(protector.apps).toEqual([
+      expect.objectContaining({
+        title: 'Nook on MacBook',
+        appId: 'device_5678',
+      }),
+    ])
     expect(rows[1]).toMatchObject({
       apps: [
         {
@@ -266,11 +264,11 @@ describe('identity key inventory', () => {
       ],
       vaults: [],
     }
-    const buildIdentityKeyInventoryArgs: Parameters<
-      typeof buildIdentityKeyInventory
+    const buildIdentityKeyInventoryArgs: ConstructorParameters<
+      typeof IdentityKeyInventory
     >[0] = { vault, identity, view }
 
-    const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
+    const rows = new IdentityKeyInventory(buildIdentityKeyInventoryArgs).rows
 
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
@@ -306,11 +304,11 @@ describe('identity key inventory', () => {
       ],
       vaults: [],
     }
-    const buildIdentityKeyInventoryArgs: Parameters<
-      typeof buildIdentityKeyInventory
+    const buildIdentityKeyInventoryArgs: ConstructorParameters<
+      typeof IdentityKeyInventory
     >[0] = { vault, identity, view }
 
-    const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
+    const rows = new IdentityKeyInventory(buildIdentityKeyInventoryArgs).rows
 
     expect(rows[0]?.apps.map((app) => app.title)).toEqual([
       `${I18N_KEYS.DevicesAccessOtherAppKey}(${JSON.stringify({ count: '1' })})`,
@@ -339,11 +337,11 @@ describe('identity key inventory', () => {
       ],
       vaults: [],
     }
-    const buildIdentityKeyInventoryArgs: Parameters<
-      typeof buildIdentityKeyInventory
+    const buildIdentityKeyInventoryArgs: ConstructorParameters<
+      typeof IdentityKeyInventory
     >[0] = { vault, identity, view }
 
-    const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
+    const rows = new IdentityKeyInventory(buildIdentityKeyInventoryArgs).rows
 
     expect(rows[0]).toMatchObject({
       kind: IdentityKeyInventoryRowKind.Protector,
@@ -372,11 +370,11 @@ describe('identity key inventory', () => {
       ],
       vaults: [],
     }
-    const buildIdentityKeyInventoryArgs: Parameters<
-      typeof buildIdentityKeyInventory
+    const buildIdentityKeyInventoryArgs: ConstructorParameters<
+      typeof IdentityKeyInventory
     >[0] = { vault, identity, view }
 
-    const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
+    const rows = new IdentityKeyInventory(buildIdentityKeyInventoryArgs).rows
 
     expect(rows).toHaveLength(1)
     expect(rows[0]?.kind).toBe(IdentityKeyInventoryRowKind.Apps)

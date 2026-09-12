@@ -39,14 +39,14 @@ impl NookEnrollmentEntryLabel {
 }
 
 #[wasm_bindgen]
-pub fn peek_enrollment_entry_id(code: &str) -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn peek_enrollment_entry_id(code: &str) -> Result<String, wasm_bindgen::JsError> {
     let code = EnrollmentLinkInput { input: code }.normalize();
     Ok(CheckedEnrollmentEnvelope::parse(&code)
         .map(|checked| checked.envelope().entry_id.clone())?)
 }
 
 #[wasm_bindgen]
-pub fn peek_enrollment_entry_label(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn peek_enrollment_entry_label(
     code: &str,
 ) -> Result<NookEnrollmentEntryLabel, wasm_bindgen::JsError> {
     let code = EnrollmentLinkInput { input: code }.normalize();
@@ -57,14 +57,14 @@ pub fn peek_enrollment_entry_label(
 }
 
 #[wasm_bindgen]
-pub fn peek_enrollment_issued_at(code: &str) -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn peek_enrollment_issued_at(code: &str) -> Result<String, wasm_bindgen::JsError> {
     let code = EnrollmentLinkInput { input: code }.normalize();
     Ok(CheckedEnrollmentEnvelope::parse(&code)
         .map(|checked| checked.envelope().issued_at.clone())?)
 }
 
 #[wasm_bindgen]
-pub fn encrypt_unlabeled_enrollment_payload(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn encrypt_unlabeled_enrollment_payload(
     input: &NookEnrollmentIssueInput,
     password: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
@@ -78,7 +78,7 @@ pub fn encrypt_unlabeled_enrollment_payload(
 }
 
 #[wasm_bindgen]
-pub fn encrypt_labeled_enrollment_payload(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn encrypt_labeled_enrollment_payload(
     input: &NookEnrollmentIssueInput,
     password: &str,
     entry_label: &str,
@@ -93,7 +93,7 @@ pub fn encrypt_labeled_enrollment_payload(
 }
 
 #[wasm_bindgen]
-pub fn decrypt_enrollment_payload(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decrypt_enrollment_payload(
     code: &str,
     password: &str,
 ) -> Result<NookDecryptedEnrollmentPayload, wasm_bindgen::JsError> {
@@ -105,12 +105,12 @@ pub fn decrypt_enrollment_payload(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn build_enrollment_link(code: &str, base_url: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn build_enrollment_link(code: &str, base_url: &str) -> String {
     EnrollmentLinkInput { input: code }.link(base_url)
 }
 
 #[wasm_bindgen]
-pub fn build_sentinel_genesis_request_link(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn build_sentinel_genesis_request_link(
     request_json: &str,
     base_url: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
@@ -121,12 +121,12 @@ pub fn build_sentinel_genesis_request_link(
 }
 
 #[wasm_bindgen]
-pub fn normalize_sentinel_genesis_request(input: &str) -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn normalize_sentinel_genesis_request(input: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok((nook_core::SentinelGenesisLinkInput { input }).canonical_request()?)
 }
 
 #[wasm_bindgen]
-pub fn build_sentinel_genesis_participant_response_link(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn build_sentinel_genesis_participant_response_link(
     response_json: &str,
     base_url: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
@@ -137,14 +137,14 @@ pub fn build_sentinel_genesis_participant_response_link(
 }
 
 #[wasm_bindgen]
-pub fn normalize_sentinel_genesis_participant_payload(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn normalize_sentinel_genesis_participant_payload(
     input: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
     Ok((nook_core::SentinelGenesisLinkInput { input }).canonical_response()?)
 }
 
 #[wasm_bindgen]
-pub fn sentinel_genesis_participant_fingerprint(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn sentinel_genesis_participant_fingerprint(
     input: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
     Ok((nook_core::SentinelGenesisLinkInput { input }).reported_fingerprint()?)
@@ -152,7 +152,7 @@ pub fn sentinel_genesis_participant_fingerprint(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn normalize_enrollment_code(code: &str) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn normalize_enrollment_code(code: &str) -> String {
     EnrollmentLinkInput { input: code }.normalize()
 }
 

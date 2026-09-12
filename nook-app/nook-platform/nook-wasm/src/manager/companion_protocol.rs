@@ -1,4 +1,8 @@
-use super::{NookExtensionIdentityHandoffContext, NookVaultManager};
+use super::device_protection::handoff_stages::HandoffBinding;
+use super::session::ExtensionHandoffState;
+use super::{
+    NookAdoptedExtensionIdentityHandoff, NookExtensionIdentityHandoffContext, NookVaultManager,
+};
 use crate::NookError;
 use nook_companion_core::{
     AuthorizedCompanionIdentityHandoff, CompanionExtensionHandoffEndpoint,
@@ -7,16 +11,38 @@ use nook_companion_core::{
     CompanionIdentityHandoffContext, CompanionIdentityHandoffRequest,
     CompanionIdentityHandoffResponse, CompanionIdentityHandoffSealer, CompanionIdentityStatus,
     CompanionIdentityStatusAdmission, CompanionIdentityStatusAdmissionRequest,
-    CompanionProtocolError, CompanionWebsiteHandoffBegin,
+    CompanionProtocolError, CompanionWebsiteHandoffBegin, DiscoveredCompanionHandoffEndpoint,
 };
 use nook_core::{
     DeviceId, DeviceIdentity, DevicePublicKey, DeviceSigningPublicKey, SigningIdentity,
     VaultApplication,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::mem;
+use std::rc::Rc;
+use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroize;
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionIdentityStatusRequestAdmission(CompanionIdentityStatusAdmissionRequest);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionHandoffResponseValueAdmission(CompanionIdentityHandoffResponse);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionExtensionPresenceAdmission(CompanionExtensionPresence);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct CompanionHandoffAuthorizationAdmission(CompanionIdentityHandoffAuthorization);
 
 #[derive(Debug, thiserror::Error)]
 enum CompanionOperationError {
@@ -24,8 +50,6 @@ enum CompanionOperationError {
     Protocol(#[from] CompanionProtocolError),
     #[error(transparent)]
     Manager(#[from] NookError),
-    #[error("{0}")]
-    Serialization(#[from] serde_json::Error),
     #[error("Companion app-key handoff is not pending.")]
     HandoffNotPending,
     #[error("Companion handoff request does not match the active extension vault.")]
@@ -34,43 +58,45 @@ enum CompanionOperationError {
     InstallationAppKeyMismatch,
 }
 
-fn companion_js_error(error: &CompanionOperationError) -> JsError {
-    JsError::new(&error.to_string())
+impl NookVaultManager {
+    fn companion_js_error(error: &CompanionOperationError) -> JsError {
+        JsError::new(&error.to_string())
+    }
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn admit_companion_identity_status(
-    request: CompanionIdentityStatusAdmissionRequest,
+    request: CompanionIdentityStatusRequestAdmission,
 ) -> CompanionIdentityStatusAdmission {
+    let CompanionIdentityStatusRequestAdmission(request) = request;
     CompanionIdentityStatusAdmission::admit(request)
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn admit_companion_handoff_response(
-    response: CompanionIdentityHandoffResponse,
+    response: CompanionHandoffResponseValueAdmission,
 ) -> CompanionHandoffResponseAdmission {
+    let CompanionHandoffResponseValueAdmission(response) = response;
     CompanionHandoffResponseAdmission::admit(response)
 }
 
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct PendingCompanionWebsiteHandoff {
+pub(in crate::manager) struct PendingCompanionWebsiteHandoff {
     request: CompanionIdentityHandoffRequest,
     context: CompanionIdentityHandoffContext,
     recipient_secret: String,
 }
 
 impl PendingCompanionWebsiteHandoff {
-    fn encode(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string(self)
-    }
-
-    fn decode(serialized: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(serialized)
-    }
-
     fn take_recipient_secret(&mut self) -> String {
         mem::take(&mut self.recipient_secret)
     }
@@ -94,27 +120,6 @@ impl NookCompanionExtensionEndpoint {
         Ok(Self {
             inner: CompanionExtensionHandoffEndpoint::new(presence)?,
         })
-    }
-
-    #[cfg(test)]
-    fn authorize_and_seal_loaded(
-        &mut self,
-        operation: CompanionExtensionSealOperation<'_>,
-    ) -> Result<CompanionIdentityHandoffResponse, CompanionOperationError> {
-        let authorized = self.inner.authorize_handoff(operation.authorization)?;
-        // A valid nonce is consumed even if sealing fails: callers must perform
-        // fresh discovery rather than replay an authorization after ambiguity.
-        Self::seal_authorized_loaded(CompanionAuthorizedSealOperation {
-            manager: operation.manager,
-            authorized,
-        })
-    }
-
-    fn discover_inner(
-        &mut self,
-        discovery: CompanionIdentityDiscoveryObservation,
-    ) -> Result<CompanionIdentityStatus, CompanionOperationError> {
-        Ok(self.inner.discover(discovery)?)
     }
 
     fn seal_authorized_loaded(
@@ -141,38 +146,88 @@ struct CompanionAuthorizedSealOperation<'a> {
 impl NookCompanionExtensionEndpoint {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(presence: CompanionExtensionPresence) -> Result<Self, JsError> {
-        Self::from_presence(presence).map_err(|error| companion_js_error(&error))
+    pub fn new(presence: CompanionExtensionPresenceAdmission) -> Result<Self, JsError> {
+        let CompanionExtensionPresenceAdmission(presence) = presence;
+        Self::from_presence(presence).map_err(|error| NookVaultManager::companion_js_error(&error))
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn presence(&self) -> CompanionExtensionPresence {
+        self.inner.presence()
     }
 
     #[allow(clippy::needless_pass_by_value)]
     pub fn discover(
-        &mut self,
+        self,
         discovery: CompanionIdentityDiscoveryObservation,
-    ) -> Result<CompanionIdentityStatus, JsError> {
-        self.discover_inner(discovery)
-            .map_err(|error| companion_js_error(&error))
+    ) -> Result<NookDiscoveredCompanionExtensionEndpoint, JsError> {
+        let inner = self
+            .inner
+            .discover(discovery)
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        Ok(NookDiscoveredCompanionExtensionEndpoint { inner })
+    }
+}
+
+/// Private, non-cloneable state; external data is admitted through its predecessor.
+///
+/// ```compile_fail,E0277
+/// use nook_wasm::NookDiscoveredCompanionExtensionEndpoint;
+/// let decode = |json: &str| serde_json::from_str::<NookDiscoveredCompanionExtensionEndpoint>(json);
+/// ```
+///
+/// ```compile_fail,E0599
+/// use nook_wasm::NookDiscoveredCompanionExtensionEndpoint;
+/// let clone = |phase: NookDiscoveredCompanionExtensionEndpoint| phase.clone();
+/// ```
+#[wasm_bindgen]
+pub struct NookDiscoveredCompanionExtensionEndpoint {
+    inner: DiscoveredCompanionHandoffEndpoint,
+}
+
+#[wasm_bindgen]
+impl NookDiscoveredCompanionExtensionEndpoint {
+    #[wasm_bindgen(getter)]
+    pub fn status(&self) -> CompanionIdentityStatus {
+        self.inner.status()
+    }
+
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "wasm-bindgen owns the exported observation argument"
+    )]
+    pub fn rediscover(
+        self,
+        discovery: CompanionIdentityDiscoveryObservation,
+    ) -> Result<Self, JsError> {
+        let inner = self
+            .inner
+            .observe(&discovery)
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        Ok(Self { inner })
     }
 
     #[allow(clippy::needless_pass_by_value)]
     pub async fn authorize_and_seal(
-        &mut self,
+        self,
         manager: &mut NookVaultManager,
-        authorization: CompanionIdentityHandoffAuthorization,
+        authorization: CompanionHandoffAuthorizationAdmission,
     ) -> Result<CompanionIdentityHandoffResponse, JsError> {
+        let CompanionHandoffAuthorizationAdmission(authorization) = authorization;
         let authorized = self
             .inner
             .authorize_handoff(authorization)
-            .map_err(|error| companion_js_error(&CompanionOperationError::Protocol(error)))?;
-        manager
-            .ensure_signing_identity()
-            .await
-            .map_err(|error| companion_js_error(&CompanionOperationError::Manager(error)))?;
-        Self::seal_authorized_loaded(CompanionAuthorizedSealOperation {
+            .map_err(|error| {
+                NookVaultManager::companion_js_error(&CompanionOperationError::Protocol(error))
+            })?;
+        manager.ensure_signing_identity().await.map_err(|error| {
+            NookVaultManager::companion_js_error(&CompanionOperationError::Manager(error))
+        })?;
+        NookCompanionExtensionEndpoint::seal_authorized_loaded(CompanionAuthorizedSealOperation {
             manager,
             authorized,
         })
-        .map_err(|error| companion_js_error(&error))
+        .map_err(|error| NookVaultManager::companion_js_error(&error))
     }
 }
 
@@ -234,11 +289,12 @@ impl NookVaultManager {
         &mut self,
         response: &CompanionIdentityHandoffResponse,
     ) -> Result<PendingCompanionWebsiteHandoff, CompanionOperationError> {
-        let serialized = Zeroizing::new(mem::take(&mut self.device.extension_handoff_private_key));
-        if serialized.is_empty() {
-            return Err(CompanionOperationError::HandoffNotPending);
-        }
-        let pending = PendingCompanionWebsiteHandoff::decode(&serialized)?;
+        let pending = match mem::take(&mut self.device.extension_handoff_private_key) {
+            ExtensionHandoffState::Companion(pending) => *pending,
+            ExtensionHandoffState::Idle | ExtensionHandoffState::Recipient(_) => {
+                return Err(CompanionOperationError::HandoffNotPending);
+            }
+        };
         response.validate()?;
         if pending.request != response.request {
             return Err(CompanionProtocolError::RequestMismatch.into());
@@ -256,6 +312,7 @@ impl NookVaultManager {
         self.device.extension_handoff_private_key.zeroize();
         self.device.extension_handoff_private_key.clear();
         begin.validate()?;
+        self.device.handoff_generation = Rc::default();
         let recipient = DeviceIdentity::generate().map_err(NookError::from)?;
         let context = begin.context.clone();
         let request = begin.prepare(recipient.public_key().into_inner())?;
@@ -264,7 +321,7 @@ impl NookVaultManager {
             context,
             recipient_secret: recipient.secret_string().into_inner(),
         };
-        self.device.extension_handoff_private_key = pending.encode()?;
+        self.device.extension_handoff_private_key = ExtensionHandoffState::companion(pending);
         Ok(request)
     }
 }
@@ -275,28 +332,36 @@ impl NookVaultManager {
     pub fn begin_companion_identity_handoff(
         &mut self,
         begin: CompanionWebsiteHandoffBegin,
-    ) -> Result<CompanionIdentityHandoffRequest, JsError> {
-        self.begin_companion_identity_handoff_inner(begin)
-            .map_err(|error| companion_js_error(&error))
+    ) -> Result<NookPendingCompanionIdentityHandoff, JsError> {
+        let request = self
+            .begin_companion_identity_handoff_inner(begin)
+            .map_err(|error| NookVaultManager::companion_js_error(&error))?;
+        Ok(NookPendingCompanionIdentityHandoff {
+            binding: HandoffBinding::new(self),
+            request,
+        })
     }
+}
 
+impl NookVaultManager {
     #[allow(clippy::needless_pass_by_value)]
-    pub async fn finish_companion_identity_handoff(
+    async fn finish_companion_identity_handoff(
         &mut self,
         response: CompanionIdentityHandoffResponse,
-    ) -> Result<(), JsError> {
+    ) -> Result<NookAdoptedExtensionIdentityHandoff, JsError> {
         let mut pending = self
             .consume_companion_website_handoff(&response)
-            .map_err(|error| companion_js_error(&error))?;
+            .map_err(|error| NookVaultManager::companion_js_error(&error))?;
         let context = NookExtensionIdentityHandoffContext::from_companion(pending.context.clone())?;
         let CompanionIdentityStatus::Unlocked { app_key, .. } = &pending.request.transaction.status
         else {
-            return Err(companion_js_error(&CompanionOperationError::Protocol(
-                CompanionProtocolError::AppKeyUnavailable,
-            )));
+            return Err(NookVaultManager::companion_js_error(
+                &CompanionOperationError::Protocol(CompanionProtocolError::AppKeyUnavailable),
+            ));
         };
         let app_key = app_key.clone();
-        self.device.extension_handoff_private_key = pending.take_recipient_secret();
+        self.device.extension_handoff_private_key =
+            ExtensionHandoffState::Recipient(pending.take_recipient_secret().into());
         let expected = &app_key.app_key;
         self.finish_extension_identity_handoff(
             &response.encrypted_envelope,
@@ -306,10 +371,55 @@ impl NookVaultManager {
             &expected.signing_public_key,
             &context,
         )
-        .await
+        .await?;
+        Ok(NookAdoptedExtensionIdentityHandoff::new(self))
     }
 }
 
 #[cfg(test)]
 #[path = "companion_protocol_tests.rs"]
 mod tests;
+
+/// A one-use website transaction awaiting its correlated encrypted response.
+/// Private, non-cloneable state; external data is admitted through its predecessor.
+///
+/// ```compile_fail,E0277
+/// use nook_wasm::NookPendingCompanionIdentityHandoff;
+/// let decode = |json: &str| serde_json::from_str::<NookPendingCompanionIdentityHandoff>(json);
+/// ```
+///
+/// ```compile_fail,E0599
+/// use nook_wasm::NookPendingCompanionIdentityHandoff;
+/// let clone = |phase: NookPendingCompanionIdentityHandoff| phase.clone();
+/// ```
+#[wasm_bindgen]
+pub struct NookPendingCompanionIdentityHandoff {
+    binding: HandoffBinding,
+    request: CompanionIdentityHandoffRequest,
+}
+#[wasm_bindgen]
+impl NookPendingCompanionIdentityHandoff {
+    #[wasm_bindgen(getter)]
+    pub fn request(&self) -> CompanionIdentityHandoffRequest {
+        self.request.clone()
+    }
+    pub async fn finish(
+        self,
+        manager: &mut NookVaultManager,
+        response: CompanionIdentityHandoffResponse,
+    ) -> Result<NookAdoptedExtensionIdentityHandoff, JsError> {
+        self.binding.check(manager)?;
+        match manager.finish_companion_identity_handoff(response).await {
+            Ok(adopted) => Ok(adopted),
+            Err(error) => {
+                manager.rollback_extension_identity_handoff();
+                Err(error)
+            }
+        }
+    }
+    pub fn cancel(self, manager: &mut NookVaultManager) -> Result<(), JsError> {
+        self.binding.check(manager)?;
+        manager.rollback_extension_identity_handoff();
+        Ok(())
+    }
+}

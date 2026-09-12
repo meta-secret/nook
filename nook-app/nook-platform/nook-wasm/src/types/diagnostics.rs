@@ -119,12 +119,12 @@ impl NookVaultSecretAccessDiagnostic {
 
     #[wasm_bindgen(getter, js_name = epochId)]
     pub fn epoch_id(&self) -> Result<String, wasm_bindgen::JsError> {
-        diagnostic_epoch_id(&self.epoch)
+        NookDiagnosticEpochState::diagnostic_epoch_id(&self.epoch)
     }
 
     #[wasm_bindgen(getter, js_name = epochState)]
     pub fn epoch_state(&self) -> NookDiagnosticEpochState {
-        diagnostic_epoch_state(&self.epoch)
+        NookDiagnosticEpochState::diagnostic_epoch_state(&self.epoch)
     }
 
     #[wasm_bindgen(getter)]
@@ -202,12 +202,12 @@ impl NookVaultAccessReport {
 
     #[wasm_bindgen(getter, js_name = currentEpoch)]
     pub fn current_epoch(&self) -> Result<String, wasm_bindgen::JsError> {
-        diagnostic_epoch_id(&self.current_epoch)
+        NookDiagnosticEpochState::diagnostic_epoch_id(&self.current_epoch)
     }
 
     #[wasm_bindgen(getter, js_name = currentEpochState)]
     pub fn current_epoch_state(&self) -> NookDiagnosticEpochState {
-        diagnostic_epoch_state(&self.current_epoch)
+        NookDiagnosticEpochState::diagnostic_epoch_state(&self.current_epoch)
     }
 
     #[wasm_bindgen(getter, js_name = authKeyIds)]
@@ -287,19 +287,23 @@ impl NookVaultAccessReport {
     }
 }
 
-fn diagnostic_epoch_state(epoch: &nook_core::DiagnosticEpoch) -> NookDiagnosticEpochState {
-    match epoch {
-        DiagnosticEpoch::Unknown => NookDiagnosticEpochState::Unknown,
-        DiagnosticEpoch::Known(_) => NookDiagnosticEpochState::Known,
+impl NookDiagnosticEpochState {
+    fn diagnostic_epoch_state(epoch: &nook_core::DiagnosticEpoch) -> NookDiagnosticEpochState {
+        match epoch {
+            DiagnosticEpoch::Unknown => NookDiagnosticEpochState::Unknown,
+            DiagnosticEpoch::Known(_) => NookDiagnosticEpochState::Known,
+        }
     }
 }
 
-fn diagnostic_epoch_id(
-    epoch: &nook_core::DiagnosticEpoch,
-) -> Result<String, wasm_bindgen::JsError> {
-    match epoch {
-        DiagnosticEpoch::Unknown => Err(JsError::new("diagnostic epoch is unknown")),
-        DiagnosticEpoch::Known(epoch_id) => Ok(epoch_id.clone()),
+impl NookDiagnosticEpochState {
+    fn diagnostic_epoch_id(
+        epoch: &nook_core::DiagnosticEpoch,
+    ) -> Result<String, wasm_bindgen::JsError> {
+        match epoch {
+            DiagnosticEpoch::Unknown => Err(JsError::new("diagnostic epoch is unknown")),
+            DiagnosticEpoch::Known(epoch_id) => Ok(epoch_id.clone()),
+        }
     }
 }
 

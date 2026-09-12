@@ -11,17 +11,15 @@
 //! age ciphertext parser as normal unlock, but it never returns plaintext keys,
 //! private device material, or decrypted secret values.
 
-use crate::EpochPasswordState;
+use crate::{EpochPasswordState, EventId, ProjectionEpoch};
+use nook_auth2::{DeviceJoinStatus, PendingJoinForDeviceRequest, VaultMetaState};
 
-use crate::EventId;
-use crate::ProjectionEpoch;
 use crate::errors::VaultResult;
 use crate::secret_types::StoredSecretRecord;
 use crate::vault_ids::{AuthKeyId, SecretId};
 use crate::vault_wire::AgeArmoredCiphertext;
 use crate::{
     AuthEnvelopes, DeviceIdentity, SymmetricKey, VaultCrypto, VaultMetaRecord, VaultRecordView,
-    pending_join_for_device,
 };
 use crate::{VaultEvent, VaultEventSchemaVersion, VaultOperation};
 use std::collections::{BTreeMap, BTreeSet};
@@ -126,7 +124,12 @@ impl VaultAccessDiagnosticRequest<'_> {
         ) {
             return Ok(VaultKeyAccessDiagnosticStatus::UnsupportedEpoch);
         }
-        if pending_join_for_device(records, identity.device_id())?.is_some() {
+        if let DeviceJoinStatus::Pending(_) =
+            VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
+                records,
+                device_id: identity.device_id(),
+            })?
+        {
             return Ok(VaultKeyAccessDiagnosticStatus::JoinPending);
         }
         let auth_id = identity.auth_id();
@@ -212,6 +215,11 @@ impl VaultAccessDiagnosticRequest<'_> {
     }
 }
 
+enum DiagnosticCrypto {
+    Unavailable,
+    Ready(VaultCrypto),
+}
+
 impl EvaluatedVaultAccess<'_> {
     fn secret_records(&self) -> VaultResult<Vec<VaultSecretAccessDiagnostic>> {
         let records = self.request.records;
@@ -220,13 +228,15 @@ impl EvaluatedVaultAccess<'_> {
         let epoch_index = &self.epoch_index;
 
         let crypto = match secrets_key {
-            ResolvedSecretsKey::Unavailable => None,
-            ResolvedSecretsKey::Available(key) => VaultCrypto::new(key).ok(),
+            ResolvedSecretsKey::Unavailable => DiagnosticCrypto::Unavailable,
+            ResolvedSecretsKey::Available(key) => match VaultCrypto::new(key) {
+                Ok(crypto) => DiagnosticCrypto::Ready(crypto),
+                Err(_) => DiagnosticCrypto::Unavailable,
+            },
         };
         let mut secrets = Vec::new();
         for record in records {
-            let VaultMetaRecord::Secret(secret_id, secret_type, payload) =
-                VaultMetaRecord::classify(record)?
+            let VaultMetaRecord::Secret(secret_id, secret_type, payload) = (record).classify()?
             else {
                 continue;
             };
@@ -236,11 +246,10 @@ impl EvaluatedVaultAccess<'_> {
             };
             let mut status = key_status.record_status();
             if status == VaultRecordDecryptabilityStatus::Decryptable {
-                status = match (
-                    AgeArmoredCiphertext::parse(payload.as_str()),
-                    crypto.as_ref(),
-                ) {
-                    (Ok(armored), Some(crypto)) if crypto.decrypt_value(&armored).is_ok() => {
+                status = match (AgeArmoredCiphertext::parse(payload.as_str()), &crypto) {
+                    (Ok(armored), DiagnosticCrypto::Ready(crypto))
+                        if crypto.decrypt_value(&armored).is_ok() =>
+                    {
                         VaultRecordDecryptabilityStatus::Decryptable
                     }
                     _ => VaultRecordDecryptabilityStatus::CorruptCiphertext,
@@ -414,6 +423,7 @@ impl EvaluatedVaultAccess<'_> {
 
 #[cfg(test)]
 mod tests {
+    use crate::{GenesisImportRequest, RecordTypeDeclaration};
     struct EncryptedSecretFixture<'a> {
         id: &'a str,
         crypto: &'a VaultCrypto,
@@ -430,13 +440,13 @@ mod tests {
         ApiKeySecret, EncryptedSecretPayload, GenesisImportPayload, IsoTimestamp, KeyEpoch,
         PasswordEntryId, PasswordEnvelope, PasswordEnvelopeVersion, PasswordUnlockEntry,
         SecretType, SecretValue, SigningIdentity, StoreId, StoredRecordPayload, VaultKeys,
-        VaultProjection, VaultResult, build_genesis_import_event,
+        VaultProjection, VaultResult,
     };
     use ed25519_dalek::SigningKey;
     use std::ptr;
 
     #[test]
-    fn encrypted_payload_count_preserves_scalar_json() -> Result<(), serde_json::Error> {
+    fn encrypted_payload_count_preserves_scalar_json() -> serde_json::Result<()> {
         let count = VaultEncryptedPayloadCount::from(3);
         assert_eq!(serde_json::to_string(&count)?, "3");
         assert_eq!(
@@ -452,7 +462,7 @@ mod tests {
 
             Ok(StoredSecretRecord {
                 key: SecretId::from_vault_record(id),
-                secret_type: Some(SecretType::ApiKey),
+                secret_type: RecordTypeDeclaration::Secret(SecretType::ApiKey),
                 value: StoredRecordPayload::from_age_armored(
                     crypto.encrypt_value(
                         SecretValue::ApiKey(ApiKeySecret {
@@ -515,8 +525,8 @@ mod tests {
             VaultKeyAccessDiagnosticStatus::EnrolledDecryptable
         );
         assert_eq!(
-            report.secrets[0].status,
-            VaultRecordDecryptabilityStatus::Decryptable
+            report.secrets.first().map(|secret| secret.status),
+            Some(VaultRecordDecryptabilityStatus::Decryptable)
         );
         Ok(())
     }
@@ -655,7 +665,7 @@ mod tests {
         let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
         records.push(StoredSecretRecord {
             key: SecretId::from_vault_record("secret_corrupt01"),
-            secret_type: Some(SecretType::ApiKey),
+            secret_type: RecordTypeDeclaration::Secret(SecretType::ApiKey),
             value: StoredRecordPayload::from_trusted("not age".to_owned()),
         });
 
@@ -668,8 +678,8 @@ mod tests {
         .diagnose()?;
 
         assert_eq!(
-            report.secrets[0].status,
-            VaultRecordDecryptabilityStatus::CorruptCiphertext
+            report.secrets.first().map(|secret| secret.status),
+            Some(VaultRecordDecryptabilityStatus::CorruptCiphertext)
         );
         Ok(())
     }
@@ -704,11 +714,11 @@ mod tests {
         let actor_id = SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?;
         let store_id = StoreId::parse("store_diagstore11")?;
         let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
-        let event = build_genesis_import_event(
-            &store_id,
-            &actor_id,
-            &epoch,
-            GenesisImportPayload {
+        let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+            store_id: &store_id,
+            actor_id: &actor_id,
+            key_epoch: &epoch,
+            payload: GenesisImportPayload {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: vec![EncryptedSecretPayload {
                     id: SecretId::from_vault_record("secret_eventdiag"),
@@ -723,9 +733,9 @@ mod tests {
                 }],
                 password_entries: Vec::new(),
             },
-            &IsoTimestamp::from_trusted("2026-07-06T00:00:00Z".to_owned()),
-            &signing_key,
-        )?;
+            created_at: &IsoTimestamp::from_trusted("2026-07-06T00:00:00Z".to_owned()),
+            signing_key: &signing_key,
+        })?;
         let mut projection = VaultProjection {
             epoch: ProjectionEpoch::Current(KeyEpoch(epoch)),
             ..VaultProjection::default()
@@ -742,10 +752,16 @@ mod tests {
 
         assert_eq!(report.events.len(), 1);
         assert_eq!(
-            report.events[0].epoch_status,
-            VaultEpochDiagnosticStatus::CurrentEpoch
+            report.events.first().map(|event| event.epoch_status),
+            Some(VaultEpochDiagnosticStatus::CurrentEpoch)
         );
-        assert_eq!(usize::from(report.events[0].encrypted_payloads), 1);
+        assert_eq!(
+            report
+                .events
+                .first()
+                .map(|event| usize::from(event.encrypted_payloads)),
+            Some(1)
+        );
         Ok(())
     }
 
@@ -808,18 +824,18 @@ mod tests {
         let actor_id = SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?;
         let store_id = StoreId::parse("store_diagstore12")?;
         let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
-        let event = build_genesis_import_event(
-            &store_id,
-            &actor_id,
-            &epoch,
-            GenesisImportPayload {
+        let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+            store_id: &store_id,
+            actor_id: &actor_id,
+            key_epoch: &epoch,
+            payload: GenesisImportPayload {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: Vec::new(),
                 password_entries: Vec::new(),
             },
-            &IsoTimestamp::from_trusted("2026-07-06T00:00:00Z".to_owned()),
-            &signing_key,
-        )?;
+            created_at: &IsoTimestamp::from_trusted("2026-07-06T00:00:00Z".to_owned()),
+            signing_key: &signing_key,
+        })?;
         let projection = VaultProjection {
             store_id,
             epoch: ProjectionEpoch::Current(KeyEpoch(epoch)),
@@ -836,8 +852,8 @@ mod tests {
         .diagnose()?;
 
         assert_eq!(
-            report.events[0].epoch_status,
-            VaultEpochDiagnosticStatus::UnsupportedEpoch
+            report.events.first().map(|event| event.epoch_status),
+            Some(VaultEpochDiagnosticStatus::UnsupportedEpoch)
         );
         Ok(())
     }

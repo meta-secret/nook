@@ -1,5 +1,13 @@
 # CI Operator and Agent Operations
 
+## Agent delivery applicability
+
+Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
+feature compilation and the manually run dev manager's slow PR cycle.
+Runtime workflow details below do not grant permission to run local tests or
+feature-stage slow checks. Paused Hive remains outside the manual manager
+lifecycle and must not be reactivated by this delivery change.
+
 ## Overview
 
 This authority owns CI storage reclamation, application-log inspection, secrets,
@@ -33,6 +41,10 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
 - **Remote e2e failure:** read Playwright attachment `nook-app-logs.json` from
   the CI artifact/report before changing code. The attachment is created for
   every e2e result; failures also print the same entries to test output.
+- **E2e failure repair:** for every failed e2e test, analyze the underlying
+  cause and write a focused unit test at the owning boundary before fixing the
+  defect. Direct e2e-test edits are allowed only when a unit test is infeasible
+  (rare).
 - **Human local repro:** `E2E_SPEC=… task web:test:e2e:file`, then
   `fetchAppLogs(page)` or open `/app-logs?minLevel=debug&limit=1000`. Agents use
   the hosted remote catalog.
@@ -41,7 +53,7 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
 Full reference: [logging.md § Debugging, troubleshooting, and CI verification](../../../shared/references/logging.md#debugging-troubleshooting-and-ci-verification).
 
 Local `task ci:pr` remains available as an optional warm-cache debug mirror.
-See [pull request validation](../../../gizmo/workflows/pull-requests.md#5-hosted-iteration-and-explicit-validation)
+See [pull request validation](../../../gizmo/workflows/pull-requests.md)
 and [mission delivery](../../../gizmo/workflows/mission-delivery.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
@@ -171,7 +183,9 @@ separate Task-backed harness.
 - An unsuccessful Main run is handled separately by [`main-failure-handoff.yml`](../../../../.github/workflows/main-failure-handoff.yml).
 - Trusted default-branch code writes a deduplicated `status: ready`, `automation: hive` Workbench incident without copying raw logs.
 - The token-free k0s dispatcher reconciles it into Neo4j.
-- One isolated logical task owns diagnosis through exact-head checks, review resolution, squash merge, and replacement Main verification.
+- A repair task owns diagnosis and feature implementation through local dev landing.
+- The dev manager owns slow dev PR checks, review acceptance, and fast-forward
+  promotion. Incident completion retains replacement Main verification.
 - The explicitly dispatched implementation worker does not claim Hive
   incidents.
 - Browser E2E failures enter the same durable repair queue as native, WASM,
@@ -354,14 +368,12 @@ publication steps. Registry credentials are not used. Prompt:
 
 - GitHub Actions is the agent build/test environment and sole merge-validation
   pipeline.
-- Team Agents format and commit without pushing. Gizmo continues from the commit, runs
-  pre-push, pushes, and owns remote validation.
-- Gizmo starts complete PR validation with `task pr:validate`; an ordinary
-  push does not refresh that gate.
-- Agents do not run local Task mirrors of builds, tests, checks, or e2e.
-  Team Agents return focused fix commits; Gizmo obtains replacement evidence.
-- Interactive development servers and browser sessions may remain local when
-  their persistent state is intrinsic to the investigation.
+- Feature teams author tests and return scoped commits.
+- Feature Gizmos request only the required remote build-only capability.
+- The dev manager alone requests the full slow dev-to-main PR checks.
+- Local tests, Docker work, product compilation, and broad pre-push are prohibited.
+- Missing build-only tooling is a visible runtime prerequisite.
+- Repairs return through the feature path and serialized local dev integration.
 
 ## Agent checklist when touching CI or e2e
 
@@ -381,8 +393,9 @@ publication steps. Registry credentials are not used. Prompt:
    - Every actionable unsuccessful Main run is reconciled through one
      `automation: hive` Workbench incident.
      - Browser E2E failures are included.
-     - One isolated task owns the repair PR, review loop, squash merge, and
-       replacement Main verification.
+     - The repair follows the feature path into local dev.
+     - The dev manager controls slow checks and fast-forward promotion.
+     - Incident completion retains replacement Main verification.
    - Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 

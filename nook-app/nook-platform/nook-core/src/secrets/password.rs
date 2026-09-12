@@ -1,4 +1,3 @@
-use getrandom::fill;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -16,30 +15,63 @@ pub const MAX_PASSWORD_LENGTH: PasswordCharacterCount = PasswordCharacterCount::
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-#[allow(clippy::struct_excessive_bools)]
 pub struct PasswordGenerationOptions {
     #[tsify(type = "number")]
     pub length: PasswordCharacterCount,
-    pub lowercase: bool,
-    pub uppercase: bool,
-    pub numbers: bool,
-    pub symbols: bool,
+    #[tsify(type = "boolean")]
+    pub lowercase: PasswordCharacterSet,
+    #[tsify(type = "boolean")]
+    pub uppercase: PasswordCharacterSet,
+    #[tsify(type = "boolean")]
+    pub numbers: PasswordCharacterSet,
+    #[tsify(type = "boolean")]
+    pub symbols: PasswordCharacterSet,
+}
+
+/// Whether a named password alphabet participates in generation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+#[serde(from = "bool", into = "bool")]
+pub enum PasswordCharacterSet {
+    Included,
+    Excluded,
+}
+
+impl From<bool> for PasswordCharacterSet {
+    fn from(included: bool) -> Self {
+        if included {
+            Self::Included
+        } else {
+            Self::Excluded
+        }
+    }
+}
+impl From<PasswordCharacterSet> for bool {
+    fn from(selection: PasswordCharacterSet) -> Self {
+        matches!(selection, PasswordCharacterSet::Included)
+    }
+}
+
+/// A validated alphabet and length. Only validated options can construct it.
+pub struct PasswordGeneration {
+    charset: String,
+    length: PasswordCharacterCount,
 }
 
 impl Default for PasswordGenerationOptions {
     fn default() -> Self {
         Self {
             length: 20.into(),
-            lowercase: true,
-            uppercase: true,
-            numbers: true,
-            symbols: true,
+            lowercase: PasswordCharacterSet::Included,
+            uppercase: PasswordCharacterSet::Included,
+            numbers: PasswordCharacterSet::Included,
+            symbols: PasswordCharacterSet::Included,
         }
     }
 }
 
 impl PasswordGenerationOptions {
-    pub fn validate(self) -> PasswordResult<()> {
+    pub fn validate(self) -> PasswordResult<PasswordGeneration> {
         if !(usize::from(MIN_PASSWORD_LENGTH)..=usize::from(MAX_PASSWORD_LENGTH))
             .contains(&usize::from(self.length))
         {
@@ -48,50 +80,70 @@ impl PasswordGenerationOptions {
                 max: MAX_PASSWORD_LENGTH,
             });
         }
-        if !self.lowercase && !self.uppercase && !self.numbers && !self.symbols {
+        if [self.lowercase, self.uppercase, self.numbers, self.symbols]
+            .iter()
+            .all(|selection| matches!(selection, PasswordCharacterSet::Excluded))
+        {
             return Err(PasswordError::NoCharacterSet);
         }
-        Ok(())
+        Ok(PasswordGeneration {
+            charset: self.charset(),
+            length: self.length,
+        })
+    }
+
+    pub fn generate(self) -> PasswordResult<String> {
+        self.validate()?.generate()
     }
 
     fn charset(self) -> String {
         let mut chars = String::new();
-        if self.lowercase {
+        if matches!(self.lowercase, PasswordCharacterSet::Included) {
             chars.push_str(LOWERCASE);
         }
-        if self.uppercase {
+        if matches!(self.uppercase, PasswordCharacterSet::Included) {
             chars.push_str(UPPERCASE);
         }
-        if self.numbers {
+        if matches!(self.numbers, PasswordCharacterSet::Included) {
             chars.push_str(NUMBERS);
         }
-        if self.symbols {
+        if matches!(self.symbols, PasswordCharacterSet::Included) {
             chars.push_str(SYMBOLS);
         }
         chars
     }
 }
 
-pub fn generate_password(options: PasswordGenerationOptions) -> PasswordResult<String> {
-    options.validate()?;
-    let charset = options.charset();
-    let charset_bytes = charset.as_bytes();
-    let password_length = usize::from(options.length);
-    let mut random = vec![0u8; password_length * 4];
-    fill(&mut random).map_err(|e| PasswordError::RandomBytes(e.to_string()))?;
+impl PasswordGeneration {
+    pub fn generate(self) -> PasswordResult<String> {
+        let charset_bytes = self.charset.as_bytes();
+        let password_length = usize::from(self.length);
+        let mut random = vec![0u8; password_length * 4];
+        getrandom::fill(&mut random).map_err(|e| PasswordError::RandomBytes(e.to_string()))?;
 
-    let mut password = String::with_capacity(password_length);
-    for chunk in random.chunks(4) {
-        if password.len() >= password_length {
-            break;
+        let mut password = String::with_capacity(password_length);
+        for chunk in random.chunks_exact(4) {
+            if password.len() >= password_length {
+                break;
+            }
+            let Some(bytes) = chunk.get(..4).and_then(|value| value.try_into().ok()) else {
+                return Err(PasswordError::RandomBytes(
+                    "random password word was incomplete".to_owned(),
+                ));
+            };
+            let n = u32::from_le_bytes(bytes) as usize;
+            let idx = n % charset_bytes.len();
+            let Some(character) = charset_bytes.get(idx).copied() else {
+                return Err(PasswordError::RandomBytes(
+                    "validated password character set was unavailable".to_owned(),
+                ));
+            };
+            password.push(char::from(character));
         }
-        let n = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as usize;
-        let idx = n % charset_bytes.len();
-        password.push(charset_bytes[idx] as char);
-    }
 
-    password.truncate(password_length);
-    Ok(password)
+        password.truncate(password_length);
+        Ok(password)
+    }
 }
 
 #[cfg(test)]
@@ -105,10 +157,10 @@ mod tests {
             options,
             PasswordGenerationOptions {
                 length: 20.into(),
-                lowercase: true,
-                uppercase: true,
-                numbers: true,
-                symbols: true,
+                lowercase: PasswordCharacterSet::Included,
+                uppercase: PasswordCharacterSet::Included,
+                numbers: PasswordCharacterSet::Included,
+                symbols: PasswordCharacterSet::Included,
             }
         );
         let encoded = serde_json::to_string(&options)?;
@@ -125,12 +177,12 @@ mod tests {
 
     #[test]
     fn generates_password_with_requested_length() -> anyhow::Result<()> {
-        let password = generate_password(PasswordGenerationOptions {
+        let password = PasswordGenerationOptions::generate(PasswordGenerationOptions {
             length: 24.into(),
-            lowercase: true,
-            uppercase: true,
-            numbers: true,
-            symbols: false,
+            lowercase: PasswordCharacterSet::Included,
+            uppercase: PasswordCharacterSet::Included,
+            numbers: PasswordCharacterSet::Included,
+            symbols: PasswordCharacterSet::Excluded,
         })?;
         assert_eq!(password.len(), 24);
         Ok(())
@@ -138,12 +190,12 @@ mod tests {
 
     #[test]
     fn rejects_empty_charset() -> anyhow::Result<()> {
-        let err = generate_password(PasswordGenerationOptions {
+        let err = PasswordGenerationOptions::generate(PasswordGenerationOptions {
             length: 16.into(),
-            lowercase: false,
-            uppercase: false,
-            numbers: false,
-            symbols: false,
+            lowercase: PasswordCharacterSet::Excluded,
+            uppercase: PasswordCharacterSet::Excluded,
+            numbers: PasswordCharacterSet::Excluded,
+            symbols: PasswordCharacterSet::Excluded,
         })
         .err()
         .ok_or_else(|| anyhow::anyhow!("password test should reject invalid input"))?;
@@ -153,12 +205,12 @@ mod tests {
 
     #[test]
     fn rejects_invalid_length() -> anyhow::Result<()> {
-        let err = generate_password(PasswordGenerationOptions {
+        let err = PasswordGenerationOptions::generate(PasswordGenerationOptions {
             length: 4.into(),
-            lowercase: true,
-            uppercase: false,
-            numbers: false,
-            symbols: false,
+            lowercase: PasswordCharacterSet::Included,
+            uppercase: PasswordCharacterSet::Excluded,
+            numbers: PasswordCharacterSet::Excluded,
+            symbols: PasswordCharacterSet::Excluded,
         })
         .err()
         .ok_or_else(|| anyhow::anyhow!("password test should reject invalid input"))?;
@@ -168,12 +220,12 @@ mod tests {
 
     #[test]
     fn uses_only_selected_charsets() -> anyhow::Result<()> {
-        let password = generate_password(PasswordGenerationOptions {
+        let password = PasswordGenerationOptions::generate(PasswordGenerationOptions {
             length: 32.into(),
-            lowercase: true,
-            uppercase: false,
-            numbers: true,
-            symbols: false,
+            lowercase: PasswordCharacterSet::Included,
+            uppercase: PasswordCharacterSet::Excluded,
+            numbers: PasswordCharacterSet::Included,
+            symbols: PasswordCharacterSet::Excluded,
         })?;
         assert!(
             password
@@ -185,21 +237,21 @@ mod tests {
 
     #[test]
     fn accepts_min_and_max_length() -> anyhow::Result<()> {
-        let min = generate_password(PasswordGenerationOptions {
+        let min = PasswordGenerationOptions::generate(PasswordGenerationOptions {
             length: MIN_PASSWORD_LENGTH,
-            lowercase: true,
-            uppercase: false,
-            numbers: false,
-            symbols: false,
+            lowercase: PasswordCharacterSet::Included,
+            uppercase: PasswordCharacterSet::Excluded,
+            numbers: PasswordCharacterSet::Excluded,
+            symbols: PasswordCharacterSet::Excluded,
         })?;
         assert_eq!(min.len(), usize::from(MIN_PASSWORD_LENGTH));
 
-        let max = generate_password(PasswordGenerationOptions {
+        let max = PasswordGenerationOptions::generate(PasswordGenerationOptions {
             length: MAX_PASSWORD_LENGTH,
-            lowercase: true,
-            uppercase: false,
-            numbers: false,
-            symbols: false,
+            lowercase: PasswordCharacterSet::Included,
+            uppercase: PasswordCharacterSet::Excluded,
+            numbers: PasswordCharacterSet::Excluded,
+            symbols: PasswordCharacterSet::Excluded,
         })?;
         assert_eq!(max.len(), usize::from(MAX_PASSWORD_LENGTH));
         Ok(())
@@ -207,12 +259,12 @@ mod tests {
 
     #[test]
     fn rejects_length_above_max() -> anyhow::Result<()> {
-        let err = generate_password(PasswordGenerationOptions {
+        let err = PasswordGenerationOptions::generate(PasswordGenerationOptions {
             length: (usize::from(MAX_PASSWORD_LENGTH) + 1).into(),
-            lowercase: true,
-            uppercase: false,
-            numbers: false,
-            symbols: false,
+            lowercase: PasswordCharacterSet::Included,
+            uppercase: PasswordCharacterSet::Excluded,
+            numbers: PasswordCharacterSet::Excluded,
+            symbols: PasswordCharacterSet::Excluded,
         })
         .err()
         .ok_or_else(|| anyhow::anyhow!("password test should reject invalid input"))?;
@@ -222,14 +274,29 @@ mod tests {
 
     #[test]
     fn symbols_only_charset() -> anyhow::Result<()> {
-        let password = generate_password(PasswordGenerationOptions {
+        let password = PasswordGenerationOptions::generate(PasswordGenerationOptions {
             length: 16.into(),
-            lowercase: false,
-            uppercase: false,
-            numbers: false,
-            symbols: true,
+            lowercase: PasswordCharacterSet::Excluded,
+            uppercase: PasswordCharacterSet::Excluded,
+            numbers: PasswordCharacterSet::Excluded,
+            symbols: PasswordCharacterSet::Included,
         })?;
         assert!(password.chars().all(|c| SYMBOLS.contains(c)));
+        Ok(())
+    }
+    #[test]
+    fn mixed_character_selections_preserve_boolean_wire() -> anyhow::Result<()> {
+        let json =
+            r#"{"length":20,"lowercase":true,"uppercase":false,"numbers":true,"symbols":false}"#;
+        let options: PasswordGenerationOptions = serde_json::from_str(json)?;
+        assert_eq!(options.lowercase, PasswordCharacterSet::Included);
+        assert_eq!(options.uppercase, PasswordCharacterSet::Excluded);
+        assert_eq!(options.numbers, PasswordCharacterSet::Included);
+        assert_eq!(options.symbols, PasswordCharacterSet::Excluded);
+        assert_eq!(serde_json::to_string(&options)?, json);
+        assert!(serde_json::from_str::<PasswordGenerationOptions>(
+        r#"{"length":20,"lowercase":"Included","uppercase":false,"numbers":true,"symbols":false}"#
+    ).is_err());
         Ok(())
     }
 }

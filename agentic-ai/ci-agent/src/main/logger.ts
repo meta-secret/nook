@@ -1,5 +1,4 @@
-/** log4j-style structured console logging for ci-agent. */
-
+/** Structured console logging owned by each CI component. */
 export enum LogLevel {
   Trace = "TRACE",
   Debug = "DEBUG",
@@ -16,83 +15,108 @@ const LEVEL_RANK: Record<LogLevel, number> = {
   ERROR: 50,
 };
 
-const ROOT_COMPONENT = "ci-agent";
+export class LogTimestamp {
+  constructor(private readonly date: Date = new Date()) {}
 
-function readMinLevel(): LogLevel {
-  const raw = process.env.CI_AGENT_LOG_LEVEL?.trim().toUpperCase();
-  if (raw && raw in LEVEL_RANK) {
-    return raw as LogLevel;
+  format(): string {
+    const date = this.date;
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    const hours = String(date.getUTCHours()).padStart(2, "0");
+    const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+    const seconds = String(date.getUTCSeconds()).padStart(2, "0");
+    const millis = String(date.getUTCMilliseconds()).padStart(3, "0");
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds},${millis}`;
   }
-  return LogLevel.Info;
 }
 
-const minLevel = readMinLevel();
-
-/** Format timestamp like log4j: `yyyy-MM-dd HH:mm:ss,SSS` (UTC). */
-export function formatLogTimestamp(date = new Date()): string {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  const hours = String(date.getUTCHours()).padStart(2, "0");
-  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
-  const seconds = String(date.getUTCSeconds()).padStart(2, "0");
-  const millis = String(date.getUTCMilliseconds()).padStart(3, "0");
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds},${millis}`;
+export interface LogRecordContent {
+  readonly level: LogLevel;
+  readonly component: string;
+  readonly message: string;
+  readonly timestamp?: Date;
 }
 
-export function formatLogLine(
-  level: LogLevel,
-  component: string,
-  message: string,
-  timestamp = new Date(),
-): string {
-  const levelLabel = level.padEnd(5, " ");
-  return `${formatLogTimestamp(timestamp)} ${levelLabel} [${component}] ${message}`;
-}
+export class LogRecord {
+  constructor(private readonly content: LogRecordContent) {}
 
-function shouldLog(level: LogLevel): boolean {
-  return LEVEL_RANK[level] >= LEVEL_RANK[minLevel];
-}
-
-function writeLine(level: LogLevel, line: string): void {
-  if (level === LogLevel.Error) {
-    console.error(line);
-    return;
+  format(): string {
+    const { level, component, message, timestamp = new Date() } = this.content;
+    return `${new LogTimestamp(timestamp).format()} ${level.padEnd(5, " ")} [${component}] ${message}`;
   }
-  if (level === LogLevel.Warn) {
-    console.warn(line);
-    return;
+
+  write(): void {
+    if (!minimumLevel.includes(this.content.level)) return;
+    const line = this.format();
+    switch (this.content.level) {
+      case LogLevel.Error:
+        console.error(line);
+        break;
+      case LogLevel.Warn:
+        console.warn(line);
+        break;
+      case LogLevel.Trace:
+      case LogLevel.Debug:
+      case LogLevel.Info:
+        console.log(line);
+        break;
+    }
   }
-  console.log(line);
 }
 
-export function log(level: LogLevel, component: string, message: string): void {
-  if (!shouldLog(level)) {
-    return;
+class LogLevelFilter {
+  private constructor(private readonly minimum: LogLevel) {}
+
+  static fromEnvironment(environment: NodeJS.ProcessEnv): LogLevelFilter {
+    const raw = environment.CI_AGENT_LOG_LEVEL?.trim().toUpperCase();
+    const level = Object.values(LogLevel).find(
+      (candidate) => candidate === raw,
+    );
+    return new LogLevelFilter(level || LogLevel.Info);
   }
-  writeLine(level, formatLogLine(level, component, message));
+
+  includes(level: LogLevel): boolean {
+    return LEVEL_RANK[level] >= LEVEL_RANK[this.minimum];
+  }
 }
 
-export type Logger = {
-  trace: (message: string) => void;
-  debug: (message: string) => void;
-  info: (message: string) => void;
-  warn: (message: string) => void;
-  error: (message: string) => void;
-  child: (suffix: string) => Logger;
-};
+const minimumLevel = LogLevelFilter.fromEnvironment(process.env);
 
-export function createLogger(component: string): Logger {
-  const fullComponent = component.startsWith(ROOT_COMPONENT)
-    ? component
-    : `${ROOT_COMPONENT}/${component}`;
+export class Logger {
+  private readonly component: string;
 
-  return {
-    trace: (message) => log(LogLevel.Trace, fullComponent, message),
-    debug: (message) => log(LogLevel.Debug, fullComponent, message),
-    info: (message) => log(LogLevel.Info, fullComponent, message),
-    warn: (message) => log(LogLevel.Warn, fullComponent, message),
-    error: (message) => log(LogLevel.Error, fullComponent, message),
-    child: (suffix) => createLogger(`${fullComponent}/${suffix}`),
-  };
+  constructor(component: string) {
+    this.component = component.startsWith("ci-agent")
+      ? component
+      : `ci-agent/${component}`;
+  }
+
+  trace(message: string): void {
+    this.write({ level: LogLevel.Trace, message });
+  }
+  debug(message: string): void {
+    this.write({ level: LogLevel.Debug, message });
+  }
+  info(message: string): void {
+    this.write({ level: LogLevel.Info, message });
+  }
+  warn(message: string): void {
+    this.write({ level: LogLevel.Warn, message });
+  }
+  error(message: string): void {
+    this.write({ level: LogLevel.Error, message });
+  }
+  child(suffix: string): Logger {
+    return new Logger(`${this.component}/${suffix}`);
+  }
+
+  private write(content: ComponentLogMessage): void {
+    new LogRecord({ ...content, component: this.component }).write();
+  }
+}
+
+interface ComponentLogMessage {
+  readonly level: LogLevel;
+  readonly message: string;
 }

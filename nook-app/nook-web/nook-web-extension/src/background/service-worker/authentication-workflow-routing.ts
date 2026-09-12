@@ -5,11 +5,11 @@ import {
   type AuthenticationPageObservationFacts,
   type AuthenticationSavedLoginCapability,
   type AuthenticationDetailedPasskeyControlObservation,
+  type AuthenticationWorkflowSelectedFactsWire,
   type WebsiteLoginMatchAvailability,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import type {
-  AuthenticationPageObservationView,
   AuthenticationWorkflowSnapshotMessage,
   AuthenticationWorkflowSnapshotView,
 } from '../../lib/auth-workflow-messages'
@@ -19,17 +19,17 @@ import {
   MatchingPasskeyAvailabilityKind,
   passkeyAccountCountForClassification,
 } from './passkey-availability'
-import type { matchingPasskeyAvailabilityForOriginSafe } from './passkey-operations'
+import type { websitePasskeyRequests } from './passkey-operations'
 import type * as VaultRuntime from '../vault-runtime'
 
 export type AuthenticationWorkflowRoutingDependencies = {
   companionWasmReady: Promise<void>
   authenticationPasskeyEvidenceIsSafe: typeof authenticationPasskeyEvidenceIsSafe
-  authenticationWorkflowSnapshot: typeof VaultRuntime.authenticationWorkflowSnapshot
+  authenticationWorkflowSnapshot: typeof VaultRuntime.backgroundVaultRuntime.authenticationWorkflowSnapshot
   authenticationWorkflowSavedLoginCapability: typeof authenticationWorkflowSavedLoginCapability
   authenticationWorkflowRequiresLoginMatchAvailability: typeof authenticationWorkflowRequiresLoginMatchAvailability
-  matchingPasskeyAvailabilityForOriginSafe: typeof matchingPasskeyAvailabilityForOriginSafe
-  websiteLoginMatchAvailability: typeof AccountPickers.websiteLoginMatchAvailability
+  matchingPasskeyAvailabilityForOriginSafe: typeof websitePasskeyRequests.matchingPasskeyAvailabilityForOriginSafe
+  websiteLoginMatchAvailability: typeof AccountPickers.accountPickerSessions.websiteLoginMatchAvailability
 }
 
 export function authenticationPasskeyEvidenceIsSafe(
@@ -55,7 +55,7 @@ export type AuthenticationWorkflowRoutingResponse = {
     | { ok: true; snapshot?: AuthenticationWorkflowSnapshotView }
     | { ok: false; reason: 'workflow-snapshot-failed' }
   loginMatches: WebsiteLoginMatchAvailability
-  selectedFacts?: AuthenticationPageObservationView
+  selectedFacts: AuthenticationWorkflowSelectedFactsWire
 }
 
 export type AuthenticationWorkflowRoutingRequest = {
@@ -162,17 +162,19 @@ export async function authenticationWorkflowMessageResponse({
       return {
         workflow: { ok: true, snapshot: result.snapshot },
         loginMatches,
-        selectedFacts,
+        selectedFacts: { state: 'selected', facts: selectedFacts },
       }
     }
     return {
       workflow: { ok: true },
       loginMatches: { kind: 'unavailable' },
+      selectedFacts: { state: 'notApplicable' },
     }
   } catch {
     return {
       workflow: { ok: false, reason: 'workflow-snapshot-failed' },
       loginMatches: { kind: 'unavailable' },
+      selectedFacts: { state: 'notApplicable' },
     }
   }
 }

@@ -1,10 +1,30 @@
 //! Three-way rebase policy for staged vault-creation identity ownership.
 
-use std::iter;
+use std::mem;
 
-use super::IdentityDirectory;
-use crate::errors::{MultiDeviceError, MultiDeviceResult};
+use super::{IdentityDirectory, IdentityDirectoryRejection};
+use crate::errors::MultiDeviceError;
 use crate::{IdentityId, IdentityRecord};
+
+pub struct StagedIdentityRebase<'a> {
+    pub base: &'a IdentityDirectory,
+    pub candidate: &'a IdentityDirectory,
+    pub identity_id: &'a IdentityId,
+}
+
+enum StagedIdentityPresence<'a> {
+    Existing(&'a IdentityRecord),
+    NewlyCreated,
+}
+
+enum StagedRebaseRollback {
+    Unchanged,
+    Replaced {
+        index: usize,
+        previous: IdentityRecord,
+    },
+    Inserted,
+}
 
 impl IdentityDirectory {
     /// Apply one staged target identity over unrelated concurrent directory changes.
@@ -13,64 +33,79 @@ impl IdentityDirectory {
     /// directory keeps its selection and unrelated identities. A concurrent
     /// change to the same target fails closed.
     pub fn rebase_staged_vault_creation(
-        &self,
-        base: &Self,
-        candidate: &Self,
-        identity_id: &IdentityId,
-    ) -> MultiDeviceResult<Self> {
-        let target =
-            candidate
-                .identity(identity_id)
-                .ok_or_else(|| MultiDeviceError::IdentityNotFound {
-                    identity_id: identity_id.to_string(),
-                })?;
-        let base_target = base.identity(identity_id);
-        let base_others = base.identities_without(identity_id);
-        let candidate_others = candidate.identities_without(identity_id);
-        if base_others != candidate_others || base.retired_app_ids != candidate.retired_app_ids {
-            return Err(Self::staged_identity_conflict(identity_id));
+        mut self,
+        request: StagedIdentityRebase<'_>,
+    ) -> Result<Self, IdentityDirectoryRejection> {
+        let applied = request.target().and_then(|target| {
+            self.apply_staged_identity(StagedIdentityApplication {
+                base: request.base,
+                target,
+            })
+        });
+        match applied {
+            Err(cause) => Err(IdentityDirectoryRejection {
+                directory: self,
+                cause,
+            }),
+            Ok(rollback) => match self.validate() {
+                Ok(()) => Ok(self),
+                Err(cause) => {
+                    let cause = match rollback.restore(&mut self) {
+                        Ok(()) => cause,
+                        Err(rollback_cause) => rollback_cause,
+                    };
+                    Err(IdentityDirectoryRejection {
+                        directory: self,
+                        cause,
+                    })
+                }
+            },
         }
-
-        let identities = match (
-            base_target,
-            self.identities
-                .iter()
-                .position(|record| &record.identity_id == identity_id),
-        ) {
-            (Some(_), Some(index)) if self.identities[index] == *target => self.identities.clone(),
-            (Some(base_record), Some(index)) if self.identities[index] == *base_record => self
-                .identities
-                .iter()
-                .enumerate()
-                .map(|(current_index, record)| {
-                    if current_index == index {
-                        target.clone()
-                    } else {
-                        record.clone()
-                    }
-                })
-                .collect(),
-            (None, None) => self
-                .identities
-                .iter()
-                .cloned()
-                .chain(iter::once(target.clone()))
-                .collect(),
-            _ => return Err(Self::staged_identity_conflict(identity_id)),
-        };
-        let rebased = Self {
-            identities,
-            selection: self.selection.clone(),
-            retired_app_ids: self.retired_app_ids.clone(),
-        };
-        rebased.validate()?;
-        Ok(rebased)
     }
 
-    fn identity(&self, identity_id: &IdentityId) -> Option<&IdentityRecord> {
-        self.identities
+    fn apply_staged_identity(
+        &mut self,
+        application: StagedIdentityApplication<'_>,
+    ) -> Result<StagedRebaseRollback, MultiDeviceError> {
+        let StagedIdentityApplication { base, target } = application;
+        // Only the candidate target is copied; unrelated current records retain ownership.
+        match (
+            base.identity(&target.identity_id),
+            self.identities
+                .iter()
+                .position(|record| record.identity_id == target.identity_id),
+        ) {
+            (StagedIdentityPresence::Existing(original), Some(index)) => {
+                let current = self
+                    .identities
+                    .get_mut(index)
+                    .ok_or_else(|| Self::staged_identity_conflict(&target.identity_id))?;
+                if *current == *target {
+                    Ok(StagedRebaseRollback::Unchanged)
+                } else if *current == *original {
+                    let previous = mem::replace(current, target.clone());
+                    Ok(StagedRebaseRollback::Replaced { index, previous })
+                } else {
+                    Err(Self::staged_identity_conflict(&target.identity_id))
+                }
+            }
+            (StagedIdentityPresence::NewlyCreated, None) => {
+                self.identities.push(target.clone());
+                Ok(StagedRebaseRollback::Inserted)
+            }
+            _ => Err(Self::staged_identity_conflict(&target.identity_id)),
+        }
+    }
+
+    fn identity(&self, identity_id: &IdentityId) -> StagedIdentityPresence<'_> {
+        match self
+            .identities
             .iter()
             .find(|record| &record.identity_id == identity_id)
+        {
+            Some(record) => StagedIdentityPresence::Existing(record),
+            None => StagedIdentityPresence::NewlyCreated,
+        }
     }
 
     fn identities_without(&self, identity_id: &IdentityId) -> Vec<&IdentityRecord> {
@@ -87,8 +122,60 @@ impl IdentityDirectory {
     }
 }
 
+struct StagedIdentityApplication<'a> {
+    base: &'a IdentityDirectory,
+    target: &'a IdentityRecord,
+}
+
+impl<'a> StagedIdentityRebase<'a> {
+    fn target(&self) -> Result<&'a IdentityRecord, MultiDeviceError> {
+        let StagedIdentityPresence::Existing(target) = self.candidate.identity(self.identity_id)
+        else {
+            return Err(MultiDeviceError::IdentityNotFound {
+                identity_id: self.identity_id.to_string(),
+            });
+        };
+        if self.base.identities_without(self.identity_id)
+            != self.candidate.identities_without(self.identity_id)
+            || self.base.retired_app_ids != self.candidate.retired_app_ids
+        {
+            return Err(IdentityDirectory::staged_identity_conflict(
+                self.identity_id,
+            ));
+        }
+        Ok(target)
+    }
+}
+
+impl StagedRebaseRollback {
+    fn restore(self, directory: &mut IdentityDirectory) -> Result<(), MultiDeviceError> {
+        match self {
+            Self::Unchanged => Ok(()),
+            Self::Replaced { index, previous } => {
+                let identity_id = previous.identity_id.clone();
+                let stored = directory
+                    .identities
+                    .get_mut(index)
+                    .ok_or_else(|| IdentityDirectory::staged_identity_conflict(&identity_id))?;
+                *stored = previous;
+                Ok(())
+            }
+            Self::Inserted => directory
+                .identities
+                .pop()
+                .map(|_| ())
+                .ok_or(MultiDeviceError::InvalidIdentitySelection),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::{
+        DirectoryCreationEnrollment, DirectoryOwnedVaultOpening, IdentityCreation,
+        IdentityVaultKeyOpening, MemberLabelState,
+    };
+
     use super::*;
     use crate::AppKey;
 
@@ -98,25 +185,45 @@ mod tests {
         let concurrent = AppKey::generate()?;
         let store_id = crate::StoreId::generate()?;
         let mut base = IdentityDirectory::empty();
-        let identity_id = base.create_identity("Personal", &owner, None)?;
+        let resolved_identity = base.create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &owner,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        base = resolved_identity.directory;
+        let identity_id = resolved_identity.identity_id;
         let mut candidate = base.clone();
-        let _ = candidate.open_or_generate_vault_dek_for_identity(
-            &identity_id,
-            &owner,
-            store_id.clone(),
-        )?;
+        let opened_identity =
+            candidate.open_or_generate_vault_dek_for_identity(DirectoryOwnedVaultOpening {
+                identity_id: &identity_id,
+                vault: IdentityVaultKeyOpening {
+                    app_key: &owner,
+                    store_id: store_id.clone(),
+                },
+            })?;
+        candidate = opened_identity.directory;
         let mut current = base.clone();
-        let concurrent_id = current.create_identity("Work", &concurrent, None)?;
+        let resolved_identity = current.create_identity(IdentityCreation {
+            label: "Work",
+            app_key: &concurrent,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        current = resolved_identity.directory;
+        let concurrent_id = resolved_identity.identity_id;
 
-        let rebased = current.rebase_staged_vault_creation(&base, &candidate, &identity_id)?;
+        let previous_selection = current.selection().clone();
+        let rebased = current.rebase_staged_vault_creation(StagedIdentityRebase {
+            base: &base,
+            candidate: &candidate,
+            identity_id: &identity_id,
+        })?;
 
-        assert_eq!(rebased.selection(), current.selection());
+        assert_eq!(rebased.selection(), &previous_selection);
         assert_eq!(rebased.selected()?.identity_id, concurrent_id);
-        assert!(
-            rebased
-                .identity(&identity_id)
-                .is_some_and(|record| record.owns_vault(&store_id))
-        );
+        assert!(matches!(
+            rebased.identity(&identity_id),
+            StagedIdentityPresence::Existing(record) if record.owns_vault(&store_id)
+        ));
         Ok(())
     }
 
@@ -126,16 +233,42 @@ mod tests {
         let staged_member = AppKey::generate()?;
         let concurrent_member = AppKey::generate()?;
         let mut base = IdentityDirectory::empty();
-        let identity_id = base.create_identity("Personal", &owner, None)?;
+        let resolved_identity = base.create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &owner,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        base = resolved_identity.directory;
+        let identity_id = resolved_identity.identity_id;
         let mut candidate = base.clone();
-        candidate.enroll_selected_app_key_for_vault_creation(&staged_member, "Personal")?;
+        let resolved_identity =
+            candidate.enroll_selected_app_key_for_vault_creation(DirectoryCreationEnrollment {
+                app_key: &staged_member,
+                label: "Personal",
+            })?;
+        candidate = resolved_identity.directory;
         let mut current = base.clone();
-        current.enroll_selected_app_key_for_vault_creation(&concurrent_member, "Personal")?;
+        let resolved_identity =
+            current.enroll_selected_app_key_for_vault_creation(DirectoryCreationEnrollment {
+                app_key: &concurrent_member,
+                label: "Personal",
+            })?;
+        current = resolved_identity.directory;
 
+        let original = current.clone();
+        let rejected = match current.rebase_staged_vault_creation(StagedIdentityRebase {
+            base: &base,
+            candidate: &candidate,
+            identity_id: &identity_id,
+        }) {
+            Err(rejected) => rejected,
+            Ok(_) => anyhow::bail!("Conflicting staged rebase unexpectedly succeeded"),
+        };
         assert!(matches!(
-            current.rebase_staged_vault_creation(&base, &candidate, &identity_id),
-            Err(MultiDeviceError::StagedIdentityConflict { .. })
+            rejected.cause,
+            MultiDeviceError::StagedIdentityConflict { .. }
         ));
+        assert_eq!(rejected.directory, original);
         Ok(())
     }
 
@@ -144,16 +277,42 @@ mod tests {
         let owner = AppKey::generate()?;
         let overlapping = AppKey::generate()?;
         let mut base = IdentityDirectory::empty();
-        let identity_id = base.create_identity("Personal", &owner, None)?;
+        let resolved_identity = base.create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &owner,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        base = resolved_identity.directory;
+        let identity_id = resolved_identity.identity_id;
         let mut candidate = base.clone();
-        candidate.enroll_selected_app_key_for_vault_creation(&overlapping, "Personal")?;
+        let resolved_identity =
+            candidate.enroll_selected_app_key_for_vault_creation(DirectoryCreationEnrollment {
+                app_key: &overlapping,
+                label: "Personal",
+            })?;
+        candidate = resolved_identity.directory;
         let mut current = base.clone();
-        current.create_identity("Work", &overlapping, None)?;
+        let resolved_identity = current.create_identity(IdentityCreation {
+            label: "Work",
+            app_key: &overlapping,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        current = resolved_identity.directory;
 
+        let original = current.clone();
+        let rejected = match current.rebase_staged_vault_creation(StagedIdentityRebase {
+            base: &base,
+            candidate: &candidate,
+            identity_id: &identity_id,
+        }) {
+            Err(rejected) => rejected,
+            Ok(_) => anyhow::bail!("Conflicting staged rebase unexpectedly succeeded"),
+        };
         assert!(matches!(
-            current.rebase_staged_vault_creation(&base, &candidate, &identity_id),
-            Err(MultiDeviceError::DuplicateAppKeyOwnership { .. })
+            rejected.cause,
+            MultiDeviceError::DuplicateAppKeyOwnership { .. }
         ));
+        assert_eq!(rejected.directory, original);
         Ok(())
     }
 }

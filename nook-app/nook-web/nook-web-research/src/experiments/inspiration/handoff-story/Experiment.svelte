@@ -8,7 +8,6 @@ are reading via IntersectionObserver and lets you jump between them.
   type ActForArgs = {
     access: AccessScenario
     stage: ChainStage
-    index: number
   }
 
   type VaultActArgs = {
@@ -35,16 +34,8 @@ are reading via IntersectionObserver and lets you jump between them.
     ChainStage,
     type Fact,
     FactKind,
-    factText,
-    isPrepared,
-    known,
-    notObserved,
-    relationInto,
     ScenarioId,
-    scenarioById,
-    stageCaption,
-    verifiedSummary,
-    verifiedVaults,
+    AccessScenarioView,
   } from '../_shared/keys-management-state'
   import type { ExperimentProps } from '../../index'
 
@@ -59,32 +50,35 @@ are reading via IntersectionObserver and lets you jump between them.
     withheld: string
   }
 
-  const NUMERALS = ['I', 'II', 'III']
+  const NUMERALS: Record<ChainStage, string> = {
+    [ChainStage.Passkey]: 'I',
+    [ChainStage.DeviceKey]: 'II',
+    [ChainStage.Vaults]: 'III',
+  }
   const ACCENT = '#ff6b3d'
 
   let { navigate }: ExperimentProps = $props()
   let scenarioId = $state(ScenarioId.Unlocked)
   let activeAct = $state(ChainStage.Passkey)
-  const scenario = $derived(scenarioById(scenarioId))
-  const prepared = $derived(isPrepared(scenario))
+  const scenario = $derived(AccessScenarioView.scenarioById(scenarioId))
+  const prepared = $derived(new AccessScenarioView(scenario).isPrepared())
   const acts = $derived(
-    [...CHAIN_STAGES.entries()].map(([index, stage]) => {
+    CHAIN_STAGES.map((stage) => {
       const nookNamedArgument110: Parameters<typeof actFor>[0] = {
         access: scenario,
         stage,
-        index,
       }
       return actFor(nookNamedArgument110)
     }),
   )
 
   function passkeyAct({ access, numeral }: PasskeyActArgs): Act {
-    const ready = isPrepared(access)
+    const ready = new AccessScenarioView(access).isPrepared()
     return {
       stage: ChainStage.Passkey,
       numeral,
       actor: ready
-        ? factText(access.passkey.savedIn)
+        ? AccessScenarioView.factText(access.passkey.savedIn)
         : 'No passkey manager yet',
       statement: ready
         ? 'Your passkey manager proves it is you, then keeps the passkey.'
@@ -101,7 +95,7 @@ are reading via IntersectionObserver and lets you jump between them.
   }
 
   function deviceAct({ access, numeral }: DeviceActArgs): Act {
-    const ready = isPrepared(access)
+    const ready = new AccessScenarioView(access).isPrepared()
     return {
       stage: ChainStage.DeviceKey,
       numeral,
@@ -112,14 +106,14 @@ are reading via IntersectionObserver and lets you jump between them.
       identifier: access.device.id,
       identifierLabel: 'Device key',
       trusted: ready
-        ? `Trusted to derive the device key and decrypt vault data here. Prepared ${factText(access.device.preparedAt)}.`
+        ? `Trusted to derive the device key and decrypt vault data here. Prepared ${AccessScenarioView.factText(access.device.preparedAt)}.`
         : 'Trusted to derive a device key the first time a passkey unlocks it here.',
       withheld: `Never trusted to move that key anywhere else. ${access.device.boundary}`,
     }
   }
 
   function vaultAct({ access, numeral }: VaultActArgs): Act {
-    const verified = verifiedVaults(access)
+    const verified = new AccessScenarioView(access).verifiedVaults()
     const names = verified.map((vault) => vault.label).join(', ')
     return {
       stage: ChainStage.Vaults,
@@ -131,8 +125,10 @@ are reading via IntersectionObserver and lets you jump between them.
           : 'The key opens the vaults it has already opened, and nothing else.',
       identifier:
         access.vaults.length === 0
-          ? notObserved('Nothing opened from here yet')
-          : known(verifiedSummary(access)),
+          ? AccessScenarioView.notObserved('Nothing opened from here yet')
+          : AccessScenarioView.known(
+              new AccessScenarioView(access).verifiedSummary(),
+            ),
       identifierLabel: 'Proven from this browser',
       trusted:
         verified.length === 0
@@ -145,8 +141,8 @@ are reading via IntersectionObserver and lets you jump between them.
     }
   }
 
-  function actFor({ access, stage, index }: ActForArgs): Act {
-    const numeral = NUMERALS[index]
+  function actFor({ access, stage }: ActForArgs): Act {
+    const numeral = NUMERALS[stage]
     const nookNamedArgument111: Parameters<typeof passkeyAct>[0] = {
       access,
       numeral,
@@ -184,7 +180,8 @@ are reading via IntersectionObserver and lets you jump between them.
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue
-        const key = (entry.target as HTMLElement).dataset.act
+        if (!(entry.target instanceof HTMLElement)) continue
+        const key = entry.target.dataset.act
         const match = CHAIN_STAGES.find((stage) => `${stage}` === key)
         if (match) activeAct = match
       }
@@ -198,7 +195,10 @@ are reading via IntersectionObserver and lets you jump between them.
 
 <main class="min-h-[100svh] bg-[#08090a] text-[#f4f3f0]">
   <ExperimentBack {navigate} />
-  <ScenarioSwitch {scenario} onScenario={(next) => (scenarioId = next)} />
+  <ScenarioSwitch
+    {scenario}
+    onScenario={(next: ScenarioId) => (scenarioId = next)}
+  />
 
   <nav
     class="fixed top-1/2 left-3 z-40 -translate-y-1/2 sm:left-6"
@@ -222,7 +222,7 @@ are reading via IntersectionObserver and lets you jump between them.
             <span
               class={`hidden font-mono text-[10px] tracking-[0.2em] uppercase transition sm:block motion-reduce:transition-none ${active ? 'text-[#f4f3f0]' : 'text-[#6d6d6a] group-hover:text-[#a5a5a1]'}`}
             >
-              {act.numeral} · {stageCaption(act.stage)}
+              {act.numeral} · {AccessScenarioView.stageCaption(act.stage)}
             </span>
           </button>
         </li>
@@ -241,7 +241,7 @@ are reading via IntersectionObserver and lets you jump between them.
         class="font-mono text-[10px] tracking-[0.32em] uppercase"
         style={`color:${ACCENT}`}
       >
-        Act {act.numeral} · {stageCaption(act.stage)}
+        Act {act.numeral} · {AccessScenarioView.stageCaption(act.stage)}
       </p>
 
       <h2
@@ -299,14 +299,18 @@ are reading via IntersectionObserver and lets you jump between them.
         </p>
       {:else}
         {@const nextAct = acts[index + 1]}
-        <button
-          type="button"
-          class="mt-14 flex items-center gap-3 self-start font-mono text-[11px] tracking-[0.18em] text-[#6d6d6a] uppercase transition hover:text-[#f4f3f0] motion-reduce:transition-none"
-          onclick={() => jumpTo(nextAct.stage)}
-        >
-          <ArrowDown class="size-4" aria-hidden="true" />
-          {relationInto(nextAct.stage)} · {stageCaption(nextAct.stage)}
-        </button>
+        {#if nextAct}
+          <button
+            type="button"
+            class="mt-14 flex items-center gap-3 self-start font-mono text-[11px] tracking-[0.18em] text-[#6d6d6a] uppercase transition hover:text-[#f4f3f0] motion-reduce:transition-none"
+            onclick={() => jumpTo(nextAct.stage)}
+          >
+            <ArrowDown class="size-4" aria-hidden="true" />
+            {AccessScenarioView.relationInto(nextAct.stage)} · {AccessScenarioView.stageCaption(
+              nextAct.stage,
+            )}
+          </button>
+        {/if}
       {/if}
 
       {#if !prepared && index === 0}

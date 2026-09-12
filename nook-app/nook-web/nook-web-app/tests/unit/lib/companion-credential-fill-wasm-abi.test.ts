@@ -1,3 +1,8 @@
+import {
+  CredentialFillHandlePhase,
+  type CredentialFillObservationLifetime,
+  type CredentialFillPlanLifetime,
+} from './companion-credential-fill-lifetime'
 import { describe, expect, test } from 'vitest'
 
 import {
@@ -193,18 +198,34 @@ describe('companion credential-fill WASM ABI', () => {
       )
       const observation = classification.observation()
       try {
-        const fields = new CredentialFillObservations()
+        let fields: CredentialFillObservationLifetime = {
+          kind: CredentialFillHandlePhase.Owned,
+          handle: new CredentialFillObservations(),
+        }
         try {
-          fields.add(observation)
-          const result = plan_companion_credential_fill(fields)
+          {
+            const receiver = fields.handle
+            fields = { kind: CredentialFillHandlePhase.Consumed }
+            fields = {
+              kind: CredentialFillHandlePhase.Owned,
+              handle: receiver.add(observation),
+            }
+          }
+          const result = plan_companion_credential_fill(fields.handle)
           try {
             expect(result.kind).toBe(CredentialFillPlanningOutcome.Planned)
-            const plan = result.plan()
+            let plan: CredentialFillPlanLifetime = {
+              kind: CredentialFillHandlePhase.Owned,
+              handle: result.plan(),
+            }
             try {
-              const assignments = plan.take_assignments()
+              const receiver = plan.handle
+              plan = { kind: CredentialFillHandlePhase.Consumed }
+              const assignments = receiver.take_assignments()
               try {
                 expect(assignments).toHaveLength(1)
-                const assignment = assignments[0]!
+                const [assignment] = assignments
+                if (!assignment) expect.fail('planned assignment is absent')
                 expect(assignment).toBeInstanceOf(CredentialFillAssignment)
                 expect(assignment.credential).toBe(
                   classifierCase.expectedCredential,
@@ -213,13 +234,15 @@ describe('companion credential-fill WASM ABI', () => {
                 for (const assignment of assignments) assignment.free()
               }
             } finally {
-              plan.free()
+              if (plan.kind === CredentialFillHandlePhase.Owned)
+                plan.handle.free()
             }
           } finally {
             result.free()
           }
         } finally {
-          fields.free()
+          if (fields.kind === CredentialFillHandlePhase.Owned)
+            fields.handle.free()
         }
       } finally {
         observation.free()
@@ -372,10 +395,20 @@ describe('companion credential-fill WASM ABI', () => {
       )
       const observation = classification.observation()
       try {
-        const fields = new CredentialFillObservations()
+        let fields: CredentialFillObservationLifetime = {
+          kind: CredentialFillHandlePhase.Owned,
+          handle: new CredentialFillObservations(),
+        }
         try {
-          fields.add(observation)
-          const result = plan_companion_credential_fill(fields)
+          {
+            const receiver = fields.handle
+            fields = { kind: CredentialFillHandlePhase.Consumed }
+            fields = {
+              kind: CredentialFillHandlePhase.Owned,
+              handle: receiver.add(observation),
+            }
+          }
+          const result = plan_companion_credential_fill(fields.handle)
           try {
             expect(result.kind).toBe(CredentialFillPlanningOutcome.Rejected)
             expect(result.rejection()).toBe(classifierCase.expectedRejection)
@@ -383,7 +416,8 @@ describe('companion credential-fill WASM ABI', () => {
             result.free()
           }
         } finally {
-          fields.free()
+          if (fields.kind === CredentialFillHandlePhase.Owned)
+            fields.handle.free()
         }
       } finally {
         observation.free()
@@ -411,46 +445,72 @@ describe('companion credential-fill WASM ABI', () => {
       genericPasswordRole,
       writable,
     )
-    const fields = new CredentialFillObservations()
-    fields.add(username)
-    fields.add(password)
-
-    const result = plan_companion_credential_fill(fields)
+    let fields: CredentialFillObservationLifetime = {
+      kind: CredentialFillHandlePhase.Owned,
+      handle: new CredentialFillObservations(),
+    }
     try {
-      expect(result).toBeInstanceOf(CredentialFillResult)
-      expect(result.kind).toBe(CredentialFillPlanningOutcome.Planned)
-      const plan = result.plan()
+      {
+        const receiver = fields.handle
+        fields = { kind: CredentialFillHandlePhase.Consumed }
+        fields = {
+          kind: CredentialFillHandlePhase.Owned,
+          handle: receiver.add(username),
+        }
+      }
+      {
+        const receiver = fields.handle
+        fields = { kind: CredentialFillHandlePhase.Consumed }
+        fields = {
+          kind: CredentialFillHandlePhase.Owned,
+          handle: receiver.add(password),
+        }
+      }
+
+      const result = plan_companion_credential_fill(fields.handle)
       try {
-        expect(plan).toBeInstanceOf(CredentialFillPlan)
-        const assignments = plan.take_assignments()
+        expect(result).toBeInstanceOf(CredentialFillResult)
+        expect(result.kind).toBe(CredentialFillPlanningOutcome.Planned)
+        let plan: CredentialFillPlanLifetime = {
+          kind: CredentialFillHandlePhase.Owned,
+          handle: result.plan(),
+        }
         try {
-          expect(assignments).toHaveLength(2)
-          const usernameAssignment = assignments[0]!
-          const passwordAssignment = assignments[1]!
-          expect(usernameAssignment).toBeInstanceOf(CredentialFillAssignment)
-          expect(passwordAssignment).toBeInstanceOf(CredentialFillAssignment)
-          const assignedUsernameIndex = usernameAssignment.field_index
-          const assignedPasswordIndex = passwordAssignment.field_index
-          const assignedUsernameKind = usernameAssignment.credential
-          const assignedPasswordKind = passwordAssignment.credential
+          expect(plan.handle).toBeInstanceOf(CredentialFillPlan)
+          const receiver = plan.handle
+          plan = { kind: CredentialFillHandlePhase.Consumed }
+          const assignments = receiver.take_assignments()
           try {
-            expect(assignedUsernameIndex.value).toBe(4)
-            expect(assignedUsernameKind).toBe(CredentialKind.Username)
-            expect(assignedPasswordIndex.value).toBe(7)
-            expect(assignedPasswordKind).toBe(CredentialKind.CurrentPassword)
+            expect(assignments).toHaveLength(2)
+            const [usernameAssignment, passwordAssignment] = assignments
+            if (!usernameAssignment || !passwordAssignment)
+              expect.fail('planned assignments are absent')
+            expect(usernameAssignment).toBeInstanceOf(CredentialFillAssignment)
+            expect(passwordAssignment).toBeInstanceOf(CredentialFillAssignment)
+            const assignedUsernameIndex = usernameAssignment.field_index
+            const assignedPasswordIndex = passwordAssignment.field_index
+            const assignedUsernameKind = usernameAssignment.credential
+            const assignedPasswordKind = passwordAssignment.credential
+            try {
+              expect(assignedUsernameIndex.value).toBe(4)
+              expect(assignedUsernameKind).toBe(CredentialKind.Username)
+              expect(assignedPasswordIndex.value).toBe(7)
+              expect(assignedPasswordKind).toBe(CredentialKind.CurrentPassword)
+            } finally {
+              assignedUsernameIndex.free()
+              assignedPasswordIndex.free()
+            }
           } finally {
-            assignedUsernameIndex.free()
-            assignedPasswordIndex.free()
+            for (const assignment of assignments) assignment.free()
           }
         } finally {
-          for (const assignment of assignments) assignment.free()
+          if (plan.kind === CredentialFillHandlePhase.Owned) plan.handle.free()
         }
       } finally {
-        plan.free()
+        result.free()
       }
     } finally {
-      result.free()
-      fields.free()
+      if (fields.kind === CredentialFillHandlePhase.Owned) fields.handle.free()
       username.free()
       password.free()
       usernameIndex.free()
@@ -470,19 +530,32 @@ describe('companion credential-fill WASM ABI', () => {
       currentPasswordRole,
       readonly,
     )
-    const fields = new CredentialFillObservations()
-    fields.add(observation)
-
-    const result = plan_companion_credential_fill(fields)
+    let fields: CredentialFillObservationLifetime = {
+      kind: CredentialFillHandlePhase.Owned,
+      handle: new CredentialFillObservations(),
+    }
     try {
-      expect(result).toBeInstanceOf(CredentialFillResult)
-      expect(result.kind).toBe(CredentialFillPlanningOutcome.Rejected)
-      expect(result.rejection()).toBe(
-        CredentialFillRejection.PasswordFieldsReadonly,
-      )
+      {
+        const receiver = fields.handle
+        fields = { kind: CredentialFillHandlePhase.Consumed }
+        fields = {
+          kind: CredentialFillHandlePhase.Owned,
+          handle: receiver.add(observation),
+        }
+      }
+
+      const result = plan_companion_credential_fill(fields.handle)
+      try {
+        expect(result).toBeInstanceOf(CredentialFillResult)
+        expect(result.kind).toBe(CredentialFillPlanningOutcome.Rejected)
+        expect(result.rejection()).toBe(
+          CredentialFillRejection.PasswordFieldsReadonly,
+        )
+      } finally {
+        result.free()
+      }
     } finally {
-      result.free()
-      fields.free()
+      if (fields.kind === CredentialFillHandlePhase.Owned) fields.handle.free()
       observation.free()
       readonly.free()
       currentPasswordRole.free()
@@ -496,37 +569,65 @@ describe('companion credential-fill WASM ABI', () => {
     const newPassword = CredentialFillObservation.new_password(newPasswordIndex)
     const oneTimeCode =
       CredentialFillObservation.one_time_code(oneTimeCodeIndex)
-    const newPasswordFields = new CredentialFillObservations()
-    const oneTimeCodeFields = new CredentialFillObservations()
-    newPasswordFields.add(newPassword)
-    oneTimeCodeFields.add(oneTimeCode)
-
-    const newPasswordResult = plan_companion_credential_fill(newPasswordFields)
+    let newPasswordFields: CredentialFillObservationLifetime = {
+      kind: CredentialFillHandlePhase.Owned,
+      handle: new CredentialFillObservations(),
+    }
+    let oneTimeCodeFields: CredentialFillObservationLifetime = {
+      kind: CredentialFillHandlePhase.Owned,
+      handle: new CredentialFillObservations(),
+    }
     try {
-      expect(newPasswordResult).toBeInstanceOf(CredentialFillResult)
-      expect(newPasswordResult.kind).toBe(
-        CredentialFillPlanningOutcome.Rejected,
+      {
+        const receiver = newPasswordFields.handle
+        newPasswordFields = { kind: CredentialFillHandlePhase.Consumed }
+        newPasswordFields = {
+          kind: CredentialFillHandlePhase.Owned,
+          handle: receiver.add(newPassword),
+        }
+      }
+      {
+        const receiver = oneTimeCodeFields.handle
+        oneTimeCodeFields = { kind: CredentialFillHandlePhase.Consumed }
+        oneTimeCodeFields = {
+          kind: CredentialFillHandlePhase.Owned,
+          handle: receiver.add(oneTimeCode),
+        }
+      }
+
+      const newPasswordResult = plan_companion_credential_fill(
+        newPasswordFields.handle,
       )
-      expect(newPasswordResult.rejection()).toBe(
-        CredentialFillRejection.NewPasswordFieldPresent,
-      )
-      const oneTimeCodeResult =
-        plan_companion_credential_fill(oneTimeCodeFields)
       try {
-        expect(oneTimeCodeResult).toBeInstanceOf(CredentialFillResult)
-        expect(oneTimeCodeResult.kind).toBe(
+        expect(newPasswordResult).toBeInstanceOf(CredentialFillResult)
+        expect(newPasswordResult.kind).toBe(
           CredentialFillPlanningOutcome.Rejected,
         )
-        expect(oneTimeCodeResult.rejection()).toBe(
-          CredentialFillRejection.OneTimeCodeFieldPresent,
+        expect(newPasswordResult.rejection()).toBe(
+          CredentialFillRejection.NewPasswordFieldPresent,
         )
+        const oneTimeCodeResult = plan_companion_credential_fill(
+          oneTimeCodeFields.handle,
+        )
+        try {
+          expect(oneTimeCodeResult).toBeInstanceOf(CredentialFillResult)
+          expect(oneTimeCodeResult.kind).toBe(
+            CredentialFillPlanningOutcome.Rejected,
+          )
+          expect(oneTimeCodeResult.rejection()).toBe(
+            CredentialFillRejection.OneTimeCodeFieldPresent,
+          )
+        } finally {
+          oneTimeCodeResult.free()
+        }
       } finally {
-        oneTimeCodeResult.free()
+        newPasswordResult.free()
       }
     } finally {
-      newPasswordResult.free()
-      newPasswordFields.free()
-      oneTimeCodeFields.free()
+      if (newPasswordFields.kind === CredentialFillHandlePhase.Owned)
+        newPasswordFields.handle.free()
+      if (oneTimeCodeFields.kind === CredentialFillHandlePhase.Owned)
+        oneTimeCodeFields.handle.free()
       newPassword.free()
       oneTimeCode.free()
       newPasswordIndex.free()
@@ -543,15 +644,25 @@ describe('companion credential-fill WASM ABI', () => {
       usernameRole,
       writable,
     )
-    const fields = new CredentialFillObservations()
+    let fields: CredentialFillObservationLifetime = {
+      kind: CredentialFillHandlePhase.Owned,
+      handle: new CredentialFillObservations(),
+    }
     const maxCount = CredentialFillObservations.max_count()
 
     try {
       expect(maxCount).toBeInstanceOf(CredentialFillObservationCount)
       for (let count = 0; count <= maxCount.value; count += 1) {
-        fields.add(observation)
+        {
+          const receiver: CredentialFillObservations = fields.handle
+          fields = { kind: CredentialFillHandlePhase.Consumed }
+          fields = {
+            kind: CredentialFillHandlePhase.Owned,
+            handle: receiver.add(observation),
+          }
+        }
       }
-      const result = plan_companion_credential_fill(fields)
+      const result = plan_companion_credential_fill(fields.handle)
       try {
         expect(result).toBeInstanceOf(CredentialFillResult)
         expect(result.kind).toBe(CredentialFillPlanningOutcome.Rejected)
@@ -561,8 +672,15 @@ describe('companion credential-fill WASM ABI', () => {
       } finally {
         result.free()
       }
-      fields.add(observation)
-      const repeatedResult = plan_companion_credential_fill(fields)
+      {
+        const receiver: CredentialFillObservations = fields.handle
+        fields = { kind: CredentialFillHandlePhase.Consumed }
+        fields = {
+          kind: CredentialFillHandlePhase.Owned,
+          handle: receiver.add(observation),
+        }
+      }
+      const repeatedResult = plan_companion_credential_fill(fields.handle)
       try {
         expect(repeatedResult.kind).toBe(CredentialFillPlanningOutcome.Rejected)
         expect(repeatedResult.rejection()).toBe(
@@ -572,7 +690,7 @@ describe('companion credential-fill WASM ABI', () => {
         repeatedResult.free()
       }
     } finally {
-      fields.free()
+      if (fields.kind === CredentialFillHandlePhase.Owned) fields.handle.free()
       observation.free()
       writable.free()
       usernameRole.free()

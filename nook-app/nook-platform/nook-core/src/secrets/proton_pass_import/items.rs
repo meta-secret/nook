@@ -4,11 +4,19 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Decoded Proton Pass vaults and ordered item metadata conversion.
+#[derive(Debug, PartialEq, Eq)]
+enum ExportFieldExclusion {
+    EmptyText,
+    UnsupportedValue,
+}
 use super::super::import_support::{ImportMetadata, SourceLabelMetadata};
 use super::{ProtonPassImportError, ProtonPassImportPlan};
+use crate::CreditCardFields;
+use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 use serde::Deserialize;
-use serde_json::Value;
+use serde::de::IgnoredAny;
+use serde_json::Number;
 use std::{collections::BTreeMap, str};
 #[derive(Debug, Deserialize)]
 pub(super) struct ProtonPassExport {
@@ -32,7 +40,7 @@ struct ProtonPassItem {
     #[serde(default)]
     pinned: bool,
     #[serde(default)]
-    files: Vec<Value>,
+    files: Vec<IgnoredAny>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,7 +80,7 @@ struct ProtonPassContent {
     #[serde(default)]
     totp_uri: String,
     #[serde(default)]
-    passkeys: Vec<Value>,
+    passkeys: Vec<IgnoredAny>,
     #[serde(default)]
     cardholder_name: String,
     #[serde(default)]
@@ -93,21 +101,63 @@ struct ProtonPassField {
     #[serde(rename = "type", default)]
     field_type: String,
     #[serde(default)]
-    data: Value,
+    data: ProtonPassFieldContent,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ProtonPassFieldContent {
+    Object(ProtonPassFieldData),
+    Unsupported(IgnoredAny),
+}
+impl Default for ProtonPassFieldContent {
+    fn default() -> Self {
+        Self::Unsupported(IgnoredAny)
+    }
+}
+/// Only recognized scalar field content enters imported metadata.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProtonPassFieldData {
+    #[serde(default)]
+    content: ProtonPassFieldScalar,
+    #[serde(default)]
+    totp_uri: ProtonPassFieldScalar,
+    #[serde(default)]
+    timestamp: ProtonPassFieldScalar,
+}
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ProtonPassFieldScalar {
+    Text(String),
+    Number(Number),
+    Unsupported(IgnoredAny),
+}
+impl Default for ProtonPassFieldScalar {
+    fn default() -> Self {
+        Self::Unsupported(IgnoredAny)
+    }
+}
+impl ProtonPassFieldScalar {
+    fn text(&self) -> Result<String, ExportFieldExclusion> {
+        match self {
+            Self::Text(value) if !value.trim().is_empty() => Ok(value.clone()),
+            Self::Number(value) => Ok(value.to_string()),
+            Self::Text(_) => Err(ExportFieldExclusion::EmptyText),
+            Self::Unsupported(_) => Err(ExportFieldExclusion::UnsupportedValue),
+        }
+    }
+}
 impl ProtonPassField {
-    fn value(&self) -> Option<String> {
-        let key = match self.field_type.as_str() {
-            "totp" => "totpUri",
-            "timestamp" => "timestamp",
-            "text" | "hidden" => "content",
-            _ => return None,
+    fn value(&self) -> Result<String, ExportFieldExclusion> {
+        let ProtonPassFieldContent::Object(data) = &self.data else {
+            return Err(ExportFieldExclusion::UnsupportedValue);
         };
-        match self.data.get(key) {
-            Some(Value::String(value)) if !value.trim().is_empty() => Some(value.clone()),
-            Some(Value::Number(value)) => Some(value.to_string()),
-            _ => None,
+        match self.field_type.as_str() {
+            "totp" => data.totp_uri.text(),
+            "timestamp" => data.timestamp.text(),
+            "text" | "hidden" => data.content.text(),
+            _ => Err(ExportFieldExclusion::UnsupportedValue),
         }
     }
 }
@@ -128,12 +178,12 @@ struct ProtonPassMetadataSelection<'a> {
     username: &'a str,
 }
 struct ProtonPassVaultItem<'a> {
-    item: &'a ProtonPassItem,
+    item: ProtonPassItem,
     vault_name: &'a str,
 }
 impl ProtonPassVaultItem<'_> {
     fn metadata(&self, selection: &ProtonPassMetadataSelection<'_>) -> Vec<(String, String)> {
-        let item = self.item;
+        let item = &self.item;
         let vault_name = self.vault_name;
         let primary_url = selection.primary_url;
         let selected_username = selection.username;
@@ -168,7 +218,7 @@ impl ProtonPassVaultItem<'_> {
                 .iter()
                 .enumerate()
                 .filter_map(|(index, field)| {
-                    let value = field.value()?;
+                    let value = field.value().ok()?;
                     let name = if field.field_name.trim().is_empty() {
                         format!("field[{}]", index + 1)
                     } else {
@@ -193,8 +243,8 @@ impl ProtonPassVaultItem<'_> {
     }
 }
 impl ProtonPassVaultItem<'_> {
-    fn login(&self) -> SecretValue {
-        let item = self.item;
+    fn login(self) -> SecretValue {
+        let item = &self.item;
 
         let content = &item.data.content;
         let website_url = content
@@ -213,12 +263,11 @@ impl ProtonPassVaultItem<'_> {
         .into_iter()
         .find(|candidate| !candidate.trim().is_empty())
         .map_or("", str::trim);
-        let mut notes = item.data.metadata.note.clone();
         let mut metadata = self.metadata(&ProtonPassMetadataSelection {
             primary_url: website_url.as_str(),
             username,
         });
-        if let Some(name) = (SourceLabelMetadata {
+        if let Ok(name) = (SourceLabelMetadata {
             key: "name",
             label: &item.data.metadata.name,
             website_url: website_url.as_str(),
@@ -227,40 +276,47 @@ impl ProtonPassVaultItem<'_> {
         {
             metadata.insert(0, name);
         }
+        let mut notes = self.item.data.metadata.note;
+        let content = self.item.data.content;
+        let mut username = [content.item_username, content.username, content.item_email]
+            .into_iter()
+            .find(|candidate| !candidate.trim().is_empty())
+            .unwrap_or_default();
+        username.truncate(username.trim_end().len());
+        let leading_whitespace = username.len() - username.trim_start().len();
+        username.drain(..leading_whitespace);
         ProtonPassNotes { notes: &mut notes }.append(metadata);
         SecretValue::Login(LoginSecret {
             website_url,
-            username: username.to_owned(),
-            password: content.password.clone(),
+            username,
+            password: content.password,
             notes,
         })
     }
 }
 impl ProtonPassVaultItem<'_> {
-    fn note(&self) -> SecretValue {
-        let item = self.item;
+    fn note(self) -> SecretValue {
+        let item = &self.item;
 
-        let mut note = item.data.metadata.note.clone();
-        ProtonPassNotes { notes: &mut note }.append(self.metadata(&ProtonPassMetadataSelection {
+        let metadata = self.metadata(&ProtonPassMetadataSelection {
             primary_url: "",
             username: "",
-        }));
-        SecretValue::SecureNote(SecureNoteSecret {
-            title: item.data.metadata.name.trim().to_owned(),
-            note,
-        })
+        });
+        let title = item.data.metadata.name.trim().to_owned();
+        let mut note = self.item.data.metadata.note;
+        ProtonPassNotes { notes: &mut note }.append(metadata);
+        SecretValue::SecureNote(SecureNoteSecret { title, note })
     }
 }
 impl ProtonPassVaultItem<'_> {
-    fn credit_card(&self) -> Option<SecretValue> {
-        let item = self.item;
+    fn credit_card(self) -> ImportItemDisposition {
+        let item = &self.item;
 
         let content = &item.data.content;
         let (expiration_month, expiration_year) = ProtonPassExpiration {
             raw: &content.expiration_date,
         }
         .month_year();
-        let mut notes = item.data.metadata.note.clone();
         let mut metadata = self.metadata(&ProtonPassMetadataSelection {
             primary_url: "",
             username: "",
@@ -268,18 +324,22 @@ impl ProtonPassVaultItem<'_> {
         if !content.pin.trim().is_empty() {
             metadata.push(("pin".to_owned(), content.pin.trim().to_owned()));
         }
+        let mut notes = self.item.data.metadata.note;
+        let content = &self.item.data.content;
         ProtonPassNotes { notes: &mut notes }.append(metadata);
-        CreditCardSecret::from_fields(
-            item.data.metadata.name.trim(),
-            content.cardholder_name.trim(),
-            content.number.trim(),
-            expiration_month.trim(),
-            expiration_year.trim(),
-            content.verification_number.trim(),
-            &notes,
+        CreditCardSecret::from_fields(CreditCardFields {
+            title: self.item.data.metadata.name.trim(),
+            cardholder_name: content.cardholder_name.trim(),
+            number: content.number.trim(),
+            expiration_month: expiration_month.trim(),
+            expiration_year: expiration_year.trim(),
+            cvv: content.verification_number.trim(),
+            notes: &notes,
+        })
+        .map_or(
+            ImportItemDisposition::Skipped(ImportSkipReason::InvalidCard),
+            |card| ImportItemDisposition::Imported(SecretValue::CreditCard(card)),
         )
-        .ok()
-        .map(SecretValue::CreditCard)
     }
 }
 struct ProtonPassExpiration<'a> {
@@ -311,21 +371,21 @@ impl ProtonPassExport {
                 match item.data.item_type.as_str() {
                     "login" => items.push(
                         ProtonPassVaultItem {
-                            item: &item,
+                            item,
                             vault_name: &vault.name,
                         }
                         .login(),
                     ),
                     "note" => items.push(
                         ProtonPassVaultItem {
-                            item: &item,
+                            item,
                             vault_name: &vault.name,
                         }
                         .note(),
                     ),
                     "creditCard" => {
-                        if let Some(card) = (ProtonPassVaultItem {
-                            item: &item,
+                        if let ImportItemDisposition::Imported(card) = (ProtonPassVaultItem {
+                            item,
                             vault_name: &vault.name,
                         })
                         .credit_card()
@@ -368,10 +428,15 @@ mod tests {
             ),
             (r#"{"type":"unknown","data":{"content":"secret"}}"#, None),
             (r#"{"type":"text","data":{"content":false}}"#, None),
+            (r#"{"type":"text","data":null}"#, None),
+            (r#"{"type":"text","data":42}"#, None),
+            (r#"{"type":"text","data":true}"#, None),
+            (r#"{"type":"text","data":"ignored"}"#, None),
+            (r#"{"type":"text","data":[]}"#, None),
             (r#"{"type":"text","data":{"content":" "}}"#, None),
         ] {
             let field: ProtonPassField = serde_json::from_str(json)?;
-            assert_eq!(field.value().as_deref(), expected);
+            assert_eq!(field.value().ok().as_deref(), expected);
         }
         Ok(())
     }
@@ -421,5 +486,18 @@ mod tests {
                 (month.to_owned(), year.to_owned())
             );
         }
+    }
+    #[test]
+    fn unsupported_custom_data_does_not_discard_valid_export_items() -> anyhow::Result<()> {
+        let plan = ProtonPassExport::parse(r#"{"vaults":{"a":{"items":[{"data":{"type":"note","metadata":{"name":"Kept"},"extraFields":[{"fieldName":"ignored","type":"text","data":null},{"fieldName":"array","type":"text","data":[1]},{"fieldName":"scalar","type":"text","data":true},{"fieldName":"known","type":"text","data":{"content":"retained"}}]}}]}}}"#)?.plan();
+        let [SecretValue::SecureNote(note)] = plan.items.as_slice() else {
+            anyhow::bail!("expected retained note")
+        };
+        assert_eq!(note.title, "Kept");
+        assert!(note.note.contains("retained"));
+        assert!(!note.note.contains("ignored"));
+        assert_eq!(usize::from(plan.source_count), 1);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
+        Ok(())
     }
 }

@@ -5,25 +5,33 @@
 )]
 //! Identity persistence must complete before exact-marker cleanup becomes available.
 use super::super as identity_record;
-use super::super::super::indexed_db;
+use super::VerifiedPreviousEpoch;
 use super::{
     IdentityReconciliationStore, NookError, PendingIdentityReconciliation,
     PendingIdentityReconciliationProgress,
 };
+use crate::NookDatabase;
+use crate::storage::identity_record::IdentityDirectoryWrite;
+use crate::storage::indexed_db::StoredStringRecord;
 use identity_record::LegacyVaultIdentityInput;
+use nook_core::DirectoryLegacyVaultImport;
 use nook_core::{
     AgeArmoredCiphertext, AppKey, AuthKeyId, IdentityRecord, IdentityVaultDekEpoch,
     IdentityVaultDekEpochUpdate, IdentityVaultEventId, StoreId,
 };
 pub(super) struct EpochObservation<'a> {
     pub(super) observed: IdentityVaultDekEpoch,
-    pub(super) verified_previous_key_epoch: Option<IdentityVaultEventId>,
+    pub(super) verified_previous_key_epoch: VerifiedPreviousEpoch,
     pub(super) committed_event_ids: &'a [IdentityVaultEventId],
     pub(super) checkpoint_ancestors: &'a [IdentityVaultEventId],
 }
+enum ReconciliationCleanup {
+    NoMarker,
+    ConsumeExact(String),
+}
 pub(super) struct IdentityEpochResolution {
     update: IdentityVaultDekEpochUpdate,
-    consumed_marker: Option<String>,
+    consumed_marker: ReconciliationCleanup,
 }
 /// Carries the selected marker through directory persistence without cleaning it.
 /// Dropping this state or its unpolled future has no storage effect.
@@ -49,7 +57,7 @@ struct ResolvedIdentityPersistence {
 struct PersistedIdentityReconciliation {
     store_id: StoreId,
     record: IdentityRecord,
-    consumed_marker: Option<String>,
+    consumed_marker: ReconciliationCleanup,
 }
 impl IdentityReconciliationStore<'_> {
     pub(super) async fn resolve(
@@ -64,11 +72,11 @@ impl IdentityReconciliationStore<'_> {
             checkpoint_ancestors,
         } = input;
 
-        let Some(raw) =
-            indexed_db::idb_get_string(&IdentityReconciliationStore::new(store_id).key()).await?
+        let StoredStringRecord::Stored(raw) =
+            NookDatabase::idb_get_string(&IdentityReconciliationStore::new(store_id).key()).await?
         else {
             if let (
-                Some(previous_key_epoch),
+                VerifiedPreviousEpoch::Verified(previous_key_epoch),
                 IdentityVaultDekEpoch::Known {
                     key_epoch,
                     checkpoint,
@@ -82,7 +90,7 @@ impl IdentityReconciliationStore<'_> {
                         key_epoch: key_epoch.clone(),
                         checkpoint: checkpoint.clone(),
                     },
-                    consumed_marker: None,
+                    consumed_marker: ReconciliationCleanup::NoMarker,
                 });
             }
             return Ok(IdentityEpochResolution {
@@ -90,7 +98,7 @@ impl IdentityReconciliationStore<'_> {
                     key_epoch: observed,
                     checkpoint_ancestors: checkpoint_ancestors.to_vec(),
                 },
-                consumed_marker: None,
+                consumed_marker: ReconciliationCleanup::NoMarker,
             });
         };
         let pending = PendingIdentityReconciliation::decode(&raw)?;
@@ -139,7 +147,7 @@ impl IdentityReconciliationStore<'_> {
                         key_epoch: observed_epoch.clone(),
                         checkpoint: observed_checkpoint.clone(),
                     },
-                    consumed_marker: Some(raw),
+                    consumed_marker: ReconciliationCleanup::ConsumeExact(raw),
                 })
             }
         }
@@ -199,26 +207,29 @@ impl ResolvedIdentityPersistence {
         } = self;
         let consumed_marker = resolution.consumed_marker;
         let directory_store_id = store_id.clone();
-        let record = identity_record::update_identity_directory(move |directory| {
-            let identity_id = directory
-                .import_legacy_vault(
-                    &label,
-                    &app_key,
-                    directory_store_id,
-                    nook_core::IdentityVaultDekReconciliation {
+        let record = NookDatabase::update_identity_directory(move |mut directory| {
+            let resolved_identity = directory
+                .import_legacy_vault(DirectoryLegacyVaultImport {
+                    label: &label,
+                    app_key: &app_key,
+                    store_id: directory_store_id,
+                    reconciliation: nook_core::IdentityVaultDekReconciliation {
                         secrets_envelope,
                         members_envelope,
                         epoch_update: resolution.update,
                         authorized_auth_ids,
                     },
-                )
+                })
                 .map_err(|error| NookError::Database(error.to_string()))?;
-            directory
+            directory = resolved_identity.directory;
+            let identity_id = resolved_identity.identity_id;
+            let value = directory
                 .identities()
                 .iter()
                 .find(|record| record.identity_id == identity_id)
                 .cloned()
-                .ok_or_else(|| NookError::Database("Imported identity disappeared.".to_owned()))
+                .ok_or_else(|| NookError::Database("Imported identity disappeared.".to_owned()))?;
+            Ok(IdentityDirectoryWrite { directory, value })
         })
         .await?;
 
@@ -236,7 +247,7 @@ impl PersistedIdentityReconciliation {
             record,
             consumed_marker,
         } = self;
-        if let Some(consumed_marker) = consumed_marker {
+        if let ReconciliationCleanup::ConsumeExact(consumed_marker) = consumed_marker {
             IdentityReconciliationStore::new(&store_id)
                 .clear_consumed(&consumed_marker)
                 .await?;
@@ -250,18 +261,24 @@ impl IdentityEpochResolution {
     pub(super) fn update(&self) -> &IdentityVaultDekEpochUpdate {
         &self.update
     }
-    pub(super) fn marker(&self) -> Option<&str> {
-        self.consumed_marker.as_deref()
+    pub(super) fn marker(&self) -> Result<&str, NookError> {
+        match &self.consumed_marker {
+            ReconciliationCleanup::ConsumeExact(marker) => Ok(marker),
+            ReconciliationCleanup::NoMarker => Err(NookError::IndexedDb(
+                "Committed marker was not selected for cleanup.".to_owned(),
+            )),
+        }
     }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_tests {
-    use super::{IdentityEpochResolution, ResolvedIdentityPersistence};
+    use super::{IdentityEpochResolution, ReconciliationCleanup, ResolvedIdentityPersistence};
     use crate::NookError;
+    use crate::storage::identity_record::IDENTITY_DIRECTORY_KEY;
     use crate::storage::identity_record::reconciliation::IdentityReconciliationStore;
-    use crate::storage::identity_record::{IDENTITY_DIRECTORY_KEY, load_identity_directory};
-    use crate::storage::indexed_db;
+
+    use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use nook_core::{AppKey, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -282,11 +299,11 @@ mod browser_tests {
         }
 
         async fn install(&self) -> Result<(), NookError> {
-            indexed_db::clear_vault_db().await?;
-            indexed_db::idb_put_string(
-                &IdentityReconciliationStore::new(&self.store_id).key(),
-                &self.marker,
-            )
+            NookDatabase::clear_vault_db().await?;
+            NookDatabase::idb_put_string(IdbPutStringRequest {
+                key: &IdentityReconciliationStore::new(&self.store_id).key(),
+                value: &self.marker,
+            })
             .await
         }
 
@@ -297,7 +314,7 @@ mod browser_tests {
                         key_epoch: IdentityVaultDekEpoch::LegacyUnknown,
                         checkpoint_ancestors: Vec::new(),
                     },
-                    consumed_marker: Some(self.marker.clone()),
+                    consumed_marker: ReconciliationCleanup::ConsumeExact(self.marker.clone()),
                 },
                 store_id: self.store_id.clone(),
                 app_key: self.app_key.clone(),
@@ -310,9 +327,11 @@ mod browser_tests {
 
         async fn assert_marker(&self) -> Result<(), NookError> {
             assert_eq!(
-                indexed_db::idb_get_string(&IdentityReconciliationStore::new(&self.store_id).key())
-                    .await?,
-                Some(self.marker.clone())
+                NookDatabase::idb_get_string(
+                    &IdentityReconciliationStore::new(&self.store_id).key()
+                )
+                .await?,
+                StoredStringRecord::Stored(self.marker.clone())
             );
             Ok(())
         }
@@ -331,7 +350,7 @@ mod browser_tests {
         fixture.install().await?;
         let persisted = fixture.resolved()?.persist().await?;
         fixture.assert_marker().await?;
-        let directory = load_identity_directory().await?;
+        let directory = NookDatabase::load_identity_directory().await?;
         assert!(
             directory
                 .identities()
@@ -340,12 +359,14 @@ mod browser_tests {
         );
         let expected = persisted.record.clone();
         assert_eq!(persisted.complete().await?, expected);
-        assert!(
-            indexed_db::idb_get_string(&IdentityReconciliationStore::new(&fixture.store_id).key())
-                .await?
-                .is_none()
-        );
-        indexed_db::clear_vault_db().await
+        assert!(matches!(
+            NookDatabase::idb_get_string(
+                &IdentityReconciliationStore::new(&fixture.store_id).key()
+            )
+            .await?,
+            StoredStringRecord::MissingKey
+        ));
+        NookDatabase::clear_vault_db().await
     }
 
     #[cfg_attr(
@@ -359,19 +380,21 @@ mod browser_tests {
     async fn failed_directory_persistence_preserves_selected_marker() -> Result<(), NookError> {
         let fixture = PersistenceFixture::new()?;
         fixture.install().await?;
-        indexed_db::idb_put_string(IDENTITY_DIRECTORY_KEY, "{malformed").await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: IDENTITY_DIRECTORY_KEY,
+            value: "{malformed",
+        })
+        .await?;
         assert!(matches!(
             fixture.resolved()?.persist().await,
             Err(NookError::IndexedDb(_))
         ));
         fixture.assert_marker().await?;
         assert_eq!(
-            indexed_db::idb_get_string(IDENTITY_DIRECTORY_KEY)
-                .await?
-                .as_deref(),
-            Some("{malformed")
+            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY).await?,
+            StoredStringRecord::Stored(("{malformed").to_owned())
         );
-        indexed_db::clear_vault_db().await
+        NookDatabase::clear_vault_db().await
     }
 
     #[cfg_attr(
@@ -392,11 +415,10 @@ mod browser_tests {
             let _unpolled_persistence = fixture.resolved()?.persist();
         }
         fixture.assert_marker().await?;
-        assert!(
-            indexed_db::idb_get_string(IDENTITY_DIRECTORY_KEY)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
         {
             let _persisted = fixture.resolved()?.persist().await?;
         }
@@ -405,11 +427,10 @@ mod browser_tests {
             let _unpolled_completion = fixture.resolved()?.persist().await?.complete();
         }
         fixture.assert_marker().await?;
-        assert!(
-            indexed_db::idb_get_string(IDENTITY_DIRECTORY_KEY)
-                .await?
-                .is_some()
-        );
-        indexed_db::clear_vault_db().await
+        assert!(matches!(
+            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY).await?,
+            StoredStringRecord::Stored(_)
+        ));
+        NookDatabase::clear_vault_db().await
     }
 }

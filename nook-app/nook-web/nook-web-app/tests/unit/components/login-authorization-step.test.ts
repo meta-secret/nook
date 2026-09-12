@@ -7,23 +7,24 @@ import {
   PasswordUnlockCapabilityKind,
   type DeviceKeysUnlockCapability,
 } from '$lib/components/login/login-unlock-state'
-import type { VaultState } from '$lib/vault.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import {
   PasswordEntrySelectionKind,
   type PasswordEntrySelection,
 } from '$lib/vault/state/session.svelte'
 
-const vault = {
-  t(key: string): string {
-    return key
-  },
-} as unknown as VaultState
+const vault = VaultStateTestFixture.create()
+vi.spyOn(vault, 't').mockImplementation((request) =>
+  typeof request === 'string' ? request : request.key,
+)
 
 const passwordEntry = {
   id: 'password_backup',
   label: 'Backup',
-  createdAt: 1,
-} as unknown as NookPasswordEntrySummary
+  createdAt: '2026-09-11T00:00:00Z',
+  free: vi.fn(),
+  [Symbol.dispose]: vi.fn(),
+} satisfies NookPasswordEntrySummary
 
 const selectedPasswordEntry: PasswordEntrySelection = {
   kind: PasswordEntrySelectionKind.NotSelected,
@@ -55,10 +56,12 @@ describe('LoginAuthorizationStep device-key capability transitions', () => {
       LoginAuthorizationStep,
       authorizationProps({ kind: DeviceKeysUnlockCapabilityKind.Unknown }),
     )
-    const keys = view.getByTestId(
-      'login-unlock-method-keys',
-    ) as HTMLButtonElement
-    const submit = view.getByTestId('unlock-vault-btn') as HTMLButtonElement
+    const keys = view.getByTestId('login-unlock-method-keys')
+    const submit = view.getByTestId('unlock-vault-btn')
+    if (!(keys instanceof HTMLButtonElement))
+      expect.fail('device-key method must be a button')
+    if (!(submit instanceof HTMLButtonElement))
+      expect.fail('unlock control must be a button')
 
     expect(keys.getAttribute('aria-checked')).toBe('true')
     expect(keys.disabled).toBe(true)

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { isAuthenticationOutcomeClassifyMessage } from '../src/lib/outcome-evidence-messages'
+import { AuthenticationOutcomeClassifyMessage as AuthenticationOutcomeClassifyMessageSchema } from '../src/lib/outcome-evidence-messages'
 
 const validObservation = {
   navigatedAwayFromAuthPath: true,
@@ -14,7 +14,7 @@ const validObservation = {
 describe('outcome evidence messages', () => {
   test('accepts a bounded classify payload', () => {
     expect(
-      isAuthenticationOutcomeClassifyMessage({
+      AuthenticationOutcomeClassifyMessageSchema.is({
         type: 'nook:authentication-outcome-classify',
         payload: { observation: validObservation, timeoutMs: 8_000 },
       }),
@@ -23,7 +23,7 @@ describe('outcome evidence messages', () => {
 
   test('rejects secret-bearing or malformed observations', () => {
     expect(
-      isAuthenticationOutcomeClassifyMessage({
+      AuthenticationOutcomeClassifyMessageSchema.is({
         type: 'nook:authentication-outcome-classify',
         payload: {
           observation: { ...validObservation, elapsedMs: -1 },
@@ -31,7 +31,7 @@ describe('outcome evidence messages', () => {
       }),
     ).toBe(false)
     expect(
-      isAuthenticationOutcomeClassifyMessage({
+      AuthenticationOutcomeClassifyMessageSchema.is({
         type: 'nook:authentication-outcome-classify',
         payload: {
           observation: { ...validObservation, password: 'x' },

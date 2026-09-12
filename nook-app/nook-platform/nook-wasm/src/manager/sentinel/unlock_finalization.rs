@@ -2,6 +2,10 @@
 
 use super::super::verified_access::VerifiedVaultAccessFlow;
 use super::super::{CeremonyState, NookVaultManager};
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::EventDbSaveEventBytes;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::NookDatabase;
 use crate::{NookError, NookSecretRecord};
 use nook_core::{
     DeviceIdentity, MultiDeviceError, SentinelUnlockPolicy, SentinelUnlockQuorum,
@@ -73,14 +77,14 @@ impl<'a> PendingUnlockCompletion<'a> {
         }
         let store_id = StoreId::parse(&self.manager.vault.store_id)?;
         let policy = self.manager.vault.architecture.sentinel.policy()?;
-        quorum.check_context(
+        let ready = quorum.check_context(
             &store_id,
             SentinelUnlockPolicy {
                 threshold: policy.threshold,
                 required_participants: policy.required_participants,
             },
         )?;
-        let keys = quorum.finalize()?;
+        let keys = ready.finalize()?;
         let records = self.manager.stored_records_snapshot();
         let meta = VaultMetaState::from_stored_records(&records)?;
         self.manager
@@ -398,7 +402,7 @@ mod tests {
                             required_participants: 3.into(),
                             ready_participants: 3.into(),
                         },
-                    )
+                    );
                 }
                 _ => manager.vault.store_id = "invalid-store".to_owned(),
             }
@@ -424,7 +428,6 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     mod browser {
         use super::*;
-        use crate::storage::event_db;
         use nook_core::{EventId, IsoTimestamp, VaultOperation};
         use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -495,11 +498,11 @@ mod tests {
                         operations,
                     })?;
                 let event_id = event.validate_envelope(&fixture.output.store_id)?;
-                event_db::save_event_bytes(
-                    fixture.output.store_id.as_str(),
-                    event_id.as_str(),
-                    bytes.as_ref(),
-                )
+                NookDatabase::save_event_bytes(EventDbSaveEventBytes {
+                    store_id: fixture.output.store_id.as_str(),
+                    event_id: event_id.as_str(),
+                    bytes: bytes.as_ref(),
+                })
                 .await?;
                 let quorum = fixture
                     .ready_session(&fixture.output.stored_records)?
@@ -520,7 +523,7 @@ mod tests {
                     mem::discriminant(&error)
                 );
                 fixture.assert_reset(&manager);
-                event_db::clear_local_event_store(fixture.output.store_id.as_str()).await?;
+                NookDatabase::clear_local_event_store(fixture.output.store_id.as_str()).await?;
             }
             let mut manager = fixture.manager()?;
             manager.sentinel_unlock =

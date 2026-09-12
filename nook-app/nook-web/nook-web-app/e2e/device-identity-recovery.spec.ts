@@ -2,6 +2,12 @@ import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS } from './helpers'
 
+declare global {
+  interface Window {
+    __releaseRecoveryStorageWork?: () => void
+  }
+}
+
 type RecoveryStorageSnapshot = {
   readonly wrappedIdentityStored: boolean
   readonly registryStored: boolean
@@ -9,9 +15,19 @@ type RecoveryStorageSnapshot = {
 
 async function createProtectedVault(page: Page): Promise<void> {
   await page.goto('/app/')
-  await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
+  const chooser = page.getByTestId('login-create-vault-chooser')
+  const vaultError = page.getByTestId('vault-error')
+  await expect
+    .poll(
+      async () => (await chooser.isVisible()) || (await vaultError.isVisible()),
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
+  if (await vaultError.isVisible()) {
+    throw new Error(
+      `Protected vault setup failed: ${await vaultError.innerText()}`,
+    )
+  }
   await page.getByTestId('get-started-path-simple').click()
   await page.getByTestId('login-vault-name-input').fill('Recovery test vault')
   await page.getByTestId('login-create-device-vault-btn').click()
@@ -67,17 +83,21 @@ async function readRecoveryStorage(
           transaction.onerror = () => reject(transaction.error)
           transaction.oncomplete = () => {
             db.close()
-            const keyring =
+            const keyringValue: unknown =
               typeof identityKeyring.result === 'string'
-                ? (JSON.parse(identityKeyring.result) as {
-                    entries: Array<{ appId: string }>
-                  })
-                : { entries: [] }
+                ? JSON.parse(identityKeyring.result)
+                : undefined
+            const entriesValue: unknown =
+              typeof keyringValue === 'object' && keyringValue !== null
+                ? Object.getOwnPropertyDescriptor(keyringValue, 'entries')
+                    ?.value
+                : undefined
+            const entryCount = Array.isArray(entriesValue)
+              ? entriesValue.length
+              : 0
             resolve({
               wrappedIdentityStored: Boolean(
-                legacyWrapped.result ||
-                appKeyWrapped.result ||
-                keyring.entries.length > 0,
+                legacyWrapped.result || appKeyWrapped.result || entryCount > 0,
               ),
               registryStored: Boolean(registry.result),
             })
@@ -98,33 +118,18 @@ test('waits for peer storage work before destructive identity recovery', async (
   const peer = await page.context().newPage()
   await peer.goto('/app/')
   await expect
-    .poll(() =>
-      peer.evaluate(() =>
-        Boolean(
-          (
-            window as Window & {
-              __nookVault?: { readonly localDataDeletionStarted: boolean }
-            }
-          ).__nookVault,
-        ),
-      ),
-    )
+    .poll(() => peer.evaluate(() => Boolean(window.__nookVault)))
     .toBe(true)
   await peer.evaluate(() => {
-    const peerWindow = window as Window & {
-      __nookVault?: {
-        enqueueStorage<T>(operation: () => Promise<T>): Promise<T>
-      }
-      __releaseRecoveryStorageWork?: () => void
-    }
-    if (!peerWindow.__nookVault) throw new Error('Vault runtime is not exposed')
-    void peerWindow.__nookVault.enqueueStorage(
-      () =>
-        new Promise<void>((resolve) => {
-          peerWindow.__releaseRecoveryStorageWork = resolve
-          localStorage.setItem('nook_e2e_recovery_storage_started', 'true')
-        }),
-    )
+    const peerVault = window.__nookVault
+    if (!peerVault) throw new Error('Vault runtime is not exposed')
+    void peerVault.enqueueStorage(async () => {
+      await new Promise<void>((resolve) => {
+        window.__releaseRecoveryStorageWork = resolve
+        localStorage.setItem('nook_e2e_recovery_storage_started', 'true')
+      })
+      return peerVault.admitManager()
+    })
   })
   await expect
     .poll(() =>
@@ -145,22 +150,14 @@ test('waits for peer storage work before destructive identity recovery', async (
   await expect
     .poll(() =>
       peer.evaluate(() => {
-        const peerVault = (
-          window as Window & {
-            __nookVault?: { readonly localDataDeletionStarted: boolean }
-          }
-        ).__nookVault
-        return ((v) => (v ? v : false))(peerVault?.localDataDeletionStarted)
+        return window.__nookVault?.localDataDeletionStarted ?? false
       }),
     )
     .toBe(true)
   expect((await readRecoveryStorage(page)).wrappedIdentityStored).toBe(true)
   await peer.evaluate(() => {
-    const peerWindow = window as Window & {
-      __releaseRecoveryStorageWork?: () => void
-    }
-    peerWindow.__releaseRecoveryStorageWork?.()
-    delete peerWindow.__releaseRecoveryStorageWork
+    window.__releaseRecoveryStorageWork?.()
+    delete window.__releaseRecoveryStorageWork
   })
 
   await expect(
@@ -172,26 +169,16 @@ test('waits for peer storage work before destructive identity recovery', async (
   await expect
     .poll(() =>
       peer.evaluate(() => {
-        const peerVault = (
-          window as Window & {
-            __nookVault?: { readonly localDataDeletionStarted: boolean }
-          }
-        ).__nookVault
-        return ((...[v = true]) => v)(peerVault?.localDataDeletionStarted)
+        return window.__nookVault?.localDataDeletionStarted ?? true
       }),
     )
     .toBe(false)
   await peer.evaluate(async () => {
-    const peerVault = (
-      window as Window & {
-        __nookVault?: {
-          enqueueStorage<T>(operation: () => Promise<T>): Promise<T>
-        }
-      }
-    ).__nookVault
+    const peerVault = window.__nookVault
     if (!peerVault) throw new Error('Vault runtime is not exposed')
     await peerVault.enqueueStorage(async () => {
       sessionStorage.setItem('nook_e2e_peer_reinitialized', 'true')
+      return peerVault.admitManager()
     })
   })
   await expect

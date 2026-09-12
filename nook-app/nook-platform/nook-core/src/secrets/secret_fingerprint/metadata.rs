@@ -106,14 +106,21 @@ impl ImportMetadataMarker {
                 .iter()
                 .any(|prefix| bullet.starts_with(prefix))
     }
-    fn section_index(&self, normalized: &str) -> Option<usize> {
+    fn section_indices<'a>(&'a self, normalized: &'a str) -> impl Iterator<Item = usize> + 'a {
         normalized
             .match_indices(self.heading)
-            .find_map(|(index, _)| {
-                if index != 0 && !normalized[..index].ends_with("\n\n") {
+            .filter_map(move |(index, _)| {
+                let prefix: String = normalized
+                    .char_indices()
+                    .take_while(|(position, _)| *position < index)
+                    .map(|(_, character)| character)
+                    .collect();
+                if index != 0 && !prefix.ends_with("\n\n") {
                     return None;
                 }
-                let metadata = normalized[index + self.heading.len()..].strip_prefix('\n')?;
+                let metadata = normalized
+                    .get(index + self.heading.len()..)?
+                    .strip_prefix('\n')?;
                 let first_bullet = metadata.strip_prefix("- ")?.lines().next()?;
                 self.recognizes(first_bullet).then_some(index)
             })
@@ -130,10 +137,18 @@ impl ProviderNotes<'_> {
             .policy
             .markers()
             .iter()
-            .filter_map(|marker| marker.section_index(&normalized))
+            .flat_map(|marker| marker.section_indices(&normalized))
             .min();
         match marker_index {
-            Some(index) => Zeroizing::new(normalized[..index].trim_end().to_owned()),
+            Some(index) => Zeroizing::new(
+                normalized
+                    .char_indices()
+                    .take_while(|(position, _)| *position < index)
+                    .map(|(_, character)| character)
+                    .collect::<String>()
+                    .trim_end()
+                    .to_owned(),
+            ),
             None => normalized,
         }
     }
@@ -156,7 +171,11 @@ impl ProviderNotes<'_> {
             }
             .neutral();
             if existing_base == incoming_base {
-                let incoming_metadata = incoming[incoming_base.len()..].trim();
+                let incoming_metadata = incoming
+                    .chars()
+                    .skip(incoming_base.chars().count())
+                    .collect::<String>();
+                let incoming_metadata = incoming_metadata.trim();
                 if incoming_metadata.is_empty() || existing.contains(incoming_metadata) {
                     existing.as_str().to_owned()
                 } else {

@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     env, fs,
+    ops::Deref,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -12,20 +13,40 @@ mod kubernetes_cache_sim;
 #[path = "infra/remote_platform_contracts.rs"]
 mod remote_platform_contracts;
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
 }
 
-fn read(path: &str) -> String {
-    fs::read_to_string(repository_root().join(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
 }
 
 fn read_fallible(path: &str) -> anyhow::Result<String> {
-    fs::read_to_string(repository_root().join(path))
+    fs::read_to_string(RepositoryFixture::repository_root().join(path))
         .with_context(|| format!("failed to read {path}"))
 }
 
@@ -37,13 +58,18 @@ fn production_dockerfiles(directory: PathBuf) -> Vec<PathBuf> {
         for entry in fs::read_dir(&path)
             .unwrap_or_else(|error| panic!("failed to inventory {}: {error}", path.display()))
         {
-            let entry = entry.expect("repository entry must be readable");
+            let entry =
+                entry.unwrap_or_else(|error| panic!("repository entry must be readable: {error}"));
             let path = entry.path();
             if path.is_dir() {
                 let relative = path
-                    .strip_prefix(repository_root())
-                    .expect("repository entries must stay beneath the root");
-                let directory_name = path.file_name().expect("directory must have a name");
+                    .strip_prefix(RepositoryFixture::repository_root())
+                    .unwrap_or_else(|error| {
+                        panic!("repository entries must stay beneath the root: {error}")
+                    });
+                let directory_name = path
+                    .file_name()
+                    .unwrap_or_else(|| panic!("directory must have a name"));
                 if matches!(
                     directory_name.to_str(),
                     Some(".git" | "target" | "node_modules")
@@ -66,7 +92,8 @@ fn production_dockerfiles(directory: PathBuf) -> Vec<PathBuf> {
 
 #[test]
 fn arc_buildkit_resolves_docker_hub_only_through_zot() {
-    let manifest = read("infra/k0s/manifests/arc/buildkit.yaml");
+    let manifest =
+        RepositoryFixture::repository_root().read("infra/k0s/manifests/arc/buildkit.yaml");
 
     assert!(manifest.contains(r#"[registry."docker.io"]"#));
     assert!(manifest.contains(r#"mirrors = ["registry.dev.nokey.sh"]"#));
@@ -75,9 +102,10 @@ fn arc_buildkit_resolves_docker_hub_only_through_zot() {
     assert!(manifest.contains("kind: StatefulSet"));
     assert_eq!(manifest.matches("kind: PersistentVolume\n").count(), 4);
 
-    let proof = read("infra/tasks/bake-cache.yml");
-    let zot = read("infra/sim/bake-cache/zot-config.json");
-    let hive_values = read("infra/k0s/scripts/arc-hive-values.rb");
+    let proof = RepositoryFixture::repository_root().read("infra/tasks/bake-cache.yml");
+    let zot = RepositoryFixture::repository_root().read("infra/sim/bake-cache/zot-config.json");
+    let hive_values =
+        RepositoryFixture::repository_root().read("infra/k0s/scripts/arc-hive-values.rb");
     assert!(proof.contains("registry_ref"));
     assert!(proof.contains("library/alpine"));
     assert!(zot.contains("\"onDemand\": true"));
@@ -87,12 +115,14 @@ fn arc_buildkit_resolves_docker_hub_only_through_zot() {
 
 #[test]
 fn production_dockerfiles_never_resolve_docker_hub_directly() {
-    for path in production_dockerfiles(repository_root()) {
+    for path in production_dockerfiles(RepositoryFixture::repository_root().to_path_buf()) {
         let relative = path
-            .strip_prefix(repository_root())
-            .expect("Dockerfile must stay beneath the repository root");
+            .strip_prefix(RepositoryFixture::repository_root())
+            .unwrap_or_else(|error| {
+                panic!("Dockerfile must stay beneath the repository root: {error}")
+            });
         let path = relative.to_string_lossy();
-        let dockerfile = read(&path);
+        let dockerfile = RepositoryFixture::repository_root().read(&path);
         let mut image_arguments = HashMap::new();
         let mut stages = HashSet::new();
 
@@ -114,7 +144,7 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
             let mut tokens = from.split_whitespace();
             let reference = tokens
                 .find(|token| !token.starts_with("--"))
-                .expect("FROM must contain an image or prior stage");
+                .unwrap_or_else(|| panic!("FROM must contain an image or prior stage"));
             let resolved = reference
                 .strip_prefix("${")
                 .and_then(|name| name.strip_suffix('}'))
@@ -124,9 +154,19 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
                         .copied()
                         .unwrap_or_else(|| panic!("{path} has no default for FROM ${{{name}}}"))
                 });
+            let trusted_formatter_context =
+                path == ".github/formatting/ci.Dockerfile" && reference == "formatter-tools";
+            if trusted_formatter_context {
+                let bake = RepositoryFixture::repository_root().read(".github/formatting/ci.hcl");
+                assert!(bake.contains("formatter-tools = \"target:formatter-tools\""));
+                assert!(bake.contains(
+                    "target \"formatter-tools\" {\n  context = \".\"\n  dockerfile = \"Dockerfile\""
+                ));
+            }
             assert!(
                 resolved == "scratch"
                     || stages.contains(reference)
+                    || trusted_formatter_context
                     || matches!(
                         reference,
                         "rust-base" | "web-base" | "web-runtime" | "wasm-deps"
@@ -135,8 +175,10 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
                 "{path} resolves a production base outside Zot: {resolved}"
             );
             let remainder: Vec<_> = tokens.collect();
-            if remainder.len() >= 2 && remainder[remainder.len() - 2].eq_ignore_ascii_case("AS") {
-                stages.insert(remainder[remainder.len() - 1]);
+            if let [.., marker, stage] = remainder.as_slice()
+                && marker.eq_ignore_ascii_case("AS")
+            {
+                stages.insert(*stage);
             }
         }
     }
@@ -144,7 +186,7 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
 
 #[test]
 fn arc_smoke_uses_only_supported_persistent_buildkit_routes() {
-    let tasks = read("infra/tasks/arc-smoke.yml");
+    let tasks = RepositoryFixture::repository_root().read("infra/tasks/arc-smoke.yml");
 
     assert!(tasks.contains("ARC_RUNNER_LABEL: nook-k0s"));
     assert!(tasks.contains("ARC_HIVE_RUNNER_LABEL: nook-k0s-hive"));
@@ -158,9 +200,10 @@ fn arc_smoke_uses_only_supported_persistent_buildkit_routes() {
 
 #[test]
 fn arc_mesh_reconciliation_fails_closed() {
-    let services = read("infra/tasks/host-services.yml");
-    let workers = read("infra/tasks/k0s-workers.yml");
-    let worker_mesh = read("infra/k0s/scripts/k0s-worker-mesh-reconcile");
+    let services = RepositoryFixture::repository_root().read("infra/tasks/host-services.yml");
+    let workers = RepositoryFixture::repository_root().read("infra/tasks/k0s-workers.yml");
+    let worker_mesh =
+        RepositoryFixture::repository_root().read("infra/k0s/scripts/k0s-worker-mesh-reconcile");
     assert!(
         workers.contains("worker_pod_cidr=\"$(sudo -n k0s kubectl get node")
             && workers.contains("AllowedIPs = $allowed_ips"),
@@ -196,41 +239,41 @@ fn arc_mesh_reconciliation_fails_closed() {
     );
     let empty_worker_check = worker_mesh
         .find("if test \"$(printf '%s' \"$compute_nodes\" | jq '.items | length')\" = 0")
-        .expect("mesh reconciliation must detect an empty compute tier");
+        .unwrap_or_else(|| panic!("mesh reconciliation must detect an empty compute tier"));
     let controller_key = worker_mesh
         .find("controller_public_key=\"$(sudo -n cat /etc/wireguard/nook-public.key)\"")
-        .expect("mesh reconciliation must read the controller WireGuard key");
+        .unwrap_or_else(|| panic!("mesh reconciliation must read the controller WireGuard key"));
     let peer_verification = worker_mesh
         .find("ping -c 1 -W 3 '$target_address'")
-        .expect("reachable workers must verify direct peer connectivity");
+        .unwrap_or_else(|| panic!("reachable workers must verify direct peer connectivity"));
     let taint_all = worker_mesh
         .find("set_mesh_pending \"$node_name\"\ndone <<<\"$workers\"")
-        .expect("all workers must become unschedulable before reconciliation");
+        .unwrap_or_else(|| panic!("all workers must become unschedulable before reconciliation"));
     let connection_preflight = worker_mesh
         .find("-o ConnectTimeout=5")
-        .expect("workers must be checked before configuration");
+        .unwrap_or_else(|| panic!("workers must be checked before configuration"));
     let clear_pending = worker_mesh
         .rfind("clear_mesh_pending \"$node_name\"")
-        .expect("verified workers must become schedulable");
+        .unwrap_or_else(|| panic!("verified workers must become schedulable"));
     assert!(empty_worker_check < controller_key);
     assert!(taint_all < connection_preflight);
     assert!(peer_verification < clear_pending);
     let install = services
         .find("- task: k0s:install")
-        .expect("standard deployment must install k0s");
+        .unwrap_or_else(|| panic!("standard deployment must install k0s"));
     let standard_reconcile = services
         .find("- task: k0s:worker-mesh:reconcile")
-        .expect("standard deployment must reconcile the direct worker mesh");
+        .unwrap_or_else(|| panic!("standard deployment must reconcile the direct worker mesh"));
     let standard_arc = services
         .find("- task: arc:deploy")
-        .expect("standard deployment must install ARC");
+        .unwrap_or_else(|| panic!("standard deployment must install ARC"));
     assert!(install < standard_reconcile && standard_reconcile < standard_arc);
     let reconcile = workers
         .find("task: k0s:worker-mesh:reconcile")
-        .expect("worker deployment must reconcile the direct worker mesh");
+        .unwrap_or_else(|| panic!("worker deployment must reconcile the direct worker mesh"));
     let qualify = workers
         .find("task: kata:install")
-        .expect("worker deployment must qualify Kata");
+        .unwrap_or_else(|| panic!("worker deployment must qualify Kata"));
     assert!(
         reconcile < qualify,
         "the direct worker mesh must converge before Kata and ARC qualification"
@@ -238,14 +281,24 @@ fn arc_mesh_reconciliation_fails_closed() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one infrastructure contract verifies runner placement as a unit"
+)]
 fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
-    let values = read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
-    let hive_values = read("infra/k0s/scripts/arc-hive-values.rb");
-    let buildkit = read("infra/k0s/manifests/arc/buildkit.yaml");
-    let container_hook = read("infra/k0s/manifests/arc/container-hook.yaml");
-    let container_job_nodes = read("infra/k0s/config/arc-container-job-nodes");
-    let tasks = read("infra/tasks/arc.yml");
-    let pull_request_workflow = read(".github/workflows/pr.yml");
+    let values = RepositoryFixture::repository_root()
+        .read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
+    let hive_values =
+        RepositoryFixture::repository_root().read("infra/k0s/scripts/arc-hive-values.rb");
+    let buildkit =
+        RepositoryFixture::repository_root().read("infra/k0s/manifests/arc/buildkit.yaml");
+    let container_hook =
+        RepositoryFixture::repository_root().read("infra/k0s/manifests/arc/container-hook.yaml");
+    let container_job_nodes =
+        RepositoryFixture::repository_root().read("infra/k0s/config/arc-container-job-nodes");
+    let tasks = RepositoryFixture::repository_root().read("infra/tasks/arc.yml");
+    let pull_request_workflow =
+        RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
 
     for contract in [
         "maxRunners: 35",
@@ -372,19 +425,19 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     }
     let prepare = tasks
         .find("- task: arc:controller-build:prepare")
-        .expect("ARC deployment must prepare the controller build node");
+        .unwrap_or_else(|| panic!("ARC deployment must prepare the controller build node"));
     let storage = tasks
         .find("- task: arc:buildkit:storage:prepare")
-        .expect("ARC deployment must prepare retained storage");
+        .unwrap_or_else(|| panic!("ARC deployment must prepare retained storage"));
     let container_eligibility = tasks
         .find("- task: arc:container-hosts:reconcile")
-        .expect("ARC deployment must reconcile container-job eligibility");
+        .unwrap_or_else(|| panic!("ARC deployment must reconcile container-job eligibility"));
     let rollout = tasks
         .find("rollout status statefulset/nook-buildkit")
-        .expect("ARC deployment must wait for BuildKit");
+        .unwrap_or_else(|| panic!("ARC deployment must wait for BuildKit"));
     let activate = tasks
         .rfind("- task: arc:build-hosts:activate")
-        .expect("ARC deployment must activate converged nodes");
+        .unwrap_or_else(|| panic!("ARC deployment must activate converged nodes"));
     assert!(
         prepare < container_eligibility
             && container_eligibility < storage
@@ -393,20 +446,24 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     );
     let primary = tasks
         .find("for tier in primary secondary overflow")
-        .expect("ARC activation must expose primary capacity first");
+        .unwrap_or_else(|| panic!("ARC activation must expose primary capacity first"));
     let grouped = tasks
         .find("kubectl taint node \"${tier_nodes[@]}\"")
-        .expect("ARC activation must expose each tier as one group");
+        .unwrap_or_else(|| panic!("ARC activation must expose each tier as one group"));
     assert!(primary < grouped);
 }
 
 #[test]
 fn hive_dispatcher_avoids_dragonball_network_churn_and_bounds_terminal_pods() {
-    let workers = read("infra/k0s/manifests/hive/deployment.yaml");
-    let dispatcher = read("infra/k0s/manifests/hive/dispatcher.yaml");
-    let observer = read("infra/k0s/manifests/hive/observer.yaml");
-    let reaper = read("infra/k0s/manifests/hive/reaper-controller.yaml");
-    let k0s = read("infra/k0s/config/k0s.yaml");
+    let workers =
+        RepositoryFixture::repository_root().read("infra/k0s/manifests/hive/deployment.yaml");
+    let dispatcher =
+        RepositoryFixture::repository_root().read("infra/k0s/manifests/hive/dispatcher.yaml");
+    let observer =
+        RepositoryFixture::repository_root().read("infra/k0s/manifests/hive/observer.yaml");
+    let reaper = RepositoryFixture::repository_root()
+        .read("infra/k0s/manifests/hive/reaper-controller.yaml");
+    let k0s = RepositoryFixture::repository_root().read("infra/k0s/config/k0s.yaml");
 
     for manifest in [&workers, &dispatcher, &observer, &reaper] {
         assert!(
@@ -433,10 +490,10 @@ fn hive_dispatcher_avoids_dragonball_network_churn_and_bounds_terminal_pods() {
 
 #[test]
 fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> anyhow::Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     let output = Command::new("bash")
         .arg(root.join("preflight/tests/neo4j_credentials.sh"))
-        .arg(&root)
+        .arg(root.as_ref())
         .output()?;
     assert!(
         output.status.success(),
@@ -445,7 +502,7 @@ fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> anyhow::Resu
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let task = read("infra/tasks/neo4j.yml");
+    let task = RepositoryFixture::repository_root().read("infra/tasks/neo4j.yml");
     let credential_validation = task
         .find("reconcile_neo4j_credentials \"$secret_dir\" \"$retained_storage\"")
         .context("Neo4j task must reconcile credentials")?;
@@ -483,7 +540,7 @@ fn hive_dispatcher_keeps_github_run_reads_token_free() -> anyhow::Result<()> {
 
 #[test]
 fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     for (harness, description) in [
         (
             "preflight/tests/hive_auth_sync.sh",
@@ -505,7 +562,7 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
     ] {
         let output = Command::new("bash")
             .arg(root.join(harness))
-            .arg(&root)
+            .arg(root.as_ref())
             .output()?;
         assert!(
             output.status.success(),
@@ -559,7 +616,7 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
             && deploy.contains("flock --exclusive --timeout 900 9"),
         "Hive deployment and auth rotation must share the host-global mutation lock"
     );
-    let neo4j = read("infra/tasks/neo4j.yml");
+    let neo4j = RepositoryFixture::repository_root().read("infra/tasks/neo4j.yml");
     assert!(
         neo4j.contains(
             "if test \"$tls_changed\" = true; then\n          # NEO4J_HIVE_MUTATION_LOCK_BEGIN"
@@ -585,11 +642,13 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
 
 #[test]
 fn neo4j_client_secret_normalization_is_upgrade_safe() -> anyhow::Result<()> {
-    let tasks = read("infra/tasks/neo4j.yml");
+    let tasks = RepositoryFixture::repository_root().read("infra/tasks/neo4j.yml");
     let start = tasks
         .find("NEO4J_CREDENTIAL_RECONCILIATION_BEGIN")
         .context("Neo4j task must delimit credential reconciliation")?;
-    let reconciliation = &tasks[start..];
+    let reconciliation = tasks
+        .get(start..)
+        .context("Neo4j reconciliation marker must be a character boundary")?;
 
     for required in [
         "tr -d '\\r\\n' > \"$secret_dir/password\"",
@@ -638,7 +697,10 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() -> anyhow::Result<()> {
         "a failed retained-storage probe must abort credential reconciliation"
     );
     assert!(
-        !tasks[retained_probe..storage_apply].contains("kubectl get pvc"),
+        !tasks
+            .get(retained_probe..storage_apply)
+            .context("Neo4j retained-storage section must have valid boundaries")?
+            .contains("kubectl get pvc"),
         "an empty PVC from interrupted bootstrap is not retained Neo4j data"
     );
     assert!(
@@ -670,13 +732,14 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
         "infra/k0s/manifests/hive/dispatcher.yaml",
         "infra/k0s/manifests/hive/observer.yaml",
     ] {
-        let deployment = read(manifest);
+        let deployment = RepositoryFixture::repository_root().read(manifest);
         assert!(
             deployment.contains("strategy:\n    type: Recreate"),
             "{manifest} must drain its prior graph-schema revision before starting a new one"
         );
     }
-    let worker_manifest = read("infra/k0s/manifests/hive/deployment.yaml");
+    let worker_manifest =
+        RepositoryFixture::repository_root().read("infra/k0s/manifests/hive/deployment.yaml");
     for required in [
         "terminationGracePeriodSeconds: 75",
         "while [ ! -e /workspace/.hive-task-finished ]",
@@ -692,11 +755,15 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
     let coordinator_start = worker_manifest
         .find("        - name: coordinator\n")
         .ok_or_else(|| anyhow::anyhow!("Hive coordinator container"))?;
-    let coordinator = &worker_manifest[coordinator_start..];
+    let coordinator = worker_manifest
+        .get(coordinator_start..)
+        .context("Hive coordinator marker must be a character boundary")?;
     let coordinator_end = coordinator
         .find("        - name: auth-broker\n")
         .ok_or_else(|| anyhow::anyhow!("container after Hive coordinator"))?;
-    let coordinator = &coordinator[..coordinator_end];
+    let coordinator = coordinator
+        .get(..coordinator_end)
+        .context("Hive coordinator boundary must be valid UTF-8")?;
     assert!(
         coordinator.contains(
             "            - name: workspace\n              mountPath: /workspace\n              \
@@ -704,7 +771,7 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
         ),
         "Hive coordinator must mount the worker workspace read-only to observe lifecycle markers"
     );
-    let deployment_tasks = read("infra/tasks/hive.yml");
+    let deployment_tasks = RepositoryFixture::repository_root().read("infra/tasks/hive.yml");
     for required in [
         "for deployment in hive hive-workbench-dispatcher hive-observer",
         "kubectl scale \"deployment/$deployment\"",

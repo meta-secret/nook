@@ -15,7 +15,7 @@ function run(overrides = {}) {
   return {
     id: 30190000000,
     run_attempt: 1,
-    name: 'Main',
+    name: 'CI',
     event: 'push',
     head_branch: 'main',
     head_sha: 'abcdef0123456789abcdef0123456789abcdef01',
@@ -289,6 +289,7 @@ test('reopens an incident retired by the former E2E suppression policy', () => {
 test('workflow preserves the Main cache order and coalesces only pending runs', () => {
   const root = path.join(__dirname, '..', '..')
   const main = fs.readFileSync(path.join(root, '.github/workflows/main.yml'), 'utf8')
+  const ci = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8')
   const dockerTasks = fs.readFileSync(
     path.join(root, 'nook-app/nook-platform/docker/Taskfile.yml'),
     'utf8',
@@ -297,11 +298,13 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
   const wasmCacheGate = main
     .split('\n  wasm-cache-publish:\n')[1]
     .split('\n  wasm-cache-proof:\n')[0]
+  const webJob = main.split('\n  web:\n')[1].split('\n  web-e2e:\n')[0]
   assert.match(
-    main,
-    /concurrency:\n\s+group: main[\s\S]*cancel-in-progress: false/,
+    ci,
+    /github\.event_name == 'push' && 'main'/,
   )
-  assert.doesNotMatch(main, /^\s+queue:/m)
+  assert.match(ci, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/)
+  assert.doesNotMatch(ci, /^\s+queue:/m)
   assert.match(main, /wasm:\n\s+name: WASM verification and artifact[\s\S]*needs: \[rust, preflight\]/)
   assert.match(
     main,
@@ -311,7 +314,9 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
     main,
     /wasm-cache-publish:\n\s+name: WASM cache publication[\s\S]*?\n\s+needs: \[wasm\][\s\S]*CACHE_PUBLICATION_OUTCOME: \$\{\{ needs\.wasm\.outputs\.cache_publication_outcome \}\}[\s\S]*WASM cache publication failed in the verified producer/,
   )
-  assert.match(main, /web:\n\s+name: Verify web build\n\s+needs: \[wasm\]/)
+  assert.match(webJob, /^\s+name: Verify web build$/m)
+  assert.match(webJob, /^\s+timeout-minutes: 10$/m)
+  assert.match(webJob, /^\s+needs: \[wasm\]$/m)
   assert.match(
     wasmJob,
     /outputs:\n\s+cache_publication_outcome: \$\{\{ steps\.publish_wasm_cache\.outcome \}\}[\s\S]*WASM Node tests[\s\S]*Publish verified WASM BuildKit cache[\s\S]*id: publish_wasm_cache\n\s+continue-on-error: true[\s\S]*task ci:main:publish-wasm-cache/,
@@ -363,7 +368,7 @@ test('handoff workflow trusts default-branch code and writes only Workbench', ()
   )
   assert.match(
     workflow,
-    /workflow_run:\n\s+workflows: \[Main\]\n\s+types: \[completed\]\n\s+branches: \[main\]/,
+    /workflow_run:\n\s+workflows: \[CI\]\n\s+types: \[completed\]\n\s+branches: \[main\]/,
   )
   assert.match(
     workflow,

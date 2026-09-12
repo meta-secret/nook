@@ -2,10 +2,10 @@ import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
 } from '../lib/browser-message-keys'
-import { installIsolatedAuthenticationDirectSubmitBridge } from '../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
+import { authenticationSubmissionBridge } from '../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
 export {}
 
-installIsolatedAuthenticationDirectSubmitBridge()
+authenticationSubmissionBridge.installIsolatedAuthenticationDirectSubmitBridge()
 
 import {
   WebsitePasskeyCeremony,
@@ -13,9 +13,13 @@ import {
   WebsitePasskeyOptionsMessageType,
   WebsitePasskeyOptionsStatus,
   WebsitePasskeyPerformMessageType,
-  type WebsitePasskeyCancelMessage,
-  type WebsitePasskeyOptionsMessage,
-  type WebsitePasskeyPerformMessage,
+} from '../lib/webauthn-message-types'
+import type {
+  WebsitePasskeyCancelMessage,
+  WebsitePasskeyOptionsMessage,
+  WebsitePasskeyOptionsResponse,
+  WebsitePasskeyPerformMessage,
+  WebsitePasskeyPerformResponse,
 } from '../lib/webauthn-messages'
 import {
   PageResponseAction,
@@ -29,6 +33,7 @@ const prompts = new Map<string, HTMLElement>()
 
 enum PageRequestType {
   Request = 'request',
+  Cancel = 'cancel',
 }
 
 type PageRequest = {
@@ -74,6 +79,11 @@ type WebAuthnPageResponseDelivery = {
   value?: unknown
 }
 
+type WebsitePasskeyRuntimeMessage =
+  | WebsitePasskeyOptionsMessage
+  | WebsitePasskeyPerformMessage
+  | WebsitePasskeyCancelMessage
+
 function respond({
   requestId,
   action,
@@ -89,26 +99,36 @@ function respond({
   window.postMessage(nookTypedArgs0_0, location.origin)
 }
 
-function runtimeMessage<T>(message: unknown): Promise<T> {
-  // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage<T>(message, (response) => {
-      const error = chrome.runtime.lastError?.message
-      if (error) reject(new Error(error))
-      else resolve(response)
+class WebAuthnRuntimeTransport<T> {
+  constructor(private readonly message: WebsitePasskeyRuntimeMessage) {}
+
+  send(): Promise<T> {
+    // eslint-disable-next-line max-params -- Promise owns the executor callback signature.
+    return new Promise((resolve, reject) => {
+      void chrome.runtime.sendMessage(this.message, (response: T) => {
+        const error = chrome.runtime.lastError?.message
+        if (error) reject(new Error(error))
+        else resolve(response)
+      })
     })
-  })
+  }
+}
+
+function isPasskeyOption(value: unknown): value is PasskeyOption {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'vaultStoreId' in value &&
+    typeof value.vaultStoreId === 'string' &&
+    'vaultName' in value &&
+    typeof value.vaultName === 'string'
+  )
 }
 
 function validOptions(value: unknown): PasskeyOption[] {
   if (!Array.isArray(value)) return []
-  return value.filter((option): option is PasskeyOption => {
-    if (!option || typeof option !== 'object') return false
-    const row = option as Record<string, unknown>
-    return (
-      typeof row.vaultStoreId === 'string' && typeof row.vaultName === 'string'
-    )
-  })
+  const candidates: readonly unknown[] = value
+  return candidates.filter(isPasskeyOption)
 }
 
 function removePrompt(requestId: string): void {
@@ -211,7 +231,7 @@ function chooseOption({
 
 async function handleRequest(request: PageRequest): Promise<void> {
   const requestJson = JSON.stringify(request.request)
-  const nookTypedArgs0_4: Parameters<typeof runtimeMessage>[0] = {
+  const nookTypedArgs0_4: WebsitePasskeyOptionsMessage = {
     type: WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions,
     payload: {
       requestId: request.requestId,
@@ -220,17 +240,20 @@ async function handleRequest(request: PageRequest): Promise<void> {
       expiresAt: request.expiresAt,
     },
   } satisfies WebsitePasskeyOptionsMessage
-  const optionsResponse = await runtimeMessage<{
-    ok?: boolean
-    status?: WebsitePasskeyOptionsStatus
-    options?: unknown
-  }>(nookTypedArgs0_4)
-  const options = validOptions(optionsResponse?.options)
+  const optionsResponse =
+    await new WebAuthnRuntimeTransport<WebsitePasskeyOptionsResponse>(
+      nookTypedArgs0_4,
+    ).send()
+  const options = validOptions(
+    optionsResponse.ok ? optionsResponse.options : [],
+  )
   const dispositionArgs: Parameters<
     typeof websitePasskeyOptionsDisposition
   >[0] = {
-    ok: optionsResponse?.ok === true,
-    status: optionsResponse?.status,
+    ok: optionsResponse.ok,
+    status: optionsResponse.ok
+      ? optionsResponse.status
+      : WebsitePasskeyOptionsStatus.Unavailable,
     hasOptions: options.length > 0,
   }
   const disposition = websitePasskeyOptionsDisposition(dispositionArgs)
@@ -257,7 +280,7 @@ async function handleRequest(request: PageRequest): Promise<void> {
     return
   }
   const { option: selected } = choice
-  const nookTypedArgs0_5: Parameters<typeof runtimeMessage>[0] = {
+  const nookTypedArgs0_5: WebsitePasskeyPerformMessage = {
     type: WebsitePasskeyPerformMessageType.NookWebsitePasskeyPerform,
     payload: {
       requestId: request.requestId,
@@ -270,7 +293,10 @@ async function handleRequest(request: PageRequest): Promise<void> {
         : {}),
     },
   } satisfies WebsitePasskeyPerformMessage
-  const result = await runtimeMessage<Record<string, unknown>>(nookTypedArgs0_5)
+  const result =
+    await new WebAuthnRuntimeTransport<WebsitePasskeyPerformResponse>(
+      nookTypedArgs0_5,
+    ).send()
   if (result?.ok === true) {
     const nookTypedArgs0_5: Parameters<typeof respond>[0] = {
       requestId: request.requestId,
@@ -288,47 +314,75 @@ async function handleRequest(request: PageRequest): Promise<void> {
   }
 }
 
-window.addEventListener('message', (event: MessageEvent<unknown>) => {
-  if (
-    event.source !== window ||
-    event.origin !== location.origin ||
-    !event.data ||
-    typeof event.data !== 'object'
-  )
-    return
-  const message = event.data as Record<string, unknown>
-  if (
-    message.source !== REQUEST_SOURCE ||
-    typeof message.requestId !== 'string'
-  )
-    return
-  if (message.type === 'cancel') {
-    removePrompt(message.requestId)
-    const nookTypedArgs0_6: Parameters<typeof runtimeMessage>[0] = {
-      type: WebsitePasskeyCancelMessageType.NookWebsitePasskeyCancel,
-      payload: { requestId: message.requestId },
-    } satisfies WebsitePasskeyCancelMessage
-    void runtimeMessage(nookTypedArgs0_6).catch(() => {})
-    return
+/** Admits the page message envelope before Rust validates its serialized payload. */
+class WebAuthnPageIngress {
+  private static isRequestBody(
+    value: unknown,
+  ): value is PageRequest['request'] {
+    return (
+      !!value &&
+      typeof value === 'object' &&
+      JSON.stringify(value).length <= 65_536
+    )
   }
-  if (
-    message.type !== PageRequestType.Request ||
-    (message.ceremony !== WebsitePasskeyCeremony.Create &&
-      message.ceremony !== WebsitePasskeyCeremony.Get) ||
-    typeof message.expiresAt !== 'number' ||
-    !Number.isFinite(message.expiresAt) ||
-    message.expiresAt <= Date.now() ||
-    !message.request ||
-    typeof message.request !== 'object' ||
-    JSON.stringify(message.request).length > 65_536
-  )
-    return
-  void handleRequest(message as unknown as PageRequest).catch(() => {
-    removePrompt(message.requestId as string)
-    const nookTypedArgs0_7: Parameters<typeof respond>[0] = {
-      requestId: message.requestId as string,
-      action: PageResponseAction.Fallback,
+
+  static receive(event: MessageEvent<unknown>): void {
+    if (
+      event.source !== window ||
+      event.origin !== location.origin ||
+      !event.data ||
+      typeof event.data !== 'object'
+    )
+      return
+    const message = event.data
+    if (
+      !('source' in message) ||
+      message.source !== REQUEST_SOURCE ||
+      !('requestId' in message) ||
+      typeof message.requestId !== 'string' ||
+      !('type' in message)
+    )
+      return
+    const requestId = message.requestId
+    if (message.type === PageRequestType.Cancel) {
+      removePrompt(requestId)
+      const cancelMessage: WebsitePasskeyCancelMessage = {
+        type: WebsitePasskeyCancelMessageType.NookWebsitePasskeyCancel,
+        payload: { requestId },
+      }
+      void new WebAuthnRuntimeTransport(cancelMessage).send().catch(() => {})
+      return
     }
-    respond(nookTypedArgs0_7)
-  })
-})
+    if (
+      message.type !== PageRequestType.Request ||
+      !('ceremony' in message) ||
+      (message.ceremony !== WebsitePasskeyCeremony.Create &&
+        message.ceremony !== WebsitePasskeyCeremony.Get) ||
+      !('expiresAt' in message) ||
+      typeof message.expiresAt !== 'number' ||
+      !Number.isFinite(message.expiresAt) ||
+      message.expiresAt <= Date.now() ||
+      !('request' in message) ||
+      !WebAuthnPageIngress.isRequestBody(message.request)
+    )
+      return
+    const request: PageRequest = {
+      source: REQUEST_SOURCE,
+      type: PageRequestType.Request,
+      requestId,
+      ceremony: message.ceremony,
+      request: message.request,
+      expiresAt: message.expiresAt,
+    }
+    void handleRequest(request).catch(() => {
+      removePrompt(requestId)
+      const response: Parameters<typeof respond>[0] = {
+        requestId,
+        action: PageResponseAction.Fallback,
+      }
+      respond(response)
+    })
+  }
+}
+
+window.addEventListener('message', WebAuthnPageIngress.receive)

@@ -10,6 +10,23 @@
 
 Full package docs: [`agentic-ai/loom/README.md`](../../../../agentic-ai/loom/README.md).
 
+## Module delivery boundary
+
+- **Read-only experts:** The expert runtime uses an immutable, catalog-scoped
+  snapshot of the exact source commit. That snapshot is not an implementation
+  workspace.
+- **Write-capable workers:** An implementation worker writes only in an
+  isolated child worktree based on the parent feature worktree's exact
+  accepted commit.
+- **Commit handoff:** The worker returns the exact commit for its iteration and
+  focused evidence. The parent verifies the commit and integrates it into the
+  parent worktree.
+- **History visibility:** A worker may inspect committed parent history and
+  integrated peer commits for context. This does not widen its write scope.
+
+The active harness owns worker coordination. Loom provides mechanical evidence
+and boundary checks; it does not add worker lifecycle or recovery machinery.
+
 ## Agent action references
 
 `.cortex/identifiers.json` assigns stable compact identifiers to Cortex
@@ -37,7 +54,6 @@ an effort, quality, or billing measure.
 Defaultable tools use a Task alias and an in-code example:
 
 ```bash
-task loom:pre-push
 task loom:tools-list
 task loom:cortex-audit
 task loom:cortex-session-clean
@@ -75,9 +91,9 @@ Loom follows [typescript-domain-structure.md](../../web-dev/dynamic-skills/types
 - nested same-prefix families (`agentStats`, `prLand`) plus operation enums
 - field-name enums passed into deny-unknown checks (never string sets)
 - codec-local `DecodeOutcome` / `FieldIssue` for decode accumulation only
-- runtime failures throw `LoomFailure` with `LoomFailureCode`
-- forbidden: generic TypeScript `Result<T>` / `Maybe<T>`, and
-  `new Set(['field', ...])` allow-lists
+- runtime failures return `neverthrow` Result values with concrete `LoomFailure` errors
+- authored operations use instances; static methods are narrow builders
+- raw `new Set(['field', ...])` allow-lists remain prohibited
 
 Loom also follows
 [typescript-explicit-state.md](../../web-dev/dynamic-skills/typescript-explicit-state.md),
@@ -124,8 +140,8 @@ Use one domain root family and descriptive fields. Same-prefix operations nest:
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: '{agentTempDir}/pr-123-scratch.json'
-    outputPath: '{agentTempDir}/123.yaml'
+    scratchPath: "{agentTempDir}/pr-123-scratch.json"
+    outputPath: "{agentTempDir}/123.yaml"
     includeTestInventory: true
 ```
 
@@ -170,9 +186,9 @@ instead of maintaining request bodies in Cortex.
 
 ### prePush
 
-```bash
-task loom:pre-push
-```
+This legacy task is not a local feature gate. Follow
+[dev delivery](../../../gizmo/architecture/dev-delivery.md) for permitted
+compilation and manager-stage validation.
 
 ### cortexAudit
 

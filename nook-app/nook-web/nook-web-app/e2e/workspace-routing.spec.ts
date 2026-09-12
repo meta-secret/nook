@@ -6,19 +6,20 @@ import {
   signedSentinelInvitation,
 } from './helpers'
 
-type WorkspaceRoutingWindow = Window & {
-  __nookWorkspaceRouteEventCount: number
-}
-
 test.describe('persistent workspace routing', () => {
   test('routes between primary pages', async ({ page }) => {
     await connectLocalVault(page)
     const initialHistoryLength = await page.evaluate(() => history.length)
     await page.evaluate(() => {
-      const testWindow = window as WorkspaceRoutingWindow
-      testWindow.__nookWorkspaceRouteEventCount = 0
+      document.documentElement.dataset.workspaceRouteEventCount = '0'
       window.addEventListener('popstate', () => {
-        testWindow.__nookWorkspaceRouteEventCount += 1
+        const count = Number.parseInt(
+          document.documentElement.dataset.workspaceRouteEventCount || '0',
+          10,
+        )
+        document.documentElement.dataset.workspaceRouteEventCount = String(
+          count + 1,
+        )
       })
     })
 
@@ -54,8 +55,11 @@ test.describe('persistent workspace routing', () => {
       initialHistoryLength + 3,
     )
     expect(
-      await page.evaluate(
-        () => (window as WorkspaceRoutingWindow).__nookWorkspaceRouteEventCount,
+      await page.evaluate(() =>
+        Number.parseInt(
+          document.documentElement.dataset.workspaceRouteEventCount || '0',
+          10,
+        ),
       ),
     ).toBeGreaterThanOrEqual(3)
 

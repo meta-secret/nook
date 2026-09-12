@@ -6,7 +6,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::{EventCount, IdentityVaultAppGrantKind, VaultOperation};
+use crate::IdentityVaultAppGrantKind;
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -89,40 +89,37 @@ impl CurrentVaultReplaceability {
         graph: &crate::EventGraph,
         store_id: &str,
     ) -> CurrentVaultReplaceability {
-        if graph.is_empty() || !graph.pending_events().is_empty() || !graph.quarantined().is_empty()
-        {
-            return CurrentVaultReplaceability::Unknown;
+        use nook_event_log::{
+            EventGraphReplacementEvidence, GenesisImportContents, ProjectionIntegrity,
+        };
+        let evidence = graph.replacement_evidence();
+        if matches!(evidence, EventGraphReplacementEvidence::Unavailable) {
+            return Self::Unknown;
         }
         let Ok(projection) = crate::VaultProjection::from_graph(graph, store_id) else {
-            return CurrentVaultReplaceability::Unknown;
+            return Self::Unknown;
         };
-        if projection.unresolved_schema || projection.has_blocking_conflicts() {
-            return CurrentVaultReplaceability::Unknown;
+        if !matches!(projection.integrity(), ProjectionIntegrity::Resolved) {
+            return Self::Unknown;
         }
-        let roots = graph
-            .events()
-            .filter(|(_, event)| event.body.parents.is_empty())
-            .collect::<Vec<_>>();
-        let [(_, root)] = roots.as_slice() else {
-            return CurrentVaultReplaceability::Unknown;
-        };
-        let [
-            VaultOperation::VaultImported {
-                secrets,
-                password_entries,
-                ..
-            },
-        ] = root.body.operations.as_slice()
-        else {
-            return CurrentVaultReplaceability::Unknown;
-        };
-        if !secrets.is_empty()
-            || !password_entries.is_empty()
-            || graph.len() > EventCount::SINGLE_EVENT
-        {
-            return CurrentVaultReplaceability::PreserveRequired;
+        match evidence {
+            EventGraphReplacementEvidence::Unavailable => Self::Unknown,
+            EventGraphReplacementEvidence::GenesisOnly(root) => {
+                match root.body.genesis_import_contents() {
+                    GenesisImportContents::Other => Self::Unknown,
+                    GenesisImportContents::Empty => Self::Replaceable,
+                    GenesisImportContents::Populated => Self::PreserveRequired,
+                }
+            }
+            EventGraphReplacementEvidence::Established(root) => {
+                match root.body.genesis_import_contents() {
+                    GenesisImportContents::Other => Self::Unknown,
+                    GenesisImportContents::Empty | GenesisImportContents::Populated => {
+                        Self::PreserveRequired
+                    }
+                }
+            }
         }
-        CurrentVaultReplaceability::Replaceable
     }
 }
 
@@ -230,13 +227,20 @@ impl VaultSyncConflict {
 
 #[cfg(test)]
 mod tests {
-    use crate::{IdentityVaultAppGrantKind, VaultEvent, VaultEventSchemaVersion, VaultOperation};
+    struct FixtureGraphEvent {
+        graph: EventGraph,
+        event_id: EventId,
+    }
+
+    use crate::{
+        GenesisImportRequest, IdentityVaultAppGrantKind, VaultEvent, VaultEventSchemaVersion,
+        VaultOperation,
+    };
 
     use super::*;
     use crate::{
         EncryptedSecretPayload, EventGraph, EventId, GenesisImportPayload, IsoTimestamp,
         OpaqueCiphertext, SecretFingerprint, SecretId, SecretType, SigningIdentity, StoreId,
-        build_genesis_import_event,
     };
 
     const TEST_STORE_ID: &str = "store_conflictux1";
@@ -265,23 +269,35 @@ mod tests {
                 .transpose()?
                 .into_iter()
                 .collect();
-            let event = build_genesis_import_event(
-                &StoreId::parse(TEST_STORE_ID)?,
-                &signing.actor_id()?,
-                &EventId::from_sha256_hex(
+            let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+                store_id: &StoreId::parse(TEST_STORE_ID)?,
+                actor_id: &signing.actor_id()?,
+                key_epoch: &EventId::from_sha256_hex(
                     nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
                 )?,
-                GenesisImportPayload {
+                payload: GenesisImportPayload {
                     source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                     secrets,
                     password_entries: Vec::new(),
                 },
-                &IsoTimestamp::parse("2026-09-01T00:00:00Z")?,
-                signing.signing_key(),
-            )?;
+                created_at: &IsoTimestamp::parse("2026-09-01T00:00:00Z")?,
+                signing_key: signing.signing_key(),
+            })?;
             let event_id = event.id()?;
             let mut graph = EventGraph::new();
-            graph.insert(event, TEST_STORE_ID)?;
+            match graph.insert(crate::EventGraphInsert {
+                event,
+                expected_store_id: TEST_STORE_ID,
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?;
             Ok((graph, signing, event_id))
         }
 
@@ -290,11 +306,11 @@ mod tests {
         }
 
         fn append_operation(
-            graph: &mut EventGraph,
+            mut graph: EventGraph,
             signing: &SigningIdentity,
             parent: EventId,
             operation: crate::VaultOperation,
-        ) -> anyhow::Result<EventId> {
+        ) -> anyhow::Result<FixtureGraphEvent> {
             let event = VaultEvent::sign(
                 crate::VaultEventBody {
                     schema_version: VaultEventSchemaVersion::CURRENT,
@@ -311,8 +327,20 @@ mod tests {
                 signing.signing_key(),
             )?;
             let event_id = event.id()?;
-            graph.insert(event, TEST_STORE_ID)?;
-            Ok(event_id)
+            match graph.insert(crate::EventGraphInsert {
+                event,
+                expected_store_id: TEST_STORE_ID,
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?;
+            Ok(FixtureGraphEvent { graph, event_id })
         }
     }
 
@@ -424,8 +452,11 @@ mod tests {
             ProviderVaultDecisionReason::LinkedIdentityUnavailable
         );
         assert_eq!(
-            unavailable.identities[1].eligibility,
-            ProviderVaultIdentityEligibility::NotLinked
+            unavailable
+                .identities
+                .get(1)
+                .map(|identity| identity.eligibility),
+            Some(ProviderVaultIdentityEligibility::NotLinked)
         );
 
         let unlinked = CurrentVaultReplaceability::Replaceable
@@ -506,12 +537,16 @@ mod tests {
         let mut graph = EventGraph::new();
         let missing_parent =
             EventId::from_sha256_hex(nook_auth2::Sha256Hex::from_trusted("2".repeat(64)).as_str())?;
-        Fixtures::append_operation(
-            &mut graph,
-            &signing,
-            missing_parent,
-            VaultOperation::VaultCleared,
-        )?;
+        {
+            let prepared = Fixtures::append_operation(
+                graph,
+                &signing,
+                missing_parent,
+                VaultOperation::VaultCleared,
+            )?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
 
         assert!(!graph.is_empty());
         assert!(!graph.pending_events().is_empty());
@@ -525,7 +560,12 @@ mod tests {
     #[test]
     fn accepted_post_genesis_nonsecret_mutation_requires_preservation() -> anyhow::Result<()> {
         let (mut graph, signing, genesis) = Fixtures::accepted_graph_fixture(false)?;
-        Fixtures::append_operation(&mut graph, &signing, genesis, VaultOperation::VaultCleared)?;
+        {
+            let prepared =
+                Fixtures::append_operation(graph, &signing, genesis, VaultOperation::VaultCleared)?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
 
         assert_eq!(
             CurrentVaultReplaceability::from_event_graph(&graph, TEST_STORE_ID),
@@ -538,20 +578,28 @@ mod tests {
     fn created_then_deleted_secret_still_requires_preservation() -> anyhow::Result<()> {
         let (mut graph, signing, genesis) = Fixtures::accepted_graph_fixture(false)?;
         let secret_id = SecretId::parse("secret_conflictux2")?;
-        let created = Fixtures::append_operation(
-            &mut graph,
-            &signing,
-            genesis,
-            VaultOperation::SecretCreated {
-                secret: Fixtures::encrypted_secret(secret_id.as_str())?,
-            },
-        )?;
-        Fixtures::append_operation(
-            &mut graph,
-            &signing,
-            created,
-            VaultOperation::SecretDeleted { secret_id },
-        )?;
+        let created = {
+            let prepared = Fixtures::append_operation(
+                graph,
+                &signing,
+                genesis,
+                VaultOperation::SecretCreated {
+                    secret: Fixtures::encrypted_secret(secret_id.as_str())?,
+                },
+            )?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
+        {
+            let prepared = Fixtures::append_operation(
+                graph,
+                &signing,
+                created,
+                VaultOperation::SecretDeleted { secret_id },
+            )?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
 
         assert_eq!(
             CurrentVaultReplaceability::from_event_graph(&graph, TEST_STORE_ID),

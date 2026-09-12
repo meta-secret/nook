@@ -39,6 +39,10 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      // Saving two entries can cross the short e2e idle timeout. Refresh the
+      // session immediately before the website asks the extension to open its
+      // picker so this test covers picker routing rather than lock recovery.
+      await unlockExtensionPopupPin(paired.context, paired.extensionId)
       const loginPickerPromise = paired.context.waitForEvent('page')
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
       await expect(widget).toContainText(

@@ -49,18 +49,11 @@ export default [
     },
   },
   {
-    files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
-    ...ts.configs.disableTypeChecked,
-    languageOptions: {
-      ...ts.configs.disableTypeChecked.languageOptions,
-      globals: globals.browser,
-    },
-  },
-  {
     files: [
       'eslint.config.js',
       '**/eslint.config.js',
       '**/svelte.config.js',
+      '*.js',
       '**/scripts/**/*.{js,mjs,cjs}',
       '**/e2e/**/*.{js,mjs,cjs}',
     ],
@@ -69,8 +62,15 @@ export default [
     },
   },
   {
-    files: ['**/*.ts', '**/*.svelte.ts'],
+    files: ['**/*.{ts,js,mjs,cjs}'],
     rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-argument': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
+      '@typescript-eslint/no-unsafe-type-assertion': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/await-thenable': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',
@@ -90,6 +90,13 @@ export default [
   {
     files: ['**/*.svelte'],
     rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-argument': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
+      '@typescript-eslint/no-unsafe-type-assertion': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/await-thenable': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',

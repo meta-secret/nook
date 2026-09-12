@@ -423,7 +423,7 @@ mod pending_sync_conflict_tests {
     }
 
     #[wasm_bindgen_test]
-    fn provider_vault_projection_exposes_only_public_decision_facts() {
+    fn provider_vault_projection_exposes_only_public_decision_facts() -> anyhow::Result<()> {
         let projection = NookProviderVaultDecisionProjection::from_core(
             CurrentVaultReplaceability::Replaceable.project_provider_vault_decision(vec![
                 nook_core::ProviderVaultIdentityObservation {
@@ -454,17 +454,24 @@ mod pending_sync_conflict_tests {
             ProviderVaultDecisionReason::ReadyToAdopt
         );
         let identities = projection.identities();
-        assert_eq!(identities[0].identity_id(), "identity-personal");
+        let personal = identities
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("personal identity projection must be present"))?;
+        let work = identities
+            .get(1)
+            .ok_or_else(|| anyhow::anyhow!("work identity projection must be present"))?;
+        assert_eq!(personal.identity_id(), "identity-personal");
         assert_eq!(
-            identities[0].eligibility(),
+            personal.eligibility(),
             ProviderVaultIdentityEligibility::NotLinked
         );
-        assert_eq!(identities[1].identity_label(), "Work");
-        assert!(!identities[1].is_current_app());
+        assert_eq!(work.identity_label(), "Work");
+        assert!(!work.is_current_app());
         assert_eq!(
-            identities[1].eligibility(),
+            work.eligibility(),
             ProviderVaultIdentityEligibility::LinkedAndPrepared
         );
+        Ok(())
     }
 }
 
@@ -516,25 +523,27 @@ impl NookReplacementConflict {
     }
 }
 
-pub(crate) fn replacement_conflicts_to_vec(
-    conflicts: BTreeMap<nook_core::SecretId, nook_core::SecretReplacementConflict>,
-) -> Result<Vec<NookReplacementConflict>, NookError> {
-    conflicts
-        .into_values()
-        .map(|conflict| {
-            Ok(NookReplacementConflict {
-                old_secret_id: conflict.old_secret_id.as_str().to_owned(),
-                candidates: conflict
-                    .candidates
-                    .into_iter()
-                    .map(|(event_id, secret_id)| NookReplacementCandidate {
-                        event_id: event_id.as_str().to_owned(),
-                        secret_id: secret_id.as_str().to_owned(),
-                    })
-                    .collect(),
+impl NookReplacementConflict {
+    pub(crate) fn replacement_conflicts_to_vec(
+        conflicts: BTreeMap<nook_core::SecretId, nook_core::SecretReplacementConflict>,
+    ) -> Result<Vec<NookReplacementConflict>, NookError> {
+        conflicts
+            .into_values()
+            .map(|conflict| {
+                Ok(NookReplacementConflict {
+                    old_secret_id: conflict.old_secret_id.as_str().to_owned(),
+                    candidates: conflict
+                        .candidates
+                        .into_iter()
+                        .map(|(event_id, secret_id)| NookReplacementCandidate {
+                            event_id: event_id.as_str().to_owned(),
+                            secret_id: secret_id.as_str().to_owned(),
+                        })
+                        .collect(),
+                })
             })
-        })
-        .collect()
+            .collect()
+    }
 }
 
 #[wasm_bindgen]
@@ -562,26 +571,28 @@ impl NookSecurityConflict {
     }
 }
 
-pub(crate) fn security_conflicts_to_vec(
-    conflicts: Vec<nook_core::SecurityConflict>,
-) -> Result<Vec<NookSecurityConflict>, NookError> {
-    conflicts
-        .into_iter()
-        .map(|conflict| {
-            Ok(NookSecurityConflict {
-                events: conflict
-                    .events
-                    .into_iter()
-                    .map(|event| event.as_str().to_owned())
-                    .collect(),
-                reasons: conflict
-                    .reasons
-                    .into_iter()
-                    .map(|reason| reason.as_str().to_owned())
-                    .collect(),
+impl NookSecurityConflict {
+    pub(crate) fn security_conflicts_to_vec(
+        conflicts: Vec<nook_core::SecurityConflict>,
+    ) -> Result<Vec<NookSecurityConflict>, NookError> {
+        conflicts
+            .into_iter()
+            .map(|conflict| {
+                Ok(NookSecurityConflict {
+                    events: conflict
+                        .events
+                        .into_iter()
+                        .map(|event| event.as_str().to_owned())
+                        .collect(),
+                    reasons: conflict
+                        .reasons
+                        .into_iter()
+                        .map(|reason| reason.as_str().to_owned())
+                        .collect(),
+                })
             })
-        })
-        .collect()
+            .collect()
+    }
 }
 
 #[cfg(test)]

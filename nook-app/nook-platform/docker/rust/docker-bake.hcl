@@ -357,6 +357,30 @@ target "rust-dylint" {
   output     = ["type=cacheonly"]
 }
 
+target "rust-dylint-build" {
+  inherits = ["rust-dylint"]
+  target = "rust-dylint-build"
+  cache-to = []
+}
+
+target "rust-dylint-self-test" {
+  inherits = ["rust-dylint"]
+  target = "rust-dylint-self-test"
+  cache-to = []
+}
+
+target "rust-dylint-native" {
+  inherits = ["rust-dylint"]
+  target = "rust-dylint-native"
+  cache-to = []
+}
+
+target "rust-dylint-wasm" {
+  inherits = ["rust-dylint"]
+  target = "rust-dylint-wasm"
+  cache-to = []
+}
+
 target "rust-ecosystem-deterministic" {
   inherits   = ["_sccache"]
   context    = "."

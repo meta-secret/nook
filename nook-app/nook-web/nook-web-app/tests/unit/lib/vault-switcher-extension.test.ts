@@ -7,10 +7,10 @@ import { ExtensionSetupStatus } from '$lib/extension/install'
 import {
   ConnectedVaultMenuNoteKind,
   VaultExtensionLinkKind,
-  connectedVaultMenuNote,
-  currentVaultCanPairExtension,
-  resolveVaultExtensionLink,
-  vaultEntryHoldsExtensionGrant,
+  ConnectedVaultMenuPresentation,
+  VaultPairingPresentation,
+  VaultExtensionPresentation,
+  VaultGrantPresentation,
   type ConnectedVaultMenuNoteRequest,
   type CurrentVaultPairingAvailabilityRequest,
   type ExtensionConnectedEntryRequest,
@@ -42,7 +42,7 @@ function linkFor(request: VaultExtensionLinkFixtureRequest) {
     activeStoreId: request.activeStoreId,
     entries: localEntries,
   }
-  return resolveVaultExtensionLink(resolveRequest)
+  return new VaultExtensionPresentation(resolveRequest).link
 }
 
 describe('vault switcher extension link', () => {
@@ -60,7 +60,7 @@ describe('vault switcher extension link', () => {
       link,
       activeStoreId: firstVault.storeId,
     }
-    expect(currentVaultCanPairExtension(pairingRequest)).toBe(false)
+    expect(new VaultPairingPresentation(pairingRequest).available).toBe(false)
   })
 
   test('treats an installed unpaired companion as pairable for the open vault', () => {
@@ -78,7 +78,7 @@ describe('vault switcher extension link', () => {
       link,
       activeStoreId: firstVault.storeId,
     }
-    expect(currentVaultCanPairExtension(pairingRequest)).toBe(true)
+    expect(new VaultPairingPresentation(pairingRequest).available).toBe(true)
   })
 
   test('marks the open vault when the companion grant already belongs to it', () => {
@@ -100,12 +100,12 @@ describe('vault switcher extension link', () => {
       link,
       storeId: firstVault.storeId,
     }
-    expect(vaultEntryHoldsExtensionGrant(grantRequest)).toBe(true)
+    expect(new VaultGrantPresentation(grantRequest).connected).toBe(true)
     const pairingRequest: CurrentVaultPairingAvailabilityRequest = {
       link,
       activeStoreId: firstVault.storeId,
     }
-    expect(currentVaultCanPairExtension(pairingRequest)).toBe(false)
+    expect(new VaultPairingPresentation(pairingRequest).available).toBe(false)
   })
 
   test('lets the open vault pair when the grant belongs to another local vault', () => {
@@ -131,17 +131,17 @@ describe('vault switcher extension link', () => {
       link,
       storeId: firstVault.storeId,
     }
-    expect(vaultEntryHoldsExtensionGrant(otherGrantRequest)).toBe(true)
+    expect(new VaultGrantPresentation(otherGrantRequest).connected).toBe(true)
     const pairingRequest: CurrentVaultPairingAvailabilityRequest = {
       link,
       activeStoreId: secondVault.storeId,
     }
-    expect(currentVaultCanPairExtension(pairingRequest)).toBe(true)
+    expect(new VaultPairingPresentation(pairingRequest).available).toBe(true)
     const noteRequest: ConnectedVaultMenuNoteRequest = {
       link,
       entries: localEntries,
     }
-    expect(connectedVaultMenuNote(noteRequest).kind).toBe(
+    expect(new ConnectedVaultMenuPresentation(noteRequest).note.kind).toBe(
       ConnectedVaultMenuNoteKind.Hidden,
     )
   })
@@ -164,7 +164,7 @@ describe('vault switcher extension link', () => {
       link,
       entries: localEntries,
     }
-    expect(connectedVaultMenuNote(noteRequest)).toEqual({
+    expect(new ConnectedVaultMenuPresentation(noteRequest).note).toEqual({
       kind: ConnectedVaultMenuNoteKind.MissingLocally,
       vaultName: 'Travel vault',
     })
@@ -172,6 +172,6 @@ describe('vault switcher extension link', () => {
       link,
       activeStoreId: firstVault.storeId,
     }
-    expect(currentVaultCanPairExtension(pairingRequest)).toBe(true)
+    expect(new VaultPairingPresentation(pairingRequest).available).toBe(true)
   })
 })

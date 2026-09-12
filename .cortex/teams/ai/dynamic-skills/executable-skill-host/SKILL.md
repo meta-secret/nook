@@ -32,9 +32,11 @@ skillToolsList:
   list: {}
 ```
 
-Use a returned `exampleYaml` unchanged as the starting request. Failures
-contain typed phase, field path, issue, and message fields plus a tools-list
-recovery request. Request scalars and unknown keys are never echoed.
+Use a returned `exampleYaml` unchanged as the starting request. Usage, decode,
+and action failures contain typed phase, field path, issue, and message fields
+plus a tools-list recovery request. Response admission, serialization, and
+capacity failures propagate directly and are never replaced with an alternate
+response. Request scalars and unknown keys are never echoed.
 
 ## Application and validation
 

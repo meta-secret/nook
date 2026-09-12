@@ -3,8 +3,8 @@
 use super::{
     NookIdentityDirectorySelection, NookIdentityDirectorySelectionKind,
     NookIdentityDirectorySnapshot, NookIdentitySnapshot, NookSelectedVaultIdentityContextKind,
-    current_browser_identity, selected_vault_context_kind,
 };
+use crate::BrowserSelectedVaultContextKind;
 use crate::device_access::NookDeviceAccessSnapshot;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -39,7 +39,12 @@ impl NookIdentityDirectorySnapshot {
 
     #[wasm_bindgen(getter, js_name = selectedVaultContextKind)]
     pub fn selected_vault_context_kind(&self) -> NookSelectedVaultIdentityContextKind {
-        selected_vault_context_kind(&self.identities, self.selected_vault_current_app_granted)
+        NookSelectedVaultIdentityContextKind::selected_vault_context_kind(
+            BrowserSelectedVaultContextKind {
+                identities: &self.identities,
+                current_app_granted: self.selected_vault_current_app_granted,
+            },
+        )
     }
 
     pub fn current_browser_identity(&self) -> Result<NookIdentitySnapshot, wasm_bindgen::JsError> {
@@ -50,9 +55,7 @@ impl NookIdentityDirectorySnapshot {
                 "No linked identity grants this browser access to the selected vault",
             ));
         }
-        current_browser_identity(&self.identities)
-            .cloned()
-            .ok_or_else(|| JsError::new("No linked identity belongs to this browser"))
+        NookIdentitySnapshot::current_browser_identity(&self.identities).cloned()
     }
 
     /// Return access evidence captured from the same protected app ID as the

@@ -1,6 +1,4 @@
-use serde::de;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
@@ -45,101 +43,8 @@ pub enum ModelError {
     FailedObsolete,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct TaskId(String);
-
-impl TaskId {
-    pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(ModelError::EmptyId { kind: "TaskId" });
-        }
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for TaskId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct AgentId(String);
-
-impl AgentId {
-    pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(ModelError::EmptyId { kind: "AgentId" });
-        }
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for AgentId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct AttemptId(String);
-
-impl AttemptId {
-    pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(ModelError::EmptyId { kind: "AttemptId" });
-        }
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for AttemptId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct LeaseToken(String);
-
-impl LeaseToken {
-    pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(ModelError::EmptyId { kind: "LeaseToken" });
-        }
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for LeaseToken {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
+mod identity;
+pub use identity::{AgentId, AttemptId, LeaseToken, TaskId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -201,7 +106,7 @@ pub enum CompletionArtifact {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClaimedTask {
     pub id: TaskId,
-    pub kind: String,
+    pub kind: TaskKind,
     pub prompt: String,
     pub source_commit: String,
     pub attempt_id: AttemptId,
@@ -242,11 +147,14 @@ impl ClaimOutcome {
     pub const fn is_idle(&self) -> bool {
         matches!(self, Self::NoTask)
     }
+}
 
-    pub fn into_claimed(self) -> Result<ClaimedTask, ModelError> {
-        match self {
-            Self::Claimed(task) => Ok(*task),
-            Self::NoTask => Err(ModelError::NoClaimableTask),
+impl TryFrom<ClaimOutcome> for ClaimedTask {
+    type Error = ModelError;
+    fn try_from(outcome: ClaimOutcome) -> Result<Self, Self::Error> {
+        match outcome {
+            ClaimOutcome::Claimed(task) => Ok(*task),
+            ClaimOutcome::NoTask => Err(ModelError::NoClaimableTask),
         }
     }
 }
@@ -278,7 +186,7 @@ impl TaskTrigger {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnqueueTask {
     pub id: TaskId,
-    pub kind: String,
+    pub kind: TaskKind,
     pub trigger: TaskTrigger,
     pub prompt: String,
     pub source_commit: String,
@@ -289,7 +197,7 @@ pub struct EnqueueTask {
 
 impl EnqueueTask {
     pub fn validate(&self) -> Result<(), ModelError> {
-        if self.kind.trim().is_empty() {
+        if self.kind.is_empty() {
             return Err(ModelError::EmptyTaskKind);
         }
         if self.prompt.trim().is_empty() {
@@ -313,7 +221,7 @@ impl EnqueueTask {
         {
             return Err(ModelError::SelfDependency);
         }
-        if self.kind == "blocker" && !self.dependencies.is_empty() {
+        if self.kind.is_blocker() && !self.dependencies.is_empty() {
             return Err(ModelError::BlockerWithDependencies);
         }
         Ok(())
@@ -327,7 +235,8 @@ pub struct BlockerRequest {
     pub prompt: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "WireTerminalResult")]
 pub enum TerminalResult {
     Completed {
         summary: String,
@@ -400,13 +309,7 @@ impl TryFrom<WireTerminalResult> for TerminalResult {
         } = wire;
         match status {
             WireTerminalStatus::Completed => {
-                if blocker.present {
-                    return Err(ModelError::CompletedWithBlocker);
-                }
-                if !blocker.id.is_empty() || !blocker.title.is_empty() || !blocker.prompt.is_empty()
-                {
-                    return Err(ModelError::AbsentBlockerHasDetails);
-                }
+                blocker.require_absent(AbsentBlockerContext::Completed)?;
                 Ok(Self::Completed {
                     summary,
                     changed_files,
@@ -418,37 +321,18 @@ impl TryFrom<WireTerminalResult> for TerminalResult {
                 if obsolete {
                     return Err(ModelError::BlockedObsolete);
                 }
-                if !blocker.present {
-                    return Err(ModelError::BlockedWithoutBlocker);
-                }
-                if blocker.title.trim().is_empty() {
-                    return Err(ModelError::EmptyBlockerTitle);
-                }
-                if blocker.prompt.trim().is_empty() {
-                    return Err(ModelError::EmptyBlockerPrompt);
-                }
                 Ok(Self::Blocked {
                     summary,
                     changed_files,
                     tests,
-                    blocker: BlockerRequest {
-                        id: TaskId::new(blocker.id)?,
-                        title: blocker.title,
-                        prompt: blocker.prompt,
-                    },
+                    blocker: BlockerRequest::try_from(blocker)?,
                 })
             }
             WireTerminalStatus::Failed => {
                 if obsolete {
                     return Err(ModelError::FailedObsolete);
                 }
-                if blocker.present {
-                    return Err(ModelError::FailedWithBlocker);
-                }
-                if !blocker.id.is_empty() || !blocker.title.is_empty() || !blocker.prompt.is_empty()
-                {
-                    return Err(ModelError::AbsentBlockerHasDetails);
-                }
+                blocker.require_absent(AbsentBlockerContext::Failed)?;
                 Ok(Self::Failed {
                     summary,
                     changed_files,
@@ -456,16 +340,6 @@ impl TryFrom<WireTerminalResult> for TerminalResult {
                 })
             }
         }
-    }
-}
-
-impl<'de> Deserialize<'de> for TerminalResult {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let wire = WireTerminalResult::deserialize(deserializer)?;
-        Self::try_from(wire).map_err(de::Error::custom)
     }
 }
 
@@ -495,10 +369,14 @@ impl TerminalResult {
     }
 
     #[must_use]
-    pub const fn is_obsolete(&self) -> bool {
+    pub const fn completion_relevance(&self) -> CompletionRelevance {
         match self {
-            Self::Completed { obsolete, .. } => *obsolete,
-            Self::Blocked { .. } | Self::Failed { .. } => false,
+            Self::Completed { obsolete: true, .. } => CompletionRelevance::Obsolete,
+            Self::Completed {
+                obsolete: false, ..
+            }
+            | Self::Blocked { .. }
+            | Self::Failed { .. } => CompletionRelevance::Current,
         }
     }
 }
@@ -506,16 +384,16 @@ impl TerminalResult {
 #[cfg(test)]
 mod tests {
     use super::{
-        ActivityKind, AgentId, AttemptId, ClaimOutcome, EnqueueTask, LeaseToken, ModelError,
-        TaskId, TaskTrigger, TerminalResult,
+        ActivityKind, AgentId, AttemptId, ClaimOutcome, ClaimedTask, CompletionRelevance,
+        EnqueueTask, LeaseToken, ModelError, TaskId, TaskTrigger, TerminalResult,
     };
 
     #[test]
     fn enqueue_rejects_self_dependency() -> crate::HiveResult<()> {
-        let task_id = TaskId::new("task-1")?;
+        let task_id = TaskId::try_from("task-1")?;
         let task = EnqueueTask {
             id: task_id.clone(),
-            kind: "code".to_owned(),
+            kind: "code".into(),
             trigger: TaskTrigger::ManualCli,
             prompt: "Implement it".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
@@ -531,14 +409,14 @@ mod tests {
     #[test]
     fn enqueue_rejects_blocker_dependency() -> crate::HiveResult<()> {
         let task = EnqueueTask {
-            id: TaskId::new("blocker-2")?,
-            kind: "blocker".to_owned(),
+            id: TaskId::try_from("blocker-2")?,
+            kind: "blocker".into(),
             trigger: TaskTrigger::ManualCli,
             prompt: "Resolve the prerequisite".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             priority: 200,
             max_attempts: 3,
-            dependencies: vec![TaskId::new("blocker-1")?],
+            dependencies: vec![TaskId::try_from("blocker-1")?],
         };
 
         assert_eq!(task.validate(), Err(ModelError::BlockerWithDependencies));
@@ -685,14 +563,14 @@ mod tests {
 
     #[test]
     fn identifiers_triggers_and_activity_kinds_have_stable_wire_values() -> crate::HiveResult<()> {
-        assert_eq!(TaskId::new("task-1")?.to_string(), "task-1");
-        assert_eq!(AgentId::new("agent-1")?.to_string(), "agent-1");
-        assert_eq!(AttemptId::new("attempt-1")?.to_string(), "attempt-1");
-        assert_eq!(LeaseToken::new("lease-1")?.to_string(), "lease-1");
-        assert!(TaskId::new(" ").is_err());
-        assert!(AgentId::new("\n").is_err());
-        assert!(AttemptId::new("\t").is_err());
-        assert!(LeaseToken::new("").is_err());
+        assert_eq!(TaskId::try_from("task-1")?.to_string(), "task-1");
+        assert_eq!(AgentId::try_from("agent-1")?.to_string(), "agent-1");
+        assert_eq!(AttemptId::try_from("attempt-1")?.to_string(), "attempt-1");
+        assert_eq!(LeaseToken::try_from("lease-1")?.to_string(), "lease-1");
+        assert!(TaskId::try_from(" ").is_err());
+        assert!(AgentId::try_from("\n").is_err());
+        assert!(AttemptId::try_from("\t").is_err());
+        assert!(LeaseToken::try_from("").is_err());
 
         assert_eq!(TaskTrigger::AgentDependency.as_str(), "agent-dependency");
         assert_eq!(
@@ -715,7 +593,7 @@ mod tests {
         }
         assert!(ClaimOutcome::NoTask.is_idle());
         assert_eq!(
-            ClaimOutcome::NoTask.into_claimed(),
+            ClaimedTask::try_from(ClaimOutcome::NoTask),
             Err(ModelError::NoClaimableTask)
         );
         Ok(())
@@ -724,7 +602,7 @@ mod tests {
     #[test]
     fn enqueue_validation_rejects_each_invalid_domain_field() -> crate::HiveResult<()> {
         let valid = EnqueueTask {
-            id: TaskId::new("task")?,
+            id: TaskId::try_from("task")?,
             kind: "code".into(),
             trigger: TaskTrigger::ManualCli,
             prompt: "Implement behavior".into(),
@@ -792,7 +670,7 @@ mod tests {
         assert_eq!(blocked.summary(), "Waiting for prerequisite");
         assert_eq!(blocked.changed_files(), ["src/worker.rs"]);
         assert_eq!(blocked.tests(), ["cargo test -p hive"]);
-        assert!(!blocked.is_obsolete());
+        assert_eq!(blocked.completion_relevance(), CompletionRelevance::Current);
 
         let completed: TerminalResult = serde_json::from_value(serde_json::json!({
             "status": "completed",
@@ -802,7 +680,10 @@ mod tests {
             "obsolete": true,
             "blocker": { "present": false, "id": "", "title": "", "prompt": "" }
         }))?;
-        assert!(completed.is_obsolete());
+        assert_eq!(
+            completed.completion_relevance(),
+            CompletionRelevance::Obsolete
+        );
 
         let invalid = [
             (
@@ -862,4 +743,73 @@ mod tests {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompletionRelevance {
+    Current,
+    Obsolete,
+}
+
+/// A completion proposal; the store still admits it against the live owner and lease.
+pub struct Completion<'a> {
+    pub task: &'a ClaimedTask,
+    pub agent_id: &'a AgentId,
+    pub relevance: CompletionRelevance,
+    pub summary: &'a str,
+    pub artifact: &'a CompletionArtifact,
+}
+
+mod task_kind;
+pub use task_kind::TaskKind;
+
+/// Select an active delivery by revision and typed task classification.
+pub struct ActiveDeliveryQuery<'a> {
+    pub source_commit: &'a str,
+    pub kind: &'a TaskKind,
+}
+
+enum AbsentBlockerContext {
+    Completed,
+    Failed,
+}
+impl WireBlockerResult {
+    fn require_absent(self, context: AbsentBlockerContext) -> Result<(), ModelError> {
+        if self.present {
+            return Err(match context {
+                AbsentBlockerContext::Completed => ModelError::CompletedWithBlocker,
+                AbsentBlockerContext::Failed => ModelError::FailedWithBlocker,
+            });
+        }
+        if !self.id.is_empty() || !self.title.is_empty() || !self.prompt.is_empty() {
+            return Err(ModelError::AbsentBlockerHasDetails);
+        }
+        Ok(())
+    }
+}
+impl TryFrom<WireBlockerResult> for BlockerRequest {
+    type Error = ModelError;
+    fn try_from(blocker: WireBlockerResult) -> Result<Self, Self::Error> {
+        if !blocker.present {
+            return Err(ModelError::BlockedWithoutBlocker);
+        }
+        if blocker.title.trim().is_empty() {
+            return Err(ModelError::EmptyBlockerTitle);
+        }
+        if blocker.prompt.trim().is_empty() {
+            return Err(ModelError::EmptyBlockerPrompt);
+        }
+        Ok(Self {
+            id: TaskId::try_from(blocker.id)?,
+            title: blocker.title,
+            prompt: blocker.prompt,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum ActiveDelivery {
+    #[default]
+    Idle,
+    Active(TaskId),
 }

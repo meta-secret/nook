@@ -1,30 +1,39 @@
 use std::{
     env, fs,
+    ops::Deref,
     path::{Path, PathBuf},
 };
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
 }
 
-fn read(root: &Path, path: &str) -> String {
-    fs::read_to_string(root.join(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
-}
-
-fn workflow_step<'a>(workflow: &'a str, name: &str) -> &'a str {
-    let marker = format!("      - name: {name}\n");
-    let start = workflow
-        .find(&marker)
-        .unwrap_or_else(|| panic!("repository policy must contain the named `{name}` step"));
-    let step = &workflow[start..];
-    let end = step[1..]
-        .find("\n      - name:")
-        .map_or(step.len(), |offset| offset + 1);
-    &step[..end]
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
 }
 
 fn task_body<'a>(taskfile: &'a str, task: &str, next_task: &str) -> &'a str {
@@ -33,19 +42,22 @@ fn task_body<'a>(taskfile: &'a str, task: &str, next_task: &str) -> &'a str {
     let start = taskfile
         .find(&start_marker)
         .unwrap_or_else(|| panic!("missing task {task}"));
-    let body = &taskfile[start..];
+    let body = taskfile
+        .get(start..)
+        .unwrap_or_else(|| panic!("task {task} begins outside a UTF-8 boundary"));
     let end = body
         .find(&end_marker)
         .unwrap_or_else(|| panic!("missing following task {next_task}"));
-    &body[..end]
+    body.get(..end)
+        .unwrap_or_else(|| panic!("task {task} ends outside a UTF-8 boundary"))
 }
 
 #[test]
 fn loom_verify_enforces_loom_typescript_eslint_rules() {
-    let root = repository_root();
-    let manifest = read(&root, "agentic-ai/loom/package.json");
+    let root = RepositoryFixture::repository_root();
+    let manifest = root.read("agentic-ai/loom/package.json");
     for required in [
-        "\"lint\": \"eslint src tests\"",
+        "\"lint\": \"eslint .\"",
         "\"check\": \"tsc --noEmit\"",
         "\"verify\": \"bun run format:check && bun run lint && bun run check && bun test\"",
         "\"eslint\":",
@@ -56,7 +68,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         );
     }
 
-    let eslint = read(&root, "agentic-ai/loom/eslint.config.js");
+    let eslint = root.read("agentic-ai/loom/eslint.config.js");
     for required in [
         "'max-params': ['error', { max: 1 }]",
         "'@typescript-eslint/no-restricted-types'",
@@ -66,7 +78,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "'{}':",
         "'@typescript-eslint/no-explicit-any': 'error'",
         "'@typescript-eslint/no-empty-object-type': 'error'",
-        "files: ['src/**/*.ts', 'tests/**/*.ts']",
+        "files: ['**/*.{ts,js,mjs,cjs}']",
         "Model a concrete domain type",
         "generic object type",
         "must be narrowed immediately",
@@ -81,13 +93,14 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         );
     }
 
-    let guards = read(&root, "agentic-ai/loom/src/lib/guards.ts");
+    let guards = root.read("agentic-ai/loom/src/lib/guards.ts");
     for required in [
         "export type UntrustedYamlNode =",
         "export type UntrustedYamlMap =",
         "export type UntrustedYamlMapBuilder =",
-        "export function asUntrustedYamlNode",
-        "export function untrustedYamlProperty",
+        "export class UntrustedYamlBoundary",
+        "static fromHost",
+        "static property",
         "export enum UntrustedYamlPropertyPresence",
     ] {
         assert!(
@@ -104,7 +117,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "Loom must not restore generic external value aliases"
     );
 
-    let taskfile = read(&root, ".task/agentic-ai.yml");
+    let taskfile = root.read(".task/agentic-ai.yml");
     for required in ["loom:lint:", "bun run lint", "task: loom:lint"] {
         assert!(
             taskfile.contains(required),
@@ -118,7 +131,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
             && skills_install.contains("{{.REPO_ROOT}}"),
         "executable applications must install their pinned workspace"
     );
-    let skills_workspace = read(&root, ".cortex/package.json");
+    let skills_workspace = root.read(".cortex/package.json");
     for required in [
         "@nook/executable-skills-workspace",
         "gizmo/dynamic-skills/*/scripts",
@@ -130,7 +143,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
             "executable-skill workspace must retain `{required}`"
         );
     }
-    let skills_bunfig = read(&root, ".cortex/bunfig.toml");
+    let skills_bunfig = root.read(".cortex/bunfig.toml");
     assert!(
         skills_bunfig.contains("linker = \"hoisted\""),
         "executable-skill workspace must retain one hoisted dependency tree"
@@ -155,13 +168,13 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     );
     let pre_push = task_body(&taskfile, "loom:pre-push", "loom:cortex-audit");
     assert!(
-        pre_push.contains("deps: [loom:install]")
+        pre_push.contains("deps: [loom:install, tooling:install]")
             && pre_push.contains("task loom:default FAMILY=prePush")
             && !pre_push.contains("skills:"),
         "loom:pre-push must retain Loom setup without a harness skill workspace"
     );
 
-    let preflight = read(&root, "preflight/Taskfile.yml");
+    let preflight = root.read("preflight/Taskfile.yml");
     let format_contract = task_body(&preflight, "preflight:format-contract", "preflight:export");
     assert!(
         format_contract
@@ -172,131 +185,97 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "the formatter contract must be a detached, install-free preflight task"
     );
 
-    let skills_manifest = read(
-        &root,
-        ".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/package.json",
-    );
+    let skills_manifest =
+        root.read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/package.json");
     assert!(
-        skills_manifest.contains("\"verify\":") && !skills_manifest.contains("\"dependencies\"")
+        skills_manifest.contains("\"verify\":")
+            && skills_manifest.contains("\"zod\":")
+            && skills_manifest.contains("\"neverthrow\":")
     );
-    let skills_eslint = read(
-        &root,
-        ".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/eslint.config.js",
-    );
+    let skills_eslint = root
+        .read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/eslint.config.js");
     assert!(
-        skills_eslint.contains("files: ['src/**/*.ts', 'tests/**/*.ts']")
+        skills_eslint.contains("files: ['**/*.{ts,js,mjs,cjs}']")
             && skills_eslint.contains("'max-params': ['error', { max: 1 }]")
             && skills_eslint.contains("unknown:"),
         "executable applications must retain repository TypeScript rules"
     );
-    let skills_typescript = read(
-        &root,
-        ".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/tsconfig.json",
-    );
-    assert!(skills_typescript.contains("\"include\": [\"src/**/*.ts\", \"tests/**/*.ts\"]"));
-    let source_gate = read(
-        &root,
-        "agentic-ai/loom/tests/skill-application-source-boundary.test.ts",
-    );
+    let skills_typescript =
+        root.read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/tsconfig.json");
     assert!(
-        source_gate.contains("analyzeExecutableSkillSource")
+        skills_typescript
+            .contains("\"include\": [\"**/*.ts\", \"**/*.js\", \"**/*.mjs\", \"**/*.cjs\"]")
+    );
+    let source_gate = root.read("agentic-ai/loom/tests/skill-application-source-boundary.test.ts");
+    assert!(
+        source_gate.contains("ExecutableSkillSource.analyze")
             && source_gate
                 .contains(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts")
-            && source_gate.contains("readTrackedRepositoryFiles"),
+            && source_gate.contains("new ExecutableSkillCheckout(")
+            && source_gate.contains(").readTrackedFiles()"),
         "loom:verify must AST-audit every tracked executable application source"
     );
-    let tracked_inventory = read(&root, "agentic-ai/loom/src/executable-skills/repository.ts");
+    let tracked_inventory = root.read("agentic-ai/loom/src/executable-skills/repository.ts");
     assert!(
         tracked_inventory.contains("['ls-files', '--stage', '-z']")
-            && tracked_inventory.contains("readTrackedRepositoryFiles"),
+            && tracked_inventory.contains("readTrackedFiles(): Result<"),
         "executable application gates must share the NUL-safe staged inventory"
     );
 }
 
 #[test]
 fn loom_workflow_audits_every_cortex_change() {
-    let root = repository_root();
-    let workflow = read(&root, ".github/workflows/repository-policy.yml");
+    let root = RepositoryFixture::repository_root();
+    let entrypoint = root.read(".github/workflows/ci.yml");
+    let workflow = root.read(".github/workflows/repository-policy.yml");
+    let taskfile = root.read(".task/ci-workflows.yml");
     assert!(
-        workflow.contains("fetch-depth: 0"),
-        "repository policy must retain full history for exact stacked-base availability"
-    );
-
-    assert!(
-        workflow.contains("      - .cortex/**") && workflow.contains(".cortex/* |"),
-        "repository policy must classify Cortex PR changes and trigger on Cortex Main pushes"
-    );
-    assert!(
-        workflow.contains("      - .agents/skills/**")
-            && workflow.contains(".agents/skills/* |")
-            && workflow.contains("      - .cortex/**/dynamic-skills/*/scripts/**")
-            && workflow.contains(".cortex/*/dynamic-skills/*/scripts/* |"),
-        "repository policy must trigger for prohibited mirrors and canonical applications"
-    );
-    assert!(
-        workflow.contains("echo \"loom=$loom_changed\" >> \"$GITHUB_OUTPUT\"")
-            && workflow.contains("git diff --no-renames --name-only HEAD^1 HEAD^2")
-            && workflow
-                .matches("steps.policy-paths.outputs.loom == 'true'")
-                .count()
-                == 7,
-        "repository policy must classify rename sources and condition every Loom-only step"
-    );
-    assert!(
-        workflow.contains(".cortex/*.md) ;;")
-            && workflow.contains("*) cortex_markdown_only=false ;;")
-            && workflow.contains(
-                "if [ \"$changed\" != \"true\" ]; then\n            cortex_markdown_only=false"
+        entrypoint.contains("pull_request:")
+            && entrypoint.contains("push:")
+            && entrypoint.contains("branches: [main]")
+            && !entrypoint.contains("paths:")
+            && !entrypoint.contains("paths-ignore:")
+            && entrypoint.contains(
+                "  policy:\n    name: Repository policy\n    needs: scope\n    uses: ./.github/workflows/repository-policy.yml\n    secrets: inherit",
             )
-            && workflow.contains(
-                "echo \"cortex_markdown_only=$cortex_markdown_only\" >> \"$GITHUB_OUTPUT\"",
-            ),
-        "repository policy must classify only non-empty Cortex Markdown changes as lightweight"
+            && workflow.contains("workflow_call:"),
+        "repository policy must validate every PR and Main tree"
     );
-    for trigger_path in [
-        ".github/formatting/**",
-        ".github/scripts/format-host-apply.sh",
-        ".github/scripts/format-host-apply.test.sh",
+    assert!(
+        workflow.contains("fetch-depth: 0")
+            && !workflow.contains("BASELINE_SHA")
+            && !workflow.contains("BEFORE_SHA")
+            && !workflow.contains("git diff")
+            && !workflow.contains("policy-paths")
+            && !workflow.contains("cortex_markdown_only"),
+        "repository policy must fetch identifier history without inline base comparison or path classification"
+    );
+    assert!(
+        !workflow.contains("arc-manifest-contract.ts")
+            && !workflow.contains("runner_placement")
+            && !workflow.contains("run: |")
+            && !workflow.contains("run: bun ")
+            && !workflow.contains("run: bash "),
+        "repository policy must contain only Actions setup glue and thin Task invocations"
+    );
+    assert!(
+        taskfile.contains("task: preflight:repository-policy"),
+        "both trust domains must use the Docker policy Task surface"
+    );
+    let dockerfile = root.read("preflight/Dockerfile");
+    for task in [
+        "task loom:verify",
+        "task preflight:format-contract",
+        "task loom:cortex-audit",
     ] {
         assert!(
-            workflow.contains(trigger_path),
-            "repository policy must trigger for formatter authority `{trigger_path}`"
+            dockerfile.contains(task),
+            "Docker policy must retain `{task}`"
         );
     }
-    let format_step = workflow_step(&workflow, "Enforce shared source formatter contract");
     assert!(
-        format_step.contains("run: task preflight:format-contract")
-            && format_step
-                .contains("if: steps.policy-paths.outputs.cortex_markdown_only != 'true'",)
-            && !format_step.contains("install"),
-        "repository policy must skip the detached formatter only for Cortex Markdown"
+        workflow.contains("run: task ci:repository-policy:trusted")
+            && workflow.contains("run: task ci:repository-policy:untrusted"),
+        "trusted and untrusted workflow branches must delegate policy behavior to Taskfile"
     );
-
-    let cortex_audit_step = workflow_step(&workflow, "Audit Cortex document structure");
-    assert!(
-        cortex_audit_step.contains("if: steps.policy-paths.outputs.loom == 'true'")
-            && cortex_audit_step.contains("run: task loom:cortex-audit")
-            && !cortex_audit_step.contains("cortex_markdown_only"),
-        "Loom must audit Cortex Markdown even when detached formatter work is skipped"
-    );
-
-    for (step_name, task) in [
-        (
-            "Enforce authored TypeScript state invariants",
-            "task preflight:typescript-state",
-        ),
-        (
-            "Enforce Loom single-parameter contract",
-            "task preflight:loom-contracts",
-        ),
-    ] {
-        let hosted_preflight_step = workflow_step(&workflow, step_name);
-        assert!(
-            hosted_preflight_step
-                .contains("steps.policy-paths.outputs.cortex_markdown_only != 'true'")
-                && hosted_preflight_step.contains("github.event_name == 'pull_request'")
-                && hosted_preflight_step.contains(task),
-            "hosted `{step_name}` must skip Cargo-backed preflight for Cortex Markdown only"
-        );
-    }
 }

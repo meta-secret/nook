@@ -1,10 +1,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
-  asUntrustedYamlNode,
-  isRecord,
-  untrustedYamlProperty,
   UntrustedYamlPropertyPresence,
+  UntrustedYamlBoundary,
 } from './lib/guards.ts';
 import {
   PR_STEWARD_REPOSITORY,
@@ -17,7 +15,14 @@ import type {
   PrStewardUrl,
 } from './pr-steward-contract.ts';
 
+export enum PrStewardPullRequestState {
+  Open = 'open',
+  Closed = 'closed',
+  Merged = 'merged',
+}
+
 export type PrStewardAssignedPullRequest = {
+  readonly state: PrStewardPullRequestState;
   readonly headSha: PrStewardHeadSha;
   readonly url: PrStewardUrl;
 };
@@ -63,7 +68,7 @@ export class PrStewardGithubUnavailableError extends Error {
   }
 }
 
-class PrStewardGhCommand implements PrStewardCommandRunner {
+export class PrStewardGhCommand implements PrStewardCommandRunner {
   async run(request: PrStewardCommandRequest): Promise<PrStewardCommandResult> {
     try {
       const result = await promisify(execFile)(
@@ -136,24 +141,33 @@ export class PrStewardGithubPrReader implements PrStewardAssignedPrReader {
       });
     let parsed: UntrustedYamlNode;
     try {
-      parsed = asUntrustedYamlNode(
+      parsed = UntrustedYamlBoundary.fromHost(
         JSON.parse(result.stdout) as UntrustedYamlNode,
       );
     } catch {
       throw new PrStewardGithubUnavailableError({ cause: false });
     }
-    if (!isRecord(parsed))
+    if (!UntrustedYamlBoundary.isRecord(parsed))
       throw new PrStewardGithubUnavailableError({ cause: false });
-    const head = untrustedYamlProperty({ record: parsed, key: 'head' });
-    const html = untrustedYamlProperty({ record: parsed, key: 'html_url' });
+    const head = UntrustedYamlBoundary.property({
+      record: parsed,
+      key: 'head',
+    });
+    const html = UntrustedYamlBoundary.property({
+      record: parsed,
+      key: 'html_url',
+    });
     if (
       head.presence !== UntrustedYamlPropertyPresence.Present ||
-      !isRecord(head.value) ||
+      !UntrustedYamlBoundary.isRecord(head.value) ||
       html.presence !== UntrustedYamlPropertyPresence.Present ||
       typeof html.value !== 'string'
     )
       throw new PrStewardGithubUnavailableError({ cause: false });
-    const sha = untrustedYamlProperty({ record: head.value, key: 'sha' });
+    const sha = UntrustedYamlBoundary.property({
+      record: head.value,
+      key: 'sha',
+    });
     const expected = `https://github.com/${PR_STEWARD_REPOSITORY}/pull/${request.pullRequest}`;
     const url = PrStewardNdjsonCodec.githubUrl(html.value);
     if (
@@ -165,6 +179,30 @@ export class PrStewardGithubPrReader implements PrStewardAssignedPrReader {
       url.value !== expected
     )
       throw new PrStewardGithubUnavailableError({ cause: false });
-    return { headSha: PrStewardNdjsonCodec.headSha(sha.value), url };
+    const state = UntrustedYamlBoundary.property({
+      record: parsed,
+      key: 'state',
+    });
+    const merged = UntrustedYamlBoundary.property({
+      record: parsed,
+      key: 'merged',
+    });
+    if (
+      state.presence !== UntrustedYamlPropertyPresence.Present ||
+      merged.presence !== UntrustedYamlPropertyPresence.Present ||
+      (state.value !== 'open' && state.value !== 'closed') ||
+      typeof merged.value !== 'boolean' ||
+      (state.value === 'open' && merged.value)
+    )
+      throw new PrStewardGithubUnavailableError({ cause: false });
+    return {
+      headSha: PrStewardNdjsonCodec.headSha(sha.value),
+      url,
+      state: merged.value
+        ? PrStewardPullRequestState.Merged
+        : state.value === 'closed'
+          ? PrStewardPullRequestState.Closed
+          : PrStewardPullRequestState.Open,
+    };
   }
 }

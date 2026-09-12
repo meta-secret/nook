@@ -13,7 +13,7 @@
 use crate::{CanonicalEventBodyBytes, EventError, EventResult};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde::{Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use std::fmt;
 
@@ -22,7 +22,9 @@ const SHA256_BASE64URL_LEN: usize = 43;
 const SHA256_BYTES_LEN: usize = 32;
 
 /// Content-addressed event identifier (`sha256u:{base64url_no_pad}`).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[tsify(type = "string")]
+#[serde(try_from = "String")]
 pub struct EventId(String);
 
 impl EventId {
@@ -122,15 +124,17 @@ impl Serialize for EventId {
     }
 }
 
-impl<'de> Deserialize<'de> for EventId {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for EventId {
+    type Error = EventError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 
 /// Ed25519 signature string (`ed25519:{hex}`).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify)]
+#[tsify(type = "string")]
+#[serde(try_from = "String")]
 pub struct Ed25519Signature(String);
 
 impl Ed25519Signature {
@@ -212,10 +216,10 @@ impl Serialize for Ed25519Signature {
     }
 }
 
-impl<'de> Deserialize<'de> for Ed25519Signature {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for Ed25519Signature {
+    type Error = EventError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 
@@ -274,6 +278,52 @@ mod tests {
         let sig_back: Ed25519Signature = serde_json::from_str(&serde_json::to_string(&sig)?)?;
         assert_eq!(sig_back, sig);
         assert!(Ed25519Signature::parse("bad-signature").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn event_id_typed_boundary_rejects_every_malformed_digest_shape() {
+        assert!(serde_json::from_str::<EventId>("\"not-an-event-id\"").is_err());
+        assert!(matches!(
+            EventId::parse("sha256u:short"),
+            Err(EventError::EventIdInvalidDigest { .. })
+        ));
+        assert!(matches!(
+            EventId::parse(&format!("sha256u:{}", "!".repeat(43))),
+            Err(EventError::EventIdInvalidDigest { .. })
+        ));
+        assert!(EventId::from_sha256_hex("not-hex").is_err());
+        assert!(matches!(
+            EventId::from_sha256_hex("00"),
+            Err(EventError::EventIdInvalidDigest { .. })
+        ));
+
+        let trusted =
+            EventId::from_trusted("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw".to_owned());
+        assert_eq!(trusted.as_ref(), trusted.as_str());
+        assert_eq!(trusted.to_string(), trusted.as_str());
+        assert_eq!(trusted.clone().into_inner(), trusted.as_str());
+    }
+
+    #[test]
+    fn signature_typed_boundary_rejects_malformed_and_unverified_values() -> anyhow::Result<()> {
+        assert!(serde_json::from_str::<Ed25519Signature>("\"bad-signature\"").is_err());
+        assert!(Ed25519Signature::parse("ed25519:not-hex").is_err());
+        assert!(matches!(
+            Ed25519Signature::parse("ed25519:00"),
+            Err(EventError::SignatureWrongLength)
+        ));
+
+        let signing_key = signing_key();
+        let body = CanonicalEventBodyBytes::from_json(&json!({"value": 1}))?;
+        let invalid = Ed25519Signature::from_trusted(format!("ed25519:{}", "00".repeat(64)));
+        assert!(matches!(
+            invalid.verify(&body, &signing_key.verifying_key()),
+            Err(EventError::SignatureVerificationFailed)
+        ));
+        assert_eq!(invalid.as_ref(), invalid.as_str());
+        assert_eq!(invalid.to_string(), invalid.as_str());
+        assert_eq!(invalid.clone().into_inner(), invalid.as_str());
         Ok(())
     }
 }

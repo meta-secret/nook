@@ -234,8 +234,11 @@
       }
       if (event.key === 'Enter') {
         event.preventDefault()
+        const [firstSuggestion] = suggestions
+        const word = suggestions[suggestionIndex] || firstSuggestion
+        if (!word) return
         const selectSuggestionArgs: Parameters<typeof selectSuggestion>[0] = {
-          word: ((...[v = suggestions[0]!]) => v)(suggestions[suggestionIndex]),
+          word,
           index,
         }
         selectSuggestion(selectSuggestionArgs)
@@ -243,8 +246,11 @@
       }
       if (event.key === 'Tab' && !event.shiftKey) {
         event.preventDefault()
+        const [firstSuggestion] = suggestions
+        const word = suggestions[suggestionIndex] || firstSuggestion
+        if (!word) return
         const selectSuggestionArgs2: Parameters<typeof selectSuggestion>[0] = {
-          word: ((...[v = suggestions[0]!]) => v)(suggestions[suggestionIndex]),
+          word,
           index,
         }
         selectSuggestion(selectSuggestionArgs2)

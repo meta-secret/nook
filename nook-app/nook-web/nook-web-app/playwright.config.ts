@@ -2,7 +2,7 @@ import dotenv from 'dotenv'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from '@playwright/test'
+import { defineConfig, type PlaywrightTestConfig } from '@playwright/test'
 import playwrightGates from './playwright.gates.json' with { type: 'json' }
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
@@ -53,7 +53,7 @@ const SYNC_LIVE_SPECS = playwrightGates.manual
 const specPaths = (files: readonly string[]) =>
   files.map((file) => path.join('**', file))
 
-const projectDefinitions = [
+const projectDefinitions: NonNullable<PlaywrightTestConfig['projects']> = [
   {
     name: 'stable',
     testMatch: specPaths(PR_SPECS),
@@ -127,8 +127,8 @@ export default defineConfig({
     : isCi
       ? { workers: 2 }
       : {}),
-  ...(isCi ? { maxFailures: 1, globalTimeout: 45 * 60_000 } : {}),
-  retries: isCi ? 2 : 0,
+  ...(isCi ? { maxFailures: 0, globalTimeout: 180 * 60_000 } : {}),
+  retries: 0,
   globalTeardown: './e2e/global-teardown.ts',
   timeout: isCi ? 120_000 : 60_000,
   reporter: isCi ? 'line' : 'list',

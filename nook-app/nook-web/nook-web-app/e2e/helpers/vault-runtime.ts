@@ -17,27 +17,25 @@ export async function clearBrowserVault(page: Page) {
     })
     .toBe(true)
 
-  const clearedThroughManager = await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault: {
-          init(): Promise<void>
-          stopVaultSync(): void
-          waitForStorageChain(): Promise<void>
-          enqueueStorage<T>(operation: () => Promise<T>): Promise<T>
-          hasManager: boolean
-          requireManager(): { delete_local_browser_data(): Promise<void> }
-        }
-      }
-    ).__nookVault
+  const cleared = await page.evaluate(async () => {
+    const vault = window.__nookVault
+    if (!vault) throw new Error('__nookVault is not available on the page')
     await vault.init()
     vault.stopVaultSync()
     await vault.waitForStorageChain()
-    if (!vault.hasManager) return false
-    const manager = vault.requireManager()
-    await vault.enqueueStorage(() => manager.delete_local_browser_data())
-    return true
+    if (!vault.hasManager) return { ok: true as const, value: false }
+    const manager = vault.admitManager()
+    if (manager.isErr())
+      return { ok: false as const, error: manager.error.translationKey }
+    try {
+      await manager.value.delete_local_browser_data()
+    } catch {
+      return { ok: false as const, error: 'Native local data deletion failed' }
+    }
+    return { ok: true as const, value: true }
   })
+  if (!cleared.ok) throw new Error(cleared.error)
+  const clearedThroughManager = cleared.value
   await page.evaluate(
     (vaultAlreadyCleared) =>
       new Promise<void>((resolve, reject) => {

@@ -8,12 +8,6 @@ use tsify::Tsify;
 #[tsify(type = "number")]
 pub struct AuthenticationOutcomeElapsedMilliseconds(u32);
 
-impl AuthenticationOutcomeElapsedMilliseconds {
-    pub(crate) const fn raw(self) -> u32 {
-        self.0
-    }
-}
-
 impl From<u32> for AuthenticationOutcomeElapsedMilliseconds {
     fn from(value: u32) -> Self {
         Self(value)
@@ -29,10 +23,6 @@ impl AuthenticationOutcomeTimeoutMilliseconds {
     pub(crate) const fn from_raw(value: u32) -> Self {
         Self(value)
     }
-
-    pub(crate) const fn raw(self) -> u32 {
-        self.0
-    }
 }
 
 impl From<u32> for AuthenticationOutcomeTimeoutMilliseconds {
@@ -46,12 +36,6 @@ impl From<u32> for AuthenticationOutcomeTimeoutMilliseconds {
 #[tsify(type = "number")]
 pub struct AuthenticationFieldCount(pub(crate) u32);
 
-impl AuthenticationFieldCount {
-    pub(crate) const fn raw(self) -> u32 {
-        self.0
-    }
-}
-
 impl From<u32> for AuthenticationFieldCount {
     fn from(value: u32) -> Self {
         Self(value)
@@ -64,8 +48,8 @@ impl From<u32> for AuthenticationFieldCount {
 pub struct AuthenticationSemanticSubmitControlCount(u32);
 
 impl AuthenticationSemanticSubmitControlCount {
-    pub(crate) const fn raw(self) -> u32 {
-        self.0
+    pub(crate) const fn is_nonzero(self) -> bool {
+        self.0 != 0
     }
 }
 
@@ -82,10 +66,6 @@ pub struct AuthenticationPasskeyAccountCount(u32);
 
 impl AuthenticationPasskeyAccountCount {
     pub(crate) const ZERO: Self = Self(0);
-
-    pub(crate) const fn raw(self) -> u32 {
-        self.0
-    }
 }
 
 impl From<u32> for AuthenticationPasskeyAccountCount {
@@ -160,12 +140,6 @@ impl From<AuthenticationWorkflowTotalSteps> for u8 {
 #[tsify(type = "number")]
 pub struct AuthenticationWorkflowObservationIndex(pub(crate) u32);
 
-impl AuthenticationWorkflowObservationIndex {
-    pub(crate) const fn raw(self) -> u32 {
-        self.0
-    }
-}
-
 impl From<u32> for AuthenticationWorkflowObservationIndex {
     fn from(value: u32) -> Self {
         Self(value)
@@ -183,12 +157,6 @@ impl From<AuthenticationWorkflowObservationIndex> for u32 {
 #[tsify(type = "number")]
 pub struct ExtensionSyncProviderCount(u32);
 
-impl ExtensionSyncProviderCount {
-    pub(crate) const fn raw(self) -> u32 {
-        self.0
-    }
-}
-
 impl From<u32> for ExtensionSyncProviderCount {
     fn from(value: u32) -> Self {
         Self(value)
@@ -200,12 +168,6 @@ impl From<u32> for ExtensionSyncProviderCount {
 #[tsify(type = "number")]
 pub struct ExtensionEventCount(u32);
 
-impl ExtensionEventCount {
-    pub(crate) const fn raw(self) -> u32 {
-        self.0
-    }
-}
-
 impl From<u32> for ExtensionEventCount {
     fn from(value: u32) -> Self {
         Self(value)
@@ -213,6 +175,7 @@ impl From<u32> for ExtensionEventCount {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
 
@@ -231,5 +194,100 @@ mod tests {
             timeout
         );
         Ok(())
+    }
+}
+
+impl AuthenticationFieldCount {
+    #[must_use]
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+    #[must_use]
+    pub const fn is_nonzero(self) -> bool {
+        !self.is_zero()
+    }
+    #[must_use]
+    pub const fn is_single(self) -> bool {
+        self.0 == 1
+    }
+    #[must_use]
+    pub const fn is_multiple(self) -> bool {
+        self.0 > 1
+    }
+    pub(crate) const fn is_within_observation_limit(self) -> bool {
+        self.0 <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+    }
+}
+
+impl AuthenticationSemanticSubmitControlCount {
+    #[must_use]
+    pub const fn is_single(self) -> bool {
+        self.0 == 1
+    }
+    #[must_use]
+    pub const fn is_multiple(self) -> bool {
+        self.0 > 1
+    }
+    pub(crate) const fn is_within_observation_limit(self) -> bool {
+        self.0 <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+    }
+}
+
+impl AuthenticationPasskeyAccountCount {
+    #[must_use]
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+    #[must_use]
+    pub const fn is_nonzero(self) -> bool {
+        !self.is_zero()
+    }
+    pub(crate) const fn is_within_observation_limit(self) -> bool {
+        self.0 <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+    }
+}
+
+impl AuthenticationSavedLoginAccountCount {
+    #[must_use]
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+    #[must_use]
+    pub const fn is_nonzero(self) -> bool {
+        !self.is_zero()
+    }
+}
+
+impl ExtensionEventCount {
+    #[must_use]
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+}
+
+impl AuthenticationFieldCount {
+    pub(crate) const fn saturating_add(self, other: Self) -> Self {
+        Self(self.0.saturating_add(other.0))
+    }
+}
+impl AuthenticationOutcomeElapsedMilliseconds {
+    #[must_use]
+    pub const fn has_reached(self, timeout: AuthenticationOutcomeTimeoutMilliseconds) -> bool {
+        self.0 >= timeout.0
+    }
+}
+impl AuthenticationWorkflowObservationIndex {
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the classifier observation limit is a compile-time value of 20"
+    )]
+    pub(crate) const fn is_within_classifier_batch(self) -> bool {
+        self.0 < crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS as u32
+    }
+}
+
+impl AuthenticationFieldCount {
+    pub(crate) const fn fits_within(self, total: Self) -> bool {
+        self.0 <= total.0
     }
 }

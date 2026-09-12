@@ -1,3 +1,8 @@
+import { err, ok } from 'neverthrow'
+import {
+  ExtensionSessionTransportFailure,
+  ExtensionSessionTransportFailureKind,
+} from '../src/background/service-worker/session-document'
 import { describe, expect, mock, test } from 'bun:test'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import { extensionSessionProbeDeadline } from '../src/offscreen/session-request-adapter'
@@ -17,7 +22,7 @@ describe('login account listing failure handling', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const { loginAccountAvailabilityForOrigin, loginAccountsForOrigin } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     const grants = [grant('failed-vault'), grant('healthy-vault')]
     const responses = [
@@ -35,14 +40,18 @@ describe('login account listing failure handling', () => {
       },
     ]
     const interactiveSendMessage = mock(() =>
-      Promise.resolve(responses.shift()),
+      Promise.resolve(ok(responses.shift())),
     )
-    const interactiveRequest: Parameters<typeof loginAccountsForOrigin>[0] = {
+    const interactiveRequest: Parameters<
+      typeof accountPickerSessions.loginAccountsForOrigin
+    >[0] = {
       grants,
       origin: 'https://example.test',
       sendMessage: interactiveSendMessage,
     }
-    await expect(loginAccountsForOrigin(interactiveRequest)).resolves.toEqual([
+    expect(
+      await accountPickerSessions.loginAccountsForOrigin(interactiveRequest),
+    ).toEqual([
       {
         vaultStoreId: 'healthy-vault',
         vaultName: 'healthy-vault',
@@ -55,31 +64,41 @@ describe('login account listing failure handling', () => {
     expect(interactiveSendMessage).toHaveBeenCalledTimes(2)
 
     const unavailableSendMessage = mock(() =>
-      Promise.reject(new Error('extension session unavailable')),
+      Promise.resolve(
+        err(
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ),
+        ),
+      ),
     )
-    const unavailableRequest: Parameters<typeof loginAccountsForOrigin>[0] = {
+    const unavailableRequest: Parameters<
+      typeof accountPickerSessions.loginAccountsForOrigin
+    >[0] = {
       grants,
       origin: 'https://example.test',
       sendMessage: unavailableSendMessage,
     }
-    await expect(loginAccountsForOrigin(unavailableRequest)).resolves.toEqual(
-      [],
-    )
+    expect(
+      await accountPickerSessions.loginAccountsForOrigin(unavailableRequest),
+    ).toEqual([])
 
     const passiveSendMessage = mock(() =>
-      Promise.resolve({ ok: false, reason: 'session-list-failed' }),
+      Promise.resolve(ok({ ok: false, reason: 'session-list-failed' })),
     )
     const passiveRequest: Parameters<
-      typeof loginAccountAvailabilityForOrigin
+      typeof accountPickerSessions.loginAccountAvailabilityForOrigin
     >[0] = {
       grants,
       origin: 'https://example.test',
       queue: extensionSessionProbeDeadline(Date.now() + 1_000),
       sendMessage: passiveSendMessage,
     }
-    await expect(
-      loginAccountAvailabilityForOrigin(passiveRequest),
-    ).resolves.toEqual({ ok: false })
+    expect(
+      await accountPickerSessions.loginAccountAvailabilityForOrigin(
+        passiveRequest,
+      ),
+    ).toEqual({ ok: false })
     expect(passiveSendMessage).toHaveBeenCalledTimes(1)
   })
 
@@ -87,28 +106,40 @@ describe('login account listing failure handling', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const { loginAccountAvailabilityForOrigin, loginAccountsForOrigin } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     const grants = [grant('failed-vault'), grant('healthy-vault')]
     const interactiveSendMessage = mock()
-      .mockRejectedValueOnce(new Error('extension session unavailable'))
-      .mockResolvedValueOnce({
-        ok: true,
-        accounts: [
-          {
-            secretId: 'login-1',
-            username: 'person@example.test',
-            websiteUrl: 'https://example.test/login',
-            websiteHost: 'example.test',
-          },
-        ],
-      })
-    const interactiveRequest: Parameters<typeof loginAccountsForOrigin>[0] = {
+      .mockResolvedValueOnce(
+        err(
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        ok({
+          ok: true,
+          accounts: [
+            {
+              secretId: 'login-1',
+              username: 'person@example.test',
+              websiteUrl: 'https://example.test/login',
+              websiteHost: 'example.test',
+            },
+          ],
+        }),
+      )
+    const interactiveRequest: Parameters<
+      typeof accountPickerSessions.loginAccountsForOrigin
+    >[0] = {
       grants,
       origin: 'https://example.test',
       sendMessage: interactiveSendMessage,
     }
-    await expect(loginAccountsForOrigin(interactiveRequest)).resolves.toEqual([
+    expect(
+      await accountPickerSessions.loginAccountsForOrigin(interactiveRequest),
+    ).toEqual([
       {
         vaultStoreId: 'healthy-vault',
         vaultName: 'healthy-vault',
@@ -121,19 +152,27 @@ describe('login account listing failure handling', () => {
     expect(interactiveSendMessage).toHaveBeenCalledTimes(2)
 
     const passiveSendMessage = mock(() =>
-      Promise.reject(new Error('extension session unavailable')),
+      Promise.resolve(
+        err(
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ),
+        ),
+      ),
     )
     const passiveRequest: Parameters<
-      typeof loginAccountAvailabilityForOrigin
+      typeof accountPickerSessions.loginAccountAvailabilityForOrigin
     >[0] = {
       grants,
       origin: 'https://example.test',
       queue: extensionSessionProbeDeadline(Date.now() + 1_000),
       sendMessage: passiveSendMessage,
     }
-    await expect(
-      loginAccountAvailabilityForOrigin(passiveRequest),
-    ).resolves.toEqual({ ok: false })
+    expect(
+      await accountPickerSessions.loginAccountAvailabilityForOrigin(
+        passiveRequest,
+      ),
+    ).toEqual({ ok: false })
     expect(passiveSendMessage).toHaveBeenCalledTimes(1)
   })
 
@@ -141,23 +180,27 @@ describe('login account listing failure handling', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const { loginAccountAvailabilityForOrigin } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     const passiveRequest: Parameters<
-      typeof loginAccountAvailabilityForOrigin
+      typeof accountPickerSessions.loginAccountAvailabilityForOrigin
     >[0] = {
       grants: [grant('malformed-vault')],
       origin: 'https://example.test',
       queue: extensionSessionProbeDeadline(Date.now() + 1_000),
       sendMessage: mock(() =>
-        Promise.resolve({
-          ok: true,
-          accounts: [{ secretId: 'login-1' }],
-        }),
+        Promise.resolve(
+          ok({
+            ok: true,
+            accounts: [{ secretId: 'login-1' }],
+          }),
+        ),
       ),
     }
-    await expect(
-      loginAccountAvailabilityForOrigin(passiveRequest),
-    ).resolves.toEqual({ ok: false })
+    expect(
+      await accountPickerSessions.loginAccountAvailabilityForOrigin(
+        passiveRequest,
+      ),
+    ).toEqual({ ok: false })
   })
 })

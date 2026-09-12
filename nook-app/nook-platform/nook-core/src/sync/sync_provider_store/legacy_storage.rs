@@ -1,135 +1,100 @@
-//! Rollback-safe `nook_auth` storage projection.
-//!
-//! The Rust domain model uses semantic enums. `IndexedDB` keeps the original
-//! string-or-absent wire shape so an older deployed build can still read rows
-//! after a rollback. A future incompatible wire change must use a new schema
-//! version and an explicit forward/backward migration.
-
-#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
-#![cfg_attr(
-    dylint_lib = "nook_domain_api",
-    forbid(invalid_unowned_function_suppression)
-)]
-
-use serde::Serialize;
-
+//! Provider storage projections preserve the existing string-or-omitted wire shape.
+//! Tagged domain serialization remains separate from this persisted projection.
 use super::{
-    AuthProvidersSnapshotData, LocalFolderConfig, OAuthFileConfig, ProviderSyncCheckpoint,
-    StorageProviderData,
+    AuthProvidersSnapshotData, LocalFolderConfig, OAuthFileConfig, StorageProviderData,
+    StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
 };
+use serde::ser::SerializeMap;
+use serde::{Serialize, Serializer};
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LegacyOAuthFileConfig<'a> {
-    preset: &'a crate::OauthFilePreset,
-    access_token: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    refresh_token: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    expires_at: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    file_id: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    file_name: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    account_email: Option<&'a str>,
-    drive_mode: &'a crate::GoogleDriveMode,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    folder_id: Option<&'a str>,
-    #[serde(rename = "iCloudMode")]
-    icloud_mode: &'a crate::ICloudMode,
-    #[serde(rename = "iCloudShareTarget", skip_serializing_if = "Option::is_none")]
-    icloud_share_target: Option<&'a str>,
+struct LegacyOAuthFileConfig<'a>(&'a OAuthFileConfig);
+impl Serialize for LegacyOAuthFileConfig<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let config = self.0;
+        // serde owns the optional map-length hint.
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("preset", &config.preset)?;
+        config.access_token.serialize_storage_field(&mut map)?;
+        config.refresh_token.serialize_storage_field(&mut map)?;
+        config.expires_at.serialize_storage_field(&mut map)?;
+        config.file_id.serialize_storage_field(&mut map)?;
+        config.file_name.serialize_storage_field(&mut map)?;
+        config.account_email.serialize_storage_field(&mut map)?;
+        config.folder_id.serialize_storage_field(&mut map)?;
+        config
+            .icloud_share_target
+            .serialize_storage_field(&mut map)?;
+        map.serialize_entry("driveMode", &config.drive_mode)?;
+        map.serialize_entry("iCloudMode", &config.icloud_mode)?;
+        map.end()
+    }
 }
 
-impl<'a> From<&'a OAuthFileConfig> for LegacyOAuthFileConfig<'a> {
-    fn from(config: &'a OAuthFileConfig) -> Self {
-        Self {
-            preset: &config.preset,
-            access_token: config.access_token.as_deref().unwrap_or_default(),
-            refresh_token: config.refresh_token.as_deref(),
-            expires_at: config.expires_at.as_deref(),
-            file_id: config.file_id.as_deref(),
-            file_name: config.file_name.as_deref(),
-            account_email: config.account_email.as_deref(),
-            drive_mode: &config.drive_mode,
-            folder_id: config.folder_id.as_deref(),
-            icloud_mode: &config.icloud_mode,
-            icloud_share_target: config.icloud_share_target.as_deref(),
+struct LegacyLocalFolderConfig<'a>(&'a LocalFolderConfig);
+impl Serialize for LegacyLocalFolderConfig<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(None)?;
+        self.0.directory_name.serialize_storage_field(&mut map)?;
+        self.0.handle_id.serialize_storage_field(&mut map)?;
+        map.end()
+    }
+}
+
+impl StoredOAuthFileConfiguration {
+    fn serialize_storage_field<M: SerializeMap>(&self, map: &mut M) -> Result<(), M::Error> {
+        match self {
+            Self::NotApplicable => Ok(()),
+            Self::Configured(config) => {
+                map.serialize_entry("oauthFile", &LegacyOAuthFileConfig(config))
+            }
+        }
+    }
+}
+impl StoredLocalFolderConfiguration {
+    fn serialize_storage_field<M: SerializeMap>(&self, map: &mut M) -> Result<(), M::Error> {
+        match self {
+            Self::NotApplicable => Ok(()),
+            Self::Configured(config) => {
+                map.serialize_entry("localFolder", &LegacyLocalFolderConfig(config))
+            }
         }
     }
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LegacyLocalFolderConfig<'a> {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    directory_name: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    handle_id: Option<&'a str>,
-}
-
-impl<'a> From<&'a LocalFolderConfig> for LegacyLocalFolderConfig<'a> {
-    fn from(config: &'a LocalFolderConfig) -> Self {
-        Self {
-            directory_name: config.directory_name.as_deref(),
-            handle_id: config.handle_id.as_deref(),
-        }
+struct LegacyStorageProvider<'a>(&'a StorageProviderData);
+impl Serialize for LegacyStorageProvider<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let provider = self.0;
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("id", &provider.id)?;
+        map.serialize_entry("type", &provider.provider_type)?;
+        map.serialize_entry("label", &provider.label)?;
+        provider.github_pat.serialize_storage_field(&mut map)?;
+        provider.github_repo.serialize_storage_field(&mut map)?;
+        provider.oauth_file.serialize_storage_field(&mut map)?;
+        provider.local_folder.serialize_storage_field(&mut map)?;
+        provider.store_id.serialize_storage_field(&mut map)?;
+        map.serialize_entry("syncCheckpoint", &provider.sync_checkpoint)?;
+        map.serialize_entry("createdAt", &provider.created_at)?;
+        map.end()
     }
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LegacyStorageProvider<'a> {
-    id: &'a str,
-    #[serde(rename = "type")]
-    provider_type: &'a crate::StorageProviderType,
-    label: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    github_pat: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    github_repo: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    oauth_file: Option<LegacyOAuthFileConfig<'a>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    local_folder: Option<LegacyLocalFolderConfig<'a>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    store_id: Option<&'a str>,
-    sync_checkpoint: &'a ProviderSyncCheckpoint,
-    created_at: &'a str,
-}
-
-impl<'a> From<&'a StorageProviderData> for LegacyStorageProvider<'a> {
-    fn from(provider: &'a StorageProviderData) -> Self {
-        Self {
-            id: &provider.id,
-            provider_type: &provider.provider_type,
-            label: &provider.label,
-            github_pat: provider.github_pat.as_deref(),
-            github_repo: provider.github_repo.as_deref(),
-            oauth_file: provider.oauth_file.as_ref().map(Into::into),
-            local_folder: provider.local_folder.as_ref().map(Into::into),
-            store_id: provider.store_id.as_deref(),
-            sync_checkpoint: &provider.sync_checkpoint,
-            created_at: &provider.created_at,
-        }
+pub struct LegacyAuthProvidersSnapshot<'a>(&'a AuthProvidersSnapshotData);
+impl Serialize for LegacyAuthProvidersSnapshot<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(None)?;
+        let providers: Vec<_> = self.0.providers.iter().map(LegacyStorageProvider).collect();
+        map.serialize_entry("providers", &providers)?;
+        self.0
+            .active_vault_store_id
+            .serialize_storage_field(&mut map)?;
+        map.end()
     }
 }
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LegacyAuthProvidersSnapshot<'a> {
-    providers: Vec<LegacyStorageProvider<'a>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    active_vault_store_id: Option<&'a str>,
-}
-
 impl AuthProvidersSnapshotData {
-    pub fn legacy_storage_value(&self) -> Result<serde_json::Value, serde_json::Error> {
-        serde_json::to_value(LegacyAuthProvidersSnapshot {
-            providers: self.providers.iter().map(Into::into).collect(),
-            active_vault_store_id: self.active_vault_store_id.as_deref(),
-        })
+    pub fn legacy_storage_snapshot(&self) -> LegacyAuthProvidersSnapshot<'_> {
+        LegacyAuthProvidersSnapshot(self)
     }
 }
 
@@ -150,8 +115,8 @@ mod tests {
             active_vault_store_id: ActiveVaultScope::StoreId("store-1".to_owned()),
         };
 
-        let value = snapshot.legacy_storage_value()?;
-        let round_trip = NormalizedAuthSnapshot::from_wire(&value).snapshot;
+        let value = serde_json::to_value(snapshot.legacy_storage_snapshot())?;
+        let round_trip = NormalizedAuthSnapshot::from(value).snapshot;
         assert_eq!(round_trip, snapshot);
         Ok(())
     }

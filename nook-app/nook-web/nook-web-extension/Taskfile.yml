@@ -205,6 +205,23 @@ tasks:
       - cd "{{.EXTENSION_ROOT}}" && bun run check
       - bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh"
 
+  _extension:lint:parallel:
+    desc: Verify generated translation keys and lint the browser extension.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && node ../nook-web-app/scripts/generate-i18n-keys.mjs --check
+      - cd "{{.EXTENSION_ROOT}}" && bun run lint
+
+  _extension:typecheck:
+    desc: Run only extension Svelte and TypeScript compilers.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && bun run typecheck
+
+  _extension:test:parallel:
+    desc: Run extension unit and hosted-launcher contract tests after compilation succeeds.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && bun run test:unit
+      - bash "{{.EXTENSION_ROOT}}/scripts/hosted-extension.test.sh"
+
   _extension:test:e2e:
     desc: Run browser extension Playwright e2e.
     cmds:

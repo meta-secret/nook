@@ -1,8 +1,10 @@
 //! Import a provider/local-folder event log as an additional local vault.
 
 use super::NookVaultManager;
-use crate::NookError;
-use crate::storage::indexed_db;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::SaveVaultBlobRequest;
+use crate::VaultSnapshotLookup;
+use crate::{NookDatabase, NookError};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -18,12 +20,12 @@ impl NookVaultManager {
         if trimmed.is_empty() {
             return Ok(());
         }
-        let Some(_) = indexed_db::load_vault_blob(trimmed).await? else {
+        let VaultSnapshotLookup::Stored(_) = NookDatabase::load_vault_blob(trimmed).await? else {
             return Err(NookError::Database(format!(
                 "Import as new vault removed the previous local vault {trimmed}."
             )));
         };
-        let registry = indexed_db::list_vault_registry_entries().await?;
+        let registry = NookDatabase::list_vault_registry_entries().await?;
         if registry.iter().any(|entry| entry.store_id == trimmed) {
             return Ok(());
         }
@@ -37,7 +39,10 @@ impl NookVaultManager {
         if trimmed.is_empty() {
             return Ok((trimmed, false));
         }
-        let existed = indexed_db::load_vault_blob(&trimmed).await?.is_some();
+        let existed = matches!(
+            NookDatabase::load_vault_blob(&trimmed).await?,
+            VaultSnapshotLookup::Stored(_)
+        );
         Ok((trimmed, existed))
     }
 }
@@ -67,7 +72,11 @@ mod browser_tests {
             .await
             .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
         let store_id = nook_core::StoreId::generate()?.to_string();
-        indexed_db::save_vault_blob(&store_id, "prior vault").await?;
+        NookDatabase::save_vault_blob(SaveVaultBlobRequest {
+            store_id: &store_id,
+            content: "prior vault",
+        })
+        .await?;
 
         assert_eq!(
             NookVaultManager::snapshot_prior_local_vault(&format!("  {store_id}  ")).await?,

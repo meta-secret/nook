@@ -4,6 +4,8 @@
 //! module owns the state transitions and predicates that must behave the same
 //! in every client.
 
+use nook_app_common::TranslateFromCatalogRequest;
+use nook_app_common::TranslationCatalog;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod connection;
@@ -18,7 +20,7 @@ pub use sync_policy::{
     VaultSyncTimerStartDecision, VaultSyncTimerTickDecision,
 };
 
-use crate::{i18n_keys, translate_from_catalog};
+use crate::i18n_keys;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -69,15 +71,18 @@ pub enum ProviderSyncFreshness {
     Forced,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("unknown persisted device protection status")]
+pub struct InvalidDeviceProtectionStatus;
+
 impl DeviceProtectionStatus {
-    #[must_use]
-    pub fn from_persisted(value: &str) -> Option<Self> {
+    pub fn from_persisted(value: &str) -> Result<Self, InvalidDeviceProtectionStatus> {
         match value {
-            "missing" => Some(Self::Missing),
-            "plaintext" => Some(Self::Plaintext),
-            "passkey" => Some(Self::Passkey),
-            "pin" => Some(Self::Pin),
-            _ => None,
+            "missing" => Ok(Self::Missing),
+            "plaintext" => Ok(Self::Plaintext),
+            "passkey" => Ok(Self::Passkey),
+            "pin" => Ok(Self::Pin),
+            _ => Err(InvalidDeviceProtectionStatus),
         }
     }
 
@@ -115,16 +120,31 @@ pub enum VaultEditDecision {
     BlockedByArchitecture,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum VaultEditMessage {
+    Allowed,
+    Blocked(String),
+}
+#[derive(Debug, PartialEq, Eq)]
+pub enum VaultEditTranslation {
+    Allowed,
+    Blocked(&'static str),
+}
+
 impl VaultEditDecision {
     #[must_use]
-    pub const fn translation_key(self) -> Option<&'static str> {
+    pub const fn translation_key(self) -> VaultEditTranslation {
         match self {
-            Self::Allowed => None,
-            Self::BlockedSecurityConflict => Some(i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS),
-            Self::BlockedSyncConflict => Some(i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS),
-            Self::BlockedByArchitecture => {
-                Some(i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED)
+            Self::Allowed => VaultEditTranslation::Allowed,
+            Self::BlockedSecurityConflict => {
+                VaultEditTranslation::Blocked(i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS)
             }
+            Self::BlockedSyncConflict => {
+                VaultEditTranslation::Blocked(i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS)
+            }
+            Self::BlockedByArchitecture => VaultEditTranslation::Blocked(
+                i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED,
+            ),
         }
     }
 }
@@ -134,105 +154,109 @@ pub struct VaultClientPolicy;
 
 impl VaultClientPolicy {
     #[must_use]
-    pub const fn edit_block_reason(
-        security_conflict_count: crate::VaultSecurityConflictCount,
-        has_sync_conflict: bool,
-        architecture_allows_secret_creation: bool,
-    ) -> VaultEditDecision {
-        if security_conflict_count.is_nonzero() {
+    pub const fn edit_block_reason(request: crate::EditBlockReasonRequest) -> VaultEditDecision {
+        if request.security_conflict_count.is_nonzero() {
             return VaultEditDecision::BlockedSecurityConflict;
         }
-        if has_sync_conflict {
+        if matches!(
+            request.has_sync_conflict,
+            crate::VaultSyncConflictState::Conflicted
+        ) {
             return VaultEditDecision::BlockedSyncConflict;
         }
-        if !architecture_allows_secret_creation {
+        if !matches!(
+            request.architecture_allows_secret_creation,
+            crate::VaultSecretCreationPermission::Allowed
+        ) {
             return VaultEditDecision::BlockedByArchitecture;
         }
         VaultEditDecision::Allowed
     }
 
     #[must_use]
-    pub const fn edits_blocked(
-        security_conflict_count: crate::VaultSecurityConflictCount,
-        has_sync_conflict: bool,
-        architecture_allows_secret_creation: bool,
-    ) -> bool {
+    pub const fn edits_blocked(request: crate::EditsBlockedRequest) -> bool {
         !matches!(
-            Self::edit_block_reason(
-                security_conflict_count,
-                has_sync_conflict,
-                architecture_allows_secret_creation,
-            ),
+            Self::edit_block_reason(crate::EditBlockReasonRequest {
+                security_conflict_count: request.security_conflict_count,
+                has_sync_conflict: request.has_sync_conflict,
+                architecture_allows_secret_creation: request.architecture_allows_secret_creation
+            }),
             VaultEditDecision::Allowed
         )
     }
 
     #[must_use]
-    pub fn edit_block_message(
-        security_conflict_count: crate::VaultSecurityConflictCount,
-        has_sync_conflict: bool,
-        architecture_allows_secret_creation: bool,
-        catalog_json: &str,
-        locale: &str,
-    ) -> Option<String> {
-        let translation_key = Self::edit_block_reason(
-            security_conflict_count,
-            has_sync_conflict,
-            architecture_allows_secret_creation,
-        )
-        .translation_key()?;
-        Some(translate_from_catalog(
-            catalog_json,
-            locale,
-            translation_key,
+    pub fn edit_block_message(request: crate::EditBlockMessageRequest<'_>) -> VaultEditMessage {
+        let translation = Self::edit_block_reason(crate::EditBlockReasonRequest {
+            security_conflict_count: request.security_conflict_count,
+            has_sync_conflict: request.has_sync_conflict,
+            architecture_allows_secret_creation: request.architecture_allows_secret_creation,
+        })
+        .translation_key();
+        let VaultEditTranslation::Blocked(translation_key) = translation else {
+            return VaultEditMessage::Allowed;
+        };
+        VaultEditMessage::Blocked(TranslationCatalog::translate_from_catalog(
+            TranslateFromCatalogRequest {
+                catalog_json: request.catalog_json,
+                locale: request.locale,
+                key: translation_key,
+            },
         ))
     }
 
     #[must_use]
     pub const fn should_use_join_provider_for_connect(
-        authenticated: bool,
-        sync_provider_count: crate::VaultSyncProviderCount,
-        join_state: JoinEnrollmentState,
+        request: crate::ShouldUseJoinProviderForConnectRequest,
     ) -> bool {
-        !authenticated
-            && sync_provider_count.is_nonzero()
-            && !matches!(join_state, JoinEnrollmentState::None)
+        !matches!(
+            request.authenticated,
+            crate::VaultAuthenticationState::Authenticated
+        ) && request.sync_provider_count.is_nonzero()
+            && !matches!(request.join_state, JoinEnrollmentState::None)
     }
 
     #[must_use]
-    #[allow(clippy::fn_params_excessive_bools)]
-    pub const fn should_auto_unlock(
-        session_explicitly_locked: bool,
-        local_vault_present: bool,
-        password_entry_count: crate::VaultPasswordEntryCount,
-        sync_provider_count: crate::VaultSyncProviderCount,
-        provider_setup_active: bool,
-        add_provider_open: bool,
-    ) -> bool {
-        !session_explicitly_locked
-            && local_vault_present
-            && password_entry_count.is_zero()
-            && sync_provider_count.is_zero()
-            && !provider_setup_active
-            && !add_provider_open
+    pub const fn should_auto_unlock(request: crate::ShouldAutoUnlockRequest) -> bool {
+        !matches!(
+            request.session_explicitly_locked,
+            crate::VaultSessionLockIntent::ExplicitlyLocked
+        ) && matches!(
+            request.local_vault_present,
+            crate::LocalVaultPresence::Present
+        ) && request.password_entry_count.is_zero()
+            && request.sync_provider_count.is_zero()
+            && !matches!(
+                request.provider_setup_active,
+                crate::ProviderSetupState::Active
+            )
+            && !matches!(
+                request.add_provider_open,
+                crate::AddProviderPromptState::Open
+            )
     }
 
     #[must_use]
-    #[allow(clippy::fn_params_excessive_bools)]
     pub const fn should_show_login_vault_picker(
-        authenticated: bool,
-        local_vault_count: crate::LocalVaultCount,
-        vault_selected: bool,
-        provider_setup_active: bool,
-        add_provider_open: bool,
-        session_explicitly_locked: bool,
+        request: crate::ShouldShowLoginVaultPickerRequest,
     ) -> bool {
-        !authenticated
-            && local_vault_count.is_multiple()
-            && !vault_selected
-            && !provider_setup_active
-            && !add_provider_open
-            && session_explicitly_locked
+        !matches!(
+            request.authenticated,
+            crate::VaultAuthenticationState::Authenticated
+        ) && request.local_vault_count.is_multiple()
+            && !matches!(request.vault_selected, crate::VaultSelectionState::Selected)
+            && !matches!(
+                request.provider_setup_active,
+                crate::ProviderSetupState::Active
+            )
+            && !matches!(
+                request.add_provider_open,
+                crate::AddProviderPromptState::Open
+            )
+            && matches!(
+                request.session_explicitly_locked,
+                crate::VaultSessionLockIntent::ExplicitlyLocked
+            )
     }
 
     #[must_use]
@@ -248,66 +272,109 @@ impl VaultClientPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nook_app_common::AppLocale;
 
     #[test]
     fn edit_blocking_has_security_first_precedence() {
         assert_eq!(
-            VaultClientPolicy::edit_block_reason(1.into(), true, false),
+            VaultClientPolicy::edit_block_reason(crate::EditBlockReasonRequest {
+                security_conflict_count: 1.into(),
+                has_sync_conflict: (true).into(),
+                architecture_allows_secret_creation: (false).into()
+            }),
             VaultEditDecision::BlockedSecurityConflict
         );
         assert_eq!(
-            VaultClientPolicy::edit_block_reason(0.into(), true, false),
+            VaultClientPolicy::edit_block_reason(crate::EditBlockReasonRequest {
+                security_conflict_count: 0.into(),
+                has_sync_conflict: (true).into(),
+                architecture_allows_secret_creation: (false).into()
+            }),
             VaultEditDecision::BlockedSyncConflict
         );
         assert_eq!(
-            VaultClientPolicy::edit_block_reason(0.into(), false, false),
+            VaultClientPolicy::edit_block_reason(crate::EditBlockReasonRequest {
+                security_conflict_count: 0.into(),
+                has_sync_conflict: (false).into(),
+                architecture_allows_secret_creation: (false).into()
+            }),
             VaultEditDecision::BlockedByArchitecture
         );
         assert_eq!(
-            VaultClientPolicy::edit_block_reason(0.into(), false, true),
+            VaultClientPolicy::edit_block_reason(crate::EditBlockReasonRequest {
+                security_conflict_count: 0.into(),
+                has_sync_conflict: (false).into(),
+                architecture_allows_secret_creation: (true).into()
+            }),
             VaultEditDecision::Allowed
         );
         assert_eq!(
             VaultEditDecision::BlockedSecurityConflict.translation_key(),
-            Some(i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS)
+            VaultEditTranslation::Blocked(i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS)
         );
         assert_eq!(
             VaultEditDecision::BlockedSyncConflict.translation_key(),
-            Some(i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS)
+            VaultEditTranslation::Blocked(i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS)
         );
         assert_eq!(
             VaultEditDecision::BlockedByArchitecture.translation_key(),
-            Some(i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED)
-        );
-        assert_eq!(VaultEditDecision::Allowed.translation_key(), None);
-        assert!(VaultClientPolicy::edits_blocked(1.into(), false, true));
-        assert!(!VaultClientPolicy::edits_blocked(0.into(), false, true));
-        assert_eq!(
-            VaultClientPolicy::edit_block_message(
-                1.into(),
-                true,
-                false,
-                crate::get_translation_catalog("en"),
-                "en",
+            VaultEditTranslation::Blocked(
+                i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED
             )
-            .as_deref(),
-            Some("Security conflict detected. Sync from all devices before editing.")
         );
         assert_eq!(
-            VaultClientPolicy::edit_block_message(0.into(), false, true, "{}", "en"),
-            None
+            VaultEditDecision::Allowed.translation_key(),
+            VaultEditTranslation::Allowed
+        );
+        assert!(VaultClientPolicy::edits_blocked(
+            crate::EditsBlockedRequest {
+                security_conflict_count: 1.into(),
+                has_sync_conflict: (false).into(),
+                architecture_allows_secret_creation: (true).into()
+            }
+        ));
+        assert!(!VaultClientPolicy::edits_blocked(
+            crate::EditsBlockedRequest {
+                security_conflict_count: 0.into(),
+                has_sync_conflict: (false).into(),
+                architecture_allows_secret_creation: (true).into()
+            }
+        ));
+        assert_eq!(
+            VaultClientPolicy::edit_block_message(crate::EditBlockMessageRequest {
+                security_conflict_count: 1.into(),
+                has_sync_conflict: (true).into(),
+                architecture_allows_secret_creation: (false).into(),
+                catalog_json: AppLocale::get_translation_catalog("en"),
+                locale: "en"
+            }),
+            VaultEditMessage::Blocked(
+                "Security conflict detected. Sync from all devices before editing.".to_owned()
+            )
+        );
+        assert_eq!(
+            VaultClientPolicy::edit_block_message(crate::EditBlockMessageRequest {
+                security_conflict_count: 0.into(),
+                has_sync_conflict: (false).into(),
+                architecture_allows_secret_creation: (true).into(),
+                catalog_json: "{}",
+                locale: "en"
+            }),
+            VaultEditMessage::Allowed
         );
     }
 
     #[test]
     fn auto_unlock_requires_an_unlocked_local_key_only_session() {
         assert!(VaultClientPolicy::should_auto_unlock(
-            false,
-            true,
-            0.into(),
-            0.into(),
-            false,
-            false
+            crate::ShouldAutoUnlockRequest {
+                session_explicitly_locked: (false).into(),
+                local_vault_present: (true).into(),
+                password_entry_count: 0.into(),
+                sync_provider_count: 0.into(),
+                provider_setup_active: (false).into(),
+                add_provider_open: (false).into()
+            }
         ));
         for blocked in [
             (true, true, 0_usize, 0_usize, false, false),
@@ -318,12 +385,14 @@ mod tests {
             (false, true, 0, 0, false, true),
         ] {
             assert!(!VaultClientPolicy::should_auto_unlock(
-                blocked.0,
-                blocked.1,
-                blocked.2.into(),
-                blocked.3.into(),
-                blocked.4,
-                blocked.5
+                crate::ShouldAutoUnlockRequest {
+                    session_explicitly_locked: (blocked.0).into(),
+                    local_vault_present: (blocked.1).into(),
+                    password_entry_count: blocked.2.into(),
+                    sync_provider_count: blocked.3.into(),
+                    provider_setup_active: (blocked.4).into(),
+                    add_provider_open: (blocked.5).into()
+                }
             ));
         }
     }
@@ -331,74 +400,92 @@ mod tests {
     #[test]
     fn provider_connect_and_sync_guards_are_portable() {
         assert!(VaultClientPolicy::should_use_join_provider_for_connect(
-            false,
-            1.into(),
-            JoinEnrollmentState::Pending,
+            crate::ShouldUseJoinProviderForConnectRequest {
+                authenticated: (false).into(),
+                sync_provider_count: 1.into(),
+                join_state: JoinEnrollmentState::Pending
+            }
         ));
         assert!(!VaultClientPolicy::should_use_join_provider_for_connect(
-            true,
-            1.into(),
-            JoinEnrollmentState::Pending,
+            crate::ShouldUseJoinProviderForConnectRequest {
+                authenticated: (true).into(),
+                sync_provider_count: 1.into(),
+                join_state: JoinEnrollmentState::Pending
+            }
         ));
     }
 
     #[test]
     fn login_picker_is_only_for_explicitly_locked_multi_vault_sessions() {
         assert!(VaultClientPolicy::should_show_login_vault_picker(
-            false,
-            2.into(),
-            false,
-            false,
-            false,
-            true
+            crate::ShouldShowLoginVaultPickerRequest {
+                authenticated: (false).into(),
+                local_vault_count: 2.into(),
+                vault_selected: (false).into(),
+                provider_setup_active: (false).into(),
+                add_provider_open: (false).into(),
+                session_explicitly_locked: (true).into()
+            }
         ));
         assert!(!VaultClientPolicy::should_show_login_vault_picker(
-            true,
-            2.into(),
-            false,
-            false,
-            false,
-            true
+            crate::ShouldShowLoginVaultPickerRequest {
+                authenticated: (true).into(),
+                local_vault_count: 2.into(),
+                vault_selected: (false).into(),
+                provider_setup_active: (false).into(),
+                add_provider_open: (false).into(),
+                session_explicitly_locked: (true).into()
+            }
         ));
         assert!(!VaultClientPolicy::should_show_login_vault_picker(
-            false,
-            1.into(),
-            false,
-            false,
-            false,
-            true
+            crate::ShouldShowLoginVaultPickerRequest {
+                authenticated: (false).into(),
+                local_vault_count: 1.into(),
+                vault_selected: (false).into(),
+                provider_setup_active: (false).into(),
+                add_provider_open: (false).into(),
+                session_explicitly_locked: (true).into()
+            }
         ));
         assert!(!VaultClientPolicy::should_show_login_vault_picker(
-            false,
-            2.into(),
-            true,
-            false,
-            false,
-            true
+            crate::ShouldShowLoginVaultPickerRequest {
+                authenticated: (false).into(),
+                local_vault_count: 2.into(),
+                vault_selected: (true).into(),
+                provider_setup_active: (false).into(),
+                add_provider_open: (false).into(),
+                session_explicitly_locked: (true).into()
+            }
         ));
         assert!(!VaultClientPolicy::should_show_login_vault_picker(
-            false,
-            2.into(),
-            false,
-            true,
-            false,
-            true
+            crate::ShouldShowLoginVaultPickerRequest {
+                authenticated: (false).into(),
+                local_vault_count: 2.into(),
+                vault_selected: (false).into(),
+                provider_setup_active: (true).into(),
+                add_provider_open: (false).into(),
+                session_explicitly_locked: (true).into()
+            }
         ));
         assert!(!VaultClientPolicy::should_show_login_vault_picker(
-            false,
-            2.into(),
-            false,
-            false,
-            true,
-            true
+            crate::ShouldShowLoginVaultPickerRequest {
+                authenticated: (false).into(),
+                local_vault_count: 2.into(),
+                vault_selected: (false).into(),
+                provider_setup_active: (false).into(),
+                add_provider_open: (true).into(),
+                session_explicitly_locked: (true).into()
+            }
         ));
         assert!(!VaultClientPolicy::should_show_login_vault_picker(
-            false,
-            2.into(),
-            false,
-            false,
-            false,
-            false
+            crate::ShouldShowLoginVaultPickerRequest {
+                authenticated: (false).into(),
+                local_vault_count: 2.into(),
+                vault_selected: (false).into(),
+                provider_setup_active: (false).into(),
+                add_provider_open: (false).into(),
+                session_explicitly_locked: (false).into()
+            }
         ));
     }
 
@@ -406,13 +493,16 @@ mod tests {
     fn persisted_device_protection_status_is_parsed_once_in_core() {
         assert_eq!(
             DeviceProtectionStatus::from_persisted("passkey"),
-            Some(DeviceProtectionStatus::Passkey)
+            Ok(DeviceProtectionStatus::Passkey)
         );
         assert_eq!(
             DeviceProtectionStatus::from_persisted("pin"),
-            Some(DeviceProtectionStatus::Pin)
+            Ok(DeviceProtectionStatus::Pin)
         );
-        assert_eq!(DeviceProtectionStatus::from_persisted("future"), None);
+        assert_eq!(
+            DeviceProtectionStatus::from_persisted("future"),
+            Err(InvalidDeviceProtectionStatus)
+        );
         assert_eq!(DeviceProtectionStatus::Unlocked.as_str(), "unlocked");
     }
 
@@ -460,3 +550,11 @@ mod tests {
         );
     }
 }
+
+mod login_unlock;
+pub use login_unlock::*;
+
+mod states;
+pub use states::*;
+mod requests;
+pub use requests::*;

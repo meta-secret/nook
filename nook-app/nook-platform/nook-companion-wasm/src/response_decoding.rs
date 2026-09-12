@@ -1,18 +1,124 @@
 //! WASM exports that decode session and response wire contracts.
 
 use nook_companion_core::{
+    AuthenticationOutcomeResponse, ExtensionSessionStatusAvailability, LoginPickerOpenResponse,
+};
+use nook_companion_core::{
     AuthenticatorBackupAttachResponse, AuthenticatorEnrollmentConfirmResponse,
     AuthenticatorEnrollmentStageResponse, AuthenticatorOptionsResponse,
     AuthenticatorPickerOpenResponse, AuthenticatorPreviewResponse, GeneratedPasswordResponse,
     WebsiteLoginOptions, WebsitePasskeyAccountList,
 };
+use serde::Deserialize;
+use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct WebsiteLoginOptionsAdmission(nook_companion_core::WebsiteLoginOptionsWireValue);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct WebsiteLoginSaveOfferAdmission(nook_companion_core::WebsiteLoginSaveOfferResponse);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct WebsiteLoginSavePendingAdmission(nook_companion_core::WebsiteLoginSavePendingResponse);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct WebsiteLoginSaveActionAdmission(nook_companion_core::WebsiteLoginSaveActionResponse);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct LoginPickerOpenAdmission(nook_companion_core::LoginPickerOpenResponseWire);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticatorPickerOpenAdmission(
+    nook_companion_core::AuthenticatorPickerOpenResponseWire,
+);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticationOutcomeAdmission(nook_companion_core::AuthenticationOutcomeResponseWire);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticatorBackupAttachAdmission(
+    nook_companion_core::AuthenticatorBackupAttachResponseWire,
+);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticatorEnrollmentStageAdmission(
+    nook_companion_core::AuthenticatorEnrollmentStageResponseWire,
+);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticatorEnrollmentConfirmAdmission(
+    nook_companion_core::AuthenticatorEnrollmentConfirmResponseWire,
+);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct GeneratedPasswordAdmission(nook_companion_core::GeneratedPasswordResponseWire);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticatorOptionsAdmission(nook_companion_core::AuthenticatorOptionsResponseWire);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticatorPreviewAdmission(nook_companion_core::AuthenticatorPreviewResponseWire);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct ExtensionSessionStatusAdmission(nook_companion_core::ExtensionSessionStatusResponseWire);
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct ExtensionSessionRequestAdmission(nook_companion_core::ExtensionSessionRequestWire);
+
+#[cfg(test)]
+mod session_request_admission_tests {
+    use super::*;
+
+    #[test]
+    fn chrome_session_request_admission_is_unknown_and_schema_checked() {
+        assert!(ExtensionSessionRequestAdmission::DECL.ends_with(" = unknown;"));
+        assert!(serde_json::from_str::<ExtensionSessionRequestAdmission>("null").is_err());
+        assert!(
+            serde_json::from_str::<ExtensionSessionRequestAdmission>(
+                r#"{"type":"nook:extension-session-status","payload":{"queue":{"kind":"message-default"},"unexpected":true}}"#,
+            )
+            .is_err()
+        );
+    }
+}
 
 #[wasm_bindgen]
 #[must_use]
-pub fn validate_extension_session_request(
-    request: nook_companion_core::ExtensionSessionRequestWire,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn validate_extension_session_request(
+    request: ExtensionSessionRequestAdmission,
 ) -> nook_companion_core::ExtensionSessionRequestValidation {
+    let ExtensionSessionRequestAdmission(request) = request;
     drop(request);
     nook_companion_core::ExtensionSessionRequestValidation::Accepted
 }
@@ -20,22 +126,24 @@ pub fn validate_extension_session_request(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)] // wasm-bindgen owns the decoded ABI value.
-pub fn decode_extension_session_status_response(
-    response: nook_companion_core::ExtensionSessionStatusResponseWire,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_session_status_response(
+    response: ExtensionSessionStatusAdmission,
 ) -> nook_companion_core::ExtensionSessionStatusAvailability {
-    nook_companion_core::decode_extension_session_status_response(&response)
+    let ExtensionSessionStatusAdmission(response) = response;
+    ExtensionSessionStatusAvailability::decode_extension_session_status_response(&response)
 }
 
 #[wasm_bindgen]
-pub fn decode_website_login_options(
-    response: nook_companion_core::WebsiteLoginOptionsWireValue,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_website_login_options(
+    response: WebsiteLoginOptionsAdmission,
 ) -> Result<nook_companion_core::WebsiteLoginOptions, JsError> {
+    let WebsiteLoginOptionsAdmission(response) = response;
     WebsiteLoginOptions::from_wire(response).map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn decode_website_passkey_account_list(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_website_passkey_account_list(
     response: wasm_bindgen::JsValue,
 ) -> nook_companion_core::WebsitePasskeyAccountList {
     serde_wasm_bindgen::from_value(response).map_or_else(
@@ -45,101 +153,158 @@ pub fn decode_website_passkey_account_list(
 }
 
 #[wasm_bindgen]
-pub fn decode_website_login_save_offer_response(
-    response: nook_companion_core::WebsiteLoginSaveOfferResponse,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_website_login_save_offer_response(
+    response: WebsiteLoginSaveOfferAdmission,
 ) -> Result<nook_companion_core::WebsiteLoginSaveOfferResponse, JsError> {
+    let WebsiteLoginSaveOfferAdmission(response) = response;
     response
         .validate()
         .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn decode_website_login_save_pending_response(
-    response: nook_companion_core::WebsiteLoginSavePendingResponse,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_website_login_save_pending_response(
+    response: WebsiteLoginSavePendingAdmission,
 ) -> Result<nook_companion_core::WebsiteLoginSavePendingResponse, JsError> {
+    let WebsiteLoginSavePendingAdmission(response) = response;
     response
         .validate()
         .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn decode_website_login_save_action_response(
-    response: nook_companion_core::WebsiteLoginSaveActionResponse,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_website_login_save_action_response(
+    response: WebsiteLoginSaveActionAdmission,
 ) -> Result<nook_companion_core::WebsiteLoginSaveActionResponse, JsError> {
+    let WebsiteLoginSaveActionAdmission(response) = response;
     response
         .validate()
         .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn decode_login_picker_open_response(
-    response: nook_companion_core::LoginPickerOpenResponseWire,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_login_picker_open_response(
+    response: LoginPickerOpenAdmission,
 ) -> Result<nook_companion_core::LoginPickerOpenResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_login_picker_open_response(response)
+    let LoginPickerOpenAdmission(response) = response;
+    LoginPickerOpenResponse::decode_login_picker_open_response(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn decode_authenticator_picker_open_response(
-    response: nook_companion_core::AuthenticatorPickerOpenResponseWire,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_picker_open_response(
+    response: AuthenticatorPickerOpenAdmission,
 ) -> Result<nook_companion_core::AuthenticatorPickerOpenResponse, JsError> {
+    let AuthenticatorPickerOpenAdmission(response) = response;
     AuthenticatorPickerOpenResponse::from_wire(response)
         .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn decode_authentication_outcome_response(
-    response: nook_companion_core::AuthenticationOutcomeResponseWire,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authentication_outcome_response(
+    response: AuthenticationOutcomeAdmission,
 ) -> Result<nook_companion_core::AuthenticationOutcomeResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_authentication_outcome_response(response)
+    let AuthenticationOutcomeAdmission(response) = response;
+    AuthenticationOutcomeResponse::decode_authentication_outcome_response(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn decode_authenticator_backup_attach_response(
-    response: nook_companion_core::AuthenticatorBackupAttachResponseWire,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_backup_attach_response(
+    response: AuthenticatorBackupAttachAdmission,
 ) -> Result<nook_companion_core::AuthenticatorBackupAttachResponse, JsError> {
+    let AuthenticatorBackupAttachAdmission(response) = response;
     AuthenticatorBackupAttachResponse::from_wire(response)
         .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn decode_authenticator_enrollment_stage_response(
-    response: nook_companion_core::AuthenticatorEnrollmentStageResponseWire,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_enrollment_stage_response(
+    response: AuthenticatorEnrollmentStageAdmission,
 ) -> Result<nook_companion_core::AuthenticatorEnrollmentStageResponse, JsError> {
+    let AuthenticatorEnrollmentStageAdmission(response) = response;
     AuthenticatorEnrollmentStageResponse::from_wire(response)
         .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn decode_authenticator_enrollment_confirm_response(
-    response: nook_companion_core::AuthenticatorEnrollmentConfirmResponseWire,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_enrollment_confirm_response(
+    response: AuthenticatorEnrollmentConfirmAdmission,
 ) -> Result<nook_companion_core::AuthenticatorEnrollmentConfirmResponse, JsError> {
+    let AuthenticatorEnrollmentConfirmAdmission(response) = response;
     AuthenticatorEnrollmentConfirmResponse::from_wire(response)
         .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn decode_generated_password_response(
-    response: nook_companion_core::GeneratedPasswordResponseWire,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_generated_password_response(
+    response: GeneratedPasswordAdmission,
 ) -> Result<nook_companion_core::GeneratedPasswordResponse, JsError> {
+    let GeneratedPasswordAdmission(response) = response;
     GeneratedPasswordResponse::from_wire(response).map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn decode_authenticator_options_response(
-    response: nook_companion_core::AuthenticatorOptionsResponseWire,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_options_response(
+    response: AuthenticatorOptionsAdmission,
 ) -> Result<nook_companion_core::AuthenticatorOptionsResponse, JsError> {
+    let AuthenticatorOptionsAdmission(response) = response;
     AuthenticatorOptionsResponse::from_wire(response)
         .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn decode_authenticator_preview_response(
-    response: nook_companion_core::AuthenticatorPreviewResponseWire,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_preview_response(
+    response: AuthenticatorPreviewAdmission,
 ) -> Result<nook_companion_core::AuthenticatorPreviewResponse, JsError> {
+    let AuthenticatorPreviewAdmission(response) = response;
     AuthenticatorPreviewResponse::from_wire(response)
         .map_err(|error| JsError::new(&error.to_string()))
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+
+    #[test]
+    fn runtime_response_admissions_declare_unknown_chrome_inputs() {
+        for declaration in [
+            WebsiteLoginOptionsAdmission::DECL,
+            WebsiteLoginSaveOfferAdmission::DECL,
+            WebsiteLoginSavePendingAdmission::DECL,
+            WebsiteLoginSaveActionAdmission::DECL,
+            LoginPickerOpenAdmission::DECL,
+            AuthenticatorPickerOpenAdmission::DECL,
+            AuthenticationOutcomeAdmission::DECL,
+            AuthenticatorBackupAttachAdmission::DECL,
+            AuthenticatorEnrollmentStageAdmission::DECL,
+            AuthenticatorEnrollmentConfirmAdmission::DECL,
+            GeneratedPasswordAdmission::DECL,
+            AuthenticatorOptionsAdmission::DECL,
+            AuthenticatorPreviewAdmission::DECL,
+            ExtensionSessionStatusAdmission::DECL,
+        ] {
+            assert!(declaration.ends_with(" = unknown;"));
+        }
+    }
+
+    #[test]
+    fn runtime_response_admissions_reject_non_contract_values() {
+        assert!(serde_json::from_str::<WebsiteLoginOptionsAdmission>("null").is_err());
+        assert!(serde_json::from_str::<WebsiteLoginSaveOfferAdmission>("null").is_err());
+        assert!(serde_json::from_str::<WebsiteLoginSavePendingAdmission>("null").is_err());
+        assert!(serde_json::from_str::<WebsiteLoginSaveActionAdmission>("null").is_err());
+        assert!(serde_json::from_str::<LoginPickerOpenAdmission>("null").is_err());
+        assert!(serde_json::from_str::<AuthenticatorPickerOpenAdmission>("null").is_err());
+        assert!(serde_json::from_str::<AuthenticationOutcomeAdmission>("null").is_err());
+        assert!(serde_json::from_str::<AuthenticatorBackupAttachAdmission>("null").is_err());
+        assert!(serde_json::from_str::<AuthenticatorEnrollmentStageAdmission>("null").is_err());
+        assert!(serde_json::from_str::<AuthenticatorEnrollmentConfirmAdmission>("null").is_err());
+        assert!(serde_json::from_str::<GeneratedPasswordAdmission>("null").is_err());
+        assert!(serde_json::from_str::<AuthenticatorOptionsAdmission>("null").is_err());
+        assert!(serde_json::from_str::<AuthenticatorPreviewAdmission>("null").is_err());
+        assert!(serde_json::from_str::<ExtensionSessionStatusAdmission>("null").is_err());
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
@@ -378,4 +543,81 @@ mod wasm_tests {
         );
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    fn authenticator_session_decoders_admit_complete_responses() -> Result<(), JsError> {
+        assert!(
+            decode_authenticator_code_session_response(js_value(
+                r#"{"ok":true,"code":"012345","expiresAt":1700000030000}"#,
+            )?)
+            .is_ok()
+        );
+        assert!(decode_authenticator_preview_session_response(js_value(
+            r#"{"ok":true,"preview":{"issuer":"Example","account":"alice@example.com","websiteUrl":"https://example.com","algorithm":"SHA1","digits":6,"period":30}}"#,
+        )?)
+        .is_ok());
+        assert!(
+            decode_authenticator_secret_session_response(js_value(
+                r#"{"ok":true,"secretId":"authenticator-1"}"#,
+            )?)
+            .is_ok()
+        );
+        assert!(decode_authenticator_backup_verification_session_response(js_value(
+            r#"{"ok":true,"secretId":"authenticator-1","backupCodesVerified":true,"reviewedInputPersisted":true}"#,
+        )?)
+        .is_ok());
+        assert!(decode_authenticator_code_session_response(JsValue::from_str("invalid")).is_err());
+        assert!(
+            decode_authenticator_preview_session_response(JsValue::from_str("invalid")).is_err()
+        );
+        assert!(
+            decode_authenticator_secret_session_response(JsValue::from_str("invalid")).is_err()
+        );
+        assert!(
+            decode_authenticator_backup_verification_session_response(JsValue::from_str("invalid"))
+                .is_err()
+        );
+        Ok(())
+    }
+}
+
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_code_session_response(
+    value: wasm_bindgen::JsValue,
+) -> Result<nook_companion_core::AuthenticatorCodeSessionResponse, JsError> {
+    let wire: nook_companion_core::AuthenticatorCodeSessionWire =
+        serde_wasm_bindgen::from_value(value)
+            .map_err(|_| JsError::new("Extension session returned an invalid response."))?;
+    nook_companion_core::AuthenticatorCodeSessionResponse::try_from(wire).map_err(JsError::new)
+}
+
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_preview_session_response(
+    value: wasm_bindgen::JsValue,
+) -> Result<nook_companion_core::AuthenticatorPreviewSessionResponse, JsError> {
+    let wire: nook_companion_core::AuthenticatorPreviewSessionWire =
+        serde_wasm_bindgen::from_value(value)
+            .map_err(|_| JsError::new("Extension session returned an invalid response."))?;
+    nook_companion_core::AuthenticatorPreviewSessionResponse::try_from(wire).map_err(JsError::new)
+}
+
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_secret_session_response(
+    value: wasm_bindgen::JsValue,
+) -> Result<nook_companion_core::AuthenticatorSecretSessionResponse, JsError> {
+    let wire: nook_companion_core::AuthenticatorSecretSessionWire =
+        serde_wasm_bindgen::from_value(value)
+            .map_err(|_| JsError::new("Extension session returned an invalid response."))?;
+    nook_companion_core::AuthenticatorSecretSessionResponse::try_from(wire).map_err(JsError::new)
+}
+
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_backup_verification_session_response(
+    value: wasm_bindgen::JsValue,
+) -> Result<nook_companion_core::VerifiedAuthenticatorBackupAttachResponse, JsError> {
+    let wire: nook_companion_core::AuthenticatorBackupVerificationSessionWire =
+        serde_wasm_bindgen::from_value(value)
+            .map_err(|_| JsError::new("Extension session returned an invalid response."))?;
+    nook_companion_core::VerifiedAuthenticatorBackupAttachResponse::try_from(wire)
+        .map_err(JsError::new)
 }

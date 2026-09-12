@@ -1,4 +1,5 @@
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
+import type { NookVaultArchitecture } from '$app-wasm'
 import { expect, test } from './fixtures'
 import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from './helpers'
 import { installMockPasskeyRuntime } from './passkey-mock'
@@ -7,33 +8,12 @@ const SIMPLE_APP_URL = (
   process.env.VITE_SIMPLE_APP_URL?.trim() || 'https://simple.nokey.sh'
 ).replace(/\/+$/, '')
 
-type DebugVault = {
-  requireManager(): {
-    vaultArchitecture: {
-      constructor: {
-        simple(
-          deviceMode: number,
-          replicationType: number,
-        ): {
-          free(): void
-        }
-        sentinel(
-          deviceMode: number,
-          replicationType: number,
-          threshold: number,
-          requiredParticipants: number,
-          readyParticipants: number,
-        ): { free(): void }
-      }
-      device_mode: number
-      replication_type: number
-      free(): void
-    }
-    set_vault_architecture(value: { free(): void }): void
-    device_id: string
-    device_public_key: string
-    device_signing_public_key_js(): Promise<string>
-  }
+type RejectedPairingRuntime = {
+  sendMessage(
+    extensionId: string,
+    message: { readonly type: string },
+    callback: (response: { readonly ok: false }) => void,
+  ): void
 }
 
 test.beforeEach(async ({ page }) => {
@@ -91,11 +71,25 @@ test('exposes only the project capability and rejects the opposite vault type', 
   }
 
   const error = await page.evaluate((simpleApp) => {
-    const manager = (
-      window as Window & { __nookVault: DebugVault }
-    ).__nookVault.requireManager()
+    const vault = window.__nookVault
+    if (!vault) return 'Vault debug hooks are unavailable'
+    const admission = vault.admitManager()
+    if (admission.isErr()) return admission.error.translationKey
+    const manager = admission.value
     const current = manager.vaultArchitecture
+    const isArchitectureFactory = (
+      candidate: unknown,
+    ): candidate is Pick<typeof NookVaultArchitecture, 'sentinel' | 'simple'> =>
+      typeof candidate === 'function' &&
+      'sentinel' in candidate &&
+      typeof candidate.sentinel === 'function' &&
+      'simple' in candidate &&
+      typeof candidate.simple === 'function'
     const Architecture = current.constructor
+    if (!isArchitectureFactory(Architecture)) {
+      current.free()
+      return 'Vault architecture factory is unavailable'
+    }
     const oppositeArchitecture = simpleApp
       ? Architecture.sentinel(
           current.device_mode,
@@ -144,19 +138,31 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await extensionPage.goto(new URL(page.url()).origin)
   await expect(
     extensionPage.getByTestId('login-create-vault-chooser'),
-  ).toBeVisible({ timeout: UI_TIMEOUT_MS * 2 })
+  ).toBeVisible({
+    timeout: UI_TIMEOUT_MS * 2,
+  })
   await createLocalVaultOnLogin(extensionPage, 'Isolated extension device')
   await expect(extensionPage.getByTestId('vault-panel')).toBeVisible()
   const extensionDevice = await extensionPage.evaluate(async () => {
-    const manager = (
-      window as Window & { __nookVault: DebugVault }
-    ).__nookVault.requireManager()
+    const vault = window.__nookVault
+    if (!vault)
+      return { ok: false as const, error: 'Vault debug hooks are unavailable' }
+    const admission = vault.admitManager()
+    if (admission.isErr())
+      return { ok: false as const, error: admission.error.translationKey }
+    const manager = admission.value
     const deviceId = manager.device_id
     const devicePublicKey = manager.device_public_key
     const deviceSigningPublicKey = await manager.device_signing_public_key_js()
-    return { deviceId, devicePublicKey, deviceSigningPublicKey }
+    return {
+      ok: true as const,
+      deviceId,
+      devicePublicKey,
+      deviceSigningPublicKey,
+    }
   })
   await extensionContext.close()
+  if (!extensionDevice.ok) throw new Error(extensionDevice.error)
   await page.getByTestId('header-lock-vault-btn').click()
   await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
@@ -172,21 +178,17 @@ test('keeps extension routing and local session behavior app-specific', async ({
     timeout: UI_TIMEOUT_MS,
   })
   await page.evaluate(() => {
-    const browserWindow = window as Window & {
-      chrome?: { runtime?: unknown }
+    const runtime: RejectedPairingRuntime = {
+      sendMessage: (
+        _extensionId: string,
+        _message: { readonly type: string },
+        callback: (response: { readonly ok: false }) => void,
+      ) => callback({ ok: false }),
     }
-    const chrome = ((v) => (v ? v : {}))(browserWindow.chrome)
-    Object.defineProperty(chrome, 'runtime', {
+    Object.defineProperty(globalThis, 'chrome', {
       configurable: true,
-      value: {
-        sendMessage: (
-          _extensionId: string,
-          _message: unknown,
-          callback: (response: unknown) => void,
-        ) => callback({ ok: false }),
-      },
+      value: { runtime },
     })
-    if (!browserWindow.chrome) browserWindow.chrome = chrome
   })
   await page.getByTestId('approve-extension-device-btn').click()
   await expect(

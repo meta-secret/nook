@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 vars:
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
@@ -51,6 +51,13 @@ env:
       elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ]; then printf '1'; fi
 
 includes:
+  build:
+    taskfile: .task/build.yml
+  dev:
+    taskfile: .task/dev.yml
+  static-checks:
+    taskfile: .task/static-checks.yml
+    flatten: true
   preflight:
     taskfile: preflight/Taskfile.yml
     flatten: true
@@ -75,3 +82,10 @@ includes:
   infra:
     taskfile: infra/Taskfile.yml
     dir: .
+
+tasks:
+  tooling:install:
+    desc: Install pinned repository script runtime dependencies.
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - bun install --frozen-lockfile --ignore-scripts

@@ -1,20 +1,28 @@
 import { describe, expect, test, vi } from 'vitest'
 import {
+  NookIdentityDirectorySelectionKind,
+  NookIdentityLocalAccessKind,
   NookSelectedVaultIdentityContextKind,
-  type NookIdentitySnapshot,
-  type NookVaultManager,
+  NookVaultManager,
 } from '$app-wasm'
-import { loadLoginVaultIdentityContext } from '../../../../nook-web-shared/src/vault-app/lib/components/login/login-vault-identity-context'
+import { LoginVaultIdentityReader } from '../../../../nook-web-shared/src/vault-app/lib/components/login/login-vault-identity-context'
 
-function linkedIdentity(
-  identityId: string,
-  label: string,
-): NookIdentitySnapshot {
+function linkedIdentity(identityId: string, label: string) {
   return {
+    appId: 'app-test',
+    appKeyCount: 1,
+    controlEpoch: 1n,
+    fingerprint: 'fingerprint-test',
     identityId,
     label,
+    localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
+    members: vi.fn(() => []),
+    vaultCount: 1,
+    vault_store_ids: vi.fn(() => ['store_selectedvault']),
+    vaults: vi.fn(() => []),
     free: vi.fn(),
-  } as unknown as NookIdentitySnapshot
+    [Symbol.dispose]: vi.fn(),
+  }
 }
 
 function managerWithContext({
@@ -32,26 +40,40 @@ function managerWithContext({
 } {
   const currentBrowserIdentity = vi.fn(() => {
     if (!currentIdentity) {
-      throw new Error('current identity is unavailable')
+      expect.fail(
+        'the Rust-selected context must not request an unavailable identity',
+      )
     }
     return linkedIdentity(...currentIdentity)
   })
   const snapshot = {
     selectedVaultContextKind: kind,
     length: identities.length,
-    identity: (index: number) => linkedIdentity(...identities[index]),
+    identity: (index: number) => {
+      const identity = identities[index]
+      if (!identity) expect.fail(`missing linked identity at index ${index}`)
+      return linkedIdentity(...identity)
+    },
     current_browser_identity: currentBrowserIdentity,
+    device_access: vi.fn(),
     free: vi.fn(),
+    [Symbol.dispose]: vi.fn(),
+    selectedIdentityId: currentIdentity ? currentIdentity[0] : '',
+    selectionKind: identities.length
+      ? NookIdentityDirectorySelectionKind.Selected
+      : NookIdentityDirectorySelectionKind.Empty,
   }
   const request = {
     resolve: vi.fn(async () => snapshot),
     free: vi.fn(),
+    [Symbol.dispose]: vi.fn(),
   }
-  const selectedVaultRequest = vi.fn(() => request)
+  const manager = new NookVaultManager()
+  const selectedVaultRequest = vi
+    .spyOn(manager, 'selected_vault_identity_context_request')
+    .mockReturnValue(request)
   return {
-    manager: {
-      selected_vault_identity_context_request: selectedVaultRequest,
-    } as unknown as NookVaultManager,
+    manager,
     selectedVaultRequest,
     currentBrowserIdentity,
   }
@@ -68,23 +90,25 @@ describe('login vault identity context', () => {
       currentIdentity: ['identity-personal', 'Personal'],
     })
 
-    const context = await loadLoginVaultIdentityContext({
+    const context = await new LoginVaultIdentityReader({
       manager,
       storeId: 'store_selectedvault',
-    })
+    }).execute()
 
     expect(selectedVaultRequest).toHaveBeenCalledWith('store_selectedvault')
-    expect(context).toEqual({
-      kind: NookSelectedVaultIdentityContextKind.LinkedWithCurrent,
-      identities: [
-        { identityId: 'identity-personal', label: 'Personal' },
-        { identityId: 'identity-work', label: 'Work' },
-      ],
-      currentIdentity: {
-        identityId: 'identity-personal',
-        label: 'Personal',
-      },
-    })
+    expect(context.isOk()).toBe(true)
+    if (context.isOk())
+      expect(context.value).toEqual({
+        kind: NookSelectedVaultIdentityContextKind.LinkedWithCurrent,
+        identities: [
+          { identityId: 'identity-personal', label: 'Personal' },
+          { identityId: 'identity-work', label: 'Work' },
+        ],
+        currentIdentity: {
+          identityId: 'identity-personal',
+          label: 'Personal',
+        },
+      })
   })
 
   test('uses the Rust mismatch classification without resolving a current identity', async () => {
@@ -93,15 +117,17 @@ describe('login vault identity context', () => {
       identities: [['identity-work', 'Work']],
     })
 
-    const context = await loadLoginVaultIdentityContext({
+    const context = await new LoginVaultIdentityReader({
       manager,
       storeId: 'store_selectedvault',
-    })
+    }).execute()
 
-    expect(context).toEqual({
-      kind: NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent,
-      identities: [{ identityId: 'identity-work', label: 'Work' }],
-    })
+    expect(context.isOk()).toBe(true)
+    if (context.isOk())
+      expect(context.value).toEqual({
+        kind: NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent,
+        identities: [{ identityId: 'identity-work', label: 'Work' }],
+      })
     expect(currentBrowserIdentity).not.toHaveBeenCalled()
   })
 
@@ -111,14 +137,16 @@ describe('login vault identity context', () => {
       identities: [],
     })
 
-    const context = await loadLoginVaultIdentityContext({
+    const context = await new LoginVaultIdentityReader({
       manager,
       storeId: 'store_selectedvault',
-    })
+    }).execute()
 
-    expect(context).toEqual({
-      kind: NookSelectedVaultIdentityContextKind.Empty,
-    })
+    expect(context.isOk()).toBe(true)
+    if (context.isOk())
+      expect(context.value).toEqual({
+        kind: NookSelectedVaultIdentityContextKind.Empty,
+      })
     expect(currentBrowserIdentity).not.toHaveBeenCalled()
   })
 })

@@ -62,8 +62,8 @@ describe('Tesla authentication mock', () => {
     expect(TeslaAuthMockScenario.submittedControl('Primary action')).toBe(
       TeslaAuthControl.Unrecognized,
     )
-    expect(TeslaAuthPresentationState.Ready).toBe('ready')
-    expect(TeslaAuthPresentationState.Rejected).toBe('rejected')
+    expect(String(TeslaAuthPresentationState.Ready)).toBe('ready')
+    expect(String(TeslaAuthPresentationState.Rejected)).toBe('rejected')
   })
 
   test('catalogs the captured shell without OAuth query values', () => {

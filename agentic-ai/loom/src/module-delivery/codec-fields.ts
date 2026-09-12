@@ -1,11 +1,10 @@
 import {
   UntrustedYamlPropertyPresence,
-  isRecord,
-  untrustedYamlProperty,
+  UntrustedYamlBoundary,
 } from '../lib/guards.ts';
 import {
-  fieldNamesOf,
   type RequestFieldVocabulary,
+  RequestFieldCatalog,
 } from '../codec/field-vocabulary.ts';
 import {
   MAX_MODULE_DELIVERY_STRING_CODE_UNITS,
@@ -39,7 +38,7 @@ export class ModulePlanFields {
     vocabulary: RequestFieldVocabulary<FieldName>,
   ): void {
     const actual = Object.keys(this.record).sort();
-    const expected = [...fieldNamesOf(vocabulary)].sort();
+    const expected = [...RequestFieldCatalog.names(vocabulary)].sort();
     if (JSON.stringify(actual) !== JSON.stringify(expected))
       this.fail(`: expected exactly ${expected.join(', ')}.`);
   }
@@ -50,7 +49,7 @@ export class ModulePlanFields {
       typeof value !== 'string' ||
       value.trim() === '' ||
       value.length > MAX_MODULE_DELIVERY_STRING_CODE_UNITS ||
-      hasControlCharacter(value)
+      ModulePlanFields.hasControlCharacter(value)
     )
       this.fail(`.${key}: expected a bounded non-empty string.`);
     return value;
@@ -94,7 +93,7 @@ export class ModulePlanFields {
         typeof entry !== 'string' ||
         entry.trim() === '' ||
         entry.length > MAX_MODULE_DELIVERY_STRING_CODE_UNITS ||
-        hasControlCharacter(entry)
+        ModulePlanFields.hasControlCharacter(entry)
       )
         this.fail(`.${key}: expected bounded non-empty entries.`);
     }
@@ -103,7 +102,8 @@ export class ModulePlanFields {
 
   recordField(key: string): UntrustedYamlMap {
     const value = this.value(key);
-    if (!isRecord(value)) this.fail(`.${key}: expected an object.`);
+    if (!UntrustedYamlBoundary.isRecord(value))
+      this.fail(`.${key}: expected an object.`);
     return value;
   }
 
@@ -125,7 +125,7 @@ export class ModulePlanFields {
       record: this.record,
       key,
     };
-    const property = untrustedYamlProperty(propertyRequest);
+    const property = UntrustedYamlBoundary.property(propertyRequest);
     if (property.presence === UntrustedYamlPropertyPresence.Absent)
       this.fail(`.${key}: required field is missing.`);
     return property.value;
@@ -134,12 +134,12 @@ export class ModulePlanFields {
   private fail(message: string): never {
     throw new ModulePlanDecodeFailure(`${this.path}${message}`);
   }
-}
 
-function hasControlCharacter(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code <= 31 || code === 127) return true;
+  private static hasControlCharacter(value: string): boolean {
+    for (let index = 0; index < value.length; index += 1) {
+      const code = value.charCodeAt(index);
+      if (code <= 31 || code === 127) return true;
+    }
+    return false;
   }
-  return false;
 }

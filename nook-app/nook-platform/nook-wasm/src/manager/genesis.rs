@@ -1,9 +1,18 @@
 //! Vault genesis and empty-session initialization.
 
+use super::device_protection::{ExtensionIdentityPublication, PendingExtensionIdentityEnrollment};
+use super::identity_handoff::VaultCreationHandoff;
 use super::{NookVaultManager, VaultNameState};
-use crate::NookError;
-use crate::NookSecretRecord;
+use crate::IdentityDbGenerateVaultDekForIdentity;
+use crate::NookDatabase;
 use crate::storage::identity_record;
+use crate::storage::identity_record::PendingSimpleGenesisFlow;
+use crate::storage::identity_record::StoredIdentityRecord;
+use crate::{NookError, NookSecretRecord};
+use nook_core::{DirectoryOwnedVaultOpening, IdentityVaultKeyOpening};
+use nook_core::{
+    GenesisMembersRecordsRequest, IdentityRecord, IdentityVaultGenesisRecordsRequest, VaultMember,
+};
 use nook_core::{SymmetricKey, VaultMetaState, VaultType, VaultUnlock};
 use wasm_bindgen::JsError;
 
@@ -20,16 +29,24 @@ impl NookVaultManager {
             VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
             _ => "Personal".to_owned(),
         };
-        if let Some(handoff) = self.pending_vault_creation_handoff() {
-            let app_key = self.device_identity()?;
+        if let ExtensionIdentityPublication::Staged(pending) =
+            &self.device.pending_extension_handoff
+            && matches!(
+                &pending.enrollment,
+                PendingExtensionIdentityEnrollment::VaultCreation { .. }
+            )
+        {
             self.event_log
                 .signing_seed
-                .clone_from(&handoff.signing_seed);
+                .clone_from(&pending.handoff_signing_seed);
+        }
+        if let VaultCreationHandoff::Extension(handoff) = self.pending_vault_creation_handoff() {
+            let app_key = self.device_identity()?;
             let (pending, identity_record, keys) = identity_record::StagedSimpleGenesisInput {
                 app_key: &app_key,
-                signing_public_key: &handoff.signing_public_key,
-                authorizer: handoff.authorizer.as_ref(),
-                authorizer_signing: handoff.authorizer_signing.as_ref(),
+                signing_public_key: handoff.signing_public_key,
+                authorizer: handoff.authorizer,
+                authorizer_signing: handoff.authorizer_signing,
                 label: &label,
             }
             .begin_or_resume()
@@ -45,16 +62,20 @@ impl NookVaultManager {
         .begin_or_resume()
         .await?;
         self.vault.store_id = pending.store_id.to_string();
-        if let Some(staged) = pending.staged_identity() {
-            let mut directory = staged.directory.clone();
-            let keys = directory
-                .open_or_generate_vault_dek_for_identity(
-                    &pending.identity_id,
-                    identity,
-                    pending.store_id.clone(),
-                )
+        if let PendingSimpleGenesisFlow::Staged(staged) = &pending.flow {
+            let keys = staged
+                .directory
+                .open_vault_dek_for_identity(DirectoryOwnedVaultOpening {
+                    identity_id: &pending.identity_id,
+                    vault: IdentityVaultKeyOpening {
+                        app_key: identity,
+                        store_id: pending.store_id.clone(),
+                    },
+                })
                 .map_err(|error| NookError::Database(error.to_string()))?;
-            let identity_record = directory
+
+            let identity_record = staged
+                .directory
                 .identities()
                 .iter()
                 .find(|record| record.identity_id == pending.identity_id)
@@ -65,17 +86,19 @@ impl NookVaultManager {
             self.apply_identity_genesis_vault_keys(&identity_record, &keys)?;
             return Ok(pending);
         }
-        let keys = identity_record::generate_vault_dek_for_identity(
-            &pending.identity_id,
-            identity,
-            pending.store_id.clone(),
-        )
-        .await?;
-        let identity_record = identity_record::load_identity(&pending.identity_id)
-            .await?
-            .ok_or_else(|| {
+        let keys =
+            NookDatabase::generate_vault_dek_for_identity(IdentityDbGenerateVaultDekForIdentity {
+                identity_id: &pending.identity_id,
+                app_key: identity,
+                store_id: pending.store_id.clone(),
+            })
+            .await?;
+        let identity_record = match NookDatabase::load_identity(&pending.identity_id).await? {
+            StoredIdentityRecord::Registered(value) => Ok(value),
+            StoredIdentityRecord::NotRegistered => Err({
                 NookError::Database("Pending genesis identity no longer exists.".to_owned())
-            })?;
+            }),
+        }?;
         self.apply_identity_genesis_vault_keys(&identity_record, &keys)?;
         Ok(pending)
     }
@@ -87,7 +110,13 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         self.prepare_genesis_vault_keys(keys)?;
         if self.vault.architecture.vault_type == VaultType::Simple {
-            for record in nook_core::identity_vault_genesis_records(identity, keys, "genesis")? {
+            for record in IdentityRecord::identity_vault_genesis_records(
+                IdentityVaultGenesisRecordsRequest {
+                    identity,
+                    keys,
+                    enrolled_at: "genesis",
+                },
+            )? {
                 self.vault.meta.apply_record(&record)?;
             }
         }
@@ -120,7 +149,11 @@ impl NookVaultManager {
                 // are issued after the required participants are enrolled.
             }
         }
-        for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
+        for member in VaultMember::genesis_members_records(GenesisMembersRecordsRequest {
+            identity,
+            members_key: &keys.members_key,
+            enrolled_at: "genesis",
+        })? {
             self.vault.meta.apply_record(&member)?;
         }
         Ok(())
@@ -137,7 +170,7 @@ impl NookVaultManager {
 
     // Initialize an empty database
     pub async fn initialize_empty(&mut self) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status.tx.send("INITIALIZE_START".to_owned());
+        drop(self.status.tx.send("INITIALIZE_START".to_owned()));
         self.vault.meta.secrets.clear();
         if self.needs_genesis_persist()? {
             let identity = self.device_identity()?;
@@ -152,7 +185,11 @@ impl NookVaultManager {
                     // Sentinel never writes per-device auth envelopes.
                 }
             }
-            for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")? {
+            for member in VaultMember::genesis_members_records(GenesisMembersRecordsRequest {
+                identity: &identity,
+                members_key: &members_key,
+                enrolled_at: "genesis",
+            })? {
                 self.vault.meta.apply_record(&member)?;
             }
         }
@@ -164,7 +201,7 @@ impl NookVaultManager {
         }
         self.persist_projection_cache().await?;
         self.purge_legacy_plaintext_search_catalog().await?;
-        let _ = self.status.tx.send("READY".to_owned());
+        drop(self.status.tx.send("READY".to_owned()));
         Ok(self.get_records()?)
     }
 }

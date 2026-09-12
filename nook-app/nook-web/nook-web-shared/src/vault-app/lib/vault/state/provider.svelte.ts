@@ -1,3 +1,4 @@
+import type { NookStorageConnectArgs } from "$app-wasm";
 import {
   is_local_folder_backup_supported,
   type NookLocalVaultEntry,
@@ -60,7 +61,7 @@ export type StagedRemoteStorage =
   | { kind: StagedRemoteStorageKind.Unavailable }
   | {
       kind: StagedRemoteStorageKind.Available;
-      args: [string, string, string];
+      args: NookStorageConnectArgs;
     };
 
 export enum LocalProviderLookupKind {
@@ -132,11 +133,6 @@ export class VaultProviderState {
   get hasActiveVaultStore(): boolean {
     return this.activeVaultStoreState.kind === ActiveVaultKind.Open;
   }
-  requireActiveVaultStoreId(): StoreId {
-    if (this.activeVaultStoreState.kind === ActiveVaultKind.Open)
-      return this.activeVaultStoreState.storeId;
-    throw new Error("Active vault store is required");
-  }
   openActiveVault(value: StoreId): void {
     this.activeVaultStoreState = { kind: ActiveVaultKind.Open, storeId: value };
   }
@@ -191,12 +187,6 @@ export class VaultProviderState {
   get recoveryDiscovery(): RecoveryDiscovery {
     return this.recoverySummaryState;
   }
-  requireExistingVaultRecovery(): VaultRecoverySummary {
-    if (this.recoverySummaryState.kind === RecoveryDiscoveryKind.Found) {
-      return this.recoverySummaryState.summary;
-    }
-    throw new Error("Existing vault recovery summary is required");
-  }
   recordExistingVaultRecovery(value: VaultRecoverySummary): void {
     this.recoverySummaryState = {
       kind: RecoveryDiscoveryKind.Found,
@@ -217,12 +207,6 @@ export class VaultProviderState {
   get oauthFileDraft(): OAuthFileDraft {
     return this.oauthFileState;
   }
-  requireOauthFileConfig(): OAuthFileConfig {
-    if (this.oauthFileState.kind === OAuthFileDraftKind.Configured) {
-      return this.oauthFileState.config;
-    }
-    throw new Error("OAuth file configuration is required");
-  }
   configureOauthFile(value: OAuthFileConfig): void {
     this.oauthFileState = {
       kind: OAuthFileDraftKind.Configured,
@@ -238,12 +222,6 @@ export class VaultProviderState {
   });
   get localFolderDraft(): LocalFolderDraft {
     return this.localFolderState;
-  }
-  requireLocalFolderConfig(): LocalFolderConfig {
-    if (this.localFolderState.kind === LocalFolderDraftKind.Configured) {
-      return this.localFolderState.config;
-    }
-    throw new Error("Local folder configuration is required");
   }
   configureLocalFolder(value: LocalFolderConfig): void {
     this.localFolderState = {

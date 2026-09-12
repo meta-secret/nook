@@ -1,6 +1,8 @@
 import { expect, type Page } from '@playwright/test'
 import fs from 'node:fs/promises'
+import { LogLevel } from '../../../nook-web-shared/src/vault-app/lib/runtime/log-level'
 import { UI_TIMEOUT_MS } from './environment'
+import { parseJson, readStringProperty, requireRecord } from './guards'
 
 export type NookLogEntry = {
   ts: string
@@ -29,6 +31,25 @@ function buildAppLogsUrl(options?: {
   return query ? `/app-logs?${query}` : '/app-logs'
 }
 
+function parseLogLevel(value: string | undefined): LogLevel {
+  switch (value?.trim().toLowerCase()) {
+    case undefined:
+      return LogLevel.Trace
+    case LogLevel.Error:
+      return LogLevel.Error
+    case LogLevel.Warn:
+      return LogLevel.Warn
+    case LogLevel.Info:
+      return LogLevel.Info
+    case LogLevel.Debug:
+      return LogLevel.Debug
+    case LogLevel.Trace:
+      return LogLevel.Trace
+    default:
+      return LogLevel.Trace
+  }
+}
+
 type AppLogsResponse = {
   meta: {
     schema: typeof APP_LOGS_SCHEMA
@@ -48,29 +69,18 @@ async function readNookLogEntries(
   page: Page,
   limit: number,
 ): Promise<NookLogEntry[]> {
-  return page.evaluate(async (lim) => {
-    const log = (
-      window as Window & {
-        __nookLog?: {
-          dump: (opts?: { limit?: number }) => Promise<
-            {
-              ts: string
-              level: string
-              scope: string
-              message: string
-              data?: string
-            }[]
-          >
-        }
-      }
-    ).__nookLog
-    if (!log) throw new Error('__nookLog is not available on the page')
-    return log.dump({
-      minLevel: 'trace',
-      limit: lim,
-      offset: 0,
-    })
-  }, limit)
+  return page.evaluate(
+    async ({ lim, minLevel }) => {
+      const log = window.__nookLog
+      if (!log) throw new Error('__nookLog is not available on the page')
+      return log.dump({
+        minLevel,
+        limit: lim,
+        offset: 0,
+      })
+    },
+    { lim: limit, minLevel: LogLevel.Trace },
+  )
 }
 
 export async function readNookLogSnapshot(
@@ -79,33 +89,12 @@ export async function readNookLogSnapshot(
 ): Promise<AppLogsResponse> {
   const query = {
     schema: APP_LOGS_SCHEMA,
-    minLevel: ((...[v = 'trace']) => v)(options?.minLevel),
+    minLevel: parseLogLevel(options?.minLevel),
     limit: ((...[v = APP_LOGS_ATTACHMENT_LIMIT]) => v)(options?.limit),
     offset: ((v) => (v ? v : 0))(options?.offset),
   }
   return page.evaluate(async (opts) => {
-    const log = (
-      window as Window & {
-        __nookLog?: {
-          flush: () => Promise<void>
-          getLevel: () => string
-          count: () => Promise<number>
-          dump: (opts?: {
-            minLevel?: string
-            limit?: number
-            offset?: number
-          }) => Promise<
-            {
-              ts: string
-              level: string
-              scope: string
-              message: string
-              data?: string
-            }[]
-          >
-        }
-      }
-    ).__nookLog
+    const log = window.__nookLog
     if (!log) throw new Error('__nookLog is not available on the page')
     await log.flush()
     const [total, entries] = await Promise.all([
@@ -162,13 +151,61 @@ export async function fetchAppLogs(
   if (!text) {
     throw new Error('`/app-logs` returned an empty JSON body')
   }
-  const payload = JSON.parse(text) as AppLogsResponse
-  if (payload.meta?.schema !== APP_LOGS_SCHEMA) {
-    throw new Error(
-      `Unexpected /app-logs schema: ${String(payload.meta?.schema)}`,
-    )
+  const payloadRecord = requireRecord(parseJson(text), 'app logs response')
+  const metaRecord = requireRecord(payloadRecord.meta, 'app logs metadata')
+  if (metaRecord.schema !== APP_LOGS_SCHEMA) {
+    throw new Error(`Unexpected /app-logs schema: ${String(metaRecord.schema)}`)
   }
-  return payload
+  const entriesValue = payloadRecord.entries
+  if (!Array.isArray(entriesValue)) {
+    throw new Error('Unexpected /app-logs entries payload')
+  }
+  const entries: NookLogEntry[] = []
+  for (const entryValue of entriesValue) {
+    const entry = requireRecord(entryValue, 'app log entry')
+    const data = entry.data
+    if (data !== undefined && typeof data !== 'string') {
+      throw new Error('Unexpected app log data payload')
+    }
+    entries.push({
+      ts: readStringProperty(entry, 'ts', 'app log entry'),
+      level: readStringProperty(entry, 'level', 'app log entry'),
+      scope: readStringProperty(entry, 'scope', 'app log entry'),
+      message: readStringProperty(entry, 'message', 'app log entry'),
+      ...(data === undefined ? {} : { data }),
+    })
+  }
+  const readNumberProperty = (key: string): number => {
+    const value = metaRecord[key]
+    if (typeof value !== 'number') {
+      throw new Error(`Unexpected app log metadata: ${key}`)
+    }
+    return value
+  }
+  const numericMetadata = {
+    limit: readNumberProperty('limit'),
+    offset: readNumberProperty('offset'),
+    returned: readNumberProperty('returned'),
+    total: readNumberProperty('total'),
+  }
+  return {
+    meta: {
+      schema: APP_LOGS_SCHEMA,
+      generatedAt: readStringProperty(
+        metaRecord,
+        'generatedAt',
+        'app logs metadata',
+      ),
+      activeLevel: readStringProperty(
+        metaRecord,
+        'activeLevel',
+        'app logs metadata',
+      ),
+      minLevel: readStringProperty(metaRecord, 'minLevel', 'app logs metadata'),
+      ...numericMetadata,
+    },
+    entries,
+  }
 }
 
 /** Read persisted app log entries when the runtime hook is available. */
@@ -225,10 +262,15 @@ export async function waitForPersistedAppLog(
       { timeout: ((...[v = UI_TIMEOUT_MS * 2]) => v)(options?.timeoutMs) },
     )
     .toBe(true)
-  if (searchState.kind === LogSearchStateKind.Searching) {
+  const entries = await readNookLogEntries(
+    page,
+    ((...[v = 500]) => v)(options?.limit),
+  )
+  const found = findAppLogEntry(entries, filter)
+  if (found.kind === AppLogEntryLookupKind.Missing) {
     throw new Error('persisted app log poll completed without a matching entry')
   }
-  return searchState.entry
+  return found.entry
 }
 
 /** Wait for each persisted log milestone in order (see `.cortex/shared/references/logging.md`). */
@@ -423,7 +465,10 @@ export async function dumpNookLogs(
 export async function attachNookLogsForTest(
   page: Page,
   testInfo: import('@playwright/test').TestInfo,
-  options?: { print?: boolean },
+  options?: {
+    attachmentName?: NookAppLogAttachmentName
+    print?: boolean
+  },
 ) {
   try {
     const payload = await readNookLogSnapshot(page, {
@@ -437,14 +482,24 @@ export async function attachNookLogsForTest(
         payload.entries.slice(-APP_LOGS_FAILURE_PRINT_LIMIT),
       )
     }
-    const body = JSON.stringify(payload, (_key, value) => value, 2)
-    const attachmentPath = testInfo.outputPath('nook-app-logs.json')
+    const body = JSON.stringify(payload, null, 2)
+    const attachmentName =
+      options && options.attachmentName
+        ? options.attachmentName
+        : NookAppLogAttachmentName.Primary
+    const attachmentPath = testInfo.outputPath(attachmentName)
     await fs.writeFile(attachmentPath, body)
-    await testInfo.attach('nook-app-logs.json', {
+    await testInfo.attach(attachmentName, {
       path: attachmentPath,
       contentType: 'application/json',
     })
   } catch {
     // Post-mortem logging must never fail the run.
   }
+}
+
+export enum NookAppLogAttachmentName {
+  Joiner = 'joiner-nook-app-logs.json',
+  Primary = 'nook-app-logs.json',
+  SentinelInitiator = 'sentinel-initiator-nook-app-logs.json',
 }

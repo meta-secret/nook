@@ -1,5 +1,13 @@
 # Quality and Release
 
+## Agent delivery applicability
+
+Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
+feature compilation and the manually run dev manager's slow PR cycle.
+Runtime workflow details below do not grant permission to run local tests or
+feature-stage slow checks. Paused Hive remains outside the manual manager
+lifecycle and must not be reactivated by this delivery change.
+
 ## Overview
 
 Use this workflow for quality, CI, and deployment changes.
@@ -38,7 +46,7 @@ Use this workflow for quality, CI, and deployment changes.
    - Composites call those stages in order so a leaf miss cannot cold-rebuild apt.
    - Labeled product PRs call the shared jobs from `pr.yml` via `rust-ecosystem-checks.yml`.
    - `main.yml` owns all merged-head ecosystem execution.
-   - Thin `rust-ecosystem.yml` keeps schedule, manual, and labeled minds-only PR entry points.
+   - `ci.yml` owns schedule, manual, and labeled minds-only PR entry points.
    - Main includes minds paths, then skips its product job chain when the push is minds-only.
    - Do not duplicate those commands in bespoke preflight scanners, call Bake helpers directly from the workflow, or compile their CLIs on the GitHub-hosted runner host.
    - Kani pins its specialized model-checking toolchain in `product.Dockerfile`.
@@ -154,7 +162,7 @@ Use this workflow for quality, CI, and deployment changes.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
 10. **CI policy** — see subsections below. Gizmo follows
-    [the pull request pipeline](../../../gizmo/workflows/pull-requests.md#agent-pipeline).
+    [the pull request pipeline](../../../gizmo/workflows/pull-requests.md).
 
     #### Workflows and runners
     - Trusted native Rust and Rust ecosystem PR jobs and Main build producers
@@ -422,8 +430,10 @@ Use this workflow for quality, CI, and deployment changes.
     - `Verify and preview` never waits for native coverage.
     - The preview web solve retries once after the known immediate BuildKit Dockerfile-load flake.
     - Repeated failures still fail the gate.
-    - The Repository policy job owns Source architecture and conditional Loom
-      checks in one automatic PR run.
+    - The Repository policy job owns preflight and Loom checks in one automatic
+      PR run without base-SHA comparison or changed-path classification.
+    - Its workflow is Actions-only setup and trust wiring; repository-owned
+      operations run through `.task/ci-workflows.yml`.
     - Its `pr-preflight` cache covers `preflight/target` and the Cargo registry.
     - The source-architecture proof requires cache restore before the first
       preflight Cargo task.
@@ -468,7 +478,9 @@ Use this workflow for quality, CI, and deployment changes.
     - Cancelling exclusive blockers share that barrier, so stale and replacement workers never execute concurrently.
     - Successful reruns retire active incidents; current-generation reconciliation is idempotent.
     - A single isolated dispatcher enqueues actionable incidents.
-    - One logical Hive task owns the normal PR, checks, review loop, squash merge, and replacement Main verification.
+    - Repair implementation follows the feature path into local dev.
+    - The dev manager controls slow dev PR checks and fast-forward promotion.
+    - Incident completion retains replacement Main verification.
     - The explicitly dispatched implementation worker does not claim it.
     - Hive verification materializes its real-lock test and Clippy dependency graphs in independent BuildKit stages so they execute in parallel.
     - SeaweedFS S3 `sccache` supplies compiler objects.
@@ -476,19 +488,14 @@ Use this workflow for quality, CI, and deployment changes.
     - Hosted jobs restore the same verified Zot refs read-only.
 
 11. **GitHub Actions agent execution:**
-    - Team Agents return formatted commits without pushing. Gizmo continues from them,
-      runs pre-push, pushes, and owns remote validation.
-    - Gizmo uses focused `task remote` when faster than complete validation.
-    - Focused tasks are not a prerequisite for complete validation.
-    - Gizmo starts complete PR checks only with `task pr:validate PR=<number>`.
-    - Do not run `task check`, `task ci:pr`, full suites, builds, or e2e on the agent machine.
-    - Local mirrors remain available to humans.
-    - See [remote execution](remote-execution.md),
-      [mission delivery](../../../gizmo/workflows/mission-delivery.md), and
-      [pull request validation](../../../gizmo/workflows/pull-requests.md#5-hosted-iteration-and-explicit-validation).
-12. Gizmo proves the final head with green hosted checks. After a complete-gate
-    failure, the Team Agent returns a formatted fix commit; Gizmo continues from it,
-    pushes, and re-validates.
+    - Feature teams author tests and return scoped commits.
+    - Feature feedback requires remote build-only capability.
+    - Missing capability is a blocker, not permission for slow feature checks.
+    - The manually run dev manager owns the full slow dev-to-main PR cycle.
+    - Local tests, Docker work, compilation, and broad pre-push are prohibited.
+    - See [dev delivery](../../../gizmo/architecture/dev-delivery.md).
+12. After a slow-stage failure, delegate repair through the normal feature path.
+    Select a replacement snapshot only after the prior slow attempt finishes.
 13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
 14. **NEVER pipe a long-running command through `| grep`/`| tail`/`| head`/`| sed` (or any filter).** This is a hard rule, not a suggestion.
     - `grep`/`tail`/`head` **buffer their input until the upstream command exits**.
@@ -550,7 +557,8 @@ Use this workflow for quality, CI, and deployment changes.
 22. **Cost tiers:**
     - cargo-deny, RustSec, Proptest, and committed Insta snapshots are normal merge checks.
     - Loom models must remain bounded.
-    - Cargo-fuzz uses a short merge smoke and longer scheduled/manual campaigns.
+    - Cargo-fuzz uses a 20-second smoke per target for merge, scheduled, and manual runs.
+    - Each shared Rust ecosystem job has a five-minute limit.
     - Kani proofs must declare practical unwind bounds.
     - Dylint libraries, versions, and their dated nightly (`nightly-2026-04-16` for Dylint `6.0.1`) are pinned so compiler-coupled lint behavior changes intentionally.
 

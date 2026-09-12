@@ -17,15 +17,16 @@
     "preview": "vite preview",
     "i18n:keys:generate": "node scripts/generate-i18n-keys.mjs",
     "i18n:keys:check": "node scripts/generate-i18n-keys.mjs --check",
-    "check": "bun run i18n:keys:check && svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.config.json && cd ../nook-vault-simple && bun run check && cd ../nook-vault-sentinel && bun run check",
-    "lint": "bun run security && bun run unused && bun run duplicates && cd .. && node_modules/.bin/eslint --config eslint.config.js nook-web-app nook-web-shared/src/vault-app nook-vault-simple nook-vault-sentinel && node_modules/.bin/prettier --check nook-web-app nook-web-shared/src/vault-app nook-vault-simple nook-vault-sentinel",
+    "check": "bun run i18n:keys:check && bun run typecheck && cd ../nook-vault-simple && bun run check && cd ../nook-vault-sentinel && bun run check",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.authored.json && tsc -p tsconfig.config.json",
+    "lint": "bun run security && bun run unused && bun run duplicates && cd .. && node_modules/.bin/eslint --config eslint.config.js *.js nook-web-app nook-web-shared/src/vault-app nook-vault-simple nook-vault-sentinel && node_modules/.bin/prettier --check nook-web-app nook-web-shared/src/vault-app nook-vault-simple nook-vault-sentinel",
     "security": "bun audit --prod --audit-level=high",
     "unused": "knip --reporter compact",
     "duplicates": "cd ../../.. && nook-app/nook-web/node_modules/.bin/jscpd --config .jscpd.json nook-app preflight",
     "format": "prettier --write . ../nook-web-shared/src/vault-app ../nook-vault-simple ../nook-vault-sentinel",
     "format:check": "prettier --check . ../nook-web-shared/src/vault-app ../nook-vault-simple ../nook-vault-sentinel",
     "test": "vitest run --passWithNoTests",
-    "test:e2e": "bun run test:e2e:stable && bun run test:e2e:unstable",
+    "test:e2e": "failed=0; bun run test:e2e:stable || failed=1; bun run test:e2e:unstable || failed=1; exit \"$failed\"",
     "test:e2e:debug": "bun scripts/run-e2e-debug.ts",
     "test:e2e:stable": "PLAYWRIGHT_WORKERS=3 playwright test --project=stable",
     "test:e2e:unstable": "PLAYWRIGHT_WORKERS=2 playwright test --project=unstable",
@@ -50,6 +51,7 @@
     "@tsconfig/svelte": "5.0.8",
     "@types/bun": "1.3.14",
     "@types/dompurify": "3.2.0",
+    "@types/eslint-plugin-no-unsanitized": "4.1.0",
     "@types/markdown-it": "14.1.2",
     "@types/node": "26.2.0",
     "@typescript-eslint/parser": "8.66.0",
@@ -74,7 +76,8 @@
     "vite": "8.2.1",
     "vitest": "4.1.10",
     "wrangler": "4.120.0",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.0",
+    "@types/chrome": "0.2.9"
   },
   "dependencies": {
     "@lucide/svelte": "1.30.0",
@@ -88,7 +91,8 @@
     "qr-scanner": "1.4.2",
     "tailwind-merge": "3.6.0",
     "tailwind-variants": "3.3.1",
-    "tw-animate-css": "1.4.0"
+    "tw-animate-css": "1.4.0",
+    "neverthrow": "8.2.0"
   },
   "optionalDependencies": {
     "@rolldown/binding-darwin-arm64": "1.2.3",

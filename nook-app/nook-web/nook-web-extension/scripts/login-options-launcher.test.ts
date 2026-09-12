@@ -1,7 +1,7 @@
+import { ok } from 'neverthrow'
 import { describe, expect, mock, test } from 'bun:test'
 import { WebsiteAuthenticatorResponseStatus } from '../src/lib/login-fill-messages'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
-import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import { extensionSessionProbeDeadline } from '../src/offscreen/session-request-adapter'
 
 type GrantAccessResponse =
@@ -20,23 +20,49 @@ type ExtensionWindowRequest = {
   url: string
 }
 
-type LoginAccountAvailabilityRequest = {
-  queue: {
-    kind: string
-    expiresAt?: number
-    priority?: string
+type AccountPickerSessions =
+  (typeof import('../src/background/service-worker/account-pickers'))['accountPickerSessions']
+type LoginAccountAvailabilityRequest = Parameters<
+  AccountPickerSessions['loginAccountAvailabilityForOrigin']
+>[0]
+type LoginAccountAvailabilityResponse = Awaited<
+  ReturnType<AccountPickerSessions['loginAccountAvailabilityForOrigin']>
+>
+
+function websiteSender({
+  id = 'nook-extension',
+  tabId = 42,
+}: {
+  id?: string
+  tabId?: number
+} = {}): chrome.runtime.MessageSender {
+  return {
+    id,
+    url: 'https://example.test/login',
+    tab: {
+      id: tabId,
+      index: 0,
+      pinned: false,
+      highlighted: false,
+      windowId: 1,
+      active: true,
+      incognito: false,
+      selected: true,
+      discarded: false,
+      autoDiscardable: true,
+      frozen: false,
+      lastAccessed: 0,
+      groupId: -1,
+    },
   }
 }
-
-type LoginAccountAvailabilityResponse =
-  { ok: true; accounts: [] } | { ok: false }
 
 describe('websiteLoginOptions', () => {
   test('opens one trusted pairing surface when Continue finds no password-filling grant', async () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const { websiteLoginMatchAvailability, websiteLoginOptions } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     let grantAccessResponse: GrantAccessResponse = {
       response: {
@@ -92,13 +118,9 @@ describe('websiteLoginOptions', () => {
       loginAccountAvailabilityForOrigin,
       openCompanionLauncherBestEffort,
     }
-    const response = await websiteLoginOptions({
+    const response = await accountPickerSessions.websiteLoginOptions({
       message: { payload: { origin: 'https://example.test' } },
-      sender: {
-        id: 'nook-extension',
-        url: 'https://example.test/login',
-        tab: { id: 42 },
-      },
+      sender: websiteSender(),
       dependencies,
     })
 
@@ -121,82 +143,83 @@ describe('websiteLoginOptions', () => {
         status: WebsiteAuthenticatorResponseStatus.Locked,
       },
     }
-    const passiveResponse = await websiteLoginMatchAvailability({
-      origin: 'https://example.test',
-      sender: {
-        id: 'nook-extension',
-        url: 'https://example.test/login',
-        tab: { id: 42 },
-      },
-      dependencies,
-    })
+    const passiveResponse =
+      await accountPickerSessions.websiteLoginMatchAvailability({
+        origin: 'https://example.test',
+        sender: websiteSender(),
+        dependencies,
+      })
     expect(passiveResponse).toEqual({ kind: 'locked' })
     expect(passiveAvailableWebsiteGrants).toHaveBeenCalledTimes(1)
     expect(availableWebsiteGrants).toHaveBeenCalledTimes(1)
     expect(openCompanionLauncherBestEffort).toHaveBeenCalledTimes(1)
 
     grantAccessResponse = { grants: [] }
-    const unlockedPassiveResponse = await websiteLoginMatchAvailability({
-      origin: 'https://example.test',
-      sender: {
-        id: 'nook-extension',
-        url: 'https://example.test/login',
-        tab: { id: 42 },
-      },
-      dependencies,
-    })
+    const unlockedPassiveResponse =
+      await accountPickerSessions.websiteLoginMatchAvailability({
+        origin: 'https://example.test',
+        sender: websiteSender(),
+        dependencies,
+      })
     expect(unlockedPassiveResponse).toEqual({ kind: 'ready', count: 0 })
     expect(availabilityRequests).toHaveLength(1)
     expect(availabilityRequests[0]?.queue).toMatchObject({
       kind: 'deadline',
       priority: 'probe',
     })
-    expect(availabilityRequests[0]?.queue.expiresAt).toBeGreaterThan(Date.now())
+    const availabilityQueue = availabilityRequests[0]?.queue
+    if (!availabilityQueue || !('expiresAt' in availabilityQueue)) {
+      throw new Error('expected a bounded availability request')
+    }
+    expect(availabilityQueue.expiresAt).toBeGreaterThan(Date.now())
 
     loginAccountAvailability = { ok: false }
-    const failedPassiveResponse = await websiteLoginMatchAvailability({
-      origin: 'https://example.test',
-      sender: {
-        id: 'nook-extension',
-        url: 'https://example.test/login',
-        tab: { id: 42 },
-      },
-      dependencies,
-    })
+    const failedPassiveResponse =
+      await accountPickerSessions.websiteLoginMatchAvailability({
+        origin: 'https://example.test',
+        sender: websiteSender(),
+        dependencies,
+      })
     expect(failedPassiveResponse).toEqual({ kind: 'unavailable' })
 
     const failedSessionList = mock(() =>
-      Promise.resolve({ ok: false, reason: 'session-list-failed' }),
+      Promise.resolve(ok({ ok: false, reason: 'session-list-failed' })),
     )
     const failedListRequest: Parameters<
       typeof loginAccountAvailabilityForOrigin
     >[0] = {
       grants: [
         {
+          vaultType: 'simple',
           vaultStoreId: 'vault-1',
           vaultName: 'Personal',
           deviceId: 'device-1',
           devicePublicKey: 'device-public-key',
           deviceSigningPublicKey: 'device-signing-key',
-        } as StoredExtensionPairingGrant,
+          deviceLabel: 'Laptop',
+          approvedAt: '2026-08-10T00:00:00Z',
+          scopes: ['password-filling'],
+          syncProviderCount: 0,
+          eventCount: 1,
+          eventLogHeads: ['event-1'],
+          lastLocalSyncAt: '2026-08-10T00:00:00Z',
+        },
       ],
       origin: 'https://example.test',
       queue: extensionSessionProbeDeadline(Date.now() + 1_000),
       sendMessage: failedSessionList,
     }
-    await expect(
-      loginAccountAvailabilityForOrigin(failedListRequest),
-    ).resolves.toEqual({ ok: false })
-
-    const interactiveResponse = await websiteLoginOptions({
-      message: { payload: { origin: 'https://example.test' } },
-      sender: {
-        id: 'nook-extension',
-        url: 'https://example.test/login',
-        tab: { id: 42 },
-      },
-      dependencies,
+    expect(await loginAccountAvailabilityForOrigin(failedListRequest)).toEqual({
+      ok: false,
     })
+
+    const interactiveResponse = await accountPickerSessions.websiteLoginOptions(
+      {
+        message: { payload: { origin: 'https://example.test' } },
+        sender: websiteSender(),
+        dependencies,
+      },
+    )
     expect(interactiveResponse).toEqual({
       ok: true,
       status: 'ready',
@@ -209,13 +232,9 @@ describe('websiteLoginOptions', () => {
     grantAccessResponse = {
       response: { ok: false, reason: 'login-forbidden-origin' },
     }
-    const rejectedResponse = await websiteLoginOptions({
+    const rejectedResponse = await accountPickerSessions.websiteLoginOptions({
       message: { payload: { origin: 'https://example.test' } },
-      sender: {
-        id: 'foreign-extension',
-        url: 'https://example.test/login',
-        tab: { id: 42 },
-      },
+      sender: websiteSender({ id: 'foreign-extension' }),
       dependencies,
     })
 
@@ -231,9 +250,9 @@ describe('websiteLoginOptions', () => {
   })
 
   test('withholds direct account results invalidated during lookup', async () => {
-    const { websiteLoginOptions } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
-    const { websiteAuthenticatorOptions } =
+    const { authenticatorEnrollmentOperations } =
       await import('../src/background/service-worker/authenticator-operations')
     let currentChecks = 0
     const authorizationIsCurrent = mock(() => ++currentChecks === 1)
@@ -248,7 +267,7 @@ describe('websiteLoginOptions', () => {
     }
     const sender = { id: 'nook-extension' }
     const message = { payload: { origin: 'https://example.test' } }
-    const loginResponse = await websiteLoginOptions({
+    const loginResponse = await accountPickerSessions.websiteLoginOptions({
       message,
       sender,
       dependencies: {
@@ -270,15 +289,16 @@ describe('websiteLoginOptions', () => {
     })
 
     currentChecks = 0
-    const authenticatorResponse = await websiteAuthenticatorOptions({
-      message,
-      sender,
-      dependencies: {
-        ...authorization,
-        availableWebsiteGrants: mock(() => Promise.resolve({ grants: [] })),
-        authenticatorAccounts: mock(() => Promise.resolve([])),
-      },
-    })
+    const authenticatorResponse =
+      await authenticatorEnrollmentOperations.websiteAuthenticatorOptions({
+        message,
+        sender,
+        dependencies: {
+          ...authorization,
+          availableWebsiteGrants: mock(() => Promise.resolve({ grants: [] })),
+          authenticatorAccounts: mock(() => Promise.resolve(ok([]))),
+        },
+      })
     expect(authenticatorResponse).toEqual({
       ok: false,
       reason: 'authenticator-locked',

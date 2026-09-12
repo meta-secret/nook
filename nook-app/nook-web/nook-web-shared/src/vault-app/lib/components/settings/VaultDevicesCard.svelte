@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { DeviceMutationResult } from '$lib/vault/multi-device'
   type IdentityTextTruncation = {
     readonly value: string
     readonly head: number
@@ -21,13 +22,10 @@
   } from '@lucide/svelte'
   import { configured_vault_application_supports_extension } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
-  import { openInstalledExtension } from '$lib/extension/connect'
+  import { extensionConnectionBrowser } from '$lib/extension/connect'
   import {
     ExtensionSetupStatus,
-    loadExtensionInstallTarget,
-    openExtensionInstallTarget,
-    resolveExtensionSetupState,
-    shouldOfferExtensionSetup,
+    extensionInstallationBrowser,
   } from '$lib/extension/install'
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
@@ -51,7 +49,7 @@
     vault,
     deviceId,
     devicePublicKey,
-    pendingJoins = [] as JoinRequest[],
+    pendingJoins = [],
     vaultMembers = [] as VaultMember[],
     isBusy,
     hasPasswordEnvelope = false,
@@ -69,8 +67,8 @@
     hasPasswordEnvelope?: boolean
     onApproveJoin: (deviceId: string) => void | Promise<void>
     onDenyJoin: (deviceId: string) => void | Promise<void>
-    onRenameDevice: (args: DeviceRename) => void | Promise<void>
-    onRevokeDevice: (authId: string) => void | Promise<void>
+    onRenameDevice: (args: DeviceRename) => Promise<DeviceMutationResult>
+    onRevokeDevice: (authId: string) => Promise<DeviceMutationResult>
   } = $props()
 
   let detailsAuthId = $state<MemberDetails>({
@@ -92,12 +90,16 @@
 
   async function refreshExtensionSetupStatus() {
     if (!SUPPORTS_EXTENSION) return
-    const state = await resolveExtensionSetupState(vault.activeVault)
+    const state = await extensionInstallationBrowser.resolveExtensionSetupState(
+      vault.activeVault,
+    )
     extensionSetupState = (() => {
       const shouldOfferExtensionSetupArgs: Parameters<
-        typeof shouldOfferExtensionSetup
+        typeof extensionInstallationBrowser.shouldOfferExtensionSetup
       >[0] = { status: state.status, environment: navigator }
-      return shouldOfferExtensionSetup(shouldOfferExtensionSetupArgs)
+      return extensionInstallationBrowser.shouldOfferExtensionSetup(
+        shouldOfferExtensionSetupArgs,
+      )
     })()
       ? { kind: ExtensionSetupOfferKind.Visible, setup: state }
       : { kind: ExtensionSetupOfferKind.Hidden }
@@ -106,8 +108,9 @@
   async function handleExtensionInstall() {
     extensionInstallBusy = true
     try {
-      const target = await loadExtensionInstallTarget()
-      openExtensionInstallTarget(target)
+      const target =
+        await extensionInstallationBrowser.loadExtensionInstallTarget()
+      extensionInstallationBrowser.openExtensionInstallTarget(target)
     } finally {
       extensionInstallBusy = false
     }
@@ -117,7 +120,8 @@
     extensionInstallBusy = true
     extensionConnectError = false
     try {
-      extensionConnectError = !(await openInstalledExtension())
+      extensionConnectError =
+        !(await extensionConnectionBrowser.openInstalledExtension())
     } finally {
       extensionInstallBusy = false
     }
@@ -246,7 +250,11 @@
       authId: member.authId,
       label: renameLabel,
     }
-    await onRenameDevice(deviceRename)
+    const renamed = await onRenameDevice(deviceRename)
+    if (renamed.isErr()) {
+      vault.errorMsg = vault.t(renamed.error.translationKey)
+      return
+    }
     renameAuthId = { kind: MemberRenameKind.Idle }
     renameLabel = ''
   }
@@ -681,7 +689,13 @@
                       class="h-8"
                       disabled={isBusy}
                       data-testid="device-revoke-confirm-btn"
-                      onclick={() => void onRevokeDevice(member.authId)}
+                      onclick={() =>
+                        void onRevokeDevice(member.authId).then((result) => {
+                          if (result.isErr())
+                            vault.errorMsg = vault.t(
+                              result.error.translationKey,
+                            )
+                        })}
                     >
                       {vault.t(I18N_KEYS.DevicesCardRevoke)}
                     </Button>

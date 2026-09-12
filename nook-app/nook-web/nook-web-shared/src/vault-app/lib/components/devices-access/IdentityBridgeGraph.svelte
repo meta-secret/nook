@@ -9,7 +9,7 @@
     type NodeTypes,
   } from '@xyflow/svelte'
   import {
-    buildIdentityBridge,
+    IdentityBridgePresentation,
     IdentityBridgeControlPosition,
     type IdentityBridgeDeviceIconKind,
     IdentityBridgeNodeType,
@@ -57,7 +57,9 @@
   let compact = $state(false)
   let canvasWidth = $state(0)
   const graph = $derived.by(() => {
-    const buildIdentityBridgeArgs: Parameters<typeof buildIdentityBridge>[0] = {
+    const buildIdentityBridgeArgs: ConstructorParameters<
+      typeof IdentityBridgePresentation
+    >[0] = {
       perspective,
       selectedVault,
       compact,
@@ -69,7 +71,7 @@
       vaults,
       copy,
     }
-    return buildIdentityBridge(buildIdentityBridgeArgs)
+    return new IdentityBridgePresentation(buildIdentityBridgeArgs).graph
   })
   const selectedVaultKey = $derived(
     selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected

@@ -27,11 +27,11 @@ runs:
         fi
         baseline="${NOOK_CACHE_TELEMETRY_BASELINE:-$RUNNER_TEMP/nook-cache-telemetry-baseline.json}"
         if [ ! -f "$baseline" ]; then
-          timeout 15s "$node_bin" .github/scripts/cache-telemetry.cjs start --output "$baseline"
+          timeout 15s "$node_bin" .github/scripts/cache-telemetry.mjs start --output "$baseline"
         fi
         suffix="${NOOK_CACHE_TELEMETRY_SUFFIX:+-$NOOK_CACHE_TELEMETRY_SUFFIX}"
         output="$RUNNER_TEMP/nook-cache-telemetry/$GITHUB_JOB$suffix.json"
-        if timeout 30s "$node_bin" .github/scripts/cache-telemetry.cjs collect \
+        if timeout 30s "$node_bin" .github/scripts/cache-telemetry.mjs collect \
           --baseline "$baseline" \
           --output "$output"; then
           :
@@ -42,7 +42,7 @@ runs:
             warning="collection_timeout:30s"
           fi
           echo "Cache telemetry collection unavailable ($warning); preserving an incomplete record."
-          "$node_bin" .github/scripts/cache-telemetry.cjs unavailable \
+          "$node_bin" .github/scripts/cache-telemetry.mjs unavailable \
             --warning "$warning" \
             --output "$output"
         fi

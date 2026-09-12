@@ -33,11 +33,9 @@ export enum SkillCommandPhase {
 }
 
 export enum SkillCommandIssue {
-  InvalidResponse = 'invalid-response',
   InvalidRequest = 'invalid-request',
   InvalidYaml = 'invalid-yaml',
   RequestTooLarge = 'request-too-large',
-  ResponseTooLarge = 'response-too-large',
   UsageError = 'usage-error',
 }
 

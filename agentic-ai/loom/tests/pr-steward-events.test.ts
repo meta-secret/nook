@@ -1,3 +1,4 @@
+import { PrStewardInvocationCodec } from '../src/pr-steward-invocation.ts';
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
   chmodSync,
@@ -10,9 +11,11 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  loadCredential,
   PrStewardEventObserver,
-  PrStewardInvocationCodec,
+  PrStewardCredentialFile,
+  PrStewardBoundedMessageStream,
+  PrStewardSubscriptionKind,
+  PrStewardSubscriptionOverloadError,
 } from '../src/pr-steward-events.ts';
 import {
   PR_STEWARD_REPOSITORY,
@@ -21,7 +24,10 @@ import {
   PrStewardSource,
   PrStewardUrlTrust,
 } from '../src/pr-steward-contract.ts';
-import { PrStewardGithubUnavailableError } from '../src/pr-steward-github.ts';
+import {
+  PrStewardPullRequestState,
+  PrStewardGithubUnavailableError,
+} from '../src/pr-steward-github.ts';
 import type {
   PrStewardHeadSha,
   PrStewardPullRequest,
@@ -49,7 +55,11 @@ const assignedUrl = {
 
 class FixturePrReader implements PrStewardAssignedPrReader {
   async read(_request: PrStewardAssignedPrRequest) {
-    return { headSha: ASSIGNED_HEAD, url: assignedUrl } as const;
+    return {
+      headSha: ASSIGNED_HEAD,
+      url: assignedUrl,
+      state: PrStewardPullRequestState.Open,
+    } as const;
   }
 }
 class UnavailablePrReader implements PrStewardAssignedPrReader {
@@ -136,6 +146,7 @@ class PrStewardEventFixture {
   }): Promise<readonly string[]> {
     const lines: string[] = [];
     await new PrStewardEventObserver({ reader: request.reader }).observe({
+      activity: () => {},
       messages: (async function* () {
         for (const item of request.data) yield { data: item };
       })(),
@@ -159,7 +170,7 @@ describe('PR Steward credentials and invocation codec', () => {
     const path = join(directory, 'client.yaml');
     writeFileSync(path, `username: pr-steward\npassword: ${'a'.repeat(64)}\n`);
     chmodSync(path, 0o600);
-    expect(loadCredential(path)).toEqual({
+    expect(PrStewardCredentialFile.load(path)).toEqual({
       username: 'pr-steward',
       password: 'a'.repeat(64),
     });
@@ -167,7 +178,9 @@ describe('PR Steward credentials and invocation codec', () => {
       path,
       `username: pr-steward\npassword: ${'a'.repeat(64)}\nextra: true\n`,
     );
-    expect(() => loadCredential(path)).toThrow('credential schema is invalid');
+    expect(() => PrStewardCredentialFile.load(path)).toThrow(
+      'credential schema is invalid',
+    );
   });
 
   test('rejects broad modes and symbolic links', () => {
@@ -180,10 +193,14 @@ describe('PR Steward credentials and invocation codec', () => {
       `username: pr-steward\npassword: ${'a'.repeat(64)}\n`,
     );
     chmodSync(target, 0o644);
-    expect(() => loadCredential(target)).toThrow('mode must be 0600');
+    expect(() => PrStewardCredentialFile.load(target)).toThrow(
+      'mode must be 0600',
+    );
     chmodSync(target, 0o600);
     symlinkSync(target, link);
-    expect(() => loadCredential(link)).toThrow('cannot be opened securely');
+    expect(() => PrStewardCredentialFile.load(link)).toThrow(
+      'cannot be opened securely',
+    );
   });
 
   test('requires one positive PR and an absolute optional config', () => {
@@ -200,6 +217,61 @@ describe('PR Steward credentials and invocation codec', () => {
 });
 
 describe('exact-head routing observations', () => {
+  test('admits four messages and synchronously unsubscribes on overflow', async () => {
+    const messages = new PrStewardBoundedMessageStream();
+    let unsubscribed = 0;
+    const unsubscribe = (): void => {
+      unsubscribed += 1;
+    };
+    messages.admit({ data: encoder.encode('0'), unsubscribe });
+    const iterator = messages[Symbol.asyncIterator]();
+    const first = await iterator.next();
+    if (first.done) throw new Error('expected first admitted message');
+    for (let index = 1; index < 5; index += 1)
+      messages.admit({ data: encoder.encode(String(index)), unsubscribe });
+    expect(unsubscribed).toBe(1);
+    const admitted = [new TextDecoder().decode(first.value.data)];
+    while (true) {
+      const next = await iterator.next();
+      if (next.done) break;
+      admitted.push(new TextDecoder().decode(next.value.data));
+    }
+    expect(admitted).toEqual(['0', '1', '2', '3']);
+    const outcome = messages.outcome();
+    expect(outcome).toEqual({
+      kind: PrStewardSubscriptionKind.Overloaded,
+      pending: 4,
+    });
+    if (outcome.kind !== PrStewardSubscriptionKind.Overloaded)
+      throw new Error('expected overload outcome');
+    const failure = new PrStewardSubscriptionOverloadError({
+      pending: outcome.pending,
+    });
+    expect(failure.pending).toBe(4);
+    expect(failure.message).toContain('4 pending messages');
+  });
+
+  test('settles admitted messages before reporting normal closure', async () => {
+    const messages = new PrStewardBoundedMessageStream();
+    let unsubscribed = false;
+    messages.admit({
+      data: encoder.encode('admitted'),
+      unsubscribe: () => {
+        unsubscribed = true;
+      },
+    });
+    messages.terminate({ kind: PrStewardSubscriptionKind.Closed });
+    const admitted: string[] = [];
+    for await (const message of messages)
+      admitted.push(new TextDecoder().decode(message.data));
+    expect(admitted).toEqual(['admitted']);
+    const outcome = messages.outcome();
+    expect(outcome).toEqual({
+      kind: PrStewardSubscriptionKind.Closed,
+    });
+    expect(unsubscribed).toBe(false);
+  });
+
   test.each([
     {
       event: 'pull_request',
@@ -467,6 +539,7 @@ describe('exact-head routing observations', () => {
     const failure = new Error('operational failure');
     await expect(
       new PrStewardEventObserver({ reader: new FixturePrReader() }).observe({
+        activity: () => {},
         messages: (async function* () {
           yield { data: valid };
         })(),
@@ -478,6 +551,7 @@ describe('exact-head routing observations', () => {
     ).rejects.toBe(failure);
     await expect(
       new PrStewardEventObserver({ reader: new FixturePrReader() }).observe({
+        activity: () => {},
         messages: (async function* () {
           yield { data: valid };
           throw failure;
@@ -512,19 +586,32 @@ describe('exact-head routing observations', () => {
     ).rejects.toBe(failure);
   });
 
-  test('bounds concurrent observations while continuing message consumption', async () => {
+  test('processes one admitted observation at a time', async () => {
     const reader = new PendingPrReader();
-    const event = cloudEvent({
-      event: 'pull_request',
-      body: { repository, pull_request: pullRequest },
-    });
+    const events = [
+      'serial-1',
+      'serial-2',
+      'serial-3',
+      'serial-4',
+      'serial-5',
+    ].map((id) =>
+      cloudEvent({
+        event: 'pull_request',
+        body: { repository, pull_request: pullRequest },
+        id,
+      }),
+    );
     const observation = PrStewardEventFixture.observe({
-      data: [event, event, event, event, event],
+      data: events,
       reader,
     });
     await Bun.sleep(0);
-    expect(reader.reads).toBe(4);
-    reader.pending.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
+    expect(reader.reads).toBe(1);
+    reader.pending.resolve({
+      headSha: ASSIGNED_HEAD,
+      url: assignedUrl,
+      state: PrStewardPullRequestState.Open,
+    });
     expect(await observation).toHaveLength(5);
   });
 
@@ -532,6 +619,7 @@ describe('exact-head routing observations', () => {
     const reader = new OrderedPrReader();
     const lines: string[] = [];
     const observation = new PrStewardEventObserver({ reader }).observe({
+      activity: () => {},
       messages: (async function* () {
         yield {
           data: cloudEvent({
@@ -552,21 +640,30 @@ describe('exact-head routing observations', () => {
       write: (line) => lines.push(line),
     });
     await Bun.sleep(0);
-    reader.second.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
+    reader.second.resolve({
+      headSha: ASSIGNED_HEAD,
+      url: assignedUrl,
+      state: PrStewardPullRequestState.Open,
+    });
     await Bun.sleep(0);
     expect(lines).toHaveLength(0);
-    reader.first.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
+    reader.first.resolve({
+      headSha: ASSIGNED_HEAD,
+      url: assignedUrl,
+      state: PrStewardPullRequestState.Open,
+    });
     await observation;
     expect(
       lines.map((line) => PrStewardNdjsonCodec.decode(line).record),
     ).toMatchObject([{ eventId: 'first' }, { eventId: 'second' }]);
   });
 
-  test('settles and discards pending work before propagating stream failure', async () => {
+  test('settles admitted work before propagating stream failure', async () => {
     const reader = new PendingPrReader();
     const failure = new Error('stream failure');
     const lines: string[] = [];
     const observation = new PrStewardEventObserver({ reader }).observe({
+      activity: () => {},
       messages: (async function* () {
         yield {
           data: cloudEvent({
@@ -581,9 +678,13 @@ describe('exact-head routing observations', () => {
     });
     await Bun.sleep(0);
     expect(reader.reads).toBe(1);
-    reader.pending.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
+    reader.pending.resolve({
+      headSha: ASSIGNED_HEAD,
+      url: assignedUrl,
+      state: PrStewardPullRequestState.Open,
+    });
     await expect(observation).rejects.toBe(failure);
-    expect(lines).toHaveLength(0);
+    expect(lines).toHaveLength(1);
   });
 });
 

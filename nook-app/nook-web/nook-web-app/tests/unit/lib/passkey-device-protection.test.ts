@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   PasskeyCeremonyOutcome,
+  PasskeyCeremonyAction,
+  PasskeyCeremonyFailure,
+  PasskeyFallback,
   passkeyCeremonyOutcome,
   sanitizedPasskeyCeremonyData,
 } from '$lib/auth/passkey-device-protection'
@@ -51,5 +54,37 @@ describe('sanitizedPasskeyCeremonyData', () => {
     expect(JSON.stringify(data)).not.toContain('secret')
     expect(JSON.stringify(data)).not.toContain('token=abc')
     expect(data.outcome).toBe(PasskeyCeremonyOutcome.PasskeyUnavailable)
+  })
+})
+
+describe('passkey failure presentation', () => {
+  it('offers a PIN only for setup or recovery capability failures', () => {
+    for (const action of [
+      PasskeyCeremonyAction.Create,
+      PasskeyCeremonyAction.Recover,
+    ]) {
+      const failure = new PasskeyCeremonyFailure(
+        action,
+        new Error('PASSKEY_PRF_UNAVAILABLE'),
+      )
+      expect(failure.fallback).toBe(PasskeyFallback.OfferPin)
+    }
+    const unlock = new PasskeyCeremonyFailure(
+      PasskeyCeremonyAction.Unlock,
+      new Error('PASSKEY_PRF_UNAVAILABLE'),
+    )
+    expect(unlock.fallback).toBe(PasskeyFallback.Unchanged)
+  })
+
+  it('keeps cancellation distinct and does not retain a native secret-bearing error', () => {
+    const failure = new PasskeyCeremonyFailure(
+      PasskeyCeremonyAction.Create,
+      new Error('PASSKEY_CEREMONY_NOT_ALLOWED secret=private'),
+    )
+    expect(failure.fallback).toBe(PasskeyFallback.Unchanged)
+    expect(failure.diagnostic.outcome).toBe(
+      PasskeyCeremonyOutcome.CeremonyNotAllowed,
+    )
+    expect(JSON.stringify(failure)).not.toContain('private')
   })
 })

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, test } from 'vitest'
 import {
   FormSubmissionResult,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { SiteFixturePilotExpectation } from '../../../../nook-web-extension/e2e/mock-auth/src/lib/site-fixtures'
 import {
@@ -56,22 +56,115 @@ type SiteShellRef = {
   loginUrl: string
 }
 
-const siteShells = JSON.parse(readFileSync(siteShellsPath, 'utf8')) as Record<
-  string,
-  SiteShellRef
->
-const pilotExpectations = JSON.parse(
-  readFileSync(pilotExpectationsPath, 'utf8'),
-) as Record<string, SiteFixturePilotExpectation>
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string'
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || isString(value)
+}
+
+function isRecordOf<T>(
+  value: unknown,
+  guard: (entry: unknown) => entry is T,
+): value is Record<string, T> {
+  return isRecord(value) && Object.values(value).every(guard)
+}
+
+function isSiteShellRef(value: unknown): value is SiteShellRef {
+  return (
+    isRecord(value) &&
+    isString(value.template) &&
+    isString(value.source) &&
+    isString(value.loginUrl)
+  )
+}
+
+function isSiteFixtureField(value: unknown): value is SiteFixtureField {
+  return (
+    isRecord(value) &&
+    isOptionalString(value.name) &&
+    isOptionalString(value.type) &&
+    isOptionalString(value.id) &&
+    isOptionalString(value.autocomplete) &&
+    isOptionalString(value.inputmode) &&
+    isOptionalString(value.label) &&
+    isOptionalString(value.placeholder) &&
+    isOptionalString(value['aria-label']) &&
+    isOptionalString(value['data-qa']) &&
+    isOptionalString(value['data-testid'])
+  )
+}
+
+function isShellTemplate(value: unknown): value is ShellTemplate {
+  if (!isRecord(value) || !isString(value.id)) return false
+  if (
+    !Array.isArray(value.quirks) ||
+    !value.quirks.every(isString) ||
+    !Array.isArray(value.steps)
+  ) {
+    return false
+  }
+  return value.steps.every((step) => {
+    if (
+      !isRecord(step) ||
+      !Array.isArray(step.fields) ||
+      !isRecord(step.submit)
+    ) {
+      return false
+    }
+    return (
+      step.fields.every(isSiteFixtureField) &&
+      isString(step.submit.label) &&
+      isOptionalString(step.submit.type) &&
+      isOptionalString(step.submit.name) &&
+      isOptionalString(step.submit.id)
+    )
+  })
+}
+
+function isCatalogEntry(value: unknown): value is CatalogEntry {
+  return isRecord(value) && isString(value.id) && typeof value.rank === 'number'
+}
+
+function isPilotExpectation(
+  value: unknown,
+): value is SiteFixturePilotExpectation {
+  return Object.values(SiteFixturePilotExpectation).some(
+    (expectation) => expectation === value,
+  )
+}
+
+function readJson<T>(
+  filePath: string,
+  guard: (value: unknown) => value is T,
+): T {
+  const value = JSON.parse(readFileSync(filePath, 'utf8')) as unknown
+  if (!guard(value)) throw new Error(`invalid fixture JSON: ${filePath}`)
+  return value
+}
+
+const siteShells = readJson(
+  siteShellsPath,
+  (value): value is Record<string, SiteShellRef> =>
+    isRecordOf(value, isSiteShellRef),
+)
+const pilotExpectations = readJson(
+  pilotExpectationsPath,
+  (value): value is Record<string, SiteFixturePilotExpectation> =>
+    isRecordOf(value, isPilotExpectation),
+)
 const templates = new Map(
   readdirSync(templatesDir)
     .filter((name) => name.endsWith('.json'))
     .map((name) => {
       const id = name.replace(/\.json$/u, '')
-      const template = JSON.parse(
-        readFileSync(path.join(templatesDir, name), 'utf8'),
-      ) as ShellTemplate
-      return [id, { ...template, id }] as const
+      const template = readJson(path.join(templatesDir, name), isShellTemplate)
+      return [id, { ...template, id }]
     }),
 )
 
@@ -80,7 +173,9 @@ function escapeAttr(value: string): string {
 }
 
 function renderStepHtml(fixture: ShellTemplate, stepIndex: number): string {
-  const [step = fixture.steps[0]] = [fixture.steps[stepIndex]]
+  let step = fixture.steps[stepIndex]
+  if (!step) [step] = fixture.steps
+  if (!step) expect.fail('a shell fixture must contain at least one step')
   const fields = step.fields
     .map((field) => {
       const attrs = [
@@ -125,9 +220,11 @@ afterEach(() => {
 })
 
 describe('popular login shell templates', () => {
-  const catalog = JSON.parse(
-    readFileSync(catalogPath, 'utf8'),
-  ) as CatalogEntry[]
+  const catalog = readJson(
+    catalogPath,
+    (value): value is CatalogEntry[] =>
+      Array.isArray(value) && value.every(isCatalogEntry),
+  )
   const templateIds = [...templates.keys()].sort()
 
   test('catalog maps every site to a shared template (no per-site shell copies)', () => {
@@ -144,22 +241,27 @@ describe('popular login shell templates', () => {
       ),
     ).toEqual([SiteFixturePilotExpectation.FailClosedAlternateAuthentication])
     for (const site of catalog) {
-      expect(siteShells[site.id]).toBeTruthy()
-      expect(templates.has(siteShells[site.id].template)).toBe(true)
+      const siteShell = siteShells[site.id]
+      if (!siteShell) expect.fail(`missing shell for catalog site ${site.id}`)
+      expect(templates.has(siteShell.template)).toBe(true)
     }
   })
 
   test.each(templateIds.map((id) => [id, id]))(
     'detects login workflow for template %s',
     (templateId) => {
-      const fixture = templates.get(templateId) as ShellTemplate
+      const fixture = templates.get(templateId)
+      if (!fixture) expect.fail(`missing template ${templateId}`)
       expect(fixture.steps.length).toBeGreaterThan(0)
 
-      const firstHasPassword = fixture.steps[0].fields.some(
+      const [firstStep] = fixture.steps
+      if (!firstStep) expect.fail('a shell fixture must contain a first step')
+      const firstHasPassword = firstStep.fields.some(
         (field) => field.type === 'password',
       )
       document.body.innerHTML = renderStepHtml(fixture, 0)
-      const observations = summarizeAuthenticationWorkflowForms()
+      const observations =
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms()
       expect(observations.length).toBeGreaterThan(0)
       const summary = observations[0]?.summary
       expect(summary).toBeTruthy()
@@ -174,7 +276,8 @@ describe('popular login shell templates', () => {
           fixture,
           fixture.steps.length - 1,
         )
-        const passwordObservations = summarizeAuthenticationWorkflowForms()
+        const passwordObservations =
+          passwordFormInteraction.summarizeAuthenticationWorkflowForms()
         expect(passwordObservations.length).toBeGreaterThan(0)
         expect(
           ((v) => (v ? v : 0))(

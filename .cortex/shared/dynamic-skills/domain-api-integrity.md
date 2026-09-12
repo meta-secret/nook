@@ -9,6 +9,9 @@ semantics.
 Domain types carry meaning and metadata. API shapes preserve that meaning from
 external decoding through state, behavior, persistence, and results.
 
+Apply the [single-responsibility ownership rule](function-ownership.md) when
+placing domain decisions on these types.
+
 ## Required actions
 
 ### Types and states
@@ -17,6 +20,8 @@ external decoding through state, behavior, persistence, and results.
 - Use a nominal newtype, opaque type, enum, or value object when a primitive
   representation has domain meaning.
 - Use an enum or discriminated union for a closed set or named state.
+- Use semantic enums for domain-state, policy, mode, and command parameters,
+  even when they currently have only two cases.
 - Put state-specific data on the state or variant that owns it.
 - Keep independent state dimensions in independent types.
 - Match evolving domain alternatives exhaustively.
@@ -29,15 +34,36 @@ external decoding through state, behavior, persistence, and results.
 - Keep advanced capability construction private to the legal transition.
 - Expose an operation only on the state or capability where it is legal.
 - Return a named next state or exhaustive outcome from a state transition.
+- Return semantic outcomes for eligibility, classification, and selection decisions.
+- Put each decision on the owner of the data it interprets.
+- Choose the [precise receiver](function-ownership.md#precise-receivers).
+- Keep kind-only rules with kind semantics, even for a single-field predicate.
+- Keep aggregate APIs meaningful when they delegate to nested owners.
+- Carry the selected data on its outcome instead of requiring another lookup.
+- Apply [decision locality](function-ownership.md#decision-locality) recursively.
 - Recheck runtime authorization or freshness at the effect boundary when
   external state can change.
+
+### Owned Rust updates
+
+- Consume owned Rust state when an update replaces its value.
+- Use `mut self` internally and return `Self`, a next state, or a typed result.
+- Retain `&mut self` only for required traits or externally owned mutation contracts.
+- Keep those exceptions at their exact boundary.
+- Introduce channels only for a real high-level actor or concurrent owner.
+- Do not add actor infrastructure merely to avoid an owned update.
 
 ### API inputs and failures
 
 - Give each authored function or method at most one non-receiver parameter.
 - Use one named domain or operation request when an API needs multiple values.
 - Construct independent request values with named fields.
-- Return or throw a domain-specific failure with a stable kind or code.
+- Return a domain-specific failure with a stable kind or code.
+- Use `neverthrow` `Result<T, E>` for authored TypeScript failure-capable APIs.
+- Use `Promise<Result<T, E>>` or `ResultAsync<T, E>` for asynchronous failures.
+- Handle or propagate both alternatives explicitly at every caller.
+- Translate foreign exceptions into concrete failures at the narrow adapter.
+- Retain Rust's standard `Result<T, E>` for fallible operations.
 - Preserve a typed source when one operation fails because another operation
   failed.
 - Distinguish validation, authorization, unavailable-state, conflict, and
@@ -47,6 +73,10 @@ external decoding through state, behavior, persistence, and results.
 ### Boundaries and versions
 
 - Decode raw external data into concrete domain values at the narrowest edge.
+- Decode known JSON schemas into their concrete record or enum types.
+- Keep parsed values typed throughout internal operations.
+- Validate TypeScript transport fields before constructing the concrete type.
+- Keep raw JSON trees only inside decoding or genuinely dynamic protocol edges.
 - Encode domain values only when crossing a required external boundary.
 - Give every persisted or wire schema version a named domain type.
 - Keep one explicit current writer version and an explicit supported-reader
@@ -69,13 +99,16 @@ external decoding through state, behavior, persistence, and results.
 - Do not use an erased value bag as a domain or application value.
   - This includes `unknown`, `any`, `object`, generic records, raw JSON trees,
     `dyn Any`, and equivalent catch-all values.
+- Do not cast parsed JSON into a known type without validating its fields.
+- Do not serialize a typed value merely to pass it between internal operations.
 - Do not use an unchecked cast, non-null assertion, panic shortcut, or
   equivalent escape hatch to manufacture a valid state.
 - Do not use multiple positional parameters, tuples, arrays, or collections to
   hide independent request values.
-- Do not introduce a repository-defined generic result, optional-value, or
-  catch-all error wrapper that erases domain failure meaning. A language
-  built-in remains valid when its success and failure types are concrete.
+- Do not throw to propagate authored TypeScript domain or application failures.
+- Do not use unchecked Result extraction or convert an error into a fake success.
+- Do not duplicate the shared `neverthrow` convention with local Result wrappers.
+- Do not introduce generic optional-value or catch-all error wrappers that erase meaning.
 - Do not catch or convert a failure unless the current owner adds domain
   meaning, recovery, or boundary translation.
 - Do not silently accept an unknown schema version.
@@ -87,6 +120,14 @@ external decoding through state, behavior, persistence, and results.
 Raw primitives and untyped transport values may exist only in private
 representation storage or at required serialization, database, FFI, generated
 ABI, browser, and host edges. Validate and convert them immediately.
+
+An externally fixed boolean field retains its transport shape. Convert it to
+the semantic enum before domain policy reads it. A mechanical predicate may return
+a boolean for immediate control flow. Named domain decisions return semantic
+enums or discriminated outcomes, even when they have two alternatives. Do not pass a mechanical boolean onward as a
+domain-state, policy, mode, or command parameter.
+
+### Fixed edge contracts
 
 Compiler-required signatures, traits, generated bindings, and externally fixed
 callbacks may retain their owned shape. Keep adapters thin and delegate to an

@@ -9,6 +9,7 @@ import {
   saveAuthProvidersInBrowser,
   unlockVaultOnLogin,
 } from './helpers'
+import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 
 type LocalVaultRegistryEntry = {
   store_id?: string
@@ -30,12 +31,38 @@ async function listLocalVaultEntries(page: import('@playwright/test').Page) {
           reject(((v) => (v ? v : new Error('idb read failed')))(getReq.error))
         getReq.onsuccess = () => {
           try {
-            const raw = getReq.result
-            const parsed =
-              typeof raw === 'string'
-                ? (JSON.parse(raw) as { vaults?: LocalVaultRegistryEntry[] })
-                : { vaults: [] }
-            resolve(((v) => (v ? v : []))(parsed.vaults))
+            const raw: unknown = getReq.result
+            const parsed: unknown =
+              typeof raw === 'string' ? JSON.parse(raw) : undefined
+            if (typeof parsed !== 'object' || parsed === null) {
+              resolve([])
+              return
+            }
+            const vaultsValue: unknown = Object.getOwnPropertyDescriptor(
+              parsed,
+              'vaults',
+            )?.value
+            if (!Array.isArray(vaultsValue)) {
+              resolve([])
+              return
+            }
+            const entries: LocalVaultRegistryEntry[] = []
+            for (const value of vaultsValue) {
+              if (typeof value !== 'object' || value === null) continue
+              const storeId: unknown = Object.getOwnPropertyDescriptor(
+                value,
+                'store_id',
+              )?.value
+              const label: unknown = Object.getOwnPropertyDescriptor(
+                value,
+                'label',
+              )?.value
+              entries.push({
+                ...(typeof storeId === 'string' ? { store_id: storeId } : {}),
+                ...(typeof label === 'string' ? { label } : {}),
+              })
+            }
+            resolve(entries)
           } catch (error) {
             reject(error)
           }
@@ -47,11 +74,11 @@ async function listLocalVaultEntries(page: import('@playwright/test').Page) {
 }
 
 function parseStoreId(yaml: string): string {
-  const match = yaml.match(/^store_id:\s*(\S+)/m)
-  if (!match) {
+  const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
+  if (!storeId) {
     throw new Error('store_id missing from vault yaml')
   }
-  return match[1]
+  return storeId
 }
 
 type ViewportBox = {
@@ -84,6 +111,14 @@ async function seedScopedSyncProviders(
   storeA: string,
   storeB: string,
 ) {
+  const driveStub = createLocalE2eGoogleDriveVaultStub(
+    '',
+    'nook-multi-vault-a.yaml',
+  )
+  await driveStub.install(page, {
+    accessToken: 'ya29.e2e_file_sync_token',
+    fileName: 'nook-multi-vault-a.yaml',
+  })
   await saveAuthProvidersInBrowser(
     page,
     {

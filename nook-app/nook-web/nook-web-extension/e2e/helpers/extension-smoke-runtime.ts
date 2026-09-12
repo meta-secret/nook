@@ -1,4 +1,4 @@
-import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+import { companionWasmReady } from './companion-wasm-ready'
 
 await companionWasmReady
 import {
@@ -11,6 +11,7 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ExtensionPairingApprovedMessage } from '../../../nook-web-shared/src/extension/runtime-messages'
+import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import {
   attachNookLogsForTest,
   readPersistedAppLogs,
@@ -20,10 +21,7 @@ import {
   belongs_to_simple_vault,
   normalize_simple_vault_base_url,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import {
-  defaultSimpleVaultBaseUrl,
-  sentinelVaultBaseUrl,
-} from '../../src/lib/simple-vault-target'
+import { SimpleVaultTarget } from '../../src/lib/simple-vault-target'
 import { startMockAuthServer } from '../mock-auth'
 import { waitForExtensionPairingReady } from './extension-approval'
 import {
@@ -39,7 +37,7 @@ export {
   attachNookLogsForTest,
   installMockPasskeyRuntime,
   lockExtensionSession,
-  sentinelVaultBaseUrl,
+  SimpleVaultTarget,
   readPersistedAppLogs,
   readExtensionPersistenceSnapshot,
   waitForExtensionPairingReady,
@@ -81,7 +79,7 @@ const chromiumExecutablePath = ((v) => (v ? v : ''))(
 )
 export const setupStorageKey = 'nook:extension-setup'
 export const pairingGrantStorageKey = 'nook:extension-pairing-grant:store-e2e'
-export const syntheticEventLogRecords = [
+export const syntheticEventLogRecords: ExtensionEventLogRecord[] = [
   {
     eventId: 'event-e2e',
     path: 'events/event-e2e.yaml',
@@ -110,7 +108,7 @@ export const connectedSetupState = {
   lastLocalSyncAt: '2026-07-07T00:00:00.000Z',
 }
 export const simpleVaultBaseUrl = normalize_simple_vault_base_url(
-  process.env.NOOK_SIMPLE_VAULT_URL || defaultSimpleVaultBaseUrl(),
+  process.env.NOOK_SIMPLE_VAULT_URL || SimpleVaultTarget.defaultBase(),
 )
 
 /**
@@ -120,7 +118,7 @@ export const simpleVaultBaseUrl = normalize_simple_vault_base_url(
  */
 export function e2eSentinelVaultBaseUrl(): string {
   try {
-    return sentinelVaultBaseUrl(simpleVaultBaseUrl)
+    return new SimpleVaultTarget(simpleVaultBaseUrl).sentinelBase
   } catch {
     return 'https://sentinel.nokey.sh/'
   }
@@ -138,6 +136,7 @@ export async function startLoginServer() {
 export async function registerWebsitePasskeyThroughExtension(
   page: Page,
 ): Promise<string> {
+  await page.bringToFront()
   const ceremony = page.evaluate(async () => {
     const credential = (await navigator.credentials.create({
       publicKey: {
@@ -172,6 +171,7 @@ export async function assertWebsitePasskeyThroughExtension({
   page,
   credentialId,
 }: WebsitePasskeyAssertionBrowserFlow): Promise<void> {
+  await page.bringToFront()
   const ceremony = page.evaluate(async (id) => {
     const rawId = Uint8Array.from(
       atob(

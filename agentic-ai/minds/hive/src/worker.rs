@@ -1,3 +1,5 @@
+mod completion;
+use completion::TaskCompletionProposal;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -15,22 +17,20 @@ use tokio::io::AsyncWriteExt as _;
 use tokio::process::Command;
 use tokio::sync::{mpsc, watch};
 
-use crate::auth::{BrokerExternalAuth, prepare_worker_auth_and_readiness};
+use crate::auth::{AuthBroker, BrokerExternalAuth};
 use crate::codex::{CodexOptions, InProcessCodexRunner};
-use crate::delivery::verify_main_repair_delivery;
+use crate::delivery::MainRepairDelivery;
 use crate::model::{
-    ActivityLease, AgentId, Artifact, BlockerRequest, ClaimedTask, CompletionArtifact, EnqueueTask,
-    TaskActivity, TaskTrigger, TerminalResult,
+    ActivityLease, AgentId, Artifact, BlockerRequest, ClaimedTask, Completion, CompletionArtifact,
+    CompletionRelevance, EnqueueTask, TaskActivity, TaskTrigger, TerminalResult,
 };
 use crate::store::TaskStore;
 
 mod lifecycle;
 mod task_prompt;
 mod workspace;
-use lifecycle::{
-    ClaimStep, claim_once, establish_worker_lifecycle, mark_interrupted, shutdown_requested,
-};
-use task_prompt::*;
+use lifecycle::{ClaimStep, TaskClaim, WorkerCompletionMarker, WorkerShutdown, WorkerStartup};
+
 use workspace::*;
 
 const MAX_PERSISTED_RESULT_BYTES: usize = 64 * 1024;
@@ -64,7 +64,11 @@ impl<S: TaskStore> Worker<S> {
     }
 
     pub async fn run(self) -> crate::HiveResult<()> {
-        establish_worker_lifecycle(&self.config.workspace, &self.config.pod_name)?;
+        WorkerStartup {
+            workspace: &self.config.workspace,
+            pod_name: &self.config.pod_name,
+        }
+        .establish()?;
         let external_auth = BrokerExternalAuth::connect(&self.config.auth_socket).await?;
         let lifecycle_marker = self.config.workspace.join(".hive-task-finished");
         if lifecycle_marker.exists() {
@@ -76,7 +80,8 @@ impl<S: TaskStore> Worker<S> {
         self.store
             .register_agent(&self.config.agent_id, &self.config.pod_name)
             .await?;
-        prepare_worker_auth_and_readiness(&external_auth, &self.config.workspace).await?;
+        AuthBroker::prepare_worker_auth_and_readiness(&external_auth, &self.config.workspace)
+            .await?;
         let mut terminate = unix_signal::signal(unix_signal::SignalKind::terminate())
             .hive_context("failed to install the worker termination handler")?;
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
@@ -98,13 +103,14 @@ impl<S: TaskStore> Worker<S> {
                      consuming an attempt: {error}"
                 )));
             }
-            match claim_once(
-                &self.store,
-                &self.config.agent_id,
-                self.config.lease_seconds,
-                shutdown_rx.clone(),
-                &lifecycle_marker,
-            )
+            match (TaskClaim {
+                store: &self.store,
+                agent_id: &self.config.agent_id,
+                lease_seconds: self.config.lease_seconds,
+                shutdown: shutdown_rx.clone(),
+                lifecycle_marker: &lifecycle_marker,
+            })
+            .claim()
             .await?
             {
                 ClaimStep::Stopped => return Ok(()),
@@ -119,9 +125,9 @@ impl<S: TaskStore> Worker<S> {
                 .random_range(self.config.poll_min_seconds..=self.config.poll_max_seconds);
             tokio::select! {
                 biased;
-                shutdown = shutdown_requested(shutdown_rx.clone()) => {
+                shutdown = WorkerShutdown { receiver: shutdown_rx.clone() }.requested() => {
                     shutdown?;
-                    mark_interrupted(&lifecycle_marker).await?;
+                    WorkerCompletionMarker { path: &lifecycle_marker }.mark_interrupted().await?;
                     return Ok(());
                 }
                 () = async_time::sleep(Duration::from_secs(wait)) => {}
@@ -157,7 +163,7 @@ impl<S: TaskStore> Worker<S> {
                     .hive_context("failed to mark the cancelled Pod for replacement")?;
                 return Ok(());
             }
-            let message = bounded(&format!("{error:#}"));
+            let message = TaskDisposition::bounded(&format!("{error:#}"));
             let _ = self
                 .store
                 .fail(&task, &self.config.agent_id, &message)
@@ -182,7 +188,7 @@ impl<S: TaskStore> Worker<S> {
         shutdown: watch::Receiver<bool>,
     ) -> crate::HiveResult<()> {
         let (stop_tx, stop_rx) = watch::channel(false);
-        let mut heartbeat = tokio::spawn(heartbeat_loop(
+        let mut heartbeat = tokio::spawn(TaskWorkspace::heartbeat_loop(
             self.store.clone(),
             self.config.agent_id.clone(),
             task.clone(),
@@ -195,34 +201,43 @@ impl<S: TaskStore> Worker<S> {
             Duration::from_secs(self.config.task_timeout_seconds),
             async {
                 let (activity_tx, activity_rx) = mpsc::unbounded_channel();
-                let activity_persistence = tokio::spawn(persist_activity(
-                    self.store.clone(),
-                    self.config.agent_id.clone(),
-                    task.clone(),
-                    activity_rx,
-                ));
+                let activity_persistence = tokio::spawn(
+                    (TaskActivityStream {
+                        store: self.store.clone(),
+                        agent_id: self.config.agent_id.clone(),
+                        task: task.clone(),
+                        receiver: activity_rx,
+                    })
+                    .persist_activity(),
+                );
                 let task_result = async {
-                    let repair_branch =
-                        (task.kind == "main-repair").then(|| repair_branch_name(task.id.as_str()));
-                    let preparation = prepare_workspace(
-                        &self.config.workspace,
-                        &self.config.repository_url,
-                        &task.source_commit,
-                        repair_branch.as_deref(),
-                        &task.dependency_artifacts,
-                    )
+                    let repair_branch = task.id.repair_branch_name();
+                    let origin = if task.kind.is_main_repair() {
+                        workspace::WorkspaceOrigin::ResumeBranch(&repair_branch)
+                    } else {
+                        workspace::WorkspaceOrigin::Fresh
+                    };
+                    let preparation = (TaskWorkspace {
+                        workspace: &self.config.workspace,
+                        repository_url: &self.config.repository_url,
+                        source_commit: &task.source_commit,
+                        resume_branch: origin,
+                        dependency_artifacts: &task.dependency_artifacts,
+                    })
+                    .prepare_workspace()
                     .await?;
                     let repository = self.config.workspace.join("repository");
-                    let baseline = if preparation.conflicted {
-                        let mut codex_options = CodexOptions::new(repository.clone())
-                            .with_workspace_write()
-                            .with_activity_sender(activity_tx.clone());
-                        codex_options.model.clone_from(&self.config.model);
-                        codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
-                        codex_options
-                            .reasoning_effort
-                            .clone_from(&self.config.reasoning_effort);
-                        let resolution = InProcessCodexRunner::with_external_auth(
+                    let prepared = match preparation {
+                        WorkspacePreparation::Conflicted(conflicted) => {
+                            let mut codex_options = CodexOptions::new(repository.clone())
+                                .with_workspace_write()
+                                .with_activity_sender(activity_tx.clone());
+                            codex_options.model.clone_from(&self.config.model);
+                            codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
+                            codex_options
+                                .reasoning_effort
+                                .clone_from(&self.config.reasoning_effort);
+                            let result = InProcessCodexRunner::with_external_auth(
                             codex_options,
                             external_auth.clone(),
                         )
@@ -235,21 +250,17 @@ impl<S: TaskStore> Worker<S> {
                         )
                         .await
                         .hive_context("embedded Codex dependency resolution failed")?;
-                        let result: TerminalResult = serde_json::from_str(&resolution)
-                            .hive_context(
-                                "Codex returned an invalid dependency resolution result",
-                            )?;
-                        if !matches!(result, TerminalResult::Completed { .. }) {
-                            return Err(crate::HiveError::message(
-                                "Codex could not integrate dependency artifacts",
-                            ));
+                            if !matches!(result, TerminalResult::Completed { .. }) {
+                                return Err(crate::HiveError::message(
+                                    "Codex could not integrate dependency artifacts",
+                                ));
+                            }
+                            conflicted.finish_dependency_resolution().await?
                         }
-                        ensure_dependencies_resolved(&repository).await?;
-                        commit_dependency_baseline(&repository).await?
-                    } else {
-                        preparation.baseline
+                        WorkspacePreparation::Prepared(prepared) => prepared,
                     };
-                    let prompt = task_prompt(task);
+                    let repository = prepared.repository().to_owned();
+                    let prompt = (task).task_prompt();
                     let mut codex_options = CodexOptions::new(repository.clone())
                         .with_workspace_write()
                         .with_activity_sender(activity_tx.clone());
@@ -258,75 +269,57 @@ impl<S: TaskStore> Worker<S> {
                     codex_options
                         .reasoning_effort
                         .clone_from(&self.config.reasoning_effort);
-                    let raw_result =
+                    let result =
                         InProcessCodexRunner::with_external_auth(codex_options, external_auth)
                             .execute_task(task.id.as_str(), &prompt)
                             .await
                             .hive_context("embedded Codex execution failed")?;
-                    let result: TerminalResult = serde_json::from_str(&raw_result)
-                        .hive_context("Codex returned an invalid terminal result")?;
                     if let TerminalResult::Blocked {
                         summary, blocker, ..
                     } = &result
                     {
-                        return Ok(blocked_disposition(task, summary, blocker));
+                        return Ok(TaskDisposition::blocked_disposition(BlockerDisposition {
+                            task,
+                            summary,
+                            blocker,
+                        }));
                     }
                     if let TerminalResult::Failed { summary, .. } = &result {
-                        if task.kind != "blocker" {
+                        if task.kind.allows_prerequisite() {
                             return Err(crate::HiveError::message(
                                 "only a blocker dependency leaf may return failed",
                             ));
                         }
                         return Ok(TaskDisposition::Failed {
-                            reason: bounded(summary),
+                            reason: TaskDisposition::bounded(summary),
                         });
                     }
-                    let obsolete = completion_is_obsolete(task, &result);
-                    if obsolete {
-                        if task.owning_repairs.is_empty() {
-                            return Err(crate::HiveError::message(
-                                "obsolete blocker retirement requires active owning Main repairs",
-                            ));
-                        }
-                        if !result.changed_files().is_empty() {
-                            return Err(crate::HiveError::message(
-                                "obsolete blocker retirement cannot report changed files",
-                            ));
-                        }
-                        verify_obsolete_owner_deliveries(&repository, &task.owning_repairs).await?;
+                    let plan = TaskCompletionProposal {
+                        task,
+                        result: &result,
                     }
-                    if task.kind == "main-repair" {
-                        verify_main_repair_delivery(
-                            &repository,
-                            &repair_branch_name(task.id.as_str()),
-                            task.id.as_str(),
-                        )
+                    .admit()?;
+                    plan.verify_owner_deliveries(&repository).await?;
+                    if task.kind.is_main_repair() {
+                        (MainRepairDelivery {
+                            repository: &repository,
+                            branch: &(task.id).repair_branch_name(),
+                        })
+                        .verify_main_repair_delivery(task.id.as_str())
                         .await?;
                     }
-                    let summary = bounded(&format!(
+                    let summary = TaskDisposition::bounded(&format!(
                         "{}\n\nChanged files:\n{}\n\nTests:\n{}",
                         result.summary(),
-                        bullet_list(result.changed_files()),
-                        bullet_list(result.tests())
+                        TaskDisposition::bullet_list(result.changed_files()),
+                        TaskDisposition::bullet_list(result.tests())
                     ));
-                    let repository = self.config.workspace.join("repository");
-                    let artifact = persistable_patch(
-                        &repository,
-                        &baseline,
-                        task,
-                        &result,
-                        preparation.resumed,
-                    )
-                    .await?;
-                    if obsolete && !matches!(artifact, CompletionArtifact::NotProduced) {
-                        return Err(crate::HiveError::message(
-                            "obsolete blocker retirement cannot persist a patch artifact",
-                        ));
-                    }
+                    let artifact = prepared.persistable_patch(task, &result).await?;
+                    let completion = plan.admit_artifact(artifact)?;
                     Ok::<TaskDisposition, crate::HiveError>(TaskDisposition::Completed {
                         summary,
-                        artifact,
-                        obsolete,
+                        artifact: completion.artifact,
+                        relevance: completion.relevance,
                     })
                 }
                 .await;
@@ -338,13 +331,19 @@ impl<S: TaskStore> Worker<S> {
                     TaskDisposition::Completed {
                         summary,
                         artifact,
-                        obsolete,
+                        relevance,
                     } => {
                         let accepted = self
                             .store
-                            .complete(task, &self.config.agent_id, obsolete, &summary, &artifact)
+                            .complete(Completion {
+                                task,
+                                agent_id: &self.config.agent_id,
+                                relevance,
+                                summary: &summary,
+                                artifact: &artifact,
+                            })
                             .await?;
-                        if !accepted && obsolete {
+                        if !accepted && relevance == CompletionRelevance::Obsolete {
                             if !self.store.release(task, &self.config.agent_id).await? {
                                 return Err(WorkerCancellationRequested.into());
                             }
@@ -369,7 +368,7 @@ impl<S: TaskStore> Worker<S> {
                         eprintln!(
                             "Hive task {} deferred without consuming an attempt: {}",
                             task.id,
-                            bounded(&reason)
+                            TaskDisposition::bounded(&reason)
                         );
                         if !self.store.release(task, &self.config.agent_id).await? {
                             return Err(WorkerCancellationRequested.into());
@@ -419,7 +418,7 @@ impl<S: TaskStore> Worker<S> {
                 heartbeat_result?;
                 return Err(crate::HiveError::message("lease heartbeat stopped before task execution"));
             }
-            shutdown = shutdown_requested(shutdown) => {
+            shutdown = WorkerShutdown { receiver: shutdown }.requested() => {
                 shutdown?;
                 let _ = stop_tx.send(true);
                 heartbeat
@@ -441,19 +440,28 @@ impl<S: TaskStore> Worker<S> {
     }
 }
 
-async fn persist_activity<S: TaskStore>(
+struct TaskActivityStream<S> {
     store: S,
     agent_id: AgentId,
     task: ClaimedTask,
-    mut receiver: mpsc::UnboundedReceiver<TaskActivity>,
-) -> crate::HiveResult<()> {
-    let lease = ActivityLease::from(&task);
-    while let Some(activity) = receiver.recv().await {
-        if !store.record_activity(&lease, &agent_id, &activity).await? {
-            return Err(WorkerCancellationRequested.into());
+    receiver: mpsc::UnboundedReceiver<TaskActivity>,
+}
+impl<S: TaskStore> TaskActivityStream<S> {
+    async fn persist_activity(self) -> crate::HiveResult<()> {
+        let Self {
+            store,
+            agent_id,
+            task,
+            mut receiver,
+        } = self;
+        let lease = ActivityLease::from(&task);
+        while let Some(activity) = receiver.recv().await {
+            if !store.record_activity(&lease, &agent_id, &activity).await? {
+                return Err(WorkerCancellationRequested.into());
+            }
         }
+        Ok(())
     }
-    Ok(())
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -468,7 +476,7 @@ enum TaskDisposition {
     Completed {
         summary: String,
         artifact: CompletionArtifact,
-        obsolete: bool,
+        relevance: CompletionRelevance,
     },
     Blocked {
         blocker: EnqueueTask,
@@ -482,35 +490,38 @@ enum TaskDisposition {
     },
 }
 
-fn blocked_disposition(
-    task: &ClaimedTask,
-    summary: &str,
-    blocker: &BlockerRequest,
-) -> TaskDisposition {
-    if task.kind == "blocker" {
-        return TaskDisposition::Failed {
-            reason: bounded(&format!(
-                "prerequisite task could not complete without another dependency: {summary}"
-            )),
-        };
-    }
-    if blocker.id == task.id {
-        return TaskDisposition::Deferred {
-            reason: bounded(summary),
-        };
-    }
-    TaskDisposition::Blocked {
-        blocker: EnqueueTask {
-            id: blocker.id.clone(),
-            kind: "blocker".to_owned(),
-            trigger: TaskTrigger::AgentDependency,
-            prompt: format!("{}\n\n{}", blocker.title, blocker.prompt),
-            source_commit: task.source_commit.clone(),
-            priority: if task.kind == "main-repair" { 200 } else { 10 },
-            max_attempts: 3,
-            dependencies: Vec::new(),
-        },
-        reason: bounded(summary),
+impl TaskDisposition {
+    fn blocked_disposition(request: BlockerDisposition<'_>) -> TaskDisposition {
+        let BlockerDisposition {
+            task,
+            summary,
+            blocker,
+        } = request;
+        if task.kind.is_blocker() {
+            return TaskDisposition::Failed {
+                reason: TaskDisposition::bounded(&format!(
+                    "prerequisite task could not complete without another dependency: {summary}"
+                )),
+            };
+        }
+        if blocker.id == task.id {
+            return TaskDisposition::Deferred {
+                reason: TaskDisposition::bounded(summary),
+            };
+        }
+        TaskDisposition::Blocked {
+            blocker: EnqueueTask {
+                id: blocker.id.clone(),
+                kind: "blocker".into(),
+                trigger: TaskTrigger::AgentDependency,
+                prompt: format!("{}\n\n{}", blocker.title, blocker.prompt),
+                source_commit: task.source_commit.clone(),
+                priority: task.kind.prerequisite_priority(),
+                max_attempts: 3,
+                dependencies: Vec::new(),
+            },
+            reason: TaskDisposition::bounded(summary),
+        }
     }
 }
 
@@ -536,50 +547,55 @@ impl From<WorkerCancellationRequested> for crate::HiveError {
     }
 }
 
-fn bounded(value: &str) -> String {
-    if value.len() <= MAX_PERSISTED_RESULT_BYTES {
-        return value.to_owned();
+impl TaskDisposition {
+    fn bounded(value: &str) -> String {
+        if value.len() <= MAX_PERSISTED_RESULT_BYTES {
+            return value.to_owned();
+        }
+        let mut boundary = MAX_PERSISTED_RESULT_BYTES;
+        while !value.is_char_boundary(boundary) {
+            boundary -= 1;
+        }
+        format!("{}\n[truncated]", &value[..boundary])
     }
-    let mut boundary = MAX_PERSISTED_RESULT_BYTES;
-    while !value.is_char_boundary(boundary) {
-        boundary -= 1;
-    }
-    format!("{}\n[truncated]", &value[..boundary])
 }
 
-fn bullet_list(values: &[String]) -> String {
-    if values.is_empty() {
-        return "- none".to_owned();
+impl TaskDisposition {
+    fn bullet_list(values: &[String]) -> String {
+        if values.is_empty() {
+            return "- none".to_owned();
+        }
+        values
+            .iter()
+            .map(|value| format!("- {value}"))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
-    values
-        .iter()
-        .map(|value| format!("- {value}"))
-        .collect::<Vec<_>>()
-        .join("\n")
+}
+
+struct BlockerDisposition<'a> {
+    task: &'a ClaimedTask,
+    summary: &'a str,
+    blocker: &'a BlockerRequest,
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        MAX_PERSISTED_RESULT_BYTES, TaskDisposition, blocked_disposition, bounded,
-        completion_is_obsolete, obsolete_owner_delivery_targets, persist_activity,
-        persistable_patch, task_prompt,
+        BlockerDisposition, MAX_PERSISTED_RESULT_BYTES, TaskActivityStream, TaskDisposition,
     };
     use crate::model::{
-        ActivityKind, AgentId, AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact,
-        LeaseToken, TaskActivity, TaskId, TerminalResult,
+        ActivityKind, AgentId, AttemptId, BlockerRequest, ClaimedTask, Completion,
+        CompletionArtifact, CompletionRelevance, LeaseToken, TaskActivity, TaskId, TerminalResult,
     };
     use crate::store::TaskStore;
     use crate::store::tests::{MemoryStore, task};
-    use std::fs;
-    use std::io;
-    use std::process;
     use tokio::sync::mpsc;
 
     #[test]
     fn persisted_results_are_utf8_safe_and_bounded() {
         let value = "🦀".repeat(MAX_PERSISTED_RESULT_BYTES);
-        let bounded = bounded(&value);
+        let bounded = TaskDisposition::bounded(&value);
 
         assert!(bounded.is_char_boundary(bounded.len()));
         assert!(bounded.len() <= MAX_PERSISTED_RESULT_BYTES + "\n[truncated]".len());
@@ -589,13 +605,13 @@ mod tests {
     #[test]
     fn obsolete_completion_is_normalized_for_non_blocker_tasks() -> anyhow::Result<()> {
         let mut task = ClaimedTask {
-            id: TaskId::new("main-failure-recovery")?,
-            kind: "main-repair".to_owned(),
+            id: TaskId::try_from("main-failure-recovery")?,
+            kind: "main-repair".into(),
             prompt: "verify the delivered repair".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-1")?,
+            lease_token: LeaseToken::try_from("lease-1")?,
             owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
@@ -607,22 +623,30 @@ mod tests {
             obsolete: true,
         };
 
-        assert!(!completion_is_obsolete(&task, &result));
-        task.kind = "blocker".to_owned();
-        assert!(completion_is_obsolete(&task, &result));
+        assert_eq!(
+            task.kind
+                .completion_relevance(result.completion_relevance()),
+            CompletionRelevance::Current
+        );
+        task.kind = "blocker".into();
+        assert_eq!(
+            task.kind
+                .completion_relevance(result.completion_relevance()),
+            CompletionRelevance::Obsolete
+        );
         Ok(())
     }
 
     #[test]
     fn self_named_external_blocker_defers_without_creating_a_dependency() -> anyhow::Result<()> {
         let task = ClaimedTask {
-            id: TaskId::new("github-actions-pr-42")?,
-            kind: "main-repair".to_owned(),
+            id: TaskId::try_from("github-actions-pr-42")?,
+            kind: "main-repair".into(),
             prompt: "Wait for the exact-head workflow".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-1")?,
+            lease_token: LeaseToken::try_from("lease-1")?,
             owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
@@ -634,7 +658,7 @@ mod tests {
         };
 
         assert!(matches!(
-            blocked_disposition(&task, "workflow pending", &blocker),
+            TaskDisposition::blocked_disposition(BlockerDisposition { task: &task, summary: "workflow pending", blocker: &blocker }),
             TaskDisposition::Deferred { reason } if reason == "workflow pending"
         ));
         Ok(())
@@ -643,25 +667,25 @@ mod tests {
     #[test]
     fn prerequisite_task_cannot_create_a_child_dependency() -> anyhow::Result<()> {
         let task = ClaimedTask {
-            id: TaskId::new("github-actions-pr-42")?,
-            kind: "blocker".to_owned(),
+            id: TaskId::try_from("github-actions-pr-42")?,
+            kind: "blocker".into(),
             prompt: "Resolve failed workflow 42".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-1")?,
+            lease_token: LeaseToken::try_from("lease-1")?,
             owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
         let blocker = BlockerRequest {
-            id: TaskId::new("github-workflow-token")?,
+            id: TaskId::try_from("github-workflow-token")?,
             title: "Provision workflow token".to_owned(),
             prompt: "Provide a credential with workflow scope.".to_owned(),
         };
 
         assert!(matches!(
-            blocked_disposition(&task, "the available token lacks workflow scope", &blocker),
+            TaskDisposition::blocked_disposition(BlockerDisposition { task: &task, summary: "the available token lacks workflow scope", blocker: &blocker }),
             TaskDisposition::Failed { reason }
                 if reason.contains("prerequisite task could not complete")
                     && reason.contains("lacks workflow scope")
@@ -672,27 +696,27 @@ mod tests {
     #[test]
     fn main_repair_can_create_one_prerequisite_task() -> anyhow::Result<()> {
         let task = ClaimedTask {
-            id: TaskId::new("main-failure-recovery")?,
-            kind: "main-repair".to_owned(),
+            id: TaskId::try_from("main-failure-recovery")?,
+            kind: "main-repair".into(),
             prompt: "restore Main".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-1")?,
+            lease_token: LeaseToken::try_from("lease-1")?,
             owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
         let blocker = BlockerRequest {
-            id: TaskId::new("repair-buildkit-cache")?,
+            id: TaskId::try_from("repair-buildkit-cache")?,
             title: "Repair BuildKit cache".to_owned(),
             prompt: "Fix the repository-owned cache path.".to_owned(),
         };
 
         assert!(matches!(
-            blocked_disposition(&task, "cache repair required", &blocker),
+            TaskDisposition::blocked_disposition(BlockerDisposition { task: &task, summary: "cache repair required", blocker: &blocker }),
             TaskDisposition::Blocked { blocker, reason }
-                if blocker.kind == "blocker"
+                if blocker.kind.is_blocker()
                     && blocker.priority == 200
                     && reason == "cache repair required"
         ));
@@ -702,19 +726,19 @@ mod tests {
     #[test]
     fn blocker_prompt_requires_active_pr_ownership() -> anyhow::Result<()> {
         let task = ClaimedTask {
-            id: TaskId::new("github-actions-pr-42")?,
-            kind: "blocker".to_owned(),
+            id: TaskId::try_from("github-actions-pr-42")?,
+            kind: "blocker".into(),
             prompt: "Resolve failed workflow 42".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-1")?,
-            owning_repairs: vec![TaskId::new("main-failure-abc-run-42-attempt-1")?],
+            lease_token: LeaseToken::try_from("lease-1")?,
+            owning_repairs: vec![TaskId::try_from("main-failure-abc-run-42-attempt-1")?],
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
 
-        let prompt = task_prompt(&task);
+        let prompt = task.task_prompt();
         assert!(prompt.contains("prerequisite-ownership task"));
         assert!(prompt.contains("check out that existing PR branch"));
         assert!(prompt.contains("This task is a dependency leaf"));
@@ -726,10 +750,14 @@ mod tests {
         assert!(prompt.contains("bounded failed attempt"));
         assert!(prompt.contains("main-failure-abc-run-42-attempt-1"));
         assert!(prompt.contains("codex/hive-main-failure-abc-run-42-attempt-1"));
-        let targets = obsolete_owner_delivery_targets(&[
+        let targets = [
             task.owning_repairs[0].clone(),
-            TaskId::new("main-failure-def-run-43-attempt-1")?,
-        ]);
+            TaskId::try_from("main-failure-def-run-43-attempt-1")?,
+        ]
+        .map(|owner| {
+            let branch = owner.repair_branch_name();
+            (owner, branch)
+        });
         assert_eq!(targets.len(), 2);
         assert_eq!(targets[1].1, "codex/hive-main-failure-def-run-43-attempt-1");
         Ok(())
@@ -738,18 +766,18 @@ mod tests {
     #[test]
     fn replacement_worker_inspects_direct_github_delivery_state() -> crate::HiveResult<()> {
         let task = ClaimedTask {
-            id: TaskId::new("main-failure-recovery")?,
-            kind: "main-repair".to_owned(),
+            id: TaskId::try_from("main-failure-recovery")?,
+            kind: "main-repair".into(),
             prompt: "restore Main".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-recovery")?,
+            attempt_id: AttemptId::try_from("attempt-recovery")?,
             attempt_number: 2,
-            lease_token: LeaseToken::new("lease-recovery")?,
+            lease_token: LeaseToken::try_from("lease-recovery")?,
             owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
-        let prompt = task_prompt(&task);
+        let prompt = task.task_prompt();
 
         assert!(prompt.contains("GH_TOKEN"));
         assert!(prompt.contains("codex/hive-main-failure-recovery"));
@@ -768,69 +796,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn resumed_repair_accepts_changes_already_published_on_its_branch()
-    -> crate::HiveResult<()> {
-        let _git_process_guard = crate::GIT_PROCESS_TEST_LOCK.lock().await;
-        let repository = tempfile::tempdir()?;
-        let run_git = |arguments: &[&str]| -> io::Result<()> {
-            let status = process::Command::new("git")
-                .args(arguments)
-                .current_dir(repository.path())
-                .status()?;
-            assert!(status.success());
-            Ok(())
-        };
-        run_git(&["init", "--quiet"])?;
-        fs::write(repository.path().join("repair.txt"), "published\n")?;
-        run_git(&["add", "repair.txt"])?;
-        run_git(&[
-            "-c",
-            "user.name=Hive Test",
-            "-c",
-            "user.email=hive@example.invalid",
-            "commit",
-            "--quiet",
-            "-m",
-            "published repair",
-        ])?;
-        let baseline = process::Command::new("git")
-            .args(["rev-parse", "HEAD"])
-            .current_dir(repository.path())
-            .output()?;
-        let baseline = String::from_utf8(baseline.stdout)?;
-        let task = ClaimedTask {
-            id: TaskId::new("resumed-task")?,
-            kind: "main-repair".to_owned(),
-            prompt: "finish delivery".to_owned(),
-            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("resumed-attempt")?,
-            attempt_number: 1,
-            lease_token: LeaseToken::new("resumed-lease")?,
-            owning_repairs: Vec::new(),
-            dependency_context: Vec::new(),
-            dependency_artifacts: Vec::new(),
-        };
-        let result = TerminalResult::Completed {
-            summary: "published repair delivered".to_owned(),
-            changed_files: vec!["repair.txt".to_owned()],
-            tests: Vec::new(),
-            obsolete: false,
-        };
-
-        assert!(matches!(
-            persistable_patch(repository.path(), baseline.trim(), &task, &result, true).await?,
-            CompletionArtifact::NotProduced
-        ));
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn activity_persistence_accepts_current_leases_and_rejects_stale_ones()
     -> crate::HiveResult<()> {
         let store = MemoryStore::default();
         store.enqueue(&task("activity-task", Vec::new())?).await?;
-        let agent = AgentId::new("activity-agent")?;
-        let claimed = store.claim(&agent, 300).await?.into_claimed()?;
+        let agent = AgentId::try_from("activity-agent")?;
+        let claimed = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         let (sender, receiver) = mpsc::unbounded_channel();
         assert!(
             sender
@@ -851,7 +822,14 @@ mod tests {
                 .is_ok()
         );
         drop(sender);
-        persist_activity(store.clone(), agent.clone(), claimed.clone(), receiver).await?;
+        (TaskActivityStream {
+            store: store.clone(),
+            agent_id: agent.clone(),
+            task: claimed.clone(),
+            receiver,
+        })
+        .persist_activity()
+        .await?;
         assert!(
             store
                 .heartbeat(&claimed.id, &agent, &claimed.lease_token, 300)
@@ -860,13 +838,13 @@ mod tests {
 
         assert!(
             store
-                .complete(
-                    &claimed,
-                    &agent,
-                    false,
-                    "activity captured",
-                    &CompletionArtifact::NotProduced,
-                )
+                .complete(Completion {
+                    task: &claimed,
+                    agent_id: &agent,
+                    relevance: CompletionRelevance::Current,
+                    summary: "activity captured",
+                    artifact: &CompletionArtifact::NotProduced
+                })
                 .await?
         );
         let (sender, receiver) = mpsc::unbounded_channel();
@@ -880,10 +858,16 @@ mod tests {
                 .is_ok()
         );
         drop(sender);
-        let error = persist_activity(store, agent, claimed, receiver)
-            .await
-            .err()
-            .ok_or_else(|| crate::HiveError::message("stale activity writer was accepted"))?;
+        let error = (TaskActivityStream {
+            store,
+            agent_id: agent,
+            task: claimed,
+            receiver,
+        })
+        .persist_activity()
+        .await
+        .err()
+        .ok_or_else(|| crate::HiveError::message("stale activity writer was accepted"))?;
         assert!(matches!(
             error,
             crate::HiveError::WorkerCancellationRequested

@@ -1,12 +1,13 @@
 <script lang="ts">
+  import { SecretFailurePresentation } from '$lib/vault/secret-operation-failure'
   import type { PasswordImportMessageKeys } from '../../../generated/i18n-keys'
   import { Archive, FileSpreadsheet, Upload } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import ImportProgress from '$lib/components/ImportProgress.svelte'
   import {
-    importBinaryFile,
-    importTextFile,
+    BinaryVaultFileImport,
+    TextVaultFileImport,
     ImportAttemptKind,
     type ImportPanelProps,
   } from '$lib/components/import-panel'
@@ -50,7 +51,9 @@
   const busy = $derived(isImporting || props.isSaving)
 
   function selectFile(event: Event) {
-    const file = (event.currentTarget as HTMLInputElement).files?.[0]
+    const input = event.currentTarget
+    if (!(input instanceof HTMLInputElement)) return
+    const file = input.files?.[0]
     selectedFile = file
       ? { kind: ImportFileSelectionKind.Selected, file }
       : { kind: ImportFileSelectionKind.NotSelected }
@@ -67,35 +70,43 @@
     isImporting = true
     try {
       if (props.format === PasswordImportFormat.Text) {
-        const importRequest: Parameters<typeof importTextFile>[0] = {
+        const importRequest: ConstructorParameters<
+          typeof TextVaultFileImport
+        >[0] = {
           file,
           isSaving: false,
           onImport: props.onImport,
         }
-        const imported = await importTextFile(importRequest)
+        const imported = await new TextVaultFileImport(importRequest).execute()
         if (imported.kind === ImportAttemptKind.Completed) {
           result = {
             kind: PasswordImportOutcomeKind.Completed,
             result: imported.result,
           }
         } else if (imported.kind === ImportAttemptKind.Failed) {
-          error = imported.error
+          error = new SecretFailurePresentation(props.vault).message(
+            imported.error,
+          )
         }
         return
       }
-      const importRequest: Parameters<typeof importBinaryFile>[0] = {
+      const importRequest: ConstructorParameters<
+        typeof BinaryVaultFileImport
+      >[0] = {
         file,
         isSaving: false,
         onImport: props.onImport,
       }
-      const imported = await importBinaryFile(importRequest)
+      const imported = await new BinaryVaultFileImport(importRequest).execute()
       if (imported.kind === ImportAttemptKind.Completed) {
         result = {
           kind: PasswordImportOutcomeKind.Completed,
           result: imported.result,
         }
       } else if (imported.kind === ImportAttemptKind.Failed) {
-        error = imported.error
+        error = new SecretFailurePresentation(props.vault).message(
+          imported.error,
+        )
       }
     } finally {
       isImporting = false
@@ -180,21 +191,27 @@
           data-testid={props.resultTestId}
         >
           <p class="font-medium">
-            {(() => { const translationRequest: Parameters<typeof props.vault.t>[0] = {
-  key: props.messages.resultImported,
-  replacements: {
-              count: String(result.result.imported),
-            },
-}; return props.vault.t(translationRequest); })()}
+            {(() => {
+              const translationRequest: Parameters<typeof props.vault.t>[0] = {
+                key: props.messages.resultImported,
+                replacements: {
+                  count: String(result.result.imported),
+                },
+              }
+              return props.vault.t(translationRequest)
+            })()}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
-            {(() => { const translationRequest2: Parameters<typeof props.vault.t>[0] = {
-  key: props.messages.resultSkipped,
-  replacements: {
-              unsupported: String(result.result.skippedUnsupported),
-              duplicates: String(result.result.skippedDuplicates),
-            },
-}; return props.vault.t(translationRequest2); })()}
+            {(() => {
+              const translationRequest2: Parameters<typeof props.vault.t>[0] = {
+                key: props.messages.resultSkipped,
+                replacements: {
+                  unsupported: String(result.result.skippedUnsupported),
+                  duplicates: String(result.result.skippedDuplicates),
+                },
+              }
+              return props.vault.t(translationRequest2)
+            })()}
           </p>
         </div>
       {/if}

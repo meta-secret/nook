@@ -5,32 +5,23 @@
 )]
 //! Transaction-bound persistence for admitted event graphs.
 use crate::NookError;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::storage::indexed_db::StoredStringRecord;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use nook_core::GenesisImportRequest;
+use nook_core::LocalEventBytes;
 use nook_core::{EventGraph, EventId, EventInsertStatus, LocalEventStore, VaultEvent};
+mod requests;
 mod transaction;
+pub(crate) use requests::{EpochPairAppend, EventAppend, RemoteEventUnion};
 use transaction::{
     AppendKind, EventString, EventTransaction, PersistedEventIds, TransactionEvents,
 };
-
 /// Vault scope only. Admission and commit remain private to each operation.
 #[derive(Clone, Copy)]
 pub(crate) struct VaultEventPersistence<'a> {
     store_id: &'a str,
 }
-#[derive(Clone, Copy)]
-pub(crate) struct EventAppend<'a> {
-    pub(crate) event: &'a VaultEvent,
-    pub(crate) bytes: &'a [u8],
-}
-#[derive(Clone, Copy)]
-pub(crate) struct EpochPairAppend<'a> {
-    pub(crate) trigger: EventAppend<'a>,
-    pub(crate) checkpoint: EventAppend<'a>,
-}
-#[derive(Clone, Copy)]
-pub(crate) struct RemoteEventUnion<'a> {
-    pub(crate) events: &'a [(EventId, Vec<u8>)],
-}
-
 struct VaultAppendGraph<'a> {
     graph: EventGraph,
     store_id: &'a str,
@@ -59,13 +50,12 @@ struct PreparedEventAppend<'a, 'b> {
 /// ```compile_fail,E0603
 /// use nook_wasm::storage::event_db::security_epoch::PreparedRemoteUnion;
 /// ```
-struct PreparedRemoteUnion<'a, 'b> {
+struct PreparedRemoteUnion<'a> {
     vault: VaultEventPersistence<'a>,
     transaction: EventTransaction,
     persisted_ids: Vec<String>,
     local: LocalEventStore,
     heads: Vec<String>,
-    remote_events: &'b [(EventId, Vec<u8>)],
 }
 impl<'a> VaultEventPersistence<'a> {
     #[must_use]
@@ -159,7 +149,7 @@ impl<'a> VaultEventPersistence<'a> {
     async fn prepare_union<'b>(
         &self,
         request: RemoteEventUnion<'b>,
-    ) -> Result<PreparedRemoteUnion<'a, 'b>, NookError> {
+    ) -> Result<PreparedRemoteUnion<'a>, NookError> {
         let store_id = self.store_id;
         let remote_events = request.events;
         let transaction = EventTransaction::begin(AppendKind::Remote).await?;
@@ -173,7 +163,19 @@ impl<'a> VaultEventPersistence<'a> {
             .iter()
             .map(|(event_id, bytes)| (event_id.clone(), bytes.clone().into()))
             .collect::<Vec<_>>();
-        let heads = local.union_remote_and_heads(&typed_events, store_id)?;
+        let heads = match local.union_remote(nook_core::LocalRemoteUnion {
+            remote_events: &typed_events,
+            store_id,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.heads)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
         let graph = local.load_graph(store_id)?;
         if !nook_core::VaultProjection::from_graph(&graph, store_id)?
             .security_conflicts
@@ -189,7 +191,6 @@ impl<'a> VaultEventPersistence<'a> {
             persisted_ids,
             local,
             heads,
-            remote_events,
         })
     }
 }
@@ -209,7 +210,19 @@ impl VaultAppendGraph<'_> {
                 ));
             }
         }
-        match graph.insert(event.clone(), store_id)? {
+        match match graph.clone().insert(nook_core::EventGraphInsert {
+            event: event.clone(),
+            expected_store_id: store_id,
+        }) {
+            Ok(inserted) => {
+                *graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                *graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }? {
             EventInsertStatus::Applied | EventInsertStatus::Duplicate => {}
             EventInsertStatus::Quarantined(reason) => {
                 return Err(NookError::Database(format!(
@@ -259,7 +272,19 @@ impl VaultAppendGraph<'_> {
             ));
         }
         for event in [trigger, checkpoint] {
-            match graph.insert(event.clone(), store_id)? {
+            match match graph.clone().insert(nook_core::EventGraphInsert {
+                event: event.clone(),
+                expected_store_id: store_id,
+            }) {
+                Ok(inserted) => {
+                    *graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    *graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }? {
                 EventInsertStatus::Applied | EventInsertStatus::Duplicate => {}
                 EventInsertStatus::Quarantined(reason) => {
                     return Err(NookError::Database(format!(
@@ -298,7 +323,7 @@ impl PreparedEventAppend<'_, '_> {
         let projections = &transaction.projections;
 
         for EventBytes { event_id, bytes } in entries {
-            let value = String::from_utf8(bytes.to_vec())
+            let value = String::from_utf8(Vec::<u8>::from(bytes))
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
             EventString {
                 store: events,
@@ -341,7 +366,7 @@ impl PreparedEventAppend<'_, '_> {
         Ok(heads)
     }
 }
-impl PreparedRemoteUnion<'_, '_> {
+impl PreparedRemoteUnion<'_> {
     async fn commit(self) -> Result<(Vec<String>, LocalEventStore), NookError> {
         let Self {
             vault,
@@ -349,18 +374,23 @@ impl PreparedRemoteUnion<'_, '_> {
             persisted_ids,
             local,
             heads,
-            remote_events,
         } = self;
         let store_id = vault.store_id;
         let events = &transaction.events;
         let projections = &transaction.projections;
-        for (event_id, bytes) in remote_events {
-            if local.get_bytes(event_id).is_none()
-                || persisted_ids.iter().any(|id| id == event_id.as_str())
-            {
+        for event_id in local.event_ids() {
+            if persisted_ids.iter().any(|id| id == event_id.as_str()) {
                 continue;
             }
-            let value = String::from_utf8(bytes.clone())
+            let bytes = match local.get_bytes(&event_id) {
+                LocalEventBytes::Stored(bytes) => bytes,
+                LocalEventBytes::UnknownEvent => {
+                    return Err(NookError::Database(
+                        "Admitted remote event bytes are missing.".to_owned(),
+                    ));
+                }
+            };
+            let value = String::from_utf8(Vec::<u8>::from(bytes))
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
             EventString {
                 store: events,
@@ -431,7 +461,7 @@ mod browser {
 
     impl StoredEvent {
         fn new(event: VaultEvent) -> anyhow::Result<Self> {
-            let bytes = nook_core::serialize_event_storage_yaml(&event)?.into();
+            let bytes = VaultEvent::serialize_event_storage_yaml(&event)?.into();
             Ok(Self { event, bytes })
         }
 
@@ -459,17 +489,21 @@ mod browser {
             let store_id = nook_core::StoreId::generate()?;
             let (signing, _) = SigningIdentity::generate()?;
             let created_at = IsoTimestamp::parse("2026-08-14T00:00:00Z")?;
-            let genesis = StoredEvent::new(nook_core::build_genesis_import_event(
-                &store_id,
-                &signing.actor_id()?,
-                &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
-                GenesisImportPayload {
-                    source_content_hash: nook_auth2::Sha256Hex::from_trusted("00".repeat(32)),
-                    secrets: Vec::new(),
-                    password_entries: Vec::new(),
+            let genesis = StoredEvent::new(VaultEvent::build_genesis_import_event(
+                GenesisImportRequest {
+                    store_id: &store_id,
+                    actor_id: &signing.actor_id()?,
+                    key_epoch: &EventId::parse(
+                        "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo",
+                    )?,
+                    payload: GenesisImportPayload {
+                        source_content_hash: nook_auth2::Sha256Hex::from_trusted("00".repeat(32)),
+                        secrets: Vec::new(),
+                        password_entries: Vec::new(),
+                    },
+                    created_at: &created_at,
+                    signing_key: signing.signing_key(),
                 },
-                &created_at,
-                signing.signing_key(),
             )?)?;
             let trigger = StoredEvent::new(VaultEvent::sign(
                 VaultEventBody {
@@ -574,16 +608,16 @@ mod browser {
 
     #[derive(Debug, PartialEq, Eq)]
     struct EventSnapshot {
-        index: Option<String>,
-        heads: Option<String>,
-        rows: Vec<Option<String>>,
+        index: StoredStringRecord,
+        heads: StoredStringRecord,
+        rows: Vec<StoredStringRecord>,
     }
 
     impl EventSnapshot {
         fn assert_empty(&self) {
-            assert!(self.index.is_none());
-            assert!(self.heads.is_none());
-            assert_eq!(self.rows, vec![None, None, None]);
+            assert!(matches!(self.index, StoredStringRecord::MissingKey));
+            assert!(matches!(self.heads, StoredStringRecord::MissingKey));
+            assert_eq!(self.rows, vec![StoredStringRecord::MissingKey; 3]);
         }
 
         fn assert_committed(&self, fixture: &EventFixture) -> anyhow::Result<()> {
@@ -593,19 +627,24 @@ mod browser {
                 fixture.checkpoint.event.id()?.into_inner(),
             ];
             ids.sort();
-            assert_eq!(self.index, Some(serde_json::to_string(&ids)?));
+            assert_eq!(
+                self.index,
+                StoredStringRecord::Stored(serde_json::to_string(&ids)?)
+            );
             assert_eq!(
                 self.heads,
-                Some(serde_json::to_string(&vec![
+                StoredStringRecord::Stored(serde_json::to_string(&vec![
                     fixture.checkpoint.event.id()?.into_inner()
                 ])?)
             );
             assert_eq!(
                 self.rows,
                 vec![
-                    Some(String::from_utf8(fixture.genesis.bytes.clone())?),
-                    Some(String::from_utf8(fixture.trigger.bytes.clone())?),
-                    Some(String::from_utf8(fixture.checkpoint.bytes.clone())?),
+                    StoredStringRecord::Stored(String::from_utf8(fixture.genesis.bytes.clone())?),
+                    StoredStringRecord::Stored(String::from_utf8(fixture.trigger.bytes.clone())?),
+                    StoredStringRecord::Stored(String::from_utf8(
+                        fixture.checkpoint.bytes.clone()
+                    )?),
                 ]
             );
             Ok(())
@@ -644,16 +683,16 @@ mod browser {
         }
         assert_eq!(fixture.snapshot().await?, before);
         let transaction = EventTransaction::begin(AppendKind::Single).await?;
-        assert!(
+        assert!(matches!(
             EventString {
                 store: &transaction.events,
                 key: &vault.event_key(unauthorized.event.id()?.as_str()),
                 context: "Test unauthorized event",
             }
             .read()
-            .await?
-            .is_none()
-        );
+            .await?,
+            StoredStringRecord::MissingKey
+        ));
         transaction.complete().await?;
         Ok(())
     }
@@ -693,14 +732,20 @@ mod browser {
         let expected = vec![fixture.genesis.event.id()?.into_inner()];
         assert_eq!(vault.append(fixture.genesis.append()).await?, expected);
         let snapshot = fixture.snapshot().await?;
-        assert_eq!(snapshot.index, Some(serde_json::to_string(&expected)?));
-        assert_eq!(snapshot.heads, Some(serde_json::to_string(&expected)?));
+        assert_eq!(
+            snapshot.index,
+            StoredStringRecord::Stored(serde_json::to_string(&expected)?)
+        );
+        assert_eq!(
+            snapshot.heads,
+            StoredStringRecord::Stored(serde_json::to_string(&expected)?)
+        );
         assert_eq!(
             snapshot.rows,
             vec![
-                Some(String::from_utf8(fixture.genesis.bytes.clone())?),
-                None,
-                None
+                StoredStringRecord::Stored(String::from_utf8(fixture.genesis.bytes.clone())?),
+                StoredStringRecord::MissingKey,
+                StoredStringRecord::MissingKey
             ]
         );
         assert_eq!(vault.append(fixture.genesis.append()).await?, expected);
@@ -770,8 +815,8 @@ mod browser {
             vec![fixture.trigger.event.id()?.into_inner()]
         );
         let before = fixture.snapshot().await?;
-        assert!(before.rows[1].is_some());
-        assert!(before.rows[2].is_none());
+        assert!(matches!(before.rows[1], StoredStringRecord::Stored(_)));
+        assert!(matches!(before.rows[2], StoredStringRecord::MissingKey));
         assert_eq!(
             vault.append_epoch_pair(fixture.pair()).await?,
             vec![fixture.checkpoint.event.id()?.into_inner()]
@@ -864,8 +909,8 @@ mod browser {
         assert_eq!(local.event_ids().len(), 3);
         for (id, bytes) in &remote {
             assert_eq!(
-                local.get_bytes(id).map(Vec::<u8>::from),
-                Some(bytes.clone())
+                local.get_bytes(id),
+                LocalEventBytes::Stored(bytes.clone().into())
             );
         }
         let snapshot = fixture.snapshot().await?;
@@ -908,7 +953,7 @@ mod browser {
             .await
         {
             Err(NookError::Database(message)) => {
-                assert!(message.starts_with("failed to parse stored event:"));
+                assert!(message.starts_with("failed to parse remote event:"));
             }
             _ => anyhow::bail!("expected malformed remote event rejection"),
         }
@@ -935,13 +980,19 @@ mod browser {
         stale_ids.push(fixture.genesis.event.id()?.into_inner());
         stale_ids.sort();
         let before = fixture.snapshot().await?;
-        assert_eq!(before.index, Some(serde_json::to_string(&stale_ids)?));
-        assert!(before.rows[1].is_none());
+        assert_eq!(
+            before.index,
+            StoredStringRecord::Stored(serde_json::to_string(&stale_ids)?)
+        );
+        assert!(matches!(before.rows[1], StoredStringRecord::MissingKey));
         let (heads, local) = vault.union_remote(RemoteEventUnion { events: &[] }).await?;
         assert_eq!(local.event_ids(), vec![fixture.genesis.event.id()?]);
         assert_eq!(heads, vec![fixture.genesis.event.id()?.into_inner()]);
         let after = fixture.snapshot().await?;
-        assert_eq!(after.index, Some(serde_json::to_string(&heads)?));
+        assert_eq!(
+            after.index,
+            StoredStringRecord::Stored(serde_json::to_string(&heads)?)
+        );
         assert_eq!(after.heads, before.heads);
         assert_eq!(after.rows, before.rows);
         Ok(())

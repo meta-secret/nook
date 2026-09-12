@@ -3,10 +3,11 @@
     dylint_lib = "nook_domain_api",
     forbid(invalid_unowned_function_suppression)
 )]
-//! Selected bounded data entry retains the exact borrowed ZIP file.
+//! Selected bounded data entry owns its archive and admitted entry index.
 use super::ProtonPassImportError;
 use std::io::{Cursor, Read};
-use zip::{ZipArchive, read::ZipFile, result};
+use zeroize::Zeroizing;
+use zip::ZipArchive;
 const MAX_EXPORT_DATA_BYTES: u64 = 64 * 1024 * 1024;
 pub(super) const DATA_FILE: &str = "Proton Pass/data.json";
 pub(super) struct ProtonPassArchive<'a> {
@@ -19,8 +20,8 @@ impl<'a> ProtonPassArchive<'a> {
         })
     }
     pub(super) fn select_data(
-        &mut self,
-    ) -> Result<SelectedProtonPassData<'_, 'a>, ProtonPassImportError> {
+        mut self,
+    ) -> Result<SelectedProtonPassData<'a>, ProtonPassImportError> {
         let mut encrypted_data_found = false;
         for index in 0..self.archive.len() {
             let file = self
@@ -31,34 +32,50 @@ impl<'a> ProtonPassArchive<'a> {
                 encrypted_data_found = true;
             }
         }
-
-        let file = match self.archive.by_name(DATA_FILE) {
-            Ok(file) => file,
-            Err(result::ZipError::FileNotFound) if encrypted_data_found => {
-                return Err(ProtonPassImportError::EncryptedExport);
-            }
-            Err(result::ZipError::FileNotFound) => {
-                return Err(ProtonPassImportError::MissingDataFile);
-            }
-            Err(error) => return Err(ProtonPassImportError::invalid(error)),
+        let Some(index) = self.archive.index_for_name(DATA_FILE) else {
+            return Err(if encrypted_data_found {
+                ProtonPassImportError::EncryptedExport
+            } else {
+                ProtonPassImportError::MissingDataFile
+            });
         };
-        if file.size() > MAX_EXPORT_DATA_BYTES {
+        if self
+            .archive
+            .by_index(index)
+            .map_err(ProtonPassImportError::invalid)?
+            .size()
+            > MAX_EXPORT_DATA_BYTES
+        {
             return Err(ProtonPassImportError::ExportTooLarge);
         }
-        Ok(SelectedProtonPassData { file })
+        Ok(SelectedProtonPassData {
+            archive: self,
+            index,
+        })
     }
 }
 /// The selected entry is private and cannot be replaced by an unadmitted file.
 /// ```compile_fail,E0603
 /// use nook_core::proton_pass_import::archive::SelectedProtonPassData;
 /// ```
-pub(super) struct SelectedProtonPassData<'archive, 'bytes> {
-    file: ZipFile<'archive, Cursor<&'bytes [u8]>>,
+pub(super) struct SelectedProtonPassData<'bytes> {
+    archive: ProtonPassArchive<'bytes>,
+    index: usize,
 }
-impl SelectedProtonPassData<'_, '_> {
-    pub(super) fn read(self) -> Result<String, ProtonPassImportError> {
-        let mut json = String::new();
-        self.file
+#[cfg(test)]
+impl<'bytes> SelectedProtonPassData<'bytes> {
+    fn cancel(self) -> ProtonPassArchive<'bytes> {
+        self.archive
+    }
+}
+
+impl SelectedProtonPassData<'_> {
+    pub(super) fn read(mut self) -> Result<Zeroizing<String>, ProtonPassImportError> {
+        let mut json = Zeroizing::new(String::new());
+        self.archive
+            .archive
+            .by_index(self.index)
+            .map_err(ProtonPassImportError::invalid)?
             .take(MAX_EXPORT_DATA_BYTES + 1)
             .read_to_string(&mut json)
             .map_err(ProtonPassImportError::invalid)?;
@@ -101,7 +118,7 @@ mod tests {
     }
 
     #[test]
-    fn selected_entry_reads_original_bytes_and_drop_leaves_archive_available() -> anyhow::Result<()>
+    fn selected_entry_reads_original_bytes_and_cancellation_returns_archive() -> anyhow::Result<()>
     {
         let json = r#"{"vaults":{}}"#;
         let bytes = ProtonPassZipFixture {
@@ -109,12 +126,10 @@ mod tests {
             data: json.as_bytes(),
         }
         .build()?;
-        let mut archive = ProtonPassArchive::open(&bytes)?;
-        {
-            let _selected = archive.select_data()?;
-        }
+        let archive = ProtonPassArchive::open(&bytes)?;
+        let archive = archive.select_data()?.cancel();
         let selected = archive.select_data()?;
-        assert_eq!(selected.read()?, json);
+        assert_eq!(selected.read()?.as_str(), json);
         Ok(())
     }
 

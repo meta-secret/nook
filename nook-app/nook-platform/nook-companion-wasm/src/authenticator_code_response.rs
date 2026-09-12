@@ -1,12 +1,37 @@
 use nook_companion_core::AuthenticatorCodeResponse;
+use serde::Deserialize;
+use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
+
+#[derive(Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "unknown", from_wasm_abi)]
+pub struct AuthenticatorCodeAdmission(nook_companion_core::AuthenticatorCodeResponseWire);
 
 /// Decode the complete ephemeral authenticator-code response contract.
 #[wasm_bindgen]
-pub fn decode_authenticator_code_response(
-    response: nook_companion_core::AuthenticatorCodeResponseWire,
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_code_response(
+    response: AuthenticatorCodeAdmission,
 ) -> Result<nook_companion_core::AuthenticatorCodeResponse, JsError> {
+    let AuthenticatorCodeAdmission(response) = response;
     AuthenticatorCodeResponse::from_wire(response).map_err(|error| JsError::new(&error.to_string()))
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+
+    #[test]
+    fn authenticator_code_admission_is_unknown_but_rust_decoded() {
+        assert!(AuthenticatorCodeAdmission::DECL.ends_with(" = unknown;"));
+        assert!(serde_json::from_str::<AuthenticatorCodeAdmission>("null").is_err());
+        assert!(
+            serde_json::from_str::<AuthenticatorCodeAdmission>(
+                r#"{"ok":true,"code":"123456","expiresAt":1725000030000}"#,
+            )
+            .is_ok()
+        );
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]

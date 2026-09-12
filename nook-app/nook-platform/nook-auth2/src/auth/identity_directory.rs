@@ -1,14 +1,42 @@
 //! Portable identity collection and active-identity selection policy.
+mod enrollment;
+mod recovery;
+pub use crate::MemberLabelState;
+pub use recovery::RecoveryRetirement;
+
+/// Membership of an admitted app key in the local identity directory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppKeyIdentityMembership {
+    Enrolled(IdentityId),
+    Unenrolled,
+}
 
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
-use crate::{AppKey, IdentityId, IdentityMember, IdentityRecord, StoreId};
+use crate::{
+    AppKey, DeviceSigningPublicKey, IdentityId, IdentityLegacyVaultImport,
+    IdentityLegacyVaultReconciliation, IdentityMember, IdentityMemberVaultGrant, IdentityRecord,
+    IdentityVaultKeyOpening, StoreId,
+};
 
 mod legacy_migration;
+pub use legacy_migration::{
+    DirectoryLegacyMigration, LegacyDirectoryBase, MigratedIdentityDirectory,
+    PreparedLegacyDirectoryMigration,
+};
 mod staged_rebase;
+pub use staged_rebase::StagedIdentityRebase;
+mod transition;
+pub use transition::{
+    DirectoryCreationEnrollment, DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate,
+    DirectoryOwnedVaultOpening, DirectoryVaultEnrollment, IdentityCreation,
+    IdentityDirectoryRejection, IdentityDirectoryResolution, IdentityDirectoryVaultKeys,
+    LocalIdentityKeyRetirement,
+};
+use transition::{IdentityEnrollmentPreparation, PreparedIdentityMembership};
 
 /// Explicit local identity-selection state. A directory may retain peer-only
 /// identities without selecting one as this installation's active identity.
@@ -26,6 +54,12 @@ pub struct IdentityDirectory {
     selection: IdentitySelection,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     retired_app_ids: Vec<crate::AppId>,
+}
+
+enum LegacyImportDestination {
+    VaultOwner(IdentityId),
+    AppKeyOwner(IdentityId),
+    NewIdentity,
 }
 
 impl IdentityDirectory {
@@ -119,154 +153,302 @@ impl IdentityDirectory {
     }
 
     pub fn create_identity(
-        &mut self,
-        label: &str,
-        app_key: &AppKey,
-        member_label: Option<String>,
-    ) -> MultiDeviceResult<IdentityId> {
-        self.ensure_app_key_active(app_key)?;
-        let label = label.trim();
-        if label.is_empty() {
-            return Err(MultiDeviceError::IdentityLabelEmpty);
+        mut self,
+        request: IdentityCreation<'_>,
+    ) -> Result<IdentityDirectoryResolution, IdentityDirectoryRejection> {
+        let IdentityCreation {
+            label,
+            app_key,
+            member_label,
+        } = request;
+        let created: MultiDeviceResult<IdentityId> = (|| {
+            self.ensure_app_key_active(app_key)?;
+            let label = label.trim();
+            if label.is_empty() {
+                return Err(MultiDeviceError::IdentityLabelEmpty);
+            }
+            let record = IdentityRecord::create_with_app_key(label, app_key, member_label)?;
+            let identity_id = record.identity_id.clone();
+            self.identities.push(record);
+            self.selection = IdentitySelection::Selected(identity_id.clone());
+            Ok(identity_id)
+        })();
+        match created {
+            Ok(identity_id) => Ok(IdentityDirectoryResolution {
+                directory: self,
+                identity_id,
+            }),
+            Err(cause) => Err(IdentityDirectoryRejection {
+                directory: self,
+                cause,
+            }),
         }
-        let record = IdentityRecord::create_with_app_key(label, app_key, member_label)?;
-        let identity_id = record.identity_id.clone();
-        self.identities.push(record);
-        self.selection = IdentitySelection::Selected(identity_id.clone());
-        Ok(identity_id)
     }
 
-    pub fn select(&mut self, identity_id: &IdentityId) -> MultiDeviceResult<()> {
-        if !self
-            .identities
-            .iter()
-            .any(|record| &record.identity_id == identity_id)
-        {
-            return Err(MultiDeviceError::IdentityNotFound {
-                identity_id: identity_id.to_string(),
-            });
+    pub fn select(mut self, identity_id: &IdentityId) -> Result<Self, IdentityDirectoryRejection> {
+        let selected: MultiDeviceResult<()> = (|| {
+            if !self
+                .identities
+                .iter()
+                .any(|record| &record.identity_id == identity_id)
+            {
+                return Err(MultiDeviceError::IdentityNotFound {
+                    identity_id: identity_id.to_string(),
+                });
+            }
+            self.selection = IdentitySelection::Selected(identity_id.clone());
+            Ok(())
+        })();
+        match selected {
+            Ok(()) => Ok(self),
+            Err(cause) => Err(IdentityDirectoryRejection {
+                directory: self,
+                cause,
+            }),
         }
-        self.selection = IdentitySelection::Selected(identity_id.clone());
-        Ok(())
     }
 
     /// Associate an imported legacy vault without guessing that the active
     /// identity owns it. Existing ownership wins; otherwise the vault receives
     /// a synthesized identity because the legacy record has no identity id.
     pub fn import_legacy_vault(
-        &mut self,
-        label: &str,
-        app_key: &AppKey,
-        store_id: StoreId,
-        reconciliation: crate::IdentityVaultDekReconciliation,
-    ) -> MultiDeviceResult<IdentityId> {
-        self.ensure_app_key_active(app_key)?;
-        if let Some(index) = self
+        self,
+        request: DirectoryLegacyVaultImport<'_>,
+    ) -> Result<IdentityDirectoryResolution, IdentityDirectoryRejection> {
+        match self.legacy_import_destination(&request) {
+            Err(cause) => Err(IdentityDirectoryRejection {
+                directory: self,
+                cause,
+            }),
+            Ok(LegacyImportDestination::VaultOwner(identity_id)) => {
+                let directory = self.take_identity(&identity_id)?.update(|identity| {
+                    identity.reconcile_legacy_vault_member(IdentityLegacyVaultReconciliation {
+                        app_key: request.app_key,
+                        store_id: &request.store_id,
+                        reconciliation: &request.reconciliation,
+                    })
+                })?;
+                Ok(IdentityDirectoryResolution {
+                    directory,
+                    identity_id,
+                }
+                .select())
+            }
+            Ok(LegacyImportDestination::AppKeyOwner(identity_id)) => {
+                let directory = self.take_identity(&identity_id)?.update(|identity| {
+                    identity.import_legacy_vault(IdentityLegacyVaultImport {
+                        app_key: request.app_key,
+                        store_id: request.store_id,
+                        reconciliation: &request.reconciliation,
+                    })
+                })?;
+                Ok(IdentityDirectoryResolution {
+                    directory,
+                    identity_id,
+                }
+                .select())
+            }
+            Ok(LegacyImportDestination::NewIdentity) => self.import_new_legacy_identity(request),
+        }
+    }
+
+    fn legacy_import_destination(
+        &self,
+        request: &DirectoryLegacyVaultImport<'_>,
+    ) -> MultiDeviceResult<LegacyImportDestination> {
+        self.ensure_app_key_active(request.app_key)?;
+        match self
             .identities
             .iter()
-            .position(|record| record.vault_dek(&store_id).is_some())
+            .find(|record| record.owns_vault(&request.store_id))
         {
-            self.identities[index].reconcile_legacy_vault_member(
-                app_key,
-                &store_id,
-                &reconciliation,
-            )?;
-            let identity_id = self.identities[index].identity_id.clone();
-            self.selection = IdentitySelection::Selected(identity_id.clone());
-            return Ok(identity_id);
+            Some(record) => Ok(LegacyImportDestination::VaultOwner(
+                record.identity_id.clone(),
+            )),
+            None => match self.identity_for_app_key(request.app_key)? {
+                AppKeyIdentityMembership::Enrolled(identity_id) => {
+                    Ok(LegacyImportDestination::AppKeyOwner(identity_id))
+                }
+                AppKeyIdentityMembership::Unenrolled => Ok(LegacyImportDestination::NewIdentity),
+            },
         }
-        if let Some(identity_id) = self.identity_for_app_key(app_key)? {
-            let identity = self
-                .identities
-                .iter_mut()
-                .find(|identity| identity.identity_id == identity_id)
-                .ok_or_else(|| MultiDeviceError::IdentityNotFound {
-                    identity_id: identity_id.to_string(),
-                })?;
-            identity.import_legacy_vault(app_key, store_id, &reconciliation)?;
-            self.selection = IdentitySelection::Selected(identity_id.clone());
-            return Ok(identity_id);
-        }
+    }
+
+    fn import_new_legacy_identity(
+        mut self,
+        request: DirectoryLegacyVaultImport<'_>,
+    ) -> Result<IdentityDirectoryResolution, IdentityDirectoryRejection> {
+        let DirectoryLegacyVaultImport {
+            label,
+            app_key,
+            store_id,
+            reconciliation,
+        } = request;
         let member = IdentityMember {
             app_id: app_key.app_id().clone(),
             auth_id: app_key.auth_id(),
             public_key: app_key.public_key(),
-            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: None,
+            signing_public_key: DeviceSigningPublicKey::Unavailable,
+            label: MemberLabelState::Unnamed,
         };
-        let record = IdentityRecord::synthesize_from_legacy_vault(
+        match IdentityRecord::synthesize_from_legacy_vault(
             label,
             member,
             store_id,
             reconciliation.secrets_envelope,
             reconciliation.members_envelope,
             reconciliation.epoch_update.committed_epoch(),
-        )?;
-        let identity_id = record.identity_id.clone();
-        self.identities.push(record);
-        self.selection = IdentitySelection::Selected(identity_id.clone());
-        Ok(identity_id)
+        ) {
+            Err(cause) => Err(IdentityDirectoryRejection {
+                directory: self,
+                cause,
+            }),
+            Ok(record) => {
+                let identity_id = record.identity_id.clone();
+                self.identities.push(record);
+                Ok(IdentityDirectoryResolution {
+                    directory: self,
+                    identity_id,
+                }
+                .select())
+            }
+        }
     }
 
     pub fn reconcile_vault_dek(
-        &mut self,
-        app_key: &AppKey,
-        store_id: &StoreId,
-        reconciliation: &crate::IdentityVaultDekReconciliation,
+        self,
+        request: IdentityLegacyVaultReconciliation<'_>,
+    ) -> Result<IdentityDirectoryResolution, IdentityDirectoryRejection> {
+        match self.reconciliation_owner(&request) {
+            Err(cause) => Err(IdentityDirectoryRejection {
+                directory: self,
+                cause,
+            }),
+            Ok(identity_id) => {
+                let directory = self
+                    .take_identity(&identity_id)?
+                    .update(|identity| identity.reconcile_legacy_vault_member(request))?;
+                Ok(IdentityDirectoryResolution {
+                    directory,
+                    identity_id,
+                })
+            }
+        }
+    }
+
+    fn reconciliation_owner(
+        &self,
+        request: &IdentityLegacyVaultReconciliation<'_>,
     ) -> MultiDeviceResult<IdentityId> {
-        self.ensure_app_key_active(app_key)?;
-        let identity = self
-            .identities
-            .iter_mut()
-            .find(|record| record.vault_dek(store_id).is_some())
+        self.ensure_app_key_active(request.app_key)?;
+        self.identities
+            .iter()
+            .find(|record| record.owns_vault(request.store_id))
+            .map(|record| record.identity_id.clone())
             .ok_or_else(|| MultiDeviceError::IdentityNotFound {
-                identity_id: format!("vault:{store_id}"),
-            })?;
-        identity.reconcile_legacy_vault_member(app_key, store_id, reconciliation)?;
-        Ok(identity.identity_id.clone())
+                identity_id: format!("vault:{}", request.store_id),
+            })
+    }
+
+    pub fn open_vault_dek(
+        &self,
+        request: IdentityVaultKeyOpening<'_>,
+    ) -> MultiDeviceResult<crate::VaultKeys> {
+        self.ensure_app_key_active(request.app_key)?;
+        let owner = match self
+            .identities
+            .iter()
+            .find(|identity| identity.owns_vault(&request.store_id))
+        {
+            Some(owner) => owner,
+            None => self.selected()?,
+        };
+        owner.open_vault_dek(request)
     }
 
     pub fn open_or_generate_vault_dek(
-        &mut self,
-        app_key: &AppKey,
-        store_id: StoreId,
-    ) -> MultiDeviceResult<crate::VaultKeys> {
-        self.ensure_app_key_active(app_key)?;
-        if let Some(index) = self
+        self,
+        request: IdentityVaultKeyOpening<'_>,
+    ) -> Result<IdentityDirectoryVaultKeys, IdentityDirectoryRejection> {
+        match self.vault_opening_identity(&request) {
+            Err(cause) => Err(IdentityDirectoryRejection {
+                directory: self,
+                cause,
+            }),
+            Ok(identity_id) => self
+                .take_identity(&identity_id)?
+                .open_keys(|identity| identity.open_or_generate_vault_dek(request)),
+        }
+    }
+
+    fn vault_opening_identity(
+        &self,
+        request: &IdentityVaultKeyOpening<'_>,
+    ) -> MultiDeviceResult<IdentityId> {
+        self.ensure_app_key_active(request.app_key)?;
+        let owner = match self
             .identities
             .iter()
-            .position(|identity| identity.vault_dek(&store_id).is_some())
+            .find(|identity| identity.owns_vault(&request.store_id))
         {
-            return self.identities[index].open_or_generate_vault_dek(app_key, store_id);
+            Some(owner) => owner,
+            None => self.selected()?,
+        };
+        Ok(owner.identity_id.clone())
+    }
+
+    pub fn open_vault_dek_for_identity(
+        &self,
+        request: DirectoryOwnedVaultOpening<'_>,
+    ) -> MultiDeviceResult<crate::VaultKeys> {
+        self.ensure_app_key_active(request.vault.app_key)?;
+        if self.identities.iter().any(|identity| {
+            identity.owns_vault(&request.vault.store_id)
+                && identity.identity_id != *request.identity_id
+        }) {
+            return Err(MultiDeviceError::DuplicateVaultOwnership {
+                store_id: request.vault.store_id.to_string(),
+            });
         }
-        self.selected_mut()?
-            .open_or_generate_vault_dek(app_key, store_id)
+        let owner = self
+            .identities
+            .iter()
+            .find(|identity| identity.identity_id == *request.identity_id)
+            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                identity_id: request.identity_id.to_string(),
+            })?;
+        owner.open_vault_dek(request.vault)
     }
 
     pub fn open_or_generate_vault_dek_for_identity(
-        &mut self,
-        identity_id: &IdentityId,
-        app_key: &AppKey,
-        store_id: StoreId,
-    ) -> MultiDeviceResult<crate::VaultKeys> {
-        self.ensure_app_key_active(app_key)?;
-        if let Some(owner) = self
-            .identities
-            .iter()
-            .find(|identity| identity.vault_dek(&store_id).is_some())
-            && owner.identity_id != *identity_id
-        {
+        self,
+        request: DirectoryOwnedVaultOpening<'_>,
+    ) -> Result<IdentityDirectoryVaultKeys, IdentityDirectoryRejection> {
+        match self.admit_owned_vault_opening(&request) {
+            Err(cause) => Err(IdentityDirectoryRejection {
+                directory: self,
+                cause,
+            }),
+            Ok(()) => self
+                .take_identity(request.identity_id)?
+                .open_keys(|identity| identity.open_or_generate_vault_dek(request.vault)),
+        }
+    }
+
+    fn admit_owned_vault_opening(
+        &self,
+        request: &DirectoryOwnedVaultOpening<'_>,
+    ) -> MultiDeviceResult<()> {
+        self.ensure_app_key_active(request.vault.app_key)?;
+        if self.identities.iter().any(|identity| {
+            identity.owns_vault(&request.vault.store_id)
+                && identity.identity_id != *request.identity_id
+        }) {
             return Err(MultiDeviceError::DuplicateVaultOwnership {
-                store_id: store_id.to_string(),
+                store_id: request.vault.store_id.to_string(),
             });
         }
-        self.identities
-            .iter_mut()
-            .find(|identity| identity.identity_id == *identity_id)
-            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
-                identity_id: identity_id.to_string(),
-            })?
-            .open_or_generate_vault_dek(app_key, store_id)
+        Ok(())
     }
 
     pub fn validate_vault_enrollment(
@@ -295,76 +477,10 @@ impl IdentityDirectory {
         Ok(())
     }
 
-    /// Enroll an authenticated installation into the identity that owns the
-    /// paired vault, independent of the currently selected identity.
-    pub fn enroll_app_key_for_owned_vault(
-        &mut self,
-        current_app_key: &AppKey,
-        new_app_key: &AppKey,
-        store_id: &StoreId,
-    ) -> MultiDeviceResult<IdentityId> {
-        let owner = self
-            .identities
-            .iter_mut()
-            .find(|identity| identity.owns_vault(store_id))
-            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
-                identity_id: format!("vault:{store_id}"),
-            })?;
-        if let Some(member) = owner
-            .members
-            .iter()
-            .find(|member| member.app_id == *new_app_key.app_id())
-        {
-            if member.auth_id != new_app_key.auth_id()
-                || member.public_key != new_app_key.public_key()
-            {
-                return Err(MultiDeviceError::InvalidDeviceIdentity(
-                    "existing app id has different key material".to_owned(),
-                ));
-            }
-            return Ok(owner.identity_id.clone());
-        }
-        let grant_store_ids = owner
-            .vault_deks
-            .iter()
-            .filter(|grant| {
-                grant
-                    .secrets_envelopes
-                    .iter()
-                    .any(|entry| entry.app_id == *current_app_key.app_id())
-                    && grant
-                        .members_envelopes
-                        .iter()
-                        .any(|entry| entry.app_id == *current_app_key.app_id())
-            })
-            .map(|grant| grant.store_id.clone())
-            .collect::<Vec<_>>();
-        let keys_by_store = grant_store_ids
-            .into_iter()
-            .map(|grant_store_id| {
-                owner
-                    .open_or_generate_vault_dek(current_app_key, grant_store_id.clone())
-                    .map(|keys| (grant_store_id, keys))
-            })
-            .collect::<MultiDeviceResult<Vec<_>>>()?;
-        if !keys_by_store
-            .iter()
-            .any(|(grant_store_id, _)| grant_store_id == store_id)
-        {
-            return Err(MultiDeviceError::IdentityEnrollmentRequired);
-        }
-        let member = IdentityMember {
-            app_id: new_app_key.app_id().clone(),
-            auth_id: new_app_key.auth_id(),
-            public_key: new_app_key.public_key(),
-            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: None,
-        };
-        owner.add_member(member.clone())?;
-        owner.grant_member_to_vaults(&member, &keys_by_store)?;
-        Ok(owner.identity_id.clone())
-    }
-    pub fn identity_for_app_key(&self, app_key: &AppKey) -> MultiDeviceResult<Option<IdentityId>> {
+    pub fn identity_for_app_key(
+        &self,
+        app_key: &AppKey,
+    ) -> MultiDeviceResult<AppKeyIdentityMembership> {
         self.ensure_app_key_active(app_key)?;
         let mut matches = Vec::new();
         for identity in &self.identities {
@@ -387,127 +503,18 @@ impl IdentityDirectory {
                 "app key belongs to multiple local identities".to_owned(),
             ));
         }
-        Ok(matches.pop())
+        Ok(match matches.pop() {
+            Some(identity_id) => AppKeyIdentityMembership::Enrolled(identity_id),
+            None => AppKeyIdentityMembership::Unenrolled,
+        })
     }
 
     pub fn set_member_signing_public_key(
-        &mut self,
-        identity_id: &IdentityId,
-        app_id: &crate::AppId,
-        signing_public_key: &crate::DeviceSigningPublicKey,
-    ) -> MultiDeviceResult<()> {
-        self.identities
-            .iter_mut()
-            .find(|identity| &identity.identity_id == identity_id)
-            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
-                identity_id: identity_id.to_string(),
-            })?
-            .set_member_signing_public_key(app_id, signing_public_key)
-    }
-
-    /// Enroll an authenticated installation key into the selected identity
-    /// before that identity owns a vault. Existing vaults require an explicit
-    /// enrollment flow that also re-wraps every DEK.
-    pub fn enroll_selected_app_key_for_vault_creation(
-        &mut self,
-        app_key: &AppKey,
-        label: &str,
-    ) -> MultiDeviceResult<IdentityId> {
-        self.ensure_app_key_active(app_key)?;
-        if matches!(&self.selection, IdentitySelection::Empty) {
-            return self.create_identity(label, app_key, None);
-        }
-        {
-            let selected = self.selected()?;
-            if let Some(member) = selected
-                .members
-                .iter()
-                .find(|member| member.app_id == *app_key.app_id())
-            {
-                if member.auth_id != app_key.auth_id() || member.public_key != app_key.public_key()
-                {
-                    return Err(MultiDeviceError::InvalidDeviceIdentity(
-                        "existing app id has different key material".to_owned(),
-                    ));
-                }
-                return Ok(selected.identity_id.clone());
-            }
-            if !selected.vault_deks.is_empty() {
-                return Err(MultiDeviceError::IdentityEnrollmentRequired);
-            }
-        }
-        let selected = self.selected_mut()?;
-        selected.add_prevalidated_member(IdentityMember {
-            app_id: app_key.app_id().clone(),
-            auth_id: app_key.auth_id(),
-            public_key: app_key.public_key(),
-            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: None,
-        });
-        Ok(selected.identity_id.clone())
-    }
-
-    /// Drop directory ownership sealed to an inaccessible installation key.
-    /// Encrypted vault storage remains outside this portable record and may be
-    /// rebound only after a recovery credential proves access.
-    pub fn reset_for_device_recovery(&mut self, recovered_app_id: Option<crate::AppId>) {
-        self.identities.clear();
-        self.selection = IdentitySelection::Empty;
-        if let Some(app_id) = recovered_app_id {
-            self.retire_app_id(app_id);
-        }
-    }
-
-    /// Leave known identities visible without treating a peer-only identity as
-    /// the local browser's active protection target.
-    pub fn clear_selection(&mut self) {
-        self.selection = IdentitySelection::Empty;
-    }
-
-    /// Retire one inaccessible installation key without discarding unrelated
-    /// identities. A one-member identity is removed; a multi-member identity
-    /// remains available to its other installations.
-    pub fn retire_local_identity_key(
-        &mut self,
-        identity_id: &IdentityId,
-        app_id: &crate::AppId,
-    ) -> MultiDeviceResult<()> {
-        let index = self
-            .identities
-            .iter()
-            .position(|identity| &identity.identity_id == identity_id)
-            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
-                identity_id: identity_id.to_string(),
-            })?;
-        if !self.identities[index]
-            .members
-            .iter()
-            .any(|member| &member.app_id == app_id)
-        {
-            return Err(MultiDeviceError::InvalidDeviceIdentity(
-                "retired app key does not belong to the selected identity".to_owned(),
-            ));
-        }
-        if self.identities[index].members.len() == 1 {
-            self.identities.remove(index);
-            self.selection = self
-                .identities
-                .first()
-                .map_or(IdentitySelection::Empty, |identity| {
-                    IdentitySelection::Selected(identity.identity_id.clone())
-                });
-        } else {
-            self.identities[index].remove_member(app_id)?;
-        }
-        self.retire_app_id(app_id.clone());
-        self.validate()
-    }
-
-    /// Permanently reject one installation key discovered outside a readable directory.
-    pub fn retire_app_id(&mut self, app_id: crate::AppId) {
-        if !self.retired_app_ids.contains(&app_id) {
-            self.retired_app_ids.push(app_id);
-        }
+        self,
+        request: DirectoryMemberSigningUpdate<'_>,
+    ) -> Result<Self, IdentityDirectoryRejection> {
+        self.take_identity(request.identity_id)?
+            .update(|identity| identity.set_member_signing_public_key(request.member))
     }
 
     fn ensure_app_key_active(&self, app_key: &AppKey) -> MultiDeviceResult<()> {
@@ -527,33 +534,62 @@ impl IdentityDirectory {
             .ok_or(MultiDeviceError::InvalidIdentitySelection)
     }
 
-    pub fn selected_mut(&mut self) -> MultiDeviceResult<&mut IdentityRecord> {
-        let IdentitySelection::Selected(identity_id) = &self.selection else {
-            return Err(MultiDeviceError::InvalidIdentitySelection);
+    pub fn add_selected_member(
+        self,
+        member: IdentityMember,
+    ) -> Result<Self, IdentityDirectoryRejection> {
+        let identity_id = match self.selected() {
+            Ok(identity) => identity.identity_id.clone(),
+            Err(cause) => {
+                return Err(IdentityDirectoryRejection {
+                    directory: self,
+                    cause,
+                });
+            }
         };
-        self.identities
-            .iter_mut()
-            .find(|record| &record.identity_id == identity_id)
-            .ok_or(MultiDeviceError::InvalidIdentitySelection)
+        self.take_identity(&identity_id)?
+            .update(|identity| identity.add_member(member))
     }
 
-    pub fn replace_selected(&mut self, record: IdentityRecord) -> MultiDeviceResult<()> {
-        let IdentitySelection::Selected(identity_id) = &self.selection else {
-            return Err(MultiDeviceError::InvalidIdentitySelection);
-        };
-        if identity_id != &record.identity_id {
-            return Err(MultiDeviceError::InvalidIdentitySelection);
+    pub fn replace_selected(
+        mut self,
+        record: IdentityRecord,
+    ) -> Result<Self, IdentityDirectoryRejection> {
+        let valid_selection = matches!(&self.selection, IdentitySelection::Selected(identity_id) if identity_id == &record.identity_id);
+        if !valid_selection {
+            return Err(IdentityDirectoryRejection {
+                directory: self,
+                cause: MultiDeviceError::InvalidIdentitySelection,
+            });
         }
         if record
             .members
             .iter()
             .any(|member| self.retired_app_ids.contains(&member.app_id))
         {
-            return Err(MultiDeviceError::RetiredAppKey);
+            return Err(IdentityDirectoryRejection {
+                directory: self,
+                cause: MultiDeviceError::RetiredAppKey,
+            });
         }
-        let selected = self.selected_mut()?;
+        let Some(index) = self
+            .identities
+            .iter()
+            .position(|identity| identity.identity_id == record.identity_id)
+        else {
+            return Err(IdentityDirectoryRejection {
+                directory: self,
+                cause: MultiDeviceError::InvalidIdentitySelection,
+            });
+        };
+        let Some(selected) = self.identities.get_mut(index) else {
+            return Err(IdentityDirectoryRejection {
+                directory: self,
+                cause: MultiDeviceError::InvalidIdentitySelection,
+            });
+        };
         *selected = record;
-        Ok(())
+        Ok(self)
     }
 }
 
@@ -566,7 +602,6 @@ impl Default for IdentityDirectory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::IdentityVaultDekReconciliation;
 
     fn known_epoch(epoch: char, checkpoint: char) -> anyhow::Result<crate::IdentityVaultDekEpoch> {
         let id = |fill: char| {
@@ -582,14 +617,33 @@ mod tests {
     fn creates_and_selects_independent_identities() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let mut directory = IdentityDirectory::empty();
-        let personal = directory.create_identity(" Personal ", &app_key, None)?;
-        let work = directory.create_identity("Work", &app_key, None)?;
+        let resolved_identity = directory.create_identity(IdentityCreation {
+            label: " Personal ",
+            app_key: &app_key,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        directory = resolved_identity.directory;
+        let personal = resolved_identity.identity_id;
+        let resolved_identity = directory.create_identity(IdentityCreation {
+            label: "Work",
+            app_key: &app_key,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        directory = resolved_identity.directory;
+        let work = resolved_identity.identity_id;
 
         assert_eq!(directory.identities().len(), 2);
         assert_eq!(directory.selected()?.identity_id, work);
-        assert_eq!(directory.identities()[0].label, "Personal");
+        assert_eq!(
+            directory
+                .identities()
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("personal identity must remain"))?
+                .label,
+            "Personal"
+        );
 
-        directory.select(&personal)?;
+        directory = directory.select(&personal)?;
         assert_eq!(directory.selected()?.identity_id, personal);
         Ok(())
     }
@@ -598,7 +652,19 @@ mod tests {
     fn rejects_empty_labels_and_unknown_selection() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let mut directory = IdentityDirectory::empty();
-        assert!(directory.create_identity("   ", &app_key, None).is_err());
+        let rejected = match directory.create_identity(IdentityCreation {
+            label: "   ",
+            app_key: &app_key,
+            member_label: MemberLabelState::Unnamed,
+        }) {
+            Err(rejected) => rejected,
+            Ok(_) => anyhow::bail!("Empty label was accepted"),
+        };
+        directory = rejected.directory;
+        assert!(matches!(
+            rejected.cause,
+            MultiDeviceError::IdentityLabelEmpty
+        ));
         assert!(directory.select(&IdentityId::generate()?).is_err());
         Ok(())
     }
@@ -606,7 +672,8 @@ mod tests {
     #[test]
     fn rejects_invalid_persisted_state() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
-        let record = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let record =
+            IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)?;
         let duplicate = record.clone();
         assert!(
             IdentityDirectory::from_records(vec![record, duplicate], IdentitySelection::Empty,)
@@ -619,117 +686,15 @@ mod tests {
     fn replacement_cannot_change_selected_identity() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let mut directory = IdentityDirectory::empty();
-        directory.create_identity("Personal", &app_key, None)?;
-        let other = IdentityRecord::create_with_app_key("Other", &app_key, None)?;
-        assert!(directory.replace_selected(other).is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn authenticated_handoff_enrolls_only_before_vault_creation() -> anyhow::Result<()> {
-        let website_key = AppKey::generate()?;
-        let extension_key = AppKey::generate()?;
-        let mut directory = IdentityDirectory::empty();
-        let identity_id = directory.create_identity("Personal", &website_key, None)?;
-        assert_eq!(
-            directory.enroll_selected_app_key_for_vault_creation(&extension_key, "Personal")?,
-            identity_id
-        );
-        assert_eq!(directory.selected()?.members.len(), 2);
-
-        let later_key = AppKey::generate()?;
-        let _ =
-            directory.open_or_generate_vault_dek(&extension_key, crate::StoreId::generate()?)?;
-        assert!(matches!(
-            directory.enroll_selected_app_key_for_vault_creation(&later_key, "Personal"),
-            Err(MultiDeviceError::IdentityEnrollmentRequired)
-        ));
-        Ok(())
-    }
-
-    #[test]
-    fn paired_handoff_enrolls_the_vault_owner_not_the_selection() -> anyhow::Result<()> {
-        let website_key = AppKey::generate()?;
-        let extension_key = AppKey::generate()?;
-        let mut directory = IdentityDirectory::empty();
-        let owner_id = directory.create_identity("Personal", &website_key, None)?;
-        let store_id = crate::StoreId::generate()?;
-        let expected_keys = directory.open_or_generate_vault_dek(&website_key, store_id.clone())?;
-        let epoch = known_epoch('a', 'b')?;
-        directory.selected_mut()?.vault_deks[0].key_epoch = epoch.clone();
-        let selected_id = directory.create_identity("Work", &website_key, None)?;
-
-        let enrolled_id =
-            directory.enroll_app_key_for_owned_vault(&website_key, &extension_key, &store_id)?;
-
-        assert_eq!(enrolled_id, owner_id);
-        assert_ne!(enrolled_id, selected_id);
-        assert_eq!(
-            directory.open_or_generate_vault_dek(&extension_key, store_id)?,
-            expected_keys
-        );
-        assert_eq!(directory.selected()?.members.len(), 1);
-        assert_eq!(directory.identities()[0].vault_deks[0].key_epoch, epoch);
-        Ok(())
-    }
-
-    #[test]
-    fn paired_handoff_preserves_vault_level_revocations() -> anyhow::Result<()> {
-        let authorizer = AppKey::generate()?;
-        let revoked = AppKey::generate()?;
-        let handoff = AppKey::generate()?;
-        let mut directory = IdentityDirectory::empty();
-        directory.create_identity("Personal", &authorizer, None)?;
-        directory.selected_mut()?.add_member(IdentityMember {
-            app_id: revoked.app_id().clone(),
-            auth_id: revoked.auth_id(),
-            public_key: revoked.public_key(),
-            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: None,
+        let resolved_identity = directory.create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &app_key,
+            member_label: MemberLabelState::Unnamed,
         })?;
-        let store_id = crate::StoreId::generate()?;
-        let keys = directory.open_or_generate_vault_dek(&authorizer, store_id.clone())?;
-        directory.reconcile_vault_dek(
-            &authorizer,
-            &store_id,
-            &IdentityVaultDekReconciliation {
-                secrets_envelope: authorizer
-                    .public_key()
-                    .seal_bytes(keys.secrets_key.as_str().as_bytes())?,
-                members_envelope: authorizer
-                    .public_key()
-                    .seal_bytes(keys.members_key.as_str().as_bytes())?,
-                epoch_update: crate::IdentityVaultDekEpochUpdate::Observe {
-                    key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
-                    checkpoint_ancestors: Vec::new(),
-                },
-                authorized_auth_ids: vec![authorizer.auth_id()],
-            },
-        )?;
-
-        directory.enroll_app_key_for_owned_vault(&authorizer, &handoff, &store_id)?;
-
-        let grant = directory
-            .selected()?
-            .vault_dek(&store_id)
-            .ok_or_else(|| anyhow::anyhow!("vault grant missing"))?;
-        for envelopes in [&grant.secrets_envelopes, &grant.members_envelopes] {
-            assert!(
-                envelopes
-                    .iter()
-                    .any(|entry| entry.app_id == *authorizer.app_id())
-            );
-            assert!(
-                envelopes
-                    .iter()
-                    .any(|entry| entry.app_id == *handoff.app_id())
-            );
-            assert!(
-                envelopes
-                    .iter()
-                    .all(|entry| entry.app_id != *revoked.app_id())
-            );
-        }
+        directory = resolved_identity.directory;
+        let other =
+            IdentityRecord::create_with_app_key("Other", &app_key, MemberLabelState::Unnamed)?;
+        assert!(directory.replace_selected(other).is_err());
         Ok(())
     }
 
@@ -737,19 +702,40 @@ mod tests {
     fn genesis_retry_reopens_original_owner_after_selection_changes() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let mut directory = IdentityDirectory::empty();
-        let owner_id = directory.create_identity("Personal", &app_key, None)?;
+        let resolved_identity = directory.create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &app_key,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        directory = resolved_identity.directory;
+        let owner_id = resolved_identity.identity_id;
         let store_id = crate::StoreId::generate()?;
-        let original = directory.open_or_generate_vault_dek(&app_key, store_id.clone())?;
-        directory.create_identity("Work", &app_key, None)?;
+        let opened_identity = directory.open_or_generate_vault_dek(IdentityVaultKeyOpening {
+            app_key: &app_key,
+            store_id: store_id.clone(),
+        })?;
+        directory = opened_identity.directory;
+        let original = opened_identity.keys;
+        let resolved_identity = directory.create_identity(IdentityCreation {
+            label: "Work",
+            app_key: &app_key,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        directory = resolved_identity.directory;
 
-        let reopened = directory.open_or_generate_vault_dek(&app_key, store_id.clone())?;
+        let opened_identity = directory.open_or_generate_vault_dek(IdentityVaultKeyOpening {
+            app_key: &app_key,
+            store_id: store_id.clone(),
+        })?;
+        directory = opened_identity.directory;
+        let reopened = opened_identity.keys;
         assert_eq!(reopened, original);
         let owner = directory
             .identities()
             .iter()
             .find(|identity| identity.identity_id == owner_id)
             .ok_or_else(|| anyhow::anyhow!("original owner missing"))?;
-        assert!(owner.vault_dek(&store_id).is_some());
+        assert!(owner.owns_vault(&store_id));
         assert_eq!(directory.selected()?.label, "Work");
 
         let unenrolled = AppKey::generate()?;
@@ -770,7 +756,13 @@ mod tests {
     -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let mut directory = IdentityDirectory::empty();
-        let personal = directory.create_identity("Personal", &app_key, None)?;
+        let resolved_identity = directory.create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &app_key,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        directory = resolved_identity.directory;
+        let personal = resolved_identity.identity_id;
         let store_id = crate::StoreId::generate()?;
         let keys = crate::VaultKeys::generate()?;
         let imported = IdentityRecord::synthesize_from_legacy_vault(
@@ -780,7 +772,7 @@ mod tests {
                 auth_id: app_key.auth_id(),
                 public_key: app_key.public_key(),
                 signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-                label: None,
+                label: MemberLabelState::Unnamed,
             },
             store_id.clone(),
             app_key
@@ -791,56 +783,96 @@ mod tests {
                 .seal_bytes(keys.members_key.as_str().as_bytes())?,
             crate::IdentityVaultDekEpoch::LegacyUnknown,
         )?;
-        let secrets_envelope = imported.vault_deks[0].secrets_envelopes[0].envelope.clone();
-        let members_envelope = imported.vault_deks[0].members_envelopes[0].envelope.clone();
+        let imported_vault = imported
+            .vault_deks
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("import fixture must contain its vault DEK"))?;
+        let secrets_envelope = imported_vault
+            .secrets_envelopes
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("import fixture must contain a secrets envelope"))?
+            .envelope
+            .clone();
+        let members_envelope = imported_vault
+            .members_envelopes
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("import fixture must contain a members envelope"))?
+            .envelope
+            .clone();
 
-        let imported_id = directory.import_legacy_vault(
-            "Imported",
-            &app_key,
-            store_id.clone(),
-            observed_reconciliation(&app_key, secrets_envelope.clone(), members_envelope.clone())?,
-        )?;
+        let resolved_identity = directory.import_legacy_vault(DirectoryLegacyVaultImport {
+            label: "Imported",
+            app_key: &app_key,
+            store_id: store_id.clone(),
+            reconciliation: observed_reconciliation(
+                &app_key,
+                secrets_envelope.clone(),
+                members_envelope.clone(),
+            )?,
+        })?;
+        directory = resolved_identity.directory;
+        let imported_id = resolved_identity.identity_id;
         assert_eq!(imported_id, personal);
         assert_eq!(directory.identities().len(), 1);
         assert_eq!(directory.selected()?.identity_id, imported_id);
         assert_eq!(
-            directory.selected()?.vault_deks[0].key_epoch,
+            directory
+                .selected()?
+                .vault_deks
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("imported identity must contain its vault DEK"))?
+                .key_epoch,
             known_epoch('e', 'f')?
         );
 
-        let same_id = directory.import_legacy_vault(
-            "Ignored",
-            &app_key,
-            store_id,
-            observed_reconciliation(&app_key, secrets_envelope, members_envelope)?,
-        )?;
+        let resolved_identity = directory.import_legacy_vault(DirectoryLegacyVaultImport {
+            label: "Ignored",
+            app_key: &app_key,
+            store_id: store_id,
+            reconciliation: observed_reconciliation(&app_key, secrets_envelope, members_envelope)?,
+        })?;
+        directory = resolved_identity.directory;
+        let same_id = resolved_identity.identity_id;
         assert_eq!(same_id, imported_id);
         assert_eq!(directory.identities().len(), 1);
 
-        directory
-            .selected_mut()?
-            .generate_vault_dek(crate::StoreId::generate()?)?;
+        directory = directory
+            .open_or_generate_vault_dek(IdentityVaultKeyOpening {
+                app_key: &app_key,
+                store_id: crate::StoreId::generate()?,
+            })?
+            .directory;
         let recovered_app_key = AppKey::generate()?;
-        let imported_vault = directory.selected()?.vault_deks[0].clone();
+        let imported_vault = directory
+            .selected()?
+            .vault_deks
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("selected identity must contain its imported vault"))?;
         let recovered_secrets_envelope = recovered_app_key
             .public_key()
             .seal_bytes(keys.secrets_key.as_str().as_bytes())?;
         let recovered_members_envelope = recovered_app_key
             .public_key()
             .seal_bytes(keys.members_key.as_str().as_bytes())?;
-        let result = directory.import_legacy_vault(
-            "Ignored",
-            &recovered_app_key,
-            imported_vault.store_id,
-            observed_reconciliation(
+        let result = directory.import_legacy_vault(DirectoryLegacyVaultImport {
+            label: "Ignored",
+            app_key: &recovered_app_key,
+            store_id: imported_vault.store_id,
+            reconciliation: observed_reconciliation(
                 &recovered_app_key,
                 recovered_secrets_envelope,
                 recovered_members_envelope,
             )?,
-        );
+        });
+        let rejected = match result {
+            Err(rejected) => rejected,
+            Ok(_) => anyhow::bail!("Unenrolled import was accepted"),
+        };
+        directory = rejected.directory;
         assert!(matches!(
-            result,
-            Err(MultiDeviceError::IdentityEnrollmentRequired)
+            rejected.cause,
+            MultiDeviceError::IdentityEnrollmentRequired
         ));
         let selected = directory.selected()?;
         assert_eq!(selected.vault_deks.len(), 2);
@@ -851,7 +883,10 @@ mod tests {
                 .any(|member| member.app_id == *recovered_app_key.app_id())
         );
         assert!(
-            !selected.vault_deks[0]
+            !selected
+                .vault_deks
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("selected identity must retain its first vault"))?
                 .secrets_envelopes
                 .iter()
                 .any(|entry| entry.app_id == *recovered_app_key.app_id())
@@ -873,86 +908,5 @@ mod tests {
             },
             authorized_auth_ids: vec![app_key.auth_id()],
         })
-    }
-
-    #[test]
-    fn device_recovery_removes_stale_local_ownership() -> anyhow::Result<()> {
-        let inaccessible_key = AppKey::generate()?;
-        let store_id = crate::StoreId::generate()?;
-        let mut directory = IdentityDirectory::empty();
-        let identity_id = directory.create_identity("Personal", &inaccessible_key, None)?;
-        let peer_key = AppKey::generate()?;
-        directory.selected_mut()?.add_member(IdentityMember {
-            app_id: peer_key.app_id().clone(),
-            auth_id: peer_key.auth_id(),
-            public_key: peer_key.public_key(),
-            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: None,
-        })?;
-        let _ = directory.open_or_generate_vault_dek_for_identity(
-            &identity_id,
-            &inaccessible_key,
-            store_id.clone(),
-        )?;
-
-        directory.reset_for_device_recovery(Some(inaccessible_key.app_id().clone()));
-
-        assert!(directory.identities().is_empty());
-        assert_eq!(directory.selection(), &IdentitySelection::Empty);
-        assert!(matches!(
-            directory.create_identity("Stale", &inaccessible_key, None),
-            Err(MultiDeviceError::RetiredAppKey)
-        ));
-        directory.create_identity("Peer", &peer_key, None)?;
-        let replacement_key = AppKey::generate()?;
-        directory.validate_vault_enrollment(&replacement_key, &store_id)?;
-        Ok(())
-    }
-
-    #[test]
-    fn scoped_recovery_preserves_other_local_identities() -> anyhow::Result<()> {
-        let first_key = AppKey::generate()?;
-        let second_key = AppKey::generate()?;
-        let mut directory = IdentityDirectory::empty();
-        let first_id = directory.create_identity("First", &first_key, None)?;
-        let second_id = directory.create_identity("Second", &second_key, None)?;
-
-        directory.retire_local_identity_key(&second_id, second_key.app_id())?;
-
-        assert_eq!(directory.identities().len(), 1);
-        assert_eq!(directory.identities()[0].identity_id, first_id);
-        assert_eq!(
-            directory.selection(),
-            &IdentitySelection::Selected(first_id.clone())
-        );
-        assert!(directory.retired_app_ids().contains(second_key.app_id()));
-        assert!(matches!(
-            directory.create_identity("Retired", &second_key, None),
-            Err(MultiDeviceError::RetiredAppKey)
-        ));
-        Ok(())
-    }
-
-    #[test]
-    fn selection_can_be_cleared_without_discarding_peer_only_identity() -> anyhow::Result<()> {
-        let local_key = AppKey::generate()?;
-        let peer_key = AppKey::generate()?;
-        let mut directory = IdentityDirectory::empty();
-        let identity_id = directory.create_identity("Personal", &local_key, None)?;
-        directory.selected_mut()?.add_member(IdentityMember {
-            app_id: peer_key.app_id().clone(),
-            auth_id: peer_key.auth_id(),
-            public_key: peer_key.public_key(),
-            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: None,
-        })?;
-        directory.retire_local_identity_key(&identity_id, local_key.app_id())?;
-
-        directory.clear_selection();
-
-        assert_eq!(directory.identities().len(), 1);
-        assert_eq!(directory.selection(), &IdentitySelection::Empty);
-        directory.validate()?;
-        Ok(())
     }
 }

@@ -13,6 +13,7 @@ const LEGACY_APP_FILES = new Set([
   '/extension-connect.html',
 ])
 
+/** @param {string} pathname */
 function isLegacyAppPath(pathname) {
   return (
     LEGACY_APP_FILES.has(pathname) ||
@@ -22,6 +23,9 @@ function isLegacyAppPath(pathname) {
   )
 }
 
+/** @typedef {{ ASSETS: { fetch: typeof fetch } }} LegacyRouteBindings */
+
+/** @type {{ fetch(request: Request, env: LegacyRouteBindings): Promise<Response> }} */
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url)

@@ -92,9 +92,9 @@ impl SecretRecord {
     pub fn group_key(&self) -> String {
         match &self.data {
             SecretValue::Login(value) => WebsiteHost::normalize(&value.website_url)
-                .map_or_else(|| "No Website".to_owned(), WebsiteHost::into_string),
+                .map_or_else(|_| "No Website".to_owned(), WebsiteHost::into_string),
             SecretValue::ApiKey(value) => WebsiteHost::normalize(&value.website_url)
-                .map_or_else(|| "No Website".to_owned(), WebsiteHost::into_string),
+                .map_or_else(|_| "No Website".to_owned(), WebsiteHost::into_string),
             SecretValue::SeedPhrase(value) => {
                 let name = value.name.trim();
                 if name.is_empty() {
@@ -186,6 +186,7 @@ impl SecretRecord {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use crate::CreditCardFields;
     use crate::{AuthenticatorSecret, CreditCardSecret};
 
     use super::*;
@@ -256,15 +257,15 @@ mod tests {
         let record = SecretRecord {
             id: SecretId::from_vault_record("secret_card"),
             secret_type: SecretType::CreditCard,
-            data: SecretValue::CreditCard(CreditCardSecret::from_fields(
-                "Personal Visa",
-                "Ada Lovelace",
-                "4111 1111 1111 1111",
-                "12",
-                "2030",
-                "123",
-                "work",
-            )?),
+            data: SecretValue::CreditCard(CreditCardSecret::from_fields(CreditCardFields {
+                title: "Personal Visa",
+                cardholder_name: "Ada Lovelace",
+                number: "4111 1111 1111 1111",
+                expiration_month: "12",
+                expiration_year: "2030",
+                cvv: "123",
+                notes: "work",
+            })?),
         };
         let item = record.list_item();
         assert_eq!(item.secret_type(), SecretType::CreditCard);

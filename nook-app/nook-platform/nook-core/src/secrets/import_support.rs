@@ -55,6 +55,11 @@ pub(crate) struct CsvImportReader<'a> {
     reader: Reader<&'a [u8]>,
 }
 
+pub(crate) struct ReadCsvHeaders<'a> {
+    pub(crate) reader: CsvImportReader<'a>,
+    pub(crate) headers: StringRecord,
+}
+
 pub(crate) struct CsvImportConversion<E, F> {
     pub(crate) too_many_records: E,
     pub(crate) convert: F,
@@ -70,8 +75,12 @@ impl<'a> CsvImportReader<'a> {
         }
     }
 
-    pub(crate) fn headers(&mut self) -> Result<&StringRecord, csv::Error> {
-        self.reader.headers()
+    pub(crate) fn headers(mut self) -> Result<ReadCsvHeaders<'a>, csv::Error> {
+        let headers = self.reader.headers()?.clone();
+        Ok(ReadCsvHeaders {
+            reader: self,
+            headers,
+        })
     }
 
     pub(crate) fn collect<T, E, F>(
@@ -112,7 +121,7 @@ impl<'a> CsvImportReader<'a> {
     where
         E: From<csv::Error>,
         F: FnMut(&StringRecord) -> Result<(Vec<T>, usize), E>,
-        C: FnOnce(&mut Vec<T>),
+        C: FnOnce(Vec<T>),
     {
         let CsvImportConversion {
             too_many_records,
@@ -125,13 +134,13 @@ impl<'a> CsvImportReader<'a> {
         };
         for record in self.reader.records() {
             if collection.source_count >= MAX_CSV_RECORDS {
-                cleanup(&mut collection.items);
+                cleanup(collection.items);
                 return Err(too_many_records);
             }
             let record = match record {
                 Ok(record) => record,
                 Err(error) => {
-                    cleanup(&mut collection.items);
+                    cleanup(collection.items);
                     return Err(error.into());
                 }
             };
@@ -139,7 +148,7 @@ impl<'a> CsvImportReader<'a> {
             let (mut converted, skipped) = match convert(&record) {
                 Ok(converted) => converted,
                 Err(error) => {
-                    cleanup(&mut collection.items);
+                    cleanup(collection.items);
                     return Err(error);
                 }
             };
@@ -166,6 +175,13 @@ impl<'a> CsvHeader<'a> {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum CsvExportColumn {
+    #[default]
+    NotExported,
+    Exported(usize),
+}
+
 pub(crate) struct CsvRecordFields<'a> {
     record: &'a StringRecord,
 }
@@ -179,8 +195,11 @@ impl<'a> CsvRecordFields<'a> {
     pub(crate) fn password(&self, index: usize) -> String {
         self.record.get(index).unwrap_or_default().to_owned()
     }
-    pub(crate) fn optional(&self, index: Option<usize>) -> String {
-        index.map_or_else(String::new, |index| self.trimmed(index))
+    pub(crate) fn optional(&self, index: CsvExportColumn) -> String {
+        match index {
+            CsvExportColumn::NotExported => String::new(),
+            CsvExportColumn::Exported(index) => self.trimmed(index),
+        }
     }
 }
 
@@ -216,19 +235,26 @@ where
 }
 
 /// A source label becomes metadata only when it differs from the URL fallback.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum SourceLabelExclusion {
+    EmptyLabel,
+    DuplicatesUrl,
+}
 pub(crate) struct SourceLabelMetadata<'a> {
     pub(crate) key: &'a str,
     pub(crate) label: &'a str,
     pub(crate) website_url: &'a str,
 }
 impl SourceLabelMetadata<'_> {
-    pub(crate) fn entry(&self) -> Option<(String, String)> {
+    pub(crate) fn entry(&self) -> Result<(String, String), SourceLabelExclusion> {
         let label = self.label.trim();
         let website_url = self.website_url.trim();
-        if label.is_empty() || label == website_url {
-            None
+        if label.is_empty() {
+            Err(SourceLabelExclusion::EmptyLabel)
+        } else if label == website_url {
+            Err(SourceLabelExclusion::DuplicatesUrl)
         } else {
-            Some((self.key.to_owned(), label.to_owned()))
+            Ok((self.key.to_owned(), label.to_owned()))
         }
     }
 }
@@ -236,8 +262,8 @@ impl SourceLabelMetadata<'_> {
 #[cfg(test)]
 mod tests {
     use super::{
-        CsvHeader, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
-        MAX_CSV_RECORDS, SourceLabelMetadata,
+        CsvExportColumn, CsvHeader, CsvImportConversion, CsvImportReader, CsvRecordFields,
+        ImportMetadata, MAX_CSV_RECORDS, SourceLabelExclusion, SourceLabelMetadata,
     };
     use csv::{ErrorKind, ReaderBuilder, StringRecord, Trim};
     use std::cell::Cell;
@@ -276,11 +302,10 @@ mod tests {
 
     #[test]
     fn collection_retains_observed_headers_and_exact_record_bytes() -> anyhow::Result<()> {
-        let mut reader = CsvImportReader::new(" Password ,Name\n\" 密碼 \nsecond line \", name \n");
-        assert_eq!(
-            reader.headers()?,
-            &StringRecord::from(vec!["Password", "Name"])
-        );
+        let reader = CsvImportReader::new(" Password ,Name\n\" 密碼 \nsecond line \", name \n");
+        let read = reader.headers()?;
+        assert_eq!(read.headers, StringRecord::from(vec!["Password", "Name"]));
+        let reader = read.reader;
         let collection = reader.collect(CsvImportConversion {
             too_many_records: CsvFixtureError::Limit,
             convert: |record: &StringRecord| {
@@ -434,9 +459,9 @@ mod tests {
         assert_eq!(fields.password(3), "");
         assert_eq!(fields.password(9), "");
         assert_eq!(fields.trimmed(9), "");
-        assert_eq!(fields.optional(Some(0)), "alice");
-        assert_eq!(fields.optional(Some(9)), "");
-        assert_eq!(fields.optional(None), "");
+        assert_eq!(fields.optional(CsvExportColumn::Exported(0)), "alice");
+        assert_eq!(fields.optional(CsvExportColumn::Exported(9)), "");
+        assert_eq!(fields.optional(CsvExportColumn::NotExported), "");
         assert_eq!(record.get(1), Some(" 密碼 \t"));
     }
 
@@ -499,7 +524,7 @@ mod tests {
                 website_url: "example",
             })
             .entry(),
-            Some((" title ".to_owned(), "EXAMPLE".to_owned()))
+            Ok((" title ".to_owned(), "EXAMPLE".to_owned()))
         );
         assert_eq!(
             (SourceLabelMetadata {
@@ -508,7 +533,7 @@ mod tests {
                 website_url: " example\n",
             })
             .entry(),
-            None
+            Err(SourceLabelExclusion::DuplicatesUrl)
         );
     }
 
@@ -521,7 +546,7 @@ mod tests {
                 website_url: "https://github.com"
             })
             .entry(),
-            Some(("name".to_owned(), "GitHub work".to_owned()))
+            Ok(("name".to_owned(), "GitHub work".to_owned()))
         );
         assert_eq!(
             (SourceLabelMetadata {
@@ -530,7 +555,7 @@ mod tests {
                 website_url: "https://example.com"
             })
             .entry(),
-            None
+            Err(SourceLabelExclusion::DuplicatesUrl)
         );
         assert_eq!(
             (SourceLabelMetadata {
@@ -539,7 +564,36 @@ mod tests {
                 website_url: "https://example.com"
             })
             .entry(),
-            None
+            Err(SourceLabelExclusion::EmptyLabel)
         );
+    }
+}
+
+/// Reasons an export record cannot produce a supported secret.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ImportSkipReason {
+    EmptyRecord,
+    PasswordlessLogin,
+    UnsupportedKind,
+    IncompletePayload,
+    InvalidCard,
+}
+#[allow(clippy::large_enum_variant)]
+pub(crate) enum ImportItemDisposition {
+    Imported(crate::SecretValue),
+    Skipped(ImportSkipReason),
+}
+impl ImportItemDisposition {
+    pub(crate) fn append(self, items: &mut Vec<crate::SecretValue>) {
+        match self {
+            Self::Imported(item) => items.push(item),
+            Self::Skipped(
+                ImportSkipReason::EmptyRecord
+                | ImportSkipReason::PasswordlessLogin
+                | ImportSkipReason::UnsupportedKind
+                | ImportSkipReason::IncompletePayload
+                | ImportSkipReason::InvalidCard,
+            ) => {}
+        }
     }
 }

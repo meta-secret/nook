@@ -5,6 +5,7 @@ use std::{
     env,
     ffi::OsStr,
     fs,
+    ops::Deref,
     os::unix::fs as unix_fs,
     path::{Path, PathBuf},
     process::Command,
@@ -12,11 +13,29 @@ use std::{
     sync::OnceLock,
 };
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
 }
 
 fn repository_paths(root: &Path, source_context: bool) -> anyhow::Result<Vec<PathBuf>> {
@@ -222,7 +241,7 @@ fn repository_language_violations(
 
 #[test]
 fn repository_automation_uses_only_typescript_rust_and_taskfiles() -> anyhow::Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     let violations = repository_language_violations(
         &root,
         env::var_os("NOOK_REPOSITORY_SOURCE_CONTEXT").is_some(),
@@ -237,7 +256,7 @@ fn repository_automation_uses_only_typescript_rust_and_taskfiles() -> anyhow::Re
 
 #[test]
 fn repository_language_rule_stays_wired_to_agent_guidance() -> anyhow::Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     for path in [
         ".cortex/AGENTS.md",
         ".cortex/shared/dynamic-skills/typescript-rust-automation-only.md",
@@ -367,6 +386,10 @@ fn automation_symlinks_fail_closed() -> anyhow::Result<()> {
     unix_fs::symlink("target", fixture.path().join("linked-script"))?;
     let violations = repository_language_violations(fixture.path(), false)?;
     assert_eq!(violations.len(), 1);
-    assert!(violations[0].contains("symlinks are prohibited"));
+    assert!(
+        violations
+            .first()
+            .is_some_and(|violation| violation.contains("symlinks are prohibited"))
+    );
     Ok(())
 }

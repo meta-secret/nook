@@ -1,9 +1,11 @@
-import { describe, expect, test } from 'bun:test';
+import { ok } from 'neverthrow';
 import {
-  actionJobsRequestedValidation,
-  type ActionJobsRequestedValidationRequest,
-} from '../src/lib/agent-stats-github-api.ts';
-import { substantiveReviewBodyFindingCount } from '../src/lib/agent-stats-github-review.ts';
+  GitHubActionJobs,
+  GitHubValidationRequest,
+} from '../src/lib/agent-stats-github-jobs.ts';
+import { describe, expect, test } from 'bun:test';
+import { type ActionJobsRequestedValidationRequest } from '../src/lib/agent-stats-github-api.ts';
+import { ReviewFindingBody } from '../src/lib/agent-stats-github-review.ts';
 
 describe('agent stats GitHub classification', () => {
   test('requires supported request provenance or a non-skipped job', () => {
@@ -74,15 +76,66 @@ describe('agent stats GitHub classification', () => {
       ],
     };
 
-    expect(actionJobsRequestedValidation(skippedRequest)).toBe(false);
-    expect(actionJobsRequestedValidation(requestedRequest)).toBe(true);
-    expect(actionJobsRequestedValidation(cancelledRequest)).toBe(true);
-    expect(actionJobsRequestedValidation(unsupportedCancelledRequest)).toBe(
-      false,
-    );
-    expect(actionJobsRequestedValidation(supportedThenFailedRequest)).toBe(
-      true,
-    );
+    expect(
+      new GitHubActionJobs(skippedRequest.jobs).validationRequest(
+        skippedRequest.gateJobName,
+      ),
+    ).toEqual(ok(GitHubValidationRequest.NotRequested));
+    expect(
+      new GitHubActionJobs(requestedRequest.jobs).validationRequest(
+        requestedRequest.gateJobName,
+      ),
+    ).toEqual(ok(GitHubValidationRequest.Requested));
+    expect(
+      new GitHubActionJobs(cancelledRequest.jobs).validationRequest(
+        cancelledRequest.gateJobName,
+      ),
+    ).toEqual(ok(GitHubValidationRequest.Requested));
+    expect(
+      new GitHubActionJobs(unsupportedCancelledRequest.jobs).validationRequest(
+        unsupportedCancelledRequest.gateJobName,
+      ),
+    ).toEqual(ok(GitHubValidationRequest.NotRequested));
+    expect(
+      new GitHubActionJobs(supportedThenFailedRequest.jobs).validationRequest(
+        supportedThenFailedRequest.gateJobName,
+      ),
+    ).toEqual(ok(GitHubValidationRequest.Requested));
+  });
+
+  test('central CI ignores automatic policy jobs and accepts nested validation', () => {
+    const gate = 'PR validation / Validate explicit CI request';
+    expect(
+      new GitHubActionJobs([
+        { name: 'Classify CI paths', conclusion: 'success' },
+        {
+          name: 'Repository policy / Enforce repository policy',
+          conclusion: 'success',
+        },
+        { name: 'Hive / Verify', conclusion: 'success' },
+        {
+          name: 'Web research / Build and deploy research catalog',
+          conclusion: 'success',
+        },
+        {
+          name: 'PR validation / Native Rust verification',
+          conclusion: 'skipped',
+        },
+      ]).validationRequest(gate),
+    ).toEqual(ok(GitHubValidationRequest.NotRequested));
+    expect(
+      new GitHubActionJobs([
+        { name: 'PR validation / Web verification', conclusion: 'failure' },
+      ]).validationRequest(gate),
+    ).toEqual(ok(GitHubValidationRequest.Requested));
+    expect(
+      new GitHubActionJobs([
+        {
+          name: 'Rust ecosystem / Kani bounded proofs',
+          conclusion: 'cancelled',
+        },
+      ]).validationRequest(gate),
+    ).toEqual(ok(GitHubValidationRequest.Requested));
   });
 
   test('counts findings in noncanonical details blocks', () => {
@@ -94,7 +147,7 @@ Here are some automated review suggestions for this pull request.
 
 <details><summary>Additional finding</summary>Do not discard this.</details>`;
 
-    expect(substantiveReviewBodyFindingCount(reviewBody)).toBe(1);
+    expect(ReviewFindingBody.countFindings(reviewBody)).toBe(1);
   });
 
   test('counts text inserted into an otherwise status-only review', () => {
@@ -106,6 +159,6 @@ Preserve this actionable text.
 
 **Reviewed commit:** \`1234567890\``;
 
-    expect(substantiveReviewBodyFindingCount(reviewBody)).toBe(1);
+    expect(ReviewFindingBody.countFindings(reviewBody)).toBe(1);
   });
 });

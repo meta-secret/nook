@@ -36,18 +36,21 @@ export function readCachedGitHubStarCount(
       return { kind: GitHubStarsCacheLookupKind.Missing }
     }
     const cached: unknown = JSON.parse(serialized)
-    if (!(cached instanceof Object)) {
+    if (!cached || typeof cached !== 'object') {
       return { kind: GitHubStarsCacheLookupKind.Missing }
     }
-    const record = cached as Record<string, unknown>
     if (
-      Number.isSafeInteger(record.count) &&
-      Number(record.count) >= 0 &&
-      Number.isSafeInteger(record.updatedAt)
+      'count' in cached &&
+      typeof cached.count === 'number' &&
+      Number.isSafeInteger(cached.count) &&
+      cached.count >= 0 &&
+      'updatedAt' in cached &&
+      typeof cached.updatedAt === 'number' &&
+      Number.isSafeInteger(cached.updatedAt)
     ) {
       return {
         kind: GitHubStarsCacheLookupKind.Found,
-        count: Number(record.count),
+        count: cached.count,
       }
     }
   } catch {

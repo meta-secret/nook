@@ -9,15 +9,14 @@ use super::{
     PageControlActionability, PageControlOwnership, PageControlSemantics,
     PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
 };
+use crate::AuthenticationControlText;
+use crate::CanonicalControlDestination;
+use crate::ControlDestinationEvidence;
+use crate::page_field_classification::AuthenticationUsernameEvidence;
 use crate::page_field_classification::control_identity::AuthenticationControlIdentity;
 use crate::page_field_classification::form_identity::{
     AuthenticationRouteIdentity, CredentialDestination, DestinationPolicy, OAuthAuthorization,
     OneTimeCodeContext,
-};
-use crate::page_field_classification::{
-    AuthenticationUsernameEvidence, canonicalize_control_destination, contains_any_word,
-    expand_identity_text, looks_like_login_advance_control_label,
-    looks_like_supported_localized_login_control_label,
 };
 
 impl AuthenticationAdvanceControlObservation {
@@ -39,9 +38,12 @@ impl AuthenticationAdvanceControlObservation {
         {
             return false;
         }
-        let Some(destination) =
-            canonicalize_control_destination(&self.source_origin, &self.destination_identity)
-        else {
+        let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
+            ControlDestinationEvidence {
+                source_origin: &self.source_origin,
+                destination_identity: &self.destination_identity,
+            },
+        ) else {
             return false;
         };
         if !AuthenticationRouteIdentity::new(&destination.route_identity)
@@ -51,7 +53,7 @@ impl AuthenticationAdvanceControlObservation {
         }
         let mut actionable = self.clone();
         actionable.actionability = PageControlActionability::Actionable;
-        crate::authentication_advance_control_is_safe(&actionable)
+        actionable.authentication_advance_control_is_safe()
     }
 
     pub(super) fn is_identifier_only_get_advance(&self) -> bool {
@@ -79,10 +81,10 @@ impl AuthenticationAdvanceControlObservation {
                         )
                 }
             }
-            && self.password_field_count.raw() == 0
-            && self.new_password_field_count.raw() == 0
-            && self.one_time_code_field_count.raw() == 0
-            && self.semantic_submit_control_count.raw() == 1
+            && self.password_field_count.is_zero()
+            && self.new_password_field_count.is_zero()
+            && self.one_time_code_field_count.is_zero()
+            && self.semantic_submit_control_count.is_single()
     }
 
     fn is_mixed_phone_or_email_identifier_advance(&self) -> bool {
@@ -94,24 +96,27 @@ impl AuthenticationAdvanceControlObservation {
                 AuthenticationUsernameEvidence::MixedPhoneOrEmail
             )
             || !self.form_identity.is_empty()
-            || expand_identity_text(&self.label) != "continue"
+            || AuthenticationControlText::new(&self.label).expand_identity_text() != "continue"
             || !self.machine_identity.is_empty()
             || !matches!(self.submission_method, PageControlSubmissionMethod::Get)
             || !matches!(
                 self.submission_destination_source,
                 PageControlSubmissionDestinationSource::Omitted
             )
-            || self.password_field_count.raw() != 0
-            || self.new_password_field_count.raw() != 0
-            || self.one_time_code_field_count.raw() != 0
-            || self.semantic_submit_control_count.raw() != 1
+            || self.password_field_count.is_nonzero()
+            || self.new_password_field_count.is_nonzero()
+            || self.one_time_code_field_count.is_nonzero()
+            || !self.semantic_submit_control_count.is_single()
         {
             return false;
         }
-        canonicalize_control_destination(&self.source_origin, &self.destination_identity)
-            .is_some_and(|destination| {
-                destination.path_identity == "/login" && destination.route_identity == "/login"
-            })
+        CanonicalControlDestination::canonicalize_control_destination(ControlDestinationEvidence {
+            source_origin: &self.source_origin,
+            destination_identity: &self.destination_identity,
+        })
+        .is_ok_and(|destination| {
+            destination.path_identity == "/login" && destination.route_identity == "/login"
+        })
     }
 
     pub(super) fn has_ambiguous_identifier_only_submit(&self) -> bool {
@@ -120,10 +125,10 @@ impl AuthenticationAdvanceControlObservation {
                 self.authentication_username,
                 AuthenticationUsernameEvidence::Absent
             )
-            && self.password_field_count.raw() == 0
-            && self.new_password_field_count.raw() == 0
-            && self.one_time_code_field_count.raw() == 0
-            && self.semantic_submit_control_count.raw() > 1
+            && self.password_field_count.is_zero()
+            && self.new_password_field_count.is_zero()
+            && self.one_time_code_field_count.is_zero()
+            && self.semantic_submit_control_count.is_multiple()
     }
 }
 
@@ -155,7 +160,7 @@ impl CheckedAuthenticationControl<'_> {
             || locally_scoped_explicit_activation
             || (owned_semantic_submit
                 && (AuthenticationControlIdentity::new(&observation.label).is_explicit_advance()
-                    || looks_like_supported_localized_login_control_label(&observation.label)
+                    || AuthenticationAdvanceControlObservation::looks_like_supported_localized_login_control_label(&observation.label)
                     || AuthenticationRouteIdentity::new(&self.destination.path_identity)
                         .has_safe_login_identity()))
     }
@@ -163,7 +168,8 @@ impl CheckedAuthenticationControl<'_> {
     pub(super) fn has_unconditional_veto_identity(&self) -> bool {
         let credential_update_destination = self.credential_update_destination();
         let observation = self.observation;
-        let expanded_label = expand_identity_text(&observation.label);
+        let expanded_label =
+            AuthenticationControlText::new(&observation.label).expand_identity_text();
         let webauthn_identifier_advance = self.has_webauthn_email_oauth_identifier_advance();
         let primary_oauth_login_label = AuthenticationControlIdentity::new(&observation.label)
             .is_explicit_advance()
@@ -176,7 +182,7 @@ impl CheckedAuthenticationControl<'_> {
                     | AuthenticationUsernameEvidence::WebAuthnEmail
                     | AuthenticationUsernameEvidence::Explicit
             )
-            && (observation.password_field_count.raw() > 0 || webauthn_identifier_advance)
+            && (observation.password_field_count.is_nonzero() || webauthn_identifier_advance)
             && primary_oauth_login_label
             && !AuthenticationControlIdentity::new(&observation.label).label_names_provider()
             && AuthenticationRouteIdentity::new(&self.destination.route_identity)
@@ -188,11 +194,12 @@ impl CheckedAuthenticationControl<'_> {
                 .indicates_destructive_action()
             || AuthenticationRouteIdentity::new(&observation.label).indicates_destructive_action()
             || AuthenticationRouteIdentity::new(&observation.machine_identity).has_control_veto()
-            || contains_any_word(&expanded_label, &["cancel"])
-            || contains_any_word(
-                &expanded_label,
-                &["keep me signed in", "stay signed in", "remember me"],
-            )
+            || AuthenticationControlText::new(&expanded_label).contains_any_word(&["cancel"])
+            || AuthenticationControlText::new(&expanded_label).contains_any_word(&[
+                "keep me signed in",
+                "stay signed in",
+                "remember me",
+            ])
             || AuthenticationRouteIdentity::new(&self.destination.route_identity)
                 .has_disallowed_action_or_provider(DestinationPolicy {
                     credential: if credential_update_destination {
@@ -228,9 +235,9 @@ impl CheckedAuthenticationControl<'_> {
             AuthenticationRouteIdentity::new(&observation.form_identity).indicates_authentication()
                 || AuthenticationRouteIdentity::new(&self.destination.path_identity)
                     .indicates_authentication();
-        observation.password_field_count.raw() > 0
-            || observation.new_password_field_count.raw() > 0
-            || observation.one_time_code_field_count.raw() > 0
+        observation.password_field_count.is_nonzero()
+            || observation.new_password_field_count.is_nonzero()
+            || observation.one_time_code_field_count.is_nonzero()
             || ((matches!(
                 observation.authentication_username,
                 AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
@@ -253,15 +260,21 @@ impl CheckedAuthenticationControl<'_> {
         let accepted_semantic_submit = authentication_scope_owns_control
             && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
             && semantic_submit_ceremony_present
-            && (observation.semantic_submit_control_count.raw() == 1
-                || looks_like_login_advance_control_label(&observation.label)
+            && (observation.semantic_submit_control_count.is_single()
+                || AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(
+                    &observation.label,
+                )
                 || AuthenticationControlIdentity::new(&observation.label).is_explicit_advance());
         let accepted_scoped_activation = authentication_scope_owns_control
             && matches!(observation.semantics, PageControlSemantics::Activation)
             && semantic_submit_ceremony_present
-            && looks_like_login_advance_control_label(&observation.label);
+            && AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(
+                &observation.label,
+            );
         let accepted_login_label = authentication_scope_owns_control
-            && looks_like_login_advance_control_label(&observation.label)
+            && AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(
+                &observation.label,
+            )
             && (semantic_submit_ceremony_present
                 || AuthenticationControlIdentity::new(&observation.label).is_explicit_advance());
         accepted_semantic_submit || accepted_scoped_activation || accepted_login_label
@@ -269,7 +282,7 @@ impl CheckedAuthenticationControl<'_> {
 
     pub(super) fn one_time_code_control_lacks_authentication_context(&self) -> bool {
         let observation = self.observation;
-        observation.one_time_code_field_count.raw() > 0
+        observation.one_time_code_field_count.is_nonzero()
             && !OneTimeCodeContext {
                 authentication_username: observation.authentication_username,
                 form_identity: &observation.form_identity,
@@ -283,7 +296,6 @@ impl CheckedAuthenticationControl<'_> {
 #[cfg(test)]
 mod tests {
     use super::super::*;
-    use crate::authentication_advance_control_is_safe;
 
     struct BookingDefaultGetScenario;
 
@@ -350,7 +362,7 @@ mod tests {
                 let mut rejected = Self::observation();
                 rejected.destination_identity = destination.to_owned();
                 assert!(
-                    !authentication_advance_control_is_safe(&rejected),
+                    !rejected.authentication_advance_control_is_safe(),
                     "{destination}"
                 );
             }
@@ -359,37 +371,35 @@ mod tests {
                 let mut rejected = Self::observation();
                 rejected.label = label.to_owned();
                 assert!(
-                    !authentication_advance_control_is_safe(&rejected),
+                    !rejected.authentication_advance_control_is_safe(),
                     "{label}"
                 );
             }
 
             let mut ambiguous = Self::observation();
             ambiguous.semantic_submit_control_count = 2.into();
-            assert!(!authentication_advance_control_is_safe(&ambiguous));
+            assert!(!ambiguous.authentication_advance_control_is_safe());
 
             let mut unowned = Self::observation();
             unowned.ownership = PageControlOwnership::Unowned;
-            assert!(!authentication_advance_control_is_safe(&unowned));
+            assert!(!unowned.authentication_advance_control_is_safe());
 
             let mut inert = Self::observation();
             inert.actionability = PageControlActionability::Inert;
-            assert!(!authentication_advance_control_is_safe(&inert));
+            assert!(!inert.authentication_advance_control_is_safe());
 
             let mut activation = Self::observation();
             activation.semantics = PageControlSemantics::Activation;
-            assert!(!authentication_advance_control_is_safe(&activation));
+            assert!(!activation.authentication_advance_control_is_safe());
 
             let mut identified_form = Self::observation();
             identified_form.form_identity = "sign-in-form".to_owned();
-            assert!(!authentication_advance_control_is_safe(&identified_form));
+            assert!(!identified_form.authentication_advance_control_is_safe());
 
             let mut authored_destination = Self::observation();
             authored_destination.submission_destination_source =
                 PageControlSubmissionDestinationSource::Authored;
-            assert!(!authentication_advance_control_is_safe(
-                &authored_destination
-            ));
+            assert!(!authored_destination.authentication_advance_control_is_safe());
 
             for evidence in [
                 AuthenticationUsernameEvidence::Absent,
@@ -399,7 +409,7 @@ mod tests {
             ] {
                 let mut rejected = Self::observation();
                 rejected.authentication_username = evidence;
-                assert!(!authentication_advance_control_is_safe(&rejected));
+                assert!(!rejected.authentication_advance_control_is_safe());
             }
         }
     }
@@ -435,7 +445,7 @@ mod tests {
                 let mut rejected = Self::observation();
                 rejected.destination_identity = destination.to_owned();
                 assert!(
-                    !authentication_advance_control_is_safe(&rejected),
+                    !rejected.authentication_advance_control_is_safe(),
                     "{destination}"
                 );
             }
@@ -444,7 +454,7 @@ mod tests {
                 let mut rejected = Self::observation();
                 rejected.label = label.to_owned();
                 assert!(
-                    !authentication_advance_control_is_safe(&rejected),
+                    !rejected.authentication_advance_control_is_safe(),
                     "{label}"
                 );
             }
@@ -452,50 +462,46 @@ mod tests {
             let mut recovery_submit = Self::observation();
             recovery_submit.destination_identity = "https://account.booking.com/recover".to_owned();
             recovery_submit.label = "Recover your account".to_owned();
-            assert!(!authentication_advance_control_is_safe(&recovery_submit));
+            assert!(!recovery_submit.authentication_advance_control_is_safe());
 
             let mut ambiguous = Self::observation();
             ambiguous.semantic_submit_control_count = 2.into();
-            assert!(!authentication_advance_control_is_safe(&ambiguous));
+            assert!(!ambiguous.authentication_advance_control_is_safe());
 
             let mut unowned = Self::observation();
             unowned.ownership = PageControlOwnership::Unowned;
-            assert!(!authentication_advance_control_is_safe(&unowned));
+            assert!(!unowned.authentication_advance_control_is_safe());
 
             let mut inert = Self::observation();
             inert.actionability = PageControlActionability::Inert;
-            assert!(!authentication_advance_control_is_safe(&inert));
+            assert!(!inert.authentication_advance_control_is_safe());
 
             let mut activation = Self::observation();
             activation.semantics = PageControlSemantics::Activation;
-            assert!(!authentication_advance_control_is_safe(&activation));
+            assert!(!activation.authentication_advance_control_is_safe());
 
             let mut implicit_email = Self::observation();
             implicit_email.authentication_username = AuthenticationUsernameEvidence::Strong;
-            assert!(!authentication_advance_control_is_safe(&implicit_email));
+            assert!(!implicit_email.authentication_advance_control_is_safe());
         }
     }
 
     #[test]
     fn booking_owned_identifier_default_get_is_narrowly_admitted() {
-        assert!(authentication_advance_control_is_safe(
-            &BookingDefaultGetScenario::observation()
-        ));
+        assert!(BookingDefaultGetScenario::observation().authentication_advance_control_is_safe());
         BookingDefaultGetScenario::assert_hostile_variants_fail_closed();
     }
 
     #[test]
     fn tesla_owned_webauthn_email_default_get_is_narrowly_admitted() {
-        assert!(authentication_advance_control_is_safe(
-            &TeslaDefaultGetScenario::observation()
-        ));
+        assert!(TeslaDefaultGetScenario::observation().authentication_advance_control_is_safe());
         TeslaDefaultGetScenario::assert_hostile_variants_fail_closed();
     }
 
     #[test]
     fn mixed_phone_or_email_default_get_is_narrowly_admitted() {
         let observation = MixedPhoneOrEmailDefaultGetScenario::observation();
-        assert!(authentication_advance_control_is_safe(&observation));
+        assert!(observation.authentication_advance_control_is_safe());
 
         for destination in [
             "https://attacker.example/login",
@@ -508,7 +514,7 @@ mod tests {
             let mut rejected = observation.clone();
             rejected.destination_identity = destination.to_owned();
             assert!(
-                !authentication_advance_control_is_safe(&rejected),
+                !rejected.authentication_advance_control_is_safe(),
                 "{destination}"
             );
         }
@@ -522,7 +528,7 @@ mod tests {
             let mut rejected = observation.clone();
             rejected.label = label.to_owned();
             assert!(
-                !authentication_advance_control_is_safe(&rejected),
+                !rejected.authentication_advance_control_is_safe(),
                 "{label}"
             );
         }
@@ -535,7 +541,7 @@ mod tests {
         ] {
             let mut rejected = observation.clone();
             rejected.authentication_username = evidence;
-            assert!(!authentication_advance_control_is_safe(&rejected));
+            assert!(!rejected.authentication_advance_control_is_safe());
         }
 
         for established in [
@@ -544,7 +550,7 @@ mod tests {
         ] {
             let mut admitted = observation.clone();
             admitted.authentication_username = established;
-            assert!(authentication_advance_control_is_safe(&admitted));
+            assert!(admitted.authentication_advance_control_is_safe());
         }
 
         for mutation in [
@@ -563,24 +569,24 @@ mod tests {
         ] {
             let mut rejected = observation.clone();
             mutation(&mut rejected);
-            assert!(!authentication_advance_control_is_safe(&rejected));
+            assert!(!rejected.authentication_advance_control_is_safe());
         }
 
         let mut unowned = observation.clone();
         unowned.ownership = PageControlOwnership::Unowned;
-        assert!(!authentication_advance_control_is_safe(&unowned));
+        assert!(!unowned.authentication_advance_control_is_safe());
         let mut locally_scoped = observation.clone();
         locally_scoped.ownership = PageControlOwnership::LocallyScoped;
-        assert!(!authentication_advance_control_is_safe(&locally_scoped));
+        assert!(!locally_scoped.authentication_advance_control_is_safe());
         let mut inert = observation.clone();
         inert.actionability = PageControlActionability::Inert;
-        assert!(!authentication_advance_control_is_safe(&inert));
+        assert!(!inert.authentication_advance_control_is_safe());
         let mut activation = observation.clone();
         activation.semantics = PageControlSemantics::Activation;
-        assert!(!authentication_advance_control_is_safe(&activation));
+        assert!(!activation.authentication_advance_control_is_safe());
         let mut authored = observation.clone();
         authored.submission_destination_source = PageControlSubmissionDestinationSource::Authored;
-        assert!(!authentication_advance_control_is_safe(&authored));
+        assert!(!authored.authentication_advance_control_is_safe());
         for method in [
             PageControlSubmissionMethod::Absent,
             PageControlSubmissionMethod::Post,
@@ -588,11 +594,11 @@ mod tests {
         ] {
             let mut rejected = observation.clone();
             rejected.submission_method = method;
-            assert!(!authentication_advance_control_is_safe(&rejected));
+            assert!(!rejected.authentication_advance_control_is_safe());
         }
         let mut machine_identity = observation;
         machine_identity.machine_identity = "primary".to_owned();
-        assert!(!authentication_advance_control_is_safe(&machine_identity));
+        assert!(!machine_identity.authentication_advance_control_is_safe());
     }
 
     #[test]
@@ -614,11 +620,11 @@ mod tests {
             submission_method: PageControlSubmissionMethod::Post,
             submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
         };
-        assert!(authentication_advance_control_is_safe(&claude));
+        assert!(claude.authentication_advance_control_is_safe());
 
         let mut generic_email_get = claude.clone();
         generic_email_get.submission_method = PageControlSubmissionMethod::Get;
-        assert!(!authentication_advance_control_is_safe(&generic_email_get));
+        assert!(!generic_email_get.authentication_advance_control_is_safe());
 
         for label in [
             "Continue with Google",
@@ -629,7 +635,7 @@ mod tests {
             let mut rejected = claude.clone();
             rejected.label = label.to_owned();
             assert!(
-                !authentication_advance_control_is_safe(&rejected),
+                !rejected.authentication_advance_control_is_safe(),
                 "{label}"
             );
         }
@@ -643,23 +649,23 @@ mod tests {
             let mut rejected = claude.clone();
             rejected.destination_identity = destination.to_owned();
             assert!(
-                !authentication_advance_control_is_safe(&rejected),
+                !rejected.authentication_advance_control_is_safe(),
                 "{destination}"
             );
         }
 
         let mut inert = claude.clone();
         inert.actionability = PageControlActionability::Inert;
-        assert!(!authentication_advance_control_is_safe(&inert));
+        assert!(!inert.authentication_advance_control_is_safe());
 
         let mut unowned = claude.clone();
         unowned.ownership = PageControlOwnership::Unowned;
-        assert!(!authentication_advance_control_is_safe(&unowned));
+        assert!(!unowned.authentication_advance_control_is_safe());
 
         let mut ambiguous = claude.clone();
         ambiguous.authentication_username = AuthenticationUsernameEvidence::Strong;
         ambiguous.semantic_submit_control_count = 2.into();
-        assert!(!authentication_advance_control_is_safe(&ambiguous));
+        assert!(!ambiguous.authentication_advance_control_is_safe());
 
         let serialized = serde_json::to_value(&claude)?;
         assert_eq!(
@@ -697,7 +703,7 @@ mod tests {
             submission_method: PageControlSubmissionMethod::Post,
             submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
         };
-        assert!(authentication_advance_control_is_safe(&netflix));
+        assert!(netflix.authentication_advance_control_is_safe());
 
         for method in [
             PageControlSubmissionMethod::Get,
@@ -705,7 +711,7 @@ mod tests {
         ] {
             let mut rejected = netflix.clone();
             rejected.submission_method = method;
-            assert!(!authentication_advance_control_is_safe(&rejected));
+            assert!(!rejected.authentication_advance_control_is_safe());
         }
 
         for label in [
@@ -721,7 +727,7 @@ mod tests {
             let mut rejected = netflix.clone();
             rejected.label = label.to_owned();
             assert!(
-                !authentication_advance_control_is_safe(&rejected),
+                !rejected.authentication_advance_control_is_safe(),
                 "{label}"
             );
         }
@@ -736,24 +742,24 @@ mod tests {
             let mut rejected = netflix.clone();
             rejected.destination_identity = destination.to_owned();
             assert!(
-                !authentication_advance_control_is_safe(&rejected),
+                !rejected.authentication_advance_control_is_safe(),
                 "{destination}"
             );
         }
 
         let mut unowned = netflix.clone();
         unowned.ownership = PageControlOwnership::Unowned;
-        assert!(!authentication_advance_control_is_safe(&unowned));
+        assert!(!unowned.authentication_advance_control_is_safe());
 
         let mut inert_help = netflix.clone();
         inert_help.actionability = PageControlActionability::Inert;
         inert_help.semantics = PageControlSemantics::Activation;
         inert_help.label = "Get Help".to_owned();
-        assert!(!authentication_advance_control_is_safe(&inert_help));
+        assert!(!inert_help.authentication_advance_control_is_safe());
 
         let mut ambiguous = netflix;
         ambiguous.semantic_submit_control_count = 2.into();
         ambiguous.label = "Primary action".to_owned();
-        assert!(!authentication_advance_control_is_safe(&ambiguous));
+        assert!(!ambiguous.authentication_advance_control_is_safe());
     }
 }

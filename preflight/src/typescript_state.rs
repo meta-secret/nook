@@ -1,32 +1,31 @@
+use crate::typescript_discriminants::DiscriminantName;
+use crate::typescript_discriminants::EnumContext;
+pub struct TypeScriptApplicationState<'scan> {
+    pub root: &'scan Path,
+}
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::Path;
 
 use crate::Violation;
-use crate::typescript_discriminants::{
-    discriminant_name, enclosing_enum_name, enum_value_matches_discriminant,
-};
 
 mod language_dispatch;
 mod literal_nodes;
 mod source_files;
 mod svelte_fragments;
 mod svelte_raw_discriminants;
-use language_dispatch::{
-    generic_optional_state_lines, mutable_void_state_lines, null_token_lines,
-    raw_string_discriminant_lines, undefined_token_lines,
-};
-use literal_nodes::{
-    is_string_literal_type, is_type_utility_key_union, string_literal_value,
-    union_contains_direct_string_literal,
-};
-use source_files::collect_authored_source_files;
-use svelte_fragments::{
-    svelte_generic_optional_state_lines, svelte_mutable_void_state_lines, svelte_null_token_lines,
-    svelte_undefined_token_lines,
-};
-use svelte_raw_discriminants::svelte_raw_string_discriminant_lines;
+
+const DISCRIMINANT_NAMES: [&str; 8] = [
+    "action",
+    "kind",
+    "mode",
+    "operation",
+    "phase",
+    "stage",
+    "status",
+    "type",
+];
 
 /// Finds every authored JavaScript, TypeScript, and Svelte use of `undefined`,
 /// nullish coalescing, nullish assignment, or an assertion matcher that
@@ -46,23 +45,34 @@ use svelte_raw_discriminants::svelte_raw_string_discriminant_lines;
 /// # Errors
 ///
 /// Returns an error when the repository source tree cannot be read.
-pub fn typescript_implicit_application_state(root: &Path) -> io::Result<Vec<Violation>> {
-    let mut files = Vec::new();
-    collect_authored_source_files(root, &mut files)?;
+impl TypeScriptApplicationState<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the repository source tree cannot be read.
+    pub fn typescript_implicit_application_state(self) -> io::Result<Vec<Violation>> {
+        let Self { root } = self;
+        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
-    let mut violations = Vec::new();
-    for path in files {
-        let contents = fs::read_to_string(&path)?;
-        for line in undefined_token_lines(&contents, path.extension()).map_err(io::Error::other)? {
-            violations.push(Violation {
-                path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-                line,
-            });
+        let mut violations = Vec::new();
+        for path in files {
+            let contents = fs::read_to_string(&path)?;
+            for line in TypeScriptApplicationState::undefined_token_lines(
+                &contents,
+                language_dispatch::SourceLanguage::of_path(&path),
+            )
+            .map_err(io::Error::other)?
+            {
+                violations.push(Violation {
+                    path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+                    line,
+                });
+            }
         }
+        violations
+            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+        violations.dedup();
+        Ok(violations)
     }
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    violations.dedup();
-    Ok(violations)
 }
 
 /// Finds every authored JavaScript, TypeScript, and Svelte use of `null`.
@@ -73,23 +83,33 @@ pub fn typescript_implicit_application_state(root: &Path) -> io::Result<Vec<Viol
 /// # Errors
 ///
 /// Returns an error when the repository source tree cannot be read.
-pub fn typescript_null_absence_sentinels(root: &Path) -> io::Result<Vec<Violation>> {
-    let mut files = Vec::new();
-    collect_authored_source_files(root, &mut files)?;
+impl TypeScriptApplicationState<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the repository source tree cannot be read.
+    pub fn typescript_null_absence_sentinels(root: &Path) -> io::Result<Vec<Violation>> {
+        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
-    let mut violations = Vec::new();
-    for path in files {
-        let contents = fs::read_to_string(&path)?;
-        for line in null_token_lines(&contents, path.extension()).map_err(io::Error::other)? {
-            violations.push(Violation {
-                path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-                line,
-            });
+        let mut violations = Vec::new();
+        for path in files {
+            let contents = fs::read_to_string(&path)?;
+            for line in TypeScriptApplicationState::null_token_lines(
+                &contents,
+                language_dispatch::SourceLanguage::of_path(&path),
+            )
+            .map_err(io::Error::other)?
+            {
+                violations.push(Violation {
+                    path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+                    line,
+                });
+            }
         }
+        violations
+            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+        violations.dedup();
+        Ok(violations)
     }
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    violations.dedup();
-    Ok(violations)
 }
 
 /// Finds TypeScript/Svelte unions that disguise absence as `void`.
@@ -103,25 +123,33 @@ pub fn typescript_null_absence_sentinels(root: &Path) -> io::Result<Vec<Violatio
 /// # Errors
 ///
 /// Returns an error when the repository source tree cannot be read.
-pub fn typescript_mutable_void_state(root: &Path) -> io::Result<Vec<Violation>> {
-    let mut files = Vec::new();
-    collect_authored_source_files(root, &mut files)?;
+impl TypeScriptApplicationState<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the repository source tree cannot be read.
+    pub fn typescript_mutable_void_state(root: &Path) -> io::Result<Vec<Violation>> {
+        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
-    let mut violations = Vec::new();
-    for path in files {
-        let contents = fs::read_to_string(&path)?;
-        for line in
-            mutable_void_state_lines(&contents, path.extension()).map_err(io::Error::other)?
-        {
-            violations.push(Violation {
-                path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-                line,
-            });
+        let mut violations = Vec::new();
+        for path in files {
+            let contents = fs::read_to_string(&path)?;
+            for line in TypeScriptApplicationState::mutable_void_state_lines(
+                &contents,
+                language_dispatch::SourceLanguage::of_path(&path),
+            )
+            .map_err(io::Error::other)?
+            {
+                violations.push(Violation {
+                    path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+                    line,
+                });
+            }
         }
+        violations
+            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+        violations.dedup();
+        Ok(violations)
     }
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    violations.dedup();
-    Ok(violations)
 }
 
 /// Finds generic Option-style wrappers that hide the meaning of application state.
@@ -129,25 +157,33 @@ pub fn typescript_mutable_void_state(root: &Path) -> io::Result<Vec<Violation>> 
 /// # Errors
 ///
 /// Returns an error when the repository source tree cannot be read.
-pub fn typescript_generic_optional_state(root: &Path) -> io::Result<Vec<Violation>> {
-    let mut files = Vec::new();
-    collect_authored_source_files(root, &mut files)?;
+impl TypeScriptApplicationState<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the repository source tree cannot be read.
+    pub fn typescript_generic_optional_state(root: &Path) -> io::Result<Vec<Violation>> {
+        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
-    let mut violations = Vec::new();
-    for path in files {
-        let contents = fs::read_to_string(&path)?;
-        for line in
-            generic_optional_state_lines(&contents, path.extension()).map_err(io::Error::other)?
-        {
-            violations.push(Violation {
-                path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-                line,
-            });
+        let mut violations = Vec::new();
+        for path in files {
+            let contents = fs::read_to_string(&path)?;
+            for line in TypeScriptApplicationState::generic_optional_state_lines(
+                &contents,
+                language_dispatch::SourceLanguage::of_path(&path),
+            )
+            .map_err(io::Error::other)?
+            {
+                violations.push(Violation {
+                    path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+                    line,
+                });
+            }
         }
+        violations
+            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+        violations.dedup();
+        Ok(violations)
     }
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    violations.dedup();
-    Ok(violations)
 }
 
 /// Finds authored closed string vocabularies and runtime discriminants that
@@ -161,438 +197,555 @@ pub fn typescript_generic_optional_state(root: &Path) -> io::Result<Vec<Violatio
 /// # Errors
 ///
 /// Returns an error when the repository source tree cannot be read.
-pub fn typescript_raw_string_discriminants(root: &Path) -> io::Result<Vec<Violation>> {
-    let mut files = Vec::new();
-    collect_authored_source_files(root, &mut files)?;
+impl TypeScriptApplicationState<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when the repository source tree cannot be read.
+    pub fn typescript_raw_string_discriminants(root: &Path) -> io::Result<Vec<Violation>> {
+        let files = source_files::AuthoredSourceFiles { directory: root }.collect()?;
 
-    let mut violations = Vec::new();
-    for path in files {
-        let contents = fs::read_to_string(&path)?;
-        for line in
-            raw_string_discriminant_lines(&contents, path.extension()).map_err(io::Error::other)?
-        {
-            violations.push(Violation {
-                path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-                line,
-            });
+        let mut violations = Vec::new();
+        for path in files {
+            let contents = fs::read_to_string(&path)?;
+            for line in TypeScriptApplicationState::raw_string_discriminant_lines(
+                &contents,
+                language_dispatch::SourceLanguage::of_path(&path),
+            )
+            .map_err(io::Error::other)?
+            {
+                violations.push(Violation {
+                    path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+                    line,
+                });
+            }
         }
+        violations
+            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+        violations.dedup();
+        Ok(violations)
     }
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    violations.dedup();
-    Ok(violations)
 }
 
-fn typescript_code_undefined_token_lines(
-    source: &str,
-    first_line: usize,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
-    let Some(tree) = parser.parse(source, None) else {
-        return Ok(Vec::new());
-    };
-    let mut lines = Vec::new();
-    collect_undefined_nodes(tree.root_node(), source, first_line, &mut lines);
-    lines.sort_unstable();
-    lines.dedup();
-    Ok(lines)
-}
-
-fn typescript_code_null_token_lines(
-    source: &str,
-    first_line: usize,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
-    let Some(tree) = parser.parse(source, None) else {
-        return Ok(Vec::new());
-    };
-    let mut lines = Vec::new();
-    collect_null_nodes(tree.root_node(), first_line, &mut lines);
-    lines.sort_unstable();
-    lines.dedup();
-    Ok(lines)
-}
-
-fn typescript_code_mutable_void_state_lines(
-    source: &str,
-    first_line: usize,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
-    let Some(tree) = parser.parse(source, None) else {
-        return Ok(Vec::new());
-    };
-    let mut lines = Vec::new();
-    collect_mutable_void_nodes(tree.root_node(), source, first_line, &mut lines);
-    lines.sort_unstable();
-    lines.dedup();
-    Ok(lines)
-}
-
-fn typescript_code_raw_string_discriminant_lines(
-    source: &str,
-    first_line: usize,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    typescript_code_raw_string_discriminant_lines_with_policy(source, first_line, false)
-}
-
-fn typescript_template_raw_string_discriminant_lines(
-    source: &str,
-    first_line: usize,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    typescript_code_raw_string_discriminant_lines_with_policy(source, first_line, true)
-}
-
-fn typescript_code_raw_string_discriminant_lines_with_policy(
-    source: &str,
-    first_line: usize,
-    flag_unregistered_values: bool,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
-    let Some(tree) = parser.parse(source, None) else {
-        return Ok(Vec::new());
-    };
-    let mut enum_values = HashMap::new();
-    collect_enum_string_values(tree.root_node(), source, &mut enum_values);
-    let mut lines = Vec::new();
-    collect_raw_string_discriminant_nodes(
-        tree.root_node(),
-        source,
-        first_line,
-        &enum_values,
-        flag_unregistered_values,
-        &mut lines,
-    );
-    lines.sort_unstable();
-    lines.dedup();
-    Ok(lines)
-}
-
-fn collect_raw_string_discriminant_nodes(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    first_line: usize,
-    enum_values: &HashMap<String, HashSet<String>>,
-    flag_unregistered_values: bool,
-    lines: &mut Vec<usize>,
-) {
-    const DISCRIMINANT_NAMES: [&str; 8] = [
-        "action",
-        "kind",
-        "mode",
-        "operation",
-        "phase",
-        "stage",
-        "status",
-        "type",
-    ];
-    if node.kind() == "property_signature" {
-        let name = node
-            .child_by_field_name("name")
-            .and_then(|value| value.utf8_text(source.as_bytes()).ok())
-            .map(str::trim);
-        let declared_type = node.child_by_field_name("type");
-        if name.is_some_and(|value| DISCRIMINANT_NAMES.contains(&value))
-            && declared_type.is_some_and(|value| is_string_literal_type(value, source))
-        {
-            lines.push(first_line + node.start_position().row);
-            return;
-        }
+impl TypeScriptApplicationState<'_> {
+    fn typescript_code_undefined_token_lines(
+        source: &str,
+        first_line: usize,
+    ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
+        let Some(tree) = parser.parse(source, None) else {
+            return Ok(Vec::new());
+        };
+        let mut lines = Vec::new();
+        TypeScriptApplicationState::collect_undefined_nodes(
+            tree.root_node(),
+            source,
+            first_line,
+            &mut lines,
+        );
+        lines.sort_unstable();
+        lines.dedup();
+        Ok(lines)
     }
-    if node.kind() == "union_type"
-        && union_contains_direct_string_literal(node, source)
-        && !is_type_utility_key_union(node, source)
-    {
-        lines.push(first_line + node.start_position().row);
-        return;
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn typescript_code_null_token_lines(
+        source: &str,
+        first_line: usize,
+    ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
+        let Some(tree) = parser.parse(source, None) else {
+            return Ok(Vec::new());
+        };
+        let mut lines = Vec::new();
+        TypeScriptApplicationState::collect_null_nodes(tree.root_node(), first_line, &mut lines);
+        lines.sort_unstable();
+        lines.dedup();
+        Ok(lines)
     }
-    if node.kind() == "pair" {
-        let name = node
-            .child_by_field_name("key")
-            .and_then(|value| value.utf8_text(source.as_bytes()).ok())
-            .map(str::trim);
-        let value = node.child_by_field_name("value");
-        if name.is_some_and(|value| DISCRIMINANT_NAMES.contains(&value))
-            && value
-                .and_then(|literal| string_literal_value(literal, source))
-                .is_some_and(|literal| {
-                    flag_unregistered_values
-                        || name.is_some_and(|name| {
-                            enum_value_matches_discriminant(enum_values, literal, name)
-                        })
-                })
-        {
-            lines.push(first_line + node.start_position().row);
-            return;
-        }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn typescript_code_mutable_void_state_lines(
+        source: &str,
+        first_line: usize,
+    ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
+        let Some(tree) = parser.parse(source, None) else {
+            return Ok(Vec::new());
+        };
+        let mut lines = Vec::new();
+        TypeScriptApplicationState::collect_mutable_void_nodes(
+            tree.root_node(),
+            source,
+            first_line,
+            &mut lines,
+        );
+        lines.sort_unstable();
+        lines.dedup();
+        Ok(lines)
     }
-    if node.kind() == "binary_expression" {
-        let left = node.child_by_field_name("left");
-        let right = node.child_by_field_name("right");
-        if left.zip(right).is_some_and(|(left, right)| {
-            let (literal, discriminant) =
-                if let Some(discriminant) = discriminant_name(left, source) {
-                    (string_literal_value(right, source), Some(discriminant))
-                } else if let Some(discriminant) = discriminant_name(right, source) {
-                    (string_literal_value(left, source), Some(discriminant))
-                } else {
-                    (None, None)
-                };
-            is_equality_comparison(node, left, right, source)
-                && literal.zip(discriminant).is_some_and(|(value, name)| {
-                    flag_unregistered_values
-                        || enum_value_matches_discriminant(enum_values, value, name)
-                })
-        }) {
-            lines.push(first_line + node.start_position().row);
-            return;
-        }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn typescript_code_raw_string_discriminant_lines(
+        source: &str,
+        first_line: usize,
+    ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+        TypeScriptApplicationState::typescript_code_raw_string_discriminant_lines_with_policy(
+            crate::typescript_state::DiscriminantSource {
+                source,
+                first_line,
+                unregistered_values: UnregisteredDiscriminantPolicy::Allow,
+            },
+        )
     }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_raw_string_discriminant_nodes(
-            child,
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn typescript_template_raw_string_discriminant_lines(
+        source: &str,
+        first_line: usize,
+    ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+        TypeScriptApplicationState::typescript_code_raw_string_discriminant_lines_with_policy(
+            crate::typescript_state::DiscriminantSource {
+                source,
+                first_line,
+                unregistered_values: UnregisteredDiscriminantPolicy::Reject,
+            },
+        )
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn typescript_code_raw_string_discriminant_lines_with_policy(
+        request: DiscriminantSource<'_>,
+    ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+        let DiscriminantSource {
+            source,
+            first_line,
+            unregistered_values,
+        } = request;
+
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
+        let Some(tree) = parser.parse(source, None) else {
+            return Ok(Vec::new());
+        };
+        let mut enum_values = HashMap::new();
+        TypeScriptApplicationState::collect_enum_string_values(
+            tree.root_node(),
+            source,
+            &mut enum_values,
+        );
+        let mut lines = Vec::new();
+        TypeScriptApplicationState::collect_raw_string_discriminant_nodes(
+            crate::typescript_state::DiscriminantTraversal {
+                node: tree.root_node(),
+                source,
+                first_line,
+                enum_values: &enum_values,
+                unregistered_values,
+                lines: &mut lines,
+            },
+        );
+        lines.sort_unstable();
+        lines.dedup();
+        Ok(lines)
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one recursive AST traversal keeps discriminant rules together"
+    )]
+    fn collect_raw_string_discriminant_nodes(request: DiscriminantTraversal<'_>) {
+        let DiscriminantTraversal {
+            node,
             source,
             first_line,
             enum_values,
-            flag_unregistered_values,
+            unregistered_values,
             lines,
+        } = request;
+
+        if node.kind() == "property_signature" {
+            let name = node
+                .child_by_field_name("name")
+                .and_then(|value| value.utf8_text(source.as_bytes()).ok())
+                .map(str::trim);
+            let declared_type = node.child_by_field_name("type");
+            if name.is_some_and(|value| DISCRIMINANT_NAMES.contains(&value))
+                && declared_type.is_some_and(|value| {
+                    TypeScriptApplicationState::is_string_literal_type(value, source)
+                })
+            {
+                lines.push(first_line + node.start_position().row);
+                return;
+            }
+        }
+        if node.kind() == "union_type"
+            && TypeScriptApplicationState::union_contains_direct_string_literal(node, source)
+            && !TypeScriptApplicationState::is_type_utility_key_union(node, source)
+        {
+            lines.push(first_line + node.start_position().row);
+            return;
+        }
+        if node.kind() == "pair" {
+            let name = node
+                .child_by_field_name("key")
+                .and_then(|value| value.utf8_text(source.as_bytes()).ok())
+                .map(str::trim);
+            let value = node.child_by_field_name("value");
+            if name.is_some_and(|value| DISCRIMINANT_NAMES.contains(&value))
+                && value.is_some_and(|literal| {
+                    let literal_nodes::LiteralValue::Text(literal) =
+                        TypeScriptApplicationState::string_literal_value(literal, source)
+                    else {
+                        return false;
+                    };
+                    matches!(unregistered_values, UnregisteredDiscriminantPolicy::Reject)
+                        || name.is_some_and(|name| {
+                            TypeScriptApplicationState::enum_value_matches_discriminant(
+                                enum_values,
+                                literal,
+                                name,
+                            )
+                        })
+                })
+            {
+                lines.push(first_line + node.start_position().row);
+                return;
+            }
+        }
+        if node.kind() == "binary_expression" {
+            let left = node.child_by_field_name("left");
+            let right = node.child_by_field_name("right");
+            if left.zip(right).is_some_and(|(left, right)| {
+                let (literal, discriminant) = if let DiscriminantName::Recognized(discriminant) =
+                    TypeScriptApplicationState::discriminant_name(left, source)
+                {
+                    (
+                        TypeScriptApplicationState::string_literal_value(right, source),
+                        discriminant,
+                    )
+                } else if let DiscriminantName::Recognized(discriminant) =
+                    TypeScriptApplicationState::discriminant_name(right, source)
+                {
+                    (
+                        TypeScriptApplicationState::string_literal_value(left, source),
+                        discriminant,
+                    )
+                } else {
+                    return false;
+                };
+                let literal_nodes::LiteralValue::Text(value) = literal else {
+                    return false;
+                };
+                TypeScriptApplicationState::is_equality_comparison(node, left, right, source) && {
+                    matches!(unregistered_values, UnregisteredDiscriminantPolicy::Reject)
+                        || TypeScriptApplicationState::enum_value_matches_discriminant(
+                            enum_values,
+                            value,
+                            discriminant,
+                        )
+                }
+            }) {
+                lines.push(first_line + node.start_position().row);
+                return;
+            }
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            TypeScriptApplicationState::collect_raw_string_discriminant_nodes(
+                crate::typescript_state::DiscriminantTraversal {
+                    node: child,
+                    source,
+                    first_line,
+                    enum_values,
+                    unregistered_values,
+                    lines,
+                },
+            );
+        }
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn is_equality_comparison(
+        expression: tree_sitter::Node<'_>,
+        left: tree_sitter::Node<'_>,
+        right: tree_sitter::Node<'_>,
+        source: &str,
+    ) -> bool {
+        if expression.kind() != "binary_expression" {
+            return false;
+        }
+        source
+            .get(left.end_byte()..right.start_byte())
+            .is_some_and(|operator| matches!(operator.trim(), "==" | "===" | "!=" | "!=="))
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn collect_enum_string_values(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+        values: &mut HashMap<String, HashSet<String>>,
+    ) {
+        if node.kind() == "enum_assignment"
+            && let Some(value) = node.child_by_field_name("value")
+            && let literal_nodes::LiteralValue::Text(literal) =
+                TypeScriptApplicationState::string_literal_value(value, source)
+            && let EnumContext::Named(enum_name) =
+                TypeScriptApplicationState::enclosing_enum_name(node, source)
+        {
+            values
+                .entry(literal.to_owned())
+                .or_default()
+                .insert(enum_name.to_owned());
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            TypeScriptApplicationState::collect_enum_string_values(child, source, values);
+        }
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn typescript_code_generic_optional_state_lines(
+        source: &str,
+        first_line: usize,
+    ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
+        let Some(tree) = parser.parse(source, None) else {
+            return Ok(Vec::new());
+        };
+        let mut lines = Vec::new();
+        TypeScriptApplicationState::collect_generic_optional_state_nodes(
+            tree.root_node(),
+            source,
+            first_line,
+            &mut lines,
         );
+        lines.sort_unstable();
+        lines.dedup();
+        Ok(lines)
     }
 }
 
-fn is_equality_comparison(
-    expression: tree_sitter::Node<'_>,
-    left: tree_sitter::Node<'_>,
-    right: tree_sitter::Node<'_>,
-    source: &str,
-) -> bool {
-    if expression.kind() != "binary_expression" {
-        return false;
-    }
-    source
-        .get(left.end_byte()..right.start_byte())
-        .is_some_and(|operator| matches!(operator.trim(), "==" | "===" | "!=" | "!=="))
-}
-
-fn collect_enum_string_values(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    values: &mut HashMap<String, HashSet<String>>,
-) {
-    if node.kind() == "enum_assignment"
-        && let Some(value) = node.child_by_field_name("value")
-        && let Some(literal) = string_literal_value(value, source)
-        && let Some(enum_name) = enclosing_enum_name(node, source)
-    {
-        values
-            .entry(literal.to_owned())
-            .or_default()
-            .insert(enum_name.to_owned());
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_enum_string_values(child, source, values);
-    }
-}
-
-fn typescript_code_generic_optional_state_lines(
-    source: &str,
-    first_line: usize,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
-    let Some(tree) = parser.parse(source, None) else {
-        return Ok(Vec::new());
-    };
-    let mut lines = Vec::new();
-    collect_generic_optional_state_nodes(tree.root_node(), source, first_line, &mut lines);
-    lines.sort_unstable();
-    lines.dedup();
-    Ok(lines)
-}
-
-fn collect_generic_optional_state_nodes(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    first_line: usize,
-    lines: &mut Vec<usize>,
-) {
-    const BANNED_NAMES: [&str; 6] = [
-        "EMPTY_VALUE",
-        "ValueState",
-        "omittedValue",
-        "presentValue",
-        "valueState",
-        "valueFromState",
-    ];
-    if matches!(node.kind(), "identifier" | "type_identifier")
-        && node
-            .utf8_text(source.as_bytes())
-            .is_ok_and(|text| BANNED_NAMES.contains(&text))
-    {
-        lines.push(first_line + node.start_position().row);
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_generic_optional_state_nodes(child, source, first_line, lines);
-    }
-}
-
-fn collect_mutable_void_nodes(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    first_line: usize,
-    lines: &mut Vec<usize>,
-) {
-    if node.kind() == "union_type"
-        && union_contains_void(node, source)
-        && union_contains_non_effect_value(node, source)
-    {
-        lines.push(first_line + node.start_position().row);
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_mutable_void_nodes(child, source, first_line, lines);
-    }
-}
-
-fn union_contains_void(node: tree_sitter::Node<'_>, source: &str) -> bool {
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor).any(|child| {
-        if child.kind() == "union_type" {
-            return union_contains_void(child, source);
+impl TypeScriptApplicationState<'_> {
+    fn collect_generic_optional_state_nodes(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+        first_line: usize,
+        lines: &mut Vec<usize>,
+    ) {
+        const BANNED_NAMES: [&str; 6] = [
+            "EMPTY_VALUE",
+            "ValueState",
+            "omittedValue",
+            "presentValue",
+            "valueState",
+            "valueFromState",
+        ];
+        if matches!(node.kind(), "identifier" | "type_identifier")
+            && node
+                .utf8_text(source.as_bytes())
+                .is_ok_and(|text| BANNED_NAMES.contains(&text))
+        {
+            lines.push(first_line + node.start_position().row);
+            return;
         }
-        type_text_without_whitespace(child, source) == "void"
-    })
-}
-
-fn union_contains_non_effect_value(node: tree_sitter::Node<'_>, source: &str) -> bool {
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor).any(|child| {
-        if child.kind() == "union_type" {
-            return union_contains_non_effect_value(child, source);
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            TypeScriptApplicationState::collect_generic_optional_state_nodes(
+                child, source, first_line, lines,
+            );
         }
-        !matches!(
-            type_text_without_whitespace(child, source).as_str(),
-            "void" | "Promise<void>" | "globalThis.Promise<void>"
-        )
-    })
-}
-
-fn type_text_without_whitespace(node: tree_sitter::Node<'_>, source: &str) -> String {
-    node.utf8_text(source.as_bytes())
-        .map_or_else(|_| String::new(), |text| text.split_whitespace().collect())
-}
-
-fn collect_undefined_nodes(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    first_line: usize,
-    lines: &mut Vec<usize>,
-) {
-    if matches!(
-        node.kind(),
-        "binary_expression" | "augmented_assignment_expression"
-    ) && node
-        .child_by_field_name("operator")
-        .is_some_and(|operator| matches!(operator.kind(), "??" | "??="))
-    {
-        lines.push(first_line + node.start_position().row);
-    }
-    if node.kind() == "undefined" || node.kind() == "undefined_type" {
-        lines.push(first_line + node.start_position().row);
-        return;
-    }
-    if node.kind() == "property_identifier"
-        && node
-            .utf8_text(source.as_bytes())
-            .is_ok_and(|text| matches!(text, "toBeDefined" | "toBeNull" | "toBeUndefined"))
-    {
-        lines.push(first_line + node.start_position().row);
-        return;
-    }
-    if node.kind() == "binary_expression" && is_typeof_undefined_comparison(node, source) {
-        lines.push(first_line + node.start_position().row);
-        return;
-    }
-    if node.kind() == "call_expression" && is_parameterless_bindable(node, source) {
-        lines.push(first_line + node.start_position().row);
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_undefined_nodes(child, source, first_line, lines);
     }
 }
 
-fn is_parameterless_bindable(node: tree_sitter::Node<'_>, source: &str) -> bool {
-    let function_is_bindable = node
-        .child_by_field_name("function")
-        .and_then(|function| function.utf8_text(source.as_bytes()).ok())
-        .is_some_and(|function| function == "$bindable");
-    let has_arguments = node
-        .child_by_field_name("arguments")
-        .is_some_and(|arguments| arguments.named_child_count() > 0);
-    function_is_bindable && !has_arguments
+impl TypeScriptApplicationState<'_> {
+    fn collect_mutable_void_nodes(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+        first_line: usize,
+        lines: &mut Vec<usize>,
+    ) {
+        if node.kind() == "union_type"
+            && TypeScriptApplicationState::union_contains_void(node, source)
+            && TypeScriptApplicationState::union_contains_non_effect_value(node, source)
+        {
+            lines.push(first_line + node.start_position().row);
+            return;
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            TypeScriptApplicationState::collect_mutable_void_nodes(
+                child, source, first_line, lines,
+            );
+        }
+    }
 }
 
-fn collect_null_nodes(node: tree_sitter::Node<'_>, first_line: usize, lines: &mut Vec<usize>) {
-    if node.kind() == "null" {
-        lines.push(first_line + node.start_position().row);
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_null_nodes(child, first_line, lines);
-    }
-}
-
-fn is_typeof_undefined_comparison(node: tree_sitter::Node<'_>, source: &str) -> bool {
-    let mut child_cursor = node.walk();
-    let compares_equality = node
-        .children(&mut child_cursor)
-        .any(|child| matches!(child.kind(), "===" | "!==" | "==" | "!="));
-    if !compares_equality {
-        return false;
-    }
-
-    let mut cursor = node.walk();
-    let operands: Vec<_> = node.named_children(&mut cursor).collect();
-    if operands.len() != 2 {
-        return false;
-    }
-    (is_typeof_expression(operands[0]) && is_undefined_string(operands[1], source))
-        || (is_undefined_string(operands[0], source) && is_typeof_expression(operands[1]))
-}
-
-fn is_typeof_expression(node: tree_sitter::Node<'_>) -> bool {
-    if node.kind() != "unary_expression" {
-        return false;
-    }
-    let mut cursor = node.walk();
-    node.children(&mut cursor)
-        .any(|child| child.kind() == "typeof")
-}
-
-fn is_undefined_string(node: tree_sitter::Node<'_>, source: &str) -> bool {
-    matches!(node.kind(), "string" | "template_string")
-        && node.utf8_text(source.as_bytes()).is_ok_and(|text| {
-            matches!(text.trim(), "'undefined'" | "\"undefined\"" | "`undefined`")
+impl TypeScriptApplicationState<'_> {
+    fn union_contains_void(node: tree_sitter::Node<'_>, source: &str) -> bool {
+        let mut cursor = node.walk();
+        node.named_children(&mut cursor).any(|child| {
+            if child.kind() == "union_type" {
+                return TypeScriptApplicationState::union_contains_void(child, source);
+            }
+            TypeScriptApplicationState::type_text_without_whitespace(child, source) == "void"
         })
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn union_contains_non_effect_value(node: tree_sitter::Node<'_>, source: &str) -> bool {
+        let mut cursor = node.walk();
+        node.named_children(&mut cursor).any(|child| {
+            if child.kind() == "union_type" {
+                return TypeScriptApplicationState::union_contains_non_effect_value(child, source);
+            }
+            !matches!(
+                TypeScriptApplicationState::type_text_without_whitespace(child, source).as_str(),
+                "void" | "Promise<void>" | "globalThis.Promise<void>"
+            )
+        })
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn type_text_without_whitespace(node: tree_sitter::Node<'_>, source: &str) -> String {
+        node.utf8_text(source.as_bytes())
+            .map_or_else(|_| String::new(), |text| text.split_whitespace().collect())
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn collect_undefined_nodes(
+        node: tree_sitter::Node<'_>,
+        source: &str,
+        first_line: usize,
+        lines: &mut Vec<usize>,
+    ) {
+        if matches!(
+            node.kind(),
+            "binary_expression" | "augmented_assignment_expression"
+        ) && node
+            .child_by_field_name("operator")
+            .is_some_and(|operator| matches!(operator.kind(), "??" | "??="))
+        {
+            lines.push(first_line + node.start_position().row);
+        }
+        if node.kind() == "undefined" || node.kind() == "undefined_type" {
+            lines.push(first_line + node.start_position().row);
+            return;
+        }
+        if node.kind() == "property_identifier"
+            && node
+                .utf8_text(source.as_bytes())
+                .is_ok_and(|text| matches!(text, "toBeDefined" | "toBeNull" | "toBeUndefined"))
+        {
+            lines.push(first_line + node.start_position().row);
+            return;
+        }
+        if node.kind() == "binary_expression"
+            && TypeScriptApplicationState::is_typeof_undefined_comparison(node, source)
+        {
+            lines.push(first_line + node.start_position().row);
+            return;
+        }
+        if node.kind() == "call_expression"
+            && TypeScriptApplicationState::is_parameterless_bindable(node, source)
+        {
+            lines.push(first_line + node.start_position().row);
+            return;
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            TypeScriptApplicationState::collect_undefined_nodes(child, source, first_line, lines);
+        }
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn is_parameterless_bindable(node: tree_sitter::Node<'_>, source: &str) -> bool {
+        let function_is_bindable = node
+            .child_by_field_name("function")
+            .and_then(|function| function.utf8_text(source.as_bytes()).ok())
+            .is_some_and(|function| function == "$bindable");
+        let has_arguments = node
+            .child_by_field_name("arguments")
+            .is_some_and(|arguments| arguments.named_child_count() > 0);
+        function_is_bindable && !has_arguments
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn collect_null_nodes(node: tree_sitter::Node<'_>, first_line: usize, lines: &mut Vec<usize>) {
+        if node.kind() == "null" {
+            lines.push(first_line + node.start_position().row);
+            return;
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            TypeScriptApplicationState::collect_null_nodes(child, first_line, lines);
+        }
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn is_typeof_undefined_comparison(node: tree_sitter::Node<'_>, source: &str) -> bool {
+        let mut child_cursor = node.walk();
+        let compares_equality = node
+            .children(&mut child_cursor)
+            .any(|child| matches!(child.kind(), "===" | "!==" | "==" | "!="));
+        if !compares_equality {
+            return false;
+        }
+
+        let mut cursor = node.walk();
+        let operands: Vec<_> = node.named_children(&mut cursor).collect();
+        let [left, right] = operands.as_slice() else {
+            return false;
+        };
+        (TypeScriptApplicationState::is_typeof_expression(*left)
+            && TypeScriptApplicationState::is_undefined_string(*right, source))
+            || (TypeScriptApplicationState::is_undefined_string(*left, source)
+                && TypeScriptApplicationState::is_typeof_expression(*right))
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn is_typeof_expression(node: tree_sitter::Node<'_>) -> bool {
+        if node.kind() != "unary_expression" {
+            return false;
+        }
+        let mut cursor = node.walk();
+        node.children(&mut cursor)
+            .any(|child| child.kind() == "typeof")
+    }
+}
+
+impl TypeScriptApplicationState<'_> {
+    fn is_undefined_string(node: tree_sitter::Node<'_>, source: &str) -> bool {
+        matches!(node.kind(), "string" | "template_string")
+            && node.utf8_text(source.as_bytes()).is_ok_and(|text| {
+                matches!(text.trim(), "'undefined'" | "\"undefined\"" | "`undefined`")
+            })
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        typescript_code_generic_optional_state_lines, typescript_code_mutable_void_state_lines,
-        typescript_code_null_token_lines, typescript_code_raw_string_discriminant_lines,
-        typescript_code_undefined_token_lines,
-    };
+    use super::TypeScriptApplicationState;
 
     #[test]
     fn reports_every_code_and_type_token_but_not_prose() -> Result<(), tree_sitter::LanguageError> {
@@ -613,7 +766,7 @@ let implicitBinding = $bindable()
 "#;
 
         assert_eq!(
-            typescript_code_undefined_token_lines(source, 1)?,
+            TypeScriptApplicationState::typescript_code_undefined_token_lines(source, 1)?,
             vec![5, 6, 8, 9, 10, 11, 12, 13, 14]
         );
         Ok(())
@@ -635,7 +788,7 @@ void effect()
 ";
 
         assert_eq!(
-            typescript_code_mutable_void_state_lines(source, 1)?,
+            TypeScriptApplicationState::typescript_code_mutable_void_state_lines(source, 1)?,
             vec![2, 3, 4, 5]
         );
         Ok(())
@@ -650,7 +803,10 @@ type State = string | null
 const value = null
 "#;
 
-        assert_eq!(typescript_code_null_token_lines(source, 1)?, vec![4, 5]);
+        assert_eq!(
+            TypeScriptApplicationState::typescript_code_null_token_lines(source, 1)?,
+            vec![4, 5]
+        );
         Ok(())
     }
 
@@ -666,7 +822,7 @@ const logical = value || fallback
 "#;
 
         assert_eq!(
-            typescript_code_undefined_token_lines(source, 1)?,
+            TypeScriptApplicationState::typescript_code_undefined_token_lines(source, 1)?,
             vec![4, 5]
         );
         Ok(())
@@ -683,7 +839,7 @@ const state = presentValue(value)
 ";
 
         assert_eq!(
-            typescript_code_generic_optional_state_lines(source, 1)?,
+            TypeScriptApplicationState::typescript_code_generic_optional_state_lines(source, 1)?,
             vec![3, 4, 5]
         );
         Ok(())
@@ -720,9 +876,31 @@ type ToolArguments = ToolCall['args'] | void
 ";
 
         assert_eq!(
-            typescript_code_raw_string_discriminant_lines(source, 1)?,
+            TypeScriptApplicationState::typescript_code_raw_string_discriminant_lines(source, 1)?,
             vec![10, 12, 14, 15, 16, 17, 18]
         );
         Ok(())
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum UnregisteredDiscriminantPolicy {
+    Allow,
+    Reject,
+}
+
+#[derive(Clone, Copy)]
+struct DiscriminantSource<'a> {
+    source: &'a str,
+    first_line: usize,
+    unregistered_values: UnregisteredDiscriminantPolicy,
+}
+
+struct DiscriminantTraversal<'a> {
+    node: tree_sitter::Node<'a>,
+    source: &'a str,
+    first_line: usize,
+    enum_values: &'a HashMap<String, HashSet<String>>,
+    unregistered_values: UnregisteredDiscriminantPolicy,
+    lines: &'a mut Vec<usize>,
 }

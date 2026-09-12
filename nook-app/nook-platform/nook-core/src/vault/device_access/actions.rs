@@ -7,9 +7,12 @@
 use super::{
     DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS, DeviceAccessIdentityState, DeviceAccessProfile,
     DeviceAccessProfileDecodeResult, DeviceAccessProfileVersionEnvelope,
-    DeviceAccessProtectionKind, DeviceAccessProviderLabelError, PasskeyAccessProfile,
+    DeviceAccessProtectionKind, DeviceAccessProviderLabelError, DeviceCredentialProfile,
+    PasskeyAccessProfile,
 };
-use crate::{AppId, IdentityDirectory, IdentityRecord, StoreId, WrappedDeviceIdentity};
+use crate::{
+    AppId, IdentityDirectory, IdentityRecord, IdentityVaultBinding, StoreId, WrappedDeviceIdentity,
+};
 use sha2::{Digest, Sha256};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,24 +64,19 @@ pub struct IdentityVaultAppGrant<'a> {
 impl IdentityVaultAppGrant<'_> {
     #[must_use]
     pub fn classify(&self) -> IdentityVaultAppGrantKind {
-        let Some(vault) = self.identity.vault_dek(self.store_id) else {
+        let IdentityVaultBinding::Bound(vault) = self.identity.vault_dek(self.store_id) else {
             return IdentityVaultAppGrantKind::NotLinked;
         };
         if !self.identity.has_app_id(self.app_id) {
             return IdentityVaultAppGrantKind::NotGranted;
         }
-        let grants_secrets = vault
-            .secrets_envelopes
-            .iter()
-            .any(|envelope| envelope.app_id == *self.app_id);
-        let grants_members = vault
-            .members_envelopes
-            .iter()
-            .any(|envelope| envelope.app_id == *self.app_id);
-        if grants_secrets && grants_members {
-            IdentityVaultAppGrantKind::Granted
-        } else {
-            IdentityVaultAppGrantKind::NotGranted
+        match vault.app_envelopes(self.app_id) {
+            nook_auth2::IdentityVaultAppEnvelopes::Granted { .. } => {
+                IdentityVaultAppGrantKind::Granted
+            }
+            nook_auth2::IdentityVaultAppEnvelopes::NotGranted => {
+                IdentityVaultAppGrantKind::NotGranted
+            }
         }
     }
 }
@@ -98,10 +96,12 @@ impl DeviceAccessProfile {
         }
         match serde_json::from_str::<DeviceAccessProfile>(raw) {
             Ok(profile)
-                if profile
-                    .passkey
-                    .as_ref()
-                    .is_none_or(|passkey| !passkey.credential_fingerprint.trim().is_empty()) =>
+                if match &profile.credential {
+                    DeviceCredentialProfile::Unrecorded => true,
+                    DeviceCredentialProfile::Passkey(passkey) => {
+                        !passkey.credential_fingerprint.trim().is_empty()
+                    }
+                } =>
             {
                 DeviceAccessProfileDecodeResult::Current(Box::new(profile))
             }
@@ -112,34 +112,42 @@ impl DeviceAccessProfile {
 
 impl DeviceAccessProtectionKind {
     #[must_use]
-    pub fn classify(record: Option<&WrappedDeviceIdentity>) -> Self {
+    pub fn classify(record: &WrappedDeviceIdentity) -> Self {
         match record {
-            None => Self::Missing,
-            Some(WrappedDeviceIdentity::PasskeyDerived(_)) => Self::PasskeyStandard,
-            Some(WrappedDeviceIdentity::PasskeyWrappedLocal(_)) => Self::PasskeyAntiHacker,
-            Some(WrappedDeviceIdentity::Pin(_)) => Self::PinOrPassphrase,
+            WrappedDeviceIdentity::PasskeyDerived(_) => Self::PasskeyStandard,
+            WrappedDeviceIdentity::PasskeyWrappedLocal(_) => Self::PasskeyAntiHacker,
+            WrappedDeviceIdentity::Pin(_) => Self::PinOrPassphrase,
         }
     }
 }
 
-/// Captures the browser/session observations used to classify device identity state.
-pub struct DeviceAccessIdentityObservation<'a> {
-    pub session_unlocked: bool,
-    pub session_device_id: &'a str,
-    pub persisted_device_id: Option<&'a str>,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PersistedDeviceIdentityState {
+    NotEstablished,
+    Established,
 }
 
-impl DeviceAccessIdentityState {
+/// Captures the browser/session observations used to classify device identity state.
+pub struct DeviceAccessIdentityObservation<'a> {
+    pub session_unlocked: DeviceSessionLockState,
+    pub session_device_id: &'a str,
+    pub persisted_identity: PersistedDeviceIdentityState,
+}
+
+impl DeviceAccessIdentityObservation<'_> {
     #[must_use]
-    pub fn classify(observation: &DeviceAccessIdentityObservation<'_>) -> Self {
-        if observation.session_unlocked {
-            Self::Unlocked
-        } else if !observation.session_device_id.trim().is_empty()
-            || observation.persisted_device_id.is_some()
+    pub fn identity_state(&self) -> DeviceAccessIdentityState {
+        if matches!(self.session_unlocked, DeviceSessionLockState::Unlocked) {
+            DeviceAccessIdentityState::Unlocked
+        } else if !self.session_device_id.trim().is_empty()
+            || matches!(
+                self.persisted_identity,
+                PersistedDeviceIdentityState::Established
+            )
         {
-            Self::Locked
+            DeviceAccessIdentityState::Locked
         } else {
-            Self::Missing
+            DeviceAccessIdentityState::Missing
         }
     }
 }
@@ -188,6 +196,23 @@ impl PasskeyAccessProfile {
 
     fn short_identifier(prefix: &str, bytes: &[u8]) -> String {
         let digest = Sha256::digest(bytes);
-        format!("{prefix}_{}", hex::encode(&digest[..8]))
+        let short = digest.into_iter().take(8).collect::<Vec<_>>();
+        format!("{prefix}_{}", hex::encode(short))
+    }
+}
+
+/// Non-secret session evidence; this value does not authorize identity access.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceSessionLockState {
+    Locked,
+    Unlocked,
+}
+impl From<bool> for DeviceSessionLockState {
+    fn from(unlocked: bool) -> Self {
+        if unlocked {
+            Self::Unlocked
+        } else {
+            Self::Locked
+        }
     }
 }

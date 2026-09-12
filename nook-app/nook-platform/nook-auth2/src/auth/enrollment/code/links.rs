@@ -32,6 +32,11 @@ const ENCODE_URI_COMPONENT: &AsciiSet = &CONTROLS
     .add(b'|')
     .add(b'}');
 
+enum EnrollmentQuery<'a> {
+    Code(&'a str),
+    NotIncluded,
+}
+
 pub struct EnrollmentLinkInput<'a> {
     pub input: &'a str,
 }
@@ -54,7 +59,9 @@ impl<'a> EnrollmentLinkInput<'a> {
         }
 
         if trimmed.contains("://") {
-            if let Some(raw) = (EnrollmentLinkInput { input: trimmed }).query_value() {
+            if let EnrollmentQuery::Code(raw) =
+                (EnrollmentLinkInput { input: trimmed }).query_value()
+            {
                 return EnrollmentLinkInput { input: raw }.decode_component();
             }
             if let Some(hash) = trimmed.split_once('#').map(|(_, hash)| hash) {
@@ -69,25 +76,26 @@ impl<'a> EnrollmentLinkInput<'a> {
             return EnrollmentLinkInput { input: raw }.decode_component();
         }
 
-        if let Some(raw) = (EnrollmentLinkInput { input: trimmed }).query_value() {
+        if let EnrollmentQuery::Code(raw) = (EnrollmentLinkInput { input: trimmed }).query_value() {
             return EnrollmentLinkInput { input: raw }.decode_component();
         }
 
         trimmed.to_owned()
     }
 
-    fn query_value(&self) -> Option<&'a str> {
-        let query = self
-            .input
-            .split_once('?')?
-            .1
-            .split('#')
-            .next()
-            .unwrap_or_default();
-        query.split('&').find_map(|part| {
-            let (key, value) = part.split_once('=')?;
-            (key == "enroll").then_some(value)
-        })
+    fn query_value(&self) -> EnrollmentQuery<'a> {
+        let Some((_, query)) = self.input.split_once('?') else {
+            return EnrollmentQuery::NotIncluded;
+        };
+        let query = query.split('#').next().unwrap_or_default();
+        for part in query.split('&') {
+            if let Some((key, value)) = part.split_once('=')
+                && key == "enroll"
+            {
+                return EnrollmentQuery::Code(value);
+            }
+        }
+        EnrollmentQuery::NotIncluded
     }
 
     fn decode_component(&self) -> String {

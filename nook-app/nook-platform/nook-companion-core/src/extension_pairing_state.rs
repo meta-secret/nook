@@ -29,6 +29,10 @@ pub enum ExtensionConnectScope {
     SyncProviderCredentials,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("unsupported extension connection scope")]
+pub struct UnknownExtensionConnectScope;
+
 impl ExtensionConnectScope {
     #[must_use]
     pub fn as_str(self) -> &'static str {
@@ -40,14 +44,13 @@ impl ExtensionConnectScope {
         }
     }
 
-    #[must_use]
-    pub fn parse(value: &str) -> Option<Self> {
+    pub fn parse(value: &str) -> Result<Self, UnknownExtensionConnectScope> {
         match value {
-            "vault-access" => Some(Self::VaultAccess),
-            "password-filling" => Some(Self::PasswordFilling),
-            "passkey-management" => Some(Self::PasskeyManagement),
-            "sync-provider-credentials" => Some(Self::SyncProviderCredentials),
-            _ => None,
+            "vault-access" => Ok(Self::VaultAccess),
+            "password-filling" => Ok(Self::PasswordFilling),
+            "passkey-management" => Ok(Self::PasskeyManagement),
+            "sync-provider-credentials" => Ok(Self::SyncProviderCredentials),
+            _ => Err(UnknownExtensionConnectScope),
         }
     }
 }
@@ -162,6 +165,32 @@ pub enum ExtensionPairingRecord {
     Setup(ExtensionReadySetup),
 }
 
+/// Compare the typed records before deciding whether a legacy write is complete.
+#[derive(Debug, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct ExtensionPairingRecordComparisonRequest {
+    pub current: ExtensionPairingRecord,
+    pub migrated: ExtensionPairingRecord,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum ExtensionPairingRecordComparison {
+    Equivalent,
+    Different,
+}
+
+impl ExtensionPairingRecordComparisonRequest {
+    #[must_use]
+    pub fn compare(self) -> ExtensionPairingRecordComparison {
+        if self.current == self.migrated {
+            ExtensionPairingRecordComparison::Equivalent
+        } else {
+            ExtensionPairingRecordComparison::Different
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -226,7 +255,7 @@ impl ExtensionPairingRecord {
                     || grant.vault_name.trim().is_empty()
                     || grant.approved_at.trim().is_empty()
                     || grant.scopes.is_empty()
-                    || grant.event_count.raw() == 0
+                    || grant.event_count.is_zero()
                     || grant.event_log_heads.is_empty()
                     || grant
                         .event_log_heads
@@ -247,7 +276,7 @@ impl ExtensionPairingRecord {
                         .any(|vault| vault.trim().is_empty())
                     || setup.selected_vault_store_id.trim().is_empty()
                     || setup.selected_vault_name.trim().is_empty()
-                    || setup.event_count.raw() == 0
+                    || setup.event_count.is_zero()
                     || setup.event_log_heads.is_empty()
                     || setup
                         .event_log_heads
@@ -295,9 +324,7 @@ impl ExtensionPairingState {
 
     #[must_use]
     pub fn ordered_grants(&self) -> Vec<StoredExtensionPairingGrant> {
-        let selected = self
-            .ready_setup()
-            .map(|setup| setup.selected_vault_store_id.as_str());
+        let selected = self.ready_setup();
         let mut grants: Vec<_> = self
             .entries
             .iter()
@@ -307,8 +334,8 @@ impl ExtensionPairingState {
             })
             .collect();
         grants.sort_by(|left, right| {
-            let left_selected = Some(left.vault_store_id.as_str()) == selected;
-            let right_selected = Some(right.vault_store_id.as_str()) == selected;
+            let left_selected = matches!(&selected, PairingSetupObservation::Ready(setup) if setup.selected_vault_store_id == left.vault_store_id);
+            let right_selected = matches!(&selected, PairingSetupObservation::Ready(setup) if setup.selected_vault_store_id == right.vault_store_id);
             right_selected
                 .cmp(&left_selected)
                 .then_with(|| right.approved_at.cmp(&left.approved_at))
@@ -317,43 +344,84 @@ impl ExtensionPairingState {
     }
 
     #[must_use]
-    pub fn selected_grant(&self) -> Option<StoredExtensionPairingGrant> {
-        let selected = &self.ready_setup()?.selected_vault_store_id;
-        self.grant(selected).cloned()
+    pub fn selected_grant(&self) -> SelectedExtensionPairingGrant {
+        match self.ready_setup() {
+            PairingSetupObservation::NotConfigured => SelectedExtensionPairingGrant::NotSelected,
+            PairingSetupObservation::Ready(setup) => match self
+                .grant(&setup.selected_vault_store_id)
+            {
+                PairingGrantObservation::NotStored => SelectedExtensionPairingGrant::NotSelected,
+                PairingGrantObservation::Stored(grant) => SelectedExtensionPairingGrant::Selected {
+                    grant: Box::new(grant.clone()),
+                },
+            },
+        }
     }
 
     #[must_use]
-    pub fn first_grant(&self) -> Option<StoredExtensionPairingGrant> {
-        self.ordered_grants().into_iter().next()
+    pub fn first_grant(&self) -> SelectedExtensionPairingGrant {
+        match self.ordered_grants().into_iter().next() {
+            Some(grant) => SelectedExtensionPairingGrant::Selected {
+                grant: Box::new(grant),
+            },
+            None => SelectedExtensionPairingGrant::NotSelected,
+        }
     }
 
     #[must_use]
-    pub fn setup_after_removal(&self, removed_vault_store_id: &str) -> Option<ExtensionReadySetup> {
-        if let Some(setup) = self.ready_setup()
+    pub fn setup_after_removal(&self, removed_vault_store_id: &str) -> ExtensionSetupAfterRemoval {
+        if let PairingSetupObservation::Ready(setup) = self.ready_setup()
             && setup.selected_vault_store_id != removed_vault_store_id
         {
-            return Some(setup.clone());
+            return ExtensionSetupAfterRemoval::Ready {
+                setup: setup.clone(),
+            };
         }
-        self.ordered_grants()
+        match self
+            .ordered_grants()
             .into_iter()
             .find(|grant| grant.vault_store_id != removed_vault_store_id)
-            .map(|grant| ExtensionReadySetup::from_grant(&grant))
+        {
+            Some(grant) => ExtensionSetupAfterRemoval::Ready {
+                setup: ExtensionReadySetup::from_grant(&grant),
+            },
+            None => ExtensionSetupAfterRemoval::NoPairedVault,
+        }
     }
 
-    fn ready_setup(&self) -> Option<&ExtensionReadySetup> {
-        self.entries.iter().find_map(|entry| match &entry.record {
-            ExtensionPairingRecord::Setup(setup) if entry.key == EXTENSION_SETUP_KEY => Some(setup),
-            ExtensionPairingRecord::Grant(_) | ExtensionPairingRecord::Setup(_) => None,
-        })
+    fn ready_setup(&self) -> PairingSetupObservation<'_> {
+        for entry in &self.entries {
+            if let ExtensionPairingRecord::Setup(setup) = &entry.record
+                && entry.key == EXTENSION_SETUP_KEY
+            {
+                return PairingSetupObservation::Ready(setup);
+            }
+        }
+        PairingSetupObservation::NotConfigured
     }
 
-    fn grant(&self, vault_store_id: &str) -> Option<&StoredExtensionPairingGrant> {
+    fn grant(&self, vault_store_id: &str) -> PairingGrantObservation<'_> {
         let key = StoredExtensionPairingGrant::storage_key_for(vault_store_id);
-        self.entries.iter().find_map(|entry| match &entry.record {
-            ExtensionPairingRecord::Grant(grant) if entry.key == key => Some(grant),
-            ExtensionPairingRecord::Grant(_) | ExtensionPairingRecord::Setup(_) => None,
-        })
+        for entry in &self.entries {
+            if let ExtensionPairingRecord::Grant(grant) = &entry.record
+                && entry.key == key
+            {
+                return PairingGrantObservation::Stored(grant);
+            }
+        }
+        PairingGrantObservation::NotStored
     }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum PairingSetupObservation<'a> {
+    NotConfigured,
+    Ready(&'a ExtensionReadySetup),
+}
+#[derive(Debug, PartialEq, Eq)]
+enum PairingGrantObservation<'a> {
+    NotStored,
+    Stored(&'a StoredExtensionPairingGrant),
 }
 
 #[derive(Clone, Copy)]
@@ -376,7 +444,10 @@ impl StoredExtensionPairingGrant {
         if imported.vault_store_id != grant.vault_store_id {
             return Err(ExtensionPairingStateError::ImportedVaultMismatch);
         }
-        if !imported.access_granted {
+        if matches!(
+            ImportedExtensionAccess::from(imported.access_granted),
+            ImportedExtensionAccess::Denied
+        ) {
             return Err(ExtensionPairingStateError::ImportedAccessDenied);
         }
         Ok(StoredExtensionPairingGrant {
@@ -436,11 +507,7 @@ impl ExtensionPairingState {
         };
         let grant =
             StoredExtensionPairingGrant::from_import(approval, input.imported, input.observed_at)?;
-        let selection = if input.select {
-            PairingSelection::Select
-        } else {
-            PairingSelection::KeepCurrent
-        };
+        let selection = PairingSelection::from(input.select);
         Ok(ExtensionPairingState::for_grant(&grant, selection))
     }
 
@@ -489,6 +556,48 @@ mod tests {
     use super::*;
 
     #[test]
+    fn granted_event_log_evidence_admission_preserves_imported_fields() -> anyhow::Result<()> {
+        let evidence = Fixture::refresh_input(PairingSelection::Select).imported;
+        assert_eq!(evidence.clone().admit()?, evidence);
+        Ok(())
+    }
+
+    #[test]
+    fn granted_event_log_evidence_rejects_each_inconsistent_shape() {
+        for (event_count, heads) in [
+            (0, vec!["event-4".to_owned()]),
+            (4, Vec::new()),
+            (0, Vec::new()),
+        ] {
+            let evidence = ImportedExtensionEventLog {
+                event_count: event_count.into(),
+                heads,
+                ..Fixture::refresh_input(PairingSelection::Select).imported
+            };
+            assert!(matches!(
+                evidence.admit(),
+                Err(ImportedExtensionEventLogError)
+            ));
+        }
+    }
+
+    #[test]
+    fn denied_event_log_evidence_admission_preserves_every_shape() -> anyhow::Result<()> {
+        for event_count in [0, 4] {
+            for heads in [Vec::new(), vec!["event-4".to_owned()]] {
+                let evidence = ImportedExtensionEventLog {
+                    event_count: event_count.into(),
+                    heads,
+                    access_granted: false,
+                    ..Fixture::refresh_input(PairingSelection::Select).imported
+                };
+                assert_eq!(evidence.clone().admit()?, evidence);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
     fn extension_scope_parser_matches_serialized_vocabulary() {
         let scopes = [
             ExtensionConnectScope::VaultAccess,
@@ -498,9 +607,45 @@ mod tests {
         ];
 
         for scope in scopes {
-            assert_eq!(ExtensionConnectScope::parse(scope.as_str()), Some(scope));
+            assert_eq!(ExtensionConnectScope::parse(scope.as_str()), Ok(scope));
         }
-        assert_eq!(ExtensionConnectScope::parse("external-value"), None);
+        assert_eq!(
+            ExtensionConnectScope::parse("external-value"),
+            Err(UnknownExtensionConnectScope)
+        );
+    }
+
+    #[test]
+    fn migration_completion_compares_grant_content_and_record_variants() {
+        let current = ExtensionPairingRecord::Grant(Fixture::grant());
+        assert_eq!(
+            ExtensionPairingRecordComparisonRequest {
+                current: current.clone(),
+                migrated: current.clone(),
+            }
+            .compare(),
+            ExtensionPairingRecordComparison::Equivalent
+        );
+        let mut changed = Fixture::grant();
+        changed.device_id = "another-device".to_owned();
+        assert_eq!(
+            ExtensionPairingRecordComparisonRequest {
+                current: current.clone(),
+                migrated: ExtensionPairingRecord::Grant(changed),
+            }
+            .compare(),
+            ExtensionPairingRecordComparison::Different
+        );
+        assert_eq!(
+            ExtensionPairingRecordComparisonRequest {
+                current,
+                migrated: ExtensionPairingRecord::Setup(ExtensionReadySetup::from_grant(
+                    &Fixture::grant()
+                )),
+            }
+            .compare(),
+            ExtensionPairingRecordComparison::Different
+        );
     }
 
     #[test]
@@ -588,14 +733,18 @@ mod tests {
     fn selected_pairing_grant_refresh_rebuilds_grant_and_setup_metadata() -> anyhow::Result<()> {
         let state =
             ExtensionPairingState::refresh_grant(Fixture::refresh_input(PairingSelection::Select))?;
-        let refreshed = state
-            .selected_grant()
-            .ok_or_else(|| anyhow::anyhow!("selected refresh must include setup state"))?;
+        let SelectedExtensionPairingGrant::Selected { grant: refreshed } = state.selected_grant()
+        else {
+            anyhow::bail!("selected refresh must include setup state");
+        };
 
         assert_eq!(refreshed.event_count, ExtensionEventCount::from(4));
         assert_eq!(refreshed.event_log_heads, vec!["event-4"]);
         assert_eq!(refreshed.last_local_sync_at, "2026-07-25T00:00:04.000Z");
-        assert_eq!(state.first_grant(), Some(refreshed));
+        assert_eq!(
+            state.first_grant(),
+            SelectedExtensionPairingGrant::Selected { grant: refreshed }
+        );
         state.validate()?;
         Ok(())
     }
@@ -605,14 +754,18 @@ mod tests {
         let state = ExtensionPairingState::refresh_grant(Fixture::refresh_input(
             PairingSelection::KeepCurrent,
         ))?;
-        let refreshed = state
-            .first_grant()
-            .ok_or_else(|| anyhow::anyhow!("refresh must include the updated grant"))?;
+        let SelectedExtensionPairingGrant::Selected { grant: refreshed } = state.first_grant()
+        else {
+            anyhow::bail!("refresh must include the updated grant");
+        };
 
         assert_eq!(refreshed.event_count, ExtensionEventCount::from(4));
         assert_eq!(refreshed.event_log_heads, vec!["event-4"]);
         assert_eq!(refreshed.last_local_sync_at, "2026-07-25T00:00:04.000Z");
-        assert_eq!(state.selected_grant(), None);
+        assert_eq!(
+            state.selected_grant(),
+            SelectedExtensionPairingGrant::NotSelected
+        );
         assert_eq!(state.entries.len(), 1);
         state.validate()?;
         Ok(())
@@ -643,7 +796,10 @@ mod tests {
             ],
         };
 
-        assert_eq!(state.setup_after_removal("store-removed"), Some(expected));
+        assert_eq!(
+            state.setup_after_removal("store-removed"),
+            ExtensionSetupAfterRemoval::Ready { setup: expected }
+        );
     }
 
     #[test]
@@ -682,7 +838,9 @@ mod tests {
 
         assert_eq!(
             state.setup_after_removal("store-test"),
-            Some(ExtensionReadySetup::from_grant(&newer))
+            ExtensionSetupAfterRemoval::Ready {
+                setup: ExtensionReadySetup::from_grant(&newer)
+            }
         );
     }
 
@@ -691,7 +849,10 @@ mod tests {
         let selected = Fixture::grant();
         let state = ExtensionPairingState::for_grant(&selected, PairingSelection::Select);
 
-        assert_eq!(state.setup_after_removal("store-test"), None);
+        assert_eq!(
+            state.setup_after_removal("store-test"),
+            ExtensionSetupAfterRemoval::NoPairedVault
+        );
     }
     #[test]
     fn grant_json_validation_reports_invalid_input() -> anyhow::Result<()> {
@@ -769,3 +930,39 @@ mod tests {
         }
     }
 }
+
+// Fixed browser booleans are admitted into distinct selection/access evidence.
+impl From<bool> for PairingSelection {
+    fn from(select: bool) -> Self {
+        if select {
+            Self::Select
+        } else {
+            Self::KeepCurrent
+        }
+    }
+}
+enum ImportedExtensionAccess {
+    Denied,
+    Granted,
+}
+impl From<bool> for ImportedExtensionAccess {
+    fn from(granted: bool) -> Self {
+        if granted { Self::Granted } else { Self::Denied }
+    }
+}
+
+impl ImportedExtensionEventLog {
+    pub fn admit(self) -> Result<Self, ImportedExtensionEventLogError> {
+        if matches!(
+            ImportedExtensionAccess::from(self.access_granted),
+            ImportedExtensionAccess::Granted
+        ) && (self.event_count.is_zero() || self.heads.is_empty())
+        {
+            return Err(ImportedExtensionEventLogError);
+        }
+        Ok(self)
+    }
+}
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error("imported extension event-log evidence is inconsistent")]
+pub struct ImportedExtensionEventLogError;

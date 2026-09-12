@@ -3,10 +3,7 @@ import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { expect, test } from 'bun:test';
-import {
-  auditInternalApiExpertConsumerScope,
-  discoverInternalApiConsumerPaths,
-} from '../../src/module-experts/consumer-scope-audit.ts';
+import { InternalApiConsumerScope } from '../../src/module-experts/consumer-scope-audit.ts';
 import type { AuditInternalApiExpertConsumerScopeArgs } from '../../src/module-experts/consumer-scope-audit.ts';
 import {
   INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS,
@@ -17,7 +14,8 @@ import {
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 
 test('discovers exact production JSON binding resolver configurations', () => {
-  const discovered = discoverInternalApiConsumerPaths(REPO_ROOT);
+  const discovered =
+    InternalApiConsumerScope.discoverInternalApiConsumerPaths(REPO_ROOT);
   expect(discovered.filter((path) => path.endsWith('.json'))).toEqual([
     ...INTERNAL_API_EXPERT_JSON_CONSUMER_SCOPE_PATHS,
   ]);
@@ -53,7 +51,9 @@ test('parses bounded JSON and JSONC configs without broad JSON discovery', async
       await mkdir(dirname(absolutePath), directoryOptions);
       await writeFile(absolutePath, source, 'utf8');
     }
-    expect(discoverInternalApiConsumerPaths(fixtureRoot)).toEqual([
+    expect(
+      InternalApiConsumerScope.discoverInternalApiConsumerPaths(fixtureRoot),
+    ).toEqual([
       'nook-app/nook-web/example/knip.json',
       'nook-app/nook-web/example/tsconfig.json',
     ]);
@@ -67,7 +67,8 @@ test('rejects missing and overbroad JSON resolver scope', () => {
     (candidate) => candidate.name === 'internal_api_expert',
   );
   if (!profile) throw new Error('internal_api_expert fixture is missing.');
-  const discovered = discoverInternalApiConsumerPaths(REPO_ROOT);
+  const discovered =
+    InternalApiConsumerScope.discoverInternalApiConsumerPaths(REPO_ROOT);
   const missingJsonProfile = {
     ...profile,
     scopePaths: profile.scopePaths.filter(
@@ -78,11 +79,15 @@ test('rejects missing and overbroad JSON resolver scope', () => {
     discoveredConsumerPaths: discovered,
     profile: missingJsonProfile,
   };
-  expect(auditInternalApiExpertConsumerScope(missingArgs)).toHaveLength(1);
+  expect(
+    InternalApiConsumerScope.auditInternalApiExpertConsumerScope(missingArgs),
+  ).toHaveLength(1);
 
   const overbroadArgs: AuditInternalApiExpertConsumerScopeArgs = {
     discoveredConsumerPaths: [...discovered, 'nook-app/nook-web/package.json'],
     profile,
   };
-  expect(auditInternalApiExpertConsumerScope(overbroadArgs)).toHaveLength(1);
+  expect(
+    InternalApiConsumerScope.auditInternalApiExpertConsumerScope(overbroadArgs),
+  ).toHaveLength(1);
 });

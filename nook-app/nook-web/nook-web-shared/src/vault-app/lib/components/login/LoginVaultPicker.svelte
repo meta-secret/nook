@@ -29,13 +29,17 @@
 
   const isBusy = $derived(isVerifying || isInitializing)
   let workflow = $state<LoginVaultWorkflow>(LoginVaultWorkflow.Open)
+
+  function selectWorkflow(selected: LoginVaultWorkflow): void {
+    workflow = selected
+  }
 </script>
 
 <div class="space-y-5" data-testid="login-vault-picker">
   <LoginVaultWorkflowNav
     {vault}
     active={workflow}
-    onSelect={(selected) => (workflow = selected)}
+    onSelect={selectWorkflow}
   />
 
   {#if workflow === LoginVaultWorkflow.Open}

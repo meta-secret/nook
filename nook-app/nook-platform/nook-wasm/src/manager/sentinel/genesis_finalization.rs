@@ -1,10 +1,13 @@
 use super::super::{CeremonyState, NookVaultManager, VaultNameState};
 use super::StoredSentinelGenesisDelivery;
-use crate::storage::indexed_db::{
-    clear_sentinel_genesis_finalization_pending, load_sentinel_genesis_finalization_pending,
-    save_sentinel_genesis_finalization_pending, save_sentinel_genesis_share_delivery,
-    save_to_indexed_db,
-};
+use crate::NookDatabase;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::SentinelDbLoadSentinelGenesisShareDelivery;
+use crate::SentinelDbSaveSentinelGenesisShareDelivery;
+use crate::storage::indexed_db::SentinelFinalizationJournal;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::storage::indexed_db::StoredSentinelShareDelivery;
+
 use crate::{NookError, NookSentinelGenesisFinalizeResult};
 use nook_core::{
     SentinelGenesisOutput, SentinelGenesisPhase, SigningIdentity, VaultMetaState, VaultNameRef,
@@ -31,18 +34,22 @@ struct PendingSentinelGenesisFinalization {
 impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn has_pending_sentinel_genesis_finalization(&self) -> Result<bool, JsError> {
-        Ok(load_sentinel_genesis_finalization_pending()
-            .await?
-            .is_some())
+        Ok(matches!(
+            NookDatabase::load_sentinel_genesis_finalization_pending().await?,
+            SentinelFinalizationJournal::Pending(_)
+        ))
     }
 
     #[wasm_bindgen]
     pub async fn resume_pending_sentinel_genesis_finalization(
         &mut self,
     ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {
-        let pending_json = load_sentinel_genesis_finalization_pending()
-            .await?
-            .ok_or_else(|| JsError::new("No Sentinel finalization is pending."))?;
+        let pending_json = match NookDatabase::load_sentinel_genesis_finalization_pending().await? {
+            SentinelFinalizationJournal::Pending(value) => Ok(value),
+            SentinelFinalizationJournal::NotPending => {
+                Err(JsError::new("No Sentinel finalization is pending."))
+            }
+        }?;
         let pending: PendingSentinelGenesisFinalization = serde_json::from_str(&pending_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         self.complete_sentinel_genesis_finalization(pending).await
@@ -54,8 +61,10 @@ impl NookVaultManager {
     pub async fn finalize_sentinel_genesis(
         &mut self,
     ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {
-        let pending = load_sentinel_genesis_finalization_pending().await;
-        if let Some(pending_json) = self.observe_sentinel_genesis_journal(pending)? {
+        let pending = NookDatabase::load_sentinel_genesis_finalization_pending().await;
+        if let SentinelFinalizationJournal::Pending(pending_json) =
+            self.observe_sentinel_genesis_journal(pending)?
+        {
             let pending: PendingSentinelGenesisFinalization =
                 serde_json::from_str(&pending_json)
                     .map_err(|error| NookError::Serialization(error.to_string()))?;
@@ -81,10 +90,10 @@ impl NookVaultManager {
 impl NookVaultManager {
     pub(super) fn observe_sentinel_genesis_journal(
         &mut self,
-        pending: Result<Option<String>, NookError>,
-    ) -> Result<Option<String>, NookError> {
+        pending: Result<SentinelFinalizationJournal, NookError>,
+    ) -> Result<SentinelFinalizationJournal, NookError> {
         let pending = pending?;
-        if pending.is_some() {
+        if let SentinelFinalizationJournal::Pending(_) = pending {
             self.sentinel_genesis = CeremonyState::Inactive;
             self.sentinel_genesis_phase = SentinelGenesisPhase::AwaitingCompletionCheck;
         }
@@ -147,7 +156,7 @@ impl NookVaultManager {
         #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
         checkpoint.before_save().await;
         self.sentinel_genesis_phase = SentinelGenesisPhase::AwaitingCompletionCheck;
-        save_sentinel_genesis_finalization_pending(&pending_json).await?;
+        NookDatabase::save_sentinel_genesis_finalization_pending(&pending_json).await?;
         #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
         checkpoint.after_save()?;
         self.complete_sentinel_genesis_finalization(pending).await
@@ -164,7 +173,7 @@ impl NookVaultManager {
         pending.architecture.validate_records(&records)?;
         let meta = VaultMetaState::from_stored_records(&records)?;
 
-        save_to_indexed_db(&pending.yaml).await?;
+        NookDatabase::save_to_indexed_db(&pending.yaml).await?;
         self.vault.reset();
         self.vault.store_id.clone_from(&pending.store_id);
         self.vault.vault_name.clone_from(&pending.vault_name);
@@ -194,13 +203,15 @@ impl NookVaultManager {
             delivery: own_delivery.clone(),
         })
         .map_err(|error| NookError::Serialization(error.to_string()))?;
-        save_sentinel_genesis_share_delivery(
-            &pending.store_id,
-            identity.device_id().as_str(),
-            &stored_json,
+        NookDatabase::save_sentinel_genesis_share_delivery(
+            SentinelDbSaveSentinelGenesisShareDelivery {
+                store_id: &pending.store_id,
+                device_id: identity.device_id().as_str(),
+                delivery_json: &stored_json,
+            },
         )
         .await?;
-        clear_sentinel_genesis_finalization_pending().await?;
+        NookDatabase::clear_sentinel_genesis_finalization_pending().await?;
         self.sentinel_genesis = CeremonyState::Inactive;
         self.sentinel_genesis_phase = SentinelGenesisPhase::DeliveringShares;
 
@@ -243,7 +254,6 @@ impl IssuanceCheckpoint {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod tests {
     use super::*;
-    use crate::storage::{event_db, indexed_db};
     use js_sys::Error as BrowserError;
     use nook_core::{DeviceIdentity, StartSentinelGenesisArgs};
     use std::future::Future;
@@ -257,7 +267,7 @@ mod tests {
     }
     impl Fixture {
         async fn new() -> anyhow::Result<Self> {
-            clear_sentinel_genesis_finalization_pending().await?;
+            NookDatabase::clear_sentinel_genesis_finalization_pending().await?;
             let identity = DeviceIdentity::generate()?;
             let mut manager = NookVaultManager::new();
             manager.device.identity_private_key = identity.secret_string().as_str().to_owned();
@@ -360,11 +370,10 @@ mod tests {
         fixture.manager.sentinel_genesis_phase = SentinelGenesisPhase::AwaitingCompletionCheck;
         fixture.reject_failed_journal_read()?;
         fixture.assert_consumed(SentinelGenesisPhase::AwaitingCompletionCheck);
-        assert!(
-            load_sentinel_genesis_finalization_pending()
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::load_sentinel_genesis_finalization_pending().await?,
+            SentinelFinalizationJournal::NotPending
+        ));
         Ok(())
     }
 
@@ -378,11 +387,10 @@ mod tests {
             "No Sentinel genesis ceremony is active.",
         )?;
         fixture.assert_consumed(SentinelGenesisPhase::Inactive);
-        assert!(
-            load_sentinel_genesis_finalization_pending()
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::load_sentinel_genesis_finalization_pending().await?,
+            SentinelFinalizationJournal::NotPending
+        ));
         fixture
             .manager
             .start_sentinel_genesis(Fixture::args())
@@ -446,11 +454,10 @@ mod tests {
         ));
         drop(future);
         fixture.assert_consumed(SentinelGenesisPhase::Inactive);
-        assert!(
-            load_sentinel_genesis_finalization_pending()
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::load_sentinel_genesis_finalization_pending().await?,
+            SentinelFinalizationJournal::NotPending
+        ));
         assert!(
             fixture
                 .manager
@@ -474,9 +481,12 @@ mod tests {
             "Database error: injected failure after genesis journal persistence",
         )?;
         fixture.assert_consumed(SentinelGenesisPhase::AwaitingCompletionCheck);
-        let journal = load_sentinel_genesis_finalization_pending()
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("issued output must remain durable"))?;
+        let journal = match NookDatabase::load_sentinel_genesis_finalization_pending().await? {
+            SentinelFinalizationJournal::Pending(value) => Ok(value),
+            SentinelFinalizationJournal::NotPending => {
+                Err(anyhow::anyhow!("issued output must remain durable"))
+            }
+        }?;
         let pending: PendingSentinelGenesisFinalization = serde_json::from_str(&journal)?;
         let stale = Fixture::args().start(&fixture.manager.device_identity()?, &fixture.signer)?;
         fixture.manager.sentinel_genesis = CeremonyState::Active(stale);
@@ -501,8 +511,8 @@ mod tests {
             SentinelGenesisPhase::AwaitingCompletionCheck
         );
         assert_eq!(
-            load_sentinel_genesis_finalization_pending().await?,
-            Some(journal)
+            NookDatabase::load_sentinel_genesis_finalization_pending().await?,
+            SentinelFinalizationJournal::Pending(journal)
         );
         // There is no collecting capability: this public entry must read the journal.
         let result = fixture
@@ -522,11 +532,10 @@ mod tests {
             SentinelGenesisPhase::DeliveringShares
         );
         assert!(!fixture.manager.vault.crypto.is_unlocked());
-        assert!(
-            load_sentinel_genesis_finalization_pending()
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::load_sentinel_genesis_finalization_pending().await?,
+            SentinelFinalizationJournal::NotPending
+        ));
         Fixture::require_finalization_failure(
             fixture.manager.finalize_sentinel_genesis().await,
             "No Sentinel genesis ceremony is active.",
@@ -535,13 +544,20 @@ mod tests {
             fixture.manager.sentinel_genesis_status().phase(),
             SentinelGenesisPhase::DeliveringShares
         );
-        event_db::clear_local_event_store(&pending.store_id).await?;
-        let stored = indexed_db::load_sentinel_genesis_share_delivery(
-            &pending.store_id,
-            fixture.manager.device_identity()?.device_id().as_str(),
+        NookDatabase::clear_local_event_store(&pending.store_id).await?;
+        let stored = match NookDatabase::load_sentinel_genesis_share_delivery(
+            SentinelDbLoadSentinelGenesisShareDelivery {
+                store_id: &pending.store_id,
+                device_id: fixture.manager.device_identity()?.device_id().as_str(),
+            },
         )
         .await?
-        .ok_or_else(|| anyhow::anyhow!("own delivery missing"))?;
+        {
+            StoredSentinelShareDelivery::Delivered(value) => Ok(value),
+            StoredSentinelShareDelivery::NotDelivered => {
+                Err(anyhow::anyhow!("own delivery missing"))
+            }
+        }?;
         let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&stored)?;
         assert_eq!(stored.request, pending.request);
         assert!(pending.deliveries.contains(&stored.delivery));

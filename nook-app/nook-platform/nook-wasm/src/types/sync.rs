@@ -1,7 +1,5 @@
 use super::{
-    NookError, NookJoinRequest, NookOAuthAccountIdentity, NookOAuthRefreshCredential,
-    NookOAuthRemoteFile, NookOAuthTokenExpiry, NookSecretRecord, NookVaultManager, NookVaultMember,
-    wasm_bindgen,
+    NookError, NookJoinRequest, NookSecretRecord, NookVaultManager, NookVaultMember, wasm_bindgen,
 };
 use nook_core::OnboardingType;
 use nook_core::{
@@ -30,29 +28,6 @@ impl NookEnrollmentProvider {
     pub fn github(repo: String, pat: String) -> Self {
         Self(EnrollmentProvider::personal(
             PersonalEnrollmentProvider::github(pat, repo),
-        ))
-    }
-
-    #[wasm_bindgen]
-    #[must_use]
-    #[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
-    pub fn oauth_file(
-        preset: String,
-        access_token: String,
-        refresh: NookOAuthRefreshCredential,
-        expiry: NookOAuthTokenExpiry,
-        remote_file: NookOAuthRemoteFile,
-        account: NookOAuthAccountIdentity,
-    ) -> Self {
-        Self(EnrollmentProvider::personal(
-            PersonalEnrollmentProvider::oauth_file(
-                preset,
-                access_token,
-                refresh.0,
-                expiry.0,
-                remote_file.0,
-                account.0,
-            ),
         ))
     }
 
@@ -154,58 +129,6 @@ impl NookEnrollmentProvider {
             }) => Ok(access_token.clone()),
             _ => Err(JsError::new(
                 "enrollment provider does not carry an OAuth access token",
-            )),
-        }
-    }
-
-    #[wasm_bindgen(getter, js_name = oauthRefresh)]
-    pub fn oauth_refresh(&self) -> Result<NookOAuthRefreshCredential, wasm_bindgen::JsError> {
-        match self.0.data() {
-            EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile {
-                refresh,
-                ..
-            }) => Ok(NookOAuthRefreshCredential(refresh.clone())),
-            _ => Err(JsError::new(
-                "enrollment provider does not carry OAuth refresh state",
-            )),
-        }
-    }
-
-    #[wasm_bindgen(getter, js_name = oauthExpiry)]
-    pub fn oauth_expiry(&self) -> Result<NookOAuthTokenExpiry, wasm_bindgen::JsError> {
-        match self.0.data() {
-            EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile {
-                expiry,
-                ..
-            }) => Ok(NookOAuthTokenExpiry(expiry.clone())),
-            _ => Err(JsError::new(
-                "enrollment provider does not carry OAuth expiry state",
-            )),
-        }
-    }
-
-    #[wasm_bindgen(getter, js_name = oauthRemoteFile)]
-    pub fn oauth_remote_file(&self) -> Result<NookOAuthRemoteFile, wasm_bindgen::JsError> {
-        match self.0.data() {
-            EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile {
-                remote_file,
-                ..
-            }) => Ok(NookOAuthRemoteFile(remote_file.clone())),
-            _ => Err(JsError::new(
-                "enrollment provider does not carry OAuth remote-file state",
-            )),
-        }
-    }
-
-    #[wasm_bindgen(getter, js_name = oauthAccount)]
-    pub fn oauth_account(&self) -> Result<NookOAuthAccountIdentity, wasm_bindgen::JsError> {
-        match self.0.data() {
-            EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile {
-                account,
-                ..
-            }) => Ok(NookOAuthAccountIdentity(account.clone())),
-            _ => Err(JsError::new(
-                "enrollment provider does not carry OAuth account identity",
             )),
         }
     }
@@ -427,11 +350,17 @@ impl NookDecryptedEnrollmentPayload {
     }
 }
 
+#[derive(Clone, Copy)]
+enum VaultSyncAccessAssessment {
+    NotAssessed,
+    Assessed(nook_core::VaultAccessStatus),
+}
+
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookVaultSyncResult {
     changed: bool,
-    access_status: Option<nook_core::VaultAccessStatus>,
+    access_status: VaultSyncAccessAssessment,
     secrets: Vec<NookSecretRecord>,
     pending_joins: Vec<NookJoinRequest>,
     vault_members: Vec<NookVaultMember>,
@@ -454,15 +383,19 @@ impl NookVaultSyncResult {
     #[wasm_bindgen(getter, js_name = accessState)]
     pub fn access_state(&self) -> NookVaultSyncAccessState {
         match self.access_status {
-            None => NookVaultSyncAccessState::NotAssessed,
-            Some(_) => NookVaultSyncAccessState::Assessed,
+            VaultSyncAccessAssessment::NotAssessed => NookVaultSyncAccessState::NotAssessed,
+            VaultSyncAccessAssessment::Assessed(_) => NookVaultSyncAccessState::Assessed,
         }
     }
 
     #[wasm_bindgen(getter, js_name = accessStatus)]
     pub fn access_status(&self) -> Result<nook_core::VaultAccessStatus, wasm_bindgen::JsError> {
-        self.access_status
-            .ok_or_else(|| JsError::new("vault access was not assessed"))
+        match self.access_status {
+            VaultSyncAccessAssessment::NotAssessed => {
+                Err(JsError::new("vault access was not assessed"))
+            }
+            VaultSyncAccessAssessment::Assessed(status) => Ok(status),
+        }
     }
 
     #[wasm_bindgen(getter)]
@@ -483,7 +416,7 @@ impl NookVaultSyncResult {
     pub(crate) fn unchanged() -> Self {
         Self {
             changed: false,
-            access_status: None,
+            access_status: VaultSyncAccessAssessment::NotAssessed,
             secrets: Vec::new(),
             pending_joins: Vec::new(),
             vault_members: Vec::new(),
@@ -493,7 +426,7 @@ impl NookVaultSyncResult {
     pub(crate) fn with_access_status(status: nook_core::VaultAccessStatus) -> Self {
         Self {
             changed: true,
-            access_status: Some(status),
+            access_status: VaultSyncAccessAssessment::Assessed(status),
             secrets: Vec::new(),
             pending_joins: Vec::new(),
             vault_members: Vec::new(),
@@ -503,11 +436,26 @@ impl NookVaultSyncResult {
     pub(crate) fn session(manager: &NookVaultManager, changed: bool) -> Result<Self, NookError> {
         Ok(Self {
             changed,
-            access_status: None,
+            access_status: VaultSyncAccessAssessment::NotAssessed,
             secrets: Vec::new(),
             pending_joins: manager.pending_joins().unwrap_or_default(),
             vault_members: manager.vault_members().unwrap_or_default(),
         })
+    }
+}
+
+#[wasm_bindgen]
+impl NookEnrollmentProvider {
+    pub fn oauth_configuration(
+        &self,
+        defaults: nook_core::OAuthFileConfigData,
+    ) -> Result<nook_core::OAuthFileConfigData, JsError> {
+        nook_core::EnrollmentOAuthConfigurationRequest {
+            provider: &self.0,
+            defaults,
+        }
+        .project()
+        .map_err(|error| JsError::new(&error.to_string()))
     }
 }
 
@@ -519,7 +467,10 @@ mod tests {
 
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
-    fn enrollment_provider_projects_personal_and_shared_variants() {
+    fn enrollment_provider_projects_personal_and_shared_variants() -> Result<(), JsError> {
+        use nook_core::{
+            OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
+        };
         let local = NookEnrollmentProvider::local();
         assert_eq!(local.provider_type(), nook_core::StorageProviderType::Local);
         assert!(!local.is_shared_provider_grant());
@@ -534,55 +485,69 @@ mod tests {
             github.provider_type(),
             nook_core::StorageProviderType::Github
         );
-        assert_eq!(github.github_repo().unwrap(), "owner/repo");
-        assert_eq!(github.github_pat().unwrap(), "pat");
+        assert_eq!(github.github_repo()?, "owner/repo");
+        assert_eq!(github.github_pat()?, "pat");
         assert!(github.oauth_preset().is_err());
 
-        let oauth = NookEnrollmentProvider::oauth_file(
-            "google-drive".into(),
-            "access-token".into(),
-            NookOAuthRefreshCredential::token("refresh-token".into()),
-            NookOAuthTokenExpiry::expires_at("2030-01-01".into()),
-            NookOAuthRemoteFile::identified("file-1".into(), "vault.json".into()),
-            NookOAuthAccountIdentity::email("owner@example.com".into()),
-        );
+        let oauth = NookEnrollmentProvider::from_core(EnrollmentProvider::personal(
+            PersonalEnrollmentProvider::oauth_file(
+                "google-drive".into(),
+                "access-token".into(),
+                OAuthRefreshCredential::Token("refresh-token".into()),
+                OAuthTokenExpiry::ExpiresAt("2030-01-01".into()),
+                OAuthRemoteFile::Identified {
+                    file_id: "file-1".into(),
+                    file_name: "vault.json".into(),
+                },
+                OAuthAccountIdentity::Email("owner@example.com".into()),
+            ),
+        ));
         assert_eq!(
             oauth.provider_type(),
             nook_core::StorageProviderType::OauthFile
         );
-        assert_eq!(oauth.oauth_preset().unwrap(), "google-drive");
-        assert_eq!(oauth.oauth_access_token().unwrap(), "access-token");
+        assert_eq!(oauth.oauth_preset()?, "google-drive");
+        assert_eq!(oauth.oauth_access_token()?, "access-token");
+        let config = oauth.oauth_configuration(nook_core::OAuthFileConfigData::default())?;
         assert_eq!(
-            oauth.oauth_refresh().unwrap().value().unwrap(),
-            "refresh-token"
-        );
-        assert_eq!(oauth.oauth_expiry().unwrap().value().unwrap(), "2030-01-01");
-        assert_eq!(
-            oauth.oauth_remote_file().unwrap().file_id_value().unwrap(),
-            "file-1"
+            config.refresh_token,
+            nook_core::StoredOAuthRefreshCredential::Token(("refresh-token").to_owned())
         );
         assert_eq!(
-            oauth.oauth_account().unwrap().value().unwrap(),
-            "owner@example.com"
+            config.expires_at,
+            nook_core::StoredOAuthTokenExpiry::ExpiresAt(("2030-01-01").to_owned())
+        );
+        assert_eq!(
+            config.file_id,
+            nook_core::StoredOAuthRemoteFileId::FileId(("file-1").to_owned())
+        );
+        assert_eq!(
+            config.file_name,
+            nook_core::StoredOAuthRemoteFileName::FileName(("vault.json").to_owned())
+        );
+        assert_eq!(
+            config.account_email,
+            nook_core::StoredOAuthAccountIdentity::Email(("owner@example.com").to_owned())
         );
 
         let drive =
             NookEnrollmentProvider::shared_provider_grant("joiner".into(), "folder-1".into());
         assert!(drive.is_shared_provider_grant());
-        assert_eq!(drive.oauth_preset().unwrap(), "google-drive");
-        assert_eq!(drive.shared_joiner_identity_kind().unwrap(), "email");
-        assert_eq!(drive.shared_joiner_identity().unwrap(), "joiner");
-        assert_eq!(drive.shared_storage_target_id().unwrap(), "folder-1");
+        assert_eq!(drive.oauth_preset()?, "google-drive");
+        assert_eq!(drive.shared_joiner_identity_kind()?, "email");
+        assert_eq!(drive.shared_joiner_identity()?, "joiner");
+        assert_eq!(drive.shared_storage_target_id()?, "folder-1");
         assert!(drive.oauth_access_token().is_err());
 
         let icloud = NookEnrollmentProvider::icloud_shared("share-1".into());
-        assert_eq!(icloud.oauth_preset().unwrap(), "icloud");
-        assert_eq!(icloud.shared_storage_target_id().unwrap(), "share-1");
+        assert_eq!(icloud.oauth_preset()?, "icloud");
+        assert_eq!(icloud.shared_storage_target_id()?, "share-1");
         assert!(icloud.shared_joiner_identity().is_err());
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn enrollment_inputs_and_sync_targets_keep_typed_values() {
+    fn enrollment_inputs_and_sync_targets_keep_typed_values() -> anyhow::Result<()> {
         let provider = NookEnrollmentProvider::github("repo".into(), "pat".into());
         let unnamed = NookEnrollmentIssueInput::unnamed(
             provider.clone(),
@@ -591,14 +556,14 @@ mod tests {
         );
         assert_eq!(unnamed.entry_id(), "entry-1");
         assert_eq!(unnamed.issued_at(), "2026-01-01");
-        assert_eq!(unnamed.to_core().unwrap().vault_name, "");
+        assert_eq!(unnamed.to_core()?.vault_name, "");
         let named = NookEnrollmentIssueInput::named(
             provider,
             "Personal".into(),
             "entry-2".into(),
             "2026-01-02".into(),
         );
-        assert_eq!(named.to_core().unwrap().vault_name, "Personal");
+        assert_eq!(named.to_core()?.vault_name, "Personal");
 
         let payload =
             NookDecryptedEnrollmentPayload::from_core(nook_core::DecryptedEnrollmentPayload {
@@ -622,5 +587,6 @@ mod tests {
         assert!(github.is_github());
         let empty = NookSyncProviderTarget::empty();
         assert!(empty.is_empty());
+        Ok(())
     }
 }

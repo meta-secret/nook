@@ -1,116 +1,134 @@
+import { err, ok, type Result } from 'neverthrow'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { ExtensionStorageProviderPayload } from '../../../nook-web-shared/src/extension/runtime-messages'
+import { ExtensionStorageProviderPayload } from '../../../nook-web-shared/src/extension/runtime-messages'
 
-export type SerializedStorageProvider =
-  StorageProvider | ExtensionStorageProviderPayload
-export type SerializedExtensionStorageProviders = SerializedStorageProvider[]
-export type DecodedExtensionStorageProviders = StorageProvider[]
 export type ExtensionStorageProviderIdentities =
   ExtensionStorageProviderPayload[]
+type ProviderCredentialTransport =
+  StorageProvider | ExtensionStorageProviderPayload
+type ProviderCredentialTransports = ProviderCredentialTransport[]
 
-export function extensionSessionProviderIdentities(
-  providers: SerializedExtensionStorageProviders,
-): ExtensionStorageProviderIdentities {
-  return providers.map((provider) => ({
-    id: provider.id,
-    type: provider.type,
-  }))
-}
-
-export enum ProviderCredentialStagingKind {
-  InvalidInput = 'invalid-input',
-  Staged = 'staged',
-}
-
-export type ProviderCredentialStaging =
-  | { kind: ProviderCredentialStagingKind.InvalidInput }
-  | {
-      kind: ProviderCredentialStagingKind.Staged
-      providers: StorageProvider[]
-    }
-
-type ProviderCredentialCandidate = {
-  githubPat?: string | { state: string }
-  oauthFile?: {
-    config?: {
-      accessToken?: string | { state: string }
-      refreshToken?: string | { state: string }
-    }
-    accessToken?: string
-    refreshToken?: string
-  }
-}
-
-function isSerializedProviderField(value: unknown): boolean {
-  if (typeof value === 'string' || typeof value === 'boolean') return true
-  if (typeof value === 'number') return Number.isFinite(value)
-  if (Array.isArray(value)) return value.every(isSerializedProviderField)
-  if (!value || Object.getPrototypeOf(value) !== Object.prototype) return false
-  return Object.values(value).every(isSerializedProviderField)
-}
-
-export function scrubProviderCredentials(
-  providers: SerializedExtensionStorageProviders,
-): void {
-  const candidates = providers as ProviderCredentialCandidate[]
-  for (const provider of candidates) {
-    if (!provider || typeof provider !== 'object') continue
-    if (typeof provider.githubPat === 'string') {
-      delete provider.githubPat
-    } else if ('githubPat' in provider) {
-      provider.githubPat = { state: 'missing' }
-    }
-    if (provider.oauthFile && typeof provider.oauthFile === 'object') {
-      const config = provider.oauthFile.config
-      if (config && typeof config === 'object' && !Array.isArray(config)) {
-        config.accessToken = { state: 'signedOut' }
-        config.refreshToken = { state: 'notIssued' }
-      }
-      if (typeof provider.oauthFile.accessToken === 'string') {
-        provider.oauthFile.accessToken = ''
-      }
-      if ('refreshToken' in provider.oauthFile) {
-        delete provider.oauthFile.refreshToken
-      }
-    }
-  }
-}
-
-export type ProviderCredentialCleanupArgs<Result> = {
-  providers: StorageProvider[]
-  operation: () => Promise<Result>
-}
-
-export async function runWithProviderCredentialCleanup<Result>(
-  args: ProviderCredentialCleanupArgs<Result>,
-): Promise<Result> {
-  try {
-    return await args.operation()
-  } finally {
-    scrubProviderCredentials(args.providers)
-  }
+export enum ProviderCredentialFailure {
+  InvalidIdentity = 'invalid-provider-identity',
+  InvalidTransport = 'invalid-provider-transport',
+  AdmissionRejected = 'provider-admission-rejected',
 }
 
 export type StageProviderCredentialsArgs = {
-  providers: SerializedExtensionStorageProviders
-  decode: (
-    providers: SerializedExtensionStorageProviders,
-  ) => Promise<DecodedExtensionStorageProviders>
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Generated Rust collection crosses the admission boundary directly.
+  decode: (providers: StorageProvider[]) => Promise<StorageProvider[]>
 }
 
-export async function stageProviderCredentials(
-  args: StageProviderCredentialsArgs,
-): Promise<ProviderCredentialStaging> {
-  if (!args.providers.every(isSerializedProviderField)) {
-    return { kind: ProviderCredentialStagingKind.InvalidInput }
+enum SerializedProviderFieldAdmission {
+  Accepted = 'accepted',
+  Rejected = 'rejected',
+}
+class SerializedProviderField {
+  constructor(private readonly value: unknown) {}
+  admission(): SerializedProviderFieldAdmission {
+    const value = this.value
+    if (typeof value === 'string' || typeof value === 'boolean')
+      return SerializedProviderFieldAdmission.Accepted
+    if (typeof value === 'number')
+      return Number.isFinite(value)
+        ? SerializedProviderFieldAdmission.Accepted
+        : SerializedProviderFieldAdmission.Rejected
+    const values = Array.isArray(value)
+      ? value
+      : value && Object.getPrototypeOf(value) === Object.prototype
+        ? Object.values(value)
+        : false
+    if (!values) return SerializedProviderFieldAdmission.Rejected
+    return values.every(
+      (entry) =>
+        new SerializedProviderField(entry).admission() ===
+        SerializedProviderFieldAdmission.Accepted,
+    )
+      ? SerializedProviderFieldAdmission.Accepted
+      : SerializedProviderFieldAdmission.Rejected
   }
-  const staged = structuredClone(args.providers)
-  try {
-    const providers = await args.decode(staged)
-    return { kind: ProviderCredentialStagingKind.Staged, providers }
-  } catch {
-    return { kind: ProviderCredentialStagingKind.InvalidInput }
-  } finally {
-    scrubProviderCredentials(staged)
+}
+
+export class ProviderCredentialBuffer {
+  constructor(private readonly providers: ProviderCredentialTransports) {}
+  identities(): Result<
+    ExtensionStorageProviderIdentities,
+    ProviderCredentialFailure
+  > {
+    const identities: ExtensionStorageProviderIdentities = []
+    for (const provider of this.providers) {
+      const identity = new ExtensionStorageProviderPayload(provider).parse()
+      if (identity.isErr())
+        return err(ProviderCredentialFailure.InvalidIdentity)
+      identities.push(identity.value)
+    }
+    return ok(identities)
+  }
+  clear(): void {
+    const providers = this.providers
+    for (const provider of providers) {
+      if (!provider || typeof provider !== 'object') continue
+      if ('githubPat' in provider) {
+        provider.githubPat = { state: 'missing' }
+      }
+      if (
+        'oauthFile' in provider &&
+        provider.oauthFile &&
+        typeof provider.oauthFile === 'object'
+      ) {
+        const oauth = provider.oauthFile
+        if (
+          'config' in oauth &&
+          oauth.config &&
+          typeof oauth.config === 'object'
+        ) {
+          if ('accessToken' in oauth.config)
+            oauth.config.accessToken = { state: 'signedOut' }
+          if ('refreshToken' in oauth.config)
+            oauth.config.refreshToken = { state: 'notIssued' }
+        }
+        if ('accessToken' in oauth && typeof oauth.accessToken === 'string')
+          oauth.accessToken = ''
+        if ('refreshToken' in oauth) delete oauth.refreshToken
+      }
+    }
+  }
+
+  async runWithCleanup<Outcome>(
+    operation: () => Promise<Outcome>,
+  ): Promise<Outcome> {
+    try {
+      return await operation()
+    } finally {
+      this.clear()
+    }
+  }
+  async stage(
+    args: StageProviderCredentialsArgs,
+  ): Promise<Result<StorageProvider[], ProviderCredentialFailure>> {
+    // Only the external structured-clone and WASM admission boundaries may reject.
+    let staged: ProviderCredentialTransports
+    try {
+      if (
+        new SerializedProviderField(this.providers).admission() !==
+        SerializedProviderFieldAdmission.Accepted
+      )
+        return err(ProviderCredentialFailure.InvalidTransport)
+      staged = structuredClone(this.providers)
+    } catch {
+      return err(ProviderCredentialFailure.InvalidTransport)
+    }
+    try {
+      const admitted: StorageProvider[] = await Reflect.apply(
+        args.decode,
+        globalThis,
+        [staged],
+      )
+      return ok(admitted)
+    } catch {
+      return err(ProviderCredentialFailure.AdmissionRejected)
+    } finally {
+      new ProviderCredentialBuffer(staged).clear()
+    }
   }
 }

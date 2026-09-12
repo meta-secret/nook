@@ -62,11 +62,11 @@
       return
     }
     const recoveryRequest: Parameters<
-      typeof deviceProtectionActions.resetDeviceProtectionForRecovery
-    >[0] = { state: vault, expectedAppId: recoveryAppId }
-    void deviceProtectionActions.resetDeviceProtectionForRecovery(
-      recoveryRequest,
-    )
+      deviceProtectionActions.DeviceProtectionRecoveryActions['resetDeviceProtectionForRecovery']
+    >[0] = { expectedAppId: recoveryAppId }
+    void new deviceProtectionActions.DeviceProtectionRecoveryActions(
+      vault,
+    ).resetDeviceProtectionForRecovery(recoveryRequest)
   }
 
   async function completeProtectionAction(
@@ -178,16 +178,15 @@
         onclick={() =>
           void completeProtectionAction(() => {
             const setupRequest: Parameters<
-              typeof deviceProtectionActions.setupPinDeviceProtection
+              deviceProtectionActions.DeviceProtectionActions['setupPinDeviceProtection']
             >[0] = {
-              state: vault,
               pin,
               confirmPin: pinConfirm,
               initializeSession: initializeSession && !creationOnly,
             }
-            return deviceProtectionActions.setupPinDeviceProtection(
-              setupRequest,
-            )
+            return new deviceProtectionActions.DeviceProtectionActions(
+              vault,
+            ).setupPinDeviceProtection(setupRequest)
           })}
       >
         {vault.isVerifying
@@ -209,9 +208,9 @@
             data-testid="device-protection-use-existing-choice"
             onclick={() =>
               void completeProtectionAction(() =>
-                deviceProtectionActions.recoverDeviceProtectionWithPasskey(
+                new deviceProtectionActions.DeviceProtectionActions(
                   vault,
-                ),
+                ).recoverDeviceProtectionWithPasskey(),
               )}
           >
             <KeyRound class="size-4" />
@@ -276,16 +275,15 @@
             onclick={() =>
               void completeProtectionAction(() => {
                 const setupRequest: Parameters<
-                  typeof deviceProtectionActions.setupDeviceProtection
+                  deviceProtectionActions.DeviceProtectionActions['setupDeviceProtection']
                 >[0] = {
-                  state: vault,
                   passkeyLabel,
                   deviceMode: vault.draftDeviceMode,
                   initializeSession: initializeSession && !creationOnly,
                 }
-                return deviceProtectionActions.setupDeviceProtection(
-                  setupRequest,
-                )
+                return new deviceProtectionActions.DeviceProtectionActions(
+                  vault,
+                ).setupDeviceProtection(setupRequest)
               })}
           >
             {vault.isVerifying
@@ -308,9 +306,9 @@
               data-testid="device-protection-use-existing-choice"
               onclick={() =>
                 void completeProtectionAction(() =>
-                  deviceProtectionActions.recoverDeviceProtectionWithPasskey(
+                  new deviceProtectionActions.DeviceProtectionActions(
                     vault,
-                  ),
+                  ).recoverDeviceProtectionWithPasskey(),
                 )}
             >
               <KeyRound class="size-4" />
@@ -343,11 +341,11 @@
         onclick={() =>
           void completeProtectionAction(() => {
             const unlockRequest: Parameters<
-              typeof deviceProtectionActions.unlockPinDeviceProtection
-            >[0] = { state: vault, pin, initializeSession }
-            return deviceProtectionActions.unlockPinDeviceProtection(
-              unlockRequest,
-            )
+              deviceProtectionActions.DeviceProtectionActions['unlockPinDeviceProtection']
+            >[0] = { pin, initializeSession }
+            return new deviceProtectionActions.DeviceProtectionActions(
+              vault,
+            ).unlockPinDeviceProtection(unlockRequest)
           })}
       >
         {vault.isVerifying
@@ -378,9 +376,11 @@
         onclick={() =>
           void completeProtectionAction(() => {
             const unlockRequest: Parameters<
-              typeof deviceProtectionActions.unlockDeviceProtection
-            >[0] = { state: vault, initializeSession }
-            return deviceProtectionActions.unlockDeviceProtection(unlockRequest)
+              deviceProtectionActions.DeviceProtectionActions['unlockDeviceProtection']
+            >[0] = { initializeSession }
+            return new deviceProtectionActions.DeviceProtectionActions(
+              vault,
+            ).unlockDeviceProtection(unlockRequest)
           })}
       >
         {vault.isVerifying

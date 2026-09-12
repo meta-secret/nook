@@ -1,27 +1,48 @@
 use std::{
     env, fs, io,
+    ops::Deref,
     os::unix::fs::PermissionsExt,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{self, Command},
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{Context, Result};
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
 }
 
-fn read(path: &str) -> String {
-    fs::read_to_string(repository_root().join(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
 }
 
 fn read_fallible(path: &str) -> Result<String> {
-    fs::read_to_string(repository_root().join(path))
+    fs::read_to_string(RepositoryFixture::repository_root().join(path))
         .with_context(|| format!("failed to read {path}"))
 }
 
@@ -30,10 +51,14 @@ fn docker_stage<'a>(dockerfile: &'a str, stage: &str) -> &'a str {
     let marker_start = dockerfile
         .find(&marker)
         .unwrap_or_else(|| panic!("Dockerfile stage must exist: {stage}"));
-    let stage_start = dockerfile[..marker_start]
+    let stage_start = dockerfile
+        .get(..marker_start)
+        .unwrap_or_else(|| panic!("Dockerfile marker must be a character boundary: {stage}"))
         .rfind("FROM ")
         .unwrap_or_else(|| panic!("Dockerfile stage must start with FROM: {stage}"));
-    let remainder = &dockerfile[stage_start..];
+    let remainder = dockerfile
+        .get(stage_start..)
+        .unwrap_or_else(|| panic!("Dockerfile stage must start on a character boundary: {stage}"));
     remainder
         .split_once("\nFROM ")
         .map_or(remainder, |(body, _)| body)
@@ -41,15 +66,15 @@ fn docker_stage<'a>(dockerfile: &'a str, stage: &str) -> &'a str {
 
 fn remote_batch_command(args: &[&str]) -> io::Result<process::Output> {
     Command::new("bash")
-        .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
+        .arg(RepositoryFixture::repository_root().join(".github/scripts/remote-task-batch.sh"))
         .args(args)
         .output()
 }
 
 #[test]
 fn remote_task_dispatch_uses_named_tasks_and_exact_head_only() {
-    let root_tasks = read("Taskfile.yml");
-    let remote_tasks = read(".task/remote-execution.yml");
+    let root_tasks = RepositoryFixture::repository_root().read("Taskfile.yml");
+    let remote_tasks = RepositoryFixture::repository_root().read(".task/remote-execution.yml");
 
     assert!(root_tasks.contains("taskfile: .task/remote-execution.yml"));
     for required in [
@@ -60,6 +85,10 @@ fn remote_task_dispatch_uses_named_tasks_and_exact_head_only() {
         "gh workflow run remote.yml",
         "requested_tasks=\"$REQUESTED_REMOTE_TASKS\"",
         "--raw-field \"tasks=$requested_tasks\"",
+        "--raw-field \"source_sha=$local_sha\"",
+        "[ \"$branch\" = \"dev\" ]",
+        "build:compile is a feature-branch route",
+        ".github/scripts/require-current-base.sh origin main",
     ] {
         assert!(
             remote_tasks.contains(required),
@@ -156,24 +185,8 @@ fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
         "a head or base change during label dispatch must remove the replacement-state label"
     );
     assert!(
-        direct_validation.contains("gh run cancel \"$run_id\""),
-        "a replacement-head validation dispatched during the race must be cancelled"
-    );
-    for required in [
-        "for run_status in requested waiting pending queued in_progress",
-        "any(.pull_requests[]?; .number == $REQUESTED_PR)",
-        "select(.name == \\\"PR\\\" or .name == \\\"Rust ecosystem checks\\\")",
-    ] {
-        assert!(
-            direct_validation.contains(required),
-            "replacement-head dispatch cleanup missing: {required}"
-        );
-    }
-    assert!(
-        !direct_validation.contains(
-            "select(.name == \\\"PR\\\" or .name == \\\"Rust ecosystem checks\\\" or .name == \\\"Web research\\\")"
-        ),
-        "label-race cleanup must preserve independently synchronized Web research runs"
+        !direct_validation.contains("gh run cancel"),
+        "validation dispatch must leave cancellation to centralized native concurrency"
     );
 
     Ok(())
@@ -184,9 +197,13 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
     let arbitrary = remote_batch_command(&["--timeout", "arbitrary:task"])?;
     assert!(arbitrary.status.success());
     assert_eq!(String::from_utf8(arbitrary.stdout)?, "30\n");
+    let build_compile = remote_batch_command(&["--timeout", "build:compile"])?;
+    assert!(build_compile.status.success());
+    assert_eq!(String::from_utf8(build_compile.stdout)?, "30\n");
 
-    let batch_script = read(".github/scripts/remote-task-batch.sh");
-    let workflow = read(".github/workflows/remote.yml");
+    let batch_script =
+        RepositoryFixture::repository_root().read(".github/scripts/remote-task-batch.sh");
+    let workflow = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");
     assert!(batch_script.contains("timeout --kill-after=1m"));
     assert!(!batch_script.contains("timeout --foreground"));
     assert!(!batch_script.contains("is_catalog_task"));
@@ -207,20 +224,41 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
             "runtime-backed remote task must bypass the daemonless batch: {task}"
         );
     }
+    assert!(
+        batch_script
+            .contains("build:compile) run_with_timeout \"$timeout_minutes\" task build:compile")
+    );
     for direct_task in [
         "web:build) task _web:build",
-        "web:e2e) task _web:test:e2e",
+        "web:e2e) task _ci:main:web:e2e-only",
         "web:e2e:debug) NOOK_REMOTE_E2E_DEBUG=1 task _web:test:e2e:debug",
         "extension:e2e) task _extension:test:e2e",
         "check) task _check",
         "ci:pr) task _ci:pr",
-        "ci:pr:e2e) task _ci:main",
     ] {
         assert!(
             workflow.contains(direct_task),
             "container execution must call the internal daemonless task: {direct_task}"
         );
     }
+    for suite_task in [
+        "stable) task _web:test:e2e:stable",
+        "unstable) task _web:test:e2e:unstable",
+        "isolation) task _web:test:e2e:isolation",
+        "extension) task _extension:test:e2e",
+    ] {
+        assert!(workflow.contains(suite_task));
+    }
+    assert!(workflow.contains("fail-fast: false"));
+    assert!(workflow.contains("ref: ${{ inputs.source_sha || github.sha }}"));
+    assert!(workflow.contains("name: Validate exact remote source"));
+    assert!(workflow.contains("name: Confirm prepared build-only environment"));
+    assert!(
+        workflow
+            .contains("build:compile is allowed only from a feature branch, never main or dev.")
+    );
+    assert!(workflow.contains("needs: ci-pr-e2e-suite"));
+    assert!(workflow.contains("needs.ci-pr-e2e-suite.result"));
     assert!(batch_script.contains("status == 124 || status == 137"));
     assert!(batch_script.contains("cleanup_timed_out_buildkit_work"));
     assert!(batch_script.contains("docker buildx inspect --bootstrap \"$builder\""));
@@ -271,7 +309,7 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     let summary = fixture.join("summary.md");
     let system_path = env::var("PATH")?;
     let output = Command::new("bash")
-        .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
+        .arg(RepositoryFixture::repository_root().join(".github/scripts/remote-task-batch.sh"))
         .args(["--run", "preflight,rust:ci,arbitrary:task,hive:verify"])
         .env("PATH", format!("{}:{system_path}", fixture.display()))
         .env("TASK_LOG", &task_log)
@@ -346,7 +384,7 @@ fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues
         let timeout_marker = fixture.join("timeout.marker");
         let system_path = env::var("PATH")?;
         let output = Command::new("bash")
-            .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
+            .arg(RepositoryFixture::repository_root().join(".github/scripts/remote-task-batch.sh"))
             .args(["--run", "preflight,rust:ci"])
             .env("PATH", format!("{}:{system_path}", fixture.display()))
             .env("TASK_LOG", &task_log)
@@ -374,22 +412,32 @@ fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues
 
 #[test]
 fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
-    let remote_tasks = read(".task/remote-execution.yml");
-    assert!(remote_tasks.contains(".github/scripts/require-current-base.sh origin main"));
+    let remote_tasks = RepositoryFixture::repository_root().read(".task/remote-execution.yml");
+    assert!(remote_tasks.contains(
+        "if [ \"$requested_tasks\" != \"build:compile\" ]; then\n          .github/scripts/require-current-base.sh origin main\n        fi"
+    ));
     assert!(remote_tasks.contains("baseRefName"));
 
     let status = Command::new("bash")
-        .arg(repository_root().join(".github/scripts/require-current-base.test.sh"))
+        .arg(
+            RepositoryFixture::repository_root()
+                .join(".github/scripts/require-current-base.test.sh"),
+        )
         .status()?;
     assert!(status.success(), "base freshness behavior tests must pass");
     Ok(())
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one ARC contract verifies the full named-task workflow"
+)]
 fn arc_workflow_runs_named_task_targets() -> Result<()> {
-    let remote_tasks = read(".task/remote-execution.yml");
-    let workflow = read(".github/workflows/remote.yml");
-    let batch_script = read(".github/scripts/remote-task-batch.sh");
+    let remote_tasks = RepositoryFixture::repository_root().read(".task/remote-execution.yml");
+    let workflow = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");
+    let batch_script =
+        RepositoryFixture::repository_root().read(".github/scripts/remote-task-batch.sh");
 
     assert_eq!(
         workflow.matches("runs-on: ubuntu-latest").count(),
@@ -450,53 +498,36 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
     assert!(
         workflow.contains("group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}")
     );
-    let task_setup_position = workflow
-        .find("name: Install Task for Loom-only verification")
-        .context("Loom-only remote execution must install Task")?;
-    let rust_setup_position = workflow
-        .find("name: Install Rust for Loom verification")
-        .context("Loom remote execution must install Rust")?;
-    let bun_setup_position = workflow
-        .find("name: Install Bun for Loom verification")
-        .context("Loom remote execution must install Bun")?;
-    let tool_proof_position = workflow
-        .find("name: Verify Loom command tools")
-        .context("Loom remote execution must prove both command tools")?;
+    let docker_setup_position = workflow
+        .find("uses: ./.github/actions/nook-docker-setup")
+        .context("Remote execution must install Task and configure BuildKit")?;
     let batch_position = workflow
         .find("remote-task-batch.sh --run \"$REQUESTED_REMOTE_TASKS\"")
         .context("remote execution must run the named task batch")?;
-    assert!(task_setup_position < rust_setup_position);
-    assert!(rust_setup_position < bun_setup_position);
-    assert!(bun_setup_position < tool_proof_position);
-    assert!(tool_proof_position < batch_position);
-    for required in [
-        "(inputs.tasks || inputs.task) == 'loom:verify'",
-        "uses: go-task/setup-task@v2",
-        "version: 3.52.0",
-        "uses: dtolnay/rust-toolchain@stable",
-        "components: rustfmt",
-        "uses: oven-sh/setup-bun@v2",
-        "bun-version: 1.3.14",
-        "command -v task",
-        "command -v bun",
+    assert!(docker_setup_position < batch_position);
+    assert!(workflow.contains("(inputs.tasks || inputs.task) == 'loom:verify' && 'preflight'"));
+    for forbidden in [
+        "dtolnay/rust-toolchain",
+        "Swatinem/rust-cache",
         "command -v cargo",
     ] {
         assert!(
-            workflow.contains(required),
-            "Loom remote tool bootstrap missing: {required}"
+            !workflow.contains(forbidden),
+            "Remote Rust must use Docker: {forbidden}"
         );
     }
-    assert!(workflow.contains("(inputs.tasks || inputs.task) != 'loom:verify'"));
     assert!(batch_script.contains(
         "rust:ci) run_with_timeout \"$timeout_minutes\" env CI_ARTIFACT_DIR=\"$artifact_root/rust-ci\" task ci:pr:rust"
     ));
     assert!(
-        batch_script
-            .contains("loom:verify) run_with_timeout \"$timeout_minutes\" task loom:verify")
+        batch_script.contains(
+            "loom:verify) run_with_timeout \"$timeout_minutes\" task preflight:loom-verify"
+        )
     );
     assert!(batch_script.contains("docker buildx use \"$builder\""));
     assert!(batch_script.contains("if ! restore_hosted_builder; then"));
-    let docker_setup = read(".github/actions/nook-docker-setup/action.yml");
+    let docker_setup =
+        RepositoryFixture::repository_root().read(".github/actions/nook-docker-setup/action.yml");
     assert!(docker_setup.contains(
         "NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}"
     ));
@@ -524,22 +555,32 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one remote-check contract verifies every narrow image route"
+)]
 fn frequent_remote_checks_use_narrow_source_sealed_images() -> Result<()> {
-    let app_tasks = read("nook-app/Taskfile.yml");
-    let core_tasks = read("nook-app/nook-platform/Taskfile.yml");
-    let web_tasks = read("nook-app/nook-web/Taskfile.yml");
-    let extension_tasks = read("nook-app/nook-web/nook-web-extension/Taskfile.yml");
-    let product_dockerfile = read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+    let app_tasks = RepositoryFixture::repository_root().read("nook-app/Taskfile.yml");
+    let core_tasks =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/Taskfile.yml");
+    let web_tasks = RepositoryFixture::repository_root().read("nook-app/nook-web/Taskfile.yml");
+    let extension_tasks = RepositoryFixture::repository_root()
+        .read("nook-app/nook-web/nook-web-extension/Taskfile.yml");
+    let product_dockerfile = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     let test_dockerfile = docker_stage(&product_dockerfile, "nook-rust-test");
     let lint_dockerfile = docker_stage(&product_dockerfile, "nook-rust-lint");
     let coverage_dockerfile = docker_stage(&product_dockerfile, "nook-rust-coverage");
-    let product_dockerignore =
-        read("nook-app/nook-platform/docker/rust/product.Dockerfile.dockerignore");
-    let core_bake = read("nook-app/nook-platform/nook-core/docker-bake.hcl");
-    let wasm_bake = read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
-    let web_app_bake = read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
+    let product_dockerignore = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/product.Dockerfile.dockerignore");
+    let core_bake = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let wasm_bake = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/nook-wasm/docker-bake.hcl");
+    let web_app_bake =
+        RepositoryFixture::repository_root().read("nook-app/nook-web/nook-web-app/docker-bake.hcl");
     let wasm_dockerfile = product_dockerfile.as_str();
-    let shared_bake = read("nook-app/docker-bake.hcl");
+    let shared_bake = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
     let bake = format!("{shared_bake}\n{core_bake}\n{wasm_bake}\n{web_app_bake}");
 
     let focused_web_setup = app_tasks
@@ -547,7 +588,8 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() -> Result<()> {
         .nth(1)
         .context("focused web setup task must exist")?;
     assert!(
-        focused_web_setup.contains("NOOK_EXTENSION_COMMIT: '{{.NOOK_EXTENSION_COMMIT}}'"),
+        focused_web_setup.contains("NOOK_EXTENSION_COMMIT: \"{{.NOOK_EXTENSION_COMMIT}}\"")
+            && web_app_bake.contains("NOOK_SOURCE_REVISION    = NOOK_EXTENSION_COMMIT"),
         "focused web setup must pass the exact commit to NOOK_SOURCE_REVISION through Bake"
     );
 
@@ -690,7 +732,7 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() -> Result<()> {
 
 #[test]
 fn broad_remote_tasks_export_native_layers_without_main_write_access() {
-    let bake = read("nook-app/docker-bake.hcl");
+    let bake = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
     let prepare = bake
         .split("group \"prepare\" {\n")
         .nth(1)
@@ -701,7 +743,7 @@ fn broad_remote_tasks_export_native_layers_without_main_write_access() {
         "broad setup must select builder-debug so its dedicated Zot exporter runs"
     );
 
-    let pr = read(".github/workflows/pr.yml");
+    let pr = RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
     assert!(!pr.contains("secrets.NOOK_REGISTRY_USERNAME"));
     assert!(!pr.contains("secrets.NOOK_REGISTRY_PASSWORD"));
     assert!(pr.contains("secrets.NOOK_REGISTRY_REMOTE_USERNAME"));
@@ -723,11 +765,12 @@ fn broad_remote_tasks_export_native_layers_without_main_write_access() {
 
 #[test]
 fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
-    let remote_tasks = read(".task/remote-execution.yml");
-    let pr = read(".github/workflows/pr.yml");
-    let remote_doc = read(".cortex/teams/sre/workflows/remote-execution.md");
+    let remote_tasks = RepositoryFixture::repository_root().read(".task/remote-execution.yml");
+    let pr = RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
+    let remote_doc = RepositoryFixture::repository_root()
+        .read(".cortex/teams/sre/workflows/remote-execution.md");
 
-    assert!(pr.contains("types: [labeled]"));
+    assert!(pr.contains("workflow_call:"));
     assert!(
         !pr.contains("types: [labeled, closed]"),
         "PR validation must not create a close-triggered source run"
@@ -744,7 +787,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
     }
     for label in ["ci:validate", "ci:full-e2e"] {
         assert!(
-            pr.contains(&format!("github.event.label.name == '{label}'")),
+            pr.contains("inputs.validation_requested"),
             "PR workflow must gate workers on {label}"
         );
         assert!(
@@ -759,17 +802,17 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
         .context("PR workflow must keep the UI demo job")?;
     let full_e2e = pr
         .split_once("\n  full-e2e:\n")
-        .and_then(|(_, tail)| tail.split_once("\n  full-extension-e2e:\n"))
-        .map(|(job, _)| job)
+        .map(|(_, job)| job)
         .context("PR workflow must keep the full browser e2e job")?;
     let full_extension_e2e = pr
-        .split_once("\n  full-extension-e2e:\n")
-        .map(|(_, job)| job)
-        .context("PR workflow must keep the full extension e2e job")?;
-    let full_e2e_label = "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')";
+        .split_once("\n  extension-e2e:\n")
+        .and_then(|(_, tail)| tail.split_once("\n  preview:\n"))
+        .map(|(job, _)| job)
+        .context("PR workflow must keep the extension e2e job")?;
+    let full_e2e_request = "inputs.full_e2e_requested";
     assert!(
-        full_e2e.contains(full_e2e_label) && full_extension_e2e.contains(full_e2e_label),
-        "a persistent Main-fix label must keep both full e2e jobs active"
+        full_e2e.contains(full_e2e_request) && full_extension_e2e.contains(full_e2e_request),
+        "the central full-e2e request must keep both full e2e jobs active"
     );
     assert!(ui_demo.contains("runs-on: nook-k0s-container"));
     for required in [
@@ -803,7 +846,13 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
 }
 
 fn workflow_or_remote_tasks(required: &str) -> bool {
-    read(".github/workflows/remote.yml").contains(required)
-        || read("nook-app/nook-platform/docker/Taskfile.yml").contains(required)
-        || read("nook-app/nook-web/docker/Taskfile.yml").contains(required)
+    RepositoryFixture::repository_root()
+        .read(".github/workflows/remote.yml")
+        .contains(required)
+        || RepositoryFixture::repository_root()
+            .read("nook-app/nook-platform/docker/Taskfile.yml")
+            .contains(required)
+        || RepositoryFixture::repository_root()
+            .read("nook-app/nook-web/docker/Taskfile.yml")
+            .contains(required)
 }

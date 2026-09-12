@@ -1,3 +1,53 @@
+export class TeamAuthorityCatalog {
+  private constructor(private readonly request: TeamKey) {}
+
+  static teamAuthority(teamKey: TeamKey): TeamAuthority | false {
+    return new TeamAuthorityCatalog(teamKey).execute();
+  }
+
+  private execute(): TeamAuthority | false {
+    const teamKey = this.request;
+    const [defaulted1 = false] = [
+      TEAM_AUTHORITY_CATALOG.find((authority) => authority.key === teamKey),
+    ];
+    return defaulted1;
+  }
+
+  static gizmoOwnedAgentProfile(
+    agentKey: GizmoOwnedAgentKey,
+  ): GizmoOwnedAgentProfile | false {
+    const [defaulted1 = false] = [
+      GIZMO_OWNED_AGENT_CATALOG.find((agent) => agent.key === agentKey),
+    ];
+    return defaulted1;
+  }
+
+  static teamAgentProfile(
+    agentKey: TeamAgentKey,
+  ): TeamAuthority | GizmoOwnedAgentProfile | false {
+    if (Object.values(TeamKey).some((key) => key === agentKey)) {
+      return TeamAuthorityCatalog.teamAuthority(agentKey as TeamKey);
+    }
+    return TeamAuthorityCatalog.gizmoOwnedAgentProfile(
+      agentKey as GizmoOwnedAgentKey,
+    );
+  }
+
+  static teamCortexRoot(teamKey: TeamKey): string {
+    switch (teamKey) {
+      case TeamKey.Ai:
+        return '.cortex/teams/ai';
+      case TeamKey.DevelopmentCore:
+        return '.cortex/teams/dev-core';
+      case TeamKey.Security:
+        return '.cortex/teams/security';
+      case TeamKey.Sre:
+        return '.cortex/teams/sre';
+      case TeamKey.WebDevelopment:
+        return '.cortex/teams/web-dev';
+    }
+  }
+}
 export enum TeamKey {
   Ai = 'ai',
   DevelopmentCore = 'development-core',
@@ -107,43 +157,3 @@ export const GIZMO_OWNED_AGENT_CATALOG: readonly GizmoOwnedAgentProfile[] = [
       'PR Steward never edits functional code, adjudicates technical findings, sequences shared-branch writers, owns Workbench outcomes, or issues the final delivery verdict.',
   },
 ] as const;
-
-export function teamAuthority(teamKey: TeamKey): TeamAuthority | false {
-  const [defaulted1 = false] = [
-    TEAM_AUTHORITY_CATALOG.find((authority) => authority.key === teamKey),
-  ];
-  return defaulted1;
-}
-
-export function gizmoOwnedAgentProfile(
-  agentKey: GizmoOwnedAgentKey,
-): GizmoOwnedAgentProfile | false {
-  const [defaulted1 = false] = [
-    GIZMO_OWNED_AGENT_CATALOG.find((agent) => agent.key === agentKey),
-  ];
-  return defaulted1;
-}
-
-export function teamAgentProfile(
-  agentKey: TeamAgentKey,
-): TeamAuthority | GizmoOwnedAgentProfile | false {
-  if (Object.values(TeamKey).some((key) => key === agentKey)) {
-    return teamAuthority(agentKey as TeamKey);
-  }
-  return gizmoOwnedAgentProfile(agentKey as GizmoOwnedAgentKey);
-}
-
-export function teamCortexRoot(teamKey: TeamKey): string {
-  switch (teamKey) {
-    case TeamKey.Ai:
-      return '.cortex/teams/ai';
-    case TeamKey.DevelopmentCore:
-      return '.cortex/teams/dev-core';
-    case TeamKey.Security:
-      return '.cortex/teams/security';
-    case TeamKey.Sre:
-      return '.cortex/teams/sre';
-    case TeamKey.WebDevelopment:
-      return '.cortex/teams/web-dev';
-  }
-}

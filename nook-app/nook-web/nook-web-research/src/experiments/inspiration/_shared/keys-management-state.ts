@@ -57,18 +57,6 @@ export type Fact =
   | { kind: FactKind.Known; value: string }
   | { kind: FactKind.NotObserved; reason: string }
 
-export function known(value: string): Fact {
-  return { kind: FactKind.Known, value }
-}
-
-export function notObserved(reason: string): Fact {
-  return { kind: FactKind.NotObserved, reason }
-}
-
-export function factText(fact: Fact): string {
-  return fact.kind === FactKind.Known ? fact.value : fact.reason
-}
-
 export interface VaultLink {
   id: string
   label: string
@@ -120,6 +108,55 @@ export interface AccessScenario {
   vaults: VaultLink[]
 }
 
+export class AccessScenarioView {
+  constructor(private readonly scenario: AccessScenario) {}
+
+  static known(value: string): Fact {
+    return { kind: FactKind.Known, value }
+  }
+
+  static notObserved(reason: string): Fact {
+    return { kind: FactKind.NotObserved, reason }
+  }
+
+  static factText(fact: Fact): string {
+    return fact.kind === FactKind.Known ? fact.value : fact.reason
+  }
+
+  static scenarioById(id: ScenarioId): AccessScenario {
+    const match = scenarios.find((scenario) => scenario.id === id)
+    return match ? match : unlockedScenario
+  }
+
+  isPrepared(): boolean {
+    const scenario = this.scenario
+    return scenario.protection !== BrowserProtection.NotPrepared
+  }
+
+  verifiedVaults(): VaultLink[] {
+    const scenario = this.scenario
+    return scenario.vaults.filter(
+      (vault) => vault.trust === VaultTrust.Verified,
+    )
+  }
+
+  verifiedSummary(): string {
+    const scenario = this.scenario
+    if (scenario.vaults.length === 0) return 'No vaults on this browser'
+    return `${this.verifiedVaults().length} of ${scenario.vaults.length} verified`
+  }
+
+  static relationInto(stage: ChainStage): string {
+    if (stage === ChainStage.DeviceKey) return 'unlocks'
+    return stage === ChainStage.Vaults ? 'opens' : 'presents'
+  }
+
+  static stageCaption(stage: ChainStage): string {
+    if (stage === ChainStage.Passkey) return 'Passkey'
+    return stage === ChainStage.DeviceKey ? 'Device key' : 'Vaults'
+  }
+}
+
 const unlockedScenario: AccessScenario = {
   id: ScenarioId.Unlocked,
   label: 'One vault',
@@ -128,21 +165,21 @@ const unlockedScenario: AccessScenario = {
   identity: IdentityState.Unlocked,
   identityLabel: 'Identity unlocked',
   passkey: {
-    name: known('Nook device'),
-    fingerprint: known('passkey_ae216c2ef5247a37'),
-    savedIn: known('iCloud Keychain'),
-    createdAt: known('12 Mar 2026, 09:14'),
-    lastUsedAt: known('2 Aug 2026, 10:26'),
+    name: AccessScenarioView.known('Nook device'),
+    fingerprint: AccessScenarioView.known('passkey_ae216c2ef5247a37'),
+    savedIn: AccessScenarioView.known('iCloud Keychain'),
+    createdAt: AccessScenarioView.known('12 Mar 2026, 09:14'),
+    lastUsedAt: AccessScenarioView.known('2 Aug 2026, 10:26'),
     transports: ['internal', 'hybrid'],
     backupState: 'Synced across your passkey manager',
     attachment: 'This platform',
-    aaguid: known('adce0002-35bc-c60a-648b-0b25f1f05503'),
+    aaguid: AccessScenarioView.known('adce0002-35bc-c60a-648b-0b25f1f05503'),
   },
   device: {
-    id: known('7c9dd12a77a95f24'),
+    id: AccessScenarioView.known('7c9dd12a77a95f24'),
     browser: 'Chrome 141',
     platform: 'macOS 15',
-    preparedAt: known('12 Mar 2026, 09:14'),
+    preparedAt: AccessScenarioView.known('12 Mar 2026, 09:14'),
     boundary: 'Backup passwords stay wrapped in this browser and never sync.',
   },
   vaults: [
@@ -150,8 +187,8 @@ const unlockedScenario: AccessScenario = {
       id: 'store_5f0a',
       label: 'Test vault',
       trust: VaultTrust.Verified,
-      verifiedAt: known('2 Aug 2026, 10:26'),
-      lastLocalUpdateAt: known('2 Aug 2026, 10:27'),
+      verifiedAt: AccessScenarioView.known('2 Aug 2026, 10:26'),
+      lastLocalUpdateAt: AccessScenarioView.known('2 Aug 2026, 10:27'),
       enrolledDevices: 1,
       backupPasswords: 1,
     },
@@ -166,21 +203,21 @@ const sharedScenario: AccessScenario = {
   identity: IdentityState.Unlocked,
   identityLabel: 'Identity unlocked',
   passkey: {
-    name: known('Work laptop'),
-    fingerprint: known('passkey_31b7d90c14ee6b02'),
-    savedIn: known('1Password'),
-    createdAt: known('4 Jan 2026, 18:02'),
-    lastUsedAt: known('2 Aug 2026, 08:41'),
+    name: AccessScenarioView.known('Work laptop'),
+    fingerprint: AccessScenarioView.known('passkey_31b7d90c14ee6b02'),
+    savedIn: AccessScenarioView.known('1Password'),
+    createdAt: AccessScenarioView.known('4 Jan 2026, 18:02'),
+    lastUsedAt: AccessScenarioView.known('2 Aug 2026, 08:41'),
     transports: ['usb', 'internal'],
     backupState: 'Device-bound — this passkey cannot leave the manager',
     attachment: 'This platform',
-    aaguid: known('08987058-cadc-4b81-b6e1-30de50dcbe96'),
+    aaguid: AccessScenarioView.known('08987058-cadc-4b81-b6e1-30de50dcbe96'),
   },
   device: {
-    id: known('c4f9eac14b4e7865'),
+    id: AccessScenarioView.known('c4f9eac14b4e7865'),
     browser: 'Firefox 139',
     platform: 'Ubuntu 26.04',
-    preparedAt: known('4 Jan 2026, 18:03'),
+    preparedAt: AccessScenarioView.known('4 Jan 2026, 18:03'),
     boundary: 'Backup passwords stay wrapped in this browser and never sync.',
   },
   vaults: [
@@ -188,8 +225,8 @@ const sharedScenario: AccessScenario = {
       id: 'store_5f0a',
       label: 'Personal',
       trust: VaultTrust.Verified,
-      verifiedAt: known('2 Aug 2026, 08:41'),
-      lastLocalUpdateAt: known('2 Aug 2026, 09:55'),
+      verifiedAt: AccessScenarioView.known('2 Aug 2026, 08:41'),
+      lastLocalUpdateAt: AccessScenarioView.known('2 Aug 2026, 09:55'),
       enrolledDevices: 3,
       backupPasswords: 2,
     },
@@ -197,8 +234,8 @@ const sharedScenario: AccessScenario = {
       id: 'store_9c31',
       label: 'Household',
       trust: VaultTrust.Verified,
-      verifiedAt: known('29 Jul 2026, 21:10'),
-      lastLocalUpdateAt: known('1 Aug 2026, 07:12'),
+      verifiedAt: AccessScenarioView.known('29 Jul 2026, 21:10'),
+      lastLocalUpdateAt: AccessScenarioView.known('1 Aug 2026, 07:12'),
       enrolledDevices: 2,
       backupPasswords: 1,
     },
@@ -206,8 +243,10 @@ const sharedScenario: AccessScenario = {
       id: 'store_2ad7',
       label: 'Archive 2024',
       trust: VaultTrust.Unverified,
-      verifiedAt: notObserved('This key has never opened it'),
-      lastLocalUpdateAt: known('11 Nov 2025, 13:40'),
+      verifiedAt: AccessScenarioView.notObserved(
+        'This key has never opened it',
+      ),
+      lastLocalUpdateAt: AccessScenarioView.known('11 Nov 2025, 13:40'),
       enrolledDevices: 1,
       backupPasswords: 0,
     },
@@ -222,21 +261,27 @@ const unpreparedScenario: AccessScenario = {
   identity: IdentityState.Missing,
   identityLabel: 'No identity on this browser',
   passkey: {
-    name: notObserved('No passkey yet'),
-    fingerprint: notObserved('Created when you prepare this browser'),
-    savedIn: notObserved('You choose the manager'),
-    createdAt: notObserved('Not created'),
-    lastUsedAt: notObserved('Never used'),
+    name: AccessScenarioView.notObserved('No passkey yet'),
+    fingerprint: AccessScenarioView.notObserved(
+      'Created when you prepare this browser',
+    ),
+    savedIn: AccessScenarioView.notObserved('You choose the manager'),
+    createdAt: AccessScenarioView.notObserved('Not created'),
+    lastUsedAt: AccessScenarioView.notObserved('Never used'),
     transports: [],
     backupState: 'Decided by your passkey manager at creation',
     attachment: 'Not chosen yet',
-    aaguid: notObserved('Reported by the manager at creation'),
+    aaguid: AccessScenarioView.notObserved(
+      'Reported by the manager at creation',
+    ),
   },
   device: {
-    id: notObserved('Derived when the passkey first unlocks'),
+    id: AccessScenarioView.notObserved(
+      'Derived when the passkey first unlocks',
+    ),
     browser: 'Chrome 141',
     platform: 'macOS 15',
-    preparedAt: notObserved('Not prepared'),
+    preparedAt: AccessScenarioView.notObserved('Not prepared'),
     boundary: 'Nothing is stored in this browser yet.',
   },
   vaults: [],
@@ -248,31 +293,4 @@ export const scenarios: readonly AccessScenario[] = [
   unpreparedScenario,
 ]
 
-export function scenarioById(id: ScenarioId): AccessScenario {
-  const match = scenarios.find((scenario) => scenario.id === id)
-  return match ? match : unlockedScenario
-}
-
-export function isPrepared(scenario: AccessScenario): boolean {
-  return scenario.protection !== BrowserProtection.NotPrepared
-}
-
-export function verifiedVaults(scenario: AccessScenario): VaultLink[] {
-  return scenario.vaults.filter((vault) => vault.trust === VaultTrust.Verified)
-}
-
-export function verifiedSummary(scenario: AccessScenario): string {
-  if (scenario.vaults.length === 0) return 'No vaults on this browser'
-  return `${verifiedVaults(scenario).length} of ${scenario.vaults.length} verified`
-}
-
-/** The verb drawn on the connector that arrives at a stage. */
-export function relationInto(stage: ChainStage): string {
-  if (stage === ChainStage.DeviceKey) return 'unlocks'
-  return stage === ChainStage.Vaults ? 'opens' : 'presents'
-}
-
-export function stageCaption(stage: ChainStage): string {
-  if (stage === ChainStage.Passkey) return 'Passkey'
-  return stage === ChainStage.DeviceKey ? 'Device key' : 'Vaults'
-}
+/** Owns browser orchestration for one nook web research/src/experiments/inspiration/_shared/keys management state context. */

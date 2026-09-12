@@ -1,4 +1,6 @@
+mod classification;
 use axum::response;
+pub use classification::{ObservedTaskState, ObservedTaskTrigger};
 use std::collections::BTreeMap;
 use std::io;
 use std::net::SocketAddr;
@@ -16,13 +18,13 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use neo4rs::query;
-use serde_json::Value;
 use time::OffsetDateTime;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::Mutex;
 use tower_http::services::{ServeDir, ServeFile};
 
+use crate::model::TaskKind;
 use crate::neo4j::Neo4jTaskStore;
 use crate::store::TaskStore;
 
@@ -33,9 +35,10 @@ const STALE_ACTIVITY_MS: i64 = 5 * 60_000;
 const STUCK_CANCELLATION_MS: i64 = 5 * 60_000;
 
 mod presentation;
+
 mod protocol;
 pub use presentation::*;
-use presentation::{derive_alerts, localized_activity, localized_task_kind};
+
 pub use protocol::*;
 
 #[derive(Clone)]
@@ -43,83 +46,121 @@ struct ObserverState<S> {
     store: S,
 }
 
-pub async fn run_observer<S: ObserverStore>(
-    store: S,
-    address: SocketAddr,
-    dashboard: PathBuf,
-) -> crate::HiveResult<()> {
-    let listener = async_net::TcpListener::bind(address)
+pub struct ObserverServer<S> {
+    pub store: S,
+    pub address: SocketAddr,
+    pub dashboard: PathBuf,
+}
+impl<S: ObserverStore> ObserverServer<S> {
+    pub async fn run_observer(self) -> crate::HiveResult<()> {
+        let Self {
+            store,
+            address,
+            dashboard,
+        } = self;
+        let listener = async_net::TcpListener::bind(address)
+            .await
+            .with_hive_context(|| format!("bind Hive observer to {address}"))?;
+        (BoundObserverServer {
+            store,
+            listener,
+            dashboard,
+        })
+        .run_observer_on_listener()
         .await
-        .with_hive_context(|| format!("bind Hive observer to {address}"))?;
-    run_observer_on_listener(store, listener, dashboard).await
+    }
 }
 
-async fn run_observer_on_listener<S: ObserverStore>(
+struct BoundObserverServer<S> {
     store: S,
     listener: async_net::TcpListener,
     dashboard: PathBuf,
-) -> crate::HiveResult<()> {
-    let index = dashboard.join("index.html");
-    let assets = ServeDir::new(dashboard).fallback(ServeFile::new(index));
-    let app = Router::new()
-        .route("/healthz", get(health))
-        .route("/api/overview", get(overview))
-        .route("/api/tasks/{task_id}", get(task_detail))
-        .fallback_service(assets)
-        .with_state(ObserverState { store });
-    axum::serve(listener, app)
-        .await
-        .hive_context("serve Hive observer")
+}
+impl<S: ObserverStore> BoundObserverServer<S> {
+    pub async fn run_observer_on_listener(self) -> crate::HiveResult<()> {
+        let Self {
+            store,
+            listener,
+            dashboard,
+        } = self;
+        let index = dashboard.join("index.html");
+        let assets = ServeDir::new(dashboard).fallback(ServeFile::new(index));
+        let app = Router::new()
+            .route("/healthz", get(health))
+            .route("/api/overview", get(overview))
+            .route("/api/tasks/{task_id}", get(task_detail))
+            .fallback_service(assets)
+            .with_state(ObserverState { store });
+        axum::serve(listener, app)
+            .await
+            .hive_context("serve Hive observer")
+    }
 }
 
-pub async fn run_observer_coordinator(
-    socket: PathBuf,
-    store: Neo4jTaskStore,
-) -> crate::HiveResult<()> {
-    store.migrate().await?;
-    if let Some(parent) = socket.parent() {
-        async_fs::create_dir_all(parent).await?;
-    }
-    remove_socket_if_present(&socket).await?;
-    let listener = UnixListener::bind(&socket)
-        .with_hive_context(|| format!("bind Hive observer coordinator {}", socket.display()))?;
-    let (stream, _) = listener
-        .accept()
-        .await
-        .hive_context("accept Hive observer channel")?;
-    drop(listener);
-    remove_socket_if_present(&socket).await?;
-
-    let (reader, mut writer) = stream.into_split();
-    let mut lines = BufReader::new(reader).lines();
-    while let Some(line) = lines.next_line().await? {
-        let response = match serde_json::from_str::<ObserverRequest>(&line) {
-            Ok(ObserverRequest::Snapshot { locale }) => store
-                .observer_snapshot_value(&locale)
-                .await
-                .map(ObserverResponse::Snapshot),
-            Ok(ObserverRequest::Task { task_id, locale }) => store
-                .observer_task_value(&task_id, &locale)
-                .await
-                .map(ObserverResponse::Task),
-            Err(error) => Err(crate::HiveError::message(format!(
-                "decode observer request: {error}"
-            ))),
+pub struct ObserverCoordinator {
+    pub socket: PathBuf,
+    pub store: Neo4jTaskStore,
+}
+impl ObserverCoordinator {
+    pub async fn run_observer_coordinator(self) -> crate::HiveResult<()> {
+        let Self { socket, store } = self;
+        store.migrate().await?;
+        if let Some(parent) = socket.parent() {
+            async_fs::create_dir_all(parent).await?;
         }
-        .unwrap_or_else(|error| ObserverResponse::Error(format!("{error:#}")));
-        writer.write_all(&serde_json::to_vec(&response)?).await?;
-        writer.write_all(b"\n").await?;
-        writer.flush().await?;
+        (ObserverSocket { path: &socket })
+            .remove_if_present()
+            .await?;
+        let listener = UnixListener::bind(&socket)
+            .with_hive_context(|| format!("bind Hive observer coordinator {}", socket.display()))?;
+        let (stream, _) = listener
+            .accept()
+            .await
+            .hive_context("accept Hive observer channel")?;
+        drop(listener);
+        (ObserverSocket { path: &socket })
+            .remove_if_present()
+            .await?;
+
+        let (reader, mut writer) = stream.into_split();
+        let mut lines = BufReader::new(reader).lines();
+        while let Some(line) = lines.next_line().await? {
+            let response = match serde_json::from_str::<ObserverRequest>(&line) {
+                Ok(ObserverRequest::Snapshot { locale }) => store
+                    .observer_snapshot_view(&locale)
+                    .await
+                    .map(Box::new)
+                    .map(ObserverResponse::Snapshot),
+                Ok(ObserverRequest::Task { task_id, locale }) => store
+                    .observer_task_view(&task_id, &locale)
+                    .await
+                    .map(Box::new)
+                    .map(ObserverResponse::Task),
+                Err(error) => Err(crate::HiveError::message(format!(
+                    "decode observer request: {error}"
+                ))),
+            }
+            .unwrap_or_else(|error| ObserverResponse::Error(format!("{error:#}")));
+            writer.write_all(&serde_json::to_vec(&response)?).await?;
+            writer.write_all(b"\n").await?;
+            writer.flush().await?;
+        }
+        Ok(())
     }
-    Ok(())
 }
 
-async fn remove_socket_if_present(path: &FilePath) -> crate::HiveResult<()> {
-    match async_fs::remove_file(path).await {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => {
-            Err(error).with_hive_context(|| format!("remove stale socket {}", path.display()))
+struct ObserverSocket<'a> {
+    path: &'a FilePath,
+}
+impl ObserverSocket<'_> {
+    async fn remove_if_present(&self) -> crate::HiveResult<()> {
+        let path = self.path;
+        match async_fs::remove_file(path).await {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(error) => {
+                Err(error).with_hive_context(|| format!("remove stale socket {}", path.display()))
+            }
         }
     }
 }
@@ -131,9 +172,9 @@ async fn health() -> StatusCode {
 async fn overview<S: ObserverStore>(
     State(state): State<ObserverState<S>>,
     Query(locale): Query<LocaleQuery>,
-) -> Result<Json<Value>, ObserverError> {
+) -> Result<Json<ObserverSnapshot>, ObserverError> {
     Ok(Json(
-        state.store.observer_snapshot_value(&locale.locale).await?,
+        state.store.observer_snapshot_view(&locale.locale).await?,
     ))
 }
 
@@ -141,13 +182,15 @@ async fn task_detail<S: ObserverStore>(
     State(state): State<ObserverState<S>>,
     Path(task_id): Path<String>,
     Query(locale): Query<LocaleQuery>,
-) -> Result<Json<Value>, ObserverError> {
-    state
+) -> Result<Json<ObservedTask>, ObserverError> {
+    match state
         .store
-        .observer_task_value(&task_id, &locale.locale)
+        .observer_task_view(&task_id, &locale.locale)
         .await?
-        .map(Json)
-        .ok_or_else(|| ObserverError::not_found("task was not found"))
+    {
+        TaskObservation::Observed(task) => Ok(Json(*task)),
+        TaskObservation::Missing => Err(ObserverError::not_found("task was not found")),
+    }
 }
 
 struct ObserverError {
@@ -177,7 +220,9 @@ impl IntoResponse for ObserverError {
     fn into_response(self) -> response::Response {
         (
             self.status,
-            Json(serde_json::json!({ "error": self.message })),
+            Json(ObserverErrorBody {
+                error: self.message,
+            }),
         )
             .into_response()
     }
@@ -185,14 +230,26 @@ impl IntoResponse for ObserverError {
 
 impl Neo4jTaskStore {
     pub async fn observer_snapshot(&self, locale: &str) -> crate::HiveResult<ObserverSnapshot> {
-        let overview_tasks = self.observer_tasks("", TASK_LIMIT, locale, false).await?;
+        let overview_tasks = self
+            .observer_tasks(ObserverTaskQuery {
+                task_id: "",
+                limit: TASK_LIMIT,
+                locale,
+                selection: ObserverTaskSelection::All,
+            })
+            .await?;
         let mut attention_tasks = self
-            .observer_tasks("", ALERT_LIMIT as i64 + 1, locale, true)
+            .observer_tasks(ObserverTaskQuery {
+                task_id: "",
+                limit: ALERT_LIMIT as i64 + 1,
+                locale,
+                selection: ObserverTaskSelection::Attention,
+            })
             .await?;
         let alerts_truncated = attention_tasks.len() > ALERT_LIMIT;
         attention_tasks.truncate(ALERT_LIMIT);
         let generated_at = OffsetDateTime::now_utc().unix_timestamp() * 1000;
-        let alerts = derive_alerts(&attention_tasks, generated_at, locale);
+        let alerts = ObservedAlert::derive_alerts(&attention_tasks, generated_at, locale);
         let mut tasks = attention_tasks;
         for task in overview_tasks {
             if tasks.len() >= TASK_LIMIT as usize {
@@ -220,12 +277,22 @@ impl Neo4jTaskStore {
         &self,
         task_id: &str,
         locale: &str,
-    ) -> crate::HiveResult<Option<ObservedTask>> {
-        let mut tasks = self.observer_tasks(task_id, 1, locale, false).await?;
+    ) -> crate::HiveResult<TaskObservation> {
+        let mut tasks = self
+            .observer_tasks(ObserverTaskQuery {
+                task_id,
+                limit: 1,
+                locale,
+                selection: ObserverTaskSelection::All,
+            })
+            .await?;
         self.attach_dependencies(&mut tasks).await?;
         self.attach_triggers(&mut tasks, locale).await?;
         self.attach_activity(&mut tasks, locale).await?;
-        Ok(tasks.pop())
+        Ok(match tasks.pop() {
+            Some(task) => TaskObservation::Observed(Box::new(task)),
+            None => TaskObservation::Missing,
+        })
     }
 
     async fn observer_agents(&self) -> crate::HiveResult<Vec<ObservedAgent>> {
@@ -247,11 +314,13 @@ impl Neo4jTaskStore {
             .await?;
         let mut agents = Vec::new();
         while let Some(row) = rows.next().await? {
+            let last_seen_at = row.get("last_seen_at")?;
             agents.push(ObservedAgent {
                 id: row.get("id")?,
                 pod_name: row.get("pod_name")?,
-                status: row.get("status")?,
-                last_seen_at: row.get("last_seen_at")?,
+                status: row.get::<String>("status")?,
+                last_seen_at,
+                presence_expires_at: ObservedAgent::presence_expires_at(last_seen_at),
             });
         }
         Ok(agents)
@@ -269,17 +338,20 @@ impl Neo4jTaskStore {
         let row = rows
             .next()
             .await?
-            .hive_context("active task count query returned no row")?;
+            .ok_or_else(|| crate::HiveError::message("active task count query returned no row"))?;
         Ok(row.get("count")?)
     }
 
     async fn observer_tasks(
         &self,
-        task_id: &str,
-        limit: i64,
-        locale: &str,
-        attention_only: bool,
+        request: ObserverTaskQuery<'_>,
     ) -> crate::HiveResult<Vec<ObservedTask>> {
+        let ObserverTaskQuery {
+            task_id,
+            limit,
+            locale,
+            selection,
+        } = request;
         let mut rows = self
             .graph
             .execute(
@@ -395,7 +467,7 @@ impl Neo4jTaskStore {
                 )
                 .param("task_id", task_id)
                 .param("limit", limit)
-                .param("attention_only", attention_only)
+                .param("attention_only", matches!(selection, ObserverTaskSelection::Attention))
                 .param("attention_age", STALE_ACTIVITY_MS),
             )
             .await?;
@@ -403,9 +475,9 @@ impl Neo4jTaskStore {
         while let Some(row) = rows.next().await? {
             tasks.push(ObservedTask {
                 id: row.get("id")?,
-                kind: row.get("kind")?,
-                kind_label: localized_task_kind(&row.get::<String>("kind")?, locale),
-                trigger_kind: row.get("trigger_kind")?,
+                kind: row.get::<String>("kind")?.into(),
+                kind_label: TaskKind::from(row.get::<String>("kind")?).localized_label(locale),
+                trigger_kind: row.get::<String>("trigger_kind")?.into(),
                 trigger: String::new(),
                 status: row.get("status")?,
                 source_commit: row.get("source_commit")?,
@@ -476,17 +548,21 @@ impl Neo4jTaskStore {
         let russian =
             locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
         for task in tasks {
-            task.trigger = match (task.trigger_kind.as_str(), russian) {
-                ("github-main-failure", true) => {
+            task.trigger = match (&task.trigger_kind, russian) {
+                (ObservedTaskTrigger::GitHubMainFailure, true) => {
                     "GitHub Actions · ошибка workflow в main".to_owned()
                 }
-                ("github-main-failure", false) => {
+                (ObservedTaskTrigger::GitHubMainFailure, false) => {
                     "GitHub Actions · failed main workflow".to_owned()
                 }
-                ("agent-dependency", true) => "Задача агента · зависимость".to_owned(),
-                ("agent-dependency", false) => "Agent task · dependency".to_owned(),
-                ("manual-cli", true) => "Ручной запуск · Hive CLI".to_owned(),
-                ("manual-cli", false) => "Manual dispatch · Hive CLI".to_owned(),
+                (ObservedTaskTrigger::AgentDependency, true) => {
+                    "Задача агента · зависимость".to_owned()
+                }
+                (ObservedTaskTrigger::AgentDependency, false) => {
+                    "Agent task · dependency".to_owned()
+                }
+                (ObservedTaskTrigger::ManualCli, true) => "Ручной запуск · Hive CLI".to_owned(),
+                (ObservedTaskTrigger::ManualCli, false) => "Manual dispatch · Hive CLI".to_owned(),
                 (_, true) => "Источник не записан".to_owned(),
                 (_, false) => "Source not recorded".to_owned(),
             };
@@ -544,7 +620,12 @@ impl Neo4jTaskStore {
             tasks[index].activity.push(ObservedActivity {
                 id: row.get("id")?,
                 kind: row.get("kind")?,
-                message: localized_activity(&message, locale).to_owned(),
+                message: (presentation::ActivityLocalization {
+                    key: &message,
+                    locale,
+                })
+                .text()
+                .to_owned(),
                 detail: row.get("detail")?,
                 created_at: row.get("created_at")?,
                 attempt_id: row.get("attempt_id")?,
@@ -557,30 +638,26 @@ impl Neo4jTaskStore {
 
 #[async_trait]
 impl ObserverStore for Neo4jTaskStore {
-    async fn observer_snapshot_value(&self, locale: &str) -> crate::HiveResult<Value> {
-        Ok(serde_json::to_value(self.observer_snapshot(locale).await?)?)
+    async fn observer_snapshot_view(&self, locale: &str) -> crate::HiveResult<ObserverSnapshot> {
+        self.observer_snapshot(locale).await
     }
 
-    async fn observer_task_value(
+    async fn observer_task_view(
         &self,
         task_id: &str,
         locale: &str,
-    ) -> crate::HiveResult<Option<Value>> {
-        self.observer_task(task_id, locale)
-            .await?
-            .map(serde_json::to_value)
-            .transpose()
-            .map_err(Into::into)
+    ) -> crate::HiveResult<TaskObservation> {
+        self.observer_task(task_id, locale).await
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::{ObservedTask, ObserverSnapshot};
     use async_trait::async_trait;
     use axum::extract::{Path, Query, State};
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
-    use serde_json::{Value, json};
     use std::io;
     use std::net;
     use std::time;
@@ -601,23 +678,26 @@ mod tests {
 
     #[async_trait]
     impl ObserverStore for FixtureStore {
-        async fn observer_snapshot_value(&self, locale: &str) -> crate::HiveResult<Value> {
+        async fn observer_snapshot_view(
+            &self,
+            locale: &str,
+        ) -> crate::HiveResult<ObserverSnapshot> {
             match self {
-                Self::Ready => Ok(json!({"locale": locale, "tasks": 2})),
+                Self::Ready => Ok(ObserverSnapshot::fixture(locale)),
                 Self::Failed => Err(crate::HiveError::message("database unavailable")),
             }
         }
 
-        async fn observer_task_value(
+        async fn observer_task_view(
             &self,
             task_id: &str,
-            locale: &str,
-        ) -> crate::HiveResult<Option<Value>> {
+            _locale: &str,
+        ) -> crate::HiveResult<super::TaskObservation> {
             match self {
-                Self::Ready if task_id == "task-1" => {
-                    Ok(Some(json!({"id": task_id, "locale": locale})))
-                }
-                Self::Ready => Ok(None),
+                Self::Ready if task_id == "task-1" => Ok(super::TaskObservation::Observed(
+                    Box::new(ObservedTask::fixture(task_id)),
+                )),
+                Self::Ready => Ok(super::TaskObservation::Missing),
                 Self::Failed => Err(crate::HiveError::message("database unavailable")),
             }
         }
@@ -685,7 +765,8 @@ mod tests {
             Ok(snapshot) => snapshot.0,
             Err(_) => return Err(crate::HiveError::message("ready overview failed")),
         };
-        assert_eq!(snapshot, json!({"locale": "ru", "tasks": 2}));
+        assert_eq!(snapshot.active_task_count, 2);
+        assert_eq!(snapshot.copy.overview, "Обзор");
         let task = match task_detail(
             State(state.clone()),
             Path("task-1".into()),
@@ -698,7 +779,7 @@ mod tests {
             Ok(task) => task.0,
             Err(_) => return Err(crate::HiveError::message("known task was not returned")),
         };
-        assert_eq!(task, json!({"id": "task-1", "locale": "en"}));
+        assert_eq!(task.id, "task-1");
 
         let Err(missing) = task_detail(
             State(state),
@@ -743,20 +824,23 @@ mod tests {
         async_fs::write(dashboard.join("index.html"), "Hive dashboard fixture").await?;
         let listener = async_net::TcpListener::bind("127.0.0.1:0").await?;
         let address = listener.local_addr()?;
-        let server = tokio::spawn(super::run_observer_on_listener(
-            FixtureStore::Ready,
-            listener,
-            dashboard,
-        ));
+        let server = tokio::spawn(
+            (super::BoundObserverServer {
+                store: FixtureStore::Ready,
+                listener,
+                dashboard,
+            })
+            .run_observer_on_listener(),
+        );
 
         let health = http_get(address, "/healthz").await?;
         assert!(health.starts_with("HTTP/1.1 204 No Content"));
         let overview = http_get(address, "/api/overview?locale=ru").await?;
         assert!(overview.starts_with("HTTP/1.1 200 OK"));
-        assert!(overview.contains(r#"{"locale":"ru","tasks":2}"#));
+        assert!(overview.contains(r#""overview":"Обзор""#));
         let task = http_get(address, "/api/tasks/task-1?locale=en").await?;
         assert!(task.starts_with("HTTP/1.1 200 OK"));
-        assert!(task.contains(r#"{"id":"task-1","locale":"en"}"#));
+        assert!(task.contains(r#""id":"task-1""#));
         let missing = http_get(address, "/api/tasks/missing?locale=en").await?;
         assert!(missing.starts_with("HTTP/1.1 404 Not Found"));
         let dashboard = http_get(address, "/").await?;
@@ -772,3 +856,24 @@ mod tests {
         Ok(())
     }
 }
+
+#[derive(serde::Serialize)]
+struct ObserverErrorBody {
+    error: String,
+}
+
+#[derive(Clone, Copy)]
+enum ObserverTaskSelection {
+    All,
+    Attention,
+}
+
+struct ObserverTaskQuery<'a> {
+    task_id: &'a str,
+    limit: i64,
+    locale: &'a str,
+    selection: ObserverTaskSelection,
+}
+
+#[cfg(feature = "observer-contract-export")]
+pub mod contract_export;

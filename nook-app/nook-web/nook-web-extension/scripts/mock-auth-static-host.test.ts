@@ -39,11 +39,11 @@ describe('mock auth static host', () => {
       expect(route.path.endsWith('/dist/index.html')).toBe(true)
     }
 
-    await expect(
-      resolver.resolve(
+    expect(
+      await resolver.resolve(
         MockAuthRequestPathTestOwner.admitted('/assets/index.js'),
       ),
-    ).resolves.toEqual({ kind: MockAuthStaticAssetResolutionKind.NotFound })
+    ).toEqual({ kind: MockAuthStaticAssetResolutionKind.NotFound })
   })
 
   test.each([
@@ -55,8 +55,13 @@ describe('mock auth static host', () => {
       MockAuthRequestPathTestOwner.failingInspector(failure),
     )
 
-    await expect(
-      resolver.resolve(MockAuthRequestPathTestOwner.admitted('/linkedin')),
-    ).rejects.toBe(failure)
+    let observedFailure = false
+    try {
+      await resolver.resolve(MockAuthRequestPathTestOwner.admitted('/linkedin'))
+    } catch (rejection) {
+      observedFailure = true
+      expect(rejection).toBe(failure)
+    }
+    expect(observedFailure).toBe(true)
   })
 })

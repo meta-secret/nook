@@ -1,5 +1,24 @@
 import { describe, expect, test } from 'bun:test';
+
 import { ESLint } from 'eslint';
+
+export class EslintContractScenario {
+  private constructor(private readonly request: string) {}
+
+  static ruleIds(source: string) {
+    return new EslintContractScenario(source).execute();
+  }
+
+  private async execute() {
+    const source = this.request;
+    const eslint = new ESLint();
+    const results = await eslint.lintText(source, options);
+    const [defaulted1 = []] = [
+      results[0]?.messages.map((message) => message.ruleId),
+    ];
+    return defaulted1;
+  }
+}
 
 type LintTextOptions = {
   filePath: string;
@@ -7,19 +26,10 @@ type LintTextOptions = {
 
 const options: LintTextOptions = { filePath: 'src/cli.ts' };
 
-async function ruleIds(source: string) {
-  const eslint = new ESLint();
-  const results = await eslint.lintText(source, options);
-  const [defaulted1 = []] = [
-    results[0]?.messages.map((message) => message.ruleId),
-  ];
-  return defaulted1;
-}
-
 describe('Loom ESLint contracts', () => {
   test('rejects generic object and unknown boundary types', async () => {
     expect(
-      await ruleIds(`
+      await EslintContractScenario.ruleIds(`
         declare function decodeObject(message: object): void;
         declare function decodeUnknown(message: unknown): void;
       `),
@@ -31,13 +41,15 @@ describe('Loom ESLint contracts', () => {
 
   test('rejects explicit any', async () => {
     expect(
-      await ruleIds('declare function decode(message: any): void;'),
+      await EslintContractScenario.ruleIds(
+        'declare function decode(message: any): void;',
+      ),
     ).toEqual(['@typescript-eslint/no-explicit-any']);
   });
 
   test('rejects generic transport and value aliases', async () => {
     expect(
-      await ruleIds(`
+      await EslintContractScenario.ruleIds(`
         declare function decodeExternal(message: ExternalValue): void;
         declare function decodeJson(message: JsonValue): void;
         declare function decodeGeneric(message: GenericValue): void;
@@ -51,7 +63,7 @@ describe('Loom ESLint contracts', () => {
 
   test('accepts local object literals and inline parameter shapes', async () => {
     expect(
-      await ruleIds(`
+      await EslintContractScenario.ruleIds(`
         declare function consume(args: { name: string }): void;
         declare class Widget {
           constructor(args: { name: string });
@@ -72,7 +84,7 @@ describe('Loom ESLint contracts', () => {
 
   test('accepts concrete public contracts and local defaults', async () => {
     expect(
-      await ruleIds(`
+      await EslintContractScenario.ruleIds(`
         export type DecodeManifestRequest = {
           readonly source: string;
         };

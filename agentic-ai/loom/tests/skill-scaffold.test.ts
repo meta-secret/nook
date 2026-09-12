@@ -1,26 +1,32 @@
+import assert from 'node:assert/strict';
+import {
+  SkillMarkdownPath,
+  SkillCardTemplate,
+  SkillCatalogEntry,
+  SkillOwnerDirectory,
+  SkillCardLocation,
+} from '../src/commands/skill-scaffold.ts';
 import { describe, expect, test } from 'bun:test';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  findExistingSkillCard,
-  insertSkillCatalogEntry,
-  markdownPath,
-  renderSkillCard,
-  skillOwnerDynamicSkillsDirectory,
   type SkillOwnerDynamicSkillsDirectoryArgs,
+  SkillScaffoldCommand,
 } from '../src/commands/skill-scaffold.ts';
 import {
-  decodeSkillScaffoldRequest,
   SkillOwner,
   type SkillScaffoldRequest,
+  SkillScaffoldRequestDecoder,
 } from '../src/codec/args/skill-scaffold.ts';
 import { DecodeStatus, type DecodeOutcome } from '../src/codec/field-error.ts';
 import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
 describe('skill scaffold', () => {
   test('normalizes Markdown links across platforms', () => {
-    expect(markdownPath('sre\\recovery.md')).toBe('sre/recovery.md');
+    expect(new SkillMarkdownPath('sre\\recovery.md').value()).toBe(
+      'sre/recovery.md',
+    );
   });
 
   test('renders the current skill-card title placeholder', () => {
@@ -29,7 +35,9 @@ describe('skill scaffold', () => {
       title: 'Self Improvement',
     };
 
-    expect(renderSkillCard(renderArgs)).toStartWith('# Self Improvement\n');
+    const rendered = new SkillCardTemplate(renderArgs).render();
+    assert(rendered.isOk());
+    expect(rendered.value).toStartWith('# Self Improvement\n');
   });
 
   test('inserts the current bullet catalog shape before authoring guidance', () => {
@@ -42,7 +50,9 @@ describe('skill scaffold', () => {
         '## How to add one\n',
     };
 
-    expect(insertSkillCatalogEntry(insertArgs)).toContain(
+    const rendered = new SkillCatalogEntry(insertArgs).insert();
+    assert(rendered.isOk());
+    expect(rendered.value).toContain(
       '- **[self-improvement.md](self-improvement.md)**\n' +
         '  - Purpose: TODO: purpose\n\n' +
         '## How to add one',
@@ -58,7 +68,9 @@ describe('skill scaffold', () => {
         '## How To Add One\n',
     };
 
-    expect(insertSkillCatalogEntry(insertArgs)).toBe(insertArgs.indexContent);
+    const rendered = new SkillCatalogEntry(insertArgs).insert();
+    assert(rendered.isOk());
+    expect(rendered.value).toBe(insertArgs.indexContent);
   });
 
   test('inserts a team-owned skill by its path from the AI registry', () => {
@@ -67,7 +79,9 @@ describe('skill scaffold', () => {
       indexContent: '# Registry\n\n## Skill catalog\n\n## How to add one\n',
     };
 
-    expect(insertSkillCatalogEntry(insertArgs)).toContain(
+    const rendered = new SkillCatalogEntry(insertArgs).insert();
+    assert(rendered.isOk());
+    expect(rendered.value).toContain(
       '- **[cluster-recovery.md](../../sre/dynamic-skills/cluster-recovery.md)**',
     );
   });
@@ -78,7 +92,9 @@ describe('skill scaffold', () => {
       indexContent: '# Registry\n\n## Skill catalog\n\n## How to add one\n',
     };
 
-    expect(insertSkillCatalogEntry(insertArgs)).toContain(
+    const rendered = new SkillCatalogEntry(insertArgs).insert();
+    assert(rendered.isOk());
+    expect(rendered.value).toContain(
       '- **[article-audit/SKILL.md](article-audit/SKILL.md)**',
     );
   });
@@ -88,7 +104,7 @@ describe('skill scaffold', () => {
       cortexRoot: '/repo/.cortex',
       skillOwner: SkillOwner.Gizmo,
     };
-    expect(skillOwnerDynamicSkillsDirectory(directoryArgs)).toBe(
+    expect(new SkillOwnerDirectory(directoryArgs).path()).toBe(
       '/repo/.cortex/gizmo/dynamic-skills',
     );
   });
@@ -98,7 +114,7 @@ describe('skill scaffold', () => {
       skillSlug: 'workflow-routing',
       skillOwner: 'gizmo',
     };
-    const outcome = decodeSkillScaffoldRequest(requestNode);
+    const outcome = SkillScaffoldRequestDecoder.decode(requestNode);
     const expectedOutcome: DecodeOutcome<SkillScaffoldRequest> = {
       status: DecodeStatus.Ok,
       value: {
@@ -114,7 +130,7 @@ describe('skill scaffold', () => {
       cortexRoot: '/repo/.cortex',
       skillOwner: SkillOwner.Security,
     };
-    expect(skillOwnerDynamicSkillsDirectory(directoryArgs)).toBe(
+    expect(new SkillOwnerDirectory(directoryArgs).path()).toBe(
       '/repo/.cortex/teams/security/dynamic-skills',
     );
   });
@@ -141,7 +157,7 @@ describe('skill scaffold', () => {
       await writeFile(existingCard, '# Cluster Recovery\n', 'utf8');
 
       const findArgs = { cortexRoot, slug: 'cluster-recovery' };
-      expect(findExistingSkillCard(findArgs)).toBe(existingCard);
+      expect(new SkillCardLocation(findArgs).existing()).toBe(existingCard);
     } finally {
       const removeOptions = { recursive: true, force: true } as const;
       await rm(fixtureRoot, removeOptions);
@@ -168,7 +184,7 @@ describe('skill scaffold', () => {
       await writeFile(securityCard, '# Threat Review\n', 'utf8');
 
       const findArgs = { cortexRoot, slug: 'threat-review' };
-      expect(findExistingSkillCard(findArgs)).toBe(securityCard);
+      expect(new SkillCardLocation(findArgs).existing()).toBe(securityCard);
     } finally {
       const removeOptions = { recursive: true, force: true } as const;
       await rm(fixtureRoot, removeOptions);
@@ -193,7 +209,7 @@ describe('skill scaffold', () => {
       await writeFile(skillPath, '# Article Audit\n', 'utf8');
 
       const findArgs = { cortexRoot, slug: 'article-audit' };
-      expect(findExistingSkillCard(findArgs)).toBe(skillRoot);
+      expect(new SkillCardLocation(findArgs).existing()).toBe(skillRoot);
     } finally {
       const removeOptions = { recursive: true, force: true } as const;
       await rm(fixtureRoot, removeOptions);
@@ -214,7 +230,7 @@ describe('skill scaffold', () => {
       const directoryOptions = { recursive: true } as const;
       await mkdir(skillRoot, directoryOptions);
       const findArgs = { cortexRoot, slug: 'article-audit' };
-      expect(findExistingSkillCard(findArgs)).toBe(skillRoot);
+      expect(new SkillCardLocation(findArgs).existing()).toBe(skillRoot);
     } finally {
       const removeOptions = { recursive: true, force: true } as const;
       await rm(fixtureRoot, removeOptions);
@@ -240,7 +256,7 @@ describe('skill scaffold', () => {
       await writeFile(gizmoCard, '# Workflow Routing\n', 'utf8');
 
       const findArgs = { cortexRoot, slug: 'workflow-routing' };
-      expect(findExistingSkillCard(findArgs)).toBe(gizmoCard);
+      expect(new SkillCardLocation(findArgs).existing()).toBe(gizmoCard);
     } finally {
       const removeOptions = { recursive: true, force: true } as const;
       await rm(fixtureRoot, removeOptions);

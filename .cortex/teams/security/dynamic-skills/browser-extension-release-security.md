@@ -66,18 +66,12 @@ Does not apply to:
 7. Security reviews the exact functional-owner handoff, formats and commits
    only its allowed security-owned Cortex changes, and returns a pending
    acceptance verdict to Gizmo.
-8. Gizmo continues from the accepted commits and runs `task loom:pre-push` on the
-   combined head. If formatting changes security-owned content, Gizmo returns
-   that exact diff to Security for a fresh formatted commit instead of
-   committing it.
-9. After the owner commit and a clean `task loom:pre-push`, Gizmo pushes promptly
-   and immediately obtains remote evidence. For a non-validation-ready
-   extension head, Gizmo dispatches hosted extension proof. For a
-   validation-ready head, Gizmo dispatches complete exact-head validation.
-10. Gizmo routes the hosted extension proof plus exact-head deployed channel,
-    origin, checksum, and packaged-manifest evidence back to Security. The
-    Security verdict stays pending until Security accepts that evidence.
-    Gizmo then owns readiness and merge.
+8. Gizmo pushes the reviewed feature and obtains remote build-only evidence.
+9. The dev manager's slow PR stage executes security-required focused extension
+   checks and applicable deployment verification.
+10. Return the exact SHA, deployed channel, origin, checksum, and packaged
+    manifest evidence to Security. Promotion remains blocked until Security
+    accepts that evidence.
 
 ## Validation
 

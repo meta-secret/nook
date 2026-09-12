@@ -89,15 +89,24 @@ impl OAuthOriginUnsupportedReason {
     }
 }
 
+/// Browser location evidence is usable only when both origin and hostname were observed.
+#[derive(Clone, Copy)]
+pub enum BrowserOAuthLocation<'a> {
+    Unavailable,
+    Observed(BrowserOAuthLocationEvidence<'a>),
+}
+#[derive(Clone, Copy)]
+pub struct BrowserOAuthLocationEvidence<'a> {
+    pub origin: &'a str,
+    pub hostname: &'a str,
+}
 impl BrowserOAuthProvider {
     /// Resolve this provider's support for the reported browser location.
     #[must_use]
-    pub fn origin_support(
-        self,
-        origin: Option<&str>,
-        hostname: Option<&str>,
-    ) -> OAuthOriginSupport {
-        let (Some(origin), Some(hostname)) = (origin, hostname) else {
+    pub fn origin_support(self, location: BrowserOAuthLocation<'_>) -> OAuthOriginSupport {
+        let BrowserOAuthLocation::Observed(BrowserOAuthLocationEvidence { origin, hostname }) =
+            location
+        else {
             return OAuthOriginSupport::LocationUnavailable;
         };
         if self.is_authorized_origin(origin) {
@@ -127,21 +136,31 @@ mod tests {
     #[test]
     fn accepts_registered_origins_and_rejects_preview_hosts() {
         assert!(matches!(
-            BrowserOAuthProvider::GoogleDrive
-                .origin_support(Some("https://simple.nokey.sh"), Some("simple.nokey.sh"),),
+            BrowserOAuthProvider::GoogleDrive.origin_support(BrowserOAuthLocation::Observed(
+                BrowserOAuthLocationEvidence {
+                    origin: "https://simple.nokey.sh",
+                    hostname: "simple.nokey.sh"
+                }
+            )),
             OAuthOriginSupport::Supported { .. }
         ));
         assert!(matches!(
-            BrowserOAuthProvider::ICloud
-                .origin_support(Some("http://localhost:5173"), Some("localhost"),),
+            BrowserOAuthProvider::ICloud.origin_support(BrowserOAuthLocation::Observed(
+                BrowserOAuthLocationEvidence {
+                    origin: "http://localhost:5173",
+                    hostname: "localhost"
+                }
+            )),
             OAuthOriginSupport::Unsupported {
                 reason: OAuthOriginUnsupportedReason::UnregisteredOrigin,
                 ..
             }
         ));
         let preview = BrowserOAuthProvider::GoogleDrive.origin_support(
-            Some("https://pr-12.nokey-simple.pages.dev"),
-            Some("pr-12.nokey-simple.pages.dev"),
+            BrowserOAuthLocation::Observed(BrowserOAuthLocationEvidence {
+                origin: "https://pr-12.nokey-simple.pages.dev",
+                hostname: "pr-12.nokey-simple.pages.dev",
+            }),
         );
         assert!(matches!(
             preview,
@@ -172,15 +191,24 @@ mod tests {
                 (None, Some("simple.nokey.sh")),
             ] {
                 assert_eq!(
-                    provider.origin_support(location.0, location.1),
+                    provider.origin_support(match location {
+                        (Some(origin), Some(hostname)) =>
+                            BrowserOAuthLocation::Observed(BrowserOAuthLocationEvidence {
+                                origin,
+                                hostname
+                            }),
+                        _ => BrowserOAuthLocation::Unavailable,
+                    }),
                     OAuthOriginSupport::LocationUnavailable
                 );
             }
             assert_eq!(
-                provider.origin_support(
-                    Some("https://simple.nokey.sh"),
-                    Some("pr-7.nokey-simple.pages.dev")
-                ),
+                provider.origin_support(BrowserOAuthLocation::Observed(
+                    BrowserOAuthLocationEvidence {
+                        origin: "https://simple.nokey.sh",
+                        hostname: "pr-7.nokey-simple.pages.dev"
+                    }
+                )),
                 OAuthOriginSupport::Supported {
                     origin: "https://simple.nokey.sh".to_owned()
                 }
@@ -194,7 +222,12 @@ mod tests {
                 "https://nokey.sh",
             ] {
                 assert_eq!(
-                    provider.origin_support(Some(origin), Some("simple.nokey.sh")),
+                    provider.origin_support(BrowserOAuthLocation::Observed(
+                        BrowserOAuthLocationEvidence {
+                            origin,
+                            hostname: "simple.nokey.sh"
+                        }
+                    )),
                     OAuthOriginSupport::Unsupported {
                         origin: origin.to_owned(),
                         reason: OAuthOriginUnsupportedReason::UnregisteredOrigin
@@ -204,11 +237,21 @@ mod tests {
         }
         for origin in ["http://localhost:5173", "http://127.0.0.1:5173"] {
             assert!(matches!(
-                BrowserOAuthProvider::GoogleDrive.origin_support(Some(origin), Some("localhost")),
+                BrowserOAuthProvider::GoogleDrive.origin_support(BrowserOAuthLocation::Observed(
+                    BrowserOAuthLocationEvidence {
+                        origin,
+                        hostname: "localhost"
+                    }
+                )),
                 OAuthOriginSupport::Supported { .. }
             ));
             assert!(matches!(
-                BrowserOAuthProvider::ICloud.origin_support(Some(origin), Some("localhost")),
+                BrowserOAuthProvider::ICloud.origin_support(BrowserOAuthLocation::Observed(
+                    BrowserOAuthLocationEvidence {
+                        origin,
+                        hostname: "localhost"
+                    }
+                )),
                 OAuthOriginSupport::Unsupported {
                     reason: OAuthOriginUnsupportedReason::UnregisteredOrigin,
                     ..

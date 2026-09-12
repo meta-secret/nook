@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   extensionChannelIdentity,
   extensionIdFromManifestKey,
+  ExtensionReleaseChannel,
   parseExtensionChannel,
 } from './channel-identity'
 
@@ -31,9 +32,11 @@ describe('extension deployment channel identity', () => {
   })
 
   test('normalizes supported channels and rejects ambiguous identities', () => {
-    expect(parseExtensionChannel(' Development ')).toBe('development')
+    expect(parseExtensionChannel(' Development ')).toBe(
+      ExtensionReleaseChannel.Development,
+    )
     expect(parseExtensionChannel('PR-123')).toBe('pr-123')
-    expect(parseExtensionChannel('local')).toBe('local')
+    expect(parseExtensionChannel('local')).toBe(ExtensionReleaseChannel.Local)
     expect(() => parseExtensionChannel('preview')).toThrow()
     expect(() => parseExtensionChannel('pr-0')).toThrow()
   })

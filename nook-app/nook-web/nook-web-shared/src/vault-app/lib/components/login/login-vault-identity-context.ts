@@ -1,3 +1,8 @@
+import { err, ok, type Result } from "neverthrow";
+import {
+  NativeVaultStorageFailure,
+  type VaultStorageFailure,
+} from "$lib/runtime/storage-failure";
 import {
   NookSelectedVaultIdentityContextKind,
   type NookIdentitySnapshot,
@@ -33,46 +38,72 @@ export type LoginVaultIdentityContext =
       readonly currentIdentity: LoginVaultLinkedIdentity;
     };
 
-function readLinkedIdentity(
-  identity: NookIdentitySnapshot,
-): LoginVaultLinkedIdentity {
-  try {
-    return {
-      identityId: identity.identityId,
-      label: identity.label,
-    };
-  } finally {
-    identity.free();
+export class LoginVaultIdentityReader {
+  constructor(private readonly request: LoadLoginVaultIdentityContextArgs) {}
+  async execute(): Promise<
+    Result<LoginVaultIdentityContext, VaultStorageFailure>
+  > {
+    const { manager, storeId } = this.request;
+    let request: ReturnType<
+      NookVaultManager["selected_vault_identity_context_request"]
+    >;
+    try {
+      request = manager.selected_vault_identity_context_request(storeId);
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    }
+    let snapshot: Awaited<ReturnType<typeof request.resolve>>;
+    try {
+      snapshot = await request.resolve();
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    } finally {
+      request.free();
+    }
+    try {
+      const kind = snapshot.selectedVaultContextKind;
+      if (kind === NookSelectedVaultIdentityContextKind.Empty)
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        return ok({ kind });
+      const identities: LoginVaultLinkedIdentity[] = [];
+      for (let index = 0; index < snapshot.length; index += 1) {
+        const identity = new LinkedLoginIdentity(
+          snapshot.identity(index),
+        ).read();
+        if (identity.isErr()) return err(identity.error);
+        identities.push(identity.value);
+      }
+      if (kind === NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent)
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        return ok({ kind, identities });
+      const current = new LinkedLoginIdentity(
+        snapshot.current_browser_identity(),
+      ).read();
+      if (current.isErr()) return err(current.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({ kind, identities, currentIdentity: current.value });
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    } finally {
+      snapshot.free();
+    }
   }
 }
 
-export async function loadLoginVaultIdentityContext({
-  manager,
-  storeId,
-}: LoadLoginVaultIdentityContextArgs): Promise<LoginVaultIdentityContext> {
-  const request = manager.selected_vault_identity_context_request(storeId);
-  const snapshot = await request.resolve().finally(() => request.free());
-  try {
-    const kind = snapshot.selectedVaultContextKind;
-    if (kind === NookSelectedVaultIdentityContextKind.Empty) {
-      return { kind };
+/** Owns one native identity snapshot until its public login projection is read. */
+class LinkedLoginIdentity {
+  constructor(private readonly identity: NookIdentitySnapshot) {}
+  read(): Result<LoginVaultLinkedIdentity, VaultStorageFailure> {
+    try {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({
+        identityId: this.identity.identityId,
+        label: this.identity.label,
+      });
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    } finally {
+      this.identity.free();
     }
-
-    const identities: LoginVaultLinkedIdentity[] = [];
-    for (let index = 0; index < snapshot.length; index += 1) {
-      identities.push(readLinkedIdentity(snapshot.identity(index)));
-    }
-
-    if (kind === NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent) {
-      return { kind, identities };
-    }
-
-    return {
-      kind,
-      identities,
-      currentIdentity: readLinkedIdentity(snapshot.current_browser_identity()),
-    };
-  } finally {
-    snapshot.free();
   }
 }

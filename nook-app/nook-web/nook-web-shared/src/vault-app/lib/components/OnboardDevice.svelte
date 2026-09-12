@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { PasswordOperationResult } from '$lib/vault/password-unlock'
+  import type { EnrollmentCodeIssueResult } from '$lib/vault/enrollment-issue-failure'
   type EnrollmentCodeIssue = {
     readonly entryId: PasswordEntryId
     readonly password: string
@@ -29,14 +31,11 @@
   import OnboardDevicePasswordStep from '$lib/components/onboard-device/OnboardDevicePasswordStep.svelte'
   import SentinelOnboardingGuidance from '$lib/components/onboard-device/SentinelOnboardingGuidance.svelte'
   import { Button } from '$lib/components/ui/button'
-  import {
-    buildEnrollmentLink,
-    getEnrollmentLinkBase,
-  } from '$lib/enrollment/code'
+  import { enrollmentBrowser } from '$lib/enrollment/code'
   import {
     GITHUB_PROVIDER_TYPE,
     GOOGLE_DRIVE_OAUTH_FILE_PRESET,
-    isICloudProvider,
+    StorageProviderPresentation,
     localizedProviderStorageDetail,
     localizeProviderLabel,
     type ProviderSetupRequest,
@@ -109,9 +108,13 @@
     loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
-    onIssueCode: (args: EnrollmentCodeIssue) => Promise<string>
+    onIssueCode: (
+      args: EnrollmentCodeIssue,
+    ) => Promise<EnrollmentCodeIssueResult>
     onClearCode: () => void
-    onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>
+    onAddPassword: (
+      args: VaultPasswordCreation,
+    ) => Promise<PasswordOperationResult>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
     onBeginSetup: (request: ProviderSetupRequest) => void
@@ -235,7 +238,9 @@
   const requiresSharedJoinerIdentity = $derived(
     usesSharedProviderGrant &&
       selectedProvider.kind === ResolvedOnboardingProviderKind.Available &&
-      !isICloudProvider(selectedProvider.provider),
+      !new StorageProviderPresentation(
+        selectedProvider.provider,
+      ).isICloudProvider(),
   )
   const selectedPassword = $derived.by((): ResolvedOnboardingPassword => {
     const entry = passwordEntries.find(
@@ -253,11 +258,13 @@
   )
   const enrollmentLink = $derived.by(() => {
     if (!enrollmentCode) return ''
-    const enrollmentLinkRequest: Parameters<typeof buildEnrollmentLink>[0] = {
+    const enrollmentLinkRequest: Parameters<
+      typeof enrollmentBrowser.buildEnrollmentLink
+    >[0] = {
       code: enrollmentCode,
-      baseUrl: getEnrollmentLinkBase(),
+      baseUrl: enrollmentBrowser.getEnrollmentLinkBase(),
     }
-    return buildEnrollmentLink(enrollmentLinkRequest)
+    return enrollmentBrowser.buildEnrollmentLink(enrollmentLinkRequest)
   })
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return ''
@@ -393,13 +400,12 @@
         password: passwordInput,
         providerId: selectedProvider.provider.id,
       }
-      await onIssueCode(issueRequest)
+      const issued = await onIssueCode(issueRequest)
+      if (issued.isErr()) {
+        localError = vault.t(issued.error.translationKey)
+        return
+      }
       passwordInput = ''
-    } catch (e) {
-      localError =
-        e instanceof Error
-          ? e.message
-          : vault.t(I18N_KEYS.OnboardDeviceFailedQrErr)
     } finally {
       isGenerating = false
     }

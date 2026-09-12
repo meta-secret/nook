@@ -2,24 +2,100 @@ import type {
   AgentStatsAssembleRequest,
   AgentStatsFileRequest,
 } from './args/agent-stats.ts';
+
 import type { CortexAuditRequest } from './args/cortex-audit.ts';
+
 import type { CortexSessionCleanRequest } from './args/cortex-session-clean.ts';
+
 import type { DependencyPopularityRequest } from './args/dependency-popularity.ts';
+
 import type { PrePushRequest } from './args/pre-push.ts';
+
 import type { PrLandPrRequest } from './args/pr-land.ts';
+
 import {
   SkillOwner,
   type SkillScaffoldRequest,
 } from './args/skill-scaffold.ts';
+
 import type { ToolsListRequest } from './args/tools-list.ts';
-import { asUntrustedYamlNode, type UntrustedYamlNode } from '../lib/guards.ts';
+
+import {
+  type UntrustedYamlNode,
+  UntrustedYamlBoundary,
+} from '../lib/guards.ts';
+
 import { AGENT_TEMP_DIR_TOKEN } from '../lib/agent-temp-path.ts';
+
 import {
   AgentStatsOperation,
   PrLandOperation,
   RequestFamily,
 } from './enums.ts';
-import { stringifyYaml } from './yaml.ts';
+
+import { YamlDocument } from './yaml.ts';
+
+export class LoomRequestExamples {
+  private constructor(private readonly request: ExampleDocument) {}
+
+  static exampleDocumentNode(document: ExampleDocument): UntrustedYamlNode {
+    return new LoomRequestExamples(document).execute();
+  }
+
+  private execute(): UntrustedYamlNode {
+    const document = this.request;
+    return UntrustedYamlBoundary.fromHost(document as UntrustedYamlNode);
+  }
+
+  static exampleDocumentYaml(document: ExampleDocument): string {
+    return YamlDocument.stringify(
+      LoomRequestExamples.exampleDocumentNode(document),
+    );
+  }
+
+  static blueprintIdentity(entry: ExampleCatalogEntry): string {
+    if (entry.operation === ExampleOperationMarker.FamilyRoot) {
+      return entry.family;
+    }
+    return `${entry.family}.${entry.operation}`;
+  }
+
+  static findExampleCatalogEntry(
+    args: FindExampleCatalogEntryArgs,
+  ): ExampleCatalogLookup {
+    for (const entry of EXAMPLE_CATALOG) {
+      if (entry.family === args.family && entry.operation === args.operation) {
+        return { presence: ExampleCatalogPresence.Present, entry };
+      }
+    }
+    return { presence: ExampleCatalogPresence.Absent };
+  }
+
+  static familyRootCatalogEntry(family: RequestFamily): ExampleCatalogLookup {
+    const findExampleCatalogEntryArgs: FindExampleCatalogEntryArgs = {
+      family,
+      operation: ExampleOperationMarker.FamilyRoot,
+    };
+    return LoomRequestExamples.findExampleCatalogEntry(
+      findExampleCatalogEntryArgs,
+    );
+  }
+
+  static lookupDefaultableExample(
+    args: LookupDefaultableExampleArgs,
+  ): DefaultableExampleLookup {
+    for (const entry of EXAMPLE_CATALOG) {
+      if (
+        entry.family === args.family &&
+        entry.operation === ExampleOperationMarker.FamilyRoot &&
+        entry.dispatch === ExampleDispatchKind.Defaultable
+      ) {
+        return { presence: DefaultableExamplePresence.Present, entry };
+      }
+    }
+    return { presence: DefaultableExamplePresence.Absent };
+  }
+}
 
 export enum ExampleOperationMarker {
   FamilyRoot = 'familyRoot',
@@ -336,23 +412,6 @@ export const EXAMPLE_CATALOG: readonly ExampleCatalogEntry[] = [
   },
 ];
 
-export function exampleDocumentNode(
-  document: ExampleDocument,
-): UntrustedYamlNode {
-  return asUntrustedYamlNode(document as UntrustedYamlNode);
-}
-
-export function exampleDocumentYaml(document: ExampleDocument): string {
-  return stringifyYaml(exampleDocumentNode(document));
-}
-
-export function blueprintIdentity(entry: ExampleCatalogEntry): string {
-  if (entry.operation === ExampleOperationMarker.FamilyRoot) {
-    return entry.family;
-  }
-  return `${entry.family}.${entry.operation}`;
-}
-
 export type FindExampleCatalogEntryArgs = {
   readonly family: RequestFamily;
   readonly operation: ExampleOperation;
@@ -370,27 +429,6 @@ export type ExampleCatalogLookup =
     }
   | { readonly presence: ExampleCatalogPresence.Absent };
 
-export function findExampleCatalogEntry(
-  args: FindExampleCatalogEntryArgs,
-): ExampleCatalogLookup {
-  for (const entry of EXAMPLE_CATALOG) {
-    if (entry.family === args.family && entry.operation === args.operation) {
-      return { presence: ExampleCatalogPresence.Present, entry };
-    }
-  }
-  return { presence: ExampleCatalogPresence.Absent };
-}
-
-export function familyRootCatalogEntry(
-  family: RequestFamily,
-): ExampleCatalogLookup {
-  const findExampleCatalogEntryArgs: FindExampleCatalogEntryArgs = {
-    family,
-    operation: ExampleOperationMarker.FamilyRoot,
-  };
-  return findExampleCatalogEntry(findExampleCatalogEntryArgs);
-}
-
 export type LookupDefaultableExampleArgs = {
   readonly family: string;
 };
@@ -401,20 +439,5 @@ export type DefaultableExampleLookup =
       readonly entry: ExampleCatalogEntry;
     }
   | { readonly presence: DefaultableExamplePresence.Absent };
-
-export function lookupDefaultableExample(
-  args: LookupDefaultableExampleArgs,
-): DefaultableExampleLookup {
-  for (const entry of EXAMPLE_CATALOG) {
-    if (
-      entry.family === args.family &&
-      entry.operation === ExampleOperationMarker.FamilyRoot &&
-      entry.dispatch === ExampleDispatchKind.Defaultable
-    ) {
-      return { presence: DefaultableExamplePresence.Present, entry };
-    }
-  }
-  return { presence: DefaultableExamplePresence.Absent };
-}
 
 export const TOOLS_LIST_INVOKE = 'task loom:tools-list';

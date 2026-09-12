@@ -1,15 +1,39 @@
 //! Passkey-PRF setup, unlock, and recovery orchestration.
 
+use std::rc::Rc;
+
 use super::NookVaultManager;
+use crate::BrowserPasskeyClient;
+use crate::BrowserPasskeyCreationOptions;
+use crate::BrowserPasskeyObservation;
+use crate::BrowserPasskeyPasskeyLabelWithDeviceId;
+use crate::BrowserPasskeyPrfOutput;
+use crate::BrowserPasskeyRequestOptions;
+use crate::BrowserPasskeySignalCurrentUserDetails;
+use crate::NookDatabase;
+use crate::manager::session::ExtensionHandoffState;
+use crate::passkey_browser::PasskeyPrfEvaluation;
+use crate::storage::identity_record::HandoffAuthorization;
+use crate::storage::identity_record::ProtectedIdentityLookup;
+use crate::storage::identity_record::ProtectedLocalIdentity;
+use crate::storage::identity_record::{
+    AuthorizerMemberSigning, AuthorizerSigningUpdate, HandoffSignerPublication,
+    VaultCreationAuthority,
+};
+use nook_companion_core::CompanionIdentityHandoffContext;
 #[path = "device_protection_recovery.rs"]
 mod device_protection_recovery;
+pub(in crate::manager) mod handoff_stages;
+mod handoff_transition;
 use crate::storage::device_access;
 use crate::storage::device_access::PasskeyCreationCeremony;
-use crate::storage::{event_db, identity_record};
+use crate::storage::identity_record;
 use crate::{DeviceProtectionDeviceModeState, NookDeviceAccessSnapshotRequest};
 use crate::{NookError, NookPasskeySetup, NookPasskeyUnlockOptions};
-use crate::{passkey_browser, passkey_observation};
-use nook_companion_core::CompanionIdentityHandoffContext;
+pub use handoff_stages::{
+    NookAdoptedExtensionIdentityHandoff, NookCommittedExtensionIdentityHandoff,
+    NookPendingExtensionIdentityHandoff,
+};
 use nook_core::{
     AgeArmoredCiphertext, AppId, DeviceId, DeviceIdentity, DeviceIdentityProtection,
     DeviceIdentitySecret, DeviceKeyProtectionSetup, DeviceMode, DeviceProtectionStatus,
@@ -31,7 +55,7 @@ enum ExtensionIdentityHandoffContextValue {
 
 pub(crate) enum PendingExtensionIdentityEnrollment {
     VaultCreation {
-        authorizer: Option<nook_core::AppKey>,
+        authorizer: VaultCreationAuthority,
     },
     PairedVault {
         authorizer: nook_core::AppKey,
@@ -45,10 +69,42 @@ pub(crate) enum PendingExtensionIdentityEnrollment {
     },
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("Extension identity handoff is not pending.")]
+pub(in crate::manager) struct HandoffNotPending;
+
+#[derive(Default)]
+pub(in crate::manager) enum ExtensionIdentityPublication {
+    #[default]
+    Idle,
+    Staged(Box<PendingExtensionIdentityHandoff>),
+}
+impl ExtensionIdentityPublication {
+    pub(in crate::manager) fn staged(pending: PendingExtensionIdentityHandoff) -> Self {
+        Self::Staged(Box::new(pending))
+    }
+
+    pub(in crate::manager) fn pending(
+        &self,
+    ) -> Result<&PendingExtensionIdentityHandoff, HandoffNotPending> {
+        match self {
+            Self::Idle => Err(HandoffNotPending),
+            Self::Staged(pending) => Ok(pending),
+        }
+    }
+    pub(in crate::manager) fn pending_mut(
+        &mut self,
+    ) -> Result<&mut PendingExtensionIdentityHandoff, HandoffNotPending> {
+        match self {
+            Self::Idle => Err(HandoffNotPending),
+            Self::Staged(pending) => Ok(pending),
+        }
+    }
+}
+
 pub(in crate::manager) struct PendingExtensionIdentityHandoff {
     pub(in crate::manager) enrollment: PendingExtensionIdentityEnrollment,
-    pub(in crate::manager) authorizer_signing:
-        Option<(nook_core::AppId, nook_core::DeviceSigningPublicKey)>,
+    pub(in crate::manager) authorizer_signing: AuthorizerSigningUpdate,
     pub(in crate::manager) signing_public_key: nook_core::DeviceSigningPublicKey,
     pub(in crate::manager) handoff_signing_seed: String,
     pub(in crate::manager) persist_signing_seed: bool,
@@ -68,22 +124,26 @@ mod tests {
         let (signing, signing_seed) = SigningIdentity::generate()?;
         let mut manager = NookVaultManager::new();
         manager.event_log.signing_seed = "session-signer".to_owned();
-        manager.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
-            enrollment: PendingExtensionIdentityEnrollment::PairedVault {
-                authorizer,
-                store_id: staged_store_id,
-            },
-            authorizer_signing: None,
-            signing_public_key: signing.public_key(),
-            handoff_signing_seed: signing_seed.as_str().to_owned(),
-            persist_signing_seed: true,
-            previous_session_signing_seed: String::new(),
-        });
+        manager.device.pending_extension_handoff =
+            ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
+                enrollment: PendingExtensionIdentityEnrollment::PairedVault {
+                    authorizer,
+                    store_id: staged_store_id,
+                },
+                authorizer_signing: AuthorizerSigningUpdate::RetainMembership,
+                signing_public_key: signing.public_key(),
+                handoff_signing_seed: signing_seed.as_str().to_owned(),
+                persist_signing_seed: true,
+                previous_session_signing_seed: String::new(),
+            });
 
         manager.reset_vault_session_for_handoff_retry();
 
         assert_eq!(manager.event_log.signing_seed, signing_seed.as_str());
-        assert!(manager.device.pending_extension_handoff.is_some());
+        assert!(matches!(
+            &manager.device.pending_extension_handoff,
+            ExtensionIdentityPublication::Staged(_)
+        ));
         Ok(())
     }
 
@@ -124,7 +184,8 @@ mod tests {
             },
         };
 
-        let enrollment = pending_extension_enrollment(&context, None)?;
+        let enrollment =
+            context.pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?;
 
         assert!(matches!(
             enrollment,
@@ -139,15 +200,18 @@ mod tests {
             value: ExtensionIdentityHandoffContextValue::VaultCreation,
         };
         assert!(matches!(
-            pending_extension_enrollment(&vault_creation, None)?,
-            PendingExtensionIdentityEnrollment::VaultCreation { authorizer: None }
+            vault_creation.pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
+            PendingExtensionIdentityEnrollment::VaultCreation {
+                authorizer: VaultCreationAuthority::NewIdentity
+            }
         ));
 
         let authorizer = AppKey::generate()?;
         assert!(matches!(
-            pending_extension_enrollment(&vault_creation, Some(&authorizer))?,
+            vault_creation
+                .pending_extension_enrollment(HandoffAuthorization::Authenticated(&authorizer))?,
             PendingExtensionIdentityEnrollment::VaultCreation {
-                authorizer: Some(_)
+                authorizer: VaultCreationAuthority::ExistingIdentity(_)
             }
         ));
 
@@ -158,12 +222,12 @@ mod tests {
             },
         };
         assert!(matches!(
-            pending_extension_enrollment(&paired, None)?,
+            paired.pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
             PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { store_id: id }
                 if id == store_id
         ));
         assert!(matches!(
-            pending_extension_enrollment(&paired, Some(&authorizer))?,
+            paired.pending_extension_enrollment(HandoffAuthorization::Authenticated(&authorizer))?,
             PendingExtensionIdentityEnrollment::PairedVault { store_id: id, .. }
                 if id == store_id
         ));
@@ -174,7 +238,7 @@ mod tests {
             },
         };
         assert!(matches!(
-            pending_extension_enrollment(&imported, None)?,
+            imported.pending_extension_enrollment(HandoffAuthorization::Unauthenticated)?,
             PendingExtensionIdentityEnrollment::ExistingVaultImport { store_id: id }
                 if id == store_id
         ));
@@ -184,11 +248,11 @@ mod tests {
     #[wasm_bindgen_test]
     fn passkey_device_modes_are_mapped_without_numeric_fallbacks() {
         assert_eq!(
-            passkey_mode_from_device_mode(DeviceMode::Standard),
+            NookVaultManager::passkey_mode_from_device_mode(DeviceMode::Standard),
             PasskeyDeviceProtectionMode::Standard
         );
         assert_eq!(
-            passkey_mode_from_device_mode(DeviceMode::AntiHacker),
+            NookVaultManager::passkey_mode_from_device_mode(DeviceMode::AntiHacker),
             PasskeyDeviceProtectionMode::AntiHacker
         );
     }
@@ -251,31 +315,43 @@ impl NookExtensionIdentityHandoffContext {
     }
 }
 
-fn pending_extension_enrollment(
-    context: &NookExtensionIdentityHandoffContext,
-    authorizer: Option<&nook_core::AppKey>,
-) -> Result<PendingExtensionIdentityEnrollment, NookError> {
-    match &context.value {
-        ExtensionIdentityHandoffContextValue::VaultCreation => {
-            Ok(PendingExtensionIdentityEnrollment::VaultCreation {
-                authorizer: authorizer.cloned(),
-            })
-        }
-        ExtensionIdentityHandoffContextValue::PairedVault { store_id } => match authorizer {
-            Some(app_key) => Ok(PendingExtensionIdentityEnrollment::PairedVault {
-                authorizer: app_key.clone(),
-                store_id: store_id.clone(),
-            }),
-            None => Ok(
-                PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
+impl NookExtensionIdentityHandoffContext {
+    fn pending_extension_enrollment(
+        &self,
+        authorizer: HandoffAuthorization<'_>,
+    ) -> Result<PendingExtensionIdentityEnrollment, NookError> {
+        let context = self;
+        match &context.value {
+            ExtensionIdentityHandoffContextValue::VaultCreation => {
+                Ok(PendingExtensionIdentityEnrollment::VaultCreation {
+                    authorizer: match authorizer {
+                        HandoffAuthorization::Unauthenticated => {
+                            VaultCreationAuthority::NewIdentity
+                        }
+                        HandoffAuthorization::Authenticated(key) => {
+                            VaultCreationAuthority::ExistingIdentity(key.clone())
+                        }
+                    },
+                })
+            }
+            ExtensionIdentityHandoffContextValue::PairedVault { store_id } => match authorizer {
+                HandoffAuthorization::Authenticated(app_key) => {
+                    Ok(PendingExtensionIdentityEnrollment::PairedVault {
+                        authorizer: app_key.clone(),
+                        store_id: store_id.clone(),
+                    })
+                }
+                HandoffAuthorization::Unauthenticated => Ok(
+                    PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
+                        store_id: store_id.clone(),
+                    },
+                ),
+            },
+            ExtensionIdentityHandoffContextValue::ExistingVaultImport { store_id } => {
+                Ok(PendingExtensionIdentityEnrollment::ExistingVaultImport {
                     store_id: store_id.clone(),
-                },
-            ),
-        },
-        ExtensionIdentityHandoffContextValue::ExistingVaultImport { store_id } => {
-            Ok(PendingExtensionIdentityEnrollment::ExistingVaultImport {
-                store_id: store_id.clone(),
-            })
+                })
+            }
         }
     }
 }
@@ -285,6 +361,7 @@ impl NookVaultManager {
     /// Require passkey authorization again before any device-key operation.
     #[wasm_bindgen]
     pub fn lock_device_identity(&mut self) {
+        self.device.handoff_generation = Rc::default();
         self.device.identity_private_key.zeroize();
         self.device.identity_private_key.clear();
         self.device.extension_handoff_private_key.zeroize();
@@ -296,11 +373,18 @@ impl NookVaultManager {
     /// Create a one-time age recipient for an extension identity handoff.
     /// The matching private key remains inside this manager's Rust state.
     #[wasm_bindgen]
-    pub fn begin_extension_identity_handoff(&mut self) -> Result<String, JsError> {
+    pub fn begin_extension_identity_handoff(
+        &mut self,
+    ) -> Result<NookPendingExtensionIdentityHandoff, JsError> {
+        self.device.handoff_generation = Rc::default();
         self.device.extension_handoff_private_key.zeroize();
         let recipient = DeviceIdentity::generate()?;
-        self.device.extension_handoff_private_key = recipient.secret_string().into_inner();
-        Ok(recipient.public_key().into_inner())
+        self.device.extension_handoff_private_key =
+            ExtensionHandoffState::Recipient((recipient.secret_string().into_inner()).into());
+        Ok(NookPendingExtensionIdentityHandoff::new(
+            self,
+            recipient.public_key().into_inner(),
+        ))
     }
 
     /// Seal the currently unlocked extension identity to a one-time website
@@ -308,214 +392,33 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn seal_extension_identity_handoff(
         &mut self,
-        recipient_public_key: &str,
-        nonce: &str,
+        request: nook_core::ExtensionIdentityHandoffSealRequest,
     ) -> Result<String, JsError> {
+        // The caller's prior status observation cannot authorize a later seal.
+        self.ensure_device_identity()?;
+        let signing = self.ensure_signing_identity().await?;
         let identity = self.ensure_device_identity()?;
-        self.ensure_signing_identity().await?;
-        let recipient_public_key = DevicePublicKey::parse(recipient_public_key)?;
+        let source = nook_core::ExtensionIdentityHandoffSource {
+            identity: &identity,
+            signing: &signing,
+        };
+        if matches!(
+            source.binding(&request),
+            nook_core::ExtensionIdentityHandoffSourceBinding::DifferentIdentity
+        ) {
+            return Err(JsError::new(
+                "Extension identity request does not match this device.",
+            ));
+        }
+        let recipient_public_key = DevicePublicKey::parse(&request.recipient_public_key)?;
         Ok(nook_core::ExtensionIdentityHandoffSeal {
             identity: &identity,
             signing_seed: &self.event_log.signing_seed,
             recipient_public_key: &recipient_public_key,
-            nonce,
+            nonce: &request.nonce,
         }
         .seal()?
         .into_inner())
-    }
-
-    /// Open and validate an extension identity handoff, then adopt both the age
-    /// identity and its matching event-signing seed for this in-memory session.
-    #[wasm_bindgen]
-    pub async fn finish_extension_identity_handoff(
-        &mut self,
-        envelope: &str,
-        nonce: &str,
-        expected_device_id: &str,
-        expected_device_public_key: &str,
-        expected_device_signing_public_key: &str,
-        context: &NookExtensionIdentityHandoffContext,
-    ) -> Result<(), JsError> {
-        let private_key = Zeroizing::new(mem::take(&mut self.device.extension_handoff_private_key));
-        if private_key.is_empty() {
-            return Err(NookError::Decryption(
-                "Extension identity handoff was not initialized.".to_owned(),
-            )
-            .into());
-        }
-        let recipient =
-            DeviceIdentity::from_secret_str(&DeviceIdentitySecret::parse(&private_key)?)?;
-        let expected_signing_public_key =
-            DeviceSigningPublicKey::parse(expected_device_signing_public_key)?;
-        let material = nook_core::ExtensionIdentityHandoffOpen {
-            recipient_identity: &recipient,
-            envelope: &AgeArmoredCiphertext::parse(envelope)?,
-            expected_nonce: nonce,
-            expected_device_id: &DeviceId::parse(expected_device_id)?,
-            expected_device_public_key: &DevicePublicKey::parse(expected_device_public_key)?,
-            expected_device_signing_public_key: &expected_signing_public_key,
-        }
-        .open()?;
-        let (identity, handoff_signing_seed) = material.into_parts();
-        let authorizer = if self.device.identity_private_key.is_empty() {
-            None
-        } else {
-            let app_key = self.device_identity()?;
-            let signing_public_key = self.ensure_signing_identity().await?.public_key();
-            Some((app_key, signing_public_key))
-        };
-        let enrollment =
-            pending_extension_enrollment(context, authorizer.as_ref().map(|(app_key, _)| app_key))?;
-
-        // Age identity may come from a reinstalled extension. Keep any durable
-        // authorized signer when the vault already has events so Approve does
-        // not append JoinApproved as an unauthorized actor.
-        let stored_seed = event_db::load_signing_seed().await?;
-        let has_events = self.event_log_has_events().await?;
-        let pending_handoff_signing_seed = handoff_signing_seed.clone();
-        let importing_existing_vault = matches!(
-            &enrollment,
-            PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
-        );
-        let choice = if importing_existing_vault {
-            HandoffSigningSeedChoice::AdoptHandoff {
-                seed: handoff_signing_seed,
-                persist: false,
-            }
-        } else {
-            nook_core::HandoffSigningSeedSelection {
-                handoff_seed: handoff_signing_seed,
-                stored_seed,
-                event_log: if has_events {
-                    nook_core::HandoffEventLog::ExistingEvents
-                } else {
-                    nook_core::HandoffEventLog::Empty
-                },
-            }
-            .choose()
-        };
-        let persist_signing_seed = importing_existing_vault
-            || matches!(
-                &choice,
-                HandoffSigningSeedChoice::AdoptHandoff { persist: true, .. }
-            );
-
-        let previous_session_signing_seed = mem::take(&mut self.event_log.signing_seed);
-        self.device.identity_private_key.zeroize();
-        self.device.id = identity.device_id().as_str().to_owned();
-        self.device.identity_private_key = identity.secret_string().into_inner();
-        self.event_log.signing_seed.zeroize();
-        match choice {
-            HandoffSigningSeedChoice::KeepStored { seed } => {
-                self.event_log.signing_seed = seed;
-            }
-            HandoffSigningSeedChoice::AdoptHandoff { seed, persist } => {
-                self.event_log.signing_seed = seed;
-                debug_assert_eq!(persist, persist_signing_seed);
-            }
-        }
-        self.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
-            enrollment,
-            authorizer_signing: authorizer.map(|(app_key, signing_public_key)| {
-                (app_key.app_id().clone(), signing_public_key)
-            }),
-            signing_public_key: expected_signing_public_key,
-            handoff_signing_seed: pending_handoff_signing_seed,
-            persist_signing_seed,
-            previous_session_signing_seed,
-        });
-        Ok(())
-    }
-
-    /// Whether durable identity publication must wait for a verified connect.
-    #[wasm_bindgen]
-    pub fn extension_identity_handoff_requires_connect(&self) -> bool {
-        self.device
-            .pending_extension_handoff
-            .as_ref()
-            .is_some_and(|pending| {
-                matches!(
-                    &pending.enrollment,
-                    PendingExtensionIdentityEnrollment::VaultCreation { .. }
-                        | PendingExtensionIdentityEnrollment::PairedVault { .. }
-                        | PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
-                        | PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
-                )
-            })
-    }
-
-    /// Reclassify a deferred handoff after staged provider discovery has bound
-    /// the manager to the existing vault that must be verified before publish.
-    #[wasm_bindgen]
-    pub fn mark_extension_identity_handoff_existing_vault_import(&mut self) -> Result<(), JsError> {
-        let store_id = StoreId::parse(&self.vault.store_id)?;
-        let pending = self
-            .device
-            .pending_extension_handoff
-            .as_mut()
-            .ok_or_else(|| JsError::new("Extension identity handoff is not pending."))?;
-        pending.enrollment = PendingExtensionIdentityEnrollment::ExistingVaultImport { store_id };
-        pending.authorizer_signing = None;
-        pending.persist_signing_seed = true;
-        self.event_log.signing_seed.zeroize();
-        self.event_log
-            .signing_seed
-            .clone_from(&pending.handoff_signing_seed);
-        Ok(())
-    }
-
-    /// Atomically persist identity membership and its matching signing seed
-    /// after the caller's complete initialization flow succeeds.
-    #[wasm_bindgen]
-    pub async fn commit_extension_identity_handoff(&mut self) -> Result<(), JsError> {
-        let pending = self
-            .device
-            .pending_extension_handoff
-            .as_ref()
-            .ok_or_else(|| JsError::new("Extension identity handoff is not pending."))?;
-        if !matches!(
-            &pending.enrollment,
-            PendingExtensionIdentityEnrollment::PairedVault { .. }
-        ) {
-            return Err(JsError::new(
-                "This extension identity handoff must be finalized by verified connect.",
-            ));
-        }
-        let app_key = self.device_identity()?;
-        let signing_seed = pending
-            .persist_signing_seed
-            .then_some(self.event_log.signing_seed.as_str());
-        identity_record::IdentityHandoffCommit {
-            app_key: &app_key,
-            signing_public_key: &pending.signing_public_key,
-            authorizer_signing: pending.authorizer_signing.as_ref(),
-            enrollment: &pending.enrollment,
-            signing_seed,
-            existing_vault: None,
-        }
-        .commit()
-        .await?;
-        Ok(())
-    }
-
-    /// Accept a committed handoff after the complete caller-owned operation,
-    /// including fresh vault genesis, has succeeded.
-    #[wasm_bindgen]
-    pub fn confirm_extension_identity_handoff(&mut self) {
-        self.device.pending_extension_handoff = None;
-    }
-
-    /// Clear every secret installed by a failed external identity
-    /// authorization, including the event-log signing seed.
-    #[wasm_bindgen]
-    pub fn rollback_extension_identity_handoff(&mut self) {
-        if let Some(mut pending) = self.device.pending_extension_handoff.take() {
-            self.event_log.signing_seed.zeroize();
-            self.event_log.signing_seed = mem::take(&mut pending.previous_session_signing_seed);
-        }
-        self.device.id.clear();
-        self.lock_device_identity();
-        self.reset_vault_session();
     }
 
     #[wasm_bindgen]
@@ -541,7 +444,7 @@ impl NookVaultManager {
         let session_device_id = self.device.public_app_id();
         Ok(NookDeviceAccessSnapshotRequest::new(
             session_device_id,
-            !self.device.identity_private_key.is_empty(),
+            (!self.device.identity_private_key.is_empty()).into(),
         ))
     }
 
@@ -568,9 +471,15 @@ impl NookVaultManager {
     pub async fn device_protection_device_mode(
         &self,
     ) -> Result<crate::DeviceProtectionDeviceModeState, JsError> {
-        let Some((_, wrapped)) = self.load_protected_local_identity().await? else {
+        let ProtectedIdentityLookup::Configured(identity) =
+            self.load_protected_local_identity().await?
+        else {
             return Ok(DeviceProtectionDeviceModeState::Missing);
         };
+        let ProtectedLocalIdentity {
+            wrapped_identity: wrapped,
+            ..
+        } = *identity;
         Ok(match wrapped {
             WrappedDeviceIdentity::Pin(_) => DeviceProtectionDeviceModeState::Pin,
             WrappedDeviceIdentity::PasskeyDerived(_) => DeviceProtectionDeviceModeState::Standard,
@@ -616,6 +525,10 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the exported ceremony keeps one atomic passkey setup and rollback path"
+    )]
     pub async fn setup_device_protection_with_passkey_mode(
         &mut self,
         rp_id: &str,
@@ -625,55 +538,64 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         let creating_local_identity = self.is_creating_local_identity();
         let result: Result<(), JsError> = async {
-            let mode = passkey_mode_from_device_mode(device_mode);
-            let passkey_label = passkey_browser::normalized_passkey_label(passkey_label);
+            let mode = NookVaultManager::passkey_mode_from_device_mode(device_mode);
+            let passkey_label = BrowserPasskeyClient::normalized_passkey_label(passkey_label);
             let setup = self.begin_device_protection().await?;
             let user_handle = setup.user_handle();
             let prf_input = setup.prf_input();
-            let creation_options = passkey_browser::creation_options(
-                rp_id,
-                rp_name,
-                &passkey_label,
-                &user_handle,
-                &prf_input,
-            )?;
-            let credential = passkey_browser::create_credential(&creation_options).await?;
-            let mut observation = passkey_observation::observe_registration(&credential);
-            let credential_id = passkey_browser::credential_id(&credential)?;
+            let creation_options =
+                BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
+                    rp_id,
+                    rp_name,
+                    passkey_label: &passkey_label,
+                    user_handle: &user_handle,
+                    prf_input: &prf_input,
+                })?;
+            let credential = BrowserPasskeyClient::create_credential(&creation_options).await?;
+            let mut observation =
+                BrowserPasskeyObservation::new(&credential).observe_registration();
+            let credential_id = BrowserPasskeyClient::credential_id(&credential)?;
             let credential_id = WebAuthnCredentialId::try_from(credential_id)?;
             let user_handle = WebAuthnUserHandle::try_from(user_handle)?;
             let prf_input = WebAuthnPrfInput::try_from(prf_input)?;
             let create_prf_output =
-                passkey_browser::prf_output(&credential, true)?.map(Zeroizing::new);
-            let create_prf_output = create_prf_output
-                .as_deref()
-                .map(|output| WebAuthnPrfOutput::try_from(output.clone()))
-                .transpose()?;
+                match BrowserPasskeyClient::prf_output(BrowserPasskeyPrfOutput {
+                    credential: &credential,
+                    requirement: crate::PasskeyPrfRequirement::Enabled,
+                })? {
+                    PasskeyPrfEvaluation::NotEvaluated => PasskeyRegistrationPrfOutput::Unavailable,
+                    PasskeyPrfEvaluation::Evaluated(output) => {
+                        let output = Zeroizing::new(output);
+                        PasskeyRegistrationPrfOutput::Available(WebAuthnPrfOutput::try_from(
+                            output.to_vec(),
+                        )?)
+                    }
+                };
             let resolution = PasskeyRegistration::new(PasskeyRegistrationInput {
                 credential_id: &credential_id,
                 user_handle: &user_handle,
                 prf_input: &prf_input,
                 mode,
             })
-            .resolve(match create_prf_output {
-                Some(output) => PasskeyRegistrationPrfOutput::Available(output),
-                None => PasskeyRegistrationPrfOutput::Unavailable,
-            })?;
+            .resolve(create_prf_output)?;
             let (material, ceremony) = match resolution {
                 PasskeyRegistrationOutcome::Complete(material) => {
                     (*material, PasskeyCreationCeremony::RegistrationOnly)
                 }
                 PasskeyRegistrationOutcome::NeedsAssertion(pending) => {
                     let request = pending.request();
-                    let request_options = passkey_browser::request_options(
-                        rp_id,
-                        request.credential_id().as_ref(),
-                        request.prf_input().as_ref(),
-                    )?;
-                    let credential = passkey_browser::get_credential(&request_options).await?;
-                    observation.merge_usage(passkey_observation::observe_assertion(&credential));
+                    let request_options =
+                        BrowserPasskeyClient::request_options(BrowserPasskeyRequestOptions {
+                            rp_id,
+                            credential_id: request.credential_id().as_ref(),
+                            prf_input: request.prf_input().as_ref(),
+                        })?;
+                    let credential = BrowserPasskeyClient::get_credential(&request_options).await?;
+                    observation = observation.merge_usage(
+                        BrowserPasskeyObservation::new(&credential).observe_assertion(),
+                    );
                     let prf_output =
-                        Zeroizing::new(passkey_browser::require_prf_output(&credential)?);
+                        Zeroizing::new(BrowserPasskeyClient::require_prf_output(&credential)?);
                     let prf_output = WebAuthnPrfOutput::try_from(prf_output.to_vec())?;
                     (
                         pending.complete(&prf_output)?,
@@ -684,21 +606,29 @@ impl NookVaultManager {
             let device_id = self.save_passkey_material(&material).await?;
             let credential_fingerprint =
                 nook_core::PasskeyAccessProfile::credential_identifier(credential_id.as_ref());
-            let _ = device_access::AppPasskeyCreation {
-                app_id: &device_id,
-                credential_fingerprint: &credential_fingerprint,
-                nook_name: &passkey_label,
-                observation,
-                ceremony,
-            }
-            .apply()
-            .await;
-            let updated_label =
-                passkey_browser::passkey_label_with_device_id(&passkey_label, &device_id);
-            passkey_browser::signal_current_user_details(
-                rp_id,
-                user_handle.as_ref(),
-                &updated_label,
+            drop(
+                device_access::AppPasskeyCreation {
+                    app_id: &device_id,
+                    credential_fingerprint: &credential_fingerprint,
+                    nook_name: &passkey_label,
+                    observation,
+                    ceremony,
+                }
+                .apply()
+                .await,
+            );
+            let updated_label = BrowserPasskeyClient::passkey_label_with_device_id(
+                BrowserPasskeyPasskeyLabelWithDeviceId {
+                    passkey_label: &passkey_label,
+                    device_id: &device_id,
+                },
+            );
+            BrowserPasskeyClient::signal_current_user_details(
+                BrowserPasskeySignalCurrentUserDetails {
+                    rp_id,
+                    user_handle: user_handle.as_ref(),
+                    passkey_label: &updated_label,
+                },
             )
             .await;
             Ok(())
@@ -752,7 +682,7 @@ impl NookVaultManager {
         device_mode: nook_core::DeviceMode,
     ) -> Result<(), JsError> {
         let creating_local_identity = self.is_creating_local_identity();
-        let mode = passkey_mode_from_device_mode(device_mode);
+        let mode = NookVaultManager::passkey_mode_from_device_mode(device_mode);
         let result = async {
             let credential_id = WebAuthnCredentialId::try_from(credential_id)?;
             let user_handle = WebAuthnUserHandle::try_from(user_handle)?;
@@ -780,14 +710,14 @@ impl NookVaultManager {
         &mut self,
         rp_id: &str,
     ) -> Result<(), JsError> {
-        let request_options = passkey_browser::recovery_options(rp_id)?;
-        let credential = passkey_browser::get_credential(&request_options).await?;
-        let observation = passkey_observation::observe_assertion(&credential);
-        let credential_id = passkey_browser::credential_id(&credential)?;
+        let request_options = BrowserPasskeyClient::recovery_options(rp_id)?;
+        let credential = BrowserPasskeyClient::get_credential(&request_options).await?;
+        let observation = BrowserPasskeyObservation::new(&credential).observe_assertion();
+        let credential_id = BrowserPasskeyClient::credential_id(&credential)?;
         let credential_fingerprint =
             nook_core::PasskeyAccessProfile::credential_identifier(&credential_id);
-        let user_handle = passkey_browser::assertion_user_handle(&credential)?;
-        let prf_output = passkey_browser::require_prf_output(&credential)?;
+        let user_handle = BrowserPasskeyClient::assertion_user_handle(&credential)?;
+        let prf_output = BrowserPasskeyClient::require_prf_output(&credential)?;
         self.recover_device_protection_with_passkey_material(
             credential_id,
             user_handle,
@@ -795,13 +725,15 @@ impl NookVaultManager {
         )
         .await?;
         let app_id = self.device.public_app_id();
-        let _ = device_access::AppPasskeyUse {
-            app_id: &app_id,
-            credential_fingerprint: &credential_fingerprint,
-            observation,
-        }
-        .apply()
-        .await;
+        drop(
+            device_access::AppPasskeyUse {
+                app_id: &app_id,
+                credential_fingerprint: &credential_fingerprint,
+                observation,
+            }
+            .apply()
+            .await,
+        );
         Ok(())
     }
 
@@ -871,9 +803,15 @@ impl NookVaultManager {
 
     #[wasm_bindgen]
     pub async fn passkey_unlock_options(&self) -> Result<NookPasskeyUnlockOptions, JsError> {
-        let (_, record) = self.load_protected_local_identity().await?.ok_or_else(|| {
-            NookError::IndexedDb("No passkey-protected device identity found.".to_owned())
-        })?;
+        let ProtectedLocalIdentity {
+            wrapped_identity: record,
+            ..
+        } = *match self.load_protected_local_identity().await? {
+            ProtectedIdentityLookup::Configured(value) => Ok(value),
+            ProtectedIdentityLookup::Unconfigured => Err({
+                NookError::IndexedDb("No passkey-protected device identity found.".to_owned())
+            }),
+        }?;
         Ok(NookPasskeyUnlockOptions::from_core(&record)?)
     }
 
@@ -884,21 +822,23 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         let options = self.passkey_unlock_options().await?;
         let request_options = options.request_options(rp_id)?;
-        let credential = passkey_browser::get_credential(&request_options).await?;
-        let observation = passkey_observation::observe_assertion(&credential);
-        let credential_id = passkey_browser::credential_id(&credential)?;
+        let credential = BrowserPasskeyClient::get_credential(&request_options).await?;
+        let observation = BrowserPasskeyObservation::new(&credential).observe_assertion();
+        let credential_id = BrowserPasskeyClient::credential_id(&credential)?;
         let credential_fingerprint =
             nook_core::PasskeyAccessProfile::credential_identifier(&credential_id);
-        let prf_output = passkey_browser::require_prf_output(&credential)?;
+        let prf_output = BrowserPasskeyClient::require_prf_output(&credential)?;
         self.unlock_device_identity(prf_output).await?;
         let app_id = self.device.public_app_id();
-        let _ = device_access::AppPasskeyUse {
-            app_id: &app_id,
-            credential_fingerprint: &credential_fingerprint,
-            observation,
-        }
-        .apply()
-        .await;
+        drop(
+            device_access::AppPasskeyUse {
+                app_id: &app_id,
+                credential_fingerprint: &credential_fingerprint,
+                observation,
+            }
+            .apply()
+            .await,
+        );
         Ok(())
     }
 
@@ -912,13 +852,18 @@ impl NookVaultManager {
     )]
     pub async fn unlock_device_identity(&mut self, mut prf_output: Vec<u8>) -> Result<(), JsError> {
         let result: Result<(), NookError> = async {
-            let (stored_device_id, record) =
-                self.load_protected_local_identity().await?.ok_or_else(|| {
+            let ProtectedLocalIdentity {
+                app_id: stored_device_id,
+                wrapped_identity: record,
+            } = *match self.load_protected_local_identity().await? {
+                ProtectedIdentityLookup::Configured(value) => Ok(value),
+                ProtectedIdentityLookup::Unconfigured => Err({
                     NookError::IndexedDb("No passkey-protected device identity found.".to_owned())
-                })?;
+                }),
+            }?;
             let typed_prf_output = WebAuthnPrfOutput::try_from(prf_output.clone())?;
             let secret = record.unlock_passkey(&nook_core::PasskeyIdentityUnlock {
-                stored_device_id: &stored_device_id,
+                stored_device_id: stored_device_id.as_str(),
                 prf_output: &typed_prf_output,
             })?;
             let app_key = DeviceIdentity::from_secret_str(&secret)?;
@@ -933,13 +878,18 @@ impl NookVaultManager {
     pub async fn unlock_pin_device_identity(&mut self, pin: String) -> Result<(), JsError> {
         let pin = Zeroizing::new(pin);
         let result = async {
-            let (stored_device_id, record) =
-                self.load_protected_local_identity().await?.ok_or_else(|| {
+            let ProtectedLocalIdentity {
+                app_id: stored_device_id,
+                wrapped_identity: record,
+            } = *match self.load_protected_local_identity().await? {
+                ProtectedIdentityLookup::Configured(value) => Ok(value),
+                ProtectedIdentityLookup::Unconfigured => Err({
                     NookError::IndexedDb("No PIN-protected device identity found.".to_owned())
-                })?;
+                }),
+            }?;
             let secret = record.unwrap_pin(&pin)?;
             let identity = DeviceIdentity::from_secret_str(&secret)?;
-            if identity.device_id().as_str() != stored_device_id {
+            if identity.device_id().as_str() != stored_device_id.as_str() {
                 return Err(NookError::Decryption(
                     "Protected device identity does not match device_id.".to_owned(),
                 ));
@@ -951,12 +901,14 @@ impl NookVaultManager {
     }
 }
 
-fn passkey_mode_from_device_mode(
-    device_mode: nook_core::DeviceMode,
-) -> nook_core::PasskeyDeviceProtectionMode {
-    match device_mode {
-        DeviceMode::Standard => PasskeyDeviceProtectionMode::Standard,
-        DeviceMode::AntiHacker => PasskeyDeviceProtectionMode::AntiHacker,
+impl NookVaultManager {
+    fn passkey_mode_from_device_mode(
+        device_mode: nook_core::DeviceMode,
+    ) -> nook_core::PasskeyDeviceProtectionMode {
+        match device_mode {
+            DeviceMode::Standard => PasskeyDeviceProtectionMode::Standard,
+            DeviceMode::AntiHacker => PasskeyDeviceProtectionMode::AntiHacker,
+        }
     }
 }
 

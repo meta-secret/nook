@@ -1,23 +1,28 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
-  authenticationPageObservationFacts,
-  fillLoginCredentials,
-  findOneTimeCodeFields,
-  findPasswordFields,
-  findUsernameFields,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
-  summarizeAuthenticationWorkflowForms,
-  summarizePasswordForms,
   type PasswordFormObservation,
+  passwordFormInteraction,
+  passwordFieldDiscovery,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
 const wholeDocumentOneTimeCodeFieldQuery: Parameters<
-  typeof findOneTimeCodeFields
+  typeof passwordFieldDiscovery.findOneTimeCodeFields
 >[0] = {}
 
+class PasswordFieldTestFixture {
+  static input(selector: string): HTMLInputElement {
+    const input = document.querySelector(selector)
+    if (!(input instanceof HTMLInputElement))
+      throw new Error(`expected input fixture ${selector}`)
+    return input
+  }
+}
+
 function observedAuthenticationWorkflow(): PasswordFormObservation {
-  const observation = summarizeAuthenticationWorkflowForms()[0]
+  const observation =
+    passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
   if (!observation) throw new Error('expected an authentication workflow')
   return observation
 }
@@ -77,25 +82,23 @@ describe('authentication field detection', () => {
     `
     const owner = document.querySelector<HTMLFormElement>('#login')
     if (!owner) throw new Error('expected the owned authentication form')
-    const query: Parameters<typeof findUsernameFields>[0] = {
+    const query: Parameters<
+      typeof passwordFieldDiscovery.findUsernameFields
+    >[0] = {
       root: document,
       formScope: { kind: PasswordFormScopeKind.Owned, owner },
     }
-    expect(findUsernameFields(query).map((field) => field.id)).toEqual([
-      'before-user',
-      'inside-user',
-      'after-user',
-    ])
-    expect(findPasswordFields(query).map((field) => field.id)).toEqual([
-      'before-password',
-      'inside-password',
-      'after-password',
-    ])
-    expect(findOneTimeCodeFields(query).map((field) => field.id)).toEqual([
-      'before-otp',
-      'inside-otp',
-      'after-otp',
-    ])
+    expect(
+      passwordFieldDiscovery.findUsernameFields(query).map((field) => field.id),
+    ).toEqual(['before-user', 'inside-user', 'after-user'])
+    expect(
+      passwordFieldDiscovery.findPasswordFields(query).map((field) => field.id),
+    ).toEqual(['before-password', 'inside-password', 'after-password'])
+    expect(
+      passwordFieldDiscovery
+        .findOneTimeCodeFields(query)
+        .map((field) => field.id),
+    ).toEqual(['before-otp', 'inside-otp', 'after-otp'])
   })
 
   test('keeps form-less fields together with a sibling Sign in button', () => {
@@ -106,13 +109,14 @@ describe('authentication field detection', () => {
         <button type="button">Sign in</button>
       </div>
     `
-    const observation = summarizeAuthenticationWorkflowForms()[0]
+    const observation =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
     if (!observation) {
       throw new Error('expected a form-less login workflow')
     }
     expect(observation.summary.usernameFieldCount).toBe(1)
     expect(observation.summary.passwordFieldCount).toBe(1)
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -131,11 +135,13 @@ describe('authentication field detection', () => {
     `
 
     expect(
-      summarizeAuthenticationWorkflowForms().some(
-        (observation) =>
-          observation.formScope.kind === PasswordFormScopeKind.Owned &&
-          observation.formScope.owner.id === 'passkey-login',
-      ),
+      passwordFormInteraction
+        .summarizeAuthenticationWorkflowForms()
+        .some(
+          (observation) =>
+            observation.formScope.kind === PasswordFormScopeKind.Owned &&
+            observation.formScope.owner.id === 'passkey-login',
+        ),
     ).toBe(true)
   })
 
@@ -150,9 +156,10 @@ describe('authentication field detection', () => {
       </form>
     `
 
-    const observation = summarizeAuthenticationWorkflowForms()[0]
+    const observation =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
     if (observation) {
-      const facts = authenticationPageObservationFacts({
+      const facts = passwordFormInteraction.authenticationPageObservationFacts({
         observation,
         authenticatorSetupHint: false,
         backupCodesHint: false,
@@ -160,7 +167,9 @@ describe('authentication field detection', () => {
       expect(facts.fields.usernameFieldCount).toBe(0)
       expect(facts.fields.currentPasswordFieldCount).toBe(0)
     }
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+    const fillArgs: Parameters<
+      typeof passwordFormInteraction.fillLoginCredentials
+    >[0] = {
       credentials: {
         username: 'vault-user',
         password: 'vault-pass',
@@ -168,13 +177,9 @@ describe('authentication field detection', () => {
       kind: PasswordFormQueryKind.Root,
       root: document,
     }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
-    expect(
-      (document.querySelector('#dormant-user') as HTMLInputElement).value,
-    ).toBe('')
-    expect(
-      (document.querySelector('#dormant-pass') as HTMLInputElement).value,
-    ).toBe('')
+    expect(passwordFormInteraction.fillLoginCredentials(fillArgs)).toBe(false)
+    expect(PasswordFieldTestFixture.input('#dormant-user').value).toBe('')
+    expect(PasswordFieldTestFixture.input('#dormant-pass').value).toBe('')
   })
 
   test('fills live credentials and leaves inert sibling fields untouched', () => {
@@ -190,7 +195,9 @@ describe('authentication field detection', () => {
       </form>
     `
 
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+    const fillArgs: Parameters<
+      typeof passwordFormInteraction.fillLoginCredentials
+    >[0] = {
       credentials: {
         username: 'vault-user',
         password: 'vault-pass',
@@ -198,19 +205,15 @@ describe('authentication field detection', () => {
       kind: PasswordFormQueryKind.Root,
       root: document,
     }
-    expect(fillLoginCredentials(fillArgs)).toBe(true)
-    expect(
-      (document.querySelector('#live-user') as HTMLInputElement).value,
-    ).toBe('vault-user')
-    expect(
-      (document.querySelector('#live-pass') as HTMLInputElement).value,
-    ).toBe('vault-pass')
-    expect(
-      (document.querySelector('#dormant-user') as HTMLInputElement).value,
-    ).toBe('')
-    expect(
-      (document.querySelector('#dormant-pass') as HTMLInputElement).value,
-    ).toBe('')
+    expect(passwordFormInteraction.fillLoginCredentials(fillArgs)).toBe(true)
+    expect(PasswordFieldTestFixture.input('#live-user').value).toBe(
+      'vault-user',
+    )
+    expect(PasswordFieldTestFixture.input('#live-pass').value).toBe(
+      'vault-pass',
+    )
+    expect(PasswordFieldTestFixture.input('#dormant-user').value).toBe('')
+    expect(PasswordFieldTestFixture.input('#dormant-pass').value).toBe('')
   })
 
   test.each([
@@ -226,19 +229,21 @@ describe('authentication field detection', () => {
         <input id="username" autocomplete="username" form="approved" />
         <input id="password" type="password" autocomplete="current-password" form="approved" />
       `
-      const username = document.querySelector('#username') as HTMLInputElement
-      const password = document.querySelector('#password') as HTMLInputElement
+      const username = PasswordFieldTestFixture.input('#username')
+      const password = PasswordFieldTestFixture.input('#password')
       username.addEventListener(eventName, () => {
         if (mutation === 'reassign') password.setAttribute('form', 'other')
         if (mutation === 'disassociate') password.removeAttribute('form')
         if (mutation === 'retag') password.type = 'text'
       })
-      const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      const fillArgs: Parameters<
+        typeof passwordFormInteraction.fillLoginCredentials
+      >[0] = {
         credentials: { username: 'vault-user', password: 'vault-pass' },
         kind: PasswordFormQueryKind.Root,
         root: document,
       }
-      expect(fillLoginCredentials(fillArgs)).toBe(false)
+      expect(passwordFormInteraction.fillLoginCredentials(fillArgs)).toBe(false)
       expect(password.value).toBe('')
     },
   )
@@ -251,7 +256,7 @@ describe('authentication field detection', () => {
       <button type="button" form="login">Sign in with a passkey</button>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -262,8 +267,8 @@ describe('authentication field detection', () => {
         {
           kind: 'labeled',
           observation: {
+            label: 'Sign in with a passkey',
             ownership: 'owned-form',
-            label: expect.stringContaining('passkey'),
           },
         },
       ],
@@ -276,7 +281,7 @@ describe('authentication field detection', () => {
       <button type="button">Sign in with a passkey</button>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -302,9 +307,11 @@ describe('authentication field detection', () => {
     `
 
     expect(
-      findOneTimeCodeFields(wholeDocumentOneTimeCodeFieldQuery),
+      passwordFieldDiscovery.findOneTimeCodeFields(
+        wholeDocumentOneTimeCodeFieldQuery,
+      ),
     ).toHaveLength(2)
-    expect(summarizePasswordForms()).toMatchObject({
+    expect(passwordFormInteraction.summarizePasswordForms()).toMatchObject({
       passwordFieldCount: 0,
       oneTimeCodeFieldCount: 2,
       formCount: 1,
@@ -331,12 +338,17 @@ describe('authentication field detection', () => {
       <input name="hotpot-special" type="text" placeholder="Favorite dish" />
     `
 
-    const fields = findOneTimeCodeFields(wholeDocumentOneTimeCodeFieldQuery)
+    const fields = passwordFieldDiscovery.findOneTimeCodeFields(
+      wholeDocumentOneTimeCodeFieldQuery,
+    )
     expect(fields.map((field) => field.name)).toEqual([
       'Code',
       'VerificationCode',
     ])
-    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
+        ?.summary,
+    ).toMatchObject({
       oneTimeCodeFieldCount: 1,
     })
   })
@@ -352,7 +364,7 @@ describe('authentication field detection', () => {
     const observation = observedAuthenticationWorkflow()
     expect(observation.summary.usernameFieldCount).toBe(1)
     expect(observation.summary.passwordFieldCount).toBe(1)
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -372,7 +384,7 @@ describe('authentication field detection', () => {
     const observation = observedAuthenticationWorkflow()
     expect(observation.summary.usernameFieldCount).toBe(1)
     expect(observation.summary.passwordFieldCount).toBe(1)
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -391,7 +403,8 @@ describe('authentication field detection', () => {
         <input id="unrelated-pass" type="password" autocomplete="current-password" />
       </section>
     `
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     expect(
       observations.some(
         (observation) =>
@@ -412,16 +425,16 @@ describe('authentication field detection', () => {
     if (!usernameOnly) {
       throw new Error('expected a username-only Sign in scope')
     }
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+    const fillArgs: Parameters<
+      typeof passwordFormInteraction.fillLoginCredentials
+    >[0] = {
       credentials: { username: 'vault-user', password: 'vault-pass' },
       kind: PasswordFormQueryKind.Scoped,
       root: usernameOnly.root,
       formScope: usernameOnly.formScope,
     }
-    expect(fillLoginCredentials(fillArgs)).toBe(true)
-    expect(
-      (document.querySelector('#unrelated-pass') as HTMLInputElement).value,
-    ).toBe('')
+    expect(passwordFormInteraction.fillLoginCredentials(fillArgs)).toBe(true)
+    expect(PasswordFieldTestFixture.input('#unrelated-pass').value).toBe('')
   })
 
   test('does not treat a generic type-button as a form-less auth container', () => {
@@ -433,11 +446,13 @@ describe('authentication field detection', () => {
       </section>
     `
     expect(
-      summarizeAuthenticationWorkflowForms().some(
-        (observation) =>
-          observation.summary.usernameFieldCount === 1 &&
-          observation.summary.passwordFieldCount === 1,
-      ),
+      passwordFormInteraction
+        .summarizeAuthenticationWorkflowForms()
+        .some(
+          (observation) =>
+            observation.summary.usernameFieldCount === 1 &&
+            observation.summary.passwordFieldCount === 1,
+        ),
     ).toBe(false)
   })
 
@@ -451,7 +466,9 @@ describe('authentication field detection', () => {
         </section>
       </dialog>
     `
-    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
+    ).toEqual([])
     document.querySelector('dialog')?.setAttribute('open', '')
     const observation = observedAuthenticationWorkflow()
     expect(observation.summary.usernameFieldCount).toBe(1)

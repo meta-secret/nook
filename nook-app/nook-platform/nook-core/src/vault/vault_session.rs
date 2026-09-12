@@ -6,6 +6,7 @@
 )]
 
 use crate::AgeArmoredCiphertext;
+use crate::RecordTypeDeclaration;
 
 use crate::errors::{SessionError, VaultResult};
 use crate::{
@@ -186,7 +187,7 @@ impl VaultUserRecordBatch {
     pub fn replace(self, state: &mut VaultMetaState) {
         state.secrets.clear();
         for record in self.records {
-            if let Some(secret_type) = record.secret_type {
+            if let RecordTypeDeclaration::Secret(secret_type) = record.secret_type {
                 state
                     .secrets
                     .insert(record.key, (secret_type, record.value));
@@ -246,7 +247,7 @@ mod tests {
         let new_id = SecretId::from_vault_record("secret_new0000001");
         let user_records = vec![StoredSecretRecord {
             key: new_id.clone(),
-            secret_type: Some(SecretType::ApiKey),
+            secret_type: RecordTypeDeclaration::Secret(SecretType::ApiKey),
             value: StoredRecordPayload::from_age_armored(ciphertext),
         }];
 
@@ -327,8 +328,12 @@ mod tests {
 
         assert_eq!(usize::from(page.total), 3);
         assert_eq!(page.records.len(), 1);
-        assert_eq!(page.records[0].id.as_str(), "secret_b");
-        assert_eq!(page.records[0].summary(), "bob");
+        let record = page
+            .records
+            .first()
+            .unwrap_or_else(|| panic!("search page must contain one record"));
+        assert_eq!(record.id.as_str(), "secret_b");
+        assert_eq!(record.summary(), "bob");
         Ok(())
     }
 
@@ -352,7 +357,10 @@ mod tests {
 
         assert_eq!(usize::from(page.total), 2);
         assert_eq!(page.records.len(), 1);
-        assert_eq!(page.records[0].id.as_str(), "secret_c");
+        assert_eq!(
+            page.records.first().map(|record| record.id.as_str()),
+            Some("secret_c")
+        );
         Ok(())
     }
 
@@ -376,8 +384,12 @@ mod tests {
 
         assert_eq!(usize::from(page.total), 2);
         assert_eq!(page.records.len(), 1);
-        assert_eq!(page.records[0].id.as_str(), "secret_c");
-        assert_eq!(page.records[0].secret_type(), SecretType::SecureNote);
+        let record = page
+            .records
+            .first()
+            .unwrap_or_else(|| panic!("search page must contain one record"));
+        assert_eq!(record.id.as_str(), "secret_c");
+        assert_eq!(record.secret_type(), SecretType::SecureNote);
         Ok(())
     }
 
@@ -399,7 +411,10 @@ mod tests {
         )?;
 
         assert_eq!(usize::from(page.total), 1);
-        assert_eq!(page.records[0].id.as_str(), "secret_b");
+        assert_eq!(
+            page.records.first().map(|record| record.id.as_str()),
+            Some("secret_b")
+        );
         Ok(())
     }
 
@@ -422,7 +437,10 @@ mod tests {
         )?;
         let debug = format!("{:?}", page.records);
 
-        assert_eq!(page.records[0].summary(), "alice");
+        assert_eq!(
+            page.records.first().map(SecretListItem::summary).as_deref(),
+            Some("alice")
+        );
         assert!(!debug.contains("credential-must-not-cross-page-boundary"));
         Ok(())
     }

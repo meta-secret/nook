@@ -3,24 +3,31 @@ export enum ColorMode {
   Dark = "dark",
 }
 
-export function systemColorMode(): ColorMode {
-  return "window" in globalThis &&
-    window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? ColorMode.Dark
-    : ColorMode.Light;
-}
-
 type ManualColorModeSelection = {
   readonly current: ColorMode;
   readonly storageKey: string;
 };
 
-export function manualColorMode({
-  current,
-  storageKey,
-}: ManualColorModeSelection): ColorMode {
-  const selected =
-    current === ColorMode.Dark ? ColorMode.Light : ColorMode.Dark;
-  localStorage.setItem(storageKey, selected);
-  return selected;
+/** Owns this browser host’s resources and interaction lifecycle. */
+class BrowserColorMode {
+  constructor(private readonly browser: typeof globalThis) {}
+
+  systemColorMode(): ColorMode {
+    return "window" in this.browser &&
+      this.browser.window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? ColorMode.Dark
+      : ColorMode.Light;
+  }
+
+  manualColorMode({
+    current,
+    storageKey,
+  }: ManualColorModeSelection): ColorMode {
+    const selected =
+      current === ColorMode.Dark ? ColorMode.Light : ColorMode.Dark;
+    this.browser.localStorage.setItem(storageKey, selected);
+    return selected;
+  }
 }
+
+export const browserColorMode = new BrowserColorMode(globalThis);

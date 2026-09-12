@@ -1,9 +1,15 @@
 <script lang="ts">
+  import { LocaleCatalogSource } from '$lib/vault/locale'
+  import type { DeviceMutationResult } from '$lib/vault/multi-device'
   type DeviceRename = { readonly authId: string; readonly label: string }
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Laptop, Globe, Trash2, TriangleAlert } from '@lucide/svelte'
-  import type { NookAppLocale } from '$app-wasm'
+  import {
+    parse_app_locale,
+    supported_app_locale_code,
+    NookAppLocaleParse,
+  } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import SettingsAccordionPanel from '$lib/components/settings/SettingsAccordionSection.svelte'
   import VaultDevicesCard from '$lib/components/settings/VaultDevicesCard.svelte'
@@ -38,8 +44,8 @@
     hasPasswordEnvelope?: boolean
     onApproveJoin: (deviceId: string) => void | Promise<void>
     onDenyJoin: (deviceId: string) => void | Promise<void>
-    onRenameDevice: (args: DeviceRename) => void | Promise<void>
-    onRevokeDevice: (authId: string) => void | Promise<void>
+    onRenameDevice: (args: DeviceRename) => Promise<DeviceMutationResult>
+    onRevokeDevice: (authId: string) => Promise<DeviceMutationResult>
     accordionSection?: SettingsAccordionSection
   } = $props()
 
@@ -69,9 +75,15 @@
         <Laptop class="size-3" />
         {vaultMembers.length === 1
           ? vault.t(I18N_KEYS.SettingsDeviceCountSingular)
-          : (() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.SettingsDeviceCountPlural, replacements: {
-              count: String(vaultMembers.length),
-            } }; return vault.t(tArgs); })()}
+          : (() => {
+              const tArgs: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.SettingsDeviceCountPlural,
+                replacements: {
+                  count: String(vaultMembers.length),
+                },
+              }
+              return vault.t(tArgs)
+            })()}
       </span>
     {/snippet}
     <VaultDevicesCard
@@ -116,11 +128,18 @@
         class="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:ring-1 focus:ring-primary"
         value={vault.locale}
         onchange={(e) => {
+          const parsed = parse_app_locale(e.currentTarget.value)
+          if (parsed === NookAppLocaleParse.Unsupported) return
           const localeRequest: Parameters<typeof vault.updateLocale>[0] = {
-            newLocale: e.currentTarget.value as NookAppLocale,
-            preferWasm: vault.hasManager,
+            newLocale: supported_app_locale_code(parsed),
+            catalogSource: vault.hasManager
+              ? LocaleCatalogSource.Engine
+              : LocaleCatalogSource.Bundled,
           }
-          void vault.updateLocale(localeRequest)
+          void vault.updateLocale(localeRequest).then((updated) => {
+            if (updated.isErr())
+              vault.errorMsg = vault.t(updated.error.translationKey)
+          })
         }}
       >
         <option value="en">English</option>

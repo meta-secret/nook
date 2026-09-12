@@ -184,7 +184,7 @@ pub(super) mod tests {
 
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
-        let SecretValue::Authenticator(item) = &plan.items[0] else {
+        let Some(SecretValue::Authenticator(item)) = plan.items.first() else {
             panic!("expected authenticator");
         };
         assert_eq!(item.issuer, "Example");
@@ -256,7 +256,7 @@ pub(super) mod tests {
 
         assert_eq!(usize::from(plan.source_count), 2);
         assert_eq!(plan.items.len(), 2);
-        let SecretValue::Authenticator(first) = &plan.items[0] else {
+        let Some(SecretValue::Authenticator(first)) = plan.items.first() else {
             panic!("expected authenticator");
         };
         assert_eq!(first.issuer, "First");

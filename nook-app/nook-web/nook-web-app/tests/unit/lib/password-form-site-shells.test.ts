@@ -7,14 +7,11 @@ import {
   companion_authentication_workflow_match_kind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  authenticationPageObservationFacts,
-  fillLoginCredentials,
   FormSubmissionResult,
   PasswordFormQueryKind,
-  submitLoginForm,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { localOwnedLoginObservationRoot } from '../../../../nook-web-shared/src/extension/password-form-fields'
+import { passwordFieldDiscovery } from '../../../../nook-web-shared/src/extension/password-form-fields'
 
 afterEach(() => {
   document.body.replaceChildren()
@@ -25,7 +22,8 @@ describe('popular-site login shells', () => {
     document.body.innerHTML = `<form id="aspnetForm" method="post"><header><input name="LoginUserName" title="Your username" autocomplete="on" hidden /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" hidden /><input name="search" type="search" value="account help" /><button type="submit">Search</button></header><div class="gb-scope loginBox nc_login"><div class="gb-panel"><div class="gb-panel__body"><fieldset class="loginForm"><input name="LoginUserName" title="Your username" autocomplete="on" class="gb-form-control nc_username nc_username_required" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" class="nc_password nc_password_required handlereturn gb-form-control" /><input id="login-submit" type="submit" value="Sign in" class="nc_login_submit" /></fieldset></div></div></div>
       <footer><input name="newsletter-email" type="email" value="reader@example.test" /><button type="button">Use a passkey</button><button type="submit">Subscribe</button></footer></form>`
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(1)
     const [observation] = observations
     if (!observation) throw new Error('expected local login observation')
@@ -37,7 +35,7 @@ describe('popular-site login shells', () => {
       passwordFieldCount: 1,
     })
 
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
     })
@@ -54,7 +52,9 @@ describe('popular-site login shells', () => {
     if (!('snapshot' in match)) throw new Error('expected matched workflow')
     expect(match.snapshot.kind).toBe(AuthenticationWorkflowKind.Login)
 
-    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+    const loginFillArgs: Parameters<
+      typeof passwordFormInteraction.fillLoginCredentials
+    >[0] = {
       credentials: {
         username: 'pilot@nook.test',
         password: 'extension-fill-password',
@@ -62,7 +62,9 @@ describe('popular-site login shells', () => {
       kind: PasswordFormQueryKind.Scoped,
       ...observation,
     }
-    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
+    expect(passwordFormInteraction.fillLoginCredentials(loginFillArgs)).toBe(
+      true,
+    )
     expect(
       document.querySelector<HTMLInputElement>(
         '.loginForm [name="LoginUserName"]',
@@ -94,7 +96,9 @@ describe('popular-site login shells', () => {
     document.body.innerHTML = `<form><main class="login-panel"><input name="LoginUserName" title="Your username" autocomplete="on" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" /></main>
       <aside><input autocomplete="one-time-code" /></aside></form>`
 
-    expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(document)
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]?.root,
+    ).toBe(document)
   })
 
   test.each([
@@ -109,13 +113,17 @@ describe('popular-site login shells', () => {
   ])('keeps a page-wide owner with an extra rendered $kind', ({ extra }) => {
     document.body.innerHTML = `<form><fieldset class="loginForm"><input name="LoginUserName" title="Your username" autocomplete="on" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" /></fieldset>${extra}</form>`
 
-    expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(document)
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]?.root,
+    ).toBe(document)
   })
 
   test('keeps an explicit new-password surface at document scope', () => {
     document.body.innerHTML = `<form><fieldset class="loginForm"><input autocomplete="username" /><input type="password" autocomplete="new-password" /></fieldset></form>`
 
-    expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(document)
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]?.root,
+    ).toBe(document)
   })
 
   test('rejects a document-shell root for associated login fields', () => {
@@ -123,7 +131,9 @@ describe('popular-site login shells', () => {
       <input form="aspnetForm" autocomplete="username" />
       <input form="aspnetForm" type="password" autocomplete="current-password" />`
 
-    expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(document)
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]?.root,
+    ).toBe(document)
   })
 
   test('does not treat substring identity as a bounded login surface', () => {
@@ -131,14 +141,19 @@ describe('popular-site login shells', () => {
       <section><input autocomplete="username" /></section><aside><input type="password" autocomplete="current-password" /></aside>
       <button type="submit">Reset filters</button></main></form>`
 
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected generic shell observation')
     expect(observation.root).toBe(document)
-    const request: Parameters<typeof submitLoginForm>[0] = {
+    const request: Parameters<
+      typeof passwordFormInteraction.submitLoginForm
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       ...observation,
     }
-    expect(submitLoginForm(request)).toBe(FormSubmissionResult.NotObserved)
+    expect(passwordFormInteraction.submitLoginForm(request)).toBe(
+      FormSubmissionResult.NotObserved,
+    )
   })
 
   test.each([
@@ -150,14 +165,19 @@ describe('popular-site login shells', () => {
       document.body.innerHTML = `<form>${open}<section><input autocomplete="username" /></section>
       <aside><input type="password" autocomplete="current-password" /></aside>
       <button id="delete-account" type="submit">Continue</button>${close}</form>`
-      const [observation] = summarizeAuthenticationWorkflowForms()
+      const [observation] =
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms()
       if (!observation) throw new Error('expected generic semantic observation')
       expect(observation.root).toBe(document)
-      const request: Parameters<typeof submitLoginForm>[0] = {
+      const request: Parameters<
+        typeof passwordFormInteraction.submitLoginForm
+      >[0] = {
         kind: PasswordFormQueryKind.Scoped,
         ...observation,
       }
-      expect(submitLoginForm(request)).toBe(FormSubmissionResult.NotObserved)
+      expect(passwordFormInteraction.submitLoginForm(request)).toBe(
+        FormSubmissionResult.NotObserved,
+      )
     },
   )
 
@@ -179,9 +199,9 @@ describe('popular-site login shells', () => {
       <aside><input type="password" autocomplete="current-password" /></aside>
       <button type="submit">Sign in</button>${close}</form>`
 
-      expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(
-        document.querySelector('.login-dialog, .sign-in-panel'),
-      )
+      expect(
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]?.root,
+      ).toBe(document.querySelector('.login-dialog, .sign-in-panel'))
     },
   )
 
@@ -193,7 +213,9 @@ describe('popular-site login shells', () => {
     ).join('')
     const owner = document.querySelector<HTMLFormElement>('#owner-100')
     if (!owner) throw new Error('expected indexed owner fixture')
-    const request: Parameters<typeof localOwnedLoginObservationRoot>[0] = {
+    const request: Parameters<
+      typeof passwordFieldDiscovery.localOwnedLoginObservationRoot
+    >[0] = {
       owner,
       passwordFields: [
         ...document.querySelectorAll<HTMLInputElement>(
@@ -208,7 +230,7 @@ describe('popular-site login shells', () => {
       oneTimeCodeFields: [],
     }
 
-    expect(localOwnedLoginObservationRoot(request)).toBe(
+    expect(passwordFieldDiscovery.localOwnedLoginObservationRoot(request)).toBe(
       owner.querySelector('.login-panel'),
     )
   })
@@ -229,14 +251,19 @@ describe('popular-site login shells', () => {
     header.addEventListener('click', (event) => activations.push(event))
     footer.addEventListener('click', (event) => activations.push(event))
 
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected bounded login observation')
     expect(observation.root).toBe(document.querySelector('.login-panel'))
-    const request: Parameters<typeof submitLoginForm>[0] = {
+    const request: Parameters<
+      typeof passwordFormInteraction.submitLoginForm
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       ...observation,
     }
-    expect(submitLoginForm(request)).toBe(FormSubmissionResult.NotObserved)
+    expect(passwordFormInteraction.submitLoginForm(request)).toBe(
+      FormSubmissionResult.NotObserved,
+    )
     expect(activations).toEqual([])
   })
 
@@ -245,11 +272,12 @@ describe('popular-site login shells', () => {
       <main class="login-panel"><input name="username" autocomplete="username" /><input name="password" type="password" autocomplete="current-password" /><button type="submit">Sign in</button></main></form>
       <aside><label><input form="aspnetForm" type="checkbox" name="terms" /> I agree to the terms</label></aside>`
 
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected checkpoint observation')
     expect(observation.root).toBe(document)
     expect(observation.summary.manualCheckpointPresent).toBe(true)
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
     })
@@ -269,7 +297,9 @@ describe('popular-site login shells', () => {
       <form method="post"><input type="email" name="newsletter-email" /><button>Submit</button></form>
     `
 
-    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
+    ).toEqual([])
   })
 
   test('detects Microsoft-like email-first login without autocomplete=username', () => {
@@ -286,18 +316,23 @@ describe('popular-site login shells', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(1)
     expect(observations[0]?.summary).toMatchObject({
       usernameFieldCount: 1,
       passwordFieldCount: 0,
     })
-    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+    const loginFillArgs: Parameters<
+      typeof passwordFormInteraction.fillLoginCredentials
+    >[0] = {
       credentials: { username: 'user@contoso.com', password: '' },
       kind: PasswordFormQueryKind.Root,
       root: document,
     }
-    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
+    expect(passwordFormInteraction.fillLoginCredentials(loginFillArgs)).toBe(
+      true,
+    )
     expect(
       document.querySelector<HTMLInputElement>('[name="loginfmt"]')?.value,
     ).toBe('user@contoso.com')
@@ -316,7 +351,8 @@ describe('popular-site login shells', () => {
       </div>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(1)
     expect(observations[0]?.summary).toMatchObject({
       usernameFieldCount: 1,
@@ -346,14 +382,17 @@ describe('popular-site login shells', () => {
       </div>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(1)
     expect(observations[0]?.summary).toMatchObject({
       usernameFieldCount: 1,
       passwordFieldCount: 1,
       currentPasswordFieldCount: 1,
     })
-    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+    const loginFillArgs: Parameters<
+      typeof passwordFormInteraction.fillLoginCredentials
+    >[0] = {
       credentials: {
         username: 'pilot@nook.test',
         password: 'extension-fill-password',
@@ -361,7 +400,9 @@ describe('popular-site login shells', () => {
       kind: PasswordFormQueryKind.Root,
       root: document,
     }
-    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
+    expect(passwordFormInteraction.fillLoginCredentials(loginFillArgs)).toBe(
+      true,
+    )
     expect(document.querySelector<HTMLInputElement>('#email')?.value).toBe(
       'pilot@nook.test',
     )
@@ -389,7 +430,9 @@ describe('popular-site login shells', () => {
       </form>
     `
 
-    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
+    ).toEqual([])
   })
 
   test('detects Tier-1 popular-site login shells', () => {
@@ -462,7 +505,8 @@ describe('popular-site login shells', () => {
 
     for (const shell of shells) {
       document.body.innerHTML = shell.html
-      const observations = summarizeAuthenticationWorkflowForms()
+      const observations =
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms()
       expect(observations).toHaveLength(1)
       expect(observations[0]?.summary).toMatchObject({
         usernameFieldCount: shell.username,

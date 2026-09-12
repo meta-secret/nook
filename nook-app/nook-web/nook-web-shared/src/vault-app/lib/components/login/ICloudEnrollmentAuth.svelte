@@ -1,24 +1,32 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { prepareICloudSignInControl } from "$lib/auth/icloud/oauth";
-  import type { VaultState } from "$lib/vault.svelte";
+  import { iCloudOAuthSession } from '$lib/auth/icloud/oauth'
+  import type { VaultState } from '$lib/vault.svelte'
 
-  let { vault }: { vault: VaultState } = $props();
+  let { vault }: { vault: VaultState } = $props()
 
-  let open = $state(false);
-  let prepareStarted = $state(false);
-  let prepareError = $state("");
+  let open = $state(false)
+  let prepareStarted = $state(false)
+  let prepareError = $state('')
 
   $effect(() => {
-    if (!open || prepareStarted) return;
-    prepareStarted = true;
-    void prepareICloudSignInControl().catch((error) => {
-      prepareError =
-        error instanceof Error
-          ? vault.t(error.message)
-          : vault.t(I18N_KEYS.ProviderSetupIcloudSharedSignInFirst);
-    });
-  });
+    if (!open || prepareStarted) return
+    prepareStarted = true
+    prepareError = ''
+    void iCloudOAuthSession
+      .prepareICloudSignInControl()
+      .then((prepared) => {
+        if (prepared.isErr()) {
+          prepareError = vault.t(prepared.error.translationKey)
+        }
+      })
+      .catch((error) => {
+        prepareError =
+          error instanceof Error
+            ? vault.t(error.message)
+            : vault.t(I18N_KEYS.ProviderSetupIcloudSharedSignInFirst)
+      })
+  })
 </script>
 
 <div
@@ -31,7 +39,11 @@
     aria-expanded={open}
     data-testid="enrollment-icloud-auth-toggle"
     onclick={() => {
-      open = !open;
+      open = !open
+      if (!open && prepareError) {
+        prepareStarted = false
+        prepareError = ''
+      }
     }}
   >
     {vault.t(I18N_KEYS.LoginIcloudSharedEnrollmentToggle)}

@@ -30,180 +30,12 @@ type CloudKitRedirectDetails =
       pathname: string;
     };
 
-function stringValue(value: unknown): CloudKitDiagnosticString {
-  if (typeof value !== "string" && typeof value !== "number") {
-    return { kind: CloudKitDiagnosticValueKind.Unavailable };
-  }
-  const text = String(value).trim();
-  return text
-    ? { kind: CloudKitDiagnosticValueKind.Available, value: text }
-    : { kind: CloudKitDiagnosticValueKind.Unavailable };
-}
-
-function numericStatus(value: unknown): CloudKitDiagnosticNumber {
-  const text = stringValue(value);
-  if (text.kind === CloudKitDiagnosticValueKind.Unavailable) {
-    return { kind: CloudKitDiagnosticValueKind.Unavailable };
-  }
-  const status = Number(text.value);
-  return Number.isInteger(status)
-    ? { kind: CloudKitDiagnosticValueKind.Available, value: status }
-    : { kind: CloudKitDiagnosticValueKind.Unavailable };
-}
-
-function cloudKitRedirectDetails(
-  redirectURL: CloudKitDiagnosticString,
-): CloudKitRedirectDetails {
-  if (redirectURL.kind === CloudKitDiagnosticValueKind.Unavailable) {
-    return { kind: CloudKitRedirectDetailsKind.Unavailable };
-  }
-  try {
-    const parsed = new URL(redirectURL.value);
-    return {
-      kind: CloudKitRedirectDetailsKind.Parsed,
-      origin: parsed.origin,
-      pathname: parsed.pathname,
-    };
-  } catch {
-    return { kind: CloudKitRedirectDetailsKind.Unavailable };
-  }
-}
-
 type CloudKitDiagnosticStrings = CloudKitDiagnosticString[];
-
-function firstDiagnosticString(
-  values: CloudKitDiagnosticStrings,
-): CloudKitDiagnosticString {
-  return ((v) => (v ? v : { kind: CloudKitDiagnosticValueKind.Unavailable }))(
-    values.find(
-      (value) => value.kind === CloudKitDiagnosticValueKind.Available,
-    ),
-  );
-}
-
-export function cloudKitAuthErrorDetails(
-  error: unknown,
-): CloudKitAuthErrorDetails {
-  if (error instanceof Error) {
-    const code: CloudKitDiagnosticString =
-      error.name && error.name !== "Error"
-        ? {
-            kind: CloudKitDiagnosticValueKind.Available,
-            value: error.name,
-          }
-        : { kind: CloudKitDiagnosticValueKind.Unavailable };
-    const message = stringValue(error.message);
-    return {
-      ...(code.kind === CloudKitDiagnosticValueKind.Available
-        ? { code: code.value }
-        : {}),
-      ...(message.kind === CloudKitDiagnosticValueKind.Available
-        ? { message: message.value }
-        : {}),
-    };
-  }
-  if (error && typeof error === "object") {
-    const authError = error as CloudKitAuthError;
-    const redirectURL = stringValue(authError.redirectURL);
-    const redirect = cloudKitRedirectDetails(redirectURL);
-    const code = firstDiagnosticString([
-      stringValue(authError.code),
-      stringValue(authError.errorCode),
-      stringValue(authError.serverErrorCode),
-      stringValue(authError.name),
-    ]);
-    const message = stringValue(authError.message);
-    const reason = firstDiagnosticString([
-      stringValue(authError.reason),
-      stringValue(authError._reason),
-    ]);
-    const statusCandidates = [
-      numericStatus(authError.status),
-      numericStatus(authError.statusCode),
-    ];
-    const status: CloudKitDiagnosticNumber = ((v) =>
-      v ? v : { kind: CloudKitDiagnosticValueKind.Unavailable })(
-      statusCandidates.find(
-        (value) => value.kind === CloudKitDiagnosticValueKind.Available,
-      ),
-    );
-    const statusText = stringValue(authError.statusText);
-    const uuid = stringValue(authError.uuid);
-    return {
-      ...(code.kind === CloudKitDiagnosticValueKind.Available
-        ? { code: code.value }
-        : {}),
-      ...(message.kind === CloudKitDiagnosticValueKind.Available
-        ? { message: message.value }
-        : {}),
-      redirectURLPresent:
-        redirectURL.kind === CloudKitDiagnosticValueKind.Available,
-      ...(redirect.kind === CloudKitRedirectDetailsKind.Parsed
-        ? {
-            redirectURLOrigin: redirect.origin,
-            redirectURLPathname: redirect.pathname,
-          }
-        : {}),
-      ...(reason.kind === CloudKitDiagnosticValueKind.Available
-        ? { reason: reason.value }
-        : {}),
-      ...(status.kind === CloudKitDiagnosticValueKind.Available
-        ? { status: status.value }
-        : {}),
-      ...(statusText.kind === CloudKitDiagnosticValueKind.Available
-        ? { statusText: statusText.value }
-        : {}),
-      uuidPresent: uuid.kind === CloudKitDiagnosticValueKind.Available,
-    };
-  }
-  return {};
-}
-
-type ErrorTokenSearch = {
-  readonly details: CloudKitAuthErrorDetails;
-  readonly predicate: (value: string) => boolean;
-};
-
-function hasErrorToken({ details, predicate }: ErrorTokenSearch): boolean {
-  return [details.code, details.message, details.reason, details.statusText]
-    .filter((value): value is string => Boolean(value))
-    .some((value) => predicate(value.toUpperCase()));
-}
-
-function isAuthRequiredCloudKitError(
-  details: CloudKitAuthErrorDetails,
-): boolean {
-  if (details.status === 421) return true;
-  const hasErrorTokenArgs: Parameters<typeof hasErrorToken>[0] = {
-    details,
-    predicate: (value) =>
-      [
-        "AUTHENTICATION_REQUIRED",
-        "REQUEST NEEDS AUTHORIZATION",
-        "NEEDS AUTHORIZATION",
-      ].some((token) => value.includes(token)),
-  };
-  return hasErrorToken(hasErrorTokenArgs);
-}
 
 type ExpectedCloudKitSignInFailureCheck = {
   readonly error: unknown;
   readonly hasSignInControl: boolean;
 };
-
-export function isExpectedCloudKitSignInSetupFailure({
-  error,
-  hasSignInControl,
-}: ExpectedCloudKitSignInFailureCheck): boolean {
-  const details = cloudKitAuthErrorDetails(error);
-  if (isAuthRequiredCloudKitError(details)) return hasSignInControl;
-  const hasErrorTokenArgs2: Parameters<typeof hasErrorToken>[0] = {
-    details,
-    predicate: (value) => value.includes("UNKNOWN_ERROR"),
-  };
-  const isOpaqueUnknown = hasErrorToken(hasErrorTokenArgs2);
-  return isOpaqueUnknown && hasSignInControl;
-}
 
 export const CloudKitAuthErrorTranslationKey = {
   SignInRequired: I18N_KEYS.ProviderSetupIcloudSignInRequired,
@@ -214,44 +46,212 @@ export const CloudKitAuthErrorTranslationKey = {
 export type CloudKitAuthErrorTranslationKey =
   (typeof CloudKitAuthErrorTranslationKey)[keyof typeof CloudKitAuthErrorTranslationKey];
 
-export function cloudKitAuthErrorTranslationKey(
-  error: unknown,
-): CloudKitAuthErrorTranslationKey {
-  const details = cloudKitAuthErrorDetails(error);
-  if (isAuthRequiredCloudKitError(details)) {
-    return CloudKitAuthErrorTranslationKey.SignInRequired;
+enum CloudKitAuthenticationRequirement {
+  Required = "required",
+  Other = "other",
+}
+
+enum CloudKitFailureToken {
+  AuthenticationRequired = "AUTHENTICATION_REQUIRED",
+  RequestNeedsAuthorization = "REQUEST NEEDS AUTHORIZATION",
+  NeedsAuthorization = "NEEDS AUTHORIZATION",
+  UnknownError = "UNKNOWN_ERROR",
+  AuthenticationFailed = "AUTHENTICATION_FAILED",
+  MisdirectedStatus = "421",
+  Misdirected = "MISDIRECTED",
+}
+
+enum CloudKitSignInFailureExpectation {
+  Expected = "expected",
+  Unexpected = "unexpected",
+}
+
+export class CloudKitFailureDiagnostic {
+  readonly details: CloudKitAuthErrorDetails;
+
+  constructor(error: unknown) {
+    this.details = this.decodeDetails(error);
   }
-  const isMisdirectedRequest =
-    details.status === 421 ||
-    (() => {
-      const hasErrorTokenArgs3: Parameters<typeof hasErrorToken>[0] = {
-        details,
-        predicate: (value) =>
-          value.includes("421") || value.includes("MISDIRECTED"),
+
+  private decodeDetails(error: unknown): CloudKitAuthErrorDetails {
+    if (error instanceof Error) {
+      const code: CloudKitDiagnosticString =
+        error.name && error.name !== "Error"
+          ? {
+              kind: CloudKitDiagnosticValueKind.Available,
+              value: error.name,
+            }
+          : { kind: CloudKitDiagnosticValueKind.Unavailable };
+      const message = this.stringValue(error.message);
+      return {
+        ...(code.kind === CloudKitDiagnosticValueKind.Available
+          ? { code: code.value }
+          : {}),
+        ...(message.kind === CloudKitDiagnosticValueKind.Available
+          ? { message: message.value }
+          : {}),
       };
-      return hasErrorToken(hasErrorTokenArgs3);
-    })();
-  if (isMisdirectedRequest) {
-    return CloudKitAuthErrorTranslationKey.SignInRequired;
+    }
+    if (error && typeof error === "object") {
+      const authError = error as CloudKitAuthError;
+      const redirectURL = this.stringValue(authError.redirectURL);
+      const redirect = this.cloudKitRedirectDetails(redirectURL);
+      const code = this.firstDiagnosticString([
+        this.stringValue(authError.code),
+        this.stringValue(authError.errorCode),
+        this.stringValue(authError.serverErrorCode),
+        this.stringValue(authError.name),
+      ]);
+      const message = this.stringValue(authError.message);
+      const reason = this.firstDiagnosticString([
+        this.stringValue(authError.reason),
+        this.stringValue(authError._reason),
+      ]);
+      const statusCandidates = [
+        this.numericStatus(authError.status),
+        this.numericStatus(authError.statusCode),
+      ];
+      const status: CloudKitDiagnosticNumber = ((v) =>
+        v ? v : { kind: CloudKitDiagnosticValueKind.Unavailable })(
+        statusCandidates.find(
+          (value) => value.kind === CloudKitDiagnosticValueKind.Available,
+        ),
+      );
+      const statusText = this.stringValue(authError.statusText);
+      const uuid = this.stringValue(authError.uuid);
+      return {
+        ...(code.kind === CloudKitDiagnosticValueKind.Available
+          ? { code: code.value }
+          : {}),
+        ...(message.kind === CloudKitDiagnosticValueKind.Available
+          ? { message: message.value }
+          : {}),
+        redirectURLPresent:
+          redirectURL.kind === CloudKitDiagnosticValueKind.Available,
+        ...(redirect.kind === CloudKitRedirectDetailsKind.Parsed
+          ? {
+              redirectURLOrigin: redirect.origin,
+              redirectURLPathname: redirect.pathname,
+            }
+          : {}),
+        ...(reason.kind === CloudKitDiagnosticValueKind.Available
+          ? { reason: reason.value }
+          : {}),
+        ...(status.kind === CloudKitDiagnosticValueKind.Available
+          ? { status: status.value }
+          : {}),
+        ...(statusText.kind === CloudKitDiagnosticValueKind.Available
+          ? { statusText: statusText.value }
+          : {}),
+        uuidPresent: uuid.kind === CloudKitDiagnosticValueKind.Available,
+      };
+    }
+    return {};
   }
-  // AUTHENTICATION_FAILED means a bad API token or a disallowed browser Origin.
-  if (
-    (() => {
-      const hasErrorTokenArgs4: Parameters<typeof hasErrorToken>[0] = {
-        details,
-        predicate: (value) => value.includes("AUTHENTICATION_FAILED"),
-      };
-      return hasErrorToken(hasErrorTokenArgs4);
-    })() ||
-    (() => {
-      const hasErrorTokenArgs5: Parameters<typeof hasErrorToken>[0] = {
-        details,
-        predicate: (value) => value.includes("UNKNOWN_ERROR"),
-      };
-      return hasErrorToken(hasErrorTokenArgs5);
-    })()
-  ) {
-    return CloudKitAuthErrorTranslationKey.UnknownError;
+  private stringValue(value: unknown): CloudKitDiagnosticString {
+    if (typeof value !== "string" && typeof value !== "number") {
+      return { kind: CloudKitDiagnosticValueKind.Unavailable };
+    }
+    const text = String(value).trim();
+    return text
+      ? { kind: CloudKitDiagnosticValueKind.Available, value: text }
+      : { kind: CloudKitDiagnosticValueKind.Unavailable };
   }
-  return CloudKitAuthErrorTranslationKey.SignInFailed;
+  private numericStatus(value: unknown): CloudKitDiagnosticNumber {
+    const text = this.stringValue(value);
+    if (text.kind === CloudKitDiagnosticValueKind.Unavailable) {
+      return { kind: CloudKitDiagnosticValueKind.Unavailable };
+    }
+    const status = Number(text.value);
+    return Number.isInteger(status)
+      ? { kind: CloudKitDiagnosticValueKind.Available, value: status }
+      : { kind: CloudKitDiagnosticValueKind.Unavailable };
+  }
+  private cloudKitRedirectDetails(
+    redirectURL: CloudKitDiagnosticString,
+  ): CloudKitRedirectDetails {
+    if (redirectURL.kind === CloudKitDiagnosticValueKind.Unavailable) {
+      return { kind: CloudKitRedirectDetailsKind.Unavailable };
+    }
+    try {
+      const parsed = new URL(redirectURL.value);
+      return {
+        kind: CloudKitRedirectDetailsKind.Parsed,
+        origin: parsed.origin,
+        pathname: parsed.pathname,
+      };
+    } catch {
+      return { kind: CloudKitRedirectDetailsKind.Unavailable };
+    }
+  }
+  private firstDiagnosticString(
+    values: CloudKitDiagnosticStrings,
+  ): CloudKitDiagnosticString {
+    return ((v) => (v ? v : { kind: CloudKitDiagnosticValueKind.Unavailable }))(
+      values.find(
+        (value) => value.kind === CloudKitDiagnosticValueKind.Available,
+      ),
+    );
+  }
+  private containsToken(token: CloudKitFailureToken): boolean {
+    const { code, message, reason, statusText } = this.details;
+    return [code, message, reason, statusText].some(
+      (value) =>
+        typeof value === "string" && value.toUpperCase().includes(token),
+    );
+  }
+
+  private authenticationRequirement(): CloudKitAuthenticationRequirement {
+    if (
+      this.details.status === 421 ||
+      this.containsToken(CloudKitFailureToken.AuthenticationRequired) ||
+      this.containsToken(CloudKitFailureToken.RequestNeedsAuthorization) ||
+      this.containsToken(CloudKitFailureToken.NeedsAuthorization)
+    )
+      return CloudKitAuthenticationRequirement.Required;
+    return CloudKitAuthenticationRequirement.Other;
+  }
+
+  signInFailureExpectation(): CloudKitSignInFailureExpectation {
+    return this.authenticationRequirement() ===
+      CloudKitAuthenticationRequirement.Required ||
+      this.containsToken(CloudKitFailureToken.UnknownError)
+      ? CloudKitSignInFailureExpectation.Expected
+      : CloudKitSignInFailureExpectation.Unexpected;
+  }
+
+  translationKey(): CloudKitAuthErrorTranslationKey {
+    if (
+      this.authenticationRequirement() ===
+        CloudKitAuthenticationRequirement.Required ||
+      this.containsToken(CloudKitFailureToken.MisdirectedStatus) ||
+      this.containsToken(CloudKitFailureToken.Misdirected)
+    )
+      return CloudKitAuthErrorTranslationKey.SignInRequired;
+    // AUTHENTICATION_FAILED means a bad API token or a disallowed browser Origin.
+    if (
+      this.containsToken(CloudKitFailureToken.AuthenticationFailed) ||
+      this.containsToken(CloudKitFailureToken.UnknownError)
+    )
+      return CloudKitAuthErrorTranslationKey.UnknownError;
+    return CloudKitAuthErrorTranslationKey.SignInFailed;
+  }
+}
+
+export class CloudKitSetupFailure {
+  constructor(private readonly request: ExpectedCloudKitSignInFailureCheck) {}
+  get expected(): boolean {
+    const { error, hasSignInControl } = this.request;
+    return (
+      new CloudKitFailureDiagnostic(error).signInFailureExpectation() ===
+        CloudKitSignInFailureExpectation.Expected && hasSignInControl
+    );
+  }
+}
+
+export class CloudKitFailurePresentation {
+  constructor(private readonly request: unknown) {}
+  get translationKey(): CloudKitAuthErrorTranslationKey {
+    return new CloudKitFailureDiagnostic(this.request).translationKey();
+  }
 }

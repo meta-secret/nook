@@ -263,6 +263,7 @@ It identifies:
   required, the task selects only the relevant release paths from this
   catalog.
   - `.github/scripts/ci-release-verify-extension.sh`
+  - `.github/workflows/ci.yml`
   - `.github/workflows/main.yml`
   - `.github/workflows/pr.yml`
   - `.github/workflows/release.yml`

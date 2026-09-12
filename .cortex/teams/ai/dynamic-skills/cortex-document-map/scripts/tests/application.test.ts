@@ -1,38 +1,57 @@
+import { ok } from 'neverthrow';
 import { expect, test } from 'bun:test';
-import { executeCortexDocumentMapApplication } from '../src/application.ts';
+
+import { CortexDocumentMapApplication } from '../src/application.ts';
+
 import {
-  decodeCortexDocumentMapRequest,
   CortexDocumentMapRequestDecodeError,
+  CortexDocumentMapTransport,
 } from '../src/codec.ts';
+
 import {
   CortexDocumentMapContractKind,
   type AuditCortexDocumentMapRequest,
 } from '../src/domain.ts';
+
 import { CortexStructureFindingCode } from '../src/cortex-document-structure.ts';
+
+export class CortexDocumentMapApplicationScenario {
+  private constructor(private readonly request: MakeRequest) {}
+
+  static request(args: MakeRequest): AuditCortexDocumentMapRequest {
+    return new CortexDocumentMapApplicationScenario(args).execute();
+  }
+
+  private execute(): AuditCortexDocumentMapRequest {
+    const args = this.request;
+    const { excludedDocumentPaths = [] } = args;
+    return {
+      kind: CortexDocumentMapContractKind.Request,
+      documents: [
+        {
+          relativePath: '.cortex/knowledge-graph.md',
+          content: args.content,
+        },
+      ],
+      excludedDocumentPaths,
+    };
+  }
+}
 
 type MakeRequest = {
   readonly content: string;
   readonly excludedDocumentPaths?: readonly string[];
 };
 
-function request(args: MakeRequest): AuditCortexDocumentMapRequest {
-  const { excludedDocumentPaths = [] } = args;
-  return {
-    kind: CortexDocumentMapContractKind.Request,
-    documents: [
-      {
-        relativePath: '.cortex/knowledge-graph.md',
-        content: args.content,
-      },
-    ],
-    excludedDocumentPaths,
-  };
-}
-
 test('audits supplied documents without repository I/O', () => {
-  const result = executeCortexDocumentMapApplication(
-    request({ content: '# Cortex Context Router\n' }),
-  );
+  const resultOutcome = CortexDocumentMapApplication.from(
+    CortexDocumentMapApplicationScenario.request({
+      content: '# Cortex Context Router\n',
+    }),
+  ).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
   expect(result).toEqual({
     kind: CortexDocumentMapContractKind.Result,
     findings: [],
@@ -40,9 +59,14 @@ test('audits supplied documents without repository I/O', () => {
 });
 
 test('rejects HTML before topology and preserves the syntax diagnostic', () => {
-  const result = executeCortexDocumentMapApplication(
-    request({ content: '# Cortex Context Router\n\n<div>hidden</div>\n' }),
-  );
+  const resultOutcome = CortexDocumentMapApplication.from(
+    CortexDocumentMapApplicationScenario.request({
+      content: '# Cortex Context Router\n\n<div>hidden</div>\n',
+    }),
+  ).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
   expect(result.findings.map((finding) => finding.code)).toEqual([
     CortexStructureFindingCode.ProhibitedHtml,
     CortexStructureFindingCode.MissingIndex,
@@ -62,9 +86,11 @@ test('keeps excluded transient documents in syntax enforcement only', () => {
     ],
     excludedDocumentPaths: [excluded],
   };
-  expect(executeCortexDocumentMapApplication(auditRequest).findings).toEqual(
-    [],
-  );
+  expect(
+    CortexDocumentMapApplication.from(auditRequest)
+      .execute()
+      .map((result) => result.findings),
+  ).toEqual(ok([]));
 });
 
 test('does not suppress persistent links to excluded transient documents', () => {
@@ -80,35 +106,48 @@ test('does not suppress persistent links to excluded transient documents', () =>
     ],
     excludedDocumentPaths: [excluded],
   };
-  expect(executeCortexDocumentMapApplication(auditRequest).findings).toEqual([
-    {
-      code: CortexStructureFindingCode.InvalidIndexEntry,
-      file: '.cortex/knowledge-graph.md',
-      line: 3,
-      message:
-        'Index link points to non-existent document: .cortex/.session/note.md',
-    },
-  ]);
+  expect(
+    CortexDocumentMapApplication.from(auditRequest)
+      .execute()
+      .map((result) => result.findings),
+  ).toEqual(
+    ok([
+      {
+        code: CortexStructureFindingCode.InvalidIndexEntry,
+        file: '.cortex/knowledge-graph.md',
+        line: 3,
+        message:
+          'Index link points to non-existent document: .cortex/.session/note.md',
+      },
+    ]),
+  );
 });
 
 test('fails closed for unknown keys, unsafe paths, and missing exclusions', () => {
   const cases = [
     JSON.stringify({
-      ...request({ content: '# Index\n' }),
+      ...CortexDocumentMapApplicationScenario.request({ content: '# Index\n' }),
       secret: 'redact-me',
     }),
     JSON.stringify({
-      ...request({ content: '# Index\n' }),
+      ...CortexDocumentMapApplicationScenario.request({ content: '# Index\n' }),
       documents: [{ relativePath: '.cortex/../escape.md', content: '# X\n' }],
     }),
     JSON.stringify({
-      ...request({ content: '# Index\n' }),
+      ...CortexDocumentMapApplicationScenario.request({ content: '# Index\n' }),
       excludedDocumentPaths: ['.cortex/missing.md'],
     }),
   ];
   for (const serialized of cases) {
-    expect(() => decodeCortexDocumentMapRequest(serialized)).toThrow(
-      CortexDocumentMapRequestDecodeError,
-    );
+    CortexDocumentMapTransport.from(serialized)
+      .execute()
+      .match(
+        (value) => {
+          expect({ value }).not.toHaveProperty('value');
+        },
+        (outcome) => {
+          expect(outcome).toBeInstanceOf(CortexDocumentMapRequestDecodeError);
+        },
+      );
   }
 });

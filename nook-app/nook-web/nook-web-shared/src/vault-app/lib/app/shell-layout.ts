@@ -12,14 +12,19 @@ type AppShellLayoutState = {
   editorOpen: boolean;
 };
 
-export function appShellSpacing(state: AppShellLayoutState): string {
-  if (
-    state.legalRouteKind === LegalRouteKind.Legal ||
-    state.logsOpen ||
-    state.extensionConnectOpen ||
-    !state.authenticated
-  ) {
-    return "py-5 sm:py-6";
+export class ApplicationShellLayout {
+  constructor(private readonly request: AppShellLayoutState) {}
+  get spacing(): string {
+    const state = this.request;
+
+    if (
+      state.legalRouteKind === LegalRouteKind.Legal ||
+      state.logsOpen ||
+      state.extensionConnectOpen ||
+      !state.authenticated
+    ) {
+      return "py-5 sm:py-6";
+    }
+    return state.editorOpen ? "py-4 sm:py-8" : "pb-28 pt-4 sm:py-8";
   }
-  return state.editorOpen ? "py-4 sm:py-8" : "pb-28 pt-4 sm:py-8";
 }

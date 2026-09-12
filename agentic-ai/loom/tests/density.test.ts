@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { lintProseDensity } from '../src/lib/density.ts';
+import { CortexProseDensity } from '../src/lib/density.ts';
 
 import type { LintProseDensityArgs } from '../src/lib/density.ts';
 describe('lintProseDensity', () => {
@@ -9,7 +9,7 @@ describe('lintProseDensity', () => {
       content:
         '> Command output: one clause; another clause; final clause.\n\nTable prose; has another; clause.',
     };
-    expect(lintProseDensity(lintArgs)).toEqual([]);
+    expect(CortexProseDensity.lintProseDensity(lintArgs)).toEqual([]);
   });
 
   test('leaves sentence length to Vale', () => {
@@ -17,7 +17,7 @@ describe('lintProseDensity', () => {
       filePath: 'length.md',
       content: `${'x'.repeat(220)}.`,
     };
-    expect(lintProseDensity(lintArgs)).toEqual([]);
+    expect(CortexProseDensity.lintProseDensity(lintArgs)).toEqual([]);
   });
 
   test('flags dense sentences', () => {
@@ -27,7 +27,7 @@ describe('lintProseDensity', () => {
       filePath: 'demo.md',
       content: long,
     };
-    const findings = lintProseDensity(findingsArgs);
+    const findings = CortexProseDensity.lintProseDensity(findingsArgs);
     expect(findings.length).toBeGreaterThan(0);
     const reasons = findings.map((item) => item.reason).join(' ');
     expect(reasons.includes('and') || reasons.includes('longer')).toBe(true);
@@ -43,7 +43,9 @@ describe('lintProseDensity', () => {
       filePath: 'demo.md',
       content,
     };
-    expect(lintProseDensity(lintProseDensityArgs)).toEqual([]);
+    expect(CortexProseDensity.lintProseDensity(lintProseDensityArgs)).toEqual(
+      [],
+    );
   });
 
   test('ignores quoted command output and log excerpts', () => {
@@ -56,7 +58,7 @@ describe('lintProseDensity', () => {
       filePath: 'quoted-output.md',
       content,
     };
-    expect(lintProseDensity(lintArgs)).toEqual([]);
+    expect(CortexProseDensity.lintProseDensity(lintArgs)).toEqual([]);
   });
 
   test('checks ordinary paragraphs that begin with an output label', () => {
@@ -69,7 +71,9 @@ describe('lintProseDensity', () => {
       filePath: 'authored-output-label.md',
       content,
     };
-    expect(lintProseDensity(lintArgs).length).toBeGreaterThan(0);
+    expect(
+      CortexProseDensity.lintProseDensity(lintArgs).length,
+    ).toBeGreaterThan(0);
   });
 
   test('checks list items that begin with an output label', () => {
@@ -82,7 +86,7 @@ describe('lintProseDensity', () => {
       filePath: 'authored-output-list.md',
       content,
     };
-    const findings = lintProseDensity(lintArgs);
+    const findings = CortexProseDensity.lintProseDensity(lintArgs);
     expect(findings.some((finding) => finding.line === 1)).toBe(true);
   });
 
@@ -104,7 +108,7 @@ describe('lintProseDensity', () => {
       filePath: 'mixed-callout.md',
       content,
     };
-    const findings = lintProseDensity(lintArgs);
+    const findings = CortexProseDensity.lintProseDensity(lintArgs);
     expect(findings.some((finding) => finding.line === 9)).toBe(true);
     expect(findings.some((finding) => finding.line < 9)).toBe(false);
   });
@@ -119,7 +123,9 @@ describe('lintProseDensity', () => {
       filePath: 'callout.md',
       content,
     };
-    expect(lintProseDensity(lintArgs).length).toBeGreaterThan(0);
+    expect(
+      CortexProseDensity.lintProseDensity(lintArgs).length,
+    ).toBeGreaterThan(0);
   });
 
   test('reconstructs a dense sentence across hard-wrapped prose', () => {
@@ -133,7 +139,7 @@ describe('lintProseDensity', () => {
       filePath: 'wrapped.md',
       content,
     };
-    const findings = lintProseDensity(lintArgs);
+    const findings = CortexProseDensity.lintProseDensity(lintArgs);
     expect(
       findings.some((finding) => finding.excerpt.startsWith('Before claim')),
     ).toBe(true);
@@ -150,7 +156,7 @@ describe('lintProseDensity', () => {
       filePath: 'list.md',
       content,
     };
-    const findings = lintProseDensity(lintArgs);
+    const findings = CortexProseDensity.lintProseDensity(lintArgs);
     expect(findings.some((finding) => finding.line === 1)).toBe(true);
     expect(findings.some((finding) => finding.line === 4)).toBe(false);
   });
@@ -167,7 +173,7 @@ describe('lintProseDensity', () => {
       filePath: 'actions.md',
       content,
     };
-    expect(lintProseDensity(lintArgs)).toEqual([]);
+    expect(CortexProseDensity.lintProseDensity(lintArgs)).toEqual([]);
   });
 
   test('checks dense table cells', () => {
@@ -180,7 +186,7 @@ describe('lintProseDensity', () => {
       filePath: 'table.md',
       content,
     };
-    const findings = lintProseDensity(lintArgs);
+    const findings = CortexProseDensity.lintProseDensity(lintArgs);
     expect(findings.some((finding) => finding.line === 3)).toBe(true);
   });
 
@@ -194,7 +200,7 @@ describe('lintProseDensity', () => {
       filePath: 'table.md',
       content,
     };
-    expect(lintProseDensity(lintArgs)).toEqual([]);
+    expect(CortexProseDensity.lintProseDensity(lintArgs)).toEqual([]);
   });
 
   test('ignores one-line index cells that only point elsewhere', () => {
@@ -209,6 +215,6 @@ describe('lintProseDensity', () => {
       filePath: 'index.md',
       content,
     };
-    expect(lintProseDensity(lintArgs)).toEqual([]);
+    expect(CortexProseDensity.lintProseDensity(lintArgs)).toEqual([]);
   });
 });

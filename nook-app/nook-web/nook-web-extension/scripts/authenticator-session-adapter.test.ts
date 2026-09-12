@@ -1,15 +1,15 @@
+import { err, ok } from 'neverthrow'
 import { describe, expect, test } from 'bun:test'
 import type { ExtensionSessionTransportRequest } from '../src/offscreen/session-request-adapter'
-import type { attachAuthenticatorBackupCodesFromSession } from '../src/background/service-worker/authenticator-session-adapter'
+import type { extensionAuthenticatorSession } from '../src/background/service-worker/authenticator-session-adapter'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { WebsiteAuthenticatorBackupAttachMessageMode } from '../src/lib/enrollment-messages'
-import { ExtensionPairingVaultType } from '../../nook-web-shared/src/extension/runtime-messages'
 
 function pairingGrant(): Parameters<
-  typeof attachAuthenticatorBackupCodesFromSession
+  typeof extensionAuthenticatorSession.attachAuthenticatorBackupCodesFromSession
 >[0]['grant'] {
   return {
-    vaultType: ExtensionPairingVaultType.Simple,
+    vaultType: 'simple',
     deviceId: 'device-1',
     devicePublicKey: 'device-public-key',
     deviceSigningPublicKey: 'device-signing-public-key',
@@ -31,36 +31,26 @@ describe('authenticator session adapter', () => {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
     const observedCodes: string[][] = []
-    const runtime = {
-      sendMessage: (
-        ...parameters: [
-          ExtensionSessionTransportRequest,
-          (response: unknown) => void,
-        ]
-      ) => {
-        const [message, callback] = parameters
-        queueMicrotask(() => {
-          if (
-            message.type ===
-            ExtensionSessionMessageType.AuthenticatorBackupAttach
-          ) {
-            observedCodes.push([...message.payload.codes])
-          }
-          callback({
-            ok: true,
-            secretId: 'secret-1',
-            backupCodesVerified: true,
-            reviewedInputPersisted: true,
-          })
+    const { ExtensionAuthenticatorSession } =
+      await import('../src/background/service-worker/authenticator-session-adapter')
+    const session = new ExtensionAuthenticatorSession({
+      sendSessionMessage: async (request: ExtensionSessionTransportRequest) => {
+        if (
+          request.type === ExtensionSessionMessageType.AuthenticatorBackupAttach
+        ) {
+          observedCodes.push([...request.payload.codes])
+        }
+        return ok({
+          ok: true,
+          secretId: 'secret-1',
+          backupCodesVerified: true,
+          reviewedInputPersisted: true,
         })
       },
-    }
-    globalThis.chrome = { runtime } as typeof chrome
-    const { attachAuthenticatorBackupCodesFromSession } =
-      await import('../src/background/service-worker/authenticator-session-adapter')
+    })
     const codes = ['A1B2-C3D4', 'E5F6-G7H8']
     const args: Parameters<
-      typeof attachAuthenticatorBackupCodesFromSession
+      typeof extensionAuthenticatorSession.attachAuthenticatorBackupCodesFromSession
     >[0] = {
       grant: pairingGrant(),
       secretId: 'secret-1',
@@ -68,35 +58,32 @@ describe('authenticator session adapter', () => {
       mode: WebsiteAuthenticatorBackupAttachMessageMode.Replace,
     }
 
-    const pending = attachAuthenticatorBackupCodesFromSession(args)
+    const pending = session.attachAuthenticatorBackupCodesFromSession(args)
     codes.fill('')
 
-    await expect(pending).resolves.toEqual({
-      ok: true,
-      secretId: 'secret-1',
-      backupCodesVerified: true,
-      reviewedInputPersisted: true,
-    })
+    expect(await pending).toEqual(
+      ok({
+        ok: true,
+        secretId: 'secret-1',
+        backupCodesVerified: true,
+        reviewedInputPersisted: true,
+      }),
+    )
     expect(observedCodes).toEqual([['A1B2-C3D4', 'E5F6-G7H8']])
   })
 
   test('rejects a backup-code response without Rust persistence proof', async () => {
-    const runtime = {
-      sendMessage: (
-        ...parameters: [
-          ExtensionSessionTransportRequest,
-          (response: unknown) => void,
-        ]
-      ) => {
-        const [, callback] = parameters
-        callback({ ok: true, secretId: 'secret-1' })
-      },
-    }
-    globalThis.chrome = { runtime } as typeof chrome
-    const { attachAuthenticatorBackupCodesFromSession } =
+    const {
+      ExtensionAuthenticatorSession,
+      AuthenticatorSessionFailure,
+      AuthenticatorSessionFailureKind,
+    } =
       await import('../src/background/service-worker/authenticator-session-adapter')
+    const session = new ExtensionAuthenticatorSession({
+      sendSessionMessage: async () => ok({ ok: true, secretId: 'secret-1' }),
+    })
     const args: Parameters<
-      typeof attachAuthenticatorBackupCodesFromSession
+      typeof extensionAuthenticatorSession.attachAuthenticatorBackupCodesFromSession
     >[0] = {
       grant: pairingGrant(),
       secretId: 'secret-1',
@@ -104,10 +91,14 @@ describe('authenticator session adapter', () => {
       mode: WebsiteAuthenticatorBackupAttachMessageMode.Replace,
     }
 
-    await expect(
-      attachAuthenticatorBackupCodesFromSession(args),
-    ).rejects.toThrow(
-      'Extension session did not verify persisted authenticator backup codes.',
+    expect(
+      await session.attachAuthenticatorBackupCodesFromSession(args),
+    ).toEqual(
+      err(
+        new AuthenticatorSessionFailure(
+          AuthenticatorSessionFailureKind.InvalidResponse,
+        ),
+      ),
     )
   })
 })

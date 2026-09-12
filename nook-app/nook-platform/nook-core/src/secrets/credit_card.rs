@@ -36,26 +36,49 @@ impl fmt::Debug for CreditCardSecret {
     }
 }
 
+/// Named values required by `CreditCardSecret::from_fields`.
+#[derive(Clone, Copy)]
+pub struct CreditCardFields<'a> {
+    pub title: &'a str,
+    pub cardholder_name: &'a str,
+    pub number: &'a str,
+    pub expiration_month: &'a str,
+    pub expiration_year: &'a str,
+    pub cvv: &'a str,
+    pub notes: &'a str,
+}
+
+/// Named values required by `CreditCardSecret::normalize_expiration`.
+#[derive(Clone, Copy)]
+struct CreditCardExpiration<'a> {
+    month_raw: &'a str,
+    year_raw: &'a str,
+}
+
 impl CreditCardSecret {
     /// Normalize and validate form or import fields into a stored payload.
-    pub fn from_fields(
-        title: &str,
-        cardholder_name: &str,
-        number: &str,
-        expiration_month: &str,
-        expiration_year: &str,
-        cvv: &str,
-        notes: &str,
-    ) -> Result<Self, ValidationError> {
+    pub fn from_fields(request: CreditCardFields<'_>) -> Result<Self, ValidationError> {
+        let CreditCardFields {
+            title,
+            cardholder_name,
+            number,
+            expiration_month,
+            expiration_year,
+            cvv,
+            notes,
+        } = request;
         let title = title.trim().to_owned();
         if title.is_empty() {
             return Err(ValidationError::CreditCardTitleRequired);
         }
 
-        let number = normalize_card_number(number)?;
+        let number = CreditCardSecret::normalize_card_number(number)?;
         let (expiration_month, expiration_year) =
-            normalize_expiration(expiration_month, expiration_year)?;
-        let cvv = normalize_cvv(cvv)?;
+            CreditCardSecret::normalize_expiration(CreditCardExpiration {
+                month_raw: expiration_month,
+                year_raw: expiration_year,
+            })?;
+        let cvv = CreditCardSecret::normalize_cvv(cvv)?;
 
         Ok(Self {
             title,
@@ -69,17 +92,16 @@ impl CreditCardSecret {
     }
 
     /// Re-validate a deserialized payload (import / decrypt path).
-    pub fn normalize(&mut self) -> Result<(), ValidationError> {
-        *self = Self::from_fields(
-            &self.title,
-            &self.cardholder_name,
-            &self.number,
-            &self.expiration_month,
-            &self.expiration_year,
-            &self.cvv,
-            &self.notes,
-        )?;
-        Ok(())
+    pub fn normalize(self) -> Result<Self, ValidationError> {
+        Self::from_fields(CreditCardFields {
+            title: &self.title,
+            cardholder_name: &self.cardholder_name,
+            number: &self.number,
+            expiration_month: &self.expiration_month,
+            expiration_year: &self.expiration_year,
+            cvv: &self.cvv,
+            notes: &self.notes,
+        })
     }
 
     /// Last four digits for safe list display.
@@ -128,98 +150,113 @@ impl Zeroize for CreditCardSecret {
     }
 }
 
-fn normalize_card_number(raw: &str) -> Result<String, ValidationError> {
-    let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
-    if !(MIN_CARD_DIGITS..=MAX_CARD_DIGITS).contains(&digits.len()) {
-        return Err(ValidationError::CreditCardNumberInvalid);
-    }
-    if !luhn_valid(&digits) {
-        return Err(ValidationError::CreditCardNumberInvalid);
-    }
-    Ok(digits)
-}
-
-fn normalize_cvv(raw: &str) -> Result<String, ValidationError> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Ok(String::new());
-    }
-    if !(3..=4).contains(&trimmed.len()) || !trimmed.bytes().all(|b| b.is_ascii_digit()) {
-        return Err(ValidationError::CreditCardCvvInvalid);
-    }
-    Ok(trimmed.to_owned())
-}
-
-fn normalize_expiration(
-    month_raw: &str,
-    year_raw: &str,
-) -> Result<(String, String), ValidationError> {
-    let month_raw = month_raw.trim();
-    let year_raw = year_raw.trim();
-    if month_raw.is_empty() && year_raw.is_empty() {
-        return Ok((String::new(), String::new()));
-    }
-    if month_raw.is_empty() || year_raw.is_empty() {
-        return Err(ValidationError::CreditCardExpirationInvalid);
-    }
-
-    let month = parse_month(month_raw)?;
-    let year = parse_year(year_raw)?;
-    Ok((format!("{month:02}"), format!("{year:04}")))
-}
-
-fn parse_month(raw: &str) -> Result<u32, ValidationError> {
-    let month: u32 = raw
-        .parse()
-        .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
-    if (1..=12).contains(&month) {
-        Ok(month)
-    } else {
-        Err(ValidationError::CreditCardExpirationInvalid)
-    }
-}
-
-fn parse_year(raw: &str) -> Result<u32, ValidationError> {
-    let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
-    match digits.len() {
-        2 => {
-            let yy: u32 = digits
-                .parse()
-                .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
-            // Payment cards use a rolling century window around the current era.
-            Ok(2000 + yy)
+impl CreditCardSecret {
+    fn normalize_card_number(raw: &str) -> Result<String, ValidationError> {
+        let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
+        if !(MIN_CARD_DIGITS..=MAX_CARD_DIGITS).contains(&digits.len()) {
+            return Err(ValidationError::CreditCardNumberInvalid);
         }
-        4 => {
-            let year: u32 = digits
-                .parse()
-                .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
-            if (2000..=2100).contains(&year) {
-                Ok(year)
-            } else {
-                Err(ValidationError::CreditCardExpirationInvalid)
+        if !CreditCardSecret::luhn_valid(&digits) {
+            return Err(ValidationError::CreditCardNumberInvalid);
+        }
+        Ok(digits)
+    }
+}
+
+impl CreditCardSecret {
+    fn normalize_cvv(raw: &str) -> Result<String, ValidationError> {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Ok(String::new());
+        }
+        if !(3..=4).contains(&trimmed.len()) || !trimmed.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(ValidationError::CreditCardCvvInvalid);
+        }
+        Ok(trimmed.to_owned())
+    }
+}
+
+impl CreditCardSecret {
+    fn normalize_expiration(
+        request: CreditCardExpiration<'_>,
+    ) -> Result<(String, String), ValidationError> {
+        let CreditCardExpiration {
+            month_raw,
+            year_raw,
+        } = request;
+        let month_raw = month_raw.trim();
+        let year_raw = year_raw.trim();
+        if month_raw.is_empty() && year_raw.is_empty() {
+            return Ok((String::new(), String::new()));
+        }
+        if month_raw.is_empty() || year_raw.is_empty() {
+            return Err(ValidationError::CreditCardExpirationInvalid);
+        }
+
+        let month = CreditCardSecret::parse_month(month_raw)?;
+        let year = CreditCardSecret::parse_year(year_raw)?;
+        Ok((format!("{month:02}"), format!("{year:04}")))
+    }
+}
+
+impl CreditCardSecret {
+    fn parse_month(raw: &str) -> Result<u32, ValidationError> {
+        let month: u32 = raw
+            .parse()
+            .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
+        if (1..=12).contains(&month) {
+            Ok(month)
+        } else {
+            Err(ValidationError::CreditCardExpirationInvalid)
+        }
+    }
+}
+
+impl CreditCardSecret {
+    fn parse_year(raw: &str) -> Result<u32, ValidationError> {
+        let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
+        match digits.len() {
+            2 => {
+                let yy: u32 = digits
+                    .parse()
+                    .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
+                // Payment cards use a rolling century window around the current era.
+                Ok(2000 + yy)
             }
+            4 => {
+                let year: u32 = digits
+                    .parse()
+                    .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
+                if (2000..=2100).contains(&year) {
+                    Ok(year)
+                } else {
+                    Err(ValidationError::CreditCardExpirationInvalid)
+                }
+            }
+            _ => Err(ValidationError::CreditCardExpirationInvalid),
         }
-        _ => Err(ValidationError::CreditCardExpirationInvalid),
     }
 }
 
-fn luhn_valid(digits: &str) -> bool {
-    let mut sum = 0_u32;
-    let mut double = false;
-    for ch in digits.chars().rev() {
-        let Some(mut digit) = ch.to_digit(10) else {
-            return false;
-        };
-        if double {
-            digit *= 2;
-            if digit > 9 {
-                digit -= 9;
+impl CreditCardSecret {
+    fn luhn_valid(digits: &str) -> bool {
+        let mut sum = 0_u32;
+        let mut double = false;
+        for ch in digits.chars().rev() {
+            let Some(mut digit) = ch.to_digit(10) else {
+                return false;
+            };
+            if double {
+                digit *= 2;
+                if digit > 9 {
+                    digit -= 9;
+                }
             }
+            sum += digit;
+            double = !double;
         }
-        sum += digit;
-        double = !double;
+        sum.is_multiple_of(10)
     }
-    sum.is_multiple_of(10)
 }
 
 #[cfg(test)]
@@ -228,15 +265,15 @@ mod tests {
 
     #[test]
     fn accepts_valid_visa_test_number_and_masks_last4() -> anyhow::Result<()> {
-        let card = CreditCardSecret::from_fields(
-            "Personal Visa",
-            "Ada Lovelace",
-            "4111 1111 1111 1111",
-            "12",
-            "30",
-            "123",
-            "work card",
-        )?;
+        let card = CreditCardSecret::from_fields(CreditCardFields {
+            title: "Personal Visa",
+            cardholder_name: "Ada Lovelace",
+            number: "4111 1111 1111 1111",
+            expiration_month: "12",
+            expiration_year: "30",
+            cvv: "123",
+            notes: "work card",
+        })?;
 
         assert_eq!(card.number, "4111111111111111");
         assert_eq!(card.expiration_month, "12");
@@ -250,26 +287,66 @@ mod tests {
     #[test]
     fn rejects_invalid_luhn_and_partial_expiry() {
         assert_eq!(
-            CreditCardSecret::from_fields("Bad", "", "4111111111111112", "", "", "", ""),
+            CreditCardSecret::from_fields(CreditCardFields {
+                title: "Bad",
+                cardholder_name: "",
+                number: "4111111111111112",
+                expiration_month: "",
+                expiration_year: "",
+                cvv: "",
+                notes: ""
+            }),
             Err(ValidationError::CreditCardNumberInvalid)
         );
         assert_eq!(
-            CreditCardSecret::from_fields("Bad", "", "4111111111111111", "12", "", "", ""),
+            CreditCardSecret::from_fields(CreditCardFields {
+                title: "Bad",
+                cardholder_name: "",
+                number: "4111111111111111",
+                expiration_month: "12",
+                expiration_year: "",
+                cvv: "",
+                notes: ""
+            }),
             Err(ValidationError::CreditCardExpirationInvalid)
         );
         assert_eq!(
-            CreditCardSecret::from_fields("Bad", "", "4111111111111111", "", "", "12", ""),
+            CreditCardSecret::from_fields(CreditCardFields {
+                title: "Bad",
+                cardholder_name: "",
+                number: "4111111111111111",
+                expiration_month: "",
+                expiration_year: "",
+                cvv: "12",
+                notes: ""
+            }),
             Err(ValidationError::CreditCardCvvInvalid)
         );
         assert_eq!(
-            CreditCardSecret::from_fields("", "", "4111111111111111", "", "", "", ""),
+            CreditCardSecret::from_fields(CreditCardFields {
+                title: "",
+                cardholder_name: "",
+                number: "4111111111111111",
+                expiration_month: "",
+                expiration_year: "",
+                cvv: "",
+                notes: ""
+            }),
             Err(ValidationError::CreditCardTitleRequired)
         );
     }
 
     #[test]
     fn allows_empty_optional_fields() -> anyhow::Result<()> {
-        let card = CreditCardSecret::from_fields("Debit", "", "4111111111111111", "", "", "", "")?;
+        let card = CreditCardSecret::from_fields(CreditCardFields {
+            title: "Debit",
+            cardholder_name: "",
+            number: "4111111111111111",
+            expiration_month: "",
+            expiration_year: "",
+            cvv: "",
+            notes: "",
+        })?;
         assert!(card.cardholder_name.is_empty());
         assert!(card.cvv.is_empty());
         assert!(card.expiration_display().is_empty());
@@ -285,30 +362,30 @@ mod tests {
             ("12", "2101"),
         ] {
             assert_eq!(
-                CreditCardSecret::from_fields(
-                    "Invalid expiry",
-                    "",
-                    "4111111111111111",
-                    month,
-                    year,
-                    "",
-                    "",
-                ),
+                CreditCardSecret::from_fields(CreditCardFields {
+                    title: "Invalid expiry",
+                    cardholder_name: "",
+                    number: "4111111111111111",
+                    expiration_month: month,
+                    expiration_year: year,
+                    cvv: "",
+                    notes: ""
+                }),
                 Err(ValidationError::CreditCardExpirationInvalid)
             );
         }
 
         for cvv in ["12", "12345", "12a"] {
             assert_eq!(
-                CreditCardSecret::from_fields(
-                    "Invalid CVV",
-                    "",
-                    "4111111111111111",
-                    "",
-                    "",
+                CreditCardSecret::from_fields(CreditCardFields {
+                    title: "Invalid CVV",
+                    cardholder_name: "",
+                    number: "4111111111111111",
+                    expiration_month: "",
+                    expiration_year: "",
                     cvv,
-                    "",
-                ),
+                    notes: ""
+                }),
                 Err(ValidationError::CreditCardCvvInvalid)
             );
         }
@@ -316,15 +393,15 @@ mod tests {
 
     #[test]
     fn debug_output_redacts_payment_secrets() -> anyhow::Result<()> {
-        let card = CreditCardSecret::from_fields(
-            "Personal Visa",
-            "Ada Lovelace",
-            "4111111111111111",
-            "12",
-            "2030",
-            "123",
-            "private billing note",
-        )?;
+        let card = CreditCardSecret::from_fields(CreditCardFields {
+            title: "Personal Visa",
+            cardholder_name: "Ada Lovelace",
+            number: "4111111111111111",
+            expiration_month: "12",
+            expiration_year: "2030",
+            cvv: "123",
+            notes: "private billing note",
+        })?;
         let debug = format!("{card:?}");
 
         assert!(debug.contains("Personal Visa"));

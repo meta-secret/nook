@@ -1,22 +1,28 @@
 {
-  "extends": "@tsconfig/svelte/tsconfig.json",
+  "extends": [
+    "@tsconfig/svelte/tsconfig.json",
+    "../tsconfig.safety.json"
+  ],
   "compilerOptions": {
-    "allowJs": true,
-    "checkJs": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "bundler",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "paths": {
-      "$lib": ["./src/lib"],
-      "$lib/*": ["./src/lib/*"]
+      "$lib": [
+        "./src/lib"
+      ],
+      "$lib/*": [
+        "./src/lib/*"
+      ]
     },
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "strict": true,
     "target": "ES2022",
-    "types": ["vite/client"]
+    "types": [
+      "vite/client"
+    ]
   },
   "include": [
     "e2e/**/*.ts",
@@ -24,6 +30,19 @@
     "src/**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.svelte",
-    "vite.config.ts"
+    "vite.config.ts",
+    "**/*.ts",
+    "**/*.svelte",
+    "**/*.js",
+    "**/*.mjs",
+    "**/*.cjs"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/dist-prod/**",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm-*",
+    "../nook-web-shared/src/extension/nook-companion-wasm"
   ]
 }

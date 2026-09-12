@@ -1,27 +1,27 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  isWebsiteAuthenticatorFillMessage,
-  isWebsiteAuthenticatorOptionsMessage,
-  isWebsiteLoginOptionsMessage,
-  isWebsiteLoginRevealMessage,
+  WebsiteAuthenticatorFillMessage as WebsiteAuthenticatorFillMessageSchema,
+  WebsiteAuthenticatorOptionsMessage as WebsiteAuthenticatorOptionsMessageSchema,
+  WebsiteLoginOptionsMessage as WebsiteLoginOptionsMessageSchema,
+  WebsiteLoginRevealMessage as WebsiteLoginRevealMessageSchema,
 } from '../src/lib/login-fill-messages'
 
 describe('website login fill runtime messages', () => {
   test('accepts typed options and fill messages', () => {
     expect(
-      isWebsiteLoginOptionsMessage({
+      WebsiteLoginOptionsMessageSchema.is({
         type: 'nook:website-login-options',
         payload: { origin: 'https://login.example.com' },
       }),
     ).toBe(true)
     expect(
-      isWebsiteAuthenticatorOptionsMessage({
+      WebsiteAuthenticatorOptionsMessageSchema.is({
         type: 'nook:website-authenticator-options',
         payload: { origin: 'https://login.example.com' },
       }),
     ).toBe(true)
     expect(
-      isWebsiteAuthenticatorFillMessage({
+      WebsiteAuthenticatorFillMessageSchema.is({
         type: 'nook:website-authenticator-fill',
         payload: {
           origin: 'https://login.example.com',
@@ -32,7 +32,7 @@ describe('website login fill runtime messages', () => {
       }),
     ).toBe(true)
     expect(
-      isWebsiteLoginRevealMessage({
+      WebsiteLoginRevealMessageSchema.is({
         type: 'nook:website-login-fill',
         payload: {
           origin: 'https://login.example.com',
@@ -46,13 +46,13 @@ describe('website login fill runtime messages', () => {
 
   test('rejects malformed messages', () => {
     expect(
-      isWebsiteLoginOptionsMessage({
+      WebsiteLoginOptionsMessageSchema.is({
         type: 'nook:website-login-options',
         payload: { origin: '' },
       }),
     ).toBe(false)
     expect(
-      isWebsiteLoginRevealMessage({
+      WebsiteLoginRevealMessageSchema.is({
         type: 'nook:website-login-fill',
         payload: {
           origin: 'https://login.example.com',
@@ -61,7 +61,7 @@ describe('website login fill runtime messages', () => {
       }),
     ).toBe(false)
     expect(
-      isWebsiteAuthenticatorFillMessage({
+      WebsiteAuthenticatorFillMessageSchema.is({
         type: 'nook:website-authenticator-fill',
         payload: {
           origin: 'https://login.example.com',

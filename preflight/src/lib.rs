@@ -1,5 +1,5 @@
 pub mod coverage;
-mod dockerfile_cache;
+pub mod dockerfile_cache;
 mod javascript_literals;
 mod javascript_scopes;
 mod rust_macros;
@@ -22,22 +22,21 @@ mod wasm_module_sources;
 mod wasm_svelte_sources;
 mod wasm_web_sources;
 
-pub use dockerfile_cache::dockerfile_cache_mounts;
-use dockerfile_cache::is_generated_directory;
+pub use dockerfile_cache::DockerfileRepository;
+
 pub use typescript_domain_boundary::*;
 
+pub struct RustBoundarySources<'scan> {
+    pub root: &'scan Path,
+}
 use std::ffi::OsStr;
 use syn::visit;
 
-pub use rust_macros::authored_rust_macro_definitions;
-pub use rust_tsify_state::rust_tsify_implicit_absence_overrides;
-pub use rust_typed_json::rust_test_untyped_json_assertions;
-pub use rust_wasm_names::rust_wasm_callable_name_overrides;
-pub use typescript_state::{
-    typescript_generic_optional_state, typescript_implicit_application_state,
-    typescript_mutable_void_state, typescript_null_absence_sentinels,
-    typescript_raw_string_discriminants,
-};
+pub use rust_macros::RustMacroInventory;
+pub use rust_tsify_state::RustBoundaryState;
+pub use rust_typed_json::RustTestSources;
+pub use rust_wasm_names::RustWasmNames;
+pub use typescript_state::TypeScriptApplicationState;
 
 use std::collections::HashSet;
 use std::fs;
@@ -151,32 +150,38 @@ const RUST_WASM_TYPED_DOMAIN_FUNCTION_MARKERS: &[&str] = &[
 /// # Errors
 ///
 /// Returns an error when a portable Rust source tree cannot be read.
-pub fn portable_core_browser_dependencies(root: &Path) -> io::Result<Vec<Violation>> {
-    let mut violations = violations_in_tree(
-        root,
-        Path::new("nook-app/nook-platform/nook-app-common/src"),
-        "rs",
-        BROWSER_RUST_MARKERS,
-    )?;
-    violations.extend(violations_in_tree(
-        root,
-        Path::new("nook-app/nook-platform/nook-core/src"),
-        "rs",
-        BROWSER_RUST_MARKERS,
-    )?);
-    violations.extend(violations_in_tree(
-        root,
-        Path::new("nook-app/nook-platform/nook-replication/src"),
-        "rs",
-        BROWSER_RUST_MARKERS,
-    )?);
-    violations.extend(violations_in_tree(
-        root,
-        Path::new("nook-app/nook-platform/nook-event-log/src"),
-        "rs",
-        BROWSER_RUST_MARKERS,
-    )?);
-    Ok(violations)
+impl RustBoundarySources<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when a portable Rust source tree cannot be read.
+    pub fn portable_core_browser_dependencies(self) -> io::Result<Vec<Violation>> {
+        let Self { root } = self;
+        let mut violations = RustBoundarySources::violations_in_tree(
+            root,
+            Path::new("nook-app/nook-platform/nook-app-common/src"),
+            "rs",
+            BROWSER_RUST_MARKERS,
+        )?;
+        violations.extend(RustBoundarySources::violations_in_tree(
+            root,
+            Path::new("nook-app/nook-platform/nook-core/src"),
+            "rs",
+            BROWSER_RUST_MARKERS,
+        )?);
+        violations.extend(RustBoundarySources::violations_in_tree(
+            root,
+            Path::new("nook-app/nook-platform/nook-replication/src"),
+            "rs",
+            BROWSER_RUST_MARKERS,
+        )?);
+        violations.extend(RustBoundarySources::violations_in_tree(
+            root,
+            Path::new("nook-app/nook-platform/nook-event-log/src"),
+            "rs",
+            BROWSER_RUST_MARKERS,
+        )?);
+        Ok(violations)
+    }
 }
 
 /// Finds authored `JsValue` paths in the WASM bridge.
@@ -184,32 +189,39 @@ pub fn portable_core_browser_dependencies(root: &Path) -> io::Result<Vec<Violati
 /// # Errors
 ///
 /// Returns an error when a source file cannot be read or parsed as Rust.
-pub fn wasm_js_values(root: &Path) -> io::Result<Vec<Violation>> {
-    let directory = root.join("nook-app/nook-platform/nook-wasm/src");
-    let mut files = Vec::new();
-    collect_files_with_extension(&directory, "rs", &mut files)?;
-    let mut violations = Vec::new();
+impl RustBoundarySources<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when a source file cannot be read or parsed as Rust.
+    pub fn wasm_js_values(&self) -> io::Result<Vec<Violation>> {
+        let root = self.root;
+        let directory = root.join("nook-app/nook-platform/nook-wasm/src");
+        let mut files = Vec::new();
+        RustBoundarySources::collect_files_with_extension(&directory, "rs", &mut files)?;
+        let mut violations = Vec::new();
 
-    for path in files {
-        let contents = fs::read_to_string(&path)?;
-        let syntax = syn::parse_file(&contents).map_err(|error| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("failed to parse {}: {error}", path.display()),
-            )
-        })?;
-        let mut visitor = JsValueVisitor::default();
-        visitor.visit_file(&syntax);
-        visitor.lines.sort_unstable();
-        visitor.lines.dedup();
-        violations.extend(visitor.lines.into_iter().map(|line| Violation {
-            path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-            line,
-        }));
+        for path in files {
+            let contents = fs::read_to_string(&path)?;
+            let syntax = syn::parse_file(&contents).map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("failed to parse {}: {error}", path.display()),
+                )
+            })?;
+            let mut visitor = JsValueVisitor::default();
+            visitor.visit_file(&syntax);
+            visitor.lines.sort_unstable();
+            visitor.lines.dedup();
+            violations.extend(visitor.lines.into_iter().map(|line| Violation {
+                path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+                line,
+            }));
+        }
+
+        violations
+            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+        Ok(violations)
     }
-
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    Ok(violations)
 }
 
 #[derive(Default)]
@@ -242,65 +254,74 @@ impl<'ast> Visit<'ast> for JsValueVisitor {
     }
 }
 
-fn violations_in_tree(
-    root: &Path,
-    relative_directory: &Path,
-    extension: &str,
-    markers: &[&str],
-) -> io::Result<Vec<Violation>> {
-    let directory = root.join(relative_directory);
-    let mut files = Vec::new();
-    collect_files_with_extension(&directory, extension, &mut files)?;
-    marker_violations(root, files, |line| {
-        markers.iter().any(|marker| line.contains(marker))
-    })
+impl RustBoundarySources<'_> {
+    fn violations_in_tree(
+        root: &Path,
+        relative_directory: &Path,
+        extension: &str,
+        markers: &[&str],
+    ) -> io::Result<Vec<Violation>> {
+        let directory = root.join(relative_directory);
+        let mut files = Vec::new();
+        RustBoundarySources::collect_files_with_extension(&directory, extension, &mut files)?;
+        RustBoundarySources::marker_violations(root, files, |line| {
+            markers.iter().any(|marker| line.contains(marker))
+        })
+    }
 }
 
-fn marker_violations(
-    root: &Path,
-    files: Vec<PathBuf>,
-    matches: impl Fn(&str) -> bool,
-) -> io::Result<Vec<Violation>> {
-    let mut violations = Vec::new();
-    for path in files {
-        let contents = fs::read_to_string(&path)?;
-        for (index, line) in contents.lines().enumerate() {
-            if matches(line) {
-                violations.push(Violation {
-                    path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-                    line: index + 1,
-                });
+impl RustBoundarySources<'_> {
+    fn marker_violations(
+        root: &Path,
+        files: Vec<PathBuf>,
+        matches: impl Fn(&str) -> bool,
+    ) -> io::Result<Vec<Violation>> {
+        let mut violations = Vec::new();
+        for path in files {
+            let contents = fs::read_to_string(&path)?;
+            for (index, line) in contents.lines().enumerate() {
+                if matches(line) {
+                    violations.push(Violation {
+                        path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+                        line: index + 1,
+                    });
+                }
             }
         }
+        violations
+            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+        Ok(violations)
     }
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    Ok(violations)
 }
 
-fn collect_files_with_extension(
-    directory: &Path,
-    extension: &str,
-    files: &mut Vec<PathBuf>,
-) -> io::Result<()> {
-    for entry in fs::read_dir(directory)? {
-        let entry = entry?;
-        let path = entry.path();
-        let file_type = entry.file_type()?;
-        if file_type.is_dir() {
-            if !is_generated_directory(&path) {
-                collect_files_with_extension(&path, extension, files)?;
+impl RustBoundarySources<'_> {
+    fn collect_files_with_extension(
+        directory: &Path,
+        extension: &str,
+        files: &mut Vec<PathBuf>,
+    ) -> io::Result<()> {
+        for entry in fs::read_dir(directory)? {
+            let entry = entry?;
+            let path = entry.path();
+            let file_type = entry.file_type()?;
+            if file_type.is_dir() {
+                if !DockerfileRepository::is_generated_directory(&path) {
+                    RustBoundarySources::collect_files_with_extension(&path, extension, files)?;
+                }
+            } else if file_type.is_file()
+                && path.extension().and_then(OsStr::to_str) == Some(extension)
+            {
+                files.push(path);
             }
-        } else if file_type.is_file() && path.extension().and_then(OsStr::to_str) == Some(extension)
-        {
-            files.push(path);
         }
+        Ok(())
     }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::typescript_domain_boundary::TypeScriptDomainBoundary;
     use std::{
         env, process,
         sync::atomic::{AtomicU64, Ordering},
@@ -346,7 +367,7 @@ export function adaptedProviderCapability(
 "#;
 
         assert_eq!(
-            typescript_boundary_violation_lines(source),
+            TypeScriptDomainBoundary::typescript_boundary_violation_lines(source),
             vec![7, 8, 9, 11, 14, 18, 24]
         );
     }
@@ -374,7 +395,10 @@ export function adaptedProviderCapability(
 }
 "#;
 
-        assert_eq!(typescript_boundary_violation_lines(source), vec![7, 9]);
+        assert_eq!(
+            TypeScriptDomainBoundary::typescript_boundary_violation_lines(source),
+            vec![7, 9]
+        );
     }
 
     #[test]
@@ -388,7 +412,10 @@ export type ExistingVaultRecoverySummary = {
 }
 ";
 
-        assert_eq!(typescript_boundary_violation_lines(source), vec![2, 5]);
+        assert_eq!(
+            TypeScriptDomainBoundary::typescript_boundary_violation_lines(source),
+            vec![2, 5]
+        );
     }
 
     #[test]
@@ -412,7 +439,7 @@ type PasswordGenerationOptions =
 ";
 
         assert_eq!(
-            typescript_boundary_violation_lines(source),
+            TypeScriptDomainBoundary::typescript_boundary_violation_lines(source),
             vec![2, 5, 8, 9, 13]
         );
     }
@@ -437,7 +464,10 @@ export enum EnrollmentSubmitQueueKind {
 }
 "#;
 
-        assert_eq!(typescript_boundary_violation_lines(source), vec![8]);
+        assert_eq!(
+            TypeScriptDomainBoundary::typescript_boundary_violation_lines(source),
+            vec![8]
+        );
     }
 
     #[test]
@@ -449,7 +479,10 @@ const snapshot = JSON.parse(
 )
 ";
 
-        assert_eq!(json_round_trip_clone_lines(source), vec![2, 3]);
+        assert_eq!(
+            TypeScriptDomainBoundary::json_round_trip_clone_lines(source),
+            vec![2, 3]
+        );
     }
 
     #[test]
@@ -463,7 +496,10 @@ let raw = $state.raw<Config | undefined>(undefined)
 let concise = $state<Item>()
 ";
 
-        assert_eq!(redundant_optional_state_lines(source), vec![2, 3, 6]);
+        assert_eq!(
+            TypeScriptDomainBoundary::redundant_optional_state_lines(source),
+            vec![2, 3, 6]
+        );
     }
 
     #[test]
@@ -476,7 +512,10 @@ remoteRecovery = $state<
 >('none')
 "#;
 
-        assert_eq!(domain_string_union_state_lines(source), vec![3, 4]);
+        assert_eq!(
+            TypeScriptDomainBoundary::domain_string_union_state_lines(source),
+            vec![3, 4]
+        );
     }
 
     #[test]
@@ -490,7 +529,10 @@ let providerId = $state<string>()
 let selectedStoreId = $state<StoreId>()
 ";
 
-        assert_eq!(widened_domain_identifier_state_lines(source), vec![2, 3]);
+        assert_eq!(
+            TypeScriptDomainBoundary::widened_domain_identifier_state_lines(source),
+            vec![2, 3]
+        );
     }
 
     #[test]
@@ -512,7 +554,10 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
 }
 "#;
 
-        assert_eq!(rust_wasm_boundary_violation_lines(source), vec![4, 6]);
+        assert_eq!(
+            TypeScriptDomainBoundary::rust_wasm_boundary_violation_lines(source),
+            vec![4, 6]
+        );
     }
 
     fn write_authored_null_fixture(root: &Path) -> anyhow::Result<()> {
@@ -629,7 +674,7 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
         let root = temporary_directory()?;
         write_authored_null_fixture(&root)?;
         assert_eq!(
-            typescript_null_absence_sentinels(&root)?,
+            TypeScriptApplicationState::typescript_null_absence_sentinels(&root)?,
             expected_authored_null_violations()
         );
         fs::remove_dir_all(root)?;
@@ -666,7 +711,7 @@ export function configuredCapability(): NookProviderReplicationCapability {
 }
 "#;
 
-        assert!(typescript_boundary_violation_lines(source).is_empty());
+        assert!(TypeScriptDomainBoundary::typescript_boundary_violation_lines(source).is_empty());
     }
 
     #[test]
@@ -685,7 +730,10 @@ export function configuredCapability(): NookProviderReplicationCapability {
 </script>
 "#;
 
-        assert_eq!(typescript_boundary_violation_lines(source), vec![6]);
+        assert_eq!(
+            TypeScriptDomainBoundary::typescript_boundary_violation_lines(source),
+            vec![6]
+        );
     }
 
     fn temporary_directory() -> anyhow::Result<PathBuf> {

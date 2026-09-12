@@ -1,8 +1,18 @@
 import { describe, expect, test } from 'bun:test'
-import { Linter } from 'eslint'
+import { TSESLint } from '@typescript-eslint/utils'
 import ts from 'typescript-eslint'
 import { noRawObjectArgumentsRule } from '../../eslint.config.js'
 
+/** @type {'problem'} */
+const problemRuleType = 'problem'
+/** @type {'error'} */
+const errorSeverity = 'error'
+const typedNoRawObjectArgumentsRule = {
+  ...noRawObjectArgumentsRule,
+  meta: { ...noRawObjectArgumentsRule.meta, type: problemRuleType },
+}
+
+/** @type {import('@typescript-eslint/utils').TSESLint.FlatConfig.Config} */
 const config = {
   languageOptions: {
     parser: ts.parser,
@@ -14,20 +24,22 @@ const config = {
   plugins: {
     'nook-typed-api': {
       rules: {
-        'no-raw-object-arguments': noRawObjectArgumentsRule,
+        'no-raw-object-arguments': typedNoRawObjectArgumentsRule,
       },
     },
   },
   rules: {
-    'nook-typed-api/no-raw-object-arguments': 'error',
+    'nook-typed-api/no-raw-object-arguments': errorSeverity,
   },
 }
 
+/** @param {string} source */
 function lint(source) {
-  return new Linter()
+  return new TSESLint.Linter()
     .verify(source, config)
     .filter(
       (message) =>
+        typeof message.messageId !== 'string' ||
         ![
           'namedParameterDefault',
           'namedParameterType',
@@ -36,17 +48,22 @@ function lint(source) {
     )
 }
 
+/** @param {string} source */
 function lintParameterTypes(source) {
-  return new Linter()
+  return new TSESLint.Linter()
     .verify(source, config)
-    .filter((message) =>
-      ['namedParameterType', 'semanticParameterType'].includes(
-        message.messageId,
-      ),
+    .filter(
+      (message) =>
+        typeof message.messageId === 'string' &&
+        ['namedParameterType', 'semanticParameterType'].includes(
+          message.messageId,
+        ),
     )
 }
 
+/** @param {string} source */
 function lintWithoutParameterContractEnforcement(source) {
+  /** @type {import('@typescript-eslint/utils').TSESLint.FlatConfig.Config} */
   const migrationConfig = {
     ...config,
     rules: {
@@ -56,7 +73,7 @@ function lintWithoutParameterContractEnforcement(source) {
       ],
     },
   }
-  return new Linter().verify(source, migrationConfig)
+  return new TSESLint.Linter().verify(source, migrationConfig)
 }
 describe('typed API named arguments', () => {
   test('rejects a named object literal without an explicit type', () => {
@@ -539,7 +556,7 @@ describe('typed API named arguments', () => {
   })
 
   test('rejects inferred object parameter defaults at the declaration', () => {
-    const messages = new Linter()
+    const messages = new TSESLint.Linter()
       .verify(
         `
           function direct(args = { name: 'Nook' }): void { void args }
@@ -558,7 +575,7 @@ describe('typed API named arguments', () => {
   })
 
   test('rejects object defaults under a named parameter contract', () => {
-    const messages = new Linter()
+    const messages = new TSESLint.Linter()
       .verify(
         `
           type DirectConsumeRequest = { name?: string }

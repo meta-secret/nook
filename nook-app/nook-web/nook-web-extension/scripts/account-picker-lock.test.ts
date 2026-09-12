@@ -1,9 +1,32 @@
 import { describe, expect, test } from 'bun:test'
 import { CleanupEvidence } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { WebsiteLoginCanceledMessageType } from '../src/lib/login-picker-messages'
 
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
 })
+
+function browserTab(
+  id: number,
+  url = 'https://example.test/',
+): chrome.tabs.Tab {
+  return {
+    id,
+    url,
+    index: 0,
+    pinned: false,
+    highlighted: false,
+    windowId: 1,
+    active: true,
+    incognito: false,
+    selected: true,
+    discarded: false,
+    autoDiscardable: true,
+    frozen: false,
+    lastAccessed: 0,
+    groupId: -1,
+  }
+}
 
 class AuthorizationStorageFixture {
   readonly runtime = {}
@@ -15,10 +38,12 @@ class AuthorizationStorageFixture {
   }
 
   constructor() {
-    globalThis.chrome = {
-      runtime: this.runtime,
-      storage: { session: this.session },
-    } as typeof chrome
+    Object.assign(globalThis, {
+      chrome: {
+        runtime: this.runtime,
+        storage: { session: this.session },
+      },
+    })
   }
 
   holdRemoval(): Promise<() => void> {
@@ -44,14 +69,22 @@ describe('account picker authorization cleanup', () => {
     const { AccountPickerPageTarget } =
       await import('../src/background/service-worker/account-pickers')
     const deliveries: Array<{ tabId: number; frameId: number }> = []
-    globalThis.chrome = {
-      tabs: {
-        sendMessage: (tabId, _message, options) => {
-          deliveries.push({ tabId, frameId: options.frameId })
-          return Promise.resolve({ ok: options.frameId === 7 })
+    Object.assign(globalThis, {
+      chrome: {
+        tabs: {
+          sendMessage: (
+            tabId: number,
+            _message: unknown,
+            options: chrome.tabs.MessageSendOptions,
+          ) => {
+            const frameId =
+              typeof options.frameId === 'number' ? options.frameId : 0
+            deliveries.push({ tabId, frameId })
+            return Promise.resolve({ ok: options.frameId === 7 })
+          },
         },
       },
-    } as typeof chrome
+    })
 
     expect(AccountPickerPageTarget.senderFrameId({ frameId: 7 })).toBe(7)
     expect(AccountPickerPageTarget.senderFrameId({})).toBe(0)
@@ -60,13 +93,13 @@ describe('account picker authorization cleanup', () => {
     >[0] = {
       tabId: 42,
       frameId: 7,
-      sender: { tab: { id: 42 }, frameId: 7 },
+      sender: { tab: browserTab(42), frameId: 7 },
     }
     const wrongFrameSender: Parameters<
       typeof AccountPickerPageTarget.matchesSender
     >[0] = {
       ...expectedSender,
-      sender: { tab: { id: 42 }, frameId: 3 },
+      sender: { tab: browserTab(42), frameId: 3 },
     }
     expect(AccountPickerPageTarget.matchesSender(expectedSender)).toBe(true)
     expect(AccountPickerPageTarget.matchesSender(wrongFrameSender)).toBe(false)
@@ -81,10 +114,10 @@ describe('account picker authorization cleanup', () => {
       message: { type: 'selected' },
     }
 
-    await expect(AccountPickerPageTarget.send(requestedFrame)).resolves.toEqual(
-      { ok: true },
-    )
-    await expect(AccountPickerPageTarget.send(wrongFrame)).resolves.toEqual({
+    expect(await AccountPickerPageTarget.send(requestedFrame)).toEqual({
+      ok: true,
+    })
+    expect(await AccountPickerPageTarget.send(wrongFrame)).toEqual({
       ok: false,
     })
     expect(deliveries).toEqual([
@@ -94,7 +127,7 @@ describe('account picker authorization cleanup', () => {
   })
 
   test('rehydrates only picker records carrying a validated frame target', async () => {
-    const { persistedAccountPickerCleanupPlan } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     const stored = {
       'nook.extension.login-picker.framed': {
@@ -114,7 +147,9 @@ describe('account picker authorization cleanup', () => {
       },
     }
 
-    expect(persistedAccountPickerCleanupPlan(stored)).toEqual({
+    expect(
+      accountPickerSessions.persistedAccountPickerCleanupPlan(stored),
+    ).toEqual({
       storageKeys: [
         'nook.extension.login-picker.framed',
         'nook.extension.login-picker.legacy-unframed',
@@ -124,7 +159,7 @@ describe('account picker authorization cleanup', () => {
           tabId: 42,
           frameId: 7,
           message: {
-            type: 'nook:website-login-canceled',
+            type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
             payload: {
               origin: 'https://idmsa.apple.test',
               requestId: 'framed',
@@ -147,7 +182,10 @@ describe('account picker authorization cleanup', () => {
     expect(overlap.authorizationGeneration).toBe(
       cleanup.authorizationGeneration,
     )
-    const result = await accountPickers.loadLoginPicker('persisted-request')
+    const result =
+      await accountPickers.accountPickerSessions.loadLoginPicker(
+        'persisted-request',
+      )
     await accountPickers.completeAccountPickerAuthorizationCleanup(
       cleanup.authorizationGeneration,
       CleanupEvidence.Full,
@@ -167,7 +205,7 @@ describe('account picker authorization cleanup', () => {
       ),
     ).toBe(true)
 
-    expect(result).toEqual({ kind: 'unavailable' })
+    expect('request' in result).toBe(false)
   })
 
   test('reacquires the successor after marker removal overlaps another cleanup', async () => {
@@ -267,25 +305,29 @@ describe('account picker authorization cleanup', () => {
   })
 
   test('rejects picker rehydration after a worker restart during cleanup', async () => {
-    const { loadLoginPicker } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
-    globalThis.chrome = {
-      runtime: {},
-      storage: {
-        session: {
-          get: (_key, callback) =>
-            callback({ 'nook.extension.account-picker-cleanup': true }),
+    Object.assign(globalThis, {
+      chrome: {
+        runtime: {},
+        storage: {
+          session: {
+            get: (
+              _key: string,
+              callback: (items: Record<string, boolean>) => void,
+            ) => callback({ 'nook.extension.account-picker-cleanup': true }),
+          },
         },
       },
-    } as typeof chrome
-
-    expect(await loadLoginPicker('persisted-request')).toEqual({
-      kind: 'unavailable',
     })
+
+    const result =
+      await accountPickerSessions.loadLoginPicker('persisted-request')
+    expect('request' in result).toBe(false)
   })
 
   test('closes visible picker surfaces during cleanup', async () => {
-    const { clearPendingAccountPickers } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     const removedTabs: number[] = []
     let rejectStorage = false
@@ -293,50 +335,78 @@ describe('account picker authorization cleanup', () => {
     const runtime = {
       getURL: (path: string) => `chrome-extension://nook/${path}`,
     }
-    globalThis.chrome = {
-      runtime,
-      storage: {
-        session: {
-          get: (callback: (items: Record<string, boolean>) => void) => {
-            if (rejectStorage) {
-              Object.assign(runtime, { lastError: { message: 'denied' } })
-            }
-            callback({})
-            Reflect.deleteProperty(runtime, 'lastError')
+    Object.assign(globalThis, {
+      chrome: {
+        runtime,
+        storage: {
+          session: {
+            get: (callback: (items: Record<string, boolean>) => void) => {
+              if (rejectStorage) {
+                Object.assign(runtime, { lastError: { message: 'denied' } })
+              }
+              callback({})
+              Reflect.deleteProperty(runtime, 'lastError')
+            },
           },
         },
-      },
-      tabs: {
-        query: (_query, callback) =>
-          callback([
-            {
-              id: 21,
-              url: 'chrome-extension://nook/popup/index.html?intent=login-picker',
-            },
-          ]),
-        remove: (tabId, callback) => {
-          removedTabs.push(tabId as number)
-          if (rejectRemoval) {
-            Object.assign(runtime, { lastError: { message: 'denied' } })
-          }
-          callback?.()
-          Reflect.deleteProperty(runtime, 'lastError')
+        tabs: {
+          query: (
+            _query: chrome.tabs.QueryInfo,
+            callback: (tabs: chrome.tabs.Tab[]) => void,
+          ) =>
+            callback([
+              browserTab(
+                21,
+                'chrome-extension://nook/popup/index.html?intent=login-picker',
+              ),
+            ]),
+          remove: (tabId: number | number[], callback?: () => void) => {
+            let removedTabId = -1
+            if (Array.isArray(tabId)) {
+              for (const selectedTabId of tabId) {
+                removedTabId = selectedTabId
+                break
+              }
+            } else {
+              removedTabId = tabId
+            }
+            removedTabs.push(removedTabId)
+            if (rejectRemoval) {
+              Object.assign(runtime, { lastError: { message: 'denied' } })
+            }
+            callback?.()
+            Reflect.deleteProperty(runtime, 'lastError')
+          },
+          sendMessage: () => Promise.resolve(),
         },
-        sendMessage: () => Promise.resolve(),
       },
-    } as typeof chrome
+    })
 
-    await clearPendingAccountPickers()
+    await accountPickerSessions.clearPendingAccountPickers()
 
     expect(removedTabs).toEqual([21])
     rejectStorage = true
-    await expect(clearPendingAccountPickers()).rejects.toThrow(
-      'account picker cleanup failed',
-    )
+    let storageRejected = false
+    try {
+      await accountPickerSessions.clearPendingAccountPickers()
+    } catch (failure) {
+      storageRejected = true
+      expect(failure).toBeInstanceOf(Error)
+      if (failure instanceof Error)
+        expect(failure.message).toContain('account picker cleanup failed')
+    }
+    expect(storageRejected).toBe(true)
     rejectStorage = false
     rejectRemoval = true
-    await expect(clearPendingAccountPickers()).rejects.toThrow(
-      'account picker cleanup failed',
-    )
+    let removalRejected = false
+    try {
+      await accountPickerSessions.clearPendingAccountPickers()
+    } catch (failure) {
+      removalRejected = true
+      expect(failure).toBeInstanceOf(Error)
+      if (failure instanceof Error)
+        expect(failure.message).toContain('account picker cleanup failed')
+    }
+    expect(removalRejected).toBe(true)
   })
 })

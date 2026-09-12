@@ -27,12 +27,11 @@
   import {
     DEFAULT_GITHUB_REPO,
     GITHUB_PROVIDER_TYPE,
-    localFolderHandle,
+    LocalFolderPresentation,
     LocalFolderHandleKind,
     localizedProviderStorageDetail,
     localizeProviderLabel,
-    oauthAccessToken,
-    OAuthAccessTokenKind,
+    oauth_access_token,
     OAUTH_FILE_PROVIDER_TYPE,
   } from '$lib/auth/providers'
   import type { VaultState } from '$lib/vault.svelte'
@@ -40,7 +39,7 @@
     providerCapabilityLabelKey,
     provider_supports_replication,
   } from '$lib/vault/architecture-model'
-  import { formatProviderSyncStatus } from '$lib/auth/provider-sync-status'
+  import { ProviderSyncStatusView } from '$lib/auth/provider-sync-status'
   import {
     LocalFolderDraftKind,
     LoginSetupKind,
@@ -89,24 +88,31 @@
 
   function confirmRemoveProvider(provider: StorageProvider) {
     if (!onRemoveProvider) return
-    const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.AuthStorageConfirmRemove, replacements: {
+    const tArgs: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.AuthStorageConfirmRemove,
+      replacements: {
         label: provider.label,
         signedOutNote: '',
-      } };
-    const ok = confirm(
-      vault.t(tArgs),
-    )
+      },
+    }
+    const ok = confirm(vault.t(tArgs))
     if (ok) {
       void onRemoveProvider(provider.id)
     }
   }
 
   function formatSyncStatus(provider: StorageProvider): string {
-    const formatProviderSyncStatusArgs: Parameters<typeof formatProviderSyncStatus>[0] = { provider, locale: vault.locale, labels: {
-      lastSynced: vault.t(I18N_KEYS.AuthStorageLastSynced),
-      notSyncedYet: vault.t(I18N_KEYS.AuthStorageNotSyncedYet),
-    } };
-    return formatProviderSyncStatus(formatProviderSyncStatusArgs)
+    const formatProviderSyncStatusArgs: ConstructorParameters<
+      typeof ProviderSyncStatusView
+    >[0] = {
+      provider,
+      locale: vault.locale,
+      labels: {
+        lastSynced: vault.t(I18N_KEYS.AuthStorageLastSynced),
+        notSyncedYet: vault.t(I18N_KEYS.AuthStorageNotSyncedYet),
+      },
+    }
+    return new ProviderSyncStatusView(formatProviderSyncStatusArgs).text
   }
 
   const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
@@ -121,12 +127,12 @@
     setupIs('local') ||
       (setupIs('local-folder') &&
         vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
-        localFolderHandle(vault.localFolderDraft.config).kind ===
-          LocalFolderHandleKind.Selected) ||
+        new LocalFolderPresentation(
+          vault.localFolderDraft.config,
+        ).localFolderHandle().kind === LocalFolderHandleKind.Selected) ||
       (setupIs('oauth-file') &&
         vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-        oauthAccessToken(vault.oauthFileDraft.config).kind ===
-          OAuthAccessTokenKind.Available) ||
+        oauth_access_token(vault.oauthFileDraft.config).kind === 'available') ||
       (setupIs('github') && Boolean(githubPat.trim())),
   )
   const oauthPreset = $derived(
@@ -156,15 +162,21 @@
         </button>
         <h2 class="text-base font-semibold text-foreground">
           {#if showSetup}
-            {(() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.AuthStorageConnectToType, replacements: {
-              type: setupIs('github')
-                ? vault.t(I18N_KEYS.AuthStorageGithub)
-                : setupIs('oauth-file')
-                  ? vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
-                  : setupIs('local-folder')
-                    ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
-                    : vault.t(I18N_KEYS.AuthStorageThisDevice),
-            } }; return vault.t(tArgs2); })()}
+            {(() => {
+              const tArgs2: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.AuthStorageConnectToType,
+                replacements: {
+                  type: setupIs('github')
+                    ? vault.t(I18N_KEYS.AuthStorageGithub)
+                    : setupIs('oauth-file')
+                      ? vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
+                      : setupIs('local-folder')
+                        ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
+                        : vault.t(I18N_KEYS.AuthStorageThisDevice),
+                },
+              }
+              return vault.t(tArgs2)
+            })()}
           {:else}
             {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
           {/if}
@@ -271,10 +283,11 @@
               data-testid="settings-providers-list"
             >
               {#each syncProviders as provider (provider.id)}
-                {@const supportsVaultReplication = provider_supports_replication(
-                  provider,
-                  vault.vaultArchitecture.replication_type,
-                )}
+                {@const supportsVaultReplication =
+                  provider_supports_replication(
+                    provider,
+                    vault.vaultArchitecture.replication_type,
+                  )}
                 <li class="flex items-center gap-2 py-2.5 first:pt-0 last:pb-0">
                   <div
                     class="flex min-w-0 flex-1 items-center gap-3 px-1 py-1"
@@ -287,12 +300,26 @@
                     {/if}
                     <span class="min-w-0 flex-1">
                       <span class="block truncate font-medium text-sm">
-                        {(() => { const localizeProviderLabelArgs: Parameters<typeof localizeProviderLabel>[0] = { label: provider.label, t: vault.t }; return localizeProviderLabel(localizeProviderLabelArgs); })()}
+                        {(() => {
+                          const localizeProviderLabelArgs: Parameters<
+                            typeof localizeProviderLabel
+                          >[0] = { label: provider.label, t: vault.t }
+                          return localizeProviderLabel(
+                            localizeProviderLabelArgs,
+                          )
+                        })()}
                       </span>
                       <span
                         class="block truncate text-xs text-muted-foreground"
                       >
-                        {(() => { const localizedProviderStorageDetailRequest: Parameters<typeof localizedProviderStorageDetail>[0] = { provider, t: vault.t }; return localizedProviderStorageDetail(localizedProviderStorageDetailRequest); })()}
+                        {(() => {
+                          const localizedProviderStorageDetailRequest: Parameters<
+                            typeof localizedProviderStorageDetail
+                          >[0] = { provider, t: vault.t }
+                          return localizedProviderStorageDetail(
+                            localizedProviderStorageDetailRequest,
+                          )
+                        })()}
                       </span>
                       <span
                         class="block truncate text-[11px] text-muted-foreground"
@@ -351,9 +378,12 @@
                     <button
                       type="button"
                       class="inline-flex shrink-0 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                      aria-label="{vault.t(
-                        I18N_KEYS.CommonRemove,
-                      )} {(() => { const localizeProviderLabelArgs2: Parameters<typeof localizeProviderLabel>[0] = { label: provider.label, t: vault.t }; return localizeProviderLabel(localizeProviderLabelArgs2); })()}"
+                      aria-label="{vault.t(I18N_KEYS.CommonRemove)} {(() => {
+                        const localizeProviderLabelArgs2: Parameters<
+                          typeof localizeProviderLabel
+                        >[0] = { label: provider.label, t: vault.t }
+                        return localizeProviderLabel(localizeProviderLabelArgs2)
+                      })()}"
                       data-testid="remove-provider-{provider.id}"
                       disabled={isVerifying || isInitializing}
                       onclick={() => confirmRemoveProvider(provider)}

@@ -1,18 +1,28 @@
 import { describe, expect, test } from 'bun:test';
-import { analyzeExecutableSkillSource } from '../../src/executable-skills/source-policy.ts';
+
+import { ExecutableSkillSource } from '../../src/executable-skills/source-policy.ts';
+
+export class ExecutableSkillsSourcePolicyScenario {
+  private constructor(private readonly request: AnalyzeFixtureRequest) {}
+
+  static analyzeFixture(request: AnalyzeFixtureRequest): readonly string[] {
+    return new ExecutableSkillsSourcePolicyScenario(request).execute();
+  }
+
+  private execute(): readonly string[] {
+    const request = this.request;
+    const analysisRequest = {
+      ...request,
+      relativePath:
+        '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/fixture/runner.ts',
+    };
+    return ExecutableSkillSource.analyze(analysisRequest).moduleSpecifiers;
+  }
+}
 
 type AnalyzeFixtureRequest = {
   readonly source: string;
 };
-
-function analyzeFixture(request: AnalyzeFixtureRequest): readonly string[] {
-  const analysisRequest = {
-    ...request,
-    relativePath:
-      '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/fixture/runner.ts',
-  };
-  return analyzeExecutableSkillSource(analysisRequest).moduleSpecifiers;
-}
 
 describe('executable skill source policy', () => {
   test('accepts audited local modules and type-only external modules', () => {
@@ -28,7 +38,9 @@ describe('executable skill source policy', () => {
     const request: AnalyzeFixtureRequest = {
       source,
     };
-    expect(analyzeFixture(request)).toEqual(['./audit.ts']);
+    expect(
+      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+    ).toEqual(['./audit.ts']);
   });
 
   test('distinguishes emitted local bindings from ambient capability names', () => {
@@ -58,7 +70,9 @@ describe('executable skill source policy', () => {
       'const localHolder = { Bun, Buffer, process, fetch, Worker, Object, postMessage, BroadcastChannel };',
     ].join('\n');
     const request: AnalyzeFixtureRequest = { source };
-    expect(analyzeFixture(request)).toEqual([]);
+    expect(
+      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+    ).toEqual([]);
   });
 
   test('allows erased declarations only in declaration and type positions', () => {
@@ -72,7 +86,9 @@ describe('executable skill source policy', () => {
       'interface Holder { readonly process: ProcessShape; readonly bun: Bun; readonly object: Object }',
     ].join('\n');
     const request: AnalyzeFixtureRequest = { source };
-    expect(analyzeFixture(request)).toEqual([]);
+    expect(
+      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+    ).toEqual([]);
   });
 
   test('rejects erased declarations and type-only bindings used as values', () => {
@@ -95,9 +111,9 @@ describe('executable skill source policy', () => {
     ];
     for (const source of sources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() => analyzeFixture(request)).toThrow(
-        'erased declarations used as runtime values',
-      );
+      expect(() =>
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      ).toThrow('erased declarations used as runtime values');
     }
   });
 
@@ -108,9 +124,9 @@ describe('executable skill source policy', () => {
     ];
     for (const source of sources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() => analyzeFixture(request)).toThrow(
-        'Bun APIs outside narrow standard I/O',
-      );
+      expect(() =>
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      ).toThrow('Bun APIs outside narrow standard I/O');
     }
   });
 
@@ -124,7 +140,9 @@ describe('executable skill source policy', () => {
       'Bun.spawn("local");',
     ].join('\n');
     const request: AnalyzeFixtureRequest = { source };
-    expect(analyzeFixture(request)).toEqual([]);
+    expect(
+      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+    ).toEqual([]);
   });
 
   test('analyzes only the runtime-local side of export specifiers', () => {
@@ -139,7 +157,9 @@ describe('executable skill source policy', () => {
       "export { RuntimeShape as RemoteShape } from './types.ts';",
     ].join('\n');
     const acceptedRequest: AnalyzeFixtureRequest = { source: accepted };
-    expect(analyzeFixture(acceptedRequest)).toEqual(['./types.ts']);
+    expect(
+      ExecutableSkillsSourcePolicyScenario.analyzeFixture(acceptedRequest),
+    ).toEqual(['./types.ts']);
 
     const rejected = [
       'export { Bun };',
@@ -151,9 +171,9 @@ describe('executable skill source policy', () => {
     ];
     for (const source of rejected) {
       const rejectedRequest: AnalyzeFixtureRequest = { source };
-      expect(() => analyzeFixture(rejectedRequest)).toThrow(
-        'ambient global capabilities',
-      );
+      expect(() =>
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(rejectedRequest),
+      ).toThrow('ambient global capabilities');
     }
   });
 
@@ -176,7 +196,9 @@ describe('executable skill source policy', () => {
       const request: AnalyzeFixtureRequest = {
         source,
       };
-      expect(() => analyzeFixture(request)).toThrow('external runtime package');
+      expect(() =>
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      ).toThrow('external runtime package');
     }
   });
 
@@ -189,7 +211,9 @@ describe('executable skill source policy', () => {
         'ancestor;',
       ].join('\n'),
     };
-    expect(analyzeFixture(request)).toEqual(['./local.ts', '../domain.ts']);
+    expect(
+      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+    ).toEqual(['./local.ts', '../domain.ts']);
   });
 
   test('rejects runtime imports that normalize outside the owning skill root', () => {
@@ -199,9 +223,9 @@ describe('executable skill source policy', () => {
     ];
     for (const source of sources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() => analyzeFixture(request)).toThrow(
-        'inside their owning skill root',
-      );
+      expect(() =>
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      ).toThrow('inside their owning skill root');
     }
   });
 
@@ -219,7 +243,7 @@ describe('executable skill source policy', () => {
         relativePath,
         source: "const view = <div>{fetch('https://example.com')}</div>;",
       };
-      expect(() => analyzeExecutableSkillSource(request)).toThrow(
+      expect(() => ExecutableSkillSource.analyze(request)).toThrow(
         'canonical TypeScript source path',
       );
     }
@@ -229,7 +253,7 @@ describe('executable skill source policy', () => {
         '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/fixture/run.ts',
       source: "const view = <div>{fetch('https://example.com')}</div>;",
     };
-    expect(() => analyzeExecutableSkillSource(invalidSyntaxRequest)).toThrow(
+    expect(() => ExecutableSkillSource.analyze(invalidSyntaxRequest)).toThrow(
       'invalid TypeScript syntax',
     );
   });
@@ -242,9 +266,9 @@ describe('executable skill source policy', () => {
     ];
     for (const source of attributedSources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() => analyzeFixture(request)).toThrow(
-        'runtime import attributes',
-      );
+      expect(() =>
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      ).toThrow('runtime import attributes');
     }
 
     const nonSourceModules = [
@@ -260,9 +284,9 @@ describe('executable skill source policy', () => {
     ];
     for (const source of nonSourceModules) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() => analyzeFixture(request)).toThrow(
-        'relative TypeScript source imports',
-      );
+      expect(() =>
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      ).toThrow('relative TypeScript source imports');
     }
   });
 
@@ -281,9 +305,9 @@ describe('executable skill source policy', () => {
       const request: AnalyzeFixtureRequest = {
         source: `const holder = { ${capability} };`,
       };
-      expect(() => analyzeFixture(request)).toThrow(
-        'ambient global capabilities',
-      );
+      expect(() =>
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      ).toThrow('ambient global capabilities');
     }
   });
 
@@ -291,9 +315,9 @@ describe('executable skill source policy', () => {
     const request: AnalyzeFixtureRequest = {
       source: 'const bytes = Buffer.allocUnsafe(1024);',
     };
-    expect(() => analyzeFixture(request)).toThrow(
-      'ambient global capabilities',
-    );
+    expect(() =>
+      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+    ).toThrow('ambient global capabilities');
   });
 
   test('rejects ambient cross-context messaging capabilities', () => {
@@ -307,9 +331,9 @@ describe('executable skill source policy', () => {
     ];
     for (const source of ambientSources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() => analyzeFixture(request)).toThrow(
-        'ambient global capabilities',
-      );
+      expect(() =>
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      ).toThrow('ambient global capabilities');
     }
 
     const erasedShadowSources = [
@@ -318,9 +342,9 @@ describe('executable skill source policy', () => {
     ];
     for (const source of erasedShadowSources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() => analyzeFixture(request)).toThrow(
-        'erased declarations used as runtime values',
-      );
+      expect(() =>
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      ).toThrow('erased declarations used as runtime values');
     }
   });
 
@@ -331,7 +355,7 @@ describe('executable skill source policy', () => {
       '  BroadcastChannel: class { constructor(readonly name: string) {} },',
       '  onmessage: (value: string) => value,',
       '  addEventListener: (name: string) => name,',
-      '  close: () => undefined,',
+      '  close: () => {},',
       '  MessageChannel: class {},',
       '  MessagePort: class {},',
       '};',
@@ -349,22 +373,26 @@ describe('executable skill source policy', () => {
       'new MessagePort();',
     ].join('\n');
     const request: AnalyzeFixtureRequest = { source };
-    expect(analyzeFixture(request)).toEqual([]);
+    expect(
+      ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+    ).toEqual([]);
   });
 
   test('rejects source, path, and module-list inputs above their bounds', () => {
     const oversizedSourceRequest: AnalyzeFixtureRequest = {
       source: 'a'.repeat(1024 * 1024 + 1),
     };
-    expect(() => analyzeFixture(oversizedSourceRequest)).toThrow(
-      'source exceeds its byte bound',
-    );
+    expect(() =>
+      ExecutableSkillsSourcePolicyScenario.analyzeFixture(
+        oversizedSourceRequest,
+      ),
+    ).toThrow('source exceeds its byte bound');
 
     const oversizedPathRequest = {
       relativePath: `./${'a'.repeat(4096)}`,
       source: 'export {};',
     };
-    expect(() => analyzeExecutableSkillSource(oversizedPathRequest)).toThrow(
+    expect(() => ExecutableSkillSource.analyze(oversizedPathRequest)).toThrow(
       'source path exceeds its byte bound',
     );
 
@@ -375,9 +403,9 @@ describe('executable skill source policy', () => {
     const moduleListRequest: AnalyzeFixtureRequest = {
       source: importLines.join('\n'),
     };
-    expect(() => analyzeFixture(moduleListRequest)).toThrow(
-      'module specifiers exceed their bound',
-    );
+    expect(() =>
+      ExecutableSkillsSourcePolicyScenario.analyzeFixture(moduleListRequest),
+    ).toThrow('module specifiers exceed their bound');
   });
 
   test('rejects every runtime node module form', () => {
@@ -389,7 +417,9 @@ describe('executable skill source policy', () => {
     ];
     for (const source of sources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() => analyzeFixture(request)).toThrow('forbidden ambient module');
+      expect(() =>
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      ).toThrow('forbidden ambient module');
     }
   });
 
@@ -403,7 +433,9 @@ describe('executable skill source policy', () => {
         'values.at(index);',
       ].join('\n'),
     };
-    expect(analyzeFixture(acceptedRequest)).toEqual([]);
+    expect(
+      ExecutableSkillsSourcePolicyScenario.analyzeFixture(acceptedRequest),
+    ).toEqual([]);
 
     const rejected = [
       "const key = 'constructor' as never as number; (() => {})[key];",
@@ -423,9 +455,9 @@ describe('executable skill source policy', () => {
     ];
     for (const source of rejected) {
       const rejectedRequest: AnalyzeFixtureRequest = { source };
-      expect(() => analyzeFixture(rejectedRequest)).toThrow(
-        'nonnegative safe-integer numeric literal',
-      );
+      expect(() =>
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(rejectedRequest),
+      ).toThrow('nonnegative safe-integer numeric literal');
     }
   });
 
@@ -482,7 +514,9 @@ describe('executable skill source policy', () => {
       const request: AnalyzeFixtureRequest = {
         source,
       };
-      expect(() => analyzeFixture(request)).toThrow();
+      expect(() =>
+        ExecutableSkillsSourcePolicyScenario.analyzeFixture(request),
+      ).toThrow();
     }
   });
 
@@ -490,12 +524,14 @@ describe('executable skill source policy', () => {
     const localRequest: AnalyzeFixtureRequest = {
       source: "import { audit } from './audit.ts';",
     };
-    expect(analyzeFixture(localRequest)).toEqual(['./audit.ts']);
+    expect(
+      ExecutableSkillsSourcePolicyScenario.analyzeFixture(localRequest),
+    ).toEqual(['./audit.ts']);
     const packageRequest: AnalyzeFixtureRequest = {
       source: "import value from 'package-name';",
     };
-    expect(() => analyzeFixture(packageRequest)).toThrow(
-      'external runtime package',
-    );
+    expect(() =>
+      ExecutableSkillsSourcePolicyScenario.analyzeFixture(packageRequest),
+    ).toThrow('external runtime package');
   });
 });

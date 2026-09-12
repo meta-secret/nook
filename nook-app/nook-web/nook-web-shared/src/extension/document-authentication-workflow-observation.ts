@@ -1,22 +1,32 @@
-import { PasswordFormScopeKind } from './password-form-fields'
+import { PasswordFormScopeKind } from "./password-form-fields";
+
 import {
   PasswordFormQueryKind,
   type PasswordFormScopeQuery,
-} from './password-form-submission-controls'
-import {
-  summarizeRoot,
-  type PasswordFormObservation,
-} from './password-forms'
+} from "./password-form-submission-controls";
 
-export function documentAuthenticationWorkflowObservation(): PasswordFormObservation {
-  const root = document
-  const request: PasswordFormScopeQuery = {
-    kind: PasswordFormQueryKind.Root,
-    root,
-  }
-  return {
-    root,
-    formScope: { kind: PasswordFormScopeKind.Unowned },
-    summary: summarizeRoot(request),
+import {
+  type PasswordFormObservation,
+  passwordFormInteraction,
+} from "./password-forms";
+
+/** Owns this browser host’s resources and interaction lifecycle. */
+class DocumentAuthenticationObservation {
+  constructor(private readonly browser: typeof globalThis) {}
+
+  documentAuthenticationWorkflowObservation(): PasswordFormObservation {
+    const root = this.browser.document;
+    const request: PasswordFormScopeQuery = {
+      kind: PasswordFormQueryKind.Root,
+      root,
+    };
+    return {
+      root,
+      formScope: { kind: PasswordFormScopeKind.Unowned },
+      summary: passwordFormInteraction.summarizeRoot(request),
+    };
   }
 }
+
+export const documentAuthenticationObservation =
+  new DocumentAuthenticationObservation(globalThis);

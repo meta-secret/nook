@@ -1,3 +1,4 @@
+import { KubernetesDocument } from "./kubernetes-document";
 import { timingSafeEqual } from "node:crypto";
 
 const namespace = "hive-system";
@@ -23,7 +24,7 @@ export enum ApiMethod {
 
 export interface KubernetesApi {
   request(input: ApiRequest): Promise<string>;
-  json<T>(input: ApiRequest): Promise<T>;
+  json<T>(input: ApiJsonRequest<T>): Promise<T>;
 }
 
 interface IpBlock {
@@ -31,18 +32,19 @@ interface IpBlock {
 }
 
 interface SelectorTarget {
-  namespaceSelector?: { matchLabels: Record<string, string> };
-  podSelector?: { matchLabels: Record<string, string> };
+  namespaceSelector?: { matchLabels?: Record<string, string> };
+  podSelector?: { matchLabels?: Record<string, string> };
 }
 
 type NetworkTarget = IpBlock | SelectorTarget;
 
+export type NetworkPortValue = number | string;
 interface NetworkPort {
   protocol?: string;
-  port?: number;
+  port?: NetworkPortValue;
 }
 
-interface EgressRule {
+export interface EgressRule {
   to?: NetworkTarget[];
   ports?: NetworkPort[];
 }
@@ -57,15 +59,15 @@ export interface NetworkPolicyPatch {
   spec: { egress: EgressRule[] };
 }
 
-interface Service {
+export interface Service {
   spec: { clusterIP: string };
 }
 
-interface Endpoints {
+export interface Endpoints {
   subsets?: Array<{ addresses?: Array<{ ip: string }> }>;
 }
 
-interface Pod {
+export interface Pod {
   metadata?: { labels?: Record<string, string> };
 }
 
@@ -109,8 +111,8 @@ export class LiveKubernetesApi implements KubernetesApi {
     return response.text();
   }
 
-  async json<T>(input: ApiRequest): Promise<T> {
-    return JSON.parse(await this.request(input)) as T;
+  async json<T>(input: ApiJsonRequest<T>): Promise<T> {
+    return input.decode(await this.request(input));
   }
 }
 
@@ -125,21 +127,79 @@ function normalizeIpv4(value: string): string {
   return parts.map((part) => String(Number(part))).join(".");
 }
 
-function isNeo4jIpRule(rule: EgressRule): boolean {
-  const [ports = []] = [rule.ports];
-  const [targets = []] = [rule.to];
-  return (
-    ports.some(
-      (port) => port.protocol === "TCP" && port.port === 7687,
-    ) && targets.some((target) => "ipBlock" in target)
-  );
+export enum Neo4jPolicyPreparationKind {
+  Unchanged = "unchanged",
+  Prepared = "prepared",
 }
-
-function destinationsEqual(input: {
-  left: NetworkTarget[];
-  right: NetworkTarget[];
-}): boolean {
-  return JSON.stringify(input.left) === JSON.stringify(input.right);
+type Neo4jPolicyPreparation =
+  | { kind: Neo4jPolicyPreparationKind.Unchanged }
+  | {
+      kind: Neo4jPolicyPreparationKind.Prepared;
+      patch: PreparedNeo4jPolicyPatch;
+    };
+interface Neo4jPolicyAdmission {
+  api: KubernetesApi;
+  policyPath: string;
+  policy: NetworkPolicy;
+  destinations: NetworkTarget[];
+}
+enum Neo4jPatchStateKind {
+  Ready = "ready",
+  Consumed = "consumed",
+}
+type Neo4jPatchState =
+  | { kind: Neo4jPatchStateKind.Ready; api: KubernetesApi; request: ApiRequest }
+  | { kind: Neo4jPatchStateKind.Consumed };
+export class ConsumedNeo4jPolicyPatch extends Error {
+  constructor() {
+    super("Neo4j policy patch has already been consumed");
+  }
+}
+/** A one-use update admitted from one observed resource version. */
+export class PreparedNeo4jPolicyPatch {
+  #state: Neo4jPatchState;
+  private constructor(api: KubernetesApi, request: ApiRequest) {
+    this.#state = { kind: Neo4jPatchStateKind.Ready, api, request };
+  }
+  static prepare(input: Neo4jPolicyAdmission): Neo4jPolicyPreparation {
+    const egress = structuredClone(input.policy.spec.egress);
+    const rules = egress.filter(PreparedNeo4jPolicyPatch.isNeo4jIpRule);
+    if (rules.length !== 1)
+      throw new Error("Neo4j endpoint egress rule is missing");
+    const [rule] = rules;
+    if (!rule) throw new Error("Neo4j endpoint egress rule is missing");
+    const { to: previous = [] } = rule;
+    if (JSON.stringify(previous) === JSON.stringify(input.destinations))
+      return { kind: Neo4jPolicyPreparationKind.Unchanged };
+    rule.to = structuredClone(input.destinations);
+    const payload: NetworkPolicyPatch = {
+      metadata: { resourceVersion: input.policy.metadata.resourceVersion },
+      spec: { egress },
+    };
+    return {
+      kind: Neo4jPolicyPreparationKind.Prepared,
+      patch: new PreparedNeo4jPolicyPatch(input.api, {
+        method: ApiMethod.Patch,
+        path: input.policyPath,
+        payload,
+      }),
+    };
+  }
+  private static isNeo4jIpRule(rule: EgressRule): boolean {
+    const { ports = [], to = [] } = rule;
+    return (
+      ports.some((port) => port.protocol === "TCP" && port.port === 7687) &&
+      to.some((target) => "ipBlock" in target)
+    );
+  }
+  async apply(): Promise<void> {
+    if (this.#state.kind === Neo4jPatchStateKind.Consumed)
+      throw new ConsumedNeo4jPolicyPatch();
+    const { api, request } = this.#state;
+    this.#state = { kind: Neo4jPatchStateKind.Consumed };
+    // Kubernetes enforces the live resourceVersion precondition; conflicts require a fresh read.
+    await api.request(request);
+  }
 }
 
 export interface ReaperControllerOptions {
@@ -168,8 +228,14 @@ export class ReaperController {
       method: ApiMethod.Get,
       path: "/api/v1/namespaces/hive-data/endpoints/hive-neo4j",
     };
-    const service = await this.api.json<Service>(serviceRequest);
-    const endpoints = await this.api.json<Endpoints>(endpointsRequest);
+    const service = await this.api.json({
+      ...serviceRequest,
+      decode: KubernetesDocument.service,
+    });
+    const endpoints = await this.api.json({
+      ...endpointsRequest,
+      decode: KubernetesDocument.endpoints,
+    });
     const serviceIp = normalizeIpv4(service.spec.clusterIP);
     const [subsets = []] = [endpoints.subsets];
     const endpointIps = subsets
@@ -206,33 +272,19 @@ export class ReaperController {
         method: ApiMethod.Get,
         path: policyPath,
       };
-      const policy = await this.api.json<NetworkPolicy>(readRequest);
-      const egress = structuredClone(policy.spec.egress);
-      const rules = egress.filter(isNeo4jIpRule);
-      if (rules.length !== 1) {
-        throw new Error("Neo4j endpoint egress rule is missing");
-      }
-      const rule = rules[0]!;
-      const [left = []] = [rule.to];
-      const comparison = {
-        left,
-        right: input.destinations,
-      };
-      if (destinationsEqual(comparison)) {
-        return;
-      }
-      rule.to = input.destinations;
-      const payload: NetworkPolicyPatch = {
-        metadata: { resourceVersion: policy.metadata.resourceVersion },
-        spec: { egress },
-      };
-      const patchRequest: ApiRequest = {
-        method: ApiMethod.Patch,
-        path: policyPath,
-        payload,
-      };
+      const policy = await this.api.json({
+        ...readRequest,
+        decode: KubernetesDocument.networkPolicy,
+      });
+      const preparation = PreparedNeo4jPolicyPatch.prepare({
+        api: this.api,
+        policyPath,
+        policy,
+        destinations: input.destinations,
+      });
+      if (preparation.kind === Neo4jPolicyPreparationKind.Unchanged) return;
       try {
-        await this.api.request(patchRequest);
+        await preparation.patch.apply();
         return;
       } catch (error) {
         if (!(error instanceof KubernetesApiError) || error.status !== 409) {
@@ -249,7 +301,10 @@ export class ReaperController {
     const podPath = `/api/v1/namespaces/${namespace}/pods/${podName}`;
     const readRequest: ApiRequest = { method: ApiMethod.Get, path: podPath };
     try {
-      const pod = await this.api.json<Pod>(readRequest);
+      const pod = await this.api.json({
+        ...readRequest,
+        decode: KubernetesDocument.pod,
+      });
       if (pod.metadata?.labels?.["app.kubernetes.io/name"] !== "hive") {
         return responseWithStatus(403);
       }
@@ -314,7 +369,9 @@ export function createReaperRequestHandler(
     if (request.method !== "POST") {
       return responseWithStatus(404);
     }
-    const [supplied = ("")] = [request.headers.get("Authorization")?.replace(/^Bearer /, "")];
+    const [supplied = ""] = [
+      request.headers.get("Authorization")?.replace(/^Bearer /, ""),
+    ];
     const expected = (await input.readExpectedToken()).trim();
     const match = new URL(request.url).pathname.match(
       /^\/reap\/(hive-[a-z0-9-]+)$/,
@@ -349,4 +406,8 @@ export async function serve(): Promise<void> {
 
 if (import.meta.main) {
   await serve();
+}
+
+export interface ApiJsonRequest<T> extends ApiRequest {
+  decode(text: string): T;
 }

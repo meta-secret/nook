@@ -677,6 +677,7 @@ tasks:
         BASH
 
   webhook-ingress:jetstream:wss:smoke:
+    deps: [":tooling:install"]
     desc: Prove trusted WSS, scoped consumption, and authorization denials.
     silent: true
     cmds:

@@ -6,6 +6,7 @@
 //! Keeper record classification and exact ordered metadata.
 use super::super::import_support::{CsvRecordFields, ImportMetadata, SourceLabelMetadata};
 use super::columns::{CustomFieldColumn, KeeperColumns};
+use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
 use crate::{LoginSecret, SecretValue, SecureNoteSecret};
 use csv::StringRecord;
 struct KeeperCustomFields<'a> {
@@ -73,7 +74,7 @@ impl KeeperMetadata<'_> {
             custom_fields,
         } = self;
         let mut metadata = Vec::new();
-        if let Some(entry) = (SourceLabelMetadata {
+        if let Ok(entry) = (SourceLabelMetadata {
             key: "title",
             label: title,
             website_url,
@@ -108,7 +109,7 @@ pub(super) struct KeeperRecord<'a> {
     pub(super) columns: &'a KeeperColumns,
 }
 impl KeeperRecord<'_> {
-    pub(super) fn convert(self) -> Option<SecretValue> {
+    pub(super) fn convert(self) -> ImportItemDisposition {
         let record = self.record;
         let csv_fields = CsvRecordFields::new(record);
         let columns = self.columns;
@@ -133,14 +134,14 @@ impl KeeperRecord<'_> {
             && shared_folder.is_empty()
             && custom_fields.is_empty()
         {
-            return None;
+            return ImportItemDisposition::Skipped(ImportSkipReason::EmptyRecord);
         }
 
         let looks_like_login =
             !login.is_empty() || !password.trim().is_empty() || !website.is_empty();
         if !looks_like_login {
             if title.is_empty() && notes.is_empty() && custom_fields.is_empty() {
-                return None;
+                return ImportItemDisposition::Skipped(ImportSkipReason::EmptyRecord);
             }
             KeeperMetadata {
                 title: "",
@@ -150,7 +151,7 @@ impl KeeperRecord<'_> {
                 custom_fields: &custom_fields,
             }
             .append_to(&mut notes);
-            return Some(SecretValue::SecureNote(SecureNoteSecret {
+            return ImportItemDisposition::Imported(SecretValue::SecureNote(SecureNoteSecret {
                 title: if title.is_empty() {
                     "Keeper note".to_owned()
                 } else {
@@ -173,7 +174,7 @@ impl KeeperRecord<'_> {
             custom_fields: &custom_fields,
         }
         .append_to(&mut notes);
-        Some(SecretValue::Login(LoginSecret {
+        ImportItemDisposition::Imported(SecretValue::Login(LoginSecret {
             website_url,
             username: login,
             password,

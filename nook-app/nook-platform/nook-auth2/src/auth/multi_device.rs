@@ -15,24 +15,13 @@ mod state;
 
 pub use state::*;
 
-pub use access::{
-    ConnectAccessStatus, SelfRosterSync, assess_connect_access, device_is_enrolled,
-    ensure_self_in_roster, pending_join_for_device,
-};
+pub use access::{ConnectAccessStatus, DeviceJoinStatus, SelfRosterSync};
 pub use join::{DeviceEnrollment, JoinRequestApproval, JoinRequestDenial, JoinRequestIssuance};
 pub use key_actions::{AuthRecordIssuance, VaultRecordView};
-pub use roster::{
-    build_members_records, encrypt_member_entry, genesis_members_records, member_from_identity,
-    member_from_join, rename_vault_member, replace_member_records, resolve_member_roster,
-    revoke_vault_member, roster_add_member,
-};
 
 pub use sentinel::{
     OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SentinelKeyReconstruction,
     SentinelShareEnvelope, SentinelShareOpening, SentinelShareVersion,
-    count_sentinel_share_records, create_sentinel_root_share_records_for_recipients,
-    create_sentinel_share_records, create_sentinel_share_records_for_recipients,
-    is_sentinel_share_stored_record, parse_sentinel_share_envelope, sentinel_share_record_key,
 };
 
 /// `secrets_key` encrypts user secrets; `members_key` encrypts member catalog entries.
@@ -53,7 +42,7 @@ mod tests {
     use std::io;
 
     use super::*;
-    use crate::DeviceSigningPublicKey;
+    use crate::{DeviceSigningPublicKey, RecordTypeDeclaration};
 
     const ENROLLED_AT: &str = "2026-06-21T00:00:00Z";
     fn genesis_vault(
@@ -61,10 +50,12 @@ mod tests {
     ) -> anyhow::Result<(DeviceIdentity, Vec<StoredSecretRecord>)> {
         let genesis = DeviceIdentity::generate()?;
         let mut records = vec![genesis.auth_record(&keys.secrets_key, &keys.members_key)?];
-        records.extend(genesis_members_records(
-            &genesis,
-            &keys.members_key,
-            ENROLLED_AT,
+        records.extend(VaultMember::genesis_members_records(
+            GenesisMembersRecordsRequest {
+                identity: &genesis,
+                members_key: &keys.members_key,
+                enrolled_at: ENROLLED_AT,
+            },
         )?);
         Ok((genesis, records))
     }
@@ -72,7 +63,7 @@ mod tests {
     fn user_secret_record(id: &str, value: &str) -> StoredSecretRecord {
         StoredSecretRecord {
             key: SecretId::from_vault_record(id),
-            secret_type: Some(SecretType::Login),
+            secret_type: RecordTypeDeclaration::Secret(SecretType::Login),
             value: StoredRecordPayload::from_trusted(value.to_owned()),
         }
     }
@@ -83,19 +74,29 @@ mod tests {
         records: &mut Vec<StoredSecretRecord>,
         joiner: &DeviceIdentity,
     ) -> anyhow::Result<()> {
-        let join = pending_join_for_device(records, joiner.device_id())?
-            .ok_or_else(|| io::Error::other("pending join fixture must exist"))?;
+        let join = match VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
+            records: records,
+            device_id: joiner.device_id(),
+        })? {
+            DeviceJoinStatus::Pending(join) => join,
+            DeviceJoinStatus::NotRequested => {
+                return Err(io::Error::other("pending join fixture must exist").into());
+            }
+        };
         let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,
             &keys.members_key,
-            &join,
+            join,
             approver,
             records,
         )
         .approve()?;
         records.retain(|record| record.key.as_str() != join_key);
         records.push(auth_record);
-        replace_member_records(records, member_records)?;
+        VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
+            records: records,
+            member_records: member_records,
+        })?;
         Ok(())
     }
 
@@ -132,7 +133,14 @@ mod tests {
             VaultRecordView::new(&records).members_key(&joiner)?,
             keys.members_key
         );
-        assert_eq!(resolve_member_roster(&records, &keys.members_key)?.len(), 2);
+        assert_eq!(
+            VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+                records: &records,
+                members_key: &keys.members_key
+            })?
+            .len(),
+            2
+        );
         Ok(())
     }
 
@@ -143,10 +151,12 @@ mod tests {
         let (genesis, mut records) = genesis_vault(&keys)?;
         let joiner = DeviceIdentity::generate()?;
         let sentinel_participant = DeviceIdentity::generate()?;
-        let sentinel_record = create_sentinel_share_records(
-            &keys,
-            &[genesis.clone(), sentinel_participant.clone()],
-            2.into(),
+        let sentinel_record = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &[genesis.clone(), sentinel_participant.clone()],
+                threshold: 2.into(),
+            },
         )?
         .pop()
         .ok_or_else(|| io::Error::other("sentinel share record must exist"))?;
@@ -192,15 +202,15 @@ mod tests {
         assert!(state.is_empty());
 
         assert!(matches!(
-            VaultMetaRecord::classify(&user_secret)?,
+            (&user_secret).classify()?,
             VaultMetaRecord::Secret(_, SecretType::Login, _)
         ));
         assert!(matches!(
-            VaultMetaRecord::classify(&join_record)?,
+            (&join_record).classify()?,
             VaultMetaRecord::Join(_, _)
         ));
         assert!(matches!(
-            VaultMetaRecord::classify(&sentinel_record)?,
+            (&sentinel_record).classify()?,
             VaultMetaRecord::SentinelShare(_, _)
         ));
 
@@ -212,7 +222,7 @@ mod tests {
                 .replacen("\"version\":1", "\"version\":3", 1),
         );
         let before = state.clone();
-        assert!(VaultMetaRecord::classify(&invalid_sentinel).is_err());
+        assert!((&invalid_sentinel).classify().is_err());
         match state.apply_record(&invalid_sentinel) {
             Err(_) => {}
             Ok(()) => return Err(anyhow::anyhow!("invalid share must be rejected")),
@@ -257,24 +267,37 @@ mod tests {
         let genesis = DeviceIdentity::generate()?;
         let joiner = DeviceIdentity::generate()?;
         let wrong_members_key = SymmetricKey::generate_for_vault()?;
-        let corrupt_member_record = build_members_records(
-            &[member_from_identity(&genesis, ENROLLED_AT)],
-            &wrong_members_key,
-        )?
-        .into_iter()
-        .next()
-        .ok_or_else(|| io::Error::other("member record must exist"))?;
+        let corrupt_member_record =
+            VaultMember::build_members_records(BuildMembersRecordsRequest {
+                roster: vec![VaultMember::member_from_identity(
+                    MemberFromIdentityRequest {
+                        identity: &genesis,
+                        enrolled_at: ENROLLED_AT,
+                    },
+                )],
+                members_key: &wrong_members_key,
+            })?
+            .into_iter()
+            .next()
+            .ok_or_else(|| io::Error::other("member record must exist"))?;
         let records = vec![
             JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?,
             corrupt_member_record,
         ];
-        let join = pending_join_for_device(&records, joiner.device_id())?
-            .ok_or_else(|| io::Error::other("pending join must exist"))?;
+        let join = match VaultMetaState::pending_join_for_device(PendingJoinForDeviceRequest {
+            records: &records,
+            device_id: joiner.device_id(),
+        })? {
+            DeviceJoinStatus::Pending(join) => join,
+            DeviceJoinStatus::NotRequested => {
+                return Err(io::Error::other("pending join must exist").into());
+            }
+        };
 
         let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,
             &keys.members_key,
-            &join,
+            join,
             &genesis,
             &records,
         )
@@ -287,7 +310,10 @@ mod tests {
             VaultRecordView::new(&approved_records).secrets_key(&joiner)?,
             keys.secrets_key
         );
-        let roster = resolve_member_roster(&approved_records, &keys.members_key)?;
+        let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+            records: &approved_records,
+            members_key: &keys.members_key,
+        })?;
         assert_eq!(roster.len(), 2);
         assert!(
             roster
@@ -302,3 +328,21 @@ mod tests {
         Ok(())
     }
 }
+
+pub use roster::{
+    BuildMembersRecordsRequest, DecryptMemberEntryRequest, EncryptMemberEntryRequest,
+    GenesisMembersRecordsRequest, MemberFromIdentityRequest, RenameVaultMemberRequest,
+    ReplaceMemberRecordsRequest, ResolveMemberRosterRequest, RevokeVaultMemberRequest,
+};
+
+pub use access::{
+    AssessConnectAccessRequest, DeviceIsEnrolledRequest, EnsureSelfInRosterRequest,
+    PendingJoinForDeviceRequest,
+};
+
+pub use roster::RosterAddMemberRequest;
+
+pub use sentinel::{
+    CreateSentinelRootShareRecordsForRecipientsRequest,
+    CreateSentinelShareRecordsForRecipientsRequest, CreateSentinelShareRecordsRequest,
+};

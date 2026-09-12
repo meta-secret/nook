@@ -9,6 +9,9 @@ coordinates delivery but does not redefine a team's technical contract.
 
 ## Universal rules
 
+- Follow [dev delivery](dev-delivery.md) for feature and manager stages.
+- Each concurrent feature has a separate Gizmo and isolated Team Agent children.
+- The manually run dev manager owns dev publication and main promotion.
 - Every Team Agent task has exactly one team identity. PR Steward is a separate
   operational Team Agent context for bounded pull-request mechanics.
 - The functional owner defines behavior, contracts, tests, and acceptance.
@@ -17,10 +20,16 @@ coordinates delivery but does not redefine a team's technical contract.
 - A team stops at another team's boundary and reports the dependency to Gizmo.
 - Gizmo assigns a separate task when another team's implementation is needed.
 - Security review does not transfer implementation ownership.
-- Team Agents edit the current shared checkout sequentially.
-- Gizmo owns shared-branch sequencing, external delivery policy, and
-  authorization. PR Steward performs only the explicitly authorized
-  pull-request mechanics.
+- Team Agents may edit isolated child worktrees concurrently when their
+  explicit file scopes are disjoint.
+- Overlapping scopes and unresolved dependencies require ordered execution.
+- Gizmo inventories dirty paths and hunks before dispatch.
+- Every pre-existing change has an attributed owner and task.
+- A scope overlap blocks dispatch unless the exact changes are handed off or
+  attributed to the proposed task.
+- Gizmo owns child-worktree allocation, write-wave coordination, parent
+  integration, feature acceptance, and local landing authorization.
+- PR Steward performs only the explicitly authorized pull-request mechanics.
 
 ## Teams
 
@@ -29,19 +38,23 @@ coordinates delivery but does not redefine a team's technical contract.
 Gizmo owns:
 
 - mission scope and task routing;
-- shared-branch write sequencing;
+- write-wave coordination and shared-branch commit turns;
 - shared-file coordination;
-- pull-request policy and authorization;
+- feature compilation and local landing authorization;
 - technical review-finding disposition;
-- readiness and merge verdicts;
+- feature acceptance verdicts;
 - Workbench state; and
-- the final delivery verdict.
+- the feature delivery verdict.
+
+The dev manager controls dev PR creation/update, slow evidence, readiness,
+and promotion. Steward performs these mechanics only under a manager packet.
 
 The separate PR Steward Team Agent performs pull-request metadata.
 It observes reviews and checks.
 It retriggers exact-head validation.
 It collects readiness evidence.
-It performs authorized squash merges.
+It invokes bounded dev tasks under the owning controller's authorization.
+It performs only guarded fast-forward promotion to the tested dev SHA.
 It verifies remote merge state.
 It is not a functional engineering team.
 It does not own technical findings.
@@ -111,11 +124,12 @@ Its normal scope includes:
 ## Shared files
 
 Shared files include root manifests, lockfiles, generated bindings, cross-team
-registries, and root routing documents.
+registries, root routing documents, and shared command outputs.
 
-Gizmo assigns one writer for each shared-file change. The assigned Team Agent
-edits the file in the current checkout. No separate integration workspace is
-created.
+Gizmo assigns one writer for each shared-file change. Any task that needs the
+same shared file is ordered after that writer. The assigned Team Agent edits
+the file in an isolated child worktree. Gizmo verifies the child commit and
+integrates it into the parent feature worktree.
 
 ## Assignment procedure
 
@@ -123,10 +137,20 @@ created.
 2. Identify the functional owner.
 3. Split only at real team or dependency boundaries.
 4. Give each task one team identity and bounded file scope.
-5. Sequence write-capable tasks on the shared branch.
-6. Let each team implement and test its own scope.
-7. Route cross-team dependencies back through Gizmo.
-8. Validate the completed shared-branch result.
+5. Inventory dirty paths and hunks.
+6. Attribute every dirty change to its owner and task.
+7. Block an overlapping scope without an exact handoff or same-task
+   attribution.
+8. Name each acceptance command's read, write, and output scopes.
+9. Group tasks only when file and command scopes are safe for concurrency.
+10. Create one child worktree for each task in the group from the parent
+    feature worktree's current commit.
+11. Run each task in its child worktree.
+12. Verify each complete scoped commit and integrate it into the parent
+    feature worktree.
+13. Route cross-team dependencies back through Gizmo.
+14. Co-validate provider and consumer evidence on the combined branch.
+15. Route integration failures to the responsible owners.
 
 ## Team responsibility
 
@@ -138,9 +162,9 @@ Within its assigned scope, a team owns:
 - review fixes; and
 - validation fixes caused by its change.
 
-Gizmo owns external delivery policy after the technical result is ready. PR
-Steward performs the named external pull-request actions after Gizmo's
-authorization.
+Gizmo owns feature acceptance and the local landing request. The dev manager
+owns dev PR policy and promotion. PR Steward executes dev PR actions only
+after the manager's authorization.
 
 ## Validation
 
@@ -149,7 +173,15 @@ Verify:
 - every changed behavior has one functional owner;
 - every Team Agent task has one team identity;
 - cross-team dependencies were routed to their owners;
-- only one writer changed the checkout at a time;
+- concurrent writers had disjoint explicit file scopes;
+- overlapping or dependent writers ran in order;
+- dirty paths and hunks were attributed before dispatch;
+- no writer committed unrelated pre-existing changes;
+- acceptance command scopes were safe for concurrency or ran serially on a
+  stable committed head;
+- only one writer mutated each worktree's Git index at a time;
 - shared files had an explicitly assigned writer;
-- accepted worker commits are already on the shared branch; and
-- no worktree or parallel Team Agent lifecycle was introduced.
+- accepted worker commits are integrated into the parent feature worktree;
+- every child worktree was issued by Gizmo and stayed within its task scope;
+- parent integration was serialized; and
+- no external lifecycle system was introduced.

@@ -1,5 +1,8 @@
 <script lang="ts">
-  type VaultWorkflowTabNavigation = { readonly event: KeyboardEvent; readonly index: number }
+  type VaultWorkflowTabNavigation = {
+    readonly event: KeyboardEvent
+    readonly index: number
+  }
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { CloudDownload, FolderOpen, Plus } from '@lucide/svelte'
@@ -40,9 +43,13 @@
     event.preventDefault()
     const offset = event.key === 'ArrowRight' ? 1 : -1
     const nextIndex = (index + offset + workflows.length) % workflows.length
-    onSelect(workflows[nextIndex].id)
+    const nextWorkflow = workflows[nextIndex]
+    if (!nextWorkflow) return
+    onSelect(nextWorkflow.id)
     requestAnimationFrame(() => {
-      const tabs = (event.currentTarget as HTMLElement)
+      const currentTarget = event.currentTarget
+      if (!(currentTarget instanceof HTMLElement)) return
+      const tabs = currentTarget
         .closest('[role="tablist"]')
         ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
       tabs?.[nextIndex]?.focus()
@@ -67,7 +74,15 @@
       tabindex={active === workflow.id ? 0 : -1}
       data-testid={`login-vault-workflow-${workflow.id}`}
       onclick={() => onSelect(workflow.id)}
-      onkeydown={(event) => (() => { const handleTabKeydownArgs: Parameters<typeof handleTabKeydown>[0] = { event, index }; return handleTabKeydown(handleTabKeydownArgs); })()}
+      onkeydown={(event) =>
+        (() => {
+          if (!(event instanceof KeyboardEvent)) return
+          const handleTabKeydownArgs: Parameters<typeof handleTabKeydown>[0] = {
+            event,
+            index,
+          }
+          return handleTabKeydown(handleTabKeydownArgs)
+        })()}
     >
       <workflow.icon class="size-4" />
       <span class="truncate">{vault.t(workflow.label)}</span>

@@ -6,11 +6,12 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::LocalEventBytes;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    EventId, EventResult, EventStorageBytes, LocalEventStore, VaultEvent, VaultOperation,
-    parse_event_storage_bytes,
+    EventGraphRejection, EventId, EventResult, EventStorageBytes, LocalEventStore, VaultEvent,
+    VaultOperation,
 };
 
 impl VaultEvent {
@@ -26,49 +27,81 @@ impl VaultEvent {
     }
 }
 
+enum CheckpointCommit<'a> {
+    NotCheckpoint,
+    Commits(&'a EventId),
+}
+
 impl VaultEvent {
-    pub(crate) fn committed_epoch_parent(&self) -> Option<&EventId> {
+    fn committed_epoch_parent(&self) -> CheckpointCommit<'_> {
         let is_checkpoint = self
             .body
             .operations
             .iter()
             .any(|operation| matches!(operation, VaultOperation::EpochCheckpoint { .. }));
         match self.body.parents.as_slice() {
-            [parent] if is_checkpoint && self.body.key_epoch == *parent => Some(parent),
-            _ => None,
-        }
-    }
-}
-
-impl LocalEventStore {
-    fn authorized_checkpoint_parents(
-        &self,
-        remote_events: &[(EventId, EventStorageBytes)],
-        store_id: &str,
-    ) -> EventResult<BTreeSet<EventId>> {
-        let mut candidate = self.clone();
-        for (event_id, bytes) in remote_events {
-            candidate.put_event(event_id.clone(), bytes.clone());
-        }
-        let graph = candidate.load_graph(store_id)?;
-        let mut parents = BTreeSet::new();
-        for event in graph.applicable_events() {
-            if let Some(parent) = event.committed_epoch_parent() {
-                parents.insert(parent.clone());
+            [parent] if is_checkpoint && self.body.key_epoch == *parent => {
+                CheckpointCommit::Commits(parent)
             }
+            _ => CheckpointCommit::NotCheckpoint,
         }
-        Ok(parents)
     }
 }
 
-impl LocalEventStore {
-    pub(crate) fn incomplete_security_transition_events(
-        &self,
-        store_id: &str,
-    ) -> EventResult<BTreeSet<EventId>> {
-        let graph = self.load_graph(store_id)?;
-        let committed = self.authorized_checkpoint_parents(&[], store_id)?;
-        let security_triggers = graph
+pub(crate) struct LocalGraphProjection<'a> {
+    pub(crate) local: &'a LocalEventStore,
+    pub(crate) remote: &'a [(EventId, EventStorageBytes)],
+    pub(crate) store_id: &'a str,
+    pub(crate) excluded: &'a BTreeSet<EventId>,
+}
+impl LocalGraphProjection<'_> {
+    pub(crate) fn build(self) -> EventResult<crate::EventGraph> {
+        let mut events = BTreeMap::new();
+        for id in self.local.event_ids() {
+            if self.excluded.contains(&id) {
+                continue;
+            }
+            let bytes = match self.local.get_bytes(&id) {
+                LocalEventBytes::Stored(bytes) => bytes,
+                LocalEventBytes::UnknownEvent => {
+                    return Err(crate::EventError::MissingEvent {
+                        event_id: id.to_string(),
+                    });
+                }
+            };
+            events.insert(id, VaultEvent::parse_event_storage_bytes(&bytes)?);
+        }
+        for (id, bytes) in self.remote {
+            if self.excluded.contains(id) || events.contains_key(id) {
+                continue;
+            }
+            events.insert(id.clone(), VaultEvent::parse_event_storage_bytes(bytes)?);
+        }
+        let mut graph = crate::EventGraph::new();
+        for event in events.into_values() {
+            graph = graph
+                .insert(crate::EventGraphInsert {
+                    event,
+                    expected_store_id: self.store_id,
+                })
+                .map_err(EventGraphRejection::into_cause)?
+                .graph;
+        }
+        Ok(graph)
+    }
+}
+impl crate::EventGraph {
+    pub(crate) fn incomplete_security_transition_events(&self) -> EventResult<BTreeSet<EventId>> {
+        let committed = self
+            .applicable_events()
+            .into_iter()
+            .filter_map(|event| match event.committed_epoch_parent() {
+                CheckpointCommit::Commits(parent) => Some(parent),
+                CheckpointCommit::NotCheckpoint => None,
+            })
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let security_triggers = self
             .applicable_events()
             .into_iter()
             .filter(|event| event.starts_security_epoch())
@@ -76,15 +109,15 @@ impl LocalEventStore {
             .collect::<EventResult<Vec<_>>>()?;
         let incomplete = security_triggers
             .into_iter()
-            .filter(|event_id| !committed.contains(event_id))
+            .filter(|id| !committed.contains(id))
             .collect::<Vec<_>>();
-        Ok(graph
+        Ok(self
             .events()
-            .map(|(event_id, _)| event_id.clone())
-            .filter(|event_id| {
+            .map(|(id, _)| id.clone())
+            .filter(|id| {
                 incomplete
                     .iter()
-                    .any(|trigger| trigger == event_id || graph.is_ancestor(trigger, event_id))
+                    .any(|trigger| trigger == id || self.is_ancestor(trigger, id))
             })
             .collect())
     }
@@ -99,18 +132,21 @@ impl LocalEventStore {
         remote_events: &[(EventId, EventStorageBytes)],
         store_id: &str,
     ) -> EventResult<Vec<(EventId, EventStorageBytes)>> {
-        let mut candidate = self.clone();
-        for (event_id, bytes) in remote_events {
-            candidate.put_event(event_id.clone(), bytes.clone());
+        let graph = LocalGraphProjection {
+            local: self,
+            remote: remote_events,
+            store_id,
+            excluded: &BTreeSet::new(),
         }
-        let hidden = candidate.incomplete_security_transition_events(store_id)?;
+        .build()?;
+        let hidden = graph.incomplete_security_transition_events()?;
         remote_events
             .iter()
             .map(|(event_id, bytes)| {
                 Ok((
                     event_id.clone(),
                     bytes.clone(),
-                    parse_event_storage_bytes(bytes)?,
+                    VaultEvent::parse_event_storage_bytes(bytes)?,
                 ))
             })
             .collect::<EventResult<Vec<_>>>()
@@ -126,7 +162,7 @@ impl LocalEventStore {
 
 impl VaultEvent {
     fn publish_priority(&self) -> u8 {
-        if self.committed_epoch_parent().is_some() {
+        if matches!(self.committed_epoch_parent(), CheckpointCommit::Commits(_)) {
             0
         } else if self.starts_security_epoch() {
             2
@@ -180,7 +216,7 @@ impl<'a> RemoteEventWrites<'a> {
         let events = self.events;
         let mut priorities = BTreeMap::new();
         for (event_id, bytes) in events.iter() {
-            let event = parse_event_storage_bytes(bytes)?;
+            let event = VaultEvent::parse_event_storage_bytes(bytes)?;
             priorities.insert(event_id.clone(), event.publish_priority());
         }
         events.sort_by_key(|(event_id, _)| {
@@ -201,9 +237,8 @@ mod tests {
     use crate::test_support;
     use crate::{
         DeviceSigningPublicKey, EpochMetadataState, EpochPasswordState, EventError,
-        GenesisImportPayload, IsoTimestamp, PasswordEntryId, Sha256Hex, SigningIdentity, StoreId,
-        VaultEventBody, VaultEventSchemaVersion, build_genesis_import_event,
-        serialize_event_storage_yaml,
+        GenesisImportPayload, GenesisImportRequest, IsoTimestamp, PasswordEntryId, Sha256Hex,
+        SigningIdentity, StoreId, VaultEventBody, VaultEventSchemaVersion,
     };
     use ed25519_dalek::SigningKey;
 
@@ -242,21 +277,26 @@ mod tests {
     impl EpochPairFixture {
         fn new() -> EventResult<Self> {
             let signing_key = test_support::signing_key();
-            let genesis = build_genesis_import_event(
-                &StoreId::parse(STORE)?,
-                &SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?,
-                &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
-                GenesisImportPayload {
+            let genesis = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+                store_id: &StoreId::parse(STORE)?,
+                actor_id: &SigningIdentity::actor_id_for_verifying_key(
+                    &signing_key.verifying_key(),
+                )?,
+                key_epoch: &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
+                payload: GenesisImportPayload {
                     source_content_hash: Sha256Hex::from_trusted("00".repeat(32)),
                     secrets: Vec::new(),
                     password_entries: Vec::new(),
                 },
-                &IsoTimestamp::from_trusted("2026-08-14T00:00:00Z".to_owned()),
-                &signing_key,
-            )?;
+                created_at: &IsoTimestamp::from_trusted("2026-08-14T00:00:00Z".to_owned()),
+                signing_key: &signing_key,
+            })?;
             let previous = genesis.id()?;
             let mut local = LocalEventStore::new();
-            local.put_event(previous.clone(), serialize_event_storage_yaml(&genesis)?);
+            local = local.put_event(crate::LocalEventWrite {
+                event_id: previous.clone(),
+                bytes: VaultEvent::serialize_event_storage_yaml(&genesis)?,
+            });
             let trigger = Self::signed_event(
                 &signing_key,
                 vec![previous.clone()],
@@ -280,17 +320,26 @@ mod tests {
             let checkpoint_id = checkpoint.id()?;
             Ok(Self(
                 local,
-                (trigger_id, serialize_event_storage_yaml(&trigger)?),
-                (checkpoint_id, serialize_event_storage_yaml(&checkpoint)?),
+                (
+                    trigger_id,
+                    VaultEvent::serialize_event_storage_yaml(&trigger)?,
+                ),
+                (
+                    checkpoint_id,
+                    VaultEvent::serialize_event_storage_yaml(&checkpoint)?,
+                ),
             ))
         }
     }
 
     #[test]
-    fn malformed_write_batch_preserves_original_order_and_bytes() -> EventResult<()> {
+    fn malformed_write_batch_preserves_original_order_and_bytes() -> anyhow::Result<()> {
         let EpochPairFixture(_, trigger, checkpoint) = EpochPairFixture::new()?;
         let mut writes = vec![trigger, checkpoint];
-        writes[1].1 = b"invalid event".to_vec().into();
+        let second = writes
+            .get_mut(1)
+            .ok_or_else(|| anyhow::anyhow!("epoch fixture must contain its checkpoint"))?;
+        second.1 = b"invalid event".to_vec().into();
         let original = writes.clone();
         assert!(matches!(
             RemoteEventWrites::new(&mut writes).order(),
@@ -319,14 +368,17 @@ mod tests {
     }
 
     #[test]
-    fn publishes_checkpoint_before_trigger() -> EventResult<()> {
+    fn publishes_checkpoint_before_trigger() -> anyhow::Result<()> {
         let EpochPairFixture(_, trigger, checkpoint) = EpochPairFixture::new()?;
         let checkpoint_id = checkpoint.0.clone();
         let mut events = vec![trigger, checkpoint];
 
         RemoteEventWrites::new(&mut events).order()?;
 
-        assert_eq!(events[0].0, checkpoint_id);
+        let first = events
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("ordered epoch writes must retain their checkpoint"))?;
+        assert_eq!(first.0, checkpoint_id);
         Ok(())
     }
 
@@ -347,7 +399,10 @@ mod tests {
         )?;
         let remote = vec![
             trigger.clone(),
-            (checkpoint.id()?, serialize_event_storage_yaml(&checkpoint)?),
+            (
+                checkpoint.id()?,
+                VaultEvent::serialize_event_storage_yaml(&checkpoint)?,
+            ),
         ];
 
         let visible = local.visibility_gated_remote_events(&remote, STORE)?;
@@ -368,7 +423,10 @@ mod tests {
         )?;
         let remote = vec![
             trigger,
-            (descendant.id()?, serialize_event_storage_yaml(&descendant)?),
+            (
+                descendant.id()?,
+                VaultEvent::serialize_event_storage_yaml(&descendant)?,
+            ),
         ];
 
         assert!(
@@ -382,7 +440,10 @@ mod tests {
     #[test]
     fn quarantines_a_legacy_local_trigger_and_its_remote_descendant() -> EventResult<()> {
         let EpochPairFixture(mut local, trigger, _) = EpochPairFixture::new()?;
-        local.put_event(trigger.0.clone(), trigger.1.clone());
+        local = local.put_event(crate::LocalEventWrite {
+            event_id: trigger.0.clone(),
+            bytes: trigger.1.clone(),
+        });
         let signing_key = test_support::signing_key();
         let descendant = EpochPairFixture::signed_event(
             &signing_key,
@@ -391,17 +452,32 @@ mod tests {
             VaultOperation::VaultCleared,
         )?;
         let descendant_id = descendant.id()?;
-        let imported = local.union_remote(
-            &[(
+        let imported = match local.union_remote(crate::LocalRemoteUnion {
+            remote_events: &[(
                 descendant_id.clone(),
-                serialize_event_storage_yaml(&descendant)?,
+                VaultEvent::serialize_event_storage_yaml(&descendant)?,
             )],
-            STORE,
-        )?;
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                local = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                local = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
 
         assert!(imported.is_empty());
-        assert!(local.get_bytes(&trigger.0).is_none());
-        assert!(local.get_bytes(&descendant_id).is_none());
+        assert!(matches!(
+            local.get_bytes(&trigger.0),
+            LocalEventBytes::UnknownEvent
+        ));
+        assert!(matches!(
+            local.get_bytes(&descendant_id),
+            LocalEventBytes::UnknownEvent
+        ));
         assert_eq!(local.event_ids().len(), 1);
         Ok(())
     }

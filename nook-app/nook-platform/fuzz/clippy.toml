@@ -2,3 +2,9 @@
 allow-expect-in-tests = false
 allow-unwrap-in-tests = false
 absolute-paths-max-segments = 2
+
+disallowed-methods = [
+    { path = "nook_auth2::wire::SymmetricKey::from_trusted", reason = "Construct symmetric keys through validation or generation." },
+    { path = "nook_auth2::wire::SigningSeedHex::from_trusted", reason = "Construct signing seeds through validation." },
+    { path = "nook_auth2::wire::DeviceIdentitySecret::from_trusted", reason = "Construct device identity secrets through validation." },
+]

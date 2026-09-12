@@ -324,7 +324,8 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn revision_and_store_scope_wrappers_project_presence_and_values() {
+    fn revision_and_store_scope_wrappers_project_presence_and_values()
+    -> Result<(), wasm_bindgen::JsError> {
         let unknown = NookProviderSyncRevision::untracked();
         assert_eq!(unknown.state(), NookProviderSyncRevisionState::Untracked);
         assert!(matches!(
@@ -334,7 +335,7 @@ mod tests {
 
         let tracked = NookProviderSyncRevision::tracked("r-7".into());
         assert_eq!(tracked.state(), NookProviderSyncRevisionState::Tracked);
-        assert_eq!(tracked.value().unwrap(), "r-7");
+        assert_eq!(tracked.value()?, "r-7");
         assert!(matches!(
             tracked.as_core(),
             ProviderSyncRevisionRef::Revision("r-7")
@@ -346,17 +347,19 @@ mod tests {
 
         let scoped = NookManagerStoreScope::scoped("store-1".into());
         assert_eq!(scoped.state(), NookManagerStoreScopeState::Scoped);
-        assert_eq!(scoped.store_id().unwrap(), "store-1");
+        assert_eq!(scoped.store_id()?, "store-1");
         assert!(matches!(
             scoped.as_core(),
             ManagerStoreScopeRef::Store("store-1")
         ));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn vault_architecture_wrappers_project_simple_and_sentinel_policy() {
-        let simple = NookVaultArchitecture::simple(DeviceMode::Standard, ReplicationType::Personal)
-            .expect("valid simple architecture");
+    fn vault_architecture_wrappers_project_simple_and_sentinel_policy()
+    -> Result<(), wasm_bindgen::JsError> {
+        let simple =
+            NookVaultArchitecture::simple(DeviceMode::Standard, ReplicationType::Personal)?;
         assert_eq!(simple.device_mode(), DeviceMode::Standard);
         assert_eq!(simple.vault_type(), VaultType::Simple);
         assert_eq!(simple.replication_type(), ReplicationType::Personal);
@@ -367,14 +370,14 @@ mod tests {
             2,
             3,
             1,
-        )
-        .expect("valid sentinel architecture");
+        )?;
         assert_eq!(sentinel.device_mode(), DeviceMode::AntiHacker);
         assert_eq!(sentinel.vault_type(), VaultType::Sentinel);
         assert_eq!(sentinel.replication_type(), ReplicationType::Shared);
-        assert_eq!(sentinel.sentinel_threshold().unwrap(), 2);
-        assert_eq!(sentinel.sentinel_required_participants().unwrap(), 3);
-        assert_eq!(sentinel.sentinel_ready_participants().unwrap(), 1);
+        assert_eq!(sentinel.sentinel_threshold()?, 2);
+        assert_eq!(sentinel.sentinel_required_participants()?, 3);
+        assert_eq!(sentinel.sentinel_ready_participants()?, 1);
+        Ok(())
     }
 }
 
@@ -569,16 +572,20 @@ pub struct NookPasskeyAccount {
     user_display_name: String,
 }
 
-#[wasm_bindgen]
-impl NookPasskeyAccount {
-    pub(crate) fn from_core(value: &nook_core::PasskeySecret) -> Self {
-        Self {
+impl From<nook_core::PasskeySecret> for NookPasskeyAccount {
+    fn from(mut value: nook_core::PasskeySecret) -> Self {
+        let account = Self {
             credential_id: value.credential_id.clone(),
             user_name: value.user_name.clone(),
             user_display_name: value.user_display_name.clone(),
-        }
+        };
+        value.zeroize_plaintext();
+        account
     }
+}
 
+#[wasm_bindgen]
+impl NookPasskeyAccount {
     #[wasm_bindgen(getter, js_name = credentialId)]
     pub fn credential_id(&self) -> String {
         self.credential_id.clone()

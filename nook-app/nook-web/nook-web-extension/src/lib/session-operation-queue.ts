@@ -1,3 +1,4 @@
+import { err, type Result } from 'neverthrow'
 export enum SessionOperationPriority {
   Expiry = 'expiry',
   Interactive = 'interactive',
@@ -35,19 +36,8 @@ export const DEFAULT_SESSION_OPERATION_OPTIONS: SessionOperationOptions = {
   cleanup: { kind: SessionOperationCleanupKind.None },
 }
 
-type QueueEntry = {
-  sequence: number
-  priority: number
-  operation: () => Promise<void>
-  reject: (reason: Error) => void
-  expiresAt?: number
-  onExpire?: () => void
-  expiryTimer?: ReturnType<typeof setTimeout>
-  settled: boolean
-}
-
 export type EnqueueSessionOperationArgs<T> = {
-  operation: () => Promise<T>
+  operation: () => Promise<Result<T, SessionOperationFailure>>
   options: SessionOperationOptions
 }
 
@@ -58,7 +48,163 @@ const priorityOrder: Record<SessionOperationPriority, number> = {
   [SessionOperationPriority.Probe]: 3,
 }
 
-const expiredError = () => new Error('EXTENSION_SESSION_REQUEST_EXPIRED')
+export enum SessionOperationFailureKind {
+  Expired = 'EXTENSION_SESSION_REQUEST_EXPIRED',
+  Failed = 'EXTENSION_SESSION_OPERATION_FAILED',
+  InvalidRequest = 'EXTENSION_SESSION_INVALID_REQUEST',
+  Locked = 'EXTENSION_SESSION_LOCKED',
+  Verification = 'EXTENSION_SESSION_VERIFICATION_FAILED',
+  Consumed = 'EXTENSION_SESSION_CONSUMED',
+  Closed = 'EXTENSION_SESSION_CLOSED',
+}
+
+export class SessionOperationFailure {
+  constructor(readonly kind: SessionOperationFailureKind) {}
+  get message(): string {
+    return this.kind
+  }
+}
+
+enum PendingTimerKind {
+  Unscheduled = 'unscheduled',
+  Scheduled = 'scheduled',
+}
+
+type PendingTimer =
+  | { kind: PendingTimerKind.Unscheduled }
+  | { kind: PendingTimerKind.Scheduled; handle: ReturnType<typeof setTimeout> }
+
+enum OperationStateKind {
+  Queued = 'queued',
+  Running = 'running',
+  Settled = 'settled',
+}
+
+type OperationState =
+  | { kind: OperationStateKind.Queued; timer: PendingTimer }
+  | { kind: OperationStateKind.Running }
+  | { kind: OperationStateKind.Settled }
+
+interface QueuedOperation {
+  readonly sequence: number
+  readonly priority: SessionOperationPriority
+  scheduleExpiry(): void
+  run(): Promise<void>
+  cancel(error: SessionOperationFailure): void
+}
+
+type QueuedSessionOperationConfiguration<T> = {
+  readonly sequence: number
+  readonly request: EnqueueSessionOperationArgs<T>
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+  readonly resolve: (value: Result<T, SessionOperationFailure>) => void
+  readonly remove: (entry: QueuedOperation) => void
+}
+
+/** Owns the deadline and cleanup only while the operation is waiting to run. */
+class QueuedSessionOperation<T> implements QueuedOperation {
+  private state: OperationState = {
+    kind: OperationStateKind.Queued,
+    timer: { kind: PendingTimerKind.Unscheduled },
+  }
+
+  constructor(
+    private readonly configuration: QueuedSessionOperationConfiguration<T>,
+  ) {}
+
+  get sequence(): number {
+    return this.configuration.sequence
+  }
+  get priority(): SessionOperationPriority {
+    return this.configuration.request.options.priority
+  }
+
+  scheduleExpiry(): void {
+    if (this.state.kind !== OperationStateKind.Queued) return
+    const expiry = this.configuration.request.options.expiry
+    if (expiry.kind === SessionOperationExpiryKind.None) return
+    const remaining = expiry.expiresAt - Date.now()
+    if (remaining <= 0) {
+      this.cancel(
+        new SessionOperationFailure(SessionOperationFailureKind.Expired),
+      )
+      return
+    }
+    this.state = {
+      kind: OperationStateKind.Queued,
+      timer: {
+        kind: PendingTimerKind.Scheduled,
+        handle: setTimeout(
+          () =>
+            this.cancel(
+              new SessionOperationFailure(SessionOperationFailureKind.Expired),
+            ),
+          remaining,
+        ),
+      },
+    }
+  }
+
+  private clearTimer(timer: PendingTimer): void {
+    if (timer.kind === PendingTimerKind.Scheduled) clearTimeout(timer.handle)
+  }
+
+  cancel(error: SessionOperationFailure): void {
+    if (this.state.kind !== OperationStateKind.Queued) return
+    this.clearTimer(this.state.timer)
+    this.state = { kind: OperationStateKind.Settled }
+    this.configuration.remove(this)
+    const cleanup = this.configuration.request.options.cleanup
+    try {
+      if (cleanup.kind === SessionOperationCleanupKind.OnExpire) cleanup.run()
+    } finally {
+      this.configuration.resolve(err(error))
+    }
+  }
+
+  async run(): Promise<void> {
+    if (this.state.kind !== OperationStateKind.Queued) return
+    const expiry = this.configuration.request.options.expiry
+    if (
+      expiry.kind === SessionOperationExpiryKind.Deadline &&
+      expiry.expiresAt <= Date.now()
+    ) {
+      this.cancel(
+        new SessionOperationFailure(SessionOperationFailureKind.Expired),
+      )
+      return
+    }
+    this.clearTimer(this.state.timer)
+    this.state = { kind: OperationStateKind.Running }
+    const running = new RunningSessionOperation(this.configuration)
+    await running.complete()
+    this.state = { kind: OperationStateKind.Settled }
+  }
+}
+
+/** Running work has no queued deadline or cancellation operation. */
+class RunningSessionOperation<T> {
+  private state = OperationStateKind.Running
+  constructor(
+    private readonly configuration: QueuedSessionOperationConfiguration<T>,
+  ) {}
+  async complete(): Promise<void> {
+    if (this.state !== OperationStateKind.Running) return
+    this.state = OperationStateKind.Settled
+    try {
+      this.configuration.resolve(await this.configuration.request.operation())
+    } catch {
+      this.configuration.resolve(
+        err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
+      )
+    }
+  }
+}
+
+/** Closed queues expose their terminal reason, never enqueue or drain. */
+export class ClosedSessionOperationQueue {
+  constructor(readonly error: SessionOperationFailure) {}
+}
 
 enum QueueStateKind {
   Open = 'open',
@@ -66,120 +212,74 @@ enum QueueStateKind {
 }
 
 type QueueState =
-  { kind: QueueStateKind.Open } | { kind: QueueStateKind.Closed; error: Error }
+  | { kind: QueueStateKind.Open }
+  | { kind: QueueStateKind.Closed; error: SessionOperationFailure }
+
+enum QueueDrainKind {
+  Idle = 'idle',
+  Running = 'running',
+}
 
 export class SessionOperationQueue {
-  private entries: QueueEntry[] = []
+  private entries: QueuedOperation[] = []
   private sequence = 0
-  private running = false
+  private drainState = QueueDrainKind.Idle
   private state: QueueState = { kind: QueueStateKind.Open }
 
-  close(error: Error): void {
-    if (this.state.kind === QueueStateKind.Closed) return
+  close(error: SessionOperationFailure): ClosedSessionOperationQueue {
+    if (this.state.kind === QueueStateKind.Closed)
+      return new ClosedSessionOperationQueue(this.state.error)
     this.state = { kind: QueueStateKind.Closed, error }
     const pending = this.entries
     this.entries = []
-    for (const entry of pending) {
-      if (entry.settled) continue
-      entry.settled = true
-      if (entry.expiryTimer) clearTimeout(entry.expiryTimer)
-      entry.onExpire?.()
-      entry.reject(error)
-    }
+    for (const entry of pending) entry.cancel(error)
+    return new ClosedSessionOperationQueue(error)
   }
 
-  enqueue<T>(args: EnqueueSessionOperationArgs<T>): Promise<T> {
-    const { operation, options } = args
-    // Promise owns this callback's resolve and reject signature.
-    // eslint-disable-next-line max-params
-    return new Promise<T>((resolve, reject) => {
+  enqueue<T>(
+    request: EnqueueSessionOperationArgs<T>,
+  ): Promise<Result<T, SessionOperationFailure>> {
+    return new Promise<Result<T, SessionOperationFailure>>((resolve) => {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      const entry = new QueuedSessionOperation({
+        sequence: this.sequence++,
+        request,
+        resolve,
+        remove: (expired) => this.remove(expired),
+      })
       if (this.state.kind === QueueStateKind.Closed) {
-        if (options.cleanup.kind === SessionOperationCleanupKind.OnExpire) {
-          options.cleanup.run()
-        }
-        reject(this.state.error)
+        entry.cancel(this.state.error)
         return
       }
-      const expiryFields =
-        options.expiry.kind === SessionOperationExpiryKind.Deadline
-          ? { expiresAt: options.expiry.expiresAt }
-          : {}
-      const cleanupFields =
-        options.cleanup.kind === SessionOperationCleanupKind.OnExpire
-          ? { onExpire: options.cleanup.run }
-          : {}
-      const entry: QueueEntry = {
-        sequence: this.sequence++,
-        priority: priorityOrder[options.priority],
-        operation: async () => {
-          const result = await operation()
-          resolve(result)
-        },
-        reject,
-        ...expiryFields,
-        ...cleanupFields,
-        settled: false,
-      }
-      if (typeof entry.expiresAt === 'number') {
-        const remaining = entry.expiresAt - Date.now()
-        if (remaining <= 0) {
-          entry.settled = true
-          entry.onExpire?.()
-          reject(expiredError())
-          return
-        }
-        entry.expiryTimer = setTimeout(() => {
-          if (entry.settled) return
-          entry.settled = true
-          this.entries = this.entries.filter((candidate) => candidate !== entry)
-          entry.onExpire?.()
-          reject(expiredError())
-        }, remaining)
-      }
       this.entries.push(entry)
-      // Array.sort owns this comparator signature.
-      // eslint-disable-next-line max-params
-      const compareEntries = (left: QueueEntry, right: QueueEntry) =>
-        left.priority - right.priority || left.sequence - right.sequence
-      this.entries.sort(compareEntries)
+      entry.scheduleExpiry()
+      this.entries.sort(
+        // eslint-disable-next-line max-params -- Array.sort owns the comparator signature.
+        (left, right) =>
+          priorityOrder[left.priority] - priorityOrder[right.priority] ||
+          left.sequence - right.sequence,
+      )
       void this.drain()
     })
   }
 
+  private remove(entry: QueuedOperation): void {
+    this.entries = this.entries.filter((candidate) => candidate !== entry)
+  }
+
   private async drain(): Promise<void> {
-    if (this.running) return
-    this.running = true
+    if (this.drainState === QueueDrainKind.Running) return
+    this.drainState = QueueDrainKind.Running
     try {
-      let entry = this.entries.shift()
-      while (entry) {
-        if (!entry.settled) {
-          if (
-            typeof entry.expiresAt === 'number' &&
-            entry.expiresAt <= Date.now()
-          ) {
-            entry.settled = true
-            if (entry.expiryTimer) clearTimeout(entry.expiryTimer)
-            entry.onExpire?.()
-            entry.reject(expiredError())
-          } else {
-            if (entry.expiryTimer) clearTimeout(entry.expiryTimer)
-            try {
-              await entry.operation()
-              entry.settled = true
-            } catch (error) {
-              entry.settled = true
-              entry.reject(
-                error instanceof Error
-                  ? error
-                  : new Error('Extension session operation failed.'),
-              )
-            }
-          }
-        }
+      for (
+        let entry = this.entries.shift();
+        entry;
         entry = this.entries.shift()
+      ) {
+        await entry.run()
       }
     } finally {
-      this.running = false
+      this.drainState = QueueDrainKind.Idle
       if (this.entries.length > 0) void this.drain()
     }
   }

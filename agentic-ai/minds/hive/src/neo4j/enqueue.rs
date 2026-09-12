@@ -2,7 +2,7 @@ use crate::HiveContext;
 use neo4rs::query;
 use uuid::Uuid;
 
-use crate::model::{EnqueueTask, TaskId};
+use crate::model::{ActiveDelivery, ActiveDeliveryQuery, EnqueueTask, TaskId};
 
 use super::Neo4jTaskStore;
 
@@ -105,9 +105,12 @@ impl Neo4jTaskStore {
 
     pub(super) async fn active_delivery_task(
         &self,
-        source_commit: &str,
-        kind: &str,
-    ) -> crate::HiveResult<Option<TaskId>> {
+        request: ActiveDeliveryQuery<'_>,
+    ) -> crate::HiveResult<ActiveDelivery> {
+        let ActiveDeliveryQuery {
+            source_commit,
+            kind,
+        } = request;
         let mut rows = self
             .graph
             .execute(
@@ -123,12 +126,14 @@ impl Neo4jTaskStore {
                      LIMIT 1",
                 )
                 .param("source_commit", source_commit)
-                .param("kind", kind),
+                .param("kind", kind.as_str()),
             )
             .await?;
-        rows.next()
-            .await?
-            .map(|row| Ok(TaskId::new(row.get::<String>("id")?)?))
-            .transpose()
+        match rows.next().await? {
+            Some(row) => Ok(ActiveDelivery::Active(TaskId::try_from(
+                row.get::<String>("id")?,
+            )?)),
+            None => Ok(ActiveDelivery::Idle),
+        }
     }
 }

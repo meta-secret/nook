@@ -13,6 +13,10 @@ Harness profile directories must not mirror or redefine these cards.
 
 ## Skill catalog
 
+- **[Dev publication](../../dev-manager/dynamic-skills/dev-publish.md)**
+  - Purpose: Manually publish dev snapshots and coordinate full slow validation.
+- **[Dev promotion](../../dev-manager/dynamic-skills/dev-promote.md)**
+  - Purpose: Fast-forward main to the tested dev SHA with verified remote state.
 - **[team-oriented-development.md](../../../gizmo/dynamic-skills/team-oriented-development.md)**
   - Purpose: Route capabilities through all five implementation teams with optional bounded expertise providers and Gizmo-owned cross-team joins
 - **[typescript-rust-automation-only.md](../../../shared/dynamic-skills/typescript-rust-automation-only.md)**
@@ -62,13 +66,13 @@ Harness profile directories must not mirror or redefine these cards.
 - **[dynamic-skill-authoring.md](dynamic-skill-authoring.md)**
   - Purpose: Capture user feedback as durable team-owned Cortex skill cards
 - **[efficient-pr-delivery.md](../../../gizmo/dynamic-skills/efficient-pr-delivery.md)**
-  - Purpose: Ship PRs with focused configured-runner execution, complete exact-head validation, and readiness
+  - Purpose: Route current dev delivery and retain prior PR runtime reference
 - **[github-actions-only-validation.md](../../sre/dynamic-skills/github-actions-only-validation.md)**
-  - Purpose: Format locally; run focused tasks and trusted Rust gates on the configured Actions runner while runtime-dependent gates stay GitHub-hosted
+  - Purpose: Route feature compilation and manager slow checks to remote execution
 - **[kubernetes-native-cluster-execution.md](../../sre/dynamic-skills/kubernetes-native-cluster-execution.md)**
   - Purpose: Prohibit nested container runtimes in k8s and k0s and require direct Pod execution for Playwright and other workloads
 - **[pre-push-hygiene.md](../../sre/dynamic-skills/pre-push-hygiene.md)**
-  - Purpose: Always host-apply `task format` and pass the UI demo contract before every push so Verify does not burn cycles on Prettier/rustfmt/demo misses
+  - Purpose: Describe prior pre-push runtime under the current dev-stage restrictions
 - **[browser-extension-release-security.md](../../security/dynamic-skills/browser-extension-release-security.md)**
   - Purpose: Apply origin, identity, archive, redirect, and profile-isolation checks before shipping extension artifacts
 - **[feature-issue-planning.md](../../../gizmo/dynamic-skills/feature-issue-planning.md)**
@@ -110,7 +114,7 @@ Harness profile directories must not mirror or redefine these cards.
     - Nest same-prefix closed vocabularies into parent objects plus operation
       enums.
     - Use field enums instead of string sets.
-    - Ban hand-rolled TypeScript `Result` / `Maybe` utilities.
+    - Use shared `neverthrow` Result values; prohibit competing local wrappers.
 - **[typescript-single-parameter.md](../../web-dev/dynamic-skills/typescript-single-parameter.md)**
   - Purpose: Limit authored functions to one parameter
 - **[typescript-no-unknown.md](../../web-dev/dynamic-skills/typescript-no-unknown.md)**

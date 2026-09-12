@@ -9,35 +9,57 @@ the active harness.
 
 ## Rules
 
+- Follow [dev delivery](../architecture/dev-delivery.md) for stage boundaries.
+- Author tests without executing them in the feature stage.
+- Local feedback is limited to scoped rustfmt and bounded TS diagnostics.
+- Gizmo requests remote build-only execution through PR Steward.
 - Every Team Agent task has one team identity. A PR Steward task uses the
   separate `pr-steward` operational context and remains a child task of Gizmo
   for policy and authorization.
 - Every task names its outcome, allowed files, forbidden files, and acceptance
   evidence.
-- Before any Team Agent starts, Gizmo lists every task and dependency currently
-  known in native harness dispatch order.
-- The user-visible hierarchy comes only from the validated
+- Internally establish every known task and dependency before dispatch.
+- Validate scope, ownership, and dispatch order without printing the plan.
+- Use the optional
   [delegation visualization](../../teams/ai/dynamic-skills/delegation-visualization/SKILL.md)
-  `delegationVisualization.render` result.
-- The visualization request is ephemeral presentation input.
-- It is not admission, scheduling, persistence, or agent-lifecycle state.
-- Gizmo never composes, edits, or infers the returned plan document.
+  only when requested or needed to explain a consequential dependency change.
 - Give the Team Agent only its team entry point and task-relevant Cortex.
 - Use the active harness for Team Agent communication.
 - Do not use another Codex task, thread, cloud task, or external agent as
   delegation transport.
-- Do not create a worktree for a Team Agent.
-- Write-capable Team Agents use the current checkout and current branch.
-- Only one write-capable Team Agent runs at a time.
+- Create exactly one child worktree for each Team Agent from the parent feature
+  worktree's current committed frontier.
+- Bind the child path and branch to the task and attempt identity.
+- The child worktree must be disjoint from the parent and every other active
+  child worktree.
+- Workers must not create child worktrees or choose a different child path.
+- Run dependency-ready write-capable Team Agents in parallel when their
+  explicit file scopes are disjoint.
+- Order writers whose scopes overlap or whose tasks have a dependency edge.
+- Inventory and attribute dirty paths and hunks before dispatch.
+- Block a proposed scope that overlaps pre-existing user or foreign changes.
+  - Dispatch may proceed only when those exact changes are handed off or
+    attributed to the proposed task.
+- Name each acceptance command's read, write, and output scopes.
+- Run acceptance commands concurrently only when their scopes are safe.
+  - A command must not read a peer scope while that scope may change.
+  - Its write and output scopes must not overlap a peer task or command scope.
+  - A shared generated or output path is a shared file with one writer.
+  - A command with uncertain or conflicting scope waits for a stable committed
+    head and runs serially.
 - Read-only Team Agents may run concurrently when they cannot interfere with a
   writer.
-- A Team Agent may commit its complete scoped change when Gizmo requests it.
-- Gizmo continues directly from that commit.
-- Do not cherry-pick, merge, copy, replay, or synthesize a worker commit into a
-  separate integration branch.
-- Gizmo owns branch sequencing, PR authorization, technical review
-  dispositions, readiness and merge verdicts. PR Steward performs only the
-  explicitly authorized external pull-request mechanics described in the
+- Each worker mutates only its own child worktree's Git index. Gizmo serializes
+  parent integration commits.
+- Every writer commits its complete scoped iteration during its Gizmo-granted
+  commit turn.
+- Gizmo verifies each child commit and integrates it into the parent feature
+  worktree through the guarded module integrator.
+- Do not copy, replay, or synthesize a worker commit into an unrelated branch.
+- Gizmo owns feature sequencing, review, acceptance, and landing requests.
+  The dev manager controls dev PR creation/update, slow evidence, readiness,
+  and promotion. Steward performs dev PR mechanics only under manager packets.
+  Follow the
   [PR Steward lifecycle](../../teams/pr-steward/workflows/pull-request-lifecycle.md).
 
 ## Procedure
@@ -45,52 +67,108 @@ the active harness.
 1. Identify the team that owns the requested change.
 2. Discover every Team Agent task and dependency currently known.
 3. Define each bounded task with explicit file scope and acceptance evidence.
-4. Check that no other write-capable Team Agent is active.
-5. Build one `delegationVisualization.render` request for that known work.
-   - Give every task one identifier, team, description, and dependency list.
-   - Keep tasks in native harness dispatch order.
-   - Name only earlier tasks as dependencies.
-6. Invoke the static renderer through `task skills:run`.
-7. Emit one normal `Gizmo Prime:STATE` activity update for the plan
-   visualization.
-8. Publish the returned `document` as the compact user-visible plan immediately
-   below that activity update.
-9. Start the Team Agent through the active harness in the current checkout.
-10. Let the Team Agent implement and run focused checks.
-11. Ask for a commit when a commit is useful for the delivery sequence.
-12. Verify that the result stays inside the declared scope.
-13. Continue from the resulting shared-branch state.
-14. Route any correction to the team that owns the affected change.
+   - Name every acceptance command's read, write, and output scopes.
+   - Include the [GitHub execution boundary](../../AGENTS.md#github-execution-boundary)
+     in every functional worker prompt.
+   - Tell the worker to request missing PR evidence from Gizmo.
+   - Explicitly prohibit direct `gh` queries, equivalent GitHub access, and
+     PR monitoring, including read-only `gh pr view`.
+4. Inspect the current dirty paths and diff hunks.
+5. Attribute every dirty change to its owner and task.
+   - If a proposed scope overlaps a pre-existing user or foreign change, block
+     that task.
+   - Proceed only after an exact handoff or same-task attribution.
+6. Build the next dependency-ready wave.
+   - Require disjoint file scopes.
+   - Require concurrency-safe acceptance command scopes.
+   - Treat shared generated and output paths as shared files.
+   - Defer unsafe checks until the relevant changes are committed.
+7. Create one child worktree per task from the parent feature worktree's current
+   commit.
+8. Start that wave through the active harness with each worker in its issued
+   child worktree.
+9. Let each Team Agent implement and author behavior-focused tests.
+10. Require each worker to commit its complete iteration in its child worktree.
+    - The worker stages only its allowed files.
+    - The commit must be directly after the child baseline.
+11. Verify each child commit and integrate it into the parent feature worktree
+    in a serialized integration turn.
+12. Request remote compilation after the parent has a stable committed head.
+    - Route any tracked output to its assigned owner.
+    - Require that owner to commit the output as a complete new iteration.
+13. Request one terminal handoff from each writer.
+    - Enumerate every committed iteration in order.
+    - For each iteration, include its SHA, outcome, evidence, and unresolved
+      blockers.
+14. Verify each commit stays inside its declared scope.
+15. Co-validate the combined parent branch after all tasks in the wave commit.
+16. Continue with the next dependency-ready wave from the parent frontier.
+17. Route corrections to the team that owns the affected change.
+
+Before a later implementation or repair iteration, the Team Agent reads the
+last one or two commits relevant to its allowed files and named interfaces. It
+also inspects those diffs. This committed history supplements the task prompt.
+It does not replace the explicit scope or acceptance evidence.
 
 ## Dependencies
 
 A Team Agent stops at another team's boundary and reports the missing
 dependency to Gizmo.
 
-Gizmo then assigns a separate bounded task to the owning team. The current
-writer finishes or stops before another writer begins.
+Gizmo assigns a separate bounded task to the owning team. A dependent consumer
+waits for the provider commit. Independent work may remain in the active wave.
+
+For a cross-team provider-consumer boundary, Gizmo records:
+
+- the provider-owned interface and its observable acceptance evidence;
+- the consumer assumption and its observable acceptance evidence; and
+- the combined compilation, typecheck, or behavior evidence.
+
+Provider and consumer tasks may run in parallel when both can implement against
+an already agreed interface. If the consumer needs the provider's new output,
+the provider task is an explicit dependency.
+
+After both commits exist, Gizmo co-validates the combined branch. A failure is
+routed to the provider when the exported contract is wrong. It is routed to the
+consumer when the contract is used incorrectly. When both sides must change,
+Gizmo assigns both bounded repair tasks. Those repairs may run in parallel only
+when their scopes remain disjoint and neither repair depends on the other.
 
 Workers do not create other workers. They do not change task ownership or the
 delivery sequence.
 
+### PR information requests
+
+1. The worker reports the known PR or run target to Gizmo.
+   It names the missing evidence and dependent work.
+2. Gizmo supplies an explicit operation packet to PR Steward.
+   Only PR Steward queries GitHub or starts a monitoring subscription.
+3. PR Steward returns bounded evidence or a blocker to Gizmo.
+4. Gizmo forwards the result to the requesting worker.
+   The worker continues independent in-scope work while waiting when possible.
+
+Missing PR identity is part of the request, not permission for worker discovery.
+An unavailable Steward remains a blocker for the dependent work.
+
 ### Later discovery
 
-A genuinely later dependency was not part of the initial known work. Gizmo
-must not backfill that dependency into the initial visualization or claim it
-was known earlier. Before its Team Agent starts, Gizmo renders a new request
-for the newly known work through the same presentation gate.
+Record a newly discovered dependency internally before dispatch. Report it only
+when it changes the expected outcome or requires a decision. Render a new plan
+only when a visualization is warranted. Never claim it was known earlier.
 
 ## Failure handling
 
-- If request validation or visualization publication fails, report the blocker.
-  Do not dispatch a Team Agent.
+- If task scope or dependency validation fails, stop dispatch.
+  Report the blocker.
 - If a required Team Agent cannot start, report the blocker.
 - If a Team Agent produces out-of-scope changes, reject those changes and route
   a corrected task.
-- If the current checkout contains unexpected edits, stop before starting a
-  writer and identify their owner.
-- Do not add a parallel Team Agent lifecycle or Git-state protocol to recover
-  from a failure.
+- If a proposed scope overlaps pre-existing user or foreign changes without an
+  exact handoff or same-task attribution, block that dispatch.
+- If a child or parent worktree contains edits outside the declared active
+  scopes, stop the affected dispatch and identify their owner.
+- Do not add a lifecycle service or Git-state protocol to recover from a
+  failure.
 
 ## Validation
 
@@ -98,8 +176,27 @@ Before accepting Team Agent work, verify:
 
 - the task used the correct team identity;
 - only the declared files changed;
-- no other writer ran concurrently;
-- the shared branch contains the accepted result;
-- focused acceptance checks passed; and
-- Gizmo still owns every external delivery decision and authorization. Any PR
-  Steward mutation stays inside the named packet.
+- concurrent writers had disjoint explicit file scopes;
+- dependency edges and overlapping scopes were ordered;
+- dirty paths and hunks were attributed before dispatch;
+- no commit included unrelated pre-existing changes;
+- acceptance command read, write, and output scopes were concurrency-safe;
+- unsafe checks ran serially on a stable committed head;
+- only one writer mutated each worktree's Git index at a time;
+- the parent feature worktree contains every accepted result;
+- every child worktree was created from the recorded parent frontier;
+- each child worktree was clean after its handoff and was cleaned up only after
+  integration;
+- parent integration was serialized;
+- every writer committed its complete scoped iteration;
+- each terminal handoff enumerated every iteration commit in order;
+- each iteration entry named its SHA, outcome, evidence, and unresolved
+  blockers;
+- later iterations inspected the last one or two relevant commits and diffs;
+- provider-consumer evidence passed on the combined branch;
+- remote build-only acceptance passed for the feature SHA;
+- workers requested missing PR evidence through Gizmo without direct GitHub
+  access or monitoring; and
+- Gizmo owns feature-stage decisions and landing authorization.
+- The dev manager controls dev PR operations, readiness, and promotion.
+- Steward mutations stay inside the owning controller's packet.

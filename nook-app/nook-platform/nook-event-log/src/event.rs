@@ -1,5 +1,6 @@
 //! Vault event envelope, typed domain operations, and signing helpers.
 
+use nook_auth2::RecordTypeDeclaration;
 use std::{fmt, str};
 
 use crate::canonical::{Ed25519Signature, EventId};
@@ -14,10 +15,14 @@ use nook_auth2::{
     Sha256Hex, StoreId, StoredRecordPayload, StoredSecretRecord,
 };
 use serde::{Deserialize, Serialize, ser::Error as _};
-use serde_json::{Value, json};
+use serde_json::Value;
+#[cfg(test)]
+use serde_json::json;
 
 /// Supported `schema_version` values on the event wire.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, tsify::Tsify,
+)]
 #[serde(transparent)]
 pub struct VaultEventSchemaVersion(u32);
 
@@ -45,10 +50,11 @@ impl fmt::Display for VaultEventSchemaVersion {
 }
 
 /// Encrypted secret payload embedded in an event operation.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 pub struct EncryptedSecretPayload {
     pub id: SecretId,
     #[serde(rename = "type")]
+    #[tsify(type = "SecretTypeWire")]
     pub secret_type: SecretType,
     pub ciphertext: OpaqueCiphertext,
     pub identity_fingerprint: SecretFingerprint,
@@ -77,14 +83,14 @@ impl EncryptedSecretPayload {
     pub fn to_stored(&self) -> StoredSecretRecord {
         StoredSecretRecord {
             key: self.id.clone(),
-            secret_type: Some(self.secret_type),
+            secret_type: RecordTypeDeclaration::Secret(self.secret_type),
             value: StoredRecordPayload::from_trusted(self.ciphertext.as_str().to_owned()),
         }
     }
 }
 
 /// One sentinel share encrypted to a participant device, recorded in the event log.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 #[serde(rename_all = "snake_case")]
 pub struct SentinelShareIssuedPayload {
     pub device_id: DeviceId,
@@ -95,7 +101,8 @@ pub struct SentinelShareIssuedPayload {
     pub ciphertext: AgeArmoredCiphertext,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(from = "Vec<PasswordUnlockEntry>")]
 pub enum EpochPasswordState {
     #[default]
     LegacyRetain,
@@ -104,7 +111,8 @@ pub enum EpochPasswordState {
 
 /// Checkpoint metadata replacement. Omitted legacy fields retain the previous
 /// metadata, while an explicit empty array clears every metadata record.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(from = "Vec<StoredSecretRecord>")]
 pub enum EpochMetadataState {
     #[default]
     LegacyRetain,
@@ -117,25 +125,26 @@ impl EpochMetadataState {
     }
 }
 
-fn deserialize_epoch_metadata_state<'de, D>(deserializer: D) -> Result<EpochMetadataState, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Vec::<StoredSecretRecord>::deserialize(deserializer).map(EpochMetadataState::Replace)
+impl From<Vec<StoredSecretRecord>> for EpochMetadataState {
+    fn from(values: Vec<StoredSecretRecord>) -> Self {
+        Self::Replace(values)
+    }
 }
 
-fn serialize_epoch_metadata_state<S>(
-    state: &EpochMetadataState,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    match state {
-        EpochMetadataState::Replace(records) => records.serialize(serializer),
-        EpochMetadataState::LegacyRetain => Err(S::Error::custom(
-            "legacy checkpoint metadata state must be omitted",
-        )),
+impl EpochMetadataState {
+    fn serialize_epoch_metadata_state<S>(
+        state: &EpochMetadataState,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match state {
+            EpochMetadataState::Replace(records) => records.serialize(serializer),
+            EpochMetadataState::LegacyRetain => Err(S::Error::custom(
+                "legacy checkpoint metadata state must be omitted",
+            )),
+        }
     }
 }
 
@@ -145,30 +154,31 @@ impl EpochPasswordState {
     }
 }
 
-fn deserialize_epoch_password_state<'de, D>(deserializer: D) -> Result<EpochPasswordState, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Vec::<PasswordUnlockEntry>::deserialize(deserializer).map(EpochPasswordState::Replace)
+impl From<Vec<PasswordUnlockEntry>> for EpochPasswordState {
+    fn from(values: Vec<PasswordUnlockEntry>) -> Self {
+        Self::Replace(values)
+    }
 }
 
-fn serialize_epoch_password_state<S>(
-    state: &EpochPasswordState,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    match state {
-        EpochPasswordState::Replace(entries) => entries.serialize(serializer),
-        EpochPasswordState::LegacyRetain => Err(S::Error::custom(
-            "legacy checkpoint password state must be omitted",
-        )),
+impl EpochPasswordState {
+    fn serialize_epoch_password_state<S>(
+        state: &EpochPasswordState,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match state {
+            EpochPasswordState::Replace(entries) => entries.serialize(serializer),
+            EpochPasswordState::LegacyRetain => Err(S::Error::custom(
+                "legacy checkpoint password state must be omitted",
+            )),
+        }
     }
 }
 
 /// Atomic domain operations recorded in the immutable event log.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum VaultOperation {
     VaultImported {
@@ -254,16 +264,18 @@ pub enum VaultOperation {
         #[serde(
             default,
             skip_serializing_if = "EpochMetadataState::is_legacy_retain",
-            deserialize_with = "deserialize_epoch_metadata_state",
-            serialize_with = "serialize_epoch_metadata_state"
+            serialize_with = "EpochMetadataState::serialize_epoch_metadata_state"
         )]
+        // This custom serde field emits Replace records as an array and omits LegacyRetain.
+        #[tsify(type = "StoredSecretRecord[]", optional)]
         rotated_meta_records: EpochMetadataState,
         #[serde(
             default,
             skip_serializing_if = "EpochPasswordState::is_legacy_retain",
-            deserialize_with = "deserialize_epoch_password_state",
-            serialize_with = "serialize_epoch_password_state"
+            serialize_with = "EpochPasswordState::serialize_epoch_password_state"
         )]
+        // The custom serializer likewise preserves the legacy omitted/explicit-array distinction.
+        #[tsify(type = "PasswordUnlockEntry[]", optional)]
         password_entries: EpochPasswordState,
     },
 }
@@ -288,7 +300,7 @@ impl VaultOperation {
 }
 
 /// Signed event body (everything except the signature field).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 #[serde(rename_all = "snake_case")]
 pub struct VaultEventBody {
     pub schema_version: VaultEventSchemaVersion,
@@ -301,18 +313,87 @@ pub struct VaultEventBody {
     pub operations: Vec<VaultOperation>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GenesisImportContents {
+    Other,
+    Empty,
+    Populated,
+}
+pub enum EpochCheckpointRequirement<'a> {
+    NotRequired,
+    SecurityRotationParent(&'a EventId),
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecurityRotationTrigger {
+    Other,
+    PasswordRotated,
+    PasswordRemoved,
+    DeviceRevoked,
+}
+impl VaultEventBody {
+    #[must_use]
+    pub fn genesis_import_contents(&self) -> GenesisImportContents {
+        match self.operations.as_slice() {
+            [
+                VaultOperation::VaultImported {
+                    secrets,
+                    password_entries,
+                    ..
+                },
+            ] => {
+                if secrets.is_empty() && password_entries.is_empty() {
+                    GenesisImportContents::Empty
+                } else {
+                    GenesisImportContents::Populated
+                }
+            }
+            _ => GenesisImportContents::Other,
+        }
+    }
+    #[must_use]
+    pub fn security_rotation_trigger(&self) -> SecurityRotationTrigger {
+        match self.operations.as_slice() {
+            [VaultOperation::PasswordRotated { .. }] => SecurityRotationTrigger::PasswordRotated,
+            [VaultOperation::PasswordRemoved { .. }] => SecurityRotationTrigger::PasswordRemoved,
+            [VaultOperation::DeviceRevoked { .. }] => SecurityRotationTrigger::DeviceRevoked,
+            _ => SecurityRotationTrigger::Other,
+        }
+    }
+    pub fn epoch_checkpoint_requirement(&self) -> EventResult<EpochCheckpointRequirement<'_>> {
+        let checkpoints = self
+            .operations
+            .iter()
+            .filter(|op| matches!(op, VaultOperation::EpochCheckpoint { .. }))
+            .count();
+        if checkpoints == 0 || self.schema_version < VaultEventSchemaVersion::V3 {
+            return Ok(EpochCheckpointRequirement::NotRequired);
+        }
+        if checkpoints != 1 || self.operations.len() != 1 {
+            return Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint must be the event's sole operation",
+            });
+        }
+        let [parent] = self.parents.as_slice() else {
+            return Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint must have exactly one direct parent",
+            });
+        };
+        if self.key_epoch != *parent {
+            return Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint key epoch must equal its direct parent id",
+            });
+        }
+        Ok(EpochCheckpointRequirement::SecurityRotationParent(parent))
+    }
+}
+
 impl VaultEventBody {
     pub fn to_canonical_value(&self) -> EventResult<Value> {
-        let mut value = serde_json::to_value(self).map_err(EventError::EventBodySerialize)?;
-        if let Value::Object(ref mut map) = value {
-            let mut sorted_parents: Vec<String> = self
-                .parents
-                .iter()
-                .map(|id| id.as_str().to_owned())
-                .collect();
-            sorted_parents.sort();
-            map.insert("parents".to_owned(), json!(sorted_parents));
-        }
+        let mut body = self.clone();
+        body.parents
+            .sort_by(|left, right| left.as_str().cmp(right.as_str()));
+        // The generic canonical JSON writer is the signing wire boundary.
+        let value = serde_json::to_value(&body).map_err(EventError::EventBodySerialize)?;
         Ok(CanonicalEventBodyBytes::canonical_value(&value))
     }
 
@@ -326,12 +407,22 @@ impl VaultEventBody {
 }
 
 /// Full signed vault event.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 #[serde(rename_all = "snake_case")]
 pub struct VaultEvent {
     #[serde(flatten)]
     pub body: VaultEventBody,
     pub signature: Ed25519Signature,
+}
+
+/// Named values required by `VaultEvent::build_genesis_import_event`.
+pub struct GenesisImportRequest<'a> {
+    pub store_id: &'a StoreId,
+    pub actor_id: &'a AuthKeyId,
+    pub key_epoch: &'a EventId,
+    pub payload: GenesisImportPayload,
+    pub created_at: &'a IsoTimestamp,
+    pub signing_key: &'a SigningKey,
 }
 
 impl VaultEvent {
@@ -422,30 +513,36 @@ impl VaultEvent {
 ///
 /// Event ids and signatures still use canonical compact JSON body bytes. The
 /// persisted event envelope is pretty YAML so humans can inspect provider files.
-pub fn serialize_event_storage_yaml(event: &VaultEvent) -> EventResult<EventStorageBytes> {
-    let mut yaml =
-        serde_yaml::to_string(event).map_err(|e| EventError::EventSerialize(e.to_string()))?;
-    if !yaml.ends_with('\n') {
-        yaml.push('\n');
+impl VaultEvent {
+    pub fn serialize_event_storage_yaml(event: &VaultEvent) -> EventResult<EventStorageBytes> {
+        let mut yaml =
+            serde_yaml::to_string(event).map_err(|e| EventError::EventSerialize(e.to_string()))?;
+        if !yaml.ends_with('\n') {
+            yaml.push('\n');
+        }
+        Ok(yaml.into_bytes().into())
     }
-    Ok(yaml.into_bytes().into())
 }
 
 /// Parse a stored event from YAML bytes.
-pub fn parse_event_storage_bytes(bytes: &EventStorageBytes) -> EventResult<VaultEvent> {
-    let text = str::from_utf8(bytes.as_ref()).map_err(|e| {
-        EventError::ParseStoredEvent(format!("event storage bytes are not UTF-8: {e}"))
-    })?;
-    serde_yaml::from_str(text)
-        .map_err(|e| EventError::ParseStoredEvent(format!("YAML parse failed: {e}")))
+impl VaultEvent {
+    pub fn parse_event_storage_bytes(bytes: &EventStorageBytes) -> EventResult<VaultEvent> {
+        let text = str::from_utf8(bytes.as_ref()).map_err(|e| {
+            EventError::ParseStoredEvent(format!("event storage bytes are not UTF-8: {e}"))
+        })?;
+        serde_yaml::from_str(text)
+            .map_err(|e| EventError::ParseStoredEvent(format!("YAML parse failed: {e}")))
+    }
 }
 
 /// Parse a remote event and classify errors for provider sync.
-pub fn parse_remote_event_storage_bytes(bytes: &EventStorageBytes) -> EventResult<VaultEvent> {
-    parse_event_storage_bytes(bytes).map_err(|error| match error {
-        EventError::ParseStoredEvent(message) => EventError::ParseRemoteEvent(message),
-        other => other,
-    })
+impl VaultEvent {
+    pub fn parse_remote_event_storage_bytes(bytes: &EventStorageBytes) -> EventResult<VaultEvent> {
+        VaultEvent::parse_event_storage_bytes(bytes).map_err(|error| match error {
+            EventError::ParseStoredEvent(message) => EventError::ParseRemoteEvent(message),
+            other => other,
+        })
+    }
 }
 
 /// Build a genesis import event from encrypted snapshot data.
@@ -455,39 +552,44 @@ pub struct GenesisImportPayload {
     pub password_entries: Vec<PasswordUnlockEntry>,
 }
 
-pub fn build_genesis_import_event(
-    store_id: &StoreId,
-    actor_id: &AuthKeyId,
-    key_epoch: &EventId,
-    payload: GenesisImportPayload,
-    created_at: &IsoTimestamp,
-    signing_key: &SigningKey,
-) -> EventResult<VaultEvent> {
-    let signing_actor_id =
-        SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?;
-    if signing_actor_id != *actor_id {
-        return Err(EventError::ActorSigningKeyMismatch {
-            actor_id: actor_id.as_str().to_owned(),
-            signing_key_actor_id: signing_actor_id.as_str().to_owned(),
-        });
+impl VaultEvent {
+    pub fn build_genesis_import_event(
+        request: GenesisImportRequest<'_>,
+    ) -> EventResult<VaultEvent> {
+        let GenesisImportRequest {
+            store_id,
+            actor_id,
+            key_epoch,
+            payload,
+            created_at,
+            signing_key,
+        } = request;
+        let signing_actor_id =
+            SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?;
+        if signing_actor_id != *actor_id {
+            return Err(EventError::ActorSigningKeyMismatch {
+                actor_id: actor_id.as_str().to_owned(),
+                signing_key_actor_id: signing_actor_id.as_str().to_owned(),
+            });
+        }
+        let body = VaultEventBody {
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: store_id.clone(),
+            actor_id: actor_id.clone(),
+            actor_signing_public_key: DeviceSigningPublicKey::from_trusted(hex::encode(
+                signing_key.verifying_key().as_bytes(),
+            )),
+            parents: Vec::new(),
+            created_at: created_at.clone(),
+            key_epoch: key_epoch.clone(),
+            operations: vec![VaultOperation::VaultImported {
+                source_content_hash: payload.source_content_hash,
+                secrets: payload.secrets,
+                password_entries: payload.password_entries,
+            }],
+        };
+        VaultEvent::sign(body, signing_key)
     }
-    let body = VaultEventBody {
-        schema_version: VaultEventSchemaVersion::CURRENT,
-        store_id: store_id.clone(),
-        actor_id: actor_id.clone(),
-        actor_signing_public_key: DeviceSigningPublicKey::from_trusted(hex::encode(
-            signing_key.verifying_key().as_bytes(),
-        )),
-        parents: Vec::new(),
-        created_at: created_at.clone(),
-        key_epoch: key_epoch.clone(),
-        operations: vec![VaultOperation::VaultImported {
-            source_content_hash: payload.source_content_hash,
-            secrets: payload.secrets,
-            password_entries: payload.password_entries,
-        }],
-    };
-    VaultEvent::sign(body, signing_key)
 }
 
 #[cfg(test)]
@@ -498,18 +600,18 @@ mod tests {
     use ed25519_dalek::SigningKey;
 
     fn empty_genesis_event(signing_key: &SigningKey) -> EventResult<VaultEvent> {
-        build_genesis_import_event(
-            &store()?,
-            &actor(signing_key)?,
-            &epoch()?,
-            GenesisImportPayload {
+        VaultEvent::build_genesis_import_event(GenesisImportRequest {
+            store_id: &store()?,
+            actor_id: &actor(signing_key)?,
+            key_epoch: &epoch()?,
+            payload: GenesisImportPayload {
                 source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: Vec::new(),
                 password_entries: Vec::new(),
             },
-            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             signing_key,
-        )
+        })
     }
 
     #[test]
@@ -558,7 +660,7 @@ mod tests {
     fn reserved_sentinel_checkpoint_key_is_architecture_evidence() {
         let malformed_share = StoredSecretRecord {
             key: SecretId::from_vault_record("sentinel_share:not-a-device"),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted("malformed".to_owned()),
         };
         let operation = VaultOperation::EpochCheckpoint {
@@ -592,6 +694,85 @@ mod tests {
         body.schema_version = VaultEventSchemaVersion::V2;
         VaultEvent::sign(body, &signing_key)?
             .validate_envelope(&StoreId::parse("store_testtoken11")?)?;
+        Ok(())
+    }
+
+    #[test]
+    fn event_body_classifies_import_rotation_and_checkpoint_states() -> anyhow::Result<()> {
+        let signing_key = test_signing_key();
+        let mut body = empty_genesis_event(&signing_key)?.body;
+        assert_eq!(body.genesis_import_contents(), GenesisImportContents::Empty);
+        assert_eq!(
+            body.security_rotation_trigger(),
+            SecurityRotationTrigger::Other
+        );
+        assert!(matches!(
+            body.epoch_checkpoint_requirement()?,
+            EpochCheckpointRequirement::NotRequired
+        ));
+
+        let Some(VaultOperation::VaultImported { secrets, .. }) = body.operations.first_mut()
+        else {
+            return Err(anyhow::anyhow!("fixture must contain a genesis import"));
+        };
+        secrets.push(EncryptedSecretPayload {
+            id: SecretId::from_vault_record("secret_abc12345678"),
+            secret_type: SecretType::Login,
+            ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
+            identity_fingerprint: SecretFingerprint::from_trusted("identity".to_owned()),
+            fingerprint: SecretFingerprint::from_trusted("version".to_owned()),
+        });
+        assert_eq!(
+            body.genesis_import_contents(),
+            GenesisImportContents::Populated
+        );
+
+        let parent = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
+        body.parents = vec![parent.clone()];
+        body.key_epoch = parent.clone();
+        body.operations = vec![VaultOperation::PasswordRemoved {
+            entry_id: PasswordEntryId::from_trusted("pwdentry001".to_owned()),
+        }];
+        assert_eq!(body.genesis_import_contents(), GenesisImportContents::Other);
+        assert_eq!(
+            body.security_rotation_trigger(),
+            SecurityRotationTrigger::PasswordRemoved
+        );
+
+        body.operations = vec![VaultOperation::DeviceRevoked {
+            device_id: DeviceId::parse("0123456789abcdef")?,
+        }];
+        assert_eq!(
+            body.security_rotation_trigger(),
+            SecurityRotationTrigger::DeviceRevoked
+        );
+
+        body.operations = vec![VaultOperation::EpochCheckpoint {
+            secrets: Vec::new(),
+            members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
+            rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
+            password_entries: EpochPasswordState::Replace(Vec::new()),
+        }];
+        assert!(matches!(
+            body.epoch_checkpoint_requirement()?,
+            EpochCheckpointRequirement::SecurityRotationParent(id) if id == &parent
+        ));
+
+        body.parents.clear();
+        assert!(matches!(
+            body.epoch_checkpoint_requirement(),
+            Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint must have exactly one direct parent"
+            })
+        ));
+        body.parents.push(parent);
+        body.operations.push(VaultOperation::VaultCleared);
+        assert!(matches!(
+            body.epoch_checkpoint_requirement(),
+            Err(EventError::InvalidEpochCheckpointStructure {
+                reason: "checkpoint must be the event's sole operation"
+            })
+        ));
         Ok(())
     }
 
@@ -664,11 +845,11 @@ mod tests {
     fn event_storage_is_pretty_yaml_and_roundtrips() -> anyhow::Result<()> {
         let signing_key = test_signing_key();
         let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
-        let event = build_genesis_import_event(
-            &StoreId::parse("store_testtoken11")?,
-            &actor(&signing_key)?,
-            &epoch,
-            GenesisImportPayload {
+        let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+            store_id: &StoreId::parse("store_testtoken11")?,
+            actor_id: &actor(&signing_key)?,
+            key_epoch: &epoch,
+            payload: GenesisImportPayload {
                 source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: vec![EncryptedSecretPayload {
                     id: SecretId::from_vault_record("secret_abc12345678"),
@@ -685,11 +866,11 @@ mod tests {
                 }],
                 password_entries: vec![],
             },
-            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            &signing_key,
-        )?;
+            created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            signing_key: &signing_key,
+        })?;
 
-        let yaml = String::from_utf8(serialize_event_storage_yaml(&event)?.into())?;
+        let yaml = String::from_utf8(VaultEvent::serialize_event_storage_yaml(&event)?.into())?;
         assert!(yaml.starts_with("schema_version: 3\n"));
         assert!(yaml.contains("operations:\n- type: vault-imported\n"));
         assert!(yaml.contains("\n  secrets:\n  - id: secret_abc12345678\n"));
@@ -698,9 +879,17 @@ mod tests {
         assert!(yaml.ends_with('\n'));
         assert!(!yaml.trim_start().starts_with('{'));
         assert_eq!(
-            parse_event_storage_bytes(&yaml.as_bytes().to_vec().into())?.id()?,
+            VaultEvent::parse_event_storage_bytes(&yaml.as_bytes().to_vec().into())?.id()?,
             event.id()?
         );
+        assert!(matches!(
+            VaultEvent::parse_event_storage_bytes(&vec![0xff].into()),
+            Err(EventError::ParseStoredEvent(_))
+        ));
+        assert!(matches!(
+            VaultEvent::parse_remote_event_storage_bytes(&b"not event yaml".to_vec().into()),
+            Err(EventError::ParseRemoteEvent(_))
+        ));
         Ok(())
     }
 
@@ -783,7 +972,7 @@ mod tests {
         };
         let event = VaultEvent::sign(body, &signing_key)?;
 
-        let yaml = String::from_utf8(serialize_event_storage_yaml(&event)?.into())?;
+        let yaml = String::from_utf8(VaultEvent::serialize_event_storage_yaml(&event)?.into())?;
         assert!(yaml.contains("  envelope:\n"));
         assert!(yaml.contains("    version: 1\n"));
         assert!(yaml.contains("    kdf: scrypt\n"));
@@ -792,7 +981,7 @@ mod tests {
         assert!(!yaml.contains("envelope_"));
         assert!(!yaml.contains('{'));
         assert_eq!(
-            parse_event_storage_bytes(&yaml.as_bytes().to_vec().into())?,
+            VaultEvent::parse_event_storage_bytes(&yaml.as_bytes().to_vec().into())?,
             event
         );
         Ok(())

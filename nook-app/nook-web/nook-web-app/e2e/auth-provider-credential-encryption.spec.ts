@@ -7,7 +7,7 @@ import {
   expectSealedCredential,
   flushNookLogPersistQueue,
   fetchAppLogs,
-  loadDecryptedAuthProvidersInBrowser,
+  AuthProviderBrowserFixture,
   readRawAuthProvidersFromIdb,
   saveAuthProvidersInBrowser,
   UI_TIMEOUT_MS,
@@ -16,6 +16,7 @@ import {
   waitForStorageChainIdle,
   waitForVaultSyncIdle,
 } from './helpers'
+import { AUTH_PROVIDER_HOOK_READ_FAILED } from './helpers/auth-providers'
 
 test.describe('sync provider credential encryption', () => {
   test.beforeEach(async ({ page }) => {
@@ -51,11 +52,13 @@ test.describe('sync provider credential encryption', () => {
     const raw = await readRawAuthProvidersFromIdb(page)
     expectSealedCredential(raw.providers[0]?.githubPat, pat)
 
-    const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
-    expect(decrypted.providers[0]?.githubPat).toEqual({
-      state: 'token',
-      value: pat,
-    })
+    const decrypted = await new AuthProviderBrowserFixture(page).load()
+    expect(decrypted.isOk()).toBe(true)
+    if (decrypted.isOk())
+      expect(decrypted.value.providers[0]?.githubPat).toEqual({
+        state: 'token',
+        value: pat,
+      })
   })
 
   test('replacement conflict refresh avoids recursive wasm closure use', async ({
@@ -64,11 +67,7 @@ test.describe('sync provider credential encryption', () => {
     await connectLocalVault(page)
     await disableVaultIdleLock(page)
     await page.evaluate(async () => {
-      const vault = (
-        window as Window & {
-          __nookVault?: { refreshReplacementConflicts?: () => Promise<void> }
-        }
-      ).__nookVault
+      const vault = window.__nookVault
       if (!vault?.refreshReplacementConflicts) {
         throw new Error('E2E vault conflict-refresh hook is unavailable')
       }
@@ -104,9 +103,10 @@ test.describe('sync provider credential encryption', () => {
       },
     ])
 
-    await expect(loadDecryptedAuthProvidersInBrowser(page)).rejects.toThrow(
-      'Provider credential is not age-encrypted.',
-    )
+    const admission = await new AuthProviderBrowserFixture(page).load()
+    expect(admission.isErr()).toBe(true)
+    if (admission.isErr())
+      expect(admission.error).toBe(AUTH_PROVIDER_HOOK_READ_FAILED)
 
     const raw = await readRawAuthProvidersFromIdb(page)
     expect(raw.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat).toBe(
@@ -148,16 +148,17 @@ test.describe('sync provider credential encryption', () => {
     expectSealedCredential(oauth?.accessToken, access)
     expectSealedCredential(oauth?.refreshToken, refresh)
 
-    const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
-    const decryptedOauth = decrypted.providers[0]?.oauthFile
-    expect(decryptedOauth).toEqual(
-      expect.objectContaining({
-        state: 'configured',
-        config: expect.objectContaining({
-          accessToken: { state: 'accessToken', value: access },
-          refreshToken: { state: 'token', value: refresh },
+    const decrypted = await new AuthProviderBrowserFixture(page).load()
+    expect(decrypted.isOk()).toBe(true)
+    if (decrypted.isOk())
+      expect(decrypted.value.providers[0]?.oauthFile).toEqual(
+        expect.objectContaining({
+          state: 'configured',
+          config: expect.objectContaining({
+            accessToken: { state: 'accessToken', value: access },
+            refreshToken: { state: 'token', value: refresh },
+          }),
         }),
-      }),
-    )
+      )
   })
 })

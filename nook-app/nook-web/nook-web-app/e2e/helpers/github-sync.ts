@@ -1,8 +1,9 @@
 import { expect, type Page } from '@playwright/test'
 import {
   GITHUB_VAULT_PATH,
+  fetchGithubEventLog,
   fetchGithubVaultYaml,
-  GithubVaultYamlFetchKind,
+  GithubEventLogFetchKind,
   githubApiFetch,
   githubApiHeaders,
   githubFetch,
@@ -10,8 +11,7 @@ import {
 } from '../github-api'
 import {
   assertGenesisVaultYaml,
-  joinCountFromYaml,
-  parseVaultYamlSnapshot,
+  parseVaultEventLogSnapshot,
   waitForVaultEventLogSnapshot,
   type VaultYamlSnapshot,
 } from '../vault-yaml'
@@ -23,15 +23,19 @@ import {
   GITHUB_SYNC_TIMEOUT_MS,
   sleep,
 } from './environment'
-import { createLocalE2eGithubVaultStub } from './local-sync'
+import { readStringProperty, requireRecord } from './guards'
 import { assertVaultReady } from './settings-auth'
 import { waitForVaultOperationsIdle } from './vault-runtime'
+
+export type VaultEventLogRemote = {
+  getEventFileContents(): string[]
+}
 
 export type GithubE2eTarget = {
   pat: string
   repoName: string
   /** In-memory GitHub REST stub — avoids api.github.com (PR/main CI). */
-  stub?: ReturnType<typeof createLocalE2eGithubVaultStub>
+  stub?: VaultEventLogRemote
 }
 
 export { fetchGithubVaultYaml }
@@ -99,13 +103,14 @@ export async function deleteGithubFileIfExists(
       )
     }
 
-    const file = (await fileRes.json()) as { sha: string }
+    const file = requireRecord(await fileRes.json(), 'GitHub vault file')
+    const sha = readStringProperty(file, 'sha', 'GitHub vault file')
     const deleteRes = await githubFetch(contentsUrl, {
       method: 'DELETE',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: 'Reset nook e2e vault',
-        sha: file.sha,
+        sha,
       }),
     })
 
@@ -155,13 +160,13 @@ export async function waitForVaultYaml(
     if (options?.page) {
       await assertNoVaultErrors(options.page, { allowTransient: true })
     }
-    const result = await fetchGithubVaultYaml(pat, repoName)
-    if (result.kind === GithubVaultYamlFetchKind.Available) {
-      const snapshot = parseVaultYamlSnapshot(result.yaml)
+    const result = await fetchGithubEventLog(pat, repoName)
+    if (result.kind === GithubEventLogFetchKind.Available) {
+      const snapshot = parseVaultEventLogSnapshot(result.eventYamls)
       if (predicate(snapshot)) {
         return snapshot
       }
-      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${joinCountFromYaml(result.yaml)})`
+      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
     }
     await sleep(intervalMs)
   }
@@ -262,13 +267,7 @@ export async function waitForSyncRemoteVaultState(
 
 export async function flushRemoteEventsToSyncProviders(page: Page) {
   await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault?: {
-          runFanOutSyncAfterLocalSave?: () => Promise<void>
-        }
-      }
-    ).__nookVault
+    const vault = window.__nookVault
     await vault?.runFanOutSyncAfterLocalSave?.()
   })
   await waitForVaultOperationsIdle(page)

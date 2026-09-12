@@ -19,6 +19,14 @@ const mockAuthVitestFiles = readdirSync(mockAuthSource, {
   .sort()
 
 describe('extension Playwright discovery', () => {
+  test('runs every CI case once within a finite suite budget', () => {
+    expect(playwrightConfig.retries).toBe(0)
+    if (process.env.CI) {
+      expect(playwrightConfig.maxFailures).toBe(0)
+      expect(playwrightConfig.globalTimeout).toBe(180 * 60_000)
+    }
+  })
+
   test('ignores mock-auth Vitest files while retaining extension specs', () => {
     expect(playwrightConfig.testDir).toBe('e2e')
     expect(playwrightConfig.testMatch).toBe('**/*.spec.ts')

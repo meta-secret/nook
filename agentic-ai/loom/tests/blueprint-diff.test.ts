@@ -1,13 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import {
   BlueprintExplanationKind,
-  explainAgainstBlueprint,
-  explainSyntaxFailure,
+  RequestBlueprintComparison,
 } from '../src/codec/blueprint-diff.ts';
 import { ResponsePhase } from '../src/codec/enums.ts';
-import { FieldIssue, fieldError } from '../src/codec/field-error.ts';
-import { decodeErrorResponse, encodeResponse } from '../src/codec/response.ts';
-import { dispatchValue } from '../src/tools/dispatch.ts';
+import { FieldIssue, FieldDiagnostic } from '../src/codec/field-error.ts';
+import { LoomResponseEncoder } from '../src/codec/response.ts';
+import { LoomRequestDispatch } from '../src/tools/dispatch.ts';
 
 import type { FieldErrorArgs } from '../src/codec/field-error.ts';
 import type { DecodeErrorResponseArgs } from '../src/codec/response.ts';
@@ -17,7 +16,8 @@ describe('blueprint explanation', () => {
     const explanationArgs4 = {
       prePush: { stageHostUpdates: true },
     };
-    const explanation = explainAgainstBlueprint(explanationArgs4);
+    const explanation =
+      RequestBlueprintComparison.explainAgainstBlueprint(explanationArgs4);
     expect(explanation.kind).toBe(BlueprintExplanationKind.Structural);
     expect(explanation.blueprintPath).toBe('prePush');
     expect(explanation.unifiedDiff).toContain('--- ');
@@ -30,7 +30,8 @@ describe('blueprint explanation', () => {
       name: 'agent-stats',
       arguments: { action: 'assemble' },
     };
-    const explanation = explainAgainstBlueprint(explanationArgs3);
+    const explanation =
+      RequestBlueprintComparison.explainAgainstBlueprint(explanationArgs3);
     expect(explanation.unifiedDiff).toContain('name');
     expect(explanation.blueprintYaml).toContain('prePush:');
   });
@@ -40,7 +41,8 @@ describe('blueprint explanation', () => {
       receivedYaml: 'prePush: [\n',
       parseMessage: 'unexpected end of stream',
     };
-    const explanation = explainSyntaxFailure(explanationArgs2);
+    const explanation =
+      RequestBlueprintComparison.explainSyntaxFailure(explanationArgs2);
     expect(explanation.kind).toBe(BlueprintExplanationKind.Syntax);
     if (explanation.kind === BlueprintExplanationKind.Syntax) {
       expect(explanation.parseMessage).toBe('unexpected end of stream');
@@ -54,14 +56,14 @@ describe('decode error encoding', () => {
     const outcomeArgs = {
       prePush: { stageHostUpdates: true },
     };
-    const outcome = await dispatchValue(outcomeArgs);
+    const outcome = await LoomRequestDispatch.dispatchValue(outcomeArgs);
     expect(outcome.exitCode).toBe(2);
     expect(outcome.body.ok).toBe(false);
     if (outcome.body.ok || !('explanation' in outcome.body)) {
       return;
     }
     expect(outcome.body.explanation.unifiedDiff).toContain('fetchOriginMain');
-    const encoded = encodeResponse(outcome.body) as {
+    const encoded = LoomResponseEncoder.encodeResponse(outcome.body) as {
       explanation: { unifiedDiff: string; kind: string };
     };
     expect(encoded.explanation.unifiedDiff).toContain('+++ received.yaml');
@@ -72,18 +74,19 @@ describe('decode error encoding', () => {
     const explanationArgs = {
       prePush: { stageHostUpdates: true },
     };
-    const explanation = explainAgainstBlueprint(explanationArgs);
+    const explanation =
+      RequestBlueprintComparison.explainAgainstBlueprint(explanationArgs);
     const fieldErrorArgs: FieldErrorArgs = {
       path: 'prePush.fetchOriginMain',
       issue: FieldIssue.MissingRequiredField,
     };
     const decodeErrorResponseArgs: DecodeErrorResponseArgs = {
       phase: ResponsePhase.Decode,
-      errors: [fieldError(fieldErrorArgs)],
+      errors: [FieldDiagnostic.create(fieldErrorArgs)],
       explanation,
     };
-    const encoded = encodeResponse(
-      decodeErrorResponse(decodeErrorResponseArgs),
+    const encoded = LoomResponseEncoder.encodeResponse(
+      LoomResponseEncoder.decodeErrorResponse(decodeErrorResponseArgs),
     ) as {
       errors: readonly { issue: FieldIssue; message: string }[];
       explanation: { unifiedDiff: string };

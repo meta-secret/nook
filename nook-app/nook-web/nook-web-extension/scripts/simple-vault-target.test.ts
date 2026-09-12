@@ -9,13 +9,13 @@ import {
   nook_vault_app_exclude_match_patterns,
   sentinel_vault_match_patterns,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { sentinelVaultBaseUrl } from '../src/lib/simple-vault-target'
+import { SimpleVaultTarget } from '../src/lib/simple-vault-target'
 
 describe('Sentinel deployment exclusions', () => {
   test('derives the isolated production and development Sentinel origins', () => {
-    expect(sentinelVaultBaseUrl('https://simple.dev.nokey.sh/')).toBe(
-      'https://sentinel.dev.nokey.sh/',
-    )
+    expect(
+      new SimpleVaultTarget('https://simple.dev.nokey.sh/').sentinelBase,
+    ).toBe('https://sentinel.dev.nokey.sh/')
     expect(sentinel_vault_match_patterns('https://simple.nokey.sh/')).toContain(
       'https://sentinel.nokey.sh/*',
     )
@@ -25,9 +25,10 @@ describe('Sentinel deployment exclusions', () => {
   })
 
   test('derives the matching per-PR Sentinel origin', () => {
-    expect(sentinelVaultBaseUrl('https://pr-408.nokey-simple.pages.dev/')).toBe(
-      'https://pr-408.nokey-sentinel.pages.dev/',
-    )
+    expect(
+      new SimpleVaultTarget('https://pr-408.nokey-simple.pages.dev/')
+        .sentinelBase,
+    ).toBe('https://pr-408.nokey-sentinel.pages.dev/')
     expect(
       sentinel_vault_match_patterns('https://pr-408.nokey-simple.pages.dev/'),
     ).toContain('https://pr-408.nokey-sentinel.pages.dev/*')

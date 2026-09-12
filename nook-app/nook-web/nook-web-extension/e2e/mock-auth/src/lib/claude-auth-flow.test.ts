@@ -41,8 +41,8 @@ describe('Claude authentication mock', () => {
       'utf8',
     )
     expect(pageSource).not.toMatch(/^\s*enum\s+ClaudeAuthPresentationState\b/mu)
-    expect(ClaudeAuthPresentationState.Ready).toBe('ready')
-    expect(ClaudeAuthPresentationState.Rejected).toBe('rejected')
+    expect(String(ClaudeAuthPresentationState.Ready)).toBe('ready')
+    expect(String(ClaudeAuthPresentationState.Rejected)).toBe('rejected')
   })
 
   test.each([

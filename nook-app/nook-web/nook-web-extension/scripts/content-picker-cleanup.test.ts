@@ -7,8 +7,65 @@ import type {
   WebsiteLoginSaveOfferView,
 } from '../src/lib/login-save-messages'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import {
+  AuthenticationWorkflowApproval,
+  AuthenticationWorkflowSnapshotIngress,
+} from '../src/lib/auth-workflow-messages'
 
 await companionWasmReady
+
+function pickerApproval(): AuthenticationWorkflowApproval {
+  const admission = AuthenticationWorkflowSnapshotIngress.admit({
+    type: 'nook:authentication-workflow-snapshot',
+    payload: {
+      origin: 'https://login.example.test',
+      observations: [
+        {
+          fields: {
+            usernameFieldCount: 1,
+            currentPasswordFieldCount: 1,
+            newPasswordFieldCount: 0,
+            genericPasswordFieldCount: 0,
+            oneTimeCodeFieldCount: 0,
+            actionablePasswordFieldCount: 1,
+            readonlyPasswordFieldCount: 0,
+          },
+          ceremony: {
+            oneTimeCodeProgression: 'advance-control-required',
+            oneTimeCodeHandlerSignal: '',
+            authenticationContext: {
+              authenticationUsername: 'explicit',
+              sourceOrigin: 'https://login.example.test',
+              formIdentity: 'login',
+              destinationIdentity: '/login',
+            },
+            manualCheckpoint: 'absent',
+            advanceControl: 'absent',
+          },
+          authenticator: {
+            authenticatorSetup: 'absent',
+            backupCodesCopy: '',
+            passkeyControl: 'absent',
+            passkeyAccountAvailability: 'unavailable',
+            matchingPasskeyAccountCount: 0,
+            detailedPasskeyControl: { kind: 'absent' },
+          },
+          credentialSubmission: { kind: 'absent' },
+          detailedAdvanceControl: { kind: 'absent' },
+        },
+      ],
+    },
+  })
+  if (admission.kind !== 'accepted') {
+    throw new Error('picker approval fixture must be admitted')
+  }
+  const [facts] = admission.message.payload.observations
+  if (!facts) throw new Error('picker approval fixture requires facts')
+  return {
+    workflowKey: 'login:cleanup',
+    facts,
+  }
+}
 
 const addListener = mock(() => {})
 type RuntimeResponseCallback = (response: unknown) => void
@@ -127,6 +184,7 @@ test('delivers cleanup cancellation through the content-script router', async ()
     description,
     continueButton,
     timeoutId: 7,
+    approval: pickerApproval(),
   })
   const sendResponse = mock(() => {})
 
@@ -163,7 +221,10 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
   const remove = mock(() => {})
-  widgetState.attachHost({ remove } as unknown as HTMLElement)
+  widgetState.attachHost({
+    remove,
+    isConnected: true,
+  } as unknown as HTMLElement)
   widgetState.dismissed = true
   widgetState.busy = true
   const staleOfferId = 'stale-save-offer'
@@ -178,20 +239,18 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
   const responseCapture = captureRefreshResponse()
   const sendResponse = mock(responseCapture.sendResponse)
 
-  expect(
-    routeAutofillMessage(
-      { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
-      { id: 'nook-extension' },
-      sendResponse,
-    ),
-  ).toBe(true)
+  routeAutofillMessage(
+    { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
+    { id: 'nook-extension' },
+    sendResponse,
+  )
 
   expect(widgetState.dismissed).toBe(true)
   expect(widgetState.busy).toBe(false)
   expect(widgetState.host.kind).toBe(WidgetHostKind.Detached)
   expect(schedule).not.toHaveBeenCalled()
   expect(sendResponse).not.toHaveBeenCalled()
-  await expect(responseCapture.response).resolves.toEqual({ ok: true })
+  expect(await responseCapture.response).toEqual({ ok: true })
   expect(saveOfferState.watch.kind).toBe(SavePageWatchKind.Idle)
   expect(saveOfferState.dismissedOfferIds.has(staleOfferId)).toBe(true)
   expect(sendMessage).toHaveBeenCalledWith(
@@ -204,8 +263,8 @@ test('refresh preserves dismissal while clearing stale surface state', async () 
     },
     expect.any(Function),
   )
-  expect(remove).toHaveBeenCalledOnce()
-  expect(schedule).toHaveBeenCalledOnce()
+  expect(remove).toHaveBeenCalledTimes(1)
+  expect(schedule).toHaveBeenCalledTimes(1)
   expect(sendResponse).toHaveBeenCalledWith({ ok: true })
 })
 
@@ -215,7 +274,10 @@ test('refresh does not rescan when staged offer dismissal is rejected', async ()
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
   const remove = mock(() => {})
-  widgetState.attachHost({ remove } as unknown as HTMLElement)
+  widgetState.attachHost({
+    isConnected: true,
+    remove,
+  } as unknown as HTMLElement)
   saveOfferState.watchPage({
     offer: { offerId: 'rejected-save-offer' } as WebsiteLoginSaveOfferView,
     startedAt: 1,
@@ -231,16 +293,14 @@ test('refresh does not rescan when staged offer dismissal is rejected', async ()
   const responseCapture = captureRefreshResponse()
   const sendResponse = mock(responseCapture.sendResponse)
 
-  expect(
-    routeAutofillMessage(
-      { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
-      { id: 'nook-extension' },
-      sendResponse,
-    ),
-  ).toBe(true)
-  await expect(responseCapture.response).resolves.toEqual({ ok: false })
+  routeAutofillMessage(
+    { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
+    { id: 'nook-extension' },
+    sendResponse,
+  )
+  expect(await responseCapture.response).toEqual({ ok: false })
 
-  expect(remove).toHaveBeenCalledOnce()
+  expect(remove).toHaveBeenCalledTimes(1)
   expect(schedule).not.toHaveBeenCalled()
   expect(sendResponse).toHaveBeenCalledWith({ ok: false })
 })
@@ -248,7 +308,7 @@ test('refresh does not rescan when staged offer dismissal is rejected', async ()
 test('refresh dismisses an in-flight save offer before rescanning', async () => {
   const { SavePageWatchKind, scanState, saveOfferState } =
     await import('../src/content/autofill/state')
-  const { stageSaveForCredentials } =
+  const { loginSaveInteraction } =
     await import('../src/content/autofill/login-save')
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
@@ -258,19 +318,17 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
   }
   deferRuntimeResponse()
   sendMessage.mockClear()
-  const staging = stageSaveForCredentials(credentials)
+  const staging = loginSaveInteraction.stageSaveForCredentials(credentials)
   const schedule = mock(() => {})
   scanState.schedule = schedule
   const responseCapture = captureRefreshResponse()
   const sendResponse = mock(responseCapture.sendResponse)
 
-  expect(
-    routeAutofillMessage(
-      { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
-      { id: 'nook-extension' },
-      sendResponse,
-    ),
-  ).toBe(true)
+  routeAutofillMessage(
+    { type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces },
+    { id: 'nook-extension' },
+    sendResponse,
+  )
   expect(schedule).not.toHaveBeenCalled()
   expect(sendResponse).not.toHaveBeenCalled()
 
@@ -289,7 +347,7 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
     } satisfies WebsiteLoginSaveActionResponse,
   })
   await staging
-  await expect(responseCapture.response).resolves.toEqual({ ok: true })
+  expect(await responseCapture.response).toEqual({ ok: true })
 
   expect(credentials).toEqual({ username: '', password: '' })
   expect(saveOfferState.watch.kind).toBe(SavePageWatchKind.Idle)
@@ -303,5 +361,5 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
     },
     expect.any(Function),
   )
-  expect(schedule).toHaveBeenCalledOnce()
+  expect(schedule).toHaveBeenCalledTimes(1)
 })

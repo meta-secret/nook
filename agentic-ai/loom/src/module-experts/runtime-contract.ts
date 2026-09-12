@@ -1,22 +1,512 @@
+import { err, ok, type Result } from 'neverthrow';
+import {
+  ExpertIsolationFailureKind,
+  type ExpertIsolationFailure,
+} from './isolation-failure.ts';
+import {
+  RepositorySnapshot,
+  SnapshotContextFiles,
+  type RepositorySnapshotRequest,
+  type SnapshotContextFilesRequest,
+} from './repository-snapshot.ts';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
-import type { SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
 import { MODULE_EXPERT_CATALOG } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
-import { validatedModuleExpertContextPaths } from './context-selection.ts';
+import { ModuleExpertContextAdmission } from './context-selection.ts';
 import type { ModuleExpertContextSelection } from './context-selection.ts';
 import {
   MODULE_EXPERT_READ_CONTEXT_TOOLS,
-  createModuleExpertReadContextServer,
+  ModuleExpertRepositoryContext,
 } from './read-context-mcp.ts';
 import type { ModuleExpertReadContextServer } from './read-context-mcp.ts';
 
-const ISOLATED_CODEX_HOME_PREFIX = 'nook-module-expert-codex-';
+/** Owns the module expert isolation registry and its capability transitions. */
+export class ModuleExpertIsolation {
+  private constructor() {}
+  private static readonly ISOLATED_CODEX_HOME_PREFIX =
+    'nook-module-expert-codex-';
+
+  private static readonly AUTH_BROKER_SOCKET_NAME = 'authentication.sock';
+
+  private static readonly ISOLATED_WORKSPACE_NAME = 'workspace';
+
+  static async createModuleExpertRuntimeIsolation(
+    request: ModuleExpertRuntimeIsolationRequest,
+  ): Promise<Result<ModuleExpertRuntimeIsolation, ExpertIsolationFailure>> {
+    const profileResult = ModuleExpertIsolation.moduleExpertProfile(
+      request.expertName,
+    );
+    if (profileResult.isErr()) return err(profileResult.error);
+    const profile = profileResult.value;
+    const contextSelection: ModuleExpertContextSelection = {
+      expertName: request.expertName,
+      selectedContextPaths: request.selectedContextPaths,
+    };
+    const selectedContextPaths =
+      ModuleExpertContextAdmission.validate(contextSelection);
+    const snapshotRequest: ModuleExpertSnapshotPathsRequest = {
+      profile,
+      selectedContextPaths,
+    };
+    const sharedRequest: ReadOnlyExpertRuntimeIsolationRequest = {
+      expertName: request.expertName,
+      parentEnvironment: request.parentEnvironment,
+      snapshot: {
+        excludedPaths: profile.excludedPaths,
+        optionalScopePaths: profile.generatedScopePaths.map(
+          (scope) => scope.path,
+        ),
+        scopePaths:
+          ModuleExpertIsolation.moduleExpertSnapshotPaths(snapshotRequest),
+        contextFiles: [],
+      },
+      sourceCommit: request.sourceCommit,
+      workingDirectory: request.workingDirectory,
+      ...(request.temporaryRoot
+        ? { temporaryRoot: request.temporaryRoot }
+        : {}),
+    };
+    const isolation =
+      await ModuleExpertIsolation.createReadOnlyExpertRuntimeIsolation(
+        sharedRequest,
+      );
+    if (isolation.isErr()) return err(isolation.error);
+    return ok(
+      ModuleExpertRuntimeIsolation.admit({
+        key: ISOLATION_TRANSITION,
+        isolation: isolation.value,
+        selectedContextPaths,
+      }),
+    );
+  }
+
+  static async createReadOnlyExpertRuntimeIsolation(
+    request: ReadOnlyExpertRuntimeIsolationRequest,
+  ): Promise<Result<ReadOnlyExpertRuntimeIsolation, ExpertIsolationFailure>> {
+    const source = ModuleExpertIsolation.assertSourceCommit(
+      request.sourceCommit,
+    );
+    if (source.isErr()) return err(source.error);
+    const [temporaryRoot = tmpdir()] = [request.temporaryRoot];
+    let codexHome;
+    try {
+      codexHome = mkdtempSync(
+        join(temporaryRoot, ModuleExpertIsolation.ISOLATED_CODEX_HOME_PREFIX),
+      );
+    } catch {
+      return err({
+        kind: ExpertIsolationFailureKind.Storage,
+        message: 'Expert isolation directory could not be created.',
+      });
+    }
+    let setup = IsolationSetup.Pending;
+    let authenticationBroker: ModuleExpertAuthenticationBroker | false = false;
+    let contextServer: ModuleExpertReadContextServer | false = false;
+    try {
+      try {
+        const processEnvironment = ModuleExpertIsolation.allowlistedEnvironment(
+          request.parentEnvironment,
+        );
+        const credentialResult = ModuleExpertIsolation.supportedEnvironmentAuth(
+          request.parentEnvironment,
+        );
+        if (credentialResult.isErr()) return err(credentialResult.error);
+        const credential = credentialResult.value;
+        const repositorySnapshotRequest: RepositorySnapshotRequest = {
+          codexHome,
+          sourceCommit: request.sourceCommit,
+          excludedPaths: request.snapshot.excludedPaths,
+          optionalScopePaths: request.snapshot.optionalScopePaths,
+          scopePaths: request.snapshot.scopePaths,
+          workingDirectory: request.workingDirectory,
+        };
+        const snapshot = new RepositorySnapshot(
+          repositorySnapshotRequest,
+        ).materialize();
+        if (snapshot.isErr()) return err(snapshot.error);
+        const repositorySnapshot = snapshot.value;
+        const contextWriteRequest: SnapshotContextFilesRequest = {
+          contextFiles: request.snapshot.contextFiles,
+          repositorySnapshot,
+        };
+        const written = new SnapshotContextFiles(
+          contextWriteRequest,
+        ).materialize();
+        if (written.isErr()) return err(written.error);
+        const isolatedWorkspace = join(
+          codexHome,
+          ModuleExpertIsolation.ISOLATED_WORKSPACE_NAME,
+        );
+        try {
+          mkdirSync(isolatedWorkspace);
+        } catch {
+          return err({
+            kind: ExpertIsolationFailureKind.Storage,
+            message: 'Expert isolated workspace could not be created.',
+          });
+        }
+        const authenticationBrokerRequest: ModuleExpertAuthenticationBrokerRequest =
+          {
+            codexHome,
+            credential,
+          };
+        authenticationBroker = ModuleExpertIsolation.createAuthenticationBroker(
+          authenticationBrokerRequest,
+        );
+        const contextServerRequest = { repositoryRoot: repositorySnapshot };
+        contextServer =
+          ModuleExpertRepositoryContext.createModuleExpertReadContextServer(
+            contextServerRequest,
+          );
+        processEnvironment.CODEX_HOME = codexHome;
+        const codexOptionsRequest: ModuleExpertCodexOptionsRequest = {
+          authenticationCommandArgs: authenticationBroker.commandArgs,
+          contextServerUrl: contextServer.url,
+          processEnvironment,
+        };
+        const codexOptions =
+          ModuleExpertIsolation.buildModuleExpertCodexOptions(
+            codexOptionsRequest,
+          );
+        const isolatedThreadOptionsRequest: ModuleExpertThreadOptionsArgs = {
+          workingDirectory: isolatedWorkspace,
+        };
+        const threadOptions =
+          ModuleExpertIsolation.moduleExpertIsolatedThreadOptions(
+            isolatedThreadOptionsRequest,
+          );
+        const admitted = ReadOnlyExpertRuntimeIsolation.admit({
+          key: ISOLATION_TRANSITION,
+          resources: {
+            codexHome,
+            codexOptions,
+            repositorySnapshot,
+            threadOptions,
+            dispose: async () => {
+              try {
+                if (authenticationBroker) authenticationBroker.dispose();
+              } finally {
+                try {
+                  if (contextServer) await contextServer.dispose();
+                } finally {
+                  const removeOptions: RmOptions = {
+                    recursive: true,
+                    force: true,
+                  };
+                  rmSync(codexHome, removeOptions);
+                }
+              }
+            },
+          },
+        });
+        setup = IsolationSetup.Admitted;
+        return ok(admitted);
+      } finally {
+        if (setup === IsolationSetup.Pending) {
+          try {
+            if (authenticationBroker) authenticationBroker.dispose();
+          } catch {
+            // Preserve the setup failure while continuing fail-safe cleanup.
+          } finally {
+            try {
+              if (contextServer) await contextServer.dispose();
+            } finally {
+              try {
+                rmSync(codexHome, { recursive: true, force: true });
+              } catch {
+                new ExpertIsolationCleanupError({
+                  kind: ExpertIsolationFailureKind.Storage,
+                  message: 'Expert isolation directory could not be removed.',
+                }).raise();
+              }
+            }
+          }
+        }
+      }
+    } catch (failure) {
+      if (failure instanceof ExpertIsolationCleanupError)
+        return err(failure.failure);
+      throw failure;
+    }
+  }
+
+  static async withModuleExpertRuntimeIsolation<TResult, TFailure>(
+    use: ModuleExpertRuntimeIsolationUse<TResult, TFailure>,
+  ): Promise<Result<TResult, TFailure | ExpertIsolationFailure>> {
+    const isolation =
+      await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
+        use.isolationRequest,
+      );
+    if (isolation.isErr()) return err(isolation.error);
+    let outcome: Result<TResult, TFailure>;
+    try {
+      outcome = await use.run(isolation.value);
+    } catch (failure) {
+      try {
+        await isolation.value.dispose();
+      } catch {
+        // A rejected run remains the primary failure.
+      }
+      throw failure;
+    }
+    try {
+      await isolation.value.dispose();
+    } catch {
+      if (outcome.isErr()) return outcome;
+      return err({
+        kind: ExpertIsolationFailureKind.Cleanup,
+        message: 'Expert isolation cleanup failed.',
+      });
+    }
+    return outcome;
+  }
+
+  static moduleExpertThreadOptions(
+    args: ModuleExpertThreadOptionsArgs,
+  ): ThreadOptions {
+    return {
+      approvalPolicy: 'never',
+      networkAccessEnabled: false,
+      sandboxMode: 'read-only',
+      webSearchMode: 'disabled',
+      workingDirectory: args.workingDirectory,
+    };
+  }
+
+  static moduleExpertIsolatedThreadOptions(
+    args: ModuleExpertThreadOptionsArgs,
+  ): ThreadOptions {
+    return {
+      ...ModuleExpertIsolation.moduleExpertThreadOptions(args),
+      skipGitRepoCheck: true,
+    };
+  }
+
+  static buildModuleExpertCodexOptions(
+    request: ModuleExpertCodexOptionsRequest,
+  ) {
+    const provider =
+      MODULE_EXPERT_CODEX_OPTIONS.config.model_providers[
+        MODULE_EXPERT_AUTH_PROVIDER
+      ];
+    return {
+      config: {
+        ...MODULE_EXPERT_CODEX_OPTIONS.config,
+        model_providers: {
+          [MODULE_EXPERT_AUTH_PROVIDER]: {
+            ...provider,
+            auth: {
+              ...provider.auth,
+              args: [...request.authenticationCommandArgs],
+            },
+          },
+        },
+        mcp_servers: {
+          [MODULE_EXPERT_CONTEXT_MCP]: {
+            default_tools_approval_mode: 'approve',
+            enabled: true,
+            enabled_tools: [...MODULE_EXPERT_READ_CONTEXT_TOOLS],
+            required: true,
+            startup_timeout_sec: 5,
+            tool_timeout_sec: 10,
+            url: request.contextServerUrl,
+          },
+        },
+        shell_environment_policy: {
+          ...MODULE_EXPERT_CODEX_OPTIONS.config.shell_environment_policy,
+          set: ModuleExpertIsolation.allowlistedEnvironment(
+            request.processEnvironment,
+          ),
+        },
+      },
+      env: request.processEnvironment,
+    } satisfies CodexOptions;
+  }
+
+  private static allowlistedEnvironment(
+    parentEnvironment: NodeJS.ProcessEnv,
+  ): NonNullable<CodexOptions['env']> {
+    const environment: NonNullable<CodexOptions['env']> = {};
+    for (const key of MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS) {
+      const value = parentEnvironment[key];
+      if (typeof value === 'string') environment[key] = value;
+    }
+    return environment;
+  }
+
+  private static supportedEnvironmentAuth(
+    parentEnvironment: NodeJS.ProcessEnv,
+  ): Result<string, ExpertIsolationFailure> {
+    const credential = parentEnvironment.CODEX_API_KEY?.trim();
+    if (credential) return ok(credential);
+    return err({
+      kind: ExpertIsolationFailureKind.Authentication,
+      message: 'Module expert runtime requires CODEX_API_KEY authentication.',
+    });
+  }
+
+  private static createAuthenticationBroker(
+    request: ModuleExpertAuthenticationBrokerRequest,
+  ): ModuleExpertAuthenticationBroker {
+    const socketPath = join(
+      request.codexHome,
+      ModuleExpertIsolation.AUTH_BROKER_SOCKET_NAME,
+    );
+    const state: AuthenticationBrokerState = {
+      credential: Buffer.from(request.credential, 'utf8'),
+      nonce: randomBytes(32).toString('hex'),
+      requests: new Map(),
+    };
+    const listenerOptions: Bun.UnixSocketOptions<AuthenticationBrokerState> = {
+      data: state,
+      unix: socketPath,
+      socket: {
+        binaryType: 'buffer',
+        data: (...parameters: AuthenticationBrokerSocketData) => {
+          const [socket, data] = parameters;
+          const redemption: AuthenticationCredentialRedemption = {
+            data,
+            socket,
+          };
+          ModuleExpertIsolation.redeemAuthenticationCredential(redemption);
+        },
+        close: (socket) => {
+          state.requests.delete(socket);
+        },
+        error: (socket) => {
+          state.requests.delete(socket);
+          socket.close();
+        },
+      },
+    };
+    const listener = Bun.listen(listenerOptions);
+    return ModuleExpertAuthenticationBroker.admit({
+      key: ISOLATION_TRANSITION,
+      resources: {
+        commandArgs: [
+          '-e',
+          MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
+          '--',
+          socketPath,
+          state.nonce,
+        ],
+        dispose: () => {
+          if (state.credential) state.credential.fill(0);
+          state.credential = false;
+          state.requests.clear();
+          listener.stop(true);
+          const removeOptions: RmOptions = { force: true };
+          rmSync(socketPath, removeOptions);
+        },
+      },
+    });
+  }
+
+  private static redeemAuthenticationCredential(
+    redemption: AuthenticationCredentialRedemption,
+  ): void {
+    const state = redemption.socket.data;
+    const [previous = Buffer.alloc(0)] = [
+      state.requests.get(redemption.socket),
+    ];
+    const request = Buffer.concat([previous, redemption.data]);
+    if (request.byteLength > 128) {
+      state.requests.delete(redemption.socket);
+      redemption.socket.close();
+      return;
+    }
+    const delimiter = request.indexOf(10);
+    if (delimiter < 0) {
+      state.requests.set(redemption.socket, request);
+      return;
+    }
+    state.requests.delete(redemption.socket);
+    const requestNonce = request.subarray(0, delimiter);
+    const expectedNonce = Buffer.from(state.nonce, 'utf8');
+    const validNonce =
+      requestNonce.byteLength === expectedNonce.byteLength &&
+      timingSafeEqual(requestNonce, expectedNonce);
+    if (
+      !state.credential ||
+      !validNonce ||
+      delimiter !== request.byteLength - 1
+    ) {
+      redemption.socket.close();
+      return;
+    }
+    const credential = state.credential;
+    state.credential = false;
+    const response = Buffer.alloc(credential.byteLength + 1);
+    credential.copy(response);
+    response[response.byteLength - 1] = 10;
+    credential.fill(0);
+    redemption.socket.end(response);
+  }
+
+  private static assertSourceCommit(
+    sourceCommit: string,
+  ): Result<void, ExpertIsolationFailure> {
+    if (!/^[0-9a-f]{40}$/.test(sourceCommit)) {
+      return err({
+        kind: ExpertIsolationFailureKind.SourceCommit,
+        message: 'Module expert source commit must be a full Git SHA.',
+      });
+    }
+    return ok();
+  }
+
+  private static moduleExpertProfile(
+    expertName: string,
+  ): Result<ModuleExpertProfile, ExpertIsolationFailure> {
+    const profile = MODULE_EXPERT_CATALOG.find(
+      (candidate) => candidate.name === expertName,
+    );
+    if (!profile)
+      return err({
+        kind: ExpertIsolationFailureKind.Profile,
+        message: 'Module expert runtime requires a registered expert.',
+      });
+    return ok(profile);
+  }
+
+  private static moduleExpertSnapshotPaths(
+    request: ModuleExpertSnapshotPathsRequest,
+  ): readonly string[] {
+    const generatedProducerPaths = request.profile.generatedScopePaths.map(
+      (scope) => scope.producerPath,
+    );
+    return [
+      ...new Set([
+        '.cortex/knowledge-graph.md',
+        ...request.profile.boundaryScopePaths,
+        ...request.profile.canonicalContextPaths,
+        ...request.profile.moduleRoots,
+        ...request.profile.scopePaths,
+        ...request.selectedContextPaths,
+        ...generatedProducerPaths,
+        ...request.profile.publicEntryPoints,
+        ...request.profile.authorityPaths,
+        ...request.profile.skillPaths,
+      ]),
+    ];
+  }
+}
+
+class ExpertIsolationCleanupError extends Error {
+  constructor(readonly failure: ExpertIsolationFailure) {
+    super(failure.message);
+    this.name = 'ExpertIsolationCleanupError';
+  }
+  raise(): never {
+    throw this;
+  }
+}
+
 export const MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE = [
   'const socketPath = process.argv[1];',
   'const nonce = process.argv[2];',
@@ -59,10 +549,7 @@ export const MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE = [
   '  process.exitCode = 1;',
   '}',
 ].join('\n');
-const AUTH_BROKER_SOCKET_NAME = 'authentication.sock';
-const REPOSITORY_ARCHIVE_NAME = 'repository.tar';
-const REPOSITORY_SNAPSHOT_NAME = 'repository';
-const ISOLATED_WORKSPACE_NAME = 'workspace';
+
 export const MODULE_EXPERT_AUTH_PROVIDER = 'nook_module_expert';
 export const MODULE_EXPERT_CONTEXT_MCP = 'nook_module_context';
 export const MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS = ['CODEX_API_KEY'] as const;
@@ -156,7 +643,7 @@ export type ReadOnlyExpertRuntimeIsolationRequest = {
   readonly workingDirectory: string;
 };
 
-export type ReadOnlyExpertRuntimeIsolation = {
+type ReadOnlyIsolationResources = {
   readonly codexHome: string;
   readonly codexOptions: ModuleExpertCodexOptions;
   readonly repositorySnapshot: string;
@@ -164,16 +651,17 @@ export type ReadOnlyExpertRuntimeIsolation = {
   readonly dispose: () => Promise<void>;
 };
 
-export type ModuleExpertRuntimeIsolation = ReadOnlyExpertRuntimeIsolation & {
-  readonly selectedContextPaths: readonly string[];
-};
-
-export type ModuleExpertRuntimeIsolationUse<TResult> = {
+export type ModuleExpertRuntimeIsolationUse<
+  TResult,
+  TFailure = ExpertIsolationFailure,
+> = {
   readonly isolationRequest: ModuleExpertRuntimeIsolationRequest;
-  readonly run: (isolation: ModuleExpertRuntimeIsolation) => Promise<TResult>;
+  readonly run: (
+    isolation: ModuleExpertRuntimeIsolation,
+  ) => Promise<Result<TResult, TFailure>>;
 };
 
-type ModuleExpertAuthenticationBroker = {
+type AuthenticationBrokerResources = {
   readonly commandArgs: readonly string[];
   readonly dispose: () => void;
 };
@@ -201,539 +689,142 @@ export type ModuleExpertCodexOptionsRequest = {
 };
 
 export type ModuleExpertCodexOptions = ReturnType<
-  typeof buildModuleExpertCodexOptions
+  typeof ModuleExpertIsolation.buildModuleExpertCodexOptions
 >;
-
-export async function createModuleExpertRuntimeIsolation(
-  request: ModuleExpertRuntimeIsolationRequest,
-): Promise<ModuleExpertRuntimeIsolation> {
-  const profile = moduleExpertProfile(request.expertName);
-  const contextSelection: ModuleExpertContextSelection = {
-    expertName: request.expertName,
-    selectedContextPaths: request.selectedContextPaths,
-  };
-  const selectedContextPaths =
-    validatedModuleExpertContextPaths(contextSelection);
-  const snapshotRequest: ModuleExpertSnapshotPathsRequest = {
-    profile,
-    selectedContextPaths,
-  };
-  const sharedRequest: ReadOnlyExpertRuntimeIsolationRequest = {
-    expertName: request.expertName,
-    parentEnvironment: request.parentEnvironment,
-    snapshot: {
-      excludedPaths: profile.excludedPaths,
-      optionalScopePaths: profile.generatedScopePaths.map(
-        (scope) => scope.path,
-      ),
-      scopePaths: moduleExpertSnapshotPaths(snapshotRequest),
-      contextFiles: [],
-    },
-    sourceCommit: request.sourceCommit,
-    workingDirectory: request.workingDirectory,
-    ...(request.temporaryRoot ? { temporaryRoot: request.temporaryRoot } : {}),
-  };
-  const isolation = await createReadOnlyExpertRuntimeIsolation(sharedRequest);
-  return { ...isolation, selectedContextPaths };
-}
-
-export async function createReadOnlyExpertRuntimeIsolation(
-  request: ReadOnlyExpertRuntimeIsolationRequest,
-): Promise<ReadOnlyExpertRuntimeIsolation> {
-  assertSourceCommit(request.sourceCommit);
-  const [temporaryRoot = tmpdir()] = [request.temporaryRoot];
-  const codexHome = mkdtempSync(
-    join(temporaryRoot, ISOLATED_CODEX_HOME_PREFIX),
-  );
-  let authenticationBroker: ModuleExpertAuthenticationBroker | false = false;
-  let contextServer: ModuleExpertReadContextServer | false = false;
-  try {
-    const processEnvironment = allowlistedEnvironment(
-      request.parentEnvironment,
-    );
-    const credential = supportedEnvironmentAuth(request.parentEnvironment);
-    const repositorySnapshotRequest: RepositorySnapshotRequest = {
-      codexHome,
-      environment: processEnvironment,
-      sourceCommit: request.sourceCommit,
-      excludedPaths: request.snapshot.excludedPaths,
-      optionalScopePaths: request.snapshot.optionalScopePaths,
-      scopePaths: request.snapshot.scopePaths,
-      workingDirectory: request.workingDirectory,
-    };
-    const contextOnlyRequest: MaterializeContextOnlySnapshotRequest = {
-      codexHome,
-    };
-    const repositorySnapshot =
-      request.snapshot.scopePaths.length > 0
-        ? materializeRepositorySnapshot(repositorySnapshotRequest)
-        : materializeContextOnlySnapshot(contextOnlyRequest);
-    const contextWriteRequest: WriteReadOnlyExpertContextFilesRequest = {
-      contextFiles: request.snapshot.contextFiles,
-      repositorySnapshot,
-    };
-    writeReadOnlyExpertContextFiles(contextWriteRequest);
-    const isolatedWorkspace = join(codexHome, ISOLATED_WORKSPACE_NAME);
-    mkdirSync(isolatedWorkspace);
-    const authenticationBrokerRequest: ModuleExpertAuthenticationBrokerRequest =
-      {
-        codexHome,
-        credential,
-      };
-    authenticationBroker = createAuthenticationBroker(
-      authenticationBrokerRequest,
-    );
-    const contextServerRequest = { repositoryRoot: repositorySnapshot };
-    contextServer = createModuleExpertReadContextServer(contextServerRequest);
-    processEnvironment.CODEX_HOME = codexHome;
-    const codexOptionsRequest: ModuleExpertCodexOptionsRequest = {
-      authenticationCommandArgs: authenticationBroker.commandArgs,
-      contextServerUrl: contextServer.url,
-      processEnvironment,
-    };
-    const codexOptions = buildModuleExpertCodexOptions(codexOptionsRequest);
-    const isolatedThreadOptionsRequest: ModuleExpertThreadOptionsArgs = {
-      workingDirectory: isolatedWorkspace,
-    };
-    const threadOptions = moduleExpertIsolatedThreadOptions(
-      isolatedThreadOptionsRequest,
-    );
-    let disposed = false;
-    return {
-      codexHome,
-      codexOptions,
-      repositorySnapshot,
-      threadOptions,
-      dispose: async () => {
-        if (disposed) return;
-        disposed = true;
-        try {
-          if (authenticationBroker) authenticationBroker.dispose();
-        } finally {
-          try {
-            if (contextServer) await contextServer.dispose();
-          } finally {
-            const removeOptions: RmOptions = { recursive: true, force: true };
-            rmSync(codexHome, removeOptions);
-          }
-        }
-      },
-    };
-  } catch (error) {
-    try {
-      if (authenticationBroker) authenticationBroker.dispose();
-    } catch {
-      // Preserve the setup failure while continuing fail-safe cleanup.
-    } finally {
-      try {
-        if (contextServer) await contextServer.dispose();
-      } finally {
-        const removeOptions: RmOptions = { recursive: true, force: true };
-        rmSync(codexHome, removeOptions);
-      }
-    }
-    throw error;
-  }
-}
-
-export async function withModuleExpertRuntimeIsolation<TResult>(
-  use: ModuleExpertRuntimeIsolationUse<TResult>,
-): Promise<TResult> {
-  const isolation = await createModuleExpertRuntimeIsolation(
-    use.isolationRequest,
-  );
-  try {
-    return await use.run(isolation);
-  } finally {
-    await isolation.dispose();
-  }
-}
 
 export type ModuleExpertThreadOptionsArgs = {
   readonly workingDirectory: string;
 };
-
-export function moduleExpertThreadOptions(
-  args: ModuleExpertThreadOptionsArgs,
-): ThreadOptions {
-  return {
-    approvalPolicy: 'never',
-    networkAccessEnabled: false,
-    sandboxMode: 'read-only',
-    webSearchMode: 'disabled',
-    workingDirectory: args.workingDirectory,
-  };
-}
-
-export function moduleExpertIsolatedThreadOptions(
-  args: ModuleExpertThreadOptionsArgs,
-): ThreadOptions {
-  return {
-    ...moduleExpertThreadOptions(args),
-    skipGitRepoCheck: true,
-  };
-}
-
-export function buildModuleExpertCodexOptions(
-  request: ModuleExpertCodexOptionsRequest,
-) {
-  const provider =
-    MODULE_EXPERT_CODEX_OPTIONS.config.model_providers[
-      MODULE_EXPERT_AUTH_PROVIDER
-    ];
-  return {
-    config: {
-      ...MODULE_EXPERT_CODEX_OPTIONS.config,
-      model_providers: {
-        [MODULE_EXPERT_AUTH_PROVIDER]: {
-          ...provider,
-          auth: {
-            ...provider.auth,
-            args: [...request.authenticationCommandArgs],
-          },
-        },
-      },
-      mcp_servers: {
-        [MODULE_EXPERT_CONTEXT_MCP]: {
-          default_tools_approval_mode: 'approve',
-          enabled: true,
-          enabled_tools: [...MODULE_EXPERT_READ_CONTEXT_TOOLS],
-          required: true,
-          startup_timeout_sec: 5,
-          tool_timeout_sec: 10,
-          url: request.contextServerUrl,
-        },
-      },
-      shell_environment_policy: {
-        ...MODULE_EXPERT_CODEX_OPTIONS.config.shell_environment_policy,
-        set: allowlistedEnvironment(request.processEnvironment),
-      },
-    },
-    env: request.processEnvironment,
-  } satisfies CodexOptions;
-}
-
-function allowlistedEnvironment(
-  parentEnvironment: NodeJS.ProcessEnv,
-): NonNullable<CodexOptions['env']> {
-  const environment: NonNullable<CodexOptions['env']> = {};
-  for (const key of MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS) {
-    const value = parentEnvironment[key];
-    if (typeof value === 'string') environment[key] = value;
-  }
-  return environment;
-}
-
-function supportedEnvironmentAuth(
-  parentEnvironment: NodeJS.ProcessEnv,
-): string {
-  const credential = parentEnvironment.CODEX_API_KEY?.trim();
-  if (credential) return credential;
-  throw new Error(
-    'Module expert runtime requires CODEX_API_KEY authentication.',
-  );
-}
-
-function createAuthenticationBroker(
-  request: ModuleExpertAuthenticationBrokerRequest,
-): ModuleExpertAuthenticationBroker {
-  const socketPath = join(request.codexHome, AUTH_BROKER_SOCKET_NAME);
-  const state: AuthenticationBrokerState = {
-    credential: Buffer.from(request.credential, 'utf8'),
-    nonce: randomBytes(32).toString('hex'),
-    requests: new Map(),
-  };
-  const listenerOptions: Bun.UnixSocketOptions<AuthenticationBrokerState> = {
-    data: state,
-    unix: socketPath,
-    socket: {
-      binaryType: 'buffer',
-      data: (...parameters: AuthenticationBrokerSocketData) => {
-        const [socket, data] = parameters;
-        const redemption: AuthenticationCredentialRedemption = { data, socket };
-        redeemAuthenticationCredential(redemption);
-      },
-      close: (socket) => {
-        state.requests.delete(socket);
-      },
-      error: (socket) => {
-        state.requests.delete(socket);
-        socket.close();
-      },
-    },
-  };
-  const listener = Bun.listen(listenerOptions);
-  let disposed = false;
-  return {
-    commandArgs: [
-      '-e',
-      MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
-      '--',
-      socketPath,
-      state.nonce,
-    ],
-    dispose: () => {
-      if (disposed) return;
-      disposed = true;
-      if (state.credential) state.credential.fill(0);
-      state.credential = false;
-      state.requests.clear();
-      listener.stop(true);
-      const removeOptions: RmOptions = { force: true };
-      rmSync(socketPath, removeOptions);
-    },
-  };
-}
 
 type AuthenticationCredentialRedemption = {
   readonly data: Buffer;
   readonly socket: Bun.Socket<AuthenticationBrokerState>;
 };
 
-function redeemAuthenticationCredential(
-  redemption: AuthenticationCredentialRedemption,
-): void {
-  const state = redemption.socket.data;
-  const [previous = Buffer.alloc(0)] = [state.requests.get(redemption.socket)];
-  const request = Buffer.concat([previous, redemption.data]);
-  if (request.byteLength > 128) {
-    state.requests.delete(redemption.socket);
-    redemption.socket.close();
-    return;
-  }
-  const delimiter = request.indexOf(10);
-  if (delimiter < 0) {
-    state.requests.set(redemption.socket, request);
-    return;
-  }
-  state.requests.delete(redemption.socket);
-  const requestNonce = request.subarray(0, delimiter);
-  const expectedNonce = Buffer.from(state.nonce, 'utf8');
-  const validNonce =
-    requestNonce.byteLength === expectedNonce.byteLength &&
-    timingSafeEqual(requestNonce, expectedNonce);
-  if (
-    !state.credential ||
-    !validNonce ||
-    delimiter !== request.byteLength - 1
-  ) {
-    redemption.socket.close();
-    return;
-  }
-  const credential = state.credential;
-  state.credential = false;
-  const response = Buffer.alloc(credential.byteLength + 1);
-  credential.copy(response);
-  response[response.byteLength - 1] = 10;
-  credential.fill(0);
-  redemption.socket.end(response);
-}
-
-type RepositorySnapshotRequest = {
-  readonly codexHome: string;
-  readonly environment: NonNullable<CodexOptions['env']>;
-  readonly excludedPaths: readonly string[];
-  readonly optionalScopePaths: readonly string[];
-  readonly sourceCommit: string;
-  readonly scopePaths: readonly string[];
-  readonly workingDirectory: string;
-};
-
-type MaterializeContextOnlySnapshotRequest = {
-  readonly codexHome: string;
-};
-
-function materializeContextOnlySnapshot(
-  request: MaterializeContextOnlySnapshotRequest,
-): string {
-  const snapshotPath = join(request.codexHome, REPOSITORY_SNAPSHOT_NAME);
-  mkdirSync(snapshotPath);
-  return snapshotPath;
-}
-
-type WriteReadOnlyExpertContextFilesRequest = {
-  readonly contextFiles: readonly ReadOnlyExpertContextFile[];
-  readonly repositorySnapshot: string;
-};
-
-function writeReadOnlyExpertContextFiles(
-  request: WriteReadOnlyExpertContextFilesRequest,
-): void {
-  let totalBytes = 0;
-  for (const file of request.contextFiles) {
-    totalBytes += Buffer.byteLength(file.content, 'utf8');
-  }
-  if (request.contextFiles.length > 64 || totalBytes > 1_048_576) {
-    throw new Error('Read-only expert context files exceed their bounds.');
-  }
-  for (const file of request.contextFiles) {
-    if (
-      file.path === '' ||
-      file.path.startsWith('/') ||
-      file.path.includes('\\') ||
-      file.path.includes('\u0000') ||
-      file.path.split('/').includes('..') ||
-      Buffer.byteLength(file.content, 'utf8') > 131_072
-    ) {
-      throw new Error('Read-only expert context file is unsafe.');
-    }
-    const target = join(request.repositorySnapshot, file.path);
-    const directoryOptions = { recursive: true } as const;
-    mkdirSync(join(target, '..'), directoryOptions);
-    const writeOptions = { encoding: 'utf8', flag: 'wx' } as const;
-    writeFileSync(target, file.content, writeOptions);
-  }
-}
-
-function materializeRepositorySnapshot(
-  request: RepositorySnapshotRequest,
-): string {
-  const archivePath = join(request.codexHome, REPOSITORY_ARCHIVE_NAME);
-  const snapshotPath = join(request.codexHome, REPOSITORY_SNAPSHOT_NAME);
-  mkdirSync(snapshotPath);
-  const optionalScopePaths = trackedOptionalSnapshotPaths(request);
-  const archiveArguments = [
-    'archive',
-    '--format=tar',
-    `--output=${archivePath}`,
-    request.sourceCommit,
-    '--',
-    ...request.scopePaths,
-    ...optionalScopePaths,
-  ];
-  const archiveCommand: IsolatedCommandRequest = {
-    args: archiveArguments,
-    command: 'git',
-    cwd: request.workingDirectory,
-    environment: request.environment,
-  };
-  runIsolatedCommand(archiveCommand);
-  const extractArguments = [
-    '--extract',
-    `--file=${archivePath}`,
-    `--directory=${snapshotPath}`,
-  ];
-  const extractCommand: IsolatedCommandRequest = {
-    args: extractArguments,
-    command: 'tar',
-    cwd: request.codexHome,
-    environment: request.environment,
-  };
-  runIsolatedCommand(extractCommand);
-  removeExcludedSnapshotPaths(request);
-  const removeOptions: RmOptions = { force: true };
-  rmSync(archivePath, removeOptions);
-  return snapshotPath;
-}
-
-function trackedOptionalSnapshotPaths(
-  request: RepositorySnapshotRequest,
-): readonly string[] {
-  if (request.optionalScopePaths.length === 0) return [];
-  const treeCommand: IsolatedCommandRequest = {
-    args: [
-      'ls-tree',
-      '--name-only',
-      '-z',
-      request.sourceCommit,
-      '--',
-      ...request.optionalScopePaths,
-    ],
-    command: 'git',
-    cwd: request.workingDirectory,
-    environment: request.environment,
-  };
-  const trackedPaths = captureIsolatedCommand(treeCommand)
-    .split('\u0000')
-    .filter((path) => path.length > 0);
-  return [
-    ...new Set(
-      trackedPaths.filter((path) => request.optionalScopePaths.includes(path)),
-    ),
-  ];
-}
-
-function removeExcludedSnapshotPaths(request: RepositorySnapshotRequest): void {
-  const snapshotPath = join(request.codexHome, REPOSITORY_SNAPSHOT_NAME);
-  for (const excludedPath of request.excludedPaths) {
-    if (
-      excludedPath.includes('\u0000') ||
-      excludedPath.includes('\\') ||
-      excludedPath.startsWith('/') ||
-      excludedPath.split('/').includes('..')
-    ) {
-      throw new Error('Module expert snapshot exclusion is unsafe.');
-    }
-    const absolutePath = join(snapshotPath, excludedPath);
-    const removeOptions: RmOptions = { recursive: true, force: true };
-    rmSync(absolutePath, removeOptions);
-  }
-}
-
-type IsolatedCommandRequest = {
-  readonly args: readonly string[];
-  readonly command: string;
-  readonly cwd: string;
-  readonly environment: NonNullable<CodexOptions['env']>;
-};
-
-function runIsolatedCommand(request: IsolatedCommandRequest): void {
-  captureIsolatedCommand(request);
-}
-
-function captureIsolatedCommand(request: IsolatedCommandRequest): string {
-  const options: SpawnSyncOptionsWithStringEncoding = {
-    cwd: request.cwd,
-    encoding: 'utf8',
-    env: request.environment,
-  };
-  const result = spawnSync(request.command, [...request.args], options);
-  if (result.error || result.status !== 0) {
-    throw new Error(
-      'Module expert repository snapshot materialization failed.',
-    );
-  }
-  return result.stdout;
-}
-
-function assertSourceCommit(sourceCommit: string): void {
-  if (!/^[0-9a-f]{40}$/.test(sourceCommit)) {
-    throw new Error('Module expert source commit must be a full Git SHA.');
-  }
-}
-
-function moduleExpertProfile(expertName: string): ModuleExpertProfile {
-  const profile = MODULE_EXPERT_CATALOG.find(
-    (candidate) => candidate.name === expertName,
-  );
-  if (!profile)
-    throw new Error('Module expert runtime requires a registered expert.');
-  return profile;
-}
-
 type ModuleExpertSnapshotPathsRequest = {
   readonly profile: ModuleExpertProfile;
   readonly selectedContextPaths: readonly string[];
 };
 
-function moduleExpertSnapshotPaths(
-  request: ModuleExpertSnapshotPathsRequest,
-): readonly string[] {
-  const generatedProducerPaths = request.profile.generatedScopePaths.map(
-    (scope) => scope.producerPath,
-  );
-  return [
-    ...new Set([
-      '.cortex/knowledge-graph.md',
-      ...request.profile.boundaryScopePaths,
-      ...request.profile.canonicalContextPaths,
-      ...request.profile.moduleRoots,
-      ...request.profile.scopePaths,
-      ...request.selectedContextPaths,
-      ...generatedProducerPaths,
-      ...request.profile.publicEntryPoints,
-      ...request.profile.authorityPaths,
-      ...request.profile.skillPaths,
-    ]),
-  ];
+enum IsolationSetup {
+  Pending = 'pending',
+  Admitted = 'admitted',
+}
+
+const ISOLATION_TRANSITION = Symbol('expert-isolation-transition');
+enum IsolationLifetime {
+  Live = 'live',
+  Releasing = 'releasing',
+  Released = 'released',
+}
+type IsolationRelease =
+  | { readonly phase: IsolationLifetime.Live }
+  | {
+      readonly phase: IsolationLifetime.Releasing | IsolationLifetime.Released;
+      readonly completion: Promise<void>;
+    };
+type AdmitReadOnlyIsolation = {
+  readonly key: typeof ISOLATION_TRANSITION;
+  readonly resources: ReadOnlyIsolationResources;
+};
+/** Only the successful setup transition can issue live SDK configuration. */
+export class ReadOnlyExpertRuntimeIsolation {
+  private lifetime: IsolationRelease = { phase: IsolationLifetime.Live };
+  private constructor(private readonly resources: ReadOnlyIsolationResources) {}
+  static admit(
+    request: AdmitReadOnlyIsolation,
+  ): ReadOnlyExpertRuntimeIsolation {
+    if (request.key !== ISOLATION_TRANSITION)
+      throw new Error('Invalid isolation transition.');
+    return new ReadOnlyExpertRuntimeIsolation(request.resources);
+  }
+  private assertLive(): void {
+    if (this.lifetime.phase !== IsolationLifetime.Live)
+      throw new Error('Expert isolation has been disposed.');
+  }
+  get codexHome(): string {
+    this.assertLive();
+    return this.resources.codexHome;
+  }
+  get codexOptions(): ModuleExpertCodexOptions {
+    this.assertLive();
+    return this.resources.codexOptions;
+  }
+  get repositorySnapshot(): string {
+    this.assertLive();
+    return this.resources.repositorySnapshot;
+  }
+  get threadOptions(): ThreadOptions {
+    this.assertLive();
+    return this.resources.threadOptions;
+  }
+  dispose(): Promise<void> {
+    if (this.lifetime.phase !== IsolationLifetime.Live)
+      return this.lifetime.completion;
+    const completion = Promise.resolve()
+      .then(() => this.resources.dispose())
+      .finally(() => {
+        this.lifetime = { phase: IsolationLifetime.Released, completion };
+      });
+    this.lifetime = { phase: IsolationLifetime.Releasing, completion };
+    return completion;
+  }
+}
+type AdmitModuleIsolation = {
+  readonly key: typeof ISOLATION_TRANSITION;
+  readonly isolation: ReadOnlyExpertRuntimeIsolation;
+  readonly selectedContextPaths: readonly string[];
+};
+export class ModuleExpertRuntimeIsolation {
+  private constructor(private readonly admitted: AdmitModuleIsolation) {}
+  static admit(request: AdmitModuleIsolation): ModuleExpertRuntimeIsolation {
+    if (request.key !== ISOLATION_TRANSITION)
+      throw new Error('Invalid module isolation transition.');
+    return new ModuleExpertRuntimeIsolation(request);
+  }
+  get selectedContextPaths(): readonly string[] {
+    return this.admitted.selectedContextPaths;
+  }
+  get codexHome(): string {
+    return this.admitted.isolation.codexHome;
+  }
+  get codexOptions(): ModuleExpertCodexOptions {
+    return this.admitted.isolation.codexOptions;
+  }
+  get repositorySnapshot(): string {
+    return this.admitted.isolation.repositorySnapshot;
+  }
+  get threadOptions(): ThreadOptions {
+    return this.admitted.isolation.threadOptions;
+  }
+  dispose(): Promise<void> {
+    return this.admitted.isolation.dispose();
+  }
+}
+type AdmitAuthenticationBroker = {
+  readonly key: typeof ISOLATION_TRANSITION;
+  readonly resources: AuthenticationBrokerResources;
+};
+class ModuleExpertAuthenticationBroker {
+  private phase = IsolationLifetime.Live;
+  private constructor(
+    private readonly resources: AuthenticationBrokerResources,
+  ) {}
+  static admit(
+    request: AdmitAuthenticationBroker,
+  ): ModuleExpertAuthenticationBroker {
+    if (request.key !== ISOLATION_TRANSITION)
+      throw new Error('Invalid authentication broker transition.');
+    return new ModuleExpertAuthenticationBroker(request.resources);
+  }
+  get commandArgs(): readonly string[] {
+    if (this.phase !== IsolationLifetime.Live)
+      throw new Error('Authentication broker has been disposed.');
+    return this.resources.commandArgs;
+  }
+  dispose(): void {
+    if (this.phase !== IsolationLifetime.Live) return;
+    this.phase = IsolationLifetime.Released;
+    this.resources.dispose();
+  }
 }

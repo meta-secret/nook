@@ -6,6 +6,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::secrets::import_support::CsvExportColumn;
 use csv::StringRecord;
 use thiserror::Error;
 
@@ -47,7 +48,7 @@ struct KeePassXcColumns {
     password: usize,
     url: usize,
     notes: usize,
-    totp: Option<usize>,
+    totp: CsvExportColumn,
 }
 
 struct KeePassXcHeaders {
@@ -68,11 +69,16 @@ impl KeePassXcHeaders {
             .position(|header| header == &CsvHeader::new(name).normalized())
             .ok_or(KeePassXcImportError::MissingColumn(name))
     }
-    fn optional(&self, name: &str) -> Option<usize> {
+    fn optional(&self, name: &str) -> CsvExportColumn {
         let expected = CsvHeader::new(name).normalized();
-        self.normalized
+        let column = self
+            .normalized
             .iter()
-            .position(|header| header == &expected)
+            .position(|header| header == &expected);
+        match column {
+            Some(index) => CsvExportColumn::Exported(index),
+            None => CsvExportColumn::NotExported,
+        }
     }
     fn admit(self) -> Result<KeePassXcColumns, KeePassXcImportError> {
         Ok(KeePassXcColumns {
@@ -96,7 +102,7 @@ struct KeePassXcMetadata<'a> {
 impl KeePassXcMetadata<'_> {
     fn append_to(&self, notes: &mut String) {
         let mut metadata = Vec::new();
-        if let Some(entry) = (SourceLabelMetadata {
+        if let Ok(entry) = (SourceLabelMetadata {
             key: "title",
             label: self.title,
             website_url: self.website_url,
@@ -119,15 +125,40 @@ impl KeePassXcMetadata<'_> {
     }
 }
 
+enum KeePassXcTotpDisposition {
+    NotAnOtpUri,
+    Imported(AuthenticatorSecret),
+    UnsupportedOtpUri,
+}
+impl KeePassXcTotpDisposition {
+    fn skipped_count(&self) -> usize {
+        match self {
+            Self::UnsupportedOtpUri => 1,
+            Self::NotAnOtpUri | Self::Imported(_) => 0,
+        }
+    }
+    fn notes_text<'a>(&self, original: &'a str) -> &'a str {
+        match self {
+            Self::Imported(_) => "",
+            Self::NotAnOtpUri | Self::UnsupportedOtpUri => original,
+        }
+    }
+    fn append(self, items: &mut Vec<SecretValue>) {
+        match self {
+            Self::Imported(authenticator) => items.push(SecretValue::Authenticator(authenticator)),
+            Self::NotAnOtpUri | Self::UnsupportedOtpUri => {}
+        }
+    }
+}
 struct KeePassXcTotp<'a> {
     text: &'a str,
     website_url: &'a str,
 }
 impl KeePassXcTotp<'_> {
-    fn convert(&self) -> Result<(Option<SecretValue>, usize), KeePassXcImportError> {
+    fn convert(&self) -> Result<KeePassXcTotpDisposition, KeePassXcImportError> {
         let totp = self.text.trim();
         if totp.is_empty() || !totp.to_ascii_lowercase().starts_with("otpauth://") {
-            return Ok((None, 0));
+            return Ok(KeePassXcTotpDisposition::NotAnOtpUri);
         }
         match AuthenticatorSecret::from_otpauth_uri(totp) {
             Ok(mut authenticator) => {
@@ -136,15 +167,15 @@ impl KeePassXcTotp<'_> {
                 {
                     self.website_url.clone_into(&mut authenticator.website_url);
                 }
-                authenticator.apply_inferred_website_url_if_empty()?;
-                Ok((Some(SecretValue::Authenticator(authenticator)), 0))
+                let authenticator = authenticator.apply_inferred_website_url_if_empty()?;
+                Ok(KeePassXcTotpDisposition::Imported(authenticator))
             }
             Err(ValidationError::AuthenticatorIssuerCatalogInvalid) => {
                 Err(KeePassXcImportError::InvalidIssuerCatalog(
                     AuthenticatorIssuerHostsError::InvalidBundledCatalog,
                 ))
             }
-            Err(_) => Ok((None, 1)),
+            Err(_) => Ok(KeePassXcTotpDisposition::UnsupportedOtpUri),
         }
     }
 }
@@ -180,17 +211,13 @@ impl KeePassXcColumns {
 
         if is_login {
             let website_url = if url.is_empty() { title.clone() } else { url };
-            let (authenticator, skipped_totp) = KeePassXcTotp {
+            let authenticator = KeePassXcTotp {
                 text: &totp,
                 website_url: &website_url,
             }
             .convert()?;
-            skipped_unsupported += skipped_totp;
-            let totp_for_notes = if authenticator.is_some() {
-                ""
-            } else {
-                totp.as_str()
-            };
+            skipped_unsupported += authenticator.skipped_count();
+            let totp_for_notes = authenticator.notes_text(&totp);
             KeePassXcMetadata {
                 title: &title,
                 website_url: &website_url,
@@ -204,9 +231,7 @@ impl KeePassXcColumns {
                 password,
                 notes,
             }));
-            if let Some(authenticator) = authenticator {
-                items.push(authenticator);
-            }
+            authenticator.append(&mut items);
             return Ok((items, skipped_unsupported));
         }
 
@@ -214,17 +239,13 @@ impl KeePassXcColumns {
             return Ok((Vec::new(), 1));
         }
 
-        let (authenticator, skipped_totp) = KeePassXcTotp {
+        let authenticator = KeePassXcTotp {
             text: &totp,
             website_url: "",
         }
         .convert()?;
-        skipped_unsupported += skipped_totp;
-        let totp_for_notes = if authenticator.is_some() {
-            ""
-        } else {
-            totp.as_str()
-        };
+        skipped_unsupported += authenticator.skipped_count();
+        let totp_for_notes = authenticator.notes_text(&totp);
         KeePassXcMetadata {
             title: "",
             website_url: "",
@@ -236,9 +257,7 @@ impl KeePassXcColumns {
             title,
             note: notes,
         }));
-        if let Some(authenticator) = authenticator {
-            items.push(authenticator);
-        }
+        authenticator.append(&mut items);
         Ok((items, skipped_unsupported))
     }
 }
@@ -300,8 +319,10 @@ impl<'a> KeePassXcCsvInput<'a> {
             return Err(KeePassXcImportError::CsvTooLarge);
         }
 
-        let mut reader = CsvImportReader::new(self.text);
-        let columns = KeePassXcHeaders::new(reader.headers()?).admit()?;
+        let reader = CsvImportReader::new(self.text);
+        let read = reader.headers()?;
+        let reader = read.reader;
+        let columns = KeePassXcHeaders::new(&read.headers).admit()?;
         Ok(CheckedKeePassXcCsv { reader, columns })
     }
 }
@@ -316,8 +337,8 @@ impl CheckedKeePassXcCsv<'_> {
                 too_many_records: KeePassXcImportError::TooManyRecords,
                 convert: |record: &StringRecord| self.columns.convert(record),
             },
-            |items: &mut Vec<SecretValue>| {
-                for item in items {
+            |items: Vec<SecretValue>| {
+                for mut item in items {
                     item.zeroize_plaintext();
                 }
             },
@@ -366,7 +387,7 @@ mod tests {
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(usize::from(plan.skipped_unsupported), 1);
         assert_eq!(plan.items.len(), 1);
-        assert!(matches!(&plan.items[0], SecretValue::Login(login)
+        assert!(matches!(plan.items.first(), Some(SecretValue::Login(login))
             if login.notes == "note\n\n## KeePassXC\n- totp: otpauth://totp/account?secret=!"));
         Ok(())
     }
@@ -381,14 +402,17 @@ mod tests {
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 2);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Offline".to_owned(),
                 note: "note".to_owned(),
             })
         );
         assert!(
-            matches!(&plan.items[1], SecretValue::Authenticator(auth) if auth.account == "alice")
+            matches!(plan.items.get(1), Some(SecretValue::Authenticator(auth)) if auth.account == "alice")
         );
         Ok(())
     }
@@ -436,7 +460,10 @@ mod tests {
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 3);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a login")),
             SecretValue::Login(LoginSecret {
                 website_url: "https://github.com/login".to_owned(),
                 username: "alice".to_owned(),
@@ -449,12 +476,15 @@ mod tests {
             })
         );
         assert!(matches!(
-            &plan.items[1],
-            SecretValue::Authenticator(auth)
+            plan.items.get(1),
+            Some(SecretValue::Authenticator(auth))
                 if auth.issuer == "GitHub" && auth.account == "alice"
         ));
         assert_eq!(
-            plan.items[2],
+            *plan
+                .items
+                .get(2)
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Recovery".to_owned(),
                 note: "# Offline note\n\nKeep offline\n\n## KeePassXC\n- group: Root/Personal"
@@ -476,7 +506,10 @@ mod tests {
 
         assert_eq!(plan.items.len(), 1);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a login")),
             SecretValue::Login(LoginSecret {
                 website_url: "https://example.com".to_owned(),
                 username: "alice".to_owned(),

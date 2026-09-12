@@ -32,19 +32,21 @@ pub enum VaultRecoveryErrorKind {
 /// Classify a boundary error into the recovery action understood by hosts.
 /// Message compatibility stays in Rust until the boundary can transport the
 /// concrete error enum directly.
-#[must_use]
-pub fn classify_vault_recovery_error(message: &str) -> VaultRecoveryErrorKind {
-    let normalized = message.to_ascii_lowercase();
-    if normalized.contains("sentinel vault unlock requires an opened-share ceremony")
-        || normalized.contains("sentinelceremonyrequired")
-    {
-        VaultRecoveryErrorKind::SentinelCeremonyRequired
-    } else if normalized.contains("password unlock is forbidden for sentinel")
-        || normalized.contains("sentinelpasswordunlockforbidden")
-    {
-        VaultRecoveryErrorKind::SentinelPasswordUnlockForbidden
-    } else {
-        VaultRecoveryErrorKind::Other
+impl VaultRecoveryErrorKind {
+    #[must_use]
+    pub fn classify_vault_recovery_error(message: &str) -> VaultRecoveryErrorKind {
+        let normalized = message.to_ascii_lowercase();
+        if normalized.contains("sentinel vault unlock requires an opened-share ceremony")
+            || normalized.contains("sentinelceremonyrequired")
+        {
+            VaultRecoveryErrorKind::SentinelCeremonyRequired
+        } else if normalized.contains("password unlock is forbidden for sentinel")
+            || normalized.contains("sentinelpasswordunlockforbidden")
+        {
+            VaultRecoveryErrorKind::SentinelPasswordUnlockForbidden
+        } else {
+            VaultRecoveryErrorKind::Other
+        }
     }
 }
 
@@ -117,19 +119,19 @@ mod recovery_tests {
     #[test]
     fn sentinel_recovery_errors_are_classified_in_core() {
         assert_eq!(
-            classify_vault_recovery_error(
+            VaultRecoveryErrorKind::classify_vault_recovery_error(
                 "Sentinel vault unlock requires an opened-share ceremony; per-device auth envelopes cannot unlock this vault."
             ),
             VaultRecoveryErrorKind::SentinelCeremonyRequired
         );
         assert_eq!(
-            classify_vault_recovery_error(
+            VaultRecoveryErrorKind::classify_vault_recovery_error(
                 "Password unlock is forbidden for sentinel vaults; use the opened-share ceremony instead."
             ),
             VaultRecoveryErrorKind::SentinelPasswordUnlockForbidden
         );
         assert_eq!(
-            classify_vault_recovery_error("network failed"),
+            VaultRecoveryErrorKind::classify_vault_recovery_error("network failed"),
             VaultRecoveryErrorKind::Other
         );
     }

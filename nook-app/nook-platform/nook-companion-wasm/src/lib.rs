@@ -2,6 +2,11 @@
 
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
     forbid(invalid_raw_numeric_api_suppression)
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
@@ -12,9 +17,12 @@
     clippy::uninlined_format_args
 )]
 
+use nook_companion_core::AuthenticationUsernameEvidence;
+#[cfg(test)]
+use nook_companion_core::BackupCodeCandidatePresence;
+use nook_companion_core::BackupCodePageText;
 use nook_companion_core::{
-    ExtensionPairingState, ExtensionReadySetup, OAuthOriginSupport, OAuthOriginUnsupportedReason,
-    StoredExtensionPairingGrant,
+    ExtensionPairingState, ExtensionReadySetup, StoredExtensionPairingGrant,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -29,6 +37,7 @@ mod extension_persistence;
 mod grant_authority;
 mod page_form_policy;
 mod response_decoding;
+mod vault_host_policy;
 
 pub use account_picker_authorization::*;
 pub use authentication_observation_binding::*;
@@ -41,49 +50,70 @@ pub use extension_persistence::*;
 pub use grant_authority::*;
 pub use page_form_policy::*;
 pub use response_decoding::*;
-
-#[wasm_bindgen(typescript_custom_section)]
-const EXTENSION_VAULT_EVENT_TYPESCRIPT: &str =
-    nook_companion_core::EXTENSION_VAULT_EVENT_TYPESCRIPT;
+pub use vault_host_policy::*;
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn page_has_backup_code_hint(text: &str) -> bool {
-    nook_companion_core::page_has_backup_code_hint(text)
+    BackupCodePageText::new(text).page_has_backup_code_hint()
 }
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn contains_backup_code_candidate(text: &str) -> bool {
-    nook_companion_core::contains_backup_code_candidate(text)
+    BackupCodePageText::new(text).contains_backup_code_candidate()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
-    nook_companion_core::extract_backup_code_candidates(&text)
+    BackupCodePageText::new(&text).extract_backup_code_candidates()
 }
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn authentication_username_evidence(
     field: &NookPageInputFieldObservation,
 ) -> nook_companion_core::AuthenticationUsernameEvidence {
-    nook_companion_core::authentication_username_evidence(field.as_core())
+    (field.as_core()).authentication_username_evidence()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn strongest_authentication_username_evidence(
     evidence: Vec<nook_companion_core::AuthenticationUsernameEvidence>,
 ) -> nook_companion_core::AuthenticationUsernameEvidence {
-    nook_companion_core::strongest_authentication_username_evidence(&evidence)
+    AuthenticationUsernameEvidence::strongest_authentication_username_evidence(&evidence)
 }
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn classify_companion_authentication_outcome(
     input: nook_companion_core::AuthenticationOutcomeClassification,
 ) -> nook_companion_core::AuthenticationOutcomeDecision {
@@ -95,6 +125,10 @@ pub fn classify_companion_authentication_outcome(
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn classify_companion_authentication_outcome_with_default_timeout(
     observation: nook_companion_core::AuthenticationOutcomeObservation,
 ) -> nook_companion_core::AuthenticationOutcomeDecision {
@@ -106,6 +140,10 @@ pub fn classify_companion_authentication_outcome_with_default_timeout(
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn validate_companion_authentication_outcome_decision(
     decision: nook_companion_core::AuthenticationOutcomeDecision,
 ) -> nook_companion_core::AuthenticationOutcomeDecision {
@@ -114,48 +152,80 @@ pub fn validate_companion_authentication_outcome_decision(
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn extension_pairing_grant_storage_key(vault_store_id: &str) -> String {
     StoredExtensionPairingGrant::storage_key_for(vault_store_id)
 }
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn extension_pairing_setup_storage_key() -> String {
     nook_companion_core::EXTENSION_SETUP_KEY.to_owned()
 }
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn extension_vault_access_scope() -> nook_companion_core::ExtensionConnectScope {
     nook_companion_core::ExtensionConnectScope::VaultAccess
 }
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn extension_password_filling_scope() -> nook_companion_core::ExtensionConnectScope {
     nook_companion_core::ExtensionConnectScope::PasswordFilling
 }
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn extension_passkey_management_scope() -> nook_companion_core::ExtensionConnectScope {
     nook_companion_core::ExtensionConnectScope::PasskeyManagement
 }
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::ExtensionConnectScope {
     nook_companion_core::ExtensionConnectScope::SyncProviderCredentials
 }
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn is_extension_connect_scope(value: &str) -> bool {
-    nook_companion_core::ExtensionConnectScope::parse(value).is_some()
+    nook_companion_core::ExtensionConnectScope::parse(value).is_ok()
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn create_extension_pairing_state(
     input: nook_companion_core::CreateExtensionPairingStateInput,
 ) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
@@ -165,6 +235,10 @@ pub fn create_extension_pairing_state(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn refresh_extension_pairing_grant(
     input: nook_companion_core::RefreshExtensionPairingGrantInput,
 ) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
@@ -175,6 +249,10 @@ pub fn refresh_extension_pairing_grant(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn ordered_extension_pairing_grants(
     state: nook_companion_core::ExtensionPairingState,
 ) -> Vec<nook_companion_core::StoredExtensionPairingGrant> {
@@ -184,49 +262,51 @@ pub fn ordered_extension_pairing_grants(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn selected_extension_pairing_grant(
     state: nook_companion_core::ExtensionPairingState,
 ) -> nook_companion_core::SelectedExtensionPairingGrant {
-    state.selected_grant().map_or(
-        nook_companion_core::SelectedExtensionPairingGrant::NotSelected,
-        |grant| nook_companion_core::SelectedExtensionPairingGrant::Selected {
-            grant: Box::new(grant),
-        },
-    )
+    state.selected_grant()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn first_extension_pairing_grant(
     state: nook_companion_core::ExtensionPairingState,
 ) -> nook_companion_core::SelectedExtensionPairingGrant {
-    state.first_grant().map_or(
-        nook_companion_core::SelectedExtensionPairingGrant::NotSelected,
-        |grant| nook_companion_core::SelectedExtensionPairingGrant::Selected {
-            grant: Box::new(grant),
-        },
-    )
+    state.first_grant()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn extension_setup_after_pairing_grant_removal(
     input: nook_companion_core::ExtensionPairingGrantRemovalInput,
 ) -> nook_companion_core::ExtensionSetupAfterRemoval {
     input
         .state
         .setup_after_removal(&input.removed_vault_store_id)
-        .map_or(
-            nook_companion_core::ExtensionSetupAfterRemoval::NoPairedVault,
-            |setup| nook_companion_core::ExtensionSetupAfterRemoval::Ready { setup },
-        )
 }
 
 #[wasm_bindgen]
 #[must_use]
 // Existing browser boolean projection; this outer boundary remains to be migrated.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn is_stored_extension_pairing_grant_json(value: &str) -> bool {
     StoredExtensionPairingGrant::validate_json(value).is_ok()
 }
@@ -234,11 +314,19 @@ pub fn is_stored_extension_pairing_grant_json(value: &str) -> bool {
 #[wasm_bindgen]
 #[must_use]
 // Existing browser boolean projection; this outer boundary remains to be migrated.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn is_extension_ready_setup_json(value: &str) -> bool {
     ExtensionReadySetup::validate_json(value).is_ok()
 }
 
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn migrate_legacy_extension_pairing_state_json(
     value: &str,
 ) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
@@ -246,172 +334,14 @@ pub fn migrate_legacy_extension_pairing_state_json(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
-#[wasm_bindgen]
-#[must_use]
-pub fn is_cloudflare_pr_preview_host(hostname: &str) -> bool {
-    OAuthOriginUnsupportedReason::for_unregistered_hostname(hostname)
-        == OAuthOriginUnsupportedReason::CloudflarePrPreview
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Debug)]
-pub struct NookOAuthOriginSupport {
-    inner: OAuthOriginSupport,
-}
-
-#[wasm_bindgen]
-impl NookOAuthOriginSupport {
-    #[wasm_bindgen]
-    #[must_use]
-    pub fn is_supported(&self) -> bool {
-        matches!(
-            self.inner,
-            OAuthOriginSupport::LocationUnavailable | OAuthOriginSupport::Supported { .. }
-        )
-    }
-
-    #[wasm_bindgen(getter)]
-    #[must_use]
-    pub fn origin(&self) -> String {
-        match &self.inner {
-            OAuthOriginSupport::LocationUnavailable => String::new(),
-            OAuthOriginSupport::Supported { origin }
-            | OAuthOriginSupport::Unsupported { origin, .. } => origin.clone(),
-        }
-    }
-
-    #[wasm_bindgen]
-    #[must_use]
-    pub fn is_unsupported(&self) -> bool {
-        matches!(self.inner, OAuthOriginSupport::Unsupported { .. })
-    }
-
-    /// Reason when [`Self::is_unsupported`] is true; otherwise `UnregisteredOrigin`.
-    #[wasm_bindgen]
-    #[must_use]
-    pub fn unsupported_reason(&self) -> OAuthOriginUnsupportedReason {
-        match self.inner {
-            OAuthOriginSupport::Unsupported { reason, .. } => reason,
-            _ => OAuthOriginUnsupportedReason::UnregisteredOrigin,
-        }
-    }
-}
-
-#[wasm_bindgen]
-#[must_use]
-pub fn resolve_oauth_origin_support(
-    provider: nook_companion_core::BrowserOAuthProvider,
-    origin: &str,
-    hostname: &str,
-) -> NookOAuthOriginSupport {
-    let (origin, hostname) = if origin.is_empty() || hostname.is_empty() {
-        (None, None)
-    } else {
-        (Some(origin), Some(hostname))
-    };
-    NookOAuthOriginSupport {
-        inner: provider.origin_support(origin, hostname),
-    }
-}
-
-#[wasm_bindgen]
-#[must_use]
-pub fn default_simple_vault_url() -> String {
-    nook_companion_core::DEFAULT_SIMPLE_VAULT_URL.to_owned()
-}
-
-#[wasm_bindgen]
-pub fn normalize_simple_vault_base_url(value: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::normalize_simple_vault_base_url(value)?)
-}
-
-#[wasm_bindgen]
-pub fn simple_vault_url(base_url: &str, path: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::simple_vault_url(base_url, path)?)
-}
-
-#[wasm_bindgen]
-pub fn simple_vault_match_pattern(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::simple_vault_match_pattern(base_url)?)
-}
-
-/// Matching Sentinel base URL for `base_url`, or an empty string when none matches.
-#[wasm_bindgen]
-pub fn matching_sentinel_vault_base_url(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::matching_sentinel_vault_base_url(base_url)?.unwrap_or_default())
-}
-
-#[wasm_bindgen]
-pub fn sentinel_vault_match_patterns(base_url: &str) -> Result<Vec<String>, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::sentinel_vault_match_patterns(
-        base_url,
-    )?)
-}
-
-#[wasm_bindgen]
-#[must_use]
-pub fn is_simple_vault_hostname(hostname: &str) -> bool {
-    nook_companion_core::is_simple_vault_hostname(hostname)
-}
-
-#[wasm_bindgen]
-#[must_use]
-pub fn is_sentinel_vault_hostname(hostname: &str) -> bool {
-    nook_companion_core::is_sentinel_vault_hostname(hostname)
-}
-
-#[wasm_bindgen]
-pub fn nook_vault_app_exclude_match_patterns(
-    base_url: &str,
-) -> Result<Vec<String>, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::nook_vault_app_exclude_match_patterns(
-        base_url,
-    )?)
-}
-
-/// `base_url` may be empty when no configured vault base is available.
-#[wasm_bindgen]
-pub fn is_nook_vault_app_url(
-    candidate_url: &str,
-    base_url: &str,
-) -> Result<bool, wasm_bindgen::JsError> {
-    let base_url = if base_url.is_empty() {
-        None
-    } else {
-        Some(base_url)
-    };
-    Ok(nook_companion_core::is_nook_vault_app_url(
-        candidate_url,
-        base_url,
-    )?)
-}
-
-#[wasm_bindgen]
-pub fn belongs_to_simple_vault(
-    base_url: &str,
-    candidate_url: &str,
-) -> Result<bool, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::belongs_to_simple_vault(
-        base_url,
-        candidate_url,
-    )?)
-}
-
-#[wasm_bindgen]
-pub fn belongs_to_sentinel_vault(
-    base_url: &str,
-    candidate_url: &str,
-) -> Result<bool, wasm_bindgen::JsError> {
-    Ok(nook_companion_core::belongs_to_sentinel_vault(
-        base_url,
-        candidate_url,
-    )?)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_companion_core::ExtensionEventCount;
+    use nook_companion_core::{
+        AuthenticationBackupCodesEvidence, AuthenticationBackupCodesObservation,
+        AuthenticationEnrollmentObservation, AuthenticationWorkflowMatch, ExtensionEventCount,
+        OAuthOriginUnsupportedReason, SentinelVaultMatch, VaultHostPolicy,
+    };
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn workflow_wasm_export_rejects_unbounded_observations() {
@@ -559,13 +489,20 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn backup_code_classifier_bridge_preserves_typed_variants() {
         assert_eq!(
-            classify_authentication_backup_codes_observation("Use a backup code instead", false),
+            AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
+                AuthenticationBackupCodesEvidence {
+                    text: "Use a backup code instead",
+                    candidate_presence: BackupCodeCandidatePresence::Absent
+                }
+            ),
             nook_companion_core::AuthenticationBackupCodesObservation::Absent
         );
         assert_eq!(
-            classify_authentication_backup_codes_observation(
-                "Save your recovery codes in a secure place",
-                false,
+            AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
+                AuthenticationBackupCodesEvidence {
+                    text: "Save your recovery codes in a secure place",
+                    candidate_presence: BackupCodeCandidatePresence::Absent
+                }
             ),
             nook_companion_core::AuthenticationBackupCodesObservation::Present
         );
@@ -574,7 +511,13 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn enrollment_match_bridge_preserves_selected_recovery_action() -> Result<(), String> {
         let nook_companion_core::AuthenticationWorkflowMatch::Matched(snapshot) =
-            authentication_enrollment_workflow_match(true, "Save these recovery codes", false)
+            AuthenticationWorkflowMatch::authentication_enrollment_workflow_match(
+                AuthenticationEnrollmentObservation {
+                    authenticator_setup_hint: true.into(),
+                    backup_codes_copy: "Save these recovery codes",
+                    manual_checkpoint_present: false.into(),
+                },
+            )
         else {
             return Err("expected a selected enrollment workflow".to_owned());
         };
@@ -617,7 +560,10 @@ mod tests {
                 observed_at: "2026-09-05T00:00:01.000Z".to_owned(),
             })
             .map_err(|error| format!("create failed: {error:?}"))?;
-        let grant = ordered_extension_pairing_grants(created.clone())[0].clone();
+        let grant = ordered_extension_pairing_grants(created.clone())
+            .into_iter()
+            .next()
+            .ok_or_else(|| "created pairing state did not contain a grant".to_owned())?;
         assert_eq!(grant.event_count, ExtensionEventCount::from(2));
         assert!(matches!(
             first_extension_pairing_grant(created.clone()),
@@ -644,7 +590,10 @@ mod tests {
         .map_err(|error| format!("refresh failed: {error:?}"))?;
         let refreshed_grants = ordered_extension_pairing_grants(refreshed.clone());
         assert_eq!(
-            refreshed_grants[0].event_count,
+            refreshed_grants
+                .first()
+                .ok_or_else(|| "refreshed pairing state did not contain a grant".to_owned())?
+                .event_count,
             ExtensionEventCount::from(4)
         );
         assert!(matches!(
@@ -656,7 +605,10 @@ mod tests {
             ),
             nook_companion_core::ExtensionSetupAfterRemoval::NoPairedVault
         ));
+        #[cfg(target_arch = "wasm32")]
         assert!(migrate_legacy_extension_pairing_state_json("{").is_err());
+        #[cfg(not(target_arch = "wasm32"))]
+        assert!(nook_companion_core::ExtensionPairingState::migrate_legacy_json("{").is_err());
         Ok(())
     }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
@@ -680,8 +632,10 @@ mod tests {
         let validated = validate_companion_authentication_outcome_decision(outcome);
         assert_eq!(validated, outcome);
         assert_eq!(
-            classify_companion_authentication_outcome_with_default_timeout(Default::default())
-                .verdict,
+            classify_companion_authentication_outcome_with_default_timeout(
+                nook_companion_core::AuthenticationOutcomeObservation::default()
+            )
+            .verdict,
             nook_companion_core::AuthenticationOutcomeVerdict::Insufficient
         );
         assert_eq!(
@@ -698,26 +652,30 @@ mod tests {
             assert!(is_extension_connect_scope(scope.as_str()));
         }
         assert!(!is_extension_connect_scope("foreign-scope"));
-        assert!(contains_backup_code_candidate("A1B2-C3D4-E5F6"));
+        assert!(BackupCodePageText::new("A1B2-C3D4-E5F6").contains_backup_code_candidate());
         assert_eq!(default_simple_vault_url(), "https://simple.nokey.sh/");
         assert_eq!(
-            simple_vault_url("https://simple.nokey.sh/root", "/login")
+            VaultHostPolicy::new("https://simple.nokey.sh/root")
+                .simple_vault_url("/login")
                 .map_err(|error| format!("url failed: {error:?}"))?,
             "https://simple.nokey.sh/root/login"
         );
         assert_eq!(
-            matching_sentinel_vault_base_url("https://simple.nokey.sh/")
+            VaultHostPolicy::new("https://simple.nokey.sh/")
+                .matching_sentinel_vault_base_url()
                 .map_err(|error| format!("match failed: {error:?}"))?,
-            "https://sentinel.nokey.sh/"
+            SentinelVaultMatch::MatchingBaseUrl("https://sentinel.nokey.sh/".to_owned())
         );
         assert!(
-            belongs_to_simple_vault(
-                "https://vault.example.test/simple/",
-                "https://vault.example.test/simple/app"
-            )
-            .map_err(|error| format!("membership failed: {error:?}"))?
+            VaultHostPolicy::new("https://vault.example.test/simple/")
+                .belongs_to_simple_vault("https://vault.example.test/simple/app")
+                .map_err(|error| format!("membership failed: {error:?}"))?
         );
-        assert!(simple_vault_url("http://example.test", "/app").is_err());
+        assert!(
+            VaultHostPolicy::new("http://example.test")
+                .simple_vault_url("/app")
+                .is_err()
+        );
         let preview = resolve_oauth_origin_support(
             nook_companion_core::BrowserOAuthProvider::GoogleDrive,
             "https://pr-42.nokey-simple.pages.dev",
@@ -742,8 +700,8 @@ mod wasm_tests {
     use std::fmt;
 
     use nook_companion_core::{
-        AuthenticationBackupCodesObservation, ExtensionPersistenceArea,
-        ExtensionPersistenceObservation,
+        AuthenticationBackupCodesEvidence, AuthenticationBackupCodesObservation,
+        BackupCodeCandidatePresence, ExtensionPersistenceArea, ExtensionPersistenceObservation,
     };
     use serde::{Deserialize, Serialize};
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -757,11 +715,22 @@ mod wasm_tests {
     }
 
     #[derive(Serialize)]
+    #[serde(untagged)]
+    enum SessionFixtureDevice {
+        Omitted,
+        Identity(SessionDeviceFixture),
+    }
+    impl SessionFixtureDevice {
+        fn omitted(&self) -> bool {
+            matches!(self, Self::Omitted)
+        }
+    }
+    #[derive(Serialize)]
     struct SessionStatusFixture {
         ok: bool,
         status: u8,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        device: Option<SessionDeviceFixture>,
+        #[serde(skip_serializing_if = "SessionFixtureDevice::omitted")]
+        device: SessionFixtureDevice,
     }
 
     #[derive(Serialize)]
@@ -794,6 +763,7 @@ mod wasm_tests {
     struct RuntimeResponseFixture {
         workflow: WorkflowFixture,
         login_matches: LoginMatchesFixture,
+        selected_facts: nook_companion_core::AuthenticationWorkflowSelectedFacts,
     }
 
     #[derive(Deserialize)]
@@ -862,7 +832,7 @@ mod wasm_tests {
             let fixture = SessionStatusFixture {
                 ok: true,
                 status,
-                device: None,
+                device: SessionFixtureDevice::Omitted,
             };
             let js_input = serde_wasm_bindgen::to_value(&fixture).map_err(js_error)?;
             let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
@@ -874,7 +844,7 @@ mod wasm_tests {
         let unlocked = SessionStatusFixture {
             ok: true,
             status: 6,
-            device: Some(SessionDeviceFixture {
+            device: SessionFixtureDevice::Identity(SessionDeviceFixture {
                 device_id: "device",
                 device_public_key: "public",
                 device_signing_public_key: "signing",
@@ -908,6 +878,9 @@ mod wasm_tests {
             login_matches: LoginMatchesFixture {
                 kind: "ready",
                 count: 2,
+            },
+            selected_facts: nook_companion_core::AuthenticationWorkflowSelectedFacts::Selected {
+                facts: Box::default(),
             },
         };
         let js_input = serde_wasm_bindgen::to_value(&fixture).map_err(js_error)?;
@@ -950,7 +923,7 @@ mod wasm_tests {
                 AuthenticationBackupCodesObservation::Present,
             ),
         ] {
-            let classified = super::classify_authentication_backup_codes_observation(text, false);
+            let classified = AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(AuthenticationBackupCodesEvidence { text: text, candidate_presence: BackupCodeCandidatePresence::Absent });
             let js_value = serde_wasm_bindgen::to_value(&classified)?;
             let decoded: AuthenticationBackupCodesObservation =
                 serde_wasm_bindgen::from_value(js_value)?;
@@ -960,3 +933,20 @@ mod wasm_tests {
         Ok(())
     }
 }
+
+#[wasm_bindgen]
+#[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn compare_extension_pairing_records(
+    request: nook_companion_core::ExtensionPairingRecordComparisonRequest,
+) -> nook_companion_core::ExtensionPairingRecordComparison {
+    request.compare()
+}
+
+mod browser_material_admission;
+pub use browser_material_admission::*;
+
+mod bridge_coverage;

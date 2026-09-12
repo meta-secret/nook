@@ -217,10 +217,11 @@ mod tests {
             },
             &mut replacements,
         );
-        assert!(matches!(
-            projection.secrets[&original_id].lifecycle,
-            ProjectedSecretLifecycle::Live
-        ));
+        let original = projection
+            .secrets
+            .get(&original_id)
+            .ok_or_else(|| anyhow::anyhow!("created secret must be projected"))?;
+        assert!(matches!(original.lifecycle, ProjectedSecretLifecycle::Live));
 
         let replacement_id = SecretId::from_vault_record("secret_replaced1");
         projection.apply_operation(
@@ -231,17 +232,31 @@ mod tests {
             },
             &mut replacements,
         );
+        let original = projection
+            .secrets
+            .get(&original_id)
+            .ok_or_else(|| anyhow::anyhow!("replaced secret must retain its tombstone"))?;
         assert!(matches!(
-            projection.secrets[&original_id].lifecycle,
+            original.lifecycle,
             ProjectedSecretLifecycle::Deleted { .. }
         ));
+        let replacement = projection
+            .secrets
+            .get(&replacement_id)
+            .ok_or_else(|| anyhow::anyhow!("replacement secret must be projected"))?;
         assert_eq!(
-            projection.secrets[&replacement_id].origin,
+            replacement.origin,
             ProjectedSecretOrigin::Replacement {
                 from: original_id.clone()
             }
         );
-        assert_eq!(replacements[&original_id][0].1, replacement_id);
+        let replacement_history = replacements
+            .get(&original_id)
+            .ok_or_else(|| anyhow::anyhow!("replacement history must retain the original"))?;
+        let first_replacement = replacement_history
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("replacement history must contain the new secret"))?;
+        assert_eq!(first_replacement.1, replacement_id);
 
         projection.apply_operation(
             &creator,
@@ -250,8 +265,12 @@ mod tests {
             },
             &mut replacements,
         );
+        let replacement = projection
+            .secrets
+            .get(&SecretId::from_vault_record("secret_replaced1"))
+            .ok_or_else(|| anyhow::anyhow!("deleted replacement must retain its tombstone"))?;
         assert!(matches!(
-            projection.secrets[&SecretId::from_vault_record("secret_replaced1")].lifecycle,
+            replacement.lifecycle,
             ProjectedSecretLifecycle::Deleted { .. }
         ));
         Ok(())
@@ -312,7 +331,11 @@ mod tests {
             &mut replacements,
         );
         assert_eq!(projection.password_entries.len(), 1);
-        assert_eq!(projection.password_entries[0].label, "Primary recovery");
+        let entry = projection
+            .password_entries
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("added password entry must be projected"))?;
+        assert_eq!(entry.label, "Primary recovery");
 
         projection.apply_operation(
             &actor,
@@ -322,10 +345,11 @@ mod tests {
             },
             &mut replacements,
         );
-        assert_eq!(
-            projection.password_entries[0].envelope.ciphertext,
-            "rotated"
-        );
+        let entry = projection
+            .password_entries
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("rotated password entry must remain projected"))?;
+        assert_eq!(entry.envelope.ciphertext, "rotated");
         projection.apply_operation(
             &actor,
             &VaultOperation::PasswordEnvelopeUpgraded {
@@ -334,10 +358,11 @@ mod tests {
             },
             &mut replacements,
         );
-        assert_eq!(
-            projection.password_entries[0].envelope.ciphertext,
-            "upgraded"
-        );
+        let entry = projection
+            .password_entries
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("upgraded password entry must remain projected"))?;
+        assert_eq!(entry.envelope.ciphertext, "upgraded");
 
         projection.apply_operation(
             &actor,
@@ -410,10 +435,11 @@ mod tests {
         assert_eq!(projection.password_entries, vec![retained]);
         assert_eq!(projection.secrets.len(), 1);
         assert!(!projection.secrets.contains_key(&old.id));
-        assert_eq!(
-            projection.secrets[&replacement.id].record,
-            replacement.to_stored()
-        );
+        let projected_replacement = projection
+            .secrets
+            .get(&replacement.id)
+            .ok_or_else(|| anyhow::anyhow!("checkpoint replacement must be projected"))?;
+        assert_eq!(projected_replacement.record, replacement.to_stored());
         Ok(())
     }
 

@@ -9,18 +9,22 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/main/main.js",
-    "check": "tsc --noEmit",
-    "test": "npm run build && tsc -p tsconfig.test.build.json && node --test dist/test/**/*.test.js"
+    "check": "tsc --noEmit -p tsconfig.authored.json",
+    "test": "npm run build && tsc -p tsconfig.test.build.json && node --test dist/test/**/*.test.js",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@cursor/sdk": "^1.0.28",
-    "@octokit/rest": "^22.0.1"
+    "@octokit/rest": "^22.0.1",
+    "neverthrow": "8.2.0"
   },
   "overrides": {
     "undici": "6.28.0"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
-    "typescript": "^7.0.2"
+    "typescript": "6.0.3",
+    "eslint": "10.8.1",
+    "typescript-eslint": "8.66.0"
   }
 }

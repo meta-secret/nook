@@ -9,8 +9,51 @@ mod items;
 use crate::SecretValue;
 use encryption::EncryptedBitwardenExport;
 use items::BitwardenItems;
-use serde_json::Value;
+use serde::{Deserialize, de::IgnoredAny};
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BitwardenExportHeader {
+    #[serde(default)]
+    encrypted: BitwardenHeaderFlag,
+    #[serde(default)]
+    password_protected: BitwardenHeaderFlag,
+}
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum BitwardenHeaderFlag {
+    Boolean(bool),
+    Unsupported(IgnoredAny),
+}
+impl Default for BitwardenHeaderFlag {
+    fn default() -> Self {
+        Self::Unsupported(IgnoredAny)
+    }
+}
+impl BitwardenHeaderFlag {
+    fn encryption(&self) -> BitwardenEncryption {
+        match self {
+            Self::Boolean(true) => BitwardenEncryption::Encrypted,
+            _ => BitwardenEncryption::Plaintext,
+        }
+    }
+    fn restriction(&self) -> BitwardenRestriction {
+        match self {
+            Self::Boolean(false) => BitwardenRestriction::AccountRestricted,
+            _ => BitwardenRestriction::PasswordProtected,
+        }
+    }
+}
+enum BitwardenEncryption {
+    Plaintext,
+    Encrypted,
+}
+enum BitwardenRestriction {
+    AccountRestricted,
+    PasswordProtected,
+}
 use thiserror::Error;
+
 #[derive(Debug, Error)]
 pub enum BitwardenImportError {
     #[error("Bitwarden returned invalid JSON: {0}")]
@@ -38,47 +81,54 @@ pub struct BitwardenImportPlan {
 
 /// Original input and password remain borrowed until planning finishes.
 /// ```
-/// use nook_core::BitwardenExport;
-/// let plan = BitwardenExport { json: r#"{"items":[]}"#, password: None }.plan()?;
+/// use nook_core::{BitwardenExport, BitwardenExportAccess};
+/// let plan = BitwardenExport { json: r#"{"items":[]}"#, password: BitwardenExportAccess::WithoutPassword }.plan()?;
 /// assert!(plan.items.is_empty());
 /// # Ok::<(), nook_core::BitwardenImportError>(())
 /// ```
 /// ```compile_fail,E0382
-/// use nook_core::BitwardenExport;
-/// let export = BitwardenExport { json: r#"{"items":[]}"#, password: None };
+/// use nook_core::{BitwardenExport, BitwardenExportAccess};
+/// let export = BitwardenExport { json: r#"{"items":[]}"#, password: BitwardenExportAccess::WithoutPassword };
 /// let _ = export.plan();
 /// let _ = export.plan();
 /// ```
 /// ```compile_fail,E0599
-/// use nook_core::BitwardenExport;
-/// let export = BitwardenExport { json: r#"{"items":[]}"#, password: None };
+/// use nook_core::{BitwardenExport, BitwardenExportAccess};
+/// let export = BitwardenExport { json: r#"{"items":[]}"#, password: BitwardenExportAccess::WithoutPassword };
 /// let duplicate = export.clone();
 /// ```
 /// ```compile_fail,E0502
-/// use nook_core::BitwardenExport;
+/// use nook_core::{BitwardenExport, BitwardenExportAccess};
 /// let mut json = String::from(r#"{"items":[]}"#);
-/// let export = BitwardenExport { json: &json, password: None };
+/// let export = BitwardenExport { json: &json, password: BitwardenExportAccess::WithoutPassword };
 /// json.clear();
 /// let _ = export.plan();
 /// ```
+#[derive(Clone, Copy)]
+pub enum BitwardenExportAccess<'a> {
+    WithoutPassword,
+    PasswordProvided(&'a str),
+}
 pub struct BitwardenExport<'a> {
     pub json: &'a str,
-    pub password: Option<&'a str>,
+    pub password: BitwardenExportAccess<'a>,
 }
 impl BitwardenExport<'_> {
     pub fn plan(self) -> Result<BitwardenImportPlan, BitwardenImportError> {
-        let value: Value = serde_json::from_str(self.json)?;
-        if !value
-            .get("encrypted")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        {
-            return Ok(BitwardenItems::parse(&value)?.plan());
+        let header: BitwardenExportHeader = serde_json::from_str(self.json)?;
+        if matches!(
+            header.encrypted.encryption(),
+            BitwardenEncryption::Plaintext
+        ) {
+            return Ok(BitwardenItems::parse(self.json)?.plan());
         }
-        if value.get("passwordProtected").and_then(Value::as_bool) == Some(false) {
+        if matches!(
+            header.password_protected.restriction(),
+            BitwardenRestriction::AccountRestricted
+        ) {
             return Err(BitwardenImportError::AccountRestrictedExport);
         }
-        EncryptedBitwardenExport::parse(value)?
+        EncryptedBitwardenExport::parse(self.json)?
             .check(self.password)?
             .plan()
     }
@@ -90,7 +140,7 @@ impl BitwardenImportError {
 }
 #[cfg(test)]
 mod tests {
-    use super::{BitwardenExport, BitwardenImportError};
+    use super::{BitwardenExport, BitwardenExportAccess, BitwardenImportError};
     use crate::{SecretValue, SecureNoteSecret};
 
     #[test]
@@ -99,11 +149,16 @@ mod tests {
             r#"{"items":[]}"#,
             r#"{"encrypted":false,"items":[]}"#,
             r#"{"encrypted":"true","items":[]}"#,
+            r#"{"encrypted":null,"items":[]}"#,
+            r#"{"encrypted":1,"items":[]}"#,
+            r#"{"encrypted":[],"items":[]}"#,
+            r#"{"encrypted":{},"items":[]}"#,
+            r#"{"encrypted":false,"passwordProtected":{},"items":[]}"#,
         ] {
             assert!(
                 BitwardenExport {
                     json,
-                    password: None
+                    password: BitwardenExportAccess::WithoutPassword
                 }
                 .plan()?
                 .items
@@ -113,7 +168,7 @@ mod tests {
         assert!(matches!(
             BitwardenExport {
                 json: r#"{"encrypted":true,"passwordProtected":false}"#,
-                password: None
+                password: BitwardenExportAccess::WithoutPassword
             }
             .plan(),
             Err(BitwardenImportError::AccountRestrictedExport)
@@ -121,7 +176,7 @@ mod tests {
         assert!(matches!(
             BitwardenExport {
                 json: r#"{"encrypted":true}"#,
-                password: None
+                password: BitwardenExportAccess::WithoutPassword
             }
             .plan(),
             Err(BitwardenImportError::InvalidEncryptedExport(_))
@@ -142,12 +197,12 @@ mod tests {
 
         let plan = BitwardenExport {
             json,
-            password: None,
+            password: BitwardenExportAccess::WithoutPassword,
         }
         .plan()?;
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login")
         };
         assert_eq!(login.website_url, "https://github.com/login");
@@ -169,20 +224,23 @@ mod tests {
         ]}"#;
         let plan = BitwardenExport {
             json,
-            password: None,
+            password: BitwardenExportAccess::WithoutPassword,
         }
         .plan()?;
         assert_eq!(usize::from(plan.source_count), 3);
         assert_eq!(usize::from(plan.skipped_unsupported), 1);
         assert_eq!(plan.items.len(), 2);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Private note".to_owned(),
                 note: "hello".to_owned(),
             })
         );
-        let SecretValue::CreditCard(card) = &plan.items[1] else {
+        let Some(SecretValue::CreditCard(card)) = plan.items.get(1) else {
             panic!("expected credit card");
         };
         assert_eq!(card.title, "Card");
@@ -205,7 +263,7 @@ mod tests {
                     {"name":"empty","value":null}
                 ]
             }]}"#,
-            password: None,
+            password: BitwardenExportAccess::WithoutPassword,
         }
         .plan()?;
         assert_eq!(
@@ -224,14 +282,14 @@ mod tests {
     fn accepts_real_export_shape_with_folders_dates_nulls_and_fido_fields() -> anyhow::Result<()> {
         let plan = BitwardenExport {
             json: include_str!("fixtures/bitwarden_real_export.json"),
-            password: None,
+            password: BitwardenExportAccess::WithoutPassword,
         }
         .plan()?;
         assert_eq!(usize::from(plan.source_count), 2);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 2);
 
-        let SecretValue::Login(first) = &plan.items[0] else {
+        let Some(SecretValue::Login(first)) = plan.items.first() else {
             panic!("expected first login")
         };
         assert_eq!(first.website_url, "https://my.1password.com/signin");
@@ -242,7 +300,7 @@ mod tests {
             "bla bla bla\n\n## Bitwarden\n- name: 1password.com"
         );
 
-        let SecretValue::Login(second) = &plan.items[1] else {
+        let Some(SecretValue::Login(second)) = plan.items.get(1) else {
             panic!("expected second login")
         };
         assert_eq!(second.website_url, "http://rabbitmq.9dev.io:15672/");
@@ -254,8 +312,8 @@ mod tests {
 
     #[test]
     fn accepts_null_optional_login_fields() -> anyhow::Result<()> {
-        let plan = BitwardenExport { json: r#"{"items":[{"type":1,"name":"Example","notes":null,"login":{"username":null,"password":"pw","totp":null,"uris":[{"uri":null}]}}]}"#, password: None }.plan()?;
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let plan = BitwardenExport { json: r#"{"items":[{"type":1,"name":"Example","notes":null,"login":{"username":null,"password":"pw","totp":null,"uris":[{"uri":null}]}}]}"#, password: BitwardenExportAccess::WithoutPassword }.plan()?;
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login")
         };
         assert_eq!(login.website_url, "Example");
@@ -266,7 +324,7 @@ mod tests {
 
     #[test]
     fn password_is_required_for_password_protected_exports() -> anyhow::Result<()> {
-        let error = BitwardenExport { json: r#"{"encrypted":true,"passwordProtected":true,"salt":"salt","kdfType":0,"kdfIterations":600000,"encKeyValidation_DO_NOT_EDIT":"2.a|b|c","data":"2.a|b|c"}"#, password: None }.plan()
+        let error = BitwardenExport { json: r#"{"encrypted":true,"passwordProtected":true,"salt":"salt","kdfType":0,"kdfIterations":600000,"encKeyValidation_DO_NOT_EDIT":"2.a|b|c","data":"2.a|b|c"}"#, password: BitwardenExportAccess::WithoutPassword }.plan()
         .err().ok_or_else(|| anyhow::anyhow!("bitwarden import test should reject invalid input"))?;
         assert!(matches!(error, BitwardenImportError::PasswordRequired));
         Ok(())
@@ -285,7 +343,7 @@ mod tests {
                 "kdfIterations": 1000000,
                 "encKeyValidation_DO_NOT_EDIT": "2.AAECAwQFBgcICQoLDA0ODw==|AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA|AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
                 "data": "2.EBESExQVFhcYGRobHB0eHw==|AAAAAAAAAAAAAAAAAAAAAA==|AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-            }"#, password: None }.plan()
+            }"#, password: BitwardenExportAccess::WithoutPassword }.plan()
         .err().ok_or_else(|| anyhow::anyhow!("bitwarden import test should reject invalid input"))?;
         assert!(matches!(error, BitwardenImportError::PasswordRequired));
         Ok(())
@@ -293,7 +351,7 @@ mod tests {
 
     #[test]
     fn rejects_account_restricted_exports() -> anyhow::Result<()> {
-        let error = BitwardenExport { json: r#"{"encrypted":true,"passwordProtected":false,"salt":"","kdfType":0,"kdfIterations":600000,"encKeyValidation_DO_NOT_EDIT":"","data":""}"#, password: Some("password") }.plan()
+        let error = BitwardenExport { json: r#"{"encrypted":true,"passwordProtected":false,"salt":"","kdfType":0,"kdfIterations":600000,"encKeyValidation_DO_NOT_EDIT":"","data":""}"#, password: BitwardenExportAccess::PasswordProvided("password") }.plan()
         .err().ok_or_else(|| anyhow::anyhow!("bitwarden import test should reject invalid input"))?;
         assert!(matches!(
             error,
@@ -306,7 +364,7 @@ mod tests {
     fn decrypts_bitwarden_password_protected_pbkdf2_fixture() -> anyhow::Result<()> {
         let plan = BitwardenExport {
             json: include_str!("fixtures/bitwarden_encrypted_pbkdf2.json"),
-            password: Some("correct horse battery staple"),
+            password: BitwardenExportAccess::PasswordProvided("correct horse battery staple"),
         }
         .plan()?;
         assert_eq!(usize::from(plan.source_count), 2);
@@ -319,7 +377,7 @@ mod tests {
     fn rejects_wrong_password_for_encrypted_fixture() -> anyhow::Result<()> {
         let error = BitwardenExport {
             json: include_str!("fixtures/bitwarden_encrypted_pbkdf2.json"),
-            password: Some("wrong password"),
+            password: BitwardenExportAccess::PasswordProvided("wrong password"),
         }
         .plan()
         .err()

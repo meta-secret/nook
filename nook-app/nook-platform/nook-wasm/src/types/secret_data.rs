@@ -340,24 +340,30 @@ impl Drop for NookTotpCode {
     }
 }
 
-pub(crate) fn records_to_vec(
-    records: Vec<nook_core::SecretRecord>,
-) -> Result<Vec<NookSecretRecord>, NookError> {
-    Ok(records
-        .into_iter()
-        .map(NookSecretRecord::from_record)
-        .collect())
+impl NookSecretRecord {
+    pub(crate) fn records_to_vec(
+        records: Vec<nook_core::SecretRecord>,
+    ) -> Result<Vec<NookSecretRecord>, NookError> {
+        Ok(records
+            .into_iter()
+            .map(NookSecretRecord::from_record)
+            .collect())
+    }
 }
 
-pub(crate) fn joins_to_vec(joins: Vec<nook_core::JoinRequest>) -> Vec<NookJoinRequest> {
-    joins.into_iter().map(NookJoinRequest::from_core).collect()
+impl NookJoinRequest {
+    pub(crate) fn joins_to_vec(joins: Vec<nook_core::JoinRequest>) -> Vec<NookJoinRequest> {
+        joins.into_iter().map(NookJoinRequest::from_core).collect()
+    }
 }
 
-pub(crate) fn members_to_vec(members: Vec<nook_core::VaultMember>) -> Vec<NookVaultMember> {
-    members
-        .into_iter()
-        .map(NookVaultMember::from_core)
-        .collect()
+impl NookVaultMember {
+    pub(crate) fn members_to_vec(members: Vec<nook_core::VaultMember>) -> Vec<NookVaultMember> {
+        members
+            .into_iter()
+            .map(NookVaultMember::from_core)
+            .collect()
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
@@ -441,14 +447,13 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn secret_page_import_and_totp_wrappers_project_values() {
+    fn secret_page_import_and_totp_wrappers_project_values() -> anyhow::Result<()> {
         let mut page = NookSecretPage::from_core(nook_core::SecretPage {
             records: Vec::new(),
             total: 3.into(),
             offset: 1.into(),
             limit: 2.into(),
-        })
-        .unwrap();
+        })?;
         assert_eq!(page.total(), 3);
         assert_eq!(page.offset(), 1);
         assert_eq!(page.limit(), 2);
@@ -470,6 +475,10 @@ mod tests {
         assert_eq!(totp.code(), "123456");
         assert_eq!(totp.seconds_remaining(), 17);
         assert_eq!(totp.period(), 30);
-        assert_eq!(totp.expires_at_unix_seconds(), 117.0);
+        assert_eq!(
+            totp.expires_at_unix_seconds().to_bits(),
+            117.0_f64.to_bits()
+        );
+        Ok(())
     }
 }

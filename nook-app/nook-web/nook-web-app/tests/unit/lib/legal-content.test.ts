@@ -1,30 +1,44 @@
 import { describe, expect, test } from 'vitest'
-import { LegalRouteKind, legalRoute } from '$lib/app/route-state'
+import { LegalRouteKind, LegalRouteProjection } from '$lib/app/route-state'
 import {
   LEGAL_PAGES,
   LegalPageLookupKind,
   LegalPageId,
-  getLegalPageFromPath,
+  ApplicationRoutePresentation,
 } from '$lib/content/legal'
 
 describe('legal-content', () => {
   test('maps privacy and terms paths', () => {
-    expect(getLegalPageFromPath('/privacy')).toEqual({
+    expect(
+      new ApplicationRoutePresentation('/privacy').getLegalPageFromPath(),
+    ).toEqual({
       kind: LegalPageLookupKind.LegalPage,
       page: LegalPageId.Privacy,
     })
-    expect(getLegalPageFromPath('/privacy/')).toEqual({
+    expect(
+      new ApplicationRoutePresentation('/privacy/').getLegalPageFromPath(),
+    ).toEqual({
       kind: LegalPageLookupKind.LegalPage,
       page: LegalPageId.Privacy,
     })
-    expect(getLegalPageFromPath('/terms')).toEqual({
+    expect(
+      new ApplicationRoutePresentation('/terms').getLegalPageFromPath(),
+    ).toEqual({
       kind: LegalPageLookupKind.LegalPage,
       page: LegalPageId.Terms,
     })
-    expect(legalRoute(getLegalPageFromPath('/'))).toEqual({
+    expect(
+      new LegalRouteProjection(
+        new ApplicationRoutePresentation('/').getLegalPageFromPath(),
+      ).route,
+    ).toEqual({
       kind: LegalRouteKind.Application,
     })
-    expect(legalRoute(getLegalPageFromPath('/vault'))).toEqual({
+    expect(
+      new LegalRouteProjection(
+        new ApplicationRoutePresentation('/vault').getLegalPageFromPath(),
+      ).route,
+    ).toEqual({
       kind: LegalRouteKind.Application,
     })
   })

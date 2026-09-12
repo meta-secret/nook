@@ -8,7 +8,7 @@
 
 use super::{ReplicationType, VaultArchitecture};
 use crate::errors::{ValidationError, ValidationResult};
-use crate::{OauthFilePreset, StorageProviderType};
+use crate::{OAuthFilePreset, OauthFilePreset, StorageProviderType};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -33,7 +33,7 @@ impl SharedJoinerIdentityKind {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ProviderOauthPreset {
     NotApplicable,
-    Preset(OauthFilePreset),
+    Preset(OAuthFilePreset),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

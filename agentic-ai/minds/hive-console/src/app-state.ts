@@ -1,4 +1,4 @@
-import type { ObservedTask, ObserverSnapshot } from './types';
+import type { ObservedTask, ObserverSnapshot } from './generated/index';
 
 export enum TaskTabFilter {
   All = 'all',
@@ -79,3 +79,8 @@ export enum DetailPanelMountKind {
 export type DetailPanelMount =
   | { kind: DetailPanelMountKind.Unmounted }
   | { kind: DetailPanelMountKind.Mounted; element: HTMLElement };
+
+// Idle is worker presentation state; task wire values come from Rust.
+export enum WorkerDisplayStatus {
+  Idle = 'IDLE',
+}

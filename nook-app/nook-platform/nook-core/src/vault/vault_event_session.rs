@@ -1,17 +1,20 @@
 //! Testable event-log session orchestration (append, union, projection, outbox).
 
+use crate::LocalEventBytes;
+use crate::ResolveMemberRosterRequest;
 use crate::{
     EpochMetadataState, EpochPasswordState, EventError, EventInsertStatus, VaultEpochError,
 };
+use nook_auth2::{BuildMembersRecordsRequest, VaultMember};
+use nook_event_log::EventGraphRejection;
 
-use crate::errors::VaultResult;
+use crate::errors::{VaultError, VaultResult};
 use crate::vault_ids::{AuthKeyId, StoreId};
 use crate::vault_wire::{IsoTimestamp, Sha256Hex};
 use crate::{
     AppendEventInput, CanonicalEventBodyBytes, Database, EventId, EventStorageBytes,
     LocalEventStore, ObservedHeads, SecretEpochReencryption, SigningIdentity, StoredSecretRecord,
-    VaultCrypto, VaultMetaState, VaultOperation, VaultProjection, build_members_records,
-    resolve_member_roster,
+    VaultCrypto, VaultMetaState, VaultOperation, VaultProjection,
 };
 
 /// In-memory event-log session state shared by WASM adapters and integration tests.
@@ -25,6 +28,12 @@ pub struct VaultEventSession {
     pub signing_seed: String,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum EventPublicationDestination<'a> {
+    Local,
+    Provider(&'a str),
+}
+
 pub struct VaultSecurityEpochRotationInput<'a> {
     pub trigger: VaultOperation,
     pub new_keys: &'a crate::VaultKeys,
@@ -34,7 +43,54 @@ pub struct VaultSecurityEpochRotationInput<'a> {
     pub rotated_meta_records: Vec<StoredSecretRecord>,
     pub rewrapped_password_entries: Vec<crate::PasswordUnlockEntry>,
     pub created_at: &'a str,
-    pub provider_id: Option<&'a str>,
+    pub destination: EventPublicationDestination<'a>,
+}
+
+pub struct VaultEventAppend<'a> {
+    pub operations: Vec<VaultOperation>,
+    pub created_at: &'a str,
+    pub destination: EventPublicationDestination<'a>,
+}
+#[derive(Debug)]
+pub struct VaultEventAppended {
+    pub session: VaultEventSession,
+    pub event_id: EventId,
+}
+#[derive(Debug, thiserror::Error)]
+#[error("{cause}")]
+pub struct VaultEventSessionRejection {
+    pub session: VaultEventSession,
+    #[source]
+    pub cause: VaultError,
+}
+impl VaultEventSessionRejection {
+    #[must_use]
+    pub fn into_cause(self) -> VaultError {
+        self.cause
+    }
+}
+pub struct VaultOutboxFlush<'a> {
+    pub provider_id: &'a str,
+    pub remote: LocalEventStore,
+}
+pub struct VaultOutboxFlushed {
+    pub session: VaultEventSession,
+    pub remote: LocalEventStore,
+}
+pub struct VaultEpochRotated<'a> {
+    pub session: VaultEventSession,
+    pub keys: &'a crate::VaultKeys,
+}
+struct PreparedSessionEvent {
+    event_id: EventId,
+    bytes: EventStorageBytes,
+}
+struct PreparedSessionPublication {
+    events: Vec<PreparedSessionEvent>,
+}
+enum SessionCandidateGraph {
+    Unloaded,
+    Loaded(crate::EventGraph),
 }
 
 impl VaultEventSession {
@@ -57,67 +113,156 @@ impl VaultEventSession {
         Ok(self.signing.actor_id()?)
     }
 
-    pub fn set_heads_from_graph(&mut self) -> VaultResult<()> {
-        let graph = self.store.load_graph(&self.store_id)?;
-        self.heads = graph
-            .heads()
-            .into_iter()
-            .map(|id| id.as_str().to_owned())
-            .collect();
-        Ok(())
+    #[expect(
+        clippy::result_large_err,
+        reason = "rejections retain the owned session so callers can recover it"
+    )]
+    pub fn set_heads_from_graph(mut self) -> Result<Self, VaultEventSessionRejection> {
+        let graph = match self.store.load_graph(&self.store_id) {
+            Ok(graph) => graph,
+            Err(cause) => {
+                return Err(VaultEventSessionRejection {
+                    session: self,
+                    cause: cause.into(),
+                });
+            }
+        };
+        self.heads = graph.heads().into_iter().map(|id| id.to_string()).collect();
+        Ok(self)
     }
 
+    #[expect(
+        clippy::result_large_err,
+        reason = "rejections retain the owned session so callers can recover it"
+    )]
     pub fn append_operations(
-        &mut self,
-        operations: Vec<VaultOperation>,
-        created_at: &str,
-        provider_id: Option<&str>,
-    ) -> VaultResult<EventId> {
-        let store_id = StoreId::parse(&self.store_id)?;
-        let actor_id = self.actor_id()?;
-        let key_epoch = EventId::parse(&self.key_epoch)?;
-        let created_at = IsoTimestamp::parse(created_at)?;
-        let parents = ObservedHeads::parse(&self.heads)?.as_parents();
-        let (event, bytes) = AppendEventInput::build(AppendEventInput {
-            store_id: &store_id,
-            actor_id: &actor_id,
-            signing_identity: &self.signing,
-            parents,
-            key_epoch: &key_epoch,
-            created_at: &created_at,
-            operations,
-        })?;
-        let event_id = event.id()?;
-        let (_, status) = self.store.append_event(&event, &self.store_id)?;
-        match status {
-            EventInsertStatus::Quarantined(reason) => {
-                return Err(EventError::LocalAppendQuarantined { event_id, reason }.into());
+        self,
+        input: VaultEventAppend<'_>,
+    ) -> Result<VaultEventAppended, VaultEventSessionRejection> {
+        let prepared: VaultResult<_> = (|| {
+            let store_id = StoreId::parse(&self.store_id)?;
+            let actor_id = self.actor_id()?;
+            let key_epoch = EventId::parse(&self.key_epoch)?;
+            let created_at = IsoTimestamp::parse(input.created_at)?;
+            let (event, bytes) = AppendEventInput::build(AppendEventInput {
+                store_id: &store_id,
+                actor_id: &actor_id,
+                signing_identity: &self.signing,
+                parents: ObservedHeads::parse(&self.heads)?.as_parents(),
+                key_epoch: &key_epoch,
+                created_at: &created_at,
+                operations: input.operations,
+            })?;
+            let event_id = event.id()?;
+            Ok((self.prepare_publication(vec![(event, bytes)])?, event_id))
+        })();
+        let (prepared, event_id) = match prepared {
+            Ok(prepared) => prepared,
+            Err(cause) => {
+                return Err(VaultEventSessionRejection {
+                    session: self,
+                    cause,
+                });
             }
-            EventInsertStatus::Applied
-            | EventInsertStatus::Pending(_)
-            | EventInsertStatus::Duplicate => {}
+        };
+        Ok(VaultEventAppended {
+            session: self.publish(prepared, input.destination),
+            event_id,
+        })
+    }
+
+    fn prepare_publication(
+        &self,
+        events: Vec<(crate::VaultEvent, EventStorageBytes)>,
+    ) -> VaultResult<PreparedSessionPublication> {
+        let mut candidate = SessionCandidateGraph::Unloaded;
+        let mut prepared = Vec::with_capacity(events.len());
+        for (event, bytes) in events {
+            let event_id = event.id()?;
+            // Existing event IDs are idempotent, even if unrelated stored data is malformed.
+            if matches!(
+                self.store.get_bytes(&event_id),
+                LocalEventBytes::UnknownEvent
+            ) {
+                let graph = match candidate {
+                    SessionCandidateGraph::Unloaded => self.store.load_graph(&self.store_id)?,
+                    SessionCandidateGraph::Loaded(graph) => graph,
+                };
+                let inserted = graph
+                    .insert(crate::EventGraphInsert {
+                        event,
+                        expected_store_id: &self.store_id,
+                    })
+                    .map_err(EventGraphRejection::into_cause)?;
+                if let EventInsertStatus::Quarantined(reason) = inserted.status {
+                    return Err(EventError::LocalAppendQuarantined { event_id, reason }.into());
+                }
+                candidate = SessionCandidateGraph::Loaded(inserted.graph);
+            }
+            prepared.push(PreparedSessionEvent { event_id, bytes });
         }
-        self.heads = vec![event_id.as_str().to_owned()];
-        if let Some(provider) = provider_id {
-            self.store.queue_outbox(provider, event_id.clone(), bytes);
+        Ok(PreparedSessionPublication { events: prepared })
+    }
+    fn publish(
+        mut self,
+        prepared: PreparedSessionPublication,
+        destination: EventPublicationDestination<'_>,
+    ) -> Self {
+        for event in prepared.events {
+            self.heads = vec![event.event_id.to_string()];
+            if let EventPublicationDestination::Provider(provider_id) = destination {
+                self.store = self.store.queue_outbox(crate::LocalOutboxWrite {
+                    provider_id,
+                    event: crate::LocalEventWrite {
+                        event_id: event.event_id.clone(),
+                        bytes: event.bytes.clone(),
+                    },
+                });
+            }
+            self.store = self.store.put_event(crate::LocalEventWrite {
+                event_id: event.event_id,
+                bytes: event.bytes,
+            });
         }
-        Ok(event_id)
+        self
     }
 
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
         expect(
             raw_numeric_public_api,
-            reason = "serialization boundary: accepts canonical signed event payload bytes from remote replicas"
+            reason = "database boundary: admits persisted event bytes before converting them to EventStorageBytes"
         )
     )]
-    pub fn union_remote(&mut self, remote_events: &[(EventId, Vec<u8>)]) -> VaultResult<()> {
+    #[expect(
+        clippy::result_large_err,
+        reason = "rejections retain the owned session so callers can recover it"
+    )]
+    pub fn union_remote(
+        mut self,
+        remote_events: &[(EventId, Vec<u8>)],
+    ) -> Result<Self, VaultEventSessionRejection> {
         let remote_events = remote_events
             .iter()
-            .map(|(event_id, bytes)| (event_id.clone(), EventStorageBytes::from(bytes.clone())))
+            .map(|(id, bytes)| (id.clone(), EventStorageBytes::from(bytes.clone())))
             .collect::<Vec<_>>();
-        self.store.union_remote(&remote_events, &self.store_id)?;
-        self.set_heads_from_graph()
+        match self.store.union_remote(crate::LocalRemoteUnion {
+            remote_events: &remote_events,
+            store_id: &self.store_id,
+        }) {
+            Ok(outcome) => {
+                self.store = outcome.store;
+                self.heads = outcome.heads;
+                Ok(self)
+            }
+            Err(rejected) => {
+                self.store = rejected.store;
+                Err(VaultEventSessionRejection {
+                    session: self,
+                    cause: rejected.cause.into(),
+                })
+            }
+        }
     }
 
     pub fn project(&self) -> VaultResult<VaultProjection> {
@@ -141,32 +286,54 @@ impl VaultEventSession {
         records: &[StoredSecretRecord],
         members_key: &crate::SymmetricKey,
     ) -> VaultResult<Sha256Hex> {
-        let roster = resolve_member_roster(records, members_key)?;
-        let member_records = build_members_records(&roster, members_key)?;
+        let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+            records,
+            members_key,
+        })?;
+        let member_records = VaultMember::build_members_records(BuildMembersRecordsRequest {
+            roster,
+            members_key,
+        })?;
         let json = serde_json::to_string(&member_records)
             .map_err(VaultEpochError::MemberRecordsSerialize)?;
         Ok(Sha256Hex::from_bytes(json.as_bytes()))
     }
 
-    pub fn flush_outbox_to_remote(
-        &mut self,
-        provider_id: &str,
-        remote: &mut LocalEventStore,
-    ) -> VaultResult<()> {
-        let pending = self.store.pending_outbox(provider_id);
-        for (event_id, bytes) in pending {
-            if remote.get_bytes(&event_id).is_none() {
-                remote.put_event(event_id.clone(), bytes);
+    #[must_use]
+    pub fn flush_outbox_to_remote(mut self, input: VaultOutboxFlush<'_>) -> VaultOutboxFlushed {
+        let VaultOutboxFlush {
+            provider_id,
+            mut remote,
+        } = input;
+        for (event_id, bytes) in self.store.pending_outbox(provider_id) {
+            if matches!(remote.get_bytes(&event_id), LocalEventBytes::UnknownEvent) {
+                remote = remote.put_event(crate::LocalEventWrite {
+                    event_id: event_id.clone(),
+                    bytes,
+                });
             }
-            self.store.dequeue_outbox(provider_id, &event_id);
+            self.store = self
+                .store
+                .dequeue_outbox(crate::LocalOutboxRemoval {
+                    provider_id,
+                    event_id: &event_id,
+                })
+                .store;
         }
-        Ok(())
+        VaultOutboxFlushed {
+            session: self,
+            remote,
+        }
     }
 
+    #[expect(
+        clippy::result_large_err,
+        reason = "rejections retain the owned session so callers can recover it"
+    )]
     pub fn rotate_security_epoch(
-        &mut self,
+        mut self,
         input: VaultSecurityEpochRotationInput<'_>,
-    ) -> VaultResult<(String, String)> {
+    ) -> Result<VaultEpochRotated<'_>, VaultEventSessionRejection> {
         let VaultSecurityEpochRotationInput {
             trigger,
             new_keys,
@@ -176,27 +343,59 @@ impl VaultEventSession {
             rotated_meta_records,
             rewrapped_password_entries,
             created_at,
-            provider_id,
+            destination,
         } = input;
-        let secrets =
-            SecretEpochReencryption::new(user_records, old_secrets_key, &new_keys.secrets_key)
-                .reencrypt()?;
-        let members_checkpoint_hash =
-            Self::members_checkpoint_hash(members_records, &new_keys.members_key)?;
-        let checkpoint = VaultOperation::EpochCheckpoint {
-            secrets,
-            members_checkpoint_hash,
-            rotated_meta_records: EpochMetadataState::Replace(rotated_meta_records),
-            password_entries: EpochPasswordState::Replace(rewrapped_password_entries),
+        let prepared: VaultResult<_> = (|| {
+            let secrets =
+                SecretEpochReencryption::new(user_records, old_secrets_key, &new_keys.secrets_key)
+                    .reencrypt()?;
+            let members_checkpoint_hash =
+                Self::members_checkpoint_hash(members_records, &new_keys.members_key)?;
+            let checkpoint = VaultOperation::EpochCheckpoint {
+                secrets,
+                members_checkpoint_hash,
+                rotated_meta_records: EpochMetadataState::Replace(rotated_meta_records),
+                password_entries: EpochPasswordState::Replace(rewrapped_password_entries),
+            };
+            let store_id = StoreId::parse(&self.store_id)?;
+            let actor_id = self.actor_id()?;
+            let key_epoch = EventId::parse(&self.key_epoch)?;
+            let created_at = IsoTimestamp::parse(created_at)?;
+            let first = AppendEventInput::build(AppendEventInput {
+                store_id: &store_id,
+                actor_id: &actor_id,
+                signing_identity: &self.signing,
+                parents: ObservedHeads::parse(&self.heads)?.as_parents(),
+                key_epoch: &key_epoch,
+                created_at: &created_at,
+                operations: vec![trigger],
+            })?;
+            let trigger_id = first.0.id()?;
+            let second = AppendEventInput::build(AppendEventInput {
+                store_id: &store_id,
+                actor_id: &actor_id,
+                signing_identity: &self.signing,
+                parents: vec![trigger_id.clone()],
+                key_epoch: &trigger_id,
+                created_at: &created_at,
+                operations: vec![checkpoint],
+            })?;
+            Ok((self.prepare_publication(vec![first, second])?, trigger_id))
+        })();
+        let (prepared, trigger_id) = match prepared {
+            Ok(prepared) => prepared,
+            Err(cause) => {
+                return Err(VaultEventSessionRejection {
+                    session: self,
+                    cause,
+                });
+            }
         };
-        let mut staged = self.clone();
-        let trigger_id = staged.append_operations(vec![trigger], created_at, provider_id)?;
-        trigger_id.as_str().clone_into(&mut staged.key_epoch);
-        staged.append_operations(vec![checkpoint], created_at, provider_id)?;
-        *self = staged;
-        Ok((
-            new_keys.secrets_key.as_str().to_owned(),
-            new_keys.members_key.as_str().to_owned(),
-        ))
+        self = self.publish(prepared, destination);
+        self.key_epoch = trigger_id.to_string();
+        Ok(VaultEpochRotated {
+            session: self,
+            keys: new_keys,
+        })
     }
 }

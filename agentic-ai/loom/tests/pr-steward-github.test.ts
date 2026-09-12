@@ -42,7 +42,12 @@ describe('assigned PR GitHub reader', () => {
     const command = new FixtureCommand({
       result: {
         kind: PrStewardCommandResultKind.Success,
-        stdout: JSON.stringify({ head: { sha: HEAD }, html_url: URL }),
+        stdout: JSON.stringify({
+          head: { sha: HEAD },
+          html_url: URL,
+          state: 'open',
+          merged: false,
+        }),
       },
     });
     const reader = new PrStewardGithubPrReader({ command });
@@ -124,7 +129,12 @@ describe('assigned PR GitHub reader', () => {
       command: new FixtureCommand({
         result: {
           kind: PrStewardCommandResultKind.Success,
-          stdout: JSON.stringify({ head: { sha: HEAD }, html_url: URL }),
+          stdout: JSON.stringify({
+            head: { sha: HEAD },
+            html_url: URL,
+            state: 'open',
+            merged: false,
+          }),
         },
       }),
     });

@@ -4,6 +4,15 @@
 //! their local encrypted share inside Rust and return a signed response that is
 //! session-bound and encrypted to the requester.
 
+use crate::LoadedVaultUnlockRequest;
+use crate::NookDatabase;
+use crate::SentinelDbLoadSentinelGenesisShareDelivery;
+use crate::SentinelDbSaveSentinelGenesisShareDelivery;
+use crate::manager::session::VaultKeyMaterial;
+use crate::storage::indexed_db::{SentinelFinalizationJournal, StoredSentinelShareDelivery};
+use nook_core::DeviceId;
+#[cfg(test)]
+use nook_core::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 use nook_core::{
     MultiDeviceError, SentinelConfiguration, SentinelGenesisPhase, SentinelUnlockSigning, StoreId,
     SymmetricKey, VaultMetaState, VaultType,
@@ -15,13 +24,12 @@ mod genesis_finalization;
 mod sentinel_policy;
 mod unlock_finalization;
 
+pub use delivery::NookSentinelStoredDeliveriesRequest;
+
 use super::{CeremonyState, NookVaultManager, VaultCryptoState, VaultNameState};
 use crate::NookError;
 use crate::conversion::LoadedVault;
-use crate::storage::indexed_db::{
-    load_sentinel_genesis_finalization_pending, load_sentinel_genesis_share_delivery,
-    save_sentinel_genesis_share_delivery,
-};
+
 use crate::{NookSentinelGenesisStatus, NookSentinelUnlockSessionStatus};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsError;
@@ -42,8 +50,10 @@ impl NookVaultManager {
         &mut self,
         mut args: nook_core::StartSentinelGenesisArgs,
     ) -> Result<NookSentinelGenesisStatus, JsError> {
-        let pending = load_sentinel_genesis_finalization_pending().await;
-        if self.observe_sentinel_genesis_journal(pending)?.is_some() {
+        let pending = NookDatabase::load_sentinel_genesis_finalization_pending().await;
+        if let SentinelFinalizationJournal::Pending(_) =
+            self.observe_sentinel_genesis_journal(pending)?
+        {
             return Err(JsError::new(
                 "A finalized Sentinel setup is awaiting durable completion; retry finalization first.",
             ));
@@ -188,7 +198,7 @@ impl NookVaultManager {
         self.sentinel_genesis_phase = self
             .sentinel_genesis_phase
             .complete_delivery()
-            .ok_or_else(|| JsError::new("Sentinel share delivery is not awaiting completion."))?;
+            .map_err(|error| JsError::new(&error.to_string()))?;
         Ok(self.sentinel_genesis_phase)
     }
 
@@ -213,7 +223,7 @@ impl NookVaultManager {
             &identity,
         )?;
         if records.iter().any(|record| {
-            record.key.as_str() == nook_core::sentinel_share_record_key(identity.device_id())
+            record.key.as_str() == DeviceId::sentinel_share_record_key(identity.device_id())
         }) {
             let request = session.request();
             let own_response = signing.respond_to_sentinel_unlock_request(
@@ -264,12 +274,19 @@ impl NookVaultManager {
             }) {
             participant.signing_public_key.clone()
         } else {
-            let stored_json = load_sentinel_genesis_share_delivery(
-                request.store_id.as_str(),
-                identity.device_id().as_str(),
+            let stored_json = match NookDatabase::load_sentinel_genesis_share_delivery(
+                SentinelDbLoadSentinelGenesisShareDelivery {
+                    store_id: request.store_id.as_str(),
+                    device_id: identity.device_id().as_str(),
+                },
             )
             .await?
-            .ok_or(MultiDeviceError::InvalidSentinelUnlockPayload)?;
+            {
+                StoredSentinelShareDelivery::Delivered(raw) => raw,
+                StoredSentinelShareDelivery::NotDelivered => {
+                    return Err(MultiDeviceError::InvalidSentinelUnlockPayload.into());
+                }
+            };
             let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&stored_json)
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
             stored
@@ -357,10 +374,12 @@ impl NookVaultManager {
         };
         let stored_json = serde_json::to_string(&stored)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
-        save_sentinel_genesis_share_delivery(
-            delivery.store_id.as_str(),
-            identity.device_id().as_str(),
-            &stored_json,
+        NookDatabase::save_sentinel_genesis_share_delivery(
+            SentinelDbSaveSentinelGenesisShareDelivery {
+                store_id: delivery.store_id.as_str(),
+                device_id: identity.device_id().as_str(),
+                delivery_json: &stored_json,
+            },
         )
         .await?;
 
@@ -383,7 +402,7 @@ impl NookVaultManager {
             .architecture()
             .unwrap_or_else(|_| self.vault.architecture.clone());
         if architecture.vault_type == VaultType::Sentinel {
-            if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
+            if matches!(self.vault.key_material(), VaultKeyMaterial::Unavailable) {
                 return Err(MultiDeviceError::SentinelCeremonyRequired.into());
             }
             // Session already holds reconstructed keys — hydrate records without
@@ -400,7 +419,7 @@ impl NookVaultManager {
                 members_key,
             });
         }
-        LoadedVault::unlock(content, identity)
+        LoadedVault::unlock(LoadedVaultUnlockRequest { content, identity })
     }
 
     /// Hydrate architecture + encrypted share meta without vault keys so the
@@ -416,7 +435,7 @@ impl NookVaultManager {
         self.application
             .validate_session_access(metadata.architecture.vault_type)?;
         let mut architecture = metadata.architecture;
-        if let Some(policy) = Self::sentinel_policy_from_shares(&meta)? {
+        if let SentinelConfiguration::Enabled(policy) = Self::sentinel_policy_from_shares(&meta)? {
             architecture.vault_type = VaultType::Sentinel;
             architecture.sentinel = SentinelConfiguration::Enabled(policy);
         }
@@ -478,7 +497,13 @@ mod tests {
     fn invalid_share_version_preserves_ceremony_session() -> anyhow::Result<()> {
         let keys = nook_core::VaultKeys::generate()?;
         let participants = [DeviceIdentity::generate()?, DeviceIdentity::generate()?];
-        let records = nook_core::create_sentinel_share_records(&keys, &participants, 2.into())?;
+        let records = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &participants,
+                threshold: 2.into(),
+            },
+        )?;
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             nook_core::SentinelPolicy {
@@ -588,10 +613,10 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn architecture_rejects_duplicate_or_mismatched_share_metadata() -> anyhow::Result<()> {
-        let duplicate = |second: nook_core::SentinelShareEnvelope| {
+        let duplicate = |second: nook_core::SentinelShareEnvelope| -> anyhow::Result<()> {
             let mut manager = NookVaultManager::new();
             manager.vault.meta.sentinel_shares.insert(
-                DeviceId::parse("0123456789abcdef").expect("valid device id"),
+                DeviceId::parse("0123456789abcdef")?,
                 nook_core::SentinelShareEnvelope {
                     version: nook_core::SentinelShareVersion::CURRENT,
                     threshold: 2.into(),
@@ -600,11 +625,13 @@ mod tests {
                     ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
                 },
             );
-            manager.vault.meta.sentinel_shares.insert(
-                DeviceId::parse("fedcba9876543210").expect("valid device id"),
-                second,
-            );
-            manager.ensure_sentinel_architecture_from_shares()
+            manager
+                .vault
+                .meta
+                .sentinel_shares
+                .insert(DeviceId::parse("fedcba9876543210")?, second);
+            manager.ensure_sentinel_architecture_from_shares()?;
+            Ok(())
         };
 
         assert!(
@@ -635,7 +662,13 @@ mod tests {
         store_id: &'static str,
     ) -> anyhow::Result<String> {
         let participants = [DeviceIdentity::generate()?, DeviceIdentity::generate()?];
-        let records = nook_core::create_sentinel_share_records(keys, &participants, 2.into())?;
+        let records = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys,
+                participants: &participants,
+                threshold: 2.into(),
+            },
+        )?;
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             nook_core::SentinelPolicy {
@@ -713,8 +746,8 @@ mod tests {
                 if message == MultiDeviceError::SentinelCeremonyRequired.to_string()
         ));
 
-        manager.vault.secrets_key = keys.secrets_key.to_string();
-        manager.vault.members_key = keys.members_key.to_string();
+        manager.vault.secrets_key = keys.secrets_key.as_str().to_owned();
+        manager.vault.members_key = keys.members_key.as_str().to_owned();
         let loaded = manager.load_stored_vault_or_sentinel_ceremony(&yaml, &identity)?;
         assert_eq!(loaded.secrets_key, keys.secrets_key);
         assert_eq!(loaded.members_key, keys.members_key);

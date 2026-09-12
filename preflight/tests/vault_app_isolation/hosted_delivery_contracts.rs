@@ -1,10 +1,17 @@
 use super::*;
 use anyhow::Context;
 
+#[path = "hosted_delivery_contracts/workflow_runtime_contract.rs"]
+mod workflow_runtime_contract;
+use workflow_runtime_contract::WorkflowRuntimeContract;
+
 #[test]
 fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::Result<()> {
-    let root = repository_root();
-    assert_workflow_runtime_contract(&root);
+    let root = RepositoryFixture::repository_root();
+    WorkflowRuntimeContract {
+        root: root.as_ref(),
+    }
+    .assert_contract();
     assert_docker_setup_contract(&root);
     assert_pr_workflow_contract(&root)?;
     assert_artifact_backed_e2e_contract(&root)?;
@@ -12,119 +19,17 @@ fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::
     Ok(())
 }
 
-fn assert_workflow_runtime_contract(root: &Path) {
-    for workflow in [
-        ".github/workflows/pr.yml",
-        ".github/workflows/main.yml",
-        ".github/workflows/release.yml",
-    ] {
-        let content = read(root, workflow);
-        for run_scoped_image in [
-            "DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}",
-            "DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
-        ] {
-            assert!(
-                content.contains(run_scoped_image),
-                "{workflow} must isolate its loaded runtime image: {run_scoped_image}"
-            );
-        }
-    }
-    let pr = read(root, ".github/workflows/pr.yml");
-    let main = read(root, ".github/workflows/main.yml");
-    let release = read(root, ".github/workflows/release.yml");
-    let ecosystem = read(root, ".github/workflows/rust-ecosystem-checks.yml");
-    let ecosystem_entry = read(root, ".github/workflows/rust-ecosystem.yml");
-    assert!(
-        pr.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'")
-            && release.contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
-            && release.contains("runs-on: nook-k0s-container")
-            && pr
-                .matches("github.event.pull_request.head.repo.full_name == github.repository")
-                .count()
-                >= 3
-            && ecosystem
-                .matches("github.event.pull_request.head.repo.full_name == github.repository")
-                .count()
-                == 5
-            && ecosystem.matches("github.event_name == 'schedule'").count() == 5
-            && ecosystem
-                .matches("github.event_name == 'workflow_dispatch'")
-                .count()
-                == 5
-            && ecosystem_entry.contains("github.event_name == 'schedule'")
-            && ecosystem_entry.contains("github.event_name == 'workflow_dispatch'")
-            && ecosystem_entry
-                .contains("github.event.pull_request.user.login != 'dependabot[bot]'"),
-        "trusted PR and release jobs must select ARC while forks retain hosted isolation"
-    );
-    assert!(
-        !main.contains("runs-on: ubuntu-latest")
-            && main
-                .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
-                .count()
-                >= 5
-            && main.matches("runs-on: nook-k0s-container").count() >= 3
-            && main.contains("name: Portable WASM cache publication proof")
-            && main.contains("bash .github/scripts/verify-wasm-gha-cache.sh"),
-        "Main build, browser, deployment, and portable cache-proof jobs must all use ARC"
-    );
-
-    for workflow in [
-        ".github/workflows/repository-policy.yml",
-        ".github/workflows/hive.yml",
-        ".github/workflows/web-research.yml",
-    ] {
-        let source = read(root, workflow);
-        assert!(
-            source.contains(
-                "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}",
-            ) && !source.contains("isolated-cache-write: \"true\""),
-            "{workflow} must not request PR-isolated cache writes for push or input-free manual events"
-        );
-    }
-    let hive = read(root, ".github/workflows/hive.yml");
-    let research = read(root, ".github/workflows/web-research.yml");
-    let repository_policy = read(root, ".github/workflows/repository-policy.yml");
-    for (workflow, source) in [
-        ("Hive", &hive),
-        ("web research", &research),
-        ("repository policy", &repository_policy),
-    ] {
-        assert!(
-            source.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
-                || source.contains("github.event.pull_request.user.login == 'dependabot[bot]'"),
-            "{workflow} must preserve the Dependabot trust boundary"
-        );
-    }
-    assert!(
-        research.contains("validate-untrusted:")
-            && research.contains("runs-on: ubuntu-latest")
-            && research.contains("github.event.pull_request.user.login == 'dependabot[bot]'")
-            && research.contains("task web:research:verify")
-            && research.contains("without deployment credentials"),
-        "untrusted research PRs must retain secret-free hosted validation"
-    );
-    assert!(
-        hive.contains("console-untrusted:")
-            && hive.contains("name: Validate untrusted Hive Control Center source")
-            && hive.contains("runs-on: ubuntu-latest")
-            && hive.contains("github.event.pull_request.head.repo.full_name != github.repository")
-            && hive.contains("github.event.pull_request.user.login == 'dependabot[bot]'")
-            && hive.contains("run: task hive:console:verify")
-            && hive.contains("without private credentials"),
-        "untrusted Hive console PRs must retain complete secret-free hosted validation"
-    );
-}
-
+#[expect(
+    clippy::too_many_lines,
+    reason = "one setup contract verifies the complete hosted Docker boundary"
+)]
 fn assert_docker_setup_contract(root: &Path) {
-    let setup = read(root, ".github/actions/nook-docker-setup/action.yml");
-    let pr = read(root, ".github/workflows/pr.yml");
-    let arc_values = read(root, "infra/k0s/manifests/arc/runner-scale-set-values.yaml");
-    let container_values = read(
-        root,
-        "infra/k0s/manifests/arc/container-runner-scale-set-values.yaml",
-    );
-    let container_hook = read(root, "infra/k0s/manifests/arc/container-hook.yaml");
+    let setup = (root).read(".github/actions/nook-docker-setup/action.yml");
+    let pr = (root).read(".github/workflows/pr.yml");
+    let arc_values = (root).read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
+    let container_values =
+        (root).read("infra/k0s/manifests/arc/container-runner-scale-set-values.yaml");
+    let container_hook = (root).read("infra/k0s/manifests/arc/container-hook.yaml");
     for required in [
         "docker/setup-buildx-action@v4",
         "Preload hosted BuildKit from Zot",
@@ -228,17 +133,17 @@ fn assert_docker_setup_contract(root: &Path) {
 }
 
 fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
-    let pr = read(root, ".github/workflows/pr.yml");
+    let pr = (root).read(".github/workflows/pr.yml");
     for required in [
         "name: Native Rust verification",
         "name: WASM build and artifact",
         "name: WASM Node tests",
         "name: Web verification",
         "name: Headless UI demo",
-        "name: Authentication-sensitive extension e2e",
+        "name: Extension e2e",
         "name: Verify and preview",
         "always() &&",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]",
+        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]",
         "name: Enforce required verification results",
         "NATIVE_RESULT: ${{ needs.rust.result }}",
         "WASM_RESULT: ${{ needs.wasm.result }}",
@@ -247,18 +152,19 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "UI_DEMOS_ENABLED: ${{ needs.validation-request.outputs.ui-demos-enabled }}",
         "UI_DEMO_REQUIRED: ${{ needs.verify.outputs.ui-demo-required }}",
         "UI_DEMO_RESULT: ${{ needs.ui-demo.result }}",
-        "AUTH_SENSITIVE_E2E_RESULT: ${{ needs.auth-sensitive-extension-e2e.result }}",
+        "EXTENSION_E2E_RESULT: ${{ needs.extension-e2e.result }}",
         "Preserve the secret-free hosted validation boundary",
         "name: Rust coverage report",
         "uses: ./.github/workflows/pr-coverage.yml",
-        "types: [labeled]",
+        "ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}",
+        "workflow_call:",
         "name: Validate explicit CI request",
         "name: Reject unsupported label events",
         "ui-demos-enabled: ${{ 'false' }}",
-        "github.event.label.name == 'ci:validate'",
+        "inputs.validation_requested",
         "name: Full browser e2e (main fix)",
-        "name: Full extension e2e (main fix)",
-        "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')",
+        "name: Extension e2e",
+        "inputs.full_e2e_requested",
         "runs-on: nook-k0s-container",
         "nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
         "name: pr-wasm-${{ github.run_id }}",
@@ -287,7 +193,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
         "needs: [validation-request, wasm]",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]",
+        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]",
         "name: Download built WASM handoff",
         "name: Upload preview dist handoff",
         "NOOK_HOST_PAGES_DEPLOY",
@@ -295,11 +201,12 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     ] {
         assert!(
             pr.contains(required),
-            "PR CI must keep its normal split gate and label-selected Main-fix e2e contract: {required}"
+            "PR CI must keep its normal split gate and legacy label-selected feature e2e contract: {required}"
         );
     }
+    assert!(pr.contains("source_sha:"));
 
-    let coverage = read(root, ".github/workflows/pr-coverage.yml");
+    let coverage = (root).read(".github/workflows/pr-coverage.yml");
     for required in [
         "workflow_call:",
         "name: Rust coverage report",
@@ -329,8 +236,8 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     let wasm_job = section(&pr, "  wasm:\n", "  wasm-node-test:\n");
     let wasm_node_job = section(&pr, "  wasm-node-test:\n", "  verify:\n");
     let verify_job = section(&pr, "  verify:\n", "  ui-demo:\n");
-    let ui_demo_job = section(&pr, "  ui-demo:\n", "  auth-sensitive-extension-e2e:\n");
-    let auth_sensitive_e2e_job = section(&pr, "  auth-sensitive-extension-e2e:\n", "  preview:\n");
+    let ui_demo_job = section(&pr, "  ui-demo:\n", "  extension-e2e:\n");
+    let auth_sensitive_e2e_job = section(&pr, "  extension-e2e:\n", "  preview:\n");
     let preview_job = section(&pr, "  preview:\n", "  coverage:\n");
     assert!(
         wasm_job.contains("task ci:pr:wasm")
@@ -381,8 +288,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && ui_demo_job
                 .contains("github.event.pull_request.head.repo.full_name == github.repository")
             && ui_demo_job.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
-            && ui_demo_job.contains("github.event.label.name == 'ci:validate'")
-            && ui_demo_job.contains("github.event.label.name == 'ci:full-e2e'")
+            && ui_demo_job.contains("inputs.validation_requested")
             && ui_demo_job.contains("needs: [validation-request, verify]")
             && ui_demo_job.contains("runs-on: nook-k0s-container")
             && ui_demo_job
@@ -401,8 +307,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
                 .contains("github.event.pull_request.head.repo.full_name == github.repository")
             && auth_sensitive_e2e_job
                 .contains("github.event.pull_request.user.login != 'dependabot[bot]'")
-            && auth_sensitive_e2e_job
-                .contains("needs: [validation-request, verify, wasm-node-test]")
+            && auth_sensitive_e2e_job.contains("needs: [validation-request, verify]")
             && auth_sensitive_e2e_job.contains("runs-on: nook-k0s-container")
             && auth_sensitive_e2e_job
                 .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
@@ -412,14 +317,14 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         preview_job
-            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]")
+            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]")
             && preview_job.contains("UI_DEMOS_ENABLED")
             && preview_job.contains("UI_DEMO_REQUIRED")
             && preview_job.contains("UI_DEMO_RESULT")
             && preview_job.contains("Headless UI demo=$UI_DEMO_RESULT")
             && preview_job.contains("[ \"$UI_DEMO_RESULT\" != \"success\" ]")
             && preview_job.contains("AUTH_SENSITIVE_E2E_REQUIRED")
-            && preview_job.contains("[ \"$AUTH_SENSITIVE_E2E_RESULT\" != \"success\" ]")
+            && preview_job.contains("[ \"$EXTENSION_E2E_RESULT\" != \"success\" ]")
             && !preview_job.contains("UI_DEMO_RESULT=success"),
         "PR readiness must propagate required authentication e2e and enabled demo failures without rewriting skipped results"
     );
@@ -432,16 +337,24 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "PR close cancellation must not create a skipped PR source run"
     );
 
-    let linear_ui_demo = read(root, ".github/workflows/linear-ui-demo.yml");
+    let linear_ui_demo = (root).read(".github/workflows/linear-ui-demo.yml");
+    let ci = (root).read(".github/workflows/ci.yml");
     assert!(
-        pr.contains(
-            "group: pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}"
-        )
-            && linear_ui_demo.contains(
-                "format('pr-{0}-{1}', github.event.pull_request.number, github.event.pull_request.head.sha)"
+        ci.contains("format('pr-{0}', github.event.pull_request.number)")
+            && ci.contains("types: [opened, synchronize, reopened, labeled, edited, closed]")
+            && linear_ui_demo.contains("group: linear-ui-demo-${{ github.run_id }}"),
+        "central CI must own PR cancellation while trusted publishers stay independent"
+    );
+    assert!(
+        ci.contains("name: Dev promotion readiness")
+            && ci.contains("needs: [scope, policy, pr, hive, research]")
+            && ci.contains("github.event.pull_request.head.ref == 'dev'")
+            && ci.contains(
+                "github.event.action == 'labeled' && github.event.label.name == 'ci:full-e2e'"
             )
-            && linear_ui_demo.contains("cancel-in-progress: true"),
-        "PR validation must isolate replacement heads while the trusted close workflow cancels the current exact-head group"
+            && ci.contains("'dev-pr'")
+            && ci.contains("cancel-in-progress: >-"),
+        "dev promotion must expose one stable exact-head gate with serialized native concurrency"
     );
     assert!(
         linear_ui_demo.contains(
@@ -452,15 +365,15 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "trusted UI demo artifact publication must stay disabled while close transitions remain active"
     );
 
-    let trusted_handoff = read(root, ".github/workflows/pr-validation-handoff.yml");
+    let trusted_handoff = (root).read(".github/workflows/pr-validation-handoff.yml");
     for required in [
         "name: PR validation handoff",
         "github.event.workflow_run.conclusion == 'success'",
-        "workflowPath !== '.github/workflows/pr.yml'",
+        "workflowPath !== '.github/workflows/ci.yml'",
         "run.path?.replace(/@[^@]+$/, '')",
-        "ref: ${{ steps.source.outputs.base-sha }}",
-        "git merge-tree --write-tree HEAD \"$HEAD_SHA\"",
-        "git read-tree --reset -u \"$merge_tree\"",
+        "ref: ${{ steps.source.outputs.head-sha }}",
+        "core.setOutput('head-sha', pullRequest.head.sha)",
+        "name: Checkout validated PR head",
         "'Native Rust verification'",
         "'WASM build and artifact'",
         "'WASM Node tests'",
@@ -490,6 +403,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "trusted validation promotion must derive PR provenance from the immutable workflow-run event snapshot"
     );
     assert!(
+        !trusted_handoff.contains("pullRequest.head.sha !== run.head_sha"),
+        "trusted handoff must not reject a PR head because workflow_run.head_sha is synthetic"
+    );
+    assert!(
         trusted_handoff.contains("filter: 'all'")
             && !trusted_handoff.contains("filter: 'latest'")
             && trusted_handoff.contains("const currentAttempt = run.run_attempt")
@@ -514,14 +431,13 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     let preview_job = section(&pr, "  preview:\n", "  coverage:\n");
     assert!(
-        verify_job.contains("github.event.label.name == 'ci:validate'")
-            && verify_job.contains("github.event.label.name == 'ci:full-e2e'")
+        verify_job.contains("inputs.validation_requested")
             && verify_job.contains("needs: [validation-request, wasm]")
             && verify_job.contains("name: Download built WASM handoff")
             && verify_job.contains("name: Confirm WASM handoff shape")
             && verify_job.contains("name: Upload preview dist handoff")
             && verify_job.contains(
-                "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') ||\n          (needs.validation-request.outputs.ui-demos-enabled == 'true' &&\n          steps.ui-demo-contract.outputs.required == 'true')"
+                "inputs.full_e2e_requested ||\n          (needs.validation-request.outputs.ui-demos-enabled == 'true' &&\n          steps.ui-demo-contract.outputs.required == 'true')"
             )
             && verify_job.contains("steps.auth-sensitive-e2e-contract.outputs.required == 'true'")
             && verify_job.contains("actions/download-artifact@v8")
@@ -537,10 +453,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         preview_job
-            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]")
+            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, extension-e2e]")
             && preview_job.contains("always() &&")
             && preview_job.contains("name: Enforce required verification results")
-            && preview_job.contains("AUTH_SENSITIVE_E2E_RESULT")
+            && preview_job.contains("EXTENSION_E2E_RESULT")
             && preview_job.contains("NOOK_HOST_PAGES_DEPLOY: \"1\"")
             && preview_job.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh")
             && preview_job.contains(
@@ -551,7 +467,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "PR preview must deploy only after required Native Rust, WASM, web, Node, authentication e2e, and enabled UI demo verification succeeds"
     );
     let coverage_job = section(&pr, "  coverage:\n", "  full-e2e-shard:\n");
-    let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");
+    let coverage_workflow = (root).read(".github/workflows/pr-coverage.yml");
     assert!(
         coverage_job.contains("needs: rust")
             && coverage_job.contains("uses: ./.github/workflows/pr-coverage.yml")
@@ -568,7 +484,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     assert!(
         full_e2e_job.contains("github.event.pull_request.head.repo.full_name == github.repository")
             && full_e2e_job.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
-            && full_e2e_job.contains("needs: [verify, wasm-node-test]")
+            && full_e2e_job.contains("needs: verify")
             && full_e2e_job.contains("runs-on: nook-k0s-container")
             && full_e2e_job
                 .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
@@ -579,15 +495,16 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "Main-fix web e2e must consume the exact browser image without rebuilding Rust"
     );
     let extension_e2e_job = pr
-        .split_once("  full-extension-e2e:\n")
-        .context("PR workflow must define full extension E2E")?
-        .1;
+        .split_once("  extension-e2e:\n")
+        .and_then(|(_, tail)| tail.split_once("  preview:\n"))
+        .context("PR workflow must define extension E2E")?
+        .0;
     assert!(
         extension_e2e_job
             .contains("github.event.pull_request.head.repo.full_name == github.repository")
             && extension_e2e_job
                 .contains("github.event.pull_request.user.login != 'dependabot[bot]'")
-            && extension_e2e_job.contains("needs: [verify, wasm-node-test]")
+            && extension_e2e_job.contains("needs: [validation-request, verify]")
             && extension_e2e_job.contains("runs-on: nook-k0s-container")
             && extension_e2e_job
                 .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
@@ -618,12 +535,12 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
 }
 
 fn assert_preflight_reporter_contract(root: &Path) {
-    let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
+    let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
     assert!(
         ci_tasks.contains("PREFLIGHT_OUTPUT_DIR: '{{.CI_ARTIFACT_DIR}}/tools'"),
         "native PR CI must export the preflight reporter with its coverage artifact"
     );
-    let preflight_dockerfile = read(root, "preflight/Dockerfile");
+    let preflight_dockerfile = (root).read("preflight/Dockerfile");
     for required in [
         "FROM rust-base AS chef",
         "FROM rust-base AS deps",
@@ -649,7 +566,7 @@ fn assert_preflight_reporter_contract(root: &Path) {
             && !preflight_dockerfile.contains("FROM rust@"),
         "preflight must reuse rust-base instead of installing a floating Rust tag"
     );
-    let preflight_bake = read(root, "preflight/docker-bake.hcl");
+    let preflight_bake = (root).read("preflight/docker-bake.hcl");
     for required in [
         "target \"preflight-test\"",
         "target \"preflight-cli-export\"",
@@ -662,7 +579,7 @@ fn assert_preflight_reporter_contract(root: &Path) {
             "preflight Bake wiring is missing: {required}"
         );
     }
-    let preflight_tasks = read(root, "preflight/Taskfile.yml");
+    let preflight_tasks = (root).read("preflight/Taskfile.yml");
     for required in [
         "preflight:export:",
         "preflight-cli-export",
@@ -689,9 +606,13 @@ fn assert_preflight_reporter_contract(root: &Path) {
     );
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one E2E contract verifies the complete artifact-backed workflow"
+)]
 fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
-    let pr = read(root, ".github/workflows/pr.yml");
-    let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
+    let pr = (root).read(".github/workflows/pr.yml");
+    let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
     let rust_host = section(&ci_tasks, "  _ci:pr:rust:host:\n", "  ci:pr:wasm:\n");
     let preflight = rust_host
         .find("task: preflight")
@@ -732,7 +653,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     let verify_job = section(&pr, "  verify:\n", "  preview:\n");
     let preview_job = section(&pr, "  preview:\n", "  coverage:\n");
     let coverage_job = section(&pr, "  coverage:\n", "  full-e2e:\n");
-    let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");
+    let coverage_workflow = (root).read(".github/workflows/pr-coverage.yml");
     assert!(
         !verify_job.contains("Download Rust coverage handoff")
             && !verify_job.contains("Waiting for native coverage artifact")
@@ -767,7 +688,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
             && deploy.contains("NOOK_HOST_PAGES_DEPLOY: \"1\""),
         "PR preview deploy must invoke the host Pages script that owns concurrent uploads"
     );
-    let deploy_script = read(root, ".github/scripts/ci-pr-deploy-and-verify-previews.sh");
+    let deploy_script = (root).read(".github/scripts/ci-pr-deploy-and-verify-previews.sh");
     assert!(
         deploy_script.contains("deploy_pages()")
             && deploy_script.contains("NOOK_HOST_PAGES_DEPLOY")
@@ -782,7 +703,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
             && deploy_script.contains("wait_for_deploy"),
         "independent Cloudflare preview uploads must prewarm pinned Wrangler, run concurrently, and all succeed before alias verification"
     );
-    let host_deploy = read(root, ".github/scripts/ci-pr-host-pages-deploy.sh");
+    let host_deploy = (root).read(".github/scripts/ci-pr-host-pages-deploy.sh");
     assert!(
         host_deploy.contains("npx --yes \"wrangler@${wrangler_version}\"")
             && host_deploy.contains("NOOK_WRANGLER_VERSION:-4.114.0")
@@ -794,7 +715,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
             && !ci_tasks.contains("bun add wrangler"),
         "preview deploys must use the dependency-locked Wrangler binary instead of installing it at runtime"
     );
-    let e2e_pr = read(root, ".github/workflows/e2e-pr.yml");
+    let e2e_pr = (root).read(".github/workflows/e2e-pr.yml");
     assert!(
         e2e_pr.contains("cache-write: \"false\"")
             && e2e_pr.contains(
@@ -827,7 +748,7 @@ pub(super) fn assert_main_web_e2e_core_contract(ci: &str) {
 }
 
 pub(super) fn assert_e2e_build_if_needed_contract(root: &Path) {
-    let e2e_builder = read(root, ".github/scripts/e2e-build-if-needed.sh");
+    let e2e_builder = (root).read(".github/scripts/e2e-build-if-needed.sh");
     assert_eq!(
         e2e_builder.matches("bun run build:unified").count(),
         1,
@@ -851,7 +772,7 @@ pub(super) fn assert_e2e_build_if_needed_contract(root: &Path) {
 }
 
 fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> {
-    let release = read(root, ".github/workflows/release.yml");
+    let release = (root).read(".github/workflows/release.yml");
     let release_source = release
         .find("- name: Checkout release source")
         .context("release workflow must check out release source")?;
@@ -882,7 +803,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
             && release.contains("REPO_ROOT=\"$GITHUB_WORKSPACE\""),
         "historical release refs must use current workflow tooling against the immutable source root"
     );
-    let main = read(root, ".github/workflows/main.yml");
+    let main = (root).read(".github/workflows/main.yml");
     let main_ui_demo_job = section(&main, "  ui-demos:\n", "  deploy:\n");
     for required in [
         "\n  rust:\n",
@@ -917,7 +838,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         !root.join(".github/scripts/main-post-web-e2e.sh").exists(),
         "same-runner Main suite coordinator was replaced by multi-job consumers"
     );
-    let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
+    let ci_tasks = (root).read("nook-app/ci/Taskfile.yml");
     let web_ci = section(
         &ci_tasks,
         "  ci:main:web-e2e:ci:\n",
@@ -943,7 +864,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         !root.join(".github/workflows/runner-cleanup.yml").exists(),
         "legacy registered-runner Docker cleanup must not return after ARC migration"
     );
-    let prune_script = read(root, ".github/scripts/docker-prune-stale.sh");
+    let prune_script = (root).read(".github/scripts/docker-prune-stale.sh");
     assert!(
         prune_script.contains("--filter until=168h"),
         "runner cleanup must preserve the recent delivery cache"
@@ -954,8 +875,8 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
 #[test]
 fn release_deploy_trusts_only_exact_actions_workspace_before_git_resolution() -> anyhow::Result<()>
 {
-    let root = repository_root();
-    let release = read(&root, ".github/workflows/release.yml");
+    let root = RepositoryFixture::repository_root();
+    let release = root.read(".github/workflows/release.yml");
     let deploy = release
         .split_once("\n  deploy:\n")
         .context("release workflow must define the deploy job")?

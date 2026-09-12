@@ -34,8 +34,9 @@ impl<'a> OnePasswordArchive<'a> {
             },
         })
     }
-    pub(super) fn check(mut self) -> Result<CheckedOnePasswordArchive<'a>, OnePasswordImportError> {
-        let attributes_json = self.archive.read(OnePasswordEntry::Attributes)?;
+    pub(super) fn check(self) -> Result<CheckedOnePasswordArchive<'a>, OnePasswordImportError> {
+        let read = self.archive.read(OnePasswordEntry::Attributes)?;
+        let attributes_json = read.text;
         let attributes: ExportAttributes = serde_json::from_str(&attributes_json)
             .map_err(OnePasswordImportError::InvalidAttributes)?;
         if attributes.description != "1Password Unencrypted Export" {
@@ -49,7 +50,7 @@ impl<'a> OnePasswordArchive<'a> {
             ));
         }
         Ok(CheckedOnePasswordArchive {
-            archive: self.archive,
+            archive: read.archive,
         })
     }
 }
@@ -61,9 +62,9 @@ pub(super) struct CheckedOnePasswordArchive<'a> {
     archive: BoundedOnePasswordZip<'a>,
 }
 impl CheckedOnePasswordArchive<'_> {
-    pub(super) fn plan(mut self) -> Result<OnePasswordImportPlan, OnePasswordImportError> {
+    pub(super) fn plan(self) -> Result<OnePasswordImportPlan, OnePasswordImportError> {
         let data = self.archive.read(OnePasswordEntry::Data)?;
-        ExportData::parse(&data).map(ExportData::plan)
+        ExportData::parse(&data.text).map(ExportData::plan)
     }
 }
 enum OnePasswordEntry {
@@ -81,8 +82,15 @@ impl OnePasswordEntry {
 struct BoundedOnePasswordZip<'a> {
     archive: ZipArchive<Cursor<&'a [u8]>>,
 }
-impl BoundedOnePasswordZip<'_> {
-    fn read(&mut self, entry: OnePasswordEntry) -> Result<String, OnePasswordImportError> {
+struct ReadOnePasswordEntry<'a> {
+    archive: BoundedOnePasswordZip<'a>,
+    text: String,
+}
+impl<'a> BoundedOnePasswordZip<'a> {
+    fn read(
+        mut self,
+        entry: OnePasswordEntry,
+    ) -> Result<ReadOnePasswordEntry<'a>, OnePasswordImportError> {
         let (name, max_bytes) = entry.specification();
         let file = self.archive.by_name(name).map_err(|error| match error {
             result::ZipError::FileNotFound => OnePasswordImportError::MissingEntry(name),
@@ -106,7 +114,10 @@ impl BoundedOnePasswordZip<'_> {
                 OnePasswordImportError::ArchiveTooLarge
             });
         }
-        Ok(text)
+        Ok(ReadOnePasswordEntry {
+            archive: self,
+            text,
+        })
     }
 }
 

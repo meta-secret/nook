@@ -11,11 +11,35 @@ import {
   CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
   CORTEX_ARTICLE_RESULT_BYTE_LIMIT,
 } from './domain.ts';
+
 import {
   CortexArticleRequestDecodeError,
-  decodeCortexArticleRequest,
+  CortexArticleTransport,
 } from './codec.ts';
-import { executeCortexArticleStructureApplication } from './application.ts';
+
+import { CortexArticleApplication } from './application.ts';
+
+export class CortexArticleActionDecoder {
+  private constructor(private readonly request: string) {}
+
+  static positiveSourceLineSchema() {
+    return {
+      type: 'integer',
+      minimum: 1,
+      maximum: Number.MAX_SAFE_INTEGER,
+    } as const;
+  }
+
+  static from(serialized: string): CortexArticleActionDecoder {
+    return new CortexArticleActionDecoder(serialized);
+  }
+
+  public execute() {
+    const serialized = this.request;
+    return CortexArticleTransport.from(serialized).decodeRequest();
+  }
+}
+
 export const CORTEX_ARTICLE_AUDIT_EXAMPLE = `cortexArticleStructure:
   audit:
     kind: cortex-article-structure-audit-v1
@@ -29,19 +53,14 @@ export const CORTEX_ARTICLE_AUDIT_EXAMPLE = `cortexArticleStructure:
           - kind: paragraph
             line: 3
 `;
-function positiveSourceLineSchema() {
-  return {
-    type: 'integer',
-    minimum: 1,
-    maximum: Number.MAX_SAFE_INTEGER,
-  } as const;
-}
+
 const CORTEX_MARKDOWN_PATH_SCHEMA = {
   type: 'string',
   maxUtf16CodeUnits: CORTEX_ARTICLE_PATH_LIMIT,
   pattern:
     '^\\.cortex/(?!\\.\\.?/)(?!.*/\\.\\.?(?:/|$))(?!.*\\\\)(?!.*[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e-\\u200f\\u2028-\\u202e\\u2066-\\u206f])[^/]+(?:/[^/]+)*\\.md$',
 } as const;
+
 const HEADING_BLOCK_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -56,7 +75,7 @@ const HEADING_BLOCK_SCHEMA = {
       type: 'string',
       enum: [CortexArticleSemanticKind.Heading],
     },
-    line: positiveSourceLineSchema(),
+    line: CortexArticleActionDecoder.positiveSourceLineSchema(),
     text: {
       type: 'string',
       maxUtf16CodeUnits: CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
@@ -65,6 +84,7 @@ const HEADING_BLOCK_SCHEMA = {
     },
   },
 } as const;
+
 const SIMPLE_BLOCK_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -81,9 +101,10 @@ const SIMPLE_BLOCK_SCHEMA = {
         CortexArticleSemanticKind.Table,
       ],
     },
-    line: positiveSourceLineSchema(),
+    line: CortexArticleActionDecoder.positiveSourceLineSchema(),
   },
 } as const;
+
 const ARTICLE_DOCUMENT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -99,6 +120,7 @@ const ARTICLE_DOCUMENT_SCHEMA = {
     },
   },
 } as const;
+
 export const CORTEX_ARTICLE_AUDIT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -122,6 +144,7 @@ export const CORTEX_ARTICLE_AUDIT_SCHEMA = {
     },
   },
 } as const;
+
 const CORTEX_ARTICLE_ACTION = {
   skillId: 'cortex-article-structure',
   family: 'cortexArticleStructure',
@@ -132,15 +155,17 @@ const CORTEX_ARTICLE_ACTION = {
   resolvedExampleYaml: CORTEX_ARTICLE_AUDIT_EXAMPLE,
   inputSchema: CORTEX_ARTICLE_AUDIT_SCHEMA,
 } as const;
+
 export const CORTEX_ARTICLE_ACTION_DEFINITION = Object.freeze(
   CORTEX_ARTICLE_ACTION,
 );
-export function decodeCortexArticleActionPayload(serialized: string) {
-  return decodeCortexArticleRequest(serialized);
-}
-export const executeCortexArticleAction =
-  executeCortexArticleStructureApplication;
+
+export const executeCortexArticleAction = (
+  request: Parameters<typeof CortexArticleApplication.from>[0],
+) => CortexArticleApplication.from(request).execute();
+
 export { CortexArticleRequestDecodeError };
+
 export const CORTEX_ARTICLE_FINDING_CODES = Object.freeze(
   Object.values(CortexArticleFindingCode),
 );

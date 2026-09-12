@@ -164,7 +164,7 @@ impl NookVaultManager {
             }
         }
 
-        let yaml = nook_core::build_secret_yaml_from_form(&SecretFormFields::Login(
+        let yaml = SecretFormFields::build_secret_yaml_from_form(&SecretFormFields::Login(
             nook_core::LoginSecretForm {
                 website_url: request.origin.to_owned(),
                 username: username.as_str().to_owned(),

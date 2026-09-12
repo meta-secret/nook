@@ -6,17 +6,18 @@
 //! Keeper header aliases and ordered custom-field schema.
 use super::super::import_support::CsvHeader;
 use super::KeeperImportError;
+use crate::secrets::import_support::CsvExportColumn;
 use csv::StringRecord;
 use std::{collections, iter};
 #[derive(Clone)]
 pub(super) struct KeeperColumns {
-    pub(super) folder: Option<usize>,
+    pub(super) folder: CsvExportColumn,
     pub(super) title: usize,
     pub(super) login: usize,
     pub(super) password: usize,
     pub(super) website: usize,
     pub(super) notes: usize,
-    pub(super) shared_folder: Option<usize>,
+    pub(super) shared_folder: CsvExportColumn,
     pub(super) custom_fields: Vec<CustomFieldColumn>,
 }
 
@@ -67,13 +68,17 @@ impl<'a> KeeperHeaders<'a> {
             })
             .ok_or(KeeperImportError::MissingColumn(name))
     }
-    fn optional(&self, names: &[&str]) -> Option<usize> {
-        names.iter().find_map(|name| {
+    fn optional(&self, names: &[&str]) -> CsvExportColumn {
+        let column = names.iter().find_map(|name| {
             let expected = CsvHeader::new(name).normalized();
             self.normalized
                 .iter()
                 .position(|header| header == &expected)
-        })
+        });
+        match column {
+            Some(index) => CsvExportColumn::Exported(index),
+            None => CsvExportColumn::NotExported,
+        }
     }
     pub(super) fn admit(self) -> Result<KeeperColumns, KeeperImportError> {
         let folder = self.optional(&["folder"]);
@@ -101,15 +106,18 @@ impl<'a> KeeperHeaders<'a> {
 
         let known = [
             folder,
-            Some(title),
-            Some(login),
-            Some(password),
-            Some(website),
-            Some(notes),
+            CsvExportColumn::Exported(title),
+            CsvExportColumn::Exported(login),
+            CsvExportColumn::Exported(password),
+            CsvExportColumn::Exported(website),
+            CsvExportColumn::Exported(notes),
             shared_folder,
         ]
         .into_iter()
-        .flatten()
+        .filter_map(|column| match column {
+            CsvExportColumn::Exported(index) => Some(index),
+            CsvExportColumn::NotExported => None,
+        })
         .collect::<collections::HashSet<_>>();
 
         Ok(KeeperColumns {
@@ -127,7 +135,7 @@ impl<'a> KeeperHeaders<'a> {
     fn custom_columns(&self, known: &collections::HashSet<usize>) -> Vec<CustomFieldColumn> {
         let mut paired = collections::BTreeMap::<usize, KeeperCustomPairColumns>::new();
         let mut named = Vec::new();
-        let mut blob = None;
+        let mut blob = CsvExportColumn::NotExported;
         let mut trailing = Vec::new();
 
         for (index, header) in self.record.iter().enumerate() {
@@ -138,17 +146,21 @@ impl<'a> KeeperHeaders<'a> {
             if raw.is_empty() {
                 continue;
             }
-            if let Some(pair) = KeeperCustomPairHeader::parse(raw) {
+            if let Ok(pair) = KeeperCustomPairHeader::parse(raw) {
                 let entry = paired.entry(pair.index).or_default();
                 match pair.component {
-                    KeeperCustomPairComponent::Name => entry.name = Some(index),
-                    KeeperCustomPairComponent::Value => entry.value = Some(index),
+                    KeeperCustomPairComponent::Name => {
+                        entry.name = CsvExportColumn::Exported(index);
+                    }
+                    KeeperCustomPairComponent::Value => {
+                        entry.value = CsvExportColumn::Exported(index);
+                    }
                 }
                 continue;
             }
             let normalized_header = CsvHeader::new(raw).normalized();
             if normalized_header == "customfields" {
-                blob = Some(index);
+                blob = CsvExportColumn::Exported(index);
                 continue;
             }
             if raw.starts_with('$') {
@@ -163,7 +175,9 @@ impl<'a> KeeperHeaders<'a> {
 
         let mut custom_fields = Vec::new();
         for (_, pair) in paired {
-            if let (Some(name_index), Some(value_index)) = (pair.name, pair.value) {
+            if let (CsvExportColumn::Exported(name_index), CsvExportColumn::Exported(value_index)) =
+                (pair.name, pair.value)
+            {
                 custom_fields.push(CustomFieldColumn::Paired {
                     name_index,
                     value_index,
@@ -171,7 +185,7 @@ impl<'a> KeeperHeaders<'a> {
             }
         }
         custom_fields.append(&mut named);
-        if let Some(index) = blob {
+        if let CsvExportColumn::Exported(index) = blob {
             custom_fields.push(CustomFieldColumn::Blob { index });
         } else {
             for chunk in trailing.chunks(2) {
@@ -193,34 +207,39 @@ impl<'a> KeeperHeaders<'a> {
 }
 #[derive(Default)]
 struct KeeperCustomPairColumns {
-    name: Option<usize>,
-    value: Option<usize>,
+    name: CsvExportColumn,
+    value: CsvExportColumn,
 }
 enum KeeperCustomPairComponent {
     Name,
     Value,
 }
+struct KeeperCustomHeaderError;
 struct KeeperCustomPairHeader {
     index: usize,
     component: KeeperCustomPairComponent,
 }
 impl KeeperCustomPairHeader {
-    fn parse(header: &str) -> Option<Self> {
+    fn parse(header: &str) -> Result<Self, KeeperCustomHeaderError> {
         let trimmed = header.trim();
         let lower = trimmed.to_ascii_lowercase();
-        let rest = lower.strip_prefix("custom field")?;
+        let rest = lower
+            .strip_prefix("custom field")
+            .ok_or(KeeperCustomHeaderError)?;
         let rest = rest.trim_start();
         let (number, kind) = if let Some(rest) = rest.strip_suffix(" name") {
             (rest.trim(), KeeperCustomPairComponent::Name)
         } else {
-            let rest = rest.strip_suffix(" value")?;
+            let rest = rest.strip_suffix(" value").ok_or(KeeperCustomHeaderError)?;
             (rest.trim(), KeeperCustomPairComponent::Value)
         };
-        let index = number.parse::<usize>().ok()?;
+        let index = number
+            .parse::<usize>()
+            .map_err(|_| KeeperCustomHeaderError)?;
         if index == 0 {
-            return None;
+            return Err(KeeperCustomHeaderError);
         }
-        Some(Self {
+        Ok(Self {
             index,
             component: kind,
         })
@@ -264,9 +283,9 @@ mod tests {
             "Custom Field1 Other",
             "Field1 Name",
         ] {
-            assert!(KeeperCustomPairHeader::parse(header).is_none());
+            assert!(KeeperCustomPairHeader::parse(header).is_err());
         }
-        let Some(pair) = KeeperCustomPairHeader::parse("  CUSTOM FIELD 12 VALUE  ") else {
+        let Ok(pair) = KeeperCustomPairHeader::parse("  CUSTOM FIELD 12 VALUE  ") else {
             panic!("expected value component")
         };
         assert_eq!(pair.index, 12);

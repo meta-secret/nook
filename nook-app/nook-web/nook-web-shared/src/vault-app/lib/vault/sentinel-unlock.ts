@@ -1,343 +1,531 @@
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
+import type { SentinelActionResult } from "./sentinel-genesis";
+import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
+import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
+import {
+  VaultStorageFailure as StorageOperationFailure,
+  VaultStorageFailureKind as StorageOperationFailureKind,
+} from "$lib/runtime/storage-failure";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultType } from "$lib/vault/architecture-model";
 import type { VaultState } from "$lib/vault.svelte";
-import type { NookSecretRecord } from "$lib/nook";
+import { browserLogRuntime } from "$lib/runtime/log";
 import {
-  createLogger,
-  runtimeFailure,
-  type RuntimeFailure,
-} from "$lib/runtime/log";
-import {
-  classify_vault_recovery_error,
   JoinEnrollmentState,
   NookSentinelUnlockSessionStatus,
   ProviderSyncFreshness,
   SentinelVaultUnlockState,
   VaultRecoveryErrorKind,
+  type NookSecretRecord,
   type NookSentinelStoredDeliverySummary as SentinelStoredDeliverySummary,
 } from "$app-wasm";
 
-const log = createLogger("vault-sentinel");
+export enum SentinelCeremonyVisibility {
+  Hidden = "hidden",
+  Visible = "visible",
+}
+
+const log = browserLogRuntime.createLogger("vault-sentinel");
 
 export type {
   NookSentinelStoredDeliverySummary as SentinelStoredDeliverySummary,
   NookSentinelUnlockSessionStatus as SentinelUnlockSessionStatus,
 } from "$app-wasm";
 
-export function inactiveSentinelUnlockSession(): NookSentinelUnlockSessionStatus {
-  return NookSentinelUnlockSessionStatus.inactive();
-}
-
 type UnlockSessionReplacement = {
-  readonly state: VaultState;
   readonly status: NookSentinelUnlockSessionStatus;
 };
 
-function replaceUnlockSession({
-  state,
-  status,
-}: UnlockSessionReplacement): void {
-  const previous = state.sentinelUnlockSession;
-  state.sentinelUnlockSession = status;
-  if (previous !== status) previous.free();
-}
-
-export function isSentinelCeremonyRequiredError(
-  failure: RuntimeFailure,
-): boolean {
-  return (
-    classify_vault_recovery_error(failure.message) ===
-    VaultRecoveryErrorKind.SentinelCeremonyRequired
-  );
-}
-
-export function isSentinelPasswordUnlockForbiddenError(
-  failure: RuntimeFailure,
-): boolean {
-  return (
-    classify_vault_recovery_error(failure.message) ===
-    VaultRecoveryErrorKind.SentinelPasswordUnlockForbidden
-  );
-}
-
-export function isSentinelVault(state: VaultState): boolean {
-  if (state.vaultArchitecture.vault_type === VaultType.Sentinel) return true;
-  if (!state.hasManager) return false;
-  try {
-    return (
-      state.requireManager().sentinel_unlock_status() !==
-      SentinelVaultUnlockState.NotSentinel
-    );
-  } catch {
-    return false;
-  }
-}
-
-export function sentinelCeremonyIsVisible(state: VaultState): boolean {
-  if (
-    state.isAuthenticated ||
-    state.sentinelUnlockStatus === SentinelVaultUnlockState.Unlocked
-  )
-    return false;
-  if (
-    state.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares &&
-    !state.sentinelUnlockSession.active &&
-    state.hasManager &&
-    state.requireManager().vaultStoreId === ""
-  )
-    return false;
-  return (
-    state.sentinelCeremonyPrompt ||
-    state.sentinelUnlockStatus === SentinelVaultUnlockState.CeremonyRequired ||
-    state.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares ||
-    isSentinelVault(state)
-  );
-}
-
-async function getSentinelUnlockStatus(
-  state: VaultState,
-): Promise<SentinelVaultUnlockState> {
-  if (!state.hasManager) return SentinelVaultUnlockState.NotSentinel;
-  try {
-    return await state.enqueueStorage(() =>
-      state.requireManager().sentinel_unlock_status(),
-    );
-  } catch {
-    return SentinelVaultUnlockState.NotSentinel;
-  }
-}
-
-export async function refreshSentinelUnlockStatus(
-  state: VaultState,
-): Promise<SentinelVaultUnlockState> {
-  let status = await getSentinelUnlockStatus(state);
-  if (
-    !state.isAuthenticated &&
-    status === SentinelVaultUnlockState.NotSentinel &&
-    state.vaultArchitecture.vault_type === VaultType.Sentinel
-  ) {
-    await ensureSentinelCeremonyHydrated(state);
-    status = await getSentinelUnlockStatus(state);
-  }
-  state.sentinelUnlockStatus = status;
-  if (
-    status === SentinelVaultUnlockState.CeremonyRequired ||
-    status === SentinelVaultUnlockState.AwaitingShares
-  ) {
-    state.sentinelCeremonyPrompt = true;
-    state.loginPasswordPrompt = false;
-  } else if (status === SentinelVaultUnlockState.Unlocked) {
-    state.sentinelCeremonyPrompt = false;
-  } else if (
-    status === SentinelVaultUnlockState.NotSentinel &&
-    state.vaultArchitecture.vault_type === VaultType.Sentinel
-  ) {
-    state.sentinelCeremonyPrompt = true;
-    state.sentinelUnlockStatus = SentinelVaultUnlockState.CeremonyRequired;
-    return SentinelVaultUnlockState.CeremonyRequired;
-  } else if (status === SentinelVaultUnlockState.NotSentinel) {
-    state.sentinelCeremonyPrompt = false;
-  }
-  return state.sentinelUnlockStatus;
-}
-
-/** Hydrate encrypted Sentinel metadata without attempting to bypass quorum. */
-export async function ensureSentinelCeremonyHydrated(
-  state: VaultState,
-): Promise<void> {
-  if (!state.hasManager || state.isAuthenticated || state.isVerifying) return;
-  await state.initDeviceIdentity();
-  try {
-    await state.syncFromStorage(ProviderSyncFreshness.Forced);
-  } catch {
-    // A locked Sentinel sync may fail closed until its local share is selected.
-  }
-  const status = await getSentinelUnlockStatus(state);
-  if (
-    status === SentinelVaultUnlockState.CeremonyRequired ||
-    status === SentinelVaultUnlockState.AwaitingShares
-  ) {
-    state.refreshVaultArchitectureFromManager();
-    state.sentinelCeremonyPrompt = true;
-    state.loginPasswordPrompt = false;
-    return;
-  }
-  try {
-    await state.enqueueStorage(async () => {
-      const connectArgs = state.connectStorageArgs();
-      await state.requireManager().connect(...connectArgs);
-    });
-  } catch (e) {
-    if (isSentinelCeremonyRequiredError(runtimeFailure(e))) {
-      state.refreshVaultArchitectureFromManager();
-      state.sentinelCeremonyPrompt = true;
-      state.loginPasswordPrompt = false;
-    }
-  }
-}
-
-export async function startSentinelUnlock(state: VaultState): Promise<void> {
-  if (!state.hasManager || state.isVerifying) return;
-  state.errorMsg = "";
-  await ensureSentinelCeremonyHydrated(state);
-  const status = await state.enqueueStorage(() =>
-    state.requireManager().start_sentinel_unlock(),
-  );
-  const replaceUnlockSessionArgs: Parameters<typeof replaceUnlockSession>[0] = {
-    state,
-    status,
-  };
-  replaceUnlockSession(replaceUnlockSessionArgs);
-  state.sentinelUnlockRequest = await state.enqueueStorage(() =>
-    state.requireManager().sentinel_unlock_request_json(),
-  );
-}
-
 type SentinelUnlockResponseSubmission = {
-  readonly state: VaultState;
   readonly response: string;
 };
 
-export async function addSentinelUnlockResponse({
-  state,
-  response,
-}: SentinelUnlockResponseSubmission): Promise<void> {
-  if (!state.hasManager || !response.trim()) return;
-  const status = await state.enqueueStorage(() =>
-    state.requireManager().add_sentinel_unlock_response(response.trim()),
-  );
-  const replaceUnlockSessionArgs2: Parameters<typeof replaceUnlockSession>[0] =
-    { state, status };
-  replaceUnlockSession(replaceUnlockSessionArgs2);
-}
-
-export async function listSentinelStoredDeliveries(
-  state: VaultState,
-): Promise<SentinelStoredDeliverySummary[]> {
-  if (!state.hasManager) return [];
-  await state.initDeviceIdentity();
-  const summaries = await state.enqueueStorage(() =>
-    state.requireManager().list_sentinel_genesis_share_deliveries(),
-  );
-  for (const previous of state.sentinelStoredDeliveries) previous.free();
-  state.sentinelStoredDeliveries = summaries;
-  return summaries;
-}
-
 type SentinelUnlockResponseCreation = {
-  readonly state: VaultState;
   readonly storeId: string;
   readonly request: string;
 };
 
-export async function createSentinelUnlockResponse({
-  state,
-  storeId,
-  request,
-}: SentinelUnlockResponseCreation): Promise<string> {
-  if (!state.hasManager) throw new Error("Vault engine is not available.");
-  if (!storeId.trim() || !request.trim()) return "";
-  await state.initDeviceIdentity();
-  return state.enqueueStorage(async () => {
-    await state
-      .requireManager()
-      .load_sentinel_genesis_share_delivery(storeId.trim());
-    state.refreshVaultArchitectureFromManager();
-    return state
-      .requireManager()
-      .respond_to_sentinel_unlock_request(request.trim());
-  });
-}
-
-export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
-  if (
-    !state.hasManager ||
-    state.isVerifying ||
-    !state.sentinelUnlockSession.ready
-  ) {
-    return;
-  }
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isVerifying = true;
-  try {
-    const rawRecords = (await state.enqueueStorage(() =>
-      state.requireManager().finalize_sentinel_unlock(),
-    )) as NookSecretRecord[];
-    for (const record of rawRecords) record.free();
-    const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
-      query: "",
-      requestedOffset: 0,
-    };
-    await state.loadSecretPage(loadPageArgs);
-    state.sentinelCeremonyPrompt = false;
-    state.sentinelUnlockRequest = "";
-    const replaceUnlockSessionArgs3: Parameters<
-      typeof replaceUnlockSession
-    >[0] = { state, status: inactiveSentinelUnlockSession() };
-    replaceUnlockSession(replaceUnlockSessionArgs3);
-    state.sentinelUnlockStatus = SentinelVaultUnlockState.Unlocked;
-    await state.ensureProviderSaved();
-    const providerLoadOptions: Parameters<typeof state.loadProviders>[0] = {
-      ensureLocalRow: false,
-    };
-    await state.loadProviders(providerLoadOptions);
-    await state.refreshPasswordEntriesList();
-    void state.hydrateMultiDeviceState();
-    state.markVaultUnlocked();
-    log.info("vault unlocked with sentinel quorum");
-    state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-    state.loginPasswordPrompt = false;
-    state.showSuccess(state.t(I18N_KEYS.ToastsVaultUnlocked));
-    state.startIdleSessionTracking();
-    state.startVaultSync();
-  } catch (e) {
-    state.isAuthenticated = false;
-    const status = state.requireManager().sentinel_unlock_session_status();
-    const replacement: UnlockSessionReplacement = { state, status };
-    replaceUnlockSession(replacement);
-    if (!status.active) state.sentinelUnlockRequest = "";
-    state.sentinelUnlockStatus = state
-      .requireManager()
-      .sentinel_unlock_status();
-    if (state.sentinelUnlockStatus === SentinelVaultUnlockState.Unlocked) {
-      state.sentinelCeremonyPrompt = false;
-    } else if (isSentinelCeremonyRequiredError(runtimeFailure(e))) {
-      state.sentinelCeremonyPrompt = true;
-      state.errorMsg = "";
-      return;
-    }
-    state.errorMsg =
-      e instanceof Error
-        ? state.resolveErrorMessage(e.message)
-        : state.t(I18N_KEYS.ArchitectureModesSentinelUnlockFailed);
-  } finally {
-    state.isVerifying = false;
-  }
-}
-
 type SentinelCeremonyPresentation = {
-  readonly state: VaultState;
-  readonly failure: RuntimeFailure;
+  readonly recoveryKind: VaultRecoveryErrorKind;
 };
 
-export async function surfaceSentinelCeremonyIfNeeded({
-  state,
-  failure,
-}: SentinelCeremonyPresentation): Promise<boolean> {
-  if (!isSentinelCeremonyRequiredError(failure) && !isSentinelVault(state)) {
-    return false;
+/** Owns browser orchestration for one sentinel unlock context. */
+export class SentinelUnlockActions {
+  constructor(private readonly state: VaultState) {}
+
+  static inactiveSentinelUnlockSession(): NookSentinelUnlockSessionStatus {
+    return NookSentinelUnlockSessionStatus.inactive();
   }
-  state.refreshVaultArchitectureFromManager();
-  const status = await refreshSentinelUnlockStatus(state);
-  if (
-    status === SentinelVaultUnlockState.CeremonyRequired ||
-    status === SentinelVaultUnlockState.AwaitingShares
-  ) {
-    state.sentinelCeremonyPrompt = true;
-    state.loginPasswordPrompt = false;
+
+  private replaceUnlockSession({ status }: UnlockSessionReplacement): void {
+    const state = this.state;
+    const previous = state.sentinelUnlockSession;
+    state.sentinelUnlockSession = status;
+    if (previous !== status) previous.free();
+  }
+
+  vaultType(): Result<VaultType, StorageOperationFailure> {
+    const state = this.state;
+    let kind: VaultType;
+    try {
+      kind = state.vaultArchitecture.vault_type;
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure));
+    }
+    if (kind === VaultType.Sentinel || !state.hasManager)
+      return storageOk(kind);
+    const manager = state.admitManager();
+    if (manager.isErr()) return storageErr(manager.error);
+    try {
+      return storageOk(
+        manager.value.sentinel_unlock_status() ===
+          SentinelVaultUnlockState.NotSentinel
+          ? kind
+          : VaultType.Sentinel,
+      );
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure));
+    }
+  }
+
+  ceremonyVisibility(): Result<
+    SentinelCeremonyVisibility,
+    StorageOperationFailure
+  > {
+    const state = this.state;
+    if (
+      state.isAuthenticated ||
+      state.sentinelUnlockStatus === SentinelVaultUnlockState.Unlocked
+    )
+      return storageOk(SentinelCeremonyVisibility.Hidden);
+    if (
+      state.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares &&
+      state.hasManager
+    ) {
+      const manager = state.admitManager();
+      if (manager.isErr()) return storageErr(manager.error);
+      try {
+        if (
+          !state.sentinelUnlockSession.active &&
+          manager.value.vaultStoreId === ""
+        )
+          return storageOk(SentinelCeremonyVisibility.Hidden);
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure));
+      }
+    }
+    if (
+      state.sentinelCeremonyPrompt ||
+      state.sentinelUnlockStatus ===
+        SentinelVaultUnlockState.CeremonyRequired ||
+      state.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares
+    )
+      return storageOk(SentinelCeremonyVisibility.Visible);
+    return this.vaultType().map((kind) =>
+      kind === VaultType.Sentinel
+        ? SentinelCeremonyVisibility.Visible
+        : SentinelCeremonyVisibility.Hidden,
+    );
+  }
+
+  private async getSentinelUnlockStatus(): Promise<
+    SentinelActionResult<SentinelVaultUnlockState>
+  > {
+    return this.state.enqueueStorage<
+      SentinelVaultUnlockState,
+      StorageOperationFailure
+    >(async () => {
+      const manager = this.state.admitManager();
+      if (manager.isErr()) return storageErr(manager.error);
+      try {
+        return storageOk(manager.value.sentinel_unlock_status());
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure));
+      }
+    });
+  }
+
+  async refreshSentinelUnlockStatus(): Promise<
+    SentinelActionResult<SentinelVaultUnlockState>
+  > {
+    const state = this.state;
+    let read = await this.getSentinelUnlockStatus();
+    if (read.isErr()) return storageErr(read.error);
+    let status = read.value;
+    if (
+      !state.isAuthenticated &&
+      status === SentinelVaultUnlockState.NotSentinel &&
+      state.vaultArchitecture.vault_type === VaultType.Sentinel
+    ) {
+      const hydrated = await this.ensureSentinelCeremonyHydrated();
+      if (hydrated.isErr()) return storageErr(hydrated.error);
+      read = await this.getSentinelUnlockStatus();
+      if (read.isErr()) return storageErr(read.error);
+      status = read.value;
+    }
+    state.sentinelUnlockStatus = status;
+    if (
+      status === SentinelVaultUnlockState.CeremonyRequired ||
+      status === SentinelVaultUnlockState.AwaitingShares
+    ) {
+      state.sentinelCeremonyPrompt = true;
+      state.loginPasswordPrompt = false;
+    } else if (status === SentinelVaultUnlockState.Unlocked) {
+      state.sentinelCeremonyPrompt = false;
+    } else if (
+      status === SentinelVaultUnlockState.NotSentinel &&
+      state.vaultArchitecture.vault_type === VaultType.Sentinel
+    ) {
+      state.sentinelCeremonyPrompt = true;
+      state.sentinelUnlockStatus = SentinelVaultUnlockState.CeremonyRequired;
+      return storageOk(SentinelVaultUnlockState.CeremonyRequired);
+    } else if (status === SentinelVaultUnlockState.NotSentinel) {
+      state.sentinelCeremonyPrompt = false;
+    }
+    return storageOk(state.sentinelUnlockStatus);
+  }
+
+  async ensureSentinelCeremonyHydrated(): Promise<SentinelActionResult<void>> {
+    const state = this.state;
+    if (state.isAuthenticated || state.isVerifying) return storageOk();
+    const initialized = await state.initDeviceIdentity();
+    if (initialized.isErr()) return storageErr(initialized.error);
+    const synchronized = await state.syncFromStorage(
+      ProviderSyncFreshness.Forced,
+    );
+    if (
+      synchronized.isErr() &&
+      (state.vaultArchitecture.vault_type !== VaultType.Sentinel ||
+        !(synchronized.error instanceof StorageOperationFailure) ||
+        synchronized.error.recoveryKind !==
+          VaultRecoveryErrorKind.SentinelCeremonyRequired)
+    )
+      return storageErr(synchronized.error);
+    const read = await this.getSentinelUnlockStatus();
+    if (read.isErr()) return storageErr(read.error);
+    if (
+      read.value === SentinelVaultUnlockState.CeremonyRequired ||
+      read.value === SentinelVaultUnlockState.AwaitingShares
+    ) {
+      const architecture = state.refreshVaultArchitectureFromManager();
+      if (architecture.isErr()) return storageErr(architecture.error);
+      state.sentinelCeremonyPrompt = true;
+      state.loginPasswordPrompt = false;
+      return storageOk();
+    }
+    const connected = await state.enqueueStorage(async () => {
+      const manager = state.admitManager();
+      if (manager.isErr()) return storageErr(manager.error);
+      const args = state.connectStorageArgs();
+      try {
+        return storageOk(
+          await manager.value.connect(args.mode, args.pat, args.repo),
+        );
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure));
+      }
+    });
+    if (connected.isErr()) {
+      if (
+        connected.error.recoveryKind !==
+        VaultRecoveryErrorKind.SentinelCeremonyRequired
+      )
+        return storageErr(connected.error);
+      const architecture = state.refreshVaultArchitectureFromManager();
+      if (architecture.isErr()) return storageErr(architecture.error);
+      state.sentinelCeremonyPrompt = true;
+      state.loginPasswordPrompt = false;
+      return storageOk();
+    }
+    for (const record of connected.value) record.free();
+    return storageOk();
+  }
+
+  async startSentinelUnlock(): Promise<SentinelActionResult<void>> {
+    const state = this.state;
+    if (!state.hasManager || state.isVerifying)
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.ManagerUnavailable,
+        ),
+      );
     state.errorMsg = "";
-    return true;
+    const hydrated = await this.ensureSentinelCeremonyHydrated();
+    if (hydrated.isErr()) return storageErr(hydrated.error);
+    const status = await state.enqueueStorage(async () => {
+      const admittedManager = state.admitManager();
+      if (admittedManager.isErr()) return storageErr(admittedManager.error);
+      try {
+        return storageOk(await admittedManager.value.start_sentinel_unlock());
+      } catch (nativeFailure) {
+        return storageErr(new NativeVaultStorageFailure(nativeFailure));
+      }
+    });
+    if (status.isErr()) return storageErr(status.error);
+    const replaceUnlockSessionArgs: Parameters<
+      SentinelUnlockActions["replaceUnlockSession"]
+    >[0] = {
+      status: status.value,
+    };
+    this.replaceUnlockSession(replaceUnlockSessionArgs);
+    const request = await state.enqueueStorage(async () => {
+      const admittedManager = state.admitManager();
+      if (admittedManager.isErr()) return storageErr(admittedManager.error);
+      try {
+        return storageOk(admittedManager.value.sentinel_unlock_request_json());
+      } catch (nativeFailure) {
+        return storageErr(new NativeVaultStorageFailure(nativeFailure));
+      }
+    });
+    if (request.isErr()) return storageErr(request.error);
+    state.sentinelUnlockRequest = request.value;
+    return storageOk();
   }
-  return isSentinelCeremonyRequiredError(failure);
+
+  async addSentinelUnlockResponse({
+    response,
+  }: SentinelUnlockResponseSubmission): Promise<SentinelActionResult<void>> {
+    const state = this.state;
+    if (!state.hasManager)
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.ManagerUnavailable,
+        ),
+      );
+    const status = await state.enqueueStorage(async () => {
+      const admittedManager = state.admitManager();
+      if (admittedManager.isErr()) return storageErr(admittedManager.error);
+      try {
+        return storageOk(
+          admittedManager.value.add_sentinel_unlock_response(response.trim()),
+        );
+      } catch (nativeFailure) {
+        return storageErr(new NativeVaultStorageFailure(nativeFailure));
+      }
+    });
+    if (status.isErr()) return storageErr(status.error);
+    const replaceUnlockSessionArgs2: Parameters<
+      SentinelUnlockActions["replaceUnlockSession"]
+    >[0] = { status: status.value };
+    this.replaceUnlockSession(replaceUnlockSessionArgs2);
+    return storageOk();
+  }
+
+  async listSentinelStoredDeliveries(): Promise<
+    SentinelActionResult<SentinelStoredDeliverySummary[]>
+  > {
+    const state = this.state;
+    const initialized = await state.initDeviceIdentity();
+    if (initialized.isErr()) return storageErr(initialized.error);
+    const summaries = await state.enqueueStorage(async () => {
+      const manager = state.admitManager();
+      if (manager.isErr()) return storageErr(manager.error);
+      let request: ReturnType<
+        typeof manager.value.sentinel_stored_deliveries_request
+      >;
+      try {
+        request = manager.value.sentinel_stored_deliveries_request();
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure));
+      }
+      try {
+        return storageOk(await request.resolve());
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure));
+      } finally {
+        request.free();
+      }
+    });
+    if (summaries.isErr()) return storageErr(summaries.error);
+    for (const previous of state.sentinelStoredDeliveries) previous.free();
+    state.sentinelStoredDeliveries = summaries.value;
+    return summaries;
+  }
+
+  async createSentinelUnlockResponse({
+    storeId,
+    request,
+  }: SentinelUnlockResponseCreation): Promise<SentinelActionResult<string>> {
+    const state = this.state;
+    const initialized = await state.initDeviceIdentity();
+    if (initialized.isErr()) return storageErr(initialized.error);
+    const response = await state.enqueueStorage(async () => {
+      const manager = state.admitManager();
+      if (manager.isErr()) return storageErr(manager.error);
+      try {
+        await manager.value.load_sentinel_genesis_share_delivery(
+          storeId.trim(),
+        );
+        return storageOk(
+          await manager.value.respond_to_sentinel_unlock_request(
+            request.trim(),
+          ),
+        );
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure));
+      }
+    });
+    if (response.isErr()) return storageErr(response.error);
+    const architecture = state.refreshVaultArchitectureFromManager();
+    if (architecture.isErr()) return storageErr(architecture.error);
+    return response;
+  }
+
+  presentFinalizationFailure(
+    failure: StorageOperationFailure | OAuthFailure,
+  ): void {
+    const state = this.state;
+    state.errorMsg =
+      failure instanceof StorageOperationFailure &&
+      failure.recoveryKind ===
+        VaultRecoveryErrorKind.SentinelCeremonyRequired &&
+      state.sentinelUnlockStatus !== SentinelVaultUnlockState.Unlocked
+        ? ""
+        : state.t(failure.translationKey);
+  }
+
+  private restoreFinalizationFailure(
+    failure: StorageOperationFailure | OAuthFailure,
+  ): SentinelActionResult<void> {
+    const state = this.state;
+    state.isAuthenticated = false;
+    const manager = state.admitManager();
+    if (manager.isErr()) return storageErr(manager.error);
+    try {
+      const status = manager.value.sentinel_unlock_session_status();
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      this.replaceUnlockSession({ status });
+      if (!status.active) state.sentinelUnlockRequest = "";
+      state.sentinelUnlockStatus = manager.value.sentinel_unlock_status();
+    } catch (nativeFailure) {
+      return storageErr(new NativeVaultStorageFailure(nativeFailure));
+    }
+    state.sentinelCeremonyPrompt =
+      state.sentinelUnlockStatus !== SentinelVaultUnlockState.Unlocked;
+    return storageErr(failure);
+  }
+
+  async finalizeSentinelUnlock(): Promise<SentinelActionResult<void>> {
+    const state = this.state;
+    if (
+      !state.hasManager ||
+      state.isVerifying ||
+      !state.sentinelUnlockSession.ready
+    ) {
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.OperationFailed,
+        ),
+      );
+    }
+    state.errorMsg = "";
+    state.dismissSuccess();
+    state.isVerifying = true;
+    try {
+      const rawRecords = await state.enqueueStorage<
+        NookSecretRecord[],
+        StorageOperationFailure
+      >(async () => {
+        const admittedManager = state.admitManager();
+        if (admittedManager.isErr()) return storageErr(admittedManager.error);
+        try {
+          return storageOk(
+            await admittedManager.value.finalize_sentinel_unlock(),
+          );
+        } catch (nativeFailure) {
+          return storageErr(new NativeVaultStorageFailure(nativeFailure));
+        }
+      });
+      if (rawRecords.isErr())
+        return this.restoreFinalizationFailure(rawRecords.error);
+      for (const record of rawRecords.value) record.free();
+      const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
+        query: "",
+        requestedOffset: 0,
+      };
+      const secretRefresh1 = await state.loadSecretPage(loadPageArgs);
+      if (secretRefresh1.isErr()) {
+        return this.restoreFinalizationFailure(secretRefresh1.error);
+      }
+      state.sentinelCeremonyPrompt = false;
+      state.sentinelUnlockRequest = "";
+      const replaceUnlockSessionArgs3: Parameters<
+        SentinelUnlockActions["replaceUnlockSession"]
+      >[0] = {
+        status: SentinelUnlockActions.inactiveSentinelUnlockSession(),
+      };
+      this.replaceUnlockSession(replaceUnlockSessionArgs3);
+      state.sentinelUnlockStatus = SentinelVaultUnlockState.Unlocked;
+      const savedProvider1 = await state.ensureProviderSaved();
+      if (savedProvider1.isErr()) {
+        return this.restoreFinalizationFailure(savedProvider1.error);
+      }
+      const providerLoadOptions: Parameters<typeof state.loadProviders>[0] = {
+        ensureLocalRow: false,
+      };
+      const loadedProviders1 = await state.loadProviders(providerLoadOptions);
+      if (loadedProviders1.isErr()) {
+        return this.restoreFinalizationFailure(loadedProviders1.error);
+      }
+      const passwordRefresh1 = await state.refreshPasswordEntriesList();
+      if (passwordRefresh1.isErr()) {
+        return this.restoreFinalizationFailure(passwordRefresh1.error);
+      }
+      const rosterRefresh1 = await state.hydrateMultiDeviceState();
+      if (rosterRefresh1.isErr()) {
+        return this.restoreFinalizationFailure(rosterRefresh1.error);
+      }
+      const unlocked = state.markVaultUnlocked();
+      if (unlocked.isErr()) {
+        return this.restoreFinalizationFailure(unlocked.error);
+      }
+      log.info("vault unlocked with sentinel quorum");
+      state.joinEnrollmentPrompt = JoinEnrollmentState.None;
+      state.loginPasswordPrompt = false;
+      state.showSuccess(state.t(I18N_KEYS.ToastsVaultUnlocked));
+      state.startIdleSessionTracking();
+      state.startVaultSync();
+      return storageOk();
+    } finally {
+      state.isVerifying = false;
+    }
+  }
+
+  async surfaceSentinelCeremonyIfNeeded({
+    recoveryKind,
+  }: SentinelCeremonyPresentation): Promise<boolean> {
+    const state = this.state;
+    const vaultType = this.vaultType();
+    if (vaultType.isErr()) {
+      state.errorMsg = state.t(vaultType.error.translationKey);
+      return false;
+    }
+    if (
+      recoveryKind !== VaultRecoveryErrorKind.SentinelCeremonyRequired &&
+      vaultType.value !== VaultType.Sentinel
+    ) {
+      return false;
+    }
+    const architecture = state.refreshVaultArchitectureFromManager();
+    if (architecture.isErr()) {
+      state.errorMsg = state.t(architecture.error.translationKey);
+      return false;
+    }
+    const refreshed = await this.refreshSentinelUnlockStatus();
+    if (refreshed.isErr()) {
+      state.errorMsg = state.t(refreshed.error.translationKey);
+      return false;
+    }
+    const status = refreshed.value;
+    if (
+      status === SentinelVaultUnlockState.CeremonyRequired ||
+      status === SentinelVaultUnlockState.AwaitingShares
+    ) {
+      state.sentinelCeremonyPrompt = true;
+      state.loginPasswordPrompt = false;
+      state.errorMsg = "";
+      return true;
+    }
+    return recoveryKind === VaultRecoveryErrorKind.SentinelCeremonyRequired;
+  }
 }

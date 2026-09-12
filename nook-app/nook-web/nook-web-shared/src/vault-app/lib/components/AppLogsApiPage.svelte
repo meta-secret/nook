@@ -1,15 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { loadAppLogsResponse, parseAppLogsQuery } from '$lib/app/logs-api'
+  import { AppLogsExport, AppLogsQueryString } from '$lib/app/logs-api'
   import {
     LogsPageStateKind,
     type LogsPageState,
   } from './app-logs-api-page-state'
-  import {
-    formatAppLogsError,
-    formatAppLogsLoading,
-    formatAppLogsPayload,
-  } from './app-logs-json-serialization'
+  import { AppLogsJsonDocument } from './app-logs-json-serialization'
 
   let state = $state<LogsPageState>({ kind: LogsPageStateKind.Loading })
 
@@ -18,10 +14,10 @@
 
     void (async () => {
       try {
-        const query = parseAppLogsQuery(window.location.search)
+        const query = new AppLogsQueryString(window.location.search).query
         state = {
           kind: LogsPageStateKind.Loaded,
-          payload: await loadAppLogsResponse(query),
+          payload: await new AppLogsExport(query).execute(),
         }
       } catch (cause) {
         state = {
@@ -40,11 +36,14 @@
 
 <main class="app-logs-api-page">
   {#if state.kind === LogsPageStateKind.Failed}
-    <pre data-testid="app-logs-error">{formatAppLogsError(state.message)}</pre>
+    <pre data-testid="app-logs-error">{AppLogsJsonDocument.error(state.message)
+        .text}</pre>
   {:else if state.kind === LogsPageStateKind.Loaded}
-    <pre data-testid="app-logs-json">{formatAppLogsPayload(state.payload)}</pre>
+    <pre data-testid="app-logs-json">{new AppLogsJsonDocument(state.payload)
+        .text}</pre>
   {:else}
-    <pre data-testid="app-logs-loading">{formatAppLogsLoading()}</pre>
+    <pre data-testid="app-logs-loading">{AppLogsJsonDocument.loading()
+        .text}</pre>
   {/if}
 </main>
 

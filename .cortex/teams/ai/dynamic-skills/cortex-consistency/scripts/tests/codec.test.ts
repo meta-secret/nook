@@ -1,10 +1,11 @@
+import { ok } from 'neverthrow';
 import { expect, test } from 'bun:test';
-import { decodeCortexConsistencyRequest } from '../src/codec.ts';
+import { CortexConsistencyRequestDecoder } from '../src/codec.ts';
 import { CortexConsistencyContractKind } from '../src/domain.ts';
 
 test('decodes the strict consistency request', () => {
   expect(
-    decodeCortexConsistencyRequest(
+    CortexConsistencyRequestDecoder.from(
       JSON.stringify({
         kind: CortexConsistencyContractKind.Request,
         documents: [
@@ -15,8 +16,10 @@ test('decodes the strict consistency request', () => {
           },
         ],
       }),
-    ).documents,
-  ).toHaveLength(1);
+    )
+      .execute()
+      .map((request) => request.documents.length),
+  ).toEqual(ok(1));
 });
 
 test('rejects duplicate documents and extra fields', () => {
@@ -25,21 +28,25 @@ test('rejects duplicate documents and extra fields', () => {
     references: [],
     commands: [],
   };
-  expect(() =>
-    decodeCortexConsistencyRequest(
+  expect(
+    CortexConsistencyRequestDecoder.from(
       JSON.stringify({
         kind: CortexConsistencyContractKind.Request,
         documents: [document, document],
       }),
-    ),
-  ).toThrow();
-  expect(() =>
-    decodeCortexConsistencyRequest(
+    )
+      .execute()
+      .isErr(),
+  ).toBe(true);
+  expect(
+    CortexConsistencyRequestDecoder.from(
       JSON.stringify({
         kind: CortexConsistencyContractKind.Request,
         documents: [],
         extra: true,
       }),
-    ),
-  ).toThrow();
+    )
+      .execute()
+      .isErr(),
+  ).toBe(true);
 });

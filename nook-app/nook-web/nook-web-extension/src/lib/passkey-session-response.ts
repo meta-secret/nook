@@ -1,61 +1,9 @@
-export type PasskeySetupMaterial = {
-  userHandle: number[]
-  prfInput: number[]
-}
+import type {
+  PasskeySetupMaterial,
+  PasskeyUnlockMaterial,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
-export type PasskeyUnlockMaterial = {
-  credentialId: number[]
-  prfInput: number[]
-}
-
-export type PasskeySetupResponse = {
-  setup: PasskeySetupMaterial
-}
-
-export type PasskeyUnlockResponse = {
-  material: PasskeyUnlockMaterial
-}
-
-type PasskeyResponseByteSequence = number[]
-
-function byteArray(value: PasskeyResponseByteSequence): number[] {
-  if (
-    !Array.isArray(value) ||
-    !value.every(
-      (item) =>
-        typeof item === 'number' &&
-        Number.isInteger(item) &&
-        item >= 0 &&
-        item <= 255,
-    )
-  ) {
-    throw new Error('Extension session returned malformed byte material.')
-  }
-  return [...value]
-}
-
-export function decodePasskeySetupResponse(
-  response: PasskeySetupResponse,
-): PasskeySetupMaterial {
-  const setup = response.setup
-  if (!setup) {
-    throw new Error('Extension session returned a malformed setup response.')
-  }
-  return {
-    userHandle: byteArray(setup.userHandle),
-    prfInput: byteArray(setup.prfInput),
-  }
-}
-
-export function decodePasskeyUnlockResponse(
-  response: PasskeyUnlockResponse,
-): PasskeyUnlockMaterial {
-  const material = response.material
-  if (!material) {
-    throw new Error('Extension session returned a malformed unlock response.')
-  }
-  return {
-    credentialId: byteArray(material.credentialId),
-    prfInput: byteArray(material.prfInput),
-  }
-}
+export type { PasskeySetupMaterial, PasskeyUnlockMaterial }
+/** Browser response envelopes contain canonical Rust-owned material. */
+export type PasskeySetupResponse = { setup: PasskeySetupMaterial }
+export type PasskeyUnlockResponse = { material: PasskeyUnlockMaterial }

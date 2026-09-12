@@ -1,10 +1,13 @@
 //! Owned actions for replaying and projecting vault metadata.
 
+use crate::EventLookup;
+use crate::MemberLabelState;
 use crate::{EpochMetadataState, EventGraph, MemberLabel, SymmetricKey, VaultOperation};
+use nook_auth2::BuildMembersRecordsRequest;
 use nook_auth2::{
     AuthEnvelopes, AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey, IsoTimestamp,
     JoinRequest, MultiDeviceError, MultiDeviceResult, SentinelParticipantEntry,
-    SentinelShareEnvelope, VaultMember, VaultMetaState, build_members_records,
+    SentinelShareEnvelope, VaultMember, VaultMetaState,
 };
 
 use std::collections::BTreeMap;
@@ -226,11 +229,14 @@ impl<'a> VaultMetaGraphProjection<'a> {
             .map_err(|error| MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
         let mut applier = VaultMetaOperationApplier::new(&mut rebuilt);
         for event_id in order {
-            let event = self.graph.get(&event_id).ok_or_else(|| {
-                MultiDeviceError::InvalidDeviceIdentity(format!(
-                    "Missing event {event_id} in graph."
-                ))
-            })?;
+            let event = match self.graph.get(&event_id) {
+                EventLookup::Recorded(event) => event,
+                EventLookup::UnknownEvent => {
+                    return Err(MultiDeviceError::InvalidDeviceIdentity(format!(
+                        "Missing event {event_id} in graph."
+                    )));
+                }
+            };
             for operation in &event.body.operations {
                 applier.apply(&VaultMetaOperationRequest {
                     operation,
@@ -250,6 +256,13 @@ pub struct EventGraphDeviceAccessRequest<'a> {
     pub expected_signing_public_key: &'a DeviceSigningPublicKey,
 }
 
+/// Authorization for the exact active encryption and signing key tuple.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeviceAuthorization {
+    Granted(AuthEnvelopes),
+    NotGranted,
+}
+
 /// Owns graph-based authorization queries for one event log.
 pub struct EventGraphDeviceAccess<'a> {
     graph: &'a EventGraph,
@@ -265,14 +278,17 @@ impl<'a> EventGraphDeviceAccess<'a> {
         &self,
         request: &EventGraphDeviceAccessRequest<'_>,
     ) -> MultiDeviceResult<bool> {
-        Ok(self.active_envelopes(request)?.is_some())
+        Ok(matches!(
+            self.active_envelopes(request)?,
+            DeviceAuthorization::Granted(_)
+        ))
     }
 
     /// Return DEK envelopes only for the exact active device key tuple.
     pub fn active_envelopes(
         &self,
         request: &EventGraphDeviceAccessRequest<'_>,
-    ) -> MultiDeviceResult<Option<AuthEnvelopes>> {
+    ) -> MultiDeviceResult<DeviceAuthorization> {
         let derived_device_id = request.expected_public_key.try_app_id()?;
         if &derived_device_id != request.expected_device_id {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
@@ -281,17 +297,20 @@ impl<'a> EventGraphDeviceAccess<'a> {
         }
         let expected_auth_id = request.expected_public_key.auth_id()?;
 
-        let mut active = None;
+        let mut active = DeviceAuthorization::NotGranted;
         let order = self
             .graph
             .topological_order()
             .map_err(|error| MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
         for event_id in order {
-            let event = self.graph.get(&event_id).ok_or_else(|| {
-                MultiDeviceError::InvalidDeviceIdentity(format!(
-                    "Missing event {event_id} in graph."
-                ))
-            })?;
+            let event = match self.graph.get(&event_id) {
+                EventLookup::Recorded(event) => event,
+                EventLookup::UnknownEvent => {
+                    return Err(MultiDeviceError::InvalidDeviceIdentity(format!(
+                        "Missing event {event_id} in graph."
+                    )));
+                }
+            };
             for operation in &event.body.operations {
                 match operation {
                     VaultOperation::JoinApproved {
@@ -302,24 +321,31 @@ impl<'a> EventGraphDeviceAccess<'a> {
                         members_key_ciphertext,
                         ..
                     } if device_id == request.expected_device_id => {
-                        active = (encryption_public_key == request.expected_public_key
-                            && signing_public_key == request.expected_signing_public_key)
-                            .then(|| AuthEnvelopes {
+                        active = if encryption_public_key == request.expected_public_key
+                            && signing_public_key == request.expected_signing_public_key
+                        {
+                            DeviceAuthorization::Granted(AuthEnvelopes {
                                 secrets_key: secrets_key_ciphertext.clone(),
                                 members_key: members_key_ciphertext.clone(),
-                            });
+                            })
+                        } else {
+                            DeviceAuthorization::NotGranted
+                        };
                     }
                     VaultOperation::DeviceRevoked { device_id }
                         if device_id == request.expected_device_id =>
                     {
-                        active = None;
+                        active = DeviceAuthorization::NotGranted;
                     }
                     VaultOperation::EpochCheckpoint {
                         rotated_meta_records: EpochMetadataState::Replace(records),
                         ..
-                    } if active.is_some() => {
+                    } if matches!(active, DeviceAuthorization::Granted(_)) => {
                         let checkpoint_meta = VaultMetaState::from_stored_records(records)?;
-                        active = checkpoint_meta.auth.get(&expected_auth_id).cloned();
+                        active = match checkpoint_meta.auth.get(&expected_auth_id) {
+                            Some(envelopes) => DeviceAuthorization::Granted(envelopes.clone()),
+                            None => DeviceAuthorization::NotGranted,
+                        };
                     }
                     _ => {}
                 }
@@ -347,11 +373,14 @@ impl<'a> EventGraphAuthorizationProjection<'a> {
             .topological_order()
             .map_err(|error| MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
         for event_id in order {
-            let event = self.graph.get(&event_id).ok_or_else(|| {
-                MultiDeviceError::InvalidDeviceIdentity(format!(
-                    "Missing event {event_id} in graph."
-                ))
-            })?;
+            let event = match self.graph.get(&event_id) {
+                EventLookup::Recorded(event) => event,
+                EventLookup::UnknownEvent => {
+                    return Err(MultiDeviceError::InvalidDeviceIdentity(format!(
+                        "Missing event {event_id} in graph."
+                    )));
+                }
+            };
             for operation in &event.body.operations {
                 match operation {
                     VaultOperation::JoinApproved {
@@ -415,11 +444,18 @@ impl<'a> SentinelMemberRecordProjection<'a> {
                     device_id: participant.device_id.clone(),
                     public_key: participant.encryption_public_key.clone(),
                     enrolled_at: participant.enrolled_at.clone(),
-                    label: (!participant.label.is_empty()).then(|| participant.label.clone()),
+                    label: if participant.label.is_empty() {
+                        MemberLabelState::Unnamed
+                    } else {
+                        MemberLabelState::Named(participant.label.clone())
+                    },
                 })
             })
             .collect::<MultiDeviceResult<Vec<_>>>()?;
         roster.sort_by(|left, right| left.auth_id.cmp(&right.auth_id));
-        build_members_records(&roster, self.members_key)
+        VaultMember::build_members_records(BuildMembersRecordsRequest {
+            roster,
+            members_key: self.members_key,
+        })
     }
 }

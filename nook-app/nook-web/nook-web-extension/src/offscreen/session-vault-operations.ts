@@ -1,21 +1,27 @@
+import { err, ok, type Result, type Err } from 'neverthrow'
+import {
+  SessionOperationFailure,
+  SessionOperationFailureKind,
+} from '../lib/session-operation-queue'
 import {
   decode_storage_providers,
   DeviceProtectionStatus,
   NookExternalEventLogRecords,
   NookVaultManager,
   provider_wasm_args,
+  select_remote_event_flush_providers,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   AuthProvidersSnapshot,
-  CompanionIdentityStatus,
   NookCompanionExtensionEndpoint,
+  NookDiscoveredCompanionExtensionEndpoint,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   CompanionExtensionPresence,
   CompanionIdentityDiscoveryObservation,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { scrubProviderCredentials } from '../lib/provider-credential-staging'
+import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import type { ExtensionSessionRequest } from './session-request-adapter'
 import { extensionVaultGrant } from './session-vault-grant'
@@ -33,8 +39,36 @@ type ImportVaultRequest = Extract<
 >
 
 export type ImportExtensionVaultArgs = {
-  activeManager: NookVaultManager
+  activeManager: ExtensionVaultImportManager
   message: ImportVaultRequest
+}
+
+type ExtensionEventLogImportArguments = Parameters<
+  NookVaultManager['import_extension_event_log_records_js']
+>
+type ExtensionEventLogImportStatusResource = Awaited<
+  ReturnType<NookVaultManager['import_extension_event_log_records_js']>
+>
+type ExtensionEventLogImportOperation = (
+  ...extensionEventLogImportArguments: ExtensionEventLogImportArguments
+) => Promise<Pick<ExtensionEventLogImportStatusResource, 'to_object' | 'free'>>
+type ExtensionEventLogImportStatus = ReturnType<
+  ExtensionEventLogImportStatusResource['to_object']
+>
+type ExtensionIdentityOperationOutcome = {
+  ok: boolean
+  status: ExtensionEventLogImportStatus
+}
+
+export type ExtensionVaultImportManager = Pick<
+  NookVaultManager,
+  | 'device_id'
+  | 'activate_local_identity_for_app_id'
+  | 'device_protection_status'
+  | 'replace_auth_providers_for_vault'
+  | 'save_presealed_auth_providers_snapshot'
+> & {
+  import_extension_event_log_records_js: ExtensionEventLogImportOperation
 }
 
 export type ImportExtensionVaultDependencies = {
@@ -55,13 +89,30 @@ export type ImportExtensionVaultWithDependenciesArgs =
   }
 
 export type OpenPasskeyVaultRequest = {
-  activeManager: NookVaultManager
+  activeManager: Pick<NookVaultManager, 'open_extension_passkey_vault_js'>
   grant: ExtensionVaultGrant
 }
 
+export type CompanionDiscoveryEndpoint =
+  | {
+      kind: CompanionDiscoveryEndpointKind.Initial
+      endpoint: Pick<NookCompanionExtensionEndpoint, 'discover' | 'free'>
+    }
+  | {
+      kind: CompanionDiscoveryEndpointKind.Discovered
+      endpoint: Pick<
+        NookDiscoveredCompanionExtensionEndpoint,
+        'rediscover' | 'free'
+      >
+    }
+export enum CompanionDiscoveryEndpointKind {
+  Initial = 'initial',
+  Discovered = 'discovered',
+}
+
 export type CompanionVaultDiscoveryArgs = {
-  activeManager: NookVaultManager
-  endpoint: Pick<NookCompanionExtensionEndpoint, 'discover'>
+  activeManager: Pick<NookVaultManager, 'open_extension_passkey_vault_js'>
+  endpoint: CompanionDiscoveryEndpoint
   presence: CompanionExtensionPresence
 }
 
@@ -70,42 +121,88 @@ export type PasskeyEventProviderFlushRequest = {
   vaultStoreId: string
 }
 
-export type ActivatedExtensionIdentityOperation<Result> = {
-  activeManager: NookVaultManager
+export type ActivatedExtensionIdentityOperation<
+  Outcome extends Result<
+    ExtensionIdentityOperationOutcome,
+    SessionOperationFailure
+  >,
+> = {
+  activeManager: Pick<
+    NookVaultManager,
+    | 'device_id'
+    | 'device_protection_status'
+    | 'activate_local_identity_for_app_id'
+  >
   deviceId: string
-  operation: () => Promise<Result>
+  operation: () => Promise<Outcome>
 }
 
-export async function withActivatedExtensionIdentity<Result>({
-  activeManager,
-  deviceId,
-  operation,
-}: ActivatedExtensionIdentityOperation<Result>): Promise<Result> {
-  const previousDeviceId = activeManager.device_id
-  const previousProtection = await activeManager.device_protection_status()
-  if (
-    previousProtection === DeviceProtectionStatus.Unlocked &&
-    previousDeviceId !== deviceId
-  ) {
-    throw new Error(
-      'Lock the active local identity before importing another identity.',
-    )
-  }
-  const persistedPreviousDeviceId =
-    await activeManager.activate_local_identity_for_app_id(deviceId)
-  const previousSelection =
-    previousProtection === DeviceProtectionStatus.Unlocked
-      ? previousDeviceId
-      : persistedPreviousDeviceId
-  const restorePreviousSelection =
-    previousSelection.length > 0 && previousSelection !== deviceId
-  try {
-    return await operation()
-  } catch (error) {
-    if (restorePreviousSelection) {
-      await activeManager.activate_local_identity_for_app_id(previousSelection)
+export class ActivatedExtensionIdentityLifecycle<
+  Outcome extends Result<
+    ExtensionIdentityOperationOutcome,
+    SessionOperationFailure
+  >,
+> {
+  constructor(
+    private readonly request: ActivatedExtensionIdentityOperation<Outcome>,
+  ) {}
+
+  async run(): Promise<Outcome | Err<never, SessionOperationFailure>> {
+    const { activeManager, deviceId, operation } = this.request
+    let previousDeviceId: string
+    let previousProtection: DeviceProtectionStatus
+    try {
+      previousDeviceId = activeManager.device_id
+      previousProtection = await activeManager.device_protection_status()
+    } catch {
+      return err<never, SessionOperationFailure>(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
     }
-    throw error
+    if (
+      previousProtection === DeviceProtectionStatus.Unlocked &&
+      previousDeviceId !== deviceId
+    )
+      return err<never, SessionOperationFailure>(
+        new SessionOperationFailure(SessionOperationFailureKind.Locked),
+      )
+    let persistedPreviousDeviceId: string
+    try {
+      persistedPreviousDeviceId =
+        await activeManager.activate_local_identity_for_app_id(deviceId)
+    } catch {
+      return err<never, SessionOperationFailure>(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
+    }
+    const previousSelection =
+      previousProtection === DeviceProtectionStatus.Unlocked
+        ? previousDeviceId
+        : persistedPreviousDeviceId
+    let outcome: Outcome | Err<never, SessionOperationFailure>
+    try {
+      outcome = await operation()
+    } catch {
+      outcome = err<never, SessionOperationFailure>(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
+    }
+    if (
+      outcome.isErr() &&
+      previousSelection.length > 0 &&
+      previousSelection !== deviceId
+    ) {
+      try {
+        await activeManager.activate_local_identity_for_app_id(
+          previousSelection,
+        )
+      } catch {
+        return err<never, SessionOperationFailure>(
+          new SessionOperationFailure(SessionOperationFailureKind.Failed),
+        )
+      }
+    }
+    return outcome
   }
 }
 
@@ -124,136 +221,197 @@ export async function importExtensionVaultWithDependencies({
   message,
   dependencies,
 }: ImportExtensionVaultWithDependenciesArgs) {
-  const payload = message.payload
-  const grant = extensionVaultGrant(payload)
-  const records = payload.eventLogRecords
-  const providers = payload.providers
-  if (!Array.isArray(records) || !Array.isArray(providers)) {
-    throw new Error('Extension session received an invalid vault import.')
-  }
-  const providerSnapshot: AuthProvidersSnapshot = {
-    providers: providers as StorageProvider[],
-    activeVaultStoreId: { state: 'unselected' },
-  }
-  const grantedProviders = dependencies.decodeProviders(providerSnapshot)
   try {
-    const recordValues = dependencies.createRecords(records)
-    const operation = async () => {
-      const statusValue =
-        await activeManager.import_extension_event_log_records_js(
-          grant.vaultStoreId,
-          grant.deviceId,
-          grant.devicePublicKey,
-          grant.deviceSigningPublicKey,
-          recordValues,
-        )
-      const status = statusValue.to_object()
-      statusValue.free()
-      const protection = await activeManager.device_protection_status()
-      const grantMatchesUnlockedIdentity =
-        protection === DeviceProtectionStatus.Unlocked &&
-        activeManager.device_id === grant.deviceId
-      if (grantMatchesUnlockedIdentity) {
-        const replaceArgs: Parameters<
-          typeof activeManager.replace_auth_providers_for_vault
-        >[0] = {
-          providers: grantedProviders,
-          activeVaultStoreId: {
-            state: 'storeId',
-            value: grant.vaultStoreId,
-          },
+    const payload = message.payload
+    const grant = extensionVaultGrant(payload)
+    const records = payload.eventLogRecords
+    const providers = payload.providers
+    if (!Array.isArray(records) || !Array.isArray(providers)) {
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+      )
+    }
+    const providerSnapshot: AuthProvidersSnapshot = {
+      providers,
+      activeVaultStoreId: { state: 'unselected' },
+    }
+    const grantedProviders = dependencies.decodeProviders(providerSnapshot)
+    try {
+      const recordValues = dependencies.createRecords(records)
+      const operation = async () => {
+        try {
+          const statusValue =
+            await activeManager.import_extension_event_log_records_js(
+              grant.vaultStoreId,
+              grant.deviceId,
+              grant.devicePublicKey,
+              grant.deviceSigningPublicKey,
+              recordValues,
+            )
+          const status = statusValue.to_object()
+          statusValue.free()
+          const protection = await activeManager.device_protection_status()
+          const grantMatchesUnlockedIdentity =
+            protection === DeviceProtectionStatus.Unlocked &&
+            activeManager.device_id === grant.deviceId
+          if (grantMatchesUnlockedIdentity) {
+            const replaceArgs: Parameters<
+              typeof activeManager.replace_auth_providers_for_vault
+            >[0] = {
+              providers: grantedProviders,
+              activeVaultStoreId: {
+                state: 'storeId',
+                value: grant.vaultStoreId,
+              },
+            }
+            await activeManager.replace_auth_providers_for_vault(replaceArgs)
+          } else {
+            // Website grants are already sealed for the granted device public
+            // key, so replace this vault's complete provider set through its
+            // explicit app scope, including an empty set.
+            const saveArgs: Parameters<
+              typeof activeManager.save_presealed_auth_providers_snapshot
+            >[1] = {
+              providers: grantedProviders,
+              activeVaultStoreId: {
+                state: 'storeId',
+                value: grant.vaultStoreId,
+              },
+            }
+            await activeManager.save_presealed_auth_providers_snapshot(
+              grant.deviceId,
+              saveArgs,
+            )
+          }
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+          return ok({ ok: true, status })
+        } catch {
+          return err(
+            new SessionOperationFailure(SessionOperationFailureKind.Failed),
+          )
         }
-        await activeManager.replace_auth_providers_for_vault(replaceArgs)
-      } else {
-        // Website grants are already sealed for the granted device public
-        // key, so replace this vault's complete provider set through its
-        // explicit app scope, including an empty set.
-        const saveArgs: Parameters<
-          typeof activeManager.save_presealed_auth_providers_snapshot
-        >[1] = {
-          providers: grantedProviders,
-          activeVaultStoreId: {
-            state: 'storeId',
-            value: grant.vaultStoreId,
-          },
-        }
-        await activeManager.save_presealed_auth_providers_snapshot(
-          grant.deviceId,
-          saveArgs,
-        )
       }
-      return { ok: true, status }
+      const activationArgs: ActivatedExtensionIdentityOperation<
+        Awaited<ReturnType<typeof operation>>
+      > = {
+        activeManager,
+        deviceId: grant.deviceId,
+        operation,
+      }
+      return await new ActivatedExtensionIdentityLifecycle(activationArgs).run()
+    } finally {
+      new ProviderCredentialBuffer(grantedProviders).clear()
     }
-    const activationArgs: ActivatedExtensionIdentityOperation<
-      Awaited<ReturnType<typeof operation>>
-    > = {
-      activeManager,
-      deviceId: grant.deviceId,
-      operation,
-    }
-    return await withActivatedExtensionIdentity(activationArgs)
-  } finally {
-    scrubProviderCredentials(grantedProviders)
+  } catch {
+    return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
   }
 }
 
 export async function openPasskeyVault({
   activeManager,
   grant,
-}: OpenPasskeyVaultRequest): Promise<void> {
-  await activeManager.open_extension_passkey_vault_js(
-    grant.vaultStoreId,
-    grant.deviceId,
-    grant.devicePublicKey,
-    grant.deviceSigningPublicKey,
-  )
+}: OpenPasskeyVaultRequest): Promise<Result<void, SessionOperationFailure>> {
+  try {
+    await activeManager.open_extension_passkey_vault_js(
+      grant.vaultStoreId,
+      grant.deviceId,
+      grant.devicePublicKey,
+      grant.deviceSigningPublicKey,
+    )
+    return ok()
+  } catch {
+    return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+  }
+}
+
+enum CompanionDiscoveryUse {
+  Pending = 'pending',
+  Consumed = 'consumed',
 }
 
 export class CompanionVaultDiscovery {
+  private use = CompanionDiscoveryUse.Pending
   constructor(private readonly args: CompanionVaultDiscoveryArgs) {}
 
   async discover(
     discovery: CompanionIdentityDiscoveryObservation,
-  ): Promise<CompanionIdentityStatus> {
+  ): Promise<
+    Result<NookDiscoveredCompanionExtensionEndpoint, SessionOperationFailure>
+  > {
+    if (this.use !== CompanionDiscoveryUse.Pending)
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.Consumed),
+      )
+    this.use = CompanionDiscoveryUse.Consumed
     const { activeManager, endpoint, presence } = this.args
-    if (presence.kind === 'unlocked') {
-      const grant: ExtensionVaultGrant = {
-        vaultStoreId: presence.vault_store_id,
-        deviceId: presence.app_key.appKey.appId,
-        devicePublicKey: presence.app_key.appKey.encryptionPublicKey,
-        deviceSigningPublicKey: presence.app_key.appKey.signingPublicKey,
+    try {
+      if (presence.kind === 'unlocked') {
+        const grant: ExtensionVaultGrant = {
+          vaultStoreId: presence.vault_store_id,
+          deviceId: presence.app_key.appKey.appId,
+          devicePublicKey: presence.app_key.appKey.encryptionPublicKey,
+          deviceSigningPublicKey: presence.app_key.appKey.signingPublicKey,
+        }
+        const openArgs: OpenPasskeyVaultRequest = { activeManager, grant }
+        const opened = await openPasskeyVault(openArgs)
+        if (opened.isErr()) {
+          endpoint.endpoint.free()
+          return err(opened.error)
+        }
       }
-      const openArgs: OpenPasskeyVaultRequest = { activeManager, grant }
-      await openPasskeyVault(openArgs)
+    } catch {
+      endpoint.endpoint.free()
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
     }
-    return Reflect.apply(endpoint.discover, endpoint, [discovery])
+    try {
+      return ok(
+        endpoint.kind === CompanionDiscoveryEndpointKind.Initial
+          ? endpoint.endpoint.discover(discovery)
+          : endpoint.endpoint.rediscover(discovery),
+      )
+    } catch {
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
+    }
   }
 }
 
 export async function flushPasskeyEventToProviders({
   activeManager,
   vaultStoreId,
-}: PasskeyEventProviderFlushRequest): Promise<void> {
-  const snapshot = await activeManager.load_auth_providers_snapshot()
-  const providers = snapshot.providers.filter(
-    (provider) =>
-      provider.storeId.state === 'storeId' &&
-      provider.storeId.value === vaultStoreId &&
-      provider.type !== 'local' &&
-      provider.type !== 'local-folder',
-  )
-  await Promise.allSettled(
-    providers.map(async (provider) => {
-      const args = provider_wasm_args(provider)
-      try {
-        await activeManager.flush_event_outbox_for_provider(
-          args.mode,
-          args.pat,
-          args.repo,
-        )
-      } finally {
-        args.free()
-      }
-    }),
-  )
+}: PasskeyEventProviderFlushRequest): Promise<
+  Result<void, SessionOperationFailure>
+> {
+  try {
+    const snapshot = await activeManager.load_auth_providers_snapshot()
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const providers = select_remote_event_flush_providers({
+      snapshot,
+      vaultStoreId,
+    })
+    const deliveries = await Promise.allSettled(
+      providers.map(async (provider) => {
+        const args = provider_wasm_args(provider)
+        try {
+          await activeManager.flush_event_outbox_for_provider(
+            args.mode,
+            args.pat,
+            args.repo,
+          )
+        } finally {
+          args.pat = ''
+        }
+      }),
+    )
+    if (deliveries.some((delivery) => delivery.status === 'rejected'))
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.Failed),
+      )
+    return ok()
+  } catch {
+    return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+  }
 }

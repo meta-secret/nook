@@ -1,4 +1,4 @@
-import { WebsitePasskeyOptionsStatus } from '../lib/webauthn-messages'
+import { WebsitePasskeyOptionsStatus } from '../lib/webauthn-message-types'
 
 export enum PageResponseAction {
   Fallback = 'fallback',

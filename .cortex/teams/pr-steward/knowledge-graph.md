@@ -9,6 +9,9 @@ Load only the authority required by the current pull-request operation.
 
 ## Workflows
 
+- [Dev delivery](../../gizmo/architecture/dev-delivery.md) defines the current
+  stage ownership and SHA-preserving promotion contract.
+- [Dev manager](../dev-manager/AGENTS.md) owns slow-stage authorization.
 - [Pull-request lifecycle](workflows/pull-request-lifecycle.md) defines
   metadata, review, validation, evidence, wait, and merge mechanics.
 - [Authorization handshake](workflows/authorization-handshake.md) defines
@@ -16,6 +19,7 @@ Load only the authority required by the current pull-request operation.
 
 ## Ownership boundary
 
-PR Steward returns external evidence to Gizmo Prime.
-Gizmo owns technical finding disposition, functional routing, shared-branch
-sequencing, readiness, merge policy, Workbench state, and the final verdict.
+PR Steward returns evidence to the controller that issued the packet.
+Feature Gizmo controls feature compilation, review, and local landing requests.
+The dev manager controls dev PR creation/update, slow evidence, readiness,
+and promotion. Steward performs dev PR mechanics only under a manager packet.

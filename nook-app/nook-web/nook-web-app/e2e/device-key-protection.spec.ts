@@ -4,16 +4,17 @@ import {
   createIsolatedContext,
   disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  parseJson,
+  requireRecord,
+  readStringProperty,
   signedSentinelInvitation,
   waitForPersistedAppLog,
 } from './helpers'
 
-type DelayedStorageWindow = Window & {
-  readonly __nookVault?: {
-    readonly isVerifying: boolean
-    enqueueStorage(operation: () => Promise<void>): Promise<void>
+declare global {
+  interface Window {
+    __nookE2eReleaseStorage?: () => void
   }
-  __nookE2eReleaseStorage?: () => void
 }
 
 async function revealDeviceProtectionCreateWorkflow(page: Page) {
@@ -198,8 +199,71 @@ async function readActiveIdentityKeyringEntry(
     page,
     key: 'local_identity_keyring_v1',
   })
-  const directory = JSON.parse(rawDirectory) as IdentityDirectorySnapshot
-  const keyring = JSON.parse(rawKeyring) as LocalIdentityKeyringSnapshot
+  const directoryRecord = requireRecord(
+    parseJson(rawDirectory),
+    'identity directory',
+  )
+  const selectionRecord = requireRecord(
+    directoryRecord.selection,
+    'identity directory selection',
+  )
+  const kind = readStringProperty(
+    selectionRecord,
+    'kind',
+    'identity directory selection',
+  )
+  if (
+    kind !== IdentityDirectorySelectionKind.Empty &&
+    kind !== IdentityDirectorySelectionKind.Selected
+  ) {
+    throw new Error(`Unknown identity directory selection kind: ${kind}`)
+  }
+  const identityIdValue = selectionRecord.identityId
+  if (identityIdValue !== undefined && typeof identityIdValue !== 'string') {
+    throw new Error('Identity directory selection identity id was invalid.')
+  }
+  const directory: IdentityDirectorySnapshot = {
+    selection: {
+      kind,
+      ...(identityIdValue === undefined ? {} : { identityId: identityIdValue }),
+    },
+  }
+
+  const keyringRecord = requireRecord(parseJson(rawKeyring), 'identity keyring')
+  const entriesValue = keyringRecord.entries
+  if (!Array.isArray(entriesValue)) {
+    throw new Error('Identity keyring entries were not an array.')
+  }
+  const entries: LocalIdentityKeyringEntrySnapshot[] = []
+  for (const entryValue of entriesValue) {
+    const entryRecord = requireRecord(entryValue, 'identity keyring entry')
+    const wrappedRecord = requireRecord(
+      entryRecord.wrappedAppKey,
+      'identity keyring wrapped app key',
+    )
+    const protection = readStringProperty(
+      wrappedRecord,
+      'protection',
+      'identity keyring wrapped app key',
+    )
+    const ciphertext = wrappedRecord.ciphertext
+    if (ciphertext !== undefined && typeof ciphertext !== 'string') {
+      throw new Error('Identity keyring ciphertext was invalid.')
+    }
+    entries.push({
+      identityId: readStringProperty(
+        entryRecord,
+        'identityId',
+        'identity keyring entry',
+      ),
+      appId: readStringProperty(entryRecord, 'appId', 'identity keyring entry'),
+      wrappedAppKey: {
+        protection,
+        ...(ciphertext === undefined ? {} : { ciphertext }),
+      },
+    })
+  }
+  const keyring: LocalIdentityKeyringSnapshot = { entries }
   const selectedIdentityId = directory.selection.identityId
   const entry = keyring.entries.find(
     (candidate) => candidate.identityId === selectedIdentityId,
@@ -592,24 +656,24 @@ test.describe('passkey device-key protection', () => {
       page.getByTestId('sentinel-genesis-participant-step'),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await page.evaluate(() => {
-      const testWindow = window as DelayedStorageWindow
-      const vault = testWindow.__nookVault
+      const vault = window.__nookVault
       if (!vault) throw new Error('Vault runtime is not exposed')
       let releaseStorage: () => void = () => {}
       const blocker = new Promise<void>((resolve) => {
         releaseStorage = resolve
       })
-      testWindow.__nookE2eReleaseStorage = releaseStorage
-      void vault.enqueueStorage(() => blocker)
+      window.__nookE2eReleaseStorage = releaseStorage
+      void vault.enqueueStorage(async () => {
+        await blocker
+        return vault.admitManager()
+      })
     })
     await page.getByTestId('sentinel-genesis-connect-device').click()
     await expect
       .poll(
         () =>
           page.evaluate(() =>
-            ((v) => (v ? v : false))(
-              (window as DelayedStorageWindow).__nookVault?.isVerifying,
-            ),
+            ((v) => (v ? v : false))(window.__nookVault?.isVerifying),
           ),
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
@@ -617,17 +681,14 @@ test.describe('passkey device-key protection', () => {
     await page.goBack()
     await expect(page).toHaveURL(/\/vault$/)
     await page.evaluate(() => {
-      const testWindow = window as DelayedStorageWindow
-      testWindow.__nookE2eReleaseStorage?.()
-      delete testWindow.__nookE2eReleaseStorage
+      window.__nookE2eReleaseStorage?.()
+      delete window.__nookE2eReleaseStorage
     })
     await expect
       .poll(
         () =>
           page.evaluate(() =>
-            ((...[v = true]) => v)(
-              (window as DelayedStorageWindow).__nookVault?.isVerifying,
-            ),
+            ((...[v = true]) => v)(window.__nookVault?.isVerifying),
           ),
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
@@ -731,7 +792,7 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('passkey-auth-overlay-dismiss')).toBeVisible()
     await page.getByTestId('device-protection-use-existing-choice').click()
     await expect(page.getByTestId('device-protection-error')).toContainText(
-      'missing its established signing seed',
+      "Could not safely reset this browser's device identity.",
     )
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
   })
@@ -784,7 +845,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('device-protection-pin-unlock-input').fill('000000')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
     await expect(page.getByTestId('device-protection-error')).toContainText(
-      'did not decrypt',
+      'The PIN or passphrase did not unlock this browser. Check it and try again.',
     )
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
@@ -825,8 +886,7 @@ test.describe('passkey device-key protection', () => {
     const entry = await waitForPersistedAppLog(page, {
       scope: 'vault-device-protection',
       level: 'warn',
-      messageIncludes:
-        'passkey unavailable; offering PIN device protection fallback',
+      messageIncludes: 'passkey ceremony did not complete',
     })
     expect(((v) => (v ? v : ''))(entry.data)).toContain('passkey_unavailable')
   })
@@ -854,12 +914,9 @@ test.describe('passkey device-key protection', () => {
   for (const scenario of [
     {
       mode: 'not-supported-error',
-      error:
-        'NotSupportedError: The requested public-key algorithm is not supported.',
     },
     {
       mode: 'security-error',
-      error: 'SecurityError: This is an invalid domain.',
     },
   ]) {
     test(`keeps ${scenario.mode} explicit`, async ({ page }) => {
@@ -872,7 +929,7 @@ test.describe('passkey device-key protection', () => {
       await clickDeviceProtectionSetup(page)
 
       await expect(page.getByTestId('device-protection-error')).toContainText(
-        scenario.error,
+        'This browser did not finish creating the passkey.',
       )
       await expect(
         page.getByTestId('device-protection-setup-btn'),

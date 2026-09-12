@@ -2,14 +2,14 @@
 
 use super::{
     AuthenticationPageObservation, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
-    AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
-    authentication_page_observations_are_valid, classify_authentication_workflow,
+    AuthenticationWorkflowMatch, AuthenticationWorkflowObservationIndex,
+    AuthenticationWorkflowSnapshot,
 };
-use serde::{Deserialize, Serialize, de::Error as _};
+use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Tsify)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Tsify, Deserialize)]
+#[serde(try_from = "u8")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationFormObservationPriority(u8);
 
@@ -38,20 +38,25 @@ impl Default for AuthenticationFormObservationPriority {
     }
 }
 
-impl<'de> Deserialize<'de> for AuthenticationFormObservationPriority {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        match u8::deserialize(deserializer)? {
+impl TryFrom<u8> for AuthenticationFormObservationPriority {
+    type Error = String;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
             1 => Ok(Self::USERNAME_OR_PASSKEY_ONLY),
             2 => Ok(Self::PASSWORD_FORM),
             3 => Ok(Self::GENERIC_PASSWORD),
             4 => Ok(Self::CURRENT_PASSWORD),
             5 => Ok(Self::ONE_TIME_CODE),
-            value => Err(D::Error::custom(format!(
+            value => Err(format!(
                 "invalid authentication form observation priority: {value}"
-            ))),
+            )),
         }
     }
 }
@@ -60,13 +65,13 @@ impl AuthenticationPageObservation {
     /// Rank one browser form observation before the host applies its bounded scan.
     #[must_use]
     pub const fn form_priority(self) -> AuthenticationFormObservationPriority {
-        if self.one_time_code_field_count.raw() > 0 {
+        if self.one_time_code_field_count.is_nonzero() {
             AuthenticationFormObservationPriority::ONE_TIME_CODE
-        } else if self.current_password_field_count.raw() > 0 {
+        } else if self.current_password_field_count.is_nonzero() {
             AuthenticationFormObservationPriority::CURRENT_PASSWORD
-        } else if self.generic_password_field_count.raw() == 1 {
+        } else if self.generic_password_field_count.is_single() {
             AuthenticationFormObservationPriority::GENERIC_PASSWORD
-        } else if self.password_field_count().raw() > 0 {
+        } else if self.password_field_count().is_nonzero() {
             AuthenticationFormObservationPriority::PASSWORD_FORM
         } else {
             AuthenticationFormObservationPriority::USERNAME_OR_PASSKEY_ONLY
@@ -127,48 +132,155 @@ enum AuthenticationWorkflowCandidatePriority {
 }
 
 /// Rank a browser form observation for a bounded host scan.
-#[must_use]
-pub const fn authentication_form_observation_priority(
-    observation: AuthenticationPageObservation,
-) -> AuthenticationFormObservationPriority {
-    observation.form_priority()
+impl AuthenticationPageObservation {
+    #[must_use]
+    pub const fn authentication_form_observation_priority(
+        self,
+    ) -> AuthenticationFormObservationPriority {
+        let observation = self;
+        observation.form_priority()
+    }
 }
 
 /// Select the highest-priority valid workflow candidate in observation order.
-#[must_use]
-pub fn classify_authentication_workflow_candidates(
-    observations: &[AuthenticationPageObservation],
-) -> AuthenticationWorkflowMatch {
-    if !authentication_page_observations_are_valid(observations) {
-        return AuthenticationWorkflowMatch::Rejected;
-    }
-
-    let mut selected = AuthenticationWorkflowMatch::NoMatch;
-    for (index, observation) in observations.iter().copied().enumerate() {
-        let AuthenticationWorkflowMatch::Matched(mut candidate) =
-            classify_authentication_workflow(observation)
-        else {
-            continue;
-        };
-        candidate.observation_index =
-            super::AuthenticationWorkflowObservationIndex(u32::try_from(index).unwrap_or(u32::MAX));
-        let replace = match selected {
-            AuthenticationWorkflowMatch::NoMatch => true,
-            AuthenticationWorkflowMatch::Rejected => false,
-            AuthenticationWorkflowMatch::Matched(current) => {
-                candidate.candidate_priority() > current.candidate_priority()
+impl AuthenticationWorkflowMatch {
+    /// Keep the first candidate at the highest priority. Rejection of the
+    /// selection is terminal; an individual rejected candidate is ignored.
+    #[must_use]
+    fn select_candidate(self, candidate: Self) -> Self {
+        match (self, candidate) {
+            (Self::Rejected, _) => Self::Rejected,
+            (selected, Self::NoMatch | Self::Rejected) => selected,
+            (Self::NoMatch, candidate @ Self::Matched(_)) => candidate,
+            (Self::Matched(current), Self::Matched(candidate)) => {
+                if candidate.candidate_priority() > current.candidate_priority() {
+                    Self::Matched(candidate)
+                } else {
+                    Self::Matched(current)
+                }
             }
-        };
-        if replace {
-            selected = AuthenticationWorkflowMatch::Matched(candidate);
         }
     }
-    selected
+
+    /// Attribute a detected workflow to its source without manufacturing a match.
+    #[must_use]
+    const fn with_observation_index(self, index: AuthenticationWorkflowObservationIndex) -> Self {
+        match self {
+            Self::Matched(mut snapshot) => {
+                snapshot.observation_index = index;
+                Self::Matched(snapshot)
+            }
+            Self::NoMatch => Self::NoMatch,
+            Self::Rejected => Self::Rejected,
+        }
+    }
+
+    #[must_use]
+    pub fn classify_authentication_workflow_candidates(
+        observations: &[AuthenticationPageObservation],
+    ) -> AuthenticationWorkflowMatch {
+        if !AuthenticationPageObservation::authentication_page_observations_are_valid(observations)
+        {
+            return AuthenticationWorkflowMatch::Rejected;
+        }
+
+        observations.iter().copied().enumerate().fold(
+            Self::NoMatch,
+            |selected, (index, observation)| {
+                let candidate = observation
+                    .classify_authentication_workflow()
+                    .with_observation_index(AuthenticationWorkflowObservationIndex(
+                        u32::try_from(index).unwrap_or(u32::MAX),
+                    ));
+                selected.select_candidate(candidate)
+            },
+        )
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct CandidateSelectionScenario {
+        selected: AuthenticationWorkflowMatch,
+        candidate: AuthenticationWorkflowMatch,
+        expected: AuthenticationWorkflowMatch,
+    }
+
+    impl CandidateSelectionScenario {
+        fn assert_selection(self) {
+            assert_eq!(
+                self.selected.select_candidate(self.candidate),
+                self.expected
+            );
+        }
+    }
+
+    #[test]
+    fn selection_retains_rejection_and_first_equal_priority_candidate() {
+        let first = AuthenticationPageObservation {
+            new_password_field_count: 1.into(),
+            ..Default::default()
+        }
+        .classify_authentication_workflow()
+        .with_observation_index(3.into());
+        let tied = first.with_observation_index(7.into());
+        let higher = AuthenticationPageObservation {
+            one_time_code_field_count: 1.into(),
+            ..Default::default()
+        }
+        .classify_authentication_workflow()
+        .with_observation_index(9.into());
+        for (selected, candidate, expected) in [
+            (AuthenticationWorkflowMatch::NoMatch, first, first),
+            (first, AuthenticationWorkflowMatch::NoMatch, first),
+            (first, AuthenticationWorkflowMatch::Rejected, first),
+            (
+                AuthenticationWorkflowMatch::Rejected,
+                first,
+                AuthenticationWorkflowMatch::Rejected,
+            ),
+            (
+                AuthenticationWorkflowMatch::NoMatch,
+                AuthenticationWorkflowMatch::Rejected,
+                AuthenticationWorkflowMatch::NoMatch,
+            ),
+            (
+                AuthenticationWorkflowMatch::Rejected,
+                AuthenticationWorkflowMatch::NoMatch,
+                AuthenticationWorkflowMatch::Rejected,
+            ),
+            (
+                AuthenticationWorkflowMatch::Rejected,
+                AuthenticationWorkflowMatch::Rejected,
+                AuthenticationWorkflowMatch::Rejected,
+            ),
+            (
+                AuthenticationWorkflowMatch::NoMatch,
+                AuthenticationWorkflowMatch::NoMatch,
+                AuthenticationWorkflowMatch::NoMatch,
+            ),
+            (first, tied, first),
+            (first, higher, higher),
+            (higher, first, higher),
+        ] {
+            CandidateSelectionScenario {
+                selected,
+                candidate,
+                expected,
+            }
+            .assert_selection();
+        }
+        assert_eq!(
+            AuthenticationWorkflowMatch::NoMatch.with_observation_index(4.into()),
+            AuthenticationWorkflowMatch::NoMatch
+        );
+        assert_eq!(
+            AuthenticationWorkflowMatch::Rejected.with_observation_index(4.into()),
+            AuthenticationWorkflowMatch::Rejected
+        );
+    }
 
     #[test]
     fn priority_default_and_deserialization_stay_within_the_closed_ranking() -> anyhow::Result<()> {
@@ -205,7 +317,11 @@ mod tests {
         for (observations, expected_index) in
             [([signup, manual_login], 0), ([manual_login, signup], 1)]
         {
-            let snapshot = classify_authentication_workflow_candidates(&observations).snapshot()?;
+            let snapshot =
+                AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(
+                    &observations,
+                )
+                .snapshot()?;
             assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Signup);
             assert_eq!(
                 snapshot.action,
@@ -230,7 +346,10 @@ mod tests {
             backup_codes_hint: true,
             ..Default::default()
         };
-        let snapshot = classify_authentication_workflow_candidates(&[recovery, otp]).snapshot()?;
+        let snapshot = AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(&[
+            recovery, otp,
+        ])
+        .snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpEnrollment);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::FillTotp);
         assert_eq!(u32::from(snapshot.observation_index), 1);

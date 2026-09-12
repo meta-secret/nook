@@ -1,29 +1,40 @@
-export type CompactProgressState = {
-  badge: string
-  accessibleLabel: string
-}
-
 export type CompactProgressStateArgs = {
   pilotLabel: string
   currentStep: number
   totalSteps: number
 }
 
-export function compactProgressState(
-  args: CompactProgressStateArgs,
-): CompactProgressState {
-  const { pilotLabel, currentStep, totalSteps } = args
-  const badge = `${currentStep}/${totalSteps}`
-  return {
-    badge,
-    accessibleLabel: `${pilotLabel} · ${badge}`,
+/** The visible and accessible projections of the same progress value. */
+export class CompactProgressState {
+  readonly badge: string
+  readonly accessibleLabel: string
+
+  constructor({
+    pilotLabel,
+    currentStep,
+    totalSteps,
+  }: CompactProgressStateArgs) {
+    this.badge = `${currentStep}/${totalSteps}`
+    this.accessibleLabel = `${pilotLabel} · ${this.badge}`
   }
 }
 
-export function isTrustedAuthAction(isTrusted: boolean): boolean {
-  return isTrusted
+type AuthenticationGestureEvidence = Pick<Event, 'isTrusted'>
+
+/** A browser event's provenance, borrowed only for the current interaction. */
+export class AuthenticationGesture {
+  constructor(private readonly event: AuthenticationGestureEvidence) {}
+
+  get trusted(): boolean {
+    return this.event.isTrusted
+  }
 }
 
-export function safeSavedOptionNumber(index: number): string {
-  return String(index + 1)
+/** A display-only ordinal; it never contains a saved credential. */
+export class SavedOptionOrdinal {
+  readonly label: string
+
+  constructor(index: number) {
+    this.label = String(index + 1)
+  }
 }

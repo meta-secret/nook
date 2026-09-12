@@ -1,3 +1,12 @@
+import { StorageProviderPresentation } from "$lib/auth/providers";
+import { VaultDiscoveryTimeout } from "$lib/vault/vault-discovery-timeout";
+import { err, type Result } from "neverthrow";
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from "$lib/runtime/storage-failure";
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
+import type { NookStorageConnectArgs } from "$app-wasm";
 import {
   DeviceProtectionStatus,
   NookManualProviderSyncState,
@@ -5,7 +14,6 @@ import {
   provider_label_by_id,
   resolve_error_message,
   translate_with_replacements,
-  type NookAppLocale,
 } from "$app-wasm";
 import {
   activeVaultScope,
@@ -16,10 +24,8 @@ import {
 } from "$lib/auth/providers";
 import { SerialOperationQueue } from "$lib/runtime/serial-operation-queue";
 import {
-  captureLocalDataStorageGeneration,
-  runWithExclusiveLocalDataStorageLock,
-  runWithLocalDataStorageLock,
   type LocalDataStorageOperation,
+  browserDataLifecycle,
 } from "$lib/runtime/browser-data";
 import * as localeActions from "$lib/vault/locale";
 import * as oauthActions from "$lib/vault/oauth";
@@ -32,13 +38,11 @@ import {
   type StagedRemoteStorage,
 } from "$lib/vault/state/provider.svelte";
 import {
-  translationKey,
-  translationReplacements,
+  TranslationMessage,
   type TranslationRequest,
 } from "$lib/vault/translation";
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import type { VaultState } from "$lib/vault.svelte";
-import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 export type VaultEditRestriction =
   | { decision: VaultEditDecision.Allowed }
@@ -50,11 +54,6 @@ export type VaultEditRestriction =
       reason: string;
     };
 
-export type VaultLocaleSelection = {
-  readonly newLocale: NookAppLocale;
-  readonly preferWasm: boolean;
-};
-
 export enum SyncProviderLabelKind {
   Idle = "idle",
   Active = "active",
@@ -64,14 +63,15 @@ export type SyncProviderLabel =
   | { kind: SyncProviderLabelKind.Idle }
   | { kind: SyncProviderLabelKind.Active; label: string };
 
-interface StorageTimeoutRace<T> {
-  readonly promise: Promise<T>;
-  readonly label: string;
+interface StorageTimeoutRace<T, E> {
+  readonly promise: Promise<Result<T, E>>;
+  readonly releaseLateValue: (value: T) => void;
 }
 
 /** Shared runtime, provider, locale, and queue capabilities for the vault facade. */
 export abstract class VaultRuntimeState extends VaultLifecycleState {
-  private localDataStorageGeneration = captureLocalDataStorageGeneration();
+  private localDataStorageGeneration =
+    browserDataLifecycle.captureLocalDataStorageGeneration();
   secretPageGeneration = 0;
   secretPageRequestOffset = 0;
   architectureSecretCreationAllowed = $state(true);
@@ -87,7 +87,7 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   get syncConflictLabel(): string {
-    return syncActions.syncConflictLabel(this);
+    return new syncActions.SyncConflictPresentation(this).label;
   }
 
   get editsBlocked(): boolean {
@@ -160,25 +160,29 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     return this.passwordEntries.length > 0;
   }
 
-  enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T> {
-    if (this.localDataDeletionStarted) {
-      return Promise.reject(new Error("Local browser data deletion is active"));
-    }
-    const storageOperation: LocalDataStorageOperation<T> = {
-      generation: this.localDataStorageGeneration,
-      generationChangedMessage: this.t(
-        I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
-      ),
+  enqueueStorage<T, E = VaultStorageFailure>(
+    operation: () => Result<T, E> | Promise<Result<T, E>>,
+  ): Promise<Result<T, E | VaultStorageFailure>> {
+    if (this.localDataDeletionStarted)
+      return Promise.resolve(
+        err(new VaultStorageFailure(VaultStorageFailureKind.DeletionActive)),
+      );
+    const generation = this.localDataStorageGeneration;
+    if (generation.isErr()) return Promise.resolve(err(generation.error));
+    const storageOperation: LocalDataStorageOperation<T, E> = {
+      generation: generation.value,
       operation,
     };
     return this.storageQueue.enqueue(() =>
-      runWithLocalDataStorageLock(storageOperation),
+      browserDataLifecycle.runWithLocalDataStorageLock(storageOperation),
     );
   }
 
-  enqueueExclusiveStorage<T>(operation: () => T | Promise<T>): Promise<T> {
+  enqueueExclusiveStorage<T, E = VaultStorageFailure>(
+    operation: () => Result<T, E> | Promise<Result<T, E>>,
+  ): Promise<Result<T, E | VaultStorageFailure>> {
     return this.storageQueue.enqueue(() =>
-      runWithExclusiveLocalDataStorageLock(operation),
+      browserDataLifecycle.runWithExclusiveLocalDataStorageLock(operation),
     );
   }
 
@@ -186,94 +190,108 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     return this.storageQueue.onIdle();
   }
 
-  resetStorageChain(): void {
-    this.storageQueue.reset();
-  }
-
   adoptLocalDataStorageGeneration(): void {
-    this.localDataStorageGeneration = captureLocalDataStorageGeneration();
+    this.localDataStorageGeneration =
+      browserDataLifecycle.captureLocalDataStorageGeneration();
   }
 
-  static storageOpTimeoutMs = 20_000;
+  private readonly storageOpTimeoutMs = 20_000;
 
-  raceStorageTimeout<T>({ promise, label }: StorageTimeoutRace<T>): Promise<T> {
-    const timeoutMs = VaultRuntimeState.storageOpTimeoutMs;
-    return Promise.race([
-      promise,
-      // eslint-disable-next-line max-params -- Promise owns this positional executor signature.
-      new Promise<T>((_, reject) => {
-        setTimeout(
-          () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
-          timeoutMs,
-        );
-      }),
-    ]);
+  raceStorageTimeout<T, E = VaultStorageFailure>({
+    promise,
+    releaseLateValue,
+  }: StorageTimeoutRace<T, E>): Promise<Result<T, E | VaultStorageFailure>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new VaultDiscoveryTimeout({
+      timeoutMs: this.storageOpTimeoutMs,
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    }).waitFor({ operation: promise, releaseLateValue });
   }
 
-  wasmStorageArgs(): [string, string, string] {
-    return providersActions.wasmStorageArgs(this.providerActionsContext());
+  wasmStorageArgs(): NookStorageConnectArgs {
+    return new providersActions.VaultProviderActions(
+      this.providerActionsContext(),
+    ).wasmStorageArgs();
   }
 
-  connectStorageArgs(): [string, string, string] {
-    return providersActions.connectStorageArgs(this.providerActionsContext());
+  connectStorageArgs(): NookStorageConnectArgs {
+    return new providersActions.VaultProviderActions(
+      this.providerActionsContext(),
+    ).connectStorageArgs();
   }
 
   shouldUseJoinProviderForConnect(): boolean {
-    return providersActions.shouldUseJoinProviderForConnect(
+    return new providersActions.VaultProviderActions(
       this.providerActionsContext(),
-    );
+    ).shouldUseJoinProviderForConnect();
   }
 
   stagedRemoteStorageArgs(): StagedRemoteStorage {
-    return providersActions.stagedRemoteStorageArgs(
+    return new providersActions.VaultProviderActions(
       this.providerActionsContext(),
-    );
+    ).stagedRemoteStorageArgs();
   }
 
   stagedProviderLabel(): string {
-    return providersActions.stagedProviderLabel(this.providerActionsContext());
+    return new providersActions.VaultProviderActions(
+      this.providerActionsContext(),
+    ).stagedProviderLabel();
   }
 
   hasRemoteCredentials(): boolean {
-    return providersActions.hasRemoteProviderCredentials(
+    return new providersActions.VaultProviderActions(
       this.providerActionsContext(),
-    );
+    ).hasRemoteProviderCredentials();
   }
 
   syncOAuthRemoteRefFromManager() {
-    return providersActions.syncOAuthRemoteRefFromManager(
+    return new providersActions.VaultProviderActions(
       this.providerActionsContext(),
-    );
+    ).syncOAuthRemoteRefFromManager();
   }
 
-  async ensureOAuthTokensFresh(): Promise<void> {
-    return oauthActions.ensureOAuthTokensFresh(this.completeVaultState());
+  async ensureOAuthTokensFresh(): Promise<
+    Result<void, OAuthFailure | VaultStorageFailure>
+  > {
+    return new oauthActions.VaultOAuthActions(
+      this.completeVaultState(),
+    ).ensureOAuthTokensFresh();
   }
 
   selectGoogleDriveMode(mode: GoogleDriveMode): void {
-    const request: Parameters<typeof oauthActions.selectGoogleDriveMode>[0] = {
-      state: this.completeVaultState(),
+    const request: Parameters<
+      oauthActions.VaultOAuthActions["selectGoogleDriveMode"]
+    >[0] = {
       mode,
     };
-    oauthActions.selectGoogleDriveMode(request);
+    new oauthActions.VaultOAuthActions(
+      this.completeVaultState(),
+    ).selectGoogleDriveMode(request);
   }
 
   selectICloudMode(mode: ICloudMode): void {
-    const request: Parameters<typeof oauthActions.selectICloudMode>[0] = {
-      state: this.completeVaultState(),
+    const request: Parameters<
+      oauthActions.VaultOAuthActions["selectICloudMode"]
+    >[0] = {
       mode,
     };
-    oauthActions.selectICloudMode(request);
+    new oauthActions.VaultOAuthActions(
+      this.completeVaultState(),
+    ).selectICloudMode(request);
   }
 
-  async chooseLocalFolderBackupDirectory(): Promise<void> {
-    return providersActions.chooseLocalFolder(this.providerActionsContext());
+  async chooseLocalFolderBackupDirectory(): Promise<
+    Result<void, VaultStorageFailure>
+  > {
+    return new providersActions.ProviderSelectionActions(
+      this.providerActionsContext(),
+    ).chooseLocalFolder();
   }
 
   refreshLocalFolderBackupSupport(): void {
-    return providersActions.refreshLocalFolderBackupSupport(
+    return new providersActions.ProviderSelectionActions(
       this.providerActionsContext(),
-    );
+    ).refreshLocalFolderBackupSupport();
   }
 
   dismissSuccess() {
@@ -292,15 +310,21 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   get localProvider(): LocalProviderLookup {
-    return providersActions.localProvider(this.providerActionsContext());
+    return new providersActions.ProviderSelectionActions(
+      this.providerActionsContext(),
+    ).localProvider();
   }
 
   get activeVaultProviders(): StorageProvider[] {
-    return providersActions.activeProviders(this.providerActionsContext());
+    return new providersActions.ProviderSelectionActions(
+      this.providerActionsContext(),
+    ).activeProviders();
   }
 
   get syncProviders(): StorageProvider[] {
-    return providersActions.syncProviders(this.providerActionsContext());
+    return new providersActions.ProviderSelectionActions(
+      this.providerActionsContext(),
+    ).syncProviders();
   }
 
   get hasMultipleLocalVaults(): boolean {
@@ -308,20 +332,21 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   get showLoginVaultPicker(): boolean {
-    return providersActions.showLoginVaultPicker(this.providerActionsContext());
+    return new providersActions.ProviderSelectionActions(
+      this.providerActionsContext(),
+    ).showLoginVaultPicker();
   }
 
-  providerWasmArgs(provider: StorageProvider): [string, string, string] {
-    return providersActions.providerWasmArgs(provider);
+  providerWasmArgs(provider: StorageProvider): NookStorageConnectArgs {
+    return new StorageProviderPresentation(
+      $state.snapshot(provider),
+    ).storageArgs();
   }
 
-  async updateLocale({ newLocale, preferWasm }: VaultLocaleSelection) {
-    const request: Parameters<typeof localeActions.updateLocale>[0] = {
-      state: this.completeVaultState(),
-      newLocale,
-      preferWasm,
-    };
-    return localeActions.updateLocale(request);
+  async updateLocale(request: localeActions.LocaleUpdate) {
+    return new localeActions.VaultLocaleActions(
+      this.completeVaultState(),
+    ).updateLocale(request);
   }
 
   resolveErrorMessage(message: string): string {
@@ -329,11 +354,13 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   t = (request: TranslationRequest): string => {
-    const entries = Object.entries(translationReplacements(request));
+    const entries = Object.entries(
+      new TranslationMessage(request).translationReplacements(),
+    );
     return translate_with_replacements(
       this.translations,
       this.locale,
-      translationKey(request),
+      new TranslationMessage(request).translationKey(),
       entries.map(([name]) => name),
       entries.map(([, value]) => value),
     );

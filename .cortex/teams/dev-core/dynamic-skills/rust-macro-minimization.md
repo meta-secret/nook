@@ -63,20 +63,8 @@ Does not apply to:
 
 ## Validation
 
-Development-core workers run the syntax-aware preflight tests and the smallest
-focused Rust tests that prove the changed behavior.
-
-For implementation work, run `task format`. Format every allowed Rust or
-development-core Cortex file the worker changed. Inspect that diff and return
-one coherent commit. Do not push or mutate external delivery state.
-
-Gizmo continues from the commit and runs `task loom:pre-push`. If its
-formatter changes development-core-owned content, Gizmo returns that diff to
-development core for a fresh formatted commit instead of committing the
-formatter output.
-
-- Once the gate passes, Gizmo pushes the head.
-- Run a relevant focused remote task while the head is not validation-ready.
-- Run complete exact-head validation when the head is ready.
-- Gizmo uses `task pr:validate` for complete validation.
-- Gizmo owns readiness and merge.
+Development-core workers author syntax-aware preflight and focused behavior
+tests. Execute them in the dev manager's slow PR stage. Local feedback is
+limited to scoped rustfmt and bounded diagnostics allowed by the root contract.
+Return a scoped commit to Gizmo. Feature work requires remote build-only
+evidence; missing tooling blocks that stage.

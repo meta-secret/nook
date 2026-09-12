@@ -4,21 +4,24 @@ import test from "node:test";
 import type { ToolCall } from "@cursor/sdk";
 
 import {
-  extractShellOutputChunk,
-  formatToolCompleted,
-  formatToolStarted,
+  ShellOutputEvent,
+  CompletedToolCall,
+  StartedToolCall,
 } from "../main/tool-summary.js";
 
-test("formatToolStarted shortens CI workspace paths", () => {
+void test("formatToolStarted shortens CI workspace paths", () => {
   const toolCall = {
     type: "read",
     args: { path: "/home/runner/work/nook/nook/.cortex/AGENTS.md" },
   } satisfies ToolCall;
 
-  assert.equal(formatToolStarted(toolCall), "read .cortex/AGENTS.md");
+  assert.equal(
+    new StartedToolCall(toolCall).format(),
+    "read .cortex/AGENTS.md",
+  );
 });
 
-test("formatToolStarted summarizes shell commands", () => {
+void test("formatToolStarted summarizes shell commands", () => {
   const toolCall = {
     type: "shell",
     args: {
@@ -29,12 +32,12 @@ test("formatToolStarted summarizes shell commands", () => {
   } satisfies ToolCall;
 
   assert.equal(
-    formatToolStarted(toolCall),
+    new StartedToolCall(toolCall).format(),
     "shell gh run view 28353869812 --log-failed 2>&1 | tail -200",
   );
 });
 
-test("formatToolCompleted includes shell stdout and stderr", () => {
+void test("formatToolCompleted includes shell stdout and stderr", () => {
   const toolCall = {
     type: "shell",
     args: { command: "task ci:main:parallel" },
@@ -50,7 +53,7 @@ test("formatToolCompleted includes shell stdout and stderr", () => {
     },
   } satisfies ToolCall;
 
-  assert.deepEqual(formatToolCompleted(toolCall), [
+  assert.deepEqual(new CompletedToolCall({ toolCall: toolCall }).format(), [
     "--- stdout ---",
     "    task: ci:verify:parallel",
     "    error: test failed",
@@ -60,7 +63,7 @@ test("formatToolCompleted includes shell stdout and stderr", () => {
   ]);
 });
 
-test("formatToolCompleted reports shell exit codes without empty output blocks", () => {
+void test("formatToolCompleted reports shell exit codes without empty output blocks", () => {
   const success = {
     type: "shell",
     args: { command: "true" },
@@ -76,10 +79,12 @@ test("formatToolCompleted reports shell exit codes without empty output blocks",
     },
   } satisfies ToolCall;
 
-  assert.deepEqual(formatToolCompleted(success), ["shell exit 0"]);
+  assert.deepEqual(new CompletedToolCall({ toolCall: success }).format(), [
+    "shell exit 0",
+  ]);
 });
 
-test("formatToolCompleted can omit shell output blocks", () => {
+void test("formatToolCompleted can omit shell output blocks", () => {
   const toolCall = {
     type: "shell",
     args: { command: "task ci:main:parallel" },
@@ -96,12 +101,15 @@ test("formatToolCompleted can omit shell output blocks", () => {
   } satisfies ToolCall;
 
   assert.deepEqual(
-    formatToolCompleted(toolCall, { includeShellOutput: false }),
+    new CompletedToolCall({
+      toolCall: toolCall,
+      options: { includeShellOutput: false },
+    }).format(),
     ["shell exit 1"],
   );
 });
 
-test("formatToolCompleted includes task result suffix", () => {
+void test("formatToolCompleted includes task result suffix", () => {
   const toolCall = {
     type: "task",
     args: { description: "run e2e", prompt: "run the failed test" },
@@ -116,7 +124,7 @@ test("formatToolCompleted includes task result suffix", () => {
     },
   } satisfies ToolCall;
 
-  assert.deepEqual(formatToolCompleted(toolCall), [
+  assert.deepEqual(new CompletedToolCall({ toolCall: toolCall }).format(), [
     "task done",
     "task duration 42000ms",
     "--- task result ---",
@@ -124,7 +132,7 @@ test("formatToolCompleted includes task result suffix", () => {
   ]);
 });
 
-test("formatToolCompleted skips noisy read completions", () => {
+void test("formatToolCompleted skips noisy read completions", () => {
   const toolCall = {
     type: "read",
     args: { path: ".cortex/AGENTS.md" },
@@ -134,10 +142,10 @@ test("formatToolCompleted skips noisy read completions", () => {
     },
   } satisfies ToolCall;
 
-  assert.deepEqual(formatToolCompleted(toolCall), []);
+  assert.deepEqual(new CompletedToolCall({ toolCall: toolCall }).format(), []);
 });
 
-test("formatToolCompleted surfaces tool errors", () => {
+void test("formatToolCompleted surfaces tool errors", () => {
   const toolCall = {
     type: "shell",
     args: { command: "missing-cmd" },
@@ -147,20 +155,26 @@ test("formatToolCompleted surfaces tool errors", () => {
     },
   } satisfies ToolCall;
 
-  assert.deepEqual(formatToolCompleted(toolCall), [
+  assert.deepEqual(new CompletedToolCall({ toolCall: toolCall }).format(), [
     "shell failed: command not found",
   ]);
 });
 
-test("extractShellOutputChunk reads common event shapes", () => {
-  assert.equal(extractShellOutputChunk({ text: "line 1\n" }), "line 1\n");
+void test("extractShellOutputChunk reads common event shapes", () => {
+  assert.equal(new ShellOutputEvent({ text: "line 1\n" }).text(), "line 1\n");
   assert.equal(
-    extractShellOutputChunk({ case: "stdout", value: { content: "ok" } }),
+    new ShellOutputEvent({
+      case: "stdout",
+      value: { content: "ok" },
+    }).text(),
     "ok",
   );
   assert.equal(
-    extractShellOutputChunk({ case: "stdoutDelta", value: { output: "live" } }),
+    new ShellOutputEvent({
+      case: "stdoutDelta",
+      value: { output: "live" },
+    }).text(),
     "live",
   );
-  assert.equal(extractShellOutputChunk(""), "");
+  assert.equal(new ShellOutputEvent("").text(), "");
 });

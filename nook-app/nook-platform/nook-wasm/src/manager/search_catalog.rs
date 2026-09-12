@@ -4,10 +4,12 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use super::session::SessionCatalogAvailability;
 use super::{
     NookError, NookVaultManager, SearchCatalogRestore, SearchCatalogState, Zeroize, wasm_bindgen,
 };
-use crate::storage::indexed_db;
+use crate::storage::indexed_db::SecretSearchBucketMutation;
+use crate::{NookDatabase, SaveSecretSearchCatalogBucketsRequest};
 use nook_core::{
     AgeArmoredCiphertext, SearchCatalogBucketPayload, SecretSearchCatalog, SymmetricKey,
 };
@@ -38,7 +40,7 @@ impl SearchCatalogRestore {
     }
 
     async fn load(store_id: &str, crypto: &nook_core::VaultCrypto) -> Self {
-        match indexed_db::load_secret_search_catalog_buckets(store_id).await {
+        match NookDatabase::load_secret_search_catalog_buckets(store_id).await {
             Ok(buckets) => Self::restore(buckets, crypto),
             Err(error) => {
                 tracing::warn!(
@@ -56,7 +58,7 @@ impl SearchCatalogRestore {
 struct PreparedSearchCatalogWrite<'a> {
     store_id: &'a str,
     pending_mask: u64,
-    writes: Vec<(u8, Option<String>)>,
+    writes: Vec<SecretSearchBucketMutation>,
 }
 
 impl<'a> PreparedSearchCatalogWrite<'a> {
@@ -71,15 +73,18 @@ impl<'a> PreparedSearchCatalogWrite<'a> {
             if pending_mask & (1_u64 << bucket) == 0 {
                 continue;
             }
-            let ciphertext = match catalog.bucket_json(bucket.into())? {
+            let mutation = match catalog.bucket_json(bucket.into())? {
                 SearchCatalogBucketPayload::Json(mut json) => {
                     let ciphertext = crypto.encrypt_value(&json)?;
                     json.zeroize();
-                    Some(ciphertext.as_str().to_owned())
+                    SecretSearchBucketMutation::Write {
+                        bucket,
+                        ciphertext: ciphertext.as_str().to_owned(),
+                    }
                 }
-                SearchCatalogBucketPayload::Empty => None,
+                SearchCatalogBucketPayload::Empty => SecretSearchBucketMutation::Delete { bucket },
             };
-            writes.push((bucket, ciphertext));
+            writes.push(mutation);
         }
         Ok(Self {
             store_id,
@@ -89,7 +94,11 @@ impl<'a> PreparedSearchCatalogWrite<'a> {
     }
 
     async fn persist(self, pending_mask: &mut u64) -> Result<(), NookError> {
-        indexed_db::save_secret_search_catalog_buckets(self.store_id, &self.writes).await?;
+        NookDatabase::save_secret_search_catalog_buckets(SaveSecretSearchCatalogBucketsRequest {
+            store_id: self.store_id,
+            writes: &self.writes,
+        })
+        .await?;
         *pending_mask &= !self.pending_mask;
         Ok(())
     }
@@ -103,7 +112,7 @@ impl NookVaultManager {
         if self.vault.store_id.is_empty() {
             return Ok(());
         }
-        indexed_db::delete_legacy_secret_search_catalog(&self.vault.store_id).await
+        NookDatabase::delete_legacy_secret_search_catalog(&self.vault.store_id).await
     }
 
     pub(crate) async fn prepare_secret_search_catalog(&mut self) -> Result<(), NookError> {
@@ -113,7 +122,10 @@ impl NookVaultManager {
             ));
         }
         let store_id = self.vault.store_id.clone();
-        if self.vault.search_catalog_store_id != store_id || !self.vault.search_catalog.is_ready() {
+        if matches!(
+            self.vault.catalog_availability(),
+            SessionCatalogAvailability::Restore
+        ) {
             let crypto = self.vault.crypto.get()?;
             let restored = SearchCatalogRestore::load(&store_id, crypto).await;
             self.vault.search_catalog = match restored {
@@ -212,7 +224,13 @@ mod tests {
         let prepared = fixture.prepare("store_catalogtest", (1 << 1) | (1 << 3))?;
         assert_eq!(prepared.store_id, "store_catalogtest");
         assert_eq!(prepared.pending_mask, (1 << 1) | (1 << 3));
-        assert_eq!(prepared.writes, vec![(1, None), (3, None)]);
+        assert!(matches!(
+            prepared.writes.as_slice(),
+            [
+                SecretSearchBucketMutation::Delete { bucket: 1 },
+                SecretSearchBucketMutation::Delete { bucket: 3 }
+            ]
+        ));
         assert!(fixture.prepare("store_catalogtest", 0)?.writes.is_empty());
         Ok(())
     }
@@ -251,24 +269,37 @@ mod tests {
         let fixture = CatalogFixture::new()?;
         let store_id = nook_core::StoreId::generate()?;
         let ciphertext = fixture.crypto.encrypt_value("{}")?.as_str().to_owned();
-        indexed_db::save_secret_search_catalog_buckets(
-            store_id.as_str(),
-            &[
-                (1, Some(ciphertext.clone())),
-                (3, Some(ciphertext.clone())),
-                (5, Some(ciphertext.clone())),
+        NookDatabase::save_secret_search_catalog_buckets(SaveSecretSearchCatalogBucketsRequest {
+            store_id: store_id.as_str(),
+            writes: &[
+                SecretSearchBucketMutation::Write {
+                    bucket: 1,
+                    ciphertext: ciphertext.clone(),
+                },
+                SecretSearchBucketMutation::Write {
+                    bucket: 3,
+                    ciphertext: ciphertext.clone(),
+                },
+                SecretSearchBucketMutation::Write {
+                    bucket: 5,
+                    ciphertext: ciphertext.clone(),
+                },
             ],
-        )
+        })
         .await?;
         let prepared = fixture.prepare(store_id.as_str(), (1 << 1) | (1 << 3))?;
         let mut pending = (1 << 1) | (1 << 3) | (1 << 5);
         prepared.persist(&mut pending).await?;
         assert_eq!(pending, 1 << 5);
         assert_eq!(
-            indexed_db::load_secret_search_catalog_buckets(store_id.as_str()).await?,
+            NookDatabase::load_secret_search_catalog_buckets(store_id.as_str()).await?,
             vec![(5, ciphertext)]
         );
-        indexed_db::save_secret_search_catalog_buckets(store_id.as_str(), &[(5, None)]).await?;
+        NookDatabase::save_secret_search_catalog_buckets(SaveSecretSearchCatalogBucketsRequest {
+            store_id: store_id.as_str(),
+            writes: &[SecretSearchBucketMutation::Delete { bucket: 5 }],
+        })
+        .await?;
         Ok(())
     }
 
@@ -285,12 +316,15 @@ mod tests {
         let keys = nook_core::VaultKeys::generate()?;
         let store_id = nook_core::StoreId::generate()?;
         manager.vault.store_id = store_id.to_string();
-        manager.vault.secrets_key = keys.secrets_key.to_string();
+        manager.vault.secrets_key = keys.secrets_key.as_str().to_owned();
         manager.vault.crypto = VaultCryptoState::Unlocked(VaultCrypto::new(&keys.secrets_key)?);
-        indexed_db::save_secret_search_catalog_buckets(
-            store_id.as_str(),
-            &[(0, Some("not-encrypted".to_owned()))],
-        )
+        NookDatabase::save_secret_search_catalog_buckets(SaveSecretSearchCatalogBucketsRequest {
+            store_id: store_id.as_str(),
+            writes: &[SecretSearchBucketMutation::Write {
+                bucket: 0,
+                ciphertext: "not-encrypted".to_owned(),
+            }],
+        })
         .await?;
 
         manager.prepare_secret_search_catalog().await?;
@@ -298,7 +332,11 @@ mod tests {
         assert_eq!(manager.vault.search_catalog_pending_bucket_mask, 0);
         manager.purge_legacy_plaintext_search_catalog().await?;
 
-        indexed_db::save_secret_search_catalog_buckets(store_id.as_str(), &[(0, None)]).await?;
+        NookDatabase::save_secret_search_catalog_buckets(SaveSecretSearchCatalogBucketsRequest {
+            store_id: store_id.as_str(),
+            writes: &[SecretSearchBucketMutation::Delete { bucket: 0 }],
+        })
+        .await?;
         Ok(())
     }
 }

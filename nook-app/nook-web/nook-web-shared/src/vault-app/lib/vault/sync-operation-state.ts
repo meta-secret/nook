@@ -1,3 +1,4 @@
+import type { NookStorageConnectArgs } from "$app-wasm";
 import type { StorageProvider } from "$lib/auth/providers";
 import type { NookLocalFolderHealth } from "$app-wasm";
 
@@ -15,7 +16,7 @@ export type EventOutboxTarget =
     }
   | {
       kind: EventOutboxTargetKind.Remote;
-      args: [string, string, string];
+      args: NookStorageConnectArgs;
     };
 
 export enum EventOutboxRequestKind {
@@ -55,3 +56,12 @@ export type LocalFolderInspection =
       kind: LocalFolderInspectionKind.MultipleVaults;
       issue: NookLocalFolderHealth;
     };
+
+export class ProviderEventOutbox {
+  constructor(private readonly provider: StorageProvider) {}
+  request(): EventOutboxRequest {
+    return this.provider.type === "local-folder"
+      ? { kind: EventOutboxRequestKind.LocalFolder, provider: this.provider }
+      : { kind: EventOutboxRequestKind.Remote, provider: this.provider };
+  }
+}

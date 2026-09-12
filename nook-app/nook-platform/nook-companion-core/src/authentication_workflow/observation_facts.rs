@@ -11,11 +11,11 @@ mod ceremony;
 mod disclosure;
 mod fields;
 mod passkey;
+mod revalidation;
 mod submission;
 pub use authenticator::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
     AuthenticationBackupCodesObservation, AuthenticationPasskeyAccountAvailability,
-    classify_authentication_backup_codes_observation,
 };
 pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
@@ -31,8 +31,9 @@ pub use fields::AuthenticationFieldObservationFacts;
 pub use passkey::{
     AuthenticationDetailedPasskeyControlCandidateObservation,
     AuthenticationDetailedPasskeyControlObservation, AuthenticationPasskeyControlObservation,
-    authentication_passkey_control_candidate_is_safe,
-    authentication_passkey_control_evidence_is_safe,
+};
+pub use revalidation::{
+    ApprovedAuthenticationWorkflowDecision, ApprovedAuthenticationWorkflowRevalidation,
 };
 pub use submission::{
     AuthenticationCredentialSubmissionFacts, AuthenticationCredentialSubmissionObservation,
@@ -64,38 +65,15 @@ impl AuthenticationPageObservationFacts {
     }
 
     #[must_use]
-    pub(crate) fn into_observation(self) -> AuthenticationPageObservation {
-        AuthenticationPageObservation {
-            username_field_count: self.fields.username_field_count,
-            current_password_field_count: self.fields.current_password_field_count,
-            new_password_field_count: self.fields.new_password_field_count,
-            generic_password_field_count: self.fields.generic_password_field_count,
-            one_time_code_field_count: self.fields.one_time_code_field_count,
-            manual_checkpoint_present: matches!(
-                self.ceremony.manual_checkpoint,
-                AuthenticationManualCheckpoint::Present
-            ),
-            authenticator_setup_hint: self.authenticator.authenticator_setup_hint(),
-            backup_codes_hint: self.authenticator.backup_codes_hint(),
-            passkey_control_present: self.authenticator.passkey_control_present(self.fields),
-            matching_passkey_account_count: self.authenticator.matching_passkey_account_count(),
-        }
-    }
-
-    #[must_use]
     pub fn form_priority(self) -> AuthenticationFormObservationPriority {
         if self.is_bounded() && self.has_progression() {
-            self.into_observation().form_priority()
+            AuthenticationPageObservation::from(self).form_priority()
         } else {
             AuthenticationPageObservation::default().form_priority()
         }
     }
 
     fn has_progression(&self) -> bool {
-        let trusted_context = self
-            .ceremony
-            .authentication_context
-            .is_authenticated(self.fields);
         matches!(
             self.detailed_advance_control.evidence(self.fields),
             AuthenticationAdvanceControlEvidence::Present
@@ -108,19 +86,21 @@ impl AuthenticationPageObservationFacts {
             || self.authenticator.authenticator_setup_hint()
             || self.authenticator.backup_codes_hint()
             || matches!(
-                self.ceremony
-                    .derived_one_time_code_progression(trusted_context),
+                self.ceremony.derived_one_time_code_progression(self.fields),
                 super::AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved
             )
     }
 }
 
 /// Rank one browser form observation from typed facts before the host applies its bounded scan.
-#[must_use]
-pub fn authentication_page_observation_facts_priority(
-    facts: AuthenticationPageObservationFacts,
-) -> AuthenticationFormObservationPriority {
-    facts.form_priority()
+impl AuthenticationPageObservationFacts {
+    #[must_use]
+    pub fn authentication_page_observation_facts_priority(
+        self,
+    ) -> AuthenticationFormObservationPriority {
+        let facts = self;
+        facts.form_priority()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -157,18 +137,21 @@ impl AuthenticationPageObservationFactsBatch {
                 .cloned()
                 .map(|observation| {
                     if observation.has_progression() {
-                        observation.into_observation()
+                        AuthenticationPageObservation::from(observation)
                     } else {
                         AuthenticationPageObservation::default()
                     }
                 })
                 .collect(),
         };
-        super::classify_authentication_workflow_candidates(&observations.observations)
+        AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(
+            &observations.observations,
+        )
     }
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
     use crate::{
@@ -231,8 +214,11 @@ mod tests {
         else {
             panic!("expected observed login control");
         };
-        controls[0].password_field_count = 0.into();
-        controls[0].submission_method = PageControlSubmissionMethod::Get;
+        let Some(control) = controls.first_mut() else {
+            panic!("expected one observed login control");
+        };
+        control.password_field_count = 0.into();
+        control.submission_method = PageControlSubmissionMethod::Get;
         assert!(matches!(
             AuthenticationPageObservationFactsBatch {
                 observations: vec![facts.clone()],
@@ -265,13 +251,16 @@ mod tests {
         else {
             panic!("expected observed login control");
         };
-        controls[0].authentication_username = AuthenticationUsernameEvidence::Explicit;
-        controls[0].password_field_count = 0.into();
-        controls[0].source_origin = "https://login.live.com".to_owned();
-        controls[0].form_identity.clear();
-        controls[0].destination_identity = "https://login.live.com/".to_owned();
-        controls[0].label = "Next".to_owned();
-        controls[0].submission_method = PageControlSubmissionMethod::Post;
+        let Some(control) = controls.first_mut() else {
+            panic!("expected one observed login control");
+        };
+        control.authentication_username = AuthenticationUsernameEvidence::Explicit;
+        control.password_field_count = 0.into();
+        control.source_origin = "https://login.live.com".to_owned();
+        control.form_identity.clear();
+        control.destination_identity = "https://login.live.com/".to_owned();
+        control.label = "Next".to_owned();
+        control.submission_method = PageControlSubmissionMethod::Post;
         assert!(matches!(
             AuthenticationPageObservationFactsBatch {
                 observations: vec![facts.clone()],
@@ -323,7 +312,10 @@ mod tests {
         let observation = password_login();
         let control = match &observation.detailed_advance_control {
             AuthenticationDetailedAdvanceControlObservation::Observed(controls) => {
-                controls[0].clone()
+                let Some(control) = controls.first() else {
+                    panic!("expected one observed login control");
+                };
+                control.clone()
             }
             AuthenticationDetailedAdvanceControlObservation::Absent => unreachable!(),
         };
@@ -446,14 +438,12 @@ mod tests {
             AuthenticationFormObservationPriority::default()
         );
         assert_eq!(
-            u8::from(authentication_page_observation_facts_priority(otp)),
+            u8::from((otp).authentication_page_observation_facts_priority()),
             1
         );
         assert!(password_login().form_priority() > otp_priority);
         assert_eq!(
-            u8::from(authentication_page_observation_facts_priority(
-                password_login()
-            )),
+            u8::from((password_login()).authentication_page_observation_facts_priority()),
             4
         );
     }
@@ -502,10 +492,13 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(authentication_passkey_control_evidence_is_safe(
-            &facts.authenticator.detailed_passkey_control
-        ));
-        assert!(facts.into_observation().passkey_control_present);
+        assert!(
+            facts
+                .authenticator
+                .detailed_passkey_control
+                .authentication_passkey_control_evidence_is_safe()
+        );
+        assert!(AuthenticationPageObservation::from(facts).passkey_control_present);
     }
 
     #[test]
@@ -544,7 +537,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(facts.into_observation().passkey_control_present);
+        assert!(AuthenticationPageObservation::from(facts).passkey_control_present);
     }
 
     #[test]
@@ -750,9 +743,12 @@ mod tests {
             if let AuthenticationDetailedAdvanceControlObservation::Observed(controls) =
                 &mut facts.detailed_advance_control
             {
-                controls[0].form_identity.clear();
-                controls[0].destination_identity = "https://example.test/session".to_owned();
-                controls[0].label = label.to_owned();
+                let Some(control) = controls.first_mut() else {
+                    panic!("expected one observed login control");
+                };
+                control.form_identity.clear();
+                control.destination_identity = "https://example.test/session".to_owned();
+                control.label = label.to_owned();
             }
             assert!(matches!(
                 AuthenticationPageObservationFactsBatch {
@@ -861,9 +857,12 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(authentication_passkey_control_evidence_is_safe(
-            &facts.authenticator.detailed_passkey_control
-        ));
+        assert!(
+            facts
+                .authenticator
+                .detailed_passkey_control
+                .authentication_passkey_control_evidence_is_safe()
+        );
         assert!(!facts.authenticator.passkey_control_present(facts.fields));
         assert_eq!(
             AuthenticationPageObservationFactsBatch {
@@ -946,8 +945,10 @@ mod tests {
             AuthenticationWorkflowMatch::NoMatch
         );
 
-        let last = signals.len() - 1;
-        signals[last] = "oninput=this.form.submit()".to_owned();
+        let Some(last_signal) = signals.last_mut() else {
+            panic!("handler signal fixture must not be empty");
+        };
+        *last_signal = "oninput=this.form.submit()".to_owned();
         let kept_submit = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
                 one_time_code_field_count: 1.into(),
@@ -973,5 +974,27 @@ mod tests {
             AuthenticationWorkflowMatch::Matched(snapshot)
                 if snapshot.kind == AuthenticationWorkflowKind::TotpChallenge
         ));
+    }
+}
+
+pub use authenticator::AuthenticationBackupCodesEvidence;
+
+impl From<AuthenticationPageObservationFacts> for AuthenticationPageObservation {
+    fn from(facts: AuthenticationPageObservationFacts) -> Self {
+        AuthenticationPageObservation {
+            username_field_count: facts.fields.username_field_count,
+            current_password_field_count: facts.fields.current_password_field_count,
+            new_password_field_count: facts.fields.new_password_field_count,
+            generic_password_field_count: facts.fields.generic_password_field_count,
+            one_time_code_field_count: facts.fields.one_time_code_field_count,
+            manual_checkpoint_present: matches!(
+                facts.ceremony.manual_checkpoint,
+                AuthenticationManualCheckpoint::Present
+            ),
+            authenticator_setup_hint: facts.authenticator.authenticator_setup_hint(),
+            backup_codes_hint: facts.authenticator.backup_codes_hint(),
+            passkey_control_present: facts.authenticator.passkey_control_present(facts.fields),
+            matching_passkey_account_count: facts.authenticator.matching_passkey_account_count(),
+        }
     }
 }

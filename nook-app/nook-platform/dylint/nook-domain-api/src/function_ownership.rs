@@ -1,3 +1,4 @@
+use super::boundary_reason::BoundaryReason;
 use clippy_utils::{diagnostics::span_lint_and_help, is_test_function};
 use rustc_ast::attr::AttributeExt;
 use rustc_hir::{Attribute, HirId, Item, ItemKind, Node, def::DefKind};
@@ -158,15 +159,6 @@ impl FunctionOwnership {
         })
     }
 
-    fn boundary_reason(attribute: &Attribute) -> Option<rustc_span::Symbol> {
-        attribute.meta_item_list()?.iter().find_map(|item| {
-            let meta = item.meta_item()?;
-            meta.has_name(sym::reason)
-                .then(|| meta.value_str())
-                .flatten()
-        })
-    }
-
     fn valid_reason(reason: &str) -> bool {
         ["FFI boundary:", "framework boundary:"]
             .iter()
@@ -229,7 +221,7 @@ impl<'tcx> LateLintPass<'tcx> for FunctionOwnership {
             Node::Item(item) if Self::requires_owner(cx, item))
         {
             "expectations must be on an authored free function requiring a boundary exception"
-        } else if let Some(reason) = Self::boundary_reason(attribute) {
+        } else if let BoundaryReason::Declared(reason) = BoundaryReason::from(attribute) {
             if Self::valid_reason(reason.as_str()) {
                 return;
             }

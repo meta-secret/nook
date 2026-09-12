@@ -7,10 +7,11 @@ use nook_companion_core::{
     CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingError,
     ExtensionConnectScope,
 };
+use nook_core::VaultEvent;
+use nook_core::{ActiveVaultScope, ProviderVaultScope};
 use nook_core::{
     AuthEnvelopes, AuthProvidersSnapshotData, DeviceIdentity, EventId, EventStorageBytes,
     SigningIdentity, StoreId, SymmetricKey, VaultApplication, VaultType,
-    serialize_event_storage_yaml,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroizing;
@@ -80,9 +81,12 @@ impl PairingActivationStorageAdmission<'_> {
                 .map_err(|_| CompanionPairingCandidateFailure::EventAuthorization)?;
             role_keys.push(Zeroizing::new(key.into_inner()));
         }
-        if role_keys[0]
+        let Some([secrets_key, members_key]) = role_keys.as_slice().first_chunk::<2>() else {
+            return Err(CompanionPairingCandidateFailure::EventAuthorization);
+        };
+        if secrets_key
             .as_str()
-            .eq_ignore_ascii_case(role_keys[1].as_str())
+            .eq_ignore_ascii_case(members_key.as_str())
         {
             return Err(CompanionPairingCandidateFailure::EventAuthorization);
         }
@@ -274,10 +278,9 @@ impl CurrentActivationBinding<'_> {
         {
             return Err(CompanionPairingCandidateFailure::ManagerBinding);
         }
-        if self.providers.active_vault_store_id.as_deref()
-            != Some(self.approval.vault_store_id.as_str())
+        if !matches!(&self.providers.active_vault_store_id, ActiveVaultScope::StoreId(id) if id == self.approval.vault_store_id.as_str())
             || self.providers.providers.iter().any(|provider| {
-                provider.store_id.as_deref() != Some(self.approval.vault_store_id.as_str())
+                !matches!(&provider.store_id, ProviderVaultScope::StoreId(id) if id == self.approval.vault_store_id.as_str())
             })
             || (!self
                 .approval
@@ -321,7 +324,7 @@ impl NookPreparedCompanionPairingActivation {
                 Ok(PairingActivationEvent {
                     event_id: EventId::parse(&record.event_id)
                         .map_err(|_| CompanionPairingCandidateFailure::Integrity)?,
-                    bytes: serialize_event_storage_yaml(&record.event)
+                    bytes: VaultEvent::serialize_event_storage_yaml(&record.event)
                         .map_err(|_| CompanionPairingCandidateFailure::Integrity)?,
                 })
             })

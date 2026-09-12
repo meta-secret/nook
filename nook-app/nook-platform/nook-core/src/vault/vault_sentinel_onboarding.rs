@@ -15,10 +15,10 @@ use crate::{
 };
 pub use admission::SentinelOnboardingRecipient;
 pub use issuance::SentinelOnboardingIssuance;
-use serde::{Deserialize, Deserializer, Serialize, de::Error as SerdeError};
+use serde::{Deserialize, Serialize};
 /// Version of the post-genesis Sentinel onboarding package wire format.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32")]
 pub struct SentinelOnboardingVersion(u32);
 
 impl SentinelOnboardingVersion {
@@ -31,16 +31,19 @@ impl From<SentinelOnboardingVersion> for u32 {
     }
 }
 
-impl<'de> Deserialize<'de> for SentinelOnboardingVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match u32::deserialize(deserializer)? {
+impl TryFrom<u32> for SentinelOnboardingVersion {
+    type Error = String;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
             1 => Ok(Self::CURRENT),
-            _ => Err(SerdeError::custom(
-                "unsupported Sentinel onboarding version",
-            )),
+            _ => Err("unsupported Sentinel onboarding version".to_owned()),
         }
     }
 }
@@ -210,12 +213,18 @@ mod tests {
                 .starts_with("sentinel_share:")
         );
         assert_eq!(
-            accepted.provider_snapshot.providers[0]
+            (match &accepted
+                .provider_snapshot
+                .providers
+                .first()
+                .unwrap_or_else(|| panic!("provider snapshot fixture must contain one provider"))
                 .oauth_file
-                .as_ref()
-                .ok_or_else(|| IoError::other("provider OAuth fixture must exist"))?
-                .access_token,
-            StoredOAuthAccessCredential::AccessToken("member-secret-token".to_owned())
+            {
+                StoredOAuthFileConfiguration::Configured(config) => &config.access_token,
+                StoredOAuthFileConfiguration::NotApplicable =>
+                    return Err(IoError::other("provider OAuth fixture must exist").into()),
+            }),
+            &StoredOAuthAccessCredential::AccessToken("member-secret-token".to_owned())
         );
         Ok(())
     }

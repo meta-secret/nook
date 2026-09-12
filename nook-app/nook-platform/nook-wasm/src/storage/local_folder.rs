@@ -15,7 +15,8 @@ use wasm_bindgen_futures::JsFuture;
 mod handles;
 pub(crate) use handles::LocalFolderHandles;
 use handles::{
-    ChildLookup, ChildLookupRequest, FolderCallArgument, FolderFailure, FolderObject, FolderPromise,
+    ChildLookup, ChildLookupRequest, FolderCallArgument, FolderFailure, FolderMethod, FolderObject,
+    FolderPromise,
 };
 const EVENT_LOG_PARTS: [&str; 3] = ["nook-log", "v1", "events"];
 
@@ -117,16 +118,31 @@ impl WrittenLocalFolderEvent {
         Ok(())
     }
 }
+enum FolderDirectory {
+    Unavailable,
+    Opened(Object),
+}
+enum FolderFile {
+    Unavailable,
+    Opened(Object),
+}
+#[derive(Debug, PartialEq, Eq)]
+enum FolderEventName {
+    Unrelated,
+    Event(EventId),
+}
 impl FolderObject<'_> {
     async fn child_directory(
         &self,
         request: ChildLookupRequest<'_>,
-    ) -> Result<Option<Object>, NookError> {
+    ) -> Result<FolderDirectory, NookError> {
         let parent = self.object;
         let ChildLookupRequest { name, lookup } = request;
         let create = matches!(lookup, ChildLookup::Create);
         let options = lookup.options()?;
-        let Some(function) = FolderObject::new(parent).method("getDirectoryHandle")? else {
+        let FolderMethod::Callable(function) =
+            FolderObject::new(parent).method("getDirectoryHandle")?
+        else {
             return Err(NookError::Database(
                 "Local folder handle cannot open subdirectories.".to_owned(),
             ));
@@ -138,14 +154,20 @@ impl FolderObject<'_> {
             }
             .resolve("getDirectoryHandle failed")
             .await
-            .map(Some)
-            .or_else(|err| if create { Err(err) } else { Ok(None) }),
+            .map(FolderDirectory::Opened)
+            .or_else(|err| {
+                if create {
+                    Err(err)
+                } else {
+                    Ok(FolderDirectory::Unavailable)
+                }
+            }),
             Err(err) => {
                 if create {
                     Err(FolderFailure::new(&err.unchecked_into())
                         .into_error("getDirectoryHandle call failed"))
                 } else {
-                    Ok(None)
+                    Ok(FolderDirectory::Unavailable)
                 }
             }
         }
@@ -153,12 +175,12 @@ impl FolderObject<'_> {
 }
 
 impl FolderObject<'_> {
-    async fn event_directory(&self, lookup: ChildLookup) -> Result<Option<Object>, NookError> {
+    async fn event_directory(&self, lookup: ChildLookup) -> Result<FolderDirectory, NookError> {
         let root = self.object;
-        let mut current = Some(root.clone());
+        let mut current = FolderDirectory::Opened(root.clone());
         for part in EVENT_LOG_PARTS {
-            let Some(parent) = current else {
-                return Ok(None);
+            let FolderDirectory::Opened(parent) = current else {
+                return Ok(FolderDirectory::Unavailable);
             };
             current = FolderObject::new(&parent)
                 .child_directory(ChildLookupRequest { name: part, lookup })
@@ -171,7 +193,8 @@ impl FolderObject<'_> {
 impl FolderObject<'_> {
     async fn iterator_values(&self, method_name: &str) -> Result<Vec<Object>, NookError> {
         let target = self.object;
-        let Some(function) = FolderObject::new(target).method(method_name)? else {
+        let FolderMethod::Callable(function) = FolderObject::new(target).method(method_name)?
+        else {
             return Ok(Vec::new());
         };
         let iterator_value = function.call0(target).map_err(|e| {
@@ -207,7 +230,10 @@ impl FolderObject<'_> {
     async fn event_entries(&self) -> Result<Vec<(String, Object)>, NookError> {
         let dir = self.object;
         let mut entries = Vec::new();
-        if FolderObject::new(dir).method("entries")?.is_some() {
+        if matches!(
+            FolderObject::new(dir).method("entries")?,
+            FolderMethod::Callable(_)
+        ) {
             for value in FolderObject::new(dir).iterator_values("entries").await? {
                 let array = Array::from(&value);
                 let name = array.get(0).as_string().unwrap_or_default();
@@ -217,7 +243,10 @@ impl FolderObject<'_> {
                     .as_string()
                     .as_deref()
                     == Some("file")
-                    && LocalFolderEventName::new(&name).event_id().is_some()
+                    && matches!(
+                        LocalFolderEventName::new(&name).event_id(),
+                        FolderEventName::Event(_)
+                    )
                 {
                     entries.push((name, handle));
                 }
@@ -234,7 +263,10 @@ impl FolderObject<'_> {
                 .as_string()
                 .as_deref()
                 == Some("file")
-                && LocalFolderEventName::new(&name).event_id().is_some()
+                && matches!(
+                    LocalFolderEventName::new(&name).event_id(),
+                    FolderEventName::Event(_)
+                )
             {
                 entries.push((name, handle));
             }
@@ -258,15 +290,13 @@ impl FolderObject<'_> {
 }
 
 impl FolderObject<'_> {
-    async fn child_file(
-        &self,
-        request: ChildLookupRequest<'_>,
-    ) -> Result<Option<Object>, NookError> {
+    async fn child_file(&self, request: ChildLookupRequest<'_>) -> Result<FolderFile, NookError> {
         let parent = self.object;
         let ChildLookupRequest { name, lookup } = request;
         let create = matches!(lookup, ChildLookup::Create);
         let options = lookup.options()?;
-        let Some(function) = FolderObject::new(parent).method("getFileHandle")? else {
+        let FolderMethod::Callable(function) = FolderObject::new(parent).method("getFileHandle")?
+        else {
             return Err(NookError::Database(
                 "Local folder handle cannot open files.".to_owned(),
             ));
@@ -278,14 +308,20 @@ impl FolderObject<'_> {
             }
             .resolve("getFileHandle failed")
             .await
-            .map(Some)
-            .or_else(|err| if create { Err(err) } else { Ok(None) }),
+            .map(FolderFile::Opened)
+            .or_else(|err| {
+                if create {
+                    Err(err)
+                } else {
+                    Ok(FolderFile::Unavailable)
+                }
+            }),
             Err(err) => {
                 if create {
                     Err(FolderFailure::new(&err.unchecked_into())
                         .into_error("getFileHandle call failed"))
                 } else {
-                    Ok(None)
+                    Ok(FolderFile::Unavailable)
                 }
             }
         }
@@ -293,10 +329,15 @@ impl FolderObject<'_> {
 }
 
 impl LocalFolderEventName<'_> {
-    fn event_id(&self) -> Option<EventId> {
+    fn event_id(&self) -> FolderEventName {
         let name = self.name;
-        let digest = name.strip_suffix(".yaml")?;
-        EventId::parse(&format!("sha256u:{digest}")).ok()
+        let Some(digest) = name.strip_suffix(".yaml") else {
+            return FolderEventName::Unrelated;
+        };
+        match EventId::parse(&format!("sha256u:{digest}")) {
+            Ok(id) => FolderEventName::Event(id),
+            Err(_) => FolderEventName::Unrelated,
+        }
     }
 }
 
@@ -312,7 +353,7 @@ impl LocalFolderEventName<'_> {
 impl OpenedLocalFolder {
     pub(crate) async fn read_events(&self) -> Result<Vec<LocalFolderEventFile>, NookError> {
         let root = &self.root;
-        let Some(dir) = FolderObject::new(root)
+        let FolderDirectory::Opened(dir) = FolderObject::new(root)
             .event_directory(ChildLookup::Existing)
             .await?
         else {
@@ -320,7 +361,8 @@ impl OpenedLocalFolder {
         };
         let mut records = Vec::new();
         for (name, file_handle) in FolderObject::new(&dir).event_entries().await? {
-            let Some(event_id) = LocalFolderEventName::new(&name).event_id() else {
+            let FolderEventName::Event(event_id) = LocalFolderEventName::new(&name).event_id()
+            else {
                 continue;
             };
             records.push(LocalFolderEventFile {
@@ -337,7 +379,7 @@ impl OpenedLocalFolder {
         records: &[LocalFolderEventWrite],
     ) -> Result<(), NookError> {
         let root = &self.root;
-        let Some(dir) = FolderObject::new(root)
+        let FolderDirectory::Opened(dir) = FolderObject::new(root)
             .event_directory(ChildLookup::Create)
             .await?
         else {
@@ -359,7 +401,7 @@ impl LocalFolderEventWrite {
                 lookup: ChildLookup::Existing,
             })
             .await?;
-        if let Some(existing) = existing {
+        if let FolderFile::Opened(existing) = existing {
             let current = FolderObject::new(&existing).read_text().await?;
             if current != record.content {
                 return Err(NookError::Database(format!(
@@ -369,15 +411,17 @@ impl LocalFolderEventWrite {
             }
             return Ok(());
         }
-        let file = FolderObject::new(dir)
+        let FolderFile::Opened(file) = FolderObject::new(dir)
             .child_file(ChildLookupRequest {
                 name: &name,
                 lookup: ChildLookup::Create,
             })
             .await?
-            .ok_or_else(|| {
-                NookError::Database(format!("Could not create backup event file: {name}"))
-            })?;
+        else {
+            return Err(NookError::Database(format!(
+                "Could not create backup event file: {name}"
+            )));
+        };
         let stream = FolderObject::new(&file).call("createWritable").await?;
         WritableLocalFolderEvent { stream }
             .write(&record.content)
@@ -728,7 +772,10 @@ mod tests {
         let id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let filename = LocalFolderEventName::from_event_id(id.as_str())?;
         assert_eq!(filename, format!("{}.yaml", id.encoded_digest()));
-        assert_eq!(LocalFolderEventName::new(&filename).event_id(), Some(id));
+        assert_eq!(
+            LocalFolderEventName::new(&filename).event_id(),
+            FolderEventName::Event(id)
+        );
         for name in [
             "notes.yaml",
             "event.json",
@@ -736,7 +783,10 @@ mod tests {
             "README",
             ".yaml",
         ] {
-            assert!(LocalFolderEventName::new(name).event_id().is_none());
+            assert!(matches!(
+                LocalFolderEventName::new(name).event_id(),
+                FolderEventName::Unrelated
+            ));
         }
         Ok(())
     }

@@ -3,6 +3,11 @@
 //! Kept free of vault crypto and sync so a tiny companion WASM package can link
 //! this crate without the full `nook-core` graph.
 
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![allow(
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,
@@ -51,7 +56,6 @@ pub use account_picker_authorization::{
 pub use authentication_outcome_response::{
     AuthenticationOutcomeResponse, AuthenticationOutcomeResponseDecodeError,
     AuthenticationOutcomeResponseKind, AuthenticationOutcomeResponseWire,
-    decode_authentication_outcome_response,
 };
 pub use authentication_workflow::{
     AuthenticationAdvanceControlEvidence, AuthenticationApprovalRequirement,
@@ -74,23 +78,18 @@ pub use authentication_workflow::{
     AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError,
     AuthenticationWorkflowStage, CurrentAuthenticationDisclosureControlRequest,
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
-    VersionedAuthenticationDisclosureControlObservation, authentication_enrollment_workflow_match,
-    authentication_form_observation_priority, authentication_page_observation_facts_match_binding,
-    authentication_page_observation_facts_priority, authentication_page_observations_are_valid,
-    authentication_passkey_control_candidate_is_safe,
-    authentication_passkey_control_evidence_is_safe, bind_authentication_page_observation_facts,
-    classify_authentication_backup_codes_observation, classify_authentication_workflow,
-    classify_authentication_workflow_candidates,
+    VersionedAuthenticationDisclosureControlObservation,
 };
 pub use authentication_workflow_response::{
+    AuthenticationWorkflowRoutingResponse, AuthenticationWorkflowRoutingResponseWire,
     AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowRuntimeResponseDecodeError,
-    AuthenticationWorkflowRuntimeResponseWire, AuthenticationWorkflowSnapshotResponse,
+    AuthenticationWorkflowRuntimeResponseWire, AuthenticationWorkflowSelectedFacts,
+    AuthenticationWorkflowSelectedFactsWire, AuthenticationWorkflowSnapshotResponse,
     AuthenticationWorkflowSnapshotResponseDecodeError, AuthenticationWorkflowSnapshotResponseKind,
     AuthenticationWorkflowSnapshotResponseWire, AuthenticationWorkflowSnapshotWire,
     WebsiteLoginMatchAvailability, WebsiteLoginMatchAvailabilityKind,
     WebsiteLoginMatchAvailabilityWire, WebsiteLoginMatchAvailabilityWithCountWire,
-    WebsiteLoginMatchAvailabilityWithoutCountWire, decode_authentication_workflow_runtime_response,
-    decode_authentication_workflow_snapshot_response,
+    WebsiteLoginMatchAvailabilityWithoutCountWire,
 };
 pub use authenticator_backup_attach_response::{
     AuthenticatorBackupAttachResponse, AuthenticatorBackupAttachResponseDecodeError,
@@ -120,9 +119,7 @@ pub use authenticator_preview_response::{
     AuthenticatorPreviewResponseDecodeError, AuthenticatorPreviewResponseKind,
     AuthenticatorPreviewResponseWire,
 };
-pub use backup_code_candidates::{
-    contains_backup_code_candidate, extract_backup_code_candidates, page_has_backup_code_hint,
-};
+
 pub use companion_pairing::{
     AdmittedCompanionPairingApproval, AuthorizedCompanionPairingApproval,
     AuthorizedCompanionWebsitePairing, CompanionExtensionPairingEndpoint, CompanionPairingApproval,
@@ -143,7 +140,7 @@ pub use companion_protocol::{
     CompanionIdentityHandoffSealer, CompanionIdentityStatus, CompanionIdentityStatusAdmission,
     CompanionIdentityStatusAdmissionRequest, CompanionIdentityUnlockRequest,
     CompanionInstallationAppKey, CompanionProtocolError, CompanionProtocolFailure,
-    CompanionUnlockedAppKey, CompanionWebsiteHandoffBegin,
+    CompanionUnlockedAppKey, CompanionWebsiteHandoffBegin, DiscoveredCompanionHandoffEndpoint,
 };
 pub use domain_numbers::{
     AuthenticationFieldCount, AuthenticationOutcomeElapsedMilliseconds,
@@ -157,11 +154,13 @@ pub use extension_pairing_state::{
     EXTENSION_GRANT_KEY_PREFIX, EXTENSION_SETUP_KEY, ExtensionActiveVaultScope,
     ExtensionConnectScope, ExtensionGrantAuthority, ExtensionGrantAuthorityRequest,
     ExtensionPairingEntry, ExtensionPairingGrantApproval, ExtensionPairingGrantRemovalInput,
-    ExtensionPairingRecord, ExtensionPairingState, ExtensionPairingStateError,
+    ExtensionPairingRecord, ExtensionPairingRecordComparison,
+    ExtensionPairingRecordComparisonRequest, ExtensionPairingState, ExtensionPairingStateError,
     ExtensionPairingVaultType, ExtensionReadySetup, ExtensionReadySetupStatus,
     ExtensionSetupAfterRemoval, GrantAuthorityResponseError, GrantAuthorityResponseJson,
     ImportedExtensionEventLog, PairingStorageJson, PairingVaultId,
     RefreshExtensionPairingGrantInput, SelectedExtensionPairingGrant, StoredExtensionPairingGrant,
+    UnknownExtensionConnectScope,
 };
 pub use extension_persistence::{
     ExtensionPersistenceArea, ExtensionPersistenceDatabaseState, ExtensionPersistenceObservation,
@@ -170,51 +169,37 @@ pub use extension_persistence::{
 pub use extension_session_protocol::{
     ExtensionSessionRequestValidation, ExtensionSessionRequestWire, LoginPickerOpenResponse,
     LoginPickerOpenResponseDecodeError, LoginPickerOpenResponseWire,
-    decode_login_picker_open_response, validate_extension_session_request_json,
 };
 pub use extension_session_status_response::{
-    ExtensionSessionDeviceProtectionStatusWire, ExtensionSessionDeviceWire,
+    ExtensionSessionDeviceProtectionStatusWire, ExtensionSessionDeviceResponse,
+    ExtensionSessionDeviceWire, ExtensionSessionOperationResponseWire, ExtensionSessionStatus,
     ExtensionSessionStatusAvailability, ExtensionSessionStatusResponseWire,
-    decode_extension_session_status_response,
 };
-pub use extension_vault_event::{EXTENSION_VAULT_EVENT_TYPESCRIPT, ExtensionVaultEventPayload};
+pub use extension_vault_event::ExtensionVaultEventPayload;
 pub use generated_password_response::{
     GeneratedPasswordResponse, GeneratedPasswordResponseDecodeError, GeneratedPasswordResponseKind,
     GeneratedPasswordResponseWire,
 };
 pub use oauth_origin_policy::{
-    BrowserOAuthProvider, OAuthOriginSupport, OAuthOriginUnsupportedReason,
+    BrowserOAuthLocation, BrowserOAuthLocationEvidence, BrowserOAuthProvider, OAuthOriginSupport,
+    OAuthOriginUnsupportedReason,
 };
 pub use outcome_evidence::{
     AuthenticationOutcomeClassification, AuthenticationOutcomeDecision,
     AuthenticationOutcomeObservation, AuthenticationOutcomeVerdict,
-    DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS, classify_authentication_outcome,
+    DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
 };
 pub use page_field_classification::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     AuthenticationUsernameEvidence, PageControlActionability, PageControlOwnership,
     PageControlSemantics, PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
-    authentication_advance_control_is_safe, authentication_username_evidence,
-    strongest_authentication_username_evidence,
 };
 pub use page_field_classification::{
-    CanonicalControlDestination, LoginContextObservation, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-    PageInputFieldObservation, PageInputType, can_activate_authentication_route_control,
-    canonicalize_control_destination, expand_identity_text, has_login_context,
-    has_safe_authentication_route_identity, looks_like_email_verification_body,
-    looks_like_login_advance_control_label, looks_like_manual_checkpoint_label,
-    looks_like_non_authentication_submit_control_label,
-    looks_like_one_time_code_auto_submit_signal, looks_like_one_time_code_field,
-    looks_like_passkey_control_label, looks_like_passkey_enrollment_or_management_label,
-    looks_like_username_field,
+    CanonicalControlDestination, ControlDestinationEvidence, InvalidControlDestination,
+    LoginContextObservation, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES, PageInputFieldObservation,
+    PageInputType,
 };
-pub use vault_host_policy::{
-    DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError, belongs_to_sentinel_vault,
-    belongs_to_simple_vault, is_nook_vault_app_url, is_sentinel_vault_hostname,
-    is_simple_vault_hostname, matching_sentinel_vault_base_url,
-    nook_vault_app_exclude_match_patterns, normalize_simple_vault_base_url,
-    sentinel_vault_match_patterns, simple_vault_match_pattern, simple_vault_url,
-};
+pub use vault_host_policy::{DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError};
 pub use website_login_options_response::{
     WebsiteLoginAccountOption, WebsiteLoginOptions, WebsiteLoginOptionsDecodeError,
     WebsiteLoginOptionsWireValue,
@@ -227,4 +212,58 @@ pub use website_passkey_account_list::{
     WebsitePasskeyAccount, WebsitePasskeyAccountList, WebsitePasskeyAccountListKind,
     WebsitePasskeyAccountListWire,
 };
-pub use website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
+pub use website_passkey_proposal::{WebsitePasskeyEvidence, WebsitePasskeyProposal};
+
+pub use page_field_classification::AuthenticationControlText;
+
+pub use page_field_classification::{
+    AuthenticationRouteActuation, AuthenticationRouteEvidence, AutocompleteTokenQuery,
+    CredentialUpdateRouteEvidence, OneTimeCodeRouteEvidence,
+};
+
+pub use page_field_classification::PasskeyControlMarking;
+
+pub use authentication_workflow::{
+    AuthenticationBackupCodesEvidence, AuthenticationEnrollmentObservation,
+};
+
+pub use backup_code_candidates::BackupCodePageText;
+
+pub use vault_host_policy::{
+    SentinelVaultMatch, VaultAppBaseSelection, VaultHostObservation, VaultHostPolicy,
+};
+
+pub use authentication_workflow::{
+    AuthenticationRecoveryCopyEvidence, AuthenticationRecoveryCopyRequest,
+    AuthenticationWorkflowSnapshotTransport, AuthenticationWorkflowTransportAdmission,
+    AuthenticationWorkflowTransportPayload, AuthenticationWorkflowTransportType,
+};
+
+mod passkey_session_material;
+pub use passkey_session_material::*;
+
+mod recovery_code_language;
+pub use recovery_code_language::BackupCodeCandidatePresence;
+
+pub use page_field_classification::{
+    AuthenticationRouteControlPresence, AuthenticationRoutePasswordPresence,
+    AuthenticationRouteScope, AuthenticationRouteUsernamePresence, PageLoginContext,
+};
+
+mod authentication_navigation_path;
+pub use authentication_navigation_path::AuthenticationNavigationPath;
+pub use authentication_workflow::{
+    AuthenticationDisplayProgress, AuthenticationWorkflowActivity, AuthenticationWorkflowProgress,
+    AuthenticatorEnrollmentProgress, PasswordWorkflowActivityEvidence,
+    PasswordWorkflowActivityPresentation,
+};
+pub use authentication_workflow_response::SavedLoginActionPresentationRequest;
+pub use extension_pairing_state::ImportedExtensionEventLogError;
+pub use page_field_classification::AuthenticationControlTransportability;
+
+mod authenticator_session_response;
+pub use authenticator_session_response::*;
+
+pub use authentication_workflow::{
+    ApprovedAuthenticationWorkflowDecision, ApprovedAuthenticationWorkflowRevalidation,
+};

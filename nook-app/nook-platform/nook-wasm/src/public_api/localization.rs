@@ -1,9 +1,18 @@
+use crate::types::NookAppLocale;
 use crate::{
     NookAuthenticationOutcomeObservation, NookAuthenticationOutcomeVerdict,
     NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch,
     NookVaultSecurityRecommendations,
 };
-use nook_core::AppLocale;
+use nook_core::AuthenticationWorkflowMatch;
+use nook_core::VaultSecurityAssessment;
+use nook_core::{AppLocale, VaultRecoveryErrorKind};
+use nook_core::{
+    LookupTranslationRequest, MergeTranslationCatalogsRequest, ResolveErrorMessageRequest,
+    ResolveTranslationCatalogRequest, TranslateFromCatalogRequest, TranslateRequest,
+    TranslateWithReplacementsRequest, TranslationCatalog,
+};
+use nook_core::{TranslationCatalogSource, TranslationLookup};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -27,19 +36,22 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn translate_key(locale: &str, key: &str) -> String {
-    nook_core::translate(locale, key)
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn translate_key(locale: &str, key: &str) -> String {
+    TranslationCatalog::translate(TranslateRequest {
+        locale,
+        key,
+    })
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn classify_vault_recovery_error(message: &str) -> nook_core::VaultRecoveryErrorKind {
-    nook_core::classify_vault_recovery_error(message)
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_vault_recovery_error(message: &str) -> nook_core::VaultRecoveryErrorKind {
+    VaultRecoveryErrorKind::classify_vault_recovery_error(message)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn device_protection_status_name(status: nook_core::DeviceProtectionStatus) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn device_protection_status_name(status: nook_core::DeviceProtectionStatus) -> String {
     status.as_str().to_owned()
 }
 
@@ -52,23 +64,27 @@ pub fn device_protection_status_name(status: nook_core::DeviceProtectionStatus) 
         reason = "FFI boundary: projects the `assess_vault_security` count through a JavaScript Number scalar"
     )
 )]
-pub fn assess_vault_security(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn assess_vault_security(
     sync_provider_count: u32,
     enrolled_device_count: u32,
 ) -> NookVaultSecurityRecommendations {
-    NookVaultSecurityRecommendations::from_core(nook_core::assess_vault_security(
-        (sync_provider_count as usize).into(),
-        (enrolled_device_count as usize).into(),
-    ))
+    NookVaultSecurityRecommendations::from_core(
+        nook_core::VaultSecurityRecommendations::assess_vault_security(VaultSecurityAssessment {
+            sync_provider_count: (sync_provider_count as usize).into(),
+            enrolled_device_count: (enrolled_device_count as usize).into(),
+        }),
+    )
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn authentication_workflow_snapshot(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_workflow_snapshot(
     observations: &NookAuthenticationPageObservations,
 ) -> NookAuthenticationWorkflowMatch {
     NookAuthenticationWorkflowMatch::from_core(
-        nook_core::classify_authentication_workflow_candidates(observations.as_core()),
+        AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(
+            observations.as_core(),
+        ),
     )
 }
 
@@ -81,53 +97,52 @@ pub fn authentication_workflow_snapshot(
         reason = "FFI boundary: projects the `classify_authentication_outcome` timestamp or duration through a JavaScript Number scalar"
     )
 )]
-pub fn classify_authentication_outcome(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_authentication_outcome(
     observation: &NookAuthenticationOutcomeObservation,
     timeout_ms: u32,
 ) -> NookAuthenticationOutcomeVerdict {
-    NookAuthenticationOutcomeVerdict::from_core(nook_core::classify_authentication_outcome(
-        observation.to_core(),
-        timeout_ms.into(),
-    ))
+    NookAuthenticationOutcomeVerdict::from_core(
+        (observation.to_core()).classify_authentication_outcome(timeout_ms.into()),
+    )
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn classify_authentication_outcome_with_default_timeout(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_authentication_outcome_with_default_timeout(
     observation: &NookAuthenticationOutcomeObservation,
 ) -> NookAuthenticationOutcomeVerdict {
-    NookAuthenticationOutcomeVerdict::from_core(nook_core::classify_authentication_outcome(
-        observation.to_core(),
-        nook_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
-    ))
+    NookAuthenticationOutcomeVerdict::from_core(
+        (observation.to_core())
+            .classify_authentication_outcome(nook_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
+    )
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn parse_app_locale(value: &str) -> NookAppLocaleParse {
-    nook_core::parse_app_locale(value).into()
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn parse_app_locale(value: &str) -> NookAppLocaleParse {
+    AppLocale::parse_app_locale(value).into()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn resolve_app_locale_from_tag(tag: &str) -> NookAppLocaleParse {
-    nook_core::resolve_app_locale_from_tag(tag).into()
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_app_locale_from_tag(tag: &str) -> NookAppLocaleParse {
+    AppLocale::resolve_app_locale_from_tag(tag).into()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> String {
-    nook_core::resolve_app_locale_from_tags(tags.iter().map(String::as_str)).to_owned()
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> NookAppLocale {
+    nook_core::SupportedAppLocale::resolve(tags.iter().map(String::as_str))
 }
 
 #[wasm_bindgen]
-pub fn supported_app_locale_code(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn supported_app_locale_code(
     locale: NookAppLocaleParse,
-) -> Result<String, wasm_bindgen::JsError> {
+) -> Result<NookAppLocale, wasm_bindgen::JsError> {
     match locale {
-        NookAppLocaleParse::English => Ok("en".to_owned()),
-        NookAppLocaleParse::Russian => Ok("ru".to_owned()),
+        NookAppLocaleParse::English => Ok(nook_core::SupportedAppLocale::English),
+        NookAppLocaleParse::Russian => Ok(nook_core::SupportedAppLocale::Russian),
         NookAppLocaleParse::Unsupported => Err(JsError::new(
             "unsupported locale does not have an application locale code",
         )),
@@ -136,25 +151,36 @@ pub fn supported_app_locale_code(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn get_translation_catalog(locale: &str) -> String {
-    nook_core::get_translation_catalog(locale).to_owned()
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn get_translation_catalog(locale: &str) -> String {
+    AppLocale::get_translation_catalog(locale).to_owned()
 }
 
 #[wasm_bindgen]
-pub fn lookup_translation(catalog_json: &str, key: &str) -> Result<String, wasm_bindgen::JsError> {
-    nook_core::lookup_translation(catalog_json, key)
-        .ok_or_else(|| JsError::new(&format!("missing translation key: {key}")))
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn lookup_translation(catalog_json: &str, key: &str) -> Result<String, wasm_bindgen::JsError> {
+    match TranslationCatalog::lookup_translation(LookupTranslationRequest {
+        catalog_json,
+        key,
+    }) {
+        TranslationLookup::Found(value) => Ok(value),
+        TranslationLookup::Missing | TranslationLookup::InvalidCatalog => {
+            Err(JsError::new(&format!("missing translation key: {key}")))
+        }
+    }
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn translate_from_catalog(catalog_json: &str, locale: &str, key: &str) -> String {
-    nook_core::translate_from_catalog(catalog_json, locale, key)
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn translate_from_catalog(catalog_json: &str, locale: &str, key: &str) -> String {
+    TranslationCatalog::translate_from_catalog(TranslateFromCatalogRequest {
+        catalog_json,
+        locale,
+        key,
+    })
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn translate_with_replacements(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn translate_with_replacements(
     catalog_json: &str,
     locale: &str,
     key: &str,
@@ -165,33 +191,49 @@ pub fn translate_with_replacements(
         .into_iter()
         .zip(replacement_values)
         .collect::<Vec<_>>();
-    nook_core::translate_with_replacements(catalog_json, locale, key, &replacements)
+    TranslationCatalog::translate_with_replacements(TranslateWithReplacementsRequest {
+        catalog_json,
+        locale,
+        key,
+        replacements: &replacements,
+    })
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn resolve_error_message(catalog_json: &str, locale: &str, message: &str) -> String {
-    nook_core::resolve_error_message(catalog_json, locale, message)
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_error_message(catalog_json: &str, locale: &str, message: &str) -> String {
+    TranslationCatalog::resolve_error_message(ResolveErrorMessageRequest {
+        catalog_json,
+        locale,
+        message,
+    })
 }
 
 #[wasm_bindgen]
-pub fn merge_translation_catalogs(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn merge_translation_catalogs(
     base_json: &str,
     overlay_json: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
-    nook_core::merge_translation_catalogs(base_json, overlay_json).map_err(Into::into)
+    TranslationCatalog::merge_translation_catalogs(MergeTranslationCatalogsRequest {
+        base_json,
+        overlay_json,
+    })
+    .map_err(Into::into)
+}
+
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> Result<String, wasm_bindgen::JsError> {
+    TranslationCatalog::resolve_translation_catalog(ResolveTranslationCatalogRequest {
+        locale,
+        wasm_catalog_json: TranslationCatalogSource::Supplied(wasm_catalog_json),
+    })
+    .map_err(Into::into)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> String {
-    nook_core::resolve_translation_catalog(locale, Some(wasm_catalog_json))
-}
-
-#[wasm_bindgen]
-#[must_use]
-pub fn default_translation_catalog(locale: &str) -> String {
-    nook_core::resolve_translation_catalog(locale, None)
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn default_translation_catalog(locale: &str) -> String {
+    AppLocale::get_translation_catalog(locale).to_owned()
 }
 
 #[cfg(test)]
@@ -215,15 +257,19 @@ mod tests {
             NookAppLocaleParse::Russian
         );
         assert_eq!(
-            resolve_app_locale_from_tags(vec!["xx".into(), "ru".into()]),
+            resolve_app_locale_from_tags(vec!["xx".into(), "ru".into()]).code(),
             "ru"
         );
         assert_eq!(
-            supported_app_locale_code(NookAppLocaleParse::English).unwrap(),
+            supported_app_locale_code(NookAppLocaleParse::English)
+                .unwrap()
+                .code(),
             "en"
         );
         assert_eq!(
-            supported_app_locale_code(NookAppLocaleParse::Russian).unwrap(),
+            supported_app_locale_code(NookAppLocaleParse::Russian)
+                .unwrap()
+                .code(),
             "ru"
         );
         assert!(supported_app_locale_code(NookAppLocaleParse::Unsupported).is_err());
@@ -245,7 +291,8 @@ mod tests {
         );
         assert!(!resolve_error_message(&catalog, "en", "unknown error").is_empty());
         assert!(merge_translation_catalogs("{}", "{}").is_ok());
-        assert!(!resolve_translation_catalog("en", &catalog).is_empty());
+        assert!(resolve_translation_catalog("en", &catalog).is_ok());
+        assert!(resolve_translation_catalog("en", "{").is_err());
         assert!(!default_translation_catalog("en").is_empty());
     }
 }

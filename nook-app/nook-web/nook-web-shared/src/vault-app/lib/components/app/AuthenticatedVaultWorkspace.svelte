@@ -1,11 +1,12 @@
 <script lang="ts">
+  import { WorkspaceLocation } from '$lib/app/workspace-route'
   type SecretAddModeChange = {
     readonly open: boolean
     readonly selection: SecretTypeSelection
   }
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { onDestroy, tick } from 'svelte'
+  import { onDestroy, tick, type ComponentProps } from 'svelte'
   import {
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
@@ -44,9 +45,21 @@
   import {
     WorkspaceRoute,
     WorkspaceRouteLookupKind,
-    workspaceRouteFromPath,
+    WorkspacePath,
   } from '$lib/app/workspace-route'
-  import { applyWorkspaceRoute, pushWorkspaceRoute } from '$lib/vault/ui'
+  import { VaultWorkspaceActions } from '$lib/vault/ui'
+
+  type VaultAdminProps = ComponentProps<typeof VaultAdmin>
+  type OnboardDeviceProps = ComponentProps<typeof OnboardDevice>
+  type PendingJoinsBannerProps = ComponentProps<typeof PendingJoinsBanner>
+  type SecretVaultProps = ComponentProps<typeof SecretVault>
+  type EnrollmentCodeInput = Pick<
+    Parameters<VaultState['issueEnrollmentCode']>[0],
+    'entryId' | 'password'
+  >
+  type VaultSettingsAccordionProps = ComponentProps<
+    typeof VaultSettingsAccordion
+  >
 
   const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
 
@@ -113,7 +126,7 @@
   }
 
   function openDevicesAccessFromHeader() {
-    const currentRoute = workspaceRouteFromPath(window.location.pathname)
+    const currentRoute = new WorkspacePath(window.location.pathname).route
     if (
       currentRoute.kind === WorkspaceRouteLookupKind.Workspace &&
       currentRoute.route === WorkspaceRoute.DevicesAccess
@@ -141,12 +154,19 @@
   })
 
   async function closeDevicesAccess() {
-    pushWorkspaceRoute(devicesAccessReturnRoute)
-    const routeApplication: Parameters<typeof applyWorkspaceRoute>[0] = {
-      state: vault,
+    const navigation = new WorkspaceLocation(
+      devicesAccessReturnRoute,
+    ).navigate()
+    if (navigation.isErr()) {
+      vault.errorMsg = vault.t(navigation.error.translationKey)
+      return
+    }
+    const routeApplication: Parameters<
+      VaultWorkspaceActions['applyWorkspaceRoute']
+    >[0] = {
       route: devicesAccessReturnRoute,
     }
-    applyWorkspaceRoute(routeApplication)
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(routeApplication)
     await tick()
     document
       .querySelector<HTMLButtonElement>(
@@ -227,26 +247,41 @@
           enrollmentCode={vault.enrollmentCode}
           canManageExistingPasswords={vault.deviceProtectionReady}
           onReconnect={onSettingsReconnect}
-          onSyncProvider={(id) => {
+          onSyncProvider={async (
+            id: Parameters<NonNullable<VaultAdminProps['onSyncProvider']>>[0],
+          ) => {
             const syncRequest: Parameters<typeof vault.syncProviderById>[0] = {
               providerId: id,
               visibility: ProviderSyncVisibility.Visible,
               failureHandling: ProviderSyncFailureHandling.Capture,
             }
-            return vault.syncProviderById(syncRequest)
+            const outcome = await vault.syncProviderById(syncRequest)
+            if (outcome.isErr())
+              vault.errorMsg = vault.t(outcome.error.translationKey)
           }}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
-          onBeginSetup={(setupRequest) =>
-            vault.beginProviderSetup(setupRequest)}
+          onBeginSetup={(
+            setupRequest: Parameters<VaultAdminProps['onBeginSetup']>[0],
+          ) => vault.beginProviderSetup(setupRequest)}
           onCancelSetup={() => vault.cancelProviderSetup()}
-          onRemoveProvider={(id) => vault.removeProvider(id)}
-          onAddPassword={(passwordRequest) =>
-            vault.addVaultPassword(passwordRequest)}
-          onUpdatePassword={(passwordRequest) =>
-            vault.updateVaultPasswordEntry(passwordRequest)}
-          onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
-          onIssueCode={({ entryId, password }) => {
+          onRemoveProvider={async (
+            id: Parameters<NonNullable<VaultAdminProps['onRemoveProvider']>>[0],
+          ) => {
+            const removed = await vault.removeProvider(id)
+            if (removed.isErr())
+              vault.errorMsg = vault.t(removed.error.translationKey)
+          }}
+          onAddPassword={(
+            passwordRequest: Parameters<VaultAdminProps['onAddPassword']>[0],
+          ) => vault.addVaultPassword(passwordRequest)}
+          onUpdatePassword={(
+            passwordRequest: Parameters<VaultAdminProps['onUpdatePassword']>[0],
+          ) => vault.updateVaultPasswordEntry(passwordRequest)}
+          onRemovePassword={(
+            id: Parameters<VaultAdminProps['onRemovePassword']>[0],
+          ) => vault.removeVaultPasswordEntry(id)}
+          onIssueCode={(enrollment: EnrollmentCodeInput) => {
             const provider = vault.syncProviders[0]
             if (!provider) {
               throw new Error(
@@ -256,30 +291,47 @@
             const issueRequest: Parameters<
               typeof vault.issueEnrollmentCode
             >[0] = {
-              entryId,
-              password,
+              entryId: enrollment.entryId,
+              password: enrollment.password,
               providerId: provider.id,
             }
             return vault.issueEnrollmentCode(issueRequest)
           }}
           onClearCode={() => vault.clearEnrollmentCode()}
-          onImportBitwarden={(importRequest) =>
-            vault.handleBitwardenImport(importRequest)}
-          onImportKeePassXc={(csv) => vault.handleKeePassXcImport(csv)}
-          onImportLastPass={(csv) => vault.handleLastPassImport(csv)}
-          onImportKeeper={(csv) => vault.handleKeeperImport(csv)}
-          onImportOnePassword={(archive) =>
-            vault.handleOnePasswordImport(archive)}
-          onImportApplePasswords={(exportBytes) =>
-            vault.handleApplePasswordsImport(exportBytes)}
-          onImportChromePasswords={(csv) =>
-            vault.handleChromePasswordsImport(csv)}
-          onImportDashlane={(exportBytes) =>
-            vault.handleDashlaneImport(exportBytes)}
-          onImportGoogleAuthenticator={(migrationUris) =>
-            vault.handleGoogleAuthenticatorImport(migrationUris)}
-          onImportProtonPass={(exportBytes) =>
-            vault.handleProtonPassImport(exportBytes)}
+          onImportBitwarden={(
+            importRequest: Parameters<VaultAdminProps['onImportBitwarden']>[0],
+          ) => vault.handleBitwardenImport(importRequest)}
+          onImportKeePassXc={(
+            csv: Parameters<VaultAdminProps['onImportKeePassXc']>[0],
+          ) => vault.handleKeePassXcImport(csv)}
+          onImportLastPass={(
+            csv: Parameters<VaultAdminProps['onImportLastPass']>[0],
+          ) => vault.handleLastPassImport(csv)}
+          onImportKeeper={(
+            csv: Parameters<VaultAdminProps['onImportKeeper']>[0],
+          ) => vault.handleKeeperImport(csv)}
+          onImportOnePassword={(
+            archive: Parameters<VaultAdminProps['onImportOnePassword']>[0],
+          ) => vault.handleOnePasswordImport(archive)}
+          onImportApplePasswords={(
+            exportBytes: Parameters<
+              VaultAdminProps['onImportApplePasswords']
+            >[0],
+          ) => vault.handleApplePasswordsImport(exportBytes)}
+          onImportChromePasswords={(
+            csv: Parameters<VaultAdminProps['onImportChromePasswords']>[0],
+          ) => vault.handleChromePasswordsImport(csv)}
+          onImportDashlane={(
+            exportBytes: Parameters<VaultAdminProps['onImportDashlane']>[0],
+          ) => vault.handleDashlaneImport(exportBytes)}
+          onImportGoogleAuthenticator={(
+            migrationUris: Parameters<
+              VaultAdminProps['onImportGoogleAuthenticator']
+            >[0],
+          ) => vault.handleGoogleAuthenticatorImport(migrationUris)}
+          onImportProtonPass={(
+            exportBytes: Parameters<VaultAdminProps['onImportProtonPass']>[0],
+          ) => vault.handleProtonPassImport(exportBytes)}
         />
       {:else if vault.settingsOpen && vault.settingsSection === SettingsSection.Onboard}
         <OnboardDevice
@@ -295,15 +347,18 @@
           loginSetup={vault.loginSetup}
           bind:githubPat={vault.githubPat}
           bind:githubRepo={vault.githubRepo}
-          onIssueCode={(issueRequest) =>
-            vault.issueEnrollmentCode(issueRequest)}
+          onIssueCode={(
+            issueRequest: Parameters<OnboardDeviceProps['onIssueCode']>[0],
+          ) => vault.issueEnrollmentCode(issueRequest)}
           onClearCode={() => vault.clearEnrollmentCode()}
-          onAddPassword={(passwordRequest) =>
-            vault.addVaultPassword(passwordRequest)}
+          onAddPassword={(
+            passwordRequest: Parameters<OnboardDeviceProps['onAddPassword']>[0],
+          ) => vault.addVaultPassword(passwordRequest)}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
-          onBeginSetup={(setupRequest) =>
-            vault.beginProviderSetup(setupRequest)}
+          onBeginSetup={(
+            setupRequest: Parameters<OnboardDeviceProps['onBeginSetup']>[0],
+          ) => vault.beginProviderSetup(setupRequest)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onConnectProvider={onSettingsReconnect}
         />
@@ -318,10 +373,20 @@
           pendingJoins={vault.pendingJoins}
           vaultMembers={vault.vaultMembers}
           hasPasswordEnvelope={vault.hasPasswordEnvelope}
-          onApproveJoin={(id) => vault.approveJoin(id)}
-          onDenyJoin={(id) => vault.denyJoin(id)}
-          onRenameDevice={(renameRequest) => vault.renameDevice(renameRequest)}
-          onRevokeDevice={(id) => vault.revokeDevice(id)}
+          onApproveJoin={(
+            id: Parameters<VaultSettingsAccordionProps['onApproveJoin']>[0],
+          ) => vault.approveJoin(id)}
+          onDenyJoin={(
+            id: Parameters<VaultSettingsAccordionProps['onDenyJoin']>[0],
+          ) => vault.denyJoin(id)}
+          onRenameDevice={(
+            renameRequest: Parameters<
+              VaultSettingsAccordionProps['onRenameDevice']
+            >[0],
+          ) => vault.renameDevice(renameRequest)}
+          onRevokeDevice={(
+            id: Parameters<VaultSettingsAccordionProps['onRevokeDevice']>[0],
+          ) => vault.revokeDevice(id)}
         />
       {:else}
         {#if !secretsNoteEditorOpen}
@@ -329,8 +394,14 @@
             {vault}
             pendingJoins={vault.pendingJoins}
             isBusy={vault.isSaving || vault.isVerifying}
-            onApproveJoin={(id) => vault.approveJoin(id)}
-            onRefresh={() => vault.manualSync()}
+            onApproveJoin={(
+              id: Parameters<PendingJoinsBannerProps['onApproveJoin']>[0],
+            ) => vault.approveJoin(id)}
+            onRefresh={async () => {
+              const synchronized = await vault.manualSync()
+              if (synchronized.isErr())
+                vault.errorMsg = vault.t(synchronized.error.translationKey)
+            }}
             onOpenDevicesSettings={() => {
               const settingsRequest: Parameters<typeof vault.openSettings>[0] =
                 {
@@ -349,11 +420,17 @@
               editRestriction={vault.editRestriction}
               secrets={vault.secrets}
               onAddModeChange={setAddMode}
-              onAddSecret={(secretRequest) =>
-                vault.handleAddSecret(secretRequest)}
-              onReplaceSecret={(secretRequest) =>
-                vault.handleReplaceSecret(secretRequest)}
-              onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
+              onAddSecret={(
+                secretRequest: Parameters<SecretVaultProps['onAddSecret']>[0],
+              ) => vault.handleAddSecret(secretRequest)}
+              onReplaceSecret={(
+                secretRequest: Parameters<
+                  SecretVaultProps['onReplaceSecret']
+                >[0],
+              ) => vault.handleReplaceSecret(secretRequest)}
+              onDeleteSecret={(
+                id: Parameters<SecretVaultProps['onDeleteSecret']>[0],
+              ) => vault.handleDeleteSecret(id)}
               onGeneratePassword={generate_password}
             />
           {/key}
@@ -372,7 +449,11 @@
       errorMsg={vault.errorMsg}
       syncConflictLabel={vault.syncConflictLabel}
       {appVersion}
-      onRefresh={() => vault.manualSync()}
+      onRefresh={async () => {
+        const synchronized = await vault.manualSync()
+        if (synchronized.isErr())
+          vault.errorMsg = vault.t(synchronized.error.translationKey)
+      }}
       onDismissSuccess={() => vault.dismissSuccess()}
       onDismissError={() => vault.dismissError()}
     />

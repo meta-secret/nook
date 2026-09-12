@@ -173,10 +173,13 @@ distinct acceptance evidence. It must be independently mergeable. The implementa
 plan must authorize only the first/current slice. Later rows are planning
 context, not implementation authority.
 
-State that Gizmo must fully implement, validate, squash-merge, remotely verify,
-and close out the current slice before creating the next branch. State that the
-next branch starts from current `origin/main`. Prohibit implementation against
-an unmerged predecessor and prohibit stacked branches or pull requests.
+State that Gizmo must fully implement and validate the current slice, land the
+feature through local dev with `dev:land`, publish local dev with `dev:publish`,
+and use `dev:promote` for the guarded exact-head ordinary fast-forward to main
+before closing out the current slice. State that the next branch starts from
+current `origin/main`. Prohibit direct feature-to-main delivery, history
+rewriting, implementation against an unmerged predecessor, and stacked branches
+or pull requests.
 
 Write the current slice as `<scope>; Acceptance evidence: <observable proof>`.
 Write every numbered PR row in the mapped, estimated form defined above.

@@ -1,4 +1,5 @@
 use super::*;
+use crate::{NookCompanionExtensionEndpoint, NookError, NookVaultManager};
 use nook_companion_core::{
     CompanionEpochMilliseconds, CompanionIdentityDiscoveryObservation,
     CompanionIdentityDiscoveryRequest, CompanionIdentityHandoffAuthorization,
@@ -6,18 +7,53 @@ use nook_companion_core::{
     CompanionIdentityStatusAdmissionRequest, CompanionInstallationAppKey, CompanionUnlockedAppKey,
     ExtensionConnectScope, ExtensionPairingVaultType,
 };
+use nook_companion_core::{
+    CompanionExtensionPresence, CompanionIdentityHandoffResponse, CompanionProtocolError,
+    CompanionWebsiteHandoffBegin,
+};
+use nook_core::{DeviceIdentity, SigningIdentity, VaultApplication};
+use std::mem;
+use tsify::Tsify;
 use wasm_bindgen_test::wasm_bindgen_test;
+
+#[test]
+fn chrome_companion_admissions_are_unknown_and_schema_checked() {
+    assert!(CompanionIdentityStatusRequestAdmission::DECL.ends_with(" = unknown;"));
+    assert!(CompanionHandoffResponseValueAdmission::DECL.ends_with(" = unknown;"));
+    assert!(CompanionExtensionPresenceAdmission::DECL.ends_with(" = unknown;"));
+    assert!(CompanionHandoffAuthorizationAdmission::DECL.ends_with(" = unknown;"));
+    assert!(serde_json::from_str::<CompanionIdentityStatusRequestAdmission>("null").is_err());
+    assert!(serde_json::from_str::<CompanionHandoffResponseValueAdmission>("null").is_err());
+    assert!(serde_json::from_str::<CompanionExtensionPresenceAdmission>("null").is_err());
+    assert!(serde_json::from_str::<CompanionHandoffAuthorizationAdmission>("null").is_err());
+}
+
+#[test]
+fn presence_admission_preserves_core_validation() -> Result<(), serde_json::Error> {
+    let admission = serde_json::from_str::<CompanionExtensionPresenceAdmission>(
+        r#"{"kind":"locked","vault_type":"simple","vault_store_id":"","vault_name":"Personal"}"#,
+    )?;
+    let CompanionExtensionPresenceAdmission(presence) = admission;
+    assert!(matches!(
+        NookCompanionExtensionEndpoint::from_presence(presence),
+        Err(CompanionOperationError::Protocol(
+            CompanionProtocolError::InvalidValue
+        ))
+    ));
+    Ok(())
+}
 
 fn epoch_milliseconds(
     serialized: &str,
 ) -> Result<CompanionEpochMilliseconds, CompanionOperationError> {
-    Ok(serde_json::from_str(serialized)?)
+    serde_json::from_str(serialized)
+        .map_err(|error| NookError::Serialization(error.to_string()).into())
 }
 
 struct DirectHandoffScenario {
     website: NookVaultManager,
     extension: NookVaultManager,
-    endpoint: NookCompanionExtensionEndpoint,
+    endpoint: ReplayEndpoint,
     presence: CompanionExtensionPresence,
 }
 
@@ -51,12 +87,12 @@ impl DirectHandoffScenario {
         Ok(Self {
             website: NookVaultManager::new(),
             extension,
-            endpoint: NookCompanionExtensionEndpoint::from_presence(presence.clone())?,
+            endpoint: ReplayEndpoint::new(presence.clone())?,
             presence,
         })
     }
 
-    fn discovery(&self) -> Result<CompanionIdentityDiscoveryObservation, CompanionOperationError> {
+    fn discovery() -> Result<CompanionIdentityDiscoveryObservation, CompanionOperationError> {
         Ok(CompanionIdentityDiscoveryObservation {
             request: CompanionIdentityDiscoveryRequest {
                 request_id: "request-1".to_owned(),
@@ -68,7 +104,7 @@ impl DirectHandoffScenario {
     }
 
     fn handoff_begin(&mut self) -> Result<CompanionWebsiteHandoffBegin, CompanionOperationError> {
-        let discovery = self.discovery()?;
+        let discovery = Self::discovery()?;
         let status = self.endpoint.discover_inner(discovery.clone())?;
         let admission =
             CompanionIdentityStatusAdmission::admit(CompanionIdentityStatusAdmissionRequest {
@@ -295,7 +331,7 @@ fn production_endpoint_consumes_stale_and_concurrent_transactions()
     let request = concurrent
         .website
         .begin_companion_identity_handoff_inner(begin)?;
-    let mut second = concurrent.discovery()?;
+    let mut second = DirectHandoffScenario::discovery()?;
     second.request.request_id = "request-2".to_owned();
     assert!(matches!(
         concurrent.endpoint.discover_inner(second),
@@ -335,4 +371,66 @@ fn real_manager_rejects_an_installation_app_key_mismatch() -> Result<(), Compani
         ))
     ));
     Ok(())
+}
+
+// Runtime holder exists only in replay tests: the production stages are consuming.
+struct ReplayEndpoint {
+    phase: ReplayEndpointPhase,
+}
+enum ReplayEndpointPhase {
+    Awaiting(Box<CompanionExtensionHandoffEndpoint>),
+    Discovered(Box<DiscoveredCompanionHandoffEndpoint>),
+    Consumed,
+}
+impl ReplayEndpoint {
+    fn new(presence: CompanionExtensionPresence) -> Result<Self, CompanionProtocolError> {
+        Ok(Self {
+            phase: ReplayEndpointPhase::Awaiting(Box::new(CompanionExtensionHandoffEndpoint::new(
+                presence,
+            )?)),
+        })
+    }
+    fn discover(
+        &mut self,
+        discovery: CompanionIdentityDiscoveryObservation,
+    ) -> Result<CompanionIdentityStatus, CompanionProtocolError> {
+        let ready = match mem::replace(&mut self.phase, ReplayEndpointPhase::Consumed) {
+            ReplayEndpointPhase::Awaiting(endpoint) => (*endpoint).discover(discovery)?,
+            ReplayEndpointPhase::Discovered(endpoint) => (*endpoint).observe(&discovery)?,
+            ReplayEndpointPhase::Consumed => return Err(CompanionProtocolError::NonceUnavailable),
+        };
+        let status = ready.status();
+        self.phase = ReplayEndpointPhase::Discovered(Box::new(ready));
+        Ok(status)
+    }
+    fn authorize_handoff(
+        &mut self,
+        auth: CompanionIdentityHandoffAuthorization,
+    ) -> Result<AuthorizedCompanionIdentityHandoff, CompanionProtocolError> {
+        match mem::replace(&mut self.phase, ReplayEndpointPhase::Consumed) {
+            ReplayEndpointPhase::Discovered(endpoint) => (*endpoint).authorize_handoff(auth),
+            ReplayEndpointPhase::Awaiting(_) | ReplayEndpointPhase::Consumed => {
+                Err(CompanionProtocolError::NonceUnavailable)
+            }
+        }
+    }
+}
+
+impl ReplayEndpoint {
+    fn discover_inner(
+        &mut self,
+        discovery: CompanionIdentityDiscoveryObservation,
+    ) -> Result<CompanionIdentityStatus, CompanionOperationError> {
+        Ok(self.discover(discovery)?)
+    }
+    fn authorize_and_seal_loaded(
+        &mut self,
+        operation: CompanionExtensionSealOperation<'_>,
+    ) -> Result<CompanionIdentityHandoffResponse, CompanionOperationError> {
+        let authorized = self.authorize_handoff(operation.authorization)?;
+        NookCompanionExtensionEndpoint::seal_authorized_loaded(CompanionAuthorizedSealOperation {
+            manager: operation.manager,
+            authorized,
+        })
+    }
 }

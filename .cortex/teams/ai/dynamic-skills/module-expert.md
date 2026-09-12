@@ -3,7 +3,7 @@
 ## Purpose
 
 Route module analysis through one registered read-only expert and keep module
-responsibilities separate from workflow roles.
+implementation and integration responsibilities separate from workflow roles.
 
 ## Problem Pattern
 
@@ -29,10 +29,13 @@ Analyze in this order:
 6. Report the smallest provider change and parent actions.
 
 Keep knowledge routing separate from write authorization. Invoke the registered
-semantic role through the active harness as read-only. A separate
-implementation worker may consume that evidence in the shared checkout at the
-exact accepted baseline. The parent verifies its direct commit before
-continuation.
+semantic role through the active harness as read-only against an immutable
+snapshot of the exact accepted baseline. A separately authorized
+implementation worker applies accepted findings in an isolated child worktree
+based on the parent feature worktree's exact baseline. The worker returns the
+exact commit for its iteration and focused evidence. The delivery parent
+verifies and integrates that commit into the parent worktree before deciding
+whether to continue.
 
 ## Scope
 
@@ -64,8 +67,12 @@ Do not use this skill to:
 3. Select the smallest allowed authority and skill context for the task.
 4. Verify the role contract and selection against the exact source commit.
 5. Return findings directly through the harness.
-6. Let a separately authorized implementation worker apply accepted findings.
-7. Let the delivery parent verify acceptance and decide continuation.
+6. Let a separately authorized implementation worker apply accepted findings in
+   an isolated child worktree based on the parent's exact baseline.
+7. Require the worker to return its exact iteration commit and focused evidence.
+8. Let the delivery parent verify and integrate that commit into the parent
+   worktree.
+9. Let the delivery parent verify acceptance and decide continuation.
 
 ## Validation
 

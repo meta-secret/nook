@@ -1,20 +1,41 @@
-use std::path::PathBuf;
-use std::{env, fs};
+use std::path::{Path, PathBuf};
+use std::{env, fs, ops::Deref};
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
 }
 
-fn read(relative_path: &str) -> anyhow::Result<String> {
-    Ok(fs::read_to_string(repository_root().join(relative_path))?)
+impl RepositoryFixture {
+    fn read(&self, relative_path: &str) -> anyhow::Result<String> {
+        Ok(fs::read_to_string(self.join(relative_path))?)
+    }
 }
 
 #[test]
 fn dependency_policy_allows_main_cache_seed_latency() -> anyhow::Result<()> {
-    let checks = read(".github/workflows/rust-ecosystem-checks.yml")?;
+    let checks =
+        RepositoryFixture::repository_root().read(".github/workflows/rust-ecosystem-checks.yml")?;
     let dependency_policy = checks
         .split_once("  dependency-policy:")
         .and_then(|(_, jobs)| jobs.split_once("\n  deterministic-tests:"))
@@ -22,9 +43,9 @@ fn dependency_policy_allows_main_cache_seed_latency() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("dependency-policy job block is missing"))?;
 
     assert!(
-        dependency_policy.contains("timeout-minutes: 30")
+        dependency_policy.contains("timeout-minutes: 5")
             && dependency_policy.contains("task docker:ecosystem:dependency-policy"),
-        "dependency policy must retain its command and allow Main cache-seed latency"
+        "dependency policy must retain its command within the five-minute job limit"
     );
 
     Ok(())
@@ -42,7 +63,8 @@ struct DependencyPolicyCacheContract {
 impl DependencyPolicyCacheContract {
     fn load() -> anyhow::Result<Self> {
         Ok(Self {
-            dockerfile: read("nook-app/nook-platform/docker/rust/policy-tools.Dockerfile")?,
+            dockerfile: RepositoryFixture::repository_root()
+                .read("nook-app/nook-platform/docker/rust/policy-tools.Dockerfile")?,
         })
     }
 
@@ -58,7 +80,7 @@ impl DependencyPolicyCacheContract {
             "policy must consume the owning toolchain declaration, not duplicate its pin"
         );
         let cleanup = policy
-            .find("trap 'rm -rf /tmp/nook-policy-cargo' EXIT")
+            .find("trap 'rm -rf /tmp/nook-policy-cargo /tmp/nook-policy-repository' EXIT")
             .ok_or_else(|| {
                 anyhow::anyhow!("fresh policy downloads must be cleaned on shell exit")
             })?;
@@ -85,28 +107,38 @@ impl DependencyPolicyCacheContract {
 
 #[test]
 fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()> {
-    let entry = read(".github/workflows/rust-ecosystem.yml")?;
-    let checks = read(".github/workflows/rust-ecosystem-checks.yml")?;
-    let main = read(".github/workflows/main.yml")?;
-    let pr = read(".github/workflows/pr.yml")?;
-    let quality = read(".cortex/teams/sre/workflows/quality.md")?;
-    let workspace = read("nook-app/nook-platform/Cargo.toml")?;
-    let dylint_manifest = read("nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml")?;
-    let rust_lineage_dockerfile = read("nook-app/nook-platform/docker/rust/product.Dockerfile")?;
+    let entry = RepositoryFixture::repository_root().read(".github/workflows/ci.yml")?;
+    let checks =
+        RepositoryFixture::repository_root().read(".github/workflows/rust-ecosystem-checks.yml")?;
+    let main = RepositoryFixture::repository_root().read(".github/workflows/main.yml")?;
+    let pr = RepositoryFixture::repository_root().read(".github/workflows/pr.yml")?;
+    let quality =
+        RepositoryFixture::repository_root().read(".cortex/teams/sre/workflows/quality.md")?;
+    let workspace =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/Cargo.toml")?;
+    let dylint_manifest = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml")?;
+    let rust_lineage_dockerfile = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/product.Dockerfile")?;
     let rust_dockerfile = [
         "nook-app/nook-platform/docker/rust/product.Dockerfile",
         "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile",
         "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
     ]
     .into_iter()
-    .map(read)
+    .map(|path| RepositoryFixture::repository_root().read(path))
     .collect::<anyhow::Result<Vec<_>>>()?
     .join("\n");
-    let rust_bake = read("nook-app/nook-platform/docker/rust/docker-bake.hcl")?;
-    let replication = read("nook-app/nook-platform/nook-replication/src/replica_store.rs")?;
-    let fuzz_target = read("nook-app/nook-platform/fuzz/fuzz_targets/wire_parsers.rs")?;
-    let fuzz_manifest = read("nook-app/nook-platform/fuzz/Cargo.toml")?;
-    let readiness = read("agentic-ai/ci-agent/src/main/github.ts")?;
+    let rust_bake = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/docker-bake.hcl")?;
+    let replication = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/nook-replication/src/replica_store.rs")?;
+    let fuzz_target = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/fuzz/fuzz_targets/wire_parsers.rs")?;
+    let fuzz_manifest =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/fuzz/Cargo.toml")?;
+    let readiness =
+        RepositoryFixture::repository_root().read("agentic-ai/ci-agent/src/main/github.ts")?;
     let dependency_policy = checks
         .split_once("  dependency-policy:")
         .and_then(|(_, jobs)| jobs.split_once("  deterministic-tests:"))
@@ -119,26 +151,20 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     );
     assert!(
         entry.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),
-        "Thin rust-ecosystem.yml must call the shared Rust ecosystem checks"
+        "Central ci.yml must call the shared Rust ecosystem checks"
     );
     assert!(
-        entry.contains("agentic-ai/minds/**"),
-        "Thin rust-ecosystem.yml must keep labeled minds-only PR coverage"
+        entry.contains("agentic-ai/minds/*"),
+        "Central ci.yml must keep labeled minds-only PR coverage"
     );
     for marker in [
-        "github.rest.pulls.listFiles",
-        "const isIgnoredByProductWorkflow",
-        "path.startsWith('.cortex/')",
-        "path.startsWith('.cursor/')",
-        "path === '.github/workflows/web-research.yml'",
-        "path.startsWith('agentic-ai/')",
-        "path.startsWith('nook-app/nook-web/nook-web-research/')",
-        "files.every((file) => isIgnoredByProductWorkflow(file.filename))",
-        "needs.validation-request.outputs.should-run == 'true'",
+        "needs.scope.outputs.product == 'false'",
+        "needs.scope.outputs.minds == 'true'",
+        "github.event.label.name == 'ci:validate'",
     ] {
         assert!(
             entry.contains(marker),
-            "Thin rust-ecosystem.yml must defer only paths handled by pr.yml: missing {marker}"
+            "central CI routing missing: {marker}"
         );
     }
     assert!(
@@ -152,48 +178,36 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && pr.contains("github.event.pull_request.head.repo.full_name == github.repository")
             && pr.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'")
             && checks
-                .matches("github.event.pull_request.head.repo.full_name == github.repository")
+                .lines()
+                .filter(|line| line.trim_start().starts_with("runs-on:")
+                    && line.contains(
+                        "github.event.pull_request.head.repo.full_name == github.repository"
+                    )
+                    && line.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+                    && line.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'"))
                 .count()
-                == 5,
+                == 3,
         "trusted native/ecosystem Rust jobs must use configured ARC while forks fall back hosted"
     );
-    assert!(
-        !entry.contains("\n  push:"),
-        "Thin rust-ecosystem.yml must not start a second Main-push run"
-    );
-    for marker in [
-        "- \"!agentic-ai/**\"",
-        "- \"agentic-ai/minds/**\"",
-        "product-paths:",
-        "git diff --name-only \"$BEFORE_SHA\" \"$AFTER_SHA\"",
-        "if: needs.product-paths.outputs.changed == 'true'",
-    ] {
-        assert!(
-            main.contains(marker),
-            "Main must route minds pushes while gating product jobs: missing {marker}"
-        );
-    }
+    assert!(entry.contains("branches: [main]"));
+    assert!(main.contains("workflow_call:") && main.contains("if: inputs.product_changed"));
     assert!(
         dependency_policy.contains("name: Dependency policy and RustSec")
-            && dependency_policy.contains("timeout-minutes: 30"),
-        "Dependency policy must retain enough time for a contended ARC cache miss"
+            && dependency_policy.contains("timeout-minutes: 5"),
+        "Dependency policy must enforce the five-minute job limit"
     );
     assert!(
         !entry.contains("Run dependency policy") && !entry.contains("Bake rust-dependency-policy"),
-        "Thin rust-ecosystem.yml must not duplicate dependency-policy steps"
+        "Central ci.yml must not duplicate dependency-policy steps"
     );
 
     for marker in [
         "Run dependency policy",
-        "Bake rust-ecosystem-deterministic",
-        "Bake rust-fuzz-smoke",
+        "Run deterministic tests, fuzz smoke, and Kani in parallel",
         "Bake rust-dylint",
-        "Bake Kani bounded proofs",
         "task docker:ecosystem:dependency-policy",
-        "task docker:ecosystem:deterministic",
-        "task docker:ecosystem:fuzz",
+        "task docker:ecosystem:smoke",
         "task docker:ecosystem:dylint",
-        "task docker:ecosystem:kani",
         "nook-docker-setup",
         "NOOK_SCCACHE_ACCESS_KEY",
         "FUZZ_SECONDS",
@@ -208,6 +222,19 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             "Shared Rust ecosystem checks are missing {marker}"
         );
     }
+    for selection in [
+        "ecosystem-policy-tools",
+        "ecosystem-smoke",
+        "ecosystem-dylint",
+    ] {
+        assert_eq!(
+            checks
+                .matches(&format!("cache-selection: {selection}"))
+                .count(),
+            1,
+            "each ecosystem job must select only its owned cache probe lineage"
+        );
+    }
     assert!(
         !checks.contains("docker-bake-sccache.sh")
             && !checks.contains("NOOK_BAKE_FILES")
@@ -220,14 +247,16 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
                 "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}"
             )
             .count(),
-        5,
+        3,
         "every Bake-backed ecosystem job must seed Main and isolate PR cache writes"
     );
-    let docker_tasks = read("nook-app/nook-platform/docker/Taskfile.yml")?;
-    let platform_tasks = read("nook-app/nook-platform/Taskfile.yml")?;
-    let preflight_tasks = read("preflight/Taskfile.yml")?;
-    let minds_tasks = read("agentic-ai/minds/Taskfile.yml")?;
-    let root_tasks = read("Taskfile.yml")?;
+    let docker_tasks =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/docker/Taskfile.yml")?;
+    let platform_tasks =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/Taskfile.yml")?;
+    let preflight_tasks = RepositoryFixture::repository_root().read("preflight/Taskfile.yml")?;
+    let minds_tasks = RepositoryFixture::repository_root().read("agentic-ai/minds/Taskfile.yml")?;
+    let root_tasks = RepositoryFixture::repository_root().read("Taskfile.yml")?;
     for marker in [
         "docker:rust-base:",
         "rust-base-restore",
@@ -289,7 +318,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     );
     assert!(
         docker_tasks.contains("rust-ecosystem-dependency-policy")
-            && !repository_root()
+            && !RepositoryFixture::repository_root()
                 .join("nook-app/nook-platform/docker/rust/dependency-policy.Dockerfile")
                 .exists(),
         "dependency policy must use the parameterized policy-tools Dockerfile target"
@@ -313,7 +342,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     }
     assert!(
         !checks.contains("model-checking/kani-github-action")
-            && checks.contains("task docker:ecosystem:kani"),
+            && docker_tasks.contains("task docker:ecosystem:kani & kani_pid=$!"),
         "Kani proof compilation must run through the BuildKit-cached Task target"
     );
 
@@ -349,18 +378,23 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             "docker/rust Dockerfiles are missing ecosystem marker {marker}"
         );
     }
-    let nightly_dockerfile = read("nook-app/nook-platform/docker/rust/nightly.Dockerfile")?;
+    let nightly_dockerfile = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/nightly.Dockerfile")?;
     assert!(
         !nightly_dockerfile.contains("rust-platform-nightly")
-            && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-dylint")
+            && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-dylint-build")
+            && nightly_dockerfile.contains("FROM rust-dylint-build AS rust-dylint-self-test")
+            && nightly_dockerfile.contains("FROM rust-dylint-build AS rust-dylint-native")
+            && nightly_dockerfile.contains("FROM rust-dylint-build AS rust-dylint-wasm")
+            && nightly_dockerfile.contains("FROM rust-dylint-native AS rust-dylint")
             && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-fuzz-smoke")
             && nightly_dockerfile
                 .contains("--manifest-path dylint/nook-domain-api/Cargo.toml --locked")
             && nightly_dockerfile
                 .matches("COPY nook-app/nook-platform/ nook-app/nook-platform/")
                 .count()
-                == 2,
-        "one nightly Dockerfile must own the shared tools and both source leaves"
+                == 3,
+        "one nightly Dockerfile must own shared tools, split Dylint leaves, and fuzz"
     );
     assert!(
         rust_dockerfile.contains("--hide-inclusion-graph")
@@ -419,7 +453,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && rust_bake.contains("cache-from = rust_ecosystem_fuzz_cache_from"),
         "dylint/fuzz full-graph leaf scopes must replace the standalone nightly cache lane"
     );
-    let preflight_bake = read("preflight/docker-bake.hcl")?;
+    let preflight_bake = RepositoryFixture::repository_root().read("preflight/docker-bake.hcl")?;
     let policy_tools_from = rust_bake
         .split("rust_ecosystem_policy_tools_cache_from =")
         .nth(1)
@@ -537,9 +571,13 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         );
     }
 
-    assert!(repository_root().join("deny.toml").is_file());
     assert!(
-        repository_root()
+        RepositoryFixture::repository_root()
+            .join("deny.toml")
+            .is_file()
+    );
+    assert!(
+        RepositoryFixture::repository_root()
             .join("nook-app/nook-platform/.insta.yaml")
             .is_file()
     );
@@ -569,7 +607,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "agentic-ai/minds/clippy.toml",
         "nook-app/nook-platform/fuzz/clippy.toml",
     ] {
-        let clippy = read(relative)?;
+        let clippy = RepositoryFixture::repository_root().read(relative)?;
         assert!(
             clippy.contains("allow-expect-in-tests = false"),
             "{relative} must deny expect in tests"
@@ -579,14 +617,15 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             "{relative} must deny unwrap in tests"
         );
     }
-    assert!(readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
-    assert!(readiness.contains("paths.every(isMainPrIgnoredPath)"));
+    assert!(readiness.contains("workflowFile: \"ci.yml\""));
+    assert!(readiness.contains("new PullRequestChangedPath(path).isMainPrIgnoredPath()"));
     Ok(())
 }
 
 #[test]
 fn ecosystem_policy_replaces_generic_custom_scanners_only() -> anyhow::Result<()> {
-    let quality = read(".cortex/teams/sre/workflows/quality.md")?;
+    let quality =
+        RepositoryFixture::repository_root().read(".cortex/teams/sre/workflows/quality.md")?;
 
     assert!(quality.contains("Ecosystem tools before bespoke preflight"));
     assert!(quality.contains("Keep `preflight` for Nook-specific"));

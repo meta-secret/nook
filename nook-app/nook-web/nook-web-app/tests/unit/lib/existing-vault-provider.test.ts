@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow'
 import { describe, expect, test } from 'vitest'
 import { NookExistingVaultProviderReadiness } from '$app-wasm'
 import {
@@ -10,12 +11,9 @@ import {
   storedLocalFolderDirectory,
   storedLocalFolderHandle,
 } from '$lib/auth/providers'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { ProviderActionsContext } from '$lib/vault/action-contexts'
-import { prepareExistingVaultProvider } from '$lib/vault/existing-vault-provider.svelte'
-import {
-  LocalFolderDraftKind,
-  OAuthFileDraftKind,
-} from '$lib/vault/state/provider.svelte'
+import { ExistingVaultProviderDraft } from '$lib/vault/existing-vault-provider.svelte'
 
 function providerState(): ProviderActionsContext {
   const oauthFile = defaultOAuthFileConfig({
@@ -26,59 +24,62 @@ function providerState(): ProviderActionsContext {
     directoryName: storedLocalFolderDirectory('Vaults'),
     handleId: storedLocalFolderHandle('folder'),
   }
-  return {
-    githubPat: 'github-token',
-    githubRepo: 'vault-repository',
-    oauthFileDraft: { kind: OAuthFileDraftKind.Configured, config: oauthFile },
-    localFolderDraft: {
-      kind: LocalFolderDraftKind.Configured,
-      config: localFolder,
-    },
-    requireOauthFileConfig: () => oauthFile,
-    requireLocalFolderConfig: () => localFolder,
-  } as unknown as ProviderActionsContext
+  const state = VaultStateTestFixture.create()
+  state.githubPat = 'github-token'
+  state.githubRepo = 'vault-repository'
+  state.configureOauthFile(oauthFile)
+  state.configureLocalFolder(localFolder)
+  return state
 }
 
 describe('existing vault provider snapshot', () => {
   test('uses the Rust-owned provider type as its only discriminant', () => {
     const state = providerState()
 
-    const local = prepareExistingVaultProvider({
+    const local = new ExistingVaultProviderDraft({
       state: state,
       setupType: LOCAL_PROVIDER_TYPE,
-    })
-    const github = prepareExistingVaultProvider({
+    }).prepare()
+    const github = new ExistingVaultProviderDraft({
       state: state,
       setupType: GITHUB_PROVIDER_TYPE,
-    })
-    const oauth = prepareExistingVaultProvider({
+    }).prepare()
+    const oauth = new ExistingVaultProviderDraft({
       state: state,
       setupType: OAUTH_FILE_PROVIDER_TYPE,
-    })
-    const folder = prepareExistingVaultProvider({
+    }).prepare()
+    const folder = new ExistingVaultProviderDraft({
       state: state,
       setupType: LOCAL_FOLDER_PROVIDER_TYPE,
-    })
+    }).prepare()
 
-    expect(local).toEqual({
-      kind: NookExistingVaultProviderReadiness.Ready,
-      provider: { setupType: LOCAL_PROVIDER_TYPE },
-    })
-    expect(github).toMatchObject({
-      kind: NookExistingVaultProviderReadiness.Ready,
-      provider: {
-        setupType: GITHUB_PROVIDER_TYPE,
-        githubPat: 'github-token',
-        githubRepo: 'vault-repository',
-      },
-    })
-    expect(oauth).toMatchObject({
-      kind: NookExistingVaultProviderReadiness.Ready,
-      provider: { setupType: OAUTH_FILE_PROVIDER_TYPE },
-    })
-    expect(folder).toMatchObject({
-      kind: NookExistingVaultProviderReadiness.Ready,
-      provider: { setupType: LOCAL_FOLDER_PROVIDER_TYPE },
-    })
+    expect(local).toEqual(
+      ok({
+        kind: NookExistingVaultProviderReadiness.Ready,
+        provider: { setupType: LOCAL_PROVIDER_TYPE },
+      }),
+    )
+    expect(github.isOk()).toBe(true)
+    if (github.isOk())
+      expect(github.value).toMatchObject({
+        kind: NookExistingVaultProviderReadiness.Ready,
+        provider: {
+          setupType: GITHUB_PROVIDER_TYPE,
+          githubPat: 'github-token',
+          githubRepo: 'vault-repository',
+        },
+      })
+    expect(oauth.isOk()).toBe(true)
+    if (oauth.isOk())
+      expect(oauth.value).toMatchObject({
+        kind: NookExistingVaultProviderReadiness.Ready,
+        provider: { setupType: OAUTH_FILE_PROVIDER_TYPE },
+      })
+    expect(folder.isOk()).toBe(true)
+    if (folder.isOk())
+      expect(folder.value).toMatchObject({
+        kind: NookExistingVaultProviderReadiness.Ready,
+        provider: { setupType: LOCAL_FOLDER_PROVIDER_TYPE },
+      })
   })
 })

@@ -1,3 +1,9 @@
+import { err, ok, type Result } from "neverthrow";
+import {
+  OperationalContractSource,
+  OperationalContractFailureKind,
+  type OperationalContractFailure,
+} from "./operational-contract";
 import { resolve } from "node:path";
 
 enum DockerfileFrontendConsumer {
@@ -17,13 +23,21 @@ enum TrustedDockerfileFrontendPin {
 }
 
 export class DockerfileFrontendContract {
-  static async assert(root: string): Promise<void> {
+  constructor(private readonly root: string) {}
+  async assert(): Promise<Result<void, OperationalContractFailure>> {
     for (const consumer of Object.values(DockerfileFrontendConsumer)) {
-      const source = await Bun.file(resolve(root, consumer)).text();
-      const firstLine = source.split("\n", 1)[0];
+      const source = await new OperationalContractSource(
+        resolve(this.root, consumer),
+      ).read();
+      if (source.isErr()) return err(source.error);
+      const firstLine = source.value.split("\n", 1)[0];
       if (firstLine !== TrustedDockerfileFrontendPin.Stable) {
-        throw new Error(`${consumer} must pin the trusted Dockerfile frontend`);
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: `${consumer} must pin the trusted Dockerfile frontend`,
+        });
       }
     }
+    return ok();
   }
 }

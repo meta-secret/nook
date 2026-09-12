@@ -4,21 +4,26 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Destructive identity and device recovery persistence.
+use crate::IdentityDbWriteIdentityDirectory;
+use crate::KeyringDbWriteKeyring;
+use crate::NookDatabase;
+use crate::NookError;
+use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::storage::{device_access, event_db, identity_record, indexed_db};
-use crate::{NookError, storage};
+use identity_record::simple_genesis;
 use identity_record::{
     IdentityReconciliationStore, LEGACY_IDENTITY_RECORD_KEY, RETIRED_APP_IDS_KEY,
 };
-use identity_record::{keyring, simple_genesis};
-use rexie::Rexie;
 use rexie::{Store, Transaction, TransactionMode};
-use std::rc::Rc;
 mod cleanup;
+mod target;
+pub(crate) use target::{RecoveryTarget, RetiredInstallation};
 mod planning;
+use cleanup::RecoveryCleanupState;
 pub(crate) use cleanup::{LocalIdentityRecovery, PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY};
 use planning::{RecoveryPlanning, RecoveryState};
 pub(crate) struct LocalIdentityRecoveryRequest {
-    pub(crate) expected_app_id: Option<nook_core::AppId>,
+    pub(crate) target: RecoveryTarget,
 }
 struct RecoveryMarkerPolicy {
     clear_simple_genesis: bool,
@@ -44,7 +49,7 @@ struct RecoveryDeletion {
 /// use nook_wasm::storage::identity_record::recovery::PreparedLocalIdentityRecovery;
 /// ```
 struct PreparedLocalIdentityRecovery {
-    _connection: Rc<Rexie>,
+    _connection: NookDatabase,
     transaction: Transaction,
     store: Store,
     state: RecoveryState,
@@ -93,14 +98,14 @@ impl RecoveryMarkers<'_> {
             // to own it, so clearing the marker is the only safe outcome.
             true
         } else {
-            match identity_record::load_pending_genesis(store).await? {
-                None => false,
-                Some(pending)
-                    if state.retired_identity_id.as_ref() == Some(&pending.identity_id) =>
+            match NookDatabase::load_pending_genesis(store).await? {
+                SimpleGenesisProgress::NotPending => false,
+                SimpleGenesisProgress::Pending(pending)
+                    if state.scope.retires_identity(&pending.identity_id) =>
                 {
                     true
                 }
-                Some(pending)
+                SimpleGenesisProgress::Pending(pending)
                     if state
                         .keyring
                         .entries()
@@ -109,7 +114,7 @@ impl RecoveryMarkers<'_> {
                 {
                     false
                 }
-                Some(_) => {
+                SimpleGenesisProgress::Pending(_) => {
                     return Err(NookError::Database(
                         "Pending Simple genesis has no recoverable identity owner".to_owned(),
                     ));
@@ -136,8 +141,16 @@ impl RecoveryMarkers<'_> {
 impl RecoveryState {
     async fn write(&self, store: &Store) -> Result<(), NookError> {
         let state = self;
-        identity_record::write_identity_directory(store, &state.directory).await?;
-        keyring::write_keyring(store, &state.keyring).await?;
+        NookDatabase::write_identity_directory(IdentityDbWriteIdentityDirectory {
+            store,
+            directory: &state.directory,
+        })
+        .await?;
+        NookDatabase::write_keyring(KeyringDbWriteKeyring {
+            store,
+            keyring: &state.keyring,
+        })
+        .await?;
         let retired =
             serde_json::to_string(state.directory.retired_app_ids()).map_err(|error| {
                 NookError::IndexedDb(format!("Retired app IDs encode error: {error}"))
@@ -201,19 +214,21 @@ impl RecoveryDeletion {
 }
 impl LocalIdentityRecoveryRequest {
     pub(crate) async fn execute(self) -> Result<LocalIdentityRecovery, NookError> {
-        let expected_app_id = self.expected_app_id;
+        let target = self.target;
         // Best-effort legacy migration preserves known reconciliation keys. A
         // corrupt or future-incompatible directory must never block destructive
         // device recovery.
-        let _ = identity_record::load_identity_directory().await;
-        let rexie = storage::open_nook_database().await?;
+        drop(NookDatabase::load_identity_directory().await);
+        let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(&["vault"], TransactionMode::ReadWrite)
             .map_err(|error| NookError::IndexedDb(format!("Identity reset error: {error:?}")))?;
         let store = transaction.store("vault").map_err(|error| {
             NookError::IndexedDb(format!("Identity reset store error: {error:?}"))
         })?;
-        if let Some(recovery) = LocalIdentityRecovery::load_pending(&store).await? {
+        if let RecoveryCleanupState::Pending(recovery) =
+            LocalIdentityRecovery::load_pending(&store).await?
+        {
             // The identity transaction has already committed. Resume its recorded
             // cleanup target even after reload, when the retired app ID is no
             // longer available to the UI and another surviving identity is selected.
@@ -224,7 +239,7 @@ impl LocalIdentityRecoveryRequest {
         }
         let state = RecoveryPlanning {
             store: &store,
-            expected_app_id: expected_app_id.as_ref(),
+            target: &target,
         }
         .prepare()
         .await?;
@@ -258,7 +273,7 @@ impl PreparedLocalIdentityRecovery {
             reconciliation_keys,
         } = self;
         let recovery = LocalIdentityRecovery {
-            retired_app_id: state.retired_app_id.clone(),
+            retired_app_id: state.scope.retired_installation(),
             has_remaining_local_identities: !state.keyring.entries().is_empty(),
         };
         state.write(&store).await?;
@@ -281,7 +296,9 @@ impl PreparedLocalIdentityRecovery {
 #[cfg(test)]
 mod tests {
     use super::{RecoveryDeletion, RecoveryMarkerPolicy};
+
     use crate::storage::{device_access, event_db, identity_record, indexed_db};
+
     use identity_record::simple_genesis;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -360,12 +377,14 @@ mod tests {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_tests {
+    use super::RecoveryTarget;
     use super::{
         LocalIdentityRecovery, LocalIdentityRecoveryRequest, PreparedLocalIdentityRecovery,
         RecoveryMarkers, RecoveryPlanning,
     };
-    use crate::storage::{event_db, identity_record, indexed_db};
-    use crate::{NookError, storage};
+    use crate::storage::indexed_db::StoredStringRecord;
+    use crate::storage::{event_db, identity_record};
+    use crate::{IdbPutStringRequest, NookDatabase, NookError};
     use nook_core::IdentityDirectory;
     use rexie::TransactionMode;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -381,14 +400,20 @@ mod browser_tests {
             })
         }
         async fn install(&self) -> Result<(), NookError> {
-            indexed_db::clear_vault_db().await?;
-            indexed_db::idb_put_string(identity_record::IDENTITY_DIRECTORY_KEY, &self.directory)
-                .await?;
-            indexed_db::idb_put_string(event_db::SIGNING_SEED_KEY, "retained-until-persistence")
-                .await
+            NookDatabase::clear_vault_db().await?;
+            NookDatabase::idb_put_string(IdbPutStringRequest {
+                key: identity_record::IDENTITY_DIRECTORY_KEY,
+                value: &self.directory,
+            })
+            .await?;
+            NookDatabase::idb_put_string(IdbPutStringRequest {
+                key: event_db::SIGNING_SEED_KEY,
+                value: "retained-until-persistence",
+            })
+            .await
         }
         async fn prepare(&self) -> Result<PreparedLocalIdentityRecovery, NookError> {
-            let connection = storage::open_nook_database().await?;
+            let connection = NookDatabase::open_nook_database().await?;
             let transaction = connection
                 .transaction(&["vault"], TransactionMode::ReadWrite)
                 .map_err(|error| {
@@ -399,7 +424,7 @@ mod browser_tests {
                 .map_err(|error| NookError::IndexedDb(format!("Fixture store error: {error:?}")))?;
             let state = RecoveryPlanning {
                 store: &store,
-                expected_app_id: None,
+                target: &RecoveryTarget::Unspecified,
             }
             .prepare()
             .await?;
@@ -417,16 +442,12 @@ mod browser_tests {
         }
         async fn assert_unpublished(&self) -> Result<(), NookError> {
             assert_eq!(
-                indexed_db::idb_get_string(identity_record::IDENTITY_DIRECTORY_KEY)
-                    .await?
-                    .as_deref(),
-                Some(self.directory.as_str())
+                NookDatabase::idb_get_string(identity_record::IDENTITY_DIRECTORY_KEY).await?,
+                StoredStringRecord::Stored((self.directory.as_str()).to_owned())
             );
             assert_eq!(
-                indexed_db::idb_get_string(event_db::SIGNING_SEED_KEY)
-                    .await?
-                    .as_deref(),
-                Some("retained-until-persistence")
+                NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY).await?,
+                StoredStringRecord::Stored(("retained-until-persistence").to_owned())
             );
             assert!(!LocalIdentityRecovery::has_pending().await?);
             Ok(())
@@ -456,18 +477,17 @@ mod browser_tests {
         let completed = fixture.prepare().await?.persist().await?;
         assert!(!completed.has_remaining_local_identities);
         assert!(LocalIdentityRecovery::has_pending().await?);
-        assert!(
-            indexed_db::idb_get_string(event_db::SIGNING_SEED_KEY)
-                .await?
-                .is_none()
-        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
         let resumed = LocalIdentityRecoveryRequest {
-            expected_app_id: None,
+            target: RecoveryTarget::Unspecified,
         }
         .execute()
         .await?;
         assert_eq!(resumed, completed);
         completed.complete().await?;
-        indexed_db::clear_vault_db().await
+        NookDatabase::clear_vault_db().await
     }
 }

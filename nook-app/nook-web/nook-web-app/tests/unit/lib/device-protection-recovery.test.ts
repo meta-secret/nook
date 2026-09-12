@@ -1,3 +1,4 @@
+import { ok, type Result } from 'neverthrow'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 vi.mock('$app-wasm', async (importOriginal) => {
@@ -9,14 +10,16 @@ vi.mock('$app-wasm', async (importOriginal) => {
 })
 
 vi.mock('$lib/runtime/browser-data', () => ({
-  quiesceOtherTabsForLocalRecovery: vi.fn(async () => {}),
-  reloadQuiescedTabsAfterLocalRecovery: vi.fn(async () => {}),
+  browserDataLifecycle: {
+    quiesceOtherTabsForLocalRecovery: vi.fn(async () => ok()),
+    reloadQuiescedTabsAfterLocalRecovery: vi.fn(async () => ok()),
+  },
 }))
 
 import { DeviceProtectionStatus } from '$app-wasm'
 import {
-  resetDeviceProtectionForRecovery,
   type DeviceProtectionRecoveryRequest,
+  DeviceProtectionRecoveryActions,
 } from '../../../../nook-web-shared/src/vault-app/lib/vault/device-protection.svelte'
 
 describe('device protection recovery', () => {
@@ -44,23 +47,26 @@ describe('device protection recovery', () => {
       providersLoaded: false,
       githubPat: '',
       storageMode: 'local',
-      enqueueExclusiveStorage: async <Value>(
-        operation: () => Promise<Value>,
-      ): Promise<Value> => operation(),
-      requireManager: () => manager,
+      enqueueExclusiveStorage: async <Value, Failure>(
+        operation: () =>
+          Result<Value, Failure> | Promise<Result<Value, Failure>>,
+      ): Promise<Result<Value, Failure>> => operation(),
+      admitManager: () => ok(manager),
       adoptLocalDataStorageGeneration: vi.fn(),
       clearUnlockedSession: vi.fn(),
       clearOauthFile: vi.fn(),
       clearLocalFolder: vi.fn(),
+      dismissSuccess: vi.fn(),
       showSuccess: vi.fn(),
       t: vi.fn(() => 'Recovery failed'),
-    } satisfies DeviceProtectionRecoveryRequest['state']
+    } satisfies ConstructorParameters<typeof DeviceProtectionRecoveryActions>[0]
 
     const request: DeviceProtectionRecoveryRequest = {
-      state,
       expectedAppId: '0123456789abcdef',
     }
-    await resetDeviceProtectionForRecovery(request)
+    await new DeviceProtectionRecoveryActions(
+      state,
+    ).resetDeviceProtectionForRecovery(request)
 
     expect(manager.device_protection_status).toHaveBeenCalledOnce()
     expect(state.deviceProtectionStatus).toBe(DeviceProtectionStatus.Pin)

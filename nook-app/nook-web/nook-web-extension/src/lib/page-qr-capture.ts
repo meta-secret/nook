@@ -1,5 +1,7 @@
 const OTPAUTH_TOTP_PREFIX = 'otpauth://totp/'
+
 const MAX_QR_CANDIDATES = 8
+
 const MIN_QR_EDGE_PX = 80
 
 export type DecodedOtpauthCandidate = {
@@ -46,137 +48,6 @@ type QrBitmapCapture =
   | { kind: QrBitmapCaptureKind.Captured; bitmap: ImageBitmap }
   | { kind: QrBitmapCaptureKind.Unavailable }
 
-function barcodeDetectorConstructor(): BarcodeDetectorAvailability {
-  const candidate = (globalThis as BarcodeDetectorGlobal).BarcodeDetector
-  return typeof candidate === 'function'
-    ? { kind: BarcodeDetectorAvailabilityKind.Available, Detector: candidate }
-    : { kind: BarcodeDetectorAvailabilityKind.Unsupported }
-}
-
-function isVisibleElement(element: Element): boolean {
-  if (!(element instanceof HTMLElement)) return false
-  if (element.hidden || element.getAttribute('aria-hidden') === 'true') {
-    return false
-  }
-  const style = window.getComputedStyle(element)
-  if (
-    style.display === 'none' ||
-    style.visibility === 'hidden' ||
-    style.opacity === '0'
-  ) {
-    return false
-  }
-  const rect = element.getBoundingClientRect()
-  return (
-    rect.width >= MIN_QR_EDGE_PX &&
-    rect.height >= MIN_QR_EDGE_PX &&
-    rect.bottom > 0 &&
-    rect.right > 0 &&
-    rect.top < window.innerHeight &&
-    rect.left < window.innerWidth
-  )
-}
-
-function looksLikeQrMedia(element: HTMLElement): boolean {
-  const tokens = [
-    ((v) => (v ? v : ''))(element.getAttribute('alt')),
-    ((v) => (v ? v : ''))(element.getAttribute('aria-label')),
-    ((v) => (v ? v : ''))(element.getAttribute('title')),
-    element.id,
-    element.className.toString(),
-  ]
-    .join(' ')
-    .toLowerCase()
-  if (
-    tokens.includes('qr') ||
-    tokens.includes('otpauth') ||
-    tokens.includes('authenticator') ||
-    tokens.includes('2fa') ||
-    tokens.includes('totp')
-  ) {
-    return true
-  }
-  const rect = element.getBoundingClientRect()
-  const ratio = rect.width / Math.max(rect.height, 1)
-  return ratio > 0.75 && ratio < 1.35
-}
-
-export function pageHasQrEnrollmentHint(): boolean {
-  const media = [
-    ...document.querySelectorAll('canvas, img, svg'),
-  ] as HTMLElement[]
-  return media.some(
-    (element) => isVisibleElement(element) && looksLikeQrMedia(element),
-  )
-}
-
-async function bitmapFromElement(
-  element: HTMLElement,
-): Promise<QrBitmapCapture> {
-  try {
-    if (element instanceof HTMLCanvasElement) {
-      return {
-        kind: QrBitmapCaptureKind.Captured,
-        bitmap: await createImageBitmap(element),
-      }
-    }
-    if (element instanceof HTMLImageElement) {
-      if (!element.complete || element.naturalWidth === 0) {
-        return { kind: QrBitmapCaptureKind.Unavailable }
-      }
-      return {
-        kind: QrBitmapCaptureKind.Captured,
-        bitmap: await createImageBitmap(element),
-      }
-    }
-    if (element instanceof SVGSVGElement) {
-      const serialized = new XMLSerializer().serializeToString(element)
-      const blobOptions: BlobPropertyBag = { type: 'image/svg+xml' }
-      const blob = new Blob([serialized], blobOptions)
-      return {
-        kind: QrBitmapCaptureKind.Captured,
-        bitmap: await createImageBitmap(blob),
-      }
-    }
-  } catch {
-    return { kind: QrBitmapCaptureKind.Unavailable }
-  }
-  return { kind: QrBitmapCaptureKind.Unavailable }
-}
-
-function collectQrMedia(): HTMLElement[] {
-  const media = [
-    ...document.querySelectorAll('canvas, img, svg'),
-  ] as HTMLElement[]
-  return media
-    .filter((element) => isVisibleElement(element) && looksLikeQrMedia(element))
-    .slice(0, MAX_QR_CANDIDATES)
-}
-
-function collectMarkedOtpauthCandidates(): DecodedOtpauthCandidate[] {
-  const elements = [
-    ...document.querySelectorAll('[data-nook-otpauth-uri]'),
-  ] as HTMLElement[]
-  const candidates: DecodedOtpauthCandidate[] = []
-  const seen = new Set<string>()
-  let index = 0
-  for (const element of elements) {
-    if (!isVisibleElement(element)) continue
-    const value = ((v) => (v ? v : ''))(
-      element.getAttribute('data-nook-otpauth-uri')?.trim(),
-    )
-    if (!value.startsWith(OTPAUTH_TOTP_PREFIX) || seen.has(value)) continue
-    index += 1
-    seen.add(value)
-    const candidate: DecodedOtpauthCandidate = {
-      sourceLabel: `QR ${index}`,
-      otpauthUri: value,
-    }
-    candidates.push(candidate)
-  }
-  return candidates
-}
-
 export enum DecodeVisibleOtpauthCandidatesResultStatus {
   Ready = 'ready',
   Unsupported = 'unsupported',
@@ -186,91 +57,238 @@ export enum DecodeVisibleOtpauthCandidatesResultStatus {
 
 type DecodedOtpauthCandidates = DecodedOtpauthCandidate[]
 
-function finalizeOtpauthCandidates(candidates: DecodedOtpauthCandidates): {
-  status:
-    | DecodeVisibleOtpauthCandidatesResultStatus.Ready
-    | DecodeVisibleOtpauthCandidatesResultStatus.Empty
-    | DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous
-  candidates: DecodedOtpauthCandidate[]
-} {
-  if (candidates.length === 0) {
-    return {
-      status: DecodeVisibleOtpauthCandidatesResultStatus.Empty,
-      candidates: [],
-    }
+/** Owns this browser host’s resources and interaction lifecycle. */
+class PageQrCapture {
+  constructor(private readonly browser: BarcodeDetectorGlobal) {}
+
+  private barcodeDetectorConstructor(): BarcodeDetectorAvailability {
+    const candidate = this.browser.BarcodeDetector
+    return typeof candidate === 'function'
+      ? { kind: BarcodeDetectorAvailabilityKind.Available, Detector: candidate }
+      : { kind: BarcodeDetectorAvailabilityKind.Unsupported }
   }
-  if (candidates.length > 1) {
+
+  private isVisibleElement(element: Element): boolean {
+    if (!(element instanceof HTMLElement)) return false
+    if (element.hidden || element.getAttribute('aria-hidden') === 'true') {
+      return false
+    }
+    const style = this.browser.window.getComputedStyle(element)
+    if (
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      style.opacity === '0'
+    ) {
+      return false
+    }
+    const rect = element.getBoundingClientRect()
+    return (
+      rect.width >= MIN_QR_EDGE_PX &&
+      rect.height >= MIN_QR_EDGE_PX &&
+      rect.bottom > 0 &&
+      rect.right > 0 &&
+      rect.top < this.browser.window.innerHeight &&
+      rect.left < this.browser.window.innerWidth
+    )
+  }
+
+  private looksLikeQrMedia(element: HTMLElement): boolean {
+    const tokens = [
+      ((v) => (v ? v : ''))(element.getAttribute('alt')),
+      ((v) => (v ? v : ''))(element.getAttribute('aria-label')),
+      ((v) => (v ? v : ''))(element.getAttribute('title')),
+      element.id,
+      element.className.toString(),
+    ]
+      .join(' ')
+      .toLowerCase()
+    if (
+      tokens.includes('qr') ||
+      tokens.includes('otpauth') ||
+      tokens.includes('authenticator') ||
+      tokens.includes('2fa') ||
+      tokens.includes('totp')
+    ) {
+      return true
+    }
+    const rect = element.getBoundingClientRect()
+    const ratio = rect.width / Math.max(rect.height, 1)
+    return ratio > 0.75 && ratio < 1.35
+  }
+
+  pageHasQrEnrollmentHint(): boolean {
+    const media = [
+      ...this.browser.document.querySelectorAll('canvas, img, svg'),
+    ].filter(
+      (element): element is HTMLElement => element instanceof HTMLElement,
+    )
+    return media.some(
+      (element) =>
+        this.isVisibleElement(element) && this.looksLikeQrMedia(element),
+    )
+  }
+
+  private async bitmapFromElement(
+    element: HTMLElement,
+  ): Promise<QrBitmapCapture> {
+    try {
+      if (element instanceof HTMLCanvasElement) {
+        return {
+          kind: QrBitmapCaptureKind.Captured,
+          bitmap: await this.browser.createImageBitmap(element),
+        }
+      }
+      if (element instanceof HTMLImageElement) {
+        if (!element.complete || element.naturalWidth === 0) {
+          return { kind: QrBitmapCaptureKind.Unavailable }
+        }
+        return {
+          kind: QrBitmapCaptureKind.Captured,
+          bitmap: await this.browser.createImageBitmap(element),
+        }
+      }
+      if (element instanceof SVGSVGElement) {
+        const serialized = new XMLSerializer().serializeToString(element)
+        const blobOptions: BlobPropertyBag = { type: 'image/svg+xml' }
+        const blob = new Blob([serialized], blobOptions)
+        return {
+          kind: QrBitmapCaptureKind.Captured,
+          bitmap: await this.browser.createImageBitmap(blob),
+        }
+      }
+    } catch {
+      return { kind: QrBitmapCaptureKind.Unavailable }
+    }
+    return { kind: QrBitmapCaptureKind.Unavailable }
+  }
+
+  private collectQrMedia(): HTMLElement[] {
+    const media = [
+      ...this.browser.document.querySelectorAll('canvas, img, svg'),
+    ].filter(
+      (element): element is HTMLElement => element instanceof HTMLElement,
+    )
+    return media
+      .filter(
+        (element) =>
+          this.isVisibleElement(element) && this.looksLikeQrMedia(element),
+      )
+      .slice(0, MAX_QR_CANDIDATES)
+  }
+
+  private collectMarkedOtpauthCandidates(): DecodedOtpauthCandidate[] {
+    const elements = [
+      ...this.browser.document.querySelectorAll('[data-nook-otpauth-uri]'),
+    ].filter(
+      (element): element is HTMLElement => element instanceof HTMLElement,
+    )
+    const candidates: DecodedOtpauthCandidate[] = []
+    const seen = new Set<string>()
+    let index = 0
+    for (const element of elements) {
+      if (!this.isVisibleElement(element)) continue
+      const value = ((v) => (v ? v : ''))(
+        element.getAttribute('data-nook-otpauth-uri')?.trim(),
+      )
+      if (!value.startsWith(OTPAUTH_TOTP_PREFIX) || seen.has(value)) continue
+      index += 1
+      seen.add(value)
+      const candidate: DecodedOtpauthCandidate = {
+        sourceLabel: `QR ${index}`,
+        otpauthUri: value,
+      }
+      candidates.push(candidate)
+    }
+    return candidates
+  }
+
+  private finalizeOtpauthCandidates(candidates: DecodedOtpauthCandidates): {
+    status:
+      | DecodeVisibleOtpauthCandidatesResultStatus.Ready
+      | DecodeVisibleOtpauthCandidatesResultStatus.Empty
+      | DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous
+    candidates: DecodedOtpauthCandidate[]
+  } {
+    if (candidates.length === 0) {
+      return {
+        status: DecodeVisibleOtpauthCandidatesResultStatus.Empty,
+        candidates: [],
+      }
+    }
+    if (candidates.length > 1) {
+      return {
+        status: DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous,
+        candidates,
+      }
+    }
     return {
-      status: DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous,
+      status: DecodeVisibleOtpauthCandidatesResultStatus.Ready,
       candidates,
     }
   }
-  return {
-    status: DecodeVisibleOtpauthCandidatesResultStatus.Ready,
-    candidates,
-  }
-}
 
-export async function decodeVisibleOtpauthCandidates(): Promise<{
-  status:
-    | DecodeVisibleOtpauthCandidatesResultStatus.Ready
-    | DecodeVisibleOtpauthCandidatesResultStatus.Unsupported
-    | DecodeVisibleOtpauthCandidatesResultStatus.Empty
-    | DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous
-  candidates: DecodedOtpauthCandidate[]
-}> {
-  // Prefer an explicit page-provided otpauth URI (fixtures and cooperative
-  // sites) so enrollment works without BarcodeDetector.
-  const marked = collectMarkedOtpauthCandidates()
-  if (marked.length > 0) {
-    return finalizeOtpauthCandidates(marked)
-  }
-
-  const detectorAvailability = barcodeDetectorConstructor()
-  if (
-    detectorAvailability.kind === BarcodeDetectorAvailabilityKind.Unsupported
-  ) {
-    return {
-      status: DecodeVisibleOtpauthCandidatesResultStatus.Unsupported,
-      candidates: [],
+  async decodeVisibleOtpauthCandidates(): Promise<{
+    status:
+      | DecodeVisibleOtpauthCandidatesResultStatus.Ready
+      | DecodeVisibleOtpauthCandidatesResultStatus.Unsupported
+      | DecodeVisibleOtpauthCandidatesResultStatus.Empty
+      | DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous
+    candidates: DecodedOtpauthCandidate[]
+  }> {
+    // Prefer an explicit page-provided otpauth URI (fixtures and cooperative
+    // sites) so enrollment works without BarcodeDetector.
+    const marked = this.collectMarkedOtpauthCandidates()
+    if (marked.length > 0) {
+      return this.finalizeOtpauthCandidates(marked)
     }
-  }
-  const { Detector } = detectorAvailability
-  const detectorOptions: BarcodeDetectorOptions = { formats: ['qr_code'] }
-  const detector = new Detector(detectorOptions)
-  const candidates: DecodedOtpauthCandidate[] = []
-  const seen = new Set<string>()
-  let index = 0
-  for (const element of collectQrMedia()) {
-    index += 1
-    const capture = await bitmapFromElement(element)
-    if (capture.kind === QrBitmapCaptureKind.Unavailable) continue
-    const { bitmap } = capture
-    try {
-      const codes = await detector.detect(bitmap)
-      for (const code of codes) {
-        const value = ((v) => (v ? v : ''))(code.rawValue?.trim())
-        if (!value.startsWith(OTPAUTH_TOTP_PREFIX) || seen.has(value)) continue
-        seen.add(value)
-        const candidate: DecodedOtpauthCandidate = {
-          sourceLabel: `QR ${index}`,
-          otpauthUri: value,
-        }
-        candidates.push(candidate)
+
+    const detectorAvailability = this.barcodeDetectorConstructor()
+    if (
+      detectorAvailability.kind === BarcodeDetectorAvailabilityKind.Unsupported
+    ) {
+      return {
+        status: DecodeVisibleOtpauthCandidatesResultStatus.Unsupported,
+        candidates: [],
       }
-    } catch {
-      // Cross-origin or undecodable media is skipped without weakening
-      // host permissions.
-    } finally {
-      bitmap.close()
     }
+    const { Detector } = detectorAvailability
+    const detectorOptions: BarcodeDetectorOptions = { formats: ['qr_code'] }
+    const detector = new Detector(detectorOptions)
+    const candidates: DecodedOtpauthCandidate[] = []
+    const seen = new Set<string>()
+    let index = 0
+    for (const element of this.collectQrMedia()) {
+      index += 1
+      const capture = await this.bitmapFromElement(element)
+      if (capture.kind === QrBitmapCaptureKind.Unavailable) continue
+      const { bitmap } = capture
+      try {
+        const codes = await detector.detect(bitmap)
+        for (const code of codes) {
+          const value = ((v) => (v ? v : ''))(code.rawValue?.trim())
+          if (!value.startsWith(OTPAUTH_TOTP_PREFIX) || seen.has(value))
+            continue
+          seen.add(value)
+          const candidate: DecodedOtpauthCandidate = {
+            sourceLabel: `QR ${index}`,
+            otpauthUri: value,
+          }
+          candidates.push(candidate)
+        }
+      } catch {
+        // Cross-origin or undecodable media is skipped without weakening
+        // host permissions.
+      } finally {
+        bitmap.close()
+      }
+    }
+    return this.finalizeOtpauthCandidates(candidates)
   }
-  return finalizeOtpauthCandidates(candidates)
+
+  clearOtpauthCandidate(candidate: DecodedOtpauthCandidate): void {
+    candidate.otpauthUri = ''
+    candidate.sourceLabel = ''
+  }
 }
 
-export function clearOtpauthCandidate(
-  candidate: DecodedOtpauthCandidate,
-): void {
-  candidate.otpauthUri = ''
-  candidate.sourceLabel = ''
-}
+export const pageQrCapture = new PageQrCapture(globalThis)

@@ -37,18 +37,19 @@
     vault.errorMsg = ''
     try {
       await action()
-    } catch (error) {
-      vault.errorMsg =
-        error instanceof Error
-          ? vault.resolveErrorMessage(error.message)
-          : vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockFailed)
     } finally {
       actionBusy = false
     }
   }
 
   async function startUnlock() {
-    await runAction(() => sentinelUnlockActions.startSentinelUnlock(vault))
+    await runAction(async () => {
+      const started = await new sentinelUnlockActions.SentinelUnlockActions(
+        vault,
+      ).startSentinelUnlock()
+      if (started.isErr())
+        vault.errorMsg = vault.t(started.error.translationKey)
+    })
   }
 
   async function addResponse() {
@@ -56,9 +57,15 @@
     if (!payload) return
     await runAction(async () => {
       const responseRequest: Parameters<
-        typeof sentinelUnlockActions.addSentinelUnlockResponse
-      >[0] = { state: vault, response: payload }
-      await sentinelUnlockActions.addSentinelUnlockResponse(responseRequest)
+        sentinelUnlockActions.SentinelUnlockActions['addSentinelUnlockResponse']
+      >[0] = { response: payload }
+      const added = await new sentinelUnlockActions.SentinelUnlockActions(
+        vault,
+      ).addSentinelUnlockResponse(responseRequest)
+      if (added.isErr()) {
+        vault.errorMsg = vault.t(added.error.translationKey)
+        return
+      }
       responseInput = ''
     })
   }
@@ -66,7 +73,15 @@
   async function finalizeUnlock() {
     if (!session.ready) return
     await runAction(async () => {
-      await sentinelUnlockActions.finalizeSentinelUnlock(vault)
+      const finalized = await new sentinelUnlockActions.SentinelUnlockActions(
+        vault,
+      ).finalizeSentinelUnlock()
+      if (finalized.isErr()) {
+        new sentinelUnlockActions.SentinelUnlockActions(
+          vault,
+        ).presentFinalizationFailure(finalized.error)
+        return
+      }
       if (vault.isAuthenticated) {
         await onUnlocked?.()
       }

@@ -1,30 +1,30 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  isAuthenticatorPickerCancelMessage,
-  isAuthenticatorPickerQueryMessage,
-  isAuthenticatorPickerSelectMessage,
-  isWebsiteAuthenticatorCanceledMessage,
-  isWebsiteAuthenticatorPickerOpenMessage,
-  isWebsiteAuthenticatorSelectedMessage,
   MAX_AUTHENTICATOR_SEARCH_LENGTH,
+  AuthenticatorPickerCancelMessage as AuthenticatorPickerCancelMessageSchema,
+  AuthenticatorPickerQueryMessage as AuthenticatorPickerQueryMessageSchema,
+  AuthenticatorPickerSelectMessage as AuthenticatorPickerSelectMessageSchema,
+  WebsiteAuthenticatorCanceledMessage as WebsiteAuthenticatorCanceledMessageSchema,
+  WebsiteAuthenticatorPickerOpenMessage as WebsiteAuthenticatorPickerOpenMessageSchema,
+  WebsiteAuthenticatorSelectedMessage as WebsiteAuthenticatorSelectedMessageSchema,
 } from '../src/lib/authenticator-picker-messages'
 
 describe('authenticator picker messages', () => {
   test('accepts bounded picker requests', () => {
     expect(
-      isWebsiteAuthenticatorPickerOpenMessage({
+      WebsiteAuthenticatorPickerOpenMessageSchema.is({
         type: 'nook:website-authenticator-picker-open',
         payload: { origin: 'https://example.test' },
       }),
     ).toBe(true)
     expect(
-      isAuthenticatorPickerQueryMessage({
+      AuthenticatorPickerQueryMessageSchema.is({
         type: 'nook:authenticator-picker-query',
         payload: { requestId: 'picker-1', query: 'alice' },
       }),
     ).toBe(true)
     expect(
-      isAuthenticatorPickerSelectMessage({
+      AuthenticatorPickerSelectMessageSchema.is({
         type: 'nook:authenticator-picker-select',
         payload: {
           requestId: 'picker-1',
@@ -34,7 +34,7 @@ describe('authenticator picker messages', () => {
       }),
     ).toBe(true)
     expect(
-      isAuthenticatorPickerCancelMessage({
+      AuthenticatorPickerCancelMessageSchema.is({
         type: 'nook:authenticator-picker-cancel',
         payload: { requestId: 'picker-1' },
       }),
@@ -43,7 +43,7 @@ describe('authenticator picker messages', () => {
 
   test('rejects oversized search text and incomplete selections', () => {
     expect(
-      isAuthenticatorPickerQueryMessage({
+      AuthenticatorPickerQueryMessageSchema.is({
         type: 'nook:authenticator-picker-query',
         payload: {
           requestId: 'picker-1',
@@ -52,7 +52,7 @@ describe('authenticator picker messages', () => {
       }),
     ).toBe(false)
     expect(
-      isAuthenticatorPickerSelectMessage({
+      AuthenticatorPickerSelectMessageSchema.is({
         type: 'nook:authenticator-picker-select',
         payload: {
           requestId: 'picker-1',
@@ -65,7 +65,7 @@ describe('authenticator picker messages', () => {
 
   test('accepts only complete background selections', () => {
     expect(
-      isWebsiteAuthenticatorSelectedMessage({
+      WebsiteAuthenticatorSelectedMessageSchema.is({
         type: 'nook:website-authenticator-selected',
         payload: {
           origin: 'https://example.test',
@@ -79,7 +79,7 @@ describe('authenticator picker messages', () => {
       }),
     ).toBe(true)
     expect(
-      isWebsiteAuthenticatorSelectedMessage({
+      WebsiteAuthenticatorSelectedMessageSchema.is({
         type: 'nook:website-authenticator-selected',
         payload: {
           origin: 'https://example.test',
@@ -89,7 +89,7 @@ describe('authenticator picker messages', () => {
       }),
     ).toBe(false)
     expect(
-      isWebsiteAuthenticatorCanceledMessage({
+      WebsiteAuthenticatorCanceledMessageSchema.is({
         type: 'nook:website-authenticator-canceled',
         payload: {
           origin: 'https://example.test',
@@ -98,7 +98,7 @@ describe('authenticator picker messages', () => {
       }),
     ).toBe(true)
     expect(
-      isWebsiteAuthenticatorCanceledMessage({
+      WebsiteAuthenticatorCanceledMessageSchema.is({
         type: 'nook:website-authenticator-canceled',
         payload: { origin: 'https://example.test' },
       }),

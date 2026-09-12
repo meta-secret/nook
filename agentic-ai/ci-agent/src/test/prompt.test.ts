@@ -1,3 +1,4 @@
+import { CiResultAssertions } from "./result-assertions.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -6,11 +7,7 @@ import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 
 import type { CiAgentConfig } from "../main/config.js";
-import {
-  loadPrompt,
-  resolveAgentTask,
-  resolveMajorChangeAuthorization,
-} from "../main/prompt.js";
+import { AgentPrompt, AgentPromptEnvironment } from "../main/prompt.js";
 
 const ENV_KEYS = [
   "AGENT_PROMPT",
@@ -26,33 +23,48 @@ afterEach(() => {
   }
 });
 
-describe("resolveMajorChangeAuthorization", () => {
-  it("defaults to not authorized", () => {
-    assert.equal(resolveMajorChangeAuthorization(), "not-authorized");
+void describe("resolveMajorChangeAuthorization", () => {
+  void it("defaults to not authorized", () => {
+    assert.equal(
+      new AgentPromptEnvironment(process.env).resolveMajorChangeAuthorization(),
+      "not-authorized",
+    );
   });
 
-  it("accepts only the exact trusted workflow value", () => {
+  void it("accepts only the exact trusted workflow value", () => {
     process.env.MAJOR_CHANGE_AUTHORIZED = "true";
-    assert.equal(resolveMajorChangeAuthorization(), "authorized");
+    assert.equal(
+      new AgentPromptEnvironment(process.env).resolveMajorChangeAuthorization(),
+      "authorized",
+    );
 
     process.env.MAJOR_CHANGE_AUTHORIZED = "TRUE";
-    assert.equal(resolveMajorChangeAuthorization(), "not-authorized");
+    assert.equal(
+      new AgentPromptEnvironment(process.env).resolveMajorChangeAuthorization(),
+      "not-authorized",
+    );
   });
 });
 
-describe("resolveAgentTask", () => {
-  it("prefers AGENT_PROMPT when set", () => {
+void describe("resolveAgentTask", () => {
+  void it("prefers AGENT_PROMPT when set", () => {
     process.env.AGENT_PROMPT = "  Ship the feature  ";
-    assert.equal(resolveAgentTask(), "Ship the feature");
+    assert.equal(
+      CiResultAssertions.assertSuccess(new AgentPromptEnvironment(process.env).resolveAgentTask()),
+      "Ship the feature",
+    );
   });
 
-  it("throws when the explicit prompt is missing", () => {
-    assert.throws(() => resolveAgentTask(), /AGENT_PROMPT is required/);
+  void it("throws when the explicit prompt is missing", () => {
+    CiResultAssertions.assertFailure(
+      new AgentPromptEnvironment(process.env).resolveAgentTask(),
+      /AGENT_PROMPT is required/,
+    );
   });
 });
 
-describe("loadPrompt", () => {
-  it("loads a legacy template without validated-plan metadata from the trusted tooling root", async () => {
+void describe("loadPrompt", () => {
+  void it("loads a legacy template without validated-plan metadata from the trusted tooling root", async () => {
     const parent = await mkdtemp(join(tmpdir(), "nook-ci-agent-prompt-"));
     const toolingRoot = join(parent, "tooling");
     const repoRoot = join(parent, "implementation");
@@ -83,13 +95,16 @@ describe("loadPrompt", () => {
     };
     process.env.AGENT_PROMPT = "bounded task";
     try {
-      assert.equal(await loadPrompt(config), "Trusted: bounded task");
+      assert.equal(
+        await new AgentPrompt(config).load().then(CiResultAssertions.assertSuccess),
+        "Trusted: bounded task",
+      );
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
   });
 
-  it("embeds only the exact hash-bound validated plan", async () => {
+  void it("embeds only the exact hash-bound validated plan", async () => {
     const parent = await mkdtemp(join(tmpdir(), "nook-ci-agent-plan-"));
     const toolingRoot = join(parent, "tooling");
     const repoRoot = join(parent, "implementation");
@@ -126,15 +141,21 @@ describe("loadPrompt", () => {
       .update(plan)
       .digest("hex");
     try {
-      assert.equal(await loadPrompt(config), `Trusted plan:\n${plan}`);
+      assert.equal(
+        await new AgentPrompt(config).load().then(CiResultAssertions.assertSuccess),
+        `Trusted plan:\n${plan}`,
+      );
       await writeFile(join(repoRoot, ".nook-workbench-plan.md"), "changed");
-      await assert.rejects(loadPrompt(config), /plan hash changed/);
+      await CiResultAssertions.assertAsyncFailure(
+        new AgentPrompt(config).load(),
+        /plan hash changed/,
+      );
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
   });
 
-  it("embeds only a host-provided rust-deps-outdated.txt inventory", async () => {
+  void it("embeds only a host-provided rust-deps-outdated.txt inventory", async () => {
     const parent = await mkdtemp(join(tmpdir(), "nook-ci-agent-deps-"));
     const toolingRoot = join(parent, "tooling");
     const report = join(parent, "rust-deps-outdated.txt");
@@ -157,9 +178,15 @@ describe("loadPrompt", () => {
       modelId: "test-model",
     };
     try {
-      assert.equal(await loadPrompt(config), "Report:\nserde 1.0 -> 1.1\n");
+      assert.equal(
+        await new AgentPrompt(config).load().then(CiResultAssertions.assertSuccess),
+        "Report:\nserde 1.0 -> 1.1\n",
+      );
       process.env.RUST_DEPS_OUTDATED_REPORT = join(parent, "secrets.env");
-      await assert.rejects(loadPrompt(config), /path is invalid/);
+      await CiResultAssertions.assertAsyncFailure(
+        new AgentPrompt(config).load(),
+        /path is invalid/,
+      );
     } finally {
       await rm(parent, { recursive: true, force: true });
     }

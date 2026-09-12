@@ -1,3 +1,19 @@
+import { err, ok, type Result } from 'neverthrow';
+import {
+  CortexArticleRequestDecodeError,
+  CortexArticleRequestFailureKind,
+} from './decode-error.ts';
+import {
+  ArticleHeadingSelectionKind,
+  ArticleBodyContribution,
+  ArticleDensityContribution,
+  ArticleProcedureRequirement,
+  ArticleFindingAgreement,
+  CortexArticleBlock,
+  CortexArticleSection,
+  CortexArticleFindingSequence,
+} from './semantic.ts';
+
 import {
   CortexArticleContractKind,
   CortexArticleFindingCode,
@@ -9,7 +25,143 @@ import {
   type CortexArticleSemanticBlock,
   type CortexArticleStructureResult,
 } from './domain.ts';
-import { formatMarkdownTableFindingMessage } from './audit.ts';
+
+import { CortexMarkdownTableDiagnostic } from './audit.ts';
+
+export class CortexArticleResultVerifier {
+  private constructor(
+    private readonly request: VerifyCortexArticleStructureResultRequest,
+  ) {}
+
+  static from(
+    request: VerifyCortexArticleStructureResultRequest,
+  ): CortexArticleResultVerifier {
+    return new CortexArticleResultVerifier(request);
+  }
+
+  public execute(): Result<void, CortexArticleRequestDecodeError> {
+    const request = this.request;
+    if (
+      request.auditRequest.kind !== CortexArticleContractKind.Request ||
+      request.result.kind !== CortexArticleContractKind.Result
+    ) {
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.Verification,
+          path: '',
+        }),
+      );
+    }
+    const expected = this.independentlyDeriveFindings(request.auditRequest);
+    if (
+      new CortexArticleFindingSequence(request.result.findings).agreementWith(
+        expected,
+      ) === ArticleFindingAgreement.Different
+    ) {
+      return err(
+        new CortexArticleRequestDecodeError({
+          kind: CortexArticleRequestFailureKind.Verification,
+          path: '',
+        }),
+      );
+    }
+    return ok();
+  }
+
+  private independentlyDeriveFindings(
+    request: AuditCortexArticleStructureRequest,
+  ): CortexArticleFinding[] {
+    const expected: CortexArticleFinding[] = [];
+    for (const document of request.documents) {
+      const documentRequest: VerifyDocumentRequest = { document, expected };
+      this.verifyDocument(documentRequest);
+    }
+    return expected;
+  }
+
+  private verifyDocument(request: VerifyDocumentRequest): void {
+    for (const block of request.document.blocks) {
+      if (block.kind !== CortexArticleSemanticKind.Table) continue;
+      const finding: CortexArticleFinding = {
+        code: CortexArticleFindingCode.MarkdownTable,
+        file: request.document.relativePath,
+        line: block.line,
+        message: new CortexMarkdownTableDiagnostic(
+          request.document.relativePath,
+        ).message(),
+      };
+      request.expected.push(finding);
+    }
+    for (const [index, block] of request.document.blocks.entries()) {
+      const selection = new CortexArticleBlock(block).articleHeading();
+      if (selection.kind === ArticleHeadingSelectionKind.Other) continue;
+      const articleRequest: VerifyArticleRequest = {
+        ...request,
+        heading: selection.heading,
+        sectionBlocks: new CortexArticleSection(selection.heading).ownedBlocks({
+          blocks: request.document.blocks,
+          startIndex: index + 1,
+        }),
+      };
+      this.verifyArticle(articleRequest);
+    }
+  }
+
+  private verifyArticle(request: VerifyArticleRequest): void {
+    if (
+      !request.sectionBlocks.some(
+        (block) =>
+          new CortexArticleBlock(block).bodyContribution() ===
+          ArticleBodyContribution.Visible,
+      )
+    ) {
+      const finding: CortexArticleFinding = {
+        code: CortexArticleFindingCode.EmptyArticle,
+        file: request.document.relativePath,
+        line: request.heading.line,
+        message: `Article #${request.heading.text} has no body content.`,
+      };
+      request.expected.push(finding);
+      return;
+    }
+    this.verifyParagraphDensity(request);
+    if (
+      new CortexArticleSection(request.heading).procedureRequirement(
+        request.sectionBlocks,
+      ) === ArticleProcedureRequirement.OrderedActions
+    ) {
+      const finding: CortexArticleFinding = {
+        code: CortexArticleFindingCode.UnorderedProcedure,
+        file: request.document.relativePath,
+        line: request.heading.line,
+        message: `Procedure-like article #${request.heading.text} must expose its action sequence as an ordered list.`,
+      };
+      request.expected.push(finding);
+    }
+  }
+
+  private verifyParagraphDensity(request: VerifyArticleRequest): void {
+    let consecutive = 0;
+    for (const block of request.sectionBlocks) {
+      const contribution = new CortexArticleBlock(block).densityContribution();
+      if (contribution === ArticleDensityContribution.EndArticle) break;
+      if (contribution === ArticleDensityContribution.Preserve) continue;
+      if (contribution === ArticleDensityContribution.Reset) {
+        consecutive = 0;
+        continue;
+      }
+      consecutive += 1;
+      if (consecutive !== MAX_CONSECUTIVE_PARAGRAPHS + 1) continue;
+      const finding: CortexArticleFinding = {
+        code: CortexArticleFindingCode.DenseArticle,
+        file: request.document.relativePath,
+        line: block.line,
+        message: `Article #${request.heading.text} has more than ${MAX_CONSECUTIVE_PARAGRAPHS} consecutive prose blocks without visible structure.`,
+      };
+      request.expected.push(finding);
+    }
+  }
+}
 
 export type VerifyCortexArticleStructureResultRequest = {
   readonly auditRequest: AuditCortexArticleStructureRequest;
@@ -26,174 +178,4 @@ type VerifyArticleRequest = VerifyDocumentRequest & {
   readonly sectionBlocks: readonly CortexArticleSemanticBlock[];
 };
 
-type OwnedSectionRequest = {
-  readonly blocks: readonly CortexArticleSemanticBlock[];
-  readonly headingIndex: number;
-};
-
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
-const PROCEDURE_HEADING =
-  /\b(procedures?|runbooks?|steps|ordered deliver(?:y|ies)|delivery sequences?)\b/i;
-const VERIFICATION_FAILURE =
-  'Cortex article-structure semantic verification failed.';
-
-export function verifyCortexArticleStructureResult(
-  request: VerifyCortexArticleStructureResultRequest,
-): void {
-  if (
-    request.auditRequest.kind !== CortexArticleContractKind.Request ||
-    request.result.kind !== CortexArticleContractKind.Result
-  ) {
-    throw new Error(VERIFICATION_FAILURE);
-  }
-  const expected = independentlyDeriveFindings(request.auditRequest);
-  if (request.result.findings.length !== expected.length) {
-    throw new Error(VERIFICATION_FAILURE);
-  }
-  for (let index = 0; index < expected.length; index += 1) {
-    const [actual = false] = [request.result.findings.at(index)];
-    const [wanted = false] = [expected.at(index)];
-    if (
-      actual === false ||
-      wanted === false ||
-      actual.code !== wanted.code ||
-      actual.file !== wanted.file ||
-      actual.line !== wanted.line ||
-      actual.message !== wanted.message
-    ) {
-      throw new Error(VERIFICATION_FAILURE);
-    }
-  }
-}
-
-function independentlyDeriveFindings(
-  request: AuditCortexArticleStructureRequest,
-): CortexArticleFinding[] {
-  const expected: CortexArticleFinding[] = [];
-  for (const document of request.documents) {
-    const documentRequest: VerifyDocumentRequest = { document, expected };
-    verifyDocument(documentRequest);
-  }
-  return expected;
-}
-
-function verifyDocument(request: VerifyDocumentRequest): void {
-  for (const block of request.document.blocks) {
-    if (block.kind !== CortexArticleSemanticKind.Table) continue;
-    const finding: CortexArticleFinding = {
-      code: CortexArticleFindingCode.MarkdownTable,
-      file: request.document.relativePath,
-      line: block.line,
-      message: formatMarkdownTableFindingMessage(request.document.relativePath),
-    };
-    request.expected.push(finding);
-  }
-  for (let index = 0; index < request.document.blocks.length; index += 1) {
-    const [block = false] = [request.document.blocks.at(index)];
-    if (
-      block === false ||
-      block.kind !== CortexArticleSemanticKind.Heading ||
-      (block.depth !== 2 && block.depth !== 3)
-    ) {
-      continue;
-    }
-    const sectionRequest: OwnedSectionRequest = {
-      blocks: request.document.blocks,
-      headingIndex: index,
-    };
-    const articleRequest: VerifyArticleRequest = {
-      ...request,
-      heading: block,
-      sectionBlocks: ownedSection(sectionRequest),
-    };
-    verifyArticle(articleRequest);
-  }
-}
-
-function ownedSection(
-  request: OwnedSectionRequest,
-): readonly CortexArticleSemanticBlock[] {
-  const [heading = false] = [request.blocks.at(request.headingIndex)];
-  if (heading === false || heading.kind !== CortexArticleSemanticKind.Heading) {
-    return [];
-  }
-  let end = request.blocks.length;
-  for (
-    let index = request.headingIndex + 1;
-    index < request.blocks.length;
-    index += 1
-  ) {
-    const [candidate = false] = [request.blocks.at(index)];
-    if (
-      candidate !== false &&
-      candidate.kind === CortexArticleSemanticKind.Heading &&
-      candidate.depth <= heading.depth
-    ) {
-      end = index;
-      break;
-    }
-  }
-  return request.blocks.slice(request.headingIndex + 1, end);
-}
-
-function verifyArticle(request: VerifyArticleRequest): void {
-  if (!request.sectionBlocks.some(isVisibleArticleBlock)) {
-    const finding: CortexArticleFinding = {
-      code: CortexArticleFindingCode.EmptyArticle,
-      file: request.document.relativePath,
-      line: request.heading.line,
-      message: `Article #${request.heading.text} has no body content.`,
-    };
-    request.expected.push(finding);
-    return;
-  }
-  verifyParagraphDensity(request);
-  if (
-    PROCEDURE_HEADING.test(request.heading.text) &&
-    !request.sectionBlocks.some(
-      (block) => block.kind === CortexArticleSemanticKind.VisibleOrderedList,
-    )
-  ) {
-    const finding: CortexArticleFinding = {
-      code: CortexArticleFindingCode.UnorderedProcedure,
-      file: request.document.relativePath,
-      line: request.heading.line,
-      message: `Procedure-like article #${request.heading.text} must expose its action sequence as an ordered list.`,
-    };
-    request.expected.push(finding);
-  }
-}
-
-function verifyParagraphDensity(request: VerifyArticleRequest): void {
-  let consecutive = 0;
-  for (const block of request.sectionBlocks) {
-    if (block.kind === CortexArticleSemanticKind.Heading) {
-      if (block.depth <= 3) break;
-      consecutive = 0;
-      continue;
-    }
-    if (block.kind === CortexArticleSemanticKind.Transparent) continue;
-    if (block.kind === CortexArticleSemanticKind.DensitySeparator) {
-      consecutive = 0;
-      continue;
-    }
-    consecutive =
-      block.kind === CortexArticleSemanticKind.Paragraph ? consecutive + 1 : 0;
-    if (consecutive !== MAX_CONSECUTIVE_PARAGRAPHS + 1) continue;
-    const finding: CortexArticleFinding = {
-      code: CortexArticleFindingCode.DenseArticle,
-      file: request.document.relativePath,
-      line: block.line,
-      message: `Article #${request.heading.text} has more than ${MAX_CONSECUTIVE_PARAGRAPHS} consecutive prose blocks without visible structure.`,
-    };
-    request.expected.push(finding);
-  }
-}
-
-function isVisibleArticleBlock(block: CortexArticleSemanticBlock): boolean {
-  return (
-    block.kind === CortexArticleSemanticKind.Paragraph ||
-    block.kind === CortexArticleSemanticKind.VisibleOrderedList ||
-    block.kind === CortexArticleSemanticKind.Structure
-  );
-}

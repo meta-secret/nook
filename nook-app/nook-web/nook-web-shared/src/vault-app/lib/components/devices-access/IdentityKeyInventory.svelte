@@ -16,7 +16,7 @@ on request.
   import type { DashboardView } from '../devices-access-dashboard-state'
   import type { IdentityDirectoryEntry } from './identity-directory-view'
   import {
-    buildIdentityKeyInventory,
+    IdentityKeyInventory,
     IdentityKeyInventoryRowKind,
   } from './identity-key-inventory'
   import { PasskeyCardFactKind, PasskeyCardSummaryKind } from './passkey-card'
@@ -44,12 +44,13 @@ on request.
   })
 
   const rows = $derived.by(() => {
-    const inventoryArgs: Parameters<typeof buildIdentityKeyInventory>[0] = {
-      vault,
-      identity,
-      view,
-    }
-    return buildIdentityKeyInventory(inventoryArgs)
+    const inventoryArgs: ConstructorParameters<typeof IdentityKeyInventory>[0] =
+      {
+        vault,
+        identity,
+        view,
+      }
+    return new IdentityKeyInventory(inventoryArgs).rows
   })
 
   function keysHeading(): string {

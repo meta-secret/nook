@@ -6,35 +6,37 @@ pub const MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT: u32 = 100;
 pub const MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS: usize = 20;
 
 /// Validate the bounded, non-secret observation envelope accepted from clients.
-#[must_use]
-pub fn authentication_page_observations_are_valid(
-    observations: &[AuthenticationPageObservation],
-) -> bool {
-    !observations.is_empty()
-        && observations.len() <= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
-        && observations.iter().all(|observation| {
-            [
-                observation.username_field_count.raw(),
-                observation.current_password_field_count.raw(),
-                observation.new_password_field_count.raw(),
-                observation.generic_password_field_count.raw(),
-                observation.one_time_code_field_count.raw(),
-                observation.matching_passkey_account_count.raw(),
-            ]
-            .into_iter()
-            .all(|count| count <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
-                && observation.password_field_count().raw()
-                    <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
-        })
+impl AuthenticationPageObservation {
+    #[must_use]
+    pub fn authentication_page_observations_are_valid(
+        observations: &[AuthenticationPageObservation],
+    ) -> bool {
+        !observations.is_empty()
+            && observations.len() <= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
+            && observations.iter().all(|observation| {
+                [
+                    observation.username_field_count,
+                    observation.current_password_field_count,
+                    observation.new_password_field_count,
+                    observation.generic_password_field_count,
+                    observation.one_time_code_field_count,
+                ]
+                .into_iter()
+                .all(crate::AuthenticationFieldCount::is_within_observation_limit)
+                    && observation
+                        .matching_passkey_account_count
+                        .is_within_observation_limit()
+                    && observation
+                        .password_field_count()
+                        .is_within_observation_limit()
+            })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshotError,
-        classify_authentication_workflow_candidates,
-    };
+    use crate::{AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshotError};
 
     #[test]
     fn validates_bounded_authentication_observation_envelopes() {
@@ -42,33 +44,39 @@ mod tests {
             username_field_count: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT.into(),
             ..Default::default()
         }];
-        assert!(authentication_page_observations_are_valid(&valid));
-        assert!(!authentication_page_observations_are_valid(&[]));
+        assert!(AuthenticationPageObservation::authentication_page_observations_are_valid(&valid));
+        assert!(!AuthenticationPageObservation::authentication_page_observations_are_valid(&[]));
 
         let excessive_count = [AuthenticationPageObservation {
             current_password_field_count: (MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1).into(),
             ..Default::default()
         }];
-        assert!(!authentication_page_observations_are_valid(
-            &excessive_count
-        ));
+        assert!(
+            !AuthenticationPageObservation::authentication_page_observations_are_valid(
+                &excessive_count
+            )
+        );
 
         let combined_password_overflow = [AuthenticationPageObservation {
             current_password_field_count: (MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT / 2).into(),
             generic_password_field_count: (MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT / 2 + 1).into(),
             ..Default::default()
         }];
-        assert!(!authentication_page_observations_are_valid(
-            &combined_password_overflow
-        ));
+        assert!(
+            !AuthenticationPageObservation::authentication_page_observations_are_valid(
+                &combined_password_overflow
+            )
+        );
 
         let excessive_pages = vec![
             AuthenticationPageObservation::default();
             MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 1
         ];
-        assert!(!authentication_page_observations_are_valid(
-            &excessive_pages
-        ));
+        assert!(
+            !AuthenticationPageObservation::authentication_page_observations_are_valid(
+                &excessive_pages
+            )
+        );
     }
 
     #[test]
@@ -78,7 +86,9 @@ mod tests {
             current_password_field_count: 1.into(),
             ..Default::default()
         }];
-        let rejected = classify_authentication_workflow_candidates(&excessive_field_count);
+        let rejected = AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(
+            &excessive_field_count,
+        );
         assert_eq!(rejected, AuthenticationWorkflowMatch::Rejected);
         assert_eq!(
             rejected.snapshot(),
@@ -94,7 +104,9 @@ mod tests {
             MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 1
         ];
         assert_eq!(
-            classify_authentication_workflow_candidates(&excessive_pages),
+            AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(
+                &excessive_pages
+            ),
             AuthenticationWorkflowMatch::Rejected
         );
     }

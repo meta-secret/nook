@@ -1,9 +1,11 @@
+import { CortexArticleResultAcceptance } from '../src/application.ts';
 import { expect, test } from 'bun:test';
+
 import {
-  acceptCortexArticleStructureResult,
-  executeCortexArticleStructureApplication,
   type AcceptCortexArticleStructureResultRequest,
+  CortexArticleApplication,
 } from '../src/application.ts';
+
 import {
   CortexArticleContractKind,
   CortexArticleFindingCode,
@@ -14,6 +16,40 @@ import {
   type CortexArticleFinding,
   type CortexArticleStructureResult,
 } from '../src/domain.ts';
+
+export class CortexArticleStructureApplicationScenario {
+  private constructor(
+    private readonly request: readonly CortexArticleFinding[],
+  ) {}
+
+  static resultWith(
+    findings: readonly CortexArticleFinding[],
+  ): CortexArticleStructureResult {
+    return new CortexArticleStructureApplicationScenario(findings).execute();
+  }
+
+  private execute(): CortexArticleStructureResult {
+    const findings = this.request;
+    return { kind: CortexArticleContractKind.Result, findings };
+  }
+
+  static expectApplicationRejection(
+    result: CortexArticleStructureResult,
+  ): void {
+    const acceptanceRequest: AcceptCortexArticleStructureResultRequest = {
+      auditRequest: AUDIT_REQUEST,
+      result,
+    };
+    new CortexArticleResultAcceptance(acceptanceRequest).execute().match(
+      (value) => {
+        expect({ value }).not.toHaveProperty('value');
+      },
+      (outcome) => {
+        expect(outcome.message).toContain('semantic verification failed');
+      },
+    );
+  }
+}
 
 const AUDIT_REQUEST: AuditCortexArticleStructureRequest = {
   kind: CortexArticleContractKind.Request,
@@ -43,26 +79,11 @@ const AUDIT_REQUEST: AuditCortexArticleStructureRequest = {
   ],
 };
 
-function resultWith(
-  findings: readonly CortexArticleFinding[],
-): CortexArticleStructureResult {
-  return { kind: CortexArticleContractKind.Result, findings };
-}
-
-function expectApplicationRejection(
-  result: CortexArticleStructureResult,
-): void {
-  const acceptanceRequest: AcceptCortexArticleStructureResultRequest = {
-    auditRequest: AUDIT_REQUEST,
-    result,
-  };
-  expect(() => acceptCortexArticleStructureResult(acceptanceRequest)).toThrow(
-    'semantic verification failed',
-  );
-}
-
 test('validates, audits, verifies, and bounds the accepted application result', () => {
-  const result = executeCortexArticleStructureApplication(AUDIT_REQUEST);
+  const resultOutcome = CortexArticleApplication.from(AUDIT_REQUEST).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
   expect(result.findings).toHaveLength(2);
   expect(result.findings.map((finding) => finding.code)).toEqual([
     CortexArticleFindingCode.EmptyArticle,
@@ -87,7 +108,10 @@ test('returns a bounded table finding for the longest accepted Cortex path', () 
     ],
   };
 
-  const result = executeCortexArticleStructureApplication(request);
+  const resultOutcome = CortexArticleApplication.from(request).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
 
   expect(result.findings).toHaveLength(1);
   expect(result.findings[0]?.code).toBe(CortexArticleFindingCode.MarkdownTable);
@@ -101,14 +125,28 @@ test('returns a bounded table finding for the longest accepted Cortex path', () 
 });
 
 test('production acceptance rejects reordered, duplicated, and mutated results', () => {
-  const result = executeCortexArticleStructureApplication(AUDIT_REQUEST);
+  const resultOutcome = CortexArticleApplication.from(AUDIT_REQUEST).execute();
+  expect(resultOutcome.isOk()).toBe(true);
+  if (resultOutcome.isErr()) return;
+  const result = resultOutcome.value;
   const first = result.findings.at(0);
   const second = result.findings.at(1);
   if (!first || !second) throw new Error('Expected two application findings.');
 
-  expectApplicationRejection(resultWith([second, first]));
-  expectApplicationRejection(resultWith([first, second, second]));
-  expectApplicationRejection(
-    resultWith([{ ...first, line: first.line + 1 }, second]),
+  CortexArticleStructureApplicationScenario.expectApplicationRejection(
+    CortexArticleStructureApplicationScenario.resultWith([second, first]),
+  );
+  CortexArticleStructureApplicationScenario.expectApplicationRejection(
+    CortexArticleStructureApplicationScenario.resultWith([
+      first,
+      second,
+      second,
+    ]),
+  );
+  CortexArticleStructureApplicationScenario.expectApplicationRejection(
+    CortexArticleStructureApplicationScenario.resultWith([
+      { ...first, line: first.line + 1 },
+      second,
+    ]),
   );
 });

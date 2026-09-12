@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 #[must_use]
-pub fn extension_persistence_database_name(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_persistence_database_name(
     area: nook_companion_core::ExtensionPersistenceArea,
 ) -> String {
     area.database_name().to_owned()
@@ -12,7 +12,7 @@ pub fn extension_persistence_database_name(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn extension_persistence_store_names(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_persistence_store_names(
     area: nook_companion_core::ExtensionPersistenceArea,
 ) -> Vec<String> {
     area.store_names()
@@ -21,7 +21,7 @@ pub fn extension_persistence_store_names(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn classify_extension_persistence_databases(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_extension_persistence_databases(
     input: nook_companion_core::ExtensionPersistenceObservation,
 ) -> nook_companion_core::ExtensionPersistenceDatabaseState {
     input.area.classify_database_names(&input.observed_names)
@@ -30,7 +30,7 @@ pub fn classify_extension_persistence_databases(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn classify_extension_persistence_stores(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_extension_persistence_stores(
     input: nook_companion_core::ExtensionPersistenceObservation,
 ) -> nook_companion_core::ExtensionPersistenceStoreState {
     input.area.classify_store_names(&input.observed_names)
@@ -39,7 +39,7 @@ pub fn classify_extension_persistence_stores(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn matching_extension_persistence_stores(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn matching_extension_persistence_stores(
     input: nook_companion_core::ExtensionPersistenceObservation,
 ) -> Vec<String> {
     input.area.matching_store_names(&input.observed_names)

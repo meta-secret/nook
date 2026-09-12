@@ -9,6 +9,8 @@ use super::super::import_support::{
     MAX_CSV_BYTES, SourceLabelMetadata,
 };
 use super::{DashlaneImportError, DashlaneImportPlan};
+use crate::CreditCardFields;
+use crate::secrets::import_support::CsvExportColumn;
 use crate::{
     AuthenticatorIssuerHostsError, AuthenticatorSecret, CreditCardSecret, LoginSecret, SecretValue,
     SecureNoteSecret, ValidationError,
@@ -33,8 +35,10 @@ impl<'a> DashlaneCsvInput<'a> {
         if self.text.len() > MAX_CSV_BYTES {
             return Err(DashlaneImportError::CsvTooLarge);
         }
-        let mut reader = CsvImportReader::new(self.text);
-        let headers = reader.headers()?.clone();
+        let reader = CsvImportReader::new(self.text);
+        let read = reader.headers()?;
+        let reader = read.reader;
+        let headers = read.headers;
         let headers = NormalizedDashlaneHeaders::from_record(&headers);
         let kind = match self.selection {
             DashlaneCsvSelection::Detect => headers.detect()?,
@@ -69,8 +73,8 @@ impl CheckedDashlaneCsv<'_> {
                 too_many_records: DashlaneImportError::TooManyRecords,
                 convert: |record: &StringRecord| self.columns.convert(record),
             },
-            |items: &mut Vec<SecretValue>| {
-                for item in items {
+            |items: Vec<SecretValue>| {
+                for mut item in items {
                     item.zeroize_plaintext();
                 }
             },
@@ -118,11 +122,15 @@ impl NormalizedDashlaneHeaders {
             .position(|header| header == &expected)
             .ok_or(DashlaneImportError::MissingColumn(name))
     }
-    fn optional(&self, names: &[&str]) -> Option<usize> {
-        names.iter().find_map(|name| {
+    fn optional(&self, names: &[&str]) -> CsvExportColumn {
+        let column = names.iter().find_map(|name| {
             let expected = CsvHeader::new(name).normalized();
             self.values.iter().position(|header| header == &expected)
-        })
+        });
+        match column {
+            Some(index) => CsvExportColumn::Exported(index),
+            None => CsvExportColumn::NotExported,
+        }
     }
     fn detect(&self) -> Result<DashlaneCsvKind, DashlaneImportError> {
         if self.values.iter().any(|header| header == "username")
@@ -150,15 +158,15 @@ impl NormalizedDashlaneHeaders {
 #[derive(Clone, Copy)]
 struct CredentialColumns {
     username: usize,
-    username2: Option<usize>,
-    username3: Option<usize>,
-    title: Option<usize>,
+    username2: CsvExportColumn,
+    username3: CsvExportColumn,
+    title: CsvExportColumn,
     password: usize,
-    note: Option<usize>,
-    url: Option<usize>,
-    category: Option<usize>,
-    otp_secret: Option<usize>,
-    otp_url: Option<usize>,
+    note: CsvExportColumn,
+    url: CsvExportColumn,
+    category: CsvExportColumn,
+    otp_secret: CsvExportColumn,
+    otp_url: CsvExportColumn,
 }
 
 #[derive(Clone, Copy)]
@@ -170,12 +178,12 @@ struct SecureNoteColumns {
 #[derive(Clone, Copy)]
 struct PaymentColumns {
     kind: usize,
-    account_name: Option<usize>,
-    account_holder: Option<usize>,
-    cc_number: Option<usize>,
-    code: Option<usize>,
-    expiration_month: Option<usize>,
-    expiration_year: Option<usize>,
+    account_name: CsvExportColumn,
+    account_holder: CsvExportColumn,
+    cc_number: CsvExportColumn,
+    code: CsvExportColumn,
+    expiration_month: CsvExportColumn,
+    expiration_year: CsvExportColumn,
 }
 
 impl CredentialColumns {
@@ -193,6 +201,10 @@ impl CredentialColumns {
             otp_url: headers.optional(&["otpUrl", "otp_url"]),
         })
     }
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the import row conversion remains one atomic zeroizing operation"
+    )]
     fn convert(
         &self,
         record: &StringRecord,
@@ -223,7 +235,7 @@ impl CredentialColumns {
         let website_url = if url.is_empty() { title.clone() } else { url };
 
         let mut metadata = Vec::new();
-        if let Some(entry) = (SourceLabelMetadata {
+        if let Ok(entry) = (SourceLabelMetadata {
             key: "title",
             label: &title,
             website_url: &website_url,
@@ -282,12 +294,15 @@ impl CredentialColumns {
                     {
                         authenticator.website_url = website_url;
                     }
-                    if let Err(error) = authenticator.apply_inferred_website_url_if_empty() {
-                        for item in &mut items {
-                            item.zeroize_plaintext();
+                    let authenticator = match authenticator.apply_inferred_website_url_if_empty() {
+                        Ok(authenticator) => authenticator,
+                        Err(error) => {
+                            for item in &mut items {
+                                item.zeroize_plaintext();
+                            }
+                            return Err(error.into());
                         }
-                        return Err(error.into());
-                    }
+                    };
                     items.push(SecretValue::Authenticator(authenticator));
                 }
                 Err(ValidationError::AuthenticatorIssuerCatalogInvalid) => {
@@ -357,15 +372,15 @@ impl PaymentColumns {
             } else {
                 account_holder
             };
-            match CreditCardSecret::from_fields(
-                &title,
-                &cardholder,
-                &number,
-                &expiration_month,
-                &expiration_year,
-                &code,
-                "",
-            ) {
+            match CreditCardSecret::from_fields(CreditCardFields {
+                title: &title,
+                cardholder_name: &cardholder,
+                number: &number,
+                expiration_month: &expiration_month,
+                expiration_year: &expiration_year,
+                cvv: &code,
+                notes: "",
+            }) {
                 Ok(mut card) => {
                     DashlaneNotes {
                         notes: &mut card.notes,

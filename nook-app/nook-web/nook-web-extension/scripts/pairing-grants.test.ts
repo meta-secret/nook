@@ -1,10 +1,16 @@
 import { describe, expect, mock, test } from 'bun:test'
+import { err, ok } from 'neverthrow'
 import {
   decode_extension_grant_authority_response,
   type ExtensionGrantAuthority,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { ExtensionPairingApprovedMessageAdmissionFailure } from '../../nook-web-shared/src/extension/runtime-messages'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
+import {
+  ExtensionSessionTransportFailure,
+  ExtensionSessionTransportFailureKind,
+} from '../src/background/service-worker/session-document'
 import {
   extensionPairingGrantPolicyReady,
   extensionSessionGrantIdentity,
@@ -14,8 +20,10 @@ Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
 })
 const {
+  ExtensionPairingIngress,
   importLocalEventLogUpdateWithDependencies,
   LocalEventLogUpdateFailure,
+  PairingIngressFailure,
 } = await import('../src/background/service-worker/pairing-import')
 const { classifySessionGrantAuthority } =
   await import('../src/offscreen/session-operations')
@@ -40,6 +48,30 @@ const storedGrant: StoredExtensionPairingGrant = {
 }
 
 describe('extension pairing grant transport', () => {
+  test('reports companion runtime startup failure before grant admission', async () => {
+    const ingress = new ExtensionPairingIngress(
+      Promise.reject(new Error('runtime unavailable')),
+    )
+
+    const admission = await ingress.admit({})
+    expect('reason' in admission).toBe(true)
+    if ('reason' in admission) {
+      expect(admission.reason).toBe(PairingIngressFailure.RuntimeUnavailable)
+    }
+  })
+
+  test('rejects malformed grants after companion runtime startup', async () => {
+    const ingress = new ExtensionPairingIngress(Promise.resolve())
+
+    const admission = await ingress.admit({})
+    expect('reason' in admission).toBe(true)
+    if ('reason' in admission) {
+      expect(admission.reason).toBe(
+        ExtensionPairingApprovedMessageAdmissionFailure.MessageEnvelope,
+      )
+    }
+  })
+
   test.each(['created', 'failed'] as const)(
     'ensures a closed receiver before classification: %s',
     async (receiver) => {
@@ -54,6 +86,7 @@ describe('extension pairing grant transport', () => {
         ensureSession: async () => {
           events.push('ensure')
           if (receiver === 'failed') throw new Error('receiver unavailable')
+          return ok()
         },
         importEventLog: async () => {
           events.push('import')
@@ -68,16 +101,19 @@ describe('extension pairing grant transport', () => {
           events.push('persist')
         },
         sendSession: async (message) => {
+          if (!message || typeof message !== 'object' || !('type' in message)) {
+            throw new Error('expected a typed session request')
+          }
           if (
             message.type === ExtensionSessionMessageType.ClassifyGrantAuthority
           ) {
             expect(events).toEqual(['ensure'])
             events.push('classify')
-            return { kind: 'Authorized', grant: storedGrant }
+            return ok({ kind: 'Authorized', grant: storedGrant })
           }
           expect(message.type).toBe(ExtensionSessionMessageType.UpdateVault)
           events.push('update')
-          return { ok: true }
+          return ok({ ok: true })
         },
       })
       expect(events).toEqual(
@@ -95,6 +131,49 @@ describe('extension pairing grant transport', () => {
       )
     },
   )
+  test('reports a failed local session update transport', async () => {
+    const policy = await extensionPairingGrantPolicyReady
+    const key = policy.pairingGrantStorageKey(storedGrant.vaultStoreId)
+    const sendSession = mock(
+      async (message: Parameters<ImportDependencies['sendSession']>[0]) => {
+        if (!message || typeof message !== 'object' || !('type' in message)) {
+          throw new Error('expected a typed session request')
+        }
+        if (
+          message.type === ExtensionSessionMessageType.ClassifyGrantAuthority
+        ) {
+          return ok({ kind: 'Authorized' as const, grant: storedGrant })
+        }
+        expect(message.type).toBe(ExtensionSessionMessageType.UpdateVault)
+        return err(
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ),
+        )
+      },
+    )
+    const response = await importLocalEventLogUpdateWithDependencies({
+      vaultStoreId: storedGrant.vaultStoreId,
+      eventLogRecords: [],
+      loadPairingStorage: async () => ({ [key]: storedGrant }),
+      pairingPolicyReady: extensionPairingGrantPolicyReady,
+      ensureSession: async () => ok(),
+      importEventLog: async () => ({
+        vaultStoreId: storedGrant.vaultStoreId,
+        accessGranted: true,
+        eventCount: 1,
+        heads: ['event-1'],
+      }),
+      persistPairingStorage: async () => {},
+      sendSession,
+    })
+
+    expect(response).toEqual({
+      ok: false,
+      reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+    })
+    expect(sendSession).toHaveBeenCalledTimes(2)
+  })
   test('rejects malformed and wrong-target manager responses', async () => {
     await extensionPairingGrantPolicyReady
     for (const response of [
@@ -193,6 +272,9 @@ describe('extension pairing grant transport', () => {
       )
       const sendSession = mock(
         async (message: Parameters<ImportDependencies['sendSession']>[0]) => {
+          if (!message || typeof message !== 'object' || !('type' in message)) {
+            throw new Error('expected a typed session request')
+          }
           expect(message.type).toBe(
             ExtensionSessionMessageType.ClassifyGrantAuthority,
           )
@@ -200,25 +282,34 @@ describe('extension pairing grant transport', () => {
             message.type !== ExtensionSessionMessageType.ClassifyGrantAuthority
           )
             throw new Error('unexpected session update')
-          if (scenario === 'transport-failed') throw new Error('unavailable')
-          if (scenario === 'malformed-response') return {}
+          if (scenario === 'transport-failed') {
+            return err(
+              new ExtensionSessionTransportFailure(
+                ExtensionSessionTransportFailureKind.DeliveryFailed,
+              ),
+            )
+          }
+          if (scenario === 'malformed-response') return ok({})
+          if (!('payload' in message)) {
+            throw new Error('expected a session request payload')
+          }
           expect(message.payload).toEqual({
             stored_json: JSON.stringify(await loadPairingStorage()),
             vault_store_id: 'unpaired-vault',
             queue: { kind: 'message-default' },
           })
-          return {
+          return ok({
             kind:
               scenario === 'missing-active'
                 ? 'MissingActiveAuthority'
                 : scenario === 'malformed'
                   ? 'InvalidStoredAuthority'
                   : 'NoMatchingAuthority',
-          }
+          })
         },
       )
       const response = await importLocalEventLogUpdateWithDependencies({
-        ensureSession: async () => {},
+        ensureSession: async () => ok(),
         persistPairingStorage: unusedOperation,
         vaultStoreId: 'unpaired-vault',
         eventLogRecords: [],
@@ -258,5 +349,21 @@ describe('extension pairing grant transport', () => {
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',
     })
+  })
+  test('compares migration records through the typed Rust policy', async () => {
+    const policy = await extensionPairingGrantPolicyReady
+    const { vaultName, ...otherFields } = storedGrant
+    expect(
+      policy.compare_extension_pairing_records({
+        current: storedGrant,
+        migrated: { ...otherFields, vaultName },
+      }),
+    ).toBe('Equivalent')
+    expect(
+      policy.compare_extension_pairing_records({
+        current: storedGrant,
+        migrated: { ...storedGrant, vaultName: 'Changed' },
+      }),
+    ).toBe('Different')
   })
 })

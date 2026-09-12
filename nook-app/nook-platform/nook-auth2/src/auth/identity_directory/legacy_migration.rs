@@ -5,102 +5,185 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+mod admission;
+use super::IdentityDirectory;
+#[cfg(test)]
+use crate::IdentityRecordRejection;
+use crate::errors::{MultiDeviceError, MultiDeviceResult};
+use crate::{
+    AppId, IdentityDirectoryRejection, IdentityId, IdentityMember, IdentityMemberKeyBinding,
+    IdentityRecord, IdentitySelection,
+};
+use admission::LegacyDirectoryAdmission;
 use std::collections::HashMap;
 
-use super::IdentityDirectory;
-use crate::errors::{MultiDeviceError, MultiDeviceResult};
-use crate::{AppId, IdentityId, IdentityMember, IdentityRecord, IdentitySelection};
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DirectoryLegacyMigration {
+    Unchanged,
+    Merged,
+}
+impl DirectoryLegacyMigration {
+    pub fn combine(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Unchanged, Self::Unchanged) => Self::Unchanged,
+            (Self::Merged, _) | (_, Self::Merged) => Self::Merged,
+        }
+    }
+}
+#[derive(Debug)]
+pub struct MigratedIdentityDirectory {
+    pub directory: IdentityDirectory,
+    pub migration: DirectoryLegacyMigration,
+}
+pub struct LegacyDirectoryBase<'a> {
+    pub base: &'a IdentityDirectory,
+    pub preserved_identity_id: &'a IdentityId,
+}
+enum LegacyMigrationScope<'a> {
+    WholeDirectory,
+    Preserve(&'a IdentityId),
+    FromBase {
+        preserved: &'a IdentityId,
+        components: HashMap<IdentityId, usize>,
+    },
+}
 
+impl LegacyMigrationScope<'_> {
+    fn preserves(&self, identity: &IdentityId) -> bool {
+        match self {
+            Self::WholeDirectory => false,
+            Self::Preserve(preserved) | Self::FromBase { preserved, .. } => *preserved == identity,
+        }
+    }
+}
+
+struct LegacyIdentityMerge {
+    survivor: usize,
+    absorbed: usize,
+}
+pub struct PreparedLegacyDirectoryMigration {
+    directory: IdentityDirectory,
+    merges: Vec<LegacyIdentityMerge>,
+}
+impl PreparedLegacyDirectoryMigration {
+    pub fn cancel(self) -> IdentityDirectory {
+        self.directory
+    }
+    pub fn commit(self) -> MigratedIdentityDirectory {
+        let migration = if self.merges.is_empty() {
+            DirectoryLegacyMigration::Unchanged
+        } else {
+            DirectoryLegacyMigration::Merged
+        };
+        let mut directory = self.directory;
+        for merge in self.merges {
+            directory = directory.merge_identity_records(merge);
+        }
+        MigratedIdentityDirectory {
+            directory,
+            migration,
+        }
+    }
+}
 impl IdentityDirectory {
-    /// Whether this directory predates unique app-key ownership enforcement.
     #[must_use]
     pub fn has_legacy_duplicate_app_key_ownership(&self) -> bool {
-        self.duplicate_app_key_owners().is_some()
+        !self.app_key_owners_are_unique()
     }
 
-    /// Merge legacy identities connected by a shared app key.
-    ///
-    /// Older directories allowed one installation key to appear in several
-    /// identities. Those records were not cryptographically independent. The
-    /// lossless migration keeps every member and vault grant in one identity,
-    /// preferring the selected identity as the surviving local identity.
-    pub fn migrate_legacy_duplicate_app_key_ownership(self) -> MultiDeviceResult<(Self, bool)> {
-        self.migrate_legacy_duplicate_app_key_ownership_inner(None)
+    pub fn migrate_legacy_duplicate_app_key_ownership(
+        self,
+    ) -> Result<MigratedIdentityDirectory, IdentityDirectoryRejection> {
+        self.prepare_legacy_migration(LegacyMigrationScope::WholeDirectory)
+            .map(PreparedLegacyDirectoryMigration::commit)
     }
-
-    /// Merge legacy duplicate owners without absorbing a durable identity reference.
     pub fn migrate_legacy_duplicate_app_key_ownership_preserving(
         self,
         identity_id: &IdentityId,
-    ) -> MultiDeviceResult<(Self, bool)> {
-        self.migrate_legacy_duplicate_app_key_ownership_inner(Some(identity_id))
+    ) -> Result<MigratedIdentityDirectory, IdentityDirectoryRejection> {
+        self.prepare_legacy_duplicate_app_key_ownership_preserving(identity_id)
+            .map(PreparedLegacyDirectoryMigration::commit)
     }
-
-    /// Merge only duplicate ownership relationships inherited from `base`.
-    ///
-    /// Staged candidates can add members. A duplicate introduced only by the
-    /// candidate is a conflict, not legacy state, and must remain fail-closed.
+    pub fn prepare_legacy_duplicate_app_key_ownership_preserving(
+        self,
+        identity_id: &IdentityId,
+    ) -> Result<PreparedLegacyDirectoryMigration, IdentityDirectoryRejection> {
+        self.prepare_legacy_migration(LegacyMigrationScope::Preserve(identity_id))
+    }
     pub fn migrate_legacy_duplicate_app_key_ownership_from_base(
-        mut self,
-        base: &Self,
-        preserved_identity_id: &IdentityId,
-    ) -> MultiDeviceResult<(Self, bool)> {
-        let components = base.legacy_identity_components();
-        let mut changed = false;
-        while let Some((left, right, app_id)) = self.duplicate_app_key_owners() {
-            let left_component = components.get(&self.identities[left].identity_id);
-            let right_component = components.get(&self.identities[right].identity_id);
-            if left_component.is_none() || left_component != right_component {
-                return Err(MultiDeviceError::DuplicateAppKeyOwnership {
-                    app_id: app_id.to_string(),
+        self,
+        request: LegacyDirectoryBase<'_>,
+    ) -> Result<MigratedIdentityDirectory, IdentityDirectoryRejection> {
+        self.prepare_legacy_duplicate_app_key_ownership_from_base(request)
+            .map(PreparedLegacyDirectoryMigration::commit)
+    }
+    pub fn prepare_legacy_duplicate_app_key_ownership_from_base(
+        self,
+        request: LegacyDirectoryBase<'_>,
+    ) -> Result<PreparedLegacyDirectoryMigration, IdentityDirectoryRejection> {
+        let components = match request.base.legacy_identity_components() {
+            Ok(components) => components,
+            Err(cause) => {
+                return Err(IdentityDirectoryRejection {
+                    directory: self,
+                    cause,
                 });
             }
-            let (survivor, absorbed) =
-                self.preferred_merge_order(left, right, Some(preserved_identity_id));
-            self.merge_identity_records(survivor, absorbed)?;
-            changed = true;
+        };
+        self.prepare_legacy_migration(LegacyMigrationScope::FromBase {
+            preserved: request.preserved_identity_id,
+            components,
+        })
+    }
+    fn prepare_legacy_migration(
+        self,
+        scope: LegacyMigrationScope<'_>,
+    ) -> Result<PreparedLegacyDirectoryMigration, IdentityDirectoryRejection> {
+        match (LegacyDirectoryAdmission {
+            directory: &self,
+            scope,
+        })
+        .prepare()
+        {
+            Ok(merges) => Ok(PreparedLegacyDirectoryMigration {
+                directory: self,
+                merges,
+            }),
+            Err(cause) => Err(IdentityDirectoryRejection {
+                directory: self,
+                cause,
+            }),
         }
-        self.validate()?;
-        Ok((self, changed))
     }
 
-    fn migrate_legacy_duplicate_app_key_ownership_inner(
-        mut self,
-        preserved_identity_id: Option<&IdentityId>,
-    ) -> MultiDeviceResult<(Self, bool)> {
-        let mut changed = false;
-        while let Some((left, right, _)) = self.duplicate_app_key_owners() {
-            let (survivor, absorbed) =
-                self.preferred_merge_order(left, right, preserved_identity_id);
-            self.merge_identity_records(survivor, absorbed)?;
-            changed = true;
-        }
-        self.validate()?;
-        Ok((self, changed))
-    }
-
-    fn duplicate_app_key_owners(&self) -> Option<(usize, usize, AppId)> {
+    fn app_key_owners_are_unique(&self) -> bool {
         let mut owners = HashMap::<&AppId, usize>::new();
         for (index, identity) in self.identities.iter().enumerate() {
             for member in &identity.members {
                 if let Some(owner) = owners.insert(&member.app_id, index)
                     && owner != index
                 {
-                    return Some((owner, index, member.app_id.clone()));
+                    return false;
                 }
             }
         }
-        None
+        true
     }
 
-    fn legacy_identity_components(&self) -> HashMap<IdentityId, usize> {
+    fn legacy_identity_components(&self) -> MultiDeviceResult<HashMap<IdentityId, usize>> {
         let mut components = (0..self.identities.len()).collect::<Vec<_>>();
         let mut owners = HashMap::<&AppId, usize>::new();
         for (index, identity) in self.identities.iter().enumerate() {
             for member in &identity.members {
                 if let Some(owner) = owners.insert(&member.app_id, index) {
-                    let from = components[index];
-                    let into = components[owner];
+                    let from = components
+                        .get(index)
+                        .copied()
+                        .ok_or(MultiDeviceError::InvalidIdentitySelection)?;
+                    let into = components
+                        .get(owner)
+                        .copied()
+                        .ok_or(MultiDeviceError::InvalidIdentitySelection)?;
                     for component in &mut components {
                         if *component == from {
                             *component = into;
@@ -109,113 +192,100 @@ impl IdentityDirectory {
                 }
             }
         }
-        self.identities
+        Ok(self
+            .identities
             .iter()
             .zip(components)
             .map(|(identity, component)| (identity.identity_id.clone(), component))
-            .collect()
+            .collect())
     }
 
-    fn preferred_merge_order(
-        &self,
-        left: usize,
-        right: usize,
-        preserved_identity_id: Option<&IdentityId>,
-    ) -> (usize, usize) {
-        if preserved_identity_id
-            .is_some_and(|identity_id| self.identities[right].identity_id == *identity_id)
-        {
-            return (right, left);
+    fn merge_identity_records(mut self, merge: LegacyIdentityMerge) -> Self {
+        let absorbed = self.identities.remove(merge.absorbed);
+        let index = if merge.absorbed < merge.survivor {
+            merge.survivor - 1
+        } else {
+            merge.survivor
+        };
+        let mut survivor = self.identities.remove(index);
+        if self.selection == IdentitySelection::Selected(absorbed.identity_id) {
+            self.selection = IdentitySelection::Selected(survivor.identity_id.clone());
         }
-        if preserved_identity_id
-            .is_some_and(|identity_id| self.identities[left].identity_id == *identity_id)
-        {
-            return (left, right);
-        }
-        match &self.selection {
-            IdentitySelection::Selected(selected)
-                if self.identities[right].identity_id == *selected =>
-            {
-                (right, left)
-            }
-            _ => (left, right),
-        }
-    }
-
-    fn merge_identity_records(
-        &mut self,
-        mut survivor_index: usize,
-        absorbed_index: usize,
-    ) -> MultiDeviceResult<()> {
-        let absorbed = self.identities.remove(absorbed_index);
-        if absorbed_index < survivor_index {
-            survivor_index -= 1;
-        }
-        let survivor_identity_id = self.identities[survivor_index].identity_id.clone();
-        if self.selection == IdentitySelection::Selected(absorbed.identity_id.clone()) {
-            self.selection = IdentitySelection::Selected(survivor_identity_id);
-        }
-        let survivor = &mut self.identities[survivor_index];
         survivor.control_epoch = survivor.control_epoch.max(absorbed.control_epoch);
         for member in absorbed.members {
-            survivor.merge_legacy_member(member)?;
+            survivor = survivor.merge_admitted_legacy_member(member);
         }
-        for vault in absorbed.vault_deks {
-            if survivor
-                .vault_deks
-                .iter()
-                .any(|existing| existing.store_id == vault.store_id)
-            {
-                return Err(MultiDeviceError::DuplicateVaultOwnership {
-                    store_id: vault.store_id.to_string(),
-                });
-            }
-            survivor.vault_deks.push(vault);
-        }
-        Ok(())
+        survivor.vault_deks.extend(absorbed.vault_deks);
+        self.identities.insert(index, survivor);
+        self
     }
 }
-
-impl IdentityRecord {
-    fn merge_legacy_member(&mut self, incoming: IdentityMember) -> MultiDeviceResult<()> {
-        let Some(index) = self
-            .members
-            .iter()
-            .position(|member| member.app_id == incoming.app_id)
-        else {
-            self.members.push(incoming);
-            return Ok(());
-        };
-        let existing = &self.members[index];
-        if existing.auth_id != incoming.auth_id || existing.public_key != incoming.public_key {
+impl IdentityMember {
+    fn admit_legacy_peer(&self, incoming: &Self) -> MultiDeviceResult<()> {
+        if matches!(
+            self.binding_to_member(incoming),
+            IdentityMemberKeyBinding::DifferentKeyMaterial
+        ) {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
                 "Legacy identity directory has conflicting material for one app key.".to_owned(),
             ));
         }
-        if !existing.signing_public_key.is_empty()
+        if !self.signing_public_key.is_empty()
             && !incoming.signing_public_key.is_empty()
-            && existing.signing_public_key != incoming.signing_public_key
+            && self.signing_public_key != incoming.signing_public_key
         {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
                 "Legacy identity directory has conflicting signing keys for one app key."
                     .to_owned(),
             ));
         }
-        let existing = &mut self.members[index];
-        if existing.signing_public_key.is_empty() {
-            existing.signing_public_key = incoming.signing_public_key;
-        }
-        if existing.label.is_none() {
-            existing.label = incoming.label;
-        }
         Ok(())
+    }
+}
+impl IdentityRecord {
+    #[cfg(test)]
+    fn merge_legacy_member(
+        self,
+        incoming: IdentityMember,
+    ) -> Result<Self, IdentityRecordRejection> {
+        if let Some(existing) = self
+            .members
+            .iter()
+            .find(|member| member.app_id == incoming.app_id)
+            && let Err(cause) = existing.admit_legacy_peer(&incoming)
+        {
+            return Err(IdentityRecordRejection {
+                identity: self,
+                cause,
+            });
+        }
+        Ok(self.merge_admitted_legacy_member(incoming))
+    }
+    fn merge_admitted_legacy_member(mut self, incoming: IdentityMember) -> Self {
+        if let Some(existing) = self
+            .members
+            .iter_mut()
+            .find(|member| member.app_id == incoming.app_id)
+        {
+            if existing.signing_public_key.is_empty() {
+                existing.signing_public_key = incoming.signing_public_key;
+            }
+            if existing.label.is_unnamed() {
+                existing.label = incoming.label;
+            }
+        } else {
+            self.members.push(incoming);
+        }
+        self
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::{DirectoryCreationEnrollment, IdentityCreation, IdentityVaultKeyOpening};
+
     use super::*;
-    use crate::{AppKey, DeviceSigningPublicKey};
+    use crate::{AppKey, DeviceSigningPublicKey, MemberLabelState};
 
     impl IdentityMember {
         fn fixture(app: &AppKey) -> Self {
@@ -224,7 +294,7 @@ mod tests {
                 auth_id: app.auth_id(),
                 public_key: app.public_key(),
                 signing_public_key: DeviceSigningPublicKey::Unavailable,
-                label: None,
+                label: MemberLabelState::Unnamed,
             }
         }
     }
@@ -233,10 +303,15 @@ mod tests {
     fn member_merge_inserts_new_app_without_changing_existing_member() -> anyhow::Result<()> {
         let owner = AppKey::generate()?;
         let peer = AppKey::generate()?;
-        let mut record = IdentityRecord::create_with_app_key("Personal", &owner, None)?;
-        let existing = record.members[0].clone();
+        let mut record =
+            IdentityRecord::create_with_app_key("Personal", &owner, MemberLabelState::Unnamed)?;
+        let existing = record
+            .members
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("created identity must contain its owner"))?;
         let incoming = IdentityMember::fixture(&peer);
-        record.merge_legacy_member(incoming.clone())?;
+        record = record.merge_legacy_member(incoming.clone())?;
         assert_eq!(record.members, vec![existing, incoming]);
         Ok(())
     }
@@ -245,16 +320,17 @@ mod tests {
     fn member_merge_completes_missing_metadata_and_preserves_existing_values() -> anyhow::Result<()>
     {
         let owner = AppKey::generate()?;
-        let mut record = IdentityRecord::create_with_app_key("Personal", &owner, None)?;
+        let mut record =
+            IdentityRecord::create_with_app_key("Personal", &owner, MemberLabelState::Unnamed)?;
         let mut incoming = IdentityMember::fixture(&owner);
         incoming.signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
-        incoming.label = Some("First label".to_owned());
-        record.merge_legacy_member(incoming.clone())?;
+        incoming.label = MemberLabelState::Named("First label".to_owned());
+        record = record.merge_legacy_member(incoming.clone())?;
         assert_eq!(record.members, vec![incoming.clone()]);
         let mut later = incoming.clone();
-        later.label = Some("Later label".to_owned());
-        record.merge_legacy_member(later)?;
-        record.merge_legacy_member(IdentityMember::fixture(&owner))?;
+        later.label = MemberLabelState::Named("Later label".to_owned());
+        record = record.merge_legacy_member(later)?;
+        record = record.merge_legacy_member(IdentityMember::fixture(&owner))?;
         assert_eq!(record.members, vec![incoming]);
         Ok(())
     }
@@ -263,8 +339,13 @@ mod tests {
     fn member_merge_rejects_conflicting_material_before_mutation() -> anyhow::Result<()> {
         let owner = AppKey::generate()?;
         let other = AppKey::generate()?;
-        let mut record = IdentityRecord::create_with_app_key("Personal", &owner, None)?;
-        record.members[0].signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
+        let mut record =
+            IdentityRecord::create_with_app_key("Personal", &owner, MemberLabelState::Unnamed)?;
+        record
+            .members
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("created identity must contain its owner"))?
+            .signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
         let before = record.clone();
         let mut wrong_auth = IdentityMember::fixture(&owner);
         wrong_auth.auth_id = other.auth_id();
@@ -287,8 +368,12 @@ mod tests {
             ),
         ] {
             match record.merge_legacy_member(incoming) {
-                Err(MultiDeviceError::InvalidDeviceIdentity(message)) => {
+                Err(rejected) => {
+                    let MultiDeviceError::InvalidDeviceIdentity(message) = rejected.cause else {
+                        anyhow::bail!("expected identity rejection");
+                    };
                     assert_eq!(message, expected);
+                    record = rejected.identity;
                 }
                 _ => anyhow::bail!("expected conflicting legacy member rejection"),
             }
@@ -301,16 +386,20 @@ mod tests {
     fn merges_legacy_duplicate_owners_into_selected_identity() -> anyhow::Result<()> {
         let shared = AppKey::generate()?;
         let other = AppKey::generate()?;
-        let mut personal = IdentityRecord::create_with_app_key("Personal", &shared, None)?;
+        let mut personal =
+            IdentityRecord::create_with_app_key("Personal", &shared, MemberLabelState::Unnamed)?;
         let store_id = crate::StoreId::generate()?;
-        let expected = personal.generate_vault_dek(store_id.clone())?;
-        let mut work = IdentityRecord::create_with_app_key("Work", &shared, None)?;
-        work.add_member(IdentityMember {
+        let opened_identity = personal.generate_vault_dek(store_id.clone())?;
+        personal = opened_identity.identity;
+        let expected = opened_identity.keys;
+        let mut work =
+            IdentityRecord::create_with_app_key("Work", &shared, MemberLabelState::Unnamed)?;
+        work = work.add_member(IdentityMember {
             app_id: other.app_id().clone(),
             auth_id: other.auth_id(),
             public_key: other.public_key(),
             signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
-            label: None,
+            label: MemberLabelState::Unnamed,
         })?;
         let selected_id = work.identity_id.clone();
         let legacy = IdentityDirectory {
@@ -319,14 +408,20 @@ mod tests {
             retired_app_ids: Vec::new(),
         };
 
-        let (mut migrated, changed) = legacy.migrate_legacy_duplicate_app_key_ownership()?;
+        let MigratedIdentityDirectory {
+            directory: migrated,
+            migration,
+        } = legacy.migrate_legacy_duplicate_app_key_ownership()?;
 
-        assert!(changed);
+        assert_eq!(migration, DirectoryLegacyMigration::Merged);
         assert_eq!(migrated.identities().len(), 1);
         assert_eq!(migrated.selected()?.identity_id, selected_id);
         assert_eq!(migrated.selected()?.members.len(), 2);
         assert_eq!(
-            migrated.open_or_generate_vault_dek(&shared, store_id)?,
+            migrated.open_vault_dek(IdentityVaultKeyOpening {
+                app_key: &shared,
+                store_id: store_id
+            })?,
             expected
         );
         Ok(())
@@ -335,12 +430,20 @@ mod tests {
     #[test]
     fn valid_directory_does_not_change() -> anyhow::Result<()> {
         let mut directory = IdentityDirectory::empty();
-        directory.create_identity("Personal", &AppKey::generate()?, None)?;
+        let resolved_identity = directory.create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &AppKey::generate()?,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        directory = resolved_identity.directory;
         let expected = directory.clone();
 
-        let (migrated, changed) = directory.migrate_legacy_duplicate_app_key_ownership()?;
+        let MigratedIdentityDirectory {
+            directory: migrated,
+            migration,
+        } = directory.migrate_legacy_duplicate_app_key_ownership()?;
 
-        assert!(!changed);
+        assert_eq!(migration, DirectoryLegacyMigration::Unchanged);
         assert_eq!(migrated, expected);
         Ok(())
     }
@@ -349,14 +452,29 @@ mod tests {
     fn preserves_durably_referenced_identity_over_selected_identity() -> anyhow::Result<()> {
         let shared = AppKey::generate()?;
         let mut directory = IdentityDirectory::empty();
-        let pending_identity_id = directory.create_identity("Pending genesis", &shared, None)?;
-        let selected_identity_id = directory.create_identity("Selected", &shared, None)?;
+        let resolved_identity = directory.create_identity(IdentityCreation {
+            label: "Pending genesis",
+            app_key: &shared,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        directory = resolved_identity.directory;
+        let pending_identity_id = resolved_identity.identity_id;
+        let resolved_identity = directory.create_identity(IdentityCreation {
+            label: "Selected",
+            app_key: &shared,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        directory = resolved_identity.directory;
+        let selected_identity_id = resolved_identity.identity_id;
         assert_ne!(pending_identity_id, selected_identity_id);
 
-        let (migrated, changed) = directory
+        let MigratedIdentityDirectory {
+            directory: migrated,
+            migration,
+        } = directory
             .migrate_legacy_duplicate_app_key_ownership_preserving(&pending_identity_id)?;
 
-        assert!(changed);
+        assert_eq!(migration, DirectoryLegacyMigration::Merged);
         assert_eq!(migrated.identities().len(), 1);
         assert_eq!(migrated.selected()?.identity_id, pending_identity_id);
         Ok(())
@@ -367,17 +485,97 @@ mod tests {
         let legacy_key = AppKey::generate()?;
         let candidate_key = AppKey::generate()?;
         let mut base = IdentityDirectory::empty();
-        let preserved_id = base.create_identity("Pending", &legacy_key, None)?;
-        base.create_identity("Legacy duplicate", &legacy_key, None)?;
-        base.select(&preserved_id)?;
+        let resolved_identity = base.create_identity(IdentityCreation {
+            label: "Pending",
+            app_key: &legacy_key,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        base = resolved_identity.directory;
+        let preserved_id = resolved_identity.identity_id;
+        let resolved_identity = base.create_identity(IdentityCreation {
+            label: "Legacy duplicate",
+            app_key: &legacy_key,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        base = resolved_identity.directory;
+        base = base.select(&preserved_id)?;
         let mut candidate = base.clone();
-        candidate.enroll_selected_app_key_for_vault_creation(&candidate_key, "Pending")?;
-        candidate.create_identity("Candidate overlap", &candidate_key, None)?;
+        let resolved_identity =
+            candidate.enroll_selected_app_key_for_vault_creation(DirectoryCreationEnrollment {
+                app_key: &candidate_key,
+                label: "Pending",
+            })?;
+        candidate = resolved_identity.directory;
+        let resolved_identity = candidate.create_identity(IdentityCreation {
+            label: "Candidate overlap",
+            app_key: &candidate_key,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        candidate = resolved_identity.directory;
 
         assert!(matches!(
-            candidate.migrate_legacy_duplicate_app_key_ownership_from_base(&base, &preserved_id),
-            Err(MultiDeviceError::DuplicateAppKeyOwnership { .. })
+            candidate.migrate_legacy_duplicate_app_key_ownership_from_base(LegacyDirectoryBase {
+                base: &base,
+                preserved_identity_id: &preserved_id
+            }),
+            Err(IdentityDirectoryRejection {
+                cause: MultiDeviceError::DuplicateAppKeyOwnership { .. },
+                ..
+            })
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn transitive_signing_conflict_returns_every_original_record() -> anyhow::Result<()> {
+        let app = AppKey::generate()?;
+        let first = IdentityRecord::create_with_app_key("First", &app, MemberLabelState::Unnamed)?;
+        let mut second =
+            IdentityRecord::create_with_app_key("Second", &app, MemberLabelState::Unnamed)?;
+        let mut third =
+            IdentityRecord::create_with_app_key("Third", &app, MemberLabelState::Unnamed)?;
+        second
+            .members
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("second identity must contain its owner"))?
+            .signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
+        third
+            .members
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("third identity must contain its owner"))?
+            .signing_public_key = DeviceSigningPublicKey::parse(&"22".repeat(32))?;
+        let original = IdentityDirectory {
+            selection: IdentitySelection::Selected(first.identity_id.clone()),
+            identities: vec![first, second, third],
+            retired_app_ids: Vec::new(),
+        };
+        let before = serde_json::to_string(&original)?;
+        let Err(rejected) = original.migrate_legacy_duplicate_app_key_ownership() else {
+            anyhow::bail!("expected transitive conflict");
+        };
+        assert!(matches!(
+            rejected.cause,
+            MultiDeviceError::InvalidDeviceIdentity(_)
+        ));
+        assert_eq!(serde_json::to_string(&rejected.directory)?, before);
+        Ok(())
+    }
+
+    #[test]
+    fn cancel_prepared_legacy_merge_returns_unmodified_directory() -> anyhow::Result<()> {
+        let app = AppKey::generate()?;
+        let first = IdentityRecord::create_with_app_key("First", &app, MemberLabelState::Unnamed)?;
+        let second =
+            IdentityRecord::create_with_app_key("Second", &app, MemberLabelState::Unnamed)?;
+        let selected = first.identity_id.clone();
+        let original = IdentityDirectory {
+            selection: IdentitySelection::Selected(selected.clone()),
+            identities: vec![first, second],
+            retired_app_ids: Vec::new(),
+        };
+        let before = serde_json::to_string(&original)?;
+        let prepared = original.prepare_legacy_duplicate_app_key_ownership_preserving(&selected)?;
+        assert_eq!(serde_json::to_string(&prepared.cancel())?, before);
         Ok(())
     }
 }

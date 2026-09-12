@@ -14,7 +14,7 @@ use crate::{
 #[cfg(test)]
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use ciborium::value::{Integer, Value};
+use ciborium::value::Value;
 use ciborium::{de, ser};
 use p256::Sec1Point;
 use p256::ecdsa::{Signature, SigningKey, signature::Signer};
@@ -23,6 +23,7 @@ use p256::pkcs8::{DecodePrivateKey, EncodePrivateKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
+use tsify::Tsify;
 use url::Url;
 use zeroize::{Zeroize, Zeroizing};
 
@@ -57,14 +58,16 @@ pub enum PasskeyAuthenticatorError {
 
 pub type PasskeyAuthenticatorResult<T> = Result<T, PasskeyAuthenticatorError>;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyRelyingParty {
     pub id: String,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyUser {
     pub id: String,
@@ -72,13 +75,15 @@ pub struct PasskeyUser {
     pub display_name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyCredentialDescriptor {
     pub id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyRegistrationRequest {
     pub origin: String,
@@ -99,7 +104,8 @@ pub struct PasskeyRegistrationRequest {
     pub user_verification_required: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyAssertionRequest {
     pub origin: String,
@@ -131,7 +137,7 @@ pub struct PasskeyAssertionResult {
 }
 
 mod assertion;
-mod encoding;
+pub(crate) mod encoding;
 mod registration;
 pub use assertion::CheckedPasskeyAssertion;
 use encoding::{

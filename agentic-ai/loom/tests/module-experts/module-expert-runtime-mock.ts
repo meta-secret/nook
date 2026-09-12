@@ -1,7 +1,45 @@
 import { spyOn } from 'bun:test';
+
 import * as codexRuntime from '../../src/agent-workflow/codex-runtime.ts';
+
 import type { RunIsolatedModuleExpertCodexArgs } from '../../src/agent-workflow/codex-runtime.ts';
+
 import type { AgentTaskRuntime } from '../../src/agent-workflow/runtime.ts';
+
+export class ModuleExpertsModuleExpertRuntimeMockScenario {
+  private constructor(
+    private readonly request: RegisterModuleExpertRuntimeMockArgs,
+  ) {}
+
+  static registerModuleExpertRuntimeMock(
+    args: RegisterModuleExpertRuntimeMockArgs,
+  ): ModuleExpertRuntimeMockRegistration {
+    return new ModuleExpertsModuleExpertRuntimeMockScenario(args).execute();
+  }
+
+  private execute(): ModuleExpertRuntimeMockRegistration {
+    const args = this.request;
+    const [runtimes = new Array<AgentTaskRuntime<string, string>>()] = [
+      registeredRuntimes.get(args.runId),
+    ];
+    runtimes.push(args.runtime);
+    registeredRuntimes.set(args.runId, runtimes);
+    return {
+      dispose: () => {
+        const registered = registeredRuntimes.get(args.runId);
+        if (registered?.at(-1) !== args.runtime) {
+          throw new Error(
+            `Runtime mocks for ${args.runId} were disposed out of order.`,
+          );
+        }
+        registered.pop();
+        if (registered.length === 0) {
+          registeredRuntimes.delete(args.runId);
+        }
+      },
+    };
+  }
+}
 
 export type RegisterModuleExpertRuntimeMockArgs = {
   readonly runId: string;
@@ -16,10 +54,14 @@ const registeredRuntimes = new Map<
   string,
   AgentTaskRuntime<string, string>[]
 >();
-const originalRunIsolatedModuleExpertCodex =
-  codexRuntime.runIsolatedModuleExpertCodex;
 
-spyOn(codexRuntime, 'runIsolatedModuleExpertCodex').mockImplementation(
+const originalRunIsolatedModuleExpertCodex =
+  codexRuntime.ModuleExpertCodexSdkAgentRuntime.executeIsolated;
+
+spyOn(
+  codexRuntime.ModuleExpertCodexSdkAgentRuntime,
+  'executeIsolated',
+).mockImplementation(
   async <TTask extends string, TAgent extends string>(
     args: RunIsolatedModuleExpertCodexArgs<TTask, TAgent>,
   ) => {
@@ -31,27 +73,3 @@ spyOn(codexRuntime, 'runIsolatedModuleExpertCodex').mockImplementation(
     return originalRunIsolatedModuleExpertCodex(args);
   },
 );
-
-export function registerModuleExpertRuntimeMock(
-  args: RegisterModuleExpertRuntimeMockArgs,
-): ModuleExpertRuntimeMockRegistration {
-  const [runtimes = new Array<AgentTaskRuntime<string, string>>()] = [
-    registeredRuntimes.get(args.runId),
-  ];
-  runtimes.push(args.runtime);
-  registeredRuntimes.set(args.runId, runtimes);
-  return {
-    dispose: () => {
-      const registered = registeredRuntimes.get(args.runId);
-      if (registered?.at(-1) !== args.runtime) {
-        throw new Error(
-          `Runtime mocks for ${args.runId} were disposed out of order.`,
-        );
-      }
-      registered.pop();
-      if (registered.length === 0) {
-        registeredRuntimes.delete(args.runId);
-      }
-    },
-  };
-}

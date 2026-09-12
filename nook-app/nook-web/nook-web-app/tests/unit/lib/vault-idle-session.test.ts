@@ -3,7 +3,11 @@ import initNookWasm, {
   NookClientRunModeUtil,
   NookRuntimeConfig,
 } from '$app-wasm'
-import { createVaultIdleSessionTracker } from '$lib/vault/idle-session-tracker'
+import {
+  VaultIdleSessionTracker,
+  VaultIdleSessionStartKind,
+  VaultIdleWarningKind,
+} from '$lib/vault/idle-session-tracker'
 
 beforeAll(async () => {
   await initNookWasm()
@@ -57,50 +61,59 @@ describe('resolveVaultIdleWarningMs', () => {
 describe('createVaultIdleSessionTracker', () => {
   test('fires expire callback after timeout with no activity', async () => {
     let expired = false
-    const tracker = createVaultIdleSessionTracker({
+    const tracker = new VaultIdleSessionTracker({
       timeoutMs: 50,
-      warningMs: 0,
+      warning: { kind: VaultIdleWarningKind.Disabled },
       onExpire: () => {
         expired = true
       },
     })
 
-    tracker.start()
+    const started = tracker.start()
+    if (started.kind !== VaultIdleSessionStartKind.Tracking)
+      throw new Error('DOM is required')
+    const active = started.session
     await new Promise((resolve) => setTimeout(resolve, 120))
-    tracker.stop()
+    active.stop()
     expect(expired).toBe(true)
   })
 
   test('activity resets the idle timer', async () => {
     let expired = false
-    const tracker = createVaultIdleSessionTracker({
+    const tracker = new VaultIdleSessionTracker({
       timeoutMs: 80,
-      warningMs: 0,
+      warning: { kind: VaultIdleWarningKind.Disabled },
       onExpire: () => {
         expired = true
       },
     })
 
-    tracker.start()
+    const started = tracker.start()
+    if (started.kind !== VaultIdleSessionStartKind.Tracking)
+      throw new Error('DOM is required')
+    const active = started.session
     await new Promise((resolve) => setTimeout(resolve, 40))
-    tracker.recordActivity()
+    active.recordActivity()
     await new Promise((resolve) => setTimeout(resolve, 60))
     expect(expired).toBe(false)
-    tracker.stop()
+    active.stop()
   })
 
   test('expiration detaches every activity listener before locking', async () => {
     const removeListener = vi.spyOn(document, 'removeEventListener')
-    const tracker = createVaultIdleSessionTracker({
+    const tracker = new VaultIdleSessionTracker({
       timeoutMs: 30,
-      warningMs: 0,
+      warning: { kind: VaultIdleWarningKind.Disabled },
       onExpire: () => {
-        tracker.stop()
+        // Expiration already detached the active capability.
       },
     })
 
+    const started = tracker.start()
+    if (started.kind !== VaultIdleSessionStartKind.Tracking)
+      throw new Error('DOM is required')
+    const active = started.session
     try {
-      tracker.start()
       await new Promise((resolve) => setTimeout(resolve, 80))
       for (const event of [
         'pointerdown',
@@ -112,7 +125,7 @@ describe('createVaultIdleSessionTracker', () => {
         expect(removeListener).toHaveBeenCalledWith(event, expect.any(Function))
       }
     } finally {
-      tracker.stop()
+      active.stop()
       removeListener.mockRestore()
     }
   })

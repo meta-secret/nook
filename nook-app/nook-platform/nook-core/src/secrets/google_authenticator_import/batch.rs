@@ -105,9 +105,10 @@ impl ParsedMigrationBatch {
         mut self,
     ) -> Result<CompleteMigrationBatch, GoogleAuthenticatorImportError> {
         let parts = &mut self.parts;
-        let expected_size = parts[0].batch_size;
-        let expected_id = parts[0].payload.batch_id;
-        let expected_version = parts[0].payload.version;
+        let first = parts.first().ok_or(GoogleAuthenticatorImportError::Empty)?;
+        let expected_size = first.batch_size;
+        let expected_id = first.payload.batch_id;
+        let expected_version = first.payload.version;
         if parts.iter().any(|part| {
             part.batch_size != expected_size
                 || part.payload.batch_id != expected_id
@@ -118,7 +119,7 @@ impl ParsedMigrationBatch {
         parts.sort_unstable_by_key(|part| part.batch_index);
         if parts
             .windows(2)
-            .any(|pair| pair[0].batch_index == pair[1].batch_index)
+            .any(|pair| matches!(pair, [left, right] if left.batch_index == right.batch_index))
         {
             return Err(GoogleAuthenticatorImportError::DuplicateBatchPart);
         }

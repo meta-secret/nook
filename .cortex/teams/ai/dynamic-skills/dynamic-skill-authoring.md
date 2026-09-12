@@ -87,7 +87,6 @@ For code refactors using a dynamic skill, run the focused worker proof and
 required formatters. Commit every resulting mutation in the allowed paths and
 return the exact direct commit to Gizmo. If pre-push hygiene mutates
 AI-owned content, the AI team returns a fresh formatted commit. Gizmo then
-continues from it, reruns hygiene, and pushes. Gizmo dispatches at least one
-relevant focused hosted task when the pushed head is not validation-ready.
-Gizmo dispatches complete exact-head validation immediately when the head is
-ready.
+continues from it, reruns hygiene, and pushes. Gizmo authorizes PR Steward to
+dispatch hosted validation. Use focused remote evidence until the head is ready.
+Dispatch complete exact-head validation immediately when it is ready.

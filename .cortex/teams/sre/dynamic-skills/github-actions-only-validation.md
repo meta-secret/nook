@@ -2,129 +2,42 @@
 
 ## Purpose
 
-Keep agent machines on the lightest possible local work.
+The [dev delivery contract](../../../gizmo/architecture/dev-delivery.md)
+defines two remote stages. Agents keep local work limited to editing, reading,
+scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
 
-Use the configured GitHub Actions runner for iterative builds and tests.
-Trusted validation and delivery jobs use ARC. Build producers use the general
-scale set with persistent node-local BuildKit. Browser jobs use ordinary Pods
-on `nook-k0s-container`. Untrusted fork and Dependabot code stays on
-GitHub-hosted runners without private credentials.
+## Required actions
 
-## Problem Pattern
+- **Feature compilation**
+  - Publish the feature branch and request remote build-only execution.
+  - Execute build-only and type-compilation work for the exact feature SHA.
+  - Keep tests, coverage, e2e, and preflight outside its transitive task graph.
+  - Author meaningful tests for later execution.
+  - Require code review and security acceptance before local dev landing.
+- **Slow dev PR checks**
+  - The manually run dev manager selects the published dev snapshot.
+  - PR Steward executes the manager's publication and validation packets.
+  - Run the full existing slow PR checks on the captured dev head SHA.
+  - Preserve e2e opt-ins and security-required focused browser checks.
+  - Freeze remote dev during checking and promotion.
+  - Use native non-cancelling concurrency with one active and latest pending.
+  - Run complete checks without per-push path-filter reductions.
+  - Route failures through feature compilation and local dev integration.
+- **Execution infrastructure**
+  - Use the configured remote runner for compilation and slow checks.
+  - Preserve existing container, credential, and trust boundaries.
+  - See [remote execution](../workflows/remote-execution.md) for runner details.
 
-Agents burn wall-clock and contend with other worktrees by running Docker builds
-and tests locally.
+## Prohibited actions
 
-Automatically starting the complete PR pipeline on every experimental push also
-wastes hosted concurrency before the branch is ready.
+- Do not run local tests, Docker work, product compilation, or coverage.
+- Do not treat `rust:ci`, `web:verify`, or `loom:verify` as build-only.
+- Do not add an automatic dev-push slow pipeline.
+- Do not cancel an active slow run or create a custom scheduler.
+- Do not replace missing remote evidence with local execution.
 
-## Preferred Pattern
+## Evidence
 
-Validation has three layers:
-
-- **Required handoff:** Team Agents format and commit without pushing. Gizmo
-  integrates, runs `task loom:pre-push`, and owns publication.
-- **Focused evidence:** after Gizmo pushes a non-ready head, use
-  `task remote TASK_NAME=<name>` for one relevant gate.
-  - Do not batch broad gates sequentially before complete validation.
-  - Use named Task selectors. A local Docker-backed task remains unavailable
-    until it has a Kubernetes-native Pod implementation.
-- **Required remotely:** Gizmo triggers complete exact-head PR validation.
-  - Dispatch every required hosted check immediately.
-  - Never wait for GitHub review before dispatch.
-  - After dispatch, request one circuit-guarded Codex review bound to the
-    current head and base without waiting for its result.
-  - Collect review while hosted validation runs.
-  - After both settle, batch current review findings and failed checks into one
-    repair iteration.
-  - Trusted same-repository native Rust and Rust ecosystem PR jobs and Main
-    build producers select ARC.
-  - General ARC provides persistent BuildKit for image producers.
-  - Container ARC creates an ordinary Kubernetes job Pod from each exact image.
-  - Playwright executes directly inside that Pod. It never launches a nested Docker or Podman container.
-  - BuildKit builds and exports images only. It does not execute workloads.
-  - Main's portable WASM cache proof uses the general ARC scale set.
-  - Fork and Dependabot code stays on secret-free GitHub-hosted workers.
-
-Validate request example:
-
-```yaml
-prLand:
-  validate:
-    prNumber: 123
-    runFullE2e: false
-```
-
-```bash
-# Gizmo, after integrating accepted Team Agent handoffs
-task loom:pre-push
-git push -u origin HEAD
-task loom:pr-land CONFIG=path/to/gizmo-owned/pr-land-validate.yaml
-```
-
-- For Main-fix PRs, set `runFullE2e: true` in the `prLand.validate` request.
-- See [Loom tools](../../ai/references/loom-tools.md).
-- Expensive remote tasks and complete PR validation:
-  - refresh their base branch; and
-  - refuse dispatch when the local head is stale.
-- When the head is stale:
-  1. merge the reported `origin/<base>`;
-  2. run `task loom:pre-push`;
-  3. push; and
-  4. retry.
-- On a red remote run:
-  1. read `gh run view <id> --log-failed`;
-  2. obtain the responsible Team Agent's formatted fix commit;
-  3. Gizmo continues from the commit, runs pre-push, and pushes; and
-  4. Gizmo validates when ready or runs relevant focused proof.
-- Ordinary pushes do not refresh complete PR checks.
-- Markdown-only Cortex changes use the repository-policy workflow.
-  - The workflow runs `task loom:cortex-audit`.
-  - It skips Rust setup, BuildKit connection, preflight, and full Loom package
-    verification.
-  - A change limited to `repository-policy.yml` and Cortex Markdown skips the
-    product PR and Main workflows.
-  - Any non-Markdown Cortex file keeps the complete repository-policy path.
-  - Any mixed change keeps the complete repository-policy path.
-  - Any product-impacting mixed change keeps the product PR and Main workflows.
-
-## Scope
-
-Applies to:
-
-- Every normal implementation PR coordinated by Gizmo
-- Coding-bro, pull-request, CI-pipeline, and quality workflow docs
-- Pre-push hygiene and efficient PR delivery skills
-
-Does not apply to:
-
-- Humans who choose to run local mirrors for their own feedback
-- Workbench issue, worklog, and statistics commits
-- Read-only / question-only sessions with no commits
-- Interactive development servers that require retained local state
-
-## Examples
-
-- Before: format → push → local `task check` while automatic PR CI consumes
-  hosted workers.
-- After: Team Agent commit → Gizmo pre-push → push → Loom validate → ready.
-- Before: remote Verify fails → run full local `task ci:pr` before re-push.
-- After: Team Agent fix commit → Gizmo pre-push → push → re-validate.
-
-## Application Checklist
-
-- [ ] Team Agents format and commit without pushing; Gizmo continues from them.
-- [ ] Gizmo runs `task loom:pre-push` before every push.
-- [ ] Do not require `task check`, `task ci:pr`, full suites, builds, or e2e
-      on the agent machine.
-- [ ] A non-ready head requires a relevant focused `task remote`. Usefulness
-      decides focused tasks only after the head is validation-ready.
-- [ ] Gizmo triggers complete validation with Loom or `task pr:validate`.
-- [ ] Complete validation dispatches hosted checks before requesting review.
-- [ ] Exact-head review runs concurrently with hosted validation.
-- [ ] Gizmo re-validates after every push that replaces the validated head.
-
-## Validation
-
-Proof is a ready PR whose hosted validation dispatched without a review wait.
-Its exact-head review ran during the hosted validation window.
+Capture source SHA, run, attempt, and result. Feature build success proves
+compilation only. Promotion requires slow-stage tests, review, and security
+acceptance for the exact published SHA.

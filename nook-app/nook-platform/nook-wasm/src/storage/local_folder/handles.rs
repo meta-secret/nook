@@ -33,6 +33,14 @@ impl LocalFolderHandles {
         }
     }
 }
+pub(super) enum FolderMethod {
+    Unsupported,
+    Callable(Function),
+}
+enum SavedFolderHandle {
+    Unregistered,
+    Registered(Object),
+}
 struct FolderRegistration<'a> {
     handle_id: &'a str,
     handle: Object,
@@ -101,15 +109,15 @@ impl FolderObject<'_> {
 }
 
 impl FolderObject<'_> {
-    pub(super) fn method(&self, name: &str) -> Result<Option<Function>, NookError> {
+    pub(super) fn method(&self, name: &str) -> Result<FolderMethod, NookError> {
         let target = self.object;
         let value = FolderObject::new(target).property(name)?;
         if value.is_undefined() || value.is_null() {
-            return Ok(None);
+            return Ok(FolderMethod::Unsupported);
         }
         value
             .dyn_into::<Function>()
-            .map(Some)
+            .map(FolderMethod::Callable)
             .map_err(|_| NookError::Database(format!("{name} is not a function.")))
     }
 }
@@ -128,9 +136,9 @@ impl FolderPromise {
 impl FolderObject<'_> {
     pub(super) async fn call(&self, name: &str) -> Result<Object, NookError> {
         let target = self.object;
-        let function = FolderObject::new(target)
-            .method(name)?
-            .ok_or_else(|| NookError::Database(format!("{name} is missing.")))?;
+        let FolderMethod::Callable(function) = FolderObject::new(target).method(name)? else {
+            return Err(NookError::Database(format!("{name} is missing.")));
+        };
         let promise = function
             .call0(target)
             .map(JsCast::unchecked_into)
@@ -153,9 +161,9 @@ impl FolderObject<'_> {
             name,
             argument: arg,
         } = call;
-        let function = FolderObject::new(target)
-            .method(name)?
-            .ok_or_else(|| NookError::Database(format!("{name} is missing.")))?;
+        let FolderMethod::Callable(function) = FolderObject::new(target).method(name)? else {
+            return Err(NookError::Database(format!("{name} is missing.")));
+        };
         let promise = function
             .call1(target, arg)
             .map(JsCast::unchecked_into)
@@ -263,9 +271,9 @@ impl LocalFolderHandles {
 }
 
 impl LocalFolderHandles {
-    async fn load(&self, handle_id: &str) -> Result<Option<Object>, NookError> {
+    async fn load(&self, handle_id: &str) -> Result<SavedFolderHandle, NookError> {
         if let Some(handle) = self.memory.borrow().get(handle_id).cloned() {
-            return Ok(Some(handle));
+            return Ok(SavedFolderHandle::Registered(handle));
         }
 
         let rexie = Self::open_database().await?;
@@ -285,25 +293,25 @@ impl LocalFolderHandles {
         })?;
 
         let Some(row) = row.filter(|value| !value.is_undefined() && !value.is_null()) else {
-            return Ok(None);
+            return Ok(SavedFolderHandle::Unregistered);
         };
         let row: Object = row.unchecked_into();
         let handle = FolderObject::new(&row).property("handle")?;
         if handle.is_undefined() || handle.is_null() {
-            return Ok(None);
+            return Ok(SavedFolderHandle::Unregistered);
         }
         self.memory
             .borrow_mut()
             .insert(handle_id.to_owned(), handle.clone());
-        Ok(Some(handle))
+        Ok(SavedFolderHandle::Registered(handle))
     }
 }
 
 impl LocalFolderHandles {
-    pub(crate) async fn remove(&self, handle_id: Option<String>) -> Result<(), NookError> {
-        let Some(handle_id) = handle_id.filter(|id| !id.trim().is_empty()) else {
+    pub(crate) async fn remove(&self, handle_id: String) -> Result<(), NookError> {
+        if handle_id.trim().is_empty() {
             return Ok(());
-        };
+        }
         self.memory.borrow_mut().remove(&handle_id);
 
         let rexie = Self::open_database().await?;
@@ -330,11 +338,10 @@ impl NookLocalFolderConfig {
     #[must_use]
     pub(crate) fn is_supported() -> bool {
         web_sys::window().is_some_and(|window| {
-            FolderObject::new(&window.into())
-                .method("showDirectoryPicker")
-                .ok()
-                .flatten()
-                .is_some()
+            matches!(
+                FolderObject::new(&window.into()).method("showDirectoryPicker"),
+                Ok(FolderMethod::Callable(_))
+            )
         })
     }
 }
@@ -343,7 +350,8 @@ impl FolderObject<'_> {
     pub(super) async fn observe_write_permission(&self) -> Result<(), NookError> {
         let handle = self.object;
         let descriptor = Self::permission_descriptor()?;
-        let Some(query) = FolderObject::new(handle).method("queryPermission")? else {
+        let FolderMethod::Callable(query) = FolderObject::new(handle).method("queryPermission")?
+        else {
             return Ok(());
         };
         let current = FolderPromise {
@@ -362,7 +370,9 @@ impl FolderObject<'_> {
             return Ok(());
         }
 
-        let Some(request) = FolderObject::new(handle).method("requestPermission")? else {
+        let FolderMethod::Callable(request) =
+            FolderObject::new(handle).method("requestPermission")?
+        else {
             return Err(NookError::Database(
                 "Folder permission was not granted.".to_owned(),
             ));
@@ -404,13 +414,13 @@ impl NookLocalFolderConfig {
             NookError::Database("Local folder backup requires a browser.".to_owned())
         })?;
         let window: Object = window.into();
-        let picker = FolderObject::new(&window)
-            .method("showDirectoryPicker")?
-            .ok_or_else(|| {
-                NookError::Database(
-                    "Local folder backup is not supported in this browser.".to_owned(),
-                )
-            })?;
+        let FolderMethod::Callable(picker) =
+            FolderObject::new(&window).method("showDirectoryPicker")?
+        else {
+            return Err(NookError::Database(
+                "Local folder backup is not supported in this browser.".to_owned(),
+            ));
+        };
         let options = Object::new();
         Reflect::set(
             &options,
@@ -472,7 +482,7 @@ impl LocalFolderHandles {
                 "Choose a local backup folder before syncing.".to_owned(),
             ));
         }
-        let Some(handle) = self.load(handle_id).await? else {
+        let SavedFolderHandle::Registered(handle) = self.load(handle_id).await? else {
             return Err(NookError::Database(
                 "Reconnect this local backup folder before syncing.".to_owned(),
             ));
@@ -644,13 +654,18 @@ mod tests {
                 handle: Object::new(),
             })
             .await?;
-        registry.remove(None).await?;
-        registry.remove(Some(" ".to_owned())).await?;
+        registry.remove(" ".to_owned()).await?;
         assert!(registry.memory.borrow().contains_key(handle_id));
         registry.memory.borrow_mut().clear();
-        assert!(registry.load(handle_id).await?.is_some());
-        registry.remove(Some(handle_id.to_owned())).await?;
-        assert!(registry.load(handle_id).await?.is_none());
+        assert!(matches!(
+            registry.load(handle_id).await?,
+            SavedFolderHandle::Registered(_)
+        ));
+        registry.remove(handle_id.to_owned()).await?;
+        assert!(matches!(
+            registry.load(handle_id).await?,
+            SavedFolderHandle::Unregistered
+        ));
         let mut uncloneable = PermissionFixture::new();
         uncloneable.responds(PermissionResponse {
             method: "queryPermission",
@@ -670,7 +685,7 @@ mod tests {
             Ok(()) => anyhow::bail!("a function-bearing object must not be structured-cloned"),
         }
         assert!(registry.memory.borrow().contains_key(handle_id));
-        registry.remove(Some(handle_id.to_owned())).await?;
+        registry.remove(handle_id.to_owned()).await?;
         registry
             .store(FolderRegistration {
                 handle_id,
@@ -679,7 +694,10 @@ mod tests {
             .await?;
         registry.clear().await?;
         assert!(registry.memory.borrow().is_empty());
-        assert!(registry.load(handle_id).await?.is_none());
+        assert!(matches!(
+            registry.load(handle_id).await?,
+            SavedFolderHandle::Unregistered
+        ));
         Ok(())
     }
 
@@ -739,7 +757,7 @@ mod tests {
         let object = Object::new();
         assert!(matches!(
             FolderObject::new(&object).method("missing"),
-            Ok(None)
+            Ok(FolderMethod::Unsupported)
         ));
         Reflect::set(
             &object,

@@ -4,8 +4,11 @@ await companionWasmReady
 import { describe, expect, test } from 'bun:test'
 import {
   createManifest,
+  ContentScriptRunAt,
   type CreateExtensionManifestArgs,
   ExtensionManifestBuildKind,
+  ExtensionManifestType,
+  ExtensionPermission,
   type ExtensionManifestDeployment,
 } from '../src/manifest'
 
@@ -95,13 +98,15 @@ describe('extension origin isolation', () => {
         manifest.content_scripts.find(({ matches }) =>
           matches.includes(simpleMatch),
         )?.run_at,
-      ).toBe('document_start')
+      ).toBe(ContentScriptRunAt.DocumentStart)
     })
   }
 
   test('declares offscreen and storage permissions for its memory-only session coordination', () => {
-    expect(defaultManifest().permissions).toContain('offscreen')
-    expect(defaultManifest().permissions).toContain('storage')
+    expect(defaultManifest().permissions).toContain(
+      ExtensionPermission.Offscreen,
+    )
+    expect(defaultManifest().permissions).toContain(ExtensionPermission.Storage)
   })
 
   test('exposes the icon and companion WASM to in-page content scripts', () => {
@@ -117,7 +122,7 @@ describe('extension origin isolation', () => {
     const autofill = defaultManifest().content_scripts.find((script) =>
       script.js.includes('content/autofill.js'),
     )
-    expect(autofill?.type).toBe('module')
+    expect(autofill?.type).toBe(ExtensionManifestType.Module)
     expect(autofill).toHaveProperty('all_frames', true)
     expect(
       defaultManifest()

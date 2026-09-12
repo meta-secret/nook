@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { VaultType } from '$lib/vault/architecture-model'
   type VaultPasswordUnlock = {
     readonly entryId: string
     readonly password: string
@@ -19,8 +20,8 @@
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
-    isSentinelVault,
-    sentinelCeremonyIsVisible,
+    SentinelUnlockActions,
+    SentinelCeremonyVisibility,
   } from '$lib/vault/sentinel-unlock'
   import type { PasswordEntrySelection } from '$lib/vault/state/session.svelte'
   import {
@@ -33,7 +34,7 @@
     type PasswordUnlockCapability,
   } from './login-unlock-state'
   import {
-    loadLoginVaultIdentityContext,
+    LoginVaultIdentityReader,
     LoginVaultIdentityContextKind,
     type LoginVaultIdentityContext as LoginVaultIdentityContextState,
   } from './login-vault-identity-context'
@@ -79,10 +80,33 @@
 
   const isBusy = $derived(isVerifying || isInitializing)
   let workflow = $state<LoginVaultWorkflow>(LoginVaultWorkflow.Open)
-  const showSentinelCeremony = $derived(sentinelCeremonyIsVisible(vault))
-  const hidePasswordUnlock = $derived(
-    showSentinelCeremony || isSentinelVault(vault),
+
+  function selectWorkflow(selected: LoginVaultWorkflow): void {
+    workflow = selected
+  }
+  const sentinelVisibility = $derived(
+    new SentinelUnlockActions(vault).ceremonyVisibility(),
   )
+  const showSentinelCeremony = $derived(
+    sentinelVisibility.isOk() &&
+      sentinelVisibility.value === SentinelCeremonyVisibility.Visible,
+  )
+  $effect(() => {
+    if (sentinelVisibility.isErr())
+      vault.errorMsg = vault.t(sentinelVisibility.error.translationKey)
+  })
+  const presentedVaultType = $derived(
+    new SentinelUnlockActions(vault).vaultType(),
+  )
+  const hidePasswordUnlock = $derived(
+    showSentinelCeremony ||
+      presentedVaultType.isErr() ||
+      presentedVaultType.value === VaultType.Sentinel,
+  )
+  $effect(() => {
+    if (presentedVaultType.isErr())
+      vault.errorMsg = vault.t(presentedVaultType.error.translationKey)
+  })
   const passwordUnlock = $derived<PasswordUnlockCapability>(
     hidePasswordUnlock
       ? { kind: PasswordUnlockCapabilityKind.Unavailable }
@@ -108,23 +132,27 @@
       return
     }
 
+    const manager = vault.admitManager()
+    if (manager.isErr()) {
+      identityContext = { kind: LoginVaultIdentityContextKind.Failed }
+      return
+    }
     const storeId = vaultEntry.entry.storeId
     const generation = ++identityContextLoadGeneration
     identityContext = { kind: LoginVaultIdentityContextKind.Loading }
-    const identityContextRequest: Parameters<
-      typeof loadLoginVaultIdentityContext
+    const identityContextRequest: ConstructorParameters<
+      typeof LoginVaultIdentityReader
     >[0] = {
-      manager: vault.requireManager(),
+      manager: manager.value,
       storeId,
     }
-    void loadLoginVaultIdentityContext(identityContextRequest)
+    void new LoginVaultIdentityReader(identityContextRequest)
+      .execute()
       .then((context) => {
         if (generation !== identityContextLoadGeneration) return
-        identityContext = context
-      })
-      .catch(() => {
-        if (generation !== identityContextLoadGeneration) return
-        identityContext = { kind: LoginVaultIdentityContextKind.Failed }
+        identityContext = context.isOk()
+          ? context.value
+          : { kind: LoginVaultIdentityContextKind.Failed }
       })
 
     return () => {
@@ -148,7 +176,7 @@
   <LoginVaultWorkflowNav
     {vault}
     active={workflow}
-    onSelect={(selected) => (workflow = selected)}
+    onSelect={selectWorkflow}
   />
 
   {#if workflow === LoginVaultWorkflow.Open}

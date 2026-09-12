@@ -7,7 +7,10 @@
     Smartphone,
   } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
-  import { identities, identityById } from '../_shared/identity-vault-fixtures'
+  import {
+    identities,
+    identityVaultFixtures,
+  } from '../_shared/identity-vault-fixtures'
   import type { ExperimentProps } from '../../index'
 
   const ACCENT = '#ff6b3d'
@@ -23,7 +26,9 @@
     return Monitor
   }
 
-  const selectedIdentity = $derived(identityById(selectedIdentityId))
+  const selectedIdentity = $derived(
+    identityVaultFixtures.identityById(selectedIdentityId),
+  )
 </script>
 
 <svelte:head>

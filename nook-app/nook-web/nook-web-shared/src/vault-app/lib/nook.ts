@@ -1,10 +1,13 @@
-type StoredVaultSynchronization = {
-  readonly manager: NookVaultManager;
-  readonly mode: string;
-  readonly pat: string;
-  readonly repo: string;
-};
-
+import {
+  NativeVaultStorageFailure,
+  type VaultStorageFailure,
+} from "$lib/runtime/storage-failure";
+import {
+  VaultManagerStartup,
+  VaultEngineFailure,
+} from "$lib/runtime/wasm-bootstrap";
+import { err, ok, type Result } from "neverthrow";
+import type { NookStorageConnectArgs } from "$app-wasm";
 import type {
   NookImportResult,
   NookJoinRequest,
@@ -18,9 +21,8 @@ import type {
 import {
   authenticator_setup_key_changed,
   default_password_generation_options,
-  default as initNookWasm,
   generate_id,
-  NookVaultManager as NookVaultManagerClass,
+  configured_vault_application,
   NookSecretFormFields,
   SecretType,
   build_secret_yaml,
@@ -28,10 +30,7 @@ import {
   generate_secret_id,
   VaultAccessStatus,
 } from "$app-wasm";
-import { createLogger, initWasmLogging } from "$lib/runtime/log";
-
-await initNookWasm();
-initWasmLogging();
+import { browserLogRuntime } from "$lib/runtime/log";
 
 export type {
   NookImportResult,
@@ -63,50 +62,62 @@ export type AuthenticatorCodeView = {
   expiresAtUnixSeconds: number;
 };
 
+export interface VaultStorageSynchronizationRequest {
+  readonly manager: NookVaultManager;
+  readonly mode: NookStorageConnectArgs["mode"];
+  readonly pat: NookStorageConnectArgs["pat"];
+  readonly repo: NookStorageConnectArgs["repo"];
+}
+
 export function isoTimestamp(): string {
   return new Date().toISOString();
 }
 
-export async function getVaultManager(): Promise<NookVaultManager> {
-  const loadWasm = async () => {
-    await initNookWasm();
-    initWasmLogging();
-    const manager = new NookVaultManagerClass();
-    drainWasmStatusIntoLog(manager);
+export class VaultManagerRuntime {
+  async open(): Promise<Result<NookVaultManager, VaultEngineFailure>> {
+    const manager = await new VaultManagerStartup(
+      configured_vault_application(),
+    ).open();
+    if (manager.isOk()) {
+      try {
+        browserLogRuntime.initWasmLogging();
+        this.drainStatusIntoLog(manager.value);
+      } catch {
+        manager.value.free();
+        return err(VaultEngineFailure.ManagerCreation);
+      }
+    }
     return manager;
-  };
+  }
 
-  // eslint-disable-next-line max-params -- Promise owns this positional executor signature.
-  const timeout = new Promise<never>((_, reject) => {
-    setTimeout(
-      () =>
-        reject(
-          new Error(
-            "Vault engine timed out while loading. Refresh and try again.",
-          ),
-        ),
-      15_000,
-    );
-  });
-
-  return Promise.race([loadWasm(), timeout]);
+  private drainStatusIntoLog(manager: NookVaultManager) {
+    setInterval(() => {
+      try {
+        for (const status of manager.drain_status_log()) {
+          wasmLog.debug(status);
+        }
+      } catch {
+        // Manager may be mid-borrow by an async &mut call; retry next tick.
+      }
+    }, 500);
+  }
 }
 
 /** Narrow the generated wasm transport result at its API boundary. */
-export function syncVaultFromStorage({
-  manager,
-  mode,
-  pat,
-  repo,
-}: StoredVaultSynchronization): Promise<NookVaultSyncResult> {
-  return manager.sync_vault_from_storage(
-    mode,
-    pat,
-    repo,
-  ) as Promise<NookVaultSyncResult>;
+export class VaultStorageSynchronization {
+  constructor(private readonly request: VaultStorageSynchronizationRequest) {}
+
+  async run(): Promise<Result<NookVaultSyncResult, VaultStorageFailure>> {
+    const { manager, mode, pat, repo } = this.request;
+    try {
+      return ok(await manager.sync_vault_from_storage(mode, pat, repo));
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    }
+  }
 }
 
-const wasmLog = createLogger("wasm");
+const wasmLog = browserLogRuntime.createLogger("wasm");
 
 /**
  * Pipe the wasm manager's status channel (e.g. `GITHUB_FETCH_START`,
@@ -116,18 +127,6 @@ const wasmLog = createLogger("wasm");
  * `next_status` variant would hold the wasm-bindgen borrow and deadlock
  * every `&mut self` manager call.
  */
-function drainWasmStatusIntoLog(manager: NookVaultManager) {
-  setInterval(() => {
-    try {
-      for (const status of manager.drain_status_log()) {
-        wasmLog.debug(status);
-      }
-    } catch {
-      // Manager may be mid-borrow by an async &mut call; retry next tick.
-    }
-  }, 500);
-}
-
 /** Build a validated YAML payload from a core-owned secret form variant. */
 export function buildSecretYaml(fields: NookSecretFormFields): string {
   try {

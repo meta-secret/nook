@@ -342,8 +342,11 @@ tasks:
   ci:main:e2e:
     desc: Full stub web Playwright e2e plus extension e2e when wasm/dist already built.
     cmds:
-      - task: web:test:e2e:parallel
-      - task: extension:test:e2e
+      - |
+        failed=0
+        task web:test:e2e:parallel || failed=1
+        task extension:test:e2e || failed=1
+        exit "$failed"
 
   ci:main:e2e:parallel:
     desc: Alias for ci:main:e2e.
@@ -430,21 +433,30 @@ tasks:
     cmds:
       - task: _ci:main:build
       - cp -a "{{.WEB_ROOT}}/dist" "{{.WEB_ROOT}}/dist-prod"
-      - task: _web:test:e2e:parallel
-      - task: _web:test:e2e:isolation
-      - task: _web:e2e:restore-prod-dist
+      - defer: task _web:e2e:restore-prod-dist
+      - |
+        failed=0
+        task _web:test:e2e:parallel || failed=1
+        task _web:test:e2e:isolation || failed=1
+        exit "$failed"
 
   _ci:main:
     desc: Main gate — web e2e plus extension e2e in one container.
     cmds:
-      - task: _ci:main:core
-      - task: _extension:test:e2e
+      - |
+        failed=0
+        task _ci:main:core || failed=1
+        task _extension:test:e2e || failed=1
+        exit "$failed"
 
   _ci:main:web:e2e-only:
     desc: Main/PR web browser suites without format/verify (sealed image already proven).
     cmds:
-      - task: _web:test:e2e:parallel
-      - task: _web:test:e2e:isolation
+      - |
+        failed=0
+        task _web:test:e2e:parallel || failed=1
+        task _web:test:e2e:isolation || failed=1
+        exit "$failed"
 
   _ci:pr:prepare:
     desc: Format check only (split-container debug — prefer _ci:pr).

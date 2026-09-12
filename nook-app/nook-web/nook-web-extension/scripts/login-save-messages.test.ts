@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  isWebsiteLoginSaveCommitMessage,
-  isWebsiteLoginSaveDismissMessage,
-  isWebsiteLoginSaveOfferMessage,
-  isWebsiteLoginSavePendingMessage,
+  WebsiteLoginSaveCommitMessage as WebsiteLoginSaveCommitMessageSchema,
+  WebsiteLoginSaveDismissMessage as WebsiteLoginSaveDismissMessageSchema,
+  WebsiteLoginSaveOfferMessage as WebsiteLoginSaveOfferMessageSchema,
+  WebsiteLoginSavePendingMessage as WebsiteLoginSavePendingMessageSchema,
 } from '../src/lib/login-save-messages'
 
 describe('website login save runtime messages', () => {
   test('accepts typed save offer, pending, commit, and dismiss messages', () => {
     expect(
-      isWebsiteLoginSaveOfferMessage({
+      WebsiteLoginSaveOfferMessageSchema.is({
         type: 'nook:website-login-save-offer',
         payload: {
           origin: 'https://login.example.com',
@@ -19,13 +19,13 @@ describe('website login save runtime messages', () => {
       }),
     ).toBe(true)
     expect(
-      isWebsiteLoginSavePendingMessage({
+      WebsiteLoginSavePendingMessageSchema.is({
         type: 'nook:website-login-save-pending',
         payload: { origin: 'https://login.example.com' },
       }),
     ).toBe(true)
     expect(
-      isWebsiteLoginSaveCommitMessage({
+      WebsiteLoginSaveCommitMessageSchema.is({
         type: 'nook:website-login-save-commit',
         payload: {
           origin: 'https://login.example.com',
@@ -43,7 +43,7 @@ describe('website login save runtime messages', () => {
       }),
     ).toBe(true)
     expect(
-      isWebsiteLoginSaveDismissMessage({
+      WebsiteLoginSaveDismissMessageSchema.is({
         type: 'nook:website-login-save-dismiss',
         payload: {
           origin: 'https://login.example.com',
@@ -55,7 +55,7 @@ describe('website login save runtime messages', () => {
 
   test('rejects malformed save messages', () => {
     expect(
-      isWebsiteLoginSaveOfferMessage({
+      WebsiteLoginSaveOfferMessageSchema.is({
         type: 'nook:website-login-save-offer',
         payload: {
           origin: 'https://login.example.com',
@@ -65,7 +65,7 @@ describe('website login save runtime messages', () => {
       }),
     ).toBe(false)
     expect(
-      isWebsiteLoginSaveCommitMessage({
+      WebsiteLoginSaveCommitMessageSchema.is({
         type: 'nook:website-login-save-commit',
         payload: { origin: 'https://login.example.com', offerId: 'offer_1' },
       }),

@@ -14,7 +14,9 @@
     clippy::must_use_candidate,
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,
-    clippy::return_self_not_must_use
+    clippy::return_self_not_must_use,
+    clippy::result_large_err,
+    clippy::unnecessary_wraps
 )]
 
 #[path = "event_log_harness.rs"]
@@ -68,6 +70,30 @@ pub struct SimWorld {
     pub providers: ProviderBuckets,
 }
 
+pub struct SimRejection {
+    pub world: SimWorld,
+    pub cause: VaultError,
+}
+impl SimRejection {
+    pub fn into_cause(self) -> VaultError {
+        self.cause
+    }
+}
+pub struct JoinTransition<S> {
+    pub world: SimWorld,
+    pub approval: JoinApproval<S>,
+}
+pub struct JoinRejection<S> {
+    pub world: SimWorld,
+    pub approval: JoinApproval<S>,
+    pub cause: VaultError,
+}
+impl<S> JoinRejection<S> {
+    pub fn into_cause(self) -> VaultError {
+        self.cause
+    }
+}
+
 impl SimWorld {
     /// Build a world with a genesis device plus `replicas` peers sharing its vault.
     pub fn new(replicas: usize) -> VaultResult<Self> {
@@ -82,42 +108,82 @@ impl SimWorld {
         Ok(Self { devices, providers })
     }
 
-    pub fn genesis(&mut self) -> &mut EventLogDevice {
-        &mut self.devices[0]
+    pub fn genesis(&self) -> &EventLogDevice {
+        self.devices
+            .first()
+            .unwrap_or_else(|| panic!("simulation world must contain genesis"))
+    }
+    pub fn device(&self, index: usize) -> &EventLogDevice {
+        self.devices
+            .get(index)
+            .unwrap_or_else(|| panic!("simulation device index must exist"))
     }
 
-    pub fn device(&mut self, index: usize) -> &mut EventLogDevice {
-        &mut self.devices[index]
-    }
-
-    /// Flush one device's pending outbox into every shared provider bucket.
-    pub fn push(&mut self, index: usize) -> VaultResult<()> {
-        push_device_outbox(&mut self.devices[index], &mut self.providers)
-    }
-
-    /// Union all events currently in the shared buckets into one device's log.
-    pub fn pull(&mut self, index: usize) -> VaultResult<()> {
-        union_device_from_providers(&mut self.devices[index], &self.providers)
-    }
-
-    /// Push every device's outbox to the shared buckets.
-    pub fn push_all(&mut self) -> VaultResult<()> {
-        for index in 0..self.devices.len() {
-            self.push(index)?;
+    pub fn append(
+        mut self,
+        index: usize,
+        operations: Vec<nook_core::VaultOperation>,
+    ) -> Result<Self, SimRejection> {
+        let device = self.devices.remove(index);
+        match device.append_signed(operations) {
+            Ok(appended) => {
+                self.devices.insert(index, appended.device);
+                Ok(self)
+            }
+            Err(rejected) => {
+                self.devices.insert(index, rejected.device);
+                Err(SimRejection {
+                    world: self,
+                    cause: rejected.cause,
+                })
+            }
         }
-        Ok(())
     }
 
-    /// Pull the shared buckets into every device's log.
-    pub fn pull_all(&mut self) -> VaultResult<()> {
-        for index in 0..self.devices.len() {
-            self.pull(index)?;
+    pub fn push(mut self, index: usize) -> Result<Self, SimRejection> {
+        let device = self.devices.remove(index);
+        let flushed = push_device_outbox(device, self.providers);
+        self.providers = flushed.providers;
+        self.devices.insert(index, flushed.device);
+        Ok(self)
+    }
+
+    pub fn pull(mut self, index: usize) -> Result<Self, SimRejection> {
+        let device = self.devices.remove(index);
+        match union_device_from_providers(device, &self.providers) {
+            Ok(device) => {
+                self.devices.insert(index, device);
+                Ok(self)
+            }
+            Err(rejected) => {
+                self.devices.insert(index, rejected.device);
+                Err(SimRejection {
+                    world: self,
+                    cause: rejected.cause,
+                })
+            }
         }
-        Ok(())
+    }
+
+    pub fn push_all(mut self) -> Result<Self, SimRejection> {
+        for index in 0..self.devices.len() {
+            self = self.push(index)?;
+        }
+        Ok(self)
+    }
+    pub fn pull_all(mut self) -> Result<Self, SimRejection> {
+        for index in 0..self.devices.len() {
+            self = self.pull(index)?;
+        }
+        Ok(self)
     }
 
     pub fn roster_view(&self, index: usize) -> VaultResult<RosterView> {
-        roster_view(&self.devices[index])
+        roster_view(
+            self.devices
+                .get(index)
+                .unwrap_or_else(|| panic!("simulation device index must exist")),
+        )
     }
 }
 
@@ -141,10 +207,10 @@ impl JoinApproval<Pending> {
     /// Record a fresh join request from `joiner` and append the signed
     /// `JoinRequested` event on the requesting side of the world.
     pub fn request(
-        world: &mut SimWorld,
+        world: SimWorld,
         requester_index: usize,
         joiner: &DeviceIdentity,
-    ) -> VaultResult<Self> {
+    ) -> Result<JoinTransition<Pending>, SimRejection> {
         use nook_core::{DeviceSigningPublicKey, MemberLabel, VaultOperation};
 
         let join = JoinRequest {
@@ -153,68 +219,115 @@ impl JoinApproval<Pending> {
             signing_public_key: DeviceSigningPublicKey::from_trusted(String::new()),
             requested_at: SIM_TS.to_owned(),
         };
-        world.devices[requester_index].append_signed(vec![VaultOperation::JoinRequested {
-            device_id: joiner.device_id().clone(),
-            encryption_public_key: joiner.public_key(),
-            signing_public_key: DeviceSigningPublicKey::from_trusted(String::new()),
-            label: MemberLabel::from_trusted(String::new()),
-        }])?;
-        Ok(Self {
-            join,
-            _state: PhantomData,
+        let world = world.append(
+            requester_index,
+            vec![VaultOperation::JoinRequested {
+                device_id: joiner.device_id().clone(),
+                encryption_public_key: joiner.public_key(),
+                signing_public_key: DeviceSigningPublicKey::from_trusted(String::new()),
+                label: MemberLabel::from_trusted(String::new()),
+            }],
+        )?;
+        Ok(JoinTransition {
+            world,
+            approval: Self {
+                join,
+                _state: PhantomData,
+            },
         })
     }
 
     /// Approve the join by appending a signed `JoinApproved` event on `approver`.
     pub fn approve(
         self,
-        world: &mut SimWorld,
+        world: SimWorld,
         approver_index: usize,
-    ) -> VaultResult<JoinApproval<Approved>> {
+    ) -> Result<JoinTransition<Approved>, JoinRejection<Pending>> {
         use nook_core::{DeviceSigningPublicKey, MemberLabel, VaultOperation};
 
         // The convergence property observed here (join row removal) does not read
         // these wrapped-key envelopes, but the event store validates them as
         // age-armored on parse, so produce syntactically valid ciphertexts by
         // wrapping the keys with the approver's own vault crypto.
-        let approver = &world.devices[approver_index];
-        let secrets_key_ciphertext = approver
-            .crypto
-            .encrypt_value(&approver.secrets_key)
-            .map_err(VaultError::from)?;
-        let members_key_ciphertext = approver
-            .crypto
-            .encrypt_value(&approver.members_key)
-            .map_err(VaultError::from)?;
+        let prepared: VaultResult<_> = (|| {
+            let approver = world
+                .devices
+                .get(approver_index)
+                .unwrap_or_else(|| panic!("approver index must exist"));
+            Ok((
+                approver.crypto.encrypt_value(&approver.secrets_key)?,
+                approver.crypto.encrypt_value(&approver.members_key)?,
+            ))
+        })();
+        let (secrets_key_ciphertext, members_key_ciphertext) = match prepared {
+            Ok(prepared) => prepared,
+            Err(cause) => {
+                return Err(JoinRejection {
+                    world,
+                    approval: self,
+                    cause,
+                });
+            }
+        };
 
-        world.devices[approver_index].append_signed(vec![VaultOperation::JoinApproved {
-            device_id: self.join.device_id.clone(),
-            encryption_public_key: self.join.public_key.clone(),
-            signing_public_key: DeviceSigningPublicKey::from_trusted(String::new()),
-            label: MemberLabel::from_trusted(String::new()),
-            secrets_key_ciphertext,
-            members_key_ciphertext,
-        }])?;
-        Ok(JoinApproval {
-            join: self.join,
-            _state: PhantomData,
+        let world = match world.append(
+            approver_index,
+            vec![VaultOperation::JoinApproved {
+                device_id: self.join.device_id.clone(),
+                encryption_public_key: self.join.public_key.clone(),
+                signing_public_key: DeviceSigningPublicKey::from_trusted(String::new()),
+                label: MemberLabel::from_trusted(String::new()),
+                secrets_key_ciphertext,
+                members_key_ciphertext,
+            }],
+        ) {
+            Ok(world) => world,
+            Err(rejected) => {
+                return Err(JoinRejection {
+                    world: rejected.world,
+                    approval: self,
+                    cause: rejected.cause,
+                });
+            }
+        };
+        Ok(JoinTransition {
+            world,
+            approval: JoinApproval {
+                join: self.join,
+                _state: PhantomData,
+            },
         })
     }
 
     /// Deny the join by appending a signed `JoinDenied` event on `approver`.
     pub fn deny(
         self,
-        world: &mut SimWorld,
+        world: SimWorld,
         approver_index: usize,
-    ) -> VaultResult<JoinApproval<Denied>> {
+    ) -> Result<JoinTransition<Denied>, JoinRejection<Pending>> {
         use nook_core::VaultOperation;
 
-        world.devices[approver_index].append_signed(vec![VaultOperation::JoinDenied {
-            device_id: self.join.device_id.clone(),
-        }])?;
-        Ok(JoinApproval {
-            join: self.join,
-            _state: PhantomData,
+        let world = match world.append(
+            approver_index,
+            vec![VaultOperation::JoinDenied {
+                device_id: self.join.device_id.clone(),
+            }],
+        ) {
+            Ok(world) => world,
+            Err(rejected) => {
+                return Err(JoinRejection {
+                    world: rejected.world,
+                    approval: self,
+                    cause: rejected.cause,
+                });
+            }
+        };
+        Ok(JoinTransition {
+            world,
+            approval: JoinApproval {
+                join: self.join,
+                _state: PhantomData,
+            },
         })
     }
 }
@@ -231,7 +344,7 @@ pub struct Timeline {
     steps: Vec<Step>,
 }
 
-type StepFn = Box<dyn Fn(&mut SimWorld) -> VaultResult<()>>;
+type StepFn = Box<dyn Fn(SimWorld) -> Result<SimWorld, SimRejection>>;
 
 struct Step {
     name: String,
@@ -245,7 +358,7 @@ impl Timeline {
 
     pub fn step<F>(mut self, name: &str, run: F) -> Self
     where
-        F: Fn(&mut SimWorld) -> VaultResult<()> + 'static,
+        F: Fn(SimWorld) -> Result<SimWorld, SimRejection> + 'static,
     {
         self.steps.push(Step {
             name: name.to_owned(),
@@ -263,11 +376,15 @@ impl Timeline {
     }
 
     /// Run the steps against `world` in the given index order.
-    pub fn run(&self, world: &mut SimWorld, order: &[usize]) -> VaultResult<()> {
+    pub fn run(&self, mut world: SimWorld, order: &[usize]) -> Result<SimWorld, SimRejection> {
         for &index in order {
-            (self.steps[index].run)(world)?;
+            let step = self
+                .steps
+                .get(index)
+                .unwrap_or_else(|| panic!("simulation step index must exist"));
+            world = (step.run)(world)?;
         }
-        Ok(())
+        Ok(world)
     }
 
     /// For every permutation of this timeline's steps, build a fresh world via
@@ -284,10 +401,18 @@ impl Timeline {
     {
         let indices: Vec<usize> = (0..self.steps.len()).collect();
         for order in permutations(&indices) {
-            let mut world = make_world()?;
-            self.run(&mut world, &order)?;
+            let world = self
+                .run(make_world()?, &order)
+                .map_err(SimRejection::into_cause)?;
             if let Err(reason) = invariant(&world) {
-                let names: Vec<&str> = order.iter().map(|&i| self.steps[i].name.as_str()).collect();
+                let names: Vec<&str> = order
+                    .iter()
+                    .map(|&index| {
+                        self.steps
+                            .get(index)
+                            .map_or("<missing-step>", |step| step.name.as_str())
+                    })
+                    .collect();
                 panic!(
                     "invariant failed after step order [{}]: {reason}",
                     names.join(" -> ")
@@ -311,13 +436,13 @@ fn permutations(items: &[usize]) -> Vec<Vec<usize>> {
         return vec![items.to_vec()];
     }
     let mut out = Vec::new();
-    for i in 0..items.len() {
+    for (i, item) in items.iter().copied().enumerate() {
         let mut rest: Vec<usize> = Vec::with_capacity(items.len() - 1);
-        rest.extend_from_slice(&items[..i]);
-        rest.extend_from_slice(&items[i + 1..]);
+        rest.extend(items.iter().take(i).copied());
+        rest.extend(items.iter().skip(i + 1).copied());
         for mut tail in permutations(&rest) {
             let mut perm = Vec::with_capacity(items.len());
-            perm.push(items[i]);
+            perm.push(item);
             perm.append(&mut tail);
             out.push(perm);
         }

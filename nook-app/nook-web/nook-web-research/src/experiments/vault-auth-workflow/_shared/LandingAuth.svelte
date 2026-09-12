@@ -1,11 +1,17 @@
 <script lang="ts">
+  import {
+    AwaitingVaultName,
+    AwaitingVaultKind,
+    AwaitingExistingVault,
+  } from './vault-auth-workflow-state.svelte'
   import { Check, Fingerprint, Shield } from '@lucide/svelte'
   import ScenarioBar from '../../nook-auth/_shared/ScenarioBar.svelte'
-  import { vaultAuthStepMessage } from './vault-auth-workflow-messages'
+  import { VaultAuthStepMessage } from './vault-auth-workflow-messages'
   import {
-    createVaultAuthWorkflowState,
+    VaultAuthWorkflowState,
     Presence,
     type SentinelLaunch,
+    type VaultAuthTransition,
     SentinelUi,
     VaultPath,
   } from './vault-auth-workflow-state.svelte'
@@ -16,7 +22,7 @@
 
   let { onSentinel }: Props = $props()
   let vaultName = $state('')
-  const workflow = createVaultAuthWorkflowState()
+  const workflow = new VaultAuthWorkflowState()
   const steps = $derived(workflow.steps)
   const path = $derived(workflow.path)
   const step = $derived(workflow.step)
@@ -25,10 +31,56 @@
     workflow.setPresence(next)
     vaultName = ''
   }
-  const chooseSentinel = () => workflow.choose(VaultPath.Sentinel)
-  const chooseSimple = () => workflow.choose(VaultPath.Simple)
-  const continueAfterName = () => workflow.continueAfterName(vaultName)
-  const goBack = () => workflow.goBack()
+  const chooseSentinel = () => {
+    const previous = workflow.phase
+    if (previous instanceof AwaitingVaultKind) {
+      const transition: VaultAuthTransition = {
+        previous,
+        next: previous.choose(VaultPath.Sentinel),
+      }
+      workflow.transition(transition)
+    }
+  }
+  const chooseSimple = () => {
+    const previous = workflow.phase
+    if (previous instanceof AwaitingVaultKind) {
+      const transition: VaultAuthTransition = {
+        previous,
+        next: previous.choose(VaultPath.Simple),
+      }
+      workflow.transition(transition)
+    }
+  }
+  const continueAfterName = () => {
+    const previous = workflow.phase
+    if (previous instanceof AwaitingVaultName && vaultName.trim()) {
+      const transition: VaultAuthTransition = {
+        previous,
+        next: previous.respond(vaultName),
+      }
+      workflow.transition(transition)
+    }
+  }
+  const goBack = () => {
+    const previous = workflow.phase
+    if ('back' in previous) {
+      const transition: VaultAuthTransition = {
+        previous,
+        next: previous.back(),
+      }
+      workflow.transition(transition)
+    }
+  }
+  const identifyExisting = () => {
+    const previous = workflow.phase
+    if (previous instanceof AwaitingExistingVault) {
+      const transition: VaultAuthTransition = {
+        previous,
+        next: previous.identify(),
+      }
+      workflow.transition(transition)
+    }
+  }
   const openCardStack = () => {
     const launch: SentinelLaunch = {
       ui: SentinelUi.CardStack,
@@ -116,7 +168,7 @@
                 <p
                   class={`text-lg ${index === step ? 'font-semibold' : 'text-[#666]'}`}
                 >
-                  {vaultAuthStepMessage(label)}
+                  {new VaultAuthStepMessage(label).text}
                 </p>
 
                 {#if presence === Presence.Empty && index === step && step === 0}
@@ -180,7 +232,7 @@
                 {:else if presence === Presence.Existing && index === step && step === 0}
                   <button
                     class="mt-3 rounded-md bg-black px-4 py-2.5 text-sm font-medium text-white"
-                    onclick={() => (workflow.step = 1)}
+                    onclick={identifyExisting}
                   >
                     Continue to unlock
                   </button>

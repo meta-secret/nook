@@ -1,73 +1,64 @@
+import { ok } from 'neverthrow'
 import { describe, expect, test, vi } from 'vitest'
-import { JoinEnrollmentState } from '$app-wasm'
+import { JoinEnrollmentState, NookLocalVaultUnlockState } from '$app-wasm'
 import { LOCAL_PROVIDER_TYPE } from '$lib/auth/providers'
 import { ExistingVaultImportQueueKind } from '$lib/vault/creation-queue'
 import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
-import {
-  ActiveVaultKind,
-  LocalFolderDraftKind,
-  LoginSetupKind,
-  OAuthFileDraftKind,
-  RecoveryDiscoveryKind,
-} from '$lib/vault/state/provider.svelte'
+import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '$lib/vault.svelte'
 
 function lifecycleHarness(authenticated = false) {
-  const state = {
-    loginSetup: {
-      kind: LoginSetupKind.Active,
-      providerType: LOCAL_PROVIDER_TYPE,
+  const state = VaultStateTestFixture.create()
+  state.activateLoginSetup(LOCAL_PROVIDER_TYPE)
+  state.clearOauthFile()
+  state.clearLocalFolder()
+  state.githubPat = ''
+  state.githubRepo = ''
+  state.openActiveVault('current-vault')
+  state.localVaults = [
+    {
+      storeId: 'incoming-vault',
+      label: 'Incoming vault',
+      lastUnlockedAt: '',
+      unlockState: NookLocalVaultUnlockState.NeverUnlocked,
+      display_label: () => 'Incoming vault',
+      free: vi.fn(),
+      [Symbol.dispose]: vi.fn(),
     },
-    oauthFileDraft: { kind: OAuthFileDraftKind.NotConfigured },
-    localFolderDraft: { kind: LocalFolderDraftKind.NotConfigured },
-    githubPat: '',
-    githubRepo: '',
-    activeVault: { kind: ActiveVaultKind.Open, storeId: 'current-vault' },
-    localVaults: [{ storeId: 'incoming-vault' }],
-    isAuthenticated: authenticated,
-    errorMsg: '',
-    loginRequiresExistingVault: false,
-    storageMode: LOCAL_PROVIDER_TYPE,
-    recoveryDiscovery: { kind: RecoveryDiscoveryKind.NotFound },
-    loginPasswordPrompt: true,
-    joinEnrollmentPrompt: JoinEnrollmentState.None,
-    sentinelCeremonyPrompt: false,
-    t: (key: string) => key,
-    requireOauthFileConfig: vi.fn(),
-    requireLocalFolderConfig: vi.fn(),
-    clearUnlockedSession: vi.fn(),
-    selectVaultForUnlock: vi.fn(),
-    prepareExistingVaultImportSlot: vi.fn(),
-    activateLoginSetup: vi.fn(),
-    configureOauthFile: vi.fn(),
-    clearOauthFile: vi.fn(),
-    configureLocalFolder: vi.fn(),
-    clearLocalFolder: vi.fn(),
-    connectStagedProvider: vi.fn(),
-    selectPasswordEntry: vi.fn(),
-    clearSelectedPasswordEntry: vi.fn(),
-    unlockWithPassword: vi.fn(),
-    activateConnectedExistingVault: vi.fn(),
-    clearExistingVaultRecoverySummary: vi.fn(),
-    beginLoginVaultPicker: vi.fn(),
-  }
+  ]
+  state.isAuthenticated = authenticated
+  state.errorMsg = ''
+  state.loginRequiresExistingVault = false
+  state.storageMode = LOCAL_PROVIDER_TYPE
+  state.clearExistingVaultRecoverySummary()
+  state.loginPasswordPrompt = true
+  state.joinEnrollmentPrompt = JoinEnrollmentState.None
+  state.sentinelCeremonyPrompt = false
+  state.t = (request: Parameters<VaultState['t']>[0]) =>
+    typeof request === 'string' ? request : request.key
+  const clearUnlockedSession = vi.spyOn(state, 'clearUnlockedSession')
+  const selectVaultForUnlock = vi.spyOn(state, 'selectVaultForUnlock')
+  const activateLoginSetup = vi.spyOn(state, 'activateLoginSetup')
+  const unlockWithPassword = vi.spyOn(state, 'unlockWithPassword')
 
-  state.clearUnlockedSession.mockImplementation(() => {
+  clearUnlockedSession.mockImplementation(() => {
     state.isAuthenticated = false
   })
-  state.selectVaultForUnlock.mockImplementation(async (storeId: string) => {
-    state.activeVault = { kind: ActiveVaultKind.Open, storeId }
+  selectVaultForUnlock.mockImplementation(async (storeId: string) => {
+    state.openActiveVault(storeId)
+    return ok()
   })
-  state.activateLoginSetup.mockImplementation((providerType) => {
-    state.loginSetup = { kind: LoginSetupKind.Active, providerType }
+  activateLoginSetup.mockImplementation((providerType) => {
+    state.activateLoginSetup(providerType)
   })
-  state.unlockWithPassword.mockImplementation(async () => {
+  unlockWithPassword.mockImplementation(async () => {
     state.isAuthenticated = true
   })
 
   return {
     state,
-    lifecycle: new ExistingVaultImportLifecycle(state as unknown as VaultState),
+    lifecycle: new ExistingVaultImportLifecycle(state),
   }
 }
 

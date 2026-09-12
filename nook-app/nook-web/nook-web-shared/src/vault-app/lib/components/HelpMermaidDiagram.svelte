@@ -1,8 +1,11 @@
 <script lang="ts">
-  type MermaidDiagramRendering = { readonly src: string; readonly diagramTheme: MermaidTheme }
+  type MermaidDiagramRendering = {
+    readonly src: string
+    readonly diagramTheme: MermaidTheme
+  }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { MermaidTheme, renderMermaidDiagram } from '$lib/content/mermaid-diagram'
+  import { MermaidTheme, mermaidRenderer } from '$lib/content/mermaid-diagram'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -23,8 +26,12 @@
   async function paintDiagram({ src, diagramTheme }: MermaidDiagramRendering) {
     renderError = ''
     try {
-      const renderMermaidDiagramArgs: Parameters<typeof renderMermaidDiagram>[0] = { source: src, theme: diagramTheme };
-      svgHtml = await renderMermaidDiagram(renderMermaidDiagramArgs)
+      const renderMermaidDiagramArgs: Parameters<
+        typeof mermaidRenderer.renderMermaidDiagram
+      >[0] = { source: src, theme: diagramTheme }
+      svgHtml = await mermaidRenderer.renderMermaidDiagram(
+        renderMermaidDiagramArgs,
+      )
     } catch (error) {
       svgHtml = ''
       renderError =
@@ -33,7 +40,10 @@
   }
 
   $effect(() => {
-    const paintDiagramArgs: Parameters<typeof paintDiagram>[0] = { src: source, diagramTheme: theme };
+    const paintDiagramArgs: Parameters<typeof paintDiagram>[0] = {
+      src: source,
+      diagramTheme: theme,
+    }
     void paintDiagram(paintDiagramArgs)
   })
 </script>

@@ -13,10 +13,10 @@
   import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
   import {
     ConnectedVaultMenuNoteKind,
-    connectedVaultMenuNote,
-    currentVaultCanPairExtension,
-    resolveVaultExtensionLink,
-    vaultEntryHoldsExtensionGrant,
+    ConnectedVaultMenuPresentation,
+    VaultPairingPresentation,
+    VaultExtensionPresentation,
+    VaultGrantPresentation,
     type ConnectedVaultMenuNoteRequest,
     type CurrentVaultPairingAvailabilityRequest,
     type ExtensionConnectedEntryRequest,
@@ -29,9 +29,9 @@
     VaultSwitcherLayerKind,
     VaultSwitcherMenuPlacementKind,
     VaultSwitcherRootKind,
-    placeVaultSwitcherMenu,
+    VaultSwitcherAnchor,
     portalVaultSwitcherMenu,
-    vaultSwitcherContainsNode,
+    VaultSwitcherPointerTarget,
     type DisplayedVault,
     type VaultSwitchState,
     type VaultSwitcherContainsNodeRequest,
@@ -91,28 +91,28 @@
       activeStoreId,
       entries: entryLabels,
     }
-    return resolveVaultExtensionLink(request)
+    return new VaultExtensionPresentation(request).link
   })
   const canPairCurrentVault = $derived.by(() => {
     const request: CurrentVaultPairingAvailabilityRequest = {
       link: extensionLink,
       activeStoreId,
     }
-    return currentVaultCanPairExtension(request)
+    return new VaultPairingPresentation(request).available
   })
   const connectedNote = $derived.by(() => {
     const request: ConnectedVaultMenuNoteRequest = {
       link: extensionLink,
       entries: entryLabels,
     }
-    return connectedVaultMenuNote(request)
+    return new ConnectedVaultMenuPresentation(request).note
   })
   const triggerHoldsGrant = $derived.by(() => {
     const request: ExtensionConnectedEntryRequest = {
       link: extensionLink,
       storeId: activeStoreId,
     }
-    return vaultEntryHoldsExtensionGrant(request)
+    return new VaultGrantPresentation(request).connected
   })
   const activeVault = $derived.by((): DisplayedVault => {
     for (const entry of vaults) {
@@ -157,7 +157,7 @@
       menu,
       node: target,
     }
-    if (!vaultSwitcherContainsNode(containsRequest)) closeMenu()
+    if (!new VaultSwitcherPointerTarget(containsRequest).contained) closeMenu()
   }
 
   function handleDocumentKeydown(event: KeyboardEvent) {
@@ -222,14 +222,18 @@
       return
     }
     try {
-      await vault.refreshLocalVaultCatalog()
+      const refreshed = await vault.refreshLocalVaultCatalog()
+      if (refreshed.isErr()) {
+        vault.errorMsg = vault.t(refreshed.error.translationKey)
+        return
+      }
       if (trigger.kind !== VaultSwitcherLayerKind.Mounted) {
         closeMenu()
         return
       }
-      const anchor = placeVaultSwitcherMenu(
+      const anchor = new VaultSwitcherAnchor(
         trigger.element.getBoundingClientRect(),
-      )
+      ).placement
       placement = {
         kind: VaultSwitcherMenuPlacementKind.Open,
         top: anchor.top,
@@ -271,7 +275,7 @@
       link: extensionLink,
       storeId,
     }
-    return vaultEntryHoldsExtensionGrant(request)
+    return new VaultGrantPresentation(request).connected
   }
 </script>
 

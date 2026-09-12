@@ -1,5 +1,6 @@
 //! Structural issuance admission followed by recipient encryption.
 use super::{OnboardingDelivery, SentinelOnboardingPackage, SentinelOnboardingVersion};
+use crate::ProviderVaultScope;
 use crate::{
     AuthProvidersSnapshotData, MultiDeviceError, SentinelGenesisRequest,
     SentinelGenesisShareDelivery, StorageProviderType,
@@ -51,9 +52,7 @@ impl PreparedOnboardingIssuance<'_> {
         } = self.input;
         // Keep the encrypted package within the QR budget while retaining semantic
         // enums in memory. The schema-1 projection is also readable after rollback.
-        let provider_storage = provider_snapshot
-            .legacy_storage_value()
-            .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+        let provider_storage = provider_snapshot.legacy_storage_snapshot();
         let provider_json = Zeroizing::new(
             serde_json::to_vec(&provider_storage)
                 .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?,
@@ -74,11 +73,13 @@ impl AuthProvidersSnapshotData {
         if snapshot.providers.len() != 1 {
             return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
         }
-        let provider = &snapshot.providers[0];
+        let Some(provider) = snapshot.providers.first() else {
+            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
+        };
         if matches!(
             provider.provider_type,
             StorageProviderType::Local | StorageProviderType::LocalFolder
-        ) || provider.store_id.as_deref() != Some(store_id)
+        ) || !matches!(&provider.store_id, ProviderVaultScope::StoreId(id) if id == store_id)
         {
             return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
         }
@@ -123,13 +124,25 @@ mod tests {
     fn provider_admission_enforces_count_type_and_exact_store() -> anyhow::Result<()> {
         let fixture = OnboardingFixture::new()?;
         let mut duplicate = fixture.snapshot.clone();
-        duplicate.providers.push(duplicate.providers[0].clone());
+        let Some(provider) = duplicate.providers.first().cloned() else {
+            anyhow::bail!("onboarding fixture must contain one provider");
+        };
+        duplicate.providers.push(provider);
         let mut local = fixture.snapshot.clone();
-        local.providers[0].provider_type = StorageProviderType::Local;
+        let Some(local_provider) = local.providers.first_mut() else {
+            anyhow::bail!("onboarding fixture must contain one provider");
+        };
+        local_provider.provider_type = StorageProviderType::Local;
         let mut folder = fixture.snapshot.clone();
-        folder.providers[0].provider_type = StorageProviderType::LocalFolder;
+        let Some(folder_provider) = folder.providers.first_mut() else {
+            anyhow::bail!("onboarding fixture must contain one provider");
+        };
+        folder_provider.provider_type = StorageProviderType::LocalFolder;
         let mut wrong_store = fixture.snapshot.clone();
-        wrong_store.providers[0].store_id =
+        let Some(wrong_store_provider) = wrong_store.providers.first_mut() else {
+            anyhow::bail!("onboarding fixture must contain one provider");
+        };
+        wrong_store_provider.store_id =
             ProviderVaultScope::StoreId(format!(" {} ", fixture.delivery.store_id));
         for snapshot in [
             AuthProvidersSnapshotData::default(),

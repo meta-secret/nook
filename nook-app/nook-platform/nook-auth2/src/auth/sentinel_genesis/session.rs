@@ -8,17 +8,24 @@
 use super as genesis;
 use super::super::multi_device;
 use super::{
-    GENESIS_VERSION, PUBLIC_KEY_ANNOUNCEMENT_KIND, SentinelGenesisIssued,
-    SentinelGenesisParticipant, SentinelGenesisParticipantResponse, SentinelGenesisPolicy,
-    SentinelGenesisRequest, SentinelGenesisShareDelivery,
+    GENESIS_VERSION, SentinelGenesisIssued, SentinelGenesisParticipant,
+    SentinelGenesisParticipantResponse, SentinelGenesisPolicy, SentinelGenesisRequest,
+    SentinelGenesisShareDelivery,
+};
+use crate::MemberLabelState;
+use crate::VaultMember;
+use crate::{
+    BuildMembersRecordsRequest, CreateSentinelRootShareRecordsForRecipientsRequest,
+    SentinelShareEnvelope,
 };
 use crate::{
     DeviceIdentity, DeviceSigningPublicKey, MultiDeviceError, MultiDeviceResult,
     SentinelParticipantCount, SentinelThreshold, StoreId,
 };
 use ed25519_dalek::{Signer, SigningKey};
-use multi_device::{VaultMember, VaultMetaRecord};
-use serde_json::Value;
+use multi_device::VaultMetaRecord;
+
+use super::payload::{SentinelPayloadClassification, SentinelPayloadHeader};
 
 /// Public observations never construct a verified roster.
 ///
@@ -218,39 +225,53 @@ impl SentinelGenesisSession {
         }
         response.participant.validate_for(&response.session_id)?;
         response.verify_signature()?;
+        self.validate_roster_admission(&response.participant)
+    }
+    fn validate_roster_admission(
+        &self,
+        participant: &SentinelGenesisParticipant,
+    ) -> MultiDeviceResult<()> {
         if self.participants.iter().any(|existing| {
-            existing.device_id == response.participant.device_id
-                || existing.encryption_public_key == response.participant.encryption_public_key
-                || existing.signing_public_key == response.participant.signing_public_key
+            existing.device_id == participant.device_id
+                || existing.encryption_public_key == participant.encryption_public_key
+                || existing.signing_public_key == participant.signing_public_key
         }) {
-            return Err(MultiDeviceError::DuplicateSentinelGenesisParticipant {
-                device_id: response.participant.device_id.to_string(),
-            });
+            Err(MultiDeviceError::DuplicateSentinelGenesisParticipant {
+                device_id: participant.device_id.to_string(),
+            })
+        } else if self.participants.len()
+            >= usize::from(u8::from(self.request.policy.participant_count))
+        {
+            Err(MultiDeviceError::SentinelGenesisRosterFull)
+        } else {
+            Ok(())
         }
-        if self.participants.len() >= usize::from(u8::from(self.request.policy.participant_count)) {
-            return Err(MultiDeviceError::SentinelGenesisRosterFull);
-        }
-        Ok(())
     }
     pub fn collect(
         mut self,
         response: SentinelGenesisParticipantResponse,
     ) -> Result<Self, SentinelGenesisRejection> {
-        if let Err(error) = self.validate_response(&response) {
-            return Err(self.reject(error));
+        match self.validate_response(&response) {
+            Ok(()) => {
+                self.participants.push(response.participant);
+                Ok(self)
+            }
+            Err(error) => Err(self.reject(error)),
         }
-        self.participants.push(response.participant);
-        Ok(self)
     }
     fn response_from_payload(
         payload: &str,
     ) -> MultiDeviceResult<SentinelGenesisParticipantResponse> {
-        let value: Value = serde_json::from_str(payload)
-            .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-        if value.get("kind").and_then(Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
-            return Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected);
+        let header = SentinelPayloadHeader::parse(payload)?;
+        match header.classification() {
+            SentinelPayloadClassification::PublicKeyAnnouncement => {
+                Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected)
+            }
+            SentinelPayloadClassification::ParticipantResponseCandidate => {
+                serde_json::from_str(payload)
+                    .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
+            }
         }
-        serde_json::from_str(payload).map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
     }
     /// Verify signed keys before applying the owner's optional display label.
     pub fn collect_payload(
@@ -262,25 +283,36 @@ impl SentinelGenesisSession {
         if label.chars().count() > 80 {
             return Err(self.reject(MultiDeviceError::DeviceNameTooLong));
         }
-        let response = match Self::response_from_payload(payload) {
-            Ok(value) => value,
-            Err(error) => return Err(self.reject(error)),
-        };
-        let index = self.participants.len();
-        let mut next = self.collect(response)?;
-        if !label.is_empty() {
-            label.clone_into(&mut next.participants[index].label);
+        match Self::response_from_payload(payload) {
+            Ok(response) => {
+                let mut next = self.collect(response)?;
+                if !label.is_empty() {
+                    let Some(participant) = next.participants.last_mut() else {
+                        return Err(next.reject(MultiDeviceError::InvalidSentinelGenesisSession));
+                    };
+                    label.clone_into(&mut participant.label);
+                }
+                Ok(next)
+            }
+            Err(error) => Err(self.reject(error)),
         }
-        Ok(next)
     }
     fn validate_issuance(&self, signing_key: &SigningKey) -> MultiDeviceResult<()> {
-        if self.readiness() != SentinelGenesisReadiness::Complete {
-            return Err(MultiDeviceError::SentinelGenesisIncomplete {
-                required: self.request.policy.participant_count,
-                available: SentinelParticipantCount::try_from_len(self.participants.len())
-                    .map_err(|_| MultiDeviceError::SentinelParticipantCountOverflow)?,
-            });
+        match self.readiness() {
+            SentinelGenesisReadiness::Collecting => {
+                Err(MultiDeviceError::SentinelGenesisIncomplete {
+                    required: self.request.policy.participant_count,
+                    available: SentinelParticipantCount::try_from_len(self.participants.len())
+                        .map_err(|_| MultiDeviceError::SentinelParticipantCountOverflow)?,
+                })
+            }
+            SentinelGenesisReadiness::Complete => {
+                self.validate_issuer(signing_key)?;
+                self.request.validate()
+            }
         }
+    }
+    fn validate_issuer(&self, signing_key: &SigningKey) -> MultiDeviceResult<()> {
         if DeviceSigningPublicKey::from_signing_key(signing_key)
             != self.request.initiator_signing_public_key
             || !self.participants.iter().any(|participant| {
@@ -288,21 +320,22 @@ impl SentinelGenesisSession {
                     && participant.signing_public_key == self.request.initiator_signing_public_key
             })
         {
-            return Err(MultiDeviceError::InvalidSentinelGenesisSignature);
+            Err(MultiDeviceError::InvalidSentinelGenesisSignature)
+        } else {
+            Ok(())
         }
-        self.request.validate()
     }
     pub fn prepare(
         self,
         signing_key: &SigningKey,
     ) -> Result<ReadySentinelGenesis<'_>, SentinelGenesisRejection> {
-        if let Err(error) = self.validate_issuance(signing_key) {
-            return Err(self.reject(error));
+        match self.validate_issuance(signing_key) {
+            Ok(()) => Ok(ReadySentinelGenesis {
+                session: self,
+                signing_key,
+            }),
+            Err(error) => Err(self.reject(error)),
         }
-        Ok(ReadySentinelGenesis {
-            session: self,
-            signing_key,
-        })
     }
 }
 impl ReadySentinelGenesis<'_> {
@@ -322,17 +355,17 @@ impl ReadySentinelGenesis<'_> {
             })
             .collect::<Vec<_>>();
         let (keys, share_records) =
-            multi_device::create_sentinel_root_share_records_for_recipients(
-                &recipients,
-                session.request.policy.threshold,
+            SentinelShareEnvelope::create_sentinel_root_share_records_for_recipients(
+                CreateSentinelRootShareRecordsForRecipientsRequest {
+                    recipients: &recipients,
+                    threshold: session.request.policy.threshold,
+                },
             )?;
         // Construction is all-or-nothing: only publish the result after every
         // record has parsed and every delivery has been signed.
         let mut deliveries = Vec::with_capacity(share_records.len());
         for (participant, record) in session.participants.iter().zip(&share_records) {
-            let VaultMetaRecord::SentinelShare(device_id, share) =
-                VaultMetaRecord::classify(record)?
-            else {
+            let VaultMetaRecord::SentinelShare(device_id, share) = (record).classify()? else {
                 return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
             };
             if device_id != participant.device_id {
@@ -365,11 +398,18 @@ impl ReadySentinelGenesis<'_> {
                     device_id: participant.device_id.clone(),
                     public_key: participant.encryption_public_key.clone(),
                     enrolled_at: String::new(),
-                    label: (!participant.label.is_empty()).then(|| participant.label.clone()),
+                    label: if participant.label.is_empty() {
+                        MemberLabelState::Unnamed
+                    } else {
+                        MemberLabelState::Named(participant.label.clone())
+                    },
                 })
             })
             .collect::<MultiDeviceResult<Vec<_>>>()?;
-        let mut records = multi_device::build_members_records(&roster, &keys.members_key)?;
+        let mut records = VaultMember::build_members_records(BuildMembersRecordsRequest {
+            roster: roster,
+            members_key: &keys.members_key,
+        })?;
         records.extend(share_records);
         Ok(SentinelGenesisIssued {
             records,
@@ -467,7 +507,14 @@ mod tests {
         }
         let payload = serde_json::to_string(&Fixture::response(&session)?)?;
         let session = session.collect_payload(&payload, " ")?;
-        assert_eq!(session.participants()[1].label, "Peer");
+        assert_eq!(
+            session
+                .participants()
+                .get(1)
+                .ok_or_else(|| anyhow::anyhow!("peer participant must be collected"))?
+                .label,
+            "Peer"
+        );
         // Distinct signing key too: capacity rejection must follow uniqueness checks.
         let identity = DeviceIdentity::generate()?;
         let extra = session
@@ -491,7 +538,12 @@ mod tests {
     fn oversized_internal_roster_is_rejected_without_reconstruction() -> anyhow::Result<()> {
         let signer = SigningKey::from_bytes(&[1; 32]);
         let mut session = Fixture::start(&signer)?;
-        session.participants = vec![session.participants[0].clone(); usize::from(u8::MAX) + 1];
+        let participant = session
+            .participants
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("genesis session must contain its owner"))?;
+        session.participants = vec![participant; usize::from(u8::MAX) + 1];
         let (session, error) = session
             .prepare(&signer)
             .err()

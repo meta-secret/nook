@@ -1,3 +1,6 @@
+import type { VaultState } from '$lib/vault.svelte'
+import { err, ok, type Result } from 'neverthrow'
+import type { VaultStorageFailure } from '$lib/runtime/storage-failure'
 import { expect, type Page } from '@playwright/test'
 import {
   type ActiveVaultScope,
@@ -49,10 +52,22 @@ export function activeAuthProviderSeedScope(
   return { kind: AuthProviderSeedScopeKind.ActiveVault, storeId }
 }
 
+enum AuthProviderHookFailure {
+  HookUnavailable = 'hook-unavailable',
+  ReadFailed = 'read-failed',
+  WriteFailed = 'write-failed',
+}
+
+export const AUTH_PROVIDER_HOOK_READ_FAILED = AuthProviderHookFailure.ReadFailed
+
 type AuthProviderBrowserHooks = {
   activeVaultScope(storeId: string): ActiveVaultScope
-  loadAuthProviders: () => Promise<AuthProvidersSnapshot>
-  saveAuthProviders: (snapshot: AuthProvidersSnapshot) => Promise<void>
+  loadAuthProviders: () => Promise<
+    Result<AuthProvidersSnapshot, VaultStorageFailure>
+  >
+  saveAuthProviders: (
+    snapshot: AuthProvidersSnapshot,
+  ) => Promise<Result<void, VaultStorageFailure>>
   unselectedVaultScope(): ActiveVaultScope
 }
 
@@ -157,15 +172,20 @@ export async function appendAuthProviders(
               ((v) => (v ? v : new Error('idb read failed')))(getRequest.error),
             )
           getRequest.onsuccess = () => {
-            const rawSnapshot = getRequest.result as unknown
-            const snapshot =
-              rawSnapshot && typeof rawSnapshot === 'object'
-                ? (rawSnapshot as {
-                    providers: SeededAuthProvider[]
-                  })
-                : {
-                    providers: [],
-                  }
+            const rawSnapshot: unknown = getRequest.result
+            const snapshot: { providers: unknown[] } = { providers: [] }
+            if (typeof rawSnapshot === 'object' && rawSnapshot !== null) {
+              const storedProviders: unknown = Object.getOwnPropertyDescriptor(
+                rawSnapshot,
+                'providers',
+              )?.value
+              if (Array.isArray(storedProviders)) {
+                for (const storedProvider of storedProviders) {
+                  const provider: unknown = storedProvider
+                  snapshot.providers.push(provider)
+                }
+              }
+            }
             snapshot.providers.push(
               ...additions.map((provider) => {
                 return {
@@ -202,22 +222,32 @@ async function appendSealedAuthProviders(
   const storedAdditions = providers.map((provider) =>
     storedProvider(provider, seedScope),
   )
-  await page.evaluate(
-    async ({ providers: additions }) => {
+  const stored = await page.evaluate(
+    async ({ providers: additions, failures }) => {
       const hook = (
         window as Window & {
           __nookAuthProviders?: AuthProviderBrowserHooks
         }
       ).__nookAuthProviders
-      if (!hook) throw new Error('E2E auth provider hooks are unavailable')
+      if (!hook)
+        return { ok: false as const, failure: failures.HookUnavailable }
       const snapshot = await hook.loadAuthProviders()
-      snapshot.providers.push(...additions)
-      await hook.saveAuthProviders(snapshot)
+      if (snapshot.isErr())
+        return { ok: false as const, failure: failures.ReadFailed }
+      const persisted = await hook.saveAuthProviders({
+        ...snapshot.value,
+        providers: [...snapshot.value.providers, ...additions],
+      })
+      return persisted.isErr()
+        ? { ok: false as const, failure: failures.WriteFailed }
+        : { ok: true as const }
     },
     {
       providers: storedAdditions,
+      failures: AuthProviderHookFailure,
     },
   )
+  expect(stored).toEqual({ ok: true })
 }
 
 export async function waitForAuthProviderIds(
@@ -303,24 +333,24 @@ async function seedOauthFileProviders(
   extras: SeededOauthFileProviderInput[],
   seedScope: AuthProviderSeedScope,
 ) {
-  await appendSealedAuthProviders(
-    page,
-    extras.map((provider) => ({
+  const providers: SeededAuthProvider[] = extras.map((provider) => {
+    const oauthFile: NonNullable<SeededAuthProvider['oauthFile']> = {
+      preset: 'google-drive',
+      accessToken: provider.accessToken,
+      fileName: provider.fileName,
+      driveMode: provider.folderId ? 'shared' : 'private',
+      iCloudMode: 'private',
+    }
+    if (provider.accountEmail) oauthFile.accountEmail = provider.accountEmail
+    if (provider.folderId) oauthFile.folderId = provider.folderId
+    return {
       id: provider.id,
       type: 'oauth-file',
       label: provider.label,
-      oauthFile: {
-        preset: 'google-drive',
-        accessToken: provider.accessToken,
-        fileName: provider.fileName,
-        driveMode: provider.folderId ? 'shared' : 'private',
-        iCloudMode: 'private',
-        accountEmail: provider.accountEmail,
-        folderId: provider.folderId,
-      },
-    })),
-    seedScope,
-  )
+      oauthFile,
+    }
+  })
+  await appendSealedAuthProviders(page, providers, seedScope)
   await waitForAuthProviderIds(
     page,
     extras.map((provider) => provider.id),
@@ -339,10 +369,12 @@ export async function seedExtraOauthFileProviders(
   if (!storeIdMatch) {
     throw new Error('E2E OAuth provider seeding requires an active vault')
   }
+  const storeId = storeIdMatch[1]
+  if (!storeId) throw new Error('E2E OAuth provider store id is unavailable')
   await seedOauthFileProviders(
     page,
     extras,
-    activeAuthProviderSeedScope(storeIdMatch[1]),
+    activeAuthProviderSeedScope(storeId),
   )
 }
 
@@ -371,23 +403,37 @@ export type RawAuthProvidersSnapshot = {
 }
 
 async function activeAuthProviderStateKey(page: Page): Promise<string> {
-  return page.evaluate(() => {
+  const key = await page.evaluate(() => {
     const vault = (
       window as Window & {
-        __nookVault?: {
-          readonly hasManager: boolean
-          requireManager(): { readonly device_id: string }
-          enqueueStorage<T>(operation: () => T): Promise<T>
-        }
+        __nookVault?: Pick<
+          VaultState,
+          'admitManager' | 'waitForStorageChain' | 'hasManager'
+        >
       }
     ).__nookVault
-    if (!vault) return 'providers'
-    return vault.enqueueStorage(() => {
-      if (!vault.hasManager) return 'providers'
-      const appId = vault.requireManager().device_id
-      return appId ? `providers:${appId}` : 'providers'
+    if (!vault) return { ok: true as const, value: 'providers' }
+    return vault.waitForStorageChain().then(() => {
+      if (!vault.hasManager) return { ok: true as const, value: 'providers' }
+      const manager = vault.admitManager()
+      if (manager.isErr())
+        return { ok: false as const, error: manager.error.translationKey }
+      try {
+        const appId = manager.value.device_id
+        return {
+          ok: true as const,
+          value: appId ? `providers:${appId}` : 'providers',
+        }
+      } catch {
+        return {
+          ok: false as const,
+          error: 'Native device identity read failed',
+        }
+      }
     })
   })
+  if (!key.ok) throw new Error(key.error)
+  return key.value
 }
 
 /** Read the raw `nook_auth` snapshot as persisted (sealed credential fields). */
@@ -398,8 +444,71 @@ export async function readRawAuthProvidersFromIdb(
   return page.evaluate((scopedStateKey) => {
     return new Promise<RawAuthProvidersSnapshot>((resolve, reject) => {
       const resolveEmptySnapshot = () => resolve({ providers: [] })
-      const resolveSnapshot = (rawSnapshot: RawAuthProvidersSnapshot) =>
-        resolve(rawSnapshot)
+      const resolveSnapshot = (rawSnapshot: unknown) => {
+        if (typeof rawSnapshot !== 'object' || rawSnapshot === null) {
+          resolve({ providers: [] })
+          return
+        }
+        const providersValue: unknown = Object.getOwnPropertyDescriptor(
+          rawSnapshot,
+          'providers',
+        )?.value
+        if (!Array.isArray(providersValue)) {
+          resolve({ providers: [] })
+          return
+        }
+        const providers: RawAuthProvidersSnapshot['providers'] = []
+        for (const providerValue of providersValue) {
+          if (typeof providerValue !== 'object' || providerValue === null) {
+            continue
+          }
+          const id: unknown = Object.getOwnPropertyDescriptor(
+            providerValue,
+            'id',
+          )?.value
+          const type: unknown = Object.getOwnPropertyDescriptor(
+            providerValue,
+            'type',
+          )?.value
+          if (typeof id !== 'string' || typeof type !== 'string') continue
+          const provider: RawAuthProvidersSnapshot['providers'][number] = {
+            id,
+            type,
+          }
+          const githubPat: unknown = Object.getOwnPropertyDescriptor(
+            providerValue,
+            'githubPat',
+          )?.value
+          if (typeof githubPat === 'string') provider.githubPat = githubPat
+          const oauthFileValue: unknown = Object.getOwnPropertyDescriptor(
+            providerValue,
+            'oauthFile',
+          )?.value
+          if (
+            oauthFileValue instanceof Object &&
+            !Array.isArray(oauthFileValue)
+          ) {
+            const oauthFile: NonNullable<
+              RawAuthProvidersSnapshot['providers'][number]['oauthFile']
+            > = {}
+            const accessToken: unknown = Object.getOwnPropertyDescriptor(
+              oauthFileValue,
+              'accessToken',
+            )?.value
+            if (typeof accessToken === 'string')
+              oauthFile.accessToken = accessToken
+            const refreshToken: unknown = Object.getOwnPropertyDescriptor(
+              oauthFileValue,
+              'refreshToken',
+            )?.value
+            if (typeof refreshToken === 'string')
+              oauthFile.refreshToken = refreshToken
+            provider.oauthFile = oauthFile
+          }
+          providers.push(provider)
+        }
+        resolve({ providers })
+      }
       const request = indexedDB.open('nook_auth', 1)
       request.onerror = () =>
         reject(((v) => (v ? v : new Error('idb open failed')))(request.error))
@@ -412,7 +521,8 @@ export async function readRawAuthProvidersFromIdb(
           reject(((v) => (v ? v : new Error('idb read failed')))(getReq.error))
         getReq.onsuccess = () => {
           if (getReq.result) {
-            resolveSnapshot(getReq.result as RawAuthProvidersSnapshot)
+            const rawSnapshot: unknown = getReq.result
+            resolveSnapshot(rawSnapshot)
             return
           }
           if (scopedStateKey === 'providers') {
@@ -428,7 +538,8 @@ export async function readRawAuthProvidersFromIdb(
             )
           legacyReq.onsuccess = () => {
             if (legacyReq.result) {
-              resolveSnapshot(legacyReq.result as RawAuthProvidersSnapshot)
+              const rawSnapshot: unknown = legacyReq.result
+              resolveSnapshot(rawSnapshot)
               return
             }
             resolveEmptySnapshot()
@@ -456,19 +567,26 @@ export async function waitForAuthProvidersE2eHook(page: Page) {
     .toBe(true)
 }
 
-/** Load decrypted sync providers via wasm in the browser. */
-export async function loadDecryptedAuthProvidersInBrowser(page: Page) {
-  return page.evaluate(async () => {
-    const hook = (
-      window as Window & {
-        __nookAuthProviders?: AuthProviderBrowserHooks
-      }
-    ).__nookAuthProviders
-    if (hook?.loadAuthProviders) {
-      return hook.loadAuthProviders()
-    }
-    throw new Error('E2E auth provider hooks are unavailable')
-  })
+/** Owns the browser-side E2E hook for decrypted provider inspection. */
+export class AuthProviderBrowserFixture {
+  constructor(private readonly page: Page) {}
+
+  async load(): Promise<
+    Result<AuthProvidersSnapshot, AuthProviderHookFailure>
+  > {
+    const loaded = await this.page.evaluate(async (failures) => {
+      const hook = (
+        window as Window & { __nookAuthProviders?: AuthProviderBrowserHooks }
+      ).__nookAuthProviders
+      if (!hook)
+        return { ok: false as const, failure: failures.HookUnavailable }
+      const snapshot = await hook.loadAuthProviders()
+      return snapshot.isErr()
+        ? { ok: false as const, failure: failures.ReadFailed }
+        : { ok: true as const, value: snapshot.value }
+    }, AuthProviderHookFailure)
+    return loaded.ok ? ok(loaded.value) : err(loaded.failure)
+  }
 }
 
 /** Save sync providers through wasm (plaintext in → sealed in IndexedDB). */
@@ -480,30 +598,41 @@ export async function saveAuthProvidersInBrowser(
   const providers = snapshot.providers.map((provider) =>
     storedProvider(provider, seedScope),
   )
-  await page.evaluate(
-    async ({ providers, seedScope, activeVaultKind }) => {
+  const activeStoreId =
+    seedScope.kind === AuthProviderSeedScopeKind.ActiveVault
+      ? seedScope.storeId
+      : false
+  const stored = await page.evaluate(
+    async ({ providers, activeStoreId, failures }) => {
       const hook = (
         window as Window & {
           __nookAuthProviders?: AuthProviderBrowserHooks
         }
       ).__nookAuthProviders
-      if (!hook) throw new Error('E2E auth provider hooks are unavailable')
-      const activeVaultStoreId =
-        seedScope.kind === activeVaultKind
-          ? hook.activeVaultScope(seedScope.storeId)
-          : hook.unselectedVaultScope()
+      if (!hook)
+        return { ok: false as const, failure: failures.HookUnavailable }
+      let activeVaultStoreId: ActiveVaultScope
+      if (typeof activeStoreId === 'string') {
+        activeVaultStoreId = hook.activeVaultScope(activeStoreId)
+      } else {
+        activeVaultStoreId = hook.unselectedVaultScope()
+      }
       const authProvidersSnapshot: AuthProvidersSnapshot = {
         providers,
         activeVaultStoreId,
       }
-      await hook.saveAuthProviders(authProvidersSnapshot)
+      const persisted = await hook.saveAuthProviders(authProvidersSnapshot)
+      return persisted.isErr()
+        ? { ok: false as const, failure: failures.WriteFailed }
+        : { ok: true as const }
     },
     {
       providers,
-      seedScope,
-      activeVaultKind: AuthProviderSeedScopeKind.ActiveVault,
+      activeStoreId,
+      failures: AuthProviderHookFailure,
     },
   )
+  expect(stored).toEqual({ ok: true })
 }
 
 export function expectSealedCredential(stored: unknown, plaintext: string) {

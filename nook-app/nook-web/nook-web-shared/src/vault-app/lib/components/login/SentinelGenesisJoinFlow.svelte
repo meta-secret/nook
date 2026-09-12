@@ -1,9 +1,10 @@
 <script lang="ts">
+  import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Copy, RefreshCw, ShieldCheck } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
-  import { buildSentinelGenesisParticipantResponseLink } from '$lib/enrollment/sentinel-genesis-link'
+  import { sentinelGenesisBrowser } from '$lib/enrollment/sentinel-genesis-link'
   import type { VaultState } from '$lib/vault.svelte'
   import { sentinel_genesis_participant_fingerprint } from '$app-wasm'
 
@@ -26,9 +27,13 @@
     sentinelOnboardingPackage: string
     onCreateParticipantResponse?: (
       requestPayload: string,
-    ) => string | Promise<string>
-    onRememberRequest?: (requestPayload: string) => void | Promise<void>
-    onReceiveShare?: (sharePayload: string) => void | Promise<void>
+    ) => Promise<SentinelActionResult<string>>
+    onRememberRequest?: (
+      requestPayload: string,
+    ) => Promise<SentinelActionResult<void>>
+    onReceiveShare?: (
+      sharePayload: string,
+    ) => Promise<SentinelActionResult<void>>
     onAcceptOnboardingPackage?: (packageJson: string) => void | Promise<void>
     onFinishSentinelInvitation?: () => void
   } = $props()
@@ -45,9 +50,11 @@
   const generatedParticipantResponseLink = $derived(
     (() => {
       const linkArgs: Parameters<
-        typeof buildSentinelGenesisParticipantResponseLink
+        typeof sentinelGenesisBrowser.buildSentinelGenesisParticipantResponseLink
       >[0] = { responseJson: generatedParticipantResponse }
-      return buildSentinelGenesisParticipantResponseLink(linkArgs)
+      return sentinelGenesisBrowser.buildSentinelGenesisParticipantResponseLink(
+        linkArgs,
+      )
     })(),
   )
 
@@ -86,20 +93,20 @@
     }
     joinPublicKeysLoading = true
     try {
-      generatedParticipantResponse =
-        await onCreateParticipantResponse(requestPayload)
-      if (!generatedParticipantResponse && !vault.deviceProtectionReady) {
+      const response = await onCreateParticipantResponse(requestPayload)
+      if (response.isErr()) {
+        vault.errorMsg = vault.t(response.error.translationKey)
         return
       }
-      generatedParticipantFingerprint =
-        sentinel_genesis_participant_fingerprint(generatedParticipantResponse)
-    } catch (error) {
-      generatedParticipantResponse = ''
-      generatedParticipantFingerprint = ''
-      vault.errorMsg =
-        error instanceof Error
-          ? error.message
-          : vault.t(I18N_KEYS.LoginSentinelGenesisResponseFailed)
+      generatedParticipantResponse = response.value
+      try {
+        generatedParticipantFingerprint =
+          sentinel_genesis_participant_fingerprint(generatedParticipantResponse)
+      } catch {
+        generatedParticipantResponse = ''
+        generatedParticipantFingerprint = ''
+        vault.errorMsg = vault.t(I18N_KEYS.LoginSentinelGenesisResponseFailed)
+      }
     } finally {
       joinPublicKeysLoading = false
     }
@@ -123,17 +130,20 @@
     if (!requestPayload || actionBusy || !onCreateParticipantResponse) return
     actionBusy = true
     try {
-      generatedParticipantResponse =
-        await onCreateParticipantResponse(requestPayload)
-      generatedParticipantFingerprint =
-        sentinel_genesis_participant_fingerprint(generatedParticipantResponse)
-    } catch (error) {
-      generatedParticipantResponse = ''
-      generatedParticipantFingerprint = ''
-      vault.errorMsg =
-        error instanceof Error
-          ? error.message
-          : vault.t(I18N_KEYS.LoginSentinelGenesisResponseFailed)
+      const response = await onCreateParticipantResponse(requestPayload)
+      if (response.isErr()) {
+        vault.errorMsg = vault.t(response.error.translationKey)
+        return
+      }
+      generatedParticipantResponse = response.value
+      try {
+        generatedParticipantFingerprint =
+          sentinel_genesis_participant_fingerprint(generatedParticipantResponse)
+      } catch {
+        generatedParticipantResponse = ''
+        generatedParticipantFingerprint = ''
+        vault.errorMsg = vault.t(I18N_KEYS.LoginSentinelGenesisResponseFailed)
+      }
     } finally {
       actionBusy = false
     }
@@ -152,9 +162,17 @@
     try {
       const requestPayload = participantRequest.trim()
       if (requestPayload && onRememberRequest) {
-        await onRememberRequest(requestPayload)
+        const remembered = await onRememberRequest(requestPayload)
+        if (remembered.isErr()) {
+          vault.errorMsg = vault.t(remembered.error.translationKey)
+          return
+        }
       }
-      await onReceiveShare(sharePayload)
+      const received = await onReceiveShare(sharePayload)
+      if (received.isErr()) {
+        vault.errorMsg = vault.t(received.error.translationKey)
+        return
+      }
       participantShare = ''
     } finally {
       actionBusy = false

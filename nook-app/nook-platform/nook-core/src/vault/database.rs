@@ -5,16 +5,15 @@
 //! YAML storage enters and leaves through this struct, so encryption boundaries
 //! stay localised.
 
+use crate::RecordTypeDeclaration;
 use crate::{AgeArmoredCiphertext, VaultFormat};
+use crate::{SecretId, multi_device, vault_format};
 
-use crate::SecretId;
 use crate::errors::{DatabaseError, DatabaseResult, VaultFormatError};
-use crate::multi_device;
 use crate::secret_types::{
     SecretRecord, SecretType, SecretValue, StoredRecordPayload, StoredSecretRecord,
 };
 use crate::vault_crypto::VaultCrypto;
-use crate::vault_format;
 use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml, SymmetricKey};
 use std::collections::HashMap;
 
@@ -27,6 +26,13 @@ impl Default for Database {
     fn default() -> Self {
         Self::new()
     }
+}
+
+#[derive(Debug, PartialEq)]
+#[allow(clippy::large_enum_variant)]
+pub enum SecretRemoval {
+    AlreadyAbsent,
+    Removed(SecretRecord),
 }
 
 impl Database {
@@ -77,8 +83,11 @@ impl Database {
         );
     }
 
-    pub fn remove(&mut self, key: &SecretId) -> Option<SecretRecord> {
-        self.records.remove(key)
+    pub fn remove(&mut self, key: &SecretId) -> SecretRemoval {
+        match self.records.remove(key) {
+            Some(record) => SecretRemoval::Removed(record),
+            None => SecretRemoval::AlreadyAbsent,
+        }
     }
 
     pub fn remove_and_zeroize(&mut self, key: &SecretId) -> bool {
@@ -127,9 +136,11 @@ impl Database {
             .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?;
         let mut records = HashMap::new();
         for stored in user_records {
-            let secret_type = stored.secret_type.ok_or(DatabaseError::MissingSecretType {
-                key: stored.key.clone(),
-            })?;
+            let RecordTypeDeclaration::Secret(secret_type) = stored.secret_type else {
+                return Err(DatabaseError::MissingSecretType {
+                    key: stored.key.clone(),
+                });
+            };
             let decrypted =
                 crypto.decrypt_value(&AgeArmoredCiphertext::parse(stored.value.as_str())?)?;
             let value = SecretValue::from_yaml_str(secret_type, decrypted.as_str())?;
@@ -161,7 +172,7 @@ impl Database {
             let yaml = record.data.to_yaml()?;
             stored_records.push(StoredSecretRecord {
                 key: record.id.clone(),
-                secret_type: Some(record.secret_type),
+                secret_type: RecordTypeDeclaration::Secret(record.secret_type),
                 value: StoredRecordPayload::from_age_armored(crypto.encrypt_value(&yaml)?),
             });
         }
@@ -179,7 +190,10 @@ impl Database {
         keys.into_iter()
             .map(|key| StoredSecretRecord {
                 key: key.clone(),
-                secret_type: secret_types.get(key).copied(),
+                secret_type: secret_types.get(key).copied().map_or(
+                    RecordTypeDeclaration::Undeclared,
+                    RecordTypeDeclaration::Secret,
+                ),
                 value: StoredRecordPayload::from_trusted(
                     armored.get(key).cloned().unwrap_or_default(),
                 ),
@@ -195,10 +209,12 @@ mod tests {
 
     use std::{fs, io, path};
 
-    use super::Database;
+    use super::{Database, SecretRemoval};
     use crate::secret_types::StoredRecordPayload;
     use crate::vault_wire::StoredVaultYaml;
-    use crate::{ApiKeySecret, SecretId, SecretType, SecretValue, StoredSecretRecord};
+    use crate::{
+        ApiKeySecret, RecordTypeDeclaration, SecretId, SecretType, SecretValue, StoredSecretRecord,
+    };
 
     fn sid(label: &str) -> SecretId {
         SecretId::from_vault_record(label)
@@ -340,7 +356,10 @@ mod tests {
         db.insert(sid("site"), api_key("new"));
 
         assert_eq!(db.list().len(), 1);
-        assert_eq!(db.list()[0].data, api_key("new"));
+        assert_eq!(
+            db.list().first().map(|item| &item.data),
+            Some(&api_key("new"))
+        );
         Ok(())
     }
 
@@ -348,12 +367,14 @@ mod tests {
     fn remove_returns_previous_value() -> anyhow::Result<()> {
         let mut db = sample_db();
         assert_eq!(
-            db.remove(&sid("github.com"))
-                .ok_or_else(|| io::Error::other("removed record must exist"))?
-                .data,
+            match db.remove(&sid("github.com")) {
+                SecretRemoval::Removed(record) => record.data,
+                SecretRemoval::AlreadyAbsent =>
+                    return Err(io::Error::other("removed record must exist").into()),
+            },
             api_key("hunter2")
         );
-        assert_eq!(db.remove(&sid("github.com")), None);
+        assert_eq!(db.remove(&sid("github.com")), SecretRemoval::AlreadyAbsent);
         assert_eq!(db.list().len(), 1);
         Ok(())
     }
@@ -375,8 +396,12 @@ mod tests {
 
         let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE)?;
         let from_yaml = Database::from_stored_yaml(&stored_yaml, TEST_PASSPHRASE)?;
-        assert_eq!(from_yaml.list()[0].id.as_str(), key);
-        assert_eq!(from_yaml.list()[0].data, api_key(value));
+        let records = from_yaml.list();
+        let record = records
+            .first()
+            .unwrap_or_else(|| panic!("database fixture must contain one item"));
+        assert_eq!(record.id.as_str(), key);
+        assert_eq!(record.data, api_key(value));
         Ok(())
     }
 
@@ -387,7 +412,10 @@ mod tests {
 
         let stored = db.to_stored_yaml(TEST_PASSPHRASE)?;
         let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE)?;
-        assert_eq!(restored.list()[0].data, api_key(""));
+        assert_eq!(
+            restored.list().first().map(|item| &item.data),
+            Some(&api_key(""))
+        );
         Ok(())
     }
 
@@ -424,7 +452,11 @@ mod tests {
 
         let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE)?;
         assert_eq!(
-            restored.list()[0].data,
+            restored
+                .list()
+                .first()
+                .unwrap_or_else(|| panic!("database fixture must contain one item"))
+                .data,
             api_key("line-one\nline-two\nline-three")
         );
         Ok(())
@@ -452,9 +484,15 @@ mod tests {
         ]);
         let records = Database::stored_records_from_armored(&armored, &secret_types);
         assert_eq!(records.len(), 2);
-        assert_eq!(records[0].key.as_str(), "a-first");
-        assert_eq!(records[1].key.as_str(), "z-last");
-        assert_ne!(records[0].value.as_str(), records[1].value.as_str());
+        let first = records
+            .first()
+            .unwrap_or_else(|| panic!("record fixture must contain first item"));
+        let second = records
+            .get(1)
+            .unwrap_or_else(|| panic!("record fixture must contain second item"));
+        assert_eq!(first.key.as_str(), "a-first");
+        assert_eq!(second.key.as_str(), "z-last");
+        assert_ne!(first.value.as_str(), second.value.as_str());
         Ok(())
     }
 
@@ -531,14 +569,14 @@ mod tests {
 
         let missing = StoredSecretRecord {
             key: sid("missing"),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_age_armored(ciphertext.clone()),
         };
         assert!(Database::from_stored_records_with_crypto(&[missing], &crypto).is_err());
 
         let mismatched = StoredSecretRecord {
             key: sid("mismatched"),
-            secret_type: Some(SecretType::SeedPhrase),
+            secret_type: RecordTypeDeclaration::Secret(SecretType::SeedPhrase),
             value: StoredRecordPayload::from_age_armored(ciphertext),
         };
         assert!(Database::from_stored_records_with_crypto(&[mismatched], &crypto).is_err());
@@ -547,10 +585,10 @@ mod tests {
 
     #[test]
     fn validate_before_insert_rejects_blank_label() -> anyhow::Result<()> {
-        use crate::{SecretId, validate_secret_data};
+        use crate::SecretId;
 
         assert!(SecretId::parse("   ").is_err());
-        assert!(validate_secret_data("").is_err());
+        assert!(SecretValue::validate_secret_data("").is_err());
         Ok(())
     }
 }

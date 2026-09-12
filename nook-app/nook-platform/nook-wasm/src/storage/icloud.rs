@@ -7,18 +7,31 @@
 )]
 
 use reqwest::Client;
-use std::{collections, str};
+#[cfg(test)]
+use std::collections;
+use std::str;
 
 use super::checked_event_write::CheckedEventWrite;
 use crate::NookError;
 use nook_core::{EventId, ICloudEventTarget, ICloudShareRole};
+#[cfg(test)]
 use serde::Deserialize;
-use serde_json::json;
+use serde::Serialize;
 
 pub(crate) struct ICloudEventStore<'a> {
     pub(crate) web_auth_token: &'a str,
     pub(crate) target: &'a ICloudEventTarget,
 }
+
+mod wire;
+use wire::{
+    EventIdentity, FieldText, ICloudCreate, ICloudCreateOperation, ICloudCreateRecord,
+    ICloudEventFields, ICloudLookup, ICloudQuery, ICloudQueryPage, ICloudRecord,
+    ICloudRecordReference, ICloudRecordsResponse, ICloudRequest, ICloudTextField, ICloudZone,
+    QueryCompletion, QueryContinuation, RecordHierarchy, RecordLookup, ZoneSelection,
+};
+#[cfg(test)]
+use wire::{ICloudFieldValue, RecordFields};
 
 const ICLOUD_CONTAINER_ID: &str = match option_env!("NOOK_ICLOUD_CONTAINER_ID") {
     Some(value) => value,
@@ -38,6 +51,11 @@ const ICLOUD_EVENT_ID_FIELD: &str = "event_id";
 const SHA256_BASE64URL_LEN: usize = 43;
 const ICLOUD_LOG_BODY_PREVIEW_CHARS: usize = 2000;
 
+struct CloudKitRecordQuery<'a> {
+    web_auth_token: &'a str,
+    target: &'a ICloudEventTarget,
+    record_name: &'a str,
+}
 impl ICloudEventStore<'_> {
     fn is_sha256_base64url_digest(digest: &str) -> bool {
         digest.len() == SHA256_BASE64URL_LEN
@@ -45,27 +63,6 @@ impl ICloudEventStore<'_> {
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
     }
-}
-
-#[derive(Deserialize)]
-struct ICloudFieldValue {
-    value: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct ICloudRecord {
-    #[serde(rename = "recordName")]
-    record_name: String,
-    #[serde(default)]
-    fields: Option<collections::HashMap<String, ICloudFieldValue>>,
-}
-
-#[derive(Deserialize)]
-struct ICloudRecordsResponse {
-    #[serde(default)]
-    records: Vec<ICloudRecord>,
-    #[serde(rename = "continuationMarker", default)]
-    continuation_marker: Option<String>,
 }
 
 impl ICloudEventStore<'_> {
@@ -86,24 +83,21 @@ impl ICloudEventStore<'_> {
         )
     }
 
-    fn icloud_zone_id(target: &ICloudEventTarget) -> Option<serde_json::Value> {
+    fn icloud_zone_id(target: &ICloudEventTarget) -> ZoneSelection {
         match target {
-            ICloudEventTarget::Private => None,
-            ICloudEventTarget::Shared(shared) => Some(json!({
-                "zoneName": shared.zone_name,
-                "ownerRecordName": shared.owner_record_name,
-            })),
+            ICloudEventTarget::Private => ZoneSelection::DefaultZone,
+            ICloudEventTarget::Shared(shared) => ZoneSelection::Named(ICloudZone {
+                zone_name: shared.zone_name.clone(),
+                owner_record_name: shared.owner_record_name.clone(),
+            }),
         }
     }
 
-    fn with_icloud_zone(
-        mut body: serde_json::Value,
-        target: &ICloudEventTarget,
-    ) -> serde_json::Value {
-        if let Some(zone_id) = Self::icloud_zone_id(target) {
-            body["zoneID"] = zone_id;
+    fn with_icloud_zone<T: Serialize>(payload: T, target: &ICloudEventTarget) -> ICloudRequest<T> {
+        ICloudRequest {
+            payload,
+            zone: Self::icloud_zone_id(target),
         }
-        body
     }
 
     fn icloud_auth_query(web_auth_token: &str) -> [(&'static str, String); 2] {
@@ -202,7 +196,10 @@ impl CloudKitErrorBody<'_> {
             let value_end = after_prefix
                 .find(['&', '"', '\'', ' ', '\n', '\r', '\t'])
                 .unwrap_or(after_prefix.len());
-            rest = &after_prefix[value_end..];
+            let Some(remaining) = after_prefix.get(value_end..) else {
+                break;
+            };
+            rest = remaining;
         }
         output.push_str(rest);
         output
@@ -222,47 +219,21 @@ impl CloudKitErrorBody<'_> {
     }
 }
 
-impl ICloudRecord {
-    fn content(&self) -> Option<String> {
-        self.fields
-            .as_ref()
-            .and_then(|fields| fields.get(ICLOUD_CONTENT_FIELD))
-            .and_then(|field| field.value.clone())
-    }
-}
-
-impl ICloudRecord {
-    fn field(&self, field_name: &str) -> Option<String> {
-        self.fields
-            .as_ref()
-            .and_then(|fields| fields.get(field_name))
-            .and_then(|field| field.value.clone())
-    }
-}
-
 impl ICloudEventStore<'_> {
     fn icloud_event_record_name(event_id: &EventId) -> String {
         format!("nook-event-{}", event_id.encoded_digest())
     }
 }
 
-impl ICloudRecord {
-    fn event_id(&self) -> Option<String> {
-        self.field(ICLOUD_EVENT_ID_FIELD).or_else(|| {
-            self.record_name
-                .strip_prefix("nook-event-")
-                .filter(|digest| ICloudEventStore::is_sha256_base64url_digest(digest))
-                .map(|digest| format!("sha256u:{digest}"))
-        })
-    }
-}
-
 impl ICloudEventStore<'_> {
     async fn lookup_vault_record(
-        web_auth_token: &str,
-        target: &ICloudEventTarget,
-        record_name: &str,
-    ) -> Result<Option<ICloudRecord>, NookError> {
+        request: CloudKitRecordQuery<'_>,
+    ) -> Result<RecordLookup, NookError> {
+        let CloudKitRecordQuery {
+            web_auth_token,
+            target,
+            record_name,
+        } = request;
         const OPERATION: &str = "lookup";
         const PATH: &str = "records/lookup";
         Self::log_icloud_request_start(OPERATION, PATH, web_auth_token);
@@ -275,9 +246,11 @@ impl ICloudEventStore<'_> {
         );
         let client = Client::new();
         let body = Self::with_icloud_zone(
-            json!({
-                "records": [{ "recordName": record_name }]
-            }),
+            ICloudLookup {
+                records: [ICloudRecordReference {
+                    record_name: record_name.to_owned(),
+                }],
+            },
             target,
         );
         let mut request = client
@@ -305,15 +278,24 @@ impl ICloudEventStore<'_> {
             returned_records = parsed.records.len(),
             "CloudKit lookup parsed"
         );
-        Ok(parsed.records.into_iter().next())
+        Ok(match parsed.records.into_iter().next() {
+            Some(record) => RecordLookup::Loaded(record),
+            None => RecordLookup::Missing,
+        })
     }
 
-    async fn lookup_record(
-        web_auth_token: &str,
-        target: &ICloudEventTarget,
-        record_name: &str,
-    ) -> Result<Option<ICloudRecord>, NookError> {
-        Self::lookup_vault_record(web_auth_token, target, record_name).await
+    async fn lookup_record(request: CloudKitRecordQuery<'_>) -> Result<RecordLookup, NookError> {
+        let CloudKitRecordQuery {
+            web_auth_token,
+            target,
+            record_name,
+        } = request;
+        Self::lookup_vault_record(CloudKitRecordQuery {
+            web_auth_token,
+            target,
+            record_name,
+        })
+        .await
     }
 
     pub(crate) async fn list_icloud_event_ids(&self) -> Result<Vec<String>, NookError> {
@@ -322,23 +304,21 @@ impl ICloudEventStore<'_> {
         let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
         let client = Client::new();
         let mut event_ids = Vec::new();
-        let mut continuation_marker: Option<String> = None;
+        let mut continuation_marker = QueryContinuation::FirstPage;
         const OPERATION: &str = "query";
         const PATH: &str = "records/query";
 
         loop {
-            let mut body = Self::with_icloud_zone(
-                json!({
-                    "query": {
-                        "recordType": ICLOUD_EVENT_RECORD_TYPE,
+            let body = Self::with_icloud_zone(
+                ICloudQueryPage {
+                    query: ICloudQuery {
+                        record_type: ICLOUD_EVENT_RECORD_TYPE,
                     },
-                    "resultsLimit": 200,
-                }),
+                    results_limit: 200,
+                    continuation_marker: continuation_marker.clone(),
+                },
                 target,
             );
-            if let Some(marker) = continuation_marker.as_deref() {
-                body["continuationMarker"] = json!(marker);
-            }
 
             Self::log_icloud_request_start(OPERATION, PATH, token.as_ref());
             tracing::info!(
@@ -347,7 +327,7 @@ impl ICloudEventStore<'_> {
                 path = PATH,
                 record_type = ICLOUD_EVENT_RECORD_TYPE,
                 results_limit = 200,
-                continuation_present = continuation_marker.is_some(),
+                continuation_present = !continuation_marker.is_first(),
                 "CloudKit event query prepared"
             );
             let mut request = client
@@ -372,20 +352,22 @@ impl ICloudEventStore<'_> {
                 operation = OPERATION,
                 path = PATH,
                 returned_records = parsed.records.len(),
-                continuation_returned = parsed.continuation_marker.is_some(),
+                continuation_returned =
+                    matches!(parsed.continuation_marker, QueryCompletion::Continue(_)),
                 "CloudKit event query parsed"
             );
             for record in &parsed.records {
-                if let Some(event_id) = record.event_id()
+                if let EventIdentity::Declared(event_id) | EventIdentity::NameDerived(event_id) =
+                    record.event_id()
                     && EventId::parse(&event_id).is_ok()
                 {
                     event_ids.push(event_id);
                 }
             }
-            continuation_marker = parsed.continuation_marker;
-            if continuation_marker.is_none() {
-                break;
-            }
+            continuation_marker = match parsed.continuation_marker {
+                QueryCompletion::Complete => break,
+                QueryCompletion::Continue(marker) => QueryContinuation::Continue(marker),
+            };
         }
         event_ids.sort();
         event_ids.dedup();
@@ -411,27 +393,42 @@ impl ICloudEventStore<'_> {
             record_name,
             "CloudKit event fetch started"
         );
-        let record = Self::lookup_record(token.as_ref(), target, &record_name)
-            .await?
-            .ok_or_else(|| {
-                NookError::ICloud(format!("CloudKit event record {record_name} is missing."))
-            })?;
-        let stored_event_id = record.event_id().ok_or_else(|| {
-            NookError::ICloud(format!(
-                "CloudKit event record {record_name} does not include an event id."
-            ))
-        })?;
+        let record = match Self::lookup_record(CloudKitRecordQuery {
+            web_auth_token: token.as_ref(),
+            target,
+            record_name: &record_name,
+        })
+        .await?
+        {
+            RecordLookup::Loaded(record) => record,
+            RecordLookup::Missing => {
+                return Err(NookError::ICloud(format!(
+                    "CloudKit event record {record_name} is missing."
+                )));
+            }
+        };
+        let stored_event_id = match record.event_id() {
+            EventIdentity::Declared(id) | EventIdentity::NameDerived(id) => id,
+            EventIdentity::Missing => {
+                return Err(NookError::ICloud(format!(
+                    "CloudKit event record {record_name} does not include an event id."
+                )));
+            }
+        };
         if stored_event_id != event_id.as_str() {
             return Err(NookError::ICloud(format!(
                 "CloudKit event record {record_name} points at {stored_event_id}, expected {}.",
                 event_id.as_str()
             )));
         }
-        let content = record.content().ok_or_else(|| {
-            NookError::ICloud(format!(
-                "CloudKit event record {record_name} does not include content."
-            ))
-        })?;
+        let content = match record.content() {
+            FieldText::Text(content) => content,
+            FieldText::Unset => {
+                return Err(NookError::ICloud(format!(
+                    "CloudKit event record {record_name} does not include content."
+                )));
+            }
+        };
         tracing::info!(
             scope = "wasm-icloud",
             event_id = event_id.as_str(),
@@ -446,7 +443,10 @@ impl ICloudEventStore<'_> {
         record: &ICloudRecord,
         checked: &CheckedEventWrite<'_>,
     ) -> (bool, usize) {
-        let existing_content = record.content().unwrap_or_default();
+        let existing_content = match record.content() {
+            FieldText::Text(content) => content,
+            FieldText::Unset => String::new(),
+        };
         let existing_bytes = existing_content.as_bytes();
         (checked.matches(existing_bytes), existing_bytes.len())
     }
@@ -467,7 +467,13 @@ impl ICloudEventStore<'_> {
         checked: &CheckedEventWrite<'_>,
         policy: ExistingEventPolicy,
     ) -> Result<bool, NookError> {
-        if let Some(existing) = Self::lookup_record(token, target, record_name).await? {
+        if let RecordLookup::Loaded(existing) = Self::lookup_record(CloudKitRecordQuery {
+            web_auth_token: token,
+            target,
+            record_name,
+        })
+        .await?
+        {
             let (matches, existing_len) = Self::existing_icloud_event_matches(&existing, checked);
             if matches {
                 match policy {
@@ -518,25 +524,32 @@ impl ICloudEventStore<'_> {
         event_id: &EventId,
         record_name: &str,
         content: &str,
-    ) -> serde_json::Value {
-        let mut record = json!({
-            "recordType": ICLOUD_EVENT_RECORD_TYPE,
-            "recordName": record_name,
-            "fields": {
-                ICLOUD_EVENT_ID_FIELD: { "value": event_id.as_str() },
-                ICLOUD_CONTENT_FIELD: { "value": content }
-            }
-        });
-        if let ICloudEventTarget::Shared(shared) = target {
-            record["parent"] = json!({ "recordName": shared.root_record_name });
-        }
-        Self::with_icloud_zone(
-            json!({
-                "operations": [{
-                    "operationType": "create",
-                    "record": record
-                }]
+    ) -> ICloudRequest<ICloudCreate> {
+        let parent = match target {
+            ICloudEventTarget::Private => RecordHierarchy::Root,
+            ICloudEventTarget::Shared(shared) => RecordHierarchy::Child(ICloudRecordReference {
+                record_name: shared.root_record_name.clone(),
             }),
+        };
+        Self::with_icloud_zone(
+            ICloudCreate {
+                operations: [ICloudCreateOperation {
+                    operation_type: "create",
+                    record: ICloudCreateRecord {
+                        record_type: ICLOUD_EVENT_RECORD_TYPE,
+                        record_name: record_name.to_owned(),
+                        fields: ICloudEventFields {
+                            event_id: ICloudTextField {
+                                value: event_id.to_string(),
+                            },
+                            content: ICloudTextField {
+                                value: content.to_owned(),
+                            },
+                        },
+                        parent,
+                    },
+                }],
+            },
             target,
         )
     }
@@ -609,7 +622,7 @@ impl ICloudEventStore<'_> {
         let status = response.status();
         Self::log_icloud_response(OPERATION, PATH, status);
         if response.status().is_success() {
-            let _parsed: serde_json::Value = response.json().await.map_err(|e| {
+            let _parsed: ICloudRecordsResponse = response.json().await.map_err(|e| {
                 NookError::Serialization(format!("Failed to parse CloudKit event create: {e}"))
             })?;
             tracing::info!(
@@ -660,15 +673,9 @@ mod tests {
     #[derive(Deserialize)]
     struct CreateBody {
         #[serde(rename = "zoneID")]
-        zone: Option<Zone>,
+        #[serde(default)]
+        zone: ZoneSelection,
         operations: Vec<CreateOperation>,
-    }
-
-    #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct Zone {
-        zone_name: String,
-        owner_record_name: String,
     }
 
     #[derive(Deserialize)]
@@ -678,14 +685,9 @@ mod tests {
 
     #[derive(Deserialize)]
     struct CreateRecord {
-        parent: Option<ParentRecord>,
+        #[serde(default)]
+        parent: RecordHierarchy,
         fields: collections::HashMap<String, ICloudFieldValue>,
-    }
-
-    #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct ParentRecord {
-        record_name: String,
     }
 
     struct SharedTargetFixture(ICloudEventTarget);
@@ -744,21 +746,28 @@ mod tests {
             "encrypted-event",
         );
 
-        let body: CreateBody = serde_json::from_value(body)?;
-        let zone = body
-            .zone
-            .ok_or_else(|| anyhow::anyhow!("missing shared zone"))?;
+        let body: CreateBody = serde_json::from_str(&serde_json::to_string(&body)?)?;
+        let ZoneSelection::Named(zone) = body.zone else {
+            anyhow::bail!("missing shared zone")
+        };
         assert_eq!(zone.zone_name, "shared-zone");
         assert_eq!(zone.owner_record_name, "owner-record");
-        let record = &body.operations[0].record;
-        let parent = record
-            .parent
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("missing parent"))?;
+        let record = &body
+            .operations
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("shared event operation must be present"))?
+            .record;
+        let RecordHierarchy::Child(parent) = &record.parent else {
+            anyhow::bail!("missing parent")
+        };
         assert_eq!(parent.record_name, "shared-root");
         assert_eq!(
-            record.fields[ICLOUD_CONTENT_FIELD].value.as_deref(),
-            Some("encrypted-event")
+            record
+                .fields
+                .get(ICLOUD_CONTENT_FIELD)
+                .ok_or_else(|| anyhow::anyhow!("content field must be present"))?
+                .value,
+            FieldText::Text("encrypted-event".to_owned())
         );
         Ok(())
     }
@@ -777,9 +786,13 @@ mod tests {
             "encrypted-event",
         );
 
-        let body: CreateBody = serde_json::from_value(body)?;
-        assert!(body.zone.is_none());
-        assert!(body.operations[0].record.parent.is_none());
+        let body: CreateBody = serde_json::from_str(&serde_json::to_string(&body)?)?;
+        assert!(matches!(body.zone, ZoneSelection::DefaultZone));
+        let operation = body
+            .operations
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("private event operation must be present"))?;
+        assert!(matches!(operation.record.parent, RecordHierarchy::Root));
         Ok(())
     }
 
@@ -814,24 +827,40 @@ mod tests {
         assert!(!ICloudEventStore::is_sha256_base64url_digest("short"));
         assert!(!ICloudEventStore::is_sha256_base64url_digest(&format!(
             "{}!",
-            &digest[..42]
+            digest
+                .get(..42)
+                .ok_or_else(|| anyhow::anyhow!("digest prefix fixture must be present"))?
         )));
 
         let private = ICloudEventTarget::Private;
-        assert_eq!(ICloudEventStore::icloud_zone_id(&private), None);
-        let shared = SharedTargetFixture::new(ICloudShareRole::Participant)?.0;
-        let zone = ICloudEventStore::icloud_zone_id(&shared)
-            .ok_or_else(|| anyhow::anyhow!("missing shared zone"))?;
-        assert_eq!(zone["zoneName"], "shared-zone");
-        assert_eq!(zone["ownerRecordName"], "owner-record");
-        let zoned = ICloudEventStore::with_icloud_zone(serde_json::json!({"query": {}}), &shared);
-        assert_eq!(zoned["zoneID"], zone);
-        assert!(
-            !ICloudEventStore::with_icloud_zone(serde_json::json!({}), &private)
-                .as_object()
-                .unwrap()
-                .contains_key("zoneID")
+        assert_eq!(
+            ICloudEventStore::icloud_zone_id(&private),
+            ZoneSelection::DefaultZone
         );
+        let shared = SharedTargetFixture::new(ICloudShareRole::Participant)?.0;
+        let ZoneSelection::Named(zone) = ICloudEventStore::icloud_zone_id(&shared) else {
+            anyhow::bail!("missing shared zone")
+        };
+        assert_eq!(zone.zone_name, "shared-zone");
+        assert_eq!(zone.owner_record_name, "owner-record");
+        let zoned = ICloudEventStore::with_icloud_zone(
+            ICloudLookup {
+                records: [ICloudRecordReference {
+                    record_name: "record".to_owned(),
+                }],
+            },
+            &shared,
+        );
+        assert_eq!(zoned.zone, ZoneSelection::Named(zone));
+        let private_request = ICloudEventStore::with_icloud_zone(
+            ICloudLookup {
+                records: [ICloudRecordReference {
+                    record_name: "record".to_owned(),
+                }],
+            },
+            &private,
+        );
+        assert!(matches!(private_request.zone, ZoneSelection::DefaultZone));
 
         let query = ICloudEventStore::icloud_auth_query("  web-token  ");
         assert_eq!(query[0].0, "ckAPIToken");
@@ -843,30 +872,36 @@ mod tests {
         assert_eq!(record_name, format!("nook-event-{digest}"));
         let record = ICloudRecord {
             record_name: record_name.clone(),
-            fields: Some(collections::HashMap::from([(
+            fields: RecordFields::Declared(collections::HashMap::from([(
                 ICLOUD_CONTENT_FIELD.to_owned(),
                 ICloudFieldValue {
-                    value: Some("encrypted".to_owned()),
+                    value: FieldText::Text("encrypted".to_owned()),
                 },
             )])),
         };
-        assert_eq!(record.content().as_deref(), Some("encrypted"));
+        assert_eq!(record.content(), FieldText::Text("encrypted".to_owned()));
         assert_eq!(
-            record.field(ICLOUD_CONTENT_FIELD).as_deref(),
-            Some("encrypted")
+            record.field(ICLOUD_CONTENT_FIELD),
+            FieldText::Text("encrypted".to_owned())
         );
-        assert_eq!(record.event_id().as_deref(), Some(event_id.as_str()));
+        assert_eq!(
+            record.event_id(),
+            EventIdentity::NameDerived(event_id.to_string())
+        );
 
         let fallback = ICloudRecord {
             record_name,
-            fields: None,
+            fields: RecordFields::Undisclosed,
         };
-        assert_eq!(fallback.event_id().as_deref(), Some(event_id.as_str()));
+        assert_eq!(
+            fallback.event_id(),
+            EventIdentity::NameDerived(event_id.to_string())
+        );
         let invalid = ICloudRecord {
             record_name: "nook-event-not-an-event".to_owned(),
-            fields: None,
+            fields: RecordFields::Undisclosed,
         };
-        assert_eq!(invalid.event_id(), None);
+        assert_eq!(invalid.event_id(), EventIdentity::Missing);
         Ok(())
     }
 

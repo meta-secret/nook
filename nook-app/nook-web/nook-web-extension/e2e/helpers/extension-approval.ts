@@ -13,8 +13,16 @@ export async function waitForExtensionPairingReady(
         ) {
           return 'approved'
         }
-        const alerts = await vaultPage.getByRole('alert').allTextContents()
-        return ((...[v = 'pending']) => v)(alerts.at(-1))
+        const alerts = vaultPage.getByRole('alert')
+        const alertTexts = await alerts.allTextContents()
+        const alertText = ((...[v = 'pending']) => v)(alertTexts.at(-1))
+        if (alertTexts.length === 0) return alertText
+        const rejectionReason = ((...[v = '']) => v)(
+          await alerts
+            .last()
+            .getAttribute('data-extension-pairing-rejection-reason'),
+        )
+        return rejectionReason ? `${alertText} [${rejectionReason}]` : alertText
       },
       { timeout: 15_000 },
     )

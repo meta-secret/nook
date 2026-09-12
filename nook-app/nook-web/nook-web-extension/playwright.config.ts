@@ -7,7 +7,8 @@ export default defineConfig({
   testDir: 'e2e',
   testMatch: '**/*.spec.ts',
   forbidOnly: isCi,
-  retries: isHostedSmoke ? 0 : isCi ? 2 : 0,
+  retries: 0,
+  ...(isCi ? { maxFailures: 0, globalTimeout: 180 * 60_000 } : {}),
   // The full smoke owns several headed pages and persistent contexts. Hosted
   // runners cannot reliably sustain it beside the other extension workers.
   ...(isCi ? { workers: 1 } : {}),

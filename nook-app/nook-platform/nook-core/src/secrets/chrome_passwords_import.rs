@@ -6,6 +6,8 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::secrets::import_support::CsvExportColumn;
+use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
 use std::iter;
 
 use csv::StringRecord;
@@ -38,11 +40,11 @@ pub struct ChromePasswordsImportPlan {
 
 #[derive(Clone, Copy)]
 struct ChromePasswordColumns {
-    name: Option<usize>,
+    name: CsvExportColumn,
     url: usize,
     username: usize,
     password: usize,
-    note: Option<usize>,
+    note: CsvExportColumn,
 }
 
 struct ChromePasswordsHeaders {
@@ -89,13 +91,17 @@ impl ChromePasswordsHeaders {
             })
             .ok_or(ChromePasswordsImportError::MissingColumn(column.name()))
     }
-    fn optional(&self, names: &[&str]) -> Option<usize> {
-        names.iter().find_map(|name| {
+    fn optional(&self, names: &[&str]) -> CsvExportColumn {
+        let column = names.iter().find_map(|name| {
             let expected = CsvHeader::new(name).normalized();
             self.normalized
                 .iter()
                 .position(|header| header == &expected)
-        })
+        });
+        match column {
+            Some(index) => CsvExportColumn::Exported(index),
+            None => CsvExportColumn::NotExported,
+        }
     }
     fn admit(self) -> Result<ChromePasswordColumns, ChromePasswordsImportError> {
         Ok(ChromePasswordColumns {
@@ -114,7 +120,7 @@ struct BrowserPasswordLabel<'a> {
 }
 impl BrowserPasswordLabel<'_> {
     fn append_to(&self, notes: &mut String) {
-        if let Some(entry) = (SourceLabelMetadata {
+        if let Ok(entry) = (SourceLabelMetadata {
             key: "name",
             label: self.name,
             website_url: self.website_url,
@@ -131,7 +137,7 @@ impl BrowserPasswordLabel<'_> {
 }
 
 impl ChromePasswordColumns {
-    fn convert(&self, record: &StringRecord) -> Option<SecretValue> {
+    fn convert(&self, record: &StringRecord) -> ImportItemDisposition {
         let csv_fields = CsvRecordFields::new(record);
         let name = csv_fields.optional(self.name);
         let url = csv_fields.trimmed(self.url);
@@ -140,7 +146,7 @@ impl ChromePasswordColumns {
         let mut notes = csv_fields.optional(self.note);
 
         if password.is_empty() {
-            return None;
+            return ImportItemDisposition::Skipped(ImportSkipReason::PasswordlessLogin);
         }
 
         if name.is_empty()
@@ -149,7 +155,7 @@ impl ChromePasswordColumns {
             && password.is_empty()
             && notes.is_empty()
         {
-            return None;
+            return ImportItemDisposition::Skipped(ImportSkipReason::PasswordlessLogin);
         }
 
         let website_url = if url.is_empty() { name.clone() } else { url };
@@ -159,7 +165,7 @@ impl ChromePasswordColumns {
         }
         .append_to(&mut notes);
 
-        Some(SecretValue::Login(LoginSecret {
+        ImportItemDisposition::Imported(SecretValue::Login(LoginSecret {
             website_url,
             username,
             password,
@@ -225,8 +231,10 @@ impl<'a> ChromePasswordsCsvInput<'a> {
             return Err(ChromePasswordsImportError::CsvTooLarge);
         }
 
-        let mut reader = CsvImportReader::new(self.text);
-        let columns = ChromePasswordsHeaders::new(reader.headers()?).admit()?;
+        let reader = CsvImportReader::new(self.text);
+        let read = reader.headers()?;
+        let reader = read.reader;
+        let columns = ChromePasswordsHeaders::new(&read.headers).admit()?;
         Ok(CheckedChromePasswordsCsv { reader, columns })
     }
 }
@@ -239,8 +247,8 @@ impl CheckedChromePasswordsCsv<'_> {
         let collection = self.reader.collect(CsvImportConversion {
             too_many_records: ChromePasswordsImportError::TooManyRecords,
             convert: |record: &StringRecord| match self.columns.convert(record) {
-                Some(item) => (vec![item], 0),
-                None => (Vec::new(), 1),
+                ImportItemDisposition::Imported(item) => (vec![item], 0),
+                ImportItemDisposition::Skipped(_) => (Vec::new(), 1),
             },
         })?;
 
@@ -281,7 +289,7 @@ mod tests {
     fn alias_preference_is_independent_of_header_position() -> anyhow::Result<()> {
         let csv = "website,website url,login,user name,secret\nsecond,first,second-user,first-user,password\n";
         let plan = ChromePasswordsCsvInput::new(csv).plan()?;
-        assert!(matches!(&plan.items[0], SecretValue::Login(login)
+        assert!(matches!(plan.items.first(), Some(SecretValue::Login(login))
             if login.website_url == "first" && login.username == "first-user"));
         Ok(())
     }
@@ -383,7 +391,7 @@ mod tests {
         let csv = "url,username,password\nhttps://example.com,alice,\" secret \"\n";
 
         let plan = ChromePasswordsCsvInput::new(csv).plan()?;
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login");
         };
 
@@ -404,7 +412,7 @@ mod tests {
 
         assert_eq!(usize::from(plan.source_count), 2);
         assert_eq!(usize::from(plan.skipped_unsupported), 1);
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login");
         };
         assert_eq!(login.password, "   ");

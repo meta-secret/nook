@@ -4,6 +4,7 @@ use nook_companion_core::{
     CompanionPairingApprovalAttempt, CompanionPairingFailure, CompanionPairingRequest,
     ConsumedCompanionPairingAuthority, ExtensionConnectScope,
 };
+use nook_core::{ActiveVaultScope, ProviderVaultScope};
 use nook_core::{AuthProvidersSnapshotData, SigningIdentity, VaultApplication, VaultType};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -36,7 +37,7 @@ impl NookCompanionPairingExtensionEndpoint {
             .map_err(|error| JsError::new(&error.to_string()))
     }
 
-    pub fn take_authority(&mut self) -> Result<NookCompanionPairingApprovalAuthority, JsError> {
+    pub fn take_authority(self) -> Result<NookCompanionPairingApprovalAuthority, JsError> {
         Ok(NookCompanionPairingApprovalAuthority {
             inner: self
                 .inner
@@ -62,7 +63,7 @@ impl NookCompanionPairingApprovalAuthority {
         providers: AuthProvidersSnapshotData,
     ) -> Result<NookPrevalidatedCompanionPairingApproval, JsError> {
         self.prevalidate_inner(manager, attempt, providers)
-            .map_err(failure_js_error)
+            .map_err(NookVaultManager::failure_js_error)
     }
 }
 
@@ -99,9 +100,9 @@ impl NookCompanionPairingApprovalAuthority {
         {
             return Err(CompanionPairingFailure::InstallationMismatch);
         }
-        if providers.active_vault_store_id.as_deref() != Some(approval.vault_store_id.as_str())
+        if !matches!(&providers.active_vault_store_id, ActiveVaultScope::StoreId(id) if id == approval.vault_store_id.as_str())
             || providers.providers.iter().any(|provider| {
-                provider.store_id.as_deref() != Some(approval.vault_store_id.as_str())
+                !matches!(&provider.store_id, ProviderVaultScope::StoreId(id) if id == approval.vault_store_id.as_str())
             })
             || (!approval
                 .request
@@ -128,8 +129,10 @@ impl NookCompanionPairingApprovalAuthority {
     }
 }
 
-fn failure_js_error(failure: CompanionPairingFailure) -> JsError {
-    JsError::new(&format!("{failure:?}"))
+impl NookVaultManager {
+    fn failure_js_error(failure: CompanionPairingFailure) -> JsError {
+        JsError::new(&format!("{failure:?}"))
+    }
 }
 
 /// Opaque proof of a manager-bound approval and its sealed provider snapshot.
@@ -144,9 +147,8 @@ pub struct NookPrevalidatedCompanionPairingApproval {
 mod tests {
     use super::*;
     use nook_companion_core::{
-        CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingError,
-        CompanionPairingInstallation, CompanionPairingProviderManifestDigest,
-        ExtensionPairingVaultType,
+        CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
+        CompanionPairingProviderManifestDigest, ExtensionPairingVaultType,
     };
     use nook_core::{ActiveVaultScope, DeviceIdentity, ProviderVaultScope, StorageProviderData};
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -189,7 +191,9 @@ mod tests {
                 );
                 provider.store_id = ProviderVaultScope::StoreId("store-1".to_owned());
                 providers.providers.push(provider);
-                providers.seal_credentials_for(&identity.public_key())?;
+                providers = providers
+                    .seal_credentials_for(&identity.public_key())
+                    .map_err(nook_core::ProviderCredentialRejection::into_cause)?;
                 scopes.push(ExtensionConnectScope::SyncProviderCredentials);
             }
             let request = CompanionPairingRequest {
@@ -228,7 +232,7 @@ mod tests {
             self,
         ) -> anyhow::Result<Result<NookPrevalidatedCompanionPairingApproval, CompanionPairingFailure>>
         {
-            let mut endpoint = CompanionExtensionPairingEndpoint::issue(self.request)?;
+            let endpoint = CompanionExtensionPairingEndpoint::issue(self.request)?;
             let authority = endpoint.take_authority()?;
             Ok(
                 NookCompanionPairingApprovalAuthority { inner: authority }.prevalidate_inner(
@@ -274,7 +278,7 @@ mod tests {
             },
             scopes: vec![ExtensionConnectScope::VaultAccess],
         };
-        let mut endpoint = NookCompanionPairingExtensionEndpoint::new(request.clone())
+        let endpoint = NookCompanionPairingExtensionEndpoint::new(request.clone())
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(
             endpoint
@@ -285,10 +289,7 @@ mod tests {
         let _authority = endpoint
             .take_authority()
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        assert!(matches!(
-            endpoint.inner.take_authority(),
-            Err(CompanionPairingError::AuthorityUnavailable)
-        ));
+        // Consuming the endpoint makes a second authority request unrepresentable.
         Ok(())
     }
 
@@ -296,7 +297,7 @@ mod tests {
     fn real_manager_prevalidates_exact_empty_and_sealed_provider_approvals() -> anyhow::Result<()> {
         for with_provider in [false, true] {
             let fixture = PairingFixture::new(with_provider)?;
-            let mut endpoint = NookCompanionPairingExtensionEndpoint::new(fixture.request.clone())
+            let endpoint = NookCompanionPairingExtensionEndpoint::new(fixture.request.clone())
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
             let authority = endpoint
                 .take_authority()
@@ -312,8 +313,8 @@ mod tests {
                 )
                 .map_err(|error| anyhow::anyhow!("unexpected rejection: {error:?}"))?;
             assert_eq!(
-                admitted.providers.active_vault_store_id.as_deref(),
-                Some("store-1")
+                admitted.providers.active_vault_store_id,
+                ActiveVaultScope::StoreId(("store-1").to_owned())
             );
             assert_eq!(
                 admitted.providers.providers.len(),
@@ -392,7 +393,12 @@ mod tests {
             if case == 0 {
                 fixture.providers.active_vault_store_id = ActiveVaultScope::Unselected;
             } else {
-                fixture.providers.providers[0].store_id = ProviderVaultScope::Unscoped;
+                fixture
+                    .providers
+                    .providers
+                    .first_mut()
+                    .ok_or_else(|| anyhow::anyhow!("provider fixture must be present"))?
+                    .store_id = ProviderVaultScope::Unscoped;
             }
             assert!(matches!(
                 fixture.prevalidate()?,
@@ -421,7 +427,12 @@ mod tests {
     fn provider_manifest_substitution_is_rejected_before_recipient_admission() -> anyhow::Result<()>
     {
         let mut fixture = PairingFixture::new(true)?;
-        fixture.providers.providers[0].label = "Substituted".to_owned();
+        fixture
+            .providers
+            .providers
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("provider fixture must be present"))?
+            .label = "Substituted".to_owned();
         assert!(matches!(
             fixture.prevalidate()?,
             Err(CompanionPairingFailure::ProviderManifestMismatch)
@@ -443,8 +454,14 @@ mod tests {
             )],
             active_vault_store_id: ActiveVaultScope::StoreId("store-1".to_owned()),
         };
-        replacement.providers[0].store_id = ProviderVaultScope::StoreId("store-1".to_owned());
-        replacement.seal_credentials_for(&other.public_key())?;
+        replacement
+            .providers
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("replacement provider must be present"))?
+            .store_id = ProviderVaultScope::StoreId("store-1".to_owned());
+        replacement = replacement
+            .seal_credentials_for(&other.public_key())
+            .map_err(nook_core::ProviderCredentialRejection::into_cause)?;
         fixture.providers = replacement;
         fixture.refresh_manifest()?;
         assert!(matches!(

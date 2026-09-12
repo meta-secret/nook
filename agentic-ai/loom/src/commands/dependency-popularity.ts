@@ -1,16 +1,91 @@
+import type { ManifestFailure } from '../lib/dependency-popularity/scan.ts';
+import { err, ok, type Result } from 'neverthrow';
+import type { RegistryFailure } from '../lib/dependency-popularity/registry-response.ts';
 import type { DependencyPopularityRequest } from '../codec/args/dependency-popularity.ts';
-import { fetchCrateMetrics } from '../lib/dependency-popularity/crates.ts';
-import { evaluatePopularity } from '../lib/dependency-popularity/evaluate.ts';
-import { fetchNpmPackageMetrics } from '../lib/dependency-popularity/npm.ts';
-import { scanRepositoryManifests } from '../lib/dependency-popularity/scan.ts';
+
+import { CrateRegistryMetrics } from '../lib/dependency-popularity/crates.ts';
+
+import { DependencyPopularityPolicy } from '../lib/dependency-popularity/evaluate.ts';
+
+import { NpmRegistryMetrics } from '../lib/dependency-popularity/npm.ts';
+
+import { RepositoryDependencyInventory } from '../lib/dependency-popularity/scan.ts';
+
 import {
   PopularityVerdict,
   type PopularityFinding,
   type PopularityThresholds,
 } from '../lib/dependency-popularity/types.ts';
-import { findRepoRoot } from '../lib/repo.ts';
+
+import { RepositoryRoot } from '../lib/repo.ts';
 
 import type { EvaluatePopularityArgs } from '../lib/dependency-popularity/evaluate.ts';
+
+export class DependencyPopularityCommand {
+  constructor(private readonly request: DependencyPopularityRequest) {}
+  async execute(): Promise<
+    Result<DependencyPopularityReport, RegistryFailure | ManifestFailure>
+  > {
+    const request = this.request;
+    const thresholds: PopularityThresholds = {
+      minNpmWeeklyDownloads: request.minNpmWeeklyDownloads,
+      minGitHubStars: request.minGitHubStars,
+      minCratesIoDownloads: request.minCratesIoDownloads,
+      minCratesIoRecentDownloads: request.minCratesIoRecentDownloads,
+    };
+    const npmPackages: string[] = [];
+    const rustCrates: string[] = [];
+    if (request.includeRepositoryManifests) {
+      const discovery1 = new RepositoryRoot().locate();
+      if (discovery1.isErr()) return err(discovery1.error);
+      const scanned = new RepositoryDependencyInventory(
+        discovery1.value,
+      ).scanRepositoryManifests();
+      if (scanned.isErr()) return err(scanned.error);
+      npmPackages.push(...scanned.value.npmPackages);
+      rustCrates.push(...scanned.value.rustCrates);
+    }
+
+    const findings: PopularityFinding[] = [];
+    for (const name of npmPackages) {
+      const metrics = await new NpmRegistryMetrics(name).execute();
+      if (metrics.isErr()) return err(metrics.error);
+      const evaluatePopularityArgs2: EvaluatePopularityArgs = {
+        metrics: metrics.value,
+        thresholds,
+      };
+      findings.push(
+        new DependencyPopularityPolicy(
+          evaluatePopularityArgs2.thresholds,
+        ).evaluate(evaluatePopularityArgs2.metrics),
+      );
+    }
+    for (const name of rustCrates) {
+      const metrics = await new CrateRegistryMetrics(name).execute();
+      if (metrics.isErr()) return err(metrics.error);
+      const evaluatePopularityArgs: EvaluatePopularityArgs = {
+        metrics: metrics.value,
+        thresholds,
+      };
+      findings.push(
+        new DependencyPopularityPolicy(
+          evaluatePopularityArgs.thresholds,
+        ).evaluate(evaluatePopularityArgs.metrics),
+      );
+    }
+
+    return ok({
+      ok: findings.every(
+        (finding) => finding.verdict === PopularityVerdict.Pass,
+      ),
+      thresholds,
+      npmPackages,
+      rustCrates,
+      findings,
+    });
+  }
+}
+
 export type DependencyPopularityReport = {
   readonly ok: boolean;
   readonly thresholds: PopularityThresholds;
@@ -18,47 +93,3 @@ export type DependencyPopularityReport = {
   readonly rustCrates: readonly string[];
   readonly findings: readonly PopularityFinding[];
 };
-
-export async function runDependencyPopularity(
-  request: DependencyPopularityRequest,
-): Promise<DependencyPopularityReport> {
-  const thresholds: PopularityThresholds = {
-    minNpmWeeklyDownloads: request.minNpmWeeklyDownloads,
-    minGitHubStars: request.minGitHubStars,
-    minCratesIoDownloads: request.minCratesIoDownloads,
-    minCratesIoRecentDownloads: request.minCratesIoRecentDownloads,
-  };
-  const npmPackages: string[] = [];
-  const rustCrates: string[] = [];
-  if (request.includeRepositoryManifests) {
-    const scanned = scanRepositoryManifests(findRepoRoot());
-    npmPackages.push(...scanned.npmPackages);
-    rustCrates.push(...scanned.rustCrates);
-  }
-
-  const findings: PopularityFinding[] = [];
-  for (const name of npmPackages) {
-    const metrics = await fetchNpmPackageMetrics(name);
-    const evaluatePopularityArgs2: EvaluatePopularityArgs = {
-      metrics,
-      thresholds,
-    };
-    findings.push(evaluatePopularity(evaluatePopularityArgs2));
-  }
-  for (const name of rustCrates) {
-    const metrics = await fetchCrateMetrics(name);
-    const evaluatePopularityArgs: EvaluatePopularityArgs = {
-      metrics,
-      thresholds,
-    };
-    findings.push(evaluatePopularity(evaluatePopularityArgs));
-  }
-
-  return {
-    ok: findings.every((finding) => finding.verdict === PopularityVerdict.Pass),
-    thresholds,
-    npmPackages,
-    rustCrates,
-    findings,
-  };
-}

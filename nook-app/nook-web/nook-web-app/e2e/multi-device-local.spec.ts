@@ -1,3 +1,4 @@
+import { ProviderSyncFreshness } from '$app-wasm'
 import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
   approveJoinLocalE2eFromBanner,
@@ -14,9 +15,12 @@ import {
   sendJoinRequestLocalE2e,
   triggerVaultSyncRefresh,
   waitForSyncRemoteVaultState,
+  requireValue,
   waitForPendingJoinBanner,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
+import { refreshJoinerVaultOnLoginGate } from './helpers/joiner-vault-refresh'
+import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 
 test.describe('multi-device local vault with sync provider', () => {
   test.describe.configure({ mode: 'serial' })
@@ -82,7 +86,8 @@ test.describe('multi-device local vault with sync provider', () => {
         stub,
         (snapshot) => snapshot.joinEntries.length === 1,
       )
-    ).joinEntries[0]!
+    ).joinEntries[0]
+    if (!join) throw new Error('Expected a pending join entry in remote log')
 
     await triggerVaultSyncRefresh(deviceA)
     await expect(deviceA.getByTestId('vault-last-sync')).toContainText(
@@ -132,26 +137,12 @@ test.describe('multi-device local vault with sync provider', () => {
           if (await deviceA.getByTestId('pending-joins-banner').isVisible()) {
             return true
           }
-          await deviceA.evaluate(async () => {
-            const vault = (
-              window as Window & {
-                __nookVault?: {
-                  syncFromStorage?: (opts?: {
-                    force?: boolean
-                  }) => Promise<void>
-                }
-              }
-            ).__nookVault
-            await vault?.syncFromStorage?.({ force: true })
+          await deviceA.evaluate(refreshJoinerVaultOnLoginGate, {
+            freshness: ProviderSyncFreshness.Forced,
+            authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
           })
           await deviceA.evaluate(async () => {
-            const vault = (
-              window as Window & {
-                __nookVault?: {
-                  refreshPendingJoinsFromProviders?: () => Promise<void>
-                }
-              }
-            ).__nookVault
+            const vault = window.__nookVault
             await vault?.refreshPendingJoinsFromProviders?.()
           })
           return deviceA.getByTestId('pending-joins-banner').isVisible()
@@ -175,5 +166,5 @@ async function parseJoinFromStub(stub: {
   if (snapshot.joinEntries.length === 0) {
     throw new Error('Expected a pending join entry in remote event log')
   }
-  return snapshot.joinEntries[0]!
+  return requireValue(snapshot.joinEntries[0], 'pending join entry')
 }

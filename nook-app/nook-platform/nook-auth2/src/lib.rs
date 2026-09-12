@@ -1,12 +1,34 @@
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
     forbid(invalid_raw_numeric_api_suppression)
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
 #![allow(
+    clippy::doc_markdown,
+    clippy::double_must_use,
+    clippy::elidable_lifetime_names,
+    clippy::items_after_test_module,
+    clippy::manual_let_else,
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,
-    clippy::uninlined_format_args
+    clippy::must_use_candidate,
+    clippy::needless_borrow,
+    clippy::needless_lifetimes,
+    clippy::needless_pass_by_value,
+    clippy::needless_raw_string_hashes,
+    clippy::redundant_field_names,
+    clippy::result_large_err,
+    clippy::return_self_not_must_use,
+    clippy::single_match,
+    clippy::single_match_else,
+    clippy::too_many_lines,
+    clippy::uninlined_format_args,
+    clippy::wildcard_imports
 )]
 
 //! Portable vault authentication and key-access primitives.
@@ -17,7 +39,9 @@
 //! those mechanisms resolve. Storage providers and replication stay outside
 //! this crate.
 
-pub mod errors;
+mod member_label;
+pub use member_label::MemberLabelState;
+mod errors;
 
 mod auth;
 mod crypto;
@@ -44,14 +68,27 @@ pub use auth::enrollment::{
     SharedProviderGrant, TypedEnrollmentProvider,
 };
 pub use auth::identity::{
-    IdentityId, IdentityMember, IdentityRecord, IdentityVaultDek, IdentityVaultDekEpoch,
-    IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, MemberDekEnvelope,
-    identity_fingerprint,
+    IdentityId, IdentityLegacyVaultImport, IdentityLegacyVaultReconciliation, IdentityMember,
+    IdentityMemberKeyBinding, IdentityMemberSigningUpdate, IdentityMemberVaultGrant,
+    IdentityRecord, IdentityRecordRejection, IdentityVaultAppEnvelopes, IdentityVaultBinding,
+    IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
+    IdentityVaultDekReconciliation, IdentityVaultKeyOpening, IdentityVaultKeys, MemberDekEnvelope,
 };
-pub use auth::identity_directory::{IdentityDirectory, IdentitySelection};
-pub use auth::identity_genesis::identity_vault_genesis_records;
+pub use auth::identity_directory::{
+    AppKeyIdentityMembership, DirectoryCreationEnrollment, DirectoryLegacyMigration,
+    DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
+    DirectoryVaultEnrollment, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
+    IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentitySelection,
+    LegacyDirectoryBase, LocalIdentityKeyRetirement, MigratedIdentityDirectory,
+    PreparedLegacyDirectoryMigration, RecoveryRetirement, StagedIdentityRebase,
+};
+
 pub use auth::local_identity_keyring::{
+    IdentitySigningSeedProtection, KeyringEntryRejection, KeyringRejection,
     LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
+    LocalIdentityProtection, ProtectedIdentityKeyring, ProtectedSigningEntry,
+    ProtectedSigningMaterial, RemovedLocalIdentityKey, SigningSeedProtection,
+    WrappedAppKeyReplacement,
 };
 #[cfg(any(test, feature = "mock-passkey"))]
 pub use auth::mock_passkey::{
@@ -69,18 +106,12 @@ pub use nook_authenticator_domain::PasskeyDeviceProtectionMode;
 pub mod multi_device_api {
     pub use crate::auth::multi_device::{
         AppKey, AuthEnvelopes, AuthRecordIssuance, ConnectAccessStatus, DeviceEnrollment,
-        DeviceIdentity, JoinRequest, JoinRequestApproval, JoinRequestDenial, JoinRequestIssuance,
-        MEMBER_RECORD_PREFIX, MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX,
-        SelfRosterSync, SentinelKeyReconstruction, SentinelParticipantEntry, SentinelShareEnvelope,
-        SentinelShareOpening, SentinelShareVersion, VaultKeys, VaultMember, VaultMetaRecord,
-        VaultMetaState, VaultRecordView, assess_connect_access, build_members_records,
-        count_sentinel_share_records, create_sentinel_root_share_records_for_recipients,
-        create_sentinel_share_records, create_sentinel_share_records_for_recipients,
-        device_is_enrolled, encrypt_member_entry, ensure_self_in_roster, genesis_members_records,
-        is_sentinel_share_stored_record, member_from_identity, member_from_join,
-        parse_sentinel_share_envelope, pending_join_for_device, rename_vault_member,
-        replace_member_records, resolve_member_roster, revoke_vault_member, roster_add_member,
-        sentinel_share_record_key,
+        DeviceIdentity, DeviceJoinStatus, JoinRequest, JoinRequestApproval, JoinRequestDenial,
+        JoinRequestIssuance, MEMBER_RECORD_PREFIX, MemberEntry, OpenedSentinelShare,
+        SENTINEL_SHARE_RECORD_PREFIX, SelfRosterSync, SentinelKeyReconstruction,
+        SentinelParticipantEntry, SentinelShareEnvelope, SentinelShareOpening,
+        SentinelShareVersion, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
+        VaultRecordView,
     };
 }
 pub use auth::password_envelope::{
@@ -98,8 +129,8 @@ pub use auth::sentinel_genesis::{
     SentinelGenesisShareDelivery, SentinelGenesisVersion,
 };
 pub use auth::sentinel_unlock::{
-    CheckedSentinelUnlockRequest, SentinelUnlockPolicy, SentinelUnlockQuorum,
-    SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
+    CheckedSentinelUnlockRequest, ContextBoundSentinelUnlock, SentinelUnlockPolicy,
+    SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
     SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus, SentinelUnlockVersion,
 };
 pub use crypto::vault_crypto::VaultCrypto;
@@ -114,9 +145,29 @@ pub use ids::{
     STORE_ID_PREFIX, SecretId, StoreId,
 };
 pub use multi_device_api::*;
-pub use records::{SecretType, StoredRecordPayload, StoredSecretRecord};
+pub use records::{RecordTypeDeclaration, SecretType, StoredRecordPayload, StoredSecretRecord};
 pub use wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, IdentityVaultEventId, IsoTimestamp, MemberLabel, OpaqueCiphertext,
     PasswordEntryId, Sha256Hex, SigningSeedHex, SymmetricKey, Url64EncodedString,
+};
+
+pub use auth::identity_genesis::IdentityVaultGenesisRecordsRequest;
+
+pub use auth::multi_device::{
+    BuildMembersRecordsRequest, DecryptMemberEntryRequest, EncryptMemberEntryRequest,
+    GenesisMembersRecordsRequest, MemberFromIdentityRequest, RenameVaultMemberRequest,
+    ReplaceMemberRecordsRequest, ResolveMemberRosterRequest, RevokeVaultMemberRequest,
+};
+
+pub use auth::multi_device::{
+    AssessConnectAccessRequest, DeviceIsEnrolledRequest, EnsureSelfInRosterRequest,
+    PendingJoinForDeviceRequest,
+};
+
+pub use auth::multi_device::RosterAddMemberRequest;
+
+pub use auth::multi_device::{
+    CreateSentinelRootShareRecordsForRecipientsRequest,
+    CreateSentinelShareRecordsForRecipientsRequest, CreateSentinelShareRecordsRequest,
 };

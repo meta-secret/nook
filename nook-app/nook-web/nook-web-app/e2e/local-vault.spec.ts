@@ -13,6 +13,7 @@ import {
   mockBip39Wordlist,
   readPersistedAppLogs,
   revealSecretInRow,
+  requireValue,
   UI_TIMEOUT_MS,
   uniqueSecretKey,
   unlockVaultOnLogin,
@@ -255,15 +256,7 @@ test.describe('local vault', () => {
 
     const otherTab = await page.context().newPage()
     await otherTab.goto('/')
-    await otherTab.waitForFunction(() =>
-      Boolean(
-        (
-          window as Window & {
-            __nookVault?: { enqueueStorage: (operation: () => void) => void }
-          }
-        ).__nookVault,
-      ),
-    )
+    await otherTab.waitForFunction(() => Boolean(window.__nookVault))
     await otherTab.evaluate(() => {
       sessionStorage.setItem('nook_cleanup_probe', 'other-tab-session')
     })
@@ -406,14 +399,7 @@ test.describe('local vault', () => {
     await expect
       .poll(() =>
         otherTab.evaluate(async () => {
-          const vault = (
-            window as Window & {
-              __nookVault?: {
-                enqueueStorage: (operation: () => void) => Promise<void>
-                isAuthenticated: boolean
-              }
-            }
-          ).__nookVault
+          const vault = window.__nookVault
           if (!vault || vault.isAuthenticated) return false
           const cleanupProbe = sessionStorage
             .getItem('nook_cleanup_probe')
@@ -422,7 +408,7 @@ test.describe('local vault', () => {
             return false
           }
           try {
-            await vault.enqueueStorage(() => {})
+            await vault.enqueueStorage(() => vault.admitManager())
             return true
           } catch {
             return false
@@ -735,7 +721,12 @@ test.describe('local vault', () => {
     expect(download.suggestedFilename()).toBe('recovery.txt')
     const downloadPath = await download.path()
     expect(downloadPath).toBeTruthy()
-    expect(readFileSync(downloadPath!, 'utf8')).toBe(fileContents)
+    expect(
+      readFileSync(
+        requireValue(downloadPath, 'attachment download path'),
+        'utf8',
+      ),
+    ).toBe(fileContents)
 
     await flushNookLogPersistQueue(page)
     const logs = await readPersistedAppLogs(page, 500)

@@ -1,40 +1,65 @@
-export const VAULT_ASSESS_TIMEOUT_ERROR_NAME = "VaultAssessTimeoutError";
+import { err, type Result } from "neverthrow";
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from "$lib/runtime/storage-failure";
 
-export type VaultDiscoveryTimeout = {
-  completion: Promise<never>;
-  cancel(): void;
+enum DiscoveryDeadlineState {
+  Waiting = "waiting",
+  Expired = "expired",
+  Completed = "completed",
+}
+
+type DiscoveryDeadlineRequest = { readonly timeoutMs: number };
+type DiscoveryCompletion<T, E> = {
+  readonly operation: Promise<Result<T, E>>;
+  readonly releaseLateValue: (value: T) => void;
 };
 
-type VaultDiscoveryTimeoutSchedule = {
-  readonly message: string;
-  readonly timeoutMs: number;
-};
+/** Owns discovery's deadline and rejects publication of late native handles. */
+export class VaultDiscoveryTimeout {
+  private state = DiscoveryDeadlineState.Waiting;
+  private readonly controller = new AbortController();
+  readonly completion: Promise<Result<never, VaultStorageFailure>>;
 
-export function startVaultDiscoveryTimeout({
-  message,
-  timeoutMs,
-}: VaultDiscoveryTimeoutSchedule): VaultDiscoveryTimeout {
-  const controller = new AbortController();
-  // eslint-disable-next-line max-params -- Promise owns this positional executor signature.
-  const completion = new Promise<never>((_, reject) => {
-    const timer = setTimeout(() => {
-      const timeoutError = new Error(message);
-      timeoutError.name = VAULT_ASSESS_TIMEOUT_ERROR_NAME;
-      reject(timeoutError);
-    }, timeoutMs);
-    const addEventListenerArgs: Parameters<
-      typeof controller.signal.addEventListener
-    >[2] = {
-      once: true,
-    };
-    controller.signal.addEventListener(
-      "abort",
-      () => clearTimeout(timer),
-      addEventListenerArgs,
-    );
-  });
-  return {
-    completion,
-    cancel: () => controller.abort(),
-  };
+  constructor({ timeoutMs }: DiscoveryDeadlineRequest) {
+    this.completion = new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.state = DiscoveryDeadlineState.Expired;
+        resolve(err(new VaultStorageFailure(VaultStorageFailureKind.TimedOut)));
+      }, timeoutMs);
+      this.controller.signal.addEventListener(
+        "abort",
+        () => clearTimeout(timer),
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        {
+          once: true,
+        },
+      );
+    });
+  }
+
+  async waitFor<T, E>({
+    operation,
+    releaseLateValue,
+  }: DiscoveryCompletion<T, E>): Promise<Result<T, E | VaultStorageFailure>> {
+    const observed = operation.then((outcome) => {
+      if (this.state === DiscoveryDeadlineState.Expired && outcome.isOk()) {
+        releaseLateValue(outcome.value);
+        return err(new VaultStorageFailure(VaultStorageFailureKind.TimedOut));
+      }
+      return outcome;
+    });
+    try {
+      return await Promise.race([observed, this.completion]);
+    } finally {
+      this.cancel();
+    }
+  }
+
+  cancel(): void {
+    this.controller.abort();
+    if (this.state === DiscoveryDeadlineState.Waiting)
+      this.state = DiscoveryDeadlineState.Completed;
+  }
 }

@@ -2,6 +2,7 @@ import { expect, type Page } from '@playwright/test'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS } from './environment'
 import { unlockVaultOnLogin } from './settings-auth'
 import { disableVaultIdleLock, waitForStorageChainIdle } from './vault-runtime'
+import { requireValue } from './guards'
 
 export async function openLoginProviderSetup(page: Page) {
   if (await page.getByTestId('provider-picker-list').isVisible()) {
@@ -86,13 +87,21 @@ export async function createLocalVaultOnLogin(
   // Deferred passkey: empty create may show the top-right overlay first.
   const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
   const readySurface = page.getByTestId(readyTestId)
+  const vaultError = page.getByTestId('vault-error')
   await expect
     .poll(
       async () =>
-        (await passkeyOverlay.isVisible()) || (await readySurface.isVisible()),
+        (await passkeyOverlay.isVisible()) ||
+        (await readySurface.isVisible()) ||
+        (await vaultError.isVisible()),
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(true)
+  if (await vaultError.isVisible()) {
+    throw new Error(
+      `Local vault creation failed: ${await vaultError.innerText()}`,
+    )
+  }
   if (await passkeyOverlay.isVisible()) {
     const createChoice = page.getByTestId('device-protection-create-new-choice')
     if (await createChoice.isVisible()) {
@@ -203,6 +212,8 @@ export async function fillSeedPhraseGrid(page: Page, words: readonly string[]) {
     await page.getByTestId('seed-word-count-24').click()
   }
   for (let index = 0; index < words.length; index += 1) {
-    await page.getByTestId(`seed-word-${index + 1}`).fill(words[index]!)
+    await page
+      .getByTestId(`seed-word-${index + 1}`)
+      .fill(requireValue(words[index], `seed word ${index + 1}`))
   }
 }

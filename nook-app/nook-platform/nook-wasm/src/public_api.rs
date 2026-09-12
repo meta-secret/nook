@@ -1,11 +1,15 @@
-use super::{NookLocalFolderConfig, NookStorageConnectArgs, passkey_browser, wasm_bindgen};
+use super::{NookLocalFolderConfig, NookStorageConnectArgs, wasm_bindgen};
+use crate::BrowserPasskeyRequestOptions;
+use crate::VaultSessionLock;
 use crate::storage::local_folder::LocalFolderHandles;
-use crate::storage::session;
 use crate::types::{NookManagerStoreScope, NookProviderSyncRevision};
-use nook_core::StagedRemoteConnection;
+use crate::{BrowserCredentialCreationOptions, BrowserCredentialRequestOptions};
+use crate::{BrowserPasskeyClient, BrowserPasskeyCreationOptions, NookTotpCode};
+use nook_core::{PasswordGenerationOptions, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret};
+use nook_core::{StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection};
 use nook_core::{
-    PasswordGenerationOptions, StorageProviderType, TotpAlgorithm, TotpDigits, TotpPeriod,
-    TotpSecret,
+    StoredGithubPat, StoredGithubRepository, StoredLocalFolderHandle, StoredOAuthAccessCredential,
+    StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
 };
 use wasm_bindgen::JsError;
 
@@ -32,37 +36,41 @@ pub use shared_storage_grant::*;
 
 #[wasm_bindgen]
 #[must_use]
-pub fn is_vault_session_locked() -> bool {
-    session::is_vault_session_locked()
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_vault_session_locked() -> bool {
+    VaultSessionLock::is_vault_session_locked()
 }
 
 #[wasm_bindgen]
-pub fn set_vault_session_locked(locked: bool) {
-    session::set_vault_session_locked(locked);
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn set_vault_session_locked(locked: bool) {
+    VaultSessionLock::set_vault_session_locked(if locked {
+        VaultSessionLock::Locked
+    } else {
+        VaultSessionLock::Unlocked
+    });
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn is_local_folder_backup_supported() -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_local_folder_backup_supported() -> bool {
     NookLocalFolderConfig::is_supported()
 }
 
 #[wasm_bindgen]
-pub async fn choose_local_folder_backup_directory()
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn choose_local_folder_backup_directory()
 -> Result<NookLocalFolderConfig, wasm_bindgen::JsError> {
     NookLocalFolderConfig::choose().await.map_err(Into::into)
 }
 
 #[wasm_bindgen]
-pub async fn remove_local_folder_handle(handle_id: String) -> Result<(), wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn remove_local_folder_handle(handle_id: String) -> Result<(), wasm_bindgen::JsError> {
     LocalFolderHandles::current()
-        .remove(Some(handle_id))
+        .remove(handle_id)
         .await
         .map_err(Into::into)
 }
 
 #[wasm_bindgen]
-pub fn generate_id() -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn generate_id() -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::CompactToken::generate()?.to_string())
 }
 
@@ -75,12 +83,16 @@ pub fn generate_id() -> Result<String, wasm_bindgen::JsError> {
         reason = "FFI boundary: exchanges `build_passkey_prf_request_options` bytes with JavaScript as a Uint8Array"
     )
 )]
-pub fn build_passkey_prf_request_options(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn build_passkey_prf_request_options(
     rp_id: &str,
     credential_id: Vec<u8>,
     prf_input: Vec<u8>,
-) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
-    passkey_browser::request_options(rp_id, &credential_id, &prf_input)
+) -> Result<BrowserCredentialRequestOptions, wasm_bindgen::JsError> {
+    BrowserPasskeyClient::request_options(BrowserPasskeyRequestOptions {
+        rp_id,
+        credential_id: &credential_id,
+        prf_input: &prf_input,
+    })
 }
 
 #[wasm_bindgen]
@@ -92,25 +104,31 @@ pub fn build_passkey_prf_request_options(
         reason = "FFI boundary: exchanges `build_passkey_creation_options` bytes with JavaScript as a Uint8Array"
     )
 )]
-pub fn build_passkey_creation_options(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn build_passkey_creation_options(
     rp_id: &str,
     rp_name: &str,
     passkey_label: &str,
     user_handle: Vec<u8>,
     prf_input: Vec<u8>,
-) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
-    passkey_browser::creation_options(rp_id, rp_name, passkey_label, &user_handle, &prf_input)
+) -> Result<BrowserCredentialCreationOptions, wasm_bindgen::JsError> {
+    BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
+        rp_id,
+        rp_name,
+        passkey_label,
+        user_handle: &user_handle,
+        prf_input: &prf_input,
+    })
 }
 
 #[wasm_bindgen]
-pub fn build_passkey_recovery_request_options(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn build_passkey_recovery_request_options(
     rp_id: &str,
-) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
-    passkey_browser::recovery_options(rp_id)
+) -> Result<BrowserCredentialRequestOptions, wasm_bindgen::JsError> {
+    BrowserPasskeyClient::recovery_options(rp_id)
 }
 
 #[wasm_bindgen]
-pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::SecretId::generate()?.to_string())
 }
 
@@ -118,16 +136,16 @@ pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
 /// call it while the vault manager is borrowed by an in-flight `&mut self` op.
 #[wasm_bindgen]
 #[must_use]
-pub fn default_password_generation_options() -> nook_core::PasswordGenerationOptions {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn default_password_generation_options() -> nook_core::PasswordGenerationOptions {
     PasswordGenerationOptions::default()
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn generate_password(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn generate_password(
     options: nook_core::PasswordGenerationOptions,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::generate_password(options)?)
+    Ok(PasswordGenerationOptions::generate(options)?)
 }
 
 /// Generate an RFC 6238 TOTP code from a base32 secret via `nook-core`.
@@ -139,11 +157,11 @@ pub fn generate_password(
         reason = "FFI boundary: accepts the TOTP Unix timestamp from JavaScript as a bigint"
     )
 )]
-pub fn generate_totp_code(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn generate_totp_code(
     secret: &str,
     unix_seconds: u64,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(authenticator_from_secret(secret)?
+    Ok(NookTotpCode::authenticator_from_secret(secret)?
         .current_code(unix_seconds.into())
         .map_err(|error| JsError::new(&error.to_string()))?
         .code)
@@ -158,12 +176,12 @@ pub fn generate_totp_code(
         reason = "FFI boundary: accepts the TOTP verification Unix timestamp from JavaScript as a bigint"
     )
 )]
-pub fn verify_totp_code(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn verify_totp_code(
     secret: &str,
     code: &str,
     unix_seconds: u64,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    let authenticator = authenticator_from_secret(secret)?;
+    let authenticator = NookTotpCode::authenticator_from_secret(secret)?;
     let trimmed = code.trim();
     if trimmed.len() < 6 || trimmed.len() > 8 || !trimmed.bytes().all(|b| b.is_ascii_digit()) {
         return Ok(false);
@@ -185,19 +203,21 @@ pub fn verify_totp_code(
     Ok(false)
 }
 
-fn authenticator_from_secret(
-    secret: &str,
-) -> Result<nook_core::AuthenticatorSecret, wasm_bindgen::JsError> {
-    Ok(nook_core::AuthenticatorSecret {
-        issuer: "Nook".to_owned(),
-        account: String::new(),
-        website_url: String::new(),
-        secret: TotpSecret::parse(secret).map_err(|error| JsError::new(&error.to_string()))?,
-        algorithm: TotpAlgorithm::Sha1,
-        digits: TotpDigits::default(),
-        period: TotpPeriod::default(),
-        backup_codes: Vec::new(),
-    })
+impl NookTotpCode {
+    fn authenticator_from_secret(
+        secret: &str,
+    ) -> Result<nook_core::AuthenticatorSecret, wasm_bindgen::JsError> {
+        Ok(nook_core::AuthenticatorSecret {
+            issuer: "Nook".to_owned(),
+            account: String::new(),
+            website_url: String::new(),
+            secret: TotpSecret::parse(secret).map_err(|error| JsError::new(&error.to_string()))?,
+            algorithm: TotpAlgorithm::Sha1,
+            digits: TotpDigits::default(),
+            period: TotpPeriod::default(),
+            backup_codes: Vec::new(),
+        })
+    }
 }
 
 #[wasm_bindgen]
@@ -209,7 +229,7 @@ fn authenticator_from_secret(
         reason = "FFI boundary: projects the `vault_password_min_length` count through a JavaScript Number scalar"
     )
 )]
-pub fn vault_password_min_length() -> u32 {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn vault_password_min_length() -> u32 {
     u32::try_from(usize::from(nook_core::PasswordPolicy::min_length())).unwrap_or(u32::MAX)
 }
 
@@ -222,7 +242,7 @@ pub fn vault_password_min_length() -> u32 {
         reason = "FFI boundary: projects the `vault_password_recommended_min_length` count through a JavaScript Number scalar"
     )
 )]
-pub fn vault_password_recommended_min_length() -> u32 {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn vault_password_recommended_min_length() -> u32 {
     u32::try_from(usize::from(
         nook_core::PasswordPolicy::recommended_min_length(),
     ))
@@ -231,37 +251,47 @@ pub fn vault_password_recommended_min_length() -> u32 {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn is_vault_password_long_enough(password: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_vault_password_long_enough(password: &str) -> bool {
     nook_core::PasswordPolicy::is_long_enough(password)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn is_vault_password_recommended_length(password: &str) -> bool {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_vault_password_recommended_length(password: &str) -> bool {
     nook_core::PasswordPolicy::is_recommended_length(password)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn has_github_credentials(pat: &str) -> bool {
-    StorageProviderType::Github.has_credentials(Some(pat), None, None)
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_github_credentials(pat: &str) -> bool {
+    nook_core::ProviderCredentialEvidence::Github(&StoredGithubPat::Token(pat.to_owned()))
+        .readiness()
+        == nook_core::ProviderCredentialReadiness::Ready
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn has_oauth_credentials(access_token: &str) -> bool {
-    StorageProviderType::OauthFile.has_credentials(None, Some(access_token), None)
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_oauth_credentials(access_token: &str) -> bool {
+    nook_core::ProviderCredentialEvidence::OAuth(&StoredOAuthAccessCredential::AccessToken(
+        access_token.to_owned(),
+    ))
+    .readiness()
+        == nook_core::ProviderCredentialReadiness::Ready
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn has_local_folder_credentials(handle_id: &str) -> bool {
-    StorageProviderType::LocalFolder.has_credentials(None, None, Some(handle_id))
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_local_folder_credentials(handle_id: &str) -> bool {
+    nook_core::ProviderCredentialEvidence::LocalFolder(&StoredLocalFolderHandle::HandleId(
+        handle_id.to_owned(),
+    ))
+    .readiness()
+        == nook_core::ProviderCredentialReadiness::Ready
 }
 
 #[wasm_bindgen]
 #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
-pub fn provider_storage_detail(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_storage_detail(
     provider: nook_core::StorageProviderData,
     this_device_desc: String,
     no_token_saved: String,
@@ -285,7 +315,7 @@ pub fn provider_storage_detail(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn localize_provider_label(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn localize_provider_label(
     label: &str,
     this_device: String,
     github: String,
@@ -305,7 +335,7 @@ pub fn localize_provider_label(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn oauth_remote_storage_ref(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn oauth_remote_storage_ref(
     config: nook_core::OAuthFileConfigData,
 ) -> NookOAuthRemoteStorageReference {
     NookOAuthRemoteStorageReference::new(config.remote_storage_ref())
@@ -313,7 +343,7 @@ pub fn oauth_remote_storage_ref(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn update_oauth_remote_ref(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn update_oauth_remote_ref(
     config: nook_core::OAuthFileConfigData,
     remote_ref: &str,
 ) -> NookOAuthRemoteConfigurationUpdate {
@@ -321,53 +351,43 @@ pub fn update_oauth_remote_ref(
 }
 
 #[wasm_bindgen]
-pub fn staged_github_remote_storage_args(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_github_remote_storage_args(
     github_pat: &str,
     github_repo: &str,
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
-        StagedRemoteConnection {
-            provider_type: StorageProviderType::Github,
-            github_pat: Some(github_pat),
-            github_repo: Some(github_repo),
-            oauth_file: None,
-        }
+        StagedRemoteConnection::Github(StagedGithubConnection {
+            credential: &StoredGithubPat::Token((github_pat).to_owned()),
+            repository: &StoredGithubRepository::Repository((github_repo).to_owned()),
+        })
         .project()?,
     ))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn staged_oauth_remote_storage_args(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_oauth_remote_storage_args(
     oauth_file: nook_core::OAuthFileConfigData,
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
-        StagedRemoteConnection {
-            provider_type: StorageProviderType::OauthFile,
-            github_pat: None,
-            github_repo: None,
-            oauth_file: Some(&oauth_file),
-        }
+        StagedRemoteConnection::OAuth(StagedOAuthConnection {
+            configuration: &StoredOAuthFileConfiguration::Configured(oauth_file.clone()),
+            file_name: &StoredOAuthRemoteFileName::Unresolved,
+        })
         .project()?,
     ))
 }
 
 #[wasm_bindgen]
-pub fn staged_local_remote_storage_args() -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_local_remote_storage_args() -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
-        StagedRemoteConnection {
-            provider_type: StorageProviderType::Local,
-            github_pat: None,
-            github_repo: None,
-            oauth_file: None,
-        }
-        .project()?,
+        StagedRemoteConnection::Local.project()?,
     ))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn update_provider_sync_metadata(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn update_provider_sync_metadata(
     mut snapshot: nook_core::AuthProvidersSnapshotData,
     provider_id: &str,
     vault_yaml: &str,
@@ -393,8 +413,8 @@ mod browser_tests {
         GoogleDriveMode, ICloudMode, OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope,
         ReplicationType, StorageProviderData, StorageProviderType, StoredGithubPat,
         StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
-        StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
-        StoredOAuthRemoteFileName,
+        StoredLocalFolderConfiguration, StoredOAuthAccessCredential, StoredOAuthAccountIdentity,
+        StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
     };
     use wasm_bindgen_test::*;
 
@@ -425,7 +445,7 @@ mod browser_tests {
                 drive_mode: GoogleDriveMode::Shared,
                 ..Default::default()
             }),
-            local_folder: nook_core::StoredLocalFolderConfiguration::NotApplicable,
+            local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-01-01T00:00:00Z".into(),
@@ -461,10 +481,10 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     fn public_helpers_project_password_totp_and_provider_credentials() {
-        set_vault_session_locked(true);
-        assert!(is_vault_session_locked());
-        set_vault_session_locked(false);
-        assert!(!is_vault_session_locked());
+        VaultSessionLock::set_vault_session_locked(VaultSessionLock::Locked);
+        assert!(VaultSessionLock::is_vault_session_locked());
+        VaultSessionLock::set_vault_session_locked(VaultSessionLock::Unlocked);
+        assert!(!VaultSessionLock::is_vault_session_locked());
         let _ = is_local_folder_backup_supported();
 
         assert!(generate_id().unwrap().len() > 10);
@@ -515,10 +535,7 @@ mod browser_tests {
             ),
             "GitHub"
         );
-        assert_eq!(
-            provider_wasm_args(provider.clone()).unwrap().mode(),
-            "github"
-        );
+        assert_eq!(provider_wasm_args(provider.clone()).unwrap().mode, "github");
 
         let empty = nook_core::AuthProvidersSnapshotData::default();
         let unscoped = NookManagerStoreScope::unscoped();
@@ -631,15 +648,14 @@ mod browser_tests {
             .unwrap(),
             "provider-1"
         );
-        assert!(
-            shared_grant_provider_id(
+        assert!(matches!(
+            select_shared_grant_provider(nook_core::SharedGrantProviderRequest {
                 snapshot,
-                OauthFilePreset::GoogleDrive,
-                nook_core::SharedStorageTargetSelection::Create,
-            )
-            .provider_id()
-            .is_err()
-        );
+                preset: OauthFilePreset::GoogleDrive,
+                target: nook_core::SharedStorageTargetSelection::Create,
+            }),
+            nook_core::SharedGrantProviderOutcome::AuthorizationRequired
+        ));
 
         let updated_drive = set_google_drive_provider_mode(
             nook_core::OAuthFileConfigData::default(),
@@ -680,14 +696,20 @@ mod browser_tests {
             StoredOAuthFileConfiguration::NotApplicable,
         )
         .unwrap();
-        assert!(google.access_token.as_deref().is_some());
+        assert!(matches!(
+            google.access_token,
+            StoredOAuthAccessCredential::AccessToken(_)
+        ));
         let icloud = icloud_oauth_tokens_to_config(
             "access-token",
             StoredOAuthAccountIdentity::Email("alice@example.test".into()),
             StoredOAuthFileConfiguration::NotApplicable,
         )
         .unwrap();
-        assert!(icloud.access_token.as_deref().is_some());
+        assert!(matches!(
+            icloud.access_token,
+            StoredOAuthAccessCredential::AccessToken(_)
+        ));
 
         let github_enrollment =
             enrollment_provider_for_architecture(provider.clone(), &architecture).unwrap();
@@ -717,3 +739,14 @@ mod browser_tests {
         assert!(icloud_shared.is_shared_provider_grant());
     }
 }
+
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn login_unlock_decision(
+    access: nook_core::VaultAccessStatus,
+    passwords: nook_core::PasswordEntryPresence,
+) -> nook_core::LoginUnlockDecision {
+    nook_core::LoginUnlockAssessment { access, passwords }.decide()
+}
+
+mod passkey_material_admission;
+pub use passkey_material_admission::*;

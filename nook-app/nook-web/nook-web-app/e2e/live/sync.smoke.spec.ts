@@ -11,6 +11,7 @@ import {
 } from '../helpers'
 import {
   connectSyncVault,
+  E2eSyncProviderId,
   e2eSyncProviderDef,
   hasLiveSyncCredential,
   liveSyncCredential,
@@ -35,11 +36,11 @@ describeLive(`live ${providerDef.label} sync smoke`, () => {
   let target: SyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
-    if (providerId === 'github') {
+    if (providerId === E2eSyncProviderId.GitHub) {
       const repoName = createE2eGithubRepoName()
-      const pat = liveSyncCredential('github')
+      const pat = liveSyncCredential(E2eSyncProviderId.GitHub)
       await resetGithubVault(pat, repoName)
-      target = { providerId: 'github', pat, repoName }
+      target = { providerId: E2eSyncProviderId.GitHub, pat, repoName }
     } else {
       throw new Error(`${providerDef.label} live smoke not wired yet`)
     }

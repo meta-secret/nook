@@ -93,6 +93,7 @@ COPY --from=nook-formatter \
   bun.lock \
   prettier-default.json \
   prettier-shared-typescript.json \
+  prettier-skill.json \
   prettier-web.json \
   format.sh \
   /opt/nook-formatter/
@@ -116,23 +117,53 @@ FROM toolchain AS chef-planner
 COPY Cargo.toml Cargo.lock ./
 COPY vendor vendor
 COPY hive/Cargo.toml hive/Cargo.toml
-RUN mkdir -p hive/src \
-    && touch hive/src/main.rs
+RUN mkdir -p hive/src/bin \
+    && touch hive/src/lib.rs hive/src/main.rs hive/src/bin/export_observer_contract.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
+FROM toolchain AS fetched-dependencies
+COPY Cargo.toml Cargo.lock ./
+COPY vendor vendor
+COPY hive/Cargo.toml hive/Cargo.toml
+RUN --network=default mkdir -p hive/src/bin \
+    && touch hive/src/lib.rs hive/src/main.rs hive/src/bin/export_observer_contract.rs \
+    && cargo fetch --locked --config net.git-fetch-with-cli=false
+
+# Warm the exporter's debug-profile dependencies independently of Hive source.
+FROM fetched-dependencies AS observer-contract-dependencies
+COPY --from=chef-planner /build/recipe.json recipe.json
+RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
+    cargo chef cook --locked --recipe-path recipe.json -p hive \
+      --features observer-contract-export --bin hive-export-observer-contract \
+    && nook-sccache-report hive-observer-contract-dependencies
+
+# Native contract output is rebuilt from the same Rust sources as this console.
+FROM observer-contract-dependencies AS observer-contract-exporter
+COPY hive/src hive/src
+RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
+    cargo run --locked -p hive --features observer-contract-export \
+      --bin hive-export-observer-contract -- --output /observer-contract
+
 FROM bun AS console-builder
+ENV HIVE_OBSERVER_CONTRACT_INPUT=/usr/local/share/hive-observer-contract
+COPY --from=observer-contract-exporter /observer-contract /usr/local/share/hive-observer-contract
 WORKDIR /console
 COPY hive-console/package.json hive-console/bun.lock ./
 RUN bun install --frozen-lockfile
-COPY hive-console/index.html hive-console/svelte.config.js hive-console/tsconfig.json hive-console/vite.config.ts ./
+COPY hive-console/index.html hive-console/svelte.config.js hive-console/eslint.config.js hive-console/tsconfig.json hive-console/vite.config.ts hive-console/playwright.config.ts ./
+COPY hive-console/e2e e2e
 COPY hive-console/src src
 COPY hive-console/locales locales
+COPY hive-console/scripts scripts
+COPY hive-console/.prettierignore ./
 RUN bun run check \
     && bun run build
 
 # The hosted console check needs Bun, Chromium, and only the console source.
 # Keep it independent from Nook Web's Rust/WASM preparation graph.
 FROM bun AS console-verification
+ENV HIVE_OBSERVER_CONTRACT_INPUT=/usr/local/share/hive-observer-contract
+COPY --from=observer-contract-exporter /observer-contract /usr/local/share/hive-observer-contract
 USER root
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
@@ -148,20 +179,14 @@ FROM bun AS console-formatter
 WORKDIR /console
 COPY hive-console/package.json hive-console/bun.lock ./
 RUN bun install --frozen-lockfile
-COPY hive-console/index.html hive-console/svelte.config.js hive-console/tsconfig.json hive-console/vite.config.ts hive-console/playwright.config.ts hive-console/.prettierrc ./
+COPY hive-console/index.html hive-console/svelte.config.js hive-console/tsconfig.json hive-console/vite.config.ts hive-console/playwright.config.ts hive-console/eslint.config.js hive-console/.prettierrc ./
 COPY hive-console/src src
 COPY hive-console/locales locales
+COPY hive-console/scripts scripts
+COPY hive-console/.prettierignore ./
 COPY hive-console/e2e e2e
 COPY hive-console/PRODUCT.md hive-console/DESIGN.md ./
 RUN bun run format
-
-FROM toolchain AS fetched-dependencies
-COPY Cargo.toml Cargo.lock ./
-COPY vendor vendor
-COPY hive/Cargo.toml hive/Cargo.toml
-RUN --network=default mkdir -p hive/src \
-    && touch hive/src/lib.rs hive/src/main.rs \
-    && cargo fetch --locked --config net.git-fetch-with-cli=false
 
 # Production image builds use a release-profile cargo-chef layer.
 FROM fetched-dependencies AS dependencies
@@ -223,7 +248,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     mkdir -p /opt/nook/hive-tests \
     && eval "$(cargo llvm-cov show-env --export-prefix)" \
-    && CARGO_TARGET_DIR=target/llvm-cov-target cargo test --locked --workspace --no-run --message-format=json \
+    && CARGO_TARGET_DIR=target/llvm-cov-target cargo test --locked --workspace --no-run --message-format=json-render-diagnostics \
       > /tmp/hive-test-artifacts.jsonl \
     && jq -r \
       'select(.reason == "compiler-artifact" and .profile.test == true and .executable != null) | .executable' \

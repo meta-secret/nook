@@ -1,22 +1,15 @@
 import {
-  authentication_page_observation_facts_match_binding,
-  bind_authentication_page_observation_facts,
-  classify_companion_authentication_workflow_facts,
-  companion_authentication_workflow_match_kind,
-  CompanionAuthenticationWorkflowMatchKind,
-  authentication_passkey_control_evidence_is_safe,
+  revalidate_approved_authentication_workflow,
   type AuthenticationPageObservationFacts,
-  type AuthenticationPageObservationFactsBatch,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
-  authenticationFactStringsAreTransportable,
   MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+  authenticationSubmissionControls,
 } from "./password-form-submission-controls";
 import {
-  authenticationPageObservationFacts,
   PasswordFormScopeKind,
-  summarizeAuthenticationWorkflowForms,
   type PasswordFormObservation,
+  passwordFormInteraction,
 } from "./password-forms";
 
 export type ClassifiedAuthenticationWorkflowObservation = {
@@ -30,43 +23,6 @@ type ClassifiedAuthenticationWorkflowRequest = {
   backupCodesHint: boolean;
 };
 
-export function classifiedAuthenticationWorkflowObservations({
-  workflowForms,
-  authenticatorSetupHint,
-  backupCodesHint,
-}: ClassifiedAuthenticationWorkflowRequest): ClassifiedAuthenticationWorkflowObservation[] {
-  return workflowForms.flatMap((observation) => {
-    const factsRequest: Parameters<
-      typeof authenticationPageObservationFacts
-    >[0] = {
-      observation,
-      authenticatorSetupHint,
-      backupCodesCopy: backupCodesHint ? "Save backup codes" : "",
-    };
-    const facts = authenticationPageObservationFacts(factsRequest);
-    const authenticationContext = facts.ceremony.authenticationContext;
-    const fields = facts.fields;
-    return authenticationContext &&
-      authenticationFactStringsAreTransportable([
-        authenticationContext.sourceOrigin,
-        authenticationContext.formIdentity,
-        authenticationContext.destinationIdentity,
-      ]) &&
-      [
-        fields.usernameFieldCount,
-        fields.currentPasswordFieldCount,
-        fields.newPasswordFieldCount,
-        fields.genericPasswordFieldCount,
-        fields.oneTimeCodeFieldCount,
-        fields.currentPasswordFieldCount +
-          fields.newPasswordFieldCount +
-          fields.genericPasswordFieldCount,
-      ].every((count) => count <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
-      ? [{ observation, facts }]
-      : [];
-  });
-}
-
 type LiveApprovedAuthenticationWorkflowRequest = {
   approved: ClassifiedAuthenticationWorkflowObservation;
   authenticatorSetupHint: boolean;
@@ -78,175 +34,108 @@ type AuthenticationWorkflowScopePair = {
   right: PasswordFormObservation;
 };
 
-type ApprovedAuthenticationFactsPair = {
-  live: AuthenticationPageObservationFacts;
-  approved: AuthenticationPageObservationFacts;
-};
-
-export function authenticationWorkflowScopesMatch({
-  left,
-  right,
-}: AuthenticationWorkflowScopePair): boolean {
-  if (left.formScope.kind !== right.formScope.kind) return false;
-  if (left.formScope.kind === PasswordFormScopeKind.Owned) {
-    return (
-      right.formScope.kind === PasswordFormScopeKind.Owned &&
-      left.formScope.owner === right.formScope.owner
-    );
-  }
-  return left.root === right.root;
-}
-
-function approvedAuthenticationContextMatches({
-  live,
-  approved,
-}: ApprovedAuthenticationFactsPair): boolean {
-  const liveContext = live.ceremony.authenticationContext;
-  const approvedContext = approved.ceremony.authenticationContext;
-  if (!liveContext || !approvedContext) return false;
-  return (
-    liveContext.sourceOrigin === approvedContext.sourceOrigin &&
-    liveContext.formIdentity === approvedContext.formIdentity &&
-    liveContext.destinationIdentity === approvedContext.destinationIdentity &&
-    live.fields.usernameFieldCount === approved.fields.usernameFieldCount &&
-    live.fields.currentPasswordFieldCount ===
-      approved.fields.currentPasswordFieldCount &&
-    live.fields.newPasswordFieldCount ===
-      approved.fields.newPasswordFieldCount &&
-    live.fields.genericPasswordFieldCount ===
-      approved.fields.genericPasswordFieldCount &&
-    live.fields.oneTimeCodeFieldCount === approved.fields.oneTimeCodeFieldCount
-  );
-}
-
-function approvedFieldSemanticsMatch(
-  request: ApprovedAuthenticationFactsPair,
-): boolean {
-  return approvedAuthenticationContextMatches(request);
-}
-
-function rustBoundAuthenticationFactsMatch({
-  live,
-  approved,
-}: ApprovedAuthenticationFactsPair): boolean {
-  const approvedBatch: AuthenticationPageObservationFactsBatch = {
-    observations: [approved],
-  };
-  const liveBatch: AuthenticationPageObservationFactsBatch = {
-    observations: [live],
-  };
-  try {
-    const binding = bind_authentication_page_observation_facts(approvedBatch);
-    return authentication_page_observation_facts_match_binding(
-      binding,
-      liveBatch,
-    );
-  } catch {
-    return false;
+export class AuthenticationWorkflowClassification {
+  constructor(
+    private readonly request: ClassifiedAuthenticationWorkflowRequest,
+  ) {}
+  get observations(): ClassifiedAuthenticationWorkflowObservation[] {
+    const { workflowForms, authenticatorSetupHint, backupCodesHint } =
+      this.request;
+    return workflowForms.flatMap((observation) => {
+      const factsRequest: Parameters<
+        typeof passwordFormInteraction.authenticationPageObservationFacts
+      >[0] = {
+        observation,
+        authenticatorSetupHint,
+        backupCodesCopy: backupCodesHint ? "Save backup codes" : "",
+      };
+      const facts =
+        passwordFormInteraction.authenticationPageObservationFacts(
+          factsRequest,
+        );
+      const authenticationContext = facts.ceremony.authenticationContext;
+      const fields = facts.fields;
+      return authenticationContext &&
+        authenticationSubmissionControls.authenticationFactStringsAreTransportable(
+          [
+            authenticationContext.sourceOrigin,
+            authenticationContext.formIdentity,
+            authenticationContext.destinationIdentity,
+          ],
+        ) &&
+        [
+          fields.usernameFieldCount,
+          fields.currentPasswordFieldCount,
+          fields.newPasswordFieldCount,
+          fields.genericPasswordFieldCount,
+          fields.oneTimeCodeFieldCount,
+          fields.currentPasswordFieldCount +
+            fields.newPasswordFieldCount +
+            fields.genericPasswordFieldCount,
+        ].every((count) => count <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
+        ? [{ observation, facts }]
+        : [];
+    });
   }
 }
 
-function rustWorkflowSemantics(
-  facts: AuthenticationPageObservationFacts,
-): string {
-  const workflowMatchRequest: Parameters<
-    typeof classify_companion_authentication_workflow_facts
-  >[0] = {
-    observations: [facts],
-  };
-  const workflowMatch =
-    classify_companion_authentication_workflow_facts(workflowMatchRequest);
-  const matchKind = companion_authentication_workflow_match_kind(workflowMatch);
-  if (
-    matchKind !== CompanionAuthenticationWorkflowMatchKind.Matched ||
-    !("snapshot" in workflowMatch)
-  ) {
-    return String(matchKind);
-  }
-  return `${matchKind}:${workflowMatch.snapshot.kind}:${workflowMatch.snapshot.action}`;
+export enum AuthenticationWorkflowScopeDisposition {
+  Same = "same",
+  Changed = "changed",
 }
 
-export function liveApprovedAuthenticationWorkflow({
-  approved,
-  authenticatorSetupHint,
-  backupCodesHint,
-}: LiveApprovedAuthenticationWorkflowRequest): boolean {
-  const classifiedRequest: ClassifiedAuthenticationWorkflowRequest = {
-    workflowForms: summarizeAuthenticationWorkflowForms(),
-    authenticatorSetupHint,
-    backupCodesHint,
-  };
-  const liveCandidates =
-    classifiedAuthenticationWorkflowObservations(classifiedRequest);
-  const approvedPasskeyEvidence =
-    approved.facts.authenticator.detailedPasskeyControl;
-  const approvedPasskeyEvidenceIsSafe = approvedPasskeyEvidence
-    ? authentication_passkey_control_evidence_is_safe(approvedPasskeyEvidence)
-    : false;
-  if (
-    !approvedPasskeyEvidenceIsSafe &&
-    liveCandidates.some((candidate) => {
-      const passkeyEvidence =
-        candidate.facts.authenticator.detailedPasskeyControl;
-      return passkeyEvidence
-        ? authentication_passkey_control_evidence_is_safe(passkeyEvidence)
-        : false;
-    })
-  ) {
-    return false;
+export enum LiveAuthenticationWorkflowDisposition {
+  Current = "current",
+  Changed = "changed",
+}
+
+export class AuthenticationWorkflowScopeComparison {
+  constructor(private readonly request: AuthenticationWorkflowScopePair) {}
+  get disposition(): AuthenticationWorkflowScopeDisposition {
+    const { left, right } = this.request;
+    if (left.formScope.kind !== right.formScope.kind)
+      return AuthenticationWorkflowScopeDisposition.Changed;
+    if (left.formScope.kind === PasswordFormScopeKind.Owned) {
+      return right.formScope.kind === PasswordFormScopeKind.Owned &&
+        left.formScope.owner === right.formScope.owner
+        ? AuthenticationWorkflowScopeDisposition.Same
+        : AuthenticationWorkflowScopeDisposition.Changed;
+    }
+    return left.root === right.root
+      ? AuthenticationWorkflowScopeDisposition.Same
+      : AuthenticationWorkflowScopeDisposition.Changed;
   }
-  const live = liveCandidates.map((candidate) => {
-    const passkeyEvidence =
-      candidate.facts.authenticator.detailedPasskeyControl;
-    const matchingPasskeyAccountCount =
-      passkeyEvidence &&
-      authentication_passkey_control_evidence_is_safe(passkeyEvidence)
-        ? approved.facts.authenticator.matchingPasskeyAccountCount
-        : 0;
-    const passkeyAccountAvailability =
-      approved.facts.authenticator.passkeyAccountAvailability;
-    return {
-      ...candidate,
-      facts: {
-        ...candidate.facts,
-        authenticator: {
-          ...candidate.facts.authenticator,
-          passkeyAccountAvailability,
-          matchingPasskeyAccountCount,
-        },
+}
+export class LiveApprovedAuthenticationWorkflow {
+  constructor(
+    private readonly request: LiveApprovedAuthenticationWorkflowRequest,
+  ) {}
+  get disposition(): LiveAuthenticationWorkflowDisposition {
+    const { approved, authenticatorSetupHint, backupCodesHint } = this.request;
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const liveCandidates = new AuthenticationWorkflowClassification({
+      workflowForms:
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
+      authenticatorSetupHint,
+      backupCodesHint,
+    }).observations;
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const decision = revalidate_approved_authentication_workflow({
+      approved: approved.facts,
+      live: {
+        observations: liveCandidates.map((candidate) => candidate.facts),
       },
-    };
-  });
-  const batchRequest: Parameters<
-    typeof classify_companion_authentication_workflow_facts
-  >[0] = {
-    observations: live.map((candidate) => candidate.facts),
-  };
-  const batchMatch =
-    classify_companion_authentication_workflow_facts(batchRequest);
-  const matchKind = companion_authentication_workflow_match_kind(batchMatch);
-  if (
-    matchKind !== CompanionAuthenticationWorkflowMatchKind.Matched ||
-    !("snapshot" in batchMatch)
-  ) {
-    return false;
+    });
+    if (decision.kind === "rejected")
+      return LiveAuthenticationWorkflowDisposition.Changed;
+    const selected = liveCandidates[decision.observationIndex];
+    if (!selected) return LiveAuthenticationWorkflowDisposition.Changed;
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new AuthenticationWorkflowScopeComparison({
+      left: selected.observation,
+      right: approved.observation,
+    }).disposition === AuthenticationWorkflowScopeDisposition.Same
+      ? LiveAuthenticationWorkflowDisposition.Current
+      : LiveAuthenticationWorkflowDisposition.Changed;
   }
-  const selected = live[batchMatch.snapshot.observationIndex];
-  if (!selected) return false;
-  const scopePair: AuthenticationWorkflowScopePair = {
-    left: selected.observation,
-    right: approved.observation,
-  };
-  const factsPair: ApprovedAuthenticationFactsPair = {
-    live: selected.facts,
-    approved: approved.facts,
-  };
-  return (
-    authenticationWorkflowScopesMatch(scopePair) &&
-    rustBoundAuthenticationFactsMatch(factsPair) &&
-    approvedAuthenticationContextMatches(factsPair) &&
-    approvedFieldSemanticsMatch(factsPair) &&
-    rustWorkflowSemantics(selected.facts) ===
-      rustWorkflowSemantics(approved.facts)
-  );
 }

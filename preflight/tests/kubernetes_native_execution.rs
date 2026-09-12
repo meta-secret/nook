@@ -1,4 +1,8 @@
-use std::{env, fs, mem, path::PathBuf};
+use std::{
+    env, fs, mem,
+    ops::Deref,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Result;
 
@@ -13,16 +17,36 @@ const CLUSTER_ENTRYPOINTS: &[&str] = &[
     "nook-app/ci/Taskfile.yml",
 ];
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
 }
 
-fn read(path: &str) -> String {
-    fs::read_to_string(repository_root().join(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
 }
 
 fn assert_no_nested_runtime(label: &str, source: &str) {
@@ -130,7 +154,7 @@ fn cluster_job_blocks(workflow: &str) -> Vec<String> {
 
 #[test]
 fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()> {
-    let workflow_directory = repository_root().join(".github/workflows");
+    let workflow_directory = RepositoryFixture::repository_root().join(".github/workflows");
     for entry in fs::read_dir(workflow_directory)? {
         let path = entry?.path();
         let workflow = fs::read_to_string(&path)?;
@@ -140,15 +164,17 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
     }
 
     for path in CLUSTER_ENTRYPOINTS {
-        assert_no_nested_runtime(path, &read(path));
+        assert_no_nested_runtime(path, &RepositoryFixture::repository_root().read(path));
     }
 
-    let ci_tasks = read("nook-app/ci/Taskfile.yml");
+    let ci_tasks = RepositoryFixture::repository_root().read("nook-app/ci/Taskfile.yml");
     assert!(ci_tasks.contains("if test \"${NOOK_BUILDKIT_REMOTE:-}\" = \"1\"; then"));
     assert!(ci_tasks.contains(".github/scripts/with-remote-buildkit.sh"));
-    let docker_setup = read(".github/actions/nook-docker-setup/action.yml");
+    let docker_setup =
+        RepositoryFixture::repository_root().read(".github/actions/nook-docker-setup/action.yml");
     assert!(docker_setup.contains("echo \"NOOK_BUILDKIT_REMOTE=1\" >> \"$GITHUB_ENV\""));
-    let remote_buildkit = read(".github/scripts/with-remote-buildkit.sh");
+    let remote_buildkit =
+        RepositoryFixture::repository_root().read(".github/scripts/with-remote-buildkit.sh");
     for allowed in ["buildx inspect", "buildx build", "buildx use"] {
         assert!(
             remote_buildkit.contains(allowed),
@@ -167,13 +193,14 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
         );
     }
 
-    let remote_workflow = read(".github/workflows/remote.yml");
+    let remote_workflow = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");
     assert!(remote_workflow.contains("runs-on: nook-k0s-container"));
     assert!(remote_workflow.contains("container:"));
     assert!(remote_workflow.contains("task _web:test:e2e"));
     assert!(remote_workflow.contains("task _extension:test:e2e"));
 
-    let release_deploy = read(".github/scripts/ci-release-deploy-vaults.sh");
+    let release_deploy =
+        RepositoryFixture::repository_root().read(".github/scripts/ci-release-deploy-vaults.sh");
     assert!(release_deploy.contains(
         "node /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler"
     ));
@@ -183,14 +210,14 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
         ".cortex/gizmo/workflows/mission-delivery.md",
         ".cortex/gizmo/workflows/pull-requests.md",
     ] {
-        let documentation = read(path);
+        let documentation = RepositoryFixture::repository_root().read(path);
         assert!(documentation.contains("task remote TASK_NAME=web:build"));
         assert!(documentation.contains("task remote TASK_NAME=web:e2e"));
         assert!(!documentation.contains("task remote TASK_NAMES=web:build,web:e2e"));
     }
 
-    let cortex_rule =
-        read(".cortex/teams/sre/dynamic-skills/kubernetes-native-cluster-execution.md");
+    let cortex_rule = RepositoryFixture::repository_root()
+        .read(".cortex/teams/sre/dynamic-skills/kubernetes-native-cluster-execution.md");
     assert!(cortex_rule.contains("P1 hard rule"));
     assert!(cortex_rule.contains("BuildKit shard is a build service only"));
     assert!(cortex_rule.contains("Playwright directly inside an ordinary Pod"));

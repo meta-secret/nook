@@ -124,14 +124,17 @@ mod tests {
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 2);
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login");
         };
         assert_eq!(login.username, "alice");
         assert_eq!(login.password, "secret");
         assert!(login.notes.contains("## Dashlane"));
         assert!(login.notes.contains("category: Work"));
-        assert!(matches!(plan.items[1], SecretValue::Authenticator(_)));
+        assert!(matches!(
+            plan.items.get(1),
+            Some(SecretValue::Authenticator(_))
+        ));
         Ok(())
     }
 

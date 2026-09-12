@@ -12,7 +12,8 @@ use std::fmt;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
+#[tsify(type_suffix = "Wire")]
 #[serde(rename_all = "kebab-case")]
 pub enum SecretType {
     Login,
@@ -58,7 +59,8 @@ impl SecretType {
 }
 
 /// Opaque on-disk payload — user secrets are age-armored YAML; auth/join/member rows use JSON or nested armor.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
+#[tsify(type = "string")]
 #[serde(transparent)]
 pub struct StoredRecordPayload(String);
 
@@ -96,13 +98,34 @@ impl AsRef<str> for StoredRecordPayload {
     }
 }
 
+/// An explicit secret tag or the historical untyped record representation.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum RecordTypeDeclaration {
+    Secret(SecretType),
+    #[default]
+    Undeclared,
+}
+
+impl RecordTypeDeclaration {
+    pub fn is_undeclared(&self) -> bool {
+        matches!(self, Self::Undeclared)
+    }
+}
+
 /// One record on disk — label is plaintext, `value` is an opaque encrypted or JSON payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 pub struct StoredSecretRecord {
     #[serde(rename = "id")]
     pub key: SecretId,
-    #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
-    pub secret_type: Option<SecretType>,
+    #[serde(
+        rename = "type",
+        default,
+        skip_serializing_if = "RecordTypeDeclaration::is_undeclared"
+    )]
+    // Preserve the existing optional scalar TS wire field; the Rust state is explicit.
+    #[tsify(optional, type = "SecretTypeWire")]
+    pub secret_type: RecordTypeDeclaration,
     #[serde(rename = "data")]
     pub value: StoredRecordPayload,
 }
@@ -153,7 +176,7 @@ mod tests {
     fn stored_secret_record_uses_disk_field_names() -> anyhow::Result<()> {
         let record = StoredSecretRecord {
             key: SecretId::from_vault_record("secret_token001"),
-            secret_type: Some(SecretType::ApiKey),
+            secret_type: RecordTypeDeclaration::Secret(SecretType::ApiKey),
             value: StoredRecordPayload::from_trusted("ciphertext".to_owned()),
         };
 
@@ -167,11 +190,22 @@ mod tests {
 
         let auth_row = StoredSecretRecord {
             key: SecretId::from_vault_record("auth:key"),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted("{}".to_owned()),
         };
         let encoded_auth_row = serde_json::to_value(&auth_row)?;
         assert!(encoded_auth_row.get("type").is_none());
+        assert_eq!(
+            serde_json::from_value::<StoredSecretRecord>(encoded_auth_row)?,
+            auth_row
+        );
+        let explicit_null = serde_json::json!({"id": "auth:key", "type": null, "data": "{}"});
+        assert_eq!(
+            serde_json::from_value::<StoredSecretRecord>(explicit_null)?,
+            auth_row
+        );
+        let unknown_type = serde_json::json!({"id": "auth:key", "type": "unknown", "data": "{}"});
+        assert!(serde_json::from_value::<StoredSecretRecord>(unknown_type).is_err());
         Ok(())
     }
 }

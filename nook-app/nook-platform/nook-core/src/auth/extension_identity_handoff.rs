@@ -5,7 +5,7 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use std::mem;
+use std::{fmt, mem};
 
 use crate::{
     AgeArmoredCiphertext, DeviceId, DeviceIdentity, DeviceIdentitySecret, DevicePublicKey,
@@ -67,10 +67,33 @@ pub enum HandoffEventLog {
     ExistingEvents,
 }
 
+/// Durable signer availability before an extension identity handoff.
+#[derive(Clone, PartialEq, Eq)]
+pub enum StoredSigningSeed {
+    Missing,
+    Stored(String),
+}
+impl fmt::Debug for StoredSigningSeed {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Missing => formatter.write_str("StoredSigningSeed::Missing"),
+            Self::Stored(_) => formatter.write_str("StoredSigningSeed::Stored([REDACTED])"),
+        }
+    }
+}
+impl Zeroize for StoredSigningSeed {
+    fn zeroize(&mut self) {
+        if let Self::Stored(seed) = self {
+            seed.zeroize();
+        }
+        *self = Self::Missing;
+    }
+}
+
 /// Seed candidates owned until the existing signer-selection policy completes.
 pub struct HandoffSigningSeedSelection {
     pub handoff_seed: String,
-    pub stored_seed: Option<String>,
+    pub stored_seed: StoredSigningSeed,
     pub event_log: HandoffEventLog,
 }
 
@@ -91,7 +114,8 @@ impl HandoffSigningSeedSelection {
     #[must_use]
     pub fn choose(mut self) -> HandoffSigningSeedChoice {
         if self.event_log == HandoffEventLog::ExistingEvents
-            && let Some(seed) = self.stored_seed.as_mut().filter(|value| !value.is_empty())
+            && let StoredSigningSeed::Stored(seed) = &mut self.stored_seed
+            && !seed.is_empty()
         {
             self.handoff_seed.zeroize();
             return HandoffSigningSeedChoice::KeepStored {
@@ -115,6 +139,42 @@ impl HandoffNonce<'_> {
             return Err(ExtensionIdentityHandoffError::InvalidNonce);
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, tsify::Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
+pub struct ExtensionIdentityHandoffSealRequest {
+    pub recipient_public_key: String,
+    pub nonce: String,
+    pub expected_device_id: String,
+    pub expected_device_public_key: String,
+    pub expected_device_signing_public_key: String,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExtensionIdentityHandoffSourceBinding {
+    Matched,
+    DifferentIdentity,
+}
+pub struct ExtensionIdentityHandoffSource<'a> {
+    pub identity: &'a DeviceIdentity,
+    pub signing: &'a SigningIdentity,
+}
+impl ExtensionIdentityHandoffSource<'_> {
+    #[must_use]
+    pub fn binding(
+        &self,
+        request: &ExtensionIdentityHandoffSealRequest,
+    ) -> ExtensionIdentityHandoffSourceBinding {
+        if request.expected_device_id == self.identity.device_id().as_str()
+            && request.expected_device_public_key == self.identity.public_key().as_str()
+            && request.expected_device_signing_public_key == self.signing.public_key_hex()
+        {
+            ExtensionIdentityHandoffSourceBinding::Matched
+        } else {
+            ExtensionIdentityHandoffSourceBinding::DifferentIdentity
+        }
     }
 }
 
@@ -250,11 +310,11 @@ mod tests {
         ExtensionIdentityHandoffMaterial, ExtensionIdentityHandoffOpen,
         ExtensionIdentityHandoffPayload, ExtensionIdentityHandoffSeal, HandoffEventLog,
         HandoffNonce, HandoffSigningSeedChoice, HandoffSigningSeedSelection, SensitiveSigningSeed,
+        StoredSigningSeed,
     };
     use crate::{
-        AgeArmoredCiphertext, DeviceIdentity, DeviceIdentitySecret, DevicePublicKey,
-        DeviceSigningPublicKey, ExtensionIdentityHandoffError, SigningIdentity, SigningSeedHex,
-        VaultError, VaultResult,
+        AgeArmoredCiphertext, DeviceIdentity, DevicePublicKey, DeviceSigningPublicKey,
+        ExtensionIdentityHandoffError, SigningIdentity, SigningSeedHex, VaultError, VaultResult,
     };
     use std::ptr;
     use zeroize::{Zeroize, Zeroizing};
@@ -362,7 +422,7 @@ mod tests {
         assert_eq!(
             HandoffSigningSeedSelection {
                 handoff_seed: "handoff-seed".to_owned(),
-                stored_seed: Some("authorized-seed".to_owned()),
+                stored_seed: StoredSigningSeed::Stored("authorized-seed".to_owned()),
                 event_log: HandoffEventLog::ExistingEvents,
             }
             .choose(),
@@ -378,7 +438,7 @@ mod tests {
             assert_eq!(
                 HandoffSigningSeedSelection {
                     handoff_seed: "handoff-seed".to_owned(),
-                    stored_seed: None,
+                    stored_seed: StoredSigningSeed::Missing,
                     event_log
                 }
                 .choose(),
@@ -487,9 +547,12 @@ mod tests {
         ));
         let mut payload = fixture.payload()?;
         payload.version = 2;
-        payload.identity_private_key =
-            DeviceIdentitySecret::from_trusted("invalid-private-key".to_owned());
-        let malformed = fixture.encrypt_payload(&payload)?;
+        let plaintext = Zeroizing::new(
+            serde_json::to_string(&payload)
+                .map_err(ExtensionIdentityHandoffError::Serialize)?
+                .replace(payload.identity_private_key.as_str(), "invalid-private-key"),
+        );
+        let malformed = fixture.encrypt_text(&plaintext)?;
         assert!(matches!(
             fixture.open_request(&malformed).open(),
             Err(VaultError::ExtensionIdentityHandoff(
@@ -648,7 +711,7 @@ mod tests {
         for event_log in [HandoffEventLog::Empty, HandoffEventLog::ExistingEvents] {
             let selected = HandoffSigningSeedSelection {
                 handoff_seed: "incoming".to_owned(),
-                stored_seed: Some(String::new()),
+                stored_seed: StoredSigningSeed::Stored(String::new()),
                 event_log,
             }
             .choose();
@@ -663,7 +726,7 @@ mod tests {
         assert_eq!(
             HandoffSigningSeedSelection {
                 handoff_seed: "incoming".to_owned(),
-                stored_seed: Some(" \t ".to_owned()),
+                stored_seed: StoredSigningSeed::Stored(" \t ".to_owned()),
                 event_log: HandoffEventLog::ExistingEvents
             }
             .choose(),
@@ -674,7 +737,7 @@ mod tests {
         assert_eq!(
             HandoffSigningSeedSelection {
                 handoff_seed: "incoming".to_owned(),
-                stored_seed: Some("stored".to_owned()),
+                stored_seed: StoredSigningSeed::Stored("stored".to_owned()),
                 event_log: HandoffEventLog::Empty
             }
             .choose(),
@@ -689,11 +752,11 @@ mod tests {
     fn seed_selection_cleanup_wipes_both_owned_candidates() {
         let mut request = HandoffSigningSeedSelection {
             handoff_seed: "incoming".to_owned(),
-            stored_seed: Some("stored".to_owned()),
+            stored_seed: StoredSigningSeed::Stored("stored".to_owned()),
             event_log: HandoffEventLog::ExistingEvents,
         };
         request.zeroize();
         assert!(request.handoff_seed.is_empty());
-        assert!(request.stored_seed.as_ref().is_none_or(String::is_empty));
+        assert!(matches!(request.stored_seed, StoredSigningSeed::Missing));
     }
 }

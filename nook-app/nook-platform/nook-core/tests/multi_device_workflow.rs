@@ -1,12 +1,16 @@
 //! Multi-device vault keys workflow integration tests.
 
+use nook_auth2::{
+    GenesisMembersRecordsRequest, RenameVaultMemberRequest, ReplaceMemberRecordsRequest,
+    ResolveMemberRosterRequest, RevokeVaultMemberRequest, VaultMember,
+};
+use nook_core::MemberLabelState;
 use std::io;
 
 use nook_core::{
     ApiKeySecret, Database, DeviceEnrollment, DeviceIdentity, JoinRequestApproval,
     JoinRequestIssuance, SecretId, SecretValue, VaultCrypto, VaultFormat, VaultFormatDocument,
-    VaultKeys, VaultRecordSet, VaultRecordView, genesis_members_records, rename_vault_member,
-    replace_member_records, resolve_member_roster, revoke_vault_member,
+    VaultKeys, VaultRecordSet, VaultRecordView,
 };
 
 fn sid(label: &str) -> SecretId {
@@ -33,10 +37,12 @@ fn genesis_vault(
 ) -> anyhow::Result<(DeviceIdentity, Vec<nook_core::StoredSecretRecord>)> {
     let genesis = DeviceIdentity::generate()?;
     let mut records = vec![genesis.auth_record(&keys.secrets_key, &keys.members_key)?];
-    records.extend(genesis_members_records(
-        &genesis,
-        &keys.members_key,
-        "2026-06-21T00:00:00Z",
+    records.extend(VaultMember::genesis_members_records(
+        GenesisMembersRecordsRequest {
+            identity: &genesis,
+            members_key: &keys.members_key,
+            enrolled_at: "2026-06-21T00:00:00Z",
+        },
     )?);
     Ok((genesis, records))
 }
@@ -61,14 +67,17 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     let (auth_two, join_key, member_records) = JoinRequestApproval::new(
         &keys.secrets_key,
         &keys.members_key,
-        &join_two,
+        join_two,
         &genesis,
         &records,
     )
     .approve()?;
     records.retain(|record| record.key.as_str() != join_key);
     records.push(auth_two);
-    replace_member_records(&mut records, member_records)?;
+    VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
+        records: &mut records,
+        member_records,
+    })?;
 
     let device_three = DeviceIdentity::generate()?;
     records.push(JoinRequestIssuance::new(&device_three, "2026-06-21T01:00:00Z").issue()?);
@@ -79,14 +88,17 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     let (auth_three, join_key, member_records) = JoinRequestApproval::new(
         &keys.secrets_key,
         &keys.members_key,
-        &join_three,
+        join_three,
         &genesis,
         &records,
     )
     .approve()?;
     records.retain(|record| record.key.as_str() != join_key);
     records.push(auth_three);
-    replace_member_records(&mut records, member_records)?;
+    VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
+        records: &mut records,
+        member_records,
+    })?;
 
     let yaml = VaultRecordSet::serialize(&records, VaultFormat::Yaml)?;
     let yaml_str = yaml.as_str();
@@ -106,12 +118,22 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
         let resolved_members = VaultRecordView::new(&loaded).members_key(device)?;
         assert_eq!(resolved_secrets, keys.secrets_key);
         assert_eq!(resolved_members, keys.members_key);
-        let roster = resolve_member_roster(&loaded, &keys.members_key)?;
+        let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+            records: &loaded,
+            members_key: &keys.members_key,
+        })?;
         assert_eq!(roster.len(), 3);
         let user_records = VaultRecordView::new(&loaded).user_records()?;
         let unlocked = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
         assert_eq!(unlocked.list().len(), 1);
-        assert_eq!(unlocked.list()[0].data, api_key("hunter2"));
+        assert_eq!(
+            unlocked
+                .list()
+                .first()
+                .unwrap_or_else(|| panic!("unlocked fixture must contain one secret"))
+                .data,
+            api_key("hunter2")
+        );
     }
     Ok(())
 }
@@ -141,9 +163,15 @@ fn oob_enroll_writes_self_member_roster_only() -> anyhow::Result<()> {
     .enroll()?;
     let mut records = vec![auth];
     records.extend(members);
-    let roster = resolve_member_roster(&records, &keys.members_key)?;
+    let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+        records: &records,
+        members_key: &keys.members_key,
+    })?;
     assert_eq!(roster.len(), 1);
-    assert_eq!(roster[0].device_id, device.device_id().to_owned());
+    assert_eq!(
+        roster.first().map(|member| &member.device_id),
+        Some(device.device_id())
+    );
     Ok(())
 }
 
@@ -187,11 +215,17 @@ fn member_roster_entries_expose_pk_id_and_public_key() -> anyhow::Result<()> {
     let mut records = vec![auth];
     records.extend(members);
 
-    let roster = resolve_member_roster(&records, &keys.members_key)?;
+    let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+        records: &records,
+        members_key: &keys.members_key,
+    })?;
     assert_eq!(roster.len(), 1);
-    assert_eq!(roster[0].auth_id, device.auth_id());
-    assert_eq!(roster[0].public_key, device.public_key());
-    assert_eq!(roster[0].device_id, device.device_id().to_owned());
+    let member = roster
+        .first()
+        .unwrap_or_else(|| panic!("roster fixture must contain one member"));
+    assert_eq!(member.auth_id, device.auth_id());
+    assert_eq!(member.public_key, device.public_key());
+    assert_eq!(member.device_id, device.device_id().to_owned());
     Ok(())
 }
 
@@ -209,7 +243,7 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes() -> anyhow::Resul
     let (auth, join_key, _) = JoinRequestApproval::new(
         &keys.secrets_key,
         &keys.members_key,
-        &join,
+        join,
         &genesis,
         &records,
     )
@@ -228,20 +262,32 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes() -> anyhow::Resul
 fn rename_member_label_survives_yaml_roundtrip() -> anyhow::Result<()> {
     let keys = VaultKeys::generate()?;
     let (device, mut records) = genesis_vault(&keys)?;
-    let member_records = rename_vault_member(
-        &records,
-        &keys.members_key,
-        &device.auth_id(),
-        "Kitchen iPad",
-    )?;
-    replace_member_records(&mut records, member_records)?;
+    let member_records = VaultMember::rename_vault_member(RenameVaultMemberRequest {
+        records: &records,
+        members_key: &keys.members_key,
+        auth_id: &device.auth_id(),
+        label: "Kitchen iPad",
+    })?;
+    VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
+        records: &mut records,
+        member_records,
+    })?;
 
     let yaml = VaultRecordSet::serialize(&records, VaultFormat::Yaml)?;
     assert!(!yaml.as_str().contains("Kitchen iPad"));
     let loaded = VaultFormatDocument::new(yaml.as_str()).deserialize(VaultFormat::Yaml)?;
-    let roster = resolve_member_roster(&loaded, &keys.members_key)?;
+    let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+        records: &loaded,
+        members_key: &keys.members_key,
+    })?;
     assert_eq!(roster.len(), 1);
-    assert_eq!(roster[0].label.as_deref(), Some("Kitchen iPad"));
+    assert_eq!(
+        roster
+            .first()
+            .unwrap_or_else(|| panic!("roster fixture must contain one member"))
+            .label,
+        MemberLabelState::Named("Kitchen iPad".to_owned())
+    );
     Ok(())
 }
 
@@ -259,16 +305,23 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<(
     let (auth, join_key, member_records) = JoinRequestApproval::new(
         &keys.secrets_key,
         &keys.members_key,
-        &join,
+        join,
         &genesis,
         &records,
     )
     .approve()?;
     records.retain(|r| r.key.as_str() != join_key);
     records.push(auth);
-    replace_member_records(&mut records, member_records)?;
+    VaultMember::replace_member_records(ReplaceMemberRecordsRequest {
+        records: &mut records,
+        member_records,
+    })?;
 
-    let revoked = revoke_vault_member(&records, &keys.members_key, &joiner.auth_id())?;
+    let revoked = VaultMember::revoke_vault_member(RevokeVaultMemberRequest {
+        records: &records,
+        members_key: &keys.members_key,
+        auth_id: &joiner.auth_id(),
+    })?;
     let yaml = VaultRecordSet::serialize(&revoked, VaultFormat::Yaml)?;
     let loaded = VaultFormatDocument::new(yaml.as_str()).deserialize(VaultFormat::Yaml)?;
 
@@ -277,8 +330,14 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<(
         VaultRecordView::new(&loaded).secrets_key(&genesis)?,
         keys.secrets_key
     );
-    let roster = resolve_member_roster(&loaded, &keys.members_key)?;
+    let roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+        records: &loaded,
+        members_key: &keys.members_key,
+    })?;
     assert_eq!(roster.len(), 1);
-    assert_eq!(roster[0].auth_id, genesis.auth_id());
+    assert_eq!(
+        roster.first().map(|member| member.auth_id.clone()),
+        Some(genesis.auth_id())
+    );
     Ok(())
 }

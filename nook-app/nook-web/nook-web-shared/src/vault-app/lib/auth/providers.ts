@@ -1,3 +1,9 @@
+import { provider_wasm_args, type NookStorageConnectArgs } from "$app-wasm";
+import { err, ok, type Result } from "neverthrow";
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from "$lib/runtime/storage-failure";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
   GITHUB_PROVIDER_TYPE,
@@ -27,12 +33,10 @@ import {
   set_google_drive_provider_mode,
   set_icloud_provider_mode,
   wasm_storage_mode_for_provider,
-  NookDuplicateSyncProviderState,
   NookStoredOAuthFileConfigurationState,
   stored_oauth_file_configuration_state,
   NookStoredLocalFolderConfigurationState,
   stored_local_folder_configuration_state,
-  NookOAuthAccessTokenKind as OAuthAccessTokenKind,
   type AuthProvidersSnapshot,
   type ActiveVaultScope,
   type LocalFolderConfig,
@@ -56,7 +60,8 @@ import {
   type StoredOAuthTokenExpiry,
   type ProviderVaultScope,
   NookGithubPatHintState,
-  type NookOAuthAccessToken,
+  type DuplicateSyncProvider,
+  missing_oauth_access_token,
   type NookVaultManager,
 } from "$app-wasm";
 
@@ -96,39 +101,19 @@ export {
   set_google_drive_provider_mode,
   set_icloud_provider_mode,
   wasm_storage_mode_for_provider,
-  OAuthAccessTokenKind,
 };
 
-export type OAuthAccessToken =
-  | { kind: OAuthAccessTokenKind.Missing }
-  | { kind: OAuthAccessTokenKind.Available; token: string };
-
-function copyOAuthAccessToken(
-  accessToken: NookOAuthAccessToken,
-): OAuthAccessToken {
-  try {
-    return accessToken.kind === OAuthAccessTokenKind.Available
-      ? {
-          kind: OAuthAccessTokenKind.Available,
-          token: accessToken.token,
-        }
-      : { kind: OAuthAccessTokenKind.Missing };
-  } finally {
-    accessToken.free();
-  }
-}
-
-export function oauthAccessToken(config: OAuthFileConfig): OAuthAccessToken {
-  return copyOAuthAccessToken(oauth_access_token(config));
-}
-
-export function missingOAuthAccessToken(): OAuthAccessToken {
-  return { kind: OAuthAccessTokenKind.Missing };
-}
+export type { OAuthAccessToken, DuplicateSyncProvider } from "$app-wasm";
+export { oauth_access_token, missing_oauth_access_token };
 
 export enum DriveFileIdentityKind {
   New = "new",
   Existing = "existing",
+}
+
+export enum OAuthAccessTokenKind {
+  Missing = "missing",
+  Available = "available",
 }
 
 export type DriveFileIdentity =
@@ -403,28 +388,6 @@ export type OAuthFileName =
   | { kind: OAuthFileNameKind.Unresolved }
   | { kind: OAuthFileNameKind.Resolved; fileName: string };
 
-export function oauthFileName(config: OAuthFileConfig): OAuthFileName {
-  const fileName =
-    config.fileName.state === "fileName" ? config.fileName.value.trim() : "";
-  return fileName.length > 0
-    ? { kind: OAuthFileNameKind.Resolved, fileName }
-    : { kind: OAuthFileNameKind.Unresolved };
-}
-
-export function oauthAccountLabel(config: OAuthFileConfig): string {
-  return config.accountEmail.state === "email"
-    ? config.accountEmail.value.trim()
-    : "";
-}
-
-export function hasGoogleDriveFolder(config: OAuthFileConfig): boolean {
-  return config.folderId.state === "folderId";
-}
-
-export function hasICloudShareTarget(config: OAuthFileConfig): boolean {
-  return config.iCloudShareTarget.state === "sharedTarget";
-}
-
 export enum LocalFolderHandleKind {
   Unselected = "unselected",
   Selected = "selected",
@@ -433,16 +396,6 @@ export enum LocalFolderHandleKind {
 export type LocalFolderHandle =
   | { kind: LocalFolderHandleKind.Unselected }
   | { kind: LocalFolderHandleKind.Selected; handleId: string };
-
-export function localFolderHandle(
-  config: LocalFolderConfig,
-): LocalFolderHandle {
-  const handleId =
-    config.handleId.state === "handleId" ? config.handleId.value.trim() : "";
-  return handleId.length > 0
-    ? { kind: LocalFolderHandleKind.Selected, handleId }
-    : { kind: LocalFolderHandleKind.Unselected };
-}
 
 export { NookStoredOAuthFileConfigurationState };
 
@@ -472,14 +425,6 @@ export function isConfiguredLocalFolder(
   );
 }
 
-export function isICloudProvider(provider: StorageProvider): boolean {
-  const configuration = provider.oauthFile;
-  return (
-    isConfiguredOAuthFile(configuration) &&
-    configuration.config.preset === "icloud"
-  );
-}
-
 export enum LocalFolderProviderConfigurationKind {
   Missing = "missing",
   Configured = "configured",
@@ -492,24 +437,6 @@ export type LocalFolderProviderConfiguration =
       config: LocalFolderConfig;
     };
 
-export function localFolderProviderConfiguration(
-  provider: StorageProvider,
-): LocalFolderProviderConfiguration {
-  return provider.localFolder.state === "configured"
-    ? {
-        kind: LocalFolderProviderConfigurationKind.Configured,
-        config: provider.localFolder.config,
-      }
-    : { kind: LocalFolderProviderConfigurationKind.Missing };
-}
-
-export type DuplicateSyncProvider =
-  | {
-      state: NookDuplicateSyncProviderState.Duplicate;
-      provider: StorageProvider;
-    }
-  | { state: NookDuplicateSyncProviderState.Unique };
-
 export type SyncProviderCandidateSet = {
   readonly providers: StorageProvider[];
   readonly candidate: StorageProvider;
@@ -519,7 +446,7 @@ export type SyncProviderCandidateExclusion = SyncProviderCandidateSet & {
   readonly excludeId: string;
 };
 
-export type AuthProviderPersistence = {
+export type AuthProviderPersistenceRequest = {
   readonly manager: NookVaultManager;
   readonly snapshot: AuthProvidersSnapshot;
 };
@@ -547,22 +474,10 @@ export function findDuplicateSyncProvider({
   const findDuplicateSyncProviderWasmArgs: Parameters<
     typeof find_duplicate_sync_provider
   >[0] = { providers, activeVaultStoreId: unselectedVaultScope() };
-  const result = find_duplicate_sync_provider(
+  return find_duplicate_sync_provider(
     findDuplicateSyncProviderWasmArgs,
     candidate,
   );
-  try {
-    if (result.state === NookDuplicateSyncProviderState.Duplicate) {
-      const provider = result.provider;
-      return {
-        state: NookDuplicateSyncProviderState.Duplicate,
-        provider,
-      };
-    }
-    return { state: NookDuplicateSyncProviderState.Unique };
-  } finally {
-    result.free();
-  }
 }
 
 export function findDuplicateSyncProviderExcluding({
@@ -573,30 +488,27 @@ export function findDuplicateSyncProviderExcluding({
   const findDuplicateSyncProviderExcludingWasmArgs: Parameters<
     typeof find_duplicate_sync_provider_excluding
   >[0] = { providers, activeVaultStoreId: unselectedVaultScope() };
-  const result = find_duplicate_sync_provider_excluding(
+  return find_duplicate_sync_provider_excluding(
     findDuplicateSyncProviderExcludingWasmArgs,
     candidate,
     excludeId,
   );
-  try {
-    if (result.state === NookDuplicateSyncProviderState.Duplicate) {
-      const provider = result.provider;
-      return {
-        state: NookDuplicateSyncProviderState.Duplicate,
-        provider,
-      };
-    }
-    return { state: NookDuplicateSyncProviderState.Unique };
-  } finally {
-    result.free();
-  }
 }
 
-export async function saveAuthProviders({
-  manager,
-  snapshot,
-}: AuthProviderPersistence): Promise<void> {
-  await manager.save_auth_providers_snapshot(snapshot);
+export class AuthProviderPersistence {
+  constructor(private readonly request: AuthProviderPersistenceRequest) {}
+
+  async save(): Promise<Result<void, VaultStorageFailure>> {
+    const { manager, snapshot } = this.request;
+    try {
+      await manager.save_auth_providers_snapshot(snapshot);
+      return ok();
+    } catch {
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
+      );
+    }
+  }
 }
 
 export function providerDefaultLabel({
@@ -712,4 +624,70 @@ export function localizedProviderStorageDetail({
     t(I18N_KEYS.AuthStorageIcloudNotSignedIn),
     t(I18N_KEYS.AuthStorageLocalFolderNeedsReconnect),
   );
+}
+
+export class OAuthFilePresentation {
+  constructor(private readonly value: OAuthFileConfig) {}
+  oauthFileName(): OAuthFileName {
+    const config = this.value;
+    const fileName =
+      config.fileName.state === "fileName" ? config.fileName.value.trim() : "";
+    return fileName.length > 0
+      ? { kind: OAuthFileNameKind.Resolved, fileName }
+      : { kind: OAuthFileNameKind.Unresolved };
+  }
+
+  oauthAccountLabel(): string {
+    const config = this.value;
+    return config.accountEmail.state === "email"
+      ? config.accountEmail.value.trim()
+      : "";
+  }
+
+  hasGoogleDriveFolder(): boolean {
+    const config = this.value;
+    return config.folderId.state === "folderId";
+  }
+
+  hasICloudShareTarget(): boolean {
+    const config = this.value;
+    return config.iCloudShareTarget.state === "sharedTarget";
+  }
+}
+
+export class LocalFolderPresentation {
+  constructor(private readonly value: LocalFolderConfig) {}
+  localFolderHandle(): LocalFolderHandle {
+    const config = this.value;
+    const handleId =
+      config.handleId.state === "handleId" ? config.handleId.value.trim() : "";
+    return handleId.length > 0
+      ? { kind: LocalFolderHandleKind.Selected, handleId }
+      : { kind: LocalFolderHandleKind.Unselected };
+  }
+}
+
+export class StorageProviderPresentation {
+  constructor(private readonly value: StorageProvider) {}
+  storageArgs(): NookStorageConnectArgs {
+    return provider_wasm_args(this.value);
+  }
+  isICloudProvider(): boolean {
+    const provider = this.value;
+    const configuration = provider.oauthFile;
+    return (
+      isConfiguredOAuthFile(configuration) &&
+      configuration.config.preset === "icloud"
+    );
+  }
+
+  localFolderProviderConfiguration(): LocalFolderProviderConfiguration {
+    const provider = this.value;
+    return provider.localFolder.state === "configured"
+      ? {
+          kind: LocalFolderProviderConfigurationKind.Configured,
+          config: provider.localFolder.config,
+        }
+      : { kind: LocalFolderProviderConfigurationKind.Missing };
+  }
 }

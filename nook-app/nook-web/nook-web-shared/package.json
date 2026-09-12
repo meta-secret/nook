@@ -1,5 +1,9 @@
 {
   "name": "nook-web-shared",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "neverthrow": "8.2.0",
+    "bits-ui": "2.18.1"
+  }
 }

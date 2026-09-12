@@ -70,184 +70,193 @@ type LabelledAuthenticationControlDependency = {
   previousId: string | false;
 };
 
-function elementLabelsAuthenticationControl({
-  element,
-  previousId,
-}: LabelledAuthenticationControlDependency): boolean {
-  const referencedIds = new Set<string>();
-  if (previousId) referencedIds.add(previousId);
-  let labelElement: Element | false = element;
-  while (labelElement) {
-    if (labelElement.id) referencedIds.add(labelElement.id);
-    labelElement = ((v) => (v ? v : false))(labelElement.parentElement);
-  }
-  for (const labelledDescendant of element.querySelectorAll<HTMLElement>(
-    "[id]",
-  )) {
-    referencedIds.add(labelledDescendant.id);
-  }
-  if (referencedIds.size === 0) return false;
-  return Array.from(
-    element.ownerDocument.querySelectorAll<HTMLElement>(
-      authenticationFactLabelledControlSelector,
-    ),
-  ).some((control) =>
-    (((v) => (v ? v : ""))(control.getAttribute("aria-labelledby")))
-      .split(/\s+/u)
-      .some((id) => referencedIds.has(id)),
-  );
-}
+export const AUTHENTICATION_SUBMIT_VALUE_SOURCE =
+  "nook-authentication-submit-value-v1";
 
-export function authenticationFactMutationTouchesLabelDependency(
-  mutation: MutationRecord,
-): boolean {
-  const elements = new Set<Element>();
-  const includeNode = (node: Node): void => {
-    if (node instanceof Element) elements.add(node);
-    if (node.parentElement) elements.add(node.parentElement);
-  };
-  includeNode(mutation.target);
-  if (mutation.type === "childList") {
-    for (const node of [...mutation.addedNodes, ...mutation.removedNodes]) {
-      includeNode(node);
+/** Owns this browser host’s resources and interaction lifecycle. */
+class AuthenticationFactObserver {
+  constructor(private readonly browser: typeof globalThis) {}
+
+  private elementLabelsAuthenticationControl({
+    element,
+    previousId,
+  }: LabelledAuthenticationControlDependency): boolean {
+    const referencedIds = new Set<string>();
+    if (previousId) referencedIds.add(previousId);
+    let labelElement: Element | false = element;
+    while (labelElement) {
+      if (labelElement.id) referencedIds.add(labelElement.id);
+      labelElement = ((v) => (v ? v : false))(labelElement.parentElement);
     }
+    for (const labelledDescendant of element.querySelectorAll<HTMLElement>(
+      "[id]",
+    )) {
+      referencedIds.add(labelledDescendant.id);
+    }
+    if (referencedIds.size === 0) return false;
+    return Array.from(
+      element.ownerDocument.querySelectorAll<HTMLElement>(
+        authenticationFactLabelledControlSelector,
+      ),
+    ).some((control) =>
+      ((v) => (v ? v : ""))(control.getAttribute("aria-labelledby"))
+        .split(/\s+/u)
+        .some((id) => referencedIds.has(id)),
+    );
   }
-  const previousId =
-    mutation.type === "attributes" &&
-    mutation.attributeName === "id" &&
-    mutation.oldValue
-      ? mutation.oldValue
-      : false;
-  return [...elements].some((element) => {
+
+  authenticationFactMutationTouchesLabelDependency(
+    mutation: MutationRecord,
+  ): boolean {
+    const elements = new Set<Element>();
+    const includeNode = (node: Node): void => {
+      if (node instanceof Element) elements.add(node);
+      if (node.parentElement) elements.add(node.parentElement);
+    };
+    includeNode(mutation.target);
+    if (mutation.type === "childList") {
+      for (const node of [...mutation.addedNodes, ...mutation.removedNodes]) {
+        includeNode(node);
+      }
+    }
+    const previousId =
+      mutation.type === "attributes" &&
+      mutation.attributeName === "id" &&
+      mutation.oldValue
+        ? mutation.oldValue
+        : false;
+    return [...elements].some((element) => {
+      const dependency: LabelledAuthenticationControlDependency = {
+        element,
+        previousId,
+      };
+      return this.elementLabelsAuthenticationControl(dependency);
+    });
+  }
+
+  private attributeTargetCanAffectAuthenticationFacts(
+    mutation: AuthenticationFactMutation,
+  ): boolean {
+    const element =
+      mutation.target instanceof Element ? mutation.target : false;
+    if (!element) return false;
+    if (
+      mutation.attributeName === "data-nook-manual-checkpoint" ||
+      mutation.attributeName === "data-nook-passkey-control" ||
+      (mutation.attributeName === "role" &&
+        (mutation.oldValue === "button" || mutation.oldValue === "form"))
+    ) {
+      return true;
+    }
+    if (
+      element.matches(authenticationFactElementSelector) ||
+      element.closest(authenticationFactNestedScopeSelector) ||
+      element.querySelector(authenticationFactElementSelector)
+    ) {
+      return true;
+    }
+    const previousId =
+      mutation.attributeName === "id" && mutation.oldValue
+        ? mutation.oldValue
+        : false;
     const dependency: LabelledAuthenticationControlDependency = {
       element,
       previousId,
     };
-    return elementLabelsAuthenticationControl(dependency);
-  });
-}
-
-function attributeTargetCanAffectAuthenticationFacts(
-  mutation: AuthenticationFactMutation,
-): boolean {
-  const element = mutation.target instanceof Element ? mutation.target : false;
-  if (!element) return false;
-  if (
-    mutation.attributeName === "data-nook-manual-checkpoint" ||
-    mutation.attributeName === "data-nook-passkey-control" ||
-    (mutation.attributeName === "role" &&
-      (mutation.oldValue === "button" || mutation.oldValue === "form"))
-  ) {
-    return true;
+    return this.elementLabelsAuthenticationControl(dependency);
   }
-  if (
-    element.matches(authenticationFactElementSelector) ||
-    element.closest(authenticationFactNestedScopeSelector) ||
-    element.querySelector(authenticationFactElementSelector)
-  ) {
-    return true;
+
+  authenticationFactMutationRequiresScan(
+    mutation: AuthenticationFactMutation,
+  ): boolean {
+    if (mutation.type === "attributes") {
+      return this.attributeTargetCanAffectAuthenticationFacts(mutation);
+    }
+    if (mutation.type !== "characterData") return true;
+    const node = mutation.target;
+    const element =
+      node instanceof Text
+        ? node.parentElement
+        : node instanceof Element
+          ? node
+          : false;
+    if (!element) return false;
+    const dependency: LabelledAuthenticationControlDependency = {
+      element,
+      previousId: false,
+    };
+    return Boolean(
+      element.closest(authenticationFactCharacterDataScopeSelector) ||
+      this.elementLabelsAuthenticationControl(dependency),
+    );
   }
-  const previousId =
-    mutation.attributeName === "id" && mutation.oldValue
-      ? mutation.oldValue
-      : false;
-  const dependency: LabelledAuthenticationControlDependency = {
-    element,
-    previousId,
-  };
-  return elementLabelsAuthenticationControl(dependency);
-}
 
-export function authenticationFactMutationRequiresScan(
-  mutation: AuthenticationFactMutation,
-): boolean {
-  if (mutation.type === "attributes") {
-    return attributeTargetCanAffectAuthenticationFacts(mutation);
+  notifyAuthenticationSubmitValueAssigned(): void {
+    const targetOrigin = this.browser.location.origin;
+    if (targetOrigin === "null") return;
+    const message: Parameters<typeof this.browser.window.postMessage>[0] = {
+      source: AUTHENTICATION_SUBMIT_VALUE_SOURCE,
+    };
+    this.browser.window.postMessage(message, targetOrigin);
   }
-  if (mutation.type !== "characterData") return true;
-  const node = mutation.target;
-  const element =
-    node instanceof Text
-      ? node.parentElement
-      : node instanceof Element
-        ? node
-        : false;
-  if (!element) return false;
-  const dependency: LabelledAuthenticationControlDependency = {
-    element,
-    previousId: false,
-  };
-  return Boolean(
-    element.closest(authenticationFactCharacterDataScopeSelector) ||
-    elementLabelsAuthenticationControl(dependency),
-  );
-}
 
-export const AUTHENTICATION_SUBMIT_VALUE_SOURCE =
-  "nook-authentication-submit-value-v1";
-
-export function notifyAuthenticationSubmitValueAssigned(): void {
-  const targetOrigin = location.origin;
-  if (targetOrigin === "null") return;
-  const message: Parameters<typeof window.postMessage>[0] = {
-    source: AUTHENTICATION_SUBMIT_VALUE_SOURCE,
-  };
-  window.postMessage(message, targetOrigin);
-}
-
-export function isAuthenticationSubmitValueMessage(
-  event: MessageEvent,
-): boolean {
-  if (
-    location.origin === "null" ||
-    event.origin === "null" ||
-    event.origin !== location.origin ||
-    event.source !== window
-  ) {
-    return false;
+  isAuthenticationSubmitValueMessage(event: MessageEvent): boolean {
+    if (
+      this.browser.location.origin === "null" ||
+      event.origin === "null" ||
+      event.origin !== this.browser.location.origin ||
+      event.source !== this.browser.window
+    ) {
+      return false;
+    }
+    const data = event.data;
+    return (
+      typeof data === "object" &&
+      Boolean(data) &&
+      data.source === AUTHENTICATION_SUBMIT_VALUE_SOURCE
+    );
   }
-  const data = event.data;
-  return (
-    typeof data === "object" &&
-    Boolean(data) &&
-    data.source === AUTHENTICATION_SUBMIT_VALUE_SOURCE
-  );
+
+  observeAuthenticationSubmitValueAssignments(
+    onChange: () => void,
+  ): () => void {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    );
+    if (!descriptor || !descriptor.get || !descriptor.set) {
+      return () => {};
+    }
+    const originalGet = descriptor.get;
+    const originalSet = descriptor.set;
+    const valueProperty: PropertyDescriptor = {
+      configurable: true,
+      get() {
+        return originalGet.call(this);
+      },
+      set(next: string) {
+        const input = this as HTMLInputElement;
+        const previous = originalGet.call(input);
+        originalSet.call(input, next);
+        if (
+          previous !== next &&
+          (input.type === "submit" ||
+            input.type === "image" ||
+            input.type === "button")
+        ) {
+          onChange();
+        }
+      },
+    };
+    if (typeof descriptor.enumerable === "boolean")
+      valueProperty.enumerable = descriptor.enumerable;
+    Object.defineProperty(HTMLInputElement.prototype, "value", valueProperty);
+    return () => {
+      Object.defineProperty(HTMLInputElement.prototype, "value", descriptor);
+    };
+  }
 }
 
-export function observeAuthenticationSubmitValueAssignments(
-  onChange: () => void,
-): () => void {
-  const descriptor = Object.getOwnPropertyDescriptor(
-    HTMLInputElement.prototype,
-    "value",
-  );
-  if (!descriptor || !descriptor.get || !descriptor.set) {
-    return () => {};
-  }
-  const originalGet = descriptor.get;
-  const originalSet = descriptor.set;
-  const valueProperty: PropertyDescriptor = {
-    configurable: true,
-    enumerable: descriptor.enumerable,
-    get() {
-      return originalGet.call(this);
-    },
-    set(next: string) {
-      const input = this as HTMLInputElement;
-      const previous = originalGet.call(input);
-      originalSet.call(input, next);
-      if (
-        previous !== next &&
-        (input.type === "submit" ||
-          input.type === "image" ||
-          input.type === "button")
-      ) {
-        onChange();
-      }
-    },
-  };
-  Object.defineProperty(HTMLInputElement.prototype, "value", valueProperty);
-  return () => {
-    Object.defineProperty(HTMLInputElement.prototype, "value", descriptor);
-  };
-}
+export const authenticationFactObserver = new AuthenticationFactObserver(
+  globalThis,
+);

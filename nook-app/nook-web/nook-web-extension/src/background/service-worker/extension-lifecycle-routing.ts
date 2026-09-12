@@ -1,13 +1,18 @@
+import { err, ok, type Result } from 'neverthrow'
+import type { ExtensionSessionTransportFailure } from './session-document'
 import {
-  isBeginExtensionPairingMessage,
-  isExtensionLocalEventLogUpdatedMessage,
-  isOpenSimpleVaultMessage,
-} from '../../../../nook-web-shared/src/extension/lifecycle-runtime-message-adapter'
+  BeginExtensionPairingMessage as BeginExtensionPairingMessageSchema,
+  ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageSchema,
+  OpenSimpleVaultMessage as OpenSimpleVaultMessageSchema,
+} from '../../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import {
-  normalizeOpenCompanionLauncherMessage,
   OpenCompanionLauncherNormalizationKind,
-} from '../../../../nook-web-shared/src/extension/companion-launcher-message-adapter'
-import { isExtensionRuntimeSender, isNokeySender } from './routing-trust'
+  NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema,
+} from '../../../../nook-web-shared/src/extension/companion-launcher-message'
+import {
+  ExternalSenderTrustPolicy,
+  isExtensionRuntimeSender,
+} from './routing-trust'
 import type * as PairingState from '../../lib/pairing-state'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
@@ -34,27 +39,27 @@ type ExtensionLifecycleRoutingArgs = {
 export type ExtensionLifecycleRoutingDependencies = {
   accountPickerAuthorizationCleanupPending: typeof AccountPickers.accountPickerAuthorizationCleanupPending
   beginAccountPickerAuthorizationCleanup: typeof AccountPickers.beginAccountPickerAuthorizationCleanup
-  clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
-  clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
-  rebindStagedAuthenticatorEnrollmentsAuthorization: typeof AuthenticatorOperations.rebindStagedAuthenticatorEnrollmentsAuthorization
-  closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
+  clearPendingAccountPickers: typeof AccountPickers.accountPickerSessions.clearPendingAccountPickers
+  clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.authenticatorEnrollmentOperations.clearStagedAuthenticatorEnrollments
+  rebindStagedAuthenticatorEnrollmentsAuthorization: typeof AuthenticatorOperations.authenticatorEnrollmentOperations.rebindStagedAuthenticatorEnrollmentsAuthorization
+  closeExtensionSessionDocument: typeof SessionLifecycle.extensionSessionLifecycle.closeExtensionSessionDocument
   completeAccountPickerAuthorizationCleanup: typeof AccountPickers.completeAccountPickerAuthorizationCleanup
-  ensureExtensionSessionDocument: typeof SessionLifecycle.ensureExtensionSessionDocument
+  ensureExtensionSessionDocument: typeof SessionLifecycle.extensionSessionLifecycle.ensureExtensionSessionDocument
   extensionSessionDocument: typeof SessionLifecycle.extensionSessionDocument
   handlePairingStateQuery: typeof PairingStateQuery.handlePairingStateQuery
-  hasPairingApprovedType: typeof PairingIdentity.hasPairingApprovedType
+  hasPairingApprovedType: typeof PairingIdentity.extensionPairingIdentity.hasPairingApprovedType
   importLocalEventLogUpdate: typeof PairingImport.importLocalEventLogUpdate
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
   isExtensionAuthenticationSurfacesRefreshMessage: typeof SessionRuntimeMessages.isExtensionAuthenticationSurfacesRefreshMessage
-  isExtensionPairingStateQueryMessage: typeof PairingState.isExtensionPairingStateQueryMessage
+  isExtensionPairingStateQueryMessage: typeof PairingState.ExtensionPairingStateQueryMessage.is
   isExtensionSessionEnsureMessage: typeof SessionRuntimeMessages.isExtensionSessionEnsureMessage
   isExtensionSessionExpiryMessage: typeof SessionRuntimeMessages.isExtensionSessionExpiryMessage
   isExtensionSessionLockMessage: typeof SessionRuntimeMessages.isExtensionSessionLockMessage
-  openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
-  openExtensionPairing: typeof PairingIdentity.openExtensionPairing
-  openSimpleVault: typeof SessionLifecycle.openSimpleVault
+  openCompanionLauncher: typeof SessionLifecycle.extensionSessionLifecycle.openCompanionLauncher
+  openExtensionPairing: typeof PairingIdentity.extensionPairingIdentity.openExtensionPairing
+  openSimpleVault: typeof SessionLifecycle.extensionSessionLifecycle.openSimpleVault
   releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
-  refreshAuthenticationSurfaces: typeof SessionLifecycle.refreshAuthenticationSurfaces
+  refreshAuthenticationSurfaces: typeof SessionLifecycle.extensionSessionLifecycle.refreshAuthenticationSurfaces
 }
 
 type MessageResponse = Parameters<
@@ -85,9 +90,9 @@ const pairingLaunchFailureResponse: MessageResponse = {
 
 type ClearAuthorizationStateArgs = {
   beginAccountPickerAuthorizationCleanup: typeof AccountPickers.beginAccountPickerAuthorizationCleanup
-  clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
-  clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
-  closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
+  clearPendingAccountPickers: typeof AccountPickers.accountPickerSessions.clearPendingAccountPickers
+  clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.authenticatorEnrollmentOperations.clearStagedAuthenticatorEnrollments
+  closeExtensionSessionDocument: typeof SessionLifecycle.extensionSessionLifecycle.closeExtensionSessionDocument
   completeAccountPickerAuthorizationCleanup: typeof AccountPickers.completeAccountPickerAuthorizationCleanup
   releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
   closeSession: boolean
@@ -106,70 +111,108 @@ type AuthorizationCleanupStart =
       cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
     }
 
-async function clearAuthorizationState({
-  beginAccountPickerAuthorizationCleanup,
-  clearPendingAccountPickers,
-  clearStagedAuthenticatorEnrollments,
-  closeExtensionSessionDocument,
-  completeAccountPickerAuthorizationCleanup,
-  releaseAccountPickerAuthorizationCleanup,
-  closeSession,
-  cleanupStart,
-}: ClearAuthorizationStateArgs): Promise<void> {
-  const cleanupOperation =
-    cleanupStart.kind === AuthorizationCleanupStartKind.Existing
-      ? Promise.resolve(cleanupStart.cleanup)
-      : beginAccountPickerAuthorizationCleanup()
-  const closeOperation = closeSession
-    ? closeExtensionSessionDocument().then(
-        () => false,
-        () => true,
+export enum AuthorizationCleanupFailureKind {
+  MarkerUnavailable = 'authorization-cleanup-marker-unavailable',
+  PendingPickerRemovalFailed = 'authorization-cleanup-picker-removal-failed',
+  Rejected = 'authorization-cleanup-rejected',
+  MarkerLookupFailed = 'authorization-cleanup-marker-lookup-failed',
+}
+
+type AuthorizationCleanupFailure =
+  AuthorizationCleanupFailureKind | ExtensionSessionTransportFailure
+type AuthorizationCleanupResult = Result<
+  void,
+  readonly AuthorizationCleanupFailure[]
+>
+
+class AuthorizationCleanupLifecycle {
+  constructor(private readonly request: ClearAuthorizationStateArgs) {}
+
+  async clear(): Promise<AuthorizationCleanupResult> {
+    const {
+      beginAccountPickerAuthorizationCleanup,
+      clearPendingAccountPickers,
+      clearStagedAuthenticatorEnrollments,
+      closeExtensionSessionDocument,
+      completeAccountPickerAuthorizationCleanup,
+      releaseAccountPickerAuthorizationCleanup,
+      closeSession,
+      cleanupStart,
+    } = this.request
+    const cleanupOperation =
+      cleanupStart.kind === AuthorizationCleanupStartKind.Existing
+        ? Promise.resolve(cleanupStart.cleanup)
+        : beginAccountPickerAuthorizationCleanup()
+    const closeOperation = closeSession
+      ? closeExtensionSessionDocument()
+      : Promise.resolve(ok())
+    let startedCleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
+    try {
+      startedCleanup = await cleanupOperation
+    } catch {
+      return err([AuthorizationCleanupFailureKind.Rejected])
+    }
+    const { authorizationGeneration, markerStatus } = startedCleanup
+    const failures: AuthorizationCleanupFailure[] = []
+    if (markerStatus === AccountPickerCleanupMarkerStatus.Unavailable)
+      failures.push(AuthorizationCleanupFailureKind.MarkerUnavailable)
+    const closed = await closeOperation
+    if (closed.isErr()) failures.push(closed.error)
+    clearStagedAuthenticatorEnrollments()
+    try {
+      await clearPendingAccountPickers()
+    } catch {
+      failures.push(AuthorizationCleanupFailureKind.PendingPickerRemovalFailed)
+    }
+    try {
+      await clearPendingAccountPickers()
+    } catch {
+      failures.push(AuthorizationCleanupFailureKind.PendingPickerRemovalFailed)
+    }
+    clearStagedAuthenticatorEnrollments()
+    if (failures.length > 0) {
+      releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
+      return err(failures)
+    }
+    let outcome: Awaited<
+      ReturnType<typeof completeAccountPickerAuthorizationCleanup>
+    >
+    try {
+      outcome = await completeAccountPickerAuthorizationCleanup(
+        authorizationGeneration,
+        CleanupEvidence.Full,
       )
-    : Promise.resolve(false)
-  const startedCleanup = await cleanupOperation
-  const { authorizationGeneration, markerStatus } = startedCleanup
-  let failed =
-    markerStatus === AccountPickerCleanupMarkerStatus.Unavailable ||
-    (await closeOperation)
-  clearStagedAuthenticatorEnrollments()
-  try {
-    await clearPendingAccountPickers()
-  } catch {
-    failed = true
+    } catch {
+      releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
+      return err([AuthorizationCleanupFailureKind.Rejected])
+    }
+    return 'error' in outcome
+      ? err([AuthorizationCleanupFailureKind.Rejected])
+      : ok()
   }
-  try {
-    await clearPendingAccountPickers()
-  } catch {
-    failed = true
-  }
-  clearStagedAuthenticatorEnrollments()
-  if (failed) {
-    releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
-    throw new Error('authorization cleanup failed')
-  }
-  const outcome = await completeAccountPickerAuthorizationCleanup(
-    authorizationGeneration,
-    CleanupEvidence.Full,
-  )
-  if ('error' in outcome) throw new Error('authorization cleanup rejected')
 }
 
 export async function recoverInterruptedAuthorizationCleanup(
   dependencies: ExtensionLifecycleRoutingDependencies,
-): Promise<void> {
+): Promise<AuthorizationCleanupResult> {
   const pendingLookup = dependencies
     .accountPickerAuthorizationCleanupPending()
     .then(
       (pending) => ({ kind: 'resolved' as const, pending }),
       () => ({ kind: 'rejected' as const }),
     )
-  const cleanup = await dependencies.beginAccountPickerAuthorizationCleanup()
+  let cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
+  try {
+    cleanup = await dependencies.beginAccountPickerAuthorizationCleanup()
+  } catch {
+    return err([AuthorizationCleanupFailureKind.Rejected])
+  }
   const lookup = await pendingLookup
   if (lookup.kind === 'rejected') {
     dependencies.releaseAccountPickerAuthorizationCleanup(
       cleanup.authorizationGeneration,
     )
-    throw new Error('authorization cleanup marker lookup failed')
+    return err([AuthorizationCleanupFailureKind.MarkerLookupFailed])
   }
   if (!lookup.pending) {
     const outcome =
@@ -177,8 +220,9 @@ export async function recoverInterruptedAuthorizationCleanup(
         cleanup.authorizationGeneration,
         CleanupEvidence.Partial,
       )
-    if ('error' in outcome) throw new Error('authorization cleanup rejected')
-    return
+    return 'error' in outcome
+      ? err([AuthorizationCleanupFailureKind.Rejected])
+      : ok()
   }
   const cleanupArgs: ClearAuthorizationStateArgs = {
     ...dependencies,
@@ -188,7 +232,7 @@ export async function recoverInterruptedAuthorizationCleanup(
       cleanup,
     },
   }
-  await clearAuthorizationState(cleanupArgs)
+  return new AuthorizationCleanupLifecycle(cleanupArgs).clear()
 }
 
 export enum ExtensionLifecycleRoutingResult {
@@ -238,9 +282,11 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void ensureExtensionSessionDocument()
-      .then(() => sendResponse(successResponse))
-      .catch(() => sendResponse(sessionRuntimeFailureResponse))
+    void ensureExtensionSessionDocument().then((opened) =>
+      sendResponse(
+        opened.isOk() ? successResponse : sessionRuntimeFailureResponse,
+      ),
+    )
     return true
   }
 
@@ -274,8 +320,13 @@ export function routeExtensionLifecycleMessage({
       closeSession: true,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
-    void clearAuthorizationState(cleanupArgs)
-      .then(() => sendResponse(successResponse))
+    void new AuthorizationCleanupLifecycle(cleanupArgs)
+      .clear()
+      .then((cleanup) =>
+        sendResponse(
+          cleanup.isOk() ? successResponse : sessionLockFailureResponse,
+        ),
+      )
       .catch(() => sendResponse(sessionLockFailureResponse))
     return true
   }
@@ -298,8 +349,13 @@ export function routeExtensionLifecycleMessage({
       closeSession: true,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
-    void clearAuthorizationState(cleanupArgs)
-      .then(() => sendResponse(successResponse))
+    void new AuthorizationCleanupLifecycle(cleanupArgs)
+      .clear()
+      .then((cleanup) =>
+        sendResponse(
+          cleanup.isOk() ? successResponse : sessionLockFailureResponse,
+        ),
+      )
       .catch(() => sendResponse(sessionLockFailureResponse))
     return true
   }
@@ -312,86 +368,113 @@ export function routeExtensionLifecycleMessage({
     void importPairingAfterCompanionReady(message)
       .then(async (response) => {
         if (response.ok) await refreshAuthenticationSurfaces()
+        return response
       })
       .then(sendResponse)
     return true
   }
 
-  if (isExtensionLocalEventLogUpdatedMessage(message)) {
-    if (!isExtensionRuntimeSender(sender) || !isNokeySender(sender)) {
-      sendResponse(forbiddenSenderResponse)
-      return false
-    }
-    const importArgs: Parameters<typeof importLocalEventLogUpdate>[0] = {
-      vaultStoreId: message.payload.vaultStoreId,
-      eventLogRecords: message.payload.eventLogRecords,
-    }
-    void beginAccountPickerAuthorizationCleanup()
-      .then(async (cleanupStart) => {
-        const cleanupArgs: ClearAuthorizationStateArgs = {
-          beginAccountPickerAuthorizationCleanup,
-          clearPendingAccountPickers,
-          clearStagedAuthenticatorEnrollments,
-          closeExtensionSessionDocument,
-          completeAccountPickerAuthorizationCleanup,
-          releaseAccountPickerAuthorizationCleanup,
-          closeSession: true,
-          cleanupStart: {
-            kind: AuthorizationCleanupStartKind.Existing,
-            cleanup: cleanupStart,
-          },
-        }
-        try {
-          const response = await importLocalEventLogUpdate(importArgs)
-          if (
-            !response.ok &&
-            response.reason !== LocalEventLogUpdateFailure.VaultNotPaired
-          ) {
-            try {
-              await clearAuthorizationState(cleanupArgs)
-            } catch {
-              // Authorization remains invalid while browser cleanup is retried.
-            }
-          } else {
-            rebindStagedAuthenticatorEnrollmentsAuthorization(
-              cleanupStart.authorizationGeneration,
-            )
-            const outcome = await completeAccountPickerAuthorizationCleanup(
-              cleanupStart.authorizationGeneration,
-              CleanupEvidence.Partial,
-            )
-            // Preserve the import outcome without refreshing a rejected generation.
-            if ('error' in outcome) return response
-            if (response.ok) await refreshAuthenticationSurfaces()
-          }
-          return response
-        } catch {
-          try {
-            await clearAuthorizationState(cleanupArgs)
-          } catch {
-            // The persisted marker keeps authorization invalid if cleanup fails.
-          }
-          return {
-            ok: false,
-            reason: LocalEventLogUpdateFailure.EventLogImportFailed,
-          }
-        }
-      })
-      .then(sendResponse)
-    return true
-  }
-
-  if (isOpenSimpleVaultMessage(message)) {
+  if (ExtensionLocalEventLogUpdatedMessageSchema.is(message)) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    openSimpleVault()
-    sendResponse(successResponse)
-    return false
+    void ExternalSenderTrustPolicy.admits(sender)
+      .then(async (trusted) => {
+        if (!trusted) {
+          sendResponse(forbiddenSenderResponse)
+          return
+        }
+        const importArgs: Parameters<typeof importLocalEventLogUpdate>[0] = {
+          vaultStoreId: message.payload.vaultStoreId,
+          eventLogRecords: message.payload.eventLogRecords,
+        }
+        void beginAccountPickerAuthorizationCleanup()
+          .then(async (cleanupStart) => {
+            const cleanupArgs: ClearAuthorizationStateArgs = {
+              beginAccountPickerAuthorizationCleanup,
+              clearPendingAccountPickers,
+              clearStagedAuthenticatorEnrollments,
+              closeExtensionSessionDocument,
+              completeAccountPickerAuthorizationCleanup,
+              releaseAccountPickerAuthorizationCleanup,
+              closeSession: true,
+              cleanupStart: {
+                kind: AuthorizationCleanupStartKind.Existing,
+                cleanup: cleanupStart,
+              },
+            }
+            try {
+              const response = await importLocalEventLogUpdate(importArgs)
+              if (
+                !response.ok &&
+                response.reason !== LocalEventLogUpdateFailure.VaultNotPaired
+              ) {
+                try {
+                  const cleanup = await new AuthorizationCleanupLifecycle(
+                    cleanupArgs,
+                  ).clear()
+                  if (cleanup.isErr())
+                    return {
+                      ok: false,
+                      reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+                    }
+                } catch {
+                  // Authorization remains invalid while browser cleanup is retried.
+                }
+              } else {
+                rebindStagedAuthenticatorEnrollmentsAuthorization(
+                  cleanupStart.authorizationGeneration,
+                )
+                const outcome = await completeAccountPickerAuthorizationCleanup(
+                  cleanupStart.authorizationGeneration,
+                  CleanupEvidence.Partial,
+                )
+                // Preserve the import outcome without refreshing a rejected generation.
+                if ('error' in outcome) return response
+                if (response.ok) await refreshAuthenticationSurfaces()
+              }
+              return response
+            } catch {
+              try {
+                const cleanup = await new AuthorizationCleanupLifecycle(
+                  cleanupArgs,
+                ).clear()
+                if (cleanup.isErr())
+                  return {
+                    ok: false,
+                    reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+                  }
+              } catch {
+                // The persisted marker keeps authorization invalid if cleanup fails.
+              }
+              return {
+                ok: false,
+                reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+              }
+            }
+          })
+          .then(sendResponse)
+      })
+      .catch(() => sendResponse(forbiddenSenderResponse))
+    return true
   }
 
-  const launcherMessage = normalizeOpenCompanionLauncherMessage(message)
+  if (OpenSimpleVaultMessageSchema.is(message)) {
+    if (!isExtensionRuntimeSender(sender)) {
+      sendResponse(forbiddenSenderResponse)
+      return false
+    }
+    void openSimpleVault()
+      .then(() => sendResponse(successResponse))
+      .catch(() => sendResponse(launcherFailureResponse))
+    return true
+  }
+
+  const launcherMessage =
+    NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage(
+      message,
+    )
   if (
     launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
   ) {
@@ -405,7 +488,7 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (isBeginExtensionPairingMessage(message)) {
+  if (BeginExtensionPairingMessageSchema.is(message)) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false

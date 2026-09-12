@@ -2,12 +2,15 @@
 
 use super::NookPrevalidatedCompanionPairingApproval;
 use crate::manager::NookExternalEventLogRecords;
+use nook_core::DeviceAuthorization;
+use nook_core::VaultEvent;
 use nook_core::{
     AuthEnvelopes, CheckedRemoteEvent, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
     EventGraphDeviceAccess, EventGraphDeviceAccessRequest, EventGraphVaultArchitecture, EventId,
     LocalEventStore, StoreId, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
-    serialize_event_storage_yaml,
 };
+#[cfg(test)]
+use nook_core::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 use std::collections::BTreeSet;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -102,14 +105,14 @@ impl NookPrevalidatedCompanionPairingApproval {
             {
                 return Err(CompanionPairingPreparationFailure::EventIdMismatch);
             }
-            let bytes = serialize_event_storage_yaml(&record.event)
+            let bytes = VaultEvent::serialize_event_storage_yaml(&record.event)
                 .map_err(|_| CompanionPairingPreparationFailure::RecordInvalid)?;
             let checked = CheckedRemoteEvent::parse(&event_id, &bytes)
                 .map_err(|_| CompanionPairingPreparationFailure::RecordInvalid)?;
             if !checked.belongs_to_store(store_id.as_str()) {
                 return Err(CompanionPairingPreparationFailure::VaultMismatch);
             }
-            event_store.put_event(event_id, bytes);
+            event_store = event_store.put_event(nook_core::LocalEventWrite { event_id, bytes });
         }
         if unique.is_empty() {
             return Err(CompanionPairingPreparationFailure::GraphInvalid);
@@ -141,14 +144,19 @@ impl NookPrevalidatedCompanionPairingApproval {
             .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
         let signing_public_key = DeviceSigningPublicKey::parse(&installation.signing_public_key)
             .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
-        let envelopes = EventGraphDeviceAccess::new(&graph)
+        let envelopes = match EventGraphDeviceAccess::new(&graph)
             .active_envelopes(&EventGraphDeviceAccessRequest {
                 expected_device_id: &device_id,
                 expected_public_key: &public_key,
                 expected_signing_public_key: &signing_public_key,
             })
             .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?
-            .ok_or(CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
+        {
+            DeviceAuthorization::Granted(envelopes) => envelopes,
+            DeviceAuthorization::NotGranted => {
+                return Err(CompanionPairingPreparationFailure::RecipientAuthorizationMismatch);
+            }
+        };
         let mut meta = VaultMetaState::default();
         VaultMetaGraphProjection::new(&graph)
             .materialize(&mut meta)
@@ -209,7 +217,7 @@ mod tests {
     use nook_core::{
         ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity, EpochMetadataState,
         EpochPasswordState, IsoTimestamp, MemberLabel, Sha256Hex, SigningIdentity, StoreId,
-        VaultApplication, VaultKeys, VaultOperation, create_sentinel_share_records,
+        VaultApplication, VaultKeys, VaultOperation,
     };
 
     pub(super) struct ActivationFixture {
@@ -275,7 +283,7 @@ mod tests {
                     providers.companion_pairing_manifest_digest()?.as_str(),
                 )?,
             };
-            let mut endpoint = NookCompanionPairingExtensionEndpoint::new(request)
+            let endpoint = NookCompanionPairingExtensionEndpoint::new(request)
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
             let authority = endpoint
                 .take_authority()
@@ -290,7 +298,7 @@ mod tests {
                     providers,
                 )
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-            let records = Self::access_records(AccessRecordsRequest {
+            let records = Self::access_records(&AccessRecordsRequest {
                 manager: &manager,
                 identity: &identity,
             })?;
@@ -303,7 +311,7 @@ mod tests {
         }
 
         fn access_records(
-            request: AccessRecordsRequest<'_>,
+            request: &AccessRecordsRequest<'_>,
         ) -> anyhow::Result<NookExternalEventLogRecords> {
             let AccessRecordsRequest { manager, identity } = request;
             let (website_signing, _) = SigningIdentity::generate()?;
@@ -346,7 +354,14 @@ mod tests {
         }
 
         fn append_sentinel_membership(&mut self) -> anyhow::Result<()> {
-            let parent = EventId::parse(&self.records.0[0].event_id)?;
+            let parent = EventId::parse(
+                &self
+                    .records
+                    .0
+                    .first()
+                    .ok_or_else(|| anyhow::anyhow!("genesis record must be present"))?
+                    .event_id,
+            )?;
             let signing =
                 SigningIdentity::from_seed_hex_stored(&self.manager.event_log.signing_seed)?;
             let participant = DeviceIdentity::generate()?;
@@ -367,7 +382,14 @@ mod tests {
         }
 
         fn append_sentinel_checkpoint(&mut self) -> anyhow::Result<()> {
-            let parent = EventId::parse(&self.records.0[0].event_id)?;
+            let parent = EventId::parse(
+                &self
+                    .records
+                    .0
+                    .first()
+                    .ok_or_else(|| anyhow::anyhow!("genesis record must be present"))?
+                    .event_id,
+            )?;
             let signing =
                 SigningIdentity::from_seed_hex_stored(&self.manager.event_log.signing_seed)?;
             let trigger = Self::event_record(EventRecordRequest {
@@ -383,8 +405,13 @@ mod tests {
             self.records.0.push(trigger);
             let first = DeviceIdentity::generate()?;
             let second = DeviceIdentity::generate()?;
-            let shares =
-                create_sentinel_share_records(&VaultKeys::generate()?, &[first, second], 2.into())?;
+            let shares = SentinelShareEnvelope::create_sentinel_share_records(
+                CreateSentinelShareRecordsRequest {
+                    keys: &VaultKeys::generate()?,
+                    participants: &[first, second],
+                    threshold: 2.into(),
+                },
+            )?;
             let store_id = StoreId::parse(&self.manager.vault.store_id)?;
             let (event, _) = nook_core::AppendEventInput::build(nook_core::AppendEventInput {
                 store_id: &store_id,
@@ -458,7 +485,7 @@ mod tests {
     fn rejects_event_grant_for_another_recipient() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
         let other = DeviceIdentity::generate()?;
-        fixture.records = ActivationFixture::access_records(AccessRecordsRequest {
+        fixture.records = ActivationFixture::access_records(&AccessRecordsRequest {
             manager: &fixture.manager,
             identity: &other,
         })?;
@@ -483,7 +510,13 @@ mod tests {
     #[test]
     fn rejects_duplicate_event() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
-        fixture.records.0.push(fixture.records.0[0].clone());
+        let duplicate = fixture
+            .records
+            .0
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+            .clone();
+        fixture.records.0.push(duplicate);
         assert!(matches!(
             fixture.prepare(),
             Err(CompanionPairingPreparationFailure::DuplicateEvent)
@@ -494,8 +527,12 @@ mod tests {
     #[test]
     fn rejects_event_id_substitution() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
-        fixture.records.0[0].event_id =
-            "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo".to_owned();
+        fixture
+            .records
+            .0
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+            .event_id = "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo".to_owned();
         assert!(matches!(
             fixture.prepare(),
             Err(CompanionPairingPreparationFailure::EventIdMismatch)
@@ -506,7 +543,12 @@ mod tests {
     #[test]
     fn rejects_invalid_event_identifier() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
-        fixture.records.0[0].event_id = "not-an-event-identifier".to_owned();
+        fixture
+            .records
+            .0
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+            .event_id = "not-an-event-identifier".to_owned();
         assert!(matches!(
             fixture.prepare(),
             Err(CompanionPairingPreparationFailure::IdentifierInvalid)
@@ -518,7 +560,14 @@ mod tests {
     fn rejects_event_with_invalid_signature() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
         let (other_signer, _) = SigningIdentity::generate()?;
-        let parent = EventId::parse(&fixture.records.0[0].event_id)?;
+        let parent = EventId::parse(
+            &fixture
+                .records
+                .0
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+                .event_id,
+        )?;
         let other_record = ActivationFixture::event_record(EventRecordRequest {
             manager: &fixture.manager,
             signer: &other_signer,
@@ -526,7 +575,13 @@ mod tests {
             created_at: IsoTimestamp::parse("2026-09-08T00:00:02Z")?,
             operation: VaultOperation::VaultCleared,
         })?;
-        fixture.records.0[0].event.signature = other_record.event.signature;
+        fixture
+            .records
+            .0
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+            .event
+            .signature = other_record.event.signature;
         assert!(matches!(
             fixture.prepare(),
             Err(CompanionPairingPreparationFailure::RecordInvalid)
@@ -565,7 +620,14 @@ mod tests {
     fn rejects_quarantined_unauthorized_event() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
         let (unauthorized, _) = SigningIdentity::generate()?;
-        let parent = EventId::parse(&fixture.records.0[0].event_id)?;
+        let parent = EventId::parse(
+            &fixture
+                .records
+                .0
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+                .event_id,
+        )?;
         fixture
             .records
             .0
@@ -591,7 +653,14 @@ mod tests {
         let mut fixture = ActivationFixture::new()?;
         let signing =
             SigningIdentity::from_seed_hex_stored(&fixture.manager.event_log.signing_seed)?;
-        let parent = EventId::parse(&fixture.records.0[0].event_id)?;
+        let parent = EventId::parse(
+            &fixture
+                .records
+                .0
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("event fixture must be present"))?
+                .event_id,
+        )?;
         fixture
             .records
             .0
@@ -625,7 +694,7 @@ mod tests {
     fn rejects_event_for_another_vault() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
         fixture.manager.vault.store_id = "store_testtoken12".to_owned();
-        fixture.records = ActivationFixture::access_records(AccessRecordsRequest {
+        fixture.records = ActivationFixture::access_records(&AccessRecordsRequest {
             manager: &fixture.manager,
             identity: &fixture.identity,
         })?;

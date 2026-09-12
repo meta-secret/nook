@@ -1,3 +1,6 @@
+import { ok, type Result } from 'neverthrow'
+import { NookLocalVaultUnlockState } from '$app-wasm'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const wasmMocks = vi.hoisted(() => ({
@@ -9,6 +12,9 @@ const wasmMocks = vi.hoisted(() => ({
   setLocalVaultLabel: vi.fn(),
   setVaultSessionLocked: vi.fn(),
 }))
+const unlockPresentationRefresh = vi.hoisted(() =>
+  vi.fn<() => Promise<Result<void, never>>>(),
+)
 
 vi.mock('$app-wasm', () => ({
   get_active_vault_selection: wasmMocks.getActiveVaultSelection,
@@ -19,22 +25,40 @@ vi.mock('$app-wasm', () => ({
   set_local_vault_label: wasmMocks.setLocalVaultLabel,
   set_vault_session_locked: wasmMocks.setVaultSessionLocked,
   NookVaultSwitchState: { Switch: 'Switch' },
+  VaultRecoveryErrorKind: { Other: 'Other' },
+  classify_vault_recovery_error: () => 'Other',
 }))
 
 vi.mock('$lib/runtime/log', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
+  browserLogRuntime: {
+    createLogger: () => ({
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+    }),
+  },
+}))
+
+vi.mock('$lib/vault/login-unlock-capabilities', () => ({
+  LoginUnlockPresentation: class {
+    async refresh() {
+      return unlockPresentationRefresh()
+    }
+  },
 }))
 
 vi.mock('$lib/auth/providers', () => ({
-  saveAuthProviders: vi.fn(),
+  activeVaultScope: vi.fn(),
+  AuthProviderPersistence: class {
+    async save() {
+      return ok()
+    }
+  },
 }))
-
-import { renameLocalVaultLabel } from '$lib/vault/local-login'
-import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
+import { VaultLoginActions } from '$lib/vault/local-login'
+import { NookVaultManager } from '$app-wasm'
+import { LocalLoginPreparationState } from '$lib/vault/state/provider.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '$lib/vault.svelte'
 
 describe('renameLocalVaultLabel', () => {
@@ -48,24 +72,30 @@ describe('renameLocalVaultLabel', () => {
     wasmMocks.listLocalVaults.mockRejectedValue(
       new Error('catalog refresh failed'),
     )
-    const state = {
-      activeVault: {
-        kind: ActiveVaultKind.Open,
+    const state = VaultStateTestFixture.create()
+    state.openActiveVault('store-1')
+    state.localVaults = [
+      {
         storeId: 'store-1',
+        label: 'Old name',
+        lastUnlockedAt: '',
+        unlockState: NookLocalVaultUnlockState.NeverUnlocked,
+        display_label: () => 'Old name',
+        free: vi.fn(),
+        [Symbol.dispose]: vi.fn(),
       },
-      localVaults: [{ storeId: 'store-1', label: 'Old name' }],
-      requireManager: () => ({ set_vault_name: setVaultName }),
-      enqueueStorage: <T>(operation: () => T | Promise<T>) =>
-        Promise.resolve(operation()),
-      dismissSuccess: vi.fn(),
-      showSuccess: vi.fn(),
-      t: (key: string) => key,
-      errorMsg: '',
-      isVerifying: false,
-    } as unknown as VaultState
+    ]
+    const manager = new NookVaultManager()
+    manager.set_vault_name = setVaultName
+    state.openManager(manager)
+    state.dismissSuccess = vi.fn()
+    state.showSuccess = vi.fn()
+    state.t = (request: Parameters<VaultState['t']>[0]) =>
+      typeof request === 'string' ? request : request.key
+    state.errorMsg = ''
+    state.isVerifying = false
 
-    await renameLocalVaultLabel({
-      state: state,
+    await new VaultLoginActions(state).renameLocalVaultLabel({
       storeId: 'store-1',
       label: 'New name',
     })
@@ -77,7 +107,43 @@ describe('renameLocalVaultLabel', () => {
     )
     expect(setVaultName).toHaveBeenCalledOnce()
     expect(setVaultName).toHaveBeenCalledWith('New name')
-    expect(state.errorMsg).toBe('catalog refresh failed')
+    expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)
     expect(state.isVerifying).toBe(false)
+  })
+})
+
+describe('selectVaultForUnlock', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    wasmMocks.setActiveVault.mockImplementation(async () => {})
+    wasmMocks.hasActiveLocalVault.mockResolvedValue(true)
+    unlockPresentationRefresh.mockResolvedValue(ok())
+  })
+
+  test('prepares the selected vault without protected provider or identity access', async () => {
+    const syncActiveVaultStoreIdToAuth = vi.fn(async () => ok())
+    const reloadProvidersForActiveVault = vi.fn(async () => ok())
+    const state = VaultStateTestFixture.create()
+    state.clearManager()
+    state.errorMsg = ''
+    state.isVerifying = false
+    state.localLoginPreparation = LocalLoginPreparationState.Idle
+    state.localVaultPresent = true
+    state.dismissSuccess = vi.fn()
+    state.openActiveVault = vi.fn()
+    state.refreshPasswordEntriesList = vi.fn(async () => ok())
+    state.syncActiveVaultStoreIdToAuth = syncActiveVaultStoreIdToAuth
+    state.reloadProvidersForActiveVault = reloadProvidersForActiveVault
+
+    const selected = await new VaultLoginActions(state).selectVaultForUnlock({
+      storeId: 'store-2',
+    })
+
+    expect(selected.isOk()).toBe(true)
+    expect(wasmMocks.setActiveVault).toHaveBeenCalledWith('store-2')
+    expect(state.openActiveVault).toHaveBeenCalledWith('store-2')
+    expect(syncActiveVaultStoreIdToAuth).not.toHaveBeenCalled()
+    expect(reloadProvidersForActiveVault).not.toHaveBeenCalled()
+    expect(unlockPresentationRefresh).not.toHaveBeenCalled()
   })
 })

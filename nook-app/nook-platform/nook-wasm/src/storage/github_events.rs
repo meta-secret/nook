@@ -6,14 +6,40 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
+use crate::GitHubStorageClient;
+use crate::GitHubStorageClientFetchGithubVault;
+use crate::GitHubStorageClientWriteGithubTextFile;
+use nook_core::EventId;
+#[cfg(test)]
+use nook_core::{GenesisImportRequest, VaultEvent};
 use reqwest::{Client, StatusCode};
 use std::path::Path;
 use std::str;
 
 use super::checked_event_write::CheckedEventWrite;
+use super::github::{GitHubFileWrite, GitHubRootDiscovery, GitHubVaultDiscovery};
+use super::remote_event::RemoteEventRead;
 use crate::NookError;
-use crate::storage::github::{fetch_github_vault, write_github_text_file};
-use nook_core::EventId;
+#[derive(Clone, Copy)]
+struct RepositoryResponse<'a> {
+    status: StatusCode,
+    text: &'a str,
+    repo: &'a str,
+}
+enum RepositoryDiscovery {
+    Missing,
+    Loaded(GitHubRepoResponse),
+}
+enum TreeDiscovery {
+    Missing,
+    Loaded(GitTreeResponse),
+}
+#[derive(Debug, PartialEq, Eq)]
+enum TreeEvent {
+    Unrelated,
+    Event(String),
+}
+
 use serde::Deserialize;
 
 pub(crate) struct GitHubEventStore<'a> {
@@ -33,12 +59,11 @@ impl GitHubEventStore<'_> {
     }
 
     fn github_repo_response(
-        status: StatusCode,
-        text: &str,
-        repo: &str,
-    ) -> Result<Option<GitHubRepoResponse>, NookError> {
+        request: RepositoryResponse<'_>,
+    ) -> Result<RepositoryDiscovery, NookError> {
+        let RepositoryResponse { status, text, repo } = request;
         if status == StatusCode::NOT_FOUND {
-            return Ok(None);
+            return Ok(RepositoryDiscovery::Missing);
         }
         if !status.is_success() {
             return Err(NookError::GitHub(format!(
@@ -47,16 +72,13 @@ impl GitHubEventStore<'_> {
         }
 
         serde_json::from_str(text)
-            .map(Some)
+            .map(RepositoryDiscovery::Loaded)
             .map_err(|e| NookError::Serialization(e.to_string()))
     }
 
-    fn github_tree_response(
-        status: StatusCode,
-        text: &str,
-    ) -> Result<Option<GitTreeResponse>, NookError> {
+    fn github_tree_response(status: StatusCode, text: &str) -> Result<TreeDiscovery, NookError> {
         if status == StatusCode::NOT_FOUND {
-            return Ok(None);
+            return Ok(TreeDiscovery::Missing);
         }
         if !status.is_success() {
             return Err(NookError::GitHub(format!(
@@ -72,14 +94,17 @@ impl GitHubEventStore<'_> {
             ));
         }
 
-        Ok(Some(tree))
+        Ok(TreeDiscovery::Loaded(tree))
     }
 
     fn event_ids_from_tree(entries: &[GitTreeEntry]) -> Vec<String> {
         entries
             .iter()
             .filter(|entry| entry.entry_type == "blob")
-            .filter_map(|entry| Self::event_id_from_tree_path(&entry.path))
+            .filter_map(|entry| match Self::event_id_from_tree_path(&entry.path) {
+                TreeEvent::Event(id) => Some(id),
+                TreeEvent::Unrelated => None,
+            })
             .collect()
     }
 
@@ -112,19 +137,22 @@ struct GitTreeEntry {
 }
 
 impl GitHubEventStore<'_> {
-    fn event_id_from_tree_path(path: &str) -> Option<String> {
-        let name = path
+    fn event_id_from_tree_path(path: &str) -> TreeEvent {
+        let Some(name) = path
             .strip_prefix(&format!("{EVENT_LOG_ROOT}/"))
-            .filter(|relative| !relative.contains('/'))?;
+            .filter(|relative| !relative.contains('/'))
+        else {
+            return TreeEvent::Unrelated;
+        };
         if let Some(extension) = Path::new(name).extension()
             && extension.eq_ignore_ascii_case("yaml")
             && let Some(stem) = Path::new(name).file_stem()
             && let Some(digest) = stem.to_str()
             && Self::is_sha256_base64url_digest(digest)
         {
-            return Some(format!("sha256u:{digest}"));
+            return TreeEvent::Event(format!("sha256u:{digest}"));
         }
-        None
+        TreeEvent::Unrelated
     }
 
     pub(crate) async fn list_github_event_ids(&self) -> Result<Vec<String>, NookError> {
@@ -148,7 +176,13 @@ impl GitHubEventStore<'_> {
             .text()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let Some(repo_info) = Self::github_repo_response(repo_status, &repo_text, repo)? else {
+        let RepositoryDiscovery::Loaded(repo_info) =
+            Self::github_repo_response(RepositoryResponse {
+                status: repo_status,
+                text: &repo_text,
+                repo,
+            })?
+        else {
             return Ok(Vec::new());
         };
         let branch = urlencoding::encode(&repo_info.default_branch);
@@ -168,7 +202,8 @@ impl GitHubEventStore<'_> {
             .text()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let Some(tree) = Self::github_tree_response(tree_status, &tree_text)? else {
+        let TreeDiscovery::Loaded(tree) = Self::github_tree_response(tree_status, &tree_text)?
+        else {
             return Ok(Vec::new());
         };
 
@@ -180,25 +215,30 @@ impl GitHubEventStore<'_> {
         &self,
         event_id: &EventId,
     ) -> Result<Vec<u8>, NookError> {
-        let pat = self.pat;
-        let repo = self.repo;
-        Self::fetch_github_event_optional(pat, repo, event_id)
-            .await?
-            .ok_or_else(|| {
-                NookError::GitHub(format!("Event file missing at {}", event_id.as_str()))
-            })
+        match self.read_github_event(event_id).await? {
+            RemoteEventRead::Retrieved(bytes) => Ok(bytes.into()),
+            RemoteEventRead::Unavailable => Err(NookError::GitHub(format!(
+                "Event file missing at {}",
+                event_id.as_str()
+            ))),
+        }
     }
 
-    async fn fetch_github_event_optional(
-        pat: &str,
-        repo: &str,
-        event_id: &EventId,
-    ) -> Result<Option<Vec<u8>>, NookError> {
+    async fn read_github_event(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
+        let pat = self.pat;
+        let repo = self.repo;
         let path = event_id.storage_path();
-        if let Some(file) = fetch_github_vault(pat, repo, &path, None).await? {
-            return Ok(Some(file.content.into_bytes()));
+        if let GitHubVaultDiscovery::FileLoaded(file) = GitHubStorageClient::new(pat)
+            .fetch_github_vault(GitHubStorageClientFetchGithubVault {
+                repo,
+                path: &path,
+                root: GitHubRootDiscovery::Inspect,
+            })
+            .await?
+        {
+            return Ok(RemoteEventRead::Retrieved(file.content.into_bytes().into()));
         }
-        Ok(None)
+        Ok(RemoteEventRead::Unavailable)
     }
 }
 
@@ -218,27 +258,42 @@ impl GitHubEventStore<'_> {
         let repo = self.repo;
         let event_id = checked.event_id();
         let bytes = checked.bytes();
-        match Self::fetch_github_event_optional(pat, repo, event_id).await? {
-            Some(existing) if checked.matches(&existing) => {
+        match self.read_github_event(event_id).await? {
+            RemoteEventRead::Retrieved(existing) if checked.matches(existing.as_ref()) => {
                 return Ok(());
             }
-            Some(_) => {
+            RemoteEventRead::Retrieved(_) => {
                 return Err(NookError::GitHub(
                     "Event path exists with different content (corruption)".to_owned(),
                 ));
             }
-            None => {}
+            RemoteEventRead::Unavailable => {}
         }
 
         let path = event_id.storage_path();
         let content = Self::event_content(bytes)?;
 
         for attempt in 0..3 {
-            match write_github_text_file(pat, repo, &path, content, None).await {
+            match GitHubStorageClient::new(pat)
+                .write_github_text_file(GitHubStorageClientWriteGithubTextFile {
+                    repo,
+                    path: &path,
+                    content,
+                    write: GitHubFileWrite::Create,
+                })
+                .await
+            {
                 Ok(_) => return Ok(()),
                 Err(NookError::GitHub(message)) if attempt < 2 => {
                     if Self::is_retryable_event_write_error(&message) {
-                        if let Ok(Some(existing)) = fetch_github_vault(pat, repo, &path, None).await
+                        if let Ok(GitHubVaultDiscovery::FileLoaded(existing)) =
+                            GitHubStorageClient::new(pat)
+                                .fetch_github_vault(GitHubStorageClientFetchGithubVault {
+                                    repo,
+                                    path: &path,
+                                    root: GitHubRootDiscovery::Inspect,
+                                })
+                                .await
                         {
                             let existing_bytes = existing.content.as_bytes();
                             if checked.matches(existing_bytes) {
@@ -264,10 +319,7 @@ impl GitHubEventStore<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_core::{
-        GenesisImportPayload, IsoTimestamp, SigningIdentity, StoreId, build_genesis_import_event,
-        serialize_event_storage_yaml,
-    };
+    use nook_core::{GenesisImportPayload, IsoTimestamp, SigningIdentity, StoreId};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -279,23 +331,23 @@ mod tests {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         assert_eq!(
             GitHubEventStore::event_id_from_tree_path(&format!("{EVENT_LOG_ROOT}/{digest}.yaml")),
-            Some(format!("sha256u:{digest}"))
+            TreeEvent::Event(format!("sha256u:{digest}"))
         );
         assert_eq!(
             GitHubEventStore::event_id_from_tree_path(&format!(
                 "{EVENT_LOG_ROOT}/aa/{digest}.yaml"
             )),
-            None
+            TreeEvent::Unrelated
         );
         assert_eq!(
             GitHubEventStore::event_id_from_tree_path(&format!("{EVENT_LOG_ROOT}/{digest}.json")),
-            None
+            TreeEvent::Unrelated
         );
         assert_eq!(
             GitHubEventStore::event_id_from_tree_path(
                 "other/path/ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0.yaml"
             ),
-            None
+            TreeEvent::Unrelated
         );
     }
 
@@ -304,27 +356,31 @@ mod tests {
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test callback"
     )]
-    fn tree_path_filter_rejects_invalid_digests_and_accepts_case_insensitive_yaml() {
+    fn tree_path_filter_rejects_invalid_digests_and_accepts_case_insensitive_yaml()
+    -> anyhow::Result<()> {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         assert_eq!(
             GitHubEventStore::event_id_from_tree_path(&format!("{EVENT_LOG_ROOT}/{digest}.YaMl")),
-            Some(format!("sha256u:{digest}"))
+            TreeEvent::Event(format!("sha256u:{digest}"))
         );
         assert_eq!(
             GitHubEventStore::event_id_from_tree_path(&format!(
                 "{EVENT_LOG_ROOT}/{}!.yaml",
-                &digest[..42]
+                digest
+                    .get(..42)
+                    .ok_or_else(|| anyhow::anyhow!("digest prefix fixture must be present"))?
             )),
-            None
+            TreeEvent::Unrelated
         );
         assert_eq!(
             GitHubEventStore::event_id_from_tree_path(&format!(
                 "{EVENT_LOG_ROOT}/{}.yaml.bak",
                 digest
             )),
-            None
+            TreeEvent::Unrelated
         );
         assert!(!GitHubEventStore::is_sha256_base64url_digest("short"));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -338,8 +394,12 @@ mod tests {
         )?;
         assert!(response.truncated);
         assert_eq!(response.tree.len(), 1);
-        assert_eq!(response.tree[0].path, "nook-log/v1/events/event.yaml");
-        assert_eq!(response.tree[0].entry_type, "blob");
+        let entry = response
+            .tree
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("tree entry fixture must be present"))?;
+        assert_eq!(entry.path, "nook-log/v1/events/event.yaml");
+        assert_eq!(entry.entry_type, "blob");
         let repo: GitHubRepoResponse = serde_json::from_str(r#"{"default_branch":"main"}"#)?;
         assert_eq!(repo.default_branch, "main");
         Ok(())
@@ -350,33 +410,45 @@ mod tests {
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test callback"
     )]
-    fn github_repo_response_projects_missing_errors_and_json() {
-        assert!(
-            GitHubEventStore::github_repo_response(StatusCode::NOT_FOUND, "", "owner/repo")
-                .unwrap()
-                .is_none()
-        );
+    fn github_repo_response_projects_missing_errors_and_json() -> anyhow::Result<()> {
+        assert!(matches!(
+            GitHubEventStore::github_repo_response(RepositoryResponse {
+                status: StatusCode::NOT_FOUND,
+                text: "",
+                repo: "owner/repo"
+            })?,
+            RepositoryDiscovery::Missing
+        ));
 
-        let unavailable =
-            GitHubEventStore::github_repo_response(StatusCode::FORBIDDEN, "", "owner/repo");
+        let unavailable = GitHubEventStore::github_repo_response(RepositoryResponse {
+            status: StatusCode::FORBIDDEN,
+            text: "",
+            repo: "owner/repo",
+        });
         assert!(matches!(
             unavailable,
             Err(NookError::GitHub(message))
                 if message.contains("owner/repo") && message.contains("403")
         ));
 
-        let malformed =
-            GitHubEventStore::github_repo_response(StatusCode::OK, "not-json", "owner/repo");
+        let malformed = GitHubEventStore::github_repo_response(RepositoryResponse {
+            status: StatusCode::OK,
+            text: "not-json",
+            repo: "owner/repo",
+        });
         assert!(matches!(malformed, Err(NookError::Serialization(_))));
 
-        let repo = GitHubEventStore::github_repo_response(
-            StatusCode::OK,
-            r#"{"default_branch":"release"}"#,
-            "owner/repo",
-        )
-        .unwrap()
-        .expect("successful repository response must decode");
+        let RepositoryDiscovery::Loaded(repo) =
+            GitHubEventStore::github_repo_response(RepositoryResponse {
+                status: StatusCode::OK,
+                text: r#"{"default_branch":"release"}"#,
+                repo: "owner/repo",
+            })?
+        else {
+            panic!("successful repository response must decode")
+        };
         assert_eq!(repo.default_branch, "release");
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -384,12 +456,11 @@ mod tests {
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test callback"
     )]
-    fn github_tree_response_projects_missing_errors_truncation_and_entries() {
-        assert!(
-            GitHubEventStore::github_tree_response(StatusCode::NOT_FOUND, "")
-                .unwrap()
-                .is_none()
-        );
+    fn github_tree_response_projects_missing_errors_truncation_and_entries() -> anyhow::Result<()> {
+        assert!(matches!(
+            GitHubEventStore::github_tree_response(StatusCode::NOT_FOUND, "")?,
+            TreeDiscovery::Missing
+        ));
 
         let unavailable = GitHubEventStore::github_tree_response(StatusCode::BAD_GATEWAY, "");
         assert!(matches!(
@@ -409,13 +480,15 @@ mod tests {
             Err(NookError::GitHub(message)) if message.contains("truncated")
         ));
 
-        let tree = GitHubEventStore::github_tree_response(
+        let TreeDiscovery::Loaded(tree) = GitHubEventStore::github_tree_response(
             StatusCode::OK,
             r#"{"truncated":false,"tree":[{"path":"event.yaml","type":"blob"}]}"#,
-        )
-        .unwrap()
-        .expect("complete tree response must decode");
+        )?
+        else {
+            panic!("complete tree response must decode")
+        };
         assert_eq!(tree.tree.len(), 1);
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -454,9 +527,9 @@ mod tests {
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test callback"
     )]
-    fn event_content_accepts_utf8_and_rejects_binary_payloads() {
+    fn event_content_accepts_utf8_and_rejects_binary_payloads() -> anyhow::Result<()> {
         assert_eq!(
-            GitHubEventStore::event_content(b"event: yaml").unwrap(),
+            GitHubEventStore::event_content(b"event: yaml")?,
             "event: yaml"
         );
         let invalid = GitHubEventStore::event_content(&[0xff, 0xfe]);
@@ -464,6 +537,7 @@ mod tests {
             invalid,
             Err(NookError::Serialization(message)) if message.contains("Event YAML must be UTF-8")
         ));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -473,25 +547,27 @@ mod tests {
     )]
     async fn event_write_rejects_mismatched_event_id_before_network() -> anyhow::Result<()> {
         let (identity, _) = SigningIdentity::generate()?;
-        let event = build_genesis_import_event(
-            &StoreId::parse("store_testtoken11")?,
-            &identity.actor_id()?,
-            &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
-            GenesisImportPayload {
+        let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+            store_id: &StoreId::parse("store_testtoken11")?,
+            actor_id: &identity.actor_id()?,
+            key_epoch: &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
+            payload: GenesisImportPayload {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: vec![],
                 password_entries: vec![],
             },
-            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            identity.signing_key(),
-        )?;
-        let bytes: Vec<u8> = serialize_event_storage_yaml(&event)?.into();
+            created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            signing_key: identity.signing_key(),
+        })?;
+        let bytes: Vec<u8> = VaultEvent::serialize_event_storage_yaml(&event)?.into();
         let requested_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let store = GitHubEventStore { pat: "", repo: "" };
-        let error = store
+        let Err(error) = store
             .put_github_event_if_absent(&requested_id, &bytes)
             .await
-            .expect_err("mismatched event id must fail before network");
+        else {
+            anyhow::bail!("mismatched event id must fail before network");
+        };
         assert!(matches!(
             error,
             NookError::Serialization(message) if message.contains("GitHub event id mismatch")

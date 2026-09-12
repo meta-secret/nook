@@ -61,27 +61,29 @@ pub enum AuthenticationOutcomeResponse {
 #[error("authentication outcome response is malformed")]
 pub struct AuthenticationOutcomeResponseDecodeError;
 
-pub fn decode_authentication_outcome_response(
-    wire: AuthenticationOutcomeResponseWire,
-) -> Result<AuthenticationOutcomeResponse, AuthenticationOutcomeResponseDecodeError> {
-    match wire {
-        AuthenticationOutcomeResponseWire::Completed(AuthenticationOutcomeCompletedWire {
-            ok: true,
-            verdict,
-        }) => Ok(AuthenticationOutcomeResponse::Completed {
-            kind: AuthenticationOutcomeResponseKind::Completed,
-            verdict,
-        }),
-        AuthenticationOutcomeResponseWire::Rejected(AuthenticationOutcomeRejectedWire {
-            ok: false,
-            reason,
-        }) if !reason.trim().is_empty() => Ok(AuthenticationOutcomeResponse::Rejected {
-            kind: AuthenticationOutcomeResponseKind::Rejected,
-            reason,
-        }),
-        AuthenticationOutcomeResponseWire::Completed(_)
-        | AuthenticationOutcomeResponseWire::Rejected(_) => {
-            Err(AuthenticationOutcomeResponseDecodeError)
+impl AuthenticationOutcomeResponse {
+    pub fn decode_authentication_outcome_response(
+        wire: AuthenticationOutcomeResponseWire,
+    ) -> Result<AuthenticationOutcomeResponse, AuthenticationOutcomeResponseDecodeError> {
+        match wire {
+            AuthenticationOutcomeResponseWire::Completed(AuthenticationOutcomeCompletedWire {
+                ok: true,
+                verdict,
+            }) => Ok(AuthenticationOutcomeResponse::Completed {
+                kind: AuthenticationOutcomeResponseKind::Completed,
+                verdict,
+            }),
+            AuthenticationOutcomeResponseWire::Rejected(AuthenticationOutcomeRejectedWire {
+                ok: false,
+                reason,
+            }) if !reason.trim().is_empty() => Ok(AuthenticationOutcomeResponse::Rejected {
+                kind: AuthenticationOutcomeResponseKind::Rejected,
+                reason,
+            }),
+            AuthenticationOutcomeResponseWire::Completed(_)
+            | AuthenticationOutcomeResponseWire::Rejected(_) => {
+                Err(AuthenticationOutcomeResponseDecodeError)
+            }
         }
     }
 }
@@ -97,7 +99,9 @@ mod tests {
             r#"{"ok":false,"reason":"outcome-classify-failed"}"#,
         ] {
             let wire = serde_json::from_str::<AuthenticationOutcomeResponseWire>(serialized)?;
-            assert!(decode_authentication_outcome_response(wire).is_ok());
+            assert!(
+                AuthenticationOutcomeResponse::decode_authentication_outcome_response(wire).is_ok()
+            );
         }
         Ok(())
     }
@@ -112,7 +116,7 @@ mod tests {
         ] {
             let decoded = serde_json::from_str::<AuthenticationOutcomeResponseWire>(serialized)
                 .map_err(|_| AuthenticationOutcomeResponseDecodeError)
-                .and_then(decode_authentication_outcome_response);
+                .and_then(AuthenticationOutcomeResponse::decode_authentication_outcome_response);
             assert!(decoded.is_err(), "accepted {serialized}");
         }
     }

@@ -2,24 +2,24 @@ import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import {
   SecretType,
-  type NookSecretRecord,
+  default_password_generation_options,
   type PasswordGenerationOptions,
 } from '$lib/nook'
-import type { VaultState } from '$lib/vault.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
 import { SecretTypeSelectionKind } from '$lib/components/secret-form-state'
 import { SecretEditorKind } from '$lib/components/secret-vault-state'
+import type { SecretOperationResult } from '$lib/vault/secret-operation-failure'
+import { ok } from 'neverthrow'
+import { SecretComponentTestFixture } from './secret-component-test-fixture'
 
-const vault = {
-  t(key: string): string {
-    return key
-  },
-  resolveErrorMessage(error: string): string {
-    return error
-  },
-} as unknown as VaultState
+const vault = VaultStateTestFixture.create()
+vi.spyOn(vault, 't').mockImplementation((request) =>
+  typeof request === 'string' ? request : request.key,
+)
+vi.spyOn(vault, 'resolveErrorMessage').mockImplementation((error) => error)
 
-const legacyAuthenticator = {
+const legacyAuthenticator = SecretComponentTestFixture.record({
   id: 'legacy-authenticator',
   type: SecretType.Authenticator,
   issuer: 'Legacy service',
@@ -30,7 +30,7 @@ const legacyAuthenticator = {
   digits: 8,
   period: 45,
   backupCodes: ['recovery-one', 'recovery-two'],
-} as unknown as NookSecretRecord
+})
 
 function renderLegacyAuthenticatorEditor() {
   const onReplaceSecret = vi
@@ -39,13 +39,13 @@ function renderLegacyAuthenticatorEditor() {
         readonly oldId: string
         readonly type: SecretType
         readonly data: string
-      }) => Promise<void>
+      }) => Promise<SecretOperationResult<void>>
     >()
-    .mockResolvedValue()
+    .mockResolvedValue(ok())
   const view = render(AddSecretForm, {
     vault,
     isSaving: false,
-    onAddSecret: vi.fn(async () => {}),
+    onAddSecret: vi.fn(async () => ok()),
     onReplaceSecret,
     onGeneratePassword: vi.fn(() => ''),
     onCancel: vi.fn(),
@@ -66,7 +66,7 @@ describe('AddSecretForm file attachment picker', () => {
     const view = render(AddSecretForm, {
       vault,
       isSaving: false,
-      onAddSecret: vi.fn(async () => {}),
+      onAddSecret: vi.fn(async () => ok()),
       onGeneratePassword: vi.fn(() => ''),
       onCancel: vi.fn(),
     })
@@ -86,7 +86,7 @@ describe('AddSecretForm password generation', () => {
     const view = render(AddSecretForm, {
       vault,
       isSaving: false,
-      onAddSecret: vi.fn(async () => {}),
+      onAddSecret: vi.fn(async () => ok()),
       onGeneratePassword,
       onCancel: vi.fn(),
     })
@@ -95,16 +95,13 @@ describe('AddSecretForm password generation', () => {
     await fireEvent.click(view.getByTestId('password-generator-toggle'))
     await fireEvent.click(view.getByTestId('generate-password-btn'))
 
-    expect(onGeneratePassword).toHaveBeenCalledWith({
-      length: 20,
-      lowercase: true,
-      uppercase: true,
-      numbers: true,
-      symbols: true,
-    })
-    expect((view.getByTestId('secret-value') as HTMLInputElement).value).toBe(
-      'rust-generated-password',
+    expect(onGeneratePassword).toHaveBeenCalledWith(
+      default_password_generation_options(),
     )
+    const secretValue = view.getByTestId('secret-value')
+    if (!(secretValue instanceof HTMLInputElement))
+      expect.fail('secret value must be an input')
+    expect(secretValue.value).toBe('rust-generated-password')
   })
 })
 
@@ -119,7 +116,9 @@ describe('AddSecretForm authenticator editing', () => {
     await fireEvent.click(view.getByTestId('save-secret-btn'))
 
     await waitFor(() => expect(onReplaceSecret).toHaveBeenCalledTimes(1))
-    const request = onReplaceSecret.mock.calls[0][0]
+    const [call] = onReplaceSecret.mock.calls
+    if (!call) expect.fail('editing must replace the authenticator secret')
+    const [request] = call
     expect(request.type).toBe(SecretType.Authenticator)
     expect(request.data).toContain('algorithm: SHA256')
     expect(request.data).toContain('digits: 8')
@@ -138,7 +137,9 @@ describe('AddSecretForm authenticator editing', () => {
     await fireEvent.click(view.getByTestId('save-secret-btn'))
 
     await waitFor(() => expect(onReplaceSecret).toHaveBeenCalledTimes(1))
-    const request = onReplaceSecret.mock.calls[0][0]
+    const [call] = onReplaceSecret.mock.calls
+    if (!call) expect.fail('editing must replace the authenticator secret')
+    const [request] = call
     expect(request.type).toBe(SecretType.Authenticator)
     expect(request.data).toContain('algorithm: SHA1')
     expect(request.data).toContain('digits: 6')

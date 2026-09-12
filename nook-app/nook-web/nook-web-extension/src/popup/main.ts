@@ -1,27 +1,31 @@
 import { mount } from 'svelte'
 import type { ComponentProps, MountOptions } from 'svelte'
-import { initializeExtensionI18n } from '../lib/i18n'
+import { extensionLocaleCatalog } from '../lib/i18n'
 import {
+  extensionPairingStateLoader,
   ExtensionSetupLoadKind,
-  loadExtensionSetupState,
 } from '../lib/pairing-state'
 import {
-  extensionDeviceProtectionStatus,
-  extensionSessionDevice,
   ExtensionSessionDeviceStateKind,
   DeviceProtectionStatus,
   type ExtensionSessionDeviceState,
+  extensionWasmRuntime,
 } from '../lib/nook-wasm'
 import PopupApp from './PopupApp.svelte'
 import AuthenticatorPicker from './AuthenticatorPicker.svelte'
 import LoginPicker from './LoginPicker.svelte'
 import './popup.css'
 
-async function loadCompanionVaultConnection(): Promise<{
-  isConnected: boolean
-  vaultName?: string
-}> {
-  const setup = await loadExtensionSetupState()
+async function loadCompanionVaultConnection(): Promise<
+  | {
+      isConnected: false
+    }
+  | {
+      isConnected: true
+      vaultName: string
+    }
+> {
+  const setup = await extensionPairingStateLoader.loadExtensionSetupState()
   return setup.kind === ExtensionSetupLoadKind.Ready
     ? { isConnected: true, vaultName: setup.setup.selectedVaultName }
     : { isConnected: false }
@@ -32,7 +36,7 @@ async function main() {
   if (!target) return
 
   const searchParams = new URLSearchParams(window.location.search)
-  const i18n = await initializeExtensionI18n()
+  const i18n = await extensionLocaleCatalog.initializeExtensionI18n()
   if (searchParams.get('intent') === 'authenticator-picker') {
     const nookTypedArgs0_0: MountOptions<
       ComponentProps<typeof AuthenticatorPicker>
@@ -59,10 +63,11 @@ async function main() {
   }
 
   const vaultConnection = await loadCompanionVaultConnection()
-  const protectionStatus = await extensionDeviceProtectionStatus()
+  const protectionStatus =
+    await extensionWasmRuntime.extensionDeviceProtectionStatus()
   const activeSessionDevice: ExtensionSessionDeviceState =
     protectionStatus === DeviceProtectionStatus.Unlocked
-      ? await extensionSessionDevice()
+      ? await extensionWasmRuntime.extensionSessionDevice()
       : { kind: ExtensionSessionDeviceStateKind.Locked }
 
   const nookTypedArgs0_2: MountOptions<ComponentProps<typeof PopupApp>> = {
@@ -70,7 +75,9 @@ async function main() {
     props: {
       i18n,
       isConnected: vaultConnection.isConnected,
-      vaultName: vaultConnection.vaultName,
+      ...(vaultConnection.isConnected
+        ? { vaultName: vaultConnection.vaultName }
+        : {}),
       pairingRequested: searchParams.get('intent') === 'pair',
       protectionStatus,
       activeSessionDevice,

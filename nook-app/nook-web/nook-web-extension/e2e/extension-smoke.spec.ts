@@ -29,13 +29,13 @@ import {
   simple_vault_url,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
-import { ExtensionPairingVaultType } from '../../nook-web-shared/src/extension/runtime-messages'
 import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
 } from './helpers/pin-device'
 import { lockExtensionSession } from './helpers/paired-pin-extension'
 import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
+import { ExtensionPairingApprovedMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
@@ -311,9 +311,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(sentinelPage.locator('#nook-auth-widget')).toHaveCount(0)
 
     const forgedGrant = {
-      type: 'nook:extension-pairing-approved',
+      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
       payload: {
-        vaultType: ExtensionPairingVaultType.Sentinel,
+        vaultType: 'sentinel',
         deviceId: 'sentinel-device-e2e',
         devicePublicKey: 'age1sentinel',
         deviceSigningPublicKey: 'sentinel-signing-key',
@@ -328,14 +328,14 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     }
     expect(
       await sendExternalMessage(simplePage, extensionId, forgedGrant),
-    ).toEqual({ ok: false, reason: 'invalid-pairing-grant' })
+    ).toEqual({ ok: false, reason: 'invalid-pairing-grant-vault-type' })
 
     const persistenceBeforeMalformedProvider =
       await readExtensionPersistenceSnapshot(worker)
     const malformedProviderGrant = {
-      type: 'nook:extension-pairing-approved',
+      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
       payload: {
-        vaultType: ExtensionPairingVaultType.Simple,
+        vaultType: 'simple',
         deviceId: 'device-e2e',
         devicePublicKey: 'age1extension',
         deviceSigningPublicKey: 'extension-signing-key',
@@ -357,15 +357,15 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         extensionId,
         malformedProviderGrant,
       ),
-    ).toEqual({ ok: false, reason: 'invalid-pairing-grant' })
+    ).toEqual({ ok: false, reason: 'invalid-pairing-grant-providers' })
     expect(await readExtensionPersistenceSnapshot(worker)).toEqual(
       persistenceBeforeMalformedProvider,
     )
 
     const approvedGrant: ExtensionPairingApprovedMessage = {
-      type: 'nook:extension-pairing-approved',
+      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
       payload: {
-        vaultType: ExtensionPairingVaultType.Simple,
+        vaultType: 'simple',
         deviceId: 'device-e2e',
         devicePublicKey: 'age1extension',
         deviceSigningPublicKey: 'extension-signing-key',

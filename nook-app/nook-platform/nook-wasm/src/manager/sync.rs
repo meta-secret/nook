@@ -5,8 +5,9 @@
 //! Event-log vaults union remote events. Projection YAML is never a sync source.
 
 use super::NookVaultManager;
-use crate::conversion::{sync_result_access_status, sync_result_session, sync_result_unchanged};
-use crate::storage::event_db::is_event_log_mode;
+use crate::NookDatabase;
+use crate::SyncResultSessionRequest;
+
 use crate::{NookError, NookVaultSyncResult};
 use nook_core::{StorageMode, VaultAccessStatus};
 use wasm_bindgen::JsError;
@@ -34,7 +35,7 @@ impl NookVaultManager {
         self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
 
-        if self.event_log.enabled || is_event_log_mode().await? {
+        if self.event_log.enabled || NookDatabase::is_event_log_mode().await? {
             self.event_log.enabled = true;
             let event_changed = self.sync_event_log_from_storage().await.unwrap_or(false);
             let changed = event_changed;
@@ -44,9 +45,12 @@ impl NookVaultManager {
                 }
             } else {
                 // Locked sentinel joiners still need share/join meta for ceremony.
-                let _ = self.materialize_vault_meta_from_events().await;
+                drop(self.materialize_vault_meta_from_events().await);
             }
-            let result = sync_result_session(self, changed)?;
+            let result = NookVaultSyncResult::sync_result_session(SyncResultSessionRequest {
+                manager: self,
+                changed,
+            })?;
             tracing::debug!(
                 scope = "wasm-sync",
                 changed,
@@ -69,14 +73,17 @@ impl NookVaultManager {
 
         if content.trim() == self.vault.last_synced_content.trim() {
             if self.vault.members_key.is_empty() {
-                return sync_result_unchanged();
+                return NookVaultSyncResult::sync_result_unchanged();
             }
-            return sync_result_session(self, false);
+            return NookVaultSyncResult::sync_result_session(SyncResultSessionRequest {
+                manager: self,
+                changed: false,
+            });
         }
 
         if content.trim().is_empty() {
             self.vault.last_synced_content = content.clone();
-            return sync_result_access_status(VaultAccessStatus::NewVault);
+            return NookVaultSyncResult::sync_result_access_status(VaultAccessStatus::NewVault);
         }
 
         if self.vault.members_key.is_empty() {
@@ -84,7 +91,7 @@ impl NookVaultManager {
             self.vault.last_synced_content = content.clone();
             let identity = self.ensure_device_identity()?;
             let status = nook_core::VaultContent::new(&content).access_status(&identity)?;
-            return sync_result_access_status(status);
+            return NookVaultSyncResult::sync_result_access_status(status);
         }
 
         Err(NookError::Database("Vault event log is required.".to_owned()).into())
@@ -115,7 +122,7 @@ mod browser_tests {
     async fn local_sync_without_content_reports_a_new_vault() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
         manager.delete_local_browser_data().await?;
-        crate::storage::event_db::clear_event_log_mode().await?;
+        NookDatabase::clear_event_log_mode().await?;
         let identity = nook_core::DeviceIdentity::generate()?;
         manager.device.id = identity.device_id().to_string();
         manager.device.identity_private_key = identity.secret_string().into_inner();
@@ -126,7 +133,7 @@ mod browser_tests {
             .await?;
         assert!(result.changed());
         assert_eq!(result.access_status()?, VaultAccessStatus::NewVault);
-        crate::storage::event_db::clear_event_log_mode().await?;
+        NookDatabase::clear_event_log_mode().await?;
         manager.delete_local_browser_data().await?;
         Ok(())
     }
@@ -135,7 +142,7 @@ mod browser_tests {
     async fn local_sync_with_matching_empty_content_reports_unchanged() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
         manager.delete_local_browser_data().await?;
-        crate::storage::event_db::clear_event_log_mode().await?;
+        NookDatabase::clear_event_log_mode().await?;
 
         let result = manager
             .sync_vault_from_storage("local".to_owned(), String::new(), String::new())
@@ -151,7 +158,7 @@ mod browser_tests {
     async fn local_sync_with_matching_content_returns_session_projection() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
         manager.delete_local_browser_data().await?;
-        crate::storage::event_db::clear_event_log_mode().await?;
+        NookDatabase::clear_event_log_mode().await?;
         manager.vault.last_synced_content.clear();
         manager.vault.members_key = "ab".repeat(32);
 
@@ -170,7 +177,7 @@ mod browser_tests {
     async fn event_log_sync_restores_local_storage_after_projection() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
         manager.delete_local_browser_data().await?;
-        crate::storage::event_db::set_event_log_mode().await?;
+        NookDatabase::set_event_log_mode().await?;
         manager.event_log.enabled = true;
 
         let result = manager
@@ -180,7 +187,7 @@ mod browser_tests {
         assert!(result.access_status().is_err());
         assert_eq!(manager.storage.mode, StorageMode::Local);
 
-        crate::storage::event_db::clear_event_log_mode().await?;
+        NookDatabase::clear_event_log_mode().await?;
         manager.delete_local_browser_data().await?;
         Ok(())
     }

@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import {
   access,
   mkdir,
@@ -6,38 +7,159 @@ import {
   rm,
   writeFile,
 } from 'node:fs/promises';
+
 import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
+
 import { tmpdir } from 'node:os';
+
 import { dirname, join } from 'node:path';
+
 import { expect, test } from 'bun:test';
+
 import {
   MODULE_EXPERT_CATALOG,
   WEB_EXPERT_ALLOWED_CONTEXT_PATHS,
   WEB_EXPERT_SKILL_AUTHORITY_PATHS,
 } from '../../src/module-experts/catalog.ts';
+
 import type {
   ModuleExpertProfile,
   WebExpertAllowedContextPath,
 } from '../../src/module-experts/catalog.ts';
-import { createModuleExpertRuntimeIsolation } from '../../src/module-experts/runtime-contract.ts';
+
+import { ModuleExpertIsolation } from '../../src/module-experts/runtime-contract.ts';
+
 import type { ModuleExpertRuntimeIsolationRequest } from '../../src/module-experts/runtime-contract.ts';
-import { runCommand } from '../../src/lib/run.ts';
-import type { RunCommandArgs } from '../../src/lib/run.ts';
+
+import {
+  RepositoryCommand,
+  RepositoryCommandExecutable,
+} from '../../src/lib/run.ts';
+
+import type { RepositoryCommandRequest } from '../../src/lib/run.ts';
+
+export class ModuleExpertsWebExpertSnapshotScenario {
+  private constructor(private readonly request: string) {}
+
+  static createWebSnapshotFixture(
+    fixtureRoot: string,
+  ): Promise<WebSnapshotFixture> {
+    return new ModuleExpertsWebExpertSnapshotScenario(fixtureRoot).execute();
+  }
+
+  private async execute(): Promise<WebSnapshotFixture> {
+    const fixtureRoot = this.request;
+    const root = join(fixtureRoot, 'repository');
+    await mkdir(root);
+    const profile = ModuleExpertsWebExpertSnapshotScenario.webExpertProfile();
+    const paths = [
+      '.cortex/knowledge-graph.md',
+      UNRELATED_PRODUCT_SPEC,
+      UNRELATED_CI_AUTHORITY,
+      VENDOR_CORE_PROFILE,
+      ...profile.canonicalContextPaths,
+      ...profile.moduleRoots.map((moduleRoot) =>
+        join(moduleRoot, 'fixture.txt'),
+      ),
+      ...profile.allowedContextPaths,
+      ...profile.publicEntryPoints,
+      ...profile.authorityPaths,
+      ...profile.skillPaths,
+    ];
+    const directoryOptions: MakeDirectoryOptions = { recursive: true };
+    for (const path of new Set(paths)) {
+      await mkdir(dirname(join(root, path)), directoryOptions);
+      await writeFile(join(root, path), `committed:${path}\n`, 'utf8');
+    }
+    await writeFile(
+      join(root, VENDOR_CORE_PROFILE),
+      'name = "core_expert"\nsandbox_mode = "workspace-write"\n',
+      'utf8',
+    );
+    ModuleExpertsWebExpertSnapshotScenario.commitFixture(root);
+    const revisionCommand: RepositoryCommandRequest = {
+      args: ['rev-parse', 'HEAD'],
+      command: RepositoryCommandExecutable.Git,
+      rootDirectory: root,
+      workingDirectory: root,
+    };
+    const sourceCommit =
+      ModuleExpertsWebExpertSnapshotScenario.gitOutput(revisionCommand);
+    for (const scopePath of profile.allowedContextPaths) {
+      await writeFile(join(root, scopePath), 'mutable scope content\n', 'utf8');
+    }
+    return { root, sourceCommit };
+  }
+
+  static commitFixture(root: string): void {
+    const initCommand: RepositoryCommandRequest = {
+      args: ['init'],
+      command: RepositoryCommandExecutable.Git,
+      rootDirectory: root,
+      workingDirectory: root,
+    };
+    ModuleExpertsWebExpertSnapshotScenario.gitOutput(initCommand);
+    const addCommand: RepositoryCommandRequest = {
+      args: ['add', '.'],
+      command: RepositoryCommandExecutable.Git,
+      rootDirectory: root,
+      workingDirectory: root,
+    };
+    ModuleExpertsWebExpertSnapshotScenario.gitOutput(addCommand);
+    const commitCommand: RepositoryCommandRequest = {
+      args: [
+        '-c',
+        'user.name=Nook Test',
+        '-c',
+        'user.email=nook-test@example.test',
+        'commit',
+        '-m',
+        'fixture',
+      ],
+      command: RepositoryCommandExecutable.Git,
+      rootDirectory: root,
+      workingDirectory: root,
+    };
+    ModuleExpertsWebExpertSnapshotScenario.gitOutput(commitCommand);
+  }
+
+  static gitOutput(command: RepositoryCommandRequest): string {
+    const hostLaunch1 = new RepositoryCommand(command).execute();
+    assert(hostLaunch1.isOk());
+    const result = hostLaunch1.value;
+    if (result.exitCode !== 0) throw new Error('Fixture Git command failed.');
+    return result.stdout.trim();
+  }
+
+  static webExpertProfile(): ModuleExpertProfile {
+    const profile = MODULE_EXPERT_CATALOG.find(
+      (candidate) => candidate.name === 'web_expert',
+    );
+    if (!profile) throw new Error('web_expert profile is missing.');
+    return profile;
+  }
+}
 
 const UNRELATED_PRODUCT_SPEC =
   '.cortex/teams/sre/product-specs/monorepo-setup.md';
+
 const UNRELATED_CI_AUTHORITY = '.github/workflows/unrelated.yml';
+
 const VENDOR_CORE_PROFILE = '.codex/agents/module-experts/core_expert.toml';
+
 const DESIGN_SKILL_PATH =
   '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md';
+
 const EXTENSION_RELEASE_SKILL_PATH =
   '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md';
+
 const SELECTED_CONTEXT_PATHS: readonly WebExpertAllowedContextPath[] = [
   '.cortex/teams/web-dev/product-specs/browser-extension.md',
   '.github/workflows/release.yml',
   DESIGN_SKILL_PATH,
   EXTENSION_RELEASE_SKILL_PATH,
 ];
+
 const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
 
 type WebSnapshotFixture = {
@@ -48,7 +170,10 @@ type WebSnapshotFixture = {
 test('materializes exact committed web product and release authorities', async () => {
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-web-snapshot-'));
   try {
-    const fixture = await createWebSnapshotFixture(fixtureRoot);
+    const fixture =
+      await ModuleExpertsWebExpertSnapshotScenario.createWebSnapshotFixture(
+        fixtureRoot,
+      );
     const temporaryRoot = join(fixtureRoot, 'isolated');
     await mkdir(temporaryRoot);
     const [defaulted1 = ''] = [process.env.PATH];
@@ -63,10 +188,14 @@ test('materializes exact committed web product and release authorities', async (
       temporaryRoot,
       workingDirectory: fixture.root,
     };
-    const isolation =
-      await createModuleExpertRuntimeIsolation(isolationRequest);
+    const isolationResult =
+      await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
+        isolationRequest,
+      );
+    assert(isolationResult.isOk());
+    const isolation = isolationResult.value;
     try {
-      const profile = webExpertProfile();
+      const profile = ModuleExpertsWebExpertSnapshotScenario.webExpertProfile();
       expect(isolation.selectedContextPaths).toEqual(SELECTED_CONTEXT_PATHS);
       for (const scopePath of SELECTED_CONTEXT_PATHS) {
         expect(
@@ -104,7 +233,10 @@ test('materializes exact committed web product and release authorities', async (
 test('keeps ordinary web analysis free of design and extension release context', async () => {
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-web-base-snapshot-'));
   try {
-    const fixture = await createWebSnapshotFixture(fixtureRoot);
+    const fixture =
+      await ModuleExpertsWebExpertSnapshotScenario.createWebSnapshotFixture(
+        fixtureRoot,
+      );
     const temporaryRoot = join(fixtureRoot, 'isolated');
     await mkdir(temporaryRoot);
     const [defaulted2 = ''] = [process.env.PATH];
@@ -119,8 +251,12 @@ test('keeps ordinary web analysis free of design and extension release context',
       temporaryRoot,
       workingDirectory: fixture.root,
     };
-    const isolation =
-      await createModuleExpertRuntimeIsolation(isolationRequest);
+    const isolationResult =
+      await ModuleExpertIsolation.createModuleExpertRuntimeIsolation(
+        isolationRequest,
+      );
+    assert(isolationResult.isOk());
+    const isolation = isolationResult.value;
     try {
       expect(isolation.selectedContextPaths).toEqual([]);
       for (const excludedTaskContext of [
@@ -146,87 +282,3 @@ test('keeps ordinary web analysis free of design and extension release context',
     await rm(fixtureRoot, REMOVE_RECURSIVELY);
   }
 });
-
-async function createWebSnapshotFixture(
-  fixtureRoot: string,
-): Promise<WebSnapshotFixture> {
-  const root = join(fixtureRoot, 'repository');
-  await mkdir(root);
-  const profile = webExpertProfile();
-  const paths = [
-    '.cortex/knowledge-graph.md',
-    UNRELATED_PRODUCT_SPEC,
-    UNRELATED_CI_AUTHORITY,
-    VENDOR_CORE_PROFILE,
-    ...profile.canonicalContextPaths,
-    ...profile.moduleRoots.map((moduleRoot) => join(moduleRoot, 'fixture.txt')),
-    ...profile.allowedContextPaths,
-    ...profile.publicEntryPoints,
-    ...profile.authorityPaths,
-    ...profile.skillPaths,
-  ];
-  const directoryOptions: MakeDirectoryOptions = { recursive: true };
-  for (const path of new Set(paths)) {
-    await mkdir(dirname(join(root, path)), directoryOptions);
-    await writeFile(join(root, path), `committed:${path}\n`, 'utf8');
-  }
-  await writeFile(
-    join(root, VENDOR_CORE_PROFILE),
-    'name = "core_expert"\nsandbox_mode = "workspace-write"\n',
-    'utf8',
-  );
-  commitFixture(root);
-  const revisionCommand: RunCommandArgs = {
-    args: ['rev-parse', 'HEAD'],
-    command: 'git',
-    cwd: root,
-  };
-  const sourceCommit = gitOutput(revisionCommand);
-  for (const scopePath of profile.allowedContextPaths) {
-    await writeFile(join(root, scopePath), 'mutable scope content\n', 'utf8');
-  }
-  return { root, sourceCommit };
-}
-
-function commitFixture(root: string): void {
-  const initCommand: RunCommandArgs = {
-    args: ['init'],
-    command: 'git',
-    cwd: root,
-  };
-  gitOutput(initCommand);
-  const addCommand: RunCommandArgs = {
-    args: ['add', '.'],
-    command: 'git',
-    cwd: root,
-  };
-  gitOutput(addCommand);
-  const commitCommand: RunCommandArgs = {
-    args: [
-      '-c',
-      'user.name=Nook Test',
-      '-c',
-      'user.email=nook-test@example.test',
-      'commit',
-      '-m',
-      'fixture',
-    ],
-    command: 'git',
-    cwd: root,
-  };
-  gitOutput(commitCommand);
-}
-
-function gitOutput(command: RunCommandArgs): string {
-  const result = runCommand(command);
-  if (result.exitCode !== 0) throw new Error('Fixture Git command failed.');
-  return result.stdout.trim();
-}
-
-function webExpertProfile(): ModuleExpertProfile {
-  const profile = MODULE_EXPERT_CATALOG.find(
-    (candidate) => candidate.name === 'web_expert',
-  );
-  if (!profile) throw new Error('web_expert profile is missing.');
-  return profile;
-}

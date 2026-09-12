@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test';
+
 import { chmodSync, rmSync } from 'node:fs';
+
 import { join } from 'node:path';
+
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
+
 import {
   CORTEX_TEAM_WRITER_EXPERT,
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -11,12 +15,10 @@ import {
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
-  createModuleDeliveryAdmissionState,
-  createModuleDeliveryGenerationAuthority,
-  decodeAndValidateModuleDeliveryPlan,
-  recordModuleDeliveryAttemptLeases,
-  selectModuleDeliveryAdmissions,
+  ModuleGenerationAuthority,
+  ModuleDeliveryPlanDecoder,
 } from '../../src/module-delivery/index.ts';
+
 import type {
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
@@ -26,20 +28,116 @@ import type {
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
+
 import { TeamKey } from '../../src/team-agents/catalog.ts';
+
 import { CORTEX_AUTHORING_SKILL_PATHS } from '../../src/team-agents/context.ts';
-import {
-  createGitFixture,
-  disposeGitFixture,
-  fixtureGit,
-  writeFixtureFile,
-} from './worktree-test-support.ts';
+
+import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-support.ts';
+
 import type { FixtureFileWrite, GitFixture } from './worktree-test-support.ts';
+
+export class ModuleDeliveryCortexAdmissionScenario {
+  private constructor(private readonly request: string) {}
+
+  static write(request: CortexFixtureFileWriteRequest): void {
+    const { fixture, relativePath } = request;
+    const fileWrite: FixtureFileWrite = {
+      fixture,
+      relativePath,
+      contents: `${relativePath}\n`,
+    };
+    ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile(fileWrite);
+  }
+
+  static plan(sourceCommit: string): ModuleDeliveryPlanV2 {
+    return new ModuleDeliveryCortexAdmissionScenario(sourceCommit).execute();
+  }
+
+  private execute(): ModuleDeliveryPlanV2 {
+    const sourceCommit = this.request;
+    return {
+      version: 2,
+      generation: 7,
+      sourceCommit,
+      maxConcurrency: 1,
+      maxAgentDepth: 3,
+      maxAttempts: 2,
+      parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
+      parentJoin: {
+        kind: ModuleDeliveryJoinKind.DirectCommits,
+        owner: 'gizmo-prime',
+        validationCommands: ['task loom:verify'],
+      },
+      nodes: [
+        {
+          kind: ModuleDeliveryTaskKind.Write,
+          taskId: 'sre-cortex-writer',
+          team: TeamKey.Ai,
+          functionalOwner: ModuleDeliveryOwner.GizmoPrime,
+          acceptanceOwner: ModuleDeliveryOwner.GizmoPrime,
+          parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+          expert: CORTEX_TEAM_WRITER_EXPERT,
+          moduleRoot: '.cortex/teams/ai',
+          consumerOutcome: 'SRE guidance and its shared index are current.',
+          baseline: {
+            kind: ModuleDeliveryBaselineKind.SourceCommit,
+            sourceCommit,
+          },
+          agentDepthLimit: 3,
+          dependencies: [],
+          resources: {
+            read: [SRE_SKILL],
+            write: ['.cortex/gizmo/workflows/subagent-delegation.md'],
+            evidenceSurface: [],
+          },
+          cortexAuthoring: {
+            selectedSkillPaths: [SRE_SKILL],
+            sharedWriteClaims: [
+              '.cortex/gizmo/workflows/subagent-delegation.md',
+            ],
+          },
+          parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES.filter(
+            (claim) => claim !== '.cortex/**',
+          ),
+          acceptance: {
+            commands: ['task loom:cortex-audit'],
+            evidence: ['SRE Cortex guidance is indexed and audited.'],
+          },
+          workspace: {
+            kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
+            expectedCommitHandoff: true,
+          },
+        },
+      ],
+      edgeContracts: [],
+    };
+  }
+
+  static validate(value: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
+    const result = ModuleDeliveryPlanDecoder.decodeAndValidate(
+      JSON.stringify(value),
+    );
+    if (result.status !== ModuleDeliveryValidationStatus.Accepted)
+      throw new Error(JSON.stringify(result.issues));
+    return result;
+  }
+
+  static lineage(
+    accepted: ValidatedModuleDeliveryPlan,
+  ): readonly ModuleDeliveryExpectedLineage[] {
+    return accepted.plan.nodes.map((node) => ({
+      taskId: node.taskId,
+      parentLineage: node.parentLineage,
+    }));
+  }
+}
 
 const SRE_CONTEXT = [
   '.cortex/teams/ai/AGENTS.md',
   '.cortex/teams/ai/knowledge-graph.md',
 ] as const;
+
 const SRE_SKILL =
   '.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md';
 
@@ -48,92 +146,10 @@ interface CortexFixtureFileWriteRequest {
   readonly relativePath: string;
 }
 
-function write(request: CortexFixtureFileWriteRequest): void {
-  const { fixture, relativePath } = request;
-  const fileWrite: FixtureFileWrite = {
-    fixture,
-    relativePath,
-    contents: `${relativePath}\n`,
-  };
-  writeFixtureFile(fileWrite);
-}
-
-function plan(sourceCommit: string): ModuleDeliveryPlanV2 {
-  return {
-    version: 2,
-    generation: 7,
-    sourceCommit,
-    maxConcurrency: 1,
-    maxAgentDepth: 3,
-    maxAttempts: 2,
-    parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
-    parentJoin: {
-      kind: ModuleDeliveryJoinKind.DirectCommits,
-      owner: 'gizmo-prime',
-      validationCommands: ['task loom:verify'],
-    },
-    nodes: [
-      {
-        kind: ModuleDeliveryTaskKind.Write,
-        taskId: 'sre-cortex-writer',
-        team: TeamKey.Ai,
-        functionalOwner: ModuleDeliveryOwner.GizmoPrime,
-        acceptanceOwner: ModuleDeliveryOwner.GizmoPrime,
-        parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
-        expert: CORTEX_TEAM_WRITER_EXPERT,
-        moduleRoot: '.cortex/teams/ai',
-        consumerOutcome: 'SRE guidance and its shared index are current.',
-        baseline: {
-          kind: ModuleDeliveryBaselineKind.SourceCommit,
-          sourceCommit,
-        },
-        agentDepthLimit: 3,
-        dependencies: [],
-        resources: {
-          read: [SRE_SKILL],
-          write: ['.cortex/gizmo/workflows/subagent-delegation.md'],
-          evidenceSurface: [],
-        },
-        cortexAuthoring: {
-          selectedSkillPaths: [SRE_SKILL],
-          sharedWriteClaims: ['.cortex/gizmo/workflows/subagent-delegation.md'],
-        },
-        parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES.filter(
-          (claim) => claim !== '.cortex/**',
-        ),
-        acceptance: {
-          commands: ['task loom:cortex-audit'],
-          evidence: ['SRE Cortex guidance is indexed and audited.'],
-        },
-        workspace: {
-          kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-          expectedCommitHandoff: true,
-        },
-      },
-    ],
-    edgeContracts: [],
-  };
-}
-
-function validate(value: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
-  const result = decodeAndValidateModuleDeliveryPlan(JSON.stringify(value));
-  if (result.status !== ModuleDeliveryValidationStatus.Accepted)
-    throw new Error(JSON.stringify(result.issues));
-  return result;
-}
-
-function lineage(
-  accepted: ValidatedModuleDeliveryPlan,
-): readonly ModuleDeliveryExpectedLineage[] {
-  return accepted.plan.nodes.map((node) => ({
-    taskId: node.taskId,
-    parentLineage: node.parentLineage,
-  }));
-}
-
 describe('Cortex module-delivery admission', () => {
   test('freezes context reads, accepts regular blob modes, and records the lease', () => {
-    const fixture = createGitFixture();
+    const fixture =
+      ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
     try {
       for (const path of [
         ...SRE_CONTEXT,
@@ -144,29 +160,60 @@ describe('Cortex module-delivery admission', () => {
           fixture,
           relativePath: path,
         };
-        write(writeRequest);
+        ModuleDeliveryCortexAdmissionScenario.write(writeRequest);
       }
       chmodSync(
         join(fixture.sourceRoot, CORTEX_AUTHORING_SKILL_PATHS[0]),
         0o755,
       );
-      fixtureGit(fixture)(['add', '--all']);
-      fixtureGit(fixture)(['commit', '--quiet', '-m', 'cortex context']);
-      const sourceCommit = fixtureGit(fixture)(['rev-parse', 'HEAD']);
-      const accepted = validate(plan(sourceCommit));
+      ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
+        'add',
+        '--all',
+      ]);
+      ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
+        'commit',
+        '--quiet',
+        '-m',
+        'cortex context',
+      ]);
+      const sourceCommit = ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(
+        fixture,
+      )(['rev-parse', 'HEAD']);
+      const accepted = ModuleDeliveryCortexAdmissionScenario.validate(
+        ModuleDeliveryCortexAdmissionScenario.plan(sourceCommit),
+      );
       const generationRequest: CreateModuleDeliveryGenerationAuthorityRequest =
         {
           acceptedPlan: accepted,
-          expectedLineage: lineage(accepted),
+          expectedLineage:
+            ModuleDeliveryCortexAdmissionScenario.lineage(accepted),
           repositoryRoot: fixture.sourceRoot,
         };
       const authority =
-        createModuleDeliveryGenerationAuthority(generationRequest);
+        ModuleGenerationAuthority.createModuleDeliveryGenerationAuthority(
+          generationRequest,
+        );
       rmSync(join(fixture.sourceRoot, CORTEX_AUTHORING_SKILL_PATHS[1]));
-      fixtureGit(fixture)(['add', '--all']);
-      fixtureGit(fixture)(['commit', '--quiet', '-m', 'checkout drift']);
-      const replacementCommit = fixtureGit(fixture)(['rev-parse', 'HEAD']);
-      fixtureGit(fixture)(['replace', sourceCommit, replacementCommit]);
+      ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
+        'add',
+        '--all',
+      ]);
+      ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
+        'commit',
+        '--quiet',
+        '-m',
+        'checkout drift',
+      ]);
+      const replacementCommit =
+        ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
+          'rev-parse',
+          'HEAD',
+        ]);
+      ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
+        'replace',
+        sourceCommit,
+        replacementCommit,
+      ]);
       const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
         authority,
         acceptedPlan: accepted,
@@ -174,13 +221,19 @@ describe('Cortex module-delivery admission', () => {
         integratedWriterFrontiers: [],
         acceptedEvidence: [],
       };
-      const state = createModuleDeliveryAdmissionState(stateRequest);
+      const state =
+        ModuleGenerationAuthority.createModuleDeliveryAdmissionState(
+          stateRequest,
+        );
       const selectionRequest: SelectModuleDeliveryAdmissionsRequest = {
         authority,
         acceptedPlan: accepted,
         state,
       };
-      const selection = selectModuleDeliveryAdmissions(selectionRequest);
+      const selection =
+        ModuleGenerationAuthority.selectModuleDeliveryAdmissions(
+          selectionRequest,
+        );
       const admission = selection.admissions[0];
       const expectedContext = [
         ...SRE_CONTEXT,
@@ -200,14 +253,17 @@ describe('Cortex module-delivery admission', () => {
         state,
         admissions: selection.admissions,
       };
-      const recorded = recordModuleDeliveryAttemptLeases(leaseRequest);
+      const recorded =
+        ModuleGenerationAuthority.recordModuleDeliveryAttemptLeases(
+          leaseRequest,
+        );
       expect(recorded.leases[0]?.planDigest).toBe(accepted.planDigest);
       expect(recorded.leases[0]?.context?.skillPaths).toEqual([
         ...CORTEX_AUTHORING_SKILL_PATHS,
         SRE_SKILL,
       ]);
     } finally {
-      disposeGitFixture(fixture);
+      ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(fixture);
     }
   });
 });

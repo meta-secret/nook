@@ -1,0 +1,40 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["svelte", "chrome", "bun", "node"],
+    "paths": {
+      "$lib": ["../nook-web-shared/src/vault-app/lib"],
+      "$lib/*": ["../nook-web-shared/src/vault-app/lib/*"],
+      "$vault-shared": ["../nook-web-shared/src/vault-app"],
+      "$vault-shared/*": ["../nook-web-shared/src/vault-app/*"],
+      "$web-shared/*": ["../nook-web-shared/src/*"],
+      "$app-wasm": [
+        "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.svelte",
+    "scripts/**/*.ts",
+    "e2e/**/*.ts",
+    "playwright*.ts",
+    "../nook-web-shared/src/components/NookIcon.svelte",
+    "../nook-web-shared/src/extension/**/*.ts",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm/**/*.d.ts",
+    "**/*.ts",
+    "**/*.svelte",
+    "**/*.js",
+    "**/*.mjs",
+    "**/*.cjs"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/dist-prod/**",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm-*",
+    "../nook-web-shared/src/extension/nook-companion-wasm"
+  ]
+}

@@ -1,12 +1,15 @@
+import { RepositoryRequestPath } from '../src/lib/repo.ts';
+import assert from 'node:assert/strict';
 import { describe, expect, test } from 'bun:test';
 import {
   DecodeStatus,
   FieldIssue,
-  decodeErr,
-  decodeOk,
-  fieldError,
+  FailedFieldDecode,
+  SuccessfulFieldDecode,
+  FieldDiagnostic,
+  FieldDecodeInvariantViolation,
 } from '../src/codec/field-error.ts';
-import { findRepoRoot, resolveRequestPath } from '../src/lib/repo.ts';
+import { RepositoryRoot } from '../src/lib/repo.ts';
 import {
   LoomFailure,
   LoomFailureCode,
@@ -18,7 +21,7 @@ import type { ResolveRequestPathArgs } from '../src/lib/repo.ts';
 describe('decode outcome helpers', () => {
   test('decodeOk carries value', () => {
     const outcomeArgs = { ready: true };
-    const outcome = decodeOk(outcomeArgs);
+    const outcome = SuccessfulFieldDecode.create(outcomeArgs);
     expect(outcome.status).toBe(DecodeStatus.Ok);
     if (outcome.status === DecodeStatus.Ok) {
       expect(outcome.value.ready).toBe(true);
@@ -30,7 +33,9 @@ describe('decode outcome helpers', () => {
       path: 'prePush.stageHostUpdates',
       issue: FieldIssue.ExpectedBoolean,
     };
-    const outcome = decodeErr([fieldError(fieldErrorArgs)]);
+    const outcome = FailedFieldDecode.create([
+      FieldDiagnostic.create(fieldErrorArgs),
+    ]);
     expect(outcome.status).toBe(DecodeStatus.Failed);
     if (outcome.status === DecodeStatus.Failed) {
       expect(outcome.errors).toHaveLength(1);
@@ -38,6 +43,23 @@ describe('decode outcome helpers', () => {
         expect(error.issue).toBe(FieldIssue.ExpectedBoolean);
       }
     }
+  });
+
+  test('successful field decode owns guarded value access', () => {
+    const success = SuccessfulFieldDecode.create({ ready: true });
+    expect(SuccessfulFieldDecode.requireValue(success)).toEqual({
+      ready: true,
+    });
+
+    const failure = FailedFieldDecode.create([
+      FieldDiagnostic.create({
+        path: 'prePush.stageHostUpdates',
+        issue: FieldIssue.ExpectedBoolean,
+      }),
+    ]);
+    expect(() => SuccessfulFieldDecode.requireValue(failure)).toThrow(
+      FieldDecodeInvariantViolation,
+    );
   });
 });
 
@@ -65,17 +87,25 @@ describe('resolveRequestPath', () => {
     const resolveRequestPathArgs: ResolveRequestPathArgs = {
       requestPath: absolute,
     };
-    expect(resolveRequestPath(resolveRequestPathArgs)).toBe(absolute);
+    const discovery1 = new RepositoryRequestPath(
+      resolveRequestPathArgs,
+    ).resolve();
+    assert(discovery1.isOk());
+    expect(discovery1.value).toBe(absolute);
   });
 
   test('resolves relative paths from repository root', () => {
-    const root = findRepoRoot();
+    const discovery2 = new RepositoryRoot().locate();
+    assert(discovery2.isOk());
+    const root = discovery2.value;
     const relative = 'agentic-ai/loom/package.json';
     const resolvedArgs: ResolveRequestPathArgs = {
       requestPath: relative,
       startDir: `${root}/agentic-ai/loom`,
     };
-    const resolved = resolveRequestPath(resolvedArgs);
+    const discovery3 = new RepositoryRequestPath(resolvedArgs).resolve();
+    assert(discovery3.isOk());
+    const resolved = discovery3.value;
     expect(resolved.endsWith(relative)).toBe(true);
   });
 });

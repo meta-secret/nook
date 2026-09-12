@@ -1,9 +1,14 @@
+import { err, ok } from 'neverthrow'
+import {
+  SessionOperationFailure,
+  SessionOperationFailureKind,
+} from '../src/lib/session-operation-queue'
+import { CompanionDiscoveryEndpointKind } from '../src/offscreen/session-vault-operations'
 import { describe, expect, test } from 'bun:test'
 import {
   DeviceProtectionStatus,
   type AuthProvidersSnapshot,
   type NookExternalEventLogRecords,
-  type NookVaultManager,
   type StorageProvider,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { GITHUB_PROVIDER_TYPE } from '../../nook-web-shared/src/vault-app/lib/auth/provider-types'
@@ -15,11 +20,20 @@ import {
   importExtensionVaultWithDependencies,
   type ImportExtensionVaultDependencies,
   type ImportExtensionVaultWithDependenciesArgs,
+  type ExtensionVaultImportManager,
 } from '../src/offscreen/session-vault-operations'
 import type {
   CompanionExtensionPresence,
   CompanionIdentityDiscoveryObservation,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+
+type InitialCompanionDiscoveryEndpoint = Extract<
+  CompanionVaultDiscoveryArgs['endpoint'],
+  { kind: CompanionDiscoveryEndpointKind.Initial }
+>
+type DiscoveredCompanionEndpoint = ReturnType<
+  InitialCompanionDiscoveryEndpoint['endpoint']['discover']
+>
 
 type ImportManagerState = {
   protection: DeviceProtectionStatus
@@ -43,13 +57,14 @@ function githubProvider(): StorageProvider {
     id: 'github',
     type: GITHUB_PROVIDER_TYPE,
     label: 'Personal GitHub',
-    githubPat: 'github_pat_session_secret',
+    githubPat: { state: 'token', value: 'github_pat_session_secret' },
     githubRepo: { state: 'defaultRepository' },
     oauthFile: { state: 'notApplicable' },
     localFolder: { state: 'notApplicable' },
     storeId: { state: 'unscoped' },
     createdAt: '2026-08-11T00:00:00Z',
-  } as StorageProvider
+    syncCheckpoint: { state: 'neverSynced' },
+  }
 }
 
 function importRequest(
@@ -79,7 +94,17 @@ function importDependencies(
   }
 }
 
-function importManager(state: ImportManagerState): NookVaultManager {
+function importedStatus() {
+  return {
+    imported: true,
+    vaultStoreId: 'vault',
+    eventCount: 0,
+    heads: [],
+    accessGranted: true,
+  }
+}
+
+function importManager(state: ImportManagerState): ExtensionVaultImportManager {
   return {
     get device_id() {
       return state.deviceId
@@ -89,7 +114,7 @@ function importManager(state: ImportManagerState): NookVaultManager {
       state.importedRecords = true
       if (state.rejectImport) throw new Error('import failed')
       return {
-        to_object: () => ({ imported: true }),
+        to_object: importedStatus,
         free: () => {
           state.statusFreed = true
         },
@@ -120,7 +145,7 @@ function importManager(state: ImportManagerState): NookVaultManager {
       state.deviceId = appId
       return previousAppId
     },
-  } as NookVaultManager
+  }
 }
 
 function importState(protection: DeviceProtectionStatus): ImportManagerState {
@@ -156,10 +181,12 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual({
-      ok: true,
-      status: { imported: true },
-    })
+    expect(await importExtensionVaultWithDependencies(args)).toEqual(
+      ok({
+        ok: true,
+        status: importedStatus(),
+      }),
+    )
     expect(state.importedRecords).toBe(true)
     expect(state.operationOrder).toEqual(['activate', 'import'])
     expect(state.activatedAppId).toBe('device')
@@ -170,7 +197,7 @@ describe('extension vault import operations', () => {
       value: 'vault',
     })
     expect(state.saved).toBe(false)
-    expect(provider).not.toHaveProperty('githubPat')
+    expect(provider.githubPat).toEqual({ state: 'missing' })
   })
 
   test('saves the locked vault provider snapshot without requiring unlock', async () => {
@@ -182,10 +209,12 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual({
-      ok: true,
-      status: { imported: true },
-    })
+    expect(await importExtensionVaultWithDependencies(args)).toEqual(
+      ok({
+        ok: true,
+        status: importedStatus(),
+      }),
+    )
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(true)
     expect(state.savedAppId).toBe('device')
@@ -195,7 +224,7 @@ describe('extension vault import operations', () => {
     })
     expect(state.operationOrder).toEqual(['activate', 'import'])
     expect(state.activatedAppId).toBe('device')
-    expect(provider).not.toHaveProperty('githubPat')
+    expect(provider.githubPat).toEqual({ state: 'missing' })
   })
 
   test('preserves another unlocked identity instead of rebinding it', async () => {
@@ -208,8 +237,8 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
-      'Lock the active local identity',
+    expect(await importExtensionVaultWithDependencies(args)).toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Locked)),
     )
     expect(state.importedRecords).toBe(false)
     expect(state.replaced).toBe(false)
@@ -218,7 +247,7 @@ describe('extension vault import operations', () => {
     expect(state.operationOrder).toEqual([])
     expect(state.deviceId).toBe('other-device')
     expect(state.protection).toBe(DeviceProtectionStatus.Unlocked)
-    expect(provider).not.toHaveProperty('githubPat')
+    expect(provider.githubPat).toEqual({ state: 'missing' })
   })
 
   test('scrubs decoded provider credentials when event import rejects', async () => {
@@ -231,13 +260,13 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
-      'import failed',
+    expect(await importExtensionVaultWithDependencies(args)).toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
     )
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(false)
     expect(state.operationOrder).toEqual(['activate', 'import'])
-    expect(provider).not.toHaveProperty('githubPat')
+    expect(provider.githubPat).toEqual({ state: 'missing' })
   })
 
   test('restores the prior locked identity selection when import rejects', async () => {
@@ -251,15 +280,15 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
-      'import failed',
+    expect(await importExtensionVaultWithDependencies(args)).toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
     )
     expect(state.activatedAppIds).toEqual(['device', 'other-device'])
     expect(state.operationOrder).toEqual(['activate', 'import', 'activate'])
     expect(state.deviceId).toBe('other-device')
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(false)
-    expect(provider).not.toHaveProperty('githubPat')
+    expect(provider.githubPat).toEqual({ state: 'missing' })
   })
 
   test('aborts before event and provider mutation when identity activation rejects', async () => {
@@ -272,14 +301,14 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
-      'activation failed',
+    expect(await importExtensionVaultWithDependencies(args)).toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
     )
     expect(state.importedRecords).toBe(false)
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(false)
     expect(state.operationOrder).toEqual(['activate'])
-    expect(provider).not.toHaveProperty('githubPat')
+    expect(provider.githubPat).toEqual({ state: 'missing' })
   })
 })
 
@@ -317,13 +346,18 @@ class CompanionVaultDiscoveryScenario {
     observedAt: 100,
   } satisfies CompanionIdentityDiscoveryObservation
 
-  private readonly activeManager = {
-    open_extension_passkey_vault_js: this.openVault.bind(this),
-  } as NookVaultManager
+  private readonly activeManager: CompanionVaultDiscoveryArgs['activeManager'] =
+    {
+      open_extension_passkey_vault_js: this.openVault.bind(this),
+    }
 
-  private readonly endpoint = {
-    discover: this.reportUnlocked.bind(this),
-  } as CompanionVaultDiscoveryArgs['endpoint']
+  private readonly endpoint: CompanionVaultDiscoveryArgs['endpoint'] = {
+    kind: CompanionDiscoveryEndpointKind.Initial,
+    endpoint: {
+      discover: () => new DiscoveredCompanionEndpointFixture(this),
+      free: () => {},
+    },
+  }
 
   constructor(private readonly openOutcome: CompanionVaultOpenOutcome) {}
 
@@ -340,7 +374,12 @@ class CompanionVaultDiscoveryScenario {
     }
   }
 
-  private reportUnlocked() {
+  reportUnlocked(): ReturnType<
+    Extract<
+      CompanionVaultDiscoveryArgs['endpoint'],
+      { kind: CompanionDiscoveryEndpointKind.Initial }
+    >['endpoint']['discover']
+  >['status'] {
     this.operationOrder.push('discover')
     return {
       status: 'unlocked',
@@ -363,13 +402,45 @@ class CompanionVaultDiscoveryScenario {
   }
 }
 
+class DiscoveredCompanionEndpointFixture implements DiscoveredCompanionEndpoint {
+  constructor(private readonly scenario: CompanionVaultDiscoveryScenario) {}
+
+  get status(): DiscoveredCompanionEndpoint['status'] {
+    return this.scenario.reportUnlocked()
+  }
+
+  authorize_and_seal(
+    ..._args: Parameters<DiscoveredCompanionEndpoint['authorize_and_seal']>
+  ): ReturnType<DiscoveredCompanionEndpoint['authorize_and_seal']> {
+    void _args
+    throw new Error('Authorization is outside this discovery scenario')
+  }
+
+  rediscover(
+    ..._args: Parameters<DiscoveredCompanionEndpoint['rediscover']>
+  ): DiscoveredCompanionEndpoint {
+    void _args
+    return this
+  }
+
+  free(): void {}
+
+  [Symbol.dispose](): void {
+    this.free()
+  }
+}
+
 describe('companion discovery vault restoration', () => {
   test('reopens a persisted paired vault before reporting unlocked after restart', async () => {
     const scenario = new CompanionVaultDiscoveryScenario(
       CompanionVaultOpenOutcome.Opened,
     )
 
-    const status = await scenario.discover()
+    const discovery = await scenario.discover()
+    expect(discovery.isOk()).toBe(true)
+    if (discovery.isErr()) return
+    const discovered = discovery.value
+    const status = discovered.status
 
     expect(status.status).toBe('unlocked')
     expect(scenario.operationOrder).toEqual([
@@ -383,8 +454,8 @@ describe('companion discovery vault restoration', () => {
       CompanionVaultOpenOutcome.Mismatched,
     )
 
-    await expect(scenario.discover()).rejects.toThrow(
-      'ActiveExtensionVaultMismatch',
+    expect(await scenario.discover()).toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
     )
     expect(scenario.operationOrder).toEqual([
       'open:vault:device:public:signing',

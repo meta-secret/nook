@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto'
+import { rejects, throws } from 'node:assert/strict'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import {
   IDBCursor,
@@ -113,7 +114,6 @@ class CompanionPairingApprovalFixture {
       pairingRequest,
     )
     const authority = extensionProtocol.take_authority()
-    extensionProtocol.free()
     const websiteProtocol = new NookCompanionPairingWebsiteProtocol({
       request: structuredClone(pairingRequest),
       observedAt: 120,
@@ -271,9 +271,10 @@ function discovery(requestId: string): CompanionIdentityDiscoveryObservation {
 }
 
 function beginHandoff(requestId: string) {
-  const endpoint = new NookCompanionExtensionEndpoint(structuredClone(presence))
+  const initial = new NookCompanionExtensionEndpoint(structuredClone(presence))
   const observation = discovery(requestId)
-  const status = endpoint.discover(structuredClone(observation))
+  const endpoint = initial.discover(structuredClone(observation))
+  const status = endpoint.status
   const admissionRequest = {
     discovery: structuredClone(observation),
     status: structuredClone(status),
@@ -293,15 +294,16 @@ function beginHandoff(requestId: string) {
       vault_store_id: extension.vaultStoreId,
     },
   } satisfies CompanionWebsiteHandoffBegin
-  const request = website.begin_companion_identity_handoff(
+  const pending = website.begin_companion_identity_handoff(
     structuredClone(begin),
   )
+  const request = pending.request
   const authorization = {
     request: structuredClone(request),
     observedAt: 120,
     presence: structuredClone(presence),
   } satisfies CompanionIdentityHandoffAuthorization
-  return { authorization, endpoint, request, website }
+  return { authorization, endpoint, request, website, pending }
 }
 
 beforeAll(async () => {
@@ -359,6 +361,63 @@ afterAll(() => {
 })
 
 describe('generated companion protocol composition', () => {
+  test('validates fresh presence without consuming a discovered endpoint', () => {
+    const initial = new NookCompanionExtensionEndpoint(
+      structuredClone(presence),
+    )
+    const discovered = initial.discover(discovery('presence-refresh'))
+    const lockedPresence: CompanionExtensionPresence = {
+      kind: 'locked',
+      vault_type: 'simple',
+      vault_store_id: extension.vaultStoreId,
+      vault_name: extension.vaultName,
+    }
+    const candidate = new NookCompanionExtensionEndpoint(
+      structuredClone(lockedPresence),
+    )
+    expect(candidate.presence).toEqual(lockedPresence)
+    candidate.free()
+    expect(discovered.status.status).toBe('unlocked')
+    discovered.free()
+  })
+
+  test('rejects invalid fresh presence without consuming a discovered endpoint', () => {
+    const initial = new NookCompanionExtensionEndpoint(
+      structuredClone(presence),
+    )
+    const discovered = initial.discover(discovery('presence-rejection'))
+    expect(
+      () =>
+        new NookCompanionExtensionEndpoint({
+          kind: 'locked',
+          vault_type: 'simple',
+          vault_store_id: '',
+          vault_name: extension.vaultName,
+        }),
+    ).toThrow()
+    expect(discovered.status.status).toBe('unlocked')
+    discovered.free()
+  })
+
+  test('resolves stored Sentinel deliveries without borrowing the live manager', async () => {
+    const request = extension.sentinel_stored_deliveries_request()
+    const resolution = request.resolve()
+
+    expect(extension.device_id).toBe(unlockedAppKey.appKey.appId)
+    expect(extension.vaultStoreId).not.toBe('')
+
+    try {
+      const deliveries = await resolution
+      try {
+        expect(deliveries).toEqual([])
+      } finally {
+        for (const delivery of deliveries) delivery.free()
+      }
+    } finally {
+      request.free()
+    }
+  })
+
   test('prevalidates sealed providers and rejects manifest substitution', () => {
     CompanionPairingApprovalFixture.assertManifestPrevalidation()
   })
@@ -368,7 +427,8 @@ describe('generated companion protocol composition', () => {
   })
 
   test('completes discovery, atomic authorization and sealing, and website finish', async () => {
-    const { authorization, endpoint, website } = beginHandoff('request-success')
+    const { authorization, endpoint, website, pending } =
+      beginHandoff('request-success')
     const response = await endpoint.authorize_and_seal(
       extension,
       structuredClone(authorization),
@@ -381,9 +441,14 @@ describe('generated companion protocol composition', () => {
       throw new Error('expected the generated response admission to succeed')
     }
 
-    await website.finish_companion_identity_handoff(
+    const adopted = await pending.finish(
+      website,
       structuredClone(admission.response),
     )
+    const records = await website.connect('local', '', '')
+    for (const record of records) record.free()
+    const committed = adopted.after_verified_connect(website)
+    committed.confirm(website)
 
     expect(response.encryptedEnvelope).toContain('BEGIN AGE ENCRYPTED FILE')
     expect(website.device_id).toBe(extension.device_id)
@@ -433,11 +498,12 @@ describe('generated companion protocol composition', () => {
       failure: 'discovery-expired',
     })
 
-    const endpoint = new NookCompanionExtensionEndpoint(
+    const initial = new NookCompanionExtensionEndpoint(
       structuredClone(presence),
     )
     const observation = discovery('request-correlation')
-    const status = endpoint.discover(structuredClone(observation))
+    const endpoint = initial.discover(structuredClone(observation))
+    const status = endpoint.status
     endpoint.free()
     const admission = admit_companion_identity_status({
       discovery: structuredClone(observation),
@@ -462,11 +528,12 @@ describe('generated companion protocol composition', () => {
   })
 
   test('rejects unrelated and stale status admission in Rust', () => {
-    const endpoint = new NookCompanionExtensionEndpoint(
+    const initial = new NookCompanionExtensionEndpoint(
       structuredClone(presence),
     )
     const observation = discovery('request-admission')
-    const unrelated = endpoint.discover(structuredClone(observation))
+    const endpoint = initial.discover(structuredClone(observation))
+    const unrelated = endpoint.status
     unrelated.request_id = 'request-other'
     expect(
       admit_companion_identity_status({
@@ -476,7 +543,7 @@ describe('generated companion protocol composition', () => {
       }),
     ).toEqual({ kind: 'rejected', failure: 'request-mismatch' })
 
-    const wrongVault = endpoint.discover(structuredClone(observation))
+    const wrongVault = endpoint.status
     wrongVault.vault_store_id = 'vault-other'
     expect(
       admit_companion_identity_status({
@@ -486,7 +553,7 @@ describe('generated companion protocol composition', () => {
       }),
     ).toEqual({ kind: 'rejected', failure: 'request-mismatch' })
 
-    const exact = endpoint.discover(structuredClone(observation))
+    const exact = endpoint.status
     endpoint.free()
     expect(
       admit_companion_identity_status({
@@ -504,43 +571,33 @@ describe('generated companion protocol composition', () => {
       throw new Error('expected unlocked transaction')
     }
     mismatched.request.transaction.status.app_key.appKey.appId = 'app-mismatch'
-    await expect(
+    // Await through the event loop so wasm-bindgen can deliver its rejection.
+    await rejects(
       first.endpoint.authorize_and_seal(extension, mismatched),
-    ).rejects.toThrow()
-    await expect(
-      first.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(first.authorization),
-      ),
-    ).rejects.toThrow()
+      Error,
+    )
+    // Consumed wasm-bindgen owners must be checked synchronously: invoking
+    // another async method traps inside its future before it can settle.
+    throws(() => first.endpoint.status)
   })
 
   test('consumes stale authorization and concurrent discovery', async () => {
     const stale = beginHandoff('request-stale')
     stale.authorization.observedAt = 200
-    await expect(
+    await rejects(
       stale.endpoint.authorize_and_seal(
         extension,
         structuredClone(stale.authorization),
       ),
-    ).rejects.toThrow()
-    await expect(
-      stale.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(stale.authorization),
-      ),
-    ).rejects.toThrow()
+      Error,
+    )
+    throws(() => stale.endpoint.status)
 
     const concurrent = beginHandoff('request-concurrent')
     expect(() =>
-      concurrent.endpoint.discover(discovery('request-other')),
+      concurrent.endpoint.rediscover(discovery('request-other')),
     ).toThrow()
-    await expect(
-      concurrent.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(concurrent.authorization),
-      ),
-    ).rejects.toThrow()
+    throws(() => concurrent.endpoint.status)
   })
 
   test('rejects replay and a forged response at retained website state', async () => {
@@ -550,24 +607,16 @@ describe('generated companion protocol composition', () => {
       extension,
       structuredClone(first.authorization),
     )
-    await expect(
-      first.endpoint.authorize_and_seal(
-        extension,
-        structuredClone(first.authorization),
-      ),
-    ).rejects.toThrow()
+    throws(() => first.endpoint.status)
 
     const forged = structuredClone(
       response,
     ) satisfies CompanionIdentityHandoffResponse
     forged.request.transaction.discovery.request.requestId = 'request-forged'
-    await expect(
-      first.website.finish_companion_identity_handoff(forged),
-    ).rejects.toThrow('does not match the active request')
-    await expect(
-      first.website.finish_companion_identity_handoff(
-        structuredClone(response),
-      ),
-    ).rejects.toThrow('not pending')
+    await rejects(
+      first.pending.finish(first.website, forged),
+      /does not match the active request/,
+    )
+    throws(() => first.pending.request)
   })
 })

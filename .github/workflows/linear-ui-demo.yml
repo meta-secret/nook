@@ -6,7 +6,7 @@ name: Linear UI demos
 
 on:
   workflow_run:
-    workflows: [PR]
+    workflows: [CI]
     types: [completed]
   pull_request_target:
     types: [closed]
@@ -17,11 +17,10 @@ permissions:
   issues: write
   pull-requests: write
 
-# A close event claims the same exact-head group as pr.yml and cancels current
-# validation. workflow_run publishers use a unique group.
+# Publishers are independent of CI cancellation.
 concurrency:
-  group: ${{ github.event_name == 'pull_request_target' && format('pr-{0}-{1}', github.event.pull_request.number, github.event.pull_request.head.sha) || format('linear-ui-demo-{0}', github.run_id) }}
-  cancel-in-progress: true
+  group: linear-ui-demo-${{ github.run_id }}
+  cancel-in-progress: false
 
 env:
   LINEAR_UI_DEMO_LABEL_ID: 3d5eaced-687d-4d93-a046-92f5008f584d

@@ -1,19 +1,43 @@
-use std::path::PathBuf;
-use std::{env, fs};
+use std::path::{Path, PathBuf};
+use std::{env, fs, ops::Deref};
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
 }
 
-fn read(relative_path: &str) -> String {
-    fs::read_to_string(repository_root().join(relative_path))
-        .unwrap_or_else(|error| panic!("failed to read {relative_path}: {error}"))
+impl RepositoryFixture {
+    fn read(&self, relative_path: &str) -> String {
+        fs::read_to_string(self.join(relative_path))
+            .unwrap_or_else(|error| panic!("failed to read {relative_path}: {error}"))
+    }
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one cache simulation verifies the complete parent and leaf scope matrix"
+)]
 fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
     let sim = "infra/sim/bake-cache";
     for path in [
@@ -36,15 +60,16 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         format!("{sim}/inputs/consumer.txt"),
     ] {
         assert!(
-            repository_root().join(&path).is_file(),
+            RepositoryFixture::repository_root().join(&path).is_file(),
             "missing bake-cache sim fixture {path}"
         );
     }
 
-    let bake = read(&format!("{sim}/docker-bake.hcl"));
-    let tasks = read("infra/tasks/bake-cache.yml");
-    let zot = read(&format!("{sim}/zot-config.json"));
-    let quality = read(".cortex/teams/sre/workflows/quality.md");
+    let bake = RepositoryFixture::repository_root().read(&format!("{sim}/docker-bake.hcl"));
+    let tasks = RepositoryFixture::repository_root().read("infra/tasks/bake-cache.yml");
+    let zot = RepositoryFixture::repository_root().read(&format!("{sim}/zot-config.json"));
+    let quality =
+        RepositoryFixture::repository_root().read(".cortex/teams/sre/workflows/quality.md");
 
     assert!(
         zot.contains("\"compat\": [\"docker2s2\"]") && zot.contains("anonymousPolicy"),
@@ -98,7 +123,9 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
     );
     assert!(
         !combined_leaf.contains("contexts =")
-            && read(&format!("{sim}/combined-nightly.Dockerfile")).contains("AS base"),
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/combined-nightly.Dockerfile"))
+                .contains("AS base"),
         "fixed control must keep base, parent, and leaf in one Dockerfile lineage"
     );
     let leaf_from = assignment_body(&bake, "leaf_cache_from");
@@ -162,11 +189,21 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("buildx inspect \"$builder\" --bootstrap")
             && tasks.contains("bake-sim-crate-a-expensive")
             && tasks.contains("bake-sim-crate-b-expensive")
-            && read(&format!("{sim}/combined-nightly.Dockerfile")).contains("AS crate-a")
-            && read(&format!("{sim}/combined-nightly.Dockerfile")).contains("AS crate-b")
-            && read(&format!("{sim}/hive.Dockerfile")).contains("AS fetched-dependencies")
-            && read(&format!("{sim}/hive.Dockerfile")).contains("AS test-dependencies")
-            && read(&format!("{sim}/hive.Dockerfile")).contains("AS clippy-dependencies")
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/combined-nightly.Dockerfile"))
+                .contains("AS crate-a")
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/combined-nightly.Dockerfile"))
+                .contains("AS crate-b")
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/hive.Dockerfile"))
+                .contains("AS fetched-dependencies")
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/hive.Dockerfile"))
+                .contains("AS test-dependencies")
+            && RepositoryFixture::repository_root()
+                .read(&format!("{sim}/hive.Dockerfile"))
+                .contains("AS clippy-dependencies")
             && tasks.contains("bake-sim-hive-cargo-fetch")
             && tasks.contains("nook-bake-sim-y-pr-a-retry")
             && tasks.contains("nook-bake-sim-y-pr-b-retry")
@@ -208,13 +245,18 @@ fn assignment_mentions_cache_to(bake: &str, target: &str) -> bool {
 
 fn assignment_body<'a>(bake: &'a str, name: &str) -> &'a str {
     let marker = format!("{name} =");
-    let rest = bake
-        .split_once(marker.as_str())
-        .map(|(_, rest)| rest)
-        .unwrap_or_else(|| panic!("missing Bake assignment {name}"));
+    let rest = bake.split_once(marker.as_str()).map_or_else(
+        || panic!("missing Bake assignment {name}"),
+        |(_, rest)| rest,
+    );
     let mut end = rest.len();
     for (idx, _) in rest.match_indices('\n') {
-        let line = rest[idx + 1..].lines().next().unwrap_or("");
+        let line = rest
+            .get(idx + 1..)
+            .unwrap_or_else(|| panic!("Bake assignment {name} line must be valid UTF-8"))
+            .split('\n')
+            .next()
+            .unwrap_or_else(|| panic!("Bake assignment {name} must expose its next line"));
         if line.starts_with("target \"") {
             end = idx;
             break;
@@ -227,26 +269,32 @@ fn assignment_body<'a>(bake: &'a str, name: &str) -> &'a str {
             break;
         }
     }
-    rest[..end].trim()
+    rest.get(..end)
+        .unwrap_or_else(|| panic!("Bake assignment {name} boundary must be valid UTF-8"))
+        .trim()
 }
 
 fn target_body<'a>(bake: &'a str, name: &str) -> &'a str {
     let marker = format!("target \"{name}\"");
     let rest = bake
         .split_once(marker.as_str())
-        .map(|(_, rest)| rest)
-        .unwrap_or_else(|| panic!("missing Bake target {name}"));
+        .map_or_else(|| panic!("missing Bake target {name}"), |(_, rest)| rest);
     let start = rest
         .find('{')
         .unwrap_or_else(|| panic!("target {name} missing body"));
     let mut depth = 0usize;
-    for (idx, ch) in rest[start..].char_indices() {
+    let body = rest
+        .get(start..)
+        .unwrap_or_else(|| panic!("Bake target {name} body must start on a character boundary"));
+    for (idx, ch) in body.char_indices() {
         match ch {
             '{' => depth += 1,
             '}' => {
                 depth -= 1;
                 if depth == 0 {
-                    return &rest[start..=start + idx];
+                    return rest.get(start..=start + idx).unwrap_or_else(|| {
+                        panic!("Bake target {name} body must end on a character boundary")
+                    });
                 }
             }
             _ => {}

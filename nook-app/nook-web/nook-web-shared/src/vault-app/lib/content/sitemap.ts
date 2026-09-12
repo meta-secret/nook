@@ -45,12 +45,21 @@ export class ConfiguredSiteUrlEnvironment {
 export type SiteUrlEnvironment =
   DefaultSiteUrlEnvironment | ConfiguredSiteUrlEnvironment;
 
-export function siteUrlFromEnv(environment: SiteUrlEnvironment): string {
-  const trimmed = environment.siteUrl.trim();
-  if (trimmed) {
-    return trimmed.replace(/\/$/, "");
+export class SiteUrlConfiguration {
+  private readonly request: SiteUrlEnvironment;
+
+  constructor(request: SiteUrlEnvironment) {
+    this.request = request;
   }
-  return DEFAULT_SITE_URL;
+  get url(): string {
+    const environment = this.request;
+
+    const trimmed = environment.siteUrl.trim();
+    if (trimmed) {
+      return trimmed.replace(/\/$/, "");
+    }
+    return DEFAULT_SITE_URL;
+  }
 }
 
 type AbsoluteSiteUrlRequest = {
@@ -58,23 +67,21 @@ type AbsoluteSiteUrlRequest = {
   readonly path: string;
 };
 
-export function absoluteSiteUrl({
-  siteUrl,
-  path,
-}: AbsoluteSiteUrlRequest): string {
-  const base = siteUrl.replace(/\/$/, "");
-  if (path === "/") {
-    return `${base}/`;
-  }
-  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
-}
+export class PublicSiteLocation {
+  private readonly request: AbsoluteSiteUrlRequest;
 
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  constructor(request: AbsoluteSiteUrlRequest) {
+    this.request = request;
+  }
+  get url(): string {
+    const { siteUrl, path } = this.request;
+
+    const base = siteUrl.replace(/\/$/, "");
+    if (path === "/") {
+      return `${base}/`;
+    }
+    return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  }
 }
 
 type SitemapXmlDocument = {
@@ -82,38 +89,58 @@ type SitemapXmlDocument = {
   readonly lastmod: Date;
 };
 
-export function buildSitemapXml({
-  siteUrl,
-  lastmod,
-}: SitemapXmlDocument): string {
-  const isoDate = lastmod.toISOString().slice(0, 10);
-  const body = PUBLIC_SITEMAP_ENTRIES.map(
-    (entry) => `  <url>
-    <loc>${escapeXml(
-      (() => {
-        const absoluteSiteUrlArgs: Parameters<typeof absoluteSiteUrl>[0] = {
-          siteUrl,
-          path: entry.path,
-        };
-        return absoluteSiteUrl(absoluteSiteUrlArgs);
-      })(),
-    )}</loc>
+export class SitemapDocument {
+  private readonly request: SitemapXmlDocument;
+
+  constructor(request: SitemapXmlDocument) {
+    this.request = request;
+  }
+
+  private locationXml(entry: SitemapEntry): string {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const location = new PublicSiteLocation({
+      siteUrl: this.request.siteUrl,
+      path: entry.path,
+    });
+    return location.url
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  get xml(): string {
+    const { lastmod } = this.request;
+
+    const isoDate = lastmod.toISOString().slice(0, 10);
+    const body = PUBLIC_SITEMAP_ENTRIES.map(
+      (entry: SitemapEntry) => `  <url>
+    <loc>${this.locationXml(entry)}</loc>
     <lastmod>${isoDate}</lastmod>
     <changefreq>${entry.changefreq}</changefreq>
     <priority>${entry.priority}</priority>
   </url>`,
-  ).join("\n");
+    ).join("\n");
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
+    return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${body}
 </urlset>
 `;
+  }
 }
 
-export function buildRobotsTxt(siteUrl: string): string {
-  const base = siteUrl.replace(/\/$/, "");
-  return `User-agent: *
+export class RobotsDocument {
+  private readonly request: string;
+
+  constructor(request: string) {
+    this.request = request;
+  }
+  get text(): string {
+    const siteUrl = this.request;
+
+    const base = siteUrl.replace(/\/$/, "");
+    return `User-agent: *
 Allow: /$
 Allow: /about.html
 Allow: /privacy.html
@@ -140,4 +167,5 @@ Disallow: /vault
 
 Sitemap: ${base}/sitemap.xml
 `;
+  }
 }

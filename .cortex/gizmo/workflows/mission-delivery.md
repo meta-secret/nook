@@ -2,137 +2,97 @@
 
 ## Outcome
 
-Gizmo delivers each implementation mission through the responsible teams and
-one shared-branch sequence.
+Each feature Gizmo owns one feature branch, parent worktree, and Team Agent
+children. Feature delivery ends after remote compilation, required review,
+and serialized local dev integration. The manually run dev manager owns
+publication, slow PR checks, and main promotion.
 
-A Team Agent result, local commit, push, or open pull request is an intermediate
-state. Delivery continues to the user-selected terminal condition.
+Follow [dev delivery](../architecture/dev-delivery.md) for the canonical
+contract and [team delegation](subagent-delegation.md) for worker ownership.
 
-## Required authorities
+## Required actions
 
-- Use [team-oriented development](team-oriented-development.md) for functional
-  ownership and writer sequencing.
-- Use [Team Agent delegation](subagent-delegation.md) for worker scope.
-- Use [module-oriented development](module-oriented-development.md) for real
-  provider-consumer order.
-- Use [pull request delivery](pull-requests.md) for validation and merge.
-- Use [PR Steward](../../teams/pr-steward/AGENTS.md) for the authorized external pull-request
-  mechanics within that delivery sequence.
-- Use [Workbench issue management](issues.md) for plans and worklogs.
-- Use the
-  [self-improvement review](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review)
-  only when the work reveals a durable lesson or Cortex defect.
+- Preserve functional ownership and required security verdicts.
+- Use the active harness for Team Agent communication.
+- Keep every writer within its issued child worktree and explicit file scope.
+- Author meaningful behavior tests for the slow stage.
+- Keep Workbench plans, feature handoffs, and completion evidence attributable.
+- Apply [self-improvement](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review)
+  only when a durable lesson qualifies.
 
-## Terminal condition
+## Prohibited actions
 
-Stop before merge only when:
-
-- the user requested an intermediate state;
-- the user prohibited the required external action; or
-- a concrete blocker prevents further progress.
-
-Report the blocker instead of reporting an intermediate state as complete.
+- Do not perform team-owned implementation as Gizmo.
+- Do not execute local tests, including Loom tests.
+- Do not run local product compilation, Docker work, coverage, or preflight.
+- Do not run tests, coverage, e2e, or preflight remotely in the feature stage.
+- Do not push dev or main from a feature task.
+- Do not introduce a Team Agent lifecycle service, scheduler, or Git-state machinery.
+- Do not introduce a persistent PR Steward service, scheduler, or notification journal.
+- Do not rebase, squash, force-push, or discard another feature's work.
 
 ## Procedure
 
-1. **Interpret the mission.**
-   - State the requested outcome and completion evidence.
-   - Identify explicit exclusions.
+1. **Interpret and scope the feature.**
+   - Identify functional owners and required acceptance evidence.
    - Treat every other active task as read-only.
-2. **Plan the change.**
-   - Identify functional owners and real dependencies.
-   - Estimate authored additions.
-   - Count additions only for the pull-request limit.
-   - Do not count or limit deletions.
-   - Warn at 1,500 additions and stop before 2,000 additions.
-   - Simplify the design when growth approaches the limit.
-   - When necessary scope still cannot fit, define independently useful
-     sequential PR slices.
-   - Give every slice observable acceptance evidence.
-3. **Assign Team Agent work.**
-   - Give each task one team identity.
-   - Name allowed files, forbidden files, and acceptance evidence.
-   - Assign one writer for shared files.
-4. **Sequence writers.**
-   - Run only one write-capable Team Agent at a time.
-   - Use the current checkout and current branch.
-   - Let the Team Agent run focused checks.
-   - Ask for a complete scoped commit when useful.
-   - Continue directly from that shared-branch state.
-5. **Prepare the delivery head.**
-   - Verify changed paths and focused evidence.
-   - Route formatter or implementation corrections to the owning team.
-   - Run `task loom:pre-push PR=<number>` before a push.
-   - Push the coherent shared branch as the shared-branch owner.
-   - Give PR Steward an explicit packet for pull-request publication.
-6. **Validate and repair.**
-   - Gizmo may create one mission-scoped PR Steward child with the fixed Luna
-     profile and start its subscription for exactly one active pull request.
-   - Before this Gizmo advances to another pull request, stop the old child,
-     wait for its NATS drain and exit, then start a fresh child for the new PR.
-   - Launch the subscriber as the documented direct Bun process in a foreground
-     PTY. Stop it by sending Ctrl-C to that same PTY and require exit status zero.
-   - Never stop or switch another Gizmo's independently active child.
-   - Route compact review/comment hints by path and line; never transfer bodies through the reactive stream.
-   - Treat each matching notification as a hint to issue a bounded PR Steward
-     operation packet.
-   - Authorize PR Steward to trigger the repository-owned exact-head review and
-     validation path.
-   - Use `task remote TASK_NAME=web:build` for a remote web build.
-   - Use `task remote TASK_NAME=web:e2e` for remote browser validation.
-   - Route every finding to its functional owner.
-   - Sequence the responsible writer in the current checkout.
-   - Push the corrected head and obtain fresh exact-head evidence.
-7. **Finish delivery.**
-   - Tell the reactive PR Steward child to stop and wait for its exit.
-   - Re-read the final GitHub state directly. Do this even when every expected
-     notification arrived.
-   - Authorize PR Steward to run `task pr:ready PR=<number>` and return its
-     read-only evidence.
-   - Issue a separate merge authorization only after Gizmo's final readiness
-     verdict succeeds.
-   - Have PR Steward squash-merge and verify remote merge state.
-   - Publish the final Workbench update.
-   - If another planned slice remains, fetch current `origin/main`.
-   - Create the next branch only after the current slice is remotely verified
-     and closed out.
-   - Begin only that next slice.
-
-## Prohibited complexity
-
-Mission delivery must not introduce:
-
-- Team Agent worktrees;
-- parallel Team Agent lifecycle or Git-state machinery; or
-- a persistent PR Steward service, scheduler, or notification journal; or
-- deletion-report fields or schema versions.
-- stacked branches, stacked pull requests, or implementation against an
-  unmerged predecessor.
+   - Record the explicit parent feature/integration worktree.
+   - Give every child a bounded task/attempt identity.
+2. **Prepare the write wave.**
+   - Inventory dirty paths and hunks and attribute each to its owner.
+   - Block overlap with user or foreign changes without an exact handoff.
+   - Name command read, write, and output scopes.
+   - Require disjoint scopes for concurrent writers.
+   - Preserve dependency order for overlapping or provider-dependent tasks.
+3. **Dispatch implementation.**
+   - Create one child worktree per Team Agent task from the parent frontier.
+   - Start workers through the active harness in their issued child worktrees.
+   - Permit only scoped rustfmt and bounded inexpensive TS diagnostics locally.
+   - Require authored tests without executing them.
+   - Grant one commit turn at a time within the feature's integration sequence.
+   - Require each writer's complete scoped iteration commit.
+4. **Integrate child results.**
+   - Verify each committed handoff before parent integration.
+   - Serialize mutations of the parent feature index.
+   - Preserve every accepted child commit.
+   - Require handoffs listing each iteration SHA, outcome, evidence, and blockers.
+   - Have later iterations inspect the last one or two relevant commits and diffs.
+5. **Compile and review.**
+   - Push the coherent feature branch.
+   - Authorize PR Steward to run remote build-only execution for that SHA.
+   - For web changes, use `task remote TASK_NAME=web:build` and
+     `task remote TASK_NAME=web:e2e` as applicable.
+   - Fast agents review code and required security boundaries.
+   - Route fixes to the responsible team and repeat compilation after each push.
+6. **Land the completed feature.**
+   - Require positive compilation evidence for the final feature SHA.
+   - Require resolved review findings and required security acceptance.
+   - Authorize Steward's bounded local integration.
+   - Tooling serializes the shared local dev checkout and verifies build evidence.
+   - Record feature and resulting local dev SHAs.
+7. **Hand off to the manager.**
+   - The manager selects publication through Steward's snapshot publication.
+   - The manager runs the full slow PR cycle.
+   - Failure returns to a feature Gizmo through this same procedure.
+   - Successful promotion uses Steward's guarded fast-forward promotion.
 
 ## Fix ownership
 
-- Development core fixes portable Rust and typed WASM behavior.
-- Web development fixes TypeScript, Svelte, browser, and extension behavior.
-- SRE fixes CI/CD, runners, containers, deployments, and operations.
-- Security fixes security-owned policy and reviews security acceptance.
-- AI fixes Cortex, Loom, agent skills, and AI automation.
-- Gizmo sequences the shared branch and controls external delivery policy and
-  authorization. PR Steward performs only the named external pull-request
-  mechanics.
+- Development core owns portable Rust and typed WASM fixes.
+- Web development owns presentation and browser behavior.
+- Security owns its policy and acceptance verdicts.
+- SRE owns CI, containers, infrastructure, and delivery tooling.
+- AI owns Cortex, Loom, and agent contracts.
+- Gizmo retains parent-owned integration/PR policy for its feature.
+- The dev manager retains slow-stage publication and promotion policy.
 
-## Validation
+## Completion evidence
 
-Delivery is complete only when:
-
-- all requested behavior is implemented by its functional owners across every
-  planned slice;
-- only one writer changed the shared checkout at a time;
-- the shared branch contains every accepted change;
-- repository-owned checks pass on the exact head;
-- actionable review findings are resolved;
-- any reactive PR Steward child has stopped;
-- Gizmo has reconciled final GitHub state directly;
-- `task pr:ready PR=<number>` succeeds;
-- every pull request is squash-merged;
-- every remote merge is verified; and
-- Workbench completion records are published for every slice.
+- Every worker used its issued child worktree and bounded scope.
+- Dirty changes remained attributed and unrelated changes were preserved.
+- Parent integration and shared local dev integration were serialized.
+- The feature's final SHA has passing remote build-only evidence.
+- Required review and security findings are resolved.
+- Tests were authored for execution in the manager's slow stage.
+- The accepted feature is present in local dev.
+- The handoff names all commits and any remaining blocker.

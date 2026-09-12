@@ -1,9 +1,10 @@
+import assert from 'node:assert/strict';
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { evaluatePopularity } from '../src/lib/dependency-popularity/evaluate.ts';
-import { scanRepositoryNpmPackages } from '../src/lib/dependency-popularity/scan.ts';
+import { DependencyPopularityPolicy } from '../src/lib/dependency-popularity/evaluate.ts';
+import { RepositoryDependencyInventory } from '../src/lib/dependency-popularity/scan.ts';
 import {
   DependencyEcosystem,
   GitHubStarsPresence,
@@ -33,7 +34,11 @@ describe('scanRepositoryNpmPackages', () => {
   test('reads Loom and validated executable-application dependencies', () => {
     const repositoryRoot = path.join(import.meta.dir, '../../..');
     const parse = spyOn(JSON, 'parse');
-    const names = scanRepositoryNpmPackages(repositoryRoot);
+    const inventory = new RepositoryDependencyInventory(
+      repositoryRoot,
+    ).scanRepositoryNpmPackages();
+    assert(inventory.isOk());
+    const names = inventory.value;
     expect(names).toContain('diff');
     expect(names).toContain('typescript');
     expect(names.some((name) => name.startsWith('@types/'))).toBe(false);
@@ -58,12 +63,11 @@ describe('scanRepositoryNpmPackages', () => {
     const addOptions = { cmd: ['git', 'add', '--', '.cortex'], cwd: root };
     Bun.spawnSync(initOptions);
     Bun.spawnSync(addOptions);
-    let detail = '';
-    try {
-      scanRepositoryNpmPackages(root);
-    } catch (error) {
-      detail = error instanceof Error ? error.message : '';
-    }
+    const inventory = new RepositoryDependencyInventory(
+      root,
+    ).scanRepositoryNpmPackages();
+    assert(inventory.isErr());
+    const detail = inventory.error.message;
     expect(detail).toContain('Executable-skill package audit failed');
     expect(Buffer.byteLength(detail)).toBeLessThanOrEqual(35_000);
     expect(detail).not.toContain('/dev/null');
@@ -84,7 +88,9 @@ describe('evaluatePopularity', () => {
       },
       thresholds,
     };
-    const finding = evaluatePopularity(findingArgs3);
+    const finding = new DependencyPopularityPolicy(
+      findingArgs3.thresholds,
+    ).evaluate(findingArgs3.metrics);
     expect(finding.verdict).toBe(PopularityVerdict.Pass);
     expect(finding.reasons).toHaveLength(0);
   });
@@ -102,7 +108,9 @@ describe('evaluatePopularity', () => {
       },
       thresholds,
     };
-    const finding = evaluatePopularity(findingArgs2);
+    const finding = new DependencyPopularityPolicy(
+      findingArgs2.thresholds,
+    ).evaluate(findingArgs2.metrics);
     expect(finding.verdict).toBe(PopularityVerdict.Fail);
     expect(finding.reasons.length).toBeGreaterThan(0);
   });
@@ -118,7 +126,9 @@ describe('evaluatePopularity', () => {
       },
       thresholds,
     };
-    const finding = evaluatePopularity(findingArgs);
+    const finding = new DependencyPopularityPolicy(
+      findingArgs.thresholds,
+    ).evaluate(findingArgs.metrics);
     expect(finding.verdict).toBe(PopularityVerdict.Fail);
   });
 });

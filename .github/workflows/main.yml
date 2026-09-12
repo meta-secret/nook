@@ -27,29 +27,15 @@
 name: Main
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "**"
-      - "!.cortex/**"
-      - "!.cursor/**"
-      - "!.vale.ini"
-      - "!.vale/**"
-      - "!.github/workflows/repository-policy.yml"
-      - "!.github/workflows/web-research.yml"
-      - "!agentic-ai/**"
-      - "agentic-ai/minds/**"
-      - "!nook-app/nook-web/nook-web-research/**"
+  workflow_call:
+    inputs:
+      product_changed:
+        required: true
+        type: boolean
 
 permissions:
   contents: read
   pull-requests: read
-
-concurrency:
-  group: main
-  # Finish the active cache-writing run. GitHub keeps only the newest pending Main revision,
-  # coalescing a burst of agent merges without interrupting verified cache publication.
-  cancel-in-progress: false
 
 env:
   PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
@@ -68,44 +54,6 @@ env:
   LINEAR_UI_DEMO_TEAM_ID: fb81b5b7-ce24-447e-8673-63ec37c64983
 
 jobs:
-  product-paths:
-    name: Classify Main paths
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    outputs:
-      changed: ${{ steps.classify.outputs.changed }}
-    steps:
-      - name: Checkout complete push history
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Detect product changes
-        id: classify
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
-        run: |
-          if [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
-            changed_files="$(git diff-tree --no-commit-id --name-only -r "$AFTER_SHA")"
-          else
-            changed_files="$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA")"
-          fi
-
-          product_changed=false
-          while IFS= read -r changed_file; do
-            case "$changed_file" in
-              .cortex/* | .cursor/* | .github/workflows/web-research.yml | agentic-ai/* | nook-app/nook-web/nook-web-research/*)
-                ;;
-              "")
-                ;;
-              *)
-                product_changed=true
-                break
-                ;;
-            esac
-          done <<< "$changed_files"
-          echo "changed=$product_changed" >> "$GITHUB_OUTPUT"
-
   rust-ecosystem:
     name: Rust ecosystem
     uses: ./.github/workflows/rust-ecosystem-checks.yml
@@ -116,11 +64,11 @@ jobs:
 
   preflight:
     name: Repository preflight
-    needs: [product-paths]
-    if: needs.product-paths.outputs.changed == 'true'
+    if: inputs.product_changed
     outputs:
       cache_publication_outcome: ${{ steps.publish_preflight_cache.outcome }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -161,6 +109,7 @@ jobs:
     name: Preflight cache publication
     needs: [preflight]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 10
     steps:
       - name: Require successful preflight cache publication
         env:
@@ -173,12 +122,13 @@ jobs:
 
   rust:
     name: Native Rust verification
-    needs: [product-paths, preflight]
-    if: needs.product-paths.outputs.changed == 'true'
+    needs: [preflight]
+    if: inputs.product_changed
     outputs:
       cache_publication_outcome: ${{ steps.publish_native_cache.outcome }}
     # Publish only from the verified job's node-local BuildKit shard.
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
@@ -242,6 +192,7 @@ jobs:
     name: Native cache publication
     needs: [rust]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 10
     steps:
       - name: Require successful native cache publication
         env:
@@ -258,6 +209,7 @@ jobs:
     outputs:
       cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
@@ -331,6 +283,7 @@ jobs:
     name: WASM cache publication
     needs: [wasm]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 10
     steps:
       - name: Require successful WASM cache publication
         env:
@@ -345,6 +298,7 @@ jobs:
     name: Portable WASM cache publication proof
     needs: [wasm-cache-publish]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
@@ -378,6 +332,7 @@ jobs:
 
   web:
     name: Verify web build
+    timeout-minutes: 10
     needs: [wasm]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
@@ -465,6 +420,7 @@ jobs:
     name: Web e2e
     needs: [web]
     runs-on: nook-k0s-container
+    timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:
@@ -487,6 +443,7 @@ jobs:
     name: Extension e2e
     needs: [web]
     runs-on: nook-k0s-container
+    timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:
@@ -509,6 +466,7 @@ jobs:
     # clones the promoted web generation instead of racing a sibling lineage.
     needs: [web]
     runs-on: nook-k0s-container
+    timeout-minutes: 10
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:
@@ -599,6 +557,7 @@ jobs:
     name: Deploy development
     needs: [web, web-e2e, wasm-cache-proof]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 10
     environment:
       name: development
       url: https://dev.nokey.sh/

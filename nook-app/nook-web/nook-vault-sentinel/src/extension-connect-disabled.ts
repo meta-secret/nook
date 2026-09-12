@@ -1,7 +1,15 @@
 import { I18N_KEYS } from "../../nook-web-shared/src/generated/i18n-keys";
+import { err, type Result } from "neverthrow";
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from "$lib/runtime/storage-failure";
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
-import type { NookVaultManager } from "$app-wasm";
+import type {
+  NookVaultManager,
+  NookAdoptedExtensionIdentityHandoff,
+} from "$app-wasm";
 import type {
   ExtensionConnectRequestFor,
   PairedExtensionIdentityDiscoveryFor,
@@ -96,7 +104,24 @@ export function scopeLabel(): never {
 
 export async function adoptExtensionIdentity(
   args: ExtensionIdentityAdoption,
-): Promise<void> {
+): Promise<Result<NookAdoptedExtensionIdentityHandoff, VaultStorageFailure>> {
   void args;
-  throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
+  return err(
+    new VaultStorageFailure(VaultStorageFailureKind.IdentityHandoffRejected),
+  );
 }
+
+export const extensionConnectionBrowser = {
+  isExtensionConnectPath,
+  extensionConnectRequestFromLocation,
+  readInstalledExtensionRuntimeId,
+  openInstalledExtension,
+  discoverPairedExtensionIdentity,
+  requestPairedExtensionUnlock,
+  adoptExtensionIdentity,
+  // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
+  async deliverExtensionPairingApproval(_request: unknown): Promise<never> {
+    void _request;
+    throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
+  },
+};

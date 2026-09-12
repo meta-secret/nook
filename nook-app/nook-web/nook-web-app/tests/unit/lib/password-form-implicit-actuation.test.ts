@@ -2,10 +2,12 @@ import { afterEach, describe, expect, test } from 'vitest'
 import {
   FormSubmissionResult,
   PasswordFormQueryKind,
-  submitLoginForm,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
-const wholeDocumentRequest: Parameters<typeof submitLoginForm>[0] = {
+const wholeDocumentRequest: Parameters<
+  typeof passwordFormInteraction.submitLoginForm
+>[0] = {
   kind: PasswordFormQueryKind.Root,
   root: document,
 }
@@ -41,7 +43,7 @@ describe('implicit authentication actuation', () => {
       submitted = true
     })
 
-    expect(submitLoginForm(wholeDocumentRequest)).toBe(
+    expect(passwordFormInteraction.submitLoginForm(wholeDocumentRequest)).toBe(
       FormSubmissionResult.Submitted,
     )
     expect(submitted).toBe(true)
@@ -95,7 +97,9 @@ describe('implicit authentication actuation', () => {
       pageSubmitted = true
     })
 
-    const submissionRequest: Parameters<typeof submitLoginForm>[0] = {
+    const submissionRequest: Parameters<
+      typeof passwordFormInteraction.submitLoginForm
+    >[0] = {
       ...wholeDocumentRequest,
       submissionApproval: {
         isApproved: () => true,
@@ -104,7 +108,7 @@ describe('implicit authentication actuation', () => {
         },
       },
     }
-    const result = submitLoginForm(submissionRequest)
+    const result = passwordFormInteraction.submitLoginForm(submissionRequest)
 
     expect(result).toBe(FormSubmissionResult.Rejected)
     expect(rejected).toBe(true)

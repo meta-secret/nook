@@ -1,64 +1,61 @@
+import { err, ok, type Result } from "neverthrow";
 import {
-  chmodSync,
-  mkdtempSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+  FixtureFile,
+  FixtureDirectory,
+  FixtureWorkspaceRequest,
+  FixtureEmbeddedSource,
+} from "./operational-fixture";
+import {
+  OperationalCommandProbe,
+  OperationalProbeStream,
+  OperationalContractFailureKind,
+  type OperationalContractFailure,
+} from "./operational-contract";
 import { join, resolve } from "node:path";
 
-const { PATH: executablePath = "" } = process.env;
+class FirewallFunctionSource {
+  constructor(
+    private readonly request: { start: string; declaration: string },
+  ) {}
+  execute(): Result<string, OperationalContractFailure> {
+    const input = this.request;
 
-const root = resolve(import.meta.dir, "../..");
-const taskfile = resolve(root, "infra/tasks/k0s.yml");
-const rollbackStart = "        rollback_k0s_firewall() {\n";
-const replaceStart = "        replace_k0s_firewall_rules() {\n";
-const functionEnd = "        trap rollback_k0s_firewall EXIT\n";
-
-function functionSource(input: { start: string; declaration: string }): string {
-  const task = readFileSync(taskfile, "utf8");
-  const body = task
-    .split(input.start)[1]
-    .split(functionEnd)[0]
-    .replace(/^ {8}/gm, "");
-  return `${input.declaration}\n${body}`;
+    const task = new FixtureFile(taskfile).read();
+    if (task.isErr()) return err(task.error);
+    return new FixtureEmbeddedSource(task.value)
+      .between(input.start, functionEnd)
+      .map((body) => `${input.declaration}\n${body.replace(/^ {8}/gm, "")}`);
+  }
 }
 
-function uninstallFilter(): string {
-  const task = readFileSync(taskfile, "utf8");
-  const start = "        sudo -n awk \\\n          '";
-  const end = '\' \\\n          /etc/nftables.conf > "$firewall_config"\n';
-  return task.split(start)[1].split(end)[0];
+class FirewallExecutable {
+  constructor(private readonly request: { path: string; source: string }) {}
+  execute(): Result<void, OperationalContractFailure> {
+    const input = this.request;
+
+    const prepared3 = new FixtureFile(input.path).write(input.source);
+    if (prepared3.isErr()) return err(prepared3.error);
+    return new FixtureFile(input.path).makeExecutable();
+  }
 }
 
-function executable(input: { path: string; source: string }): void {
-  writeFileSync(input.path, input.source);
-  chmodSync(input.path, 0o755);
-}
-
-const rollbackInput = {
-  start: rollbackStart,
-  declaration: "rollback_k0s_firewall() {",
-};
-const rollbackSource = functionSource(rollbackInput);
-const replaceInput = {
-  start: replaceStart,
-  declaration: "replace_k0s_firewall_rules() {",
-};
-const replaceSource = functionSource(replaceInput);
-
-enum RollbackExitMode {
-  Error = "error",
-  Signal = "signal",
-}
-
-function rollbackCase(exitMode: RollbackExitMode): void {
-  const work = mkdtempSync(join(tmpdir(), "nook-firewall-rollback-"));
-  try {
+class FirewallRollbackScenario {
+  constructor(
+    private readonly request: { mode: RollbackExitMode; source: string },
+  ) {}
+  execute(): Result<void, OperationalContractFailure> {
+    const workspace = new FixtureWorkspaceRequest(
+      "nook-firewall-rollback-",
+    ).create();
+    if (workspace.isErr()) return err(workspace.error);
+    return workspace.value.finish(this.executeIn(workspace.value.path));
+  }
+  private executeIn(work: string): Result<void, OperationalContractFailure> {
+    const exitMode = this.request.mode;
+    const rollbackSource = this.request.source;
     const mockBin = join(work, "bin");
-    mkdirSync(mockBin);
+    const prepared1 = new FixtureDirectory(mockBin).create();
+    if (prepared1.isErr()) return err(prepared1.error);
     const inputState = join(work, "input");
     const forwardState = join(work, "forward");
     const config = join(work, "nftables.conf");
@@ -74,24 +71,28 @@ function rollbackCase(exitMode: RollbackExitMode): void {
       'add rule inet bynull_filter forward counter drop comment "later forward rule"\n';
     const originalConfig = "table inet bynull_filter { # original }\n";
     const originalFragment = originalInput + originalForward;
-    writeFileSync(
-      inputState,
+    const prepared4 = new FixtureFile(inputState).write(
       'add rule inet bynull_filter input accept comment "nook k0s pod control plane v3"\n',
     );
-    writeFileSync(
-      forwardState,
+    if (prepared4.isErr()) return err(prepared4.error);
+    const prepared5 = new FixtureFile(forwardState).write(
       'add rule inet bynull_filter forward accept comment "nook k0s pod egress v3 next"\n',
     );
-    writeFileSync(config, "mutated config\n");
-    writeFileSync(fragment, "mutated fragment\n");
-    writeFileSync(previousConfig, originalConfig);
-    writeFileSync(previousFragment, originalFragment);
-    writeFileSync(
-      previousLive,
+    if (prepared5.isErr()) return err(prepared5.error);
+    const prepared6 = new FixtureFile(config).write("mutated config\n");
+    if (prepared6.isErr()) return err(prepared6.error);
+    const prepared7 = new FixtureFile(fragment).write("mutated fragment\n");
+    if (prepared7.isErr()) return err(prepared7.error);
+    const prepared8 = new FixtureFile(previousConfig).write(originalConfig);
+    if (prepared8.isErr()) return err(prepared8.error);
+    const prepared9 = new FixtureFile(previousFragment).write(originalFragment);
+    if (prepared9.isErr()) return err(prepared9.error);
+    const prepared10 = new FixtureFile(previousLive).write(
       `flush chain inet bynull_filter input\n${originalInput}flush chain inet bynull_filter forward\n${originalForward}`,
     );
-    const sudoMock = {
-      path: join(mockBin, "sudo"),
+    if (prepared10.isErr()) return err(prepared10.error);
+    const fixtureCommand = {
+      path: join(mockBin, "fixture-command"),
       source: `#!/usr/bin/env bash
 set -euo pipefail
 if test "\${1:-}" = -n; then shift; fi
@@ -127,13 +128,24 @@ else
 fi
 `,
     };
-    executable(sudoMock);
+    const fixtureCommandReady = new FirewallExecutable(
+      fixtureCommand,
+    ).execute();
+    if (fixtureCommandReady.isErr()) return err(fixtureCommandReady.error);
+    const fixtureRollbackSource = rollbackSource.replaceAll(
+      "sudo -n ",
+      `${JSON.stringify(fixtureCommand.path)} `,
+    );
     const trigger =
       exitMode === RollbackExitMode.Error ? "false" : "kill -TERM $$";
     const harness = {
       path: join(work, "harness.sh"),
       source: `#!/usr/bin/env bash
 set -Eeuo pipefail
+export MOCK_INPUT_STATE=${JSON.stringify(inputState)}
+export MOCK_FORWARD_STATE=${JSON.stringify(forwardState)}
+export MOCK_CONFIG=${JSON.stringify(config)}
+export MOCK_FRAGMENT=${JSON.stringify(fragment)}
 firewall_fragment=${join(work, "temporary-fragment")}
 firewall_config=${join(work, "temporary-config")}
 firewall_previous_config=${previousConfig}
@@ -147,7 +159,7 @@ cni_config_next=""
 recovery_key=""
 encrypted_backup=""
 expected_mac=""
-${rollbackSource}
+${fixtureRollbackSource}
 trap rollback_k0s_firewall EXIT
 trap rollback_k0s_firewall ERR
 trap 'exit 129' HUP
@@ -156,7 +168,8 @@ trap 'exit 143' TERM
 ${trigger}
 `,
     };
-    executable(harness);
+    const harnessReady = new FirewallExecutable(harness).execute();
+    if (harnessReady.isErr()) return err(harnessReady.error);
     const processInput = {
       cmd: [harness.path],
       env: {
@@ -167,53 +180,92 @@ ${trigger}
         MOCK_CONFIG: config,
         MOCK_FRAGMENT: fragment,
       },
-      stdout: "inherit" as const,
-      stderr: "inherit" as const,
+      stdout: OperationalProbeStream.Inherit,
+      stderr: OperationalProbeStream.Inherit,
     };
-    const result = Bun.spawnSync(processInput);
+    const processResult = new OperationalCommandProbe(processInput).execute();
+    if (processResult.isErr()) return err(processResult.error);
+    const result = processResult.value;
     const expectedCode = exitMode === "error" ? 1 : 143;
     if (result.exitCode !== expectedCode) {
-      throw new Error(
-        `${exitMode} rollback exited ${result.exitCode}, expected ${expectedCode}`,
-      );
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: `${exitMode} rollback exited ${result.exitCode}, expected ${expectedCode}`,
+      });
     }
     for (const comparison of [
       [inputState, originalInput],
       [forwardState, originalForward],
       [config, originalConfig],
       [fragment, originalFragment],
-    ]) {
-      if (readFileSync(comparison[0], "utf8") !== comparison[1]) {
-        throw new Error(`rollback did not restore ${comparison[0]}`);
+    ] as const) {
+      const restored = new FixtureFile(comparison[0]).read();
+      if (restored.isErr()) return err(restored.error);
+      if (restored.value !== comparison[1]) {
+        return err({
+          kind: OperationalContractFailureKind.Requirement,
+          message: `rollback did not restore ${comparison[0]}`,
+        });
       }
     }
-  } finally {
-    rmSync(work, { recursive: true, force: true });
+    return ok();
   }
 }
 
-function successfulReplacementCase(): void {
-  const work = mkdtempSync(join(tmpdir(), "nook-firewall-replace-"));
-  try {
+const { PATH: executablePath = "" } = process.env;
+
+const root = resolve(import.meta.dir, "../..");
+const taskfile = resolve(root, "infra/tasks/k0s.yml");
+const rollbackStart = "        rollback_k0s_firewall() {\n";
+const replaceStart = "        replace_k0s_firewall_rules() {\n";
+const functionEnd = "        trap rollback_k0s_firewall EXIT\n";
+
+class FirewallUninstallSource {
+  read(): Result<string, OperationalContractFailure> {
+    const task = new FixtureFile(taskfile).read();
+    if (task.isErr()) return err(task.error);
+    const start = "        sudo -n awk \\\n          '";
+    const end = '\' \\\n          /etc/nftables.conf > "$firewall_config"\n';
+    return new FixtureEmbeddedSource(task.value).between(start, end);
+  }
+}
+
+enum RollbackExitMode {
+  Error = "error",
+  Signal = "signal",
+}
+
+class FirewallReplacementScenario {
+  constructor(private readonly source: string) {}
+  execute(): Result<void, OperationalContractFailure> {
+    const workspace = new FixtureWorkspaceRequest(
+      "nook-firewall-replace-",
+    ).create();
+    if (workspace.isErr()) return err(workspace.error);
+    return workspace.value.finish(this.executeIn(workspace.value.path));
+  }
+  private executeIn(work: string): Result<void, OperationalContractFailure> {
+    const replaceSource = this.source;
     const mockBin = join(work, "bin");
-    mkdirSync(mockBin);
+    const prepared2 = new FixtureDirectory(mockBin).create();
+    if (prepared2.isErr()) return err(prepared2.error);
     const inputState = join(work, "input");
     const forwardState = join(work, "forward");
     const next = join(work, "next.nft");
-    writeFileSync(
-      inputState,
+    const prepared11 = new FixtureFile(inputState).write(
       'tcp dport 6443 accept comment "nook k0s pod control plane v2"\n' +
         'jump audit comment "unrelated input jump"\n' +
         'counter drop comment "later input drop"\n',
     );
-    writeFileSync(
-      forwardState,
+    if (prepared11.isErr()) return err(prepared11.error);
+    const prepared12 = new FixtureFile(forwardState).write(
       'ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress install"\n' +
         'jump audit comment "unrelated forward jump"\n' +
         'counter drop comment "later forward drop"\n',
     );
-    const sudoMock = {
-      path: join(mockBin, "sudo"),
+    if (prepared12.isErr()) return err(prepared12.error);
+    const fixtureCommand = {
+      path: join(mockBin, "fixture-command"),
       source: `#!/usr/bin/env bash
 set -euo pipefail
 if test "\${1:-}" = -n; then shift; fi
@@ -246,17 +298,27 @@ else
 fi
 `,
     };
-    executable(sudoMock);
+    const fixtureCommandReady = new FirewallExecutable(
+      fixtureCommand,
+    ).execute();
+    if (fixtureCommandReady.isErr()) return err(fixtureCommandReady.error);
+    const fixtureReplaceSource = replaceSource.replaceAll(
+      "sudo -n ",
+      `${JSON.stringify(fixtureCommand.path)} `,
+    );
     const harness = {
       path: join(work, "harness.sh"),
       source: `#!/usr/bin/env bash
 set -Eeuo pipefail
+export MOCK_INPUT_STATE=${JSON.stringify(inputState)}
+export MOCK_FORWARD_STATE=${JSON.stringify(forwardState)}
 firewall_live_next=${next}
-${replaceSource}
+${fixtureReplaceSource}
 replace_k0s_firewall_rules committed
 `,
     };
-    executable(harness);
+    const harnessReady = new FirewallExecutable(harness).execute();
+    if (harnessReady.isErr()) return err(harnessReady.error);
     const processInput = {
       cmd: [harness.path],
       env: {
@@ -265,12 +327,17 @@ replace_k0s_firewall_rules committed
         MOCK_INPUT_STATE: inputState,
         MOCK_FORWARD_STATE: forwardState,
       },
-      stdout: "inherit" as const,
-      stderr: "inherit" as const,
+      stdout: OperationalProbeStream.Inherit,
+      stderr: OperationalProbeStream.Inherit,
     };
-    const result = Bun.spawnSync(processInput);
+    const processResult = new OperationalCommandProbe(processInput).execute();
+    if (processResult.isErr()) return err(processResult.error);
+    const result = processResult.value;
     if (result.exitCode !== 0)
-      throw new Error(`replacement exited ${result.exitCode}`);
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: `replacement exited ${result.exitCode}`,
+      });
     const expectedInput =
       'iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s pod control plane v3"\n' +
       'jump audit comment "unrelated input jump"\n' +
@@ -279,36 +346,101 @@ replace_k0s_firewall_rules committed
       'iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s pod egress v3"\n' +
       'jump audit comment "unrelated forward jump"\n' +
       'counter drop comment "later forward drop"\n';
-    const actualInput = readFileSync(inputState, "utf8");
-    const actualForward = readFileSync(forwardState, "utf8");
+    const actualInputResult = new FixtureFile(inputState).read();
+    if (actualInputResult.isErr()) return err(actualInputResult.error);
+    const actualInput = actualInputResult.value;
+    const actualForwardResult = new FixtureFile(forwardState).read();
+    if (actualForwardResult.isErr()) return err(actualForwardResult.error);
+    const actualForward = actualForwardResult.value;
     if (actualInput !== expectedInput)
-      throw new Error(`input ordering changed:\n${actualInput}`);
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: `input ordering changed:\n${actualInput}`,
+      });
     if (actualForward !== expectedForward)
-      throw new Error(`forward ordering changed:\n${actualForward}`);
-  } finally {
-    rmSync(work, { recursive: true, force: true });
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: `forward ordering changed:\n${actualForward}`,
+      });
+    return ok();
   }
 }
 
-rollbackCase(RollbackExitMode.Error);
-rollbackCase(RollbackExitMode.Signal);
-successfulReplacementCase();
-const nftablesConfig =
-  'table inet bynull_filter {}\n  include   "/etc/nftables.d/nook-k0s.nft"   # managed\n' +
-  'include "/etc/nftables.d/unrelated.nft"\n';
-const awkInput = {
-  cmd: ["awk", uninstallFilter()],
-  stdin: Buffer.from(nftablesConfig),
-};
-const filtered = Bun.spawnSync(awkInput);
-if (filtered.exitCode !== 0)
-  throw new Error("nftables uninstall filter failed");
-const filteredText = filtered.stdout.toString();
-if (filteredText.includes("nook-k0s.nft"))
-  throw new Error("managed include was retained");
-if (!filteredText.includes('include "/etc/nftables.d/unrelated.nft"')) {
-  throw new Error("unrelated include was removed");
+class FirewallContract {
+  execute(): Result<void, OperationalContractFailure> {
+    const rollbackInput = {
+      start: rollbackStart,
+      declaration: "rollback_k0s_firewall() {",
+    };
+    const rollbackSourceResult = new FirewallFunctionSource(
+      rollbackInput,
+    ).execute();
+    if (rollbackSourceResult.isErr()) return err(rollbackSourceResult.error);
+    const rollbackSource = rollbackSourceResult.value;
+    const replaceInput = {
+      start: replaceStart,
+      declaration: "replace_k0s_firewall_rules() {",
+    };
+    const replaceSourceResult = new FirewallFunctionSource(
+      replaceInput,
+    ).execute();
+    if (replaceSourceResult.isErr()) return err(replaceSourceResult.error);
+    const replaceSource = replaceSourceResult.value;
+
+    const rollbackError = new FirewallRollbackScenario({
+      mode: RollbackExitMode.Error,
+      source: rollbackSource,
+    }).execute();
+    if (rollbackError.isErr()) return err(rollbackError.error);
+    const rollbackSignal = new FirewallRollbackScenario({
+      mode: RollbackExitMode.Signal,
+      source: rollbackSource,
+    }).execute();
+    if (rollbackSignal.isErr()) return err(rollbackSignal.error);
+    const replacement = new FirewallReplacementScenario(
+      replaceSource,
+    ).execute();
+    if (replacement.isErr()) return err(replacement.error);
+    const nftablesConfig =
+      'table inet bynull_filter {}\n  include   "/etc/nftables.d/nook-k0s.nft"   # managed\n' +
+      'include "/etc/nftables.d/unrelated.nft"\n';
+    const filter = new FirewallUninstallSource().read();
+    if (filter.isErr()) return err(filter.error);
+    const awkInput = {
+      cmd: ["awk", filter.value],
+      stdout: OperationalProbeStream.Pipe,
+      stderr: OperationalProbeStream.Pipe,
+      stdin: new Blob([nftablesConfig]),
+    };
+    const filteredResult = new OperationalCommandProbe(awkInput).execute();
+    if (filteredResult.isErr()) return err(filteredResult.error);
+    const filtered = filteredResult.value;
+    if (filtered.exitCode !== 0)
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: "nftables uninstall filter failed",
+      });
+    const filteredText = filtered.stdout.toString();
+    if (filteredText.includes("nook-k0s.nft"))
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: "managed include was retained",
+      });
+    if (!filteredText.includes('include "/etc/nftables.d/unrelated.nft"')) {
+      return err({
+        kind: OperationalContractFailureKind.Requirement,
+        message: "unrelated include was removed",
+      });
+    }
+    console.log("k0s firewall error and signal rollback: ok");
+    console.log("k0s firewall successful replacement ordering: ok");
+    console.log("k0s firewall include uninstall variants: ok");
+
+    return ok();
+  }
 }
-console.log("k0s firewall error and signal rollback: ok");
-console.log("k0s firewall successful replacement ordering: ok");
-console.log("k0s firewall include uninstall variants: ok");
+const outcome = new FirewallContract().execute();
+if (outcome.isErr()) {
+  console.error(outcome.error.message);
+  process.exitCode = 1;
+}

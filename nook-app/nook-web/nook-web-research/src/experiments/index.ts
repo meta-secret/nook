@@ -55,138 +55,139 @@ export interface ExperimentSubcategory {
   description: string
 }
 
+const auth: ExperimentCategory = {
+  slug: 'nook-auth',
+  title: 'Nook Auth',
+  description:
+    'Presence-first Open Nook entry concepts. Empty vs unlock, Simple vs Sentinel, deferred passkey.',
+}
+const workflow: ExperimentCategory = {
+  slug: 'vault-auth-workflow',
+  title: 'Vault Auth Workflow',
+  description:
+    'End-to-end auth → Sentinel setup. Key later and Landing both use: name vault → Simple or Sentinel → card stack (default) or vault terminal.',
+}
+const vault: ExperimentCategory = {
+  slug: 'vault',
+  title: 'Sentinel Vault',
+  description:
+    'Standalone threshold vault genesis directions — policy, participant keys, and seal.',
+}
+const keys: ExperimentCategory = {
+  slug: 'keys-management',
+  title: 'Keys Management',
+  description:
+    'Which of my passkeys opens this vault, and can I use it from this browser? Every sketch draws the same graph of passkeys, device keys, and vaults, shows the identifiers you would compare against a password manager, and supports three passkeys / one passkey / new browser.',
+}
+const identityManagement: ExperimentCategory = {
+  slug: 'identity-management',
+  title: 'Identity Management',
+  description: 'Small studies of identities and the public keys they keep.',
+}
+const inspiration: ExperimentCategory = {
+  slug: 'inspiration',
+  title: 'Inspiration',
+  description:
+    'Sketches kept unchanged for their interaction or visual idea, not as candidates. They may read older fixtures.',
+}
+
 export const categories: ExperimentCategory[] = [
-  {
-    slug: 'nook-auth',
-    title: 'Nook Auth',
-    description:
-      'Presence-first Open Nook entry concepts. Empty vs unlock, Simple vs Sentinel, deferred passkey.',
-  },
-  {
-    slug: 'vault-auth-workflow',
-    title: 'Vault Auth Workflow',
-    description:
-      'End-to-end auth → Sentinel setup. Key later and Landing both use: name vault → Simple or Sentinel → card stack (default) or vault terminal.',
-  },
-  {
-    slug: 'vault',
-    title: 'Sentinel Vault',
-    description:
-      'Standalone threshold vault genesis directions — policy, participant keys, and seal.',
-  },
-  {
-    slug: 'keys-management',
-    title: 'Keys Management',
-    description:
-      'Which of my passkeys opens this vault, and can I use it from this browser? Every sketch draws the same graph of passkeys, device keys, and vaults, shows the identifiers you would compare against a password manager, and supports three passkeys / one passkey / new browser.',
-  },
-  {
-    slug: 'identity-management',
-    title: 'Identity Management',
-    description: 'Small studies of identities and the public keys they keep.',
-  },
-  {
-    slug: 'inspiration',
-    title: 'Inspiration',
-    description:
-      'Sketches kept unchanged for their interaction or visual idea, not as candidates. They may read older fixtures.',
-  },
+  auth,
+  workflow,
+  vault,
+  keys,
+  identityManagement,
+  inspiration,
 ]
+
+const authV1: ExperimentSubcategory = {
+  categorySlug: 'nook-auth',
+  slug: ExperimentVersion.V1,
+  title: 'V1 · Shortlist',
+  description:
+    'Three kept directions. Toggle Empty / Vault exists in each sketch.',
+}
+const workflowV1: ExperimentSubcategory = {
+  categorySlug: 'vault-auth-workflow',
+  slug: ExperimentVersion.V1,
+  title: 'V1 · Auth → Sentinel',
+  description:
+    'Click Build Sentinel vault to enter the adopted full UI. Card stack is the default destination; terminal is the alternate.',
+}
+const v1: ExperimentSubcategory = {
+  categorySlug: 'vault',
+  slug: ExperimentVersion.V1,
+  title: 'V1 · Selected directions',
+  description: 'The strongest visual directions for Sentinel genesis.',
+}
+const v2: ExperimentSubcategory = {
+  categorySlug: 'vault',
+  slug: ExperimentVersion.V2,
+  title: 'V2 · Selected directions',
+  description: 'The precision of Credential Airlock.',
+}
+const v3: ExperimentSubcategory = {
+  categorySlug: 'vault',
+  slug: ExperimentVersion.V3,
+  title: 'V3 · Selected directions',
+  description:
+    'Evidence Room, Access Choreography, and the wallet-inspired card stack.',
+}
+const v4: ExperimentSubcategory = {
+  categorySlug: 'vault',
+  slug: ExperimentVersion.V4,
+  title: 'V4 · Reference studies',
+  description:
+    "External interaction and visual references translated into Nook's Sentinel genesis model.",
+}
+const keysV1: ExperimentSubcategory = {
+  categorySlug: 'keys-management',
+  slug: ExperimentVersion.V1,
+  title: 'V1 · Show possession',
+  description:
+    'Containment and inventory: what holds what, and what you own in total.',
+}
+const keysV3: ExperimentSubcategory = {
+  categorySlug: 'keys-management',
+  slug: ExperimentVersion.V3,
+  title: 'V3 · Inspect the evidence',
+  description:
+    'Operator density: consoles and artifacts that put identifiers side by side.',
+}
+const identityManagementV1: ExperimentSubcategory = {
+  categorySlug: 'identity-management',
+  slug: ExperimentVersion.V1,
+  title: 'V1 · Identity and keys',
+  description: 'One identity, shown as a simple group of keys.',
+}
+const identityManagementV2: ExperimentSubcategory = {
+  categorySlug: 'identity-management',
+  slug: ExperimentVersion.V2,
+  title: 'V2 · Identity and vault access',
+  description:
+    'Three perspectives on the many-to-many authorization relationship: identity-first, overview, and vault-first.',
+}
+const inspirationV1: ExperimentSubcategory = {
+  categorySlug: 'inspiration',
+  slug: ExperimentVersion.V1,
+  title: 'V1 · Kept as-is',
+  description:
+    'Frozen references. Do not iterate on these; borrow from them instead.',
+}
 
 export const subcategories: ExperimentSubcategory[] = [
-  {
-    categorySlug: 'nook-auth',
-    slug: ExperimentVersion.V1,
-    title: 'V1 · Shortlist',
-    description:
-      'Three kept directions. Toggle Empty / Vault exists in each sketch.',
-  },
-  {
-    categorySlug: 'vault-auth-workflow',
-    slug: ExperimentVersion.V1,
-    title: 'V1 · Auth → Sentinel',
-    description:
-      'Click Build Sentinel vault to enter the adopted full UI. Card stack is the default destination; terminal is the alternate.',
-  },
-  {
-    categorySlug: 'vault',
-    slug: ExperimentVersion.V1,
-    title: 'V1 · Selected directions',
-    description: 'The strongest visual directions for Sentinel genesis.',
-  },
-  {
-    categorySlug: 'vault',
-    slug: ExperimentVersion.V2,
-    title: 'V2 · Selected directions',
-    description: 'The precision of Credential Airlock.',
-  },
-  {
-    categorySlug: 'vault',
-    slug: ExperimentVersion.V3,
-    title: 'V3 · Selected directions',
-    description:
-      'Evidence Room, Access Choreography, and the wallet-inspired card stack.',
-  },
-  {
-    categorySlug: 'vault',
-    slug: ExperimentVersion.V4,
-    title: 'V4 · Reference studies',
-    description:
-      "External interaction and visual references translated into Nook's Sentinel genesis model.",
-  },
-  {
-    categorySlug: 'keys-management',
-    slug: ExperimentVersion.V1,
-    title: 'V1 · Show possession',
-    description:
-      'Containment and inventory: what holds what, and what you own in total.',
-  },
-  {
-    categorySlug: 'keys-management',
-    slug: ExperimentVersion.V3,
-    title: 'V3 · Inspect the evidence',
-    description:
-      'Operator density: consoles and artifacts that put identifiers side by side.',
-  },
-  {
-    categorySlug: 'identity-management',
-    slug: ExperimentVersion.V1,
-    title: 'V1 · Identity and keys',
-    description: 'One identity, shown as a simple group of keys.',
-  },
-  {
-    categorySlug: 'identity-management',
-    slug: ExperimentVersion.V2,
-    title: 'V2 · Identity and vault access',
-    description:
-      'Three perspectives on the many-to-many authorization relationship: identity-first, overview, and vault-first.',
-  },
-  {
-    categorySlug: 'inspiration',
-    slug: ExperimentVersion.V1,
-    title: 'V1 · Kept as-is',
-    description:
-      'Frozen references. Do not iterate on these; borrow from them instead.',
-  },
+  authV1,
+  workflowV1,
+  v1,
+  v2,
+  v3,
+  v4,
+  keysV1,
+  keysV3,
+  identityManagementV1,
+  identityManagementV2,
+  inspirationV1,
 ]
-
-const auth = categories[0]
-const workflow = categories[1]
-const vault = categories[2]
-const keys = categories[3]
-const authV1 = subcategories[0]
-const workflowV1 = subcategories[1]
-const v1 = subcategories[2]
-const v2 = subcategories[3]
-const v3 = subcategories[4]
-const v4 = subcategories[5]
-const keysV1 = subcategories[6]
-const keysV3 = subcategories[7]
-const identityManagement = categories[4]
-const identityManagementV1 = subcategories[8]
-const identityManagementV2 = subcategories[9]
-const inspiration = categories[5]
-const inspirationV1 = subcategories[10]
 
 export const experiments: Experiment[] = [
   {

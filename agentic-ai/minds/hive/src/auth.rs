@@ -1,3 +1,12 @@
+enum ProjectedCredentialReplacement {
+    Unchanged,
+    Replaced(Vec<u8>),
+}
+pub struct AuthBroker {
+    pub socket_path: PathBuf,
+    pub auth_source: PathBuf,
+    pub auth_home: PathBuf,
+}
 use std::env;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -26,10 +35,12 @@ const AUTH_API_TOKEN: &str = "/run/secrets/hive-auth-api/token";
 const AUTH_API_CA: &str = "/run/secrets/hive-auth-api/ca.crt";
 const AUTH_PERSIST_RETRY_MAX: Duration = Duration::from_secs(30);
 
-fn auth_route_config() -> AuthRouteConfig {
-    AuthRouteConfig::from_http_client_factory(HttpClientFactory::new(
-        OutboundProxyPolicy::ReqwestDefault,
-    ))
+impl AuthBroker {
+    fn auth_route_config() -> AuthRouteConfig {
+        AuthRouteConfig::from_http_client_factory(HttpClientFactory::new(
+            OutboundProxyPolicy::ReqwestDefault,
+        ))
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -72,9 +83,12 @@ impl BrokerExternalAuth {
         unreachable!("bounded auth broker connection loop always returns")
     }
 
-    async fn request(&self, refresh: bool) -> io::Result<CodexAuth> {
+    async fn request(&self, operation: BrokerAuthOperation) -> io::Result<CodexAuth> {
         let mut channel = self.channel.lock().await;
-        let request = serde_json::to_vec(&BrokerRequest { refresh }).map_err(io::Error::other)?;
+        let request = serde_json::to_vec(&BrokerRequest {
+            refresh: matches!(operation, BrokerAuthOperation::Refresh),
+        })
+        .map_err(io::Error::other)?;
         channel.get_mut().write_all(&request).await?;
         channel.get_mut().write_all(b"\n").await?;
         channel.get_mut().flush().await?;
@@ -90,253 +104,270 @@ impl BrokerExternalAuth {
     }
 
     pub async fn validate(&self) -> io::Result<()> {
-        self.request(false).await.map(drop)
+        self.request(BrokerAuthOperation::Resolve).await.map(drop)
     }
 
     pub async fn refresh_and_validate(&self) -> io::Result<()> {
-        self.request(true).await.map(drop)
+        self.request(BrokerAuthOperation::Refresh).await.map(drop)
     }
 }
 
 impl ExternalAuth for BrokerExternalAuth {
     fn resolve(&self) -> ExternalAuthFuture<'_, CodexAuth> {
-        Box::pin(self.request(false))
+        Box::pin(self.request(BrokerAuthOperation::Resolve))
     }
 
     fn refresh(&self, _context: ExternalAuthRefreshContext) -> ExternalAuthFuture<'_, CodexAuth> {
-        Box::pin(self.request(true))
+        Box::pin(self.request(BrokerAuthOperation::Refresh))
     }
 }
 
-pub(crate) async fn prepare_worker_auth_and_readiness(
-    external_auth: &BrokerExternalAuth,
-    workspace: &Path,
-) -> crate::HiveResult<()> {
-    external_auth
-        .refresh_and_validate()
-        .await
-        .hive_context("Hive auth refresh failed before worker readiness")?;
-    async_fs::write(workspace.join(".hive-worker-ready"), b"ready")
-        .await
-        .hive_context("failed to publish worker readiness")
-}
-
-pub async fn run_auth_broker(
-    socket_path: PathBuf,
-    auth_source: PathBuf,
-    auth_home: PathBuf,
-) -> crate::HiveResult<()> {
-    async_fs::create_dir_all(&auth_home).await?;
-    let private_auth = auth_home.join("auth.json");
-    async_fs::copy(&auth_source, &private_auth)
-        .await
-        .hive_context("failed to stage Codex authentication inside the broker container")?;
-    let mut permissions = async_fs::metadata(&private_auth).await?.permissions();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        permissions.set_mode(0o600);
-    }
-    async_fs::set_permissions(&private_auth, permissions).await?;
-
-    let mut auth_manager = AuthManager::shared(
-        auth_home.clone(),
-        false,
-        AuthCredentialsStoreMode::File,
-        None,
-        None,
-        AuthKeyringBackendKind::default(),
-        auth_route_config(),
-    )
-    .await;
-    if auth_manager.auth_cached().is_none() {
-        return Err(crate::HiveError::message(
-            "Codex authentication is unavailable to the broker",
-        ));
-    }
-
-    if let Some(parent) = socket_path.parent() {
-        async_fs::create_dir_all(parent).await?;
-    }
-    match async_fs::remove_file(&socket_path).await {
-        Ok(()) => {}
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error.into()),
-    }
-    let listener = UnixListener::bind(&socket_path)?;
-    let (stream, _) = listener.accept().await?;
-    drop(listener);
-    async_fs::remove_file(&socket_path)
-        .await
-        .hive_context("failed to unlink the accepted auth broker socket")?;
-
-    let mut channel = BufReader::new(stream);
-    loop {
-        let mut request = String::new();
-        if channel.read_line(&mut request).await? == 0 {
-            return Ok(());
-        }
-        let request: BrokerRequest =
-            serde_json::from_str(&request).hive_context("invalid auth broker request")?;
-        if request.refresh {
-            let projected_auth = async_fs::read(&auth_source)
-                .await
-                .hive_context("failed to reload projected Codex authentication")?;
-            let private_auth_bytes = async_fs::read(&private_auth).await?;
-            if projected_auth != private_auth_bytes {
-                async_fs::write(&private_auth, projected_auth).await?;
-                auth_manager = AuthManager::shared(
-                    auth_home.clone(),
-                    false,
-                    AuthCredentialsStoreMode::File,
-                    None,
-                    None,
-                    AuthKeyringBackendKind::default(),
-                    auth_route_config(),
-                )
-                .await;
-            } else {
-                match auth_manager.refresh_token_from_authority().await {
-                    Ok(()) => persist_rotated_auth(&private_auth, &auth_home).await,
-                    Err(refresh_error) => {
-                        // Another warm broker may have won a rotating refresh-token race.
-                        // Wait for its Secret update to reach this projected volume and retry
-                        // from the durable replacement instead of failing the active task.
-                        let mut replacement = None;
-                        for _ in 0..AUTH_CONNECT_ATTEMPTS {
-                            async_time::sleep(AUTH_CONNECT_DELAY).await;
-                            let candidate = async_fs::read(&auth_source)
-                                .await
-                                .hive_context("failed to reload projected Codex authentication")?;
-                            if candidate != private_auth_bytes {
-                                replacement = Some(candidate);
-                                break;
-                            }
-                        }
-                        let replacement = replacement.ok_or_else(|| {
-                            crate::HiveError::message(format!(
-                                "Codex authentication refresh failed: {refresh_error}"
-                            ))
-                        })?;
-                        async_fs::write(&private_auth, replacement).await?;
-                        auth_manager = AuthManager::shared(
-                            auth_home.clone(),
-                            false,
-                            AuthCredentialsStoreMode::File,
-                            None,
-                            None,
-                            AuthKeyringBackendKind::default(),
-                            auth_route_config(),
-                        )
-                        .await;
-                    }
-                }
-            }
-        }
-        let auth = auth_manager.auth_cached().ok_or_else(|| {
-            crate::HiveError::message("Codex authentication disappeared from the broker")
-        })?;
-        let response = BrokerResponse {
-            access_token: auth.get_token()?,
-            account_id: auth.get_account_id().ok_or_else(|| {
-                crate::HiveError::message("Codex authentication has no account id")
-            })?,
-        };
-        let response = serde_json::to_vec(&response)?;
-        channel.get_mut().write_all(&response).await?;
-        channel.get_mut().write_all(b"\n").await?;
-        channel.get_mut().flush().await?;
+impl AuthBroker {
+    pub(crate) async fn prepare_worker_auth_and_readiness(
+        external_auth: &BrokerExternalAuth,
+        workspace: &Path,
+    ) -> crate::HiveResult<()> {
+        external_auth
+            .refresh_and_validate()
+            .await
+            .hive_context("Hive auth refresh failed before worker readiness")?;
+        async_fs::write(workspace.join(".hive-worker-ready"), b"ready")
+            .await
+            .hive_context("failed to publish worker readiness")
     }
 }
 
-async fn persist_rotated_auth(private_auth: &Path, auth_home: &Path) {
-    let mut delay = Duration::from_secs(1);
-    loop {
-        match persist_rotated_auth_once(private_auth, auth_home).await {
-            Ok(()) => return,
-            Err(error) => {
-                eprintln!(
-                    "Hive auth broker is retaining rotated credentials until Kubernetes persistence succeeds: {error:#}"
-                );
-                async_time::sleep(delay).await;
-                delay = (delay * 2).min(AUTH_PERSIST_RETRY_MAX);
-            }
-        }
-    }
-}
-
-async fn persist_rotated_auth_once(private_auth: &Path, auth_home: &Path) -> crate::HiveResult<()> {
-    let url = env::var(AUTH_PERSIST_URL_ENV)
-        .hive_context("HIVE_AUTH_PERSIST_URL is required to persist rotated credentials")?;
-    let token = async_fs::read_to_string(AUTH_API_TOKEN)
-        .await
-        .hive_context("failed to read the broker-only Kubernetes API token")?;
-    let auth = async_fs::read_to_string(private_auth)
-        .await
-        .hive_context("failed to read rotated broker credentials")?;
-    serde_json::from_str::<serde_json::Value>(&auth)
-        .hive_context("rotated broker credentials are not valid JSON")?;
-    let patch = serde_json::json!({ "stringData": { "auth.json": auth } });
-    let patch_path = auth_home.join("secret-patch.json");
-    let header_path = auth_home.join("kubernetes-auth-header");
-    async_fs::write(&patch_path, serde_json::to_vec(&patch)?).await?;
-    async_fs::write(
-        &header_path,
-        format!("Authorization: Bearer {}", token.trim()),
-    )
-    .await?;
-    for path in [&patch_path, &header_path] {
-        let mut permissions = async_fs::metadata(path).await?.permissions();
+impl AuthBroker {
+    pub async fn run_auth_broker(self) -> crate::HiveResult<()> {
+        let Self {
+            socket_path,
+            auth_source,
+            auth_home,
+        } = self;
+        async_fs::create_dir_all(&auth_home).await?;
+        let private_auth = auth_home.join("auth.json");
+        async_fs::copy(&auth_source, &private_auth)
+            .await
+            .hive_context("failed to stage Codex authentication inside the broker container")?;
+        let mut permissions = async_fs::metadata(&private_auth).await?.permissions();
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             permissions.set_mode(0o600);
         }
-        async_fs::set_permissions(path, permissions).await?;
-    }
-    let status = Command::new("curl")
-        .args([
-            "--fail",
-            "--silent",
-            "--show-error",
-            "--connect-timeout",
-            "5",
-            "--max-time",
-            "30",
-            "--request",
-            "PATCH",
-            "--cacert",
-            AUTH_API_CA,
-            "--header",
-            &format!("@{}", header_path.display()),
-            "--header",
-            "Content-Type: application/merge-patch+json",
-            "--data-binary",
-            &format!("@{}", patch_path.display()),
-            "--output",
-            "/dev/null",
-            &url,
-        ])
-        .stdin(Stdio::null())
-        .status()
+        async_fs::set_permissions(&private_auth, permissions).await?;
+
+        let mut auth_manager = AuthManager::shared(
+            auth_home.clone(),
+            false,
+            AuthCredentialsStoreMode::File,
+            None,
+            None,
+            AuthKeyringBackendKind::default(),
+            AuthBroker::auth_route_config(),
+        )
         .await;
-    let _ = async_fs::remove_file(&patch_path).await;
-    let _ = async_fs::remove_file(&header_path).await;
-    let status =
-        status.hive_context("failed to start the Kubernetes credential persistence request")?;
-    if !status.success() {
-        return Err(crate::HiveError::message(format!(
-            "Kubernetes rejected rotated credential persistence with status {status}"
-        )));
+        if auth_manager.auth_cached().is_none() {
+            return Err(crate::HiveError::message(
+                "Codex authentication is unavailable to the broker",
+            ));
+        }
+
+        if let Some(parent) = socket_path.parent() {
+            async_fs::create_dir_all(parent).await?;
+        }
+        match async_fs::remove_file(&socket_path).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        let listener = UnixListener::bind(&socket_path)?;
+        let (stream, _) = listener.accept().await?;
+        drop(listener);
+        async_fs::remove_file(&socket_path)
+            .await
+            .hive_context("failed to unlink the accepted auth broker socket")?;
+
+        let mut channel = BufReader::new(stream);
+        loop {
+            let mut request = String::new();
+            if channel.read_line(&mut request).await? == 0 {
+                return Ok(());
+            }
+            let request: BrokerRequest =
+                serde_json::from_str(&request).hive_context("invalid auth broker request")?;
+            if request.refresh {
+                let projected_auth = async_fs::read(&auth_source)
+                    .await
+                    .hive_context("failed to reload projected Codex authentication")?;
+                let private_auth_bytes = async_fs::read(&private_auth).await?;
+                if projected_auth != private_auth_bytes {
+                    async_fs::write(&private_auth, projected_auth).await?;
+                    auth_manager = AuthManager::shared(
+                        auth_home.clone(),
+                        false,
+                        AuthCredentialsStoreMode::File,
+                        None,
+                        None,
+                        AuthKeyringBackendKind::default(),
+                        AuthBroker::auth_route_config(),
+                    )
+                    .await;
+                } else {
+                    match auth_manager.refresh_token_from_authority().await {
+                        Ok(()) => AuthBroker::persist_rotated_auth(&private_auth, &auth_home).await,
+                        Err(refresh_error) => {
+                            // Another warm broker may have won a rotating refresh-token race.
+                            // Wait for its Secret update to reach this projected volume and retry
+                            // from the durable replacement instead of failing the active task.
+                            let mut replacement = ProjectedCredentialReplacement::Unchanged;
+                            for _ in 0..AUTH_CONNECT_ATTEMPTS {
+                                async_time::sleep(AUTH_CONNECT_DELAY).await;
+                                let candidate = async_fs::read(&auth_source).await.hive_context(
+                                    "failed to reload projected Codex authentication",
+                                )?;
+                                if candidate != private_auth_bytes {
+                                    replacement =
+                                        ProjectedCredentialReplacement::Replaced(candidate);
+                                    break;
+                                }
+                            }
+                            let replacement = match replacement {
+                                ProjectedCredentialReplacement::Replaced(bytes) => bytes,
+                                ProjectedCredentialReplacement::Unchanged => {
+                                    return Err(crate::HiveError::message(format!(
+                                        "Codex authentication refresh failed: {refresh_error}"
+                                    )));
+                                }
+                            };
+                            async_fs::write(&private_auth, replacement).await?;
+                            auth_manager = AuthManager::shared(
+                                auth_home.clone(),
+                                false,
+                                AuthCredentialsStoreMode::File,
+                                None,
+                                None,
+                                AuthKeyringBackendKind::default(),
+                                AuthBroker::auth_route_config(),
+                            )
+                            .await;
+                        }
+                    }
+                }
+            }
+            let auth = auth_manager.auth_cached().ok_or_else(|| {
+                crate::HiveError::message("Codex authentication disappeared from the broker")
+            })?;
+            let response = BrokerResponse {
+                access_token: auth.get_token()?,
+                account_id: auth.get_account_id().ok_or_else(|| {
+                    crate::HiveError::message("Codex authentication has no account id")
+                })?,
+            };
+            let response = serde_json::to_vec(&response)?;
+            channel.get_mut().write_all(&response).await?;
+            channel.get_mut().write_all(b"\n").await?;
+            channel.get_mut().flush().await?;
+        }
     }
-    Ok(())
+}
+
+impl AuthBroker {
+    async fn persist_rotated_auth(private_auth: &Path, auth_home: &Path) {
+        let mut delay = Duration::from_secs(1);
+        loop {
+            match AuthBroker::persist_rotated_auth_once(private_auth, auth_home).await {
+                Ok(()) => return,
+                Err(error) => {
+                    eprintln!(
+                        "Hive auth broker is retaining rotated credentials until Kubernetes persistence succeeds: {error:#}"
+                    );
+                    async_time::sleep(delay).await;
+                    delay = (delay * 2).min(AUTH_PERSIST_RETRY_MAX);
+                }
+            }
+        }
+    }
+}
+
+impl AuthBroker {
+    async fn persist_rotated_auth_once(
+        private_auth: &Path,
+        auth_home: &Path,
+    ) -> crate::HiveResult<()> {
+        let url = env::var(AUTH_PERSIST_URL_ENV)
+            .hive_context("HIVE_AUTH_PERSIST_URL is required to persist rotated credentials")?;
+        let token = async_fs::read_to_string(AUTH_API_TOKEN)
+            .await
+            .hive_context("failed to read the broker-only Kubernetes API token")?;
+        let auth = async_fs::read_to_string(private_auth)
+            .await
+            .hive_context("failed to read rotated broker credentials")?;
+        // The upstream credential document is opaque: preserve every provider field verbatim.
+        serde_json::from_str::<serde_json::Value>(&auth)
+            .hive_context("rotated broker credentials are not valid JSON")?;
+        let patch = KubernetesAuthPatch {
+            string_data: KubernetesAuthSecret { auth_json: auth },
+        };
+        let patch_path = auth_home.join("secret-patch.json");
+        let header_path = auth_home.join("kubernetes-auth-header");
+        async_fs::write(&patch_path, serde_json::to_vec(&patch)?).await?;
+        async_fs::write(
+            &header_path,
+            format!("Authorization: Bearer {}", token.trim()),
+        )
+        .await?;
+        for path in [&patch_path, &header_path] {
+            let mut permissions = async_fs::metadata(path).await?.permissions();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                permissions.set_mode(0o600);
+            }
+            async_fs::set_permissions(path, permissions).await?;
+        }
+        let status = Command::new("curl")
+            .args([
+                "--fail",
+                "--silent",
+                "--show-error",
+                "--connect-timeout",
+                "5",
+                "--max-time",
+                "30",
+                "--request",
+                "PATCH",
+                "--cacert",
+                AUTH_API_CA,
+                "--header",
+                &format!("@{}", header_path.display()),
+                "--header",
+                "Content-Type: application/merge-patch+json",
+                "--data-binary",
+                &format!("@{}", patch_path.display()),
+                "--output",
+                "/dev/null",
+                &url,
+            ])
+            .stdin(Stdio::null())
+            .status()
+            .await;
+        let _ = async_fs::remove_file(&patch_path).await;
+        let _ = async_fs::remove_file(&header_path).await;
+        let status =
+            status.hive_context("failed to start the Kubernetes credential persistence request")?;
+        if !status.success() {
+            return Err(crate::HiveError::message(format!(
+                "Kubernetes rejected rotated credential persistence with status {status}"
+            )));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        BrokerExternalAuth, BrokerRequest, BrokerResponse, prepare_worker_auth_and_readiness,
-    };
+    use super::{AuthBroker, BrokerExternalAuth, BrokerRequest, BrokerResponse};
     use std::io;
     use tokio::fs as async_fs;
 
@@ -371,7 +402,7 @@ mod tests {
         });
 
         let external_auth = BrokerExternalAuth::connect(&socket).await?;
-        prepare_worker_auth_and_readiness(&external_auth, &workspace).await?;
+        AuthBroker::prepare_worker_auth_and_readiness(&external_auth, &workspace).await?;
         external_auth.validate().await?;
         broker.await??;
         assert!(workspace.join(".hive-worker-ready").exists());
@@ -439,4 +470,21 @@ mod tests {
         malformed_server.await??;
         Ok(())
     }
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct KubernetesAuthPatch {
+    string_data: KubernetesAuthSecret,
+}
+#[derive(serde::Serialize)]
+struct KubernetesAuthSecret {
+    #[serde(rename = "auth.json")]
+    auth_json: String,
+}
+
+#[derive(Clone, Copy)]
+enum BrokerAuthOperation {
+    Resolve,
+    Refresh,
 }

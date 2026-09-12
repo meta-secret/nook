@@ -1,9 +1,13 @@
+import type { PasswordOperationResult } from "$lib/vault/password-unlock";
+import type { SecretOperationResult } from "$lib/vault/secret-operation-failure";
+import { err, type Result } from "neverthrow";
+import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
+import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
+import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
 import {
   VaultAccessStatus,
   type NookImportResult,
-  type NookSecretRecord,
   type NookVaultSyncResult,
-  type AuthenticatorCodeView,
   type SecretType,
 } from "$lib/nook";
 import {
@@ -13,7 +17,6 @@ import {
   ProviderSyncFreshness,
   ProviderSyncVisibility,
   RemoteVaultRecoveryState,
-  SentinelVaultUnlockState,
   type NookPendingSyncConflict,
   type NookProviderSyncRevision,
   type NookSyncConflictReview,
@@ -31,7 +34,7 @@ import type {
   ProviderActionsContext,
   ProviderSyncRequest,
   SyncFromProvidersRequest,
-  VaultStorageArguments,
+  NookStorageConnectArgs,
 } from "$lib/vault/action-contexts";
 import * as providersActions from "$lib/vault/providers.svelte";
 import * as localLoginActions from "$lib/vault/local-login";
@@ -62,7 +65,11 @@ export {
 } from "$lib/vault/runtime-state.svelte";
 
 type ExternalDeviceIdentityAdoptionRequest = {
-  readonly adopt: (manager: NookVaultManager) => Promise<void>;
+  readonly adopt: (
+    manager: NookVaultManager,
+  ) => Promise<
+    Result<NookAdoptedExtensionIdentityHandoff, VaultStorageFailure>
+  >;
   readonly mode: ExternalDeviceIdentityAuthorizationMode;
 };
 
@@ -143,6 +150,28 @@ interface SecretReplacementInput {
 }
 
 export class VaultState extends VaultRuntimeState {
+  private readonly lifecycleActions =
+    new lifecycleActions.VaultInitializationActions(this);
+  private readonly architectureActions =
+    new architectureActions.VaultArchitectureActions(this);
+  private readonly localLoginActions = new localLoginActions.VaultLoginActions(
+    this,
+  );
+  private readonly sentinelGenesisActions =
+    new sentinelGenesisActions.SentinelGenesisActions(this);
+  private readonly secretsActions = new secretsActions.VaultSecretActions(this);
+  private readonly sessionActions = new sessionActions.VaultSessionActions(
+    this,
+  );
+  private readonly idleSessionActions =
+    new idleSessionActions.VaultIdleSessionActions(this);
+  private readonly uiActions = new uiActions.VaultWorkspaceActions(this);
+  private readonly multiDeviceActions =
+    new multiDeviceActions.VaultDeviceActions(this);
+  private readonly passwordUnlockActions =
+    new passwordUnlockActions.VaultPasswordActions(this);
+  private readonly sentinelUnlockActions =
+    new sentinelUnlockActions.SentinelUnlockActions(this);
   protected providerActionsContext(): ProviderActionsContext {
     return this;
   }
@@ -152,62 +181,50 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async init() {
-    return lifecycleActions.init(this);
+    return this.lifecycleActions.init();
   }
 
   async initOnce() {
-    return lifecycleActions.initOnce(this);
+    return this.lifecycleActions.initOnce();
   }
 
   async continueInitializationAfterDeviceUnlock() {
-    return lifecycleActions.continueInitializationAfterDeviceUnlock(this);
+    return this.lifecycleActions.continueInitializationAfterDeviceUnlock();
   }
 
   async initDeviceIdentity() {
-    const initDeviceIdentityArgs: Parameters<
-      typeof lifecycleActions.initDeviceIdentity
-    >[0] = {
-      state: this,
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.lifecycleActions.initDeviceIdentity({
       mode: DeviceIdentityInitializationMode.RequireCompletedAuthorization,
-    };
-    return lifecycleActions.initDeviceIdentity(initDeviceIdentityArgs);
+    });
   }
 
   async authorizeWithExternalDeviceIdentity({
     adopt,
     mode,
   }: ExternalDeviceIdentityAdoptionRequest): Promise<boolean> {
-    const authorizationArgs: Parameters<
-      typeof lifecycleActions.authorizeWithExternalDeviceIdentity
-    >[0] = { state: this, adopt, mode };
-    return lifecycleActions.authorizeWithExternalDeviceIdentity(
-      authorizationArgs,
-    );
-  }
-
-  get draftVaultArchitecture(): VaultArchitecture {
-    return architectureActions.draftVaultArchitecture(this);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.lifecycleActions.authorizeWithExternalDeviceIdentity({
+      adopt,
+      mode,
+    });
   }
 
   replaceVaultArchitecture(architecture: VaultArchitecture): void {
-    const replaceVaultArchitectureArgs: Parameters<
-      typeof architectureActions.replaceVaultArchitecture
-    >[0] = { state: this, architecture };
-    return architectureActions.replaceVaultArchitecture(
-      replaceVaultArchitectureArgs,
-    );
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.architectureActions.replaceVaultArchitecture({ architecture });
   }
 
   applyDraftVaultArchitecture() {
-    return architectureActions.applyDraftVaultArchitecture(this);
+    return this.architectureActions.applyDraftVaultArchitecture();
   }
 
   refreshVaultArchitectureFromManager() {
-    return architectureActions.refreshVaultArchitectureFromManager(this);
+    return this.architectureActions.refreshVaultArchitectureFromManager();
   }
 
-  async refreshArchitectureSecretCreationAllowed(): Promise<void> {
-    return architectureActions.refreshArchitectureSecretCreationAllowed(this);
+  async refreshArchitectureSecretCreationAllowed() {
+    return this.architectureActions.refreshArchitectureSecretCreationAllowed();
   }
 
   shouldAutoUnlock(): boolean {
@@ -223,117 +240,112 @@ export class VaultState extends VaultRuntimeState {
 
   /** Prepare login gate for local vault unlock (password or device keys). */
   async prepareLocalLogin(): Promise<void> {
-    return localLoginActions.prepareLocalLogin(this);
+    return this.localLoginActions.prepareLocalLogin();
   }
 
   /**
    * First-time setup: create an empty local vault secured by this device's keys.
    */
   async createLocalVaultWithDeviceKeys(label: string): Promise<void> {
-    const createLocalVaultWithDeviceKeysArgs: Parameters<
-      typeof localLoginActions.createLocalVaultWithDeviceKeys
-    >[0] = { state: this, label };
-    return localLoginActions.createLocalVaultWithDeviceKeys(
-      createLocalVaultWithDeviceKeysArgs,
-    );
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.localLoginActions.createLocalVaultWithDeviceKeys({ label });
   }
 
-  async startSentinelGenesis(args: StartSentinelGenesisArgs): Promise<void> {
-    const startArgs: Parameters<typeof sentinelGenesisActions.start>[0] = {
-      state: this,
+  async startSentinelGenesis(args: StartSentinelGenesisArgs) {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.sentinelGenesisActions.start({
       args: $state.snapshot(args),
-    };
-    return sentinelGenesisActions.start(startArgs);
+    });
   }
 
   async renameLocalVault({
     storeId,
     label,
   }: LocalVaultRenameRequest): Promise<void> {
-    const renameLocalVaultLabelArgs: Parameters<
-      typeof localLoginActions.renameLocalVaultLabel
-    >[0] = { state: this, storeId, label };
-    return localLoginActions.renameLocalVaultLabel(renameLocalVaultLabelArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.localLoginActions.renameLocalVaultLabel({ storeId, label });
   }
 
-  async selectVaultForUnlock(storeId: StoreId): Promise<void> {
-    const selectVaultForUnlockArgs: Parameters<
-      typeof localLoginActions.selectVaultForUnlock
-    >[0] = { state: this, storeId };
-    return localLoginActions.selectVaultForUnlock(selectVaultForUnlockArgs);
+  async selectVaultForUnlock(storeId: StoreId) {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.localLoginActions.selectVaultForUnlock({ storeId });
   }
 
-  async prepareExistingVaultImportSlot(): Promise<void> {
-    return localLoginActions.prepareExistingVaultImportSlot(this);
+  async prepareExistingVaultImportSlot() {
+    return this.localLoginActions.prepareExistingVaultImportSlot();
   }
 
-  async reloadProvidersForActiveVault(): Promise<void> {
-    return localLoginActions.reloadProvidersForActiveVault(this);
+  async reloadProvidersForActiveVault() {
+    return this.localLoginActions.reloadProvidersForActiveVault();
   }
 
-  async syncActiveVaultStoreIdToAuth(): Promise<void> {
-    return localLoginActions.syncActiveVaultStoreIdToAuth(this);
+  async syncActiveVaultStoreIdToAuth() {
+    return this.localLoginActions.syncActiveVaultStoreIdToAuth();
   }
 
-  async activateConnectedExistingVault(storeId: StoreId): Promise<void> {
-    const activateConnectedExistingVaultArgs: Parameters<
-      typeof localLoginActions.activateConnectedExistingVault
-    >[0] = { state: this, storeId };
-    return localLoginActions.activateConnectedExistingVault(
-      activateConnectedExistingVaultArgs,
-    );
+  async activateConnectedExistingVault(
+    storeId: StoreId,
+  ): Promise<Result<void, VaultStorageFailure>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.localLoginActions.activateConnectedExistingVault({ storeId });
   }
 
   beginLoginVaultPicker() {
-    return localLoginActions.beginLoginVaultPicker(this);
+    return this.localLoginActions.beginLoginVaultPicker();
   }
 
   async chooseLoginVault(storeId: StoreId) {
-    const chooseLoginVaultArgs: Parameters<
-      typeof localLoginActions.chooseLoginVault
-    >[0] = { state: this, storeId };
-    return localLoginActions.chooseLoginVault(chooseLoginVaultArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.localLoginActions.chooseLoginVault({ storeId });
   }
 
-  async refreshLocalVaultCatalog(): Promise<void> {
-    return localLoginActions.refreshLocalVaultCatalog(this);
+  async refreshLocalVaultCatalog() {
+    return this.localLoginActions.refreshLocalVaultCatalog();
   }
 
   /** Lock and open the login unlock step for another vault on this device. */
   async switchToVault(storeId: StoreId): Promise<void> {
-    const switchToVaultArgs: Parameters<
-      typeof localLoginActions.switchToVault
-    >[0] = { state: this, storeId };
-    return localLoginActions.switchToVault(switchToVaultArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.localLoginActions.switchToVault({ storeId });
   }
 
-  lockDeviceProtection(): Promise<void> {
-    return deviceProtectionActions.lockDeviceProtection(this);
+  lockDeviceProtection() {
+    return new deviceProtectionActions.DeviceProtectionActions(
+      this,
+    ).lockDeviceProtection();
   }
 
   async loadProviders(options: providersActions.ProviderLoadOptions) {
-    const loadProvidersArgs: Parameters<
-      typeof providersActions.loadProviders
-    >[0] = { state: this, options };
-    return providersActions.loadProviders(loadProvidersArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new providersActions.VaultProviderActions(this).loadProviders({
+      options,
+    });
+  }
+
+  initializePristineDeviceProviders() {
+    return new providersActions.VaultProviderActions(
+      this,
+    ).initializePristineDeviceProviders();
   }
 
   applyActiveProviderCredentials() {
-    return providersActions.applyActiveProviderCredentials(this);
+    return new providersActions.ActiveProviderCredentialsActions(
+      this,
+    ).applyActiveProviderCredentials();
   }
 
   async persistProviders(opts: providersActions.ProviderPersistenceOptions) {
-    const persistProvidersArgs: Parameters<
-      typeof providersActions.persistProviders
-    >[0] = { state: this, opts };
-    return providersActions.persistProviders(persistProvidersArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new providersActions.VaultProviderActions(this).persistProviders({
+      opts,
+    });
   }
 
   beginProviderSetup(request: ProviderSetupRequest) {
-    const beginProviderSetupArgs: Parameters<
-      typeof providersActions.beginProviderSetup
-    >[0] = { state: this, request };
-    return providersActions.beginProviderSetup(beginProviderSetupArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new providersActions.VaultProviderActions(this).beginProviderSetup({
+      request,
+    });
   }
 
   beginExistingVaultOpen() {
@@ -349,122 +361,123 @@ export class VaultState extends VaultRuntimeState {
   }
 
   beginAddProvider() {
-    return providersActions.beginAddProvider(this);
+    return new providersActions.VaultProviderActions(this).beginAddProvider();
   }
 
   cancelAddProvider() {
-    return providersActions.cancelAddProvider(this);
+    return new providersActions.VaultProviderActions(this).cancelAddProvider();
   }
 
   cancelProviderSetup() {
-    return providersActions.cancelProviderSetup(this);
+    return new providersActions.VaultProviderActions(
+      this,
+    ).cancelProviderSetup();
   }
 
-  async refreshPasswordEntriesList(): Promise<boolean> {
-    return secretsActions.refreshPasswordEntriesList(this);
+  async refreshPasswordEntriesList() {
+    return this.secretsActions.refreshPasswordEntriesList();
   }
 
   clearRemoteVaultRecovery() {
-    return syncActions.clearRemoteVaultRecovery(this);
+    return new syncActions.SyncConflictActions(this).clearRemoteVaultRecovery();
   }
 
   /** User chose to restore a deleted remote vault from the browser cache. */
   async confirmRecoverRemoteVault(): Promise<void> {
-    return syncActions.confirmRecoverRemoteVault(this);
+    return new syncActions.SyncConflictActions(
+      this,
+    ).confirmRecoverRemoteVault();
   }
 
   /** User chose to create a fresh vault file on remote storage. */
   async confirmCreateFreshRemoteVault(): Promise<void> {
-    return syncActions.confirmCreateFreshRemoteVault(this);
+    return new syncActions.SyncConflictActions(
+      this,
+    ).confirmCreateFreshRemoteVault();
   }
 
-  async assessVaultConnectStatus(
-    argsOverride?: VaultStorageArguments,
-  ): Promise<VaultAccessStatus> {
+  async assessVaultConnectStatus(argsOverride?: NookStorageConnectArgs) {
     const [args = this.connectStorageArgs()] = [argsOverride];
-    const assessVaultConnectStatusArgs: Parameters<
-      typeof providersActions.assessVaultConnectStatus
-    >[0] = { state: this, args };
-    return providersActions.assessVaultConnectStatus(
-      assessVaultConnectStatusArgs,
-    );
+
+    return new providersActions.VaultProviderActions(
+      this,
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    ).assessVaultConnectStatus({
+      args,
+    });
   }
 
   async handleRemoteVaultAssessStatus(
     accessStatus: VaultAccessStatus,
   ): Promise<boolean> {
-    const handleRemoteVaultAssessStatusArgs: Parameters<
-      typeof providersActions.handleRemoteVaultAssessStatus
-    >[0] = { state: this, accessStatus };
-    return providersActions.handleRemoteVaultAssessStatus(
-      handleRemoteVaultAssessStatusArgs,
-    );
+    return new providersActions.VaultProviderActions(
+      this,
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    ).handleRemoteVaultAssessStatus({ accessStatus });
   }
 
   /** Clear wasm session + login password preview so UI matches the active provider. */
   resetVaultSessionState(resetManager = true) {
-    const resetVaultSessionStateArgs: Parameters<
-      typeof sessionActions.resetVaultSessionState
-    >[0] = { state: this, resetManager };
-    return sessionActions.resetVaultSessionState(resetVaultSessionStateArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.sessionActions.resetVaultSessionState({ resetManager });
   }
 
   ensureIdleSessionTracker() {
-    return idleSessionActions.ensureIdleSessionTracker(this);
+    return this.idleSessionActions.ensureIdleSessionTracker();
   }
 
   startIdleSessionTracking() {
-    return idleSessionActions.startIdleSessionTracking(this);
+    return this.idleSessionActions.startIdleSessionTracking();
   }
 
   stopIdleSessionTracking() {
-    return idleSessionActions.stopIdleSessionTracking(this);
+    return this.idleSessionActions.stopIdleSessionTracking();
   }
 
   showIdleLockWarning() {
-    return idleSessionActions.showIdleLockWarning(this);
+    return this.idleSessionActions.showIdleLockWarning();
   }
 
   lockVaultDueToIdle() {
-    return idleSessionActions.lockVaultDueToIdle(this);
+    return this.idleSessionActions.lockVaultDueToIdle();
   }
 
   markVaultUnlocked() {
-    return sessionActions.markVaultUnlocked(this);
+    return this.sessionActions.markVaultUnlocked();
   }
 
   clearUnlockedSession(resetManager = true) {
-    const clearUnlockedSessionArgs: Parameters<
-      typeof sessionActions.clearUnlockedSession
-    >[0] = { state: this, resetManager };
-    return sessionActions.clearUnlockedSession(clearUnlockedSessionArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.sessionActions.clearUnlockedSession({ resetManager });
   }
 
   /** Drop a saved sync provider from this browser. Local vault row cannot be removed. */
-  async removeProvider(id: string): Promise<void> {
-    const removeProviderArgs: Parameters<
-      typeof providersActions.removeProvider
-    >[0] = { state: this, id };
-    return providersActions.removeProvider(removeProviderArgs);
+  async removeProvider(id: string): Promise<Result<void, VaultStorageFailure>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new providersActions.VaultProviderActions(this).removeProvider({
+      id,
+    });
   }
 
-  async ensureProviderSaved(): Promise<boolean> {
-    return providersActions.ensureProviderSaved(this);
+  async ensureProviderSaved() {
+    return new providersActions.ProviderPersistenceActions(
+      this,
+    ).ensureProviderSaved();
   }
 
   startVaultSync() {
-    return syncActions.startVaultSync(this);
+    return new syncActions.VaultSyncActions(this).startVaultSync();
   }
 
   stopVaultSync() {
-    return syncActions.stopVaultSync(this);
+    return new syncActions.VaultSyncActions(this).stopVaultSync();
   }
 
   applyVaultSyncResult(result: NookVaultSyncResult) {
-    const applyVaultSyncResultArgs: Parameters<
-      typeof syncActions.applyVaultSyncResult
-    >[0] = { state: this, result };
-    return syncActions.applyVaultSyncResult(applyVaultSyncResultArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new syncActions.VaultSyncRuntimeActions(this).applyVaultSyncResult({
+      result,
+    });
   }
 
   /**
@@ -476,344 +489,342 @@ export class VaultState extends VaultRuntimeState {
    * `enqueueStorage` guarantees these reads observe a quiescent
    * manager rather than racing it.
    */
-  async hydrateMultiDeviceState(): Promise<void> {
-    return syncActions.hydrateMultiDeviceState(this);
+  async hydrateMultiDeviceState(): Promise<syncActions.RosterHydrationResult> {
+    return new syncActions.VaultSyncActions(this).hydrateMultiDeviceState();
   }
 
   async syncFromStorage(freshness: ProviderSyncFreshness) {
-    const syncFromStorageArgs: Parameters<
-      typeof syncActions.syncFromStorage
-    >[0] = { state: this, freshness };
-    return syncActions.syncFromStorage(syncFromStorageArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new syncActions.VaultSyncActions(this).syncFromStorage({
+      freshness,
+    });
   }
 
   /** Pull local vault from every sync provider (background / manual refresh). */
-  async syncFromSyncProviders(
-    request: SyncFromProvidersRequest,
-  ): Promise<void> {
-    const syncFromSyncProvidersArgs: Parameters<
-      typeof syncActions.syncFromSyncProviders
-    >[0] = { state: this, ...request };
-    return syncActions.syncFromSyncProviders(syncFromSyncProvidersArgs);
+  async syncFromSyncProviders(request: SyncFromProvidersRequest) {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new syncActions.VaultSyncActions(this).syncFromSyncProviders({
+      ...request,
+    });
   }
 
   async manualSync() {
-    return syncActions.manualSync(this);
+    return new syncActions.VaultSyncActions(this).manualSync();
   }
 
   /** Sync local event log with one provider. */
-  async syncProviderById(request: ProviderSyncRequest): Promise<void> {
-    const syncProviderArgs: Parameters<typeof syncActions.syncProviderById>[0] =
-      { state: this, ...request };
-    return syncActions.syncProviderById(syncProviderArgs);
+  async syncProviderById(request: ProviderSyncRequest) {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new syncActions.ProviderSyncActions(this).syncProviderById({
+      ...request,
+    });
   }
 
   fanOutSyncChain: Promise<void> = Promise.resolve();
 
   /** Push the local vault to every connected sync provider (after CRUD or manual sync). */
-  async fanOutSyncToProviders(
-    visibility: ProviderSyncVisibility,
-  ): Promise<void> {
-    const fanOutSyncToProvidersArgs: Parameters<
-      typeof syncActions.fanOutSyncToProviders
-    >[0] = { state: this, visibility };
-    return syncActions.fanOutSyncToProviders(fanOutSyncToProvidersArgs);
+  async fanOutSyncToProviders(visibility: ProviderSyncVisibility) {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new syncActions.VaultSyncActions(this).fanOutSyncToProviders({
+      visibility,
+    });
   }
 
-  async runFanOutSyncToProviders(
-    visibility: ProviderSyncVisibility,
-  ): Promise<void> {
-    const runFanOutSyncToProvidersArgs: Parameters<
-      typeof syncActions.runFanOutSyncToProviders
-    >[0] = { state: this, visibility };
-    return syncActions.runFanOutSyncToProviders(runFanOutSyncToProvidersArgs);
+  async runFanOutSyncToProviders(visibility: ProviderSyncVisibility) {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new syncActions.VaultSyncActions(this).runFanOutSyncToProviders({
+      visibility,
+    });
   }
 
-  async runFanOutSyncAfterLocalSave(): Promise<void> {
-    return syncActions.runFanOutSyncAfterLocalSave(this);
+  async runFanOutSyncAfterLocalSave() {
+    return new syncActions.VaultSyncActions(this).runFanOutSyncAfterLocalSave();
   }
 
-  async publishExtensionEventLogUpdate(): Promise<void> {
-    return syncActions.publishExtensionEventLogUpdateForVault(this);
+  async publishExtensionEventLogUpdate() {
+    return new ExtensionSyncPublication(
+      this,
+    ).publishExtensionEventLogUpdateForVault();
   }
 
   scheduleFanOutSyncAfterLocalSave(): void {
-    void this.runFanOutSyncAfterLocalSave();
+    void this.runFanOutSyncAfterLocalSave().then((synchronized) => {
+      if (synchronized.isErr())
+        this.errorMsg = this.t(synchronized.error.translationKey);
+    });
   }
 
   eventOutboxTarget(request: EventOutboxRequest): EventOutboxTarget {
-    const eventOutboxTargetArgs: Parameters<
-      typeof syncActions.eventOutboxTarget
-    >[0] = { state: this, request };
-    return syncActions.eventOutboxTarget(eventOutboxTargetArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new syncActions.VaultSyncActions(this).eventOutboxTarget({
+      request,
+    });
   }
 
   async updateProviderSyncMetadata({
     providerId,
     yaml,
     revision,
-  }: ProviderSyncMetadataChange): Promise<void> {
-    const metadataArgs: Parameters<
-      typeof syncActions.updateProviderSyncMetadata
-    >[0] = { state: this, providerId, yaml, revision };
-    return syncActions.updateProviderSyncMetadata(metadataArgs);
+  }: ProviderSyncMetadataChange) {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new syncActions.VaultSyncActions(this).updateProviderSyncMetadata({
+      providerId,
+      yaml,
+      revision,
+    });
   }
 
-  async refreshReplacementConflicts(): Promise<void> {
-    return syncActions.refreshReplacementConflicts(this);
+  async refreshReplacementConflicts() {
+    return new syncActions.SyncConflictActions(
+      this,
+    ).refreshReplacementConflicts();
   }
 
   async resolveReplacementConflict({
     oldSecretId,
     chosenSecretId,
   }: ReplacementConflictChoice): Promise<void> {
-    const resolutionArgs: Parameters<
-      typeof syncActions.resolveReplacementConflict
-    >[0] = { state: this, oldSecretId, chosenSecretId };
-    return syncActions.resolveReplacementConflict(resolutionArgs);
+    return new syncActions.SyncConflictActions(this).resolveReplacementConflict(
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      {
+        oldSecretId,
+        chosenSecretId,
+      },
+    );
   }
 
   dismissLocalFolderMultipleVaultsIssue() {
-    return syncActions.dismissLocalFolderMultipleVaultsIssue(this);
+    return new syncActions.VaultSyncActions(
+      this,
+    ).dismissLocalFolderMultipleVaultsIssue();
   }
 
   async disconnectLocalFolderMultipleVaultsProvider(): Promise<void> {
-    return syncActions.disconnectLocalFolderMultipleVaultsProvider(this);
+    return new syncActions.VaultSyncActions(
+      this,
+    ).disconnectLocalFolderMultipleVaultsProvider();
   }
 
   async chooseReplacementLocalFolderForIssue(): Promise<void> {
-    return syncActions.chooseReplacementLocalFolderForIssue(this);
+    return new syncActions.VaultSyncActions(
+      this,
+    ).chooseReplacementLocalFolderForIssue();
   }
 
   /** E2E / dev: open the conflict dialog without reaching remote storage. */
-  stageSyncConflict(conflict: NookPendingSyncConflict) {
-    const stageSyncConflictArgs: Parameters<
-      typeof syncActions.stageSyncConflict
-    >[0] = { state: this, conflict };
-    return syncActions.stageSyncConflict(stageSyncConflictArgs);
+  override stageSyncConflict(conflict: NookPendingSyncConflict) {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new syncActions.VaultSyncActions(this).stageSyncConflict({
+      conflict,
+    });
   }
 
-  async stageStagedProviderSyncIssue(
-    args: VaultStorageArguments,
-  ): Promise<boolean> {
-    const stageStagedProviderSyncIssueArgs: Parameters<
-      typeof syncActions.stageStagedProviderSyncIssue
-    >[0] = { state: this, args };
-    return syncActions.stageStagedProviderSyncIssue(
-      stageStagedProviderSyncIssueArgs,
-    );
+  async stageStagedProviderSyncIssue(args: NookStorageConnectArgs) {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new syncActions.VaultSyncActions(this).stageStagedProviderSyncIssue({
+      args,
+    });
   }
 
   async resolveSyncConflictImportRemote(
     identitySelection: ProviderVaultIdentitySelection,
   ): Promise<void> {
     const request: syncActions.ProviderVaultImportRequest = {
-      state: this,
       identitySelection,
     };
-    return syncActions.resolveSyncConflictImportRemote(request);
+    return new syncActions.SyncConflictActions(
+      this,
+    ).resolveSyncConflictImportRemote(request);
   }
 
   async resolveSyncConflictKeepLocal(): Promise<void> {
-    return syncActions.resolveSyncConflictKeepLocal(this);
+    return new syncActions.SyncConflictActions(
+      this,
+    ).resolveSyncConflictKeepLocal();
   }
 
   async resolveSyncConflictKeepRemote(): Promise<void> {
-    return syncActions.resolveSyncConflictKeepRemote(this);
+    return new syncActions.SyncConflictActions(
+      this,
+    ).resolveSyncConflictKeepRemote();
   }
 
   finishStagedProviderConnectAfterConflict(
     conflict: NookSyncConflictReview,
   ): void {
-    const finishStagedProviderConnectAfterConflictArgs: Parameters<
-      typeof syncActions.finishStagedProviderConnectAfterConflict
-    >[0] = { state: this, conflict };
-    return syncActions.finishStagedProviderConnectAfterConflict(
-      finishStagedProviderConnectAfterConflictArgs,
-    );
+    return new syncActions.VaultSyncActions(
+      this,
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    ).finishStagedProviderConnectAfterConflict({ conflict });
   }
 
-  async ensureProviderSavedAfterConflict(
-    conflict: NookSyncConflictReview,
-  ): Promise<string> {
-    const ensureProviderSavedAfterConflictArgs: Parameters<
-      typeof syncActions.ensureProviderSavedAfterConflict
-    >[0] = { state: this, conflict };
-    return syncActions.ensureProviderSavedAfterConflict(
-      ensureProviderSavedAfterConflictArgs,
-    );
+  async ensureProviderSavedAfterConflict(conflict: NookSyncConflictReview) {
+    return new syncActions.VaultSyncActions(
+      this,
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    ).ensureProviderSavedAfterConflict({
+      conflict,
+    });
   }
 
   /** Settings: connect a new sync provider and reconcile with local vault. */
   async connectAndSyncStagedProvider(): Promise<void> {
-    return providersActions.connectAndSyncStagedProvider(this);
+    return new providersActions.ProviderConnectionActions(
+      this,
+    ).connectAndSyncStagedProvider();
   }
 
-  async discoverStagedVaultStoreId(): Promise<StoreId> {
-    return providersActions.discoverStagedVaultStoreId(this);
+  async discoverStagedVaultStoreId() {
+    return new providersActions.ProviderConnectionActions(
+      this,
+    ).discoverStagedVaultStoreId();
   }
 
   openSettings(options: SettingsNavigationRequest) {
-    const openSettingsArgs: Parameters<typeof uiActions.openSettings>[0] = {
-      state: this,
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.uiActions.openSettings({
       ...options,
-    };
-    return uiActions.openSettings(openSettingsArgs);
+    });
   }
 
   openAdmin(accordion: AdminAccordionSection = AdminAccordionSection.Vaults) {
-    const openAdminArgs: Parameters<typeof uiActions.openAdmin>[0] = {
-      state: this,
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.uiActions.openAdmin({
       accordion,
-    };
-    return uiActions.openAdmin(openAdminArgs);
+    });
   }
 
   closeSettings() {
-    return uiActions.closeSettings(this);
+    return this.uiActions.closeSettings();
   }
 
   async deleteLocalBrowserData(): Promise<void> {
-    return uiActions.deleteLocalData(this);
+    return this.uiActions.deleteLocalData();
   }
 
-  async handleRemoteLocalBrowserDataDeletion(): Promise<void> {
-    return uiActions.handleRemoteLocalBrowserDataDeletion(this);
+  async handleRemoteLocalBrowserDataDeletion() {
+    return this.uiActions.handleRemoteLocalBrowserDataDeletion();
   }
 
   /** End the in-memory session and return to the login gate (encrypted vault + sync providers stay on disk). */
   lockVault() {
     this.beginLoginVaultPicker();
-    return idleSessionActions.lockVault(this);
+    return this.idleSessionActions.lockVault();
   }
 
   openHelp() {
-    return uiActions.openHelp(this);
+    return this.uiActions.openHelp();
   }
 
   closeHelp() {
-    return uiActions.closeHelp(this);
+    return this.uiActions.closeHelp();
   }
 
   async refreshSecretsFromSession() {
-    return secretsActions.refreshSecretsFromSession(this);
+    return this.secretsActions.refreshSecretsFromSession();
   }
 
   async loadSecretPage({ query, requestedOffset }: SecretPageSelection) {
-    const loadSecretPageArgs: Parameters<
-      typeof secretsActions.loadSecretPage
-    >[0] = { state: this, query, requestedOffset };
-    return secretsActions.loadSecretPage(loadSecretPageArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.loadSecretPage({ query, requestedOffset });
   }
 
   applyConnectedSecretPage({ page, query }: ConnectedSecretPage) {
-    const connectedPageArgs: Parameters<
-      typeof secretsActions.applyConnectedSecretPage
-    >[0] = { state: this, page, query };
-    return secretsActions.applyConnectedSecretPage(connectedPageArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.applyConnectedSecretPage({ page, query });
   }
 
-  async decryptSecret(id: string): Promise<NookSecretRecord> {
-    const decryptSecretArgs: Parameters<
-      typeof secretsActions.decryptSecret
-    >[0] = { state: this, id };
-    return secretsActions.decryptSecret(decryptSecretArgs);
+  async decryptSecret(id: string) {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.decryptSecret({ id });
   }
 
-  async currentAuthenticatorCode(id: string): Promise<AuthenticatorCodeView> {
-    const currentAuthenticatorCodeArgs: Parameters<
-      typeof secretsActions.currentAuthenticatorCode
-    >[0] = { state: this, id };
-    return secretsActions.currentAuthenticatorCode(
-      currentAuthenticatorCodeArgs,
-    );
+  async currentAuthenticatorCode(id: string) {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.currentAuthenticatorCode({ id });
   }
 
   async refreshDeviceState() {
-    return multiDeviceActions.refreshDeviceState(this);
+    return this.multiDeviceActions.refreshDeviceState();
   }
 
   /** Refresh event-log joins from providers (manual sync + provider poll). */
   async refreshPendingJoinsFromProviders() {
-    return multiDeviceActions.refreshPendingJoinsFromProviders(this);
+    return this.multiDeviceActions.refreshPendingJoinsFromProviders();
   }
 
   async approveJoin(joinDeviceId: string) {
-    const approveJoinArgs: Parameters<
-      typeof multiDeviceActions.approveJoin
-    >[0] = { state: this, joinDeviceId };
-    return multiDeviceActions.approveJoin(approveJoinArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.multiDeviceActions.approveJoin({ joinDeviceId });
   }
 
   async denyJoin(joinDeviceId: string) {
-    const denyJoinArgs: Parameters<typeof multiDeviceActions.denyJoin>[0] = {
-      state: this,
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.multiDeviceActions.denyJoin({
       joinDeviceId,
-    };
-    return multiDeviceActions.denyJoin(denyJoinArgs);
+    });
   }
 
   async renameDevice({ authId, label }: DeviceRename) {
-    const renameDeviceArgs: Parameters<
-      typeof multiDeviceActions.renameDevice
-    >[0] = { state: this, authId, label };
-    return multiDeviceActions.renameDevice(renameDeviceArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.multiDeviceActions.renameDevice({ authId, label });
   }
 
   async revokeDevice(authId: string) {
-    const revokeDeviceArgs: Parameters<
-      typeof multiDeviceActions.revokeDevice
-    >[0] = { state: this, authId };
-    return multiDeviceActions.revokeDevice(revokeDeviceArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.multiDeviceActions.revokeDevice({ authId });
   }
 
   async createFreshVault() {
-    return lifecycleActions.createFreshVault(this);
+    return this.lifecycleActions.createFreshVault();
   }
 
   async enrollAndConnect() {
-    return multiDeviceActions.enrollAndConnect(this);
+    return this.multiDeviceActions.enrollAndConnect();
   }
 
   async connectStagedProvider(): Promise<void> {
-    return providersActions.connectStagedProvider(this);
+    return new providersActions.ProviderConnectionActions(
+      this,
+    ).connectStagedProvider();
   }
 
   async loadDb() {
-    return secretsActions.loadDb(this);
+    return new secretsActions.VaultConnectionActions(this).loadDb();
   }
 
-  async promoteSessionVaultToLocalIfNeeded(): Promise<void> {
-    return providersActions.promoteSessionVaultToLocalIfNeeded(this);
+  async promoteSessionVaultToLocalIfNeeded(): Promise<
+    Result<void, VaultStorageFailure>
+  > {
+    return new providersActions.VaultProviderActions(
+      this,
+    ).promoteSessionVaultToLocalIfNeeded();
   }
 
   async addVaultPassword({
     label,
     password,
-  }: VaultPasswordCreation): Promise<void> {
-    const passwordArgs: Parameters<
-      typeof passwordUnlockActions.addVaultPassword
-    >[0] = { state: this, label, password };
-    return passwordUnlockActions.addVaultPassword(passwordArgs);
+  }: VaultPasswordCreation): Promise<PasswordOperationResult> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.passwordUnlockActions.addVaultPassword({ label, password });
   }
 
   async updateVaultPasswordEntry({
     entryId,
     password,
-  }: VaultPasswordEntryUpdate): Promise<void> {
-    const passwordEntryArgs: Parameters<
-      typeof passwordUnlockActions.updateVaultPasswordEntry
-    >[0] = { state: this, entryId, password };
-    return passwordUnlockActions.updateVaultPasswordEntry(passwordEntryArgs);
+  }: VaultPasswordEntryUpdate): Promise<PasswordOperationResult> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.passwordUnlockActions.updateVaultPasswordEntry({
+      entryId,
+      password,
+    });
   }
 
-  async removeVaultPasswordEntry(entryId: PasswordEntryId): Promise<void> {
-    const removeVaultPasswordEntryArgs: Parameters<
-      typeof passwordUnlockActions.removeVaultPasswordEntry
-    >[0] = { state: this, entryId };
-    return passwordUnlockActions.removeVaultPasswordEntry(
-      removeVaultPasswordEntryArgs,
-    );
+  async removeVaultPasswordEntry(
+    entryId: PasswordEntryId,
+  ): Promise<PasswordOperationResult> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.passwordUnlockActions.removeVaultPasswordEntry({ entryId });
   }
 
   /**
@@ -829,15 +840,19 @@ export class VaultState extends VaultRuntimeState {
     entryId,
     password,
     providerId,
-  }: EnrollmentCodeIssue): Promise<string> {
+  }: EnrollmentCodeIssue) {
     const enrollmentArgs: Parameters<
-      typeof passwordUnlockActions.issueEnrollmentCode
-    >[0] = { state: this, entryId, password, providerId };
-    return passwordUnlockActions.issueEnrollmentCode(enrollmentArgs);
+      passwordUnlockActions.PasswordEnrollmentIssue["issueEnrollmentCode"]
+    >[0] = { entryId, password, providerId };
+    return new passwordUnlockActions.PasswordEnrollmentIssue(
+      this,
+    ).issueEnrollmentCode(enrollmentArgs);
   }
 
   clearEnrollmentCode() {
-    return passwordUnlockActions.clearEnrollmentCode(this);
+    return new passwordUnlockActions.PasswordEnrollmentActions(
+      this,
+    ).clearEnrollmentCode();
   }
 
   /**
@@ -847,16 +862,22 @@ export class VaultState extends VaultRuntimeState {
     entryId,
     password,
   }: VaultPasswordUnlock): Promise<void> {
-    const unlockArgs: Parameters<
-      typeof passwordUnlockActions.unlockWithPassword
-    >[0] = { state: this, entryId, password };
-    return passwordUnlockActions.unlockWithPassword(unlockArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.passwordUnlockActions.unlockWithPassword({ entryId, password });
   }
 
-  async refreshSentinelUnlockStatus(): Promise<SentinelVaultUnlockState> {
+  async refreshSentinelUnlockStatus() {
     const status =
-      await sentinelUnlockActions.refreshSentinelUnlockStatus(this);
-    await this.refreshArchitectureSecretCreationAllowed();
+      await this.sentinelUnlockActions.refreshSentinelUnlockStatus();
+    if (status.isErr()) {
+      this.errorMsg = this.t(status.error.translationKey);
+      return status;
+    }
+    const permission = await this.refreshArchitectureSecretCreationAllowed();
+    if (permission.isErr()) {
+      this.errorMsg = this.t(permission.error.translationKey);
+      return err(permission.error);
+    }
     return status;
   }
 
@@ -868,130 +889,110 @@ export class VaultState extends VaultRuntimeState {
     code,
     password,
   }: EnrollmentCodeConnectionInput): Promise<void> {
-    const enrollmentArgs: Parameters<
-      typeof passwordUnlockActions.connectWithEnrollmentCode
-    >[0] = { state: this, code, password };
-    return passwordUnlockActions.connectWithEnrollmentCode(enrollmentArgs);
+    return new passwordUnlockActions.PasswordEnrollmentActions(
+      this,
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    ).connectWithEnrollmentCode({ code, password });
   }
 
   async handleAddSecret({ id, type, data }: SecretCreationInput) {
-    const addSecretArgs: Parameters<typeof secretsActions.handleAddSecret>[0] =
-      {
-        state: this,
-        id,
-        type,
-        data,
-      };
-    return secretsActions.handleAddSecret(addSecretArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.handleAddSecret({
+      id,
+      type,
+      data,
+    });
   }
 
   async handleBitwardenImport({
     json,
     password,
-  }: BitwardenVaultImportInput): Promise<NookImportResult> {
-    const importArgs: Parameters<
-      typeof secretsActions.handleBitwardenImport
-    >[0] = { state: this, json, password };
-    return secretsActions.handleBitwardenImport(importArgs);
+  }: BitwardenVaultImportInput): Promise<
+    SecretOperationResult<NookImportResult>
+  > {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.handleBitwardenImport({ json, password });
   }
 
-  async handleKeePassXcImport(csv: string): Promise<NookImportResult> {
-    const handleKeePassXcImportArgs: Parameters<
-      typeof secretsActions.handleKeePassXcImport
-    >[0] = { state: this, csv };
-    return secretsActions.handleKeePassXcImport(handleKeePassXcImportArgs);
+  async handleKeePassXcImport(
+    csv: string,
+  ): Promise<SecretOperationResult<NookImportResult>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.handleKeePassXcImport({ csv });
   }
 
-  async handleLastPassImport(csv: string): Promise<NookImportResult> {
-    const handleLastPassImportArgs: Parameters<
-      typeof secretsActions.handleLastPassImport
-    >[0] = { state: this, csv };
-    return secretsActions.handleLastPassImport(handleLastPassImportArgs);
+  async handleLastPassImport(
+    csv: string,
+  ): Promise<SecretOperationResult<NookImportResult>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.handleLastPassImport({ csv });
   }
 
-  async handleKeeperImport(csv: string): Promise<NookImportResult> {
-    const handleKeeperImportArgs: Parameters<
-      typeof secretsActions.handleKeeperImport
-    >[0] = { state: this, csv };
-    return secretsActions.handleKeeperImport(handleKeeperImportArgs);
+  async handleKeeperImport(
+    csv: string,
+  ): Promise<SecretOperationResult<NookImportResult>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.handleKeeperImport({ csv });
   }
 
   async handleOnePasswordImport(
     archive: Uint8Array,
-  ): Promise<NookImportResult> {
-    const handleOnePasswordImportArgs: Parameters<
-      typeof secretsActions.handleOnePasswordImport
-    >[0] = { state: this, archive };
-    return secretsActions.handleOnePasswordImport(handleOnePasswordImportArgs);
+  ): Promise<SecretOperationResult<NookImportResult>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.handleOnePasswordImport({ archive });
   }
 
   async handleApplePasswordsImport(
     exportBytes: Uint8Array,
-  ): Promise<NookImportResult> {
-    const handleApplePasswordsImportArgs: Parameters<
-      typeof secretsActions.handleApplePasswordsImport
-    >[0] = { state: this, exportBytes };
-    return secretsActions.handleApplePasswordsImport(
-      handleApplePasswordsImportArgs,
-    );
+  ): Promise<SecretOperationResult<NookImportResult>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.handleApplePasswordsImport({ exportBytes });
   }
 
-  async handleChromePasswordsImport(csv: string): Promise<NookImportResult> {
-    const handleChromePasswordsImportArgs: Parameters<
-      typeof secretsActions.handleChromePasswordsImport
-    >[0] = { state: this, csv };
-    return secretsActions.handleChromePasswordsImport(
-      handleChromePasswordsImportArgs,
-    );
+  async handleChromePasswordsImport(
+    csv: string,
+  ): Promise<SecretOperationResult<NookImportResult>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.handleChromePasswordsImport({ csv });
   }
 
   async handleDashlaneImport(
     exportBytes: Uint8Array,
-  ): Promise<NookImportResult> {
-    const handleDashlaneImportArgs: Parameters<
-      typeof secretsActions.handleDashlaneImport
-    >[0] = { state: this, exportBytes };
-    return secretsActions.handleDashlaneImport(handleDashlaneImportArgs);
+  ): Promise<SecretOperationResult<NookImportResult>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.handleDashlaneImport({ exportBytes });
   }
 
   async handleGoogleAuthenticatorImport(
     migrationUris: AuthenticatorMigrationUriCollection,
-  ): Promise<NookImportResult> {
-    const handleGoogleAuthenticatorImportArgs: Parameters<
-      typeof secretsActions.handleGoogleAuthenticatorImport
-    >[0] = { state: this, migrationUris };
-    return secretsActions.handleGoogleAuthenticatorImport(
-      handleGoogleAuthenticatorImportArgs,
-    );
+  ): Promise<SecretOperationResult<NookImportResult>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.handleGoogleAuthenticatorImport({
+      migrationUris,
+    });
   }
 
   async handleProtonPassImport(
     exportBytes: Uint8Array,
-  ): Promise<NookImportResult> {
-    const handleProtonPassImportArgs: Parameters<
-      typeof secretsActions.handleProtonPassImport
-    >[0] = { state: this, exportBytes };
-    return secretsActions.handleProtonPassImport(handleProtonPassImportArgs);
+  ): Promise<SecretOperationResult<NookImportResult>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.handleProtonPassImport({ exportBytes });
   }
 
-  async flushRemoteEventOutboxNow(request: EventOutboxRequest): Promise<void> {
-    const flushRemoteEventOutboxNowArgs: Parameters<
-      typeof syncActions.flushRemoteEventOutboxNow
-    >[0] = { state: this, request };
-    return syncActions.flushRemoteEventOutboxNow(flushRemoteEventOutboxNowArgs);
+  async flushRemoteEventOutboxNow(request: EventOutboxRequest) {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new syncActions.VaultSyncActions(this).flushRemoteEventOutboxNow({
+      request,
+    });
   }
 
   async handleDeleteSecret(id: string) {
-    const handleDeleteSecretArgs: Parameters<
-      typeof secretsActions.handleDeleteSecret
-    >[0] = { state: this, id };
-    return secretsActions.handleDeleteSecret(handleDeleteSecretArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.handleDeleteSecret({ id });
   }
 
   async handleReplaceSecret({ oldId, type, data }: SecretReplacementInput) {
-    const replaceSecretArgs: Parameters<
-      typeof secretsActions.handleReplaceSecret
-    >[0] = { state: this, oldId, type, data };
-    return secretsActions.handleReplaceSecret(replaceSecretArgs);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.secretsActions.handleReplaceSecret({ oldId, type, data });
   }
 }

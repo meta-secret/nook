@@ -15,26 +15,31 @@ pub struct AuthenticationObservationBindingToken(String);
 pub struct AuthenticationObservationBindingError;
 
 /// Canonically bind the exact ordered facts Rust will classify.
-pub fn bind_authentication_page_observation_facts(
-    facts: &AuthenticationPageObservationFactsBatch,
-) -> Result<AuthenticationObservationBindingToken, AuthenticationObservationBindingError> {
-    if !facts.is_valid_binding() {
-        return Err(AuthenticationObservationBindingError);
+impl AuthenticationObservationBindingToken {
+    pub fn bind_authentication_page_observation_facts(
+        facts: &AuthenticationPageObservationFactsBatch,
+    ) -> Result<AuthenticationObservationBindingToken, AuthenticationObservationBindingError> {
+        if !facts.is_valid_binding() {
+            return Err(AuthenticationObservationBindingError);
+        }
+        let canonical =
+            serde_json::to_string(facts).map_err(|_| AuthenticationObservationBindingError)?;
+        Ok(AuthenticationObservationBindingToken(format!(
+            "{OBSERVATION_BINDING_VERSION}{canonical}"
+        )))
     }
-    let canonical =
-        serde_json::to_string(facts).map_err(|_| AuthenticationObservationBindingError)?;
-    Ok(AuthenticationObservationBindingToken(format!(
-        "{OBSERVATION_BINDING_VERSION}{canonical}"
-    )))
 }
 
 /// Compare current browser facts with a prior Rust-issued canonical binding.
-#[must_use]
-pub fn authentication_page_observation_facts_match_binding(
-    binding: &AuthenticationObservationBindingToken,
-    facts: &AuthenticationPageObservationFactsBatch,
-) -> bool {
-    bind_authentication_page_observation_facts(facts).is_ok_and(|current| current == *binding)
+impl AuthenticationObservationBindingToken {
+    #[must_use]
+    pub fn authentication_page_observation_facts_match_binding(
+        binding: &AuthenticationObservationBindingToken,
+        facts: &AuthenticationPageObservationFactsBatch,
+    ) -> bool {
+        AuthenticationObservationBindingToken::bind_authentication_page_observation_facts(facts)
+            .is_ok_and(|current| current == *binding)
+    }
 }
 
 #[cfg(test)]
@@ -71,42 +76,50 @@ mod tests {
     #[test]
     fn binds_only_the_exact_ordered_submission_and_field_facts() -> anyhow::Result<()> {
         let approved = bound_password_observation();
-        let binding = bind_authentication_page_observation_facts(&approved)?;
-        assert!(authentication_page_observation_facts_match_binding(
+        let binding =
+            AuthenticationObservationBindingToken::bind_authentication_page_observation_facts(
+                &approved,
+            )?;
+        assert!(AuthenticationObservationBindingToken::authentication_page_observation_facts_match_binding(
             &binding, &approved
         ));
 
         let mut get_route = approved.clone();
+        let Some(get_route_observation) = get_route.observations.first_mut() else {
+            anyhow::bail!("bound password fixture must contain one observation");
+        };
         let AuthenticationCredentialSubmissionObservation::Observed(submission) =
-            &mut get_route.observations[0].credential_submission
+            &mut get_route_observation.credential_submission
         else {
             unreachable!();
         };
         submission.method = PageControlSubmissionMethod::Get;
-        assert!(!authentication_page_observation_facts_match_binding(
+        assert!(!AuthenticationObservationBindingToken::authentication_page_observation_facts_match_binding(
             &binding, &get_route
         ));
 
         let mut inert_route = approved.clone();
+        let Some(inert_route_observation) = inert_route.observations.first_mut() else {
+            anyhow::bail!("bound password fixture must contain one observation");
+        };
         let AuthenticationCredentialSubmissionObservation::Observed(submission) =
-            &mut inert_route.observations[0].credential_submission
+            &mut inert_route_observation.credential_submission
         else {
             unreachable!();
         };
         submission.actionability = PageControlActionability::Inert;
-        assert!(!authentication_page_observation_facts_match_binding(
+        assert!(!AuthenticationObservationBindingToken::authentication_page_observation_facts_match_binding(
             &binding,
             &inert_route
         ));
 
         let mut readonly = approved;
-        readonly.observations[0]
-            .fields
-            .actionable_password_field_count = 0.into();
-        readonly.observations[0]
-            .fields
-            .readonly_password_field_count = 1.into();
-        assert!(!authentication_page_observation_facts_match_binding(
+        let Some(readonly_observation) = readonly.observations.first_mut() else {
+            anyhow::bail!("bound password fixture must contain one observation");
+        };
+        readonly_observation.fields.actionable_password_field_count = 0.into();
+        readonly_observation.fields.readonly_password_field_count = 1.into();
+        assert!(!AuthenticationObservationBindingToken::authentication_page_observation_facts_match_binding(
             &binding, &readonly
         ));
         Ok(())
@@ -115,16 +128,26 @@ mod tests {
     #[test]
     fn rejects_empty_unbounded_and_incomplete_password_bindings() {
         assert!(
-            bind_authentication_page_observation_facts(&AuthenticationPageObservationFactsBatch {
-                observations: Vec::new(),
-            })
+            AuthenticationObservationBindingToken::bind_authentication_page_observation_facts(
+                &AuthenticationPageObservationFactsBatch {
+                    observations: Vec::new(),
+                }
+            )
             .is_err()
         );
 
         let mut incomplete = bound_password_observation();
-        incomplete.observations[0]
+        let Some(incomplete_observation) = incomplete.observations.first_mut() else {
+            panic!("bound password fixture must contain one observation");
+        };
+        incomplete_observation
             .fields
             .actionable_password_field_count = 0.into();
-        assert!(bind_authentication_page_observation_facts(&incomplete).is_err());
+        assert!(
+            AuthenticationObservationBindingToken::bind_authentication_page_observation_facts(
+                &incomplete
+            )
+            .is_err()
+        );
     }
 }

@@ -17,12 +17,19 @@ enum FixtureGenerationError {
     WriteFixture(#[source] io::Error),
 }
 
-fn api_key(website_url: &str, key: &str) -> SecretValue {
-    SecretValue::ApiKey(ApiKeySecret {
-        website_url: website_url.to_owned(),
-        key: key.to_owned(),
-        expires_at: String::new(),
-    })
+struct ApiKeyFixture<'a> {
+    website_url: &'a str,
+    key: &'a str,
+}
+impl ApiKeyFixture<'_> {
+    fn into_secret(self) -> SecretValue {
+        let Self { website_url, key } = self;
+        SecretValue::ApiKey(ApiKeySecret {
+            website_url: website_url.to_owned(),
+            key: key.to_owned(),
+            expires_at: String::new(),
+        })
+    }
 }
 
 fn main() -> Result<(), FixtureGenerationError> {
@@ -34,15 +41,27 @@ fn main() -> Result<(), FixtureGenerationError> {
     let mut db = Database::new();
     db.insert(
         SecretId::from_vault_record("github.com"),
-        api_key("https://github.com", "hunter2"),
+        ApiKeyFixture {
+            website_url: "https://github.com",
+            key: "hunter2",
+        }
+        .into_secret(),
     );
     db.insert(
         SecretId::from_vault_record("work-vpn"),
-        api_key("https://vpn.example.com", "token-abc"),
+        ApiKeyFixture {
+            website_url: "https://vpn.example.com",
+            key: "token-abc",
+        }
+        .into_secret(),
     );
     db.insert(
         SecretId::from_vault_record("notes"),
-        api_key("https://notes.example.com", "multiline\nsecret\nwith\ttabs"),
+        ApiKeyFixture {
+            website_url: "https://notes.example.com",
+            key: "multiline\nsecret\nwith\ttabs",
+        }
+        .into_secret(),
     );
 
     let stored_yaml = db.to_stored_yaml(passphrase)?;

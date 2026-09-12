@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
+
 import {
   MODULE_DELIVERY_PLAN_VERSION,
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -11,7 +12,7 @@ import {
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
   TeamKey,
-  decodeAndValidateModuleDeliveryPlan,
+  ModuleDeliveryPlanDecoder,
 } from '../../src/module-delivery/index.ts';
 
 import type {
@@ -19,66 +20,81 @@ import type {
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
 
-const SOURCE_COMMIT = '1'.repeat(40);
+export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
+  private constructor(
+    private readonly request: {
+      readonly team: TeamKey;
+      readonly moduleRoot: string;
+      readonly write: string;
+    },
+  ) {}
 
-function ordinaryWrite(request: {
-  readonly team: TeamKey;
-  readonly moduleRoot: string;
-  readonly write: string;
-}): ModuleDeliveryWriteNodeV2 {
-  return {
-    kind: ModuleDeliveryTaskKind.Write,
-    taskId: 'ordinary-writer',
-    team: request.team,
-    functionalOwner: TeamKey.Ai,
-    acceptanceOwner: TeamKey.Ai,
-    parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
-    expert: ModuleDeliveryTaskProfile.Ordinary,
-    moduleRoot: request.moduleRoot,
-    consumerOutcome: 'The bounded team-owned change is delivered.',
-    baseline: {
-      kind: ModuleDeliveryBaselineKind.SourceCommit,
+  static ordinaryWrite(request: {
+    readonly team: TeamKey;
+    readonly moduleRoot: string;
+    readonly write: string;
+  }): ModuleDeliveryWriteNodeV2 {
+    return new ModuleDeliveryOrdinaryTaskOwnershipScenario(request).execute();
+  }
+
+  private execute(): ModuleDeliveryWriteNodeV2 {
+    const request = this.request;
+    return {
+      kind: ModuleDeliveryTaskKind.Write,
+      taskId: 'ordinary-writer',
+      team: request.team,
+      functionalOwner: TeamKey.Ai,
+      acceptanceOwner: TeamKey.Ai,
+      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+      expert: ModuleDeliveryTaskProfile.Ordinary,
+      moduleRoot: request.moduleRoot,
+      consumerOutcome: 'The bounded team-owned change is delivered.',
+      baseline: {
+        kind: ModuleDeliveryBaselineKind.SourceCommit,
+        sourceCommit: SOURCE_COMMIT,
+      },
+      agentDepthLimit: 1,
+      dependencies: [],
+      resources: { read: [], write: [request.write], evidenceSurface: [] },
+      parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+      acceptance: { commands: ['task test'], evidence: ['tests pass'] },
+      workspace: {
+        kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
+        expectedCommitHandoff: true,
+      },
+    };
+  }
+
+  static accepted(node: ModuleDeliveryWriteNodeV2): boolean {
+    const plan: ModuleDeliveryPlanV2 = {
+      version: MODULE_DELIVERY_PLAN_VERSION,
+      generation: 1,
       sourceCommit: SOURCE_COMMIT,
-    },
-    agentDepthLimit: 1,
-    dependencies: [],
-    resources: { read: [], write: [request.write], evidenceSurface: [] },
-    parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
-    acceptance: { commands: ['task test'], evidence: ['tests pass'] },
-    workspace: {
-      kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-      expectedCommitHandoff: true,
-    },
-  };
+      maxConcurrency: 1,
+      maxAgentDepth: 1,
+      maxAttempts: 1,
+      parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
+      parentJoin: {
+        kind: ModuleDeliveryJoinKind.DirectCommits,
+        owner: 'delivery-owner',
+        validationCommands: ['task test'],
+      },
+      nodes: [node],
+      edgeContracts: [],
+    };
+    return (
+      ModuleDeliveryPlanDecoder.decodeAndValidate(JSON.stringify(plan))
+        .status === ModuleDeliveryValidationStatus.Accepted
+    );
+  }
 }
 
-function accepted(node: ModuleDeliveryWriteNodeV2): boolean {
-  const plan: ModuleDeliveryPlanV2 = {
-    version: MODULE_DELIVERY_PLAN_VERSION,
-    generation: 1,
-    sourceCommit: SOURCE_COMMIT,
-    maxConcurrency: 1,
-    maxAgentDepth: 1,
-    maxAttempts: 1,
-    parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
-    parentJoin: {
-      kind: ModuleDeliveryJoinKind.DirectCommits,
-      owner: 'delivery-owner',
-      validationCommands: ['task test'],
-    },
-    nodes: [node],
-    edgeContracts: [],
-  };
-  return (
-    decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan)).status ===
-    ModuleDeliveryValidationStatus.Accepted
-  );
-}
+const SOURCE_COMMIT = '1'.repeat(40);
 
 test('limits Development Core minds writes to Rust-owned surfaces', () => {
   expect(
-    accepted(
-      ordinaryWrite({
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
         team: TeamKey.DevelopmentCore,
         moduleRoot: 'agentic-ai/minds/hive/src',
         write: 'agentic-ai/minds/hive/src/model.rs',
@@ -97,16 +113,20 @@ test('limits Development Core minds writes to Rust-owned surfaces', () => {
     ],
   ] as const)
     expect(
-      accepted(
-        ordinaryWrite({ team: TeamKey.DevelopmentCore, moduleRoot, write }),
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+        ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+          team: TeamKey.DevelopmentCore,
+          moduleRoot,
+          write,
+        }),
       ),
     ).toBe(false);
 });
 
 test('routes Hive Console writes to Web Development', () => {
   expect(
-    accepted(
-      ordinaryWrite({
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
         team: TeamKey.WebDevelopment,
         moduleRoot: 'agentic-ai/minds/hive-console',
         write: 'agentic-ai/minds/hive-console/src/App.svelte',
@@ -118,8 +138,12 @@ test('routes Hive Console writes to Web Development', () => {
 test('requires bounded ordinary write claims and admits exact extensionless paths', () => {
   for (const write of ['infra'])
     expect(
-      accepted(
-        ordinaryWrite({ team: TeamKey.Sre, moduleRoot: 'infra', write }),
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+        ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+          team: TeamKey.Sre,
+          moduleRoot: 'infra',
+          write,
+        }),
       ),
     ).toBe(false);
   for (const write of [
@@ -129,13 +153,17 @@ test('requires bounded ordinary write claims and admits exact extensionless path
     'infra/k0s/scripts/k0s-worker-mesh-reconcile',
   ])
     expect(
-      accepted(
-        ordinaryWrite({ team: TeamKey.Sre, moduleRoot: 'infra', write }),
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+        ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+          team: TeamKey.Sre,
+          moduleRoot: 'infra',
+          write,
+        }),
       ),
     ).toBe(true);
   expect(
-    accepted(
-      ordinaryWrite({
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
         team: TeamKey.DevelopmentCore,
         moduleRoot: 'agentic-ai/minds/Cargo.lock',
         write: 'agentic-ai/minds/Cargo.lock',
@@ -149,9 +177,21 @@ test('routes the web Docker subtree exclusively to SRE', () => {
     moduleRoot: 'nook-app/nook-web/docker',
     write: 'nook-app/nook-web/docker/web.Dockerfile',
   } as const;
-  expect(accepted(ordinaryWrite({ team: TeamKey.Sre, ...request }))).toBe(true);
   expect(
-    accepted(ordinaryWrite({ team: TeamKey.WebDevelopment, ...request })),
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+        team: TeamKey.Sre,
+        ...request,
+      }),
+    ),
+  ).toBe(true);
+  expect(
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+        team: TeamKey.WebDevelopment,
+        ...request,
+      }),
+    ),
   ).toBe(false);
 });
 
@@ -162,11 +202,17 @@ test('routes web Taskfile orchestration exclusively to SRE', () => {
     'nook-app/nook-web/nook-web-extension/Taskfile.yml',
   ]) {
     expect(
-      accepted(ordinaryWrite({ team: TeamKey.Sre, moduleRoot: write, write })),
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+        ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+          team: TeamKey.Sre,
+          moduleRoot: write,
+          write,
+        }),
+      ),
     ).toBe(true);
     expect(
-      accepted(
-        ordinaryWrite({
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+        ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
           team: TeamKey.WebDevelopment,
           moduleRoot: 'nook-app/nook-web',
           write,
@@ -180,11 +226,17 @@ test('routes the extension deployment verifier exclusively to SRE', () => {
   const write =
     'nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh';
   expect(
-    accepted(ordinaryWrite({ team: TeamKey.Sre, moduleRoot: write, write })),
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+        team: TeamKey.Sre,
+        moduleRoot: write,
+        write,
+      }),
+    ),
   ).toBe(true);
   expect(
-    accepted(
-      ordinaryWrite({
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
         team: TeamKey.WebDevelopment,
         moduleRoot: 'nook-app/nook-web/nook-web-extension',
         write,
@@ -195,8 +247,8 @@ test('routes the extension deployment verifier exclusively to SRE', () => {
 
 test('rejects globs that overlap a more-specific foreign root', () => {
   expect(
-    accepted(
-      ordinaryWrite({
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
         team: TeamKey.WebDevelopment,
         moduleRoot: 'nook-app/nook-web/nook-web-app',
         write: 'nook-app/nook-web/nook-web-app/*',
@@ -204,8 +256,8 @@ test('rejects globs that overlap a more-specific foreign root', () => {
     ),
   ).toBe(false);
   expect(
-    accepted(
-      ordinaryWrite({
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
         team: TeamKey.WebDevelopment,
         moduleRoot: 'nook-app/nook-web/nook-web-app',
         write: 'nook-app/nook-web/nook-web-app/src/*.ts',
@@ -217,8 +269,8 @@ test('rejects globs that overlap a more-specific foreign root', () => {
 test('rejects globs spanning multiple owners', () => {
   for (const team of [TeamKey.Sre, TeamKey.WebDevelopment])
     expect(
-      accepted(
-        ordinaryWrite({
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+        ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
           team,
           moduleRoot: 'nook-app/nook-web',
           write: 'nook-app/nook-web/**',
@@ -226,8 +278,8 @@ test('rejects globs spanning multiple owners', () => {
       ),
     ).toBe(false);
   expect(
-    accepted(
-      ordinaryWrite({
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
         team: TeamKey.WebDevelopment,
         moduleRoot: 'nook-app/nook-web/nook-web-app',
         write: 'nook-app/nook-web/nook-web-app/src/*.ts',
@@ -235,8 +287,8 @@ test('rejects globs spanning multiple owners', () => {
     ),
   ).toBe(true);
   expect(
-    accepted(
-      ordinaryWrite({
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
         team: TeamKey.Sre,
         moduleRoot: 'infra',
         write: 'infra/*.tf',
@@ -264,11 +316,17 @@ test('routes app build orchestration exclusively to SRE', () => {
     'nook-app/nook-web/nook-web-app/docker-bake.hcl',
   ]) {
     expect(
-      accepted(ordinaryWrite({ team: TeamKey.Sre, moduleRoot: write, write })),
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+        ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+          team: TeamKey.Sre,
+          moduleRoot: write,
+          write,
+        }),
+      ),
     ).toBe(true);
     expect(
-      accepted(
-        ordinaryWrite({
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+        ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
           team: TeamKey.WebDevelopment,
           moduleRoot: write,
           write,
@@ -283,10 +341,22 @@ test('routes AI preflight contracts separately from SRE preflight', () => {
     moduleRoot: 'preflight/tests/loom_contracts.rs',
     write: 'preflight/tests/loom_contracts.rs',
   } as const;
-  expect(accepted(ordinaryWrite({ team: TeamKey.Ai, ...contract }))).toBe(true);
-  expect(accepted(ordinaryWrite({ team: TeamKey.Sre, ...contract }))).toBe(
-    false,
-  );
+  expect(
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+        team: TeamKey.Ai,
+        ...contract,
+      }),
+    ),
+  ).toBe(true);
+  expect(
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+        team: TeamKey.Sre,
+        ...contract,
+      }),
+    ),
+  ).toBe(false);
 });
 
 test('separates portable platform Rust from operational ownership', () => {
@@ -295,7 +365,12 @@ test('separates portable platform Rust from operational ownership', () => {
     write: 'nook-app/nook-platform/nook-core/src/lib.rs',
   } as const;
   expect(
-    accepted(ordinaryWrite({ team: TeamKey.DevelopmentCore, ...rust })),
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+        team: TeamKey.DevelopmentCore,
+        ...rust,
+      }),
+    ),
   ).toBe(true);
   for (const request of [
     {
@@ -313,11 +388,21 @@ test('separates portable platform Rust from operational ownership', () => {
     { moduleRoot: 'preflight', write: 'preflight/tests/infra.rs' },
   ] as const) {
     expect(
-      accepted(ordinaryWrite({ team: TeamKey.DevelopmentCore, ...request })),
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+        ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+          team: TeamKey.DevelopmentCore,
+          ...request,
+        }),
+      ),
     ).toBe(false);
-    expect(accepted(ordinaryWrite({ team: TeamKey.Sre, ...request }))).toBe(
-      true,
-    );
+    expect(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+        ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+          team: TeamKey.Sre,
+          ...request,
+        }),
+      ),
+    ).toBe(true);
   }
 });
 
@@ -326,20 +411,30 @@ test('keeps exact-file deletion and descendants in separate ownership', () => {
     moduleRoot: '.task/agentic-ai.yml',
     write: '.task/agentic-ai.yml',
   } as const;
-  expect(accepted(ordinaryWrite({ team: TeamKey.Ai, ...aiRegistry }))).toBe(
-    true,
-  );
-  expect(accepted(ordinaryWrite({ team: TeamKey.Sre, ...aiRegistry }))).toBe(
-    false,
-  );
+  expect(
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+        team: TeamKey.Ai,
+        ...aiRegistry,
+      }),
+    ),
+  ).toBe(true);
+  expect(
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+        team: TeamKey.Sre,
+        ...aiRegistry,
+      }),
+    ),
+  ).toBe(false);
   for (const write of [
     '.task/agentic-ai.yml/child.yml',
     '.task/agentic-ai.yml/**',
   ])
     for (const team of [TeamKey.Ai, TeamKey.Sre])
       expect(
-        accepted(
-          ordinaryWrite({
+        ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+          ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
             team,
             moduleRoot: team === TeamKey.Ai ? '.task/agentic-ai.yml' : '.task',
             write,
@@ -347,8 +442,8 @@ test('keeps exact-file deletion and descendants in separate ownership', () => {
         ),
       ).toBe(false);
   expect(
-    accepted(
-      ordinaryWrite({
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
         team: TeamKey.Sre,
         moduleRoot: '.task',
         write: '.task/ci-workflows.yml',

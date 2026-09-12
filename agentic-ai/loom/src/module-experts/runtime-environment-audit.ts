@@ -1,5 +1,61 @@
 import type { CodexOptions } from '@openai/codex-sdk';
 
+export class ModuleExpertEnvironment {
+  private constructor(
+    private readonly request: ValidateModuleExpertRuntimeEnvironmentArgs,
+  ) {}
+  static validate(args: ValidateModuleExpertRuntimeEnvironmentArgs): boolean {
+    return new ModuleExpertEnvironment(args).execute();
+  }
+  private execute(): boolean {
+    const args = this.request;
+    const actualShellEnvironment = this.environmentRecord(
+      args.actualShellEnvironment,
+    );
+    if (!args.actualProcessEnvironment || !actualShellEnvironment) return false;
+    const codexMapValidation: ExactEnvironmentMapValidation = {
+      actual: args.actualProcessEnvironment,
+      expected: args.safeCodexEnvironment,
+    };
+    const shellMapValidation: ExactEnvironmentMapValidation = {
+      actual: actualShellEnvironment,
+      expected: args.safeShellEnvironment,
+    };
+    const allowedCodexKeys = ['CODEX_HOME', ...args.allowedShellKeys];
+    return (
+      Object.keys(args.safeCodexEnvironment).every((key) =>
+        allowedCodexKeys.includes(key),
+      ) &&
+      Object.keys(args.safeShellEnvironment).every((key) =>
+        args.allowedShellKeys.includes(key),
+      ) &&
+      this.exactEnvironmentMap(codexMapValidation) &&
+      this.exactEnvironmentMap(shellMapValidation)
+    );
+  }
+
+  private environmentRecord(
+    value: CodexConfigEntry | false,
+  ): Readonly<Record<string, CodexConfigEntry>> | false {
+    if (typeof value !== 'object' || !value || Array.isArray(value))
+      return false;
+    return value;
+  }
+
+  private exactEnvironmentMap(args: ExactEnvironmentMapValidation): boolean {
+    const expectedKeys = Object.keys(args.expected).sort();
+    const actualKeys = Object.keys(args.actual).sort();
+    return (
+      JSON.stringify(actualKeys) === JSON.stringify(expectedKeys) &&
+      expectedKeys.every(
+        (key) =>
+          typeof args.actual[key] === 'string' &&
+          args.actual[key] === args.expected[key],
+      )
+    );
+  }
+}
+
 type CodexConfigEntry = NonNullable<CodexOptions['config']>[string];
 
 export type ValidateModuleExpertRuntimeEnvironmentArgs = {
@@ -14,49 +70,3 @@ type ExactEnvironmentMapValidation = {
   readonly actual: Readonly<Record<string, CodexConfigEntry>>;
   readonly expected: Readonly<Record<string, string>>;
 };
-
-export function validModuleExpertRuntimeEnvironment(
-  args: ValidateModuleExpertRuntimeEnvironmentArgs,
-): boolean {
-  const actualShellEnvironment = environmentRecord(args.actualShellEnvironment);
-  if (!args.actualProcessEnvironment || !actualShellEnvironment) return false;
-  const codexMapValidation: ExactEnvironmentMapValidation = {
-    actual: args.actualProcessEnvironment,
-    expected: args.safeCodexEnvironment,
-  };
-  const shellMapValidation: ExactEnvironmentMapValidation = {
-    actual: actualShellEnvironment,
-    expected: args.safeShellEnvironment,
-  };
-  const allowedCodexKeys = ['CODEX_HOME', ...args.allowedShellKeys];
-  return (
-    Object.keys(args.safeCodexEnvironment).every((key) =>
-      allowedCodexKeys.includes(key),
-    ) &&
-    Object.keys(args.safeShellEnvironment).every((key) =>
-      args.allowedShellKeys.includes(key),
-    ) &&
-    exactEnvironmentMap(codexMapValidation) &&
-    exactEnvironmentMap(shellMapValidation)
-  );
-}
-
-function environmentRecord(
-  value: CodexConfigEntry | false,
-): Readonly<Record<string, CodexConfigEntry>> | false {
-  if (typeof value !== 'object' || !value || Array.isArray(value)) return false;
-  return value;
-}
-
-function exactEnvironmentMap(args: ExactEnvironmentMapValidation): boolean {
-  const expectedKeys = Object.keys(args.expected).sort();
-  const actualKeys = Object.keys(args.actual).sort();
-  return (
-    JSON.stringify(actualKeys) === JSON.stringify(expectedKeys) &&
-    expectedKeys.every(
-      (key) =>
-        typeof args.actual[key] === 'string' &&
-        args.actual[key] === args.expected[key],
-    )
-  );
-}

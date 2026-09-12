@@ -9,9 +9,8 @@ import {
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { PasswordFormScopeKind } from '../../../../nook-web-shared/src/extension/password-form-fields'
 import {
-  authenticationPageObservationFacts,
   FormSubmissionResult,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   DomAuthenticationSimulationOutcomeKind,
@@ -225,19 +224,22 @@ describe('DOM-backed companion authentication simulation', () => {
     })
     expect(fieldValue('#email')).toBe(FAKE_CREDENTIALS.username)
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
-    const chatGptObservation = summarizeAuthenticationWorkflowForms().find(
-      ({ formScope }) =>
-        formScope.kind === PasswordFormScopeKind.Owned &&
-        formScope.owner.querySelector('#email'),
-    )
+    const chatGptObservation = passwordFormInteraction
+      .summarizeAuthenticationWorkflowForms()
+      .find(
+        ({ formScope }) =>
+          formScope.kind === PasswordFormScopeKind.Owned &&
+          formScope.owner.querySelector('#email'),
+      )
     if (!chatGptObservation) {
       throw new Error('expected ChatGPT destination evidence')
     }
-    const chatGptFacts = authenticationPageObservationFacts({
-      observation: chatGptObservation,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    })
+    const chatGptFacts =
+      passwordFormInteraction.authenticationPageObservationFacts({
+        observation: chatGptObservation,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      })
     const chatGptDetailed = chatGptFacts.detailedAdvanceControl
     if (!chatGptDetailed || chatGptDetailed.kind !== 'observed') {
       throw new Error('expected ChatGPT control observations')
@@ -306,19 +308,22 @@ describe('DOM-backed companion authentication simulation', () => {
     })
     expect(fieldValue('#email')).toBe(FAKE_CREDENTIALS.username)
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
-    const openAiObservation = summarizeAuthenticationWorkflowForms().find(
-      ({ formScope }) =>
-        formScope.kind === PasswordFormScopeKind.Owned &&
-        formScope.owner.id === 'openai-identifier-form',
-    )
+    const openAiObservation = passwordFormInteraction
+      .summarizeAuthenticationWorkflowForms()
+      .find(
+        ({ formScope }) =>
+          formScope.kind === PasswordFormScopeKind.Owned &&
+          formScope.owner.id === 'openai-identifier-form',
+      )
     if (!openAiObservation) {
       throw new Error('expected OpenAI destination evidence')
     }
-    const openAiFacts = authenticationPageObservationFacts({
-      observation: openAiObservation,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    })
+    const openAiFacts =
+      passwordFormInteraction.authenticationPageObservationFacts({
+        observation: openAiObservation,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      })
     const openAiDetailed = openAiFacts.detailedAdvanceControl
     if (!openAiDetailed || openAiDetailed.kind !== 'observed') {
       throw new Error('expected OpenAI control observations')
@@ -410,28 +415,34 @@ describe('DOM-backed companion authentication simulation', () => {
       submittedControlIdentity: '',
     })
     expect(result.selectedRoot === document).toBe(true)
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected X authentication observation')
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(facts.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: expect.arrayContaining([
-        expect.objectContaining({
-          actionability: 'actionable',
-          label: expect.stringContaining('Continue with Apple'),
-          submissionMethod: 'absent',
-        }),
-        expect.objectContaining({
-          actionability: 'actionable',
-          label: expect.stringContaining('Continue with phone'),
-          submissionMethod: 'absent',
-        }),
-      ]),
-    })
+    const detailedAdvanceControl = facts.detailedAdvanceControl
+    if (detailedAdvanceControl?.kind !== 'observed') {
+      throw new Error('expected detailed advance-control observations')
+    }
+    expect(
+      detailedAdvanceControl.observations.some(
+        (observation) =>
+          observation.actionability === 'actionable' &&
+          observation.label.includes('Continue with Apple') &&
+          observation.submissionMethod === 'absent',
+      ),
+    ).toBe(true)
+    expect(
+      detailedAdvanceControl.observations.some(
+        (observation) =>
+          observation.actionability === 'actionable' &&
+          observation.label.includes('Continue with phone') &&
+          observation.submissionMethod === 'absent',
+      ),
+    ).toBe(true)
     expect(facts.ceremony).toMatchObject({
       advanceControl: 'implicit-submission',
       implicitSubmissionMethod: 'get',
@@ -493,26 +504,29 @@ describe('DOM-backed companion authentication simulation', () => {
       filled: true,
       submissionResult: FormSubmissionResult.Submitted,
     })
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) {
       throw new Error('expected safe actionable authentication observation')
     }
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
     expect(facts.ceremony.advanceControl).toBe('absent')
-    expect(facts.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: [
-        expect.objectContaining({
-          actionability: 'actionable',
-          label: expect.stringContaining('Continue'),
-          submissionMethod: 'absent',
-        }),
-      ],
-    })
+    const detailedAdvanceControl = facts.detailedAdvanceControl
+    if (detailedAdvanceControl?.kind !== 'observed') {
+      throw new Error('expected detailed advance-control observations')
+    }
+    expect(
+      detailedAdvanceControl.observations.some(
+        (observation) =>
+          observation.actionability === 'actionable' &&
+          observation.label.includes('Continue') &&
+          observation.submissionMethod === 'absent',
+      ),
+    ).toBe(true)
   })
 
   test('runs both bounded steps of the cross-origin Apple authorization surface', () => {
@@ -830,5 +844,57 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(fieldValue('#username')).toBe('')
     expect(fieldValue('#password')).toBe('')
     expect(fieldValue('aside input')).toBe('')
+  })
+
+  test('revalidates an ordinary login after password disclosure without touching unrelated fields', () => {
+    const request: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<main><form method="post"><label>Email<input id="login-email" autocomplete="username"></label><label>Password<input id="login-password" type="password" autocomplete="current-password"></label><button id="login-submit" type="submit">Sign in</button></form><aside><input id="unrelated-email" type="email" value="reader@example.test"></aside></main>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+
+    const result = simulateDomAuthentication(request)
+
+    expect(result).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+      submittedControlIdentity: 'login-submit',
+    })
+    expect(fieldValue('#login-email')).toBe(FAKE_CREDENTIALS.username)
+    expect(fieldValue('#login-password')).toBe(FAKE_CREDENTIALS.password)
+    expect(fieldValue('#unrelated-email')).toBe('reader@example.test')
+  })
+
+  test('clears disclosed credentials when the page invalidates its password field', () => {
+    const request: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<form method="post"><input id="login-email" autocomplete="username"><input id="login-password" type="password" autocomplete="current-password"><button id="login-submit" type="submit">Sign in</button></form><input id="unrelated-email" type="email" value="reader@example.test">`,
+      },
+      credentials: FAKE_CREDENTIALS,
+      prepareDocument: (simulationDocument) => {
+        const password =
+          simulationDocument.querySelector<HTMLInputElement>('#login-password')
+        if (!password) throw new Error('password fixture field missing')
+        password.addEventListener(
+          'input',
+          () => {
+            password.readOnly = true
+          },
+          { once: true },
+        )
+      },
+    }
+
+    const result = simulateDomAuthentication(request)
+
+    expect(result.filled).toBe(false)
+    expect(result.submissionResult).toBe(FormSubmissionResult.NotObserved)
+    expect(result.submittedControlIdentity).toBe('')
+    expect(fieldValue('#login-email')).toBe('')
+    expect(fieldValue('#login-password')).toBe('')
+    expect(fieldValue('#unrelated-email')).toBe('reader@example.test')
   })
 })

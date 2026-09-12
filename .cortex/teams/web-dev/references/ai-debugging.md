@@ -33,16 +33,11 @@ For every submitted annotation, the agent must:
 3. implement every in-scope fix instead of stopping at diagnosis;
 4. add or update behavior-focused tests that fail on the reported regression;
    and
-5. deterministically format every allowed web or web-owned Cortex file;
-6. commit one coherent change with focused test and browser evidence;
-7. leave push, PR, and external delivery state to Gizmo. Gizmo runs
-   `task loom:pre-push` on the combined head. If that gate formats web-owned
-   content, Gizmo returns the exact diff for a fresh web-development commit
-   instead of committing it.
-8. After the owner commit and a clean gate, Gizmo pushes.
-9. Run a relevant focused remote task when the head is not validation-ready.
-10. Run complete exact-head validation when the head is validation-ready.
-11. Gizmo owns readiness and merge.
+5. apply only permitted lightweight formatting or diagnostics;
+6. commit the scoped fix and authored regression tests;
+7. return the commit to Gizmo for remote build-only evidence;
+8. execute tests and browser proof in the dev manager's slow PR stage;
+9. preserve required security and review verdicts before promotion.
 
 The agent may stop without a code fix only when:
 

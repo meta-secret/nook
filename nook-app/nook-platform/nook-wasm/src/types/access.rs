@@ -1,5 +1,8 @@
 use super::wasm_bindgen;
+use crate::BrowserPasskeyRequestOptions;
 use crate::passkey_browser;
+use crate::{BrowserCredentialCreationOptions, BrowserCredentialRequestOptions};
+use crate::{BrowserPasskeyClient, BrowserPasskeyCreationOptions};
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -48,14 +51,14 @@ impl NookPasskeySetup {
         &self,
         rp_id: &str,
         rp_name: &str,
-    ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
-        passkey_browser::creation_options(
+    ) -> Result<BrowserCredentialCreationOptions, wasm_bindgen::JsError> {
+        BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
             rp_id,
             rp_name,
-            passkey_browser::DEFAULT_PASSKEY_LABEL,
-            &self.user_handle,
-            &self.prf_input,
-        )
+            passkey_label: passkey_browser::DEFAULT_PASSKEY_LABEL,
+            user_handle: &self.user_handle,
+            prf_input: &self.prf_input,
+        })
     }
 
     /// Build browser registration options with the label chosen by the caller.
@@ -67,14 +70,14 @@ impl NookPasskeySetup {
         rp_id: &str,
         rp_name: &str,
         passkey_label: &str,
-    ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
-        passkey_browser::creation_options(
+    ) -> Result<BrowserCredentialCreationOptions, wasm_bindgen::JsError> {
+        BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
             rp_id,
             rp_name,
             passkey_label,
-            &self.user_handle,
-            &self.prf_input,
-        )
+            user_handle: &self.user_handle,
+            prf_input: &self.prf_input,
+        })
     }
 }
 
@@ -127,8 +130,12 @@ impl NookPasskeyUnlockOptions {
     pub fn request_options(
         &self,
         rp_id: &str,
-    ) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
-        passkey_browser::request_options(rp_id, &self.credential_id, &self.prf_input)
+    ) -> Result<BrowserCredentialRequestOptions, wasm_bindgen::JsError> {
+        BrowserPasskeyClient::request_options(BrowserPasskeyRequestOptions {
+            rp_id,
+            credential_id: &self.credential_id,
+            prf_input: &self.prf_input,
+        })
     }
 }
 
@@ -178,13 +185,26 @@ pub struct NookVaultMember {
 
 #[wasm_bindgen]
 impl NookVaultMember {
+    /// Snapshot public enrollment metadata while the live vault retains its join record.
+    pub(crate) fn from_enrolled_join(
+        join: &nook_core::JoinRequest,
+    ) -> Result<Self, nook_core::MultiDeviceError> {
+        Ok(Self {
+            auth_id: join.public_key.auth_id()?.to_string(),
+            device_id: join.device_id.to_string(),
+            public_key: join.public_key.as_str().to_owned(),
+            enrolled_at: join.requested_at.clone(),
+            label: String::new(),
+        })
+    }
+
     pub(crate) fn from_core(member: nook_core::VaultMember) -> Self {
         Self {
             auth_id: member.auth_id.to_string(),
             device_id: member.device_id.to_string(),
             public_key: member.public_key.as_str().to_owned(),
             enrolled_at: member.enrolled_at,
-            label: member.label.unwrap_or_default(),
+            label: member.label.into_display_text(),
         }
     }
 
@@ -248,13 +268,15 @@ impl NookPasswordEntrySummary {
     }
 }
 
-pub(crate) fn password_entries_to_vec(
-    entries: &[nook_core::PasswordUnlockEntry],
-) -> Vec<NookPasswordEntrySummary> {
-    entries
-        .iter()
-        .map(NookPasswordEntrySummary::from_core)
-        .collect()
+impl NookPasswordEntrySummary {
+    pub(crate) fn password_entries_to_vec(
+        entries: &[nook_core::PasswordUnlockEntry],
+    ) -> Vec<NookPasswordEntrySummary> {
+        entries
+            .iter()
+            .map(NookPasswordEntrySummary::from_core)
+            .collect()
+    }
 }
 
 #[cfg(test)]

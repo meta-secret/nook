@@ -1,9 +1,6 @@
 //! Explicit lifecycle states for ordinary and staged Simple-vault genesis.
 
-use super::{
-    simple_genesis::{PendingSimpleGenesis, PendingSimpleGenesisEvent},
-    staged_genesis::StagedSimpleGenesisIdentity,
-};
+use super::{simple_genesis::PendingSimpleGenesis, staged_genesis::StagedSimpleGenesisIdentity};
 use serde::Serialize;
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
@@ -13,32 +10,22 @@ pub(crate) enum PendingSimpleGenesisFlow {
     Staged(StagedSimpleGenesisIdentity),
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PendingSimpleGenesisOutput<'a> {
-    store_id: &'a nook_core::StoreId,
-    identity_id: &'a nook_core::IdentityId,
-    created_at: &'a nook_core::IsoTimestamp,
-    event_state: &'a PendingSimpleGenesisEvent,
-    flow: &'a PendingSimpleGenesisFlow,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    staged_identity: Option<&'a StagedSimpleGenesisIdentity>,
-}
-
 impl Serialize for PendingSimpleGenesis {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        PendingSimpleGenesisOutput {
-            store_id: &self.store_id,
-            identity_id: &self.identity_id,
-            created_at: &self.created_at,
-            event_state: &self.event_state,
-            flow: &self.flow,
-            staged_identity: self.staged_identity(),
+        use serde::ser::SerializeMap;
+        let mut fields = serializer.serialize_map(None)?;
+        fields.serialize_entry("storeId", &self.store_id)?;
+        fields.serialize_entry("identityId", &self.identity_id)?;
+        fields.serialize_entry("createdAt", &self.created_at)?;
+        fields.serialize_entry("eventState", &self.event_state)?;
+        fields.serialize_entry("flow", &self.flow)?;
+        if let PendingSimpleGenesisFlow::Staged(identity) = &self.flow {
+            fields.serialize_entry("stagedIdentity", identity)?;
         }
-        .serialize(serializer)
+        fields.end()
     }
 }
 
@@ -56,13 +43,6 @@ impl SimpleGenesisCompletion<'_> {
     pub(super) fn pending(&self) -> &PendingSimpleGenesis {
         match self {
             Self::Ordinary { pending } | Self::Staged { pending, .. } => pending,
-        }
-    }
-
-    pub(super) fn staged_signing_seed(&self) -> Option<&str> {
-        match self {
-            Self::Ordinary { .. } => None,
-            Self::Staged { signing_seed, .. } => Some(signing_seed),
         }
     }
 }

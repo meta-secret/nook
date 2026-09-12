@@ -1,6 +1,7 @@
 //! Best-effort, non-authoritative metadata reported by a `WebAuthn` ceremony.
 
 use js_sys::{Array, ArrayBuffer, Function, Uint8Array};
+use nook_core::AuthenticatorGuidEvidence;
 use nook_core::{
     PasskeyAuthenticatorAttachment, PasskeyBackupState, PasskeyObservedBrowser,
     PasskeyObservedPlatform, PasskeyTransport,
@@ -12,11 +13,20 @@ use web_sys::{
 
 use crate::storage::device_access::PasskeyBrowserObservation;
 
+pub(crate) struct BrowserPasskeyObservation<'a> {
+    credential: &'a PublicKeyCredential,
+}
+impl<'a> BrowserPasskeyObservation<'a> {
+    pub(crate) fn new(credential: &'a PublicKeyCredential) -> Self {
+        Self { credential }
+    }
+}
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(extends = PublicKeyCredential, typescript_type = "PublicKeyCredential")]
     type ObservedPublicKeyCredential;
 
+    // Native nullable browser getter: wasm-bindgen owns this ABI; attachment() classifies immediately.
     #[wasm_bindgen(method, getter, structural, js_name = authenticatorAttachment)]
     fn authenticator_attachment(credential: &ObservedPublicKeyCredential) -> Option<String>;
 
@@ -26,188 +36,248 @@ extern "C" {
     )]
     type ObservedAuthenticatorAttestationResponse;
 
+    // Native optional browser method: wasm-bindgen owns this ABI; registration_transports() admits immediately.
     #[wasm_bindgen(method, getter, structural, js_name = getTransports)]
     fn get_transports_method(
         response: &ObservedAuthenticatorAttestationResponse,
     ) -> Option<Function>;
 }
 
-pub(crate) fn observe_registration(credential: &PublicKeyCredential) -> PasskeyBrowserObservation {
-    let response: AuthenticatorAttestationResponse = credential.response().unchecked_into();
-    let authenticator_data = response
-        .get_authenticator_data()
-        .ok()
-        .and_then(|buffer| authenticator_data(&buffer));
-    PasskeyBrowserObservation {
-        attachment: attachment(credential),
-        transports: registration_transports(&response),
-        backup_state: authenticator_data
-            .as_deref()
-            .map_or(PasskeyBackupState::Unknown, backup_state),
-        aaguid: authenticator_data.as_deref().and_then(aaguid),
-        ..client_environment()
-    }
+#[derive(Debug, PartialEq, Eq)]
+enum AuthenticatorDataObservation {
+    Unavailable,
+    Observed(Vec<u8>),
 }
-
-fn registration_transports(
-    response: &AuthenticatorAttestationResponse,
-) -> Vec<nook_core::PasskeyTransport> {
-    let observed_response: &ObservedAuthenticatorAttestationResponse = response.unchecked_ref();
-    let Some(method) = observed_response.get_transports_method() else {
-        return Vec::new();
-    };
-    let Ok(value) = method.call0(response.as_ref()) else {
-        return Vec::new();
-    };
-    let Ok(values) = value.dyn_into::<Array>() else {
-        return Vec::new();
-    };
-    transports(&values)
-}
-
-pub(crate) fn observe_assertion(credential: &PublicKeyCredential) -> PasskeyBrowserObservation {
-    let response: AuthenticatorAssertionResponse = credential.response().unchecked_into();
-    let authenticator_data = authenticator_data(&response.authenticator_data());
-    PasskeyBrowserObservation {
-        attachment: attachment(credential),
-        transports: Vec::new(),
-        backup_state: authenticator_data
-            .as_deref()
-            .map_or(PasskeyBackupState::Unknown, backup_state),
-        aaguid: None,
-        ..client_environment()
-    }
-}
-
-fn attachment(credential: &PublicKeyCredential) -> nook_core::PasskeyAuthenticatorAttachment {
-    let credential: &ObservedPublicKeyCredential = credential.unchecked_ref();
-    match credential.authenticator_attachment().as_deref() {
-        Some("platform") => PasskeyAuthenticatorAttachment::Platform,
-        Some("cross-platform") => PasskeyAuthenticatorAttachment::CrossPlatform,
-        _ => PasskeyAuthenticatorAttachment::Unknown,
-    }
-}
-
-fn transports(array: &Array) -> Vec<nook_core::PasskeyTransport> {
-    let mut values = Vec::new();
-    for value in array.iter() {
-        let Some(value) = value.as_string() else {
-            continue;
-        };
-        let transport = match value.as_str() {
-            "ble" => PasskeyTransport::Ble,
-            "hybrid" => PasskeyTransport::Hybrid,
-            "internal" => PasskeyTransport::Internal,
-            "nfc" => PasskeyTransport::Nfc,
-            "usb" => PasskeyTransport::Usb,
-            _ => continue,
-        };
-        if !values.contains(&transport) {
-            values.push(transport);
+impl AuthenticatorDataObservation {
+    fn backup_state(&self) -> PasskeyBackupState {
+        match self {
+            Self::Unavailable => PasskeyBackupState::Unknown,
+            Self::Observed(data) => BrowserPasskeyObservation::backup_state(data),
         }
     }
-    values.sort();
-    values
+    fn aaguid(&self) -> AuthenticatorGuidEvidence {
+        match self {
+            Self::Unavailable => AuthenticatorGuidEvidence::NotReported,
+            Self::Observed(data) => BrowserPasskeyObservation::aaguid(data),
+        }
+    }
+}
+enum RegistrationTransportMethod {
+    Unsupported,
+    Callable(Function),
 }
 
-fn authenticator_data(buffer: &ArrayBuffer) -> Option<Vec<u8>> {
-    let array = Uint8Array::new(buffer);
-    (array.length() > 0).then(|| array.to_vec())
-}
-
-fn backup_state(data: &[u8]) -> nook_core::PasskeyBackupState {
-    const FLAGS_INDEX: usize = 32;
-    const BACKUP_ELIGIBLE: u8 = 0x08;
-    const BACKUP_STATE: u8 = 0x10;
-    let Some(flags) = data.get(FLAGS_INDEX).copied() else {
-        return PasskeyBackupState::Unknown;
-    };
-    if flags & BACKUP_STATE != 0 {
-        PasskeyBackupState::BackedUp
-    } else if flags & BACKUP_ELIGIBLE != 0 {
-        PasskeyBackupState::Eligible
-    } else {
-        PasskeyBackupState::NotEligible
+impl BrowserPasskeyObservation<'_> {
+    pub(crate) fn observe_registration(&self) -> PasskeyBrowserObservation {
+        let credential = self.credential;
+        let response: AuthenticatorAttestationResponse = credential.response().unchecked_into();
+        let authenticator_data = match response.get_authenticator_data() {
+            Ok(buffer) => BrowserPasskeyObservation::authenticator_data(&buffer),
+            Err(_) => AuthenticatorDataObservation::Unavailable,
+        };
+        PasskeyBrowserObservation {
+            attachment: BrowserPasskeyObservation::new(credential).attachment(),
+            transports: BrowserPasskeyObservation::registration_transports(&response),
+            backup_state: authenticator_data.backup_state(),
+            aaguid: authenticator_data.aaguid(),
+            ..Self::client_environment()
+        }
     }
 }
 
-fn aaguid(data: &[u8]) -> Option<String> {
-    const FLAGS_INDEX: usize = 32;
-    const ATTESTED_DATA: u8 = 0x40;
-    const AAGUID_START: usize = 37;
-    const AAGUID_END: usize = AAGUID_START + 16;
-    if data.get(FLAGS_INDEX).copied()? & ATTESTED_DATA == 0 || data.len() < AAGUID_END {
-        return None;
-    }
-    let bytes = &data[AAGUID_START..AAGUID_END];
-    if bytes.iter().all(|byte| *byte == 0) {
-        return None;
-    }
-    let hex = hex::encode(bytes);
-    Some(format!(
-        "{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32]
-    ))
-}
-
-fn client_environment() -> PasskeyBrowserObservation {
-    let navigator = gloo_utils::window().navigator();
-    let Ok(user_agent) = navigator.user_agent() else {
-        return PasskeyBrowserObservation::default();
-    };
-    let browser = observed_browser(&user_agent);
-    let platform = observed_platform(&user_agent, navigator.max_touch_points());
-    PasskeyBrowserObservation {
-        browser,
-        platform,
-        ..PasskeyBrowserObservation::default()
+impl BrowserPasskeyObservation<'_> {
+    fn registration_transports(
+        response: &AuthenticatorAttestationResponse,
+    ) -> Vec<nook_core::PasskeyTransport> {
+        let observed_response: &ObservedAuthenticatorAttestationResponse = response.unchecked_ref();
+        let transport_method = match observed_response.get_transports_method() {
+            Some(method) => RegistrationTransportMethod::Callable(method),
+            None => RegistrationTransportMethod::Unsupported,
+        };
+        let RegistrationTransportMethod::Callable(method) = transport_method else {
+            return Vec::new();
+        };
+        let Ok(value) = method.call0(response.as_ref()) else {
+            return Vec::new();
+        };
+        let Ok(values) = value.dyn_into::<Array>() else {
+            return Vec::new();
+        };
+        BrowserPasskeyObservation::transports(&values)
     }
 }
 
-fn observed_platform(
-    user_agent: &str,
-    max_touch_points: i32,
-) -> nook_core::PasskeyObservedPlatform {
-    if user_agent.contains("Android") {
-        PasskeyObservedPlatform::Android
-    } else if user_agent.contains("iPhone") || user_agent.contains("iPad") {
-        PasskeyObservedPlatform::AppleMobile
-    } else if user_agent.contains("Macintosh") && max_touch_points > 1 {
-        // iPadOS desktop mode deliberately uses a Macintosh user agent. Touch
-        // capability is the browser-supported discriminator recommended for
-        // this otherwise indistinguishable case.
-        PasskeyObservedPlatform::AppleMobile
-    } else if user_agent.contains("Mac OS X") {
-        PasskeyObservedPlatform::MacOs
-    } else if user_agent.contains("Windows") {
-        PasskeyObservedPlatform::Windows
-    } else if user_agent.contains("Linux") {
-        PasskeyObservedPlatform::Linux
-    } else {
-        PasskeyObservedPlatform::Other
+impl BrowserPasskeyObservation<'_> {
+    pub(crate) fn observe_assertion(&self) -> PasskeyBrowserObservation {
+        let credential = self.credential;
+        let response: AuthenticatorAssertionResponse = credential.response().unchecked_into();
+        let authenticator_data =
+            BrowserPasskeyObservation::authenticator_data(&response.authenticator_data());
+        PasskeyBrowserObservation {
+            attachment: BrowserPasskeyObservation::new(credential).attachment(),
+            transports: Vec::new(),
+            backup_state: authenticator_data.backup_state(),
+            aaguid: AuthenticatorGuidEvidence::NotReported,
+            ..Self::client_environment()
+        }
     }
 }
 
-fn observed_browser(user_agent: &str) -> nook_core::PasskeyObservedBrowser {
-    if user_agent.contains("OPR/") || user_agent.contains("SamsungBrowser/") {
-        PasskeyObservedBrowser::Other
-    } else if user_agent.contains("Edg/")
-        || user_agent.contains("EdgA/")
-        || user_agent.contains("EdgiOS/")
-    {
-        PasskeyObservedBrowser::Edge
-    } else if user_agent.contains("Firefox/") || user_agent.contains("FxiOS/") {
-        PasskeyObservedBrowser::Firefox
-    } else if user_agent.contains("CriOS/") || user_agent.contains("Chrome/") {
-        PasskeyObservedBrowser::Chrome
-    } else if user_agent.contains("Safari/") {
-        PasskeyObservedBrowser::Safari
-    } else {
-        PasskeyObservedBrowser::Other
+impl BrowserPasskeyObservation<'_> {
+    fn attachment(&self) -> nook_core::PasskeyAuthenticatorAttachment {
+        let credential = self.credential;
+        let credential: &ObservedPublicKeyCredential = credential.unchecked_ref();
+        match credential.authenticator_attachment().as_deref() {
+            Some("platform") => PasskeyAuthenticatorAttachment::Platform,
+            Some("cross-platform") => PasskeyAuthenticatorAttachment::CrossPlatform,
+            _ => PasskeyAuthenticatorAttachment::Unknown,
+        }
+    }
+}
+
+impl BrowserPasskeyObservation<'_> {
+    fn transports(array: &Array) -> Vec<nook_core::PasskeyTransport> {
+        let mut values = Vec::new();
+        for value in array.iter() {
+            let Some(value) = value.as_string() else {
+                continue;
+            };
+            let transport = match value.as_str() {
+                "ble" => PasskeyTransport::Ble,
+                "hybrid" => PasskeyTransport::Hybrid,
+                "internal" => PasskeyTransport::Internal,
+                "nfc" => PasskeyTransport::Nfc,
+                "usb" => PasskeyTransport::Usb,
+                _ => continue,
+            };
+            if !values.contains(&transport) {
+                values.push(transport);
+            }
+        }
+        values.sort();
+        values
+    }
+}
+
+impl BrowserPasskeyObservation<'_> {
+    fn authenticator_data(buffer: &ArrayBuffer) -> AuthenticatorDataObservation {
+        let array = Uint8Array::new(buffer);
+        if array.length() == 0 {
+            AuthenticatorDataObservation::Unavailable
+        } else {
+            AuthenticatorDataObservation::Observed(array.to_vec())
+        }
+    }
+}
+
+impl BrowserPasskeyObservation<'_> {
+    fn backup_state(data: &[u8]) -> nook_core::PasskeyBackupState {
+        const FLAGS_INDEX: usize = 32;
+        const BACKUP_ELIGIBLE: u8 = 0x08;
+        const BACKUP_STATE: u8 = 0x10;
+        let Some(flags) = data.get(FLAGS_INDEX).copied() else {
+            return PasskeyBackupState::Unknown;
+        };
+        if flags & BACKUP_STATE != 0 {
+            PasskeyBackupState::BackedUp
+        } else if flags & BACKUP_ELIGIBLE != 0 {
+            PasskeyBackupState::Eligible
+        } else {
+            PasskeyBackupState::NotEligible
+        }
+    }
+}
+
+impl BrowserPasskeyObservation<'_> {
+    fn aaguid(data: &[u8]) -> AuthenticatorGuidEvidence {
+        const FLAGS_INDEX: usize = 32;
+        const ATTESTED_DATA: u8 = 0x40;
+        const AAGUID_START: usize = 37;
+        const AAGUID_END: usize = AAGUID_START + 16;
+        if data
+            .get(FLAGS_INDEX)
+            .is_none_or(|flags| flags & ATTESTED_DATA == 0)
+        {
+            return AuthenticatorGuidEvidence::NotReported;
+        }
+        let Some(bytes) = data.get(AAGUID_START..AAGUID_END) else {
+            return AuthenticatorGuidEvidence::NotReported;
+        };
+        if bytes.iter().all(|byte| *byte == 0) {
+            return AuthenticatorGuidEvidence::NotReported;
+        }
+        let mut formatted = String::with_capacity(36);
+        for (index, character) in hex::encode(bytes).chars().enumerate() {
+            if matches!(index, 8 | 12 | 16 | 20) {
+                formatted.push('-');
+            }
+            formatted.push(character);
+        }
+        AuthenticatorGuidEvidence::Reported(formatted)
+    }
+}
+
+impl BrowserPasskeyObservation<'_> {
+    fn client_environment() -> PasskeyBrowserObservation {
+        let navigator = gloo_utils::window().navigator();
+        let Ok(user_agent) = navigator.user_agent() else {
+            return PasskeyBrowserObservation::default();
+        };
+        let browser = BrowserPasskeyObservation::observed_browser(&user_agent);
+        let platform =
+            BrowserPasskeyObservation::observed_platform(&user_agent, navigator.max_touch_points());
+        PasskeyBrowserObservation {
+            browser,
+            platform,
+            ..PasskeyBrowserObservation::default()
+        }
+    }
+}
+
+impl BrowserPasskeyObservation<'_> {
+    fn observed_platform(
+        user_agent: &str,
+        max_touch_points: i32,
+    ) -> nook_core::PasskeyObservedPlatform {
+        if user_agent.contains("Android") {
+            PasskeyObservedPlatform::Android
+        } else if user_agent.contains("iPhone") || user_agent.contains("iPad") {
+            PasskeyObservedPlatform::AppleMobile
+        } else if user_agent.contains("Macintosh") && max_touch_points > 1 {
+            // iPadOS desktop mode deliberately uses a Macintosh user agent. Touch
+            // capability is the browser-supported discriminator recommended for
+            // this otherwise indistinguishable case.
+            PasskeyObservedPlatform::AppleMobile
+        } else if user_agent.contains("Mac OS X") {
+            PasskeyObservedPlatform::MacOs
+        } else if user_agent.contains("Windows") {
+            PasskeyObservedPlatform::Windows
+        } else if user_agent.contains("Linux") {
+            PasskeyObservedPlatform::Linux
+        } else {
+            PasskeyObservedPlatform::Other
+        }
+    }
+}
+
+impl BrowserPasskeyObservation<'_> {
+    fn observed_browser(user_agent: &str) -> nook_core::PasskeyObservedBrowser {
+        if user_agent.contains("OPR/") || user_agent.contains("SamsungBrowser/") {
+            PasskeyObservedBrowser::Other
+        } else if user_agent.contains("Edg/")
+            || user_agent.contains("EdgA/")
+            || user_agent.contains("EdgiOS/")
+        {
+            PasskeyObservedBrowser::Edge
+        } else if user_agent.contains("Firefox/") || user_agent.contains("FxiOS/") {
+            PasskeyObservedBrowser::Firefox
+        } else if user_agent.contains("CriOS/") || user_agent.contains("Chrome/") {
+            PasskeyObservedBrowser::Chrome
+        } else if user_agent.contains("Safari/") {
+            PasskeyObservedBrowser::Safari
+        } else {
+            PasskeyObservedBrowser::Other
+        }
     }
 }
 
@@ -217,36 +287,64 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn decodes_backup_flags_without_claiming_provider_identity() {
+    fn decodes_backup_flags_without_claiming_provider_identity() -> anyhow::Result<()> {
         let mut data = vec![0; 53];
-        data[32] = 0x08;
-        assert_eq!(backup_state(&data), PasskeyBackupState::Eligible);
-        data[32] = 0x18;
-        assert_eq!(backup_state(&data), PasskeyBackupState::BackedUp);
-        data[32] = 0;
-        assert_eq!(backup_state(&data), PasskeyBackupState::NotEligible);
+        *data
+            .get_mut(32)
+            .ok_or_else(|| anyhow::anyhow!("backup flag byte must be present"))? = 0x08;
+        assert_eq!(
+            BrowserPasskeyObservation::backup_state(&data),
+            PasskeyBackupState::Eligible
+        );
+        *data
+            .get_mut(32)
+            .ok_or_else(|| anyhow::anyhow!("backup flag byte must be present"))? = 0x18;
+        assert_eq!(
+            BrowserPasskeyObservation::backup_state(&data),
+            PasskeyBackupState::BackedUp
+        );
+        *data
+            .get_mut(32)
+            .ok_or_else(|| anyhow::anyhow!("backup flag byte must be present"))? = 0;
+        assert_eq!(
+            BrowserPasskeyObservation::backup_state(&data),
+            PasskeyBackupState::NotEligible
+        );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn formats_only_nonzero_attested_aaguid() {
+    fn formats_only_nonzero_attested_aaguid() -> anyhow::Result<()> {
         let mut data = vec![0; 53];
-        data[32] = 0x40;
-        assert_eq!(aaguid(&data), None);
-        data[37..53].copy_from_slice(&[1; 16]);
+        *data
+            .get_mut(32)
+            .ok_or_else(|| anyhow::anyhow!("attested-data flag byte must be present"))? = 0x40;
         assert_eq!(
-            aaguid(&data).as_deref(),
-            Some("01010101-0101-0101-0101-010101010101")
+            BrowserPasskeyObservation::aaguid(&data),
+            AuthenticatorGuidEvidence::NotReported
         );
+        data.get_mut(37..53)
+            .ok_or_else(|| anyhow::anyhow!("AAGUID fixture bytes must be present"))?
+            .copy_from_slice(&[1; 16]);
+        assert_eq!(
+            BrowserPasskeyObservation::aaguid(&data),
+            AuthenticatorGuidEvidence::Reported("01010101-0101-0101-0101-010101010101".to_owned())
+        );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
     fn recognizes_ios_browser_tokens_before_safari_fallback() {
         assert_eq!(
-            observed_browser("Mozilla/5.0 FxiOS/140.0 Mobile/15E148 Safari/605.1.15"),
+            BrowserPasskeyObservation::observed_browser(
+                "Mozilla/5.0 FxiOS/140.0 Mobile/15E148 Safari/605.1.15"
+            ),
             PasskeyObservedBrowser::Firefox
         );
         assert_eq!(
-            observed_browser("Mozilla/5.0 EdgiOS/140.0 Mobile/15E148 Safari/605.1.15"),
+            BrowserPasskeyObservation::observed_browser(
+                "Mozilla/5.0 EdgiOS/140.0 Mobile/15E148 Safari/605.1.15"
+            ),
             PasskeyObservedBrowser::Edge
         );
     }
@@ -254,7 +352,7 @@ mod tests {
     #[wasm_bindgen_test]
     fn recognizes_edge_on_android_before_the_generic_chrome_token() {
         assert_eq!(
-            observed_browser(
+            BrowserPasskeyObservation::observed_browser(
                 "Mozilla/5.0 (Linux; Android 15) Chrome/151.0.0.0 Mobile Safari/537.36 EdgA/151.0"
             ),
             PasskeyObservedBrowser::Edge
@@ -266,11 +364,11 @@ mod tests {
         let desktop_safari =
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Safari/605.1.15";
         assert_eq!(
-            observed_platform(desktop_safari, 5),
+            BrowserPasskeyObservation::observed_platform(desktop_safari, 5),
             PasskeyObservedPlatform::AppleMobile
         );
         assert_eq!(
-            observed_platform(desktop_safari, 0),
+            BrowserPasskeyObservation::observed_platform(desktop_safari, 0),
             PasskeyObservedPlatform::MacOs
         );
     }
@@ -278,7 +376,9 @@ mod tests {
     #[wasm_bindgen_test]
     fn recognizes_opera_before_the_generic_chrome_token() {
         assert_eq!(
-            observed_browser("Mozilla/5.0 Chrome/151.0.0.0 Safari/537.36 OPR/117.0.0.0"),
+            BrowserPasskeyObservation::observed_browser(
+                "Mozilla/5.0 Chrome/151.0.0.0 Safari/537.36 OPR/117.0.0.0"
+            ),
             PasskeyObservedBrowser::Other
         );
     }
@@ -286,7 +386,7 @@ mod tests {
     #[wasm_bindgen_test]
     fn recognizes_samsung_internet_before_the_generic_chrome_token() {
         assert_eq!(
-            observed_browser(
+            BrowserPasskeyObservation::observed_browser(
                 "Mozilla/5.0 (Linux; Android 15) Chrome/151.0 Mobile Safari/537.36 SamsungBrowser/29.0"
             ),
             PasskeyObservedBrowser::Other
@@ -301,7 +401,7 @@ mod tests {
         }
         values.push(&42.into());
         assert_eq!(
-            transports(&values),
+            BrowserPasskeyObservation::transports(&values),
             vec![
                 PasskeyTransport::Ble,
                 PasskeyTransport::Hybrid,
@@ -313,60 +413,85 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn authenticator_data_and_aaguid_fail_closed_for_short_or_unattested_data() {
-        assert_eq!(authenticator_data(&ArrayBuffer::new(0)), None);
+    fn authenticator_data_and_aaguid_fail_closed_for_short_or_unattested_data() -> anyhow::Result<()>
+    {
+        assert_eq!(
+            BrowserPasskeyObservation::authenticator_data(&ArrayBuffer::new(0)),
+            AuthenticatorDataObservation::Unavailable
+        );
         let buffer = ArrayBuffer::new(2);
         Uint8Array::new(&buffer).copy_from(&[1, 2]);
-        assert_eq!(authenticator_data(&buffer), Some(vec![1, 2]));
+        assert_eq!(
+            BrowserPasskeyObservation::authenticator_data(&buffer),
+            AuthenticatorDataObservation::Observed(vec![1, 2])
+        );
 
-        assert_eq!(backup_state(&[]), PasskeyBackupState::Unknown);
-        assert_eq!(aaguid(&[0; 10]), None);
+        assert_eq!(
+            BrowserPasskeyObservation::backup_state(&[]),
+            PasskeyBackupState::Unknown
+        );
+        assert_eq!(
+            BrowserPasskeyObservation::aaguid(&[0; 10]),
+            AuthenticatorGuidEvidence::NotReported
+        );
         let mut not_attested = vec![0; 53];
-        not_attested[32] = 0x08;
-        assert_eq!(aaguid(&not_attested), None);
+        *not_attested
+            .get_mut(32)
+            .ok_or_else(|| anyhow::anyhow!("attestation flag byte must be present"))? = 0x08;
+        assert_eq!(
+            BrowserPasskeyObservation::aaguid(&not_attested),
+            AuthenticatorGuidEvidence::NotReported
+        );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
     fn browser_and_platform_projection_covers_all_supported_tokens() {
         assert_eq!(
-            observed_browser("Mozilla/5.0 Safari/605.1.15"),
+            BrowserPasskeyObservation::observed_browser("Mozilla/5.0 Safari/605.1.15"),
             PasskeyObservedBrowser::Safari
         );
         assert_eq!(
-            observed_browser("Mozilla/5.0 Firefox/140.0"),
+            BrowserPasskeyObservation::observed_browser("Mozilla/5.0 Firefox/140.0"),
             PasskeyObservedBrowser::Firefox
         );
         assert_eq!(
-            observed_browser("Mozilla/5.0 Chrome/140.0"),
+            BrowserPasskeyObservation::observed_browser("Mozilla/5.0 Chrome/140.0"),
             PasskeyObservedBrowser::Chrome
         );
         assert_eq!(
-            observed_browser("Mozilla/5.0 Edg/140.0"),
+            BrowserPasskeyObservation::observed_browser("Mozilla/5.0 Edg/140.0"),
             PasskeyObservedBrowser::Edge
         );
         assert_eq!(
-            observed_browser("Mozilla/5.0 unknown"),
+            BrowserPasskeyObservation::observed_browser("Mozilla/5.0 unknown"),
             PasskeyObservedBrowser::Other
         );
 
         assert_eq!(
-            observed_platform("Mozilla/5.0 (Linux; Android 15)", 0),
+            BrowserPasskeyObservation::observed_platform("Mozilla/5.0 (Linux; Android 15)", 0),
             PasskeyObservedPlatform::Android
         );
         assert_eq!(
-            observed_platform("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)", 0),
+            BrowserPasskeyObservation::observed_platform(
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)",
+                0
+            ),
             PasskeyObservedPlatform::AppleMobile
         );
         assert_eq!(
-            observed_platform("Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 0),
+            BrowserPasskeyObservation::observed_platform(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                0
+            ),
             PasskeyObservedPlatform::Windows
         );
         assert_eq!(
-            observed_platform("Mozilla/5.0 (X11; Linux x86_64)", 0),
+            BrowserPasskeyObservation::observed_platform("Mozilla/5.0 (X11; Linux x86_64)", 0),
             PasskeyObservedPlatform::Linux
         );
         assert_eq!(
-            observed_platform("Mozilla/5.0 (X11; Plan9)", 0),
+            BrowserPasskeyObservation::observed_platform("Mozilla/5.0 (X11; Plan9)", 0),
             PasskeyObservedPlatform::Other
         );
     }

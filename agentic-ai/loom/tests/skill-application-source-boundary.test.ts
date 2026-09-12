@@ -1,271 +1,324 @@
+import assert from 'node:assert/strict';
 import { join, posix } from 'node:path';
+
 import { expect, test } from 'bun:test';
+
 import ts from 'typescript';
+
 import {
   type AnalyzeExecutableSkillSourceRequest,
-  analyzeExecutableSkillSource,
-  isExecutableSkillApplicationSourcePath,
+  ExecutableSkillSource,
 } from '../src/executable-skills/source-policy.ts';
+
 import {
-  executableSkillPackageFromPath,
-  executableSkillPackages,
-  readTrackedRepositoryFiles,
+  ExecutableSkillPath,
+  ExecutableSkillCheckout,
+  ExecutableTrackedPackages,
 } from '../src/executable-skills/repository.ts';
+
+export class SkillApplicationSourceBoundaryScenario {
+  private constructor(
+    private readonly request: AnalyzeExecutableSkillSourceRequest,
+  ) {}
+
+  static analyzeSkillHostSource(request: AnalyzeExecutableSkillSourceRequest) {
+    return new SkillApplicationSourceBoundaryScenario(request).execute();
+  }
+
+  private execute() {
+    const request = this.request;
+    const { relativePath, source } = request;
+    const sourceFile = ts.createSourceFile(
+      relativePath,
+      source,
+      ts.ScriptTarget.ES2022,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const retained = source.split('');
+    const processUses: string[] = [];
+    const erase = (node: ts.Node): string[] =>
+      retained.fill(' ', node.getFullStart(), node.getEnd());
+    const compact = (node: ts.Node): string =>
+      node.getText(sourceFile).replace(/\s+/gu, ' ');
+    const allowedExternalImport = (node: ts.ImportDeclaration): boolean => {
+      if (!ts.isStringLiteral(node.moduleSpecifier) || node.attributes)
+        return false;
+      const expected =
+        relativePath === YAML_CODEC && node.moduleSpecifier.text === 'yaml'
+          ? 'CST Lexer ParsedNode isAlias isMap isScalar isSeq parseDocument stringify'.split(
+              ' ',
+            )
+          : node.moduleSpecifier.text === 'neverthrow'
+            ? ['err', 'ok', 'Result']
+            : [];
+      const elements =
+        node.importClause?.namedBindings &&
+        ts.isNamedImports(node.importClause.namedBindings)
+          ? node.importClause.namedBindings.elements
+          : [];
+      return (
+        expected.length > 0 &&
+        !node.importClause?.name &&
+        elements.length === expected.length &&
+        elements.every(
+          (element) =>
+            !element.propertyName && expected.includes(element.name.text),
+        )
+      );
+    };
+    const visit = (node: ts.Node): void => {
+      if (ts.isIdentifier(node) && FORBIDDEN_HOST_GLOBALS.has(node.text))
+        throw new Error('Forbidden host output, clock, or entropy capability.');
+      if (
+        ts.isImportDeclaration(node) &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        node.moduleSpecifier.text.startsWith('.')
+      ) {
+        const dependency = posix.normalize(
+          posix.join(posix.dirname(relativePath), node.moduleSpecifier.text),
+        );
+        const crossSkill =
+          relativePath === HOST_REGISTRY &&
+          [
+            `${ARTICLE_ROOT}action.ts`,
+            `${ARTICLE_ROOT}domain.ts`,
+            `${DOCUMENT_MAP_ROOT}application.ts`,
+            `${DOCUMENT_MAP_ROOT}action.ts`,
+            `${DOCUMENT_MAP_ROOT}domain.ts`,
+            `${CONSISTENCY_ROOT}action.ts`,
+            `${CONSISTENCY_ROOT}domain.ts`,
+            `${DELEGATION_VISUALIZATION_ROOT}action.ts`,
+            `${DELEGATION_VISUALIZATION_ROOT}domain.ts`,
+            `${DELEGATION_VISUALIZATION_ROOT}result-codec.ts`,
+          ].includes(dependency);
+        if (crossSkill) {
+          erase(node);
+          return;
+        }
+        if (!dependency.startsWith(HOST_ROOT))
+          throw new Error(
+            'Host imports must remain inside its scripts project.',
+          );
+      }
+      if (
+        ts.isImportDeclaration(node) &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        !node.moduleSpecifier.text.startsWith('.')
+      ) {
+        if (!allowedExternalImport(node))
+          throw new Error(`Forbidden host import: ${relativePath}`);
+        erase(node);
+        return;
+      }
+      if (ts.isIdentifier(node) && node.text === 'process') {
+        const property = node.parent;
+        const operation = ts.isPropertyAccessExpression(property)
+          ? property.name.text === 'exitCode'
+            ? property.parent
+            : property.parent.parent
+          : property;
+        const use = compact(operation);
+        if (
+          relativePath !== HOST_CLI ||
+          !PROCESS_USES.includes(use as (typeof PROCESS_USES)[number]) ||
+          processUses.includes(use)
+        )
+          throw new Error('Forbidden host process capability.');
+        processUses.push(use);
+        retained.splice(node.getStart(), node.getWidth(), ...'allowed');
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+    if (
+      relativePath === HOST_CLI &&
+      processUses.sort().join() !== [...PROCESS_USES].sort().join()
+    )
+      throw new Error('Host capabilities must use the exact bounded seam.');
+    const analysisPath = `${HOST_ROOT}contained/src/${posix.basename(relativePath)}`;
+    const analysisRequest = {
+      relativePath: analysisPath,
+      source: retained
+        .join('')
+        .replace(/\bObject\.entries\b/gu, 'Object.values')
+        .replace(/\binstanceof Object\b/gu, 'instanceof SafeObject'),
+    };
+    return ExecutableSkillSource.analyze(analysisRequest);
+  }
+
+  static analyzeDocumentMapSource(
+    request: AnalyzeExecutableSkillSourceRequest,
+  ) {
+    const { relativePath, source } = request;
+    const sourceFile = ts.createSourceFile(
+      relativePath,
+      source,
+      ts.ScriptTarget.ES2022,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const retained = source.split('');
+    const allowedExternalImport = (node: ts.ImportDeclaration): boolean => {
+      if (!ts.isStringLiteral(node.moduleSpecifier) || node.attributes)
+        return false;
+      const specifier = node.moduleSpecifier.text;
+      const clause = node.importClause;
+      if (!clause) return false;
+      if (specifier === 'neverthrow') {
+        const bindings = clause.namedBindings;
+        const allowedNames = new Set(['err', 'ok', 'Result']);
+        return Boolean(
+          !clause.name &&
+          bindings &&
+          ts.isNamedImports(bindings) &&
+          bindings.elements.length > 0 &&
+          bindings.elements.every(
+            (element) =>
+              !element.propertyName && allowedNames.has(element.name.text),
+          ),
+        );
+      }
+      if (specifier === 'node:path')
+        return (
+          clause.name?.text === 'path' &&
+          !clause.namedBindings &&
+          !clause.isTypeOnly
+        );
+      if (specifier === 'github-slugger')
+        return (
+          clause.name?.text === 'GithubSlugger' &&
+          !clause.namedBindings &&
+          !clause.isTypeOnly
+        );
+      if (specifier === 'mdast-util-from-markdown') {
+        const bindings = clause.namedBindings;
+        return Boolean(
+          !clause.name &&
+          !clause.isTypeOnly &&
+          bindings &&
+          ts.isNamedImports(bindings) &&
+          bindings.elements.length === 1 &&
+          bindings.elements[0]?.name.text === 'fromMarkdown' &&
+          !bindings.elements[0].propertyName,
+        );
+      }
+      if (specifier !== 'mdast' || !clause.isTypeOnly || clause.name)
+        return false;
+      const bindings = clause.namedBindings;
+      const allowedTypes = new Set(
+        'Heading Link List ListItem Parent Root RootContent'.split(' '),
+      );
+      return Boolean(
+        bindings &&
+        ts.isNamedImports(bindings) &&
+        bindings.elements.length > 0 &&
+        bindings.elements.every(
+          (element) =>
+            !element.propertyName && allowedTypes.has(element.name.text),
+        ),
+      );
+    };
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isImportDeclaration(node) &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        !node.moduleSpecifier.text.startsWith('.')
+      ) {
+        if (!allowedExternalImport(node))
+          throw new Error(`Forbidden document-map import: ${relativePath}`);
+        retained.fill(' ', node.getFullStart(), node.getEnd());
+        return;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+    try {
+      return ExecutableSkillSource.analyze({
+        relativePath,
+        source: retained.join('').replace(/\bpath\b/gu, 'safePath'),
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`${relativePath}: ${detail}`, { cause: error });
+    }
+  }
+
+  static sourceProfile(scriptsRoot: string): ExecutableSkillSourceProfile {
+    if (scriptsRoot === DOCUMENT_MAP_ROOT.slice(0, -5))
+      return SkillApplicationSourceBoundaryScenario.analyzeDocumentMapSource;
+    return scriptsRoot === HOST_ROOT.slice(0, -5)
+      ? SkillApplicationSourceBoundaryScenario.analyzeSkillHostSource
+      : ExecutableSkillSource.analyze;
+  }
+
+  static executableSkillRootFromTrackedPath(path: string): string | false {
+    const skillPackage = new ExecutableSkillPath(path).package();
+    return skillPackage !== false &&
+      ExecutableSkillSource.isApplicationSourcePath(
+        `${skillPackage.scriptsRoot}/src/index.ts`,
+      )
+      ? skillPackage.scriptsRoot
+      : false;
+  }
+}
+
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
+
 const AI_SKILLS = '.cortex/teams/ai/dynamic-skills/';
+
 const HOST_ROOT = `${AI_SKILLS}executable-skill-host/scripts/src/`;
+
 const ARTICLE_ROOT =
   '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/';
+
 const DOCUMENT_MAP_ROOT =
   '.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/';
+
 const CONSISTENCY_ROOT =
   '.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src/';
+
 const DELEGATION_VISUALIZATION_ROOT =
   '.cortex/teams/ai/dynamic-skills/delegation-visualization/scripts/src/';
+
 const HOST_CLI = `${HOST_ROOT}cli.ts`;
+
 const HOST_REGISTRY = `${HOST_ROOT}skill-action-registry.ts`;
+
 const YAML_CODEC = `${HOST_ROOT}skill-yaml-codec.ts`;
+
 const PROCESS_USES =
-  `process.argv.slice(2);process.exitCode = outcome.exitCode;process.stdout.write(outcome.yaml)`.split(
+  `process.argv.slice(2);process.stdout.write(response.yaml);process.exitCode = response.exitCode;process.stderr.write(\`${'${failure.message}'}\\n\`);process.exitCode = 1`.split(
     ';',
   );
+
 const FORBIDDEN_HOST_GLOBALS = new Set(
   `alert Bun confirm Date Math console crypto performance prompt reportError`.split(
     ' ',
   ),
 );
-export function analyzeSkillHostSource(
-  request: AnalyzeExecutableSkillSourceRequest,
-) {
-  const { relativePath, source } = request;
-  const sourceFile = ts.createSourceFile(
-    relativePath,
-    source,
-    ts.ScriptTarget.ES2022,
-    true,
-    ts.ScriptKind.TS,
-  );
-  const retained = source.split('');
-  const processUses: string[] = [];
-  const erase = (node: ts.Node): string[] =>
-    retained.fill(' ', node.getFullStart(), node.getEnd());
-  const compact = (node: ts.Node): string =>
-    node.getText(sourceFile).replace(/\s+/gu, ' ');
-  const allowedExternalImport = (node: ts.ImportDeclaration): boolean => {
-    if (!ts.isStringLiteral(node.moduleSpecifier) || node.attributes)
-      return false;
-    const expected =
-      relativePath === YAML_CODEC && node.moduleSpecifier.text === 'yaml'
-        ? 'CST Lexer ParsedNode isAlias isMap isScalar isSeq parseDocument stringify'.split(
-            ' ',
-          )
-        : [];
-    const elements =
-      node.importClause?.namedBindings &&
-      ts.isNamedImports(node.importClause.namedBindings)
-        ? node.importClause.namedBindings.elements
-        : [];
-    return (
-      expected.length > 0 &&
-      !node.importClause?.name &&
-      elements.length === expected.length &&
-      elements.every(
-        (element) =>
-          !element.propertyName && expected.includes(element.name.text),
-      )
-    );
-  };
-  const visit = (node: ts.Node): void => {
-    if (ts.isIdentifier(node) && FORBIDDEN_HOST_GLOBALS.has(node.text))
-      throw new Error('Forbidden host output, clock, or entropy capability.');
-    if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier) &&
-      node.moduleSpecifier.text.startsWith('.')
-    ) {
-      const dependency = posix.normalize(
-        posix.join(posix.dirname(relativePath), node.moduleSpecifier.text),
-      );
-      const crossSkill =
-        relativePath === HOST_REGISTRY &&
-        [
-          `${ARTICLE_ROOT}action.ts`,
-          `${ARTICLE_ROOT}domain.ts`,
-          `${DOCUMENT_MAP_ROOT}action.ts`,
-          `${DOCUMENT_MAP_ROOT}domain.ts`,
-          `${CONSISTENCY_ROOT}action.ts`,
-          `${CONSISTENCY_ROOT}domain.ts`,
-          `${DELEGATION_VISUALIZATION_ROOT}action.ts`,
-          `${DELEGATION_VISUALIZATION_ROOT}domain.ts`,
-        ].includes(dependency);
-      if (crossSkill) {
-        erase(node);
-        return;
-      }
-      if (!dependency.startsWith(HOST_ROOT))
-        throw new Error('Host imports must remain inside its scripts project.');
-    }
-    if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier) &&
-      !node.moduleSpecifier.text.startsWith('.')
-    ) {
-      if (!allowedExternalImport(node))
-        throw new Error(`Forbidden host import: ${relativePath}`);
-      erase(node);
-      return;
-    }
-    if (ts.isIdentifier(node) && node.text === 'process') {
-      const property = node.parent;
-      const operation = ts.isPropertyAccessExpression(property)
-        ? property.name.text === 'exitCode'
-          ? property.parent
-          : property.parent.parent
-        : property;
-      const use = compact(operation);
-      if (
-        relativePath !== HOST_CLI ||
-        !PROCESS_USES.includes(use as (typeof PROCESS_USES)[number]) ||
-        processUses.includes(use)
-      )
-        throw new Error('Forbidden host process capability.');
-      processUses.push(use);
-      retained.splice(node.getStart(), node.getWidth(), ...'allowed');
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  if (
-    relativePath === HOST_CLI &&
-    processUses.sort().join() !== [...PROCESS_USES].sort().join()
-  )
-    throw new Error('Host capabilities must use the exact bounded seam.');
-  const analysisPath = `${HOST_ROOT}contained/src/${posix.basename(relativePath)}`;
-  const analysisRequest = {
-    relativePath: analysisPath,
-    source: retained
-      .join('')
-      .replace(/\bObject\.entries\b/gu, 'Object.values')
-      .replace(/\binstanceof Object\b/gu, 'instanceof SafeObject'),
-  };
-  return analyzeExecutableSkillSource(analysisRequest);
-}
 
-export function analyzeDocumentMapSource(
-  request: AnalyzeExecutableSkillSourceRequest,
-) {
-  const { relativePath, source } = request;
-  const sourceFile = ts.createSourceFile(
-    relativePath,
-    source,
-    ts.ScriptTarget.ES2022,
-    true,
-    ts.ScriptKind.TS,
-  );
-  const retained = source.split('');
-  const allowedExternalImport = (node: ts.ImportDeclaration): boolean => {
-    if (!ts.isStringLiteral(node.moduleSpecifier) || node.attributes)
-      return false;
-    const specifier = node.moduleSpecifier.text;
-    const clause = node.importClause;
-    if (!clause) return false;
-    if (specifier === 'node:path')
-      return (
-        clause.name?.text === 'path' &&
-        !clause.namedBindings &&
-        !clause.isTypeOnly
-      );
-    if (specifier === 'github-slugger')
-      return (
-        clause.name?.text === 'GithubSlugger' &&
-        !clause.namedBindings &&
-        !clause.isTypeOnly
-      );
-    if (specifier === 'mdast-util-from-markdown') {
-      const bindings = clause.namedBindings;
-      return Boolean(
-        !clause.name &&
-        !clause.isTypeOnly &&
-        bindings &&
-        ts.isNamedImports(bindings) &&
-        bindings.elements.length === 1 &&
-        bindings.elements[0]?.name.text === 'fromMarkdown' &&
-        !bindings.elements[0].propertyName,
-      );
-    }
-    if (specifier !== 'mdast' || !clause.isTypeOnly || clause.name)
-      return false;
-    const bindings = clause.namedBindings;
-    const allowedTypes = new Set(
-      'Heading Link List ListItem Parent Root RootContent'.split(' '),
-    );
-    return Boolean(
-      bindings &&
-      ts.isNamedImports(bindings) &&
-      bindings.elements.length > 0 &&
-      bindings.elements.every(
-        (element) =>
-          !element.propertyName && allowedTypes.has(element.name.text),
-      ),
-    );
-  };
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier) &&
-      !node.moduleSpecifier.text.startsWith('.')
-    ) {
-      if (!allowedExternalImport(node))
-        throw new Error(`Forbidden document-map import: ${relativePath}`);
-      retained.fill(' ', node.getFullStart(), node.getEnd());
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  try {
-    return analyzeExecutableSkillSource({
-      relativePath,
-      source: retained.join('').replace(/\bpath\b/gu, 'safePath'),
-    });
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`${relativePath}: ${detail}`, { cause: error });
-  }
-}
-
-type ExecutableSkillSourceProfile = typeof analyzeExecutableSkillSource;
-
-function sourceProfile(scriptsRoot: string): ExecutableSkillSourceProfile {
-  if (scriptsRoot === DOCUMENT_MAP_ROOT.slice(0, -5))
-    return analyzeDocumentMapSource;
-  return scriptsRoot === HOST_ROOT.slice(0, -5)
-    ? analyzeSkillHostSource
-    : analyzeExecutableSkillSource;
-}
-
-function executableSkillRootFromTrackedPath(path: string): string | false {
-  const skillPackage = executableSkillPackageFromPath(path);
-  return skillPackage !== false &&
-    isExecutableSkillApplicationSourcePath(
-      `${skillPackage.scriptsRoot}/src/index.ts`,
-    )
-    ? skillPackage.scriptsRoot
-    : false;
-}
+type ExecutableSkillSourceProfile = typeof ExecutableSkillSource.analyze;
 
 test('all tracked executable application sources pass the AST capability gate', async () => {
-  const trackedFiles = readTrackedRepositoryFiles(REPOSITORY_ROOT);
-  const tracked = trackedFiles.map((file) => file.path);
-  const packageRoots = executableSkillPackages(trackedFiles)
+  const trackedFiles = new ExecutableSkillCheckout(
+    REPOSITORY_ROOT,
+  ).readTrackedFiles();
+  assert(trackedFiles.isOk());
+  const tracked = trackedFiles.value.map((file) => file.path);
+  const packageRoots = new ExecutableTrackedPackages(trackedFiles.value)
+    .packages()
     .map((skillPackage) => skillPackage.scriptsRoot)
     .filter((root) =>
-      isExecutableSkillApplicationSourcePath(`${root}/src/index.ts`),
+      ExecutableSkillSource.isApplicationSourcePath(`${root}/src/index.ts`),
     );
   const implementationRoots = [
     ...new Set(
       tracked.flatMap((path) => {
-        const root = executableSkillRootFromTrackedPath(path);
+        const root =
+          SkillApplicationSourceBoundaryScenario.executableSkillRootFromTrackedPath(
+            path,
+          );
         return root === false ? [] : [root];
       }),
     ),
@@ -291,7 +344,7 @@ test('all tracked executable application sources pass the AST capability gate', 
         requiredDirectory,
       ).toBe(true);
     }
-    for (const file of trackedFiles.filter(
+    for (const file of trackedFiles.value.filter(
       (candidate) =>
         candidate.path === `${skillRoot}/SKILL.md` ||
         candidate.path.startsWith(`${root}/`),
@@ -308,13 +361,15 @@ test('all tracked executable application sources pass the AST capability gate', 
     expect(packageDocument).toContain(`"name": "@nook/${slug}-skill"`);
     expect(workspaceLock).toContain(`"name": "@nook/${slug}-skill"`);
   }
-  const sources = tracked.filter(isExecutableSkillApplicationSourcePath);
+  const sources = tracked.filter(ExecutableSkillSource.isApplicationSourcePath);
   expect(sources.length).toBeGreaterThan(0);
   for (const path of sources) {
     const packageRoot = packageRoots.find((root) =>
       path.startsWith(`${root}/src/`),
     );
-    const profile = packageRoot ? sourceProfile(packageRoot) : false;
+    const profile = packageRoot
+      ? SkillApplicationSourceBoundaryScenario.sourceProfile(packageRoot)
+      : false;
     expect(profile, path).not.toBe(false);
     if (profile === false) throw new Error(`Missing source profile: ${path}`);
     const source = await Bun.file(join(REPOSITORY_ROOT, path)).text();
@@ -357,7 +412,7 @@ test('rejects dangerous capabilities from every host layer', async () => {
     [
       HOST_CLI,
       host.replace(
-        'process.stdout.write(outcome.yaml)',
+        'process.stdout.write(response.yaml)',
         'process.stdout.write(request.argv.join())',
       ),
     ],
@@ -368,22 +423,30 @@ test('rejects dangerous capabilities from every host layer', async () => {
   ] as const;
   for (const [path, source] of fixtures) {
     const request = { relativePath: path, source };
-    expect(() => analyzeSkillHostSource(request), path).toThrow();
+    expect(
+      () =>
+        SkillApplicationSourceBoundaryScenario.analyzeSkillHostSource(request),
+      path,
+    ).toThrow();
   }
 });
 
 test('does not exempt misspelled team owners from repository source policy', () => {
   const typoPath = ARTICLE_ROOT.replace('/ai/', '/a1/').concat('src/audit.ts');
-  expect(isExecutableSkillApplicationSourcePath(typoPath)).toBe(false);
+  expect(ExecutableSkillSource.isApplicationSourcePath(typoPath)).toBe(false);
   expect(
-    isExecutableSkillApplicationSourcePath(`${ARTICLE_ROOT}src/audit.ts`),
+    ExecutableSkillSource.isApplicationSourcePath(
+      `${ARTICLE_ROOT}src/audit.ts`,
+    ),
   ).toBe(true);
 });
 
 test('derives package roots from the final scripts delimiter', () => {
   const source =
     '.cortex/teams/ai/dynamic-skills/scripts/scripts/src/application.ts';
-  expect(executableSkillRootFromTrackedPath(source)).toBe(
-    '.cortex/teams/ai/dynamic-skills/scripts/scripts',
-  );
+  expect(
+    SkillApplicationSourceBoundaryScenario.executableSkillRootFromTrackedPath(
+      source,
+    ),
+  ).toBe('.cortex/teams/ai/dynamic-skills/scripts/scripts');
 });

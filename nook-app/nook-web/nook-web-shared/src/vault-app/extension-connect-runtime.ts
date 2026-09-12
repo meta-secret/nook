@@ -6,7 +6,7 @@ import {
   is_extension_connect_scope,
 } from "$app-wasm";
 import {
-  configureExtensionConnectScopeRuntime,
+  ExtensionConnectScope,
   type ExtensionConnectScopeRuntime,
 } from "$web-shared/extension/extension-connect-scope";
 
@@ -19,5 +19,5 @@ export function configureVaultExtensionConnectScopeRuntime(): void {
     extension_sync_provider_credentials_scope,
     is_extension_connect_scope,
   };
-  configureExtensionConnectScopeRuntime(scopeRuntime);
+  ExtensionConnectScope.configureExtensionConnectScopeRuntime(scopeRuntime);
 }

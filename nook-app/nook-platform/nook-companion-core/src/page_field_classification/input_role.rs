@@ -1,7 +1,5 @@
-use super::{
-    PageInputFieldObservation, PageInputType, expand_identity_text, has_autocomplete_token,
-    one_time_code_negative, one_time_code_positive, username_negative, username_positive,
-};
+use super::{AutocompleteTokenQuery, PageInputFieldObservation, PageInputType};
+use crate::AuthenticationControlText;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Username;
@@ -23,57 +21,71 @@ pub(crate) enum AuthenticationInputRole {
     Unrelated(Unrelated),
 }
 
-pub(crate) fn classify_authentication_input_role(
-    field: &PageInputFieldObservation,
-) -> AuthenticationInputRole {
-    if has_autocomplete_token(&field.autocomplete_tokens, "one-time-code") {
-        return AuthenticationInputRole::OneTimeCode(OneTimeCode);
-    }
+impl PageInputFieldObservation {
+    pub(crate) fn classify_authentication_input_role(&self) -> AuthenticationInputRole {
+        let field = self;
+        if PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
+            tokens: &field.autocomplete_tokens,
+            expected: "one-time-code",
+        }) {
+            return AuthenticationInputRole::OneTimeCode(OneTimeCode);
+        }
 
-    let identity = expand_identity_text(&field.identity_text);
-    if has_autocomplete_token(&field.autocomplete_tokens, "cc-csc")
-        || one_time_code_negative(&identity)
-        || username_negative(&identity)
-    {
-        return AuthenticationInputRole::NonAuthentication(NonAuthentication);
-    }
+        let identity = AuthenticationControlText::new(&field.identity_text).expand_identity_text();
+        if PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
+            tokens: &field.autocomplete_tokens,
+            expected: "cc-csc",
+        }) || PageInputFieldObservation::one_time_code_negative(&identity)
+            || PageInputFieldObservation::username_negative(&identity)
+        {
+            return AuthenticationInputRole::NonAuthentication(NonAuthentication);
+        }
 
-    if matches!(
-        field.input_type,
-        PageInputType::Text | PageInputType::Email | PageInputType::Tel
-    ) && (has_autocomplete_token(&field.autocomplete_tokens, "username")
-        || has_autocomplete_token(&field.autocomplete_tokens, "email"))
-    {
-        return AuthenticationInputRole::Username(Username);
-    }
+        if matches!(
+            field.input_type,
+            PageInputType::Text | PageInputType::Email | PageInputType::Tel
+        ) && (PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
+            tokens: &field.autocomplete_tokens,
+            expected: "username",
+        }) || PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
+            tokens: &field.autocomplete_tokens,
+            expected: "email",
+        })) {
+            return AuthenticationInputRole::Username(Username);
+        }
 
-    if matches!(
-        field.input_type,
-        PageInputType::Text | PageInputType::Tel | PageInputType::Number | PageInputType::Password
-    ) && !identity.is_empty()
-        && one_time_code_positive(&identity)
-    {
-        return AuthenticationInputRole::OneTimeCode(OneTimeCode);
-    }
+        if matches!(
+            field.input_type,
+            PageInputType::Text
+                | PageInputType::Tel
+                | PageInputType::Number
+                | PageInputType::Password
+        ) && !identity.is_empty()
+            && PageInputFieldObservation::one_time_code_positive(&identity)
+        {
+            return AuthenticationInputRole::OneTimeCode(OneTimeCode);
+        }
 
-    if matches!(
-        field.input_type,
-        PageInputType::Text | PageInputType::Email | PageInputType::Tel
-    ) && !identity.is_empty()
-        && (username_positive(&identity)
-            || (field.input_type == PageInputType::Email && field.login_context))
-    {
-        return AuthenticationInputRole::Username(Username);
-    }
+        if matches!(
+            field.input_type,
+            PageInputType::Text | PageInputType::Email | PageInputType::Tel
+        ) && !identity.is_empty()
+            && (PageInputFieldObservation::username_positive(&identity)
+                || (field.input_type == PageInputType::Email
+                    && matches!(field.login_context, super::PageLoginContext::Authentication)))
+        {
+            return AuthenticationInputRole::Username(Username);
+        }
 
-    AuthenticationInputRole::Unrelated(Unrelated)
+        AuthenticationInputRole::Unrelated(Unrelated)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::{
         AuthenticationUsernameEvidence, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-        PageInputFieldObservation, PageInputType, authentication_username_evidence,
+        PageInputFieldObservation, PageInputType,
     };
 
     impl PageInputFieldObservation {
@@ -84,7 +96,7 @@ mod tests {
                 read_only: false,
                 autocomplete_tokens: vec!["tel-national".to_owned()],
                 identity_text: "tel-national Phone number or email".to_owned(),
-                login_context: true,
+                login_context: true.into(),
             }
         }
     }
@@ -92,7 +104,7 @@ mod tests {
     #[test]
     fn exact_mixed_phone_or_email_identity_has_distinct_evidence() {
         assert_eq!(
-            authentication_username_evidence(&PageInputFieldObservation::airbnb_mixed_identity()),
+            PageInputFieldObservation::airbnb_mixed_identity().authentication_username_evidence(),
             AuthenticationUsernameEvidence::MixedPhoneOrEmail
         );
     }
@@ -100,7 +112,7 @@ mod tests {
     #[test]
     fn mixed_phone_or_email_evidence_requires_the_complete_bounded_shape() {
         let mut missing_context = PageInputFieldObservation::airbnb_mixed_identity();
-        missing_context.login_context = false;
+        missing_context.login_context = false.into();
         let mut missing_autocomplete = PageInputFieldObservation::airbnb_mixed_identity();
         missing_autocomplete.autocomplete_tokens.clear();
         let mut other_autocomplete = PageInputFieldObservation::airbnb_mixed_identity();
@@ -137,7 +149,7 @@ mod tests {
             oversized,
         ] {
             assert_ne!(
-                authentication_username_evidence(&field),
+                field.authentication_username_evidence(),
                 AuthenticationUsernameEvidence::MixedPhoneOrEmail
             );
         }

@@ -391,7 +391,7 @@ test.describe('legal pages', () => {
     const principles = page.locator('.capsule-principles li')
     await expect(principles).toHaveCount(2)
     const principlePositions = await principles.evaluateAll((items) =>
-      items.map((item) => [
+      items.map((item): [string, string] => [
         item.style.getPropertyValue('--principle-x'),
         item.style.getPropertyValue('--principle-y'),
       ]),

@@ -1,7 +1,19 @@
 <script lang="ts">
-  type SecretCreationSubmission = { readonly id: string; readonly type: SecretType; readonly data: string }
+  import {
+    SecretFailurePresentation,
+    type SecretOperationResult,
+  } from '$lib/vault/secret-operation-failure'
+  type SecretCreationSubmission = {
+    readonly id: string
+    readonly type: SecretType
+    readonly data: string
+  }
 
-  type SecretReplacementSubmission = { readonly oldId: string; readonly type: SecretType; readonly data: string }
+  type SecretReplacementSubmission = {
+    readonly oldId: string
+    readonly type: SecretType
+    readonly data: string
+  }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ArrowLeft, RefreshCw } from '@lucide/svelte'
@@ -37,10 +49,12 @@
   }: {
     vault: VaultState
     isSaving: boolean
-    onAddSecret: (args: SecretCreationSubmission) => Promise<void>
+    onAddSecret: (
+      args: SecretCreationSubmission,
+    ) => Promise<SecretOperationResult<void>>
     onReplaceSecret?: (
       args: SecretReplacementSubmission,
-    ) => Promise<void>
+    ) => Promise<SecretOperationResult<void>>
     onGeneratePassword: (options: PasswordGenerationOptions) => string
     onCancel: () => void
     editor?: SecretEditor
@@ -121,7 +135,10 @@
 
     let dataYaml: string
     try {
-      const toFormFieldsArgs: Parameters<typeof state.toFormFields>[0] = { selectedType, editor };
+      const toFormFieldsArgs: Parameters<typeof state.toFormFields>[0] = {
+        selectedType,
+        editor,
+      }
       dataYaml = buildSecretYaml(state.toFormFields(toFormFieldsArgs))
     } catch (error) {
       state.submitError = vault.resolveErrorMessage(
@@ -135,11 +152,27 @@
       isEditMode &&
       onReplaceSecret
     ) {
-      const onReplaceSecretArgs: Parameters<typeof onReplaceSecret>[0] = { oldId: editor.record.id, type: selectedType, data: dataYaml };
-      await onReplaceSecret(onReplaceSecretArgs)
+      const onReplaceSecretArgs: Parameters<typeof onReplaceSecret>[0] = {
+        oldId: editor.record.id,
+        type: selectedType,
+        data: dataYaml,
+      }
+      const result = await onReplaceSecret(onReplaceSecretArgs)
+      if (result.isErr()) {
+        new SecretFailurePresentation(vault).show(result.error)
+        return
+      }
     } else {
-      const onAddSecretArgs: Parameters<typeof onAddSecret>[0] = { id: generate_secret_id(), type: selectedType, data: dataYaml };
-      await onAddSecret(onAddSecretArgs)
+      const onAddSecretArgs: Parameters<typeof onAddSecret>[0] = {
+        id: generate_secret_id(),
+        type: selectedType,
+        data: dataYaml,
+      }
+      const result = await onAddSecret(onAddSecretArgs)
+      if (result.isErr()) {
+        new SecretFailurePresentation(vault).show(result.error)
+        return
+      }
     }
     resetForm()
     onCancel()
@@ -151,7 +184,13 @@
   )
   const canSubmit = $derived(
     selectedTypeState.kind === SecretTypeSelectionKind.EditingFields &&
-      (() => { const canSubmitArgs: Parameters<typeof state.canSubmit>[0] = { selectedType: selectedTypeState.itemType, isSaving }; return state.canSubmit(canSubmitArgs); })(),
+      (() => {
+        const canSubmitArgs: Parameters<typeof state.canSubmit>[0] = {
+          selectedType: selectedTypeState.itemType,
+          isSaving,
+        }
+        return state.canSubmit(canSubmitArgs)
+      })(),
   )
   const saveLabel = $derived(
     isSaving
@@ -160,16 +199,19 @@
         ? vault.t(I18N_KEYS.AddSecretSaveChanges)
         : vault.t(I18N_KEYS.CommonSave),
   )
+
+  function selectSecretType(type: SecretType): void {
+    selectedTypeState = {
+      kind: SecretTypeSelectionKind.EditingFields,
+      itemType: type,
+    }
+  }
 </script>
 
 {#if selectedTypeState.kind === SecretTypeSelectionKind.ChoosingType && !isEditMode}
   <SecretTypePicker
     {vault}
-    onSelect={(type) =>
-      (selectedTypeState = {
-        kind: SecretTypeSelectionKind.EditingFields,
-        itemType: type,
-      })}
+    onSelect={selectSecretType}
   />
 {:else if selectedTypeState.kind === SecretTypeSelectionKind.EditingFields && selectedTypeState.itemType === SecretType.Passkey && !isEditMode}
   <PasskeyCreationGuidance

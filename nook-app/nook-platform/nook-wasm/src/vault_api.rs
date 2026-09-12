@@ -1,15 +1,30 @@
 use super::{NookSecretRecord, NookVaultManager, wasm_bindgen};
+use crate::AuthProviderDatabase;
+#[cfg(all(test, target_arch = "wasm32"))]
+use crate::ConfiguredVaultApplication;
+use crate::ExtensionPairingDatabase;
+use crate::ExtensionPairingReconciliation;
+use crate::NookDatabase;
+#[cfg(all(test, target_arch = "wasm32"))]
+use crate::SetLocalVaultLabelRequest;
+#[cfg(all(test, target_arch = "wasm32"))]
+use crate::VaultSnapshotLookup;
 use crate::storage::auth_providers::{
     PresealedProviderSnapshotPublication, ProviderSnapshotPublication,
 };
-use crate::storage::{auth_providers, extension_state, identity_record};
+use crate::storage::identity_record::StoredIdentityProtection;
+#[cfg(all(test, target_arch = "wasm32"))]
+use crate::storage::indexed_db::VaultUnlockHistory;
 use crate::vault_api_local::has_local_vault;
 use js_sys::Date;
+#[cfg(all(test, target_arch = "wasm32"))]
+use nook_core::ActiveVaultScope;
+use nook_core::ProviderCredentialRejection;
 use nook_core::{
     ActiveProviderLoginSetup, AppId, DevicePublicKey, ProviderSaveOutcome, ProviderSaveSetup,
     VaultSyncAction,
 };
-use nook_core::{DuplicateProviderSelection, LocalProviderRowRequest};
+use nook_core::{DuplicateCandidatePolicy, DuplicateProviderSelection, LocalProviderRowRequest};
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -22,13 +37,13 @@ pub enum NookProviderSaveOutcomeState {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn existing_provider_save_setup() -> nook_core::ProviderSaveSetup {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn existing_provider_save_setup() -> nook_core::ProviderSaveSetup {
     ProviderSaveSetup::Existing
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn new_provider_save_setup(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn new_provider_save_setup(
     provider_type: nook_core::StorageProviderType,
 ) -> nook_core::ProviderSaveSetup {
     ProviderSaveSetup::New(provider_type)
@@ -36,13 +51,13 @@ pub fn new_provider_save_setup(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn inactive_provider_login_setup() -> nook_core::ActiveProviderLoginSetup {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn inactive_provider_login_setup() -> nook_core::ActiveProviderLoginSetup {
     ActiveProviderLoginSetup::Inactive
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn active_provider_login_setup(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn active_provider_login_setup(
     provider_type: nook_core::StorageProviderType,
 ) -> nook_core::ActiveProviderLoginSetup {
     ActiveProviderLoginSetup::Active(provider_type)
@@ -93,7 +108,7 @@ impl NookProviderSaveOutcome {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn apply_provider_save_policy(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn apply_provider_save_policy(
     request: nook_core::ProviderSaveRequest,
 ) -> NookProviderSaveOutcome {
     NookProviderSaveOutcome(request.apply())
@@ -104,7 +119,7 @@ pub fn apply_provider_save_policy(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn active_provider_credentials_projection(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn active_provider_credentials_projection(
     request: nook_core::ActiveProviderCredentialsRequest,
 ) -> nook_core::ActiveProviderCredentialsProjection {
     request.project()
@@ -121,7 +136,7 @@ impl NookVaultManager {
         &self,
     ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
-        let loaded = auth_providers::load_auth_providers(&identity).await?;
+        let loaded = AuthProviderDatabase::load_auth_providers(&identity).await?;
         Ok(loaded.snapshot)
     }
 
@@ -133,19 +148,20 @@ impl NookVaultManager {
         &self,
     ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
-        let loaded = auth_providers::load_auth_providers(&identity).await?;
+        let loaded = AuthProviderDatabase::load_auth_providers(&identity).await?;
         let snapshot = loaded.snapshot;
         if !has_local_vault().await? {
             return Ok(snapshot);
         }
         let new_id = nook_core::CompactToken::generate()?.to_string();
         let created_at: String = Date::new_0().to_iso_string().into();
-        let (snapshot, changed) = snapshot.ensure_local_row(LocalProviderRowRequest {
-            active_store_id: None,
-            new_id: &new_id,
-            created_at: &created_at,
-        });
-        if changed {
+        let nook_core::LocalProviderRowOutcome { snapshot, change } =
+            snapshot.ensure_local_row(LocalProviderRowRequest {
+                active_store_id: &nook_core::ActiveVaultScope::Unselected,
+                new_id: &new_id,
+                created_at: &created_at,
+            });
+        if change == nook_core::LocalProviderRowChange::Inserted {
             ProviderSnapshotPublication {
                 identity: &identity,
                 snapshot: &snapshot,
@@ -169,12 +185,13 @@ impl NookVaultManager {
         let identity = self.device_identity()?;
         let new_id = nook_core::CompactToken::generate()?.to_string();
         let created_at: String = Date::new_0().to_iso_string().into();
-        let (snapshot, changed) = snapshot.ensure_local_row(LocalProviderRowRequest {
-            active_store_id: None,
-            new_id: &new_id,
-            created_at: &created_at,
-        });
-        if changed {
+        let nook_core::LocalProviderRowOutcome { snapshot, change } =
+            snapshot.ensure_local_row(LocalProviderRowRequest {
+                active_store_id: &nook_core::ActiveVaultScope::Unselected,
+                new_id: &new_id,
+                created_at: &created_at,
+            });
+        if change == nook_core::LocalProviderRowChange::Inserted {
             ProviderSnapshotPublication {
                 identity: &identity,
                 snapshot: &snapshot,
@@ -210,7 +227,7 @@ impl NookVaultManager {
         snapshot: nook_core::AuthProvidersSnapshotData,
     ) -> Result<(), wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
-        let existing = auth_providers::load_auth_providers(&identity)
+        let existing = AuthProviderDatabase::load_auth_providers(&identity)
             .await?
             .snapshot;
         let replaced = existing.replace_active_vault_grants(&snapshot);
@@ -234,10 +251,10 @@ impl NookVaultManager {
         snapshot: nook_core::AuthProvidersSnapshotData,
     ) -> Result<(), wasm_bindgen::JsError> {
         let app_id = AppId::parse(app_id)?;
-        if identity_record::load_entry_for_app_id(&app_id)
-            .await?
-            .is_none()
-        {
+        if matches!(
+            NookDatabase::load_entry_for_app_id(&app_id).await?,
+            StoredIdentityProtection::Unprotected
+        ) {
             return Err(JsError::new(
                 "Presealed provider snapshot has no protected local app key",
             ));
@@ -256,146 +273,119 @@ impl NookVaultManager {
 /// persisting. Used by extension pairing before handing granted provider rows
 /// to the extension's own storage.
 #[wasm_bindgen]
-pub fn seal_auth_providers_for_device_public_key(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn seal_auth_providers_for_device_public_key(
     device_public_key: &str,
     mut snapshot: nook_core::AuthProvidersSnapshotData,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
     let public_key = DevicePublicKey::parse(device_public_key)?;
-    snapshot.seal_credentials_for(&public_key)?;
+    snapshot = snapshot
+        .seal_credentials_for(&public_key)
+        .map_err(ProviderCredentialRejection::into_cause)?;
     Ok(snapshot)
 }
 
 /// Delete the `nook_auth` `IndexedDB` database (used on full sign-out / reset).
 #[wasm_bindgen]
-pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {
-    auth_providers::delete_auth_providers_db().await?;
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {
+    AuthProviderDatabase::delete_auth_providers_db().await?;
     Ok(())
 }
 
 /// Read all extension pairing metadata from extension-origin Rexie storage.
 #[wasm_bindgen]
-pub async fn read_extension_pairing_state()
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn read_extension_pairing_state()
 -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
-    Ok(extension_state::read_all().await?)
+    Ok(ExtensionPairingDatabase::read_all().await?)
 }
 
 /// Persist extension pairing metadata in extension-origin Rexie storage.
 #[wasm_bindgen]
-pub async fn write_extension_pairing_state(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn write_extension_pairing_state(
     state: nook_companion_core::ExtensionPairingState,
 ) -> Result<(), wasm_bindgen::JsError> {
-    extension_state::write_all(&state).await?;
+    ExtensionPairingDatabase::write_all(&state).await?;
     Ok(())
 }
 
 /// Remove extension pairing metadata from extension-origin Rexie storage.
 #[wasm_bindgen]
-pub async fn remove_extension_pairing_state(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn remove_extension_pairing_state(
     keys: Vec<String>,
 ) -> Result<(), wasm_bindgen::JsError> {
-    extension_state::remove(&keys).await?;
+    ExtensionPairingDatabase::remove(&keys).await?;
     Ok(())
 }
 
 /// Atomically remove and persist extension pairing metadata in Rexie storage.
 #[wasm_bindgen]
-pub async fn reconcile_extension_pairing_state(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn reconcile_extension_pairing_state(
     state: nook_companion_core::ExtensionPairingState,
     removed_keys: Vec<String>,
 ) -> Result<(), wasm_bindgen::JsError> {
-    extension_state::reconcile(&state, &removed_keys).await?;
+    ExtensionPairingDatabase::reconcile(ExtensionPairingReconciliation {
+        state: &state,
+        removed_keys: &removed_keys,
+    })
+    .await?;
     Ok(())
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookDuplicateSyncProviderState {
-    Unique,
-    Duplicate,
-}
-
-#[wasm_bindgen]
-pub struct NookDuplicateSyncProvider(Option<nook_core::StorageProviderData>);
-
-#[wasm_bindgen]
-impl NookDuplicateSyncProvider {
-    #[wasm_bindgen(getter)]
-    #[must_use]
-    pub fn state(&self) -> NookDuplicateSyncProviderState {
-        if self.0.is_some() {
-            NookDuplicateSyncProviderState::Duplicate
-        } else {
-            NookDuplicateSyncProviderState::Unique
-        }
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn provider(&self) -> Result<nook_core::StorageProviderData, wasm_bindgen::JsError> {
-        self.0
-            .clone()
-            .ok_or_else(|| JsError::new("sync provider target does not have a duplicate"))
-    }
 }
 
 /// Find an existing provider whose sync target matches `candidate`.
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn find_duplicate_sync_provider(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn find_duplicate_sync_provider(
     snapshot: nook_core::AuthProvidersSnapshotData,
     candidate: nook_core::StorageProviderData,
-) -> NookDuplicateSyncProvider {
-    NookDuplicateSyncProvider(
-        DuplicateProviderSelection {
-            providers: &snapshot.providers,
-            candidate: &candidate,
-            exclude_id: None,
-        }
-        .find(),
-    )
+) -> nook_core::DuplicateSyncProvider {
+    DuplicateProviderSelection {
+        providers: &snapshot.providers,
+        candidate: &candidate,
+        policy: DuplicateCandidatePolicy::IncludeAll,
+    }
+    .find()
 }
 
 /// Find a duplicate while editing an existing provider.
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn find_duplicate_sync_provider_excluding(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn find_duplicate_sync_provider_excluding(
     snapshot: nook_core::AuthProvidersSnapshotData,
     candidate: nook_core::StorageProviderData,
     exclude_id: &str,
-) -> NookDuplicateSyncProvider {
-    NookDuplicateSyncProvider(
-        DuplicateProviderSelection {
-            providers: &snapshot.providers,
-            candidate: &candidate,
-            exclude_id: Some(exclude_id),
-        }
-        .find(),
-    )
+) -> nook_core::DuplicateSyncProvider {
+    DuplicateProviderSelection {
+        providers: &snapshot.providers,
+        candidate: &candidate,
+        policy: DuplicateCandidatePolicy::Exclude(exclude_id.into()),
+    }
+    .find()
 }
 
 /// Ensure a `local` provider row exists for the active vault, prepending one
 /// (with a fresh id/timestamp) when missing. Returns the updated snapshot.
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn ensure_local_provider_row(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn ensure_local_provider_row(
     snapshot: nook_core::AuthProvidersSnapshotData,
     active_store_id: &str,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
     let new_id = nook_core::CompactToken::generate()?.to_string();
     let created_at: String = Date::new_0().to_iso_string().into();
-    let (next, _changed) = snapshot.ensure_local_row(LocalProviderRowRequest {
-        active_store_id: Some(active_store_id),
-        new_id: &new_id,
-        created_at: &created_at,
-    });
+    let nook_core::LocalProviderRowOutcome { snapshot: next, .. } =
+        snapshot.ensure_local_row(LocalProviderRowRequest {
+            active_store_id: &nook_core::ActiveVaultScope::StoreId(active_store_id.to_owned()),
+            new_id: &new_id,
+            created_at: &created_at,
+        });
     Ok(next)
 }
 
 /// Approve an extension join through a manager whose Rust-owned application
 /// capability permits extension approval.
 #[wasm_bindgen]
-pub async fn approve_extension_device(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn approve_extension_device(
     manager: &mut NookVaultManager,
     join_device_id: String,
     join_public_key: String,
@@ -415,7 +405,7 @@ pub async fn approve_extension_device(
 /// Compare local vs remote vault YAML and return a sync action label:
 /// `unchanged`, `adopt_remote`, `push_local`, or `conflict`.
 #[wasm_bindgen]
-pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bindgen::JsError> {
     match nook_core::VaultSyncComparison::new(local, remote).decide() {
         Ok(action) => Ok(match action {
             VaultSyncAction::Unchanged => "unchanged".to_owned(),
@@ -436,10 +426,42 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bind
         reason = "FFI boundary: projects the parsed vault version to JavaScript as a bigint"
     )
 )]
-pub fn read_vault_version(yaml: &str) -> u64 {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn read_vault_version(yaml: &str) -> u64 {
     nook_core::VaultFormatDocument::new(yaml)
         .version()
         .map_or(0, Into::into)
+}
+
+#[wasm_bindgen]
+impl NookVaultManager {
+    /// Persist one provider draft using Rust-owned reconciliation and identity sealing.
+    pub async fn persist_auth_providers_snapshot(
+        &self,
+        request: nook_core::AuthProviderPersistenceRequest,
+    ) -> Result<nook_core::AuthProvidersSnapshotData, JsError> {
+        use nook_core::AuthProviderPersistenceMode;
+        let identity = self.device_identity()?;
+        let snapshot = match request.mode {
+            AuthProviderPersistenceMode::Replace => request.snapshot,
+            AuthProviderPersistenceMode::PreserveUnlistedSyncProviders => {
+                if has_local_vault().await? {
+                    let stored = AuthProviderDatabase::load_auth_providers(&identity).await?;
+                    request
+                        .snapshot
+                        .preserve_unlisted_sync_providers(&stored.snapshot)
+                } else {
+                    request.snapshot
+                }
+            }
+        };
+        ProviderSnapshotPublication {
+            identity: &identity,
+            snapshot: &snapshot,
+        }
+        .save()
+        .await?;
+        Ok(snapshot)
+    }
 }
 
 #[cfg(test)]
@@ -550,25 +572,25 @@ mod projection_tests {
         };
 
         let duplicate = find_duplicate_sync_provider(snapshot.clone(), provider.clone());
-        assert_eq!(duplicate.state(), NookDuplicateSyncProviderState::Duplicate);
-        assert_eq!(duplicate.provider().unwrap().id, "provider-1");
+        assert!(
+            matches!(duplicate, nook_core::DuplicateSyncProvider::Duplicate { provider } if provider.id == "provider-1")
+        );
 
         let unique =
             find_duplicate_sync_provider_excluding(snapshot, provider.clone(), "provider-1");
-        assert_eq!(unique.state(), NookDuplicateSyncProviderState::Unique);
-        assert!(unique.provider().is_err());
+        assert_eq!(unique, nook_core::DuplicateSyncProvider::Unique);
 
-        let empty = NookActiveVaultSelection(None);
+        let empty = NookActiveVaultSelection(ActiveVaultScope::Unselected);
         assert_eq!(empty.state(), NookActiveVaultSelectionState::NotSelected);
         assert!(empty.store_id().is_err());
-        let selected = NookActiveVaultSelection(Some("store-1".into()));
+        let selected = NookActiveVaultSelection(ActiveVaultScope::StoreId("store-1".into()));
         assert_eq!(selected.state(), NookActiveVaultSelectionState::Selected);
         assert_eq!(selected.store_id().unwrap(), "store-1");
 
         let never = NookLocalVaultEntry {
             store_id: "store-1".into(),
             label: "  ".into(),
-            last_unlocked_at: None,
+            last_unlocked_at: VaultUnlockHistory::NeverUnlocked,
         };
         assert_eq!(never.store_id(), "store-1");
         assert_eq!(never.label(), "  ");
@@ -582,7 +604,7 @@ mod projection_tests {
         let unlocked = NookLocalVaultEntry {
             store_id: "store-2".into(),
             label: " Vault ".into(),
-            last_unlocked_at: Some(nook_core::IsoTimestamp::from_trusted(
+            last_unlocked_at: VaultUnlockHistory::Unlocked(nook_core::IsoTimestamp::from_trusted(
                 "2026-01-01T00:00:00Z".into(),
             )),
         };
@@ -616,7 +638,7 @@ mod projection_tests {
 
         assert_eq!(configured_vault_application_name(), "unified-development");
         assert_eq!(
-            configured_vault_application(),
+            ConfiguredVaultApplication::configured_vault_application(),
             nook_core::VaultApplication::UnifiedDevelopment
         );
         assert!(!configured_vault_application_is_simple());
@@ -694,10 +716,15 @@ mod projection_tests {
             .connect_fresh("local".to_owned(), String::new(), String::new())
             .await?;
         let store_id = manager.vault_store_id();
-        let content = crate::storage::indexed_db::load_vault_blob(&store_id)
+        let content = match NookDatabase::load_vault_blob(&store_id)
             .await
             .map_err(|error| JsError::new(&error.to_string()))?
-            .ok_or_else(|| JsError::new("connected local vault blob was not persisted"))?;
+        {
+            VaultSnapshotLookup::Stored(content) => content,
+            VaultSnapshotLookup::NotStored => {
+                return Err(JsError::new("connected local vault blob was not persisted").into());
+            }
+        };
         assert!(!store_id.is_empty());
         assert!(!content.is_empty());
 
@@ -715,12 +742,16 @@ mod projection_tests {
             NookLocalVaultUnlockState::Unlocked
         );
 
-        set_local_vault_label(store_id.clone(), "  Browser vault  ".to_owned()).await?;
+        NookDatabase::set_local_vault_label(SetLocalVaultLabelRequest {
+            store_id: &store_id,
+            label: "  Browser vault  ",
+        })
+        .await?;
         let renamed = list_local_vaults().await?;
         assert_eq!(renamed[0].label(), "Browser vault");
         assert_eq!(renamed[0].display_label("Fallback"), "Browser vault");
 
-        prepare_new_local_vault_slot().await?;
+        NookDatabase::prepare_new_local_vault_slot().await?;
         let imported = import_named_local_vault_blob(content, "Imported vault".to_owned()).await?;
         assert_eq!(imported, store_id);
         set_active_vault(imported.clone()).await?;

@@ -1,17 +1,17 @@
 import { describe, expect, test } from 'bun:test';
-import { sealUntrustedYamlMap } from '../src/lib/guards.ts';
-import { validationRetriggerCount } from '../src/lib/agent-stats-validation-cycles.ts';
+import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
+import { ValidationCycleHistory } from '../src/lib/agent-stats-validation-cycles.ts';
 
 describe('validation retriggers', () => {
   test('does not count parallel required workflows as retriggers', () => {
     const prCycleRecord = { workflow: 'PR' };
     const researchCycleRecord = { workflow: 'Web research' };
     const cycles = [
-      sealUntrustedYamlMap(prCycleRecord),
-      sealUntrustedYamlMap(researchCycleRecord),
+      UntrustedYamlBoundary.seal(prCycleRecord),
+      UntrustedYamlBoundary.seal(researchCycleRecord),
     ];
 
-    expect(validationRetriggerCount(cycles)).toBe(0);
+    expect(ValidationCycleHistory.countRetriggers(cycles)).toBe(0);
   });
 
   test('counts only repeated attempts within each workflow', () => {
@@ -19,11 +19,11 @@ describe('validation retriggers', () => {
     const secondPrCycleRecord = { workflow: 'PR' };
     const researchCycleRecord = { workflow: 'Web research' };
     const cycles = [
-      sealUntrustedYamlMap(firstPrCycleRecord),
-      sealUntrustedYamlMap(secondPrCycleRecord),
-      sealUntrustedYamlMap(researchCycleRecord),
+      UntrustedYamlBoundary.seal(firstPrCycleRecord),
+      UntrustedYamlBoundary.seal(secondPrCycleRecord),
+      UntrustedYamlBoundary.seal(researchCycleRecord),
     ];
 
-    expect(validationRetriggerCount(cycles)).toBe(1);
+    expect(ValidationCycleHistory.countRetriggers(cycles)).toBe(1);
   });
 });

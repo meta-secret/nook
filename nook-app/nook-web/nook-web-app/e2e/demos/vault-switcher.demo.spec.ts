@@ -4,20 +4,31 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
   UI_TIMEOUT_MS,
+  parseJson,
 } from '../helpers'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
-  isOpenCompanionLauncherMessage,
+  OpenCompanionLauncherMessage as OpenCompanionLauncherMessageGuard,
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
   type CompanionIdentityDiscoveryTransportResponse,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
   type OpenCompanionLauncherMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
-import type { CompanionIdentityStatus } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  CompanionIdentityDiscoveryObservation,
+  CompanionIdentityStatus,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+
+type VaultSwitcherDiscoveryMessage = Omit<
+  ExtensionPairedVaultIdentityDiscoveryMessage,
+  'payload'
+> & {
+  readonly payload: CompanionIdentityDiscoveryObservation
+}
 
 type VaultSwitcherDemoMessage =
-  ExtensionPairedVaultIdentityDiscoveryMessage | OpenCompanionLauncherMessage
+  VaultSwitcherDiscoveryMessage | OpenCompanionLauncherMessage
 
 type VaultSwitcherDemoMessageTypes = {
   openCompanionLauncher: OpenCompanionLauncherMessageType
@@ -33,10 +44,6 @@ type VaultSwitcherDemoChromeRuntime = {
     message: VaultSwitcherDemoMessage,
     callback: (response?: VaultSwitcherDemoResponse) => void,
   ) => void
-}
-
-type VaultSwitcherDemoBrowserGlobal = typeof globalThis & {
-  chrome?: { runtime?: VaultSwitcherDemoChromeRuntime }
 }
 
 type VaultSwitcherPairedElsewhereSimulation = {
@@ -76,11 +83,11 @@ async function demoBeat(page: Parameters<typeof connectLocalVault>[0]) {
 }
 
 function parseStoreId(yaml: string): string {
-  const match = yaml.match(/^store_id:\s*(\S+)/m)
-  if (!match) {
+  const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
+  if (!storeId) {
     throw new Error('store_id missing from vault yaml')
   }
-  return match[1]
+  return storeId
 }
 
 function assertBoxVisibleInViewport(request: VisibleInViewportRequest): void {
@@ -127,55 +134,63 @@ test('list every local vault and pair the open vault with the companion', async 
     connectedVaultName: 'Vault A',
   }
   await page.evaluate((simulation) => {
-    const browserGlobal = globalThis as VaultSwitcherDemoBrowserGlobal
-    browserGlobal.chrome = {
-      runtime: {
-        sendMessage: (_extensionId, message, callback) => {
-          document.documentElement.setAttribute(
-            'data-demo-extension-message',
-            JSON.stringify(message),
-          )
-          const type = message.type
-          const routedTypesAttribute =
-            document.documentElement.attributes.getNamedItem(
-              'data-demo-extension-message-types',
-            )?.value
-          const routedTypes = JSON.parse(
-            ((...[v = '[]']) => v)(routedTypesAttribute),
-          ) as string[]
-          if (type) {
-            routedTypes.push(type)
-            document.documentElement.setAttribute(
-              'data-demo-extension-message-types',
-              JSON.stringify(routedTypes),
-            )
+    const runtime: VaultSwitcherDemoChromeRuntime = {
+      sendMessage: (_extensionId, message, callback) => {
+        document.documentElement.setAttribute(
+          'data-demo-extension-message',
+          JSON.stringify(message),
+        )
+        const type = message.type
+        const routedTypesAttribute =
+          document.documentElement.attributes.getNamedItem(
+            'data-demo-extension-message-types',
+          )?.value
+        const parsedRoutedTypes: unknown = JSON.parse(
+          routedTypesAttribute ?? '[]',
+        )
+        if (!Array.isArray(parsedRoutedTypes)) {
+          throw new Error('Routed message types were not an array.')
+        }
+        const routedTypes: string[] = []
+        for (const routedType of parsedRoutedTypes) {
+          if (typeof routedType !== 'string') {
+            throw new Error('Routed message types contained a non-string.')
           }
-          const discovery = Object(message.payload)
-          const discoveryRequest = Object(Reflect.get(discovery, 'request'))
-          callback(
-            type === simulation.messageTypes.openCompanionLauncher
-              ? { ok: true }
-              : type === simulation.messageTypes.pairedVaultIdentityDiscovery
-                ? {
-                    ok: true,
-                    status: {
-                      status: 'different-vault',
-                      request_id: String(
-                        Reflect.get(discoveryRequest, 'requestId'),
-                      ),
-                      vault_store_id: String(
-                        Reflect.get(discoveryRequest, 'vaultStoreId'),
-                      ),
-                      connected_vault_store_id:
-                        simulation.connectedVaultStoreId,
-                      connected_vault_name: simulation.connectedVaultName,
-                    } satisfies CompanionIdentityStatus,
-                  }
-                : { ok: false },
+          routedTypes.push(routedType)
+        }
+        if (type) {
+          routedTypes.push(type)
+          document.documentElement.setAttribute(
+            'data-demo-extension-message-types',
+            JSON.stringify(routedTypes),
           )
-        },
+        }
+        const discoveryRequest =
+          message.type === simulation.messageTypes.pairedVaultIdentityDiscovery
+            ? message.payload.request
+            : { requestId: '', vaultStoreId: '' }
+        callback(
+          type === simulation.messageTypes.openCompanionLauncher
+            ? { ok: true }
+            : type === simulation.messageTypes.pairedVaultIdentityDiscovery
+              ? {
+                  ok: true,
+                  status: {
+                    status: 'different-vault',
+                    request_id: String(discoveryRequest.requestId),
+                    vault_store_id: String(discoveryRequest.vaultStoreId),
+                    connected_vault_store_id: simulation.connectedVaultStoreId,
+                    connected_vault_name: simulation.connectedVaultName,
+                  } satisfies CompanionIdentityStatus,
+                }
+              : { ok: false },
+        )
       },
     }
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: { runtime },
+    })
     document.documentElement.setAttribute(
       'data-nook-extension-runtime-id',
       'demo-extension-id',
@@ -247,8 +262,8 @@ test('list every local vault and pair the open vault with the companion', async 
   if (typeof encodedLauncherMessage !== 'string') {
     throw new Error('Companion launcher message was not recorded.')
   }
-  const launcherMessage = JSON.parse(encodedLauncherMessage)
-  if (!isOpenCompanionLauncherMessage(launcherMessage)) {
+  const launcherMessage: unknown = parseJson(encodedLauncherMessage)
+  if (!OpenCompanionLauncherMessageGuard.is(launcherMessage)) {
     throw new Error('Companion launcher message was malformed.')
   }
   expect(launcherMessage.payload).toEqual({ intent: 'pair' })

@@ -1,46 +1,57 @@
 use anyhow::{Context, bail};
-use serde_json::Value;
+use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+
 #[test]
 fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
     let root = repository_root()?;
-    let policy = read_json(&root.join("nook-app/nook-platform/nook-core/coverage-floor.json"))?;
-    let enforced = string_set(&policy, "enforced_packages")?;
-    let excluded = excluded_packages(&policy)?;
+    let policy =
+        CoveragePolicy::read(&root.join("nook-app/nook-platform/nook-core/coverage-floor.json"))?;
+    let enforced = policy.enforced_packages.clone();
+    let excluded: BTreeMap<_, _> = policy
+        .excluded_packages
+        .iter()
+        .map(|entry| (entry.package.clone(), entry.reason.clone()))
+        .collect();
     let excluded_names = excluded.keys().cloned().collect::<BTreeSet<_>>();
     let discovered = discover_packages(&root)?;
     let classified: BTreeSet<_> = enforced.union(&excluded_names).cloned().collect();
     let discovered_names = discovered.keys().cloned().collect::<BTreeSet<_>>();
     assert_eq!(discovered_names, classified);
     assert!(enforced.is_disjoint(&excluded_names));
-    assert!(matches!(policy["lines_percent"].as_f64(), Some(floor) if floor >= 90.0));
-    let package_floors = policy["package_lines_percent"]
-        .as_object()
-        .context("package_lines_percent must be an object")?;
+    assert!(policy.lines_percent >= 90.0);
+    let package_floors = &policy.package_lines_percent;
     let floor_names = package_floors.keys().cloned().collect::<BTreeSet<_>>();
     assert_eq!(floor_names, enforced);
     for (package, floor) in package_floors {
         let expected = match package.as_str() {
             "nook-wasm" => 70.0,
-            "nook-companion-wasm" => 90.0,
             "hive" => 60.0,
             _ => 90.0,
         };
-        assert!(floor.as_f64().is_some_and(|floor| floor >= expected));
+        assert!(*floor >= expected);
     }
     assert_eq!(
-        excluded["nook-fuzz"],
+        excluded
+            .get("nook-fuzz")
+            .context("coverage policy must explain the nook-fuzz exclusion")?,
         "Intentional non-testable cargo-fuzz harness; covered behavior belongs to nook-auth2."
     );
     assert_eq!(
-        excluded["arrayref"],
+        excluded
+            .get("arrayref")
+            .context("coverage policy must explain the arrayref exclusion")?,
         "Vendored third-party patch; upstream source is outside Nook's authored coverage policy."
     );
     Ok(())
 }
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one coverage contract verifies every hosted package decision"
+)]
 fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow::Result<()> {
     let root = repository_root()?;
     let product = read(&root.join("nook-app/nook-platform/docker/rust/product.Dockerfile"))?;
@@ -48,14 +59,16 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let docker_tasks = read(&root.join("nook-app/nook-platform/docker/Taskfile.yml"))?;
     let platform_tasks = read(&root.join("nook-app/nook-platform/Taskfile.yml"))?;
     let hive = read(&root.join("agentic-ai/minds/hive/Dockerfile"))?;
+    let central_ci = read(&root.join(".github/workflows/ci.yml"))?;
     let hive_ci = read(&root.join(".github/workflows/hive.yml"))?;
     let hive_tasks = read(&root.join("agentic-ai/minds/hive/Taskfile.yml"))?;
     let hive_arc = read(&root.join("agentic-ai/minds/hive/run-arc-tests.sh"))?;
     let preflight = read(&root.join("preflight/Dockerfile"))?;
     let minds_manifest = read(&root.join("agentic-ai/minds/Cargo.toml"))?;
     let fuzz_manifest = read(&root.join("nook-app/nook-platform/fuzz/Cargo.toml"))?;
-    let policy = read_json(&root.join("nook-app/nook-platform/nook-core/coverage-floor.json"))?;
-    let enforced = string_set(&policy, "enforced_packages")?;
+    let policy =
+        CoveragePolicy::read(&root.join("nook-app/nook-platform/nook-core/coverage-floor.json"))?;
+    let enforced = policy.enforced_packages.clone();
     for package in &enforced {
         assert!(
             [&product, &nightly, &platform_tasks, &hive, &preflight]
@@ -82,7 +95,10 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(nightly.contains("ARG RUST_DYLINT_COVERAGE_FLOOR"));
     assert!(nightly.contains("--fail-under-lines \"${RUST_DYLINT_COVERAGE_FLOOR:?}\""));
     assert!(docker_tasks.contains(".package_lines_percent[\"nook_domain_api\"] | numbers"));
-    assert!(docker_tasks.matches("RUST_DYLINT_COVERAGE_FLOOR=").count() == 2);
+    assert_eq!(
+        docker_tasks.matches("RUST_DYLINT_COVERAGE_FLOOR=").count(),
+        2
+    );
     assert!(nightly.contains("target/llvm-cov-target/debug/libnook_domain_api-c0ffee.so"));
     assert!(product.contains(".package_lines_percent[\"nook-companion-wasm\"]"));
     assert!(product.contains("llvm-cov clean --workspace"));
@@ -150,7 +166,26 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(product.contains("--from=builder-wasm-handoff /opt/nook/wasm-handoff"));
     assert!(product.contains("--from=builder-wasm /opt/nook/wasm-coverage-passed"));
     assert!(product.contains("FROM builder-wasm-handoff AS nook-rust"));
-    assert_eq!(hive_ci.matches("nook-core/coverage-floor.json").count(), 2);
+    assert!(
+        central_ci.contains("on:\n  pull_request:")
+            && central_ci.contains("push:\n    branches: [main]")
+    );
+    assert_eq!(
+        central_ci
+            .matches("nook-app/nook-platform/nook-core/coverage-floor.json")
+            .count(),
+        1
+    );
+    let hive_route = central_ci
+        .split_once("\n  hive:\n")
+        .and_then(|(_, remainder)| remainder.split_once("\n  research:\n"))
+        .map(|(route, _)| route)
+        .context("central CI must retain an independently routed Hive job")?;
+    assert!(
+        hive_route.contains("if: needs.scope.outputs.hive == 'true'")
+            && hive_route.contains("uses: ./.github/workflows/hive.yml")
+    );
+    assert!(hive_ci.contains("workflow_call:"));
     assert!(hive_tasks.contains(".package_lines_percent.hive | numbers"));
     assert!(hive.contains("cargo llvm-cov report -p hive"));
     assert!(hive.contains("--fail-under-lines \"${HIVE_RUST_COVERAGE_FLOOR}\""));
@@ -209,37 +244,22 @@ fn repository_root() -> anyhow::Result<PathBuf> {
 fn read(path: &Path) -> anyhow::Result<String> {
     fs::read_to_string(path).with_context(|| format!("read {}", path.display()))
 }
-fn read_json(path: &Path) -> anyhow::Result<Value> {
-    serde_json::from_str(&read(path)?).with_context(|| format!("parse {}", path.display()))
+#[derive(Deserialize)]
+struct CoveragePolicy {
+    lines_percent: f64,
+    enforced_packages: BTreeSet<String>,
+    excluded_packages: Vec<ExcludedPackage>,
+    package_lines_percent: BTreeMap<String, f64>,
 }
-fn string_set(value: &Value, key: &str) -> anyhow::Result<BTreeSet<String>> {
-    value[key]
-        .as_array()
-        .with_context(|| format!("{key} must be an array"))?
-        .iter()
-        .map(|entry| {
-            entry
-                .as_str()
-                .map(str::to_owned)
-                .with_context(|| format!("{key} entries must be strings"))
-        })
-        .collect()
+#[derive(Deserialize)]
+struct ExcludedPackage {
+    package: String,
+    reason: String,
 }
-fn excluded_packages(value: &Value) -> anyhow::Result<BTreeMap<String, String>> {
-    value["excluded_packages"]
-        .as_array()
-        .context("excluded_packages must be an array")?
-        .iter()
-        .map(|entry| {
-            let package = entry["package"]
-                .as_str()
-                .context("excluded package must name a package")?;
-            let reason = entry["reason"]
-                .as_str()
-                .context("excluded package must state a reason")?;
-            Ok((package.to_owned(), reason.to_owned()))
-        })
-        .collect()
+impl CoveragePolicy {
+    fn read(path: &Path) -> anyhow::Result<Self> {
+        serde_json::from_str(&read(path)?).with_context(|| format!("parse {}", path.display()))
+    }
 }
 fn discover_packages(root: &Path) -> anyhow::Result<BTreeMap<String, PathBuf>> {
     let mut manifests = Vec::new();

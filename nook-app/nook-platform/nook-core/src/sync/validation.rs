@@ -4,6 +4,11 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
+use crate::{
+    StoredGoogleDriveFolder, StoredLocalFolderDirectory, StoredLocalFolderHandle,
+    StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthRemoteFileId,
+    StoredOAuthRemoteFileName,
+};
 use std::fmt;
 
 use crate::errors::{ValidationError, ValidationResult};
@@ -30,6 +35,13 @@ pub enum StorageMode {
     ICloud,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConnectionCredentialValidation {
+    Local,
+    Github(GithubPat),
+    GoogleDrive,
+    ICloud,
+}
 impl StorageMode {
     /// Canonical short tag used at every cross-language boundary (wasm-bindgen
     /// arguments, `IndexedDB` JSON, GitHub PR descriptions, log lines).
@@ -68,14 +80,23 @@ impl StorageMode {
         }
     }
 
-    pub fn validate_connect(self, credential: &str) -> Result<Option<GithubPat>, ValidationError> {
+    pub fn validate_connect(
+        self,
+        credential: &str,
+    ) -> Result<ConnectionCredentialValidation, ValidationError> {
         match self {
-            Self::Github => Ok(Some(GithubPat::parse(credential)?)),
-            Self::GoogleDrive | Self::ICloud => {
+            Self::Github => Ok(ConnectionCredentialValidation::Github(GithubPat::parse(
+                credential,
+            )?)),
+            Self::GoogleDrive => {
                 OauthAccessToken::parse(credential)?;
-                Ok(None)
+                Ok(ConnectionCredentialValidation::GoogleDrive)
             }
-            Self::Local => Ok(None),
+            Self::ICloud => {
+                OauthAccessToken::parse(credential)?;
+                Ok(ConnectionCredentialValidation::ICloud)
+            }
+            Self::Local => Ok(ConnectionCredentialValidation::Local),
         }
     }
 }
@@ -364,26 +385,22 @@ pub struct GithubSyncTarget {
 
 /// OAuth-file (Google Drive / iCloud) sync target identity inputs.
 ///
-/// `file_id` and `file_name` are independent raw form fields that may both be
-/// present at once (identity prefers `file_id`, falling back to `file_name`);
-/// collapsing them into one enum would drop that legal "both known" input state,
-/// so they stay `Option<String>` per the boundary-DTO exemption. `preset` is a
-/// real closed set and is therefore modeled as the `OauthFilePreset` enum.
+/// Independent field states retain every observed target component.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OauthFileSyncTarget {
     pub preset: OauthFilePreset,
-    pub file_id: Option<String>,
-    pub folder_id: Option<String>,
-    pub file_name: Option<String>,
-    pub account_email: Option<String>,
-    pub access_token: Option<String>,
+    pub file_id: StoredOAuthRemoteFileId,
+    pub folder_id: StoredGoogleDriveFolder,
+    pub file_name: StoredOAuthRemoteFileName,
+    pub account_email: StoredOAuthAccountIdentity,
+    pub access_token: StoredOAuthAccessCredential,
 }
 
 /// Browser File System Access sync target identity.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LocalFolderSyncTarget {
-    pub directory_name: Option<String>,
-    pub handle_id: Option<String>,
+    pub directory_name: StoredLocalFolderDirectory,
+    pub handle_id: StoredLocalFolderHandle,
 }
 
 /// Storage/sync provider identity, one variant per provider kind.
@@ -403,7 +420,6 @@ pub enum SyncProviderTarget {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
-    use std::io;
 
     use super::*;
 
@@ -439,11 +455,8 @@ mod tests {
                 .is_err()
         );
         assert_eq!(
-            StorageMode::parse(STORAGE_MODE_GITHUB)?
-                .validate_connect(" ghp_test ")?
-                .ok_or_else(|| io::Error::other("GitHub credential must be returned"))?
-                .as_str(),
-            "ghp_test"
+            StorageMode::parse(STORAGE_MODE_GITHUB)?.validate_connect(" ghp_test ")?,
+            ConnectionCredentialValidation::Github(GithubPat::parse("ghp_test")?)
         );
         Ok(())
     }
@@ -452,7 +465,7 @@ mod tests {
     fn validate_connect_local_ok() -> anyhow::Result<()> {
         assert_eq!(
             StorageMode::parse(STORAGE_MODE_LOCAL)?.validate_connect("")?,
-            None
+            ConnectionCredentialValidation::Local
         );
         Ok(())
     }
@@ -497,7 +510,7 @@ mod tests {
         );
         assert_eq!(
             StorageMode::parse("icloud")?.validate_connect(" ck-web-token ")?,
-            None
+            ConnectionCredentialValidation::ICloud
         );
         Ok(())
     }
@@ -511,7 +524,7 @@ mod tests {
         );
         assert_eq!(
             StorageMode::parse("google-drive")?.validate_connect(" ya29.test ")?,
-            None
+            ConnectionCredentialValidation::GoogleDrive
         );
         Ok(())
     }

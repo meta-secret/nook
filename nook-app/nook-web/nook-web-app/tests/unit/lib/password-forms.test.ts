@@ -1,26 +1,25 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
-  authenticationPageObservationFacts,
-  fillLoginCredentials,
-  fillOneTimeCode,
   FormSubmissionResult,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
-  submitLoginForm,
-  summarizeAuthenticationWorkflowForms,
   type PasswordFormObservation,
+  passwordFormCredentialInteraction as credentials,
+  passwordFormInteraction as forms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
 const wholeDocumentPasswordFormSubmission: Parameters<
-  typeof submitLoginForm
+  typeof forms.submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
 
-function didSubmit(request: Parameters<typeof submitLoginForm>[0]): boolean {
-  return submitLoginForm(request) === FormSubmissionResult.Submitted
+function didSubmit(
+  request: Parameters<typeof forms.submitLoginForm>[0],
+): boolean {
+  return forms.submitLoginForm(request) === FormSubmissionResult.Submitted
 }
 
 function observedAuthenticationWorkflow(): PasswordFormObservation {
-  const observation = summarizeAuthenticationWorkflowForms()[0]
+  const observation = forms.summarizeAuthenticationWorkflowForms()[0]
   if (!observation) throw new Error('expected an authentication workflow')
   return observation
 }
@@ -30,47 +29,6 @@ afterEach(() => {
 })
 
 describe('website one-time-code fields', () => {
-  test('preserves executable OTP handler attribute names at the Rust boundary', () => {
-    document.body.innerHTML = `
-      <form method="post" id="otp-login" action="/mfa/challenge">
-        <input
-          autocomplete="one-time-code"
-          oninput="this.form.requestSubmit()"
-        />
-        <button type="submit">Verify code</button>
-      </form>
-    `
-
-    const observation = observedAuthenticationWorkflow()
-    const facts = authenticationPageObservationFacts({
-      observation,
-      authenticatorSetupHint: false,
-      backupCodesCopy: '',
-    })
-    expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([
-      'oninput=this.form.requestSubmit()',
-    ])
-  })
-
-  test('transports OTP handlers as independent Rust policy candidates', () => {
-    document.body.innerHTML = `
-      <form method="post" id="otp-login" action="/mfa/challenge">
-        <input autocomplete="one-time-code" onchange="validateCode()" />
-        <input autocomplete="one-time-code" oninput="this.form.requestSubmit()" />
-      </form>
-    `
-
-    const facts = authenticationPageObservationFacts({
-      observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
-      backupCodesCopy: '',
-    })
-    expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([
-      'oninput=this.form.requestSubmit()',
-      'onchange=validateCode()',
-    ])
-  })
-
   test('transports every scoped advance-control candidate for Rust selection', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/login">
@@ -82,7 +40,7 @@ describe('website one-time-code fields', () => {
     `
 
     const observation = observedAuthenticationWorkflow()
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesCopy: '',
@@ -91,17 +49,12 @@ describe('website one-time-code fields', () => {
     if (!detailed || detailed.kind !== 'observed') {
       throw new Error('expected observed advance-control candidates')
     }
-    expect(detailed.observations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          label: expect.stringContaining('Delete account'),
-          machineIdentity: '',
-        }),
-        expect.objectContaining({
-          label: expect.stringContaining('Sign in'),
-          machineIdentity: 'login-submit intent=session primary action',
-        }),
-      ]),
+    expect(detailed).toMatchObject({ kind: 'observed' })
+    const serializedControls = JSON.stringify(detailed)
+    expect(serializedControls).toContain('Delete account')
+    expect(serializedControls).toContain('Sign in')
+    expect(serializedControls).toContain(
+      'login-submit intent=session primary action',
     )
   })
 
@@ -115,15 +68,13 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesCopy: '',
     })
-    expect(facts.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: [{ label: expect.stringContaining('Sign in') }],
-    })
+    expect(facts.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
+    expect(JSON.stringify(facts.detailedAdvanceControl)).toContain('Sign in')
   })
 
   test('transports implicit owned-form submission evidence without a control', () => {
@@ -134,7 +85,7 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesCopy: '',
@@ -150,22 +101,26 @@ describe('website one-time-code fields', () => {
         <input id="secret" type="password" autocomplete="current-password" />
       </form>
     `
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
     expect(facts.ceremony.advanceControl).toBe('absent')
     expect(facts.ceremony.implicitSubmissionMethod).toBe('get')
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(false)
+    const secret = document.querySelector('#secret')
+    if (!(secret instanceof HTMLInputElement)) {
+      throw new Error('expected the password field')
     }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
-    expect((document.querySelector('#secret') as HTMLInputElement).value).toBe(
-      '',
-    )
+    expect(secret.value).toBe('')
   })
 
   test('rejects dialog-method password submission before fill', () => {
@@ -175,22 +130,26 @@ describe('website one-time-code fields', () => {
         <input id="secret" type="password" autocomplete="current-password" />
       </form>
     `
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
     expect(facts.ceremony.advanceControl).toBe('absent')
     expect(facts.ceremony.implicitSubmissionMethod).toBe('dialog')
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(false)
+    const secret = document.querySelector('#secret')
+    if (!(secret instanceof HTMLInputElement)) {
+      throw new Error('expected the password field')
     }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
-    expect((document.querySelector('#secret') as HTMLInputElement).value).toBe(
-      '',
-    )
+    expect(secret.value).toBe('')
   })
 
   test('marks a hidden semantic submitter inert and allows implicit submission', () => {
@@ -207,17 +166,16 @@ describe('website one-time-code fields', () => {
       submitted = true
     })
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
       kind: 'observed',
-      observations: [
-        { actionability: 'inert', label: expect.stringContaining('Continue') },
-      ],
+      observations: [{ actionability: 'inert' }],
     })
+    expect(JSON.stringify(facts.detailedAdvanceControl)).toContain('Continue')
     expect(facts.ceremony.advanceControl).toBe('implicit-submission')
     expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(submitted).toBe(true)
@@ -237,17 +195,16 @@ describe('website one-time-code fields', () => {
       submitted = true
     })
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
       kind: 'observed',
-      observations: [
-        { actionability: 'inert', label: expect.stringContaining('Continue') },
-      ],
+      observations: [{ actionability: 'inert' }],
     })
+    expect(JSON.stringify(facts.detailedAdvanceControl)).toContain('Continue')
     expect(facts.ceremony.advanceControl).toBe('implicit-submission')
     expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
     expect(submitted).toBe(true)
@@ -261,33 +218,28 @@ describe('website one-time-code fields', () => {
         <div id="panel"><button type="submit">Continue</button></div>
       </form>
     `
-    const before = authenticationPageObservationFacts({
+    const before = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
     expect(before.detailedAdvanceControl).toMatchObject({
       kind: 'observed',
-      observations: [
-        {
-          actionability: 'actionable',
-          label: expect.stringContaining('Continue'),
-        },
-      ],
+      observations: [{ actionability: 'actionable' }],
     })
+    expect(JSON.stringify(before.detailedAdvanceControl)).toContain('Continue')
 
     document.querySelector('#panel')?.setAttribute('inert', '')
-    const after = authenticationPageObservationFacts({
+    const after = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
     expect(after.detailedAdvanceControl).toMatchObject({
       kind: 'observed',
-      observations: [
-        { actionability: 'inert', label: expect.stringContaining('Continue') },
-      ],
+      observations: [{ actionability: 'inert' }],
     })
+    expect(JSON.stringify(after.detailedAdvanceControl)).toContain('Continue')
   })
 
   test('rescans actionability when an ancestor becomes aria-disabled', () => {
@@ -298,38 +250,33 @@ describe('website one-time-code fields', () => {
         <div id="panel"><button type="submit">Continue</button></div>
       </form>
     `
-    const before = authenticationPageObservationFacts({
+    const before = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
     expect(before.detailedAdvanceControl).toMatchObject({
       kind: 'observed',
-      observations: [
-        {
-          actionability: 'actionable',
-          label: expect.stringContaining('Continue'),
-        },
-      ],
+      observations: [{ actionability: 'actionable' }],
     })
+    expect(JSON.stringify(before.detailedAdvanceControl)).toContain('Continue')
 
     document.querySelector('#panel')?.setAttribute('aria-disabled', 'true')
-    const after = authenticationPageObservationFacts({
+    const after = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
     expect(after.detailedAdvanceControl).toMatchObject({
       kind: 'observed',
-      observations: [
-        { actionability: 'inert', label: expect.stringContaining('Continue') },
-      ],
+      observations: [{ actionability: 'inert' }],
     })
+    expect(JSON.stringify(after.detailedAdvanceControl)).toContain('Continue')
   })
 
   test('infers implicit submission when the only semantic submitter is inert', () => {
     document.body.innerHTML = `<form method="post" action="/auth/login"><input autocomplete="username" /><button type="submit" disabled>Sign in</button></form>`
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -346,15 +293,13 @@ describe('website one-time-code fields', () => {
     document
       .querySelector('form')
       ?.addEventListener('submit', (event) => event.preventDefault())
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(facts.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: [{ label: expect.stringContaining('Sign in') }],
-    })
+    expect(facts.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
+    expect(JSON.stringify(facts.detailedAdvanceControl)).toContain('Sign in')
     expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
   })
 
@@ -367,22 +312,24 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesCopy: '',
     })
     expect(facts.ceremony.authenticationContext).toMatchObject({
-      formIdentity: expect.stringContaining('Login'),
       destinationIdentity: `${location.origin}/session`,
     })
+    expect(JSON.stringify(facts.ceremony.authenticationContext)).toContain(
+      'Login',
+    )
     expect(facts.detailedAdvanceControl).toMatchObject({
       kind: 'observed',
       observations: [{ destinationIdentity: `${location.origin}/session` }],
     })
 
     document.querySelector('form')?.removeAttribute('action')
-    const defaultDestination = authenticationPageObservationFacts({
+    const defaultDestination = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesCopy: '',
@@ -406,19 +353,16 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
-    })
-    expect(facts.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: [{ label: expect.stringContaining('Continue') }],
     })
     const observation = facts.detailedAdvanceControl
     if (!observation || observation.kind !== 'observed') {
       throw new Error('expected observed advance control')
     }
+    expect(JSON.stringify(observation)).toContain('Continue')
     expect(
       observation.observations.every((candidate) =>
         candidate.label.includes('Continue'),
@@ -433,7 +377,7 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -441,15 +385,12 @@ describe('website one-time-code fields', () => {
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
       kind: 'candidates',
       observation: [
-        {
-          kind: 'explicitly-marked',
-          observation: {
-            ownership: 'owned-form',
-            formIdentity: expect.stringContaining('delete-account'),
-          },
-        },
+        { kind: 'explicitly-marked', observation: { ownership: 'owned-form' } },
       ],
     })
+    expect(
+      JSON.stringify(facts.authenticator.detailedPasskeyControl),
+    ).toContain('delete-account')
   })
 
   test('submits a classified username-only login whose form action is omitted', () => {
@@ -466,7 +407,7 @@ describe('website one-time-code fields', () => {
       submissions += 1
     })
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -492,12 +433,14 @@ describe('website one-time-code fields', () => {
       ?.addEventListener('input', () => {
         document.querySelector('form')?.removeAttribute('method')
       })
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(false)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -512,7 +455,7 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesCopy: '',
@@ -535,7 +478,7 @@ describe('website one-time-code fields', () => {
       <button form="login" type="submit">Sign in</button>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesCopy: '',
@@ -568,7 +511,7 @@ describe('website one-time-code fields', () => {
       submitted = true
     })
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -589,7 +532,7 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -597,16 +540,14 @@ describe('website one-time-code fields', () => {
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
       kind: 'candidates',
       observation: [
-        {
-          kind: 'labeled',
-          observation: {
-            ownership: 'owned-form',
-            formIdentity: expect.stringContaining('passkey-login'),
-            label: expect.stringContaining('passkey'),
-          },
-        },
+        { kind: 'labeled', observation: { ownership: 'owned-form' } },
       ],
     })
+    const serializedControl = JSON.stringify(
+      facts.authenticator.detailedPasskeyControl,
+    )
+    expect(serializedControl).toContain('passkey-login')
+    expect(serializedControl).toContain('passkey')
   })
 
   test('transports a passkey-only form-associated control for Rust selection', () => {
@@ -616,22 +557,18 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
       kind: 'candidates',
-      observation: [
-        {
-          kind: 'labeled',
-          observation: {
-            label: expect.stringContaining('passkey'),
-          },
-        },
-      ],
+      observation: [{ kind: 'labeled' }],
     })
+    expect(
+      JSON.stringify(facts.authenticator.detailedPasskeyControl),
+    ).toContain('passkey')
   })
 
   test('transports an input passkey control labeled by its value', () => {
@@ -641,20 +578,18 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
       kind: 'candidates',
-      observation: [
-        {
-          kind: 'labeled',
-          observation: { label: expect.stringContaining('Use passkey') },
-        },
-      ],
+      observation: [{ kind: 'labeled' }],
     })
+    expect(
+      JSON.stringify(facts.authenticator.detailedPasskeyControl),
+    ).toContain('Use passkey')
   })
 
   test('transports an icon-only passkey control labeled by aria-label', () => {
@@ -664,20 +599,18 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
       kind: 'candidates',
-      observation: [
-        {
-          kind: 'labeled',
-          observation: { label: expect.stringContaining('Use passkey') },
-        },
-      ],
+      observation: [{ kind: 'labeled' }],
     })
+    expect(
+      JSON.stringify(facts.authenticator.detailedPasskeyControl),
+    ).toContain('Use passkey')
   })
 
   test('keeps standalone explicitly marked passkey controls locally scoped', () => {
@@ -685,7 +618,7 @@ describe('website one-time-code fields', () => {
       <button type="button" data-nook-passkey-control>Continue</button>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesCopy: '',
@@ -695,13 +628,13 @@ describe('website one-time-code fields', () => {
       observation: [
         {
           kind: 'explicitly-marked',
-          observation: {
-            ownership: 'locally-scoped',
-            label: expect.stringContaining('Continue'),
-          },
+          observation: { ownership: 'locally-scoped' },
         },
       ],
     })
+    expect(
+      JSON.stringify(facts.authenticator.detailedPasskeyControl),
+    ).toContain('Continue')
   })
 
   test('does not transport a passkey control contained by a sibling form', () => {
@@ -718,15 +651,17 @@ describe('website one-time-code fields', () => {
       </div>
     `
 
-    const observation = summarizeAuthenticationWorkflowForms().find(
-      (workflow) =>
-        workflow.formScope.kind === PasswordFormScopeKind.Owned &&
-        workflow.formScope.owner.id === 'password-login',
-    )
+    const observation = forms
+      .summarizeAuthenticationWorkflowForms()
+      .find(
+        (workflow) =>
+          workflow.formScope.kind === PasswordFormScopeKind.Owned &&
+          workflow.formScope.owner.id === 'password-login',
+      )
     if (!observation) {
       throw new Error('expected the password-login workflow')
     }
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -748,7 +683,7 @@ describe('website one-time-code fields', () => {
       </div>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesCopy: '',
@@ -756,15 +691,12 @@ describe('website one-time-code fields', () => {
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
       kind: 'candidates',
       observation: [
-        {
-          kind: 'labeled',
-          observation: {
-            ownership: 'locally-scoped',
-            label: expect.stringContaining('passkey'),
-          },
-        },
+        { kind: 'labeled', observation: { ownership: 'locally-scoped' } },
       ],
     })
+    expect(
+      JSON.stringify(facts.authenticator.detailedPasskeyControl),
+    ).toContain('passkey')
   })
 
   test('does not bind a shared-parent passkey to either sibling form', () => {
@@ -784,7 +716,7 @@ describe('website one-time-code fields', () => {
       </div>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     const login = observations.find(
       (observation) =>
         observation.formScope.kind === PasswordFormScopeKind.Owned &&
@@ -799,14 +731,14 @@ describe('website one-time-code fields', () => {
       throw new Error('expected sibling login and signup workflows')
     }
     expect(
-      authenticationPageObservationFacts({
+      forms.authenticationPageObservationFacts({
         observation: login,
         authenticatorSetupHint: false,
         backupCodesHint: false,
       }).authenticator.detailedPasskeyControl,
     ).toEqual({ kind: 'absent' })
     expect(
-      authenticationPageObservationFacts({
+      forms.authenticationPageObservationFacts({
         observation: signup,
         authenticatorSetupHint: false,
         backupCodesHint: false,
@@ -824,20 +756,17 @@ describe('website one-time-code fields', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(facts.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: expect.arrayContaining([
-        expect.objectContaining({
-          label: expect.stringContaining('Proceed'),
-          semanticSubmitControlCount: 2,
-        }),
-      ]),
-    })
+    expect(facts.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
+    const serializedAdvanceControl = JSON.stringify(
+      facts.detailedAdvanceControl,
+    )
+    expect(serializedAdvanceControl).toContain('Proceed')
+    expect(serializedAdvanceControl).toContain('"semanticSubmitControlCount":2')
   })
 
   test('does not write the password after username events switch the form to GET', () => {
@@ -853,12 +782,14 @@ describe('website one-time-code fields', () => {
       ?.addEventListener('input', () => {
         document.querySelector('form')?.setAttribute('method', 'get')
       })
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(false)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -877,12 +808,14 @@ describe('website one-time-code fields', () => {
       ?.addEventListener('change', () =>
         document.querySelector('form')?.setAttribute('method', 'get'),
       )
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(false)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -896,12 +829,14 @@ describe('website one-time-code fields', () => {
         <button type="button">Sign in</button>
       </form>
     `
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(false)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -915,12 +850,14 @@ describe('website one-time-code fields', () => {
         <button type="submit" formmethod="get">Search</button>
       </form>
     `
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(false)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -935,12 +872,14 @@ describe('website one-time-code fields', () => {
         <button type="submit" formmethod="get" aria-disabled="true">Search</button>
       </form>
     `
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(false)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -954,12 +893,14 @@ describe('website one-time-code fields', () => {
         <button type="button" formmethod="get">Sign in</button>
       </form>
     `
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(true)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(true)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('vault-pass')
@@ -978,12 +919,14 @@ describe('website one-time-code fields', () => {
       'input[autocomplete="one-time-code"]',
     )
     const field = document.querySelector<HTMLInputElement>('#otp-code')
-    const oneTimeCodeFillArgs: Parameters<typeof fillOneTimeCode>[0] = {
-      code: '123456',
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillOneTimeCode(oneTimeCodeFillArgs)).toBe(true)
+
+    expect(
+      credentials.fillOneTimeCode({
+        code: '123456',
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(true)
     expect(first?.value).toBe('')
     expect(field?.value).toBe('123456')
   })

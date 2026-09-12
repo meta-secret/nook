@@ -8,8 +8,13 @@ use super::{
     PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,
     PinnedSimpleGenesisEvent,
 };
+use crate::StoredStringRecord;
+use crate::storage::identity_record::PendingSimpleGenesisFlow;
+use crate::{IndexedDbUpdate, NookDatabase};
 use crate::{NookError, storage::indexed_db};
 use indexed_db::{StringUpdateGuard, StringUpdateResult};
+use nook_core::StoredSigningSeed;
+use nook_core::VaultEvent;
 use nook_core::{AgeArmoredCiphertext, AppKey, MemberDekEnvelope, SigningIdentity};
 use std::{cell::RefCell, rc::Rc};
 pub(crate) struct SimpleGenesisEventInput<'a> {
@@ -42,7 +47,7 @@ impl GenesisEventSigner<'_> {
             signing_seed,
         } = self;
 
-        let event = nook_core::parse_event_storage_bytes(&event_yaml.as_bytes().to_vec().into())?;
+        let event = VaultEvent::parse_event_storage_bytes(&event_yaml.as_bytes().to_vec().into())?;
         let signing = SigningIdentity::from_seed_hex_stored(signing_seed)?;
         if event.body.actor_signing_public_key != signing.public_key() {
             return Err(NookError::Database(
@@ -82,38 +87,37 @@ impl PendingSimpleGenesis {
         signing_seed: &str,
     ) -> Result<Vec<MemberDekEnvelope>, NookError> {
         let pending = self;
-        pending
-            .staged_identity()
-            .and_then(|staged| {
-                staged
-                    .directory
-                    .identities()
-                    .iter()
-                    .find(|identity| identity.identity_id == pending.identity_id)
+        let PendingSimpleGenesisFlow::Staged(staged) = &pending.flow else {
+            return Ok(Vec::new());
+        };
+        let Some(identity) = staged
+            .directory
+            .identities()
+            .iter()
+            .find(|identity| identity.identity_id == pending.identity_id)
+        else {
+            return Ok(Vec::new());
+        };
+        identity
+            .members
+            .iter()
+            .map(|member| {
+                Ok(nook_core::MemberDekEnvelope {
+                    app_id: member.app_id.clone(),
+                    envelope: member.public_key.seal_bytes(signing_seed.as_bytes())?,
+                })
             })
-            .map(|identity| {
-                identity
-                    .members
-                    .iter()
-                    .map(|member| {
-                        Ok(nook_core::MemberDekEnvelope {
-                            app_id: member.app_id.clone(),
-                            envelope: member.public_key.seal_bytes(signing_seed.as_bytes())?,
-                        })
-                    })
-                    .collect::<Result<Vec<_>, nook_core::MultiDeviceError>>()
-            })
-            .transpose()
+            .collect::<Result<Vec<_>, nook_core::MultiDeviceError>>()
             .map_err(|error| NookError::Database(error.to_string()))
-            .map(Option::unwrap_or_default)
     }
+
     pub(crate) fn resume_signing_seed(
         &self,
         app_key: &AppKey,
-    ) -> Result<Option<String>, NookError> {
+    ) -> Result<nook_core::StoredSigningSeed, NookError> {
         let pending = self;
         if !pending.is_staged() {
-            return Ok(None);
+            return Ok(StoredSigningSeed::Missing);
         }
         let PendingSimpleGenesisEvent::EventPinned {
             signing_seed_envelope,
@@ -121,7 +125,7 @@ impl PendingSimpleGenesis {
             ..
         } = &pending.event_state
         else {
-            return Ok(None);
+            return Ok(StoredSigningSeed::Missing);
         };
         member_signing_seed_envelopes
             .iter()
@@ -130,7 +134,7 @@ impl PendingSimpleGenesis {
                 || app_key.open_utf8(signing_seed_envelope),
                 |entry| app_key.open_utf8(&entry.envelope),
             )
-            .map(Some)
+            .map(StoredSigningSeed::Stored)
             .map_err(|error| NookError::Database(error.to_string()))
     }
     fn prepare_event(
@@ -176,15 +180,22 @@ impl PreparedSimpleGenesisEvent {
             proposed_signing_seed_envelope,
             proposed_member_signing_seed_envelopes,
         } = self;
-        let selected = Rc::new(RefCell::new(None));
+        let selected = Rc::new(RefCell::new(Err(NookError::IndexedDb(
+            "Pending Simple genesis event produced no result.".to_owned(),
+        ))));
         let captured = Rc::clone(&selected);
-        let disposition = indexed_db::idb_update_string(
-            PENDING_SIMPLE_GENESIS_KEY,
-            StringUpdateGuard::Unconditional,
-            move |raw| {
-                let raw = raw.ok_or_else(|| {
-                    NookError::IndexedDb("Pending Simple genesis marker disappeared.".to_owned())
-                })?;
+        let disposition = NookDatabase::idb_update_string(IndexedDbUpdate {
+            key: PENDING_SIMPLE_GENESIS_KEY,
+            guard: StringUpdateGuard::Unconditional,
+            update: move |raw| {
+                let raw = match raw {
+                    StoredStringRecord::Stored(raw) => raw,
+                    StoredStringRecord::MissingKey => {
+                        return Err(NookError::IndexedDb(
+                            "Pending Simple genesis marker disappeared.".to_owned(),
+                        ));
+                    }
+                };
                 let mut current = PendingSimpleGenesis::decode(&raw)?;
                 if current.store_id != expected.store_id
                     || current.identity_id != expected.identity_id
@@ -245,19 +256,19 @@ impl PreparedSimpleGenesisEvent {
                         ));
                     }
                 };
-                *captured.borrow_mut() = Some(pinned);
+                *captured.borrow_mut() = Ok(pinned);
                 current.encode()
             },
-        )
+        })
         .await?;
         if disposition != StringUpdateResult::Applied {
             return Err(NookError::IndexedDb(
                 "Pending Simple genesis event update was rejected.".to_owned(),
             ));
         }
-        selected.borrow_mut().take().ok_or_else(|| {
-            NookError::IndexedDb("Pending Simple genesis event produced no result.".to_owned())
-        })
+        selected.replace(Err(NookError::IndexedDb(
+            "Pending Simple genesis event produced no result.".to_owned(),
+        )))
     }
 }
 #[cfg(test)]
@@ -266,7 +277,9 @@ mod tests {
         NookError, PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,
         SimpleGenesisEventInput,
     };
-    use crate::storage::{identity_record, indexed_db};
+    use crate::storage::identity_record;
+
+    use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
     use identity_record::{OrdinarySimpleGenesisRequest, genesis_flow::PendingSimpleGenesisFlow};
     use nook_core::{
         AppKey, EventId, IdentityId, IsoTimestamp, SigningIdentity, VaultEvent,
@@ -282,27 +295,30 @@ mod tests {
     )]
     #[wasm_bindgen_test]
     async fn pending_genesis_reuses_first_complete_signed_event() -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
-        let app_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let pending = OrdinarySimpleGenesisRequest {
             app_key: &app_key,
             label: "Personal",
         }
         .begin_or_resume()
         .await?;
-        let first = (&pending)
+        let first = pending
             .pin_event(SimpleGenesisEventInput {
                 app_key: &app_key,
                 proposed_yaml: "first-event\n".to_owned(),
                 proposed_signing_seed: "first-seed".to_owned(),
             })
             .await?;
-        let stored = indexed_db::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-            .await?
-            .ok_or_else(|| NookError::IndexedDb("Marker disappeared.".to_owned()))?;
+        let stored = match NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? {
+            StoredStringRecord::Stored(value) => Ok(value),
+            StoredStringRecord::MissingKey => {
+                Err(NookError::IndexedDb("Marker disappeared.".to_owned()))
+            }
+        }?;
         assert!(!stored.contains("first-seed"));
         assert!(stored.contains("signingSeedEnvelope"));
-        let resumed = (&pending)
+        let resumed = pending
             .pin_event(SimpleGenesisEventInput {
                 app_key: &app_key,
                 proposed_yaml: "other-event\n".to_owned(),
@@ -311,7 +327,7 @@ mod tests {
             .await?;
         assert_eq!(resumed.event_yaml, first.event_yaml);
         assert_eq!(resumed.signing_seed, first.signing_seed);
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[wasm_bindgen_test]
@@ -340,7 +356,7 @@ mod tests {
             event_signing.signing_key(),
         )?;
         let event_yaml =
-            String::from_utf8(nook_core::serialize_event_storage_yaml(&event)?.into())?;
+            String::from_utf8(VaultEvent::serialize_event_storage_yaml(&event)?.into())?;
         let mut pending = PendingSimpleGenesis {
             store_id,
             identity_id: IdentityId::generate()?,
@@ -394,9 +410,12 @@ mod tests {
             }
         }
         async fn marker(&self) -> Result<String, NookError> {
-            indexed_db::idb_get_string(super::PENDING_SIMPLE_GENESIS_KEY)
-                .await?
-                .ok_or_else(|| NookError::IndexedDb("Pinning marker disappeared.".to_owned()))
+            match NookDatabase::idb_get_string(super::PENDING_SIMPLE_GENESIS_KEY).await? {
+                StoredStringRecord::Stored(value) => Ok(value),
+                StoredStringRecord::MissingKey => Err(NookError::IndexedDb(
+                    "Pinning marker disappeared.".to_owned(),
+                )),
+            }
         }
     }
     #[cfg_attr(
@@ -409,7 +428,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn pinning_rejects_each_changed_marker_identity_without_overwriting()
     -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await?;
         let fixture = PinningFixture::new().await?;
         let original = fixture.marker().await?;
         let different_store = PendingSimpleGenesis {
@@ -428,16 +447,24 @@ mod tests {
         assert_ne!(different_identity.identity_id, fixture.pending.identity_id);
         assert_ne!(different_time.created_at, fixture.pending.created_at);
         for replacement in [different_store, different_identity, different_time] {
-            indexed_db::idb_put_string(super::PENDING_SIMPLE_GENESIS_KEY, &original).await?;
+            NookDatabase::idb_put_string(IdbPutStringRequest {
+                key: super::PENDING_SIMPLE_GENESIS_KEY,
+                value: &original,
+            })
+            .await?;
             let prepared = fixture.pending.prepare_event(fixture.input())?;
             let replacement = replacement.encode()?;
-            indexed_db::idb_put_string(super::PENDING_SIMPLE_GENESIS_KEY, &replacement).await?;
+            NookDatabase::idb_put_string(IdbPutStringRequest {
+                key: super::PENDING_SIMPLE_GENESIS_KEY,
+                value: &replacement,
+            })
+            .await?;
             assert!(
                 matches!(prepared.persist().await, Err(NookError::IndexedDb(message)) if message == "Pending Simple genesis marker changed during event creation.")
             );
             assert_eq!(fixture.marker().await?, replacement);
         }
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_identity_directory_for_test().await
     }
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
@@ -449,7 +476,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn prepared_event_drop_preserves_marker_and_consumption_pins_once()
     -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await?;
         let fixture = PinningFixture::new().await?;
         let original = fixture.marker().await?;
         {
@@ -477,6 +504,6 @@ mod tests {
         assert_eq!(resumed.event_yaml, pinned.event_yaml);
         assert_eq!(resumed.signing_seed, pinned.signing_seed);
         assert_eq!(fixture.marker().await?, stored);
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_identity_directory_for_test().await
     }
 }

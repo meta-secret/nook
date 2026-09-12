@@ -9,9 +9,8 @@ import {
   authentication_advance_control_is_safe,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  authenticationPageObservationFacts,
   FormSubmissionResult,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   DomAuthenticationSimulationOutcomeKind,
@@ -209,9 +208,10 @@ describe('Claude DOM-backed authentication simulation', () => {
     ).toBeTruthy()
     expect(document.querySelector('nav[aria-label="Claude"]')).toBeTruthy()
 
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected Claude observation')
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,

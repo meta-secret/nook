@@ -36,7 +36,7 @@ impl NookVaultManager {
         &mut self,
         input: SecretReplacementInput,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status.tx.send("REPLACE_SECRET_START".to_owned());
+        drop(self.status.tx.send("REPLACE_SECRET_START".to_owned()));
         self.ensure_vault_crypto_from_cache().await?;
         if !self
             .vault
@@ -108,7 +108,7 @@ impl NookVaultManager {
             ),
         }])
         .await?;
-        let _ = self.status.tx.send("READY".to_owned());
+        drop(self.status.tx.send("READY".to_owned()));
         Ok(self.get_records()?)
     }
 }
@@ -267,7 +267,7 @@ impl NookVaultManager {
         secret_type: nook_core::SecretType,
         data: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status.tx.send("ADD_SECRET_START".to_owned());
+        drop(self.status.tx.send("ADD_SECRET_START".to_owned()));
         self.ensure_vault_crypto_from_cache().await?;
         if !self
             .vault
@@ -280,7 +280,7 @@ impl NookVaultManager {
             .into());
         }
         let id = nook_core::SecretId::parse(&id)?;
-        nook_core::validate_secret_data(&data)?;
+        SecretValue::validate_secret_data(&data)?;
         let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
         let mut typed_value = SecretValue::from_yaml_str(secret_type, &data)?;
         let identity_fingerprint = typed_value.identity_fingerprint(&secrets_key)?;
@@ -308,7 +308,7 @@ impl NookVaultManager {
             ),
         }])
         .await?;
-        let _ = self.status.tx.send("READY".to_owned());
+        drop(self.status.tx.send("READY".to_owned()));
         let records = self.get_records()?;
         tracing::info!(
             scope = "wasm-secrets",
@@ -401,7 +401,7 @@ impl NookVaultManager {
 
     // Delete a secret
     pub async fn delete_secret(&mut self, id: String) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status.tx.send("DELETE_SECRET_START".to_owned());
+        drop(self.status.tx.send("DELETE_SECRET_START".to_owned()));
         self.ensure_vault_crypto_from_cache().await?;
         let id = nook_core::SecretId::parse(&id)?;
         self.vault.meta.secrets.remove(&id);
@@ -410,7 +410,7 @@ impl NookVaultManager {
             secret_id: id.clone(),
         }])
         .await?;
-        let _ = self.status.tx.send("READY".to_owned());
+        drop(self.status.tx.send("READY".to_owned()));
         let records = self.get_records()?;
         tracing::info!(
             scope = "wasm-secrets",
@@ -465,7 +465,9 @@ impl NookVaultManager {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
-    use nook_core::{AgeArmoredCiphertext, VaultKeys};
+    use nook_core::{
+        AgeArmoredCiphertext, EventPublicationDestination, LocalEventBytes, VaultKeys,
+    };
     use wasm_bindgen_test::*;
 
     /// WASM-side contract for file-sync reconnect after offline concurrent creates
@@ -483,12 +485,12 @@ mod wasm_tests {
         const TS: &str = "2026-06-28T00:00:00Z";
 
         fn append_login(
-            session: &mut VaultEventSession,
+            mut session: VaultEventSession,
             crypto: &VaultCrypto,
             secrets_key: &nook_core::SymmetricKey,
             secret_id: &str,
             password: &str,
-        ) -> anyhow::Result<()> {
+        ) -> anyhow::Result<VaultEventSession> {
             let value = SecretValue::Login(LoginSecret {
                 website_url: "https://login-a-1.example.com".to_owned(),
                 username: "alice".to_owned(),
@@ -498,8 +500,8 @@ mod wasm_tests {
             let identity = value.identity_fingerprint(secrets_key)?;
             let version = value.fingerprint(secrets_key)?;
             let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
-            session.append_operations(
-                vec![VaultOperation::SecretCreated {
+            match session.append_operations(nook_core::VaultEventAppend {
+                operations: vec![VaultOperation::SecretCreated {
                     secret: EncryptedSecretPayload::from_armored(
                         &SecretId::from_vault_record(secret_id),
                         SecretType::Login,
@@ -508,10 +510,19 @@ mod wasm_tests {
                         version,
                     ),
                 }],
-                TS,
-                Some("local-folder"),
-            )?;
-            Ok(())
+                created_at: TS,
+                destination: EventPublicationDestination::Provider("local-folder"),
+            }) {
+                Ok(outcome) => {
+                    session = outcome.session;
+                    Ok(outcome.event_id)
+                }
+                Err(rejected) => {
+                    session = rejected.session;
+                    Err(rejected.cause)
+                }
+            }?;
+            Ok(session)
         }
 
         let keys = VaultKeys::generate()?;
@@ -524,15 +535,24 @@ mod wasm_tests {
             signing.clone(),
             signing_seed.clone().into_inner(),
         );
-        device_a.append_operations(
-            vec![VaultOperation::VaultImported {
+        match device_a.append_operations(nook_core::VaultEventAppend {
+            operations: vec![VaultOperation::VaultImported {
                 source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: Vec::new(),
                 password_entries: Vec::new(),
             }],
-            TS,
-            Some("local-folder"),
-        )?;
+            created_at: TS,
+            destination: EventPublicationDestination::Provider("local-folder"),
+        }) {
+            Ok(outcome) => {
+                device_a = outcome.session;
+                Ok(outcome.event_id)
+            }
+            Err(rejected) => {
+                device_a = rejected.session;
+                Err(rejected.cause)
+            }
+        }?;
 
         let mut device_b =
             VaultEventSession::new(store_id.to_string(), signing, signing_seed.into_inner());
@@ -540,28 +560,35 @@ mod wasm_tests {
             .store
             .event_ids()
             .into_iter()
-            .filter_map(|id| {
-                device_a
-                    .store
-                    .get_bytes(&id)
-                    .map(|bytes| (id, bytes.into()))
+            .filter_map(|id| match device_a.store.get_bytes(&id) {
+                LocalEventBytes::Stored(bytes) => Some((id, bytes.into())),
+                LocalEventBytes::UnknownEvent => None,
             })
             .collect();
-        device_b.union_remote(&genesis_events)?;
+        match device_b.union_remote(&genesis_events) {
+            Ok(outcome) => {
+                device_b = outcome;
+                Ok(())
+            }
+            Err(rejected) => {
+                device_b = rejected.session;
+                Err(rejected.cause)
+            }
+        }?;
 
         let shared_head = device_a.heads[0].clone();
         // Disconnect: each device appends offline from the same head.
         device_a.heads = vec![shared_head.clone()];
-        append_login(
-            &mut device_a,
+        device_a = append_login(
+            device_a,
             &crypto,
             &keys.secrets_key,
             "secret_logina1aaaa",
             "password-from-device-a",
         )?;
         device_b.heads = vec![shared_head];
-        append_login(
-            &mut device_b,
+        device_b = append_login(
+            device_b,
             &crypto,
             &keys.secrets_key,
             "secret_logina1bbbb",
@@ -573,26 +600,40 @@ mod wasm_tests {
             .store
             .event_ids()
             .into_iter()
-            .filter_map(|id| {
-                device_a
-                    .store
-                    .get_bytes(&id)
-                    .map(|bytes| (id, bytes.into()))
+            .filter_map(|id| match device_a.store.get_bytes(&id) {
+                LocalEventBytes::Stored(bytes) => Some((id, bytes.into())),
+                LocalEventBytes::UnknownEvent => None,
             })
             .collect();
         let b_events: Vec<_> = device_b
             .store
             .event_ids()
             .into_iter()
-            .filter_map(|id| {
-                device_b
-                    .store
-                    .get_bytes(&id)
-                    .map(|bytes| (id, bytes.into()))
+            .filter_map(|id| match device_b.store.get_bytes(&id) {
+                LocalEventBytes::Stored(bytes) => Some((id, bytes.into())),
+                LocalEventBytes::UnknownEvent => None,
             })
             .collect();
-        device_a.union_remote(&b_events)?;
-        device_b.union_remote(&a_events)?;
+        match device_a.union_remote(&b_events) {
+            Ok(outcome) => {
+                device_a = outcome;
+                Ok(())
+            }
+            Err(rejected) => {
+                device_a = rejected.session;
+                Err(rejected.cause)
+            }
+        }?;
+        match device_b.union_remote(&a_events) {
+            Ok(outcome) => {
+                device_b = outcome;
+                Ok(())
+            }
+            Err(rejected) => {
+                device_b = rejected.session;
+                Err(rejected.cause)
+            }
+        }?;
 
         let graph = device_a.store.load_graph(device_a.store_id.as_str())?;
         let projection = device_a.project()?;

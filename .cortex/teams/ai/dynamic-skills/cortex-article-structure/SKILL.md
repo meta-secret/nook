@@ -201,20 +201,12 @@ also exposes its validated audit action through strict YAML.
 
 ## Validation
 
-Run the focused checks. The provider contract and independent verifier live in
-Loom with the production audit implementation:
+1. Review changed articles for purpose, hierarchy, action order, and outcomes.
+2. Preserve repeated fields as enclosed structured lists.
+3. Return the scoped documentation commit to the feature Gizmo.
+4. Execute Loom structure, link, and provider checks in the manager's slow PR stage.
 
-```bash
-task loom:cortex-audit
-task loom:verify
-task preflight:loom-contracts
-```
-
-Review the diff semantically after the mechanical checks pass.
-
-- Confirm every `.cortex/**/*.md` document parses with no GFM `table` node.
-- Confirm repeated fields and exact mappings remain explicit as named
-  properties in enclosed lists.
-
-The reviewer must be able to identify article purpose, action order, branches,
-and completion evidence without reconstructing them from dense prose.
+Follow [dev delivery](../../../../gizmo/architecture/dev-delivery.md).
+Do not run local audits, tests, or preflight. A semantic reading is not
+mechanical validation. The reader must understand each article without
+reconstructing its structure from dense prose.

@@ -1,6 +1,17 @@
-import { VaultAccessStatus, type NookPasswordEntrySummary } from "$app-wasm";
-
-type VaultConnectAssessment = [string, string, string];
+import { ok, err, type Result } from "neverthrow";
+import {
+  NativeVaultStorageFailure,
+  type VaultStorageFailure,
+} from "$lib/runtime/storage-failure";
+import type { NookStorageConnectArgs } from "$app-wasm";
+import {
+  VaultAccessStatus,
+  login_unlock_decision,
+  PasswordEntryPresence,
+  LoginDeviceKeyAvailability,
+  LoginPasswordPromptUpdate,
+  type NookPasswordEntrySummary,
+} from "$app-wasm";
 
 type LoginUnlockCapabilityState = {
   hasManager: boolean;
@@ -9,36 +20,44 @@ type LoginUnlockCapabilityState = {
   loginPasswordPrompt: boolean;
   passwordEntries: readonly NookPasswordEntrySummary[];
   assessVaultConnectStatus(
-    args: VaultConnectAssessment,
-  ): Promise<VaultAccessStatus>;
+    args: NookStorageConnectArgs,
+  ): Promise<Result<VaultAccessStatus, VaultStorageFailure>>;
 };
 
 /** Assess whether device keys or backup passwords can unlock the active vault. */
-export async function refreshLoginUnlockCapabilities(
-  state: LoginUnlockCapabilityState,
-): Promise<void> {
-  state.loginDeviceKeysCapable = true;
-  if (!state.hasManager || !state.localVaultPresent) {
-    return;
-  }
-  try {
-    const accessStatus = await state.assessVaultConnectStatus([
-      "local",
-      "",
-      "",
-    ]);
-    if (
-      accessStatus === VaultAccessStatus.NeedsEnrollment ||
-      accessStatus === VaultAccessStatus.JoinPending
-    ) {
-      state.loginDeviceKeysCapable = false;
-      if (state.passwordEntries.length > 0) {
-        state.loginPasswordPrompt = true;
-      }
+export class LoginUnlockPresentation {
+  constructor(private readonly request: LoginUnlockCapabilityState) {}
+  async refresh(): Promise<Result<void, VaultStorageFailure>> {
+    const state = this.request;
+    if (!state.hasManager || !state.localVaultPresent) {
+      state.loginDeviceKeysCapable = true;
+      return ok();
     }
-  } catch {
-    // Device identity may be locked; keep device-keys enabled until unlock
-    // ceremony can assess membership.
-    state.loginDeviceKeysCapable = true;
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const accessStatus = await state.assessVaultConnectStatus({
+      mode: "local",
+      pat: "",
+      repo: "",
+    });
+    if (accessStatus.isErr()) return err(accessStatus.error);
+    try {
+      const decision = login_unlock_decision(
+        accessStatus.value,
+        state.passwordEntries.length > 0
+          ? PasswordEntryPresence.Present
+          : PasswordEntryPresence.Absent,
+      );
+      try {
+        state.loginDeviceKeysCapable =
+          decision.device_keys === LoginDeviceKeyAvailability.Enabled;
+        if (decision.password_prompt === LoginPasswordPromptUpdate.Offer)
+          state.loginPasswordPrompt = true;
+      } finally {
+        decision.free();
+      }
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    }
+    return ok();
   }
 }

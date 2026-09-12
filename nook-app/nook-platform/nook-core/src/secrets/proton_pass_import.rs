@@ -83,7 +83,7 @@ impl<'a> ProtonPassImportInput<'a> {
             return Err(ProtonPassImportError::EncryptedExport);
         }
         if self.is_zip() {
-            let mut archive = ProtonPassArchive::open(self.bytes)?;
+            let archive = ProtonPassArchive::open(self.bytes)?;
             let json = archive.select_data()?.read()?;
             return ProtonPassExport::parse(&json).map(ProtonPassExport::plan);
         }
@@ -198,7 +198,10 @@ pub(super) mod tests {
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 3);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a login")),
             SecretValue::Login(LoginSecret {
                 website_url: "https://github.com/login".to_owned(),
                 username: "alice".to_owned(),
@@ -220,7 +223,10 @@ pub(super) mod tests {
             })
         );
         assert_eq!(
-            plan.items[1],
+            *plan
+                .items
+                .get(1)
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Private note".to_owned(),
                 note: "Keep offline\n\n## Proton Pass\n- vault: Work\n- state: trashed".to_owned(),
@@ -234,7 +240,7 @@ pub(super) mod tests {
         let json = ProtonPassZipFixture::export_json()
             .replace(r#""itemUsername":"alice""#, r#""itemUsername":"""#);
         let plan = ProtonPassImportInput::from_bytes(json.as_bytes()).plan()?;
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login")
         };
         assert_eq!(login.username, "alice@example.com");
@@ -249,7 +255,7 @@ pub(super) mod tests {
             r#""itemUsername":"","username":"legacy-alice""#,
         );
         let plan = ProtonPassImportInput::from_bytes(json.as_bytes()).plan()?;
-        let SecretValue::Login(login) = &plan.items[0] else {
+        let Some(SecretValue::Login(login)) = plan.items.first() else {
             panic!("expected login")
         };
         assert_eq!(login.username, "legacy-alice");

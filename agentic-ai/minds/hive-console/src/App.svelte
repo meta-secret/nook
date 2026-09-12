@@ -13,7 +13,6 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     CheckCircle2,
     CircleDashed,
     Clock3,
-    Filter,
     GitCommitHorizontal,
     Hexagon,
     Layers,
@@ -27,11 +26,12 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     ObservedAlert,
     ObservedTask,
     ObserverCopy,
-    ObserverSnapshot,
-  } from './types';
-  import { ObservedAlertSeverity, ObservedExecutionStatus } from './types';
-  import { emergencyCopy } from './emergency-copy';
+  } from './generated/index';
+  import { ObservedAlertSeverity, ObservedTaskState } from './generated/values';
+  import { ObserverClient, ObserverFailureKind } from './observer-client';
+  import { EmergencyCopyCatalog } from './emergency-copy';
   import {
+    WorkerDisplayStatus,
     DurableTaskLookupKind,
     DetailPanelMountKind,
     ObserverFeedKind,
@@ -72,7 +72,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   const copy = $derived(
     snapshotState.kind === ObserverFeedKind.Loaded
       ? snapshotState.snapshot.copy
-      : emergencyCopy(navigator.language || 'en'),
+      : new EmergencyCopyCatalog(navigator.language || 'en').read(),
   );
   const selectedState = $derived.by<SelectedTask>(() => {
     if (selectedIdState.kind === TaskSelectionKind.None) {
@@ -121,7 +121,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   const executingTasks = $derived.by(() => {
     if (snapshotState.kind !== ObserverFeedKind.Loaded) return [];
     return snapshotState.snapshot.tasks
-      .filter((t) => t.status === ObservedExecutionStatus.Running)
+      .filter((t) => t.status === ObservedTaskState.Running)
       .sort((left, right) => right.updated_at - left.updated_at);
   });
 
@@ -132,15 +132,15 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         : [];
     const attention = attentionEntries.length;
     const running = all.filter(
-      (t) => t.status === ObservedExecutionStatus.Running,
+      (t) => t.status === ObservedTaskState.Running,
     ).length;
     const failed = all.filter(
       (t) =>
-        t.status === ObservedExecutionStatus.Failed ||
-        t.status === ObservedExecutionStatus.Blocked,
+        t.status === ObservedTaskState.Failed ||
+        t.status === ObservedTaskState.Blocked,
     ).length;
     const completed = all.filter(
-      (t) => t.status === ObservedExecutionStatus.Completed,
+      (t) => t.status === ObservedTaskState.Completed,
     ).length;
     return { all: all.length, attention, running, failed, completed };
   });
@@ -150,30 +150,27 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       snapshotState.kind === ObserverFeedKind.Loaded
         ? snapshotState.snapshot.tasks
         : [];
-    const durableTasks: ObservedTask[] = [];
-    if (durableMatchState.kind === DurableTaskLookupKind.Found) {
-      const durableTask = durableMatchState.task;
-      if (!snapshotTasks.some((task) => task.id === durableTask.id)) {
-        durableTasks.push(durableTask);
-      }
-    }
+    const durableMatch = durableMatchState;
+    const durableTasks: ObservedTask[] =
+      durableMatch.kind === DurableTaskLookupKind.Found &&
+      !snapshotTasks.some((task) => task.id === durableMatch.task.id)
+        ? [durableMatch.task]
+        : [];
     let tasks = [...durableTasks, ...snapshotTasks];
 
     if (selectedTab === TaskTabFilter.Attention) {
       tasks = tasks.filter((t) => attentionTaskIds.has(t.id));
     } else if (selectedTab === TaskTabFilter.Running) {
-      tasks = tasks.filter((t) => t.status === ObservedExecutionStatus.Running);
+      tasks = tasks.filter((t) => t.status === ObservedTaskState.Running);
     } else if (selectedTab === TaskTabFilter.Failed) {
       tasks = tasks.filter(
         (t) =>
-          t.status === ObservedExecutionStatus.Failed ||
-          t.status === ObservedExecutionStatus.Blocked ||
+          t.status === ObservedTaskState.Failed ||
+          t.status === ObservedTaskState.Blocked ||
           attentionTaskIds.has(t.id),
       );
     } else if (selectedTab === TaskTabFilter.Completed) {
-      tasks = tasks.filter(
-        (t) => t.status === ObservedExecutionStatus.Completed,
-      );
+      tasks = tasks.filter((t) => t.status === ObservedTaskState.Completed);
     }
 
     const query = search.trim().toLocaleLowerCase();
@@ -205,13 +202,15 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   const groupedTasks = $derived.by(() => {
     if (!groupByKind) return [];
-    const groups: Record<string, ObservedTask[]> = {};
-    for (const task of filteredTasks) {
+    const groups = filteredTasks.reduce((groups, task) => {
       const label = task.kind_label || task.kind || 'Other';
-      if (!groups[label]) groups[label] = [];
-      groups[label].push(task);
-    }
-    return Object.entries(groups);
+      const existing = groups.get(label);
+      return new Map([
+        ...groups,
+        [label, [...(existing ? existing : []), task]],
+      ]);
+    }, new Map<string, ObservedTask[]>());
+    return [...groups.entries()];
   });
   const normalizedSearch = $derived(search.trim());
   const recentActivity = $derived(
@@ -273,29 +272,25 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         durableMatchState = { kind: DurableTaskLookupKind.NotFound };
         return;
       }
-      try {
-        const locale = navigator.language || 'en';
-        const response = await fetch(
-          `/api/tasks/${encodeURIComponent(taskId)}?locale=${encodeURIComponent(locale)}`,
-          { signal: controller.signal },
-        );
-        if (response.status === 404) {
+      const result = await new ObserverClient(navigator.language || 'en').task(
+        taskId,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      if (result.isErr()) {
+        if (
+          result.error.kind !== ObserverFailureKind.Cancelled &&
+          result.error.kind !== ObserverFailureKind.Http
+        )
           durableMatchState = { kind: DurableTaskLookupKind.NotFound };
-          return;
-        }
-        if (!response.ok) return;
-        const match = (await response.json()) as ObservedTask;
-        durableMatchState = { kind: DurableTaskLookupKind.Found, task: match };
-        if (!detailsClosed)
-          selectedIdState = {
-            kind: TaskSelectionKind.Selected,
-            taskId: match.id,
-          };
-      } catch (error) {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) {
-          durableMatchState = { kind: DurableTaskLookupKind.NotFound };
-        }
+        return;
       }
+      durableMatchState = result.value;
+      if (result.value.kind === DurableTaskLookupKind.Found && !detailsClosed)
+        selectedIdState = {
+          kind: TaskSelectionKind.Selected,
+          taskId: result.value.task.id,
+        };
     }, 250);
 
     return () => {
@@ -318,66 +313,60 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   });
 
   async function loadSnapshot(request: SnapshotLoadRequest) {
-    try {
-      const locale = navigator.language || 'en';
-      document.documentElement.lang = locale
-        .toLocaleLowerCase()
-        .startsWith('ru')
-        ? 'ru'
-        : 'en';
-      const requestInit: RequestInit =
-        request.kind === SnapshotLoadRequestKind.ScheduledRefresh
-          ? { signal: request.signal }
-          : {};
-      const response = await fetch(
-        `/api/overview?locale=${encodeURIComponent(locale)}`,
-        requestInit,
-      );
-      if (!response.ok) throw new Error(`observer returned ${response.status}`);
-      const next = (await response.json()) as ObserverSnapshot;
-      snapshotState = { kind: ObserverFeedKind.Loaded, snapshot: next };
-      unavailable = false;
-      let selectedTaskStillAvailable = false;
-      if (selectedIdState.kind === TaskSelectionKind.Selected) {
-        const selectedTaskId = selectedIdState.taskId;
-        selectedTaskStillAvailable =
-          next.tasks.some((task) => task.id === selectedTaskId) ||
-          (durableMatchState.kind === DurableTaskLookupKind.Found &&
-            durableMatchState.task.id === selectedTaskId);
-      }
-      if (
-        (!detailsClosed && selectedIdState.kind === TaskSelectionKind.None) ||
-        !selectedTaskStillAvailable
-      ) {
-        if (!detailsClosed) {
-          const firstTask = next.tasks[0];
-          selectedIdState = firstTask
-            ? { kind: TaskSelectionKind.Selected, taskId: firstTask.id }
-            : { kind: TaskSelectionKind.None };
-        }
-      }
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
+    const locale = navigator.language || 'en';
+    document.documentElement.lang = locale.toLocaleLowerCase().startsWith('ru')
+      ? 'ru'
+      : 'en';
+    const requestInit: RequestInit =
+      request.kind === SnapshotLoadRequestKind.ScheduledRefresh
+        ? { signal: request.signal }
+        : {};
+    const result = await new ObserverClient(locale).snapshot(requestInit);
+    if (result.isErr()) {
+      if (result.error.kind === ObserverFailureKind.Cancelled) return;
       unavailable = true;
-    } finally {
       loading = false;
+      return;
     }
+    const next = result.value;
+    snapshotState = { kind: ObserverFeedKind.Loaded, snapshot: next };
+    unavailable = false;
+    let selectedTaskStillAvailable = false;
+    if (selectedIdState.kind === TaskSelectionKind.Selected) {
+      const selectedTaskId = selectedIdState.taskId;
+      selectedTaskStillAvailable =
+        next.tasks.some((task) => task.id === selectedTaskId) ||
+        (durableMatchState.kind === DurableTaskLookupKind.Found &&
+          durableMatchState.task.id === selectedTaskId);
+    }
+    if (
+      (!detailsClosed && selectedIdState.kind === TaskSelectionKind.None) ||
+      !selectedTaskStillAvailable
+    ) {
+      if (!detailsClosed) {
+        const firstTask = next.tasks[0];
+        selectedIdState = firstTask
+          ? { kind: TaskSelectionKind.Selected, taskId: firstTask.id }
+          : { kind: TaskSelectionKind.None };
+      }
+    }
+    loading = false;
   }
 
   function isAgentHealthy(agent: ObservedAgent) {
-    return !unavailable && Date.now() - agent.last_seen_at < 2 * 60_000;
+    return !unavailable && Date.now() < agent.presence_expires_at;
   }
 
   function statusLabel(status: string) {
     const labels: Record<string, string> = {
-      [ObservedExecutionStatus.Blocked]: copy.blocked,
-      [ObservedExecutionStatus.Cancelled]: copy.cancelled,
-      [ObservedExecutionStatus.Cancelling]: copy.cancelling,
-      [ObservedExecutionStatus.Completed]: copy.completed,
-      [ObservedExecutionStatus.Failed]: copy.failed,
-      [ObservedExecutionStatus.Idle]: copy.idle,
-      [ObservedExecutionStatus.Ready]: copy.ready,
-      [ObservedExecutionStatus.Running]: copy.running,
+      [ObservedTaskState.Blocked]: copy.blocked,
+      [ObservedTaskState.Cancelled]: copy.cancelled,
+      [ObservedTaskState.Cancelling]: copy.cancelling,
+      [ObservedTaskState.Completed]: copy.completed,
+      [ObservedTaskState.Failed]: copy.failed,
+      [WorkerDisplayStatus.Idle]: copy.idle,
+      [ObservedTaskState.Ready]: copy.ready,
+      [ObservedTaskState.Running]: copy.running,
     };
     for (const [candidate, label] of Object.entries(labels)) {
       if (candidate === status) return label;
@@ -387,9 +376,9 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   function isAttentionStatus(status: string): boolean {
     return (
-      status === ObservedExecutionStatus.Blocked ||
-      status === ObservedExecutionStatus.Failed ||
-      status === ObservedExecutionStatus.Cancelling
+      status === ObservedTaskState.Blocked ||
+      status === ObservedTaskState.Failed ||
+      status === ObservedTaskState.Cancelling
     );
   }
 
@@ -503,8 +492,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       <div class="worker-capacity" aria-label={copy.workers}>
         {#each snapshotState.kind === ObserverFeedKind.Loaded ? snapshotState.snapshot.agents : [] as agent (agent.id)}
           <span
-            class:worker-running={agent.status ===
-              ObservedExecutionStatus.Running}
+            class:worker-running={agent.status === ObservedTaskState.Running}
             class:worker-stale={!isAgentHealthy(agent)}
             title={`${agent.pod_name}: ${statusLabel(agent.status)}`}
           ></span>
@@ -540,8 +528,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           {#each snapshotState.kind === ObserverFeedKind.Loaded ? snapshotState.snapshot.agents : [] as agent (agent.id)}
             <div class="worker-row">
               <div
-                class:state-running={agent.status ===
-                  ObservedExecutionStatus.Running}
+                class:state-running={agent.status === ObservedTaskState.Running}
                 class:state-stale={!isAgentHealthy(agent)}
                 class="worker-state"
               >
@@ -933,11 +920,11 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     class={`status-mark status-mark-${status.toLocaleLowerCase()}`}
     aria-hidden="true"
   >
-    {#if status === ObservedExecutionStatus.Completed}
+    {#if status === ObservedTaskState.Completed}
       <CheckCircle2 size={compact ? 13 : 16} />
     {:else if isAttentionStatus(status)}
       <AlertTriangle size={compact ? 13 : 16} />
-    {:else if status === ObservedExecutionStatus.Running}
+    {:else if status === ObservedTaskState.Running}
       <Activity size={compact ? 13 : 16} />
     {:else}
       <Clock3 size={compact ? 13 : 16} />

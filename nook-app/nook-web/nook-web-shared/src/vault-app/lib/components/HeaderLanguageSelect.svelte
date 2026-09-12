@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { LocaleCatalogSource } from '$lib/vault/locale'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import type { NookAppLocale } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
@@ -13,18 +14,25 @@
   let open = $state(false)
   let root = $state<HTMLDivElement>()
 
-  function selectLocale(locale: NookAppLocale) {
+  async function selectLocale(locale: NookAppLocale) {
     const localeRequest: Parameters<typeof vault.updateLocale>[0] = {
       newLocale: locale,
-      preferWasm: vault.hasManager,
+      catalogSource: vault.hasManager
+        ? LocaleCatalogSource.Engine
+        : LocaleCatalogSource.Bundled,
     }
-    void vault.updateLocale(localeRequest)
+    const updated = await vault.updateLocale(localeRequest)
+    if (updated.isErr()) {
+      vault.errorMsg = vault.t(updated.error.translationKey)
+      return
+    }
     open = false
   }
 
   function handleDocumentClick(event: MouseEvent) {
     if (!open || !root) return
-    if (!root.contains(event.target as Node)) open = false
+    const target = event.target
+    if (target instanceof Node && !root.contains(target)) open = false
   }
 
   function handleDocumentKeydown(event: KeyboardEvent) {

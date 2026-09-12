@@ -1,5 +1,6 @@
 use anyhow::Result;
 use nook_core::{PasswordGenerationOptions, VaultApplication};
+use nook_wasm::ConfiguredVaultApplication;
 
 struct AuthCoreWasmComposition;
 
@@ -32,7 +33,7 @@ fn core_password_options_are_accepted_by_nook_wasm() -> Result<()> {
 
 #[test]
 fn core_application_capability_constructs_real_wasm_manager() {
-    nook_wasm::configure_vault_application(VaultApplication::UnifiedDevelopment);
+    ConfiguredVaultApplication::configure_vault_application(VaultApplication::UnifiedDevelopment);
     let manager = nook_wasm::NookVaultManager::new();
     assert_eq!(
         manager.vault_application(),
@@ -56,10 +57,10 @@ fn malformed_auth2_store_id_is_rejected_before_wasm_storage() {
 #[test]
 fn core_password_policy_rejects_an_empty_character_set() {
     let options = PasswordGenerationOptions {
-        lowercase: false,
-        uppercase: false,
-        numbers: false,
-        symbols: false,
+        lowercase: nook_core::PasswordCharacterSet::Excluded,
+        uppercase: nook_core::PasswordCharacterSet::Excluded,
+        numbers: nook_core::PasswordCharacterSet::Excluded,
+        symbols: nook_core::PasswordCharacterSet::Excluded,
         ..PasswordGenerationOptions::default()
     };
     assert!(options.validate().is_err());

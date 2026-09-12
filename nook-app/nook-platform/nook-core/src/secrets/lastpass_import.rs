@@ -7,6 +7,7 @@
 )]
 
 use super::import_support::{ImportMetadata, SourceLabelMetadata};
+use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
 
 use std::collections::HashMap;
 
@@ -99,7 +100,7 @@ struct LastPassMetadata<'a> {
 impl LastPassMetadata<'_> {
     fn append_to(&self, notes: &mut String) {
         let mut metadata = Vec::new();
-        if let Some((key, value)) = (SourceLabelMetadata {
+        if let Ok((key, value)) = (SourceLabelMetadata {
             key: "name",
             label: self.name,
             website_url: self.website_url,
@@ -141,9 +142,9 @@ impl LastPassUrl<'_> {
 }
 
 impl LastPassRecord<'_> {
-    fn convert(&self) -> Option<SecretValue> {
+    fn convert(&self) -> ImportItemDisposition {
         if self.record.iter().all(|value| value.trim().is_empty()) {
-            return None;
+            return ImportItemDisposition::Skipped(ImportSkipReason::EmptyRecord);
         }
         let url = self.field("url").trim();
         let name = self.field("name").trim();
@@ -158,7 +159,7 @@ impl LastPassRecord<'_> {
                 totp: self.field("totp"),
             }
             .append_to(&mut notes);
-            return Some(SecretValue::SecureNote(SecureNoteSecret {
+            return ImportItemDisposition::Imported(SecretValue::SecureNote(SecureNoteSecret {
                 title: name.to_owned(),
                 note: notes,
             }));
@@ -174,7 +175,7 @@ impl LastPassRecord<'_> {
         }
         .append_to(&mut notes);
 
-        Some(SecretValue::Login(LoginSecret {
+        ImportItemDisposition::Imported(SecretValue::Login(LoginSecret {
             website_url,
             username: self.field("username").to_owned(),
             password: self.field("password").to_owned(),
@@ -257,7 +258,7 @@ impl CheckedLastPassCsv<'_> {
     fn collect(mut self) -> Result<LastPassImportPlan, LastPassImportError> {
         let mut items = Vec::new();
         for record in self.reader.records() {
-            if let Some(item) = (LastPassRecord {
+            if let ImportItemDisposition::Imported(item) = (LastPassRecord {
                 record: &record?,
                 columns: &self.columns,
             })
@@ -330,7 +331,10 @@ mod tests {
         );
         let plan = LastPassCsvInput::new(csv).plan()?;
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Title".to_owned(),
                 note:
@@ -339,7 +343,7 @@ mod tests {
             })
         );
         assert!(
-            matches!(&plan.items[1], SecretValue::Login(login) if login.website_url == "https://sn")
+            matches!(plan.items.get(1), Some(SecretValue::Login(login)) if login.website_url == "https://sn")
         );
         Ok(())
     }
@@ -368,7 +372,7 @@ mod tests {
         assert_eq!(usize::from(plan.source_count), 2);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(
-            plan.items[0],
+            *plan.items.first().unwrap_or_else(|| panic!("import fixture must contain a login")),
             SecretValue::Login(LoginSecret {
                 website_url: "https://github.com/login".to_owned(),
                 username: "alice".to_owned(),
@@ -378,7 +382,10 @@ mod tests {
             })
         );
         assert_eq!(
-            plan.items[1],
+            *plan
+                .items
+                .get(1)
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Recovery".to_owned(),
                 note: "# Private note\n\nKeep offline\n\n## LastPass\n- group: Personal".to_owned(),

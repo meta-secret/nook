@@ -6,30 +6,91 @@ import {
   symlink,
   writeFile,
 } from 'node:fs/promises';
+
 import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
+
 import { tmpdir } from 'node:os';
+
 import { dirname, join } from 'node:path';
+
 import { describe, expect, test } from 'bun:test';
-import {
-  auditTeamAgents,
-  auditTeamAuthorities,
-} from '../../src/team-agents/audit.ts';
+
+import { TeamAgentContract } from '../../src/team-agents/audit.ts';
+
 import type {
   AuditTeamAgentsRequest,
   AuditTeamAuthoritiesRequest,
 } from '../../src/team-agents/audit.ts';
+
 import {
   GIZMO_OWNED_AGENT_CATALOG,
   GizmoOwnedAgentKey,
   TEAM_AUTHORITY_CATALOG,
   TeamKey,
-  gizmoOwnedAgentProfile,
-  teamAuthority,
+  TeamAuthorityCatalog,
 } from '../../src/team-agents/catalog.ts';
+
 import type { TeamAuthority } from '../../src/team-agents/catalog.ts';
 
+export class TeamAgentsAuditScenario {
+  private constructor(private readonly request: string) {}
+
+  static requiredAiAuthority(): TeamAuthority {
+    const authority = TeamAuthorityCatalog.teamAuthority(TeamKey.Ai);
+    if (!authority) throw new Error('The AI team authority is required.');
+    return authority;
+  }
+
+  static async cortexAuthorityFixture(): Promise<string> {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-team-authority-'));
+    await symlink(join(REPO_ROOT, '.cortex'), join(fixtureRoot, '.cortex'));
+    return fixtureRoot;
+  }
+
+  static async driftedAuthorityFixture(): Promise<string> {
+    const fixtureRoot = await mkdtemp(
+      join(tmpdir(), 'loom-team-authority-drift-'),
+    );
+    const cortexRoot = join(fixtureRoot, '.cortex');
+    await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
+    await symlink(join(REPO_ROOT, '.cortex/teams'), join(cortexRoot, 'teams'));
+    await writeFile(join(cortexRoot, 'AGENTS.md'), 'routing only\n', 'utf8');
+    await writeFile(
+      join(cortexRoot, 'gizmo/AGENTS.md'),
+      'delivery only\n',
+      'utf8',
+    );
+    return fixtureRoot;
+  }
+
+  static autonomyDriftFixture(invariant: string): Promise<string> {
+    return new TeamAgentsAuditScenario(invariant).execute();
+  }
+
+  private async execute(): Promise<string> {
+    const invariant = this.request;
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-autonomy-drift-'));
+    const cortexRoot = join(fixtureRoot, '.cortex');
+    await mkdir(cortexRoot, CREATE_RECURSIVELY);
+    await symlink(join(REPO_ROOT, '.cortex/teams'), join(cortexRoot, 'teams'));
+    await symlink(join(REPO_ROOT, '.cortex/gizmo'), join(cortexRoot, 'gizmo'));
+    const authority = await readFile(
+      join(REPO_ROOT, '.cortex/AGENTS.md'),
+      'utf8',
+    );
+    await writeFile(
+      join(cortexRoot, 'AGENTS.md'),
+      authority.replace(invariant, 'Autonomous mission invariant removed.'),
+      'utf8',
+    );
+    return fixtureRoot;
+  }
+}
+
 const REPO_ROOT = join(import.meta.dir, '../../../..');
+
 const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
+
 const CREATE_RECURSIVELY: MakeDirectoryOptions = { recursive: true };
 
 describe('canonical Cortex team authority', () => {
@@ -44,12 +105,12 @@ describe('canonical Cortex team authority', () => {
     expect(
       TEAM_AUTHORITY_CATALOG.map((authority) => authority.identity),
     ).toEqual(['AI', 'Development core', 'Security', 'SRE', 'Web development']);
-    expect(teamAuthority(TeamKey.Ai)).not.toBe(false);
+    expect(TeamAuthorityCatalog.teamAuthority(TeamKey.Ai)).not.toBe(false);
   });
 
   test('audits canonical Cortex paths and capability boundaries', () => {
     const auditRequest: AuditTeamAgentsRequest = { repoRoot: REPO_ROOT };
-    const report = auditTeamAgents(auditRequest);
+    const report = TeamAgentContract.auditTeamAgents(auditRequest);
 
     expect(report.findings).toEqual([]);
     expect(report.authorityCount).toBe(5);
@@ -74,13 +135,13 @@ describe('canonical Cortex team authority', () => {
           'PR Steward never edits functional code, adjudicates technical findings, sequences shared-branch writers, owns Workbench outcomes, or issues the final delivery verdict.',
       },
     ]);
-    expect(gizmoOwnedAgentProfile(GizmoOwnedAgentKey.PrSteward)).toEqual(
-      GIZMO_OWNED_AGENT_CATALOG[0]!,
-    );
+    expect(
+      TeamAuthorityCatalog.gizmoOwnedAgentProfile(GizmoOwnedAgentKey.PrSteward),
+    ).toEqual(GIZMO_OWNED_AGENT_CATALOG[0]!);
   });
 
   test('rejects stable-key, identity, context, and capability drift', () => {
-    const aiAuthority = requiredAiAuthority();
+    const aiAuthority = TeamAgentsAuditScenario.requiredAiAuthority();
     const driftedAuthorities: readonly TeamAuthority[][] = [
       TEAM_AUTHORITY_CATALOG.slice(1),
       [
@@ -104,15 +165,17 @@ describe('canonical Cortex team authority', () => {
         repoRoot: REPO_ROOT,
         authorities,
       };
-      expect(auditTeamAuthorities(auditRequest).auditOk).toBe(false);
+      expect(TeamAgentContract.auditTeamAuthorities(auditRequest).auditOk).toBe(
+        false,
+      );
     }
   });
 
   test('rejects root authorities that lose compact semantic contracts', async () => {
-    const fixtureRoot = await driftedAuthorityFixture();
+    const fixtureRoot = await TeamAgentsAuditScenario.driftedAuthorityFixture();
     try {
       const auditRequest: AuditTeamAgentsRequest = { repoRoot: fixtureRoot };
-      const report = auditTeamAgents(auditRequest);
+      const report = TeamAgentContract.auditTeamAgents(auditRequest);
       expect(report.auditOk).toBe(false);
       expect(report.findings.map((finding) => finding.code)).toContain(
         'invalid-cortex-team-authority',
@@ -133,9 +196,12 @@ describe('canonical Cortex team authority', () => {
       'Silence about\nmerge is not an intermediate selection.',
     ] as const;
     for (const invariant of invariants) {
-      const fixtureRoot = await autonomyDriftFixture(invariant);
+      const fixtureRoot =
+        await TeamAgentsAuditScenario.autonomyDriftFixture(invariant);
       try {
-        const report = auditTeamAgents({ repoRoot: fixtureRoot });
+        const report = TeamAgentContract.auditTeamAgents({
+          repoRoot: fixtureRoot,
+        });
         expect(report.findings).toContainEqual({
           code: 'invalid-cortex-team-authority',
           path: '.cortex/AGENTS.md',
@@ -147,44 +213,59 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
-  test('rejects an affirmative Gizmo implementation grant', async () => {
-    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-gizmo-grant-'));
-    const cortexRoot = join(fixtureRoot, '.cortex');
-    try {
-      await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
-      await symlink(
-        join(REPO_ROOT, '.cortex/teams'),
-        join(cortexRoot, 'teams'),
-      );
-      await writeFile(
-        join(cortexRoot, 'AGENTS.md'),
-        await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8'),
-        'utf8',
-      );
-      const gizmoAuthority = await readFile(
-        join(REPO_ROOT, '.cortex/gizmo/AGENTS.md'),
-        'utf8',
-      );
-      await writeFile(
-        join(cortexRoot, 'gizmo/AGENTS.md'),
-        gizmoAuthority.replace(
-          'Gizmo does not:\n\n- implement or repair team-owned work;',
-          'Gizmo may:\n\n- implement or repair team-owned work;',
-        ),
-        'utf8',
-      );
+  test('rejects drift of the Gizmo prohibition heading or implementation boundary', async () => {
+    const drifts = [
+      {
+        current: 'Gizmo does not:',
+        replacement: 'Gizmo may:',
+      },
+      {
+        current: '- implement or repair team-owned work;',
+        replacement:
+          '- implement or repair team-owned work when requested;\n\n## Relocated marker\n\n- implement or repair team-owned work;',
+      },
+    ] as const;
+    for (const drift of drifts) {
+      const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-gizmo-grant-'));
+      const cortexRoot = join(fixtureRoot, '.cortex');
+      try {
+        await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
+        await symlink(
+          join(REPO_ROOT, '.cortex/teams'),
+          join(cortexRoot, 'teams'),
+        );
+        await writeFile(
+          join(cortexRoot, 'AGENTS.md'),
+          await readFile(join(REPO_ROOT, '.cortex/AGENTS.md'), 'utf8'),
+          'utf8',
+        );
+        const gizmoAuthority = await readFile(
+          join(REPO_ROOT, '.cortex/gizmo/AGENTS.md'),
+          'utf8',
+        );
+        expect(gizmoAuthority).toContain(drift.current);
+        await writeFile(
+          join(cortexRoot, 'gizmo/AGENTS.md'),
+          gizmoAuthority.replace(drift.current, drift.replacement),
+          'utf8',
+        );
 
-      const report = auditTeamAgents({ repoRoot: fixtureRoot });
-      expect(report.findings.map((finding) => finding.code)).toContain(
-        'invalid-cortex-gizmo-authority',
-      );
-    } finally {
-      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+        const report = TeamAgentContract.auditTeamAgents({
+          repoRoot: fixtureRoot,
+        });
+        expect(report.findings).toContainEqual({
+          code: 'invalid-cortex-gizmo-authority',
+          path: '.cortex/gizmo/AGENTS.md',
+          message: `Canonical Gizmo authority is missing marker: ${drift.current}`,
+        });
+      } finally {
+        await rm(fixtureRoot, REMOVE_RECURSIVELY);
+      }
     }
   });
 
   test('does not require or treat vendor profile TOMLs as authority', async () => {
-    const fixtureRoot = await cortexAuthorityFixture();
+    const fixtureRoot = await TeamAgentsAuditScenario.cortexAuthorityFixture();
     const vendorProfilePath = join(
       fixtureRoot,
       '.codex/agents/vendor/profiles/ai.toml',
@@ -197,9 +278,11 @@ describe('canonical Cortex team authority', () => {
         'utf8',
       );
       const auditRequest: AuditTeamAgentsRequest = { repoRoot: fixtureRoot };
-      const reportWithVendorProfile = auditTeamAgents(auditRequest);
+      const reportWithVendorProfile =
+        TeamAgentContract.auditTeamAgents(auditRequest);
       await rm(join(fixtureRoot, '.codex'), REMOVE_RECURSIVELY);
-      const reportWithoutVendorProfiles = auditTeamAgents(auditRequest);
+      const reportWithoutVendorProfiles =
+        TeamAgentContract.auditTeamAgents(auditRequest);
 
       expect(reportWithVendorProfile).toEqual(reportWithoutVendorProfiles);
       expect(reportWithoutVendorProfiles.auditOk).toBe(true);
@@ -208,49 +291,3 @@ describe('canonical Cortex team authority', () => {
     }
   });
 });
-
-function requiredAiAuthority(): TeamAuthority {
-  const authority = teamAuthority(TeamKey.Ai);
-  if (!authority) throw new Error('The AI team authority is required.');
-  return authority;
-}
-
-async function cortexAuthorityFixture(): Promise<string> {
-  const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-team-authority-'));
-  await symlink(join(REPO_ROOT, '.cortex'), join(fixtureRoot, '.cortex'));
-  return fixtureRoot;
-}
-
-async function driftedAuthorityFixture(): Promise<string> {
-  const fixtureRoot = await mkdtemp(
-    join(tmpdir(), 'loom-team-authority-drift-'),
-  );
-  const cortexRoot = join(fixtureRoot, '.cortex');
-  await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
-  await symlink(join(REPO_ROOT, '.cortex/teams'), join(cortexRoot, 'teams'));
-  await writeFile(join(cortexRoot, 'AGENTS.md'), 'routing only\n', 'utf8');
-  await writeFile(
-    join(cortexRoot, 'gizmo/AGENTS.md'),
-    'delivery only\n',
-    'utf8',
-  );
-  return fixtureRoot;
-}
-
-async function autonomyDriftFixture(invariant: string): Promise<string> {
-  const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-autonomy-drift-'));
-  const cortexRoot = join(fixtureRoot, '.cortex');
-  await mkdir(cortexRoot, CREATE_RECURSIVELY);
-  await symlink(join(REPO_ROOT, '.cortex/teams'), join(cortexRoot, 'teams'));
-  await symlink(join(REPO_ROOT, '.cortex/gizmo'), join(cortexRoot, 'gizmo'));
-  const authority = await readFile(
-    join(REPO_ROOT, '.cortex/AGENTS.md'),
-    'utf8',
-  );
-  await writeFile(
-    join(cortexRoot, 'AGENTS.md'),
-    authority.replace(invariant, 'Autonomous mission invariant removed.'),
-    'utf8',
-  );
-  return fixtureRoot;
-}

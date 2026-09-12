@@ -5,8 +5,8 @@ import type {
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   FormSubmissionResult,
-  requestImplicitAuthenticationSubmit,
   type FormSubmissionApproval,
+  authenticationSubmissionControls,
 } from "./password-form-submission-controls";
 
 type OwnedFormObservation = {
@@ -38,38 +38,6 @@ type CurrentOwnedFormObservationRequest<
   observations: () => Observation[];
 };
 
-function currentOwnedAuthenticationFormObservation<
-  Observation extends OwnedFormObservation,
->({
-  root,
-  form,
-  observations,
-}: CurrentOwnedFormObservationRequest<Observation>): Observation | false {
-  const formWithinRoot =
-    root === form.ownerDocument ||
-    (root instanceof Node && root.contains(form));
-  return (
-    observations().find(
-      (candidate) =>
-        formWithinRoot &&
-        candidate.formScope.kind === "owned" &&
-        candidate.formScope.owner === form,
-    ) || false
-  );
-}
-
-function authenticationImplicitSubmitActuationIsSafe(
-  facts: AuthenticationPageObservationFacts,
-): boolean {
-  const observation: AuthenticationImplicitSubmitActuationObservation = {
-    fields: facts.fields,
-    ceremony: facts.ceremony,
-    controlLabel: "",
-    controlMachineIdentity: "",
-  };
-  return authentication_implicit_submit_actuation_is_safe(observation);
-}
-
 export type ApprovedImplicitAuthenticationSubmitRequest<
   Observation extends OwnedFormObservation,
 > = CurrentOwnedFormObservationRequest<Observation> & {
@@ -81,28 +49,63 @@ export type ApprovedImplicitAuthenticationSubmitRequest<
   requestedApproval: FormSubmissionApproval | false;
 };
 
-export function requestApprovedImplicitAuthenticationSubmit<
+export class ApprovedImplicitAuthenticationSubmission<
   Observation extends OwnedFormObservation,
->(
-  request: ApprovedImplicitAuthenticationSubmitRequest<Observation>,
-): FormSubmissionResult {
-  const actuationIsSafe = (): boolean => {
-    const observation = currentOwnedAuthenticationFormObservation(request);
-    return Boolean(
-      observation &&
-      authenticationImplicitSubmitActuationIsSafe(
-        request.factsForObservation(observation),
-      ),
+> {
+  constructor(
+    private readonly request: ApprovedImplicitAuthenticationSubmitRequest<Observation>,
+  ) {}
+  execute(): FormSubmissionResult {
+    const request = this.request;
+    const actuationIsSafe = (): boolean => {
+      const observation =
+        this.currentOwnedAuthenticationFormObservation();
+      return Boolean(
+        observation &&
+        new AuthenticationImplicitActuationEvidence(
+          request.factsForObservation(observation),
+        ).isSafe(),
+      );
+    };
+    const implicitRequest: Parameters<
+      typeof authenticationSubmissionControls.requestImplicitAuthenticationSubmit
+    >[0] = {
+      form: request.form,
+      hasAuthenticationUsername: request.hasAuthenticationUsername,
+      hasAuthenticationPassword: request.hasAuthenticationPassword,
+      approval: request.requestedApproval || false,
+      alternativeActuationIsSafe: actuationIsSafe,
+    };
+    return authenticationSubmissionControls.requestImplicitAuthenticationSubmit(
+      implicitRequest,
     );
-  };
-  const implicitRequest: Parameters<
-    typeof requestImplicitAuthenticationSubmit
-  >[0] = {
-    form: request.form,
-    hasAuthenticationUsername: request.hasAuthenticationUsername,
-    hasAuthenticationPassword: request.hasAuthenticationPassword,
-    approval: request.requestedApproval || false,
-    alternativeActuationIsSafe: actuationIsSafe,
-  };
-  return requestImplicitAuthenticationSubmit(implicitRequest);
+  }
+  private currentOwnedAuthenticationFormObservation(): Observation | false {
+    const { root, form, observations } = this.request;
+    const formWithinRoot =
+      root === form.ownerDocument ||
+      (root instanceof Node && root.contains(form));
+    return (
+      observations().find(
+        (candidate) =>
+          formWithinRoot &&
+          candidate.formScope.kind === "owned" &&
+          candidate.formScope.owner === form,
+      ) || false
+    );
+  }
+}
+
+class AuthenticationImplicitActuationEvidence {
+  constructor(private readonly facts: AuthenticationPageObservationFacts) {}
+  isSafe(): boolean {
+    const facts = this.facts;
+    const observation: AuthenticationImplicitSubmitActuationObservation = {
+      fields: facts.fields,
+      ceremony: facts.ceremony,
+      controlLabel: "",
+      controlMachineIdentity: "",
+    };
+    return authentication_implicit_submit_actuation_is_safe(observation);
+  }
 }

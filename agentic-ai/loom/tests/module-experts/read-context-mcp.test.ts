@@ -1,16 +1,157 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+
 import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
+
 import { tmpdir } from 'node:os';
+
 import { join } from 'node:path';
+
 import { describe, expect, test } from 'bun:test';
+
 import {
   MODULE_EXPERT_READ_CONTEXT_TOOLS,
-  createModuleExpertReadContextServer,
+  ModuleExpertRepositoryContext,
 } from '../../src/module-experts/read-context-mcp.ts';
+
 import type {
   ModuleExpertReadContextServer,
   ModuleExpertReadContextServerRequest,
 } from '../../src/module-experts/read-context-mcp.ts';
+
+export class ModuleExpertsReadContextMcpScenario {
+  private constructor(private readonly request: string) {}
+
+  static toolCall(call: ToolCall): Promise<McpResponse> {
+    const request: McpRequest = {
+      id: call.id,
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { arguments: call.arguments, name: call.name },
+    };
+    const mcpCall: McpCall = { request, server: call.server };
+    return ModuleExpertsReadContextMcpScenario.callMcp(mcpCall);
+  }
+
+  static async callMcp(call: McpCall): Promise<McpResponse> {
+    const headers = new Headers();
+    headers.set('accept', 'application/json, text/event-stream');
+    headers.set('content-type', 'application/json');
+    const requestOptions: RequestInit = {
+      body: JSON.stringify(call.request),
+      headers,
+      method: 'POST',
+    };
+    const response = await fetch(call.server.url, requestOptions);
+    return (await response.json()) as McpResponse;
+  }
+
+  static searchPayload(response: McpResponse): SearchTextPayload {
+    const text = response.result?.content?.[0]?.text;
+    if (!text) throw new Error('Expected a search result payload.');
+    return JSON.parse(text) as SearchTextPayload;
+  }
+
+  static async callChunkedOversizedMcp(
+    server: ModuleExpertReadContextServer,
+  ): Promise<McpResponse> {
+    const first = Buffer.from('{"jsonrpc":"2.0","id":44,"method":"');
+    const second = Buffer.from(`${'x'.repeat(70_000)}"}`);
+    const streamSource: McpRequestStreamSource = {
+      start: (controller) => {
+        controller.enqueue(first);
+        controller.enqueue(second);
+        controller.close();
+      },
+    };
+    const stream = new ReadableStream<Uint8Array>(streamSource);
+    const headers = new Headers();
+    headers.set('content-type', 'application/json');
+    const requestOptions: RequestInit = {
+      body: stream,
+      headers,
+      method: 'POST',
+    };
+    const response = await fetch(server.url, requestOptions);
+    return (await response.json()) as McpResponse;
+  }
+
+  static createTestRepository(fixtureRoot: string): Promise<TestRepository> {
+    return new ModuleExpertsReadContextMcpScenario(fixtureRoot).execute();
+  }
+
+  private async execute(): Promise<TestRepository> {
+    const fixtureRoot = this.request;
+    const root = join(fixtureRoot, 'repository');
+    const sourceDirectory = join(root, 'src');
+    const recursiveDirectoryOptions: MakeDirectoryOptions = { recursive: true };
+    await mkdir(sourceDirectory, recursiveDirectoryOptions);
+    await writeFile(
+      join(sourceDirectory, 'domain.ts'),
+      'export const capability = "module-api";\n',
+      'utf8',
+    );
+    await writeFile(
+      join(sourceDirectory, 'matches.txt'),
+      `${'bounded-match '.repeat(20)}\n`.repeat(100),
+      'utf8',
+    );
+    await writeFile(
+      join(sourceDirectory, 'oversized.txt'),
+      'o'.repeat(256 * 1024 + 1),
+      'utf8',
+    );
+    await writeFile(
+      join(sourceDirectory, 'expanding.txt'),
+      EXPANDING_FILE_CONTENT,
+      'utf8',
+    );
+    const deepWebDirectory = join(
+      root,
+      'nook-app',
+      'nook-web',
+      'nook-web-shared',
+      'src',
+      'vault-app',
+      'lib',
+      'auth',
+      'providers',
+    );
+    await mkdir(deepWebDirectory, recursiveDirectoryOptions);
+    await writeFile(
+      join(deepWebDirectory, 'provider-types.ts'),
+      'export const bindingConsumer = "deep-web-binding-consumer";\n',
+      'utf8',
+    );
+    await writeFile(join(root, '.env'), 'SECRET=value\n', 'utf8');
+    const outsideFile = join(fixtureRoot, 'outside.txt');
+    await writeFile(outsideFile, 'outside\n', 'utf8');
+    await symlink(outsideFile, join(sourceDirectory, 'outside-link'));
+    await symlink('domain.ts', join(sourceDirectory, 'inside-link'));
+    return { outsideFile, root };
+  }
+
+  static async writeNumberedFiles(
+    request: WriteNumberedFilesRequest,
+  ): Promise<void> {
+    const recursiveDirectoryOptions: MakeDirectoryOptions = { recursive: true };
+    await mkdir(request.directory, recursiveDirectoryOptions);
+    const batchSize = 250;
+    for (let start = 0; start < request.count; start += batchSize) {
+      const writes: Promise<void>[] = [];
+      const end = Math.min(start + batchSize, request.count);
+      for (let index = start; index < end; index += 1) {
+        writes.push(
+          writeFile(
+            join(request.directory, `${request.prefix}-${index}.txt`),
+            request.content,
+            'utf8',
+          ),
+        );
+      }
+      await Promise.all(writes);
+    }
+  }
+}
 
 type TestRepository = {
   readonly outsideFile: string;
@@ -81,7 +222,9 @@ type McpRequestStreamSource = {
 };
 
 const MAX_READ_FILE_BYTES = 256 * 1024;
+
 const MAX_MCP_RESPONSE_BYTES = 256 * 1024;
+
 const EXPANDING_FILE_CONTENT = '"'.repeat(200_000);
 
 describe('module expert read-context MCP', () => {
@@ -89,11 +232,17 @@ describe('module expert read-context MCP', () => {
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-read-context-'));
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const repository = await createTestRepository(fixtureRoot);
+      const repository =
+        await ModuleExpertsReadContextMcpScenario.createTestRepository(
+          fixtureRoot,
+        );
       const serverRequest: ModuleExpertReadContextServerRequest = {
         repositoryRoot: repository.root,
       };
-      const server = createModuleExpertReadContextServer(serverRequest);
+      const server =
+        ModuleExpertRepositoryContext.createModuleExpertReadContextServer(
+          serverRequest,
+        );
       try {
         const initializeRequest: McpRequest = {
           id: 1,
@@ -101,7 +250,8 @@ describe('module expert read-context MCP', () => {
           method: 'initialize',
         };
         const initializeCall: McpCall = { request: initializeRequest, server };
-        const initialize = await callMcp(initializeCall);
+        const initialize =
+          await ModuleExpertsReadContextMcpScenario.callMcp(initializeCall);
         expect(initialize.result?.capabilities?.tools.listChanged).toBe(false);
         const toolsRequest: McpRequest = {
           id: 2,
@@ -109,7 +259,8 @@ describe('module expert read-context MCP', () => {
           method: 'tools/list',
         };
         const toolsCall: McpCall = { request: toolsRequest, server };
-        const tools = await callMcp(toolsCall);
+        const tools =
+          await ModuleExpertsReadContextMcpScenario.callMcp(toolsCall);
         expect(tools.result?.tools?.map((tool) => tool.name)).toEqual([
           ...MODULE_EXPERT_READ_CONTEXT_TOOLS,
         ]);
@@ -119,7 +270,8 @@ describe('module expert read-context MCP', () => {
           name: 'read_file',
           server,
         };
-        const read = await toolCall(readCall);
+        const read =
+          await ModuleExpertsReadContextMcpScenario.toolCall(readCall);
         expect(read.result?.content?.[0]?.text).toBe(
           'export const capability = "module-api";\n',
         );
@@ -129,7 +281,8 @@ describe('module expert read-context MCP', () => {
           name: 'list_files',
           server,
         };
-        const list = await toolCall(listCall);
+        const list =
+          await ModuleExpertsReadContextMcpScenario.toolCall(listCall);
         expect(list.result?.content?.[0]?.text).toContain('src/domain.ts');
         const literalSearchCall: ToolCall = {
           arguments: { query: '[module-api]' },
@@ -137,7 +290,8 @@ describe('module expert read-context MCP', () => {
           name: 'search_text',
           server,
         };
-        const literalSearch = await toolCall(literalSearchCall);
+        const literalSearch =
+          await ModuleExpertsReadContextMcpScenario.toolCall(literalSearchCall);
         expect(literalSearch.result?.content?.[0]?.text).toContain(
           'matches":[]',
         );
@@ -147,7 +301,10 @@ describe('module expert read-context MCP', () => {
           name: 'search_text',
           server,
         };
-        const ordinarySearch = await toolCall(ordinarySearchCall);
+        const ordinarySearch =
+          await ModuleExpertsReadContextMcpScenario.toolCall(
+            ordinarySearchCall,
+          );
         expect(ordinarySearch.result?.content?.[0]?.text).toContain(
           'src/domain.ts:1',
         );
@@ -165,11 +322,17 @@ describe('module expert read-context MCP', () => {
     );
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const repository = await createTestRepository(fixtureRoot);
+      const repository =
+        await ModuleExpertsReadContextMcpScenario.createTestRepository(
+          fixtureRoot,
+        );
       const serverRequest: ModuleExpertReadContextServerRequest = {
         repositoryRoot: repository.root,
       };
-      const server = createModuleExpertReadContextServer(serverRequest);
+      const server =
+        ModuleExpertRepositoryContext.createModuleExpertReadContextServer(
+          serverRequest,
+        );
       try {
         const shallowListCall: ToolCall = {
           arguments: { depth: 4 },
@@ -177,7 +340,8 @@ describe('module expert read-context MCP', () => {
           name: 'list_files',
           server,
         };
-        const shallowList = await toolCall(shallowListCall);
+        const shallowList =
+          await ModuleExpertsReadContextMcpScenario.toolCall(shallowListCall);
         const [shallowText = ''] = [shallowList.result?.content?.[0]?.text];
         expect(shallowText).not.toContain('provider-types.ts');
         expect(shallowText).toContain('"truncated":true');
@@ -188,7 +352,8 @@ describe('module expert read-context MCP', () => {
           name: 'list_files',
           server,
         };
-        const deepList = await toolCall(deepListCall);
+        const deepList =
+          await ModuleExpertsReadContextMcpScenario.toolCall(deepListCall);
         expect(deepList.result?.content?.[0]?.text).toContain(
           'nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/providers/provider-types.ts',
         );
@@ -199,7 +364,8 @@ describe('module expert read-context MCP', () => {
           name: 'search_text',
           server,
         };
-        const search = await toolCall(searchCall);
+        const search =
+          await ModuleExpertsReadContextMcpScenario.toolCall(searchCall);
         expect(search.result?.content?.[0]?.text).toContain(
           'provider-types.ts:1',
         );
@@ -217,7 +383,10 @@ describe('module expert read-context MCP', () => {
     );
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const repository = await createTestRepository(fixtureRoot);
+      const repository =
+        await ModuleExpertsReadContextMcpScenario.createTestRepository(
+          fixtureRoot,
+        );
       const fileCapDirectory = join(repository.root, 'search-file-cap');
       const fileCapRequest: WriteNumberedFilesRequest = {
         content: '',
@@ -225,7 +394,9 @@ describe('module expert read-context MCP', () => {
         directory: fileCapDirectory,
         prefix: 'file',
       };
-      await writeNumberedFiles(fileCapRequest);
+      await ModuleExpertsReadContextMcpScenario.writeNumberedFiles(
+        fileCapRequest,
+      );
       const byteCapDirectory = join(repository.root, 'search-byte-cap');
       const byteCapRequest: WriteNumberedFilesRequest = {
         content: 'b'.repeat(256 * 1024),
@@ -233,7 +404,9 @@ describe('module expert read-context MCP', () => {
         directory: byteCapDirectory,
         prefix: 'bytes',
       };
-      await writeNumberedFiles(byteCapRequest);
+      await ModuleExpertsReadContextMcpScenario.writeNumberedFiles(
+        byteCapRequest,
+      );
       const responseCapDirectory = join(repository.root, 'search-response-cap');
       const recursiveDirectoryOptions: MakeDirectoryOptions = {
         recursive: true,
@@ -247,7 +420,10 @@ describe('module expert read-context MCP', () => {
       const serverRequest: ModuleExpertReadContextServerRequest = {
         repositoryRoot: repository.root,
       };
-      const server = createModuleExpertReadContextServer(serverRequest);
+      const server =
+        ModuleExpertRepositoryContext.createModuleExpertReadContextServer(
+          serverRequest,
+        );
       try {
         const resultLimitCall: ToolCall = {
           arguments: {
@@ -259,7 +435,9 @@ describe('module expert read-context MCP', () => {
           name: 'search_text',
           server,
         };
-        const resultLimit = searchPayload(await toolCall(resultLimitCall));
+        const resultLimit = ModuleExpertsReadContextMcpScenario.searchPayload(
+          await ModuleExpertsReadContextMcpScenario.toolCall(resultLimitCall),
+        );
         expect(resultLimit.matches).toHaveLength(3);
         expect(resultLimit.truncated).toBe(true);
 
@@ -269,7 +447,9 @@ describe('module expert read-context MCP', () => {
           name: 'search_text',
           server,
         };
-        const fileLimit = searchPayload(await toolCall(fileLimitCall));
+        const fileLimit = ModuleExpertsReadContextMcpScenario.searchPayload(
+          await ModuleExpertsReadContextMcpScenario.toolCall(fileLimitCall),
+        );
         expect(fileLimit.searchedFiles).toBe(5_000);
         expect(fileLimit.truncated).toBe(true);
 
@@ -279,7 +459,9 @@ describe('module expert read-context MCP', () => {
           name: 'search_text',
           server,
         };
-        const byteLimit = searchPayload(await toolCall(byteLimitCall));
+        const byteLimit = ModuleExpertsReadContextMcpScenario.searchPayload(
+          await ModuleExpertsReadContextMcpScenario.toolCall(byteLimitCall),
+        );
         expect(byteLimit.searchedBytes).toBe(4 * 1024 * 1024);
         expect(byteLimit.searchedFiles).toBe(16);
         expect(byteLimit.truncated).toBe(true);
@@ -294,7 +476,9 @@ describe('module expert read-context MCP', () => {
           name: 'search_text',
           server,
         };
-        const responseLimit = searchPayload(await toolCall(responseLimitCall));
+        const responseLimit = ModuleExpertsReadContextMcpScenario.searchPayload(
+          await ModuleExpertsReadContextMcpScenario.toolCall(responseLimitCall),
+        );
         expect(responseLimit.matches.length).toBeGreaterThan(0);
         expect(responseLimit.matches.length).toBeLessThan(100);
         expect(responseLimit.truncated).toBe(true);
@@ -312,11 +496,17 @@ describe('module expert read-context MCP', () => {
     );
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const repository = await createTestRepository(fixtureRoot);
+      const repository =
+        await ModuleExpertsReadContextMcpScenario.createTestRepository(
+          fixtureRoot,
+        );
       const serverRequest: ModuleExpertReadContextServerRequest = {
         repositoryRoot: repository.root,
       };
-      const server = createModuleExpertReadContextServer(serverRequest);
+      const server =
+        ModuleExpertRepositoryContext.createModuleExpertReadContextServer(
+          serverRequest,
+        );
       try {
         const rejectedArguments: readonly TestToolArguments[] = [
           { path: '../outside.txt' },
@@ -335,7 +525,8 @@ describe('module expert read-context MCP', () => {
             name: 'read_file',
             server,
           };
-          const response = await toolCall(rejectedCall);
+          const response =
+            await ModuleExpertsReadContextMcpScenario.toolCall(rejectedCall);
           expect(response.error?.code).toBe(-32_602);
           id += 1;
         }
@@ -353,11 +544,17 @@ describe('module expert read-context MCP', () => {
     );
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const repository = await createTestRepository(fixtureRoot);
+      const repository =
+        await ModuleExpertsReadContextMcpScenario.createTestRepository(
+          fixtureRoot,
+        );
       const serverRequest: ModuleExpertReadContextServerRequest = {
         repositoryRoot: repository.root,
       };
-      const server = createModuleExpertReadContextServer(serverRequest);
+      const server =
+        ModuleExpertRepositoryContext.createModuleExpertReadContextServer(
+          serverRequest,
+        );
       try {
         const oversizedFileCall: ToolCall = {
           arguments: { path: 'src/oversized.txt' },
@@ -365,7 +562,8 @@ describe('module expert read-context MCP', () => {
           name: 'read_file',
           server,
         };
-        const oversizedFile = await toolCall(oversizedFileCall);
+        const oversizedFile =
+          await ModuleExpertsReadContextMcpScenario.toolCall(oversizedFileCall);
         expect(oversizedFile.error?.message).toContain('bounded regular file');
         const boundedSearchCall: ToolCall = {
           arguments: { maxResults: 3, query: 'bounded-match' },
@@ -373,7 +571,8 @@ describe('module expert read-context MCP', () => {
           name: 'search_text',
           server,
         };
-        const boundedSearch = await toolCall(boundedSearchCall);
+        const boundedSearch =
+          await ModuleExpertsReadContextMcpScenario.toolCall(boundedSearchCall);
         const [searchText = ''] = [boundedSearch.result?.content?.[0]?.text];
         expect(searchText).toContain('"truncated":true');
         expect(Buffer.byteLength(searchText, 'utf8')).toBeLessThanOrEqual(
@@ -385,9 +584,13 @@ describe('module expert read-context MCP', () => {
           method: `oversized-${'x'.repeat(70_000)}`,
         };
         const oversizedCall: McpCall = { request: oversizedRequest, server };
-        const response = await callMcp(oversizedCall);
+        const response =
+          await ModuleExpertsReadContextMcpScenario.callMcp(oversizedCall);
         expect(response.error?.message).toContain('byte limit');
-        const chunkedResponse = await callChunkedOversizedMcp(server);
+        const chunkedResponse =
+          await ModuleExpertsReadContextMcpScenario.callChunkedOversizedMcp(
+            server,
+          );
         expect(chunkedResponse.error?.message).toContain('byte limit');
       } finally {
         await server.dispose();
@@ -412,11 +615,17 @@ describe('module expert read-context MCP', () => {
       Buffer.byteLength(JSON.stringify(serializedResult), 'utf8'),
     ).toBeGreaterThan(MAX_MCP_RESPONSE_BYTES);
     try {
-      const repository = await createTestRepository(fixtureRoot);
+      const repository =
+        await ModuleExpertsReadContextMcpScenario.createTestRepository(
+          fixtureRoot,
+        );
       const serverRequest: ModuleExpertReadContextServerRequest = {
         repositoryRoot: repository.root,
       };
-      const server = createModuleExpertReadContextServer(serverRequest);
+      const server =
+        ModuleExpertRepositoryContext.createModuleExpertReadContextServer(
+          serverRequest,
+        );
       try {
         const expandingFileCall: ToolCall = {
           arguments: { path: 'src/expanding.txt' },
@@ -424,7 +633,8 @@ describe('module expert read-context MCP', () => {
           name: 'read_file',
           server,
         };
-        const expandingFile = await toolCall(expandingFileCall);
+        const expandingFile =
+          await ModuleExpertsReadContextMcpScenario.toolCall(expandingFileCall);
         expect(expandingFile.error?.code).toBe(-32_602);
         expect(expandingFile.error?.message).toBe(
           'MCP tool response exceeds the byte limit.',
@@ -443,16 +653,27 @@ describe('module expert read-context MCP', () => {
     );
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const repository = await createTestRepository(fixtureRoot);
+      const repository =
+        await ModuleExpertsReadContextMcpScenario.createTestRepository(
+          fixtureRoot,
+        );
       const serverRequest: ModuleExpertReadContextServerRequest = {
         repositoryRoot: repository.root,
       };
-      const server = createModuleExpertReadContextServer(serverRequest);
-      await server.dispose();
+      const server =
+        ModuleExpertRepositoryContext.createModuleExpertReadContextServer(
+          serverRequest,
+        );
+      const disposal = server.dispose();
+      expect(server.dispose()).toBe(disposal);
+      expect(() => server.url).toThrow('disposed');
+      await disposal;
       await server.dispose();
       const request: McpRequest = { id: 50, jsonrpc: '2.0', method: 'ping' };
       const closedCall: McpCall = { request, server };
-      await expect(callMcp(closedCall)).rejects.toThrow();
+      await expect(
+        ModuleExpertsReadContextMcpScenario.callMcp(closedCall),
+      ).rejects.toThrow();
     } finally {
       await rm(fixtureRoot, removeOptions);
     }
@@ -465,131 +686,3 @@ type ToolCall = {
   readonly name: string;
   readonly server: ModuleExpertReadContextServer;
 };
-
-function toolCall(call: ToolCall): Promise<McpResponse> {
-  const request: McpRequest = {
-    id: call.id,
-    jsonrpc: '2.0',
-    method: 'tools/call',
-    params: { arguments: call.arguments, name: call.name },
-  };
-  const mcpCall: McpCall = { request, server: call.server };
-  return callMcp(mcpCall);
-}
-
-async function callMcp(call: McpCall): Promise<McpResponse> {
-  const headers = new Headers();
-  headers.set('accept', 'application/json, text/event-stream');
-  headers.set('content-type', 'application/json');
-  const requestOptions: RequestInit = {
-    body: JSON.stringify(call.request),
-    headers,
-    method: 'POST',
-  };
-  const response = await fetch(call.server.url, requestOptions);
-  return (await response.json()) as McpResponse;
-}
-
-function searchPayload(response: McpResponse): SearchTextPayload {
-  const text = response.result?.content?.[0]?.text;
-  if (!text) throw new Error('Expected a search result payload.');
-  return JSON.parse(text) as SearchTextPayload;
-}
-
-async function callChunkedOversizedMcp(
-  server: ModuleExpertReadContextServer,
-): Promise<McpResponse> {
-  const first = Buffer.from('{"jsonrpc":"2.0","id":44,"method":"');
-  const second = Buffer.from(`${'x'.repeat(70_000)}"}`);
-  const streamSource: McpRequestStreamSource = {
-    start: (controller) => {
-      controller.enqueue(first);
-      controller.enqueue(second);
-      controller.close();
-    },
-  };
-  const stream = new ReadableStream<Uint8Array>(streamSource);
-  const headers = new Headers();
-  headers.set('content-type', 'application/json');
-  const requestOptions: RequestInit = {
-    body: stream,
-    headers,
-    method: 'POST',
-  };
-  const response = await fetch(server.url, requestOptions);
-  return (await response.json()) as McpResponse;
-}
-
-async function createTestRepository(
-  fixtureRoot: string,
-): Promise<TestRepository> {
-  const root = join(fixtureRoot, 'repository');
-  const sourceDirectory = join(root, 'src');
-  const recursiveDirectoryOptions: MakeDirectoryOptions = { recursive: true };
-  await mkdir(sourceDirectory, recursiveDirectoryOptions);
-  await writeFile(
-    join(sourceDirectory, 'domain.ts'),
-    'export const capability = "module-api";\n',
-    'utf8',
-  );
-  await writeFile(
-    join(sourceDirectory, 'matches.txt'),
-    `${'bounded-match '.repeat(20)}\n`.repeat(100),
-    'utf8',
-  );
-  await writeFile(
-    join(sourceDirectory, 'oversized.txt'),
-    'o'.repeat(256 * 1024 + 1),
-    'utf8',
-  );
-  await writeFile(
-    join(sourceDirectory, 'expanding.txt'),
-    EXPANDING_FILE_CONTENT,
-    'utf8',
-  );
-  const deepWebDirectory = join(
-    root,
-    'nook-app',
-    'nook-web',
-    'nook-web-shared',
-    'src',
-    'vault-app',
-    'lib',
-    'auth',
-    'providers',
-  );
-  await mkdir(deepWebDirectory, recursiveDirectoryOptions);
-  await writeFile(
-    join(deepWebDirectory, 'provider-types.ts'),
-    'export const bindingConsumer = "deep-web-binding-consumer";\n',
-    'utf8',
-  );
-  await writeFile(join(root, '.env'), 'SECRET=value\n', 'utf8');
-  const outsideFile = join(fixtureRoot, 'outside.txt');
-  await writeFile(outsideFile, 'outside\n', 'utf8');
-  await symlink(outsideFile, join(sourceDirectory, 'outside-link'));
-  await symlink('domain.ts', join(sourceDirectory, 'inside-link'));
-  return { outsideFile, root };
-}
-
-async function writeNumberedFiles(
-  request: WriteNumberedFilesRequest,
-): Promise<void> {
-  const recursiveDirectoryOptions: MakeDirectoryOptions = { recursive: true };
-  await mkdir(request.directory, recursiveDirectoryOptions);
-  const batchSize = 250;
-  for (let start = 0; start < request.count; start += batchSize) {
-    const writes: Promise<void>[] = [];
-    const end = Math.min(start + batchSize, request.count);
-    for (let index = start; index < end; index += 1) {
-      writes.push(
-        writeFile(
-          join(request.directory, `${request.prefix}-${index}.txt`),
-          request.content,
-          'utf8',
-        ),
-      );
-    }
-    await Promise.all(writes);
-  }
-}

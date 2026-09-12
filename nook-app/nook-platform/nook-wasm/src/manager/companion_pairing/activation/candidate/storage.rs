@@ -4,7 +4,10 @@ use super::{
     ActivationClock, CompanionPairingCandidateFailure, PairingActivationCandidate,
     PairingActivationStorageAdmission,
 };
-use crate::storage::open_nook_database;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::ExtensionPairingDatabase;
+use crate::NookDatabase;
+
 use rexie::TransactionMode;
 
 mod schema;
@@ -23,7 +26,12 @@ pub(super) struct StoredPairingActivationCandidate {
 
 pub(super) struct PairingActivationStore;
 
-struct StoredStringRead<'a> {
+enum ActivationGatePresence {
+    Uncommitted,
+    Committed,
+}
+
+struct ActivationGateRead<'a> {
     store: &'a rexie::Store,
     key: &'a str,
 }
@@ -81,19 +89,24 @@ impl WritableActivationTransaction {
 }
 
 impl PairingActivationStore {
-    async fn get_string(
-        request: StoredStringRead<'_>,
-    ) -> Result<Option<String>, CompanionPairingCandidateFailure> {
+    async fn observe_gate(
+        request: ActivationGateRead<'_>,
+    ) -> Result<ActivationGatePresence, CompanionPairingCandidateFailure> {
         let key =
             serde_wasm_bindgen::to_value(request.key).map_err(|_| CandidateSchema::integrity())?;
-        request
+        match request
             .store
             .get(key)
             .await
             .map_err(|_| CompanionPairingCandidateFailure::Storage)?
-            .map(serde_wasm_bindgen::from_value)
-            .transpose()
-            .map_err(|_| CandidateSchema::integrity())
+        {
+            None => Ok(ActivationGatePresence::Uncommitted),
+            Some(value) => {
+                let _: String = serde_wasm_bindgen::from_value(value)
+                    .map_err(|_| CandidateSchema::integrity())?;
+                Ok(ActivationGatePresence::Committed)
+            }
+        }
     }
 
     async fn put_string(
@@ -117,7 +130,7 @@ impl PairingActivationStore {
         let PairingActivationCommit { admission, clock } = request;
         let encoded = EncodedCandidate::new(&admission.candidate)?;
         let gate_json = CandidateSchema::encode(&encoded.gate)?;
-        let connection = open_nook_database()
+        let connection = NookDatabase::open_nook_database()
             .await
             .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
         let transaction = connection
@@ -126,12 +139,11 @@ impl PairingActivationStore {
         let vault = transaction
             .store(VAULT_STORE)
             .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
-        if Self::get_string(StoredStringRead {
+        if let ActivationGatePresence::Committed = Self::observe_gate(ActivationGateRead {
             store: &vault,
             key: &encoded.gate_key,
         })
         .await?
-        .is_some()
         {
             return Err(CompanionPairingCandidateFailure::Replay);
         }
@@ -211,7 +223,7 @@ mod tests {
 
         fn interrupted_commit(
             &mut self,
-            request: InterruptedCommit<'_>,
+            request: &InterruptedCommit<'_>,
         ) -> Result<(), CompanionPairingCandidateFailure> {
             let mut transaction = self.vault.clone();
             let gate_json = CandidateSchema::encode(&request.encoded.gate)?;
@@ -289,7 +301,7 @@ mod tests {
             for writes_before_failure in 0..(encoded.events.len() + 2) {
                 let mut store = MemoryActivationStore::default();
                 assert!(matches!(
-                    store.interrupted_commit(InterruptedCommit {
+                    store.interrupted_commit(&InterruptedCommit {
                         encoded: &encoded,
                         writes_before_failure,
                     }),
@@ -391,11 +403,7 @@ mod tests {
 mod browser_tests {
     use super::super::tests::{CandidateCommitFixture, CandidateFixture, DeterministicClock};
     use super::*;
-    use crate::{
-        NookError,
-        manager::companion_pairing::activation::tests::ActivationFixture,
-        storage::{extension_state, indexed_db},
-    };
+    use crate::{NookError, manager::companion_pairing::activation::tests::ActivationFixture};
     use rexie::TransactionMode;
     use wasm_bindgen_test::*;
 
@@ -442,7 +450,7 @@ mod browser_tests {
         }
 
         async fn activation_keys() -> Result<Vec<String>, NookError> {
-            let connection = open_nook_database().await?;
+            let connection = NookDatabase::open_nook_database().await?;
             let transaction = connection
                 .transaction(&[VAULT_STORE], TransactionMode::ReadOnly)
                 .map_err(|error| NookError::Database(format!("test transaction: {error:?}")))?;
@@ -468,7 +476,7 @@ mod browser_tests {
         }
 
         async fn authoritative_events_exclude_candidates() -> Result<(), NookError> {
-            let connection = open_nook_database().await?;
+            let connection = NookDatabase::open_nook_database().await?;
             let transaction = connection
                 .transaction(&["events"], TransactionMode::ReadOnly)
                 .map_err(|error| NookError::Database(format!("test transaction: {error:?}")))?;
@@ -492,19 +500,22 @@ mod browser_tests {
         }
 
         async fn commit_and_replay_remain_inert() -> Result<(), NookError> {
-            indexed_db::clear_vault_db().await?;
-            let authoritative_before = extension_state::read_all().await?;
+            NookDatabase::clear_vault_db().await?;
+            let authoritative_before = ExtensionPairingDatabase::read_all().await?;
             let fixture = Self::candidate()?;
             Self::commit(fixture).await?;
             assert!(!Self::activation_keys().await?.is_empty());
-            assert_eq!(extension_state::read_all().await?, authoritative_before);
+            assert_eq!(
+                ExtensionPairingDatabase::read_all().await?,
+                authoritative_before
+            );
             Self::authoritative_events_exclude_candidates().await?;
             assert!(Self::commit(Self::candidate()?).await.is_err());
             Ok(())
         }
 
         async fn concurrent_commits_have_one_winner() -> Result<(), NookError> {
-            indexed_db::clear_vault_db().await?;
+            NookDatabase::clear_vault_db().await?;
             let first = Self::commit(Self::candidate()?);
             let second = Self::commit(Self::candidate()?);
             let (first, second) = futures_util::join!(first, second);
@@ -513,7 +524,7 @@ mod browser_tests {
         }
 
         async fn late_expiry_aborts_payloads_and_gate() -> Result<(), NookError> {
-            indexed_db::clear_vault_db().await?;
+            NookDatabase::clear_vault_db().await?;
             let fixture = Self::expiring_candidate()?;
             let clock = DeterministicClock::new(vec![
                 Self::epoch("160")?,
@@ -538,7 +549,7 @@ mod browser_tests {
 
         async fn observation_failure_aborts_payloads_and_gate() -> Result<(), NookError> {
             for observations in [vec![Self::epoch("160")?], vec![Self::epoch("160")?; 2]] {
-                indexed_db::clear_vault_db().await?;
+                NookDatabase::clear_vault_db().await?;
                 let fixture = Self::expiring_candidate()?;
                 let result = PairingActivationStore::commit(PairingActivationCommit {
                     admission: PairingActivationStorageAdmission {

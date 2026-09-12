@@ -7,7 +7,7 @@
 use rexie::{ObjectStore, Rexie, TransactionMode};
 
 use crate::NookError;
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, ops::Deref, rc::Rc};
 
 pub(crate) mod auth_providers;
 mod checked_event_write;
@@ -23,6 +23,7 @@ pub(crate) mod icloud;
 pub(crate) mod identity_record;
 pub(crate) mod indexed_db;
 pub(crate) mod local_folder;
+pub(crate) mod remote_event;
 pub(crate) mod session;
 
 thread_local! {
@@ -34,42 +35,59 @@ thread_local! {
     };
 }
 
-pub(crate) async fn open_nook_database() -> Result<Rc<rexie::Rexie>, NookError> {
-    if let Some(connection) =
-        NOOK_DATABASE_CONNECTIONS.with(|connections| connections.borrow().first().cloned())
-        && connection
-            .transaction(&["vault"], TransactionMode::ReadOnly)
-            .is_ok()
-    {
-        return Ok(connection);
-    }
+/// Open database capability. The retained connection owns transaction access.
+#[derive(Clone)]
+pub(crate) struct NookDatabase {
+    connection: Rc<Rexie>,
+}
 
-    let connection = Rc::new(
-        Rexie::builder("nook_db")
-            .version(2)
-            .add_object_store(ObjectStore::new("vault"))
-            .add_object_store(ObjectStore::new("events"))
-            .add_object_store(ObjectStore::new("projections"))
-            .add_object_store(ObjectStore::new("provider_receipts"))
-            .add_object_store(ObjectStore::new("outbox"))
-            .build()
-            .await
-            .map_err(|error| NookError::IndexedDb(format!("IndexedDB build error: {error:?}")))?,
-    );
-    let connection = NOOK_DATABASE_CONNECTIONS.with(|connections| {
-        let mut connections = connections.borrow_mut();
-        connections.retain(|existing| {
-            existing
+impl Deref for NookDatabase {
+    type Target = Rexie;
+    fn deref(&self) -> &Self::Target {
+        &self.connection
+    }
+}
+
+impl NookDatabase {
+    pub(crate) async fn open_nook_database() -> Result<NookDatabase, NookError> {
+        if let Some(connection) =
+            NOOK_DATABASE_CONNECTIONS.with(|connections| connections.borrow().first().cloned())
+            && connection
                 .transaction(&["vault"], TransactionMode::ReadOnly)
                 .is_ok()
-        });
-        if let Some(existing) = connections.first().cloned() {
-            connections.push(connection);
-            existing
-        } else {
-            connections.push(connection.clone());
-            connection
+        {
+            return Ok(NookDatabase { connection });
         }
-    });
-    Ok(connection)
+
+        let connection = Rc::new(
+            Rexie::builder("nook_db")
+                .version(2)
+                .add_object_store(ObjectStore::new("vault"))
+                .add_object_store(ObjectStore::new("events"))
+                .add_object_store(ObjectStore::new("projections"))
+                .add_object_store(ObjectStore::new("provider_receipts"))
+                .add_object_store(ObjectStore::new("outbox"))
+                .build()
+                .await
+                .map_err(|error| {
+                    NookError::IndexedDb(format!("IndexedDB build error: {error:?}"))
+                })?,
+        );
+        let connection = NOOK_DATABASE_CONNECTIONS.with(|connections| {
+            let mut connections = connections.borrow_mut();
+            connections.retain(|existing| {
+                existing
+                    .transaction(&["vault"], TransactionMode::ReadOnly)
+                    .is_ok()
+            });
+            if let Some(existing) = connections.first().cloned() {
+                connections.push(connection);
+                existing
+            } else {
+                connections.push(connection.clone());
+                connection
+            }
+        });
+        Ok(NookDatabase { connection })
+    }
 }

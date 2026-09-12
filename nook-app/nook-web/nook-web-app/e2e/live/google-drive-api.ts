@@ -6,6 +6,8 @@
 const DRIVE_FILES = 'https://www.googleapis.com/drive/v3/files'
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 
+import { readStringProperty, requireRecord } from '../helpers/guards'
+
 export enum LiveDriveCredentialsStateKind {
   Missing = 'missing',
   OwnerOnly = 'owner-only',
@@ -55,11 +57,11 @@ export function hasLiveDriveSharedGrantCredentials(): boolean {
   )
 }
 
-async function driveJson<T>(
+async function driveJson(
   accessToken: string,
   url: string,
   init?: RequestInit,
-): Promise<T> {
+): Promise<unknown> {
   const response = await fetch(url, {
     ...init,
     headers: {
@@ -74,8 +76,7 @@ async function driveJson<T>(
       `Drive API ${response.status} for ${url}: ${body.slice(0, 500)}`,
     )
   }
-  if (!body) return {} as T
-  return JSON.parse(body) as T
+  return body ? JSON.parse(body) : {}
 }
 
 /** Create a My Drive folder (`drive.file` write scope). */
@@ -83,21 +84,25 @@ export async function createSharedVaultFolder(
   accessToken: string,
   name: string,
 ): Promise<{ id: string; name: string }> {
-  const created = await driveJson<{ id?: string; name?: string }>(
-    accessToken,
-    `${DRIVE_FILES}?fields=id,name`,
-    {
+  const created = requireRecord(
+    await driveJson(accessToken, `${DRIVE_FILES}?fields=id,name`, {
       method: 'POST',
       body: JSON.stringify({
         name,
         mimeType: FOLDER_MIME,
       }),
-    },
+    }),
+    'Drive folder response',
   )
-  if (!created.id?.trim()) {
+  const id = readStringProperty(created, 'id', 'Drive folder response')
+  if (!id.trim()) {
     throw new Error('Drive folder create response missing id')
   }
-  return { id: created.id, name: created.name?.trim() || name }
+  const responseName = created.name
+  return {
+    id,
+    name: typeof responseName === 'string' ? responseName.trim() || name : name,
+  }
 }
 
 /** Grant writer access to joiner email (`permissions.create`). */
@@ -133,19 +138,23 @@ export async function verifySharedVaultFolder(
     'id,name,mimeType,capabilities(canAddChildren)',
   )
   url.searchParams.set('supportsAllDrives', 'true')
-  const meta = await driveJson<{
-    id?: string
-    name?: string
-    mimeType?: string
-    capabilities?: { canAddChildren?: boolean }
-  }>(accessToken, url.toString())
+  const meta = requireRecord(
+    await driveJson(accessToken, url.toString()),
+    'Drive folder metadata',
+  )
   if (meta.mimeType !== FOLDER_MIME) {
     throw new Error('Shared Drive target is not a folder')
   }
+  const id = typeof meta.id === 'string' ? meta.id.trim() : ''
+  const name = typeof meta.name === 'string' ? meta.name.trim() : ''
+  const capabilities =
+    typeof meta.capabilities === 'object' && meta.capabilities !== null
+      ? requireRecord(meta.capabilities, 'Drive folder capabilities')
+      : {}
   return {
-    id: meta.id?.trim() || folderId,
-    name: meta.name?.trim() || 'Nook shared vault',
-    canAddChildren: meta.capabilities?.canAddChildren === true,
+    id: id || folderId,
+    name: name || 'Nook shared vault',
+    canAddChildren: capabilities.canAddChildren === true,
   }
 }
 
@@ -191,11 +200,12 @@ export async function uploadMarkerUnderFolder(
       `Drive multipart upload ${response.status}: ${text.slice(0, 500)}`,
     )
   }
-  const parsed = JSON.parse(text) as { id?: string }
-  if (!parsed.id?.trim()) {
+  const parsed = requireRecord(JSON.parse(text), 'Drive upload response')
+  const id = readStringProperty(parsed, 'id', 'Drive upload response')
+  if (!id.trim()) {
     throw new Error('Drive upload response missing id')
   }
-  return parsed.id
+  return id
 }
 
 /** List a file by id (used by joiner after grant). */
@@ -206,19 +216,25 @@ export async function getFileMetadata(
   const url = new URL(`${DRIVE_FILES}/${encodeURIComponent(fileId)}`)
   url.searchParams.set('fields', 'id,name,parents')
   url.searchParams.set('supportsAllDrives', 'true')
-  const meta = await driveJson<{
-    id?: string
-    name?: string
-    parents?: string[]
-  }>(accessToken, url.toString())
-  if (!meta.id?.trim()) {
+  const meta = requireRecord(
+    await driveJson(accessToken, url.toString()),
+    'Drive file metadata',
+  )
+  const id = readStringProperty(meta, 'id', 'Drive file metadata')
+  if (!id.trim()) {
     throw new Error('Drive file metadata missing id')
   }
-  return {
-    id: meta.id,
-    name: meta.name?.trim() || fileId,
-    parents: meta.parents,
+  const metadata: { id: string; name: string; parents?: string[] } = {
+    id,
+    name: typeof meta.name === 'string' ? meta.name.trim() || fileId : fileId,
   }
+  if (Array.isArray(meta.parents)) {
+    const parents = meta.parents.filter(
+      (parent): parent is string => typeof parent === 'string',
+    )
+    metadata.parents = parents
+  }
+  return metadata
 }
 
 /** Best-effort trash cleanup so live smoke does not leave folders behind. */

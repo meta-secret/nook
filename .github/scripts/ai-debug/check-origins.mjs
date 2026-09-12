@@ -4,24 +4,33 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+/** @typedef {{ command: string, args?: string[] }} CursorPlaywrightConfig */
+/** @typedef {{ mcpServers?: { playwright?: CursorPlaywrightConfig } }} CursorMcpConfig */
+/** @typedef {{ name: string, enabled: boolean, transport: { type: string, command: string, args: string[] } }} CodexMcpServer */
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../..')
+/** @type {string[]} */
 const expected = JSON.parse(
   readFileSync(join(root, '.github/scripts/ai-debug/allowed-origins.json'), 'utf8'),
 )
 
+/** @param {string} message @returns {never} */
 function fail(message) {
   console.error(message)
   process.exit(1)
 }
 
+/** @param {string} text @param {string} label @returns {string[]} */
 function extractAllowedOriginsArg(text, label) {
   const match = text.match(/--allowed-origins=([^\s"]+)/)
-  if (!match) {
+  const originText = match?.[1]
+  if (!originText) {
     fail(`${label} is missing --allowed-origins.`)
   }
-  return match[1].split(';').filter(Boolean)
+  return originText.split(';').filter(Boolean)
 }
 
+/** @param {readonly string[]} actual @param {string} label */
 function assertSameOrigins(actual, label) {
   const missing = expected.filter((origin) => !actual.includes(origin))
   const extra = actual.filter((origin) => !expected.includes(origin))
@@ -34,6 +43,7 @@ function assertSameOrigins(actual, label) {
   }
 }
 
+/** @param {string} path */
 function fileExists(path) {
   try {
     readFileSync(path)
@@ -72,6 +82,7 @@ assertSameOrigins(
 const cursorMcpPath = join(root, '.cursor/mcp.json')
 let cursorConfigured = false
 if (fileExists(cursorMcpPath)) {
+  /** @type {CursorMcpConfig} */
   const cursorMcp = JSON.parse(readFileSync(cursorMcpPath, 'utf8'))
   const playwright = cursorMcp?.mcpServers?.playwright
   if (!playwright) {
@@ -90,7 +101,10 @@ if (fileExists(cursorMcpPath)) {
   if (!args.includes('--ignore-https-errors')) {
     fail('.cursor/mcp.json must pass --ignore-https-errors.')
   }
-  const originsArg = args.find((arg) => arg.startsWith('--allowed-origins='))
+  const originsArg = args.find(
+    /** @type {(arg: string) => boolean} */ (arg) =>
+      arg.startsWith('--allowed-origins='),
+  )
   if (!originsArg) {
     fail('.cursor/mcp.json is missing --allowed-origins.')
   }
@@ -108,6 +122,7 @@ try {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   })
+  /** @type {CodexMcpServer[]} */
   const servers = JSON.parse(raw)
   const server = servers.find(({ name }) => name === 'playwright')
   if (!server?.enabled) {
@@ -126,7 +141,7 @@ try {
       'The Codex Playwright MCP server is missing its session launcher, --caps=devtools, or --ignore-https-errors.',
     )
   }
-  const originsArg = server.transport.args.find((arg) =>
+  const originsArg = server.transport.args.find((arg /** @type {string} */) =>
     arg.startsWith('--allowed-origins='),
   )
   if (!originsArg) {
@@ -140,8 +155,8 @@ try {
 } catch (error) {
   codexError =
     error && typeof error === 'object' && 'stderr' in error
-      ? String(error.stderr || error.message || error)
-      : String(error?.message || error)
+      ? String(error.stderr || (error instanceof Error ? error.message : error))
+      : String(error instanceof Error ? error.message : error)
 }
 
 if (!codexConfigured && !cursorConfigured) {

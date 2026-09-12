@@ -77,42 +77,6 @@ pub enum SharedStorageGrantTarget {
     },
 }
 
-impl SharedStorageGrantTarget {
-    #[must_use]
-    pub fn from_values(storage_target_id: String, storage_target_name: String) -> Self {
-        if storage_target_name.trim().is_empty() {
-            Self::Identified { storage_target_id }
-        } else {
-            Self::Named {
-                storage_target_id,
-                storage_target_name,
-            }
-        }
-    }
-
-    #[must_use]
-    pub fn id(&self) -> Option<&str> {
-        match self {
-            Self::Unavailable => None,
-            Self::Identified { storage_target_id }
-            | Self::Named {
-                storage_target_id, ..
-            } => Some(storage_target_id),
-        }
-    }
-
-    #[must_use]
-    pub fn name(&self) -> Option<&str> {
-        match self {
-            Self::Named {
-                storage_target_name,
-                ..
-            } => Some(storage_target_name),
-            Self::Unavailable | Self::Identified { .. } => None,
-        }
-    }
-}
-
 /// Outcome of preparing a shared storage grant.
 ///
 /// Rust validation is ceremony-agnostic: Google Drive shared replication is

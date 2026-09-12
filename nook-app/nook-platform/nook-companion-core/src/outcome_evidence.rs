@@ -4,7 +4,7 @@
 //! This module owns whether those signals are sufficient to treat a workflow
 //! as complete before durably creating or replacing credentials.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -47,7 +47,8 @@ pub struct AuthenticationOutcomeClassification {
     pub timeout_ms: AuthenticationOutcomeTimeoutMilliseconds,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify, Deserialize)]
+#[serde(try_from = "DecisionWire")]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationOutcomeDecision {
@@ -55,23 +56,18 @@ pub struct AuthenticationOutcomeDecision {
     pub allows_credential_commit: bool,
 }
 
-impl<'de> Deserialize<'de> for AuthenticationOutcomeDecision {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase", deny_unknown_fields)]
-        struct DecisionWire {
-            verdict: AuthenticationOutcomeVerdict,
-            allows_credential_commit: bool,
-        }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DecisionWire {
+    verdict: AuthenticationOutcomeVerdict,
+    allows_credential_commit: bool,
+}
 
-        let wire = DecisionWire::deserialize(deserializer)?;
+impl TryFrom<DecisionWire> for AuthenticationOutcomeDecision {
+    type Error = &'static str;
+    fn try_from(wire: DecisionWire) -> Result<Self, Self::Error> {
         if wire.allows_credential_commit != wire.verdict.allows_credential_commit() {
-            return Err(D::Error::custom(
-                "authentication outcome decision contradicts its verdict",
-            ));
+            return Err("authentication outcome decision contradicts its verdict");
         }
         Ok(Self {
             verdict: wire.verdict,
@@ -86,7 +82,7 @@ impl AuthenticationOutcomeDecision {
         observation: AuthenticationOutcomeObservation,
         timeout_ms: AuthenticationOutcomeTimeoutMilliseconds,
     ) -> Self {
-        let verdict = classify_authentication_outcome(observation, timeout_ms);
+        let verdict = (observation).classify_authentication_outcome(timeout_ms);
         Self {
             verdict,
             allows_credential_commit: verdict.allows_credential_commit(),
@@ -96,7 +92,8 @@ impl AuthenticationOutcomeDecision {
 
 /// Classification of collected outcome evidence.
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u32")]
 pub enum AuthenticationOutcomeVerdict {
     Sufficient,
     Insufficient,
@@ -131,19 +128,22 @@ impl Serialize for AuthenticationOutcomeVerdict {
     }
 }
 
-impl<'de> Deserialize<'de> for AuthenticationOutcomeVerdict {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match u32::deserialize(deserializer)? {
+impl TryFrom<u32> for AuthenticationOutcomeVerdict {
+    type Error = String;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
             0 => Ok(Self::Sufficient),
             1 => Ok(Self::Insufficient),
             2 => Ok(Self::Conflicting),
             3 => Ok(Self::Timeout),
-            value => Err(D::Error::custom(format!(
-                "invalid authentication outcome verdict: {value}"
-            ))),
+            value => Err(format!("invalid authentication outcome verdict: {value}")),
         }
     }
 }
@@ -153,37 +153,40 @@ impl<'de> Deserialize<'de> for AuthenticationOutcomeVerdict {
 /// Navigation alone is never Sufficient. Error and success together are
 /// Conflicting. Without an explicit success marker the verdict stays
 /// Insufficient until the timeout budget elapses.
-#[must_use]
-pub const fn classify_authentication_outcome(
-    observation: AuthenticationOutcomeObservation,
-    timeout_ms: AuthenticationOutcomeTimeoutMilliseconds,
-) -> AuthenticationOutcomeVerdict {
-    if observation.success_marker_present && observation.error_marker_present {
-        return AuthenticationOutcomeVerdict::Conflicting;
+impl AuthenticationOutcomeObservation {
+    #[must_use]
+    pub const fn classify_authentication_outcome(
+        self,
+        timeout_ms: AuthenticationOutcomeTimeoutMilliseconds,
+    ) -> AuthenticationOutcomeVerdict {
+        let observation = self;
+        if observation.success_marker_present && observation.error_marker_present {
+            return AuthenticationOutcomeVerdict::Conflicting;
+        }
+
+        if observation.error_marker_present {
+            return AuthenticationOutcomeVerdict::Insufficient;
+        }
+
+        if observation.success_marker_present {
+            return AuthenticationOutcomeVerdict::Sufficient;
+        }
+
+        // Explicit policy: leaving the auth path, clearing fields, SPA mutation,
+        // or iframe context without a success marker is never enough to commit.
+        let _ = (
+            observation.navigated_away_from_auth_path,
+            observation.auth_fields_present,
+            observation.same_document_mutation,
+            observation.in_iframe,
+        );
+
+        if observation.elapsed_ms.has_reached(timeout_ms) {
+            return AuthenticationOutcomeVerdict::Timeout;
+        }
+
+        AuthenticationOutcomeVerdict::Insufficient
     }
-
-    if observation.error_marker_present {
-        return AuthenticationOutcomeVerdict::Insufficient;
-    }
-
-    if observation.success_marker_present {
-        return AuthenticationOutcomeVerdict::Sufficient;
-    }
-
-    // Explicit policy: leaving the auth path, clearing fields, SPA mutation,
-    // or iframe context without a success marker is never enough to commit.
-    let _ = (
-        observation.navigated_away_from_auth_path,
-        observation.auth_fields_present,
-        observation.same_document_mutation,
-        observation.in_iframe,
-    );
-
-    if observation.elapsed_ms.raw() >= timeout_ms.raw() {
-        return AuthenticationOutcomeVerdict::Timeout;
-    }
-
-    AuthenticationOutcomeVerdict::Insufficient
 }
 
 #[cfg(test)]
@@ -249,7 +252,7 @@ mod tests {
             ..base()
         };
         assert_eq!(
-            classify_authentication_outcome(observation, DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
+            (observation).classify_authentication_outcome(DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
             AuthenticationOutcomeVerdict::Insufficient
         );
     }
@@ -264,7 +267,7 @@ mod tests {
             ..base()
         };
         assert_eq!(
-            classify_authentication_outcome(observation, DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
+            (observation).classify_authentication_outcome(DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
             AuthenticationOutcomeVerdict::Sufficient
         );
         assert!(AuthenticationOutcomeVerdict::Sufficient.allows_credential_commit());
@@ -289,7 +292,7 @@ mod tests {
             ..base()
         };
         assert_eq!(
-            classify_authentication_outcome(observation, DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
+            (observation).classify_authentication_outcome(DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
             AuthenticationOutcomeVerdict::Insufficient
         );
         assert!(!AuthenticationOutcomeVerdict::Insufficient.allows_credential_commit());
@@ -304,7 +307,7 @@ mod tests {
             ..base()
         };
         assert_eq!(
-            classify_authentication_outcome(observation, DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
+            (observation).classify_authentication_outcome(DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
             AuthenticationOutcomeVerdict::Conflicting
         );
     }
@@ -318,7 +321,7 @@ mod tests {
             ..base()
         };
         assert_eq!(
-            classify_authentication_outcome(observation, DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
+            (observation).classify_authentication_outcome(DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
             AuthenticationOutcomeVerdict::Insufficient
         );
     }
@@ -333,7 +336,7 @@ mod tests {
             ..base()
         };
         assert_eq!(
-            classify_authentication_outcome(observation, DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
+            (observation).classify_authentication_outcome(DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
             AuthenticationOutcomeVerdict::Sufficient
         );
     }
@@ -348,7 +351,7 @@ mod tests {
             ..base()
         };
         assert_eq!(
-            classify_authentication_outcome(navigated_only, DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
+            (navigated_only).classify_authentication_outcome(DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
             AuthenticationOutcomeVerdict::Insufficient
         );
 
@@ -359,7 +362,7 @@ mod tests {
             ..base()
         };
         assert_eq!(
-            classify_authentication_outcome(with_marker, DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
+            (with_marker).classify_authentication_outcome(DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
             AuthenticationOutcomeVerdict::Sufficient
         );
     }
@@ -373,7 +376,7 @@ mod tests {
             ..base()
         };
         assert_eq!(
-            classify_authentication_outcome(observation, DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
+            (observation).classify_authentication_outcome(DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
             AuthenticationOutcomeVerdict::Timeout
         );
         assert!(!AuthenticationOutcomeVerdict::Timeout.allows_credential_commit());
@@ -389,7 +392,7 @@ mod tests {
             ..base()
         };
         assert_eq!(
-            classify_authentication_outcome(observation, DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
+            (observation).classify_authentication_outcome(DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS),
             AuthenticationOutcomeVerdict::Insufficient
         );
     }

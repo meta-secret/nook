@@ -1,30 +1,13 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
 import {
+  addVaultPassword,
   clearBrowserVault,
   createLocalVaultOnLogin,
   UI_TIMEOUT_MS,
 } from '../helpers'
 
 const DEMO_BEAT_MS = 700
-type DemoVaultWindow = Window & {
-  __nookVault?: {
-    loginDeviceKeysCapable: boolean
-    loginPasswordPrompt: boolean
-    passwordEntries: Array<{ id: string; label: string; createdAt: string }>
-    clearProjectionConflicts(): void
-    stageSecurityConflictForTesting(args: {
-      readonly events: string[]
-      readonly reasons: string[]
-    }): void
-    stageStoreIdSyncConflictForTesting(args: {
-      readonly providerLabel: string
-      readonly localStoreId: string
-      readonly remoteStoreId: string
-    }): void
-  }
-}
-
 async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
@@ -36,10 +19,11 @@ test('import-as-new-vault conflict and unlock honesty surface', async ({
   await clearBrowserVault(page)
   await page.reload()
   await createLocalVaultOnLogin(page, 'demo-local')
+  await addVaultPassword(page, 'Recovery', 'demo-recovery-password')
   await demoBeat(page)
 
   await page.evaluate(() => {
-    const vault = (window as DemoVaultWindow).__nookVault
+    const vault = window.__nookVault
     if (!vault) {
       throw new Error('__nookVault is unavailable')
     }
@@ -58,7 +42,7 @@ test('import-as-new-vault conflict and unlock honesty surface', async ({
   await demoBeat(page)
 
   await page.evaluate(() => {
-    const vault = (window as DemoVaultWindow).__nookVault
+    const vault = window.__nookVault
     if (!vault) {
       throw new Error('__nookVault is unavailable')
     }
@@ -69,7 +53,7 @@ test('import-as-new-vault conflict and unlock honesty surface', async ({
   ).not.toBeVisible()
 
   await page.evaluate(() => {
-    const vault = (window as DemoVaultWindow).__nookVault
+    const vault = window.__nookVault
     if (!vault) {
       throw new Error('__nookVault is unavailable')
     }
@@ -107,19 +91,11 @@ test('import-as-new-vault conflict and unlock honesty surface', async ({
   await demoBeat(page)
 
   await page.evaluate(() => {
-    const vault = (window as DemoVaultWindow).__nookVault
+    const vault = window.__nookVault
     if (!vault) {
       throw new Error('__nookVault is unavailable')
     }
     vault.loginDeviceKeysCapable = false
-    vault.loginPasswordPrompt = true
-    vault.passwordEntries = [
-      {
-        id: 'demo-password-entry',
-        label: 'Recovery',
-        createdAt: '2026-08-01T00:00:00Z',
-      },
-    ]
   })
 
   await expect(page.getByTestId('login-device-keys-unavailable')).toBeVisible({

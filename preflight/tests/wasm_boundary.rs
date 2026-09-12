@@ -1,3 +1,4 @@
+use nook_preflight::RustWasmNames;
 use std::path::{Path, PathBuf};
 use std::{env, fs, process};
 
@@ -8,7 +9,10 @@ fn wasm_source_does_not_use_js_value() -> anyhow::Result<()> {
         PathBuf::from,
     );
 
-    let violations = nook_preflight::wasm_js_values(&repository_root)?;
+    let violations = (nook_preflight::RustBoundarySources {
+        root: &repository_root,
+    })
+    .wasm_js_values()?;
 
     assert!(
         violations.is_empty(),
@@ -27,7 +31,7 @@ fn wasm_callable_names_preserve_rust_provenance_end_to_end() -> anyhow::Result<(
     let root = wasm_callable_fixture_root();
     create_wasm_callable_fixture(&root)?;
 
-    let violations = nook_preflight::rust_wasm_callable_name_overrides(&root)?;
+    let violations = (RustWasmNames { root: &root }).rust_wasm_callable_name_overrides()?;
     let mut locations = violations
         .iter()
         .map(|violation| {

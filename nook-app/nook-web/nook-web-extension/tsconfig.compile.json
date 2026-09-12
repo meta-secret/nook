@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["svelte", "chrome", "bun", "node"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.svelte",
+    "scripts/build.ts",
+    "scripts/channel-identity.ts",
+    "scripts/deployment-package.ts",
+    "../nook-web-shared/src/components/NookIcon.svelte",
+    "../nook-web-shared/src/extension/**/*.ts",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm/**/*.d.ts"
+  ],
+  "exclude": [
+    "e2e/**",
+    "tests/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/dist-prod/**",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm-*",
+    "../nook-web-shared/src/extension/nook-companion-wasm"
+  ]
+}

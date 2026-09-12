@@ -18,11 +18,11 @@ import {
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 
 function parseStoreId(yaml: string): string {
-  const match = yaml.match(/^store_id:\s*(\S+)/m)
-  if (!match) {
+  const storeId = yaml.match(/^store_id:\s*(\S+)/m)?.[1]
+  if (!storeId) {
     throw new Error('store_id missing from vault yaml')
   }
-  return match[1]
+  return storeId
 }
 
 async function setSecurityConflict(page: Page, present: boolean) {
@@ -57,20 +57,15 @@ async function setSecurityConflict(page: Page, present: boolean) {
 
 async function setContentSyncConflict(page: Page) {
   await page.evaluate(() => {
-    const vault = (
-      window as Window & {
-        __nookVault: {
-          stageContentSyncConflictForTesting(args: {
-            readonly providerLabel: string
-            readonly localVersion: number
-            readonly remoteVersion: number
-          }): void
-        }
-      }
-    ).__nookVault
-    const contentConflictArgs: Parameters<
-      typeof vault.stageContentSyncConflictForTesting
-    >[0] = {
+    const vault = window.__nookVault
+    if (
+      !vault ||
+      !('stageContentSyncConflictForTesting' in vault) ||
+      typeof vault.stageContentSyncConflictForTesting !== 'function'
+    ) {
+      throw new Error('__nookVault conflict harness is unavailable.')
+    }
+    const contentConflictArgs = {
       providerLabel: 'Remote provider',
       localVersion: 1,
       remoteVersion: 2,
@@ -155,6 +150,7 @@ test.describe('sync conflict resolution', () => {
           label: 'Shared File A',
           fileName,
           accessToken: 'ya29.e2e_file_sync_token',
+          accountEmail: 'shared-a@example.test',
         },
       ],
       stub,
@@ -162,13 +158,7 @@ test.describe('sync conflict resolution', () => {
     await triggerVaultSyncRefresh(page)
     await waitForLoadedSyncProviders(page)
     await page.evaluate(async () => {
-      const vault = (
-        window as Window & {
-          __nookVault?: {
-            runFanOutSyncAfterLocalSave?: () => Promise<void>
-          }
-        }
-      ).__nookVault
+      const vault = window.__nookVault
       await vault?.runFanOutSyncAfterLocalSave?.()
     })
     await waitForSyncRemoteVaultState(
@@ -258,16 +248,14 @@ test.describe('sync conflict resolution', () => {
     await expect(page.getByTestId('vault-error')).toHaveCount(0)
     await expect
       .poll(() =>
-        page.evaluate(
-          () =>
-            (
-              window as Window & {
-                __nookVault: {
-                  requireManager(): { storage_mode: string }
-                }
-              }
-            ).__nookVault.requireManager().storage_mode,
-        ),
+        page.evaluate(() => {
+          const vault = window.__nookVault
+          if (!vault) throw new Error('__nookVault is unavailable.')
+          const manager = vault.admitManager()
+          return manager.isOk()
+            ? manager.value.storage_mode
+            : manager.error.translationKey
+        }),
       )
       .toBe('local')
     expect(parseStoreId(stub.getVaultYaml())).toEqual(storeA)
@@ -306,6 +294,7 @@ test.describe('sync conflict resolution', () => {
           label: 'Shared File Import A',
           fileName,
           accessToken: 'ya29.e2e_file_sync_token',
+          accountEmail: 'shared-import-a@example.test',
         },
       ],
       stub,
@@ -313,13 +302,7 @@ test.describe('sync conflict resolution', () => {
     await triggerVaultSyncRefresh(page)
     await waitForLoadedSyncProviders(page)
     await page.evaluate(async () => {
-      const vault = (
-        window as Window & {
-          __nookVault?: {
-            runFanOutSyncAfterLocalSave?: () => Promise<void>
-          }
-        }
-      ).__nookVault
+      const vault = window.__nookVault
       await vault?.runFanOutSyncAfterLocalSave?.()
     })
     await waitForSyncRemoteVaultState(

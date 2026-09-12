@@ -5,7 +5,7 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
 
-use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
+use serde::{Deserialize, Serialize};
 use std::{fmt, time::Duration};
 
 const DEFAULT_PERIOD: u64 = 30;
@@ -65,7 +65,7 @@ impl BackupCodeAttachMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, tsify::Tsify)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum TotpAlgorithm {
     #[default]
@@ -96,7 +96,9 @@ impl TotpAlgorithm {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, tsify::Tsify)]
+#[tsify(type = "number")]
+#[serde(try_from = "u32")]
 pub enum TotpDigits {
     #[default]
     Six,
@@ -114,15 +116,6 @@ impl Serialize for TotpDigits {
             Self::Seven => 7,
             Self::Eight => 8,
         })
-    }
-}
-
-impl<'de> Deserialize<'de> for TotpDigits {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Self::try_from(u32::deserialize(deserializer)?).map_err(D::Error::custom)
     }
 }
 
@@ -156,18 +149,9 @@ impl TryFrom<u32> for TotpDigits {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Deserialize, tsify::Tsify)]
+#[serde(try_from = "u64")]
 pub struct TotpPeriod(u64);
-
-impl<'de> Deserialize<'de> for TotpPeriod {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Self::try_from(u64::deserialize(deserializer)?).map_err(D::Error::custom)
-    }
-}
 
 impl Default for TotpPeriod {
     fn default() -> Self {
@@ -235,7 +219,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_closed_authenticator_values_for_wire_boundaries() -> Result<(), serde_json::Error> {
+    fn renders_closed_authenticator_values_for_wire_boundaries() -> serde_json::Result<()> {
         assert_eq!(
             PasskeyDeviceProtectionMode::AntiHacker.as_str(),
             "anti-hacker"

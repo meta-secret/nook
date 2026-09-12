@@ -5,19 +5,23 @@
 )]
 //! Admission against the event store held by the handoff transaction.
 use super::ExistingVaultImportCommit;
-use crate::NookError;
-use crate::storage::{event_db, identity_record};
+use crate::EventDbLoadLocalEventStoreFromStore;
+use crate::{NookDatabase, NookError};
+use nook_core::EventLookup;
+use nook_core::{DeviceAuthorization, EpochCheckpoint};
+use nook_core::{DirectoryLegacyVaultImport, DirectoryOwnedVaultOpening, IdentityVaultKeyOpening};
 use nook_core::{
     EventGraphAuthorizationProjection, EventGraphDeviceAccess, EventGraphDeviceAccessRequest,
     IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation,
     IdentityVaultEventId,
 };
 pub(super) struct ExistingVaultHandoffResult {
+    pub(super) directory: nook_core::IdentityDirectory,
     pub(super) identity_id: nook_core::IdentityId,
     pub(super) vault_keys: nook_core::VaultKeys,
 }
 pub(super) struct ExistingVaultHandoff<'a> {
-    pub(super) directory: &'a mut nook_core::IdentityDirectory,
+    pub(super) directory: nook_core::IdentityDirectory,
     pub(super) events: &'a rexie::Store,
     pub(super) store_id: &'a nook_core::StoreId,
     pub(super) app_key: &'a nook_core::AppKey,
@@ -64,9 +68,12 @@ impl<'a> ExistingVaultHandoff<'a> {
         let input = self;
 
         let graph =
-            event_db::load_local_event_store_from_store(input.events, input.store_id.as_str())
-                .await?
-                .load_graph(input.store_id.as_str())?;
+            NookDatabase::load_local_event_store_from_store(EventDbLoadLocalEventStoreFromStore {
+                store: input.events,
+                store_id: input.store_id.as_str(),
+            })
+            .await?
+            .load_graph(input.store_id.as_str())?;
         if !graph.pending_events().is_empty() {
             return Err(NookError::Database(
                 "Imported extension identity has an incomplete signed vault event graph."
@@ -74,17 +81,22 @@ impl<'a> ExistingVaultHandoff<'a> {
             ));
         }
         let ordered_event_ids = graph.topological_order()?;
-        let checkpoint_event_id = graph
-            .current_epoch_checkpoint()?
-            .or_else(|| ordered_event_ids.last().cloned())
-            .ok_or_else(|| {
+        let checkpoint_event_id = match graph.current_epoch_checkpoint()? {
+            EpochCheckpoint::Committed(checkpoint) => checkpoint,
+            EpochCheckpoint::Unrotated => ordered_event_ids.last().cloned().ok_or_else(|| {
                 NookError::Database(
                     "Imported extension identity has no committed vault events.".to_owned(),
                 )
-            })?;
-        let checkpoint_event = graph.get(&checkpoint_event_id).ok_or_else(|| {
-            NookError::Database("Imported extension identity checkpoint is missing.".to_owned())
-        })?;
+            })?,
+        };
+        let checkpoint_event = match graph.get(&checkpoint_event_id) {
+            EventLookup::Recorded(event) => event,
+            EventLookup::UnknownEvent => {
+                return Err(NookError::Database(
+                    "Imported extension identity checkpoint is missing.".to_owned(),
+                ));
+            }
+        };
         let key_epoch = IdentityVaultEventId::parse(checkpoint_event.body.key_epoch.as_str())
             .map_err(|error| NookError::Database(error.to_string()))?;
         let checkpoint = IdentityVaultEventId::parse(checkpoint_event_id.as_str())
@@ -95,18 +107,21 @@ impl<'a> ExistingVaultHandoff<'a> {
         }
         .ancestors()?;
         let expected_public_key = input.app_key.public_key();
-        let envelopes = EventGraphDeviceAccess::new(&graph)
-            .active_envelopes(&EventGraphDeviceAccessRequest {
+        let envelopes = match EventGraphDeviceAccess::new(&graph).active_envelopes(
+            &EventGraphDeviceAccessRequest {
                 expected_device_id: &input.existing.device_id,
                 expected_public_key: &expected_public_key,
                 expected_signing_public_key: input.signing_public_key,
-            })?
-            .ok_or_else(|| {
-                NookError::Database(
+            },
+        )? {
+            DeviceAuthorization::Granted(envelopes) => envelopes,
+            DeviceAuthorization::NotGranted => {
+                return Err(NookError::Database(
                     "Imported extension identity is not active in the signed vault roster."
                         .to_owned(),
-                )
-            })?;
+                ));
+            }
+        };
         let reconciliation = IdentityVaultDekReconciliation {
             secrets_envelope: envelopes.secrets_key,
             members_envelope: envelopes.members_key,
@@ -132,38 +147,51 @@ impl CheckedExistingVaultHandoff<'_> {
             input,
             reconciliation,
         } = self;
-        let identity_id = input
+        let imported = input
             .directory
-            .import_legacy_vault(
-                &input.existing.label,
-                input.app_key,
-                input.store_id.clone(),
+            .import_legacy_vault(DirectoryLegacyVaultImport {
+                label: &input.existing.label,
+                app_key: input.app_key,
+                store_id: input.store_id.clone(),
                 reconciliation,
-            )
-            .map_err(identity_record::map_domain_error)?;
-        let vault_keys = input
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        let opened = imported
             .directory
-            .open_or_generate_vault_dek_for_identity(
-                &identity_id,
-                input.app_key,
-                input.store_id.clone(),
-            )
-            .map_err(identity_record::map_domain_error)?;
+            .open_or_generate_vault_dek_for_identity(DirectoryOwnedVaultOpening {
+                identity_id: &imported.identity_id,
+                vault: IdentityVaultKeyOpening {
+                    app_key: input.app_key,
+                    store_id: input.store_id.clone(),
+                },
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
         Ok(ExistingVaultHandoffResult {
-            identity_id,
-            vault_keys,
+            directory: opened.directory,
+            identity_id: imported.identity_id,
+            vault_keys: opened.keys,
         })
     }
 }
 #[cfg(test)]
 mod tests {
-    use super::super::IdentityHandoffCommit;
+    use nook_core::{
+        DirectoryOwnedVaultOpening, IdentityCreation, IdentityVaultKeyOpening, MemberLabelState,
+        StoredSigningSeed,
+    };
+
+    use super::super::{
+        ExistingVaultEnrollment, IdentityHandoffCommit, IdentityHandoffCommitResult,
+        IdentityHandoffOperation,
+    };
     use super::{ExistingVaultHandoff, ExistingVaultImportCommit, HandoffCheckpoint, NookError};
-    use crate::manager::PendingExtensionIdentityEnrollment;
-    use crate::storage;
-    use crate::storage::event_db;
+
     use crate::storage::identity_record;
-    use crate::storage::indexed_db;
+    use crate::storage::identity_record::{AuthorizerSigningUpdate, HandoffSignerPublication};
+
+    use crate::{
+        EventDbSaveEventBytes, EventDbSaveEventBytesToStore, IdbPutStringRequest, NookDatabase,
+    };
     use futures_util::future;
     use identity_record::{IDENTITY_DIRECTORY_KEY, PendingSimpleGenesis};
     use nook_core::{
@@ -191,40 +219,61 @@ mod tests {
 
     impl ImportFixture {
         fn new() -> Result<Self, NookError> {
-            let identity = DeviceIdentity::generate().map_err(identity_record::map_domain_error)?;
+            let identity = DeviceIdentity::generate().map_err(NookDatabase::map_domain_error)?;
             let store_id =
-                nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?;
+                nook_core::StoreId::generate().map_err(NookDatabase::map_domain_error)?;
             let mut material = IdentityDirectory::empty();
-            let identity_id = material
-                .create_identity("Imported", &identity, None)
-                .map_err(identity_record::map_domain_error)?;
-            let _ = material
-                .open_or_generate_vault_dek_for_identity(&identity_id, &identity, store_id.clone())
-                .map_err(identity_record::map_domain_error)?;
-            let grant = &material
+            let resolved_identity = material
+                .create_identity(IdentityCreation {
+                    label: "Imported",
+                    app_key: &identity,
+                    member_label: MemberLabelState::Unnamed,
+                })
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+            material = resolved_identity.directory;
+            let identity_id = resolved_identity.identity_id;
+            let opened_identity = material
+                .open_or_generate_vault_dek_for_identity(DirectoryOwnedVaultOpening {
+                    identity_id: &identity_id,
+                    vault: IdentityVaultKeyOpening {
+                        app_key: &identity,
+                        store_id: store_id.clone(),
+                    },
+                })
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+            material = opened_identity.directory;
+            let selected = material
                 .selected()
-                .map_err(identity_record::map_domain_error)?
-                .vault_deks[0];
+                .map_err(NookDatabase::map_domain_error)?;
+            let grant = selected.vault_deks.first().ok_or_else(|| {
+                NookError::Database("vault grant fixture must be present".to_owned())
+            })?;
+            let secrets_envelope = grant.secrets_envelopes.first().ok_or_else(|| {
+                NookError::Database("secrets envelope fixture must be present".to_owned())
+            })?;
+            let members_envelope = grant.members_envelopes.first().ok_or_else(|| {
+                NookError::Database("members envelope fixture must be present".to_owned())
+            })?;
             Ok(ImportFixture {
                 identity,
                 store_id,
-                secrets_envelope: grant.secrets_envelopes[0].envelope.clone(),
-                members_envelope: grant.members_envelopes[0].envelope.clone(),
+                secrets_envelope: secrets_envelope.envelope.clone(),
+                members_envelope: members_envelope.envelope.clone(),
             })
         }
 
         async fn assert_nothing_published(
             &self,
-            signing_seed_before: Option<&String>,
+            signing_seed_before: &StoredSigningSeed,
         ) -> Result<(), NookError> {
             assert!(
-                identity_record::load_identity_directory()
+                NookDatabase::load_identity_directory()
                     .await?
                     .identities()
                     .is_empty()
             );
             assert_eq!(
-                event_db::load_signing_seed().await?.as_ref(),
+                &NookDatabase::load_signing_seed().await?,
                 signing_seed_before
             );
             Ok(())
@@ -239,24 +288,23 @@ mod tests {
     )]
     #[wasm_bindgen_test]
     async fn rejects_before_publishing_without_active_roster() -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await?;
         let fixture = ImportFixture::new()?;
-        let signing_seed_before = event_db::load_signing_seed().await?;
+        let signing_seed_before = NookDatabase::load_signing_seed().await?;
         let signing_public_key = DeviceSigningPublicKey::parse(&"22".repeat(32))
             .map_err(|error| NookError::Database(error.to_string()))?;
-        let enrollment = PendingExtensionIdentityEnrollment::ExistingVaultImport {
-            store_id: fixture.store_id.clone(),
-        };
         let signing_seed = "33".repeat(32);
         let result = IdentityHandoffCommit {
             app_key: &fixture.identity,
             signing_public_key: &signing_public_key,
-            authorizer_signing: None,
-            enrollment: &enrollment,
-            signing_seed: Some(&signing_seed),
-            existing_vault: Some(ExistingVaultImportCommit {
-                device_id: fixture.identity.device_id().clone(),
-                label: "Imported".to_owned(),
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
+            signing_seed: HandoffSignerPublication::ReplaceWith(&signing_seed),
+            operation: IdentityHandoffOperation::ExistingVaultImport(ExistingVaultEnrollment {
+                store_id: &fixture.store_id,
+                existing: ExistingVaultImportCommit {
+                    device_id: fixture.identity.device_id().clone(),
+                    label: "Imported".to_owned(),
+                },
             }),
         }
         .commit()
@@ -264,9 +312,9 @@ mod tests {
 
         assert!(result.is_err());
         fixture
-            .assert_nothing_published(signing_seed_before.as_ref())
+            .assert_nothing_published(&signing_seed_before)
             .await?;
-        identity_record::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await?;
         Ok(())
     }
 
@@ -326,17 +374,17 @@ mod tests {
                 .id()
                 .map_err(|error| NookError::Database(error.to_string()))?;
             let replacement_keys =
-                nook_core::VaultKeys::generate().map_err(identity_record::map_domain_error)?;
+                nook_core::VaultKeys::generate().map_err(NookDatabase::map_domain_error)?;
             let replacement_secrets = fixture
                 .identity
                 .public_key()
                 .seal_bytes(replacement_keys.secrets_key.as_str().as_bytes())
-                .map_err(identity_record::map_domain_error)?;
+                .map_err(NookDatabase::map_domain_error)?;
             let replacement_members = fixture
                 .identity
                 .public_key()
                 .seal_bytes(replacement_keys.members_key.as_str().as_bytes())
-                .map_err(identity_record::map_domain_error)?;
+                .map_err(NookDatabase::map_domain_error)?;
             let (replacement, replacement_bytes) =
                 nook_core::AppendEventInput::build(nook_core::AppendEventInput {
                     store_id: &fixture.store_id,
@@ -424,7 +472,10 @@ mod tests {
                 events.revocation_bytes.clone(),
             ),
         ] {
-            local.put_event(event_id, bytes.into());
+            local = local.put_event(nook_core::LocalEventWrite {
+                event_id,
+                bytes: bytes.into(),
+            });
         }
         let graph = local.load_graph(fixture.store_id.as_str())?;
 
@@ -461,47 +512,53 @@ mod tests {
     )]
     #[wasm_bindgen_test]
     async fn handoff_uses_latest_transactional_roster_envelopes() -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await?;
         let fixture = ImportFixture::new()?;
-        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
+        NookDatabase::clear_local_event_store(fixture.store_id.as_str()).await?;
         let events = SignedAccessEvents::new(&fixture)?;
         for (event_id, bytes) in [
             (&events.approval_id, &events.approval_bytes),
             (&events.replacement_id, &events.replacement_bytes),
         ] {
-            event_db::save_event_bytes(fixture.store_id.as_str(), event_id.as_str(), bytes).await?;
+            NookDatabase::save_event_bytes(EventDbSaveEventBytes {
+                store_id: fixture.store_id.as_str(),
+                event_id: event_id.as_str(),
+                bytes,
+            })
+            .await?;
         }
-        let enrollment = PendingExtensionIdentityEnrollment::ExistingVaultImport {
-            store_id: fixture.store_id.clone(),
-        };
 
         let committed = IdentityHandoffCommit {
             app_key: &fixture.identity,
             signing_public_key: &events.signing_public_key,
-            authorizer_signing: None,
-            enrollment: &enrollment,
-            signing_seed: None,
-            existing_vault: Some(ExistingVaultImportCommit {
-                device_id: fixture.identity.device_id().clone(),
-                label: "Imported".to_owned(),
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
+            signing_seed: HandoffSignerPublication::RetainStored,
+            operation: IdentityHandoffOperation::ExistingVaultImport(ExistingVaultEnrollment {
+                store_id: &fixture.store_id,
+                existing: ExistingVaultImportCommit {
+                    device_id: fixture.identity.device_id().clone(),
+                    label: "Imported".to_owned(),
+                },
             }),
         }
         .commit()
         .await?;
-        assert_eq!(
-            committed.existing_vault_keys,
-            Some(events.replacement_keys.clone())
+        assert!(
+            matches!(committed, IdentityHandoffCommitResult::ExistingVaultImported(keys) if keys == events.replacement_keys)
         );
 
-        let mut directory = identity_record::load_identity_directory().await?;
+        let directory = NookDatabase::load_identity_directory().await?;
         assert_eq!(
             directory
-                .open_or_generate_vault_dek(&fixture.identity, fixture.store_id.clone())
-                .map_err(identity_record::map_domain_error)?,
+                .open_vault_dek(IdentityVaultKeyOpening {
+                    app_key: &fixture.identity,
+                    store_id: fixture.store_id.clone()
+                })
+                .map_err(NookDatabase::map_domain_error)?,
             events.replacement_keys
         );
-        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_local_event_store(fixture.store_id.as_str()).await?;
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[cfg_attr(
@@ -514,66 +571,77 @@ mod tests {
     #[wasm_bindgen_test]
     async fn handoff_transaction_preserves_pending_identity_during_migration()
     -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await?;
         let fixture = ImportFixture::new()?;
-        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
+        NookDatabase::clear_local_event_store(fixture.store_id.as_str()).await?;
         let events = SignedAccessEvents::new(&fixture)?;
-        event_db::save_event_bytes(
-            fixture.store_id.as_str(),
-            events.approval_id.as_str(),
-            &events.approval_bytes,
-        )
+        NookDatabase::save_event_bytes(EventDbSaveEventBytes {
+            store_id: fixture.store_id.as_str(),
+            event_id: events.approval_id.as_str(),
+            bytes: &events.approval_bytes,
+        })
         .await?;
         let mut directory = IdentityDirectory::empty();
-        let pending_identity_id = directory
-            .create_identity("Pending", &fixture.identity, None)
-            .map_err(identity_record::map_domain_error)?;
-        directory
-            .create_identity("Concurrent duplicate", &fixture.identity, None)
-            .map_err(identity_record::map_domain_error)?;
-        indexed_db::idb_put_string(
-            IDENTITY_DIRECTORY_KEY,
-            &serde_json::to_string(&directory)
+        let resolved_identity = directory
+            .create_identity(IdentityCreation {
+                label: "Pending",
+                app_key: &fixture.identity,
+                member_label: MemberLabelState::Unnamed,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        directory = resolved_identity.directory;
+        let pending_identity_id = resolved_identity.identity_id;
+        let resolved_identity = directory
+            .create_identity(IdentityCreation {
+                label: "Concurrent duplicate",
+                app_key: &fixture.identity,
+                member_label: MemberLabelState::Unnamed,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        directory = resolved_identity.directory;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: IDENTITY_DIRECTORY_KEY,
+            value: &serde_json::to_string(&directory)
                 .map_err(|error| NookError::Serialization(error.to_string()))?,
-        )
+        })
         .await?;
-        indexed_db::idb_put_string(
-            identity_record::PENDING_SIMPLE_GENESIS_KEY,
-            &serde_json::to_string(&LegacyGenesisMarker {
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: identity_record::PENDING_SIMPLE_GENESIS_KEY,
+            value: &serde_json::to_string(&LegacyGenesisMarker {
                 store_id: fixture.store_id.as_str(),
                 identity_id: pending_identity_id.as_str(),
             })
             .map_err(|error| NookError::Serialization(error.to_string()))?,
-        )
+        })
         .await?;
-        let enrollment = PendingExtensionIdentityEnrollment::ExistingVaultImport {
-            store_id: fixture.store_id.clone(),
-        };
 
         IdentityHandoffCommit {
             app_key: &fixture.identity,
             signing_public_key: &events.signing_public_key,
-            authorizer_signing: None,
-            enrollment: &enrollment,
-            signing_seed: None,
-            existing_vault: Some(ExistingVaultImportCommit {
-                device_id: fixture.identity.device_id().clone(),
-                label: "Imported".to_owned(),
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
+            signing_seed: HandoffSignerPublication::RetainStored,
+            operation: IdentityHandoffOperation::ExistingVaultImport(ExistingVaultEnrollment {
+                store_id: &fixture.store_id,
+                existing: ExistingVaultImportCommit {
+                    device_id: fixture.identity.device_id().clone(),
+                    label: "Imported".to_owned(),
+                },
             }),
         }
         .commit()
         .await?;
 
-        let current = identity_record::load_identity_directory().await?;
+        let current = NookDatabase::load_identity_directory().await?;
         let pending = PendingSimpleGenesis::load_for_store(fixture.store_id.as_str())
             .await?
-            .ok_or_else(|| NookError::Database("Pending marker disappeared.".to_owned()))?;
+            .require_pending()
+            .map_err(|_| NookError::IndexedDb("Pending marker disappeared.".to_owned()))?;
         assert_eq!(current.identities().len(), 1);
         assert_eq!(current.selected()?.identity_id, pending_identity_id);
         assert!(current.selected()?.owns_vault(&fixture.store_id));
         assert_eq!(pending.identity_id, pending_identity_id);
-        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_local_event_store(fixture.store_id.as_str()).await?;
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[cfg_attr(
@@ -585,10 +653,10 @@ mod tests {
     )]
     #[wasm_bindgen_test]
     async fn rejects_handoff_with_pending_roster_event() -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await?;
         let fixture = ImportFixture::new()?;
-        let signing_seed_before = event_db::load_signing_seed().await?;
-        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
+        let signing_seed_before = NookDatabase::load_signing_seed().await?;
+        NookDatabase::clear_local_event_store(fixture.store_id.as_str()).await?;
         let events = SignedAccessEvents::new(&fixture)?;
         for (event_id, bytes) in [
             (&events.approval_id, &events.approval_bytes),
@@ -597,22 +665,26 @@ mod tests {
                 &events.pending_revocation_bytes,
             ),
         ] {
-            event_db::save_event_bytes(fixture.store_id.as_str(), event_id.as_str(), bytes).await?;
+            NookDatabase::save_event_bytes(EventDbSaveEventBytes {
+                store_id: fixture.store_id.as_str(),
+                event_id: event_id.as_str(),
+                bytes,
+            })
+            .await?;
         }
-        let enrollment = PendingExtensionIdentityEnrollment::ExistingVaultImport {
-            store_id: fixture.store_id.clone(),
-        };
         let signing_seed = "33".repeat(32);
 
         let result = IdentityHandoffCommit {
             app_key: &fixture.identity,
             signing_public_key: &events.signing_public_key,
-            authorizer_signing: None,
-            enrollment: &enrollment,
-            signing_seed: Some(&signing_seed),
-            existing_vault: Some(ExistingVaultImportCommit {
-                device_id: fixture.identity.device_id().clone(),
-                label: "Imported".to_owned(),
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
+            signing_seed: HandoffSignerPublication::ReplaceWith(&signing_seed),
+            operation: IdentityHandoffOperation::ExistingVaultImport(ExistingVaultEnrollment {
+                store_id: &fixture.store_id,
+                existing: ExistingVaultImportCommit {
+                    device_id: fixture.identity.device_id().clone(),
+                    label: "Imported".to_owned(),
+                },
             }),
         }
         .commit()
@@ -620,10 +692,10 @@ mod tests {
 
         assert!(result.is_err());
         fixture
-            .assert_nothing_published(signing_seed_before.as_ref())
+            .assert_nothing_published(&signing_seed_before)
             .await?;
-        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
-        identity_record::clear_identity_directory_for_test().await
+        NookDatabase::clear_local_event_store(fixture.store_id.as_str()).await?;
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[cfg_attr(
@@ -635,18 +707,18 @@ mod tests {
     )]
     #[wasm_bindgen_test]
     async fn concurrent_revocation_serializes_before_handoff() -> Result<(), NookError> {
-        identity_record::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await?;
         let fixture = ImportFixture::new()?;
-        let signing_seed_before = event_db::load_signing_seed().await?;
-        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
+        let signing_seed_before = NookDatabase::load_signing_seed().await?;
+        NookDatabase::clear_local_event_store(fixture.store_id.as_str()).await?;
         let events = SignedAccessEvents::new(&fixture)?;
-        event_db::save_event_bytes(
-            fixture.store_id.as_str(),
-            events.approval_id.as_str(),
-            &events.approval_bytes,
-        )
+        NookDatabase::save_event_bytes(EventDbSaveEventBytes {
+            store_id: fixture.store_id.as_str(),
+            event_id: events.approval_id.as_str(),
+            bytes: &events.approval_bytes,
+        })
         .await?;
-        let approved_graph = event_db::load_local_event_store(fixture.store_id.as_str())
+        let approved_graph = NookDatabase::load_local_event_store(fixture.store_id.as_str())
             .await?
             .load_graph(fixture.store_id.as_str())?;
         let approved_public_key = fixture.identity.public_key();
@@ -660,7 +732,7 @@ mod tests {
             )?
         );
 
-        let rexie = storage::open_nook_database().await?;
+        let rexie = NookDatabase::open_nook_database().await?;
         let transaction = rexie
             .transaction(&["events"], TransactionMode::ReadWrite)
             .map_err(|error| {
@@ -670,30 +742,29 @@ mod tests {
             NookError::IndexedDb(format!("Revocation event store error: {error:?}"))
         })?;
         let revocation_write = async {
-            event_db::save_event_bytes_to_store(
-                &event_store,
-                fixture.store_id.as_str(),
-                events.revocation_id.as_str(),
-                &events.revocation_bytes,
-            )
+            NookDatabase::save_event_bytes_to_store(EventDbSaveEventBytesToStore {
+                store: &event_store,
+                store_id: fixture.store_id.as_str(),
+                event_id: events.revocation_id.as_str(),
+                bytes: &events.revocation_bytes,
+            })
             .await?;
             transaction.done().await.map(|_| ()).map_err(|error| {
                 NookError::IndexedDb(format!("Revocation commit error: {error:?}"))
             })
         };
-        let enrollment = PendingExtensionIdentityEnrollment::ExistingVaultImport {
-            store_id: fixture.store_id.clone(),
-        };
         let signing_seed = "33".repeat(32);
         let handoff = IdentityHandoffCommit {
             app_key: &fixture.identity,
             signing_public_key: &events.signing_public_key,
-            authorizer_signing: None,
-            enrollment: &enrollment,
-            signing_seed: Some(&signing_seed),
-            existing_vault: Some(ExistingVaultImportCommit {
-                device_id: fixture.identity.device_id().clone(),
-                label: "Imported".to_owned(),
+            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
+            signing_seed: HandoffSignerPublication::ReplaceWith(&signing_seed),
+            operation: IdentityHandoffOperation::ExistingVaultImport(ExistingVaultEnrollment {
+                store_id: &fixture.store_id,
+                existing: ExistingVaultImportCommit {
+                    device_id: fixture.identity.device_id().clone(),
+                    label: "Imported".to_owned(),
+                },
             }),
         }
         .commit();
@@ -702,9 +773,9 @@ mod tests {
         revocation_result?;
         assert!(handoff_result.is_err());
         fixture
-            .assert_nothing_published(signing_seed_before.as_ref())
+            .assert_nothing_published(&signing_seed_before)
             .await?;
-        let revoked_graph = event_db::load_local_event_store(fixture.store_id.as_str())
+        let revoked_graph = NookDatabase::load_local_event_store(fixture.store_id.as_str())
             .await?
             .load_graph(fixture.store_id.as_str())?;
         let revoked_public_key = fixture.identity.public_key();
@@ -717,8 +788,8 @@ mod tests {
                 },
             )?
         );
-        event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
-        identity_record::clear_identity_directory_for_test().await?;
+        NookDatabase::clear_local_event_store(fixture.store_id.as_str()).await?;
+        NookDatabase::clear_identity_directory_for_test().await?;
         Ok(())
     }
 
@@ -733,14 +804,14 @@ mod tests {
     async fn checked_admission_holds_import_until_consumed() -> Result<(), NookError> {
         let fixture = ImportFixture::new()?;
         let events = SignedAccessEvents::new(&fixture)?;
-        indexed_db::clear_vault_db().await?;
-        event_db::save_event_bytes(
-            fixture.store_id.as_str(),
-            events.approval_id.as_str(),
-            &events.approval_bytes,
-        )
+        NookDatabase::clear_vault_db().await?;
+        NookDatabase::save_event_bytes(EventDbSaveEventBytes {
+            store_id: fixture.store_id.as_str(),
+            event_id: events.approval_id.as_str(),
+            bytes: &events.approval_bytes,
+        })
         .await?;
-        let connection = storage::open_nook_database().await?;
+        let connection = NookDatabase::open_nook_database().await?;
         let transaction = connection
             .transaction(&["vault", "events"], TransactionMode::ReadWrite)
             .map_err(|error| {
@@ -749,25 +820,9 @@ mod tests {
         let store = transaction
             .store("events")
             .map_err(|error| NookError::IndexedDb(format!("Admission store error: {error:?}")))?;
-        let mut directory = IdentityDirectory::empty();
-        {
-            let _checked = ExistingVaultHandoff {
-                directory: &mut directory,
-                events: &store,
-                store_id: &fixture.store_id,
-                app_key: &fixture.identity,
-                signing_public_key: &events.signing_public_key,
-                existing: ExistingVaultImportCommit {
-                    device_id: fixture.identity.device_id().clone(),
-                    label: "Imported".to_owned(),
-                },
-            }
-            .check()
-            .await?;
-        }
-        assert!(directory.identities().is_empty());
+        let directory = IdentityDirectory::empty();
         let checked = ExistingVaultHandoff {
-            directory: &mut directory,
+            directory,
             events: &store,
             store_id: &fixture.store_id,
             app_key: &fixture.identity,
@@ -779,7 +834,9 @@ mod tests {
         }
         .check()
         .await?;
+        assert!(checked.input.directory.identities().is_empty());
         let imported = checked.import()?;
+        let directory = imported.directory;
         assert_eq!(directory.identities().len(), 1);
         assert_eq!(directory.selected()?.identity_id, imported.identity_id);
         assert_eq!(
@@ -792,12 +849,15 @@ mod tests {
             NookError::IndexedDb(format!("Admission completion error: {error:?}"))
         })?;
         assert!(
-            identity_record::load_identity_directory()
+            NookDatabase::load_identity_directory()
                 .await?
                 .identities()
                 .is_empty()
         );
-        assert!(event_db::load_signing_seed().await?.is_none());
-        indexed_db::clear_vault_db().await
+        assert!(matches!(
+            NookDatabase::load_signing_seed().await?,
+            StoredSigningSeed::Missing
+        ));
+        NookDatabase::clear_vault_db().await
     }
 }

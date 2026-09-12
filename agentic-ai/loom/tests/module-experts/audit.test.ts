@@ -12,20 +12,14 @@ import { dirname, join, resolve } from 'node:path';
 import type { CodexOptions } from '@openai/codex-sdk';
 import { describe, expect, test } from 'bun:test';
 import {
-  auditGeneratedScopeProducerContract,
-  auditModuleExpertCortexAuthority,
-  auditModuleExpertRuntimePolicy,
-  auditModuleExpertRuntimeRouting,
-  auditModuleExperts,
+  ModuleExpertRuntimeRouting,
   type AuditGeneratedScopeProducerContractArgs,
   type AuditModuleExpertRuntimePolicyArgs,
   type AuditModuleExpertRuntimeRoutingArgs,
   type AuditModuleExpertsArgs,
+  ModuleExpertContract,
 } from '../../src/module-experts/audit.ts';
-import {
-  auditInternalApiExpertConsumerScope,
-  discoverInternalApiConsumerPaths,
-} from '../../src/module-experts/consumer-scope-audit.ts';
+import { InternalApiConsumerScope } from '../../src/module-experts/consumer-scope-audit.ts';
 import type { AuditInternalApiExpertConsumerScopeArgs } from '../../src/module-experts/consumer-scope-audit.ts';
 import {
   INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS,
@@ -34,6 +28,9 @@ import {
   INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS,
   MODULE_EXPERT_CATALOG,
   MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+  type ModuleExpertGeneratedMarker,
+  type ModuleExpertGeneratedScope,
+  type ModuleExpertProfile,
   WEB_EXPERT_AUTHORITY_PATHS,
   WEB_EXPERT_CANONICAL_CONTEXT_PATHS,
   WEB_EXPERT_PRODUCT_SPEC_PATHS,
@@ -42,12 +39,7 @@ import {
   WEB_EXPERT_SKILL_AUTHORITY_PATHS,
   WEB_EXPERT_SKILL_PATHS,
 } from '../../src/module-experts/catalog.ts';
-import type {
-  ModuleExpertGeneratedMarker,
-  ModuleExpertGeneratedScope,
-  ModuleExpertProfile,
-} from '../../src/module-experts/catalog.ts';
-import { auditModuleExpertSnapshotScopes } from '../../src/module-experts/snapshot-scope-audit.ts';
+import { ModuleExpertSnapshotScope } from '../../src/module-experts/snapshot-scope-audit.ts';
 import type { AuditModuleExpertSnapshotScopesArgs } from '../../src/module-experts/snapshot-scope-audit.ts';
 import {
   MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
@@ -56,18 +48,299 @@ import {
   MODULE_EXPERT_CODEX_OPTIONS,
   MODULE_EXPERT_CONTEXT_MCP,
   MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
-  buildModuleExpertCodexOptions,
-  moduleExpertIsolatedThreadOptions,
+  ModuleExpertIsolation,
+  type ModuleExpertCodexOptionsRequest,
 } from '../../src/module-experts/runtime-contract.ts';
-import type { ModuleExpertCodexOptionsRequest } from '../../src/module-experts/runtime-contract.ts';
 import {
   CargoWorkspaceInventoryKind,
-  decodeCargoWorkspaceMetadata,
   type CargoWorkspaceInventory,
   type DecodeCargoWorkspaceMetadataArgs,
+  CargoWorkspaceMetadata,
 } from '../../src/module-experts/cargo-workspace.ts';
 
-const REPO_ROOT = resolve(import.meta.dir, '../../../..');
+/** Owns the module experts audit fixture registry and its capability transitions. */
+export class ModuleExpertsAuditFixture {
+  private constructor() {}
+  static readonly REPO_ROOT = resolve(import.meta.dir, '../../../..');
+  static readonly SAFE_CODEX_OPTIONS_REQUEST: ModuleExpertCodexOptionsRequest =
+    {
+      authenticationCommandArgs: [
+        '-e',
+        MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
+        '--',
+        '/isolated/authentication.sock',
+        'test-nonce',
+      ],
+      contextServerUrl: 'http://127.0.0.1:1/test-context',
+      processEnvironment: {
+        CODEX_HOME: '/isolated/codex-home',
+        PATH: '/usr/bin',
+      },
+    };
+  static readonly SAFE_CODEX_ENVIRONMENT = {
+    CODEX_HOME: '/isolated/codex-home',
+    PATH: '/usr/bin',
+  } as const;
+  static readonly SAFE_SHELL_ENVIRONMENT = { PATH: '/usr/bin' } as const;
+  static readonly SAFE_CODEX_OPTIONS =
+    ModuleExpertIsolation.buildModuleExpertCodexOptions(
+      ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS_REQUEST,
+    );
+
+  static readonly internalApiProfile: ModuleExpertProfile =
+    ModuleExpertsAuditFixture.internalApiProfileValue();
+  private static internalApiProfileValue(): ModuleExpertProfile {
+    const profile = MODULE_EXPERT_CATALOG.find(
+      (candidate) => candidate.name === 'internal_api_expert',
+    );
+    if (profile) return profile;
+    return ModuleExpertsAuditFixture.missingInternalApiProfile();
+  }
+  private static missingInternalApiProfile(): never {
+    throw new Error('internal_api_expert test fixture is missing.');
+  }
+  static readonly GENERATED_MARKER_MUTATIONS: readonly GeneratedMarkerEvidenceMutation[] =
+    ModuleExpertsAuditFixture.internalApiProfile.generatedScopePaths.flatMap(
+      (generatedScope) =>
+        generatedScope.requiredMarkers.flatMap((marker) =>
+          marker.producerEvidence.map((evidence) => ({
+            generatedScope,
+            marker,
+            evidence,
+          })),
+        ),
+    );
+
+  static readonly RUNTIME_POLICY_DRIFTS: readonly ModuleExpertRuntimePolicyDrift[] =
+    [
+      {
+        description: 'non-file authentication storage',
+        codexOptions: {
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            cli_auth_credentials_store: 'auto',
+          },
+        },
+      },
+      {
+        description: 'login-shell enablement',
+        codexOptions: {
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            allow_login_shell: true,
+          },
+        },
+      },
+      {
+        description: 'inherited shell environment',
+        codexOptions: {
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            shell_environment_policy: {
+              ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config
+                .shell_environment_policy,
+              inherit: 'all',
+            },
+          },
+        },
+      },
+      {
+        description: 'injected SDK process environment secret',
+        codexOptions: {
+          ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS,
+          env: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.env,
+            GITHUB_TOKEN: 'inherited-secret',
+          },
+        },
+      },
+      {
+        description: 'injected shell process environment secret',
+        codexOptions: {
+          ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS,
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            shell_environment_policy: {
+              ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config
+                .shell_environment_policy,
+              set: {
+                ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config
+                  .shell_environment_policy.set,
+                GITHUB_TOKEN: 'inherited-secret',
+              },
+            },
+          },
+        },
+      },
+      {
+        description: 'ignored default shell exclusions',
+        codexOptions: {
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            shell_environment_policy: {
+              ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config
+                .shell_environment_policy,
+              ignore_default_excludes: true,
+            },
+          },
+        },
+      },
+      {
+        description: 'skill MCP dependency installation',
+        codexOptions: {
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            features: {
+              ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config.features,
+              skill_mcp_dependency_install: true,
+            },
+          },
+        },
+      },
+      {
+        description: 'model-controlled process tool',
+        codexOptions: {
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            features: {
+              ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config.features,
+              shell_tool: true,
+            },
+          },
+        },
+      },
+      {
+        description: 'image reader enablement',
+        codexOptions: {
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            features: {
+              ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config.features,
+              view_image: true,
+            },
+          },
+        },
+      },
+      {
+        description: 'untrusted authentication helper',
+        codexOptions: {
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            model_providers: {
+              [MODULE_EXPERT_AUTH_PROVIDER]: {
+                ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config
+                  .model_providers[MODULE_EXPERT_AUTH_PROVIDER],
+                auth: {
+                  ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config
+                    .model_providers[MODULE_EXPERT_AUTH_PROVIDER].auth,
+                  command: '/bin/sh',
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        description: 'mutated authentication helper source',
+        codexOptions: {
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            model_providers: {
+              [MODULE_EXPERT_AUTH_PROVIDER]: {
+                ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config
+                  .model_providers[MODULE_EXPERT_AUTH_PROVIDER],
+                auth: {
+                  ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config
+                    .model_providers[MODULE_EXPERT_AUTH_PROVIDER].auth,
+                  args: [
+                    '-e',
+                    'console.log("untrusted")',
+                    '--',
+                    '/tmp/socket',
+                    'nonce',
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        description: 'additional MCP server',
+        codexOptions: {
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            mcp_servers: {
+              ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config
+                .mcp_servers,
+              untrusted_context: {
+                command: '/bin/sh',
+              },
+            },
+          },
+        },
+      },
+      {
+        description: 'expanded repository tool allowlist',
+        codexOptions: {
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            mcp_servers: {
+              [MODULE_EXPERT_CONTEXT_MCP]: {
+                ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config
+                  .mcp_servers[MODULE_EXPERT_CONTEXT_MCP],
+                enabled_tools: [
+                  'list_files',
+                  'read_file',
+                  'search_text',
+                  'write_file',
+                ],
+              },
+            },
+          },
+        },
+      },
+      {
+        description: 'missing authentication provider',
+        codexOptions: {
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            model_providers: {},
+          },
+        },
+      },
+      {
+        description: 'missing context server',
+        codexOptions: {
+          config: {
+            ...ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS.config,
+            mcp_servers: {},
+          },
+        },
+      },
+    ];
+
+  static async moduleExpertFixture(): Promise<string> {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-module-experts-'));
+    await symlink(
+      join(ModuleExpertsAuditFixture.REPO_ROOT, '.cortex'),
+      join(fixtureRoot, '.cortex'),
+    );
+    await symlink(
+      join(ModuleExpertsAuditFixture.REPO_ROOT, '.agents'),
+      join(fixtureRoot, '.agents'),
+    );
+    await symlink(
+      join(ModuleExpertsAuditFixture.REPO_ROOT, 'agentic-ai'),
+      join(fixtureRoot, 'agentic-ai'),
+    );
+    await symlink(
+      join(ModuleExpertsAuditFixture.REPO_ROOT, 'nook-app'),
+      join(fixtureRoot, 'nook-app'),
+    );
+    return fixtureRoot;
+  }
+}
 
 type GeneratedMarkerEvidenceMutation = {
   readonly generatedScope: ModuleExpertGeneratedScope;
@@ -80,250 +353,9 @@ type ModuleExpertRuntimePolicyDrift = {
   readonly codexOptions: CodexOptions;
 };
 
-const SAFE_CODEX_OPTIONS_REQUEST: ModuleExpertCodexOptionsRequest = {
-  authenticationCommandArgs: [
-    '-e',
-    MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
-    '--',
-    '/isolated/authentication.sock',
-    'test-nonce',
-  ],
-  contextServerUrl: 'http://127.0.0.1:1/test-context',
-  processEnvironment: {
-    CODEX_HOME: '/isolated/codex-home',
-    PATH: '/usr/bin',
-  },
-};
-const SAFE_CODEX_ENVIRONMENT = {
-  CODEX_HOME: '/isolated/codex-home',
-  PATH: '/usr/bin',
-} as const;
-const SAFE_SHELL_ENVIRONMENT = { PATH: '/usr/bin' } as const;
-const SAFE_CODEX_OPTIONS = buildModuleExpertCodexOptions(
-  SAFE_CODEX_OPTIONS_REQUEST,
-);
-
-const internalApiProfile = MODULE_EXPERT_CATALOG.find(
-  (profile) => profile.name === 'internal_api_expert',
-);
-if (!internalApiProfile) {
+if (!ModuleExpertsAuditFixture.internalApiProfile) {
   throw new Error('The internal API expert profile is required by this test.');
 }
-const GENERATED_MARKER_MUTATIONS: readonly GeneratedMarkerEvidenceMutation[] =
-  internalApiProfile.generatedScopePaths.flatMap((generatedScope) =>
-    generatedScope.requiredMarkers.flatMap((marker) =>
-      marker.producerEvidence.map((evidence) => ({
-        generatedScope,
-        marker,
-        evidence,
-      })),
-    ),
-  );
-const RUNTIME_POLICY_DRIFTS: readonly ModuleExpertRuntimePolicyDrift[] = [
-  {
-    description: 'non-file authentication storage',
-    codexOptions: {
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        cli_auth_credentials_store: 'auto',
-      },
-    },
-  },
-  {
-    description: 'login-shell enablement',
-    codexOptions: {
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        allow_login_shell: true,
-      },
-    },
-  },
-  {
-    description: 'inherited shell environment',
-    codexOptions: {
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        shell_environment_policy: {
-          ...SAFE_CODEX_OPTIONS.config.shell_environment_policy,
-          inherit: 'all',
-        },
-      },
-    },
-  },
-  {
-    description: 'injected SDK process environment secret',
-    codexOptions: {
-      ...SAFE_CODEX_OPTIONS,
-      env: {
-        ...SAFE_CODEX_OPTIONS.env,
-        GITHUB_TOKEN: 'inherited-secret',
-      },
-    },
-  },
-  {
-    description: 'injected shell process environment secret',
-    codexOptions: {
-      ...SAFE_CODEX_OPTIONS,
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        shell_environment_policy: {
-          ...SAFE_CODEX_OPTIONS.config.shell_environment_policy,
-          set: {
-            ...SAFE_CODEX_OPTIONS.config.shell_environment_policy.set,
-            GITHUB_TOKEN: 'inherited-secret',
-          },
-        },
-      },
-    },
-  },
-  {
-    description: 'ignored default shell exclusions',
-    codexOptions: {
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        shell_environment_policy: {
-          ...SAFE_CODEX_OPTIONS.config.shell_environment_policy,
-          ignore_default_excludes: true,
-        },
-      },
-    },
-  },
-  {
-    description: 'skill MCP dependency installation',
-    codexOptions: {
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        features: {
-          ...SAFE_CODEX_OPTIONS.config.features,
-          skill_mcp_dependency_install: true,
-        },
-      },
-    },
-  },
-  {
-    description: 'model-controlled process tool',
-    codexOptions: {
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        features: {
-          ...SAFE_CODEX_OPTIONS.config.features,
-          shell_tool: true,
-        },
-      },
-    },
-  },
-  {
-    description: 'image reader enablement',
-    codexOptions: {
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        features: {
-          ...SAFE_CODEX_OPTIONS.config.features,
-          view_image: true,
-        },
-      },
-    },
-  },
-  {
-    description: 'untrusted authentication helper',
-    codexOptions: {
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        model_providers: {
-          [MODULE_EXPERT_AUTH_PROVIDER]: {
-            ...SAFE_CODEX_OPTIONS.config.model_providers[
-              MODULE_EXPERT_AUTH_PROVIDER
-            ],
-            auth: {
-              ...SAFE_CODEX_OPTIONS.config.model_providers[
-                MODULE_EXPERT_AUTH_PROVIDER
-              ].auth,
-              command: '/bin/sh',
-            },
-          },
-        },
-      },
-    },
-  },
-  {
-    description: 'mutated authentication helper source',
-    codexOptions: {
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        model_providers: {
-          [MODULE_EXPERT_AUTH_PROVIDER]: {
-            ...SAFE_CODEX_OPTIONS.config.model_providers[
-              MODULE_EXPERT_AUTH_PROVIDER
-            ],
-            auth: {
-              ...SAFE_CODEX_OPTIONS.config.model_providers[
-                MODULE_EXPERT_AUTH_PROVIDER
-              ].auth,
-              args: [
-                '-e',
-                'console.log("untrusted")',
-                '--',
-                '/tmp/socket',
-                'nonce',
-              ],
-            },
-          },
-        },
-      },
-    },
-  },
-  {
-    description: 'additional MCP server',
-    codexOptions: {
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        mcp_servers: {
-          ...SAFE_CODEX_OPTIONS.config.mcp_servers,
-          untrusted_context: {
-            command: '/bin/sh',
-          },
-        },
-      },
-    },
-  },
-  {
-    description: 'expanded repository tool allowlist',
-    codexOptions: {
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        mcp_servers: {
-          [MODULE_EXPERT_CONTEXT_MCP]: {
-            ...SAFE_CODEX_OPTIONS.config.mcp_servers[MODULE_EXPERT_CONTEXT_MCP],
-            enabled_tools: [
-              'list_files',
-              'read_file',
-              'search_text',
-              'write_file',
-            ],
-          },
-        },
-      },
-    },
-  },
-  {
-    description: 'missing authentication provider',
-    codexOptions: {
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        model_providers: {},
-      },
-    },
-  },
-  {
-    description: 'missing context server',
-    codexOptions: {
-      config: {
-        ...SAFE_CODEX_OPTIONS.config,
-        mcp_servers: {},
-      },
-    },
-  },
-];
 
 describe('module expert audit', () => {
   test('discovers bindings only inside production Svelte TypeScript scripts', async () => {
@@ -359,17 +391,19 @@ describe('module expert audit', () => {
         await writeFile(absolutePath, source, 'utf8');
       }
 
-      expect(discoverInternalApiConsumerPaths(fixtureRoot)).toEqual([
-        'nook-app/nook-web/example/src/Included.svelte',
-      ]);
+      expect(
+        InternalApiConsumerScope.discoverInternalApiConsumerPaths(fixtureRoot),
+      ).toEqual(['nook-app/nook-web/example/src/Included.svelte']);
     } finally {
       await rm(fixtureRoot, removeOptions);
     }
   });
 
   test('accepts the complete read-only project catalog', () => {
-    const auditArgs: AuditModuleExpertsArgs = { repoRoot: REPO_ROOT };
-    const report = auditModuleExperts(auditArgs);
+    const auditArgs: AuditModuleExpertsArgs = {
+      repoRoot: ModuleExpertsAuditFixture.REPO_ROOT,
+    };
+    const report = ModuleExpertContract.auditModuleExperts(auditArgs);
 
     expect(report.findings).toEqual([]);
     expect(report.profileCount).toBe(9);
@@ -427,6 +461,7 @@ describe('module expert audit', () => {
     ]);
     expect(WEB_EXPERT_RELEASE_AUTHORITY_PATHS).toEqual([
       '.github/scripts/ci-release-verify-extension.sh',
+      '.github/workflows/ci.yml',
       '.github/workflows/main.yml',
       '.github/workflows/pr.yml',
       '.github/workflows/release.yml',
@@ -452,7 +487,7 @@ describe('module expert audit', () => {
     const acceptedArgs: AuditModuleExpertSnapshotScopesArgs = {
       profiles: MODULE_EXPERT_CATALOG,
     };
-    expect(auditModuleExpertSnapshotScopes(acceptedArgs)).toEqual([]);
+    expect(ModuleExpertSnapshotScope.audit(acceptedArgs)).toEqual([]);
 
     const coreProfile = MODULE_EXPERT_CATALOG.find(
       (profile) => profile.name === 'core_expert',
@@ -464,25 +499,30 @@ describe('module expert audit', () => {
     if (!webProfile) throw new Error('web_expert test fixture is missing.');
     const driftedProfiles: readonly ModuleExpertProfile[] = [
       {
-        ...internalApiProfile,
+        ...ModuleExpertsAuditFixture.internalApiProfile,
         canonicalContextPaths:
-          internalApiProfile.canonicalContextPaths.slice(1),
+          ModuleExpertsAuditFixture.internalApiProfile.canonicalContextPaths.slice(
+            1,
+          ),
       },
       {
-        ...internalApiProfile,
-        boundaryScopePaths: internalApiProfile.boundaryScopePaths.slice(1),
+        ...ModuleExpertsAuditFixture.internalApiProfile,
+        boundaryScopePaths:
+          ModuleExpertsAuditFixture.internalApiProfile.boundaryScopePaths.slice(
+            1,
+          ),
       },
       {
-        ...internalApiProfile,
+        ...ModuleExpertsAuditFixture.internalApiProfile,
         boundaryScopePaths: [
-          ...internalApiProfile.boundaryScopePaths,
+          ...ModuleExpertsAuditFixture.internalApiProfile.boundaryScopePaths,
           'nook-app/nook-web',
         ],
       },
       {
-        ...internalApiProfile,
+        ...ModuleExpertsAuditFixture.internalApiProfile,
         boundaryScopePaths: [
-          ...internalApiProfile.boundaryScopePaths,
+          ...ModuleExpertsAuditFixture.internalApiProfile.boundaryScopePaths,
         ].reverse(),
       },
       {
@@ -558,7 +598,7 @@ describe('module expert audit', () => {
       );
       const auditArgs: AuditModuleExpertSnapshotScopesArgs = { profiles };
       expect(
-        auditModuleExpertSnapshotScopes(auditArgs).map(
+        ModuleExpertSnapshotScope.audit(auditArgs).map(
           (finding) => finding.code,
         ),
       ).toContain(expectedCode);
@@ -566,7 +606,10 @@ describe('module expert audit', () => {
   });
 
   test('rejects missing, broad, generated, or reordered internal API binding scope', () => {
-    const discoveredConsumerPaths = discoverInternalApiConsumerPaths(REPO_ROOT);
+    const discoveredConsumerPaths =
+      InternalApiConsumerScope.discoverInternalApiConsumerPaths(
+        ModuleExpertsAuditFixture.REPO_ROOT,
+      );
     expect(discoveredConsumerPaths).toEqual(
       INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS,
     );
@@ -590,7 +633,7 @@ describe('module expert audit', () => {
     }
     expect(
       discoveredConsumerPaths.filter((path) => path.endsWith('.svelte')),
-    ).toHaveLength(41);
+    ).toHaveLength(40);
     expect(discoveredConsumerPaths).toContain(
       'nook-app/nook-web/nook-web-shared/src/vault-app/App.svelte',
     );
@@ -613,43 +656,58 @@ describe('module expert audit', () => {
     );
     const missingScopeProfiles = INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS.map(
       (omittedPath): ModuleExpertProfile => ({
-        ...internalApiProfile,
-        scopePaths: internalApiProfile.scopePaths.filter(
-          (scopePath) => scopePath !== omittedPath,
-        ),
+        ...ModuleExpertsAuditFixture.internalApiProfile,
+        scopePaths:
+          ModuleExpertsAuditFixture.internalApiProfile.scopePaths.filter(
+            (scopePath) => scopePath !== omittedPath,
+          ),
       }),
     );
-    const [defaulted1 = ''] = [internalApiProfile.generatedScopePaths[0]?.path];
+    const [defaulted1 = ''] = [
+      ModuleExpertsAuditFixture.internalApiProfile.generatedScopePaths[0]?.path,
+    ];
     const driftedProfiles: readonly ModuleExpertProfile[] = [
       ...missingScopeProfiles,
       {
-        ...internalApiProfile,
-        scopePaths: [...internalApiProfile.scopePaths, 'nook-app/nook-web'],
+        ...ModuleExpertsAuditFixture.internalApiProfile,
+        scopePaths: [
+          ...ModuleExpertsAuditFixture.internalApiProfile.scopePaths,
+          'nook-app/nook-web',
+        ],
       },
       {
-        ...internalApiProfile,
-        scopePaths: [...internalApiProfile.scopePaths, defaulted1],
+        ...ModuleExpertsAuditFixture.internalApiProfile,
+        scopePaths: [
+          ...ModuleExpertsAuditFixture.internalApiProfile.scopePaths,
+          defaulted1,
+        ],
       },
       {
-        ...internalApiProfile,
-        scopePaths: [...internalApiProfile.scopePaths].reverse(),
+        ...ModuleExpertsAuditFixture.internalApiProfile,
+        scopePaths: [
+          ...ModuleExpertsAuditFixture.internalApiProfile.scopePaths,
+        ].reverse(),
       },
     ];
 
     const catalogAuditArgs: AuditInternalApiExpertConsumerScopeArgs = {
       discoveredConsumerPaths,
-      profile: internalApiProfile,
+      profile: ModuleExpertsAuditFixture.internalApiProfile,
     };
-    expect(auditInternalApiExpertConsumerScope(catalogAuditArgs)).toEqual([]);
+    expect(
+      InternalApiConsumerScope.auditInternalApiExpertConsumerScope(
+        catalogAuditArgs,
+      ),
+    ).toEqual([]);
     for (const profile of driftedProfiles) {
       const auditArgs: AuditInternalApiExpertConsumerScopeArgs = {
         discoveredConsumerPaths,
         profile,
       };
       expect(
-        auditInternalApiExpertConsumerScope(auditArgs).map(
-          (finding) => finding.code,
-        ),
+        InternalApiConsumerScope.auditInternalApiExpertConsumerScope(
+          auditArgs,
+        ).map((finding) => finding.code),
       ).toEqual(['invalid-internal-api-consumer-scope']);
     }
     const discoveredDrifts: readonly (readonly string[])[] = [
@@ -662,14 +720,16 @@ describe('module expert audit', () => {
     for (const driftedDiscovery of discoveredDrifts) {
       const auditArgs: AuditInternalApiExpertConsumerScopeArgs = {
         discoveredConsumerPaths: driftedDiscovery,
-        profile: internalApiProfile,
+        profile: ModuleExpertsAuditFixture.internalApiProfile,
       };
-      expect(auditInternalApiExpertConsumerScope(auditArgs)).toHaveLength(1);
+      expect(
+        InternalApiConsumerScope.auditInternalApiExpertConsumerScope(auditArgs),
+      ).toHaveLength(1);
     }
   });
 
   test('ignores vendor profile TOMLs when auditing canonical expert roles', async () => {
-    const fixtureRoot = await moduleExpertFixture();
+    const fixtureRoot = await ModuleExpertsAuditFixture.moduleExpertFixture();
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
       const vendorProfileDirectory = join(
@@ -684,9 +744,11 @@ describe('module expert audit', () => {
         'utf8',
       );
       const auditArgs: AuditModuleExpertsArgs = { repoRoot: fixtureRoot };
-      const reportWithVendorProfile = auditModuleExperts(auditArgs);
+      const reportWithVendorProfile =
+        ModuleExpertContract.auditModuleExperts(auditArgs);
       await rm(join(fixtureRoot, '.codex'), removeOptions);
-      const reportWithoutVendorProfiles = auditModuleExperts(auditArgs);
+      const reportWithoutVendorProfiles =
+        ModuleExpertContract.auditModuleExperts(auditArgs);
 
       expect(reportWithVendorProfile).toEqual(reportWithoutVendorProfiles);
     } finally {
@@ -696,7 +758,7 @@ describe('module expert audit', () => {
 
   test('rejects semantic drift in the Cortex module expert contract', async () => {
     const authorityPath = join(
-      REPO_ROOT,
+      ModuleExpertsAuditFixture.REPO_ROOT,
       '.cortex/teams/ai/architecture/module-experts.md',
     );
     const source = await readFile(authorityPath, 'utf8');
@@ -707,7 +769,7 @@ describe('module expert audit', () => {
     const authorityArgs = { source: driftedSource };
 
     expect(
-      auditModuleExpertCortexAuthority(authorityArgs).map(
+      ModuleExpertContract.auditModuleExpertCortexAuthority(authorityArgs).map(
         (finding) => finding.code,
       ),
     ).toContain('cortex-module-expert-contract-semantic-drift');
@@ -715,11 +777,11 @@ describe('module expert audit', () => {
 
   test('uses Cargo workspace identities instead of manifest text matches', () => {
     const liveManifest = join(
-      REPO_ROOT,
+      ModuleExpertsAuditFixture.REPO_ROOT,
       'nook-app/nook-platform/live-crate/Cargo.toml',
     );
     const decoyManifest = join(
-      REPO_ROOT,
+      ModuleExpertsAuditFixture.REPO_ROOT,
       'nook-app/nook-platform/retired-crate/Cargo.toml',
     );
     const metadata = {
@@ -730,7 +792,7 @@ describe('module expert audit', () => {
       workspace_members: ['live 1.0.0'],
     };
     const decodeArgs: DecodeCargoWorkspaceMetadataArgs = {
-      repoRoot: REPO_ROOT,
+      repoRoot: ModuleExpertsAuditFixture.REPO_ROOT,
       source: JSON.stringify(metadata),
     };
 
@@ -738,12 +800,17 @@ describe('module expert audit', () => {
       kind: CargoWorkspaceInventoryKind.Complete,
       roots: ['nook-app/nook-platform/live-crate'],
     };
-    expect(decodeCargoWorkspaceMetadata(decodeArgs)).toEqual(expected);
+    expect(CargoWorkspaceMetadata.decode(decodeArgs)).toEqual(expected);
   });
 
   test('uses an isolated non-delegating Codex runtime', () => {
-    const threadOptionsArgs = { workingDirectory: REPO_ROOT };
-    const threadOptions = moduleExpertIsolatedThreadOptions(threadOptionsArgs);
+    const threadOptionsArgs = {
+      workingDirectory: ModuleExpertsAuditFixture.REPO_ROOT,
+    };
+    const threadOptions =
+      ModuleExpertIsolation.moduleExpertIsolatedThreadOptions(
+        threadOptionsArgs,
+      );
 
     expect(threadOptions.sandboxMode).toBe('read-only');
     expect(threadOptions.approvalPolicy).toBe('never');
@@ -769,27 +836,35 @@ describe('module expert audit', () => {
     expect(MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS).toEqual(['CODEX_API_KEY']);
     const auditArgs: AuditModuleExpertRuntimePolicyArgs = {
       authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
-      codexOptions: SAFE_CODEX_OPTIONS,
+      codexOptions: ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS,
       processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
-      safeCodexEnvironment: SAFE_CODEX_ENVIRONMENT,
-      safeShellEnvironment: SAFE_SHELL_ENVIRONMENT,
+      safeCodexEnvironment: ModuleExpertsAuditFixture.SAFE_CODEX_ENVIRONMENT,
+      safeShellEnvironment: ModuleExpertsAuditFixture.SAFE_SHELL_ENVIRONMENT,
       threadOptions,
     };
-    expect(auditModuleExpertRuntimePolicy(auditArgs)).toEqual([]);
+    expect(
+      ModuleExpertContract.auditModuleExpertRuntimePolicy(auditArgs),
+    ).toEqual([]);
   });
 
-  for (const drift of RUNTIME_POLICY_DRIFTS) {
+  for (const drift of ModuleExpertsAuditFixture.RUNTIME_POLICY_DRIFTS) {
     test(`rejects module expert runtime policy drift: ${drift.description}`, () => {
-      const threadOptionsArgs = { workingDirectory: REPO_ROOT };
+      const threadOptionsArgs = {
+        workingDirectory: ModuleExpertsAuditFixture.REPO_ROOT,
+      };
       const auditArgs: AuditModuleExpertRuntimePolicyArgs = {
         authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
         codexOptions: drift.codexOptions,
         processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
-        safeCodexEnvironment: SAFE_CODEX_ENVIRONMENT,
-        safeShellEnvironment: SAFE_SHELL_ENVIRONMENT,
-        threadOptions: moduleExpertIsolatedThreadOptions(threadOptionsArgs),
+        safeCodexEnvironment: ModuleExpertsAuditFixture.SAFE_CODEX_ENVIRONMENT,
+        safeShellEnvironment: ModuleExpertsAuditFixture.SAFE_SHELL_ENVIRONMENT,
+        threadOptions:
+          ModuleExpertIsolation.moduleExpertIsolatedThreadOptions(
+            threadOptionsArgs,
+          ),
       };
-      const findings = auditModuleExpertRuntimePolicy(auditArgs);
+      const findings =
+        ModuleExpertContract.auditModuleExpertRuntimePolicy(auditArgs);
 
       expect(findings.map((finding) => finding.code)).toEqual([
         'unsafe-module-expert-runtime',
@@ -798,38 +873,43 @@ describe('module expert audit', () => {
   }
 
   test('rejects authentication and process environment allowlist drift', () => {
-    const threadOptionsArgs = { workingDirectory: REPO_ROOT };
-    const threadOptions = moduleExpertIsolatedThreadOptions(threadOptionsArgs);
+    const threadOptionsArgs = {
+      workingDirectory: ModuleExpertsAuditFixture.REPO_ROOT,
+    };
+    const threadOptions =
+      ModuleExpertIsolation.moduleExpertIsolatedThreadOptions(
+        threadOptionsArgs,
+      );
     const authDriftArgs: AuditModuleExpertRuntimePolicyArgs = {
       authEnvironmentKeys: [
         ...MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
         'CODEX_ACCESS_TOKEN',
       ],
-      codexOptions: SAFE_CODEX_OPTIONS,
+      codexOptions: ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS,
       processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
-      safeCodexEnvironment: SAFE_CODEX_ENVIRONMENT,
-      safeShellEnvironment: SAFE_SHELL_ENVIRONMENT,
+      safeCodexEnvironment: ModuleExpertsAuditFixture.SAFE_CODEX_ENVIRONMENT,
+      safeShellEnvironment: ModuleExpertsAuditFixture.SAFE_SHELL_ENVIRONMENT,
       threadOptions,
     };
     const processDriftArgs: AuditModuleExpertRuntimePolicyArgs = {
       authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
-      codexOptions: SAFE_CODEX_OPTIONS,
+      codexOptions: ModuleExpertsAuditFixture.SAFE_CODEX_OPTIONS,
       processEnvironmentKeys: [
         ...MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
         'GITHUB_TOKEN',
       ],
-      safeCodexEnvironment: SAFE_CODEX_ENVIRONMENT,
-      safeShellEnvironment: SAFE_SHELL_ENVIRONMENT,
+      safeCodexEnvironment: ModuleExpertsAuditFixture.SAFE_CODEX_ENVIRONMENT,
+      safeShellEnvironment: ModuleExpertsAuditFixture.SAFE_SHELL_ENVIRONMENT,
       threadOptions,
     };
 
     expect(
-      auditModuleExpertRuntimePolicy(authDriftArgs).map(
+      ModuleExpertContract.auditModuleExpertRuntimePolicy(authDriftArgs).map(
         (finding) => finding.code,
       ),
     ).toEqual(['unsafe-module-expert-runtime']);
     expect(
-      auditModuleExpertRuntimePolicy(processDriftArgs).map(
+      ModuleExpertContract.auditModuleExpertRuntimePolicy(processDriftArgs).map(
         (finding) => finding.code,
       ),
     ).toEqual(['unsafe-module-expert-runtime']);
@@ -868,14 +948,14 @@ describe('module expert audit', () => {
       ];
     for (const mutation of moduleRoutingMutations) {
       expect(
-        auditModuleExpertRuntimeRouting(mutation).map(
+        ModuleExpertRuntimeRouting.audit(mutation).map(
           (finding) => finding.code,
         ),
       ).toEqual(['unsafe-module-expert-runtime-routing']);
     }
   });
 
-  for (const mutation of GENERATED_MARKER_MUTATIONS) {
+  for (const mutation of ModuleExpertsAuditFixture.GENERATED_MARKER_MUTATIONS) {
     test(`rejects producer drift for ${mutation.marker.path} in ${mutation.generatedScope.path}`, async () => {
       const fixtureRoot = await mkdtemp(
         join(tmpdir(), 'loom-generated-scope-'),
@@ -883,7 +963,7 @@ describe('module expert audit', () => {
       const removeOptions: RmOptions = { recursive: true, force: true };
       try {
         const sourceProducerPath = join(
-          REPO_ROOT,
+          ModuleExpertsAuditFixture.REPO_ROOT,
           mutation.generatedScope.producerPath,
         );
         const fixtureProducerPath = join(
@@ -903,7 +983,8 @@ describe('module expert audit', () => {
           repoRoot: fixtureRoot,
           generatedScope: mutation.generatedScope,
         };
-        const findings = auditGeneratedScopeProducerContract(auditArgs);
+        const findings =
+          ModuleExpertContract.auditGeneratedScopeProducerContract(auditArgs);
         const markerFinding = findings.find(
           (finding) =>
             finding.code === 'generated-scope-marker-producer-drift' &&
@@ -917,12 +998,3 @@ describe('module expert audit', () => {
     });
   }
 });
-
-async function moduleExpertFixture(): Promise<string> {
-  const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-module-experts-'));
-  await symlink(join(REPO_ROOT, '.cortex'), join(fixtureRoot, '.cortex'));
-  await symlink(join(REPO_ROOT, '.agents'), join(fixtureRoot, '.agents'));
-  await symlink(join(REPO_ROOT, 'agentic-ai'), join(fixtureRoot, 'agentic-ai'));
-  await symlink(join(REPO_ROOT, 'nook-app'), join(fixtureRoot, 'nook-app'));
-  return fixtureRoot;
-}

@@ -29,13 +29,21 @@ const fixturesRoot = path.join(
 const templatesDir = path.join(fixturesRoot, 'templates')
 const siteShellsPath = path.join(fixturesRoot, 'site-shells.json')
 
+/** @type {LoginSite[]} */
 const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'))
 const siteShells = JSON.parse(readFileSync(siteShellsPath, 'utf8'))
 
+/** @typedef {{ id: string, loginUrl: string }} LoginSite */
+
+/** @param {string} id @returns {LoginSite | false} */
 function siteById(id) {
-  return catalog.find((site) => site.id === id)
+  for (const site of catalog) {
+    if (site.id === id) return site
+  }
+  return false
 }
 
+/** @param {LoginSite} site */
 async function captureSite(site) {
   const browser = await chromium.launch({ headless: true })
   const page = await browser.newPage()
@@ -86,10 +94,10 @@ async function captureSite(site) {
     if (identity.length === 0 && passwords.length === 0) {
       throw new Error('no identity/password fields found')
     }
-    const stepFields =
-      passwords.length > 0
-        ? [...identity.slice(0, 1), passwords[0]]
-        : identity.slice(0, 1)
+    const [password] = passwords
+    const stepFields = password
+      ? [...identity.slice(0, 1), password]
+      : identity.slice(0, 1)
     const template = {
       id: templateId,
       quirks: [],

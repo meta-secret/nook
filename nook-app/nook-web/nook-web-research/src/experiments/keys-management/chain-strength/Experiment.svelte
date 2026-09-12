@@ -41,25 +41,17 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import GraphSwitch from '../_shared/GraphSwitch.svelte'
   import {
-    defaultNode,
     type Device,
-    devicesForVault,
     GraphId,
-    graphById,
     HereKind,
-    hereDevices,
-    highlightFor,
-    isHere,
     type KeyGraph,
     KeyStore,
     NodeKind,
     type NodeRef,
     type Passkey,
-    passkeysForDevice,
     Reach,
-    storeLabel,
     type Vault,
-    vaultsForPasskey,
+    KeyGraphView,
   } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
   import { PathReach, Redundancy } from './chain-grade'
@@ -101,15 +93,15 @@ get a quiet footer: they exist, and that is all this browser can say about them.
 
   let { navigate }: ExperimentProps = $props()
   let graphId = $state(GraphId.Tangle)
-  let selected = $state<NodeRef>(defaultNode(graphById(GraphId.Tangle)))
-
-  const graph = $derived(graphById(graphId))
+  let selected = $state<NodeRef>(
+    new KeyGraphView(KeyGraphView.graphById(GraphId.Tangle)).defaultNode(),
+  )
+  const graph = $derived(KeyGraphView.graphById(graphId))
   const highlight = $derived.by(() => {
-    const selectionContext: Parameters<typeof highlightFor>[0] = {
-      graph,
+    const selectionContext: Parameters<KeyGraphView['highlightFor']>[0] = {
       node: selected,
     }
-    return highlightFor(selectionContext)
+    return new KeyGraphView(graph).highlightFor(selectionContext)
   })
   const reads = $derived(
     graph.vaults.map((vault) => {
@@ -122,11 +114,10 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   )
   const others = $derived(
     graph.devices.filter((device) => {
-      const nookNamedArgument237: Parameters<typeof isHere>[0] = {
-        graph,
+      const nookNamedArgument237: Parameters<KeyGraphView['isHere']>[0] = {
         device,
       }
-      return !isHere(nookNamedArgument237)
+      return !new KeyGraphView(graph).isHere(nookNamedArgument237)
     }),
   )
 
@@ -141,11 +132,10 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     device,
     passkey,
   }: StrandForArgs): Strand {
-    const nookNamedArgument238: Parameters<typeof isHere>[0] = {
-      graph: source,
+    const nookNamedArgument238: Parameters<KeyGraphView['isHere']>[0] = {
       device,
     }
-    const mine = isHere(nookNamedArgument238)
+    const mine = new KeyGraphView(source).isHere(nookNamedArgument238)
     const nookNamedArgument239: Parameters<typeof reachFor>[0] = {
       mine,
       usable: passkey.reach === Reach.Here,
@@ -155,7 +145,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
       passkeyId: passkey.id,
       passkeyShortId: passkey.shortId,
       store: passkey.store,
-      storeName: storeLabel(passkey.store),
+      storeName: KeyGraphView.storeLabel(passkey.store),
       deviceId: device.id,
       deviceShortId: device.shortId,
       deviceLabel: device.label,
@@ -165,27 +155,30 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   }
 
   function readFor({ source, vault }: ReadForArgs): VaultRead {
-    const nookNamedArgument240: Parameters<typeof devicesForVault>[0] = {
-      graph: source,
-      vault,
-    }
-    const discoveredStrands = devicesForVault(nookNamedArgument240).flatMap(
-      (device) => {
-        const nookNamedArgument241: Parameters<typeof passkeysForDevice>[0] = {
-          graph: source,
+    const nookNamedArgument240: Parameters<KeyGraphView['devicesForVault']>[0] =
+      {
+        vault,
+      }
+    const discoveredStrands = new KeyGraphView(source)
+      .devicesForVault(nookNamedArgument240)
+      .flatMap((device) => {
+        const nookNamedArgument241: Parameters<
+          KeyGraphView['passkeysForDevice']
+        >[0] = {
           device,
         }
-        return passkeysForDevice(nookNamedArgument241).map((passkey) => {
-          const nookNamedArgument242: Parameters<typeof strandFor>[0] = {
-            source,
-            vault,
-            device,
-            passkey,
-          }
-          return strandFor(nookNamedArgument242)
-        })
-      },
-    )
+        return new KeyGraphView(source)
+          .passkeysForDevice(nookNamedArgument241)
+          .map((passkey) => {
+            const nookNamedArgument242: Parameters<typeof strandFor>[0] = {
+              source,
+              vault,
+              device,
+              passkey,
+            }
+            return strandFor(nookNamedArgument242)
+          })
+      })
     const reachOrder = [
       PathReach.Now,
       PathReach.OtherDevice,
@@ -294,9 +287,9 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   function usableFrom(passkey: Passkey): boolean {
     return (
       passkey.reach === Reach.Here &&
-      hereDevices(graph).some((device) =>
-        device.passkeyIds.includes(passkey.id),
-      )
+      new KeyGraphView(graph)
+        .hereDevices()
+        .some((device) => device.passkeyIds.includes(passkey.id))
     )
   }
 
@@ -306,11 +299,14 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   }
 
   function vaultCount(passkey: Passkey): string {
-    const nookNamedArgument244: Parameters<typeof vaultsForPasskey>[0] = {
-      graph,
+    const nookNamedArgument244: Parameters<
+      KeyGraphView['vaultsForPasskey']
+    >[0] = {
       passkeyId: passkey.id,
     }
-    const count = vaultsForPasskey(nookNamedArgument244).length
+    const count = new KeyGraphView(graph).vaultsForPasskey(
+      nookNamedArgument244,
+    ).length
     return count === 1 ? '1 vault' : `${count} vaults`
   }
 
@@ -326,12 +322,12 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     light
     onGraph={(next) => {
       graphId = next
-      selected = defaultNode(graphById(next))
+      selected = new KeyGraphView(KeyGraphView.graphById(next)).defaultNode()
     }}
   />
 
   <section class="mx-auto max-w-3xl px-5 pt-28 pb-20 sm:px-8 sm:pt-24">
-    {#each hereDevices(graph) as device (device.id)}
+    {#each new KeyGraphView(graph).hereDevices() as device (device.id)}
       {@const deviceSelection: Parameters<typeof isSelected>[0] = {
         kind: NodeKind.Device,
         id: device.id,
@@ -402,8 +398,9 @@ get a quiet footer: they exist, and that is all this browser can say about them.
           kind: NodeKind.Passkey,
           id: passkey.id,
         }}
-        {@const vaultLookup: Parameters<typeof vaultsForPasskey>[0] = {
-          graph,
+        {@const vaultLookup: Parameters<
+          KeyGraphView['vaultsForPasskey']
+        >[0] = {
           passkeyId: passkey.id,
         }}
         {@const chosen = isSelected(passkeySelection)}
@@ -411,7 +408,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
           <button
             type="button"
             aria-pressed={chosen}
-            aria-label={`Passkey ${passkey.shortId} in ${storeLabel(passkey.store)}`}
+            aria-label={`Passkey ${passkey.shortId} in ${KeyGraphView.storeLabel(passkey.store)}`}
             class={`flex h-full w-full items-center gap-2.5 rounded-r-md rounded-l-full border bg-[#fffdf7] py-2 pr-3 pl-2 text-left transition motion-reduce:transition-none ${chosenEdge(chosen)}`}
             onclick={() => pick(passkeySelection)}
           >
@@ -427,7 +424,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
             </span>
             <span class="min-w-0 flex-1">
               <span class="block truncate text-[11px] text-[#1a1815]/60">
-                {storeLabel(passkey.store)}
+                {KeyGraphView.storeLabel(passkey.store)}
               </span>
               <span
                 class="mt-0.5 block font-mono text-[15px] tracking-[0.08em]"
@@ -455,7 +452,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
                 <span class="sr-only">{vaultCount(passkey)}</span>
                 <VaultIcon class="size-2.5" aria-hidden="true" />
                 <span class="{CAPS} text-[9px]" aria-hidden="true">
-                  {vaultsForPasskey(vaultLookup).length}
+                  {new KeyGraphView(graph).vaultsForPasskey(vaultLookup).length}
                 </span>
               </span>
             </span>

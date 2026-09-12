@@ -492,8 +492,10 @@ pub mod mock_passkey {
                 reason = "FFI boundary: mock authenticator looks up a WebAuthn credential-id ArrayBuffer"
             )
         )]
-        pub fn credential(&self, credential_id: &[u8]) -> Option<&StoredMockPasskey> {
-            self.credentials.get(credential_id)
+        pub fn credential(&self, credential_id: &[u8]) -> MockPasskeyResult<&StoredMockPasskey> {
+            self.credentials
+                .get(credential_id)
+                .ok_or(MockPasskeyError::NoMatchingCredential)
         }
 
         #[must_use]
@@ -549,6 +551,13 @@ pub mod mock_passkey {
         }
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: mock passkey test fixture validation helper"
+        )
+    )]
     fn validate_rp_id(rp_id: &str) -> MockPasskeyResult<()> {
         if rp_id.trim().is_empty() {
             Err(MockPasskeyError::RpIdEmpty)
@@ -557,6 +566,13 @@ pub mod mock_passkey {
         }
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: mock passkey test fixture validation helper"
+        )
+    )]
     fn validate_user_handle(user_handle: &[u8]) -> MockPasskeyResult<()> {
         if user_handle.is_empty() || user_handle.len() > 64 {
             Err(DeviceKeyProtectionError::UserHandleInvalid.into())
@@ -565,6 +581,13 @@ pub mod mock_passkey {
         }
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: mock passkey test fixture validation helper"
+        )
+    )]
     fn validate_prf_input(prf_input: &[u8]) -> MockPasskeyResult<()> {
         if prf_input.len() == 32 {
             Ok(())
@@ -573,6 +596,13 @@ pub mod mock_passkey {
         }
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: mock passkey test fixture cryptographic helper"
+        )
+    )]
     fn evaluate_mock_prf(secret: &[u8; MOCK_PASSKEY_SECRET_LEN], prf_input: &[u8]) -> [u8; 32] {
         let mut digest = Sha256::new();
         digest.update(MOCK_PASSKEY_PRF_CONTEXT);
@@ -581,6 +611,13 @@ pub mod mock_passkey {
         digest.finalize().into()
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: mock passkey test fixture hash helper"
+        )
+    )]
     fn append_hash_field(digest: &mut Sha256, value: &[u8]) {
         digest.update(u32::try_from(value.len()).unwrap_or(u32::MAX).to_be_bytes());
         digest.update(value);
@@ -589,7 +626,6 @@ pub mod mock_passkey {
     #[cfg(test)]
     mod tests {
         use crate::{PasskeyRecordMetadata, WrappedDeviceIdentity};
-        use std::io;
 
         use super::*;
         use crate::{
@@ -713,8 +749,7 @@ pub mod mock_passkey {
             assert!(matches!(result, Err(MockPasskeyError::AuthorizationDenied)));
             assert_eq!(
                 authenticator
-                    .credential(registration.credential_id())
-                    .ok_or_else(|| io::Error::other("registered credential must exist"))?
+                    .credential(registration.credential_id())?
                     .sign_count(),
                 0
             );
@@ -782,15 +817,13 @@ pub mod mock_passkey {
             assert_eq!(assertion.credential_id(), second.credential_id());
             assert_eq!(
                 authenticator
-                    .credential(first.credential_id())
-                    .ok_or_else(|| io::Error::other("first registered credential must exist"))?
+                    .credential(first.credential_id())?
                     .sign_count(),
                 0
             );
             assert_eq!(
                 authenticator
-                    .credential(second.credential_id())
-                    .ok_or_else(|| io::Error::other("second registered credential must exist"))?
+                    .credential(second.credential_id())?
                     .sign_count(),
                 1
             );
@@ -817,15 +850,13 @@ pub mod mock_passkey {
             ));
             assert_eq!(
                 authenticator
-                    .credential(first.credential_id())
-                    .ok_or_else(|| io::Error::other("first registered credential must exist"))?
+                    .credential(first.credential_id())?
                     .sign_count(),
                 0
             );
             assert_eq!(
                 authenticator
-                    .credential(second.credential_id())
-                    .ok_or_else(|| io::Error::other("second registered credential must exist"))?
+                    .credential(second.credential_id())?
                     .sign_count(),
                 0
             );

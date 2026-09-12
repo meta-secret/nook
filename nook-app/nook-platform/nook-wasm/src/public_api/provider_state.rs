@@ -1,9 +1,11 @@
 use super::{NookStorageConnectArgs, wasm_bindgen};
-use nook_core::DraftStorageConnection;
 use nook_core::{
     ActiveProviderCredentialsProjection, ExistingVaultProviderReadiness, GithubPatMask,
-    OAuthAccessTokenRef, StorageConnectArgs, StorageProviderType, StoredLocalFolderConfiguration,
-    StoredOAuthFileConfiguration,
+    StorageConnectArgs, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+};
+use nook_core::{
+    DraftStorageConnection, GithubStorageDraft, OAuthRemoteConfigurationUpdate,
+    OAuthRemoteStorageReference, OAuthStorageDraft, ProviderSelection, StagedStorageConnection,
 };
 use wasm_bindgen::JsError;
 
@@ -17,7 +19,7 @@ pub enum NookActiveProviderCredentialsProjectionState {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn active_provider_credentials_projection_state(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn active_provider_credentials_projection_state(
     projection: nook_core::ActiveProviderCredentialsProjection,
 ) -> NookActiveProviderCredentialsProjectionState {
     match projection {
@@ -32,7 +34,7 @@ pub fn active_provider_credentials_projection_state(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn active_provider_credentials_projection_draft(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn active_provider_credentials_projection_draft(
     projection: nook_core::ActiveProviderCredentialsProjection,
 ) -> Result<nook_core::ActiveProviderCredentialDraft, wasm_bindgen::JsError> {
     match projection {
@@ -53,7 +55,7 @@ pub enum NookStoredOAuthFileConfigurationState {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn stored_oauth_file_configuration_state(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn stored_oauth_file_configuration_state(
     configuration: nook_core::StoredOAuthFileConfiguration,
 ) -> NookStoredOAuthFileConfigurationState {
     match configuration {
@@ -76,7 +78,7 @@ pub enum NookStoredLocalFolderConfigurationState {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn stored_local_folder_configuration_state(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn stored_local_folder_configuration_state(
     configuration: nook_core::StoredLocalFolderConfiguration,
 ) -> NookStoredLocalFolderConfigurationState {
     match configuration {
@@ -109,7 +111,7 @@ impl From<nook_core::ExistingVaultProviderReadiness> for NookExistingVaultProvid
 
 #[wasm_bindgen]
 #[must_use]
-pub fn existing_vault_provider_readiness(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn existing_vault_provider_readiness(
     provider_type: nook_core::StorageProviderType,
     oauth_file_configured: bool,
     local_folder_configured: bool,
@@ -120,58 +122,18 @@ pub fn existing_vault_provider_readiness(
 }
 
 #[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookOAuthAccessTokenKind {
-    Missing,
-    Available,
-}
-
-enum NookOAuthAccessTokenValue {
-    Missing,
-    Available(String),
-}
-
-#[wasm_bindgen]
-pub struct NookOAuthAccessToken(NookOAuthAccessTokenValue);
-
-#[wasm_bindgen]
-impl NookOAuthAccessToken {
-    #[wasm_bindgen(getter)]
-    #[must_use]
-    pub fn kind(&self) -> NookOAuthAccessTokenKind {
-        match self.0 {
-            NookOAuthAccessTokenValue::Missing => NookOAuthAccessTokenKind::Missing,
-            NookOAuthAccessTokenValue::Available(_) => NookOAuthAccessTokenKind::Available,
-        }
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn token(&self) -> Result<String, wasm_bindgen::JsError> {
-        match &self.0 {
-            NookOAuthAccessTokenValue::Missing => {
-                Err(JsError::new("OAuth access token is missing"))
-            }
-            NookOAuthAccessTokenValue::Available(token) => Ok(token.clone()),
-        }
-    }
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
 #[must_use]
-pub fn oauth_access_token(config: nook_core::OAuthFileConfigData) -> NookOAuthAccessToken {
-    match config.usable_access_token() {
-        OAuthAccessTokenRef::Missing => NookOAuthAccessToken(NookOAuthAccessTokenValue::Missing),
-        OAuthAccessTokenRef::Available(token) => {
-            NookOAuthAccessToken(NookOAuthAccessTokenValue::Available(token.to_owned()))
-        }
-    }
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "wasm-bindgen requires the exported configuration value to be owned"
+)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn oauth_access_token(config: nook_core::OAuthFileConfigData) -> nook_core::OAuthAccessToken {
+    config.usable_access_token().into()
 }
-
 #[wasm_bindgen]
 #[must_use]
-pub fn missing_oauth_access_token() -> NookOAuthAccessToken {
-    NookOAuthAccessToken(NookOAuthAccessTokenValue::Missing)
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn missing_oauth_access_token() -> nook_core::OAuthAccessToken {
+    nook_core::OAuthAccessToken::Missing
 }
 
 #[wasm_bindgen]
@@ -182,25 +144,24 @@ pub enum NookProviderSelectionState {
 }
 
 #[wasm_bindgen]
-pub struct NookProviderSelection(pub(super) Option<String>);
+pub struct NookProviderSelection(pub(super) ProviderSelection);
 
 #[wasm_bindgen]
 impl NookProviderSelection {
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookProviderSelectionState {
-        if self.0.is_some() {
-            NookProviderSelectionState::Selected
-        } else {
-            NookProviderSelectionState::Missing
+        match &self.0 {
+            ProviderSelection::Selected(_) => NookProviderSelectionState::Selected,
+            ProviderSelection::Unavailable => NookProviderSelectionState::Missing,
         }
     }
-
     #[wasm_bindgen(getter, js_name = providerId)]
     pub fn provider_id(&self) -> Result<String, wasm_bindgen::JsError> {
-        self.0
-            .clone()
-            .ok_or_else(|| JsError::new("provider selection is missing"))
+        match &self.0 {
+            ProviderSelection::Selected(id) => Ok(id.as_str().to_owned()),
+            ProviderSelection::Unavailable => Err(JsError::new("provider selection is missing")),
+        }
     }
 }
 
@@ -212,30 +173,35 @@ pub enum NookOAuthRemoteStorageReferenceState {
 }
 
 #[wasm_bindgen]
-pub struct NookOAuthRemoteStorageReference(Option<String>);
+pub struct NookOAuthRemoteStorageReference(OAuthRemoteStorageReference);
 
 #[wasm_bindgen]
 impl NookOAuthRemoteStorageReference {
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookOAuthRemoteStorageReferenceState {
-        if self.0.is_some() {
-            NookOAuthRemoteStorageReferenceState::Resolved
-        } else {
-            NookOAuthRemoteStorageReferenceState::Unresolved
+        match &self.0 {
+            OAuthRemoteStorageReference::Unresolved => {
+                NookOAuthRemoteStorageReferenceState::Unresolved
+            }
+            OAuthRemoteStorageReference::Resolved(_) => {
+                NookOAuthRemoteStorageReferenceState::Resolved
+            }
         }
     }
-
     #[wasm_bindgen(getter)]
     pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
-        self.0
-            .clone()
-            .ok_or_else(|| JsError::new("OAuth remote storage is unresolved"))
+        match &self.0 {
+            OAuthRemoteStorageReference::Resolved(value) => Ok(value.as_str().to_owned()),
+            OAuthRemoteStorageReference::Unresolved => {
+                Err(JsError::new("OAuth remote storage is unresolved"))
+            }
+        }
     }
 }
 
 impl NookOAuthRemoteStorageReference {
-    pub(super) const fn new(value: Option<String>) -> Self {
+    pub(super) const fn new(value: OAuthRemoteStorageReference) -> Self {
         Self(value)
     }
 }
@@ -248,30 +214,35 @@ pub enum NookOAuthRemoteConfigurationUpdateState {
 }
 
 #[wasm_bindgen]
-pub struct NookOAuthRemoteConfigurationUpdate(Option<nook_core::OAuthFileConfigData>);
+pub struct NookOAuthRemoteConfigurationUpdate(OAuthRemoteConfigurationUpdate);
 
 #[wasm_bindgen]
 impl NookOAuthRemoteConfigurationUpdate {
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookOAuthRemoteConfigurationUpdateState {
-        if self.0.is_some() {
-            NookOAuthRemoteConfigurationUpdateState::Updated
-        } else {
-            NookOAuthRemoteConfigurationUpdateState::Rejected
+        match &self.0 {
+            OAuthRemoteConfigurationUpdate::Unchanged => {
+                NookOAuthRemoteConfigurationUpdateState::Rejected
+            }
+            OAuthRemoteConfigurationUpdate::Updated(_) => {
+                NookOAuthRemoteConfigurationUpdateState::Updated
+            }
         }
     }
-
     #[wasm_bindgen(getter)]
     pub fn config(&self) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
-        self.0
-            .clone()
-            .ok_or_else(|| JsError::new("OAuth remote reference was rejected"))
+        match &self.0 {
+            OAuthRemoteConfigurationUpdate::Updated(value) => Ok((**value).clone()),
+            OAuthRemoteConfigurationUpdate::Unchanged => {
+                Err(JsError::new("OAuth remote reference was rejected"))
+            }
+        }
     }
 }
 
 impl NookOAuthRemoteConfigurationUpdate {
-    pub(super) const fn new(value: Option<nook_core::OAuthFileConfigData>) -> Self {
+    pub(super) const fn new(value: OAuthRemoteConfigurationUpdate) -> Self {
         Self(value)
     }
 }
@@ -284,31 +255,31 @@ pub enum NookStagedStorageArgsState {
 }
 
 #[wasm_bindgen]
-pub struct NookStagedStorageArgs(Option<nook_core::StorageConnectArgs>);
+pub struct NookStagedStorageArgs(StagedStorageConnection);
 
 #[wasm_bindgen]
 impl NookStagedStorageArgs {
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookStagedStorageArgsState {
-        if self.0.is_some() {
-            NookStagedStorageArgsState::Ready
-        } else {
-            NookStagedStorageArgsState::Incomplete
+        match self.0 {
+            StagedStorageConnection::Ready(_) => NookStagedStorageArgsState::Ready,
+            StagedStorageConnection::Incomplete => NookStagedStorageArgsState::Incomplete,
         }
     }
-
     #[wasm_bindgen(getter)]
     pub fn args(&self) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
-        self.0
-            .clone()
-            .map(Into::into)
-            .ok_or_else(|| JsError::new("staged storage is incomplete"))
+        match &self.0 {
+            StagedStorageConnection::Ready(args) => Ok(args.clone()),
+            StagedStorageConnection::Incomplete => {
+                Err(JsError::new("staged storage is incomplete"))
+            }
+        }
     }
 }
 
 impl NookStagedStorageArgs {
-    pub(super) const fn new(value: Option<nook_core::StorageConnectArgs>) -> Self {
+    pub(super) const fn new(value: StagedStorageConnection) -> Self {
         Self(value)
     }
 }
@@ -321,115 +292,94 @@ pub enum NookGithubPatHintState {
 }
 
 #[wasm_bindgen]
-pub struct NookGithubPatHint(Option<String>);
+pub struct NookGithubPatHint(GithubPatMask);
 
 #[wasm_bindgen]
 impl NookGithubPatHint {
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookGithubPatHintState {
-        if self.0.is_some() {
-            NookGithubPatHintState::Available
-        } else {
-            NookGithubPatHintState::Missing
+        match &self.0 {
+            GithubPatMask::NoToken => NookGithubPatHintState::Missing,
+            GithubPatMask::Hint(_) => NookGithubPatHintState::Available,
         }
     }
-
     #[wasm_bindgen(getter)]
     pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
-        self.0
-            .clone()
-            .ok_or_else(|| JsError::new("GitHub PAT hint is unavailable"))
+        match &self.0 {
+            GithubPatMask::Hint(value) => Ok(value.clone()),
+            GithubPatMask::NoToken => Err(JsError::new("GitHub PAT hint is unavailable")),
+        }
     }
 }
 
 impl NookGithubPatHint {
-    pub(super) const fn new(value: Option<String>) -> Self {
+    pub(super) const fn new(value: GithubPatMask) -> Self {
         Self(value)
     }
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn local_vault_storage_args() -> NookStorageConnectArgs {
-    StorageConnectArgs::local().into()
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn local_vault_storage_args() -> NookStorageConnectArgs {
+    StorageConnectArgs::local()
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn authenticated_vault_storage_args(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authenticated_vault_storage_args(
     provider: nook_core::StorageProviderData,
 ) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
-    Ok(provider.connection_args()?.into())
+    Ok(provider.connection_args()?)
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookStorageConnectArgs {
-    DraftStorageConnection {
-        provider_type: StorageProviderType::Github,
-        github_pat: Some(github_pat),
-        github_repo: Some(github_repo),
-        oauth_preset: None,
-        oauth_access_token: None,
-        oauth_file_id: None,
-        oauth_file_name: None,
-    }
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookStorageConnectArgs {
+    DraftStorageConnection::Github(GithubStorageDraft {
+        credential: &nook_core::StoredGithubPat::Token(github_pat.to_owned()),
+        repository: &nook_core::StoredGithubRepository::Repository(github_repo.to_owned()),
+    })
     .project()
-    .into()
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
-pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookStorageConnectArgs {
-    let remote_ref = config.remote_storage_ref();
-    DraftStorageConnection {
-        provider_type: StorageProviderType::OauthFile,
-        github_pat: None,
-        github_repo: None,
-        oauth_preset: Some(config.preset),
-        oauth_access_token: config.access_token.as_deref(),
-        oauth_file_id: remote_ref.as_deref(),
-        oauth_file_name: config.file_name.as_deref(),
-    }
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookStorageConnectArgs {
+    DraftStorageConnection::OAuth(OAuthStorageDraft {
+        preset: config.preset,
+        credential: &config.access_token,
+        remote_reference: config.remote_storage_ref(),
+        file_name: &config.file_name,
+        alternate_name: &nook_core::StoredOAuthRemoteFileName::Unresolved,
+    })
     .project()
-    .into()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn draft_local_storage_args() -> NookStorageConnectArgs {
-    DraftStorageConnection {
-        provider_type: StorageProviderType::Local,
-        github_pat: None,
-        github_repo: None,
-        oauth_preset: None,
-        oauth_access_token: None,
-        oauth_file_id: None,
-        oauth_file_name: None,
-    }
-    .project()
-    .into()
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_local_storage_args() -> NookStorageConnectArgs {
+    DraftStorageConnection::Local.project()
 }
 
 /// Return a masked GitHub PAT hint without exposing the full credential.
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn mask_github_pat_hint(pat: nook_core::StoredGithubPat) -> NookGithubPatHint {
-    NookGithubPatHint::new(
-        match nook_core::GithubPat::mask(pat.as_deref().unwrap_or_default()) {
-            GithubPatMask::NoToken => None,
-            GithubPatMask::Hint(hint) => Some(hint),
-        },
-    )
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn mask_github_pat_hint(pat: nook_core::StoredGithubPat) -> NookGithubPatHint {
+    NookGithubPatHint::new(match pat {
+        nook_core::StoredGithubPat::Missing => GithubPatMask::NoToken,
+        nook_core::StoredGithubPat::Token(pat) => nook_core::GithubPat::mask(&pat),
+    })
 }
 
 #[cfg(test)]
 #[allow(unused_imports)]
 mod tests {
     use super::*;
+    #[cfg(target_arch = "wasm32")]
+    use nook_core::StorageProviderType;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[cfg(target_arch = "wasm32")]
@@ -504,64 +454,75 @@ mod tests {
     #[wasm_bindgen_test]
     fn provider_state_values_keep_secret_boundaries_and_defaults() {
         let missing = missing_oauth_access_token();
-        assert_eq!(missing.kind(), NookOAuthAccessTokenKind::Missing);
-        assert!(missing.token().is_err());
+        assert_eq!(missing, nook_core::OAuthAccessToken::Missing);
         let mut config = nook_core::OAuthFileConfigData::default();
         config.access_token = nook_core::StoredOAuthAccessCredential::AccessToken(" token ".into());
         let available = oauth_access_token(config.clone());
-        assert_eq!(available.kind(), NookOAuthAccessTokenKind::Available);
-        assert_eq!(available.token().unwrap(), "token");
+        assert_eq!(
+            available,
+            nook_core::OAuthAccessToken::Available {
+                token: "token".to_owned()
+            }
+        );
 
-        let missing_selection = NookProviderSelection(None);
+        let missing_selection = NookProviderSelection(ProviderSelection::Unavailable);
         assert_eq!(
             missing_selection.state(),
             NookProviderSelectionState::Missing
         );
         assert!(missing_selection.provider_id().is_err());
-        let selected = NookProviderSelection(Some("provider-1".into()));
+        let selected = NookProviderSelection(ProviderSelection::Selected("provider-1".into()));
         assert_eq!(selected.state(), NookProviderSelectionState::Selected);
         assert_eq!(selected.provider_id().unwrap(), "provider-1");
 
-        let unresolved = NookOAuthRemoteStorageReference::new(None);
+        let unresolved =
+            NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Unresolved);
         assert_eq!(
             unresolved.state(),
             NookOAuthRemoteStorageReferenceState::Unresolved
         );
         assert!(unresolved.value().is_err());
-        let resolved = NookOAuthRemoteStorageReference::new(Some("file-1".into()));
+        let resolved = NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Resolved(
+            "file-1".into(),
+        ));
         assert_eq!(
             resolved.state(),
             NookOAuthRemoteStorageReferenceState::Resolved
         );
         assert_eq!(resolved.value().unwrap(), "file-1");
 
-        let rejected = NookOAuthRemoteConfigurationUpdate::new(None);
+        let rejected =
+            NookOAuthRemoteConfigurationUpdate::new(OAuthRemoteConfigurationUpdate::Unchanged);
         assert_eq!(
             rejected.state(),
             NookOAuthRemoteConfigurationUpdateState::Rejected
         );
         assert!(rejected.config().is_err());
-        let updated = NookOAuthRemoteConfigurationUpdate::new(Some(config.clone()));
+        let updated = NookOAuthRemoteConfigurationUpdate::new(
+            OAuthRemoteConfigurationUpdate::Updated(Box::new(config.clone())),
+        );
         assert_eq!(
             updated.state(),
             NookOAuthRemoteConfigurationUpdateState::Updated
         );
         assert_eq!(updated.config().unwrap(), config);
 
-        let incomplete = NookStagedStorageArgs::new(None);
+        let incomplete = NookStagedStorageArgs::new(StagedStorageConnection::Incomplete);
         assert_eq!(incomplete.state(), NookStagedStorageArgsState::Incomplete);
         assert!(incomplete.args().is_err());
-        let ready = NookStagedStorageArgs::new(Some(nook_core::StorageConnectArgs::local()));
+        let ready = NookStagedStorageArgs::new(StagedStorageConnection::Ready(
+            nook_core::StorageConnectArgs::local(),
+        ));
         assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
         assert!(ready.args().is_ok());
 
-        assert_eq!(local_vault_storage_args().mode(), "local");
-        assert_eq!(draft_local_storage_args().mode(), "local");
+        assert_eq!(local_vault_storage_args().mode, "local");
+        assert_eq!(draft_local_storage_args().mode, "local");
         let github_args = draft_github_storage_args("pat", "owner/repo");
-        assert_eq!(github_args.mode(), "github");
-        assert_eq!(github_args.pat(), "pat");
-        assert_eq!(github_args.repo(), "owner/repo");
-        assert_eq!(draft_oauth_storage_args(config).mode(), "google-drive");
+        assert_eq!(github_args.mode, "github");
+        assert_eq!(github_args.pat, "pat");
+        assert_eq!(github_args.repo, "owner/repo");
+        assert_eq!(draft_oauth_storage_args(config).mode, "google-drive");
 
         let no_hint = mask_github_pat_hint(nook_core::StoredGithubPat::Missing);
         assert_eq!(no_hint.state(), NookGithubPatHintState::Missing);
@@ -583,12 +544,11 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     fn provider_state_wrappers_cover_typed_getters_and_storage_drafts() {
-        let missing = NookOAuthAccessToken(NookOAuthAccessTokenValue::Missing);
-        assert_eq!(missing.kind(), NookOAuthAccessTokenKind::Missing);
-        assert!(missing.token().is_err());
+        let missing = nook_core::OAuthAccessToken::Missing;
+        assert_eq!(missing, nook_core::OAuthAccessToken::Missing);
         assert_eq!(
-            missing_oauth_access_token().kind(),
-            NookOAuthAccessTokenKind::Missing
+            missing_oauth_access_token(),
+            nook_core::OAuthAccessToken::Missing
         );
 
         let configured = nook_core::OAuthFileConfigData {
@@ -598,51 +558,63 @@ mod browser_tests {
             ..Default::default()
         };
         let token = oauth_access_token(configured.clone());
-        assert_eq!(token.kind(), NookOAuthAccessTokenKind::Available);
-        assert_eq!(token.token().unwrap(), "token");
+        assert_eq!(
+            token,
+            nook_core::OAuthAccessToken::Available {
+                token: "token".to_owned()
+            }
+        );
 
-        let missing_selection = NookProviderSelection(None);
+        let missing_selection = NookProviderSelection(ProviderSelection::Unavailable);
         assert_eq!(
             missing_selection.state(),
             NookProviderSelectionState::Missing
         );
         assert!(missing_selection.provider_id().is_err());
-        let selected = NookProviderSelection(Some("provider-1".into()));
+        let selected = NookProviderSelection(ProviderSelection::Selected("provider-1".into()));
         assert_eq!(selected.state(), NookProviderSelectionState::Selected);
         assert_eq!(selected.provider_id().unwrap(), "provider-1");
 
-        let unresolved = NookOAuthRemoteStorageReference::new(None);
+        let unresolved =
+            NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Unresolved);
         assert_eq!(
             unresolved.state(),
             NookOAuthRemoteStorageReferenceState::Unresolved
         );
         assert!(unresolved.value().is_err());
-        let resolved = NookOAuthRemoteStorageReference::new(Some("file-1".into()));
+        let resolved = NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Resolved(
+            "file-1".into(),
+        ));
         assert_eq!(
             resolved.state(),
             NookOAuthRemoteStorageReferenceState::Resolved
         );
         assert_eq!(resolved.value().unwrap(), "file-1");
 
-        let rejected = NookOAuthRemoteConfigurationUpdate::new(None);
+        let rejected =
+            NookOAuthRemoteConfigurationUpdate::new(OAuthRemoteConfigurationUpdate::Unchanged);
         assert_eq!(
             rejected.state(),
             NookOAuthRemoteConfigurationUpdateState::Rejected
         );
         assert!(rejected.config().is_err());
-        let updated = NookOAuthRemoteConfigurationUpdate::new(Some(configured.clone()));
+        let updated = NookOAuthRemoteConfigurationUpdate::new(
+            OAuthRemoteConfigurationUpdate::Updated(Box::new(configured.clone())),
+        );
         assert_eq!(
             updated.state(),
             NookOAuthRemoteConfigurationUpdateState::Updated
         );
         assert_eq!(updated.config().unwrap().file_name, configured.file_name);
 
-        let incomplete = NookStagedStorageArgs::new(None);
+        let incomplete = NookStagedStorageArgs::new(StagedStorageConnection::Incomplete);
         assert_eq!(incomplete.state(), NookStagedStorageArgsState::Incomplete);
         assert!(incomplete.args().is_err());
-        let ready = NookStagedStorageArgs::new(Some(nook_core::StorageConnectArgs::local()));
+        let ready = NookStagedStorageArgs::new(StagedStorageConnection::Ready(
+            nook_core::StorageConnectArgs::local(),
+        ));
         assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
-        assert_eq!(ready.args().unwrap().mode(), "local");
+        assert_eq!(ready.args().unwrap().mode, "local");
 
         let no_hint = mask_github_pat_hint(nook_core::StoredGithubPat::Missing);
         assert_eq!(no_hint.state(), NookGithubPatHintState::Missing);
@@ -653,13 +625,13 @@ mod browser_tests {
         assert_eq!(hint.state(), NookGithubPatHintState::Available);
         assert_eq!(hint.value().unwrap(), "ghp_123456…");
 
-        assert_eq!(local_vault_storage_args().mode(), "local");
-        assert_eq!(draft_local_storage_args().mode(), "local");
+        assert_eq!(local_vault_storage_args().mode, "local");
+        assert_eq!(draft_local_storage_args().mode, "local");
         let github = draft_github_storage_args("pat", "owner/repo");
-        assert_eq!(github.mode(), "github");
-        assert_eq!(github.pat(), "pat");
-        assert_eq!(github.repo(), "owner/repo");
+        assert_eq!(github.mode, "github");
+        assert_eq!(github.pat, "pat");
+        assert_eq!(github.repo, "owner/repo");
         let oauth = draft_oauth_storage_args(configured);
-        assert_eq!(oauth.mode(), "google-drive");
+        assert_eq!(oauth.mode, "google-drive");
     }
 }

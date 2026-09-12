@@ -1,411 +1,490 @@
+#[derive(Debug)]
+pub(super) enum WorkspaceOrigin<'a> {
+    Fresh,
+    ResumeBranch(&'a str),
+}
+pub struct TaskWorkspace<'scan> {
+    pub workspace: &'scan Path,
+    pub repository_url: &'scan str,
+    pub source_commit: &'scan str,
+    pub resume_branch: WorkspaceOrigin<'scan>,
+    pub dependency_artifacts: &'scan [Artifact],
+}
 use super::*;
 use tokio::fs as async_fs;
 use tokio::time as async_time;
 
-pub(super) async fn heartbeat_loop<S: TaskStore>(
-    store: S,
-    agent_id: AgentId,
-    task: ClaimedTask,
-    lease_seconds: i64,
-    heartbeat_seconds: u64,
-    mut stop: watch::Receiver<bool>,
-) -> crate::HiveResult<()> {
-    let mut interval = async_time::interval(Duration::from_secs(heartbeat_seconds));
-    let mut renewal = 0_u64;
-    interval.tick().await;
-    loop {
-        tokio::select! {
-            changed = stop.changed() => {
-                if changed.is_err() || *stop.borrow() {
-                    return Ok(());
+impl TaskWorkspace<'_> {
+    pub(super) async fn heartbeat_loop<S: TaskStore>(
+        store: S,
+        agent_id: AgentId,
+        task: ClaimedTask,
+        lease_seconds: i64,
+        heartbeat_seconds: u64,
+        mut stop: watch::Receiver<bool>,
+    ) -> crate::HiveResult<()> {
+        let mut interval = async_time::interval(Duration::from_secs(heartbeat_seconds));
+        let mut renewal = 0_u64;
+        interval.tick().await;
+        loop {
+            tokio::select! {
+                changed = stop.changed() => {
+                    if changed.is_err() || *stop.borrow() {
+                        return Ok(());
+                    }
                 }
-            }
-            _ = interval.tick() => {
-                let accepted = store
-                    .heartbeat(
-                        &task.id,
-                        &agent_id,
-                        &task.lease_token,
-                        lease_seconds,
-                    )
-                    .await?;
-                if !accepted {
-                    return Err(WorkerCancellationRequested.into());
+                _ = interval.tick() => {
+                    let accepted = store
+                        .heartbeat(
+                            &task.id,
+                            &agent_id,
+                            &task.lease_token,
+                            lease_seconds,
+                        )
+                        .await?;
+                    if !accepted {
+                        return Err(WorkerCancellationRequested.into());
+                    }
+                    renewal += 1;
+                    eprintln!(
+                        "Hive lease heartbeat accepted task={} renewal={renewal}",
+                        task.id
+                    );
                 }
-                renewal += 1;
-                eprintln!(
-                    "Hive lease heartbeat accepted task={} renewal={renewal}",
-                    task.id
-                );
             }
         }
     }
 }
 
-pub(super) async fn prepare_workspace(
-    workspace: &Path,
-    repository_url: &str,
-    source_commit: &str,
-    resume_branch: Option<&str>,
-    dependency_artifacts: &[Artifact],
-) -> crate::HiveResult<WorkspacePreparation> {
-    async_fs::create_dir_all(workspace.join("task")).await?;
-    async_fs::create_dir_all(workspace.join("output")).await?;
-    async_fs::create_dir_all(workspace.join("temporary")).await?;
-    let repository = workspace.join("repository");
-    if repository.join(".git").is_dir() {
-        return Err(crate::HiveError::message(
-            "refusing to reuse a repository left by an earlier worker process",
-        ));
+impl TaskWorkspace<'_> {
+    pub async fn prepare_workspace(self) -> crate::HiveResult<WorkspacePreparation> {
+        let Self {
+            workspace,
+            repository_url,
+            source_commit,
+            resume_branch,
+            dependency_artifacts,
+        } = self;
+        async_fs::create_dir_all(workspace.join("task")).await?;
+        async_fs::create_dir_all(workspace.join("output")).await?;
+        async_fs::create_dir_all(workspace.join("temporary")).await?;
+        let repository = workspace.join("repository");
+        if repository.join(".git").is_dir() {
+            return Err(crate::HiveError::message(
+                "refusing to reuse a repository left by an earlier worker process",
+            ));
+        }
+        async_fs::create_dir_all(&repository).await?;
+        let status = Command::new("git")
+            .arg("init")
+            .arg("--quiet")
+            .arg(&repository)
+            .stdin(Stdio::null())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .await
+            .hive_context("failed to initialize the task repository")?;
+        if !status.success() {
+            return Err(crate::HiveError::message(format!(
+                "git init failed with status {status}"
+            )));
+        }
+        TaskWorkspace::run_git_status(
+            &repository,
+            &["remote", "add", "origin", repository_url],
+            "configure the task repository remote",
+        )
+        .await?;
+        TaskWorkspace::run_git_status(
+            &repository,
+            &["fetch", "--depth=1", "origin", source_commit],
+            "fetch the pinned task revision",
+        )
+        .await?;
+        let mut did_resume = false;
+        if let WorkspaceOrigin::ResumeBranch(branch) = resume_branch {
+            let resumed = Command::new("git")
+                .args([
+                    "fetch",
+                    "--depth=100",
+                    "origin",
+                    &format!("refs/heads/{branch}"),
+                ])
+                .current_dir(&repository)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .await?;
+            if resumed.success() {
+                TaskWorkspace::run_git_status(
+                    &repository,
+                    &["checkout", "--quiet", "-B", branch, "FETCH_HEAD"],
+                    "resume the durable Hive repair branch",
+                )
+                .await?;
+                TaskWorkspace::run_git_status(
+                    &repository,
+                    &["merge-base", "--is-ancestor", source_commit, "HEAD"],
+                    "verify the repair branch descends from its pinned revision",
+                )
+                .await?;
+                did_resume = true;
+            }
+        }
+        if !did_resume {
+            TaskWorkspace::run_git_status(
+                &repository,
+                &["checkout", "--quiet", "--detach", source_commit],
+                "check out the pinned task revision",
+            )
+            .await?;
+        }
+        TaskWorkspace::validate_dependency_artifacts(dependency_artifacts)?;
+        let mut applied_dependency = false;
+        for (index, artifact) in dependency_artifacts.iter().enumerate() {
+            if did_resume && TaskWorkspace::patch_is_already_applied(&repository, artifact).await? {
+                continue;
+            }
+            let mut child = Command::new("git")
+                .args(["apply", "--3way", "--index", "--binary", "-"])
+                .current_dir(&repository)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::inherit())
+                .spawn()
+                .hive_context("failed to apply a dependency artifact")?;
+            child
+                .stdin
+                .take()
+                .ok_or_else(|| crate::HiveError::message("dependency patch stdin was unavailable"))?
+                .write_all(artifact.content.as_bytes())
+                .await
+                .hive_context("failed to stream a dependency patch")?;
+            let status = child
+                .wait()
+                .await
+                .hive_context("dependency patch process failed")?;
+            if !status.success() {
+                let unmerged = TaskWorkspace::git_output(
+                    &repository,
+                    &["diff", "--name-only", "--diff-filter=U"],
+                )
+                .await
+                .hive_context("inspect dependency conflicts")?;
+                if unmerged.trim().is_empty() {
+                    return Err(crate::HiveError::message(format!(
+                        "dependency artifact {} failed to apply with status {status}",
+                        artifact.id
+                    )));
+                }
+                let pending = repository.join(".hive-pending");
+                async_fs::create_dir(&pending).await?;
+                for (pending_index, pending_artifact) in
+                    dependency_artifacts.iter().enumerate().skip(index + 1)
+                {
+                    async_fs::write(
+                        pending.join(format!("{pending_index:04}.patch")),
+                        pending_artifact.content.as_bytes(),
+                    )
+                    .await?;
+                }
+                return Ok(WorkspacePreparation::Conflicted(ConflictedWorkspace {
+                    repository,
+                    resumed: did_resume,
+                }));
+            }
+            applied_dependency = true;
+        }
+        if applied_dependency {
+            let baseline = TaskWorkspace::commit_dependency_baseline(&repository).await?;
+            return Ok(WorkspacePreparation::Prepared(PreparedWorkspace {
+                repository,
+                baseline,
+                resumed: did_resume,
+            }));
+        }
+        let baseline = TaskWorkspace::git_output(&repository, &["rev-parse", "HEAD"]).await?;
+        Ok(WorkspacePreparation::Prepared(PreparedWorkspace {
+            repository,
+            baseline,
+            resumed: did_resume,
+        }))
     }
-    async_fs::create_dir_all(&repository).await?;
-    let status = Command::new("git")
-        .arg("init")
-        .arg("--quiet")
-        .arg(&repository)
-        .stdin(Stdio::null())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
-        .await
-        .hive_context("failed to initialize the task repository")?;
-    if !status.success() {
-        return Err(crate::HiveError::message(format!(
-            "git init failed with status {status}"
-        )));
+}
+
+impl TaskWorkspace<'_> {
+    pub(super) fn validate_dependency_artifacts(
+        dependency_artifacts: &[Artifact],
+    ) -> crate::HiveResult<()> {
+        for artifact in dependency_artifacts {
+            if artifact.kind != "git-patch" {
+                return Err(crate::HiveError::message(format!(
+                    "dependency artifact {} has unsupported kind {}",
+                    artifact.id, artifact.kind
+                )));
+            }
+            let digest = Sha256::digest(artifact.content.as_bytes());
+            let digest = format!(
+                "sha256:{}",
+                digest.iter().fold(
+                    String::with_capacity(digest.len() * 2),
+                    |mut encoded, byte| {
+                        let _ = write!(encoded, "{byte:02x}");
+                        encoded
+                    },
+                )
+            );
+            if digest != artifact.digest {
+                return Err(crate::HiveError::message(format!(
+                    "dependency artifact {} failed digest verification",
+                    artifact.id
+                )));
+            }
+        }
+        Ok(())
     }
-    run_git_status(
-        &repository,
-        &["remote", "add", "origin", repository_url],
-        "configure the task repository remote",
-    )
-    .await?;
-    run_git_status(
-        &repository,
-        &["fetch", "--depth=1", "origin", source_commit],
-        "fetch the pinned task revision",
-    )
-    .await?;
-    let mut did_resume = false;
-    if let Some(branch) = resume_branch {
-        let resumed = Command::new("git")
-            .args([
-                "fetch",
-                "--depth=100",
-                "origin",
-                &format!("refs/heads/{branch}"),
-            ])
-            .current_dir(&repository)
+}
+
+impl TaskWorkspace<'_> {
+    pub(super) async fn patch_is_already_applied(
+        repository: &Path,
+        artifact: &Artifact,
+    ) -> crate::HiveResult<bool> {
+        let mut child = Command::new("git")
+            .args(["apply", "--reverse", "--check", "--binary", "-"])
+            .current_dir(repository)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .hive_context("failed to inspect a resumed dependency artifact")?;
+        child
+            .stdin
+            .take()
+            .ok_or_else(|| {
+                crate::HiveError::message("dependency reverse-check stdin was unavailable")
+            })?
+            .write_all(artifact.content.as_bytes())
+            .await
+            .hive_context("failed to stream a dependency reverse check")?;
+        Ok(child
+            .wait()
+            .await
+            .hive_context("dependency reverse-check process failed")?
+            .success())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum WorkspacePreparation {
+    Conflicted(ConflictedWorkspace),
+    Prepared(PreparedWorkspace),
+}
+
+/// Owns an unresolved checkout. No baseline or completion operation exists yet.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct ConflictedWorkspace {
+    repository: PathBuf,
+    resumed: bool,
+}
+
+/// A checkout whose dependency baseline was established by preparation.
+/// This local sequencing capability does not replace the task store's live lease checks.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct PreparedWorkspace {
+    repository: PathBuf,
+    baseline: String,
+    resumed: bool,
+}
+
+impl ConflictedWorkspace {
+    pub(super) async fn finish_dependency_resolution(self) -> crate::HiveResult<PreparedWorkspace> {
+        TaskWorkspace::ensure_dependencies_resolved(&self.repository).await?;
+        let baseline = TaskWorkspace::commit_dependency_baseline(&self.repository).await?;
+        Ok(PreparedWorkspace {
+            repository: self.repository,
+            baseline,
+            resumed: self.resumed,
+        })
+    }
+}
+
+impl PreparedWorkspace {
+    pub(super) fn repository(&self) -> &Path {
+        &self.repository
+    }
+}
+
+impl TaskWorkspace<'_> {
+    async fn ensure_dependencies_resolved(repository: &Path) -> crate::HiveResult<()> {
+        let unmerged =
+            TaskWorkspace::git_output(repository, &["diff", "--name-only", "--diff-filter=U"])
+                .await?;
+        if !unmerged.trim().is_empty() {
+            return Err(crate::HiveError::message(
+                "dependency integration left unresolved Git conflicts",
+            ));
+        }
+        if repository.join(".hive-pending").exists() {
+            return Err(crate::HiveError::message(
+                "dependency integration did not apply every pending patch",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl TaskWorkspace<'_> {
+    async fn commit_dependency_baseline(repository: &Path) -> crate::HiveResult<String> {
+        TaskWorkspace::run_git_status(
+            repository,
+            &["add", "--all", "--", "."],
+            "stage dependency artifacts",
+        )
+        .await?;
+        TaskWorkspace::run_git_status(
+            repository,
+            &[
+                "-c",
+                "user.name=Hive",
+                "-c",
+                "user.email=hive@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "Apply completed Hive dependencies",
+            ],
+            "commit dependency artifact baseline",
+        )
+        .await?;
+        TaskWorkspace::git_output(repository, &["rev-parse", "HEAD"]).await
+    }
+}
+
+impl TaskWorkspace<'_> {
+    pub(super) async fn git_output(
+        repository: &Path,
+        arguments: &[&str],
+    ) -> crate::HiveResult<String> {
+        let output = Command::new("git")
+            .args(arguments)
+            .current_dir(repository)
+            .stdin(Stdio::null())
+            .output()
+            .await
+            .hive_context("failed to execute git")?;
+        if !output.status.success() {
+            return Err(crate::HiveError::message(format!(
+                "git {:?} failed with status {}",
+                arguments, output.status
+            )));
+        }
+        String::from_utf8(output.stdout)
+            .hive_context("git output is not UTF-8")
+            .map(|value| value.trim().to_owned())
+    }
+}
+
+impl TaskWorkspace<'_> {
+    pub(super) async fn run_git_status(
+        repository: &Path,
+        arguments: &[&str],
+        operation: &str,
+    ) -> crate::HiveResult<()> {
+        let status = Command::new("git")
+            .args(arguments)
+            .current_dir(repository)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .status()
+            .await
+            .with_hive_context(|| format!("failed to {operation}"))?;
+        if !status.success() {
+            return Err(crate::HiveError::message(format!(
+                "{operation} failed with status {status}"
+            )));
+        }
+        Ok(())
+    }
+}
+
+impl PreparedWorkspace {
+    pub(super) async fn persistable_patch(
+        self,
+        task: &ClaimedTask,
+        result: &TerminalResult,
+    ) -> crate::HiveResult<CompletionArtifact> {
+        let Self {
+            repository,
+            baseline,
+            resumed,
+        } = self;
+        let repository = repository.as_path();
+        let baseline = baseline.as_str();
+        let add_status = Command::new("git")
+            .args(["add", "--intent-to-add", "--", "."])
+            .current_dir(repository)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
-            .await?;
-        if resumed.success() {
-            run_git_status(
-                &repository,
-                &["checkout", "--quiet", "-B", branch, "FETCH_HEAD"],
-                "resume the durable Hive repair branch",
-            )
-            .await?;
-            run_git_status(
-                &repository,
-                &["merge-base", "--is-ancestor", source_commit, "HEAD"],
-                "verify the repair branch descends from its pinned revision",
-            )
-            .await?;
-            did_resume = true;
-        }
-    }
-    if !did_resume {
-        run_git_status(
-            &repository,
-            &["checkout", "--quiet", "--detach", source_commit],
-            "check out the pinned task revision",
-        )
-        .await?;
-    }
-    validate_dependency_artifacts(dependency_artifacts)?;
-    let mut applied_dependency = false;
-    for (index, artifact) in dependency_artifacts.iter().enumerate() {
-        if did_resume && patch_is_already_applied(&repository, artifact).await? {
-            continue;
-        }
-        let mut child = Command::new("git")
-            .args(["apply", "--3way", "--index", "--binary", "-"])
-            .current_dir(&repository)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .hive_context("failed to apply a dependency artifact")?;
-        child
-            .stdin
-            .take()
-            .hive_context("dependency patch stdin was unavailable")?
-            .write_all(artifact.content.as_bytes())
             .await
-            .hive_context("failed to stream a dependency patch")?;
-        let status = child
-            .wait()
-            .await
-            .hive_context("dependency patch process failed")?;
-        if !status.success() {
-            let unmerged = git_output(&repository, &["diff", "--name-only", "--diff-filter=U"])
-                .await
-                .hive_context("inspect dependency conflicts")?;
-            if unmerged.trim().is_empty() {
-                return Err(crate::HiveError::message(format!(
-                    "dependency artifact {} failed to apply with status {status}",
-                    artifact.id
-                )));
-            }
-            let pending = repository.join(".hive-pending");
-            async_fs::create_dir(&pending).await?;
-            for (pending_index, pending_artifact) in
-                dependency_artifacts.iter().enumerate().skip(index + 1)
-            {
-                async_fs::write(
-                    pending.join(format!("{pending_index:04}.patch")),
-                    pending_artifact.content.as_bytes(),
-                )
-                .await?;
-            }
-            return Ok(WorkspacePreparation {
-                baseline: String::new(),
-                conflicted: true,
-                resumed: did_resume,
-            });
-        }
-        applied_dependency = true;
-    }
-    if applied_dependency {
-        let baseline = commit_dependency_baseline(&repository).await?;
-        return Ok(WorkspacePreparation {
-            baseline,
-            conflicted: false,
-            resumed: did_resume,
-        });
-    }
-    Ok(WorkspacePreparation {
-        baseline: git_output(&repository, &["rev-parse", "HEAD"]).await?,
-        conflicted: false,
-        resumed: did_resume,
-    })
-}
-
-pub(super) fn validate_dependency_artifacts(
-    dependency_artifacts: &[Artifact],
-) -> crate::HiveResult<()> {
-    for artifact in dependency_artifacts {
-        if artifact.kind != "git-patch" {
+            .hive_context("failed to stage untracked files for patch persistence")?;
+        if !add_status.success() {
             return Err(crate::HiveError::message(format!(
-                "dependency artifact {} has unsupported kind {}",
-                artifact.id, artifact.kind
+                "git add --intent-to-add failed with status {add_status}"
             )));
         }
-        let digest = Sha256::digest(artifact.content.as_bytes());
-        let digest = format!(
-            "sha256:{}",
-            digest.iter().fold(
-                String::with_capacity(digest.len() * 2),
-                |mut encoded, byte| {
-                    let _ = write!(encoded, "{byte:02x}");
-                    encoded
-                },
-            )
+
+        let output = Command::new("git")
+            .args(["diff", "--binary", "--no-ext-diff", baseline, "--", "."])
+            .current_dir(repository)
+            .stdin(Stdio::null())
+            .output()
+            .await
+            .hive_context("failed to collect the durable task patch")?;
+        if !output.status.success() {
+            return Err(crate::HiveError::message(format!(
+                "git diff failed with status {}",
+                output.status
+            )));
+        }
+        if output.stdout.len() > MAX_PERSISTED_PATCH_BYTES {
+            return Err(crate::HiveError::message(format!(
+                "task patch exceeds the {} byte prototype limit",
+                MAX_PERSISTED_PATCH_BYTES
+            )));
+        }
+        if output.stdout.is_empty() {
+            if !resumed && !result.changed_files().is_empty() {
+                return Err(crate::HiveError::message(
+                    "Codex reported changed files but produced no persistable git patch",
+                ));
+            }
+            return Ok(CompletionArtifact::NotProduced);
+        }
+
+        let content = String::from_utf8(output.stdout).hive_context("task patch is not UTF-8")?;
+        let digest = Sha256::digest(content.as_bytes());
+        let digest = digest.iter().fold(
+            String::with_capacity(digest.len() * 2),
+            |mut encoded, byte| {
+                let _ = write!(encoded, "{byte:02x}");
+                encoded
+            },
         );
-        if digest != artifact.digest {
-            return Err(crate::HiveError::message(format!(
-                "dependency artifact {} failed digest verification",
-                artifact.id
-            )));
-        }
+        let id = format!("{}:git-patch", task.attempt_id);
+        Ok(CompletionArtifact::Produced(Artifact {
+            uri: format!("hive://artifact/{id}"),
+            id,
+            kind: "git-patch".to_owned(),
+            digest: format!("sha256:{digest}"),
+            content,
+        }))
     }
-    Ok(())
-}
-
-pub(super) async fn patch_is_already_applied(
-    repository: &Path,
-    artifact: &Artifact,
-) -> crate::HiveResult<bool> {
-    let mut child = Command::new("git")
-        .args(["apply", "--reverse", "--check", "--binary", "-"])
-        .current_dir(repository)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .hive_context("failed to inspect a resumed dependency artifact")?;
-    child
-        .stdin
-        .take()
-        .hive_context("dependency reverse-check stdin was unavailable")?
-        .write_all(artifact.content.as_bytes())
-        .await
-        .hive_context("failed to stream a dependency reverse check")?;
-    Ok(child
-        .wait()
-        .await
-        .hive_context("dependency reverse-check process failed")?
-        .success())
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub(super) struct WorkspacePreparation {
-    pub(super) baseline: String,
-    pub(super) conflicted: bool,
-    pub(super) resumed: bool,
-}
-
-pub(super) async fn ensure_dependencies_resolved(repository: &Path) -> crate::HiveResult<()> {
-    let unmerged = git_output(repository, &["diff", "--name-only", "--diff-filter=U"]).await?;
-    if !unmerged.trim().is_empty() {
-        return Err(crate::HiveError::message(
-            "dependency integration left unresolved Git conflicts",
-        ));
-    }
-    if repository.join(".hive-pending").exists() {
-        return Err(crate::HiveError::message(
-            "dependency integration did not apply every pending patch",
-        ));
-    }
-    Ok(())
-}
-
-pub(super) async fn commit_dependency_baseline(repository: &Path) -> crate::HiveResult<String> {
-    run_git_status(
-        repository,
-        &["add", "--all", "--", "."],
-        "stage dependency artifacts",
-    )
-    .await?;
-    run_git_status(
-        repository,
-        &[
-            "-c",
-            "user.name=Hive",
-            "-c",
-            "user.email=hive@example.invalid",
-            "commit",
-            "--quiet",
-            "-m",
-            "Apply completed Hive dependencies",
-        ],
-        "commit dependency artifact baseline",
-    )
-    .await?;
-    git_output(repository, &["rev-parse", "HEAD"]).await
-}
-
-pub(super) async fn git_output(repository: &Path, arguments: &[&str]) -> crate::HiveResult<String> {
-    let output = Command::new("git")
-        .args(arguments)
-        .current_dir(repository)
-        .stdin(Stdio::null())
-        .output()
-        .await
-        .hive_context("failed to execute git")?;
-    if !output.status.success() {
-        return Err(crate::HiveError::message(format!(
-            "git {:?} failed with status {}",
-            arguments, output.status
-        )));
-    }
-    String::from_utf8(output.stdout)
-        .hive_context("git output is not UTF-8")
-        .map(|value| value.trim().to_owned())
-}
-
-pub(super) async fn run_git_status(
-    repository: &Path,
-    arguments: &[&str],
-    operation: &str,
-) -> crate::HiveResult<()> {
-    let status = Command::new("git")
-        .args(arguments)
-        .current_dir(repository)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::inherit())
-        .status()
-        .await
-        .with_hive_context(|| format!("failed to {operation}"))?;
-    if !status.success() {
-        return Err(crate::HiveError::message(format!(
-            "{operation} failed with status {status}"
-        )));
-    }
-    Ok(())
-}
-
-pub(super) async fn persistable_patch(
-    repository: &Path,
-    baseline: &str,
-    task: &ClaimedTask,
-    result: &TerminalResult,
-    resumed: bool,
-) -> crate::HiveResult<CompletionArtifact> {
-    let add_status = Command::new("git")
-        .args(["add", "--intent-to-add", "--", "."])
-        .current_dir(repository)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await
-        .hive_context("failed to stage untracked files for patch persistence")?;
-    if !add_status.success() {
-        return Err(crate::HiveError::message(format!(
-            "git add --intent-to-add failed with status {add_status}"
-        )));
-    }
-
-    let output = Command::new("git")
-        .args(["diff", "--binary", "--no-ext-diff", baseline, "--", "."])
-        .current_dir(repository)
-        .stdin(Stdio::null())
-        .output()
-        .await
-        .hive_context("failed to collect the durable task patch")?;
-    if !output.status.success() {
-        return Err(crate::HiveError::message(format!(
-            "git diff failed with status {}",
-            output.status
-        )));
-    }
-    if output.stdout.len() > MAX_PERSISTED_PATCH_BYTES {
-        return Err(crate::HiveError::message(format!(
-            "task patch exceeds the {} byte prototype limit",
-            MAX_PERSISTED_PATCH_BYTES
-        )));
-    }
-    if output.stdout.is_empty() {
-        if !resumed && !result.changed_files().is_empty() {
-            return Err(crate::HiveError::message(
-                "Codex reported changed files but produced no persistable git patch",
-            ));
-        }
-        return Ok(CompletionArtifact::NotProduced);
-    }
-
-    let content = String::from_utf8(output.stdout).hive_context("task patch is not UTF-8")?;
-    let digest = Sha256::digest(content.as_bytes());
-    let digest = digest.iter().fold(
-        String::with_capacity(digest.len() * 2),
-        |mut encoded, byte| {
-            let _ = write!(encoded, "{byte:02x}");
-            encoded
-        },
-    );
-    let id = format!("{}:git-patch", task.attempt_id);
-    Ok(CompletionArtifact::Produced(Artifact {
-        uri: format!("hive://artifact/{id}"),
-        id,
-        kind: "git-patch".to_owned(),
-        digest: format!("sha256:{digest}"),
-        content,
-    }))
 }
 
 #[cfg(test)]
@@ -416,7 +495,7 @@ mod tests {
     use std::process;
     use std::slice;
 
-    use super::{persistable_patch, prepare_workspace, validate_dependency_artifacts};
+    use super::{ConflictedWorkspace, PreparedWorkspace, TaskWorkspace, WorkspacePreparation};
     use crate::model::{
         Artifact, AttemptId, ClaimedTask, CompletionArtifact, LeaseToken, TaskId, TerminalResult,
     };
@@ -450,7 +529,7 @@ mod tests {
             },
         ];
 
-        let error = validate_dependency_artifacts(&artifacts)
+        let error = TaskWorkspace::validate_dependency_artifacts(&artifacts)
             .err()
             .ok_or_else(|| {
                 crate::HiveError::message(
@@ -512,13 +591,13 @@ mod tests {
         fs::write(repository.path().join("new.txt"), "new\n")?;
 
         let task = ClaimedTask {
-            id: TaskId::new("task-1")?,
-            kind: "code".to_owned(),
+            id: TaskId::try_from("task-1")?,
+            kind: "code".into(),
             prompt: "change files".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-1")?,
+            lease_token: LeaseToken::try_from("lease-1")?,
             owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
@@ -530,8 +609,13 @@ mod tests {
             obsolete: false,
         };
 
-        let artifact =
-            persistable_patch(repository.path(), baseline, &task, &result, false).await?;
+        let artifact = PreparedWorkspace {
+            repository: repository.path().to_owned(),
+            baseline: baseline.to_owned(),
+            resumed: false,
+        }
+        .persistable_patch(&task, &result)
+        .await?;
         let CompletionArtifact::Produced(artifact) = artifact else {
             return Err(crate::HiveError::message("patch artifact must be produced"));
         };
@@ -609,37 +693,45 @@ mod tests {
             "durable branch",
         ])?;
         let workspace = tempfile::tempdir()?;
-        let preparation = prepare_workspace(
-            workspace.path(),
-            source
+        let preparation = (TaskWorkspace {
+            workspace: workspace.path(),
+            repository_url: source
                 .path()
                 .to_str()
                 .ok_or_else(|| io::Error::other("source path must be UTF-8"))?,
-            &source_commit,
-            None,
-            slice::from_ref(&dependency),
-        )
+            source_commit: &source_commit,
+            resume_branch: super::WorkspaceOrigin::Fresh,
+            dependency_artifacts: slice::from_ref(&dependency),
+        })
+        .prepare_workspace()
         .await?;
-        assert!(!preparation.conflicted);
-        let baseline = preparation.baseline;
+        let WorkspacePreparation::Prepared(preparation) = preparation else {
+            return Err(crate::HiveError::message(
+                "dependency workspace must be prepared",
+            ));
+        };
         let repository = workspace.path().join("repository");
         assert_eq!(
             fs::read_to_string(repository.join("dependency.txt"))?,
             "from dependency\n"
         );
         let resumed_workspace = tempfile::tempdir()?;
-        let resumed_preparation = prepare_workspace(
-            resumed_workspace.path(),
-            source
+        let resumed_preparation = (TaskWorkspace {
+            workspace: resumed_workspace.path(),
+            repository_url: source
                 .path()
                 .to_str()
                 .ok_or_else(|| io::Error::other("source path must be UTF-8"))?,
-            &source_commit,
-            Some(resume_branch),
-            slice::from_ref(&dependency),
-        )
+            source_commit: &source_commit,
+            resume_branch: super::WorkspaceOrigin::ResumeBranch(resume_branch),
+            dependency_artifacts: slice::from_ref(&dependency),
+        })
+        .prepare_workspace()
         .await?;
-        assert!(!resumed_preparation.conflicted);
+        assert!(matches!(
+            resumed_preparation,
+            WorkspacePreparation::Prepared(PreparedWorkspace { resumed: true, .. })
+        ));
         let resumed_repository = resumed_workspace.path().join("repository");
         assert_eq!(
             fs::read_to_string(resumed_repository.join("dependency.txt"))?,
@@ -651,13 +743,13 @@ mod tests {
         );
         fs::write(repository.join("task.txt"), "task result\n")?;
         let task = ClaimedTask {
-            id: TaskId::new("task-2")?,
-            kind: "code".to_owned(),
+            id: TaskId::try_from("task-2")?,
+            kind: "code".into(),
             prompt: "build on dependency".to_owned(),
             source_commit,
-            attempt_id: AttemptId::new("attempt-2")?,
+            attempt_id: AttemptId::try_from("attempt-2")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-2")?,
+            lease_token: LeaseToken::try_from("lease-2")?,
             owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
@@ -668,12 +760,103 @@ mod tests {
             tests: Vec::new(),
             obsolete: false,
         };
-        let artifact = persistable_patch(&repository, &baseline, &task, &result, false).await?;
+        let artifact = preparation.persistable_patch(&task, &result).await?;
         let CompletionArtifact::Produced(artifact) = artifact else {
             return Err(crate::HiveError::message("task patch must be produced"));
         };
         assert!(artifact.content.contains("diff --git a/task.txt"));
         assert!(!artifact.content.contains("dependency.txt"));
+        Ok(())
+    }
+    #[tokio::test]
+    async fn resumed_repair_accepts_changes_already_published_on_its_branch()
+    -> crate::HiveResult<()> {
+        let _git_process_guard = crate::GIT_PROCESS_TEST_LOCK.lock().await;
+        let repository = tempfile::tempdir()?;
+        let run_git = |arguments: &[&str]| -> io::Result<()> {
+            let status = process::Command::new("git")
+                .args(arguments)
+                .current_dir(repository.path())
+                .status()?;
+            assert!(status.success());
+            Ok(())
+        };
+        run_git(&["init", "--quiet"])?;
+        fs::write(repository.path().join("repair.txt"), "published\n")?;
+        run_git(&["add", "repair.txt"])?;
+        run_git(&[
+            "-c",
+            "user.name=Hive Test",
+            "-c",
+            "user.email=hive@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "published repair",
+        ])?;
+        let baseline = process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(repository.path())
+            .output()?;
+        let baseline = String::from_utf8(baseline.stdout)?;
+        let task = ClaimedTask {
+            id: TaskId::try_from("resumed-task")?,
+            kind: "main-repair".into(),
+            prompt: "finish delivery".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            attempt_id: AttemptId::try_from("resumed-attempt")?,
+            attempt_number: 1,
+            lease_token: LeaseToken::try_from("resumed-lease")?,
+            owning_repairs: Vec::new(),
+            dependency_context: Vec::new(),
+            dependency_artifacts: Vec::new(),
+        };
+        let result = TerminalResult::Completed {
+            summary: "published repair delivered".to_owned(),
+            changed_files: vec!["repair.txt".to_owned()],
+            tests: Vec::new(),
+            obsolete: false,
+        };
+
+        assert!(matches!(
+            PreparedWorkspace {
+                repository: repository.path().to_owned(),
+                baseline: baseline.trim().to_owned(),
+                resumed: true
+            }
+            .persistable_patch(&task, &result)
+            .await?,
+            CompletionArtifact::NotProduced
+        ));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn pending_dependency_patches_do_not_admit_a_prepared_workspace() -> crate::HiveResult<()>
+    {
+        let _git_process_guard = crate::GIT_PROCESS_TEST_LOCK.lock().await;
+        let repository = tempfile::tempdir()?;
+        TaskWorkspace::run_git_status(
+            repository.path(),
+            &["init", "--quiet"],
+            "initialize conflict fixture",
+        )
+        .await?;
+        fs::create_dir(repository.path().join(".hive-pending"))?;
+        let conflicted = ConflictedWorkspace {
+            repository: repository.path().to_owned(),
+            resumed: false,
+        };
+        let error = conflicted
+            .finish_dependency_resolution()
+            .await
+            .err()
+            .ok_or_else(|| crate::HiveError::message("pending patches must prevent admission"))?;
+        assert!(
+            error
+                .to_string()
+                .contains("did not apply every pending patch")
+        );
         Ok(())
     }
 }

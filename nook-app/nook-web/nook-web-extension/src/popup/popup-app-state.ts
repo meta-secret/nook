@@ -1,4 +1,4 @@
-import type { ExtensionDeviceProtectionResult } from '../lib/nook-wasm'
+import type { ExtensionSessionDeviceWire } from '../lib/nook-wasm'
 
 export enum PairingCandidateKind {
   NotSelected = 'not-selected',
@@ -9,5 +9,5 @@ export type PairingCandidate =
   | { kind: PairingCandidateKind.NotSelected }
   | {
       kind: PairingCandidateKind.Selected
-      device: ExtensionDeviceProtectionResult
+      device: ExtensionSessionDeviceWire
     }

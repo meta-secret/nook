@@ -1,8 +1,11 @@
 //! Vault access diagnostics bridge.
 
 use super::{NookVaultManager, VaultNameState};
-use crate::storage::event_db::load_local_event_store;
+use crate::NookDatabase;
+use nook_core::LocalEventBytes;
+
 use crate::types::NookVaultAccessReport;
+use nook_core::VaultEvent;
 use nook_core::{
     ProjectionDiagnosticInput, StoreId, VaultAccessDiagnosticRequest, VaultRecoverySummary,
 };
@@ -30,7 +33,7 @@ impl NookVaultManager {
         }
         let store_id =
             StoreId::parse(raw_store_id).map_err(|error| JsError::new(&error.to_string()))?;
-        let store = load_local_event_store(store_id.as_str()).await?;
+        let store = NookDatabase::load_local_event_store(store_id.as_str()).await?;
         let graph = store.load_graph(store_id.as_str())?;
         let options = nook_core::VaultRecoveryOptions::from_request(
             &nook_core::VaultRecoveryProjectionRequest {
@@ -58,20 +61,20 @@ impl NookVaultManager {
         let mut warnings = Vec::new();
 
         if !self.vault.store_id.trim().is_empty() {
-            let store = load_local_event_store(&self.vault.store_id).await?;
+            let store = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
             let graph = store.load_graph(&self.vault.store_id)?;
             projection = DiagnosticProjection::Loaded(nook_core::VaultProjection::from_graph(
                 &graph,
                 &self.vault.store_id,
             )?);
             for event_id in store.event_ids() {
-                let Some(bytes) = store.get_bytes(&event_id) else {
+                let LocalEventBytes::Stored(bytes) = store.get_bytes(&event_id) else {
                     warnings.push(format!(
                         "Local event {event_id} is listed but its bytes are missing."
                     ));
                     continue;
                 };
-                match nook_core::parse_event_storage_bytes(&bytes) {
+                match VaultEvent::parse_event_storage_bytes(&bytes) {
                     Ok(event) => events.push(event),
                     Err(_) => warnings.push(format!(
                         "Local event {event_id} is unreadable and was skipped."

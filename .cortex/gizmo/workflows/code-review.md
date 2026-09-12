@@ -1,289 +1,70 @@
 # Review Request Workflow
 
-## Overview
+## Stage ownership
 
-Review policy is explicit:
+Follow [dev delivery](../architecture/dev-delivery.md). Fast feature agents
+review code alongside repeatable remote build-only evidence. The manually run
+dev manager owns review and full slow checks for the published dev SHA.
+Missing build-only capability is a blocker, never permission to run slow
+feature checks.
 
-- Repository-owned GitHub Actions dispatch before any Cloud-review wait.
-- Exact-head Cloud review proceeds during the hosted validation window.
-- Codex is the only automatic review provider. Do not activate Cursor Bugbot.
-- A Codex eye reaction is liveness evidence only. It does not settle review and
-  is never required for validation or readiness.
-- Every substantive review finding requires a disposition before merge.
-- Other external review services remain optional. Do not request or wait for
-  Claude, CodeRabbit, or similar services unless the user explicitly asks.
+## Required actions
 
-## Prompt remote review after push
+- **Review requests**
+  - PR Steward executes GitHub review operations under the owning controller's packet.
+  - Codex is the sole automatic review provider.
+  - Preserve the existing final-head review opt-in for the manager's slow PR cycle.
+  - An eye reaction is liveness evidence only.
+  - Inspect existing feedback from every provider regardless of who requested it.
+- **Dispositions**
+  - Follow [code review comments](../dynamic-skills/code-review-comments.md).
+  - Record a disposition for every substantive finding, including older heads.
+  - Evaluate the defect claim separately from the proposed remedy.
+  - Treat regressions caused by the change as relevant regardless of their consumer.
+  - Implement accepted defects through the responsible feature team.
+  - Reject claims only with evidence.
+  - Keep clarification-needed findings unresolved and acceptance-blocking.
+  - Reply to the original conversation before resolving it.
+  - Preserve submitted review bodies and top-level comments in the evidence.
+  - Do not treat an outdated marker as resolution.
+- **Acceptance**
+  - Required functional and security verdicts remain binding.
+  - Compilation and type safety do not replace authored behavior tests.
+  - The manager requires complete slow checks and review for the frozen dev SHA.
+  - Confirm actual remote review state through Steward before promotion.
 
-Do not require advisory local review before the first push or after a worker
-handoff.
+## Prohibited actions
 
-### Trusted automated publishers
+- Do not run local tests, audits, broad pre-push checks, or product compilation.
+- Do not dispatch full slow validation for a feature branch.
+- Do not cancel an active dev validation batch when feedback arrives.
+- Do not replace the frozen origin/dev head during that batch.
+- Do not request optional review providers without user direction.
+- Do not interpret feedback as permission to implement unrelated enhancements.
+- Do not waive a confirmed security or authority violation.
 
-The no-local-review rule applies to the two trusted GitHub Actions publishers
-named in the root [team worker contract](../../AGENTS.md#team-worker-contract).
-Neither bounded editor has independent Git or external delivery authority.
-Each publisher returns the exact published head to Gizmo. Gizmo owns review
-policy, technical dispositions, readiness and merge verdicts. PR Steward
-performs the explicitly authorized external review, validation, readiness-
-evidence, and merge mechanics.
+## Repair procedure
 
-### Ordinary worker handoff
+1. Collect the current review inventory through PR Steward.
+2. Route alleged security violations to the authorized security owner.
+   - Confirm findings against code and evidence.
+   - A confirmed violation blocks acceptance and promotion.
+3. Classify each defect and proposed remedy independently.
+4. Send accepted repairs to a feature Gizmo with bounded team scopes.
+5. Author regression tests and obtain build-only evidence for the repaired feature SHA.
+6. Integrate the accepted repair into local dev through the serialized path.
+7. After the prior slow attempt finishes, let the manager select a new snapshot.
+8. Repeat full slow checks and required review for that published SHA.
+9. Record targeted replies and resolve only fixed or invalidated findings.
 
-For an ordinary worker handoff, once Gizmo continues from a coherent commit it runs
-`task loom:pre-push`. Gizmo may commit parent-owned delivery state.
-If hygiene mutates team-owned source or Cortex content, Gizmo returns that diff
-to the responsible team for a fresh formatted commit, continues from it, and
-reruns hygiene. Gizmo then promptly pushes the coherent head.
-
-Every pushed head immediately selects remote evidence. Dispatch at least one
-relevant focused `task remote` job when the head is not validation-ready.
-Dispatch complete validation immediately when it is ready; focused jobs are
-optional on that path.
-
-Record a disposition for every substantive Cloud finding. Treat only an
-accepted finding as correction work. Run pre-push hygiene again before Gizmo
-pushes the replacement head.
-
-## Complete validation and Cloud review
-
-When the coherent head is ready, run complete validation:
-
-```bash
-task pr:validate PR=<number> CODEX_REVIEW=1
-```
-
-`CODEX_REVIEW=1` is the explicit final-head review opt-in. Ordinary
-`task pr:validate PR=<number>` dispatches validation without contacting Codex.
-
-The command:
-
-1. Dispatches repository-owned GitHub Actions immediately.
-2. When `CODEX_REVIEW=1`, freezes the current PR head and base to bind the
-   review request to the intended revision.
-   - Inspects every PR comment, submitted review body, and review thread without
-     filtering by timestamp, marker, or head transition.
-   - Deletes retired GitHub Actions exact-head boundary notices before feedback
-     classification.
-   - Fails feedback inspection when a retired notice cannot be deleted.
-   - Detects revision changes through feedback inspection and immediately
-     before Codex contact.
-   - Checks the review circuit, then contacts Codex without waiting for a result.
-3. Rechecks that the PR head and base did not change during dispatch.
-4. Lets hosted checks and an opted-in exact-head review proceed concurrently.
-5. Batches current review findings and failed checks after both settle.
-6. Opens a circuit breaker after three finding batches and requires a
-   comprehensive stabilization pass. After resolving its coherent batch, the
-   delivery owner explicitly acknowledges that pass with
-   `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` before the next review collection.
-
-If the frozen revision changes, the review request fails truthfully without
-contacting Codex, while validation continues. The non-waiting request then
-checks the circuit. An open circuit
-suppresses the request but does not stop validation. A transient request failure
-or provider `requested: false` result reports `not-requested` and also leaves
-validation running. Collect or retry review separately; do not restart hosted
-validation merely because the review request was unavailable.
-
-Never run `task pr:review:stabilize` before hosted validation dispatch. It may
-collect a pending review only after dispatch while checks are already running.
-Its default `REVIEW_WAIT_SECONDS=0` performs one bounded feedback snapshot and
-does not request a review. Set an explicit positive wait only when bounded
-polling is needed for a review that was already requested.
-
-Use `task pr:review PR=<number>` only when an exact-head review request is needed
-without complete validation. It is idempotent and does not wait for a result.
-
-## Actionable feedback priority
-
-Before merge, inspect feedback currently present. Preserve the repository's
-broader use of `actionable`. A review finding requires implementation only
-after its defect claim passes validity and current-task relevance. Rejecting a
-reviewer-proposed remedy does not erase an accepted defect. Follow the
-[code-review-comments skill](../dynamic-skills/code-review-comments.md). Gizmo
-must coordinate these actions:
-
-- obtain an evidence-backed disposition for every substantive PR comment and
-  submitted review finding, including feedback created before the current
-  head;
-- record the defect-claim disposition separately from the disposition of any
-  reviewer-proposed remedy;
-- treat every regression caused by the current PR as current-task relevant,
-  regardless of the product area or consumer that exposes it;
-- reject or route outside the current change only unrelated pre-existing
-  defects and enhancements;
-- implement the smallest correct fix for every accepted defect, including when
-  its proposed remedy is rejected;
-- record why each rejected defect claim requires no current change;
-- keep every clarification-needed finding unresolved and readiness-blocking
-  until evidence supports accepted or rejected reclassification;
-- retain every substantive top-level PR comment in inspection output;
-- minimize a handled top-level PR comment with GitHub's `RESOLVED` classifier;
-- block readiness on every substantive top-level comment that is not minimized
-  as `RESOLVED`;
-- retain every substantive submitted review body in inspection output;
-- block readiness on a substantive review body when it has no inline comments;
-- use unresolved-thread state as the deterministic readiness authority when a
-  review has inline comments;
-- reply on the targeted thread before resolving it;
-- re-query until unresolved review threads are zero;
-- keep polling feedback while repository checks run for the validation head;
-  and
-- batch feedback with check failures after both result sets settle.
-
-Do not replace an in-flight validation head merely because review arrives
-first. Collect the complete coherent repair batch unless a confirmed security
-or authority violation requires immediate fail-closed action.
-
-When a new finding arrives:
-
-1. Route an alleged security finding to the authorized security owner.
-2. Verify the alleged violation against current code, repository authority,
-   and reproducible evidence.
-   - A security label or severity alone is not proof.
-3. Only when the violation is confirmed, fail closed and stop or cancel unsafe
-   validation.
-4. For every finding that is not a confirmed security or authority violation,
-   keep the in-flight validation head running until
-   hosted checks and exact-head review settle.
-5. Dispatch each finding to the responsible team for separate defect and
-   remedy dispositions.
-6. Combine accepted defects and failed checks into one coherent repair batch.
-7. Record evidence-backed no-change dispositions for rejected defect claims.
-8. Keep clarification-needed findings unresolved until the team obtains the
-   missing evidence and reclassifies them as accepted or rejected.
-9. Determine whether an accepted fix or failed-check repair changed the head.
-10. When the head changed, continue from the verified fix commit. Run pre-push
-   hygiene through the responsible formatter owner and push the replacement
-   head.
-11. When the head changed, restart complete validation for that head. If it is
-   not yet validation-ready, dispatch at least one relevant focused remote job
-   first.
-12. When the batch is rejected-only, reply with the no-change rationale and
-    resolve the explicitly invalidated threads without replacement-head work.
-13. Reply to clarification-needed findings with the missing evidence and keep
-    them unresolved without replacement-head work.
-
-A confirmed security or authority violation is binding and fails closed. Route
-it to the authorized owner when its correction exceeds the current task scope.
-Do not downgrade it into an optional or out-of-scope enhancement.
-
-### Validation-head handling
-
-Use a focused task instead only when it isolates a known failure faster.
-
-Non-security feedback that arrives while checks run joins the pending repair
-batch. It does not cancel validation or replace the head before both result
-sets settle.
-
-`task pr:ready` enforces unresolved-thread count alongside the exact-head
-deployment, branch state, and applicable repository-owned PR checks. It reports
-existing comments and reviews for inspection. It does not require a Codex
-result and does not wait for one.
-
-## Handling feedback that already exists
-
-Before merge or handoff, inspect the PR comments, submitted review bodies, and
-inline threads that are currently present. Follow
-[the code-review-comments skill](../dynamic-skills/code-review-comments.md) for
-every active substantive finding, whether it came from a human, Codex, Claude,
-Cursor, CodeRabbit, or another service:
-
-1. Verify the finding against the current branch and `.cortex` rules.
-2. Apply validity and current-task relevance gates to the defect claim.
-   - A regression caused by the current PR always passes the relevance gate.
-   - Its exposing product area or consumer does not change that result.
-3. Select a candidate for the smallest correct in-scope fix for an accepted
-   defect.
-4. Apply the proportionality and scope gate separately to any proposed remedy
-   and the candidate correction.
-5. Dispatch the candidate correction after it passes that gate, even when the
-   proposed remedy is rejected.
-6. Document the evidence-backed no-change disposition for a rejected defect
-   claim.
-7. Keep a clarification-needed finding unresolved until evidence supports
-   accepted or rejected reclassification.
-8. Determine whether an accepted fix or failed-check repair changed the head.
-9. When the head changed, continue from the verified fix commit. Run
-   `task loom:pre-push PR=<number>` through the responsible formatter owner,
-   commit, and push the replacement head.
-10. When the head changed and is not validation-ready, dispatch at least one
-   relevant focused hosted task.
-11. When complete validation was already requested for a changed head,
-    dispatch it for the replacement head first. Opt in to exact-head Codex
-    review only when that replacement is the final coherent head. Otherwise
-    start review when that changed head is ready for the final gate. Wait for
-    both result sets before forming another repair batch.
-12. Do not run commit, push, or replacement-head validation when the batch has
-    no accepted fix or failed-check repair.
-13. Reply on the original thread or comment with the disposition, evidence, fix,
-   and validation as applicable when a
-   targeted reply is possible.
-14. Resolve only after the targeted reply is visible and the finding is fixed or
-   explicitly invalidated.
-15. Re-query feedback throughout validation and immediately before handoff or
-   merge.
-
-Do not resolve or minimize a clarification-needed finding as handled. Its
-targeted response requests or identifies the missing evidence. The finding
-remains readiness-blocking until reclassification.
-
-Inspect every external-service review comment already present. An optional
-review service never makes its delivered feedback optional; classify
-non-actionable status or praise as no action. Record a disposition for every
-substantive finding.
-
-### Out-of-scope discovery handling
-
-**Required actions:**
-
-- Route evidence-proven unrelated pre-existing missing functionality through
-  the [issues workflow](issues.md) when the current PR will not finish it.
-
-**Prohibited actions:**
-
-- Do not create follow-up work for a speculative reviewer suggestion or an
-  unproven enhancement.
-- Do not reject or route a regression caused by the current PR as out of scope.
-- Do not use the exposing product area or consumer to exclude that regression.
-- Do not implement the routed missing functionality.
-- Do not expand the current PR to include it.
-- Do not treat review feedback as authority to start a new implementation task
-  or PR.
-
-### Completion and ownership
-
-After those items are handled, rerun the feedback query immediately before
-merge. If another substantive comment arrives while the agent is working,
-record its separate defect and remedy dispositions. Implement the smallest
-correct fix only when the defect is accepted. When repository-owned checks
-finish and no review feedback is present, continue to readiness without
-waiting.
-
-Gizmo routes every implementation finding to the responsible team. Gizmo does
-not implement the fix. A separately requested service may own a finding only
-when its team task contract grants the required scope.
+A rejected-only batch does not create replacement commits. Keep missing
+evidence visible. Three automated finding batches require a coherent
+stabilization review before another automated request, without local test
+execution or cancellation of active checks.
 
 ## Handoff
 
-Report:
-
-- every substantive finding that was already present and its disposition;
-- unresolved active review-thread count at the time of the final inspection;
-- Loom pre-push and optional debug results when used; and
-- the state of Nook's applicable repository-owned PR test checks.
-
-Confirm that unresolved review-thread count was zero at the final readiness
-audit.
-
-## Exact-head verdict
-
-Gizmo issues the final PR verdict for the exact head.
-
-- Required team verdicts remain independent acceptance evidence.
-- A required blocking team verdict remains binding until that team clears it.
-- A required blocking security verdict remains binding until security clears
-  it.
-- Gizmo cannot waive, downgrade, or override either block.
-- Gizmo may block the PR when exact-head evidence is incomplete.
-- A replacement head invalidates verdicts whose evidence is not head-stable.
+Return the source SHA, substantive finding inventory, dispositions, required
+team/security verdicts, and unresolved blockers. Feature Gizmo owns feature
+acceptance; the dev manager owns promotion acceptance. A changed SHA
+invalidates evidence that is not stable across that change.

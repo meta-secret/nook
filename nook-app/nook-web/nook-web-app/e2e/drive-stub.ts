@@ -5,6 +5,7 @@ import {
   parseEventMultipart as parseMultipartEvent,
   EventMultipartParseKind,
 } from './event-log-stub'
+import { parseJson, requireRecord } from './helpers/guards'
 
 const DEFAULT_FILE_NAME = 'nook-events'
 
@@ -114,7 +115,8 @@ export function createLocalE2eGoogleDriveVaultStub(
     return event.kind === EventMultipartParseKind.Valid
       ? {
           kind: DriveEventUploadParseKind.Valid,
-          ...event,
+          digest: event.digest,
+          content: event.content,
           parentId: parseParentsFromBody(body),
         }
       : { kind: DriveEventUploadParseKind.Invalid }
@@ -148,7 +150,7 @@ export function createLocalE2eGoogleDriveVaultStub(
         sharedPermissionStatus?: number
       },
     ) {
-      if (opts && 'vaultYaml' in opts) {
+      if (typeof opts?.vaultYaml === 'string') {
         vaultYaml = opts.vaultYaml
         vaultFileExists = true
         if (!fileId) {
@@ -172,7 +174,7 @@ export function createLocalE2eGoogleDriveVaultStub(
         }
 
         const request = route.request()
-        const url = request.url().split('?')[0]!
+        const url = request.url().split('?')[0] ?? ''
         const method = request.method()
         const fullUrl = request.url()
         const bodyText = ((v) => (v ? v : ''))(request.postData())
@@ -193,19 +195,19 @@ export function createLocalE2eGoogleDriveVaultStub(
           url === 'https://www.googleapis.com/drive/v3/files' &&
           method === 'POST'
         ) {
-          let parsed: { name?: string; mimeType?: string }
+          let parsed: Record<string, unknown>
           try {
-            parsed = JSON.parse(bodyText) as {
-              name?: string
-              mimeType?: string
-            }
+            parsed = requireRecord(parseJson(bodyText), 'Drive file metadata')
           } catch {
             parsed = {}
           }
           if (parsed.mimeType === 'application/vnd.google-apps.folder') {
             sharedFolderSeq += 1
             const folderId = `e2e-shared-folder-${sharedFolderSeq}`
-            const name = parsed.name?.trim() || 'Nook shared vault'
+            const name =
+              typeof parsed.name === 'string'
+                ? parsed.name.trim() || 'Nook shared vault'
+                : 'Nook shared vault'
             sharedFolders.set(folderId, { name, writers: [] })
             await route.fulfill({
               status: 200,
@@ -221,11 +223,21 @@ export function createLocalE2eGoogleDriveVaultStub(
           /^https:\/\/www\.googleapis\.com\/drive\/v3\/files\/([^/]+)\/permissions$/,
         )
         if (permissionsMatch && method === 'POST') {
-          const folderId = decodeURIComponent(permissionsMatch[1]!)
+          const encodedFolderId = permissionsMatch[1]
+          if (!encodedFolderId) {
+            throw new Error('Drive permission folder id is missing.')
+          }
+          const folderId = decodeURIComponent(encodedFolderId)
           let email: string
           try {
-            const parsed = JSON.parse(bodyText) as { emailAddress?: string }
-            email = ((v) => (v ? v : ''))(parsed.emailAddress?.trim())
+            const parsed = requireRecord(
+              parseJson(bodyText),
+              'Drive permission metadata',
+            )
+            email =
+              typeof parsed.emailAddress === 'string'
+                ? parsed.emailAddress.trim()
+                : ''
           } catch {
             email = ''
           }

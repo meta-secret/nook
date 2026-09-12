@@ -82,11 +82,13 @@
         passwordEntries.length === 1 &&
         selectedPasswordEntry.kind === PasswordEntrySelectionKind.NotSelected
       ) {
+        const [passwordEntry] = passwordEntries
+        if (!passwordEntry) return
         const onSelectPasswordEntryArgs: Parameters<
           typeof onSelectPasswordEntry
         >[0] = {
           kind: PasswordEntrySelectionKind.Selected,
-          entryId: passwordEntries[0]!.id,
+          entryId: passwordEntry.id,
         }
         onSelectPasswordEntry(onSelectPasswordEntryArgs)
       }
@@ -110,11 +112,13 @@
       passwordEntries.length === 1 &&
       selectedPasswordEntry.kind === PasswordEntrySelectionKind.NotSelected
     ) {
+      const [passwordEntry] = passwordEntries
+      if (!passwordEntry) return
       const onSelectPasswordEntryArgs2: Parameters<
         typeof onSelectPasswordEntry
       >[0] = {
         kind: PasswordEntrySelectionKind.Selected,
-        entryId: passwordEntries[0]!.id,
+        entryId: passwordEntry.id,
       }
       onSelectPasswordEntry(onSelectPasswordEntryArgs2)
     }

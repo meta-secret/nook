@@ -23,6 +23,9 @@ import {
   waitForGithubVaultState,
   waitForLocalVaultState,
   waitForStableLocalVaultState,
+  parseJson,
+  readStringProperty,
+  requireRecord,
   waitForVaultUnlocked,
 } from './helpers'
 import {
@@ -101,21 +104,20 @@ test.describe('vault password envelope with sync provider', () => {
     const code = enrollmentCodeFromLink(link)
     expect(code).toMatch(/^[A-Za-z0-9_-]+$/)
 
-    const outer = JSON.parse(
-      Buffer.from(code, 'base64url').toString('utf8'),
-    ) as {
-      entry_id?: string
-      provider?: { type: string; pat?: string; repo?: string }
-      password?: string
-      issued_at: string
-      ct?: string
-    }
+    const outer = requireRecord(
+      parseJson(Buffer.from(code, 'base64url').toString('utf8')),
+      'enrollment link payload',
+    )
     expect(outer.entry_id).toBeTruthy()
     expect(Object.hasOwn(outer, 'provider')).toBe(false)
     expect(Object.hasOwn(outer, 'password')).toBe(false)
     expect(outer.ct).toBeTruthy()
-    expect(typeof outer.issued_at).toBe('string')
-    expect(Date.parse(outer.issued_at)).not.toBeNaN()
+    const issuedAt = readStringProperty(
+      outer,
+      'issued_at',
+      'enrollment link payload',
+    )
+    expect(Date.parse(issuedAt)).not.toBeNaN()
 
     test.info().annotations.push({ type: 'enrollment-link', description: link })
   })

@@ -1,6 +1,9 @@
 import { expect, test } from 'bun:test';
+
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
+
 import { TeamKey } from '../../src/team-agents/catalog.ts';
+
 import * as evidenceAuthority from '../../src/module-delivery/authority.ts';
 
 import {
@@ -16,20 +19,12 @@ import {
   ModuleDeliveryTaskProfile,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
-  createModuleDeliveryAdmissionState,
-  createModuleDeliveryGenerationAuthority,
-  decodeAndValidateModuleDeliveryPlan,
-  moduleDeliveryEvidenceArtifactDigest,
-  recordModuleDeliveryAttemptDisposition,
-  recordModuleDeliveryAttemptLeases,
-  selectModuleDeliveryAdmissions,
-  verifyModuleDeliveryEvidenceSubmission,
+  ModuleGenerationAuthority,
+  ModuleDeliveryPlanDecoder,
+  ModuleEvidenceBoundary,
 } from '../../src/module-delivery/index.ts';
-import { restoreModuleDeliveryCanonicalEvidenceReceipt } from '../../src/module-delivery/admission.ts';
-import {
-  createGitFixture,
-  disposeGitFixture,
-} from './worktree-test-support.ts';
+
+import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-support.ts';
 
 import type {
   AcceptedModuleDeliveryEvidence,
@@ -50,16 +45,365 @@ import type {
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
-import { moduleDeliveryAcceptedEvidenceIdentity } from '../../src/module-delivery/admission.ts';
-import { moduleDeliveryEvidenceClaimIdentities } from '../../src/module-delivery/evidence.ts';
+
 import type {
   ModuleDeliveryEvidenceDigestRequest,
   ModuleDeliveryEvidenceSubmissionVerification,
 } from '../../src/module-delivery/evidence.ts';
+
 import type { AcceptedModuleDeliveryEvidenceRegistration } from '../../src/module-delivery/authority.ts';
+
 import type { GitFixture } from './worktree-test-support.ts';
 
+export class ModuleDeliveryEvidenceScenario {
+  private constructor(private readonly request: EvidenceEdgeRequest) {}
+
+  static edge(request: EvidenceEdgeRequest): ModuleDeliveryEdgeContract {
+    return new ModuleDeliveryEvidenceScenario(request).execute();
+  }
+
+  private execute(): ModuleDeliveryEdgeContract {
+    const request = this.request;
+    const { providerTaskId, consumerTaskId } = request;
+    return {
+      providerTaskId,
+      consumerTaskId,
+      capability: 'accepted provider evidence',
+      publicTypes: ['AcceptedModuleDeliveryEvidence'],
+      errors: ['EvidenceRejected'],
+      behaviorInvariants: ['Evidence identity is exact.'],
+      securityInvariants: ['Only accepted evidence is synthesized.'],
+      compatibilityExpectations: ['Schema v1 remains exact.'],
+      owningTests: ['evidence authority tests'],
+    };
+  }
+
+  static runtime(existingFixture?: GitFixture): Runtime {
+    let fixture = existingFixture;
+    if (!fixture)
+      fixture = ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
+    const provider: ModuleDeliveryReadOnlyNodeV2 = {
+      kind: ModuleDeliveryTaskKind.ReadOnly,
+      taskId: 'core-evidence',
+      team: TeamKey.DevelopmentCore,
+      functionalOwner: TeamKey.Ai,
+      acceptanceOwner: TeamKey.Ai,
+      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+      expert: 'core_expert',
+      moduleRoot: CORE_ROOT,
+      consumerOutcome: 'AI receives accepted core evidence.',
+      baseline: {
+        kind: ModuleDeliveryBaselineKind.SourceCommit,
+        sourceCommit: fixture.baselineCommit,
+      },
+      agentDepthLimit: 2,
+      dependencies: [],
+      resources: {
+        read: [`${CORE_ROOT}/**`],
+        write: [],
+        evidenceSurface: [`${CORE_ROOT}/**`],
+      },
+      parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+      acceptance: {
+        commands: ['task core:evidence'],
+        evidence: ['Core evidence is complete.'],
+      },
+    };
+    const providerB: ModuleDeliveryReadOnlyNodeV2 = {
+      ...provider,
+      taskId: 'web-evidence',
+      team: TeamKey.WebDevelopment,
+      expert: 'web_expert',
+      moduleRoot: WEB_ROOT,
+      resources: { read: [WEB_ROOT], write: [], evidenceSurface: [WEB_ROOT] },
+      acceptance: {
+        commands: ['task web:evidence'],
+        evidence: ['Web evidence is complete.'],
+      },
+    };
+    const synthesis: ModuleDeliveryEvidenceSynthesisNodeV2 = {
+      kind: ModuleDeliveryTaskKind.EvidenceSynthesis,
+      taskId: 'evidence-synthesis',
+      team: TeamKey.DevelopmentCore,
+      functionalOwner: TeamKey.Ai,
+      acceptanceOwner: TeamKey.Ai,
+      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+      expert: 'core_expert',
+      moduleRoot: CORE_ROOT,
+      consumerOutcome: 'Accepted provider evidence is synthesized.',
+      baseline: {
+        kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
+        providerTaskIds: [provider.taskId, providerB.taskId],
+      },
+      agentDepthLimit: 2,
+      dependencies: [provider.taskId, providerB.taskId],
+      resources: { read: [], write: [], evidenceSurface: [] },
+      parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+      acceptance: {
+        commands: ['task synthesis:test'],
+        evidence: ['Synthesis is deterministic.'],
+      },
+      evidenceInput: {
+        schema: ModuleDeliveryEvidenceInputSchema.AcceptedProviderEvidenceV1,
+        expectedProducers: [
+          {
+            taskId: provider.taskId,
+            team: provider.team,
+            functionalOwner: provider.functionalOwner,
+            acceptanceOwner: provider.acceptanceOwner,
+          },
+          {
+            taskId: providerB.taskId,
+            team: providerB.team,
+            functionalOwner: providerB.functionalOwner,
+            acceptanceOwner: providerB.acceptanceOwner,
+          },
+        ],
+      },
+    };
+    const edgeRequest: EvidenceEdgeRequest = {
+      providerTaskId: provider.taskId,
+      consumerTaskId: synthesis.taskId,
+    };
+    const edgeBRequest: EvidenceEdgeRequest = {
+      providerTaskId: providerB.taskId,
+      consumerTaskId: synthesis.taskId,
+    };
+    const plan: ModuleDeliveryPlanV2 = {
+      version: 2,
+      generation: 1,
+      sourceCommit: fixture.baselineCommit,
+      maxConcurrency: 1,
+      maxAgentDepth: 2,
+      maxAttempts: 2,
+      parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
+      parentJoin: {
+        kind: ModuleDeliveryJoinKind.DirectCommits,
+        owner: 'delivery-owner',
+        validationCommands: ['task loom:verify'],
+      },
+      nodes: [synthesis, providerB, provider],
+      edgeContracts: [
+        ModuleDeliveryEvidenceScenario.edge(edgeRequest),
+        ModuleDeliveryEvidenceScenario.edge(edgeBRequest),
+      ],
+    };
+    const result = ModuleDeliveryPlanDecoder.decodeAndValidate(
+      JSON.stringify(plan),
+    );
+    if (result.status !== ModuleDeliveryValidationStatus.Accepted)
+      throw new Error(JSON.stringify(result.issues));
+    const authorityRequest: CreateModuleDeliveryGenerationAuthorityRequest = {
+      acceptedPlan: result,
+      repositoryRoot: fixture.sourceRoot,
+      expectedLineage: result.plan.nodes.map((node) => ({
+        taskId: node.taskId,
+        parentLineage: node.parentLineage,
+      })),
+    };
+    const authority =
+      ModuleGenerationAuthority.createModuleDeliveryGenerationAuthority(
+        authorityRequest,
+      );
+    const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+      authority,
+      acceptedPlan: result,
+      headCommit: fixture.baselineCommit,
+      integratedWriterFrontiers: [],
+      acceptedEvidence: [],
+    };
+    const state =
+      ModuleGenerationAuthority.createModuleDeliveryAdmissionState(
+        stateRequest,
+      );
+    return {
+      fixture,
+      accepted: result,
+      authority,
+      state,
+      provider,
+      providerB,
+      synthesis,
+    };
+  }
+
+  static writeRuntime(fixture: GitFixture): WriteRuntime {
+    const writer: ModuleDeliveryWriteNodeV2 = {
+      kind: ModuleDeliveryTaskKind.Write,
+      taskId: 'core-writer',
+      team: TeamKey.DevelopmentCore,
+      functionalOwner: TeamKey.Ai,
+      acceptanceOwner: TeamKey.Ai,
+      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+      expert: ModuleDeliveryTaskProfile.Ordinary,
+      moduleRoot: CORE_ROOT,
+      consumerOutcome: 'The bounded core change is delivered.',
+      baseline: {
+        kind: ModuleDeliveryBaselineKind.SourceCommit,
+        sourceCommit: fixture.baselineCommit,
+      },
+      agentDepthLimit: 1,
+      dependencies: [],
+      resources: {
+        read: [],
+        write: [`${CORE_ROOT}/src/lib.rs`],
+        evidenceSurface: [],
+      },
+      parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+      acceptance: {
+        commands: ['task core:test'],
+        evidence: ['Core tests pass.'],
+      },
+      workspace: {
+        kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
+        expectedCommitHandoff: true,
+      },
+    };
+    const plan: ModuleDeliveryPlanV2 = {
+      version: 2,
+      generation: 1,
+      sourceCommit: fixture.baselineCommit,
+      maxConcurrency: 1,
+      maxAgentDepth: 1,
+      maxAttempts: 2,
+      parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
+      parentJoin: {
+        kind: ModuleDeliveryJoinKind.DirectCommits,
+        owner: 'delivery-owner',
+        validationCommands: ['task loom:verify'],
+      },
+      nodes: [writer],
+      edgeContracts: [],
+    };
+    const accepted = ModuleDeliveryPlanDecoder.decodeAndValidate(
+      JSON.stringify(plan),
+    );
+    if (accepted.status !== ModuleDeliveryValidationStatus.Accepted)
+      throw new Error(JSON.stringify(accepted.issues));
+    const authority =
+      ModuleGenerationAuthority.createModuleDeliveryGenerationAuthority({
+        acceptedPlan: accepted,
+        repositoryRoot: fixture.sourceRoot,
+        expectedLineage: [
+          { taskId: writer.taskId, parentLineage: writer.parentLineage },
+        ],
+      });
+    const state = ModuleGenerationAuthority.createModuleDeliveryAdmissionState({
+      authority,
+      acceptedPlan: accepted,
+      headCommit: fixture.baselineCommit,
+      integratedWriterFrontiers: [],
+      acceptedEvidence: [],
+    });
+    return { accepted, authority, state, writer };
+  }
+
+  static admittedLease(
+    request: AdmittedLeaseRequest,
+  ): ModuleDeliveryAttemptLease {
+    const { runtime, taskId } = request;
+    const selectionRequest: SelectModuleDeliveryAdmissionsRequest = {
+      authority: runtime.authority,
+      acceptedPlan: runtime.accepted,
+      state: runtime.state,
+    };
+    const selection =
+      ModuleGenerationAuthority.selectModuleDeliveryAdmissions(
+        selectionRequest,
+      );
+    const admission = selection.admissions.find(
+      (entry) => entry.taskId === taskId,
+    );
+    if (!admission) throw new Error(`Admission ${taskId} is missing.`);
+    const leaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
+      authority: runtime.authority,
+      state: runtime.state,
+      admissions: [admission],
+    };
+    const lease =
+      ModuleGenerationAuthority.recordModuleDeliveryAttemptLeases(leaseRequest)
+        .leases[0];
+    if (!lease) throw new Error(`Lease ${taskId} is missing.`);
+    return lease;
+  }
+
+  static submission(
+    request: EvidenceSubmissionRequest,
+  ): ModuleDeliveryReadOnlyEvidenceSubmission {
+    const { runtime, lease, acceptedProviderEvidence } = request;
+    const node = runtime.accepted.plan.nodes.find(
+      ({ taskId }) => taskId === lease.taskId,
+    );
+    if (!node || node.kind === ModuleDeliveryTaskKind.Write)
+      throw new Error('Evidence node is missing.');
+    const identities = acceptedProviderEvidence.map(
+      ModuleGenerationAuthority.moduleDeliveryAcceptedEvidenceIdentity,
+    );
+    const claimRequest: ModuleDeliveryEvidenceDigestRequest = {
+      repositoryRoot: runtime.fixture.sourceRoot,
+      sourceCommit: lease.startingFrontier,
+      evidenceSurface: node.resources.evidenceSurface,
+    };
+    const claimIdentities =
+      node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
+        ? []
+        : ModuleEvidenceBoundary.moduleDeliveryEvidenceClaimIdentities(
+            claimRequest,
+          );
+    const artifactIdentity = `evidence/${node.taskId}.json`;
+    const evidence = [`${node.taskId} reviewed.`];
+    const artifactDigestRequest: ModuleDeliveryEvidenceArtifactDigestRequest = {
+      artifactIdentity,
+      evidence,
+      acceptanceRequirements: lease.acceptanceRequirements,
+      acceptedProviderEvidence: identities,
+    };
+    const artifactDigest =
+      ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest(
+        artifactDigestRequest,
+      );
+    return {
+      kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
+      schemaVersion: 1,
+      taskId: node.taskId,
+      attempt: lease.attempt,
+      generation: lease.generation,
+      planDigest: lease.planDigest,
+      sourceCommit: lease.startingFrontier,
+      producerTeam: lease.team,
+      functionalOwner: lease.functionalOwner,
+      acceptanceOwner: lease.acceptanceOwner,
+      acceptanceRequirements: lease.acceptanceRequirements,
+      claimIdentities,
+      acceptedProviderEvidence: identities,
+      artifactIdentity,
+      artifactDigest,
+      verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
+      evidence,
+    };
+  }
+
+  static verify(
+    request: EvidenceVerificationRequest,
+  ): AcceptedModuleDeliveryEvidence {
+    const { runtime, lease, candidate, acceptedProviderEvidence } = request;
+    const verification: ModuleDeliveryEvidenceSubmissionVerification = {
+      authority: runtime.authority,
+      acceptedPlan: runtime.accepted,
+      repositoryRoot: runtime.fixture.sourceRoot,
+      state: runtime.state,
+      submission: candidate,
+      lease,
+      authorizedProviderEvidence: acceptedProviderEvidence,
+    };
+    return ModuleGenerationAuthority.verifyModuleDeliveryEvidenceSubmission(
+      verification,
+    );
+  }
+}
+
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
+
 const WEB_ROOT = 'nook-app/nook-web/nook-web-app';
 
 type Runtime = {
@@ -73,6 +417,7 @@ type Runtime = {
 };
 
 type AdmissionRuntime = Pick<Runtime, 'accepted' | 'authority' | 'state'>;
+
 type WriteRuntime = AdmissionRuntime & {
   readonly writer: ModuleDeliveryWriteNodeV2;
 };
@@ -102,340 +447,29 @@ type MutableProviderEvidenceIdentity = Omit<
   'acceptedProviderEvidence'
 > & { acceptedProviderEvidence: MutableProviderEvidenceIdentity[] };
 
-function edge(request: EvidenceEdgeRequest): ModuleDeliveryEdgeContract {
-  const { providerTaskId, consumerTaskId } = request;
-  return {
-    providerTaskId,
-    consumerTaskId,
-    capability: 'accepted provider evidence',
-    publicTypes: ['AcceptedModuleDeliveryEvidence'],
-    errors: ['EvidenceRejected'],
-    behaviorInvariants: ['Evidence identity is exact.'],
-    securityInvariants: ['Only accepted evidence is synthesized.'],
-    compatibilityExpectations: ['Schema v1 remains exact.'],
-    owningTests: ['evidence authority tests'],
-  };
-}
-
-function runtime(existingFixture?: GitFixture): Runtime {
-  let fixture = existingFixture;
-  if (!fixture) fixture = createGitFixture();
-  const provider: ModuleDeliveryReadOnlyNodeV2 = {
-    kind: ModuleDeliveryTaskKind.ReadOnly,
-    taskId: 'core-evidence',
-    team: TeamKey.DevelopmentCore,
-    functionalOwner: TeamKey.Ai,
-    acceptanceOwner: TeamKey.Ai,
-    parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
-    expert: 'core_expert',
-    moduleRoot: CORE_ROOT,
-    consumerOutcome: 'AI receives accepted core evidence.',
-    baseline: {
-      kind: ModuleDeliveryBaselineKind.SourceCommit,
-      sourceCommit: fixture.baselineCommit,
-    },
-    agentDepthLimit: 2,
-    dependencies: [],
-    resources: {
-      read: [`${CORE_ROOT}/**`],
-      write: [],
-      evidenceSurface: [`${CORE_ROOT}/**`],
-    },
-    parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
-    acceptance: {
-      commands: ['task core:evidence'],
-      evidence: ['Core evidence is complete.'],
-    },
-  };
-  const providerB: ModuleDeliveryReadOnlyNodeV2 = {
-    ...provider,
-    taskId: 'web-evidence',
-    team: TeamKey.WebDevelopment,
-    expert: 'web_expert',
-    moduleRoot: WEB_ROOT,
-    resources: { read: [WEB_ROOT], write: [], evidenceSurface: [WEB_ROOT] },
-    acceptance: {
-      commands: ['task web:evidence'],
-      evidence: ['Web evidence is complete.'],
-    },
-  };
-  const synthesis: ModuleDeliveryEvidenceSynthesisNodeV2 = {
-    kind: ModuleDeliveryTaskKind.EvidenceSynthesis,
-    taskId: 'evidence-synthesis',
-    team: TeamKey.DevelopmentCore,
-    functionalOwner: TeamKey.Ai,
-    acceptanceOwner: TeamKey.Ai,
-    parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
-    expert: 'core_expert',
-    moduleRoot: CORE_ROOT,
-    consumerOutcome: 'Accepted provider evidence is synthesized.',
-    baseline: {
-      kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
-      providerTaskIds: [provider.taskId, providerB.taskId],
-    },
-    agentDepthLimit: 2,
-    dependencies: [provider.taskId, providerB.taskId],
-    resources: { read: [], write: [], evidenceSurface: [] },
-    parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
-    acceptance: {
-      commands: ['task synthesis:test'],
-      evidence: ['Synthesis is deterministic.'],
-    },
-    evidenceInput: {
-      schema: ModuleDeliveryEvidenceInputSchema.AcceptedProviderEvidenceV1,
-      expectedProducers: [
-        {
-          taskId: provider.taskId,
-          team: provider.team,
-          functionalOwner: provider.functionalOwner,
-          acceptanceOwner: provider.acceptanceOwner,
-        },
-        {
-          taskId: providerB.taskId,
-          team: providerB.team,
-          functionalOwner: providerB.functionalOwner,
-          acceptanceOwner: providerB.acceptanceOwner,
-        },
-      ],
-    },
-  };
-  const edgeRequest: EvidenceEdgeRequest = {
-    providerTaskId: provider.taskId,
-    consumerTaskId: synthesis.taskId,
-  };
-  const edgeBRequest: EvidenceEdgeRequest = {
-    providerTaskId: providerB.taskId,
-    consumerTaskId: synthesis.taskId,
-  };
-  const plan: ModuleDeliveryPlanV2 = {
-    version: 2,
-    generation: 1,
-    sourceCommit: fixture.baselineCommit,
-    maxConcurrency: 1,
-    maxAgentDepth: 2,
-    maxAttempts: 2,
-    parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
-    parentJoin: {
-      kind: ModuleDeliveryJoinKind.DirectCommits,
-      owner: 'delivery-owner',
-      validationCommands: ['task loom:verify'],
-    },
-    nodes: [synthesis, providerB, provider],
-    edgeContracts: [edge(edgeRequest), edge(edgeBRequest)],
-  };
-  const result = decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan));
-  if (result.status !== ModuleDeliveryValidationStatus.Accepted)
-    throw new Error(JSON.stringify(result.issues));
-  const authorityRequest: CreateModuleDeliveryGenerationAuthorityRequest = {
-    acceptedPlan: result,
-    repositoryRoot: fixture.sourceRoot,
-    expectedLineage: result.plan.nodes.map((node) => ({
-      taskId: node.taskId,
-      parentLineage: node.parentLineage,
-    })),
-  };
-  const authority = createModuleDeliveryGenerationAuthority(authorityRequest);
-  const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
-    authority,
-    acceptedPlan: result,
-    headCommit: fixture.baselineCommit,
-    integratedWriterFrontiers: [],
-    acceptedEvidence: [],
-  };
-  const state = createModuleDeliveryAdmissionState(stateRequest);
-  return {
-    fixture,
-    accepted: result,
-    authority,
-    state,
-    provider,
-    providerB,
-    synthesis,
-  };
-}
-
-function writeRuntime(fixture: GitFixture): WriteRuntime {
-  const writer: ModuleDeliveryWriteNodeV2 = {
-    kind: ModuleDeliveryTaskKind.Write,
-    taskId: 'core-writer',
-    team: TeamKey.DevelopmentCore,
-    functionalOwner: TeamKey.Ai,
-    acceptanceOwner: TeamKey.Ai,
-    parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
-    expert: ModuleDeliveryTaskProfile.Ordinary,
-    moduleRoot: CORE_ROOT,
-    consumerOutcome: 'The bounded core change is delivered.',
-    baseline: {
-      kind: ModuleDeliveryBaselineKind.SourceCommit,
-      sourceCommit: fixture.baselineCommit,
-    },
-    agentDepthLimit: 1,
-    dependencies: [],
-    resources: {
-      read: [],
-      write: [`${CORE_ROOT}/src/lib.rs`],
-      evidenceSurface: [],
-    },
-    parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
-    acceptance: {
-      commands: ['task core:test'],
-      evidence: ['Core tests pass.'],
-    },
-    workspace: {
-      kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-      expectedCommitHandoff: true,
-    },
-  };
-  const plan: ModuleDeliveryPlanV2 = {
-    version: 2,
-    generation: 1,
-    sourceCommit: fixture.baselineCommit,
-    maxConcurrency: 1,
-    maxAgentDepth: 1,
-    maxAttempts: 2,
-    parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
-    parentJoin: {
-      kind: ModuleDeliveryJoinKind.DirectCommits,
-      owner: 'delivery-owner',
-      validationCommands: ['task loom:verify'],
-    },
-    nodes: [writer],
-    edgeContracts: [],
-  };
-  const accepted = decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan));
-  if (accepted.status !== ModuleDeliveryValidationStatus.Accepted)
-    throw new Error(JSON.stringify(accepted.issues));
-  const authority = createModuleDeliveryGenerationAuthority({
-    acceptedPlan: accepted,
-    repositoryRoot: fixture.sourceRoot,
-    expectedLineage: [
-      { taskId: writer.taskId, parentLineage: writer.parentLineage },
-    ],
-  });
-  const state = createModuleDeliveryAdmissionState({
-    authority,
-    acceptedPlan: accepted,
-    headCommit: fixture.baselineCommit,
-    integratedWriterFrontiers: [],
-    acceptedEvidence: [],
-  });
-  return { accepted, authority, state, writer };
-}
-
-function admittedLease(
-  request: AdmittedLeaseRequest,
-): ModuleDeliveryAttemptLease {
-  const { runtime, taskId } = request;
-  const selectionRequest: SelectModuleDeliveryAdmissionsRequest = {
-    authority: runtime.authority,
-    acceptedPlan: runtime.accepted,
-    state: runtime.state,
-  };
-  const selection = selectModuleDeliveryAdmissions(selectionRequest);
-  const admission = selection.admissions.find(
-    (entry) => entry.taskId === taskId,
-  );
-  if (!admission) throw new Error(`Admission ${taskId} is missing.`);
-  const leaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
-    authority: runtime.authority,
-    state: runtime.state,
-    admissions: [admission],
-  };
-  const lease = recordModuleDeliveryAttemptLeases(leaseRequest).leases[0];
-  if (!lease) throw new Error(`Lease ${taskId} is missing.`);
-  return lease;
-}
-
-function submission(
-  request: EvidenceSubmissionRequest,
-): ModuleDeliveryReadOnlyEvidenceSubmission {
-  const { runtime, lease, acceptedProviderEvidence } = request;
-  const node = runtime.accepted.plan.nodes.find(
-    ({ taskId }) => taskId === lease.taskId,
-  );
-  if (!node || node.kind === ModuleDeliveryTaskKind.Write)
-    throw new Error('Evidence node is missing.');
-  const identities = acceptedProviderEvidence.map(
-    moduleDeliveryAcceptedEvidenceIdentity,
-  );
-  const claimRequest: ModuleDeliveryEvidenceDigestRequest = {
-    repositoryRoot: runtime.fixture.sourceRoot,
-    sourceCommit: lease.startingFrontier,
-    evidenceSurface: node.resources.evidenceSurface,
-  };
-  const claimIdentities =
-    node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
-      ? []
-      : moduleDeliveryEvidenceClaimIdentities(claimRequest);
-  const artifactIdentity = `evidence/${node.taskId}.json`;
-  const evidence = [`${node.taskId} reviewed.`];
-  const artifactDigestRequest: ModuleDeliveryEvidenceArtifactDigestRequest = {
-    artifactIdentity,
-    evidence,
-    acceptanceRequirements: lease.acceptanceRequirements,
-    acceptedProviderEvidence: identities,
-  };
-  const artifactDigest = moduleDeliveryEvidenceArtifactDigest(
-    artifactDigestRequest,
-  );
-  return {
-    kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
-    schemaVersion: 1,
-    taskId: node.taskId,
-    attempt: lease.attempt,
-    generation: lease.generation,
-    planDigest: lease.planDigest,
-    sourceCommit: lease.startingFrontier,
-    producerTeam: lease.team,
-    functionalOwner: lease.functionalOwner,
-    acceptanceOwner: lease.acceptanceOwner,
-    acceptanceRequirements: lease.acceptanceRequirements,
-    claimIdentities,
-    acceptedProviderEvidence: identities,
-    artifactIdentity,
-    artifactDigest,
-    verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
-    evidence,
-  };
-}
-
-function verify(
-  request: EvidenceVerificationRequest,
-): AcceptedModuleDeliveryEvidence {
-  const { runtime, lease, candidate, acceptedProviderEvidence } = request;
-  const verification: ModuleDeliveryEvidenceSubmissionVerification = {
-    authority: runtime.authority,
-    acceptedPlan: runtime.accepted,
-    repositoryRoot: runtime.fixture.sourceRoot,
-    state: runtime.state,
-    submission: candidate,
-    lease,
-    authorizedProviderEvidence: acceptedProviderEvidence,
-  };
-  return verifyModuleDeliveryEvidenceSubmission(verification);
-}
-
 test('rejects forged evidence and restores a canonical redacted receipt after restart', () => {
-  const active = runtime();
+  const active = ModuleDeliveryEvidenceScenario.runtime();
   try {
     const leaseRequest: AdmittedLeaseRequest = {
       runtime: active,
       taskId: active.provider.taskId,
     };
-    const lease = admittedLease(leaseRequest);
+    const lease = ModuleDeliveryEvidenceScenario.admittedLease(leaseRequest);
     const submissionRequest: EvidenceSubmissionRequest = {
       runtime: active,
       lease,
       acceptedProviderEvidence: [],
     };
-    const exact = submission(submissionRequest);
+    const exact = ModuleDeliveryEvidenceScenario.submission(submissionRequest);
     const gitClaimRequest: ModuleDeliveryEvidenceDigestRequest = {
       repositoryRoot: active.fixture.sourceRoot,
       sourceCommit: active.fixture.baselineCommit,
       evidenceSurface: ['git:index'],
     };
     expect(() =>
-      moduleDeliveryEvidenceClaimIdentities(gitClaimRequest),
+      ModuleEvidenceBoundary.moduleDeliveryEvidenceClaimIdentities(
+        gitClaimRequest,
+      ),
     ).toThrow('Git-state evidence claims are unsupported');
     const mutations: readonly ModuleDeliveryReadOnlyEvidenceSubmission[] = [
       { ...exact, taskId: 'forged-task' },
@@ -462,28 +496,37 @@ test('rejects forged evidence and restores a canonical redacted receipt after re
         ...submissionRequest,
         candidate,
       };
-      expect(() => verify(mutationVerificationRequest)).toThrow();
+      expect(() =>
+        ModuleDeliveryEvidenceScenario.verify(mutationVerificationRequest),
+      ).toThrow();
     }
-    const accepted = verify({ ...submissionRequest, candidate: exact });
-    const receipt = moduleDeliveryAcceptedEvidenceIdentity(accepted);
+    const accepted = ModuleDeliveryEvidenceScenario.verify({
+      ...submissionRequest,
+      candidate: exact,
+    });
+    const receipt =
+      ModuleGenerationAuthority.moduleDeliveryAcceptedEvidenceIdentity(
+        accepted,
+      );
     expect('evidence' in receipt).toBe(false);
-    const replay = runtime(active.fixture);
-    const replayLease = admittedLease({
+    const replay = ModuleDeliveryEvidenceScenario.runtime(active.fixture);
+    const replayLease = ModuleDeliveryEvidenceScenario.admittedLease({
       runtime: replay,
       taskId: replay.provider.taskId,
     });
-    const restored = restoreModuleDeliveryCanonicalEvidenceReceipt({
-      authority: replay.authority,
-      acceptedPlan: replay.accepted,
-      state: replay.state,
-      lease: replayLease,
-      acceptedEvidence: [],
-      receipt,
-    });
+    const restored =
+      ModuleGenerationAuthority.restoreModuleDeliveryCanonicalEvidenceReceipt({
+        authority: replay.authority,
+        acceptedPlan: replay.accepted,
+        state: replay.state,
+        lease: replayLease,
+        acceptedEvidence: [],
+        receipt,
+      });
     expect(restored.evidence.evidence).toEqual([]);
     expect(restored.state.acceptedProviderEvidence).toEqual([receipt]);
     expect(() =>
-      restoreModuleDeliveryCanonicalEvidenceReceipt({
+      ModuleGenerationAuthority.restoreModuleDeliveryCanonicalEvidenceReceipt({
         authority: replay.authority,
         acceptedPlan: replay.accepted,
         state: replay.state,
@@ -499,7 +542,7 @@ test('rejects forged evidence and restores a canonical redacted receipt after re
       verifiedHeadCommit: active.fixture.baselineCommit,
     };
     const isolatedRegistry =
-      evidenceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
+      evidenceAuthority.ModuleSourceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
     const isolatedRegistration: AcceptedModuleDeliveryEvidenceRegistration = {
       authority: active.authority,
       evidence: forgedEvidence,
@@ -517,31 +560,36 @@ test('rejects forged evidence and restores a canonical redacted receipt after re
       acceptedEvidence: [forgedEvidence],
     };
     expect(() =>
-      createModuleDeliveryAdmissionState(forgedStateRequest),
+      ModuleGenerationAuthority.createModuleDeliveryAdmissionState(
+        forgedStateRequest,
+      ),
     ).toThrow('evidence authority is invalid');
   } finally {
-    disposeGitFixture(active.fixture);
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(active.fixture);
   }
 });
 
 test('canonical redacted receipt replay rejects inconsistent lifecycle fields without key material', () => {
-  const active = runtime();
+  const active = ModuleDeliveryEvidenceScenario.runtime();
   try {
-    const lease = admittedLease({
+    const lease = ModuleDeliveryEvidenceScenario.admittedLease({
       runtime: active,
       taskId: active.provider.taskId,
     });
-    const accepted = verify({
+    const accepted = ModuleDeliveryEvidenceScenario.verify({
       runtime: active,
       lease,
       acceptedProviderEvidence: [],
-      candidate: submission({
+      candidate: ModuleDeliveryEvidenceScenario.submission({
         runtime: active,
         lease,
         acceptedProviderEvidence: [],
       }),
     });
-    const receipt = moduleDeliveryAcceptedEvidenceIdentity(accepted);
+    const receipt =
+      ModuleGenerationAuthority.moduleDeliveryAcceptedEvidenceIdentity(
+        accepted,
+      );
     const inconsistent = [
       { ...receipt, schemaVersion: 2 },
       { ...receipt, generation: 2 },
@@ -556,32 +604,35 @@ test('canonical redacted receipt replay rejects inconsistent lifecycle fields wi
       Object.assign(structuredClone(receipt), { extra: true }),
     ];
     for (const candidate of inconsistent) {
-      const replay = runtime(active.fixture);
-      const replayLease = admittedLease({
+      const replay = ModuleDeliveryEvidenceScenario.runtime(active.fixture);
+      const replayLease = ModuleDeliveryEvidenceScenario.admittedLease({
         runtime: replay,
         taskId: replay.provider.taskId,
       });
       expect(() =>
-        restoreModuleDeliveryCanonicalEvidenceReceipt({
-          authority: replay.authority,
-          acceptedPlan: replay.accepted,
-          state: replay.state,
-          lease: replayLease,
-          acceptedEvidence: [],
-          receipt: candidate as ModuleDeliveryAcceptedProviderEvidenceIdentity,
-        }),
+        ModuleGenerationAuthority.restoreModuleDeliveryCanonicalEvidenceReceipt(
+          {
+            authority: replay.authority,
+            acceptedPlan: replay.accepted,
+            state: replay.state,
+            lease: replayLease,
+            acceptedEvidence: [],
+            receipt:
+              candidate as ModuleDeliveryAcceptedProviderEvidenceIdentity,
+          },
+        ),
       ).toThrow();
     }
   } finally {
-    disposeGitFixture(active.fixture);
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(active.fixture);
   }
 });
 
 test('canonical receipt replay rejects write leases before consuming state', () => {
-  const fixture = createGitFixture();
+  const fixture = ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
   try {
-    const active = writeRuntime(fixture);
-    const lease = admittedLease({
+    const active = ModuleDeliveryEvidenceScenario.writeRuntime(fixture);
+    const lease = ModuleDeliveryEvidenceScenario.admittedLease({
       runtime: active,
       taskId: active.writer.taskId,
     });
@@ -606,39 +657,46 @@ test('canonical receipt replay rejects write leases before consuming state', () 
     };
     for (let attempt = 0; attempt < 2; attempt += 1)
       expect(() =>
-        restoreModuleDeliveryCanonicalEvidenceReceipt({
-          authority: active.authority,
-          acceptedPlan: active.accepted,
-          state: active.state,
-          lease,
-          acceptedEvidence: [],
-          receipt,
-        }),
+        ModuleGenerationAuthority.restoreModuleDeliveryCanonicalEvidenceReceipt(
+          {
+            authority: active.authority,
+            acceptedPlan: active.accepted,
+            state: active.state,
+            lease,
+            acceptedEvidence: [],
+            receipt,
+          },
+        ),
       ).toThrow('cannot restore write tasks');
   } finally {
-    disposeGitFixture(fixture);
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(fixture);
   }
 });
 
 test('synthesis requires exact nonempty accepted provider evidence identities', () => {
-  const active = runtime();
+  const active = ModuleDeliveryEvidenceScenario.runtime();
   try {
     const providerLeaseRequest: AdmittedLeaseRequest = {
       runtime: active,
       taskId: active.provider.taskId,
     };
-    const providerLease = admittedLease(providerLeaseRequest);
+    const providerLease =
+      ModuleDeliveryEvidenceScenario.admittedLease(providerLeaseRequest);
     const providerSubmissionRequest: EvidenceSubmissionRequest = {
       runtime: active,
       lease: providerLease,
       acceptedProviderEvidence: [],
     };
-    const providerCandidate = submission(providerSubmissionRequest);
+    const providerCandidate = ModuleDeliveryEvidenceScenario.submission(
+      providerSubmissionRequest,
+    );
     const providerVerificationRequest: EvidenceVerificationRequest = {
       ...providerSubmissionRequest,
       candidate: providerCandidate,
     };
-    const providerEvidence = verify(providerVerificationRequest);
+    const providerEvidence = ModuleDeliveryEvidenceScenario.verify(
+      providerVerificationRequest,
+    );
     const prematureDispositionRequest = {
       authority: active.authority,
       state: active.state,
@@ -649,7 +707,9 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       },
     };
     expect(() =>
-      recordModuleDeliveryAttemptDisposition(prematureDispositionRequest),
+      ModuleGenerationAuthority.recordModuleDeliveryAttemptDisposition(
+        prematureDispositionRequest,
+      ),
     ).toThrow('lease capability');
     const evidenceStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
@@ -659,7 +719,9 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       acceptedEvidence: [providerEvidence],
     };
     const evidenceState =
-      createModuleDeliveryAdmissionState(evidenceStateRequest);
+      ModuleGenerationAuthority.createModuleDeliveryAdmissionState(
+        evidenceStateRequest,
+      );
     let oversizedRootAccesses = 0;
     const oversizedRoots = Array(129).fill(providerEvidence);
     const oversizedHandler: ProxyHandler<AcceptedModuleDeliveryEvidence[]> = {
@@ -676,7 +738,9 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       acceptedEvidence: oversizedEvidence,
     };
     expect(() =>
-      createModuleDeliveryAdmissionState(oversizedStateRequest),
+      ModuleGenerationAuthority.createModuleDeliveryAdmissionState(
+        oversizedStateRequest,
+      ),
     ).toThrow('ancestry is too large');
     expect(oversizedRootAccesses).toBe(0);
     const omittedEvidenceRequest: CreateModuleDeliveryAdmissionStateRequest = {
@@ -684,7 +748,9 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       acceptedEvidence: [],
     };
     expect(() =>
-      createModuleDeliveryAdmissionState(omittedEvidenceRequest),
+      ModuleGenerationAuthority.createModuleDeliveryAdmissionState(
+        omittedEvidenceRequest,
+      ),
     ).toThrow('cannot discard proof');
     const providerDispositionRequest = {
       authority: active.authority,
@@ -703,15 +769,21 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       },
     };
     expect(() =>
-      recordModuleDeliveryAttemptDisposition(unusableDispositionRequest),
+      ModuleGenerationAuthority.recordModuleDeliveryAttemptDisposition(
+        unusableDispositionRequest,
+      ),
     ).toThrow('lease capability is invalid');
-    recordModuleDeliveryAttemptDisposition(providerDispositionRequest);
+    ModuleGenerationAuthority.recordModuleDeliveryAttemptDisposition(
+      providerDispositionRequest,
+    );
     const providerRuntime: Runtime = { ...active, state: evidenceState };
     const providerBLeaseRequest: AdmittedLeaseRequest = {
       runtime: providerRuntime,
       taskId: active.providerB.taskId,
     };
-    const providerBLease = admittedLease(providerBLeaseRequest);
+    const providerBLease = ModuleDeliveryEvidenceScenario.admittedLease(
+      providerBLeaseRequest,
+    );
     const providerBSubmissionRequest: EvidenceSubmissionRequest = {
       runtime: providerRuntime,
       lease: providerBLease,
@@ -719,9 +791,13 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     };
     const providerBVerificationRequest: EvidenceVerificationRequest = {
       ...providerBSubmissionRequest,
-      candidate: submission(providerBSubmissionRequest),
+      candidate: ModuleDeliveryEvidenceScenario.submission(
+        providerBSubmissionRequest,
+      ),
     };
-    const providerBEvidence = verify(providerBVerificationRequest);
+    const providerBEvidence = ModuleDeliveryEvidenceScenario.verify(
+      providerBVerificationRequest,
+    );
     const completeStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
@@ -730,46 +806,56 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       acceptedEvidence: [providerEvidence, providerBEvidence],
     };
     const completeState =
-      createModuleDeliveryAdmissionState(completeStateRequest);
+      ModuleGenerationAuthority.createModuleDeliveryAdmissionState(
+        completeStateRequest,
+      );
     const providerBDispositionRequest = {
       ...providerDispositionRequest,
       state: completeState,
       lease: providerBLease,
     };
-    recordModuleDeliveryAttemptDisposition(providerBDispositionRequest);
+    ModuleGenerationAuthority.recordModuleDeliveryAttemptDisposition(
+      providerBDispositionRequest,
+    );
     const synthesisRuntime: Runtime = { ...active, state: completeState };
     const synthesisLeaseRequest: AdmittedLeaseRequest = {
       runtime: synthesisRuntime,
       taskId: active.synthesis.taskId,
     };
-    const synthesisLease = admittedLease(synthesisLeaseRequest);
+    const synthesisLease = ModuleDeliveryEvidenceScenario.admittedLease(
+      synthesisLeaseRequest,
+    );
     const synthesisSubmissionRequest: EvidenceSubmissionRequest = {
       runtime: synthesisRuntime,
       lease: synthesisLease,
       acceptedProviderEvidence: [providerEvidence, providerBEvidence],
     };
     expect(Object.values(synthesisLease.resources).flat()).toEqual([]);
-    const exact = submission(synthesisSubmissionRequest);
+    const exact = ModuleDeliveryEvidenceScenario.submission(
+      synthesisSubmissionRequest,
+    );
     const missingInputsVerificationRequest: EvidenceVerificationRequest = {
       runtime: synthesisRuntime,
       lease: synthesisLease,
       candidate: exact,
       acceptedProviderEvidence: [],
     };
-    expect(() => verify(missingInputsVerificationRequest)).toThrow(
-      'synthesis inputs',
-    );
+    expect(() =>
+      ModuleDeliveryEvidenceScenario.verify(missingInputsVerificationRequest),
+    ).toThrow('synthesis inputs');
     const reversedSubmissionRequest: EvidenceSubmissionRequest = {
       ...synthesisSubmissionRequest,
       acceptedProviderEvidence: [providerBEvidence, providerEvidence],
     };
     const reversedVerificationRequest: EvidenceVerificationRequest = {
       ...reversedSubmissionRequest,
-      candidate: submission(reversedSubmissionRequest),
+      candidate: ModuleDeliveryEvidenceScenario.submission(
+        reversedSubmissionRequest,
+      ),
     };
-    expect(() => verify(reversedVerificationRequest)).toThrow(
-      'synthesis inputs',
-    );
+    expect(() =>
+      ModuleDeliveryEvidenceScenario.verify(reversedVerificationRequest),
+    ).toThrow('synthesis inputs');
     const mutableIdentities = structuredClone(
       exact.acceptedProviderEvidence,
     ) as MutableProviderEvidenceIdentity[];
@@ -781,19 +867,21 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       ...synthesisSubmissionRequest,
       candidate: mutableExact,
     };
-    const synthesisEvidence = verify(synthesisVerificationRequest);
+    const synthesisEvidence = ModuleDeliveryEvidenceScenario.verify(
+      synthesisVerificationRequest,
+    );
     const retained = mutableIdentities[0];
     const nested = mutableIdentities[1];
     const stored = synthesisEvidence.acceptedProviderEvidence[0];
     if (!retained || !nested || !stored)
       throw new Error('Nested synthesis evidence is missing.');
     const registry =
-      evidenceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
+      evidenceAuthority.ModuleSourceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
     const artifact = {
       ...exact,
       acceptedProviderEvidence: Array(129).fill(nested),
     };
-    const digest = moduleDeliveryEvidenceArtifactDigest;
+    const digest = ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest;
     expect(() => digest(artifact)).toThrow('ancestry is too large');
     const aggregateRoot = structuredClone(retained);
     aggregateRoot.acceptedProviderEvidence = Array(127)
@@ -839,7 +927,9 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       })),
     };
     const authorityB =
-      createModuleDeliveryGenerationAuthority(authorityBRequest);
+      ModuleGenerationAuthority.createModuleDeliveryGenerationAuthority(
+        authorityBRequest,
+      );
     const evidenceB = structuredClone(providerEvidence);
     const registrationB: AcceptedModuleDeliveryEvidenceRegistration = {
       authority: authorityB,
@@ -880,6 +970,6 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       'Accepted evidence is invalid',
     );
   } finally {
-    disposeGitFixture(active.fixture);
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(active.fixture);
   }
 });

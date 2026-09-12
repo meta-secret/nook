@@ -18,12 +18,14 @@ import {
   waitForVaultSyncIdle,
 } from './helpers'
 import {
+  E2eSyncProviderId,
   connectSyncGenesisDevice,
   connectSyncJoinerDevice,
   createSyncTarget,
   installSyncRemote,
   installSyncRemoteOnPages,
   waitForSyncRemoteState,
+  type LocalFileSyncE2eTarget,
   type SyncE2eTarget,
 } from './sync-provider'
 
@@ -34,7 +36,7 @@ test.describe('file sync provider event log', () => {
   let contextB: BrowserContext
   let deviceA: Page
   let deviceB: Page
-  let target: SyncE2eTarget
+  let target: LocalFileSyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
     contextA = await createIsolatedContext(browser)
@@ -43,7 +45,7 @@ test.describe('file sync provider event log', () => {
     deviceB = await contextB.newPage()
     await disableVaultIdleLock(deviceA)
     await disableVaultIdleLock(deviceB)
-    target = createSyncTarget('', 'file-sync', 'file')
+    target = createSyncTarget('', 'file-sync', E2eSyncProviderId.File)
     await installSyncRemoteOnPages([deviceA, deviceB], target)
   })
 
@@ -91,7 +93,11 @@ test.describe('file sync provider event log', () => {
     await connectSyncJoinerDevice(deviceB, target)
     const join = await sendJoinRequestLocalE2e(deviceB, stub)
     await approveJoinFromBanner(deviceA, join.deviceId, target, 2)
-    await waitForJoinerVaultReady(deviceB, target)
+    await waitForJoinerVaultReady({
+      page: deviceB,
+      target,
+      testInfo: test.info(),
+    })
 
     await waitForSecretOnDevice(deviceB, key, target)
     expect(await revealSecretValue(deviceB, key)).toBe(value)
@@ -123,9 +129,14 @@ test.describe('file sync provider event log', () => {
     await expectFileTargetsToHaveSameEvents([commonVault, commonVaultBackup])
 
     await connectSyncJoinerDevice(deviceB, commonVault)
-    const join = await sendJoinRequestLocalE2e(deviceB, commonVault.stub!)
+    if (!commonVault.stub) throw new Error('expected the file sync stub')
+    const join = await sendJoinRequestLocalE2e(deviceB, commonVault.stub)
     await approveJoinFromBanner(deviceA, join.deviceId, commonVault, 2)
-    await waitForJoinerVaultReady(deviceB, commonVault)
+    await waitForJoinerVaultReady({
+      page: deviceB,
+      target: commonVault,
+      testInfo: test.info(),
+    })
     await assertVaultReady(deviceB)
 
     await addFileBackupProvider(deviceB, vault2Backup, {
@@ -159,7 +170,7 @@ test.describe('file sync provider event log', () => {
 })
 
 function createIsolatedFileTarget(prefix: string, tokenSuffix: string) {
-  const target = createSyncTarget('', prefix, 'file')
+  const target = createSyncTarget('', prefix, E2eSyncProviderId.File)
   return {
     ...target,
     pat: `ya29.e2e_${tokenSuffix}_${Date.now()}`,
@@ -246,14 +257,7 @@ async function addSecureNote(page: Page, title: string, body: string) {
 
 async function flushFileProviders(page: Page) {
   await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault?: {
-          manualSync?: () => Promise<void>
-          runFanOutSyncAfterLocalSave?: () => Promise<void>
-        }
-      }
-    ).__nookVault
+    const vault = window.__nookVault
     await vault?.manualSync?.()
     await vault?.runFanOutSyncAfterLocalSave?.()
   })

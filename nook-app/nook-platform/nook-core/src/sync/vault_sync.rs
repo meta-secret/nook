@@ -10,10 +10,8 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::VaultStoreIdentity;
-
-use crate::VaultFormatDocument;
 use crate::errors::VaultSyncError;
+use crate::{VaultFormatDocument, VaultStoreIdentity};
 
 type VaultSyncResult<T> = Result<T, VaultSyncError>;
 

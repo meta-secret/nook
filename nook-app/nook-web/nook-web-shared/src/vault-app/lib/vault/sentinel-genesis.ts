@@ -1,3 +1,10 @@
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
+import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
+import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
+import {
+  VaultStorageFailure as StorageOperationFailure,
+  VaultStorageFailureKind as StorageOperationFailureKind,
+} from "$lib/runtime/storage-failure";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
   set_active_vault,
@@ -9,7 +16,7 @@ import {
 } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
-import { listSentinelStoredDeliveries } from "$lib/vault/sentinel-unlock";
+import { SentinelUnlockActions } from "$lib/vault/sentinel-unlock";
 import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
 import { SentinelGenesisTargetKind } from "$lib/vault/state/sentinel.svelte";
 
@@ -19,353 +26,480 @@ type ReplaceOwnedWasmValuesArgs<T extends { free: () => void }> = {
 };
 
 export interface SentinelGenesisStatusUpdate {
-  readonly state: VaultState;
   readonly status: NookSentinelGenesisStatus;
 }
 
 export interface SentinelGenesisFinalization {
-  readonly state: VaultState;
   readonly result: NookSentinelGenesisFinalizeResult;
 }
 
 export interface SentinelGenesisStart {
-  readonly state: VaultState;
   readonly args: StartSentinelGenesisArgs;
 }
 
 export interface SentinelGenesisParticipantResponseAddition {
-  readonly state: VaultState;
   readonly payload: string;
   readonly participantLabel: string;
 }
 
 export interface SentinelGenesisRequestPayload {
-  readonly state: VaultState;
   readonly requestPayload: string;
 }
 
 export interface SentinelGenesisShareDelivery {
-  readonly state: VaultState;
   readonly payload: string;
 }
 
 export interface SentinelOnboardingPackageAcceptance {
-  readonly state: VaultState;
   readonly packageJson: string;
 }
 
-function replaceOwnedWasmValues<T extends { free: () => void }>({
-  current,
-  replacement,
-}: ReplaceOwnedWasmValuesArgs<T>): T[] {
-  current.forEach((value) => value.free());
-  return replacement;
+export interface SentinelParticipantKeyCreationRequest {
+  readonly vault: VaultState;
+  readonly waitForDevice: () => void;
+  readonly finishPendingCreation: () => void;
 }
 
-export function releaseResults(state: VaultState): void {
-  const replaceOwnedWasmValuesArgs: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisDelivery> =
-    { current: state.sentinelGenesisDeliveries, replacement: [] };
-  state.sentinelGenesisDeliveries = replaceOwnedWasmValues(
-    replaceOwnedWasmValuesArgs,
-  );
-  const replaceOwnedWasmValuesArgs2: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisParticipantStatus> =
-    { current: state.sentinelGenesisParticipants, replacement: [] };
-  state.sentinelGenesisParticipants = replaceOwnedWasmValues(
-    replaceOwnedWasmValuesArgs2,
-  );
-  state.sentinelGenesisParticipantCount = 0;
-}
+export type SentinelActionResult<T> = Result<
+  T,
+  StorageOperationFailure | OAuthFailure
+>;
 
-export function applyStatus({
-  state,
-  status,
-}: SentinelGenesisStatusUpdate): void {
-  const participants = status.participants;
-  state.sentinelGenesisParticipantCount = participants.length;
-  const replaceOwnedWasmValuesArgs3: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisParticipantStatus> =
-    {
-      current: state.sentinelGenesisParticipants,
-      replacement: participants,
-    };
-  state.sentinelGenesisParticipants = replaceOwnedWasmValues(
-    replaceOwnedWasmValuesArgs3,
-  );
-  state.sentinelGenesisPhase = status.phase;
-  status.free();
-}
+export class SentinelParticipantKeyCreationLifecycle {
+  constructor(
+    private readonly request: SentinelParticipantKeyCreationRequest,
+  ) {}
 
-export function applyFinalizeResult({
-  state,
-  result,
-}: SentinelGenesisFinalization): void {
-  state.sentinelGenesisPhase = result.phase;
-  state.selectSentinelGenesisStore(result.storeId);
-  state.openActiveVault(result.storeId);
-  state.replaceVaultArchitecture(result.architecture as VaultArchitecture);
-  const replaceOwnedWasmValuesArgs4: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisDelivery> =
-    {
-      current: state.sentinelGenesisDeliveries,
-      replacement: result.participantDeliveries,
-    };
-  state.sentinelGenesisDeliveries = replaceOwnedWasmValues(
-    replaceOwnedWasmValuesArgs4,
-  );
-  result.free();
-}
-
-export async function start({
-  state,
-  args,
-}: SentinelGenesisStart): Promise<void> {
-  if (!state.hasManager) throw new Error("Vault engine is not available.");
-  if (state.isVerifying) return;
-  state.isVerifying = true;
-  state.errorMsg = "";
-  state.dismissSuccess();
-  releaseResults(state);
-  state.clearSentinelGenesisStore();
-  try {
-    await state.initDeviceIdentity();
-    const status = await state.enqueueStorage(() =>
-      state.requireManager().start_sentinel_genesis(args),
-    );
-    state.sentinelGenesisRequest = state
-      .requireManager()
-      .sentinel_genesis_request_json();
-    const applyStatusArgs: Parameters<typeof applyStatus>[0] = {
-      state,
-      status,
-    };
-    applyStatus(applyStatusArgs);
-  } catch (error) {
-    const statusUpdate: SentinelGenesisStatusUpdate = {
-      state,
-      status: state.requireManager().sentinel_genesis_status(),
-    };
-    applyStatus(statusUpdate);
-    state.errorMsg =
-      error instanceof Error
-        ? error.message
-        : "Failed to start Sentinel setup.";
-    throw error;
-  } finally {
-    state.isVerifying = false;
-  }
-}
-
-export async function addParticipantResponse({
-  state,
-  payload,
-  participantLabel,
-}: SentinelGenesisParticipantResponseAddition): Promise<void> {
-  if (!state.hasManager) throw new Error("Vault engine is not available.");
-  if (state.isVerifying) return;
-  state.isVerifying = true;
-  state.errorMsg = "";
-  try {
-    const status = await state.enqueueStorage(() =>
-      state
-        .requireManager()
-        .add_sentinel_genesis_participant_response(
-          payload.trim(),
-          participantLabel.trim(),
+  async create(): Promise<SentinelActionResult<string>> {
+    const { vault, waitForDevice, finishPendingCreation } = this.request;
+    if (!vault.deviceProtectionReady) {
+      waitForDevice();
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.DeviceAuthorizationRequired,
         ),
-    );
-    const applyStatusArgs2: Parameters<typeof applyStatus>[0] = {
-      state,
-      status,
-    };
-    applyStatus(applyStatusArgs2);
-  } catch (error) {
-    state.errorMsg =
-      error instanceof Error
-        ? error.message
-        : "Failed to add Sentinel participant.";
-    throw error;
-  } finally {
-    state.isVerifying = false;
+      );
+    }
+    return new SentinelGenesisActions(vault)
+      .createPublicKeyAnnouncement()
+      .finally(finishPendingCreation);
   }
 }
 
-export async function createPublicKeyAnnouncement(
-  state: VaultState,
-): Promise<string> {
-  if (!state.hasManager) throw new Error("Vault engine is not available.");
-  if (state.isVerifying) return "";
-  state.isVerifying = true;
-  state.errorMsg = "";
-  try {
-    await state.initDeviceIdentity();
-    return await state.enqueueStorage(() =>
-      state
-        .requireManager()
-        .create_sentinel_genesis_public_key_announcement(
-          state.t(I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder),
+/** Owns browser orchestration for one sentinel genesis context. */
+export class SentinelGenesisActions {
+  constructor(private readonly state: VaultState) {}
+
+  private replaceOwnedWasmValues<T extends { free: () => void }>({
+    current,
+    replacement,
+  }: ReplaceOwnedWasmValuesArgs<T>): T[] {
+    current.forEach((value) => value.free());
+    return replacement;
+  }
+
+  releaseResults(): void {
+    const state = this.state;
+    const replaceOwnedWasmValuesArgs: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisDelivery> =
+      { current: state.sentinelGenesisDeliveries, replacement: [] };
+    state.sentinelGenesisDeliveries = this.replaceOwnedWasmValues(
+      replaceOwnedWasmValuesArgs,
+    );
+    const replaceOwnedWasmValuesArgs2: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisParticipantStatus> =
+      { current: state.sentinelGenesisParticipants, replacement: [] };
+    state.sentinelGenesisParticipants = this.replaceOwnedWasmValues(
+      replaceOwnedWasmValuesArgs2,
+    );
+    state.sentinelGenesisParticipantCount = 0;
+  }
+
+  applyStatus({ status }: SentinelGenesisStatusUpdate): void {
+    const state = this.state;
+    const participants = status.participants;
+    state.sentinelGenesisParticipantCount = participants.length;
+    const replaceOwnedWasmValuesArgs3: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisParticipantStatus> =
+      {
+        current: state.sentinelGenesisParticipants,
+        replacement: participants,
+      };
+    state.sentinelGenesisParticipants = this.replaceOwnedWasmValues(
+      replaceOwnedWasmValuesArgs3,
+    );
+    state.sentinelGenesisPhase = status.phase;
+    status.free();
+  }
+
+  applyFinalizeResult({ result }: SentinelGenesisFinalization): void {
+    const state = this.state;
+    state.sentinelGenesisPhase = result.phase;
+    state.selectSentinelGenesisStore(result.storeId);
+    state.openActiveVault(result.storeId);
+    state.replaceVaultArchitecture(result.architecture as VaultArchitecture);
+    const replaceOwnedWasmValuesArgs4: ReplaceOwnedWasmValuesArgs<NookSentinelGenesisDelivery> =
+      {
+        current: state.sentinelGenesisDeliveries,
+        replacement: result.participantDeliveries,
+      };
+    state.sentinelGenesisDeliveries = this.replaceOwnedWasmValues(
+      replaceOwnedWasmValuesArgs4,
+    );
+    result.free();
+  }
+
+  private restoreStatus(): void {
+    const admitted = this.state.admitManager();
+    if (admitted.isErr()) return;
+    let status: NookSentinelGenesisStatus;
+    try {
+      status = admitted.value.sentinel_genesis_status();
+    } catch {
+      return;
+    }
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    this.applyStatus({ status });
+  }
+
+  async start({
+    args,
+  }: SentinelGenesisStart): Promise<Result<void, StorageOperationFailure>> {
+    const state = this.state;
+    if (state.isVerifying)
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.OperationFailed,
         ),
-    );
-  } catch (error) {
-    state.errorMsg =
-      error instanceof Error
-        ? error.message
-        : "Failed to create Sentinel public key announcement.";
-    throw error;
-  } finally {
-    state.isVerifying = false;
+      );
+    state.isVerifying = true;
+    state.errorMsg = "";
+    state.dismissSuccess();
+    this.releaseResults();
+    state.clearSentinelGenesisStore();
+    try {
+      const initialized = await state.initDeviceIdentity();
+      if (initialized.isErr()) return storageErr(initialized.error);
+      const status = await state.enqueueStorage(async () => {
+        const admitted = state.admitManager();
+        if (admitted.isErr()) return storageErr(admitted.error);
+        try {
+          return storageOk(await admitted.value.start_sentinel_genesis(args));
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      });
+      if (status.isErr()) {
+        this.restoreStatus();
+        return storageErr(status.error);
+      }
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      this.applyStatus({ status: status.value });
+      const admitted = state.admitManager();
+      if (admitted.isErr()) return storageErr(admitted.error);
+      try {
+        state.sentinelGenesisRequest =
+          admitted.value.sentinel_genesis_request_json();
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure));
+      }
+      return storageOk();
+    } finally {
+      state.isVerifying = false;
+    }
   }
-}
 
-export async function rememberRequest({
-  state,
-  requestPayload,
-}: SentinelGenesisRequestPayload): Promise<void> {
-  if (!state.hasManager) throw new Error("Vault engine is not available.");
-  if (state.isVerifying) return;
-  state.isVerifying = true;
-  state.errorMsg = "";
-  try {
-    await state.enqueueStorage(() =>
-      state
-        .requireManager()
-        .remember_sentinel_genesis_request(requestPayload.trim()),
-    );
-  } catch (error) {
-    state.errorMsg =
-      error instanceof Error
-        ? error.message
-        : "Failed to remember the Sentinel initiator request.";
-    throw error;
-  } finally {
-    state.isVerifying = false;
-  }
-}
-
-export async function createParticipantResponse({
-  state,
-  requestPayload,
-}: SentinelGenesisRequestPayload): Promise<string> {
-  if (!state.hasManager) throw new Error("Vault engine is not available.");
-  if (state.isVerifying) return "";
-  state.isVerifying = true;
-  state.errorMsg = "";
-  try {
-    await state.initDeviceIdentity();
-    return await state.enqueueStorage(() =>
-      state
-        .requireManager()
-        .respond_to_sentinel_genesis_request(
-          requestPayload.trim(),
-          state.t(I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder),
+  async addParticipantResponse({
+    payload,
+    participantLabel,
+  }: SentinelGenesisParticipantResponseAddition): Promise<
+    Result<void, StorageOperationFailure>
+  > {
+    const state = this.state;
+    if (state.isVerifying)
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.OperationFailed,
         ),
-    );
-  } catch (error) {
-    state.errorMsg =
-      error instanceof Error
-        ? error.message
-        : "Failed to create Sentinel participant response.";
-    throw error;
-  } finally {
-    state.isVerifying = false;
+      );
+    state.isVerifying = true;
+    state.errorMsg = "";
+    try {
+      const status = await state.enqueueStorage(async () => {
+        const admitted = state.admitManager();
+        if (admitted.isErr()) return storageErr(admitted.error);
+        try {
+          return storageOk(
+            admitted.value.add_sentinel_genesis_participant_response(
+              payload.trim(),
+              participantLabel.trim(),
+            ),
+          );
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      });
+      if (status.isErr()) return storageErr(status.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      this.applyStatus({ status: status.value });
+      return storageOk();
+    } finally {
+      state.isVerifying = false;
+    }
   }
-}
 
-export async function finalize(state: VaultState): Promise<void> {
-  if (!state.hasManager) throw new Error("Vault engine is not available.");
-  if (state.isVerifying) return;
-  state.isVerifying = true;
-  state.errorMsg = "";
-  try {
-    const result = await state.enqueueStorage(() =>
-      state.requireManager().finalize_sentinel_genesis(),
-    );
-    const applyFinalizeResultArgs: Parameters<typeof applyFinalizeResult>[0] = {
-      state,
-      result,
-    };
-    applyFinalizeResult(applyFinalizeResultArgs);
-  } catch (error) {
-    const statusUpdate: SentinelGenesisStatusUpdate = {
-      state,
-      status: state.requireManager().sentinel_genesis_status(),
-    };
-    applyStatus(statusUpdate);
-    state.errorMsg =
-      error instanceof Error
-        ? error.message
-        : "Failed to finalize Sentinel setup.";
-    throw error;
-  } finally {
-    state.isVerifying = false;
+  async createPublicKeyAnnouncement(): Promise<
+    Result<string, StorageOperationFailure>
+  > {
+    const state = this.state;
+    if (state.isVerifying)
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.OperationFailed,
+        ),
+      );
+    state.isVerifying = true;
+    state.errorMsg = "";
+    try {
+      const initialized = await state.initDeviceIdentity();
+      if (initialized.isErr()) return storageErr(initialized.error);
+      const label = state.t(I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder);
+      return await state.enqueueStorage(async () => {
+        const admitted = state.admitManager();
+        if (admitted.isErr()) return storageErr(admitted.error);
+        try {
+          return storageOk(
+            await admitted.value.create_sentinel_genesis_public_key_announcement(
+              label,
+            ),
+          );
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      });
+    } finally {
+      state.isVerifying = false;
+    }
   }
-}
 
-export async function acceptShareDelivery({
-  state,
-  payload,
-}: SentinelGenesisShareDelivery): Promise<void> {
-  if (!state.hasManager) throw new Error("Vault engine is not available.");
-  if (state.isVerifying) return;
-  state.isVerifying = true;
-  state.errorMsg = "";
-  try {
-    await state.enqueueStorage(() =>
-      state
-        .requireManager()
-        .accept_sentinel_genesis_share_delivery(payload.trim()),
-    );
-    await listSentinelStoredDeliveries(state);
-    state.showSuccess(
-      state.t(I18N_KEYS.LoginSentinelGenesisReceiveShareSuccess),
-    );
-  } catch (error) {
-    state.errorMsg =
-      error instanceof Error
-        ? error.message
-        : "Failed to receive Sentinel share.";
-    throw error;
-  } finally {
-    state.isVerifying = false;
+  async rememberRequest({
+    requestPayload,
+  }: SentinelGenesisRequestPayload): Promise<
+    Result<void, StorageOperationFailure>
+  > {
+    const state = this.state;
+    if (state.isVerifying)
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.OperationFailed,
+        ),
+      );
+    state.isVerifying = true;
+    state.errorMsg = "";
+    try {
+      return await state.enqueueStorage(async () => {
+        const admitted = state.admitManager();
+        if (admitted.isErr()) return storageErr(admitted.error);
+        try {
+          admitted.value.remember_sentinel_genesis_request(
+            requestPayload.trim(),
+          );
+          return storageOk();
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      });
+    } finally {
+      state.isVerifying = false;
+    }
   }
-}
 
-export async function completeDelivery(state: VaultState): Promise<void> {
-  if (!state.hasManager) throw new Error("Vault engine is not available.");
-  if (
-    state.sentinelGenesisTarget.kind !== SentinelGenesisTargetKind.Selected ||
-    state.isVerifying
-  )
-    return;
-  const storeId = state.sentinelGenesisTarget.storeId;
-  state.isVerifying = true;
-  try {
-    await set_active_vault(storeId);
-    await state.refreshLocalVaultCatalog();
-    state.selectLoginVault(storeId);
-    state.localLoginPreparation = LocalLoginPreparationState.Idle;
-    state.sentinelCeremonyPrompt = true;
-    state.sentinelGenesisPhase = state
-      .requireManager()
-      .complete_sentinel_genesis_delivery();
-  } finally {
-    state.isVerifying = false;
+  async createParticipantResponse({
+    requestPayload,
+  }: SentinelGenesisRequestPayload): Promise<
+    Result<string, StorageOperationFailure>
+  > {
+    const state = this.state;
+    if (state.isVerifying)
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.OperationFailed,
+        ),
+      );
+    state.isVerifying = true;
+    state.errorMsg = "";
+    try {
+      const initialized = await state.initDeviceIdentity();
+      if (initialized.isErr()) return storageErr(initialized.error);
+      const label = state.t(I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder);
+      return await state.enqueueStorage(async () => {
+        const admitted = state.admitManager();
+        if (admitted.isErr()) return storageErr(admitted.error);
+        try {
+          return storageOk(
+            await admitted.value.respond_to_sentinel_genesis_request(
+              requestPayload.trim(),
+              label,
+            ),
+          );
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      });
+    } finally {
+      state.isVerifying = false;
+    }
   }
-}
 
-export async function acceptOnboardingPackage({
-  state,
-  packageJson,
-}: SentinelOnboardingPackageAcceptance): Promise<void> {
-  if (!state.hasManager) throw new Error("Vault engine is not available.");
-  state.errorMsg = "";
-  const storeId = await state.enqueueStorage(() =>
-    state.requireManager().accept_sentinel_onboarding_package(packageJson),
-  );
-  state.openActiveVault(storeId);
-  await set_active_vault(storeId);
-  const providerLoadOptions: Parameters<typeof state.loadProviders>[0] = {
-    ensureLocalRow: false,
-  };
-  await state.loadProviders(providerLoadOptions);
-  state.applyActiveProviderCredentials();
-  await state.loadDb();
-  state.sentinelGenesisPhase = state.requireManager().sentinelGenesisPhase;
+  async finalize(): Promise<Result<void, StorageOperationFailure>> {
+    const state = this.state;
+    if (state.isVerifying)
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.OperationFailed,
+        ),
+      );
+    state.isVerifying = true;
+    state.errorMsg = "";
+    try {
+      const result = await state.enqueueStorage(async () => {
+        const admitted = state.admitManager();
+        if (admitted.isErr()) return storageErr(admitted.error);
+        try {
+          return storageOk(await admitted.value.finalize_sentinel_genesis());
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      });
+      if (result.isErr()) {
+        this.restoreStatus();
+        return storageErr(result.error);
+      }
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      this.applyFinalizeResult({ result: result.value });
+      return storageOk();
+    } finally {
+      state.isVerifying = false;
+    }
+  }
+
+  async acceptShareDelivery({
+    payload,
+  }: SentinelGenesisShareDelivery): Promise<SentinelActionResult<void>> {
+    const state = this.state;
+    if (state.isVerifying)
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.OperationFailed,
+        ),
+      );
+    state.isVerifying = true;
+    state.errorMsg = "";
+    try {
+      const accepted = await state.enqueueStorage(async () => {
+        const admitted = state.admitManager();
+        if (admitted.isErr()) return storageErr(admitted.error);
+        try {
+          await admitted.value.accept_sentinel_genesis_share_delivery(
+            payload.trim(),
+          );
+          return storageOk();
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      });
+      if (accepted.isErr()) return storageErr(accepted.error);
+      const deliveries = await new SentinelUnlockActions(
+        state,
+      ).listSentinelStoredDeliveries();
+      if (deliveries.isErr()) return storageErr(deliveries.error);
+      state.showSuccess(
+        state.t(I18N_KEYS.LoginSentinelGenesisReceiveShareSuccess),
+      );
+      return storageOk();
+    } finally {
+      state.isVerifying = false;
+    }
+  }
+
+  async completeDelivery(): Promise<Result<void, StorageOperationFailure>> {
+    const state = this.state;
+    if (
+      state.sentinelGenesisTarget.kind !== SentinelGenesisTargetKind.Selected ||
+      state.isVerifying
+    )
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.OperationFailed,
+        ),
+      );
+    const storeId = state.sentinelGenesisTarget.storeId;
+    state.isVerifying = true;
+    try {
+      try {
+        await set_active_vault(storeId);
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure));
+      }
+      const catalogRefresh1 = await state.refreshLocalVaultCatalog();
+      if (catalogRefresh1.isErr()) {
+        return storageErr(catalogRefresh1.error);
+      }
+      state.selectLoginVault(storeId);
+      state.localLoginPreparation = LocalLoginPreparationState.Idle;
+      state.sentinelCeremonyPrompt = true;
+      const admitted = state.admitManager();
+      if (admitted.isErr()) return storageErr(admitted.error);
+      try {
+        state.sentinelGenesisPhase =
+          admitted.value.complete_sentinel_genesis_delivery();
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure));
+      }
+      return storageOk();
+    } finally {
+      state.isVerifying = false;
+    }
+  }
+
+  async acceptOnboardingPackage({
+    packageJson,
+  }: SentinelOnboardingPackageAcceptance): Promise<
+    Result<void, StorageOperationFailure>
+  > {
+    const state = this.state;
+    state.errorMsg = "";
+    const storeId = await state.enqueueStorage(async () => {
+      const admitted = state.admitManager();
+      if (admitted.isErr()) return storageErr(admitted.error);
+      try {
+        return storageOk(
+          await admitted.value.accept_sentinel_onboarding_package(packageJson),
+        );
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure));
+      }
+    });
+    if (storeId.isErr()) return storageErr(storeId.error);
+    try {
+      await set_active_vault(storeId.value);
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure));
+    }
+    state.openActiveVault(storeId.value);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const loadedProviders1 = await state.loadProviders({
+      ensureLocalRow: false,
+    });
+    if (loadedProviders1.isErr()) {
+      return storageErr(loadedProviders1.error);
+    }
+    state.applyActiveProviderCredentials();
+    await state.loadDb();
+    const admitted = state.admitManager();
+    if (admitted.isErr()) return storageErr(admitted.error);
+    try {
+      state.sentinelGenesisPhase = admitted.value.sentinelGenesisPhase;
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure));
+    }
+    return storageOk();
+  }
 }

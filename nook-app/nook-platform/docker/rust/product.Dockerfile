@@ -357,7 +357,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report native-replication-clippy
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo llvm-cov nextest --no-clean --profile ci -p nook-replication \
+    INSTA_UPDATE=no cargo llvm-cov nextest --no-clean --profile ci -p nook-replication \
     && nook-sccache-report native-replication-coverage
 
 COPY nook-app/nook-platform/nook-event-log nook-event-log
@@ -868,10 +868,16 @@ FROM rust-platform AS rust-ecosystem-deterministic
 
 WORKDIR /meta-secret/nook/nook-app/nook-platform
 
+# Only the PR caller with mandatory native coverage may omit duplicate unit tests.
+ARG NATIVE_COVERAGE_PROVIDED=false
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     set -eux; \
-    INSTA_UPDATE=no cargo test --locked -p nook-replication; \
+    case "$NATIVE_COVERAGE_PROVIDED" in \
+      true) INSTA_UPDATE=no cargo test --locked -p nook-replication --doc ;; \
+      false) INSTA_UPDATE=no cargo test --locked -p nook-replication ;; \
+      *) echo 'NATIVE_COVERAGE_PROVIDED must be true or false' >&2; exit 1 ;; \
+    esac; \
     RUSTFLAGS='--cfg loom' cargo test --locked -p nook-replication loom_tests --release; \
     nook-sccache-report rust-ecosystem-deterministic
 
@@ -894,4 +900,4 @@ WORKDIR /meta-secret/nook
 COPY nook-app/nook-platform/ nook-app/nook-platform/
 
 WORKDIR /meta-secret/nook/nook-app/nook-platform
-RUN RUSTC_WRAPPER= cargo kani --package nook-replication
+RUN RUSTC_WRAPPER= timeout --kill-after=10s 3m cargo kani --package nook-replication

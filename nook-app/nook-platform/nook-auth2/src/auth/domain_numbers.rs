@@ -93,7 +93,7 @@ impl From<EnrollmentKeyDerivationIterations> for u32 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
 #[serde(transparent)]
 pub struct PasswordWorkFactor(pub(crate) u8);
 impl From<u8> for PasswordWorkFactor {
@@ -107,7 +107,7 @@ impl From<PasswordWorkFactor> for u8 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
 #[serde(transparent)]
 pub struct SentinelParticipantCount(pub(crate) u8);
 impl From<u8> for SentinelParticipantCount {
@@ -164,7 +164,9 @@ impl Display for SentinelShareCount {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, tsify::Tsify,
+)]
 #[serde(transparent)]
 pub struct SentinelShareIndex(pub(crate) u8);
 impl From<u8> for SentinelShareIndex {
@@ -178,7 +180,7 @@ impl From<SentinelShareIndex> for u8 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
 #[serde(transparent)]
 pub struct SentinelThreshold(pub(crate) u8);
 impl From<u8> for SentinelThreshold {
@@ -211,5 +213,62 @@ mod tests {
         assert_eq!(serde_json::from_str::<IdentityControlEpoch>("2")?, epoch);
         assert_eq!(IdentityControlEpoch::from(u64::MAX).next(), u64::MAX.into());
         Ok(())
+    }
+}
+
+impl SentinelParticipantCount {
+    pub const MIN_QUORUM: Self = Self(2);
+    pub const MAX_QUORUM: Self = Self(16);
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+    pub const fn is_supported_quorum(self) -> bool {
+        self.0 >= Self::MIN_QUORUM.0 && self.0 <= Self::MAX_QUORUM.0
+    }
+    pub const fn has_reached(self, required: Self) -> bool {
+        self.0 >= required.0
+    }
+    pub const fn fits_within(self, required: Self) -> bool {
+        self.0 <= required.0
+    }
+    pub fn matches_share_count(self, actual: SentinelShareCount) -> bool {
+        usize::from(self.0) == actual.0
+    }
+    pub fn supported_quorums() -> Vec<Self> {
+        (Self::MIN_QUORUM.0..=Self::MAX_QUORUM.0)
+            .map(Self)
+            .collect()
+    }
+}
+impl SentinelThreshold {
+    pub const fn is_valid_for(self, participants: SentinelParticipantCount) -> bool {
+        self.0 >= SentinelParticipantCount::MIN_QUORUM.0 && self.0 <= participants.0
+    }
+    pub fn supported_for(participants: SentinelParticipantCount) -> Vec<Self> {
+        if participants.is_supported_quorum() {
+            (SentinelParticipantCount::MIN_QUORUM.0..=participants.0)
+                .map(Self)
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+}
+impl SentinelShareIndex {
+    pub const fn belongs_to(self, participants: SentinelParticipantCount) -> bool {
+        self.0 != 0 && self.0 <= participants.0
+    }
+}
+impl TryFrom<usize> for SentinelParticipantCount {
+    type Error = TryFromIntError;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: converts a collection length into a participant count"
+        )
+    )]
+    fn try_from(count: usize) -> Result<Self, Self::Error> {
+        u8::try_from(count).map(Self)
     }
 }

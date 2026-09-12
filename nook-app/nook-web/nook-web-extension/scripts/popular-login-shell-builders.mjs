@@ -1,11 +1,18 @@
+/** @typedef {Record<string, string>} LoginField */
+/** @typedef {{ fields: LoginField[], submit: Record<string, string> }} LoginStep */
+/** @typedef {{ quirks: string[], steps: LoginStep[] }} LoginShell */
+
+/** @param {Record<string, string>} partial @returns {LoginField} */
 function field(partial) {
   return { type: 'text', ...partial }
 }
 
+/** @param {string[]} quirks @param {LoginStep[]} steps @returns {LoginShell} */
 function shell(quirks, steps) {
   return { quirks, steps }
 }
 
+/** @param {string[]} quirks */
 function emailPassword(quirks = []) {
   return shell(quirks, [
     {
@@ -30,6 +37,7 @@ function emailPassword(quirks = []) {
   ])
 }
 
+/** @param {string[]} quirks */
 function usernamePassword(quirks = []) {
   return shell(quirks, [
     {

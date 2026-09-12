@@ -1,14 +1,9 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { SerializedStorageProvider } from '../lib/provider-credential-staging'
-import {
-  extensionSessionProviderIdentities,
-  scrubProviderCredentials,
-} from '../lib/provider-credential-staging'
+import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import {
   ExtensionSessionRequestValidation,
   type ExtensionSessionRequest as GeneratedExtensionSessionRequest,
-  type ExtensionSessionRequestWire,
   type PasskeyCeremonyQueueDisposition,
   type QueueDisposition,
   validate_extension_session_request,
@@ -90,7 +85,9 @@ type ExtensionSessionImportTransportRequest = {
   payload: Omit<
     GeneratedExtensionSessionImportRequest['payload'],
     'providers'
-  > & { providers: SerializedStorageProvider[] }
+  > & {
+    providers: StorageProvider[]
+  }
 }
 export type ExtensionSessionTransportRequest =
   | GeneratedExtensionSessionNonImportRequest
@@ -417,7 +414,7 @@ function stageExtensionSessionIngressRequest(
     }
     try {
       const stagedProviders = structuredClone(providers)
-      scrubProviderCredentials(providers)
+      new ProviderCredentialBuffer(providers).clear()
       request.payload.providers = []
       return {
         kind: ExtensionSessionIngressStageKind.Staged,
@@ -427,7 +424,7 @@ function stageExtensionSessionIngressRequest(
         },
       }
     } catch {
-      scrubProviderCredentials(providers)
+      new ProviderCredentialBuffer(providers).clear()
       request.payload.providers = []
       return { kind: ExtensionSessionIngressStageKind.Invalid }
     }
@@ -450,7 +447,7 @@ function clearExtensionSessionIngressRequest(
   request: ParsedExtensionSessionTransportRequest,
 ): void {
   if (request.type === ExtensionSessionMessageType.ImportVault) {
-    scrubProviderCredentials(request.payload.providers)
+    new ProviderCredentialBuffer(request.payload.providers).clear()
     request.payload.providers = []
     return
   }
@@ -499,22 +496,24 @@ export async function parseExtensionSessionRequest(
     if (readiness === CompanionWasmReadinessKind.Expired) {
       return { kind: ExtensionSessionRequestParseKind.Invalid }
     }
-    const validationRequest =
-      request.type === ExtensionSessionMessageType.ImportVault
-        ? {
-            ...request,
-            payload: {
-              ...request.payload,
-              providers: extensionSessionProviderIdentities(
-                request.payload.providers,
-              ),
-            },
-          }
-        : request
-    const requestWire: ExtensionSessionRequestWire =
-      validationRequest as ExtensionSessionRequestWire
+    let validationRequest
+    if (request.type === ExtensionSessionMessageType.ImportVault) {
+      const identities = new ProviderCredentialBuffer(
+        request.payload.providers,
+      ).identities()
+      if (identities.isErr()) {
+        clearExtensionSessionIngressRequest(request)
+        return { kind: ExtensionSessionRequestParseKind.Invalid }
+      }
+      validationRequest = {
+        ...request,
+        payload: { ...request.payload, providers: identities.value },
+      }
+    } else {
+      validationRequest = request
+    }
     if (
-      validate_extension_session_request(requestWire) !==
+      validate_extension_session_request(validationRequest) !==
       ExtensionSessionRequestValidation.Accepted
     ) {
       clearExtensionSessionIngressRequest(request)

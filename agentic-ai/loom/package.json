@@ -18,7 +18,7 @@
     "module-experts": "bun run src/module-experts/cli.ts",
     "structural-experts": "bun run src/structural-experts/cli.ts",
     "check": "tsc --noEmit",
-    "lint": "eslint src tests",
+    "lint": "eslint .",
     "format": "prettier --config .prettierrc --write \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc",
     "format:check": "prettier --config .prettierrc --check \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc",
     "test": "bun test",
@@ -42,6 +42,8 @@
     "mdast-util-from-markdown": "2.0.3",
     "remark-gfm": "4.0.1",
     "remark-parse": "11.0.0",
-    "unified": "11.0.5"
+    "unified": "11.0.5",
+    "neverthrow": "8.2.0",
+    "zod": "4.4.3"
   }
 }

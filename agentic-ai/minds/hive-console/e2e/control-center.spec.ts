@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { ObserverSnapshot } from '../src/types';
-import { ObservedAlertKind, ObservedAlertSeverity } from '../src/types';
+import type { ObserverSnapshot } from '../src/generated/index';
+import {
+  ObservedAlertKind,
+  ObservedAlertSeverity,
+} from '../src/generated/values';
 
 const now = Date.now();
 
@@ -62,24 +65,28 @@ const snapshot: ObserverSnapshot = {
       pod_name: 'hive-7c49d9b5c8-krx2p',
       status: 'RUNNING',
       last_seen_at: now - 18_000,
+      presence_expires_at: now + 102_000,
     },
     {
       id: 'agent-two',
       pod_name: 'hive-7c49d9b5c8-n8w4q',
       status: 'IDLE',
       last_seen_at: now - 8_000,
+      presence_expires_at: now + 112_000,
     },
     {
       id: 'agent-three',
       pod_name: 'hive-7c49d9b5c8-qm6tz',
       status: 'IDLE',
       last_seen_at: now - 7 * 60_000,
+      presence_expires_at: now - 300_000,
     },
     {
       id: 'agent-four',
       pod_name: 'hive-7c49d9b5c8-v2jhd',
       status: 'IDLE',
       last_seen_at: now - 11_000,
+      presence_expires_at: now + 109_000,
     },
   ],
   active_task_count: 1,

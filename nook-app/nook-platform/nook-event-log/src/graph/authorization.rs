@@ -1,11 +1,20 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+mod membership;
 use nook_auth2::{AuthKeyId, DeviceSigningPublicKey};
 
-use super::{EventGraph, VaultEvent};
-use crate::event::{VaultEventSchemaVersion, VaultOperation};
+use super::{EventGraph, EventGraphRejection, VaultEvent};
+use crate::event::VaultOperation;
 use crate::signing::SigningIdentity;
-use crate::{EventError, EventResult};
+use crate::{
+    EpochCheckpointRequirement, EventError, EventId, EventResult, SecurityRotationTrigger,
+};
+use nook_replication::CausalQuarantine;
+
+enum EventQuarantineDecision {
+    Retain,
+    Quarantine(String),
+}
 
 impl EventGraph {
     pub(super) fn validate_event_actor_authorized(&self, event: &VaultEvent) -> EventResult<()> {
@@ -17,58 +26,84 @@ impl EventGraph {
         }
         let authorized = self.authorized_actors_before(event)?;
         if authorized.contains(&event.body.actor_id) {
-            return Ok(());
+            Ok(())
+        } else {
+            Err(EventError::UnauthorizedActor {
+                actor_id: event.body.actor_id.as_str().to_owned(),
+            })
         }
-        Err(EventError::UnauthorizedActor {
-            actor_id: event.body.actor_id.as_str().to_owned(),
-        })
     }
 
-    pub(super) fn quarantine_rejected_applicable_events(&mut self) -> EventResult<()> {
+    #[allow(clippy::result_large_err)]
+    pub(super) fn quarantine_rejected_applicable_events(
+        mut self,
+    ) -> Result<Self, EventGraphRejection> {
         loop {
             let mut changed = false;
             let ids = self.events.keys().cloned().collect::<Vec<_>>();
             for id in ids {
-                if self.causal.quarantined().contains_key(&id) {
-                    continue;
-                }
-                let event = self
-                    .events
-                    .get(&id)
-                    .ok_or_else(|| EventError::MissingEvent {
-                        event_id: id.as_str().to_owned(),
-                    })?;
-                if !self.event_ancestors_present(event) {
-                    continue;
-                }
-                let reason = if event
-                    .body
-                    .parents
-                    .iter()
-                    .any(|parent| self.causal.quarantined().contains_key(parent))
-                {
-                    Some("Ancestor event was rejected".to_owned())
-                } else if let Err(EventError::InvalidEpochCheckpointStructure { reason }) =
-                    self.validate_epoch_checkpoint_structure(event)
-                {
-                    Some(format!("Invalid security epoch checkpoint: {reason}"))
-                } else {
-                    match self.validate_event_actor_authorized(event) {
-                        Ok(()) => None,
-                        Err(EventError::UnauthorizedActor { actor_id }) => Some(format!(
-                            "Event actor {actor_id} was not authorized in causal history"
-                        )),
-                        Err(err) => return Err(err),
+                match self.classify_event_quarantine(&id) {
+                    Ok(EventQuarantineDecision::Retain) => {}
+                    Ok(EventQuarantineDecision::Quarantine(reason)) => {
+                        self.causal = self.causal.quarantine(CausalQuarantine { id, reason });
+                        changed = true;
                     }
-                };
-                if let Some(reason) = reason {
-                    self.causal.quarantine(id, reason);
-                    changed = true;
+                    Err(cause) => return Err(EventGraphRejection { graph: self, cause }),
                 }
             }
             if !changed {
-                return Ok(());
+                return Ok(self);
             }
+        }
+    }
+
+    fn classify_event_quarantine(&self, id: &EventId) -> EventResult<EventQuarantineDecision> {
+        if self.causal.quarantined().contains_key(id) {
+            return Ok(EventQuarantineDecision::Retain);
+        }
+        let event = self
+            .events
+            .get(id)
+            .ok_or_else(|| EventError::MissingEvent {
+                event_id: id.as_str().to_owned(),
+            })?;
+        if !self.event_ancestors_present(event) {
+            return Ok(EventQuarantineDecision::Retain);
+        }
+        if event
+            .body
+            .parents
+            .iter()
+            .any(|parent| self.causal.quarantined().contains_key(parent))
+        {
+            Ok(EventQuarantineDecision::Quarantine(
+                "Ancestor event was rejected".to_owned(),
+            ))
+        } else {
+            match self.validate_epoch_checkpoint_structure(event) {
+                Err(EventError::InvalidEpochCheckpointStructure { reason }) => {
+                    Ok(EventQuarantineDecision::Quarantine(format!(
+                        "Invalid security epoch checkpoint: {reason}"
+                    )))
+                }
+                // Only checkpoint structure errors classify an event for quarantine here.
+                Ok(()) | Err(_) => self.classify_event_actor_quarantine(event),
+            }
+        }
+    }
+
+    fn classify_event_actor_quarantine(
+        &self,
+        event: &VaultEvent,
+    ) -> EventResult<EventQuarantineDecision> {
+        match self.validate_event_actor_authorized(event) {
+            Ok(()) => Ok(EventQuarantineDecision::Retain),
+            Err(EventError::UnauthorizedActor { actor_id }) => {
+                Ok(EventQuarantineDecision::Quarantine(format!(
+                    "Event actor {actor_id} was not authorized in causal history"
+                )))
+            }
+            Err(cause) => Err(cause),
         }
     }
 
@@ -80,133 +115,27 @@ impl EventGraph {
         &self,
         event: &VaultEvent,
     ) -> EventResult<()> {
-        let checkpoints = event
-            .body
-            .operations
-            .iter()
-            .filter(|operation| matches!(operation, VaultOperation::EpochCheckpoint { .. }))
-            .count();
-        if checkpoints == 0 || event.body.schema_version < VaultEventSchemaVersion::V3 {
-            return Ok(());
-        }
-        if checkpoints != 1 || event.body.operations.len() != 1 {
-            return Err(EventError::InvalidEpochCheckpointStructure {
-                reason: "checkpoint must be the event's sole operation",
-            });
-        }
-        let [parent_id] = event.body.parents.as_slice() else {
-            return Err(EventError::InvalidEpochCheckpointStructure {
-                reason: "checkpoint must have exactly one direct parent",
-            });
-        };
-        if event.body.key_epoch != *parent_id {
-            return Err(EventError::InvalidEpochCheckpointStructure {
-                reason: "checkpoint key epoch must equal its direct parent id",
-            });
-        }
-        let parent = self
-            .events
-            .get(parent_id)
-            .ok_or_else(|| EventError::MissingEvent {
-                event_id: parent_id.as_str().to_owned(),
-            })?;
-        let is_security_trigger = matches!(
-            parent.body.operations.as_slice(),
-            [VaultOperation::PasswordRotated { .. }
-                | VaultOperation::PasswordRemoved { .. }
-                | VaultOperation::DeviceRevoked { .. }]
-        );
-        if !is_security_trigger {
-            return Err(EventError::InvalidEpochCheckpointStructure {
-                reason: "checkpoint parent must be one security rotation trigger",
-            });
-        }
-        Ok(())
-    }
-
-    /// Allow an unauthorized actor to publish its own membership event when the
-    /// operation's signing key matches the event actor.
-    ///
-    /// Policy:
-    /// - `JoinRequested` — always allowed when self-signed (pending join).
-    /// - `JoinApproved` — allowed only for simple password self-enrol, i.e. when
-    ///   causal ancestry has no sentinel membership/share ops.
-    /// - `SentinelParticipantEnrolled` — never self-signed; must be authorized.
-    fn is_self_signed_membership_event(&self, event: &VaultEvent) -> EventResult<bool> {
-        if event.body.operations.is_empty() {
-            return Ok(false);
-        }
-        let mut allows_join_requested = false;
-        let mut allows_join_approved = false;
-        for operation in &event.body.operations {
-            match operation {
-                VaultOperation::JoinRequested {
-                    signing_public_key, ..
-                } => {
-                    if !Self::operation_is_self_signed(event, signing_public_key)? {
-                        return Ok(false);
+        match event.body.epoch_checkpoint_requirement()? {
+            EpochCheckpointRequirement::NotRequired => Ok(()),
+            EpochCheckpointRequirement::SecurityRotationParent(parent_id) => {
+                let parent =
+                    self.events
+                        .get(parent_id)
+                        .ok_or_else(|| EventError::MissingEvent {
+                            event_id: parent_id.as_str().to_owned(),
+                        })?;
+                match parent.body.security_rotation_trigger() {
+                    SecurityRotationTrigger::Other => {
+                        Err(EventError::InvalidEpochCheckpointStructure {
+                            reason: "checkpoint parent must be one security rotation trigger",
+                        })
                     }
-                    allows_join_requested = true;
+                    SecurityRotationTrigger::PasswordRotated
+                    | SecurityRotationTrigger::PasswordRemoved
+                    | SecurityRotationTrigger::DeviceRevoked => Ok(()),
                 }
-                VaultOperation::JoinApproved {
-                    signing_public_key, ..
-                } => {
-                    if !Self::operation_is_self_signed(event, signing_public_key)? {
-                        return Ok(false);
-                    }
-                    allows_join_approved = true;
-                }
-                VaultOperation::SentinelParticipantEnrolled { .. } => {
-                    // Sentinel enrolment must be signed by an already-authorized actor.
-                    return Ok(false);
-                }
-                _ => return Ok(false),
             }
         }
-        if allows_join_approved && self.ancestry_has_sentinel_architecture_evidence(event) {
-            return Ok(false);
-        }
-        Ok(allows_join_requested || allows_join_approved)
-    }
-
-    fn operation_is_self_signed(
-        event: &VaultEvent,
-        signing_public_key: &DeviceSigningPublicKey,
-    ) -> EventResult<bool> {
-        if signing_public_key.is_empty() {
-            return Ok(false);
-        }
-        if &event.body.actor_signing_public_key != signing_public_key {
-            return Ok(false);
-        }
-        let request_actor =
-            SigningIdentity::actor_id_for_public_key_hex(signing_public_key.as_str())?;
-        Ok(request_actor == event.body.actor_id)
-    }
-
-    /// True when causal ancestry proves Sentinel architecture and therefore
-    /// disqualifies simple password self-enrol via `JoinApproved`.
-    fn ancestry_has_sentinel_architecture_evidence(&self, event: &VaultEvent) -> bool {
-        let mut visited = BTreeSet::new();
-        let mut stack = event.body.parents.clone();
-        while let Some(id) = stack.pop() {
-            if !visited.insert(id.clone()) {
-                continue;
-            }
-            let Some(parent) = self.events.get(&id) else {
-                continue;
-            };
-            if parent
-                .body
-                .operations
-                .iter()
-                .any(VaultOperation::is_sentinel_architecture_evidence)
-            {
-                return true;
-            }
-            stack.extend(parent.body.parents.iter().cloned());
-        }
-        false
     }
 
     fn authorized_actors_before(&self, event: &VaultEvent) -> EventResult<BTreeSet<AuthKeyId>> {
@@ -270,26 +199,30 @@ impl EventGraph {
 
 #[cfg(test)]
 mod tests {
+    #![allow(unused_assignments)]
+
     use super::*;
     use crate::event::{
-        EncryptedSecretPayload, GenesisImportPayload, SentinelShareIssuedPayload, VaultEvent,
-        VaultEventBody, VaultEventSchemaVersion, VaultOperation, build_genesis_import_event,
+        EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
+        VaultEventSchemaVersion, VaultOperation,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key, store};
-    use crate::{EventId, EventInsertStatus, EventResult};
+    use crate::{
+        EventGraphRejection, EventId, EventInsertStatus, EventResult, GenesisImportRequest,
+    };
     use ed25519_dalek::SigningKey;
     use nook_auth2::{
         AgeArmoredCiphertext, DeviceId, DevicePublicKey, IsoTimestamp, MemberLabel,
         OpaqueCiphertext, SecretId, Sha256Hex,
     };
 
-    const STORE_STR: &str = "store_testtoken11";
+    pub(super) const STORE_STR: &str = "store_testtoken11";
 
-    fn genesis_source_hash() -> Sha256Hex {
+    pub(super) fn genesis_source_hash() -> Sha256Hex {
         Sha256Hex::from_trusted("deadbeef".repeat(8))
     }
 
-    fn signed_child(
+    pub(super) fn signed_child(
         parents: Vec<EventId>,
         secret_id: &str,
         signing_key: &SigningKey,
@@ -319,22 +252,22 @@ mod tests {
         VaultEvent::sign(body, signing_key)
     }
 
-    fn genesis_event(signing_key: &SigningKey) -> EventResult<VaultEvent> {
-        build_genesis_import_event(
-            &store()?,
-            &actor(signing_key)?,
-            &epoch()?,
-            GenesisImportPayload {
+    pub(super) fn genesis_event(signing_key: &SigningKey) -> EventResult<VaultEvent> {
+        VaultEvent::build_genesis_import_event(GenesisImportRequest {
+            store_id: &store()?,
+            actor_id: &actor(signing_key)?,
+            key_epoch: &epoch()?,
+            payload: GenesisImportPayload {
                 source_content_hash: genesis_source_hash(),
                 secrets: vec![],
                 password_entries: vec![],
             },
-            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             signing_key,
-        )
+        })
     }
 
-    fn signed_operation(
+    pub(super) fn signed_operation(
         parents: Vec<EventId>,
         operation: VaultOperation,
         signing_key: &SigningKey,
@@ -352,15 +285,29 @@ mod tests {
         VaultEvent::sign(body, signing_key)
     }
 
-    fn graph_with_genesis(signing_key: &SigningKey) -> EventResult<(EventGraph, EventId)> {
+    pub(super) fn graph_with_genesis(
+        signing_key: &SigningKey,
+    ) -> EventResult<(EventGraph, EventId)> {
         let mut graph = EventGraph::new();
         let genesis = genesis_event(signing_key)?;
         let genesis_id = genesis.id()?;
-        graph.insert(genesis, STORE_STR)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis,
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
         Ok((graph, genesis_id))
     }
 
-    fn join_approval(
+    pub(super) fn join_approval(
         signing_key: &SigningKey,
         device_id: &str,
         encryption_public_key: &str,
@@ -376,12 +323,12 @@ mod tests {
         })
     }
 
-    fn assert_self_approval_quarantined(
-        graph: &mut EventGraph,
+    pub(super) fn assert_self_approval_quarantined(
+        mut graph: EventGraph,
         parent: EventId,
         stranger_key: &SigningKey,
         encryption_public_key: &str,
-    ) -> EventResult<()> {
+    ) -> EventResult<EventGraph> {
         let event = signed_operation(
             vec![parent],
             join_approval(
@@ -394,11 +341,23 @@ mod tests {
         )?;
         let event_id = event.id()?;
         assert!(matches!(
-            graph.insert(event, STORE_STR)?,
+            match graph.insert(crate::EventGraphInsert {
+                event,
+                expected_store_id: STORE_STR
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?,
             EventInsertStatus::Quarantined(_)
         ));
         assert!(graph.quarantined().contains_key(&event_id));
-        Ok(())
+        Ok(graph)
     }
 
     #[test]
@@ -417,13 +376,37 @@ mod tests {
 
         let mut graph = EventGraph::new();
         assert!(matches!(
-            graph.insert(child, STORE_STR)?,
+            match graph.insert(crate::EventGraphInsert {
+                event: child,
+                expected_store_id: STORE_STR
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?,
             EventInsertStatus::Pending(_)
         ));
         assert_eq!(graph.pending_events().len(), 1);
 
         assert_eq!(
-            graph.insert(genesis, STORE_STR)?,
+            match graph.insert(crate::EventGraphInsert {
+                event: genesis,
+                expected_store_id: STORE_STR
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?,
             EventInsertStatus::Applied
         );
         assert!(graph.pending_events().is_empty());
@@ -439,12 +422,36 @@ mod tests {
         let mut graph = EventGraph::new();
         let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
-        graph.insert(genesis, STORE_STR)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis,
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         let stranger_event = signed_child(vec![genesis_id], "secret_unauth0001", &stranger_key)?;
         let stranger_id = stranger_event.id()?;
         assert!(matches!(
-            graph.insert(stranger_event, STORE_STR)?,
+            match graph.insert(crate::EventGraphInsert {
+                event: stranger_event,
+                expected_store_id: STORE_STR
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?,
             EventInsertStatus::Quarantined(_)
         ));
         assert!(graph.quarantined().contains_key(&stranger_id));
@@ -458,7 +465,19 @@ mod tests {
         let mut graph = EventGraph::new();
         let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
-        graph.insert(genesis, STORE_STR)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis,
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         let join = signed_operation(
             vec![genesis_id],
@@ -470,7 +489,22 @@ mod tests {
             },
             &joiner_key,
         )?;
-        assert_eq!(graph.insert(join, STORE_STR)?, EventInsertStatus::Applied);
+        assert_eq!(
+            match graph.insert(crate::EventGraphInsert {
+                event: join,
+                expected_store_id: STORE_STR
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?,
+            EventInsertStatus::Applied
+        );
         Ok(())
     }
 
@@ -486,10 +520,40 @@ mod tests {
             &joiner_key,
         )?;
         let enrol_id = enrol.id()?;
-        assert_eq!(graph.insert(enrol, STORE_STR)?, EventInsertStatus::Applied);
+        assert_eq!(
+            match graph.insert(crate::EventGraphInsert {
+                event: enrol,
+                expected_store_id: STORE_STR
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?,
+            EventInsertStatus::Applied
+        );
 
         let child = signed_child(vec![enrol_id], "secret_joiner0001", &joiner_key)?;
-        assert_eq!(graph.insert(child, STORE_STR)?, EventInsertStatus::Applied);
+        assert_eq!(
+            match graph.insert(crate::EventGraphInsert {
+                event: child,
+                expected_store_id: STORE_STR
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?,
+            EventInsertStatus::Applied
+        );
         Ok(())
     }
 
@@ -505,10 +569,37 @@ mod tests {
             &root_key,
         )?;
         let approval_id = approval.id()?;
-        graph.insert(approval, STORE_STR)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: approval,
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         let child = signed_child(vec![approval_id], "secret_joiner0001", &joiner_key)?;
-        assert_eq!(graph.insert(child, STORE_STR)?, EventInsertStatus::Applied);
+        assert_eq!(
+            match graph.insert(crate::EventGraphInsert {
+                event: child,
+                expected_store_id: STORE_STR
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?,
+            EventInsertStatus::Applied
+        );
         Ok(())
     }
 
@@ -520,7 +611,19 @@ mod tests {
         let mut graph = EventGraph::new();
         let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
-        graph.insert(genesis, STORE_STR)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis,
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         let approval = signed_operation(
             vec![genesis_id],
@@ -537,7 +640,19 @@ mod tests {
             &root_key,
         )?;
         let approval_id = approval.id()?;
-        graph.insert(approval, STORE_STR)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: approval,
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         let revoke = signed_operation(
             vec![approval_id],
@@ -545,41 +660,37 @@ mod tests {
             &root_key,
         )?;
         let revoke_id = revoke.id()?;
-        graph.insert(revoke, STORE_STR)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: revoke,
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         let child = signed_child(vec![revoke_id], "secret_revoked0001", &joiner_key)?;
         assert!(matches!(
-            graph.insert(child, STORE_STR)?,
+            match graph.insert(crate::EventGraphInsert {
+                event: child,
+                expected_store_id: STORE_STR
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?,
             EventInsertStatus::Quarantined(_)
         ));
-        Ok(())
-    }
-
-    #[test]
-    fn self_signed_sentinel_participant_enrolled_is_quarantined() -> EventResult<()> {
-        let root_key = signing_key();
-        let stranger_key = signing_key();
-        let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key)?;
-        let genesis_id = genesis.id()?;
-        graph.insert(genesis, STORE_STR)?;
-
-        let enrol = signed_operation(
-            vec![genesis_id],
-            VaultOperation::SentinelParticipantEnrolled {
-                device_id: DeviceId::parse("0123456789abcdef")?,
-                encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
-                signing_public_key: public_key(&stranger_key),
-                label: MemberLabel::from_trusted("phone".to_owned()),
-            },
-            &stranger_key,
-        )?;
-        let enrol_id = enrol.id()?;
-        assert!(matches!(
-            graph.insert(enrol, STORE_STR)?,
-            EventInsertStatus::Quarantined(_)
-        ));
-        assert!(graph.quarantined().contains_key(&enrol_id));
         Ok(())
     }
 
@@ -590,7 +701,19 @@ mod tests {
         let mut graph = EventGraph::new();
         let genesis = genesis_event(&root_key)?;
         let genesis_id = genesis.id()?;
-        graph.insert(genesis, STORE_STR)?;
+        match graph.insert(crate::EventGraphInsert {
+            event: genesis,
+            expected_store_id: STORE_STR,
+        }) {
+            Ok(inserted) => {
+                graph = inserted.graph;
+                Ok(inserted.status)
+            }
+            Err(rejected) => {
+                graph = rejected.graph;
+                Err(rejected.cause)
+            }
+        }?;
 
         let enrol = signed_operation(
             vec![genesis_id],
@@ -603,107 +726,84 @@ mod tests {
             &root_key,
         )?;
         let enrol_id = enrol.id()?;
-        assert_eq!(graph.insert(enrol, STORE_STR)?, EventInsertStatus::Applied);
-
-        let child = signed_child(vec![enrol_id], "secret_joiner0001", &joiner_key)?;
-        assert_eq!(graph.insert(child, STORE_STR)?, EventInsertStatus::Applied);
-        Ok(())
-    }
-
-    #[test]
-    fn self_signed_join_approved_after_sentinel_enrol_is_quarantined() -> EventResult<()> {
-        let root_key = signing_key();
-        let joiner_key = signing_key();
-        let stranger_key = signing_key();
-        let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key)?;
-        let genesis_id = genesis.id()?;
-        graph.insert(genesis, STORE_STR)?;
-
-        let sentinel_enrol = signed_operation(
-            vec![genesis_id],
-            VaultOperation::SentinelParticipantEnrolled {
-                device_id: DeviceId::parse("0123456789abcdef")?,
-                encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
-                signing_public_key: public_key(&joiner_key),
-                label: MemberLabel::from_trusted("phone".to_owned()),
-            },
-            &root_key,
-        )?;
-        let sentinel_enrol_id = sentinel_enrol.id()?;
-        graph.insert(sentinel_enrol, STORE_STR)?;
-
-        assert_self_approval_quarantined(
-            &mut graph,
-            sentinel_enrol_id,
-            &stranger_key,
-            "age-pub-2",
-        )?;
-        Ok(())
-    }
-
-    #[test]
-    fn self_signed_join_approved_after_sentinel_shares_is_quarantined() -> EventResult<()> {
-        let root_key = signing_key();
-        let stranger_key = signing_key();
-        let mut graph = EventGraph::new();
-        let genesis = genesis_event(&root_key)?;
-        let genesis_id = genesis.id()?;
-        graph.insert(genesis, STORE_STR)?;
-
-        let shares = signed_operation(
-            vec![genesis_id],
-            VaultOperation::SentinelSharesIssued {
-                shares: vec![SentinelShareIssuedPayload {
-                    device_id: DeviceId::parse("0123456789abcdef")?,
-                    version: crate::SentinelShareVersion::LEGACY,
-                    threshold: 2.into(),
-                    required_participants: 2.into(),
-                    share_index: 1.into(),
-                    ciphertext: AgeArmoredCiphertext::from_trusted("share-ct".to_owned()),
-                }],
-            },
-            &root_key,
-        )?;
-        let shares_id = shares.id()?;
-        graph.insert(shares, STORE_STR)?;
-
-        assert_self_approval_quarantined(&mut graph, shares_id, &stranger_key, "age-pub")?;
-        Ok(())
-    }
-
-    #[test]
-    fn self_signed_join_approved_after_sentinel_genesis_root_is_quarantined() -> EventResult<()> {
-        let root_key = signing_key();
-        let stranger_key = signing_key();
-        let mut graph = EventGraph::new();
-
-        // Sentinel-style root: genesis import that also records the owner's
-        // SentinelParticipantEnrolled in the same empty-parent event (allowed via
-        // parents.is_empty() short-circuit on actor auth).
-        let mut sentinel_genesis = genesis_event(&root_key)?;
-        sentinel_genesis
-            .body
-            .operations
-            .push(VaultOperation::SentinelParticipantEnrolled {
-                device_id: DeviceId::parse("0123456789abcdef")?,
-                encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
-                signing_public_key: public_key(&root_key),
-                label: MemberLabel::from_trusted("owner".to_owned()),
-            });
-        sentinel_genesis = VaultEvent::sign(sentinel_genesis.body, &root_key)?;
-        let sentinel_genesis_id = sentinel_genesis.id()?;
         assert_eq!(
-            graph.insert(sentinel_genesis, STORE_STR)?,
+            match graph.insert(crate::EventGraphInsert {
+                event: enrol,
+                expected_store_id: STORE_STR
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?,
             EventInsertStatus::Applied
         );
 
-        assert_self_approval_quarantined(
-            &mut graph,
-            sentinel_genesis_id,
-            &stranger_key,
-            "age-pub-2",
-        )?;
+        let child = signed_child(vec![enrol_id], "secret_joiner0001", &joiner_key)?;
+        assert_eq!(
+            match graph.insert(crate::EventGraphInsert {
+                event: child,
+                expected_store_id: STORE_STR
+            }) {
+                Ok(inserted) => {
+                    graph = inserted.graph;
+                    Ok(inserted.status)
+                }
+                Err(rejected) => {
+                    graph = rejected.graph;
+                    Err(rejected.cause)
+                }
+            }?,
+            EventInsertStatus::Applied
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn graph_admission_fails_closed_for_corrupt_or_invalid_envelopes() -> anyhow::Result<()> {
+        let first_key = signing_key();
+        let second_key = signing_key();
+        let incoming = genesis_event(&first_key)?;
+        let incoming_id = incoming.id()?;
+        let mut corrupt_graph = EventGraph::new();
+        corrupt_graph
+            .events
+            .insert(incoming_id.clone(), genesis_event(&second_key)?);
+
+        let inserted = corrupt_graph
+            .insert(crate::EventGraphInsert {
+                event: incoming,
+                expected_store_id: STORE_STR,
+            })
+            .map_err(EventGraphRejection::into_cause)?;
+        assert!(matches!(
+            inserted.status,
+            EventInsertStatus::Quarantined(reason) if reason == "hash mismatch at event path"
+        ));
+        assert!(inserted.graph.quarantined().contains_key(&incoming_id));
+
+        let rejected = EventGraph::new()
+            .insert(crate::EventGraphInsert {
+                event: genesis_event(&first_key)?,
+                expected_store_id: "store_otherid0001",
+            })
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("wrong-store event must be rejected"))?;
+        assert!(rejected.graph.is_empty());
+        assert!(matches!(
+            rejected.into_cause(),
+            EventError::EventStoreIdMismatch { .. }
+        ));
+
+        let unknown = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
+        assert!(matches!(
+            EventGraph::new().classify_event_quarantine(&unknown),
+            Err(EventError::MissingEvent { .. })
+        ));
         Ok(())
     }
 }

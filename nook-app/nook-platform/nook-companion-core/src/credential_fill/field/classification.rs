@@ -2,6 +2,8 @@ use super::super::CredentialFillFieldClassificationOutcome;
 use super::{
     Credential, CredentialRole, Editability, Index, NewPassword, Observation, OneTimeCode, Password,
 };
+use crate::AutocompleteTokenQuery;
+use crate::PageInputFieldObservation;
 use crate::page_field_classification;
 use serde::{Deserialize, Serialize};
 
@@ -57,7 +59,7 @@ impl Classification {
         if field.disabled {
             return Self::Ignored(field_index.into());
         }
-        match page_field_classification::classify_authentication_input_role(field) {
+        match (field).classify_authentication_input_role() {
             page_field_classification::AuthenticationInputRole::OneTimeCode(_) => {
                 Observation::from(OneTimeCode::from(field_index)).into()
             }
@@ -81,20 +83,21 @@ impl Classification {
                 if field.input_type != crate::PageInputType::Password {
                     return Self::Ignored(field_index.into());
                 }
-                if page_field_classification::has_autocomplete_token(
-                    &field.autocomplete_tokens,
-                    "new-password",
-                ) {
+                if PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
+                    tokens: &field.autocomplete_tokens,
+                    expected: "new-password",
+                }) {
                     return Observation::from(NewPassword::from(field_index)).into();
                 }
-                let password = if page_field_classification::has_autocomplete_token(
-                    &field.autocomplete_tokens,
-                    "current-password",
-                ) {
-                    Password::Current
-                } else {
-                    Password::Generic
-                };
+                let password =
+                    if PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
+                        tokens: &field.autocomplete_tokens,
+                        expected: "current-password",
+                    }) {
+                        Password::Current
+                    } else {
+                        Password::Generic
+                    };
                 let editability = if field.read_only {
                     Editability::Readonly
                 } else {
@@ -132,7 +135,7 @@ mod tests {
                     .map(ToString::to_string)
                     .collect(),
                 identity_text: identity_text.to_owned(),
-                login_context: true,
+                login_context: (true).into(),
             }
         }
     }

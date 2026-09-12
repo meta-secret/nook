@@ -1,4 +1,7 @@
 use super::AuthenticationFieldObservationFacts;
+use crate::AuthenticationControlText;
+use crate::CanonicalControlDestination;
+use crate::ControlDestinationEvidence;
 use crate::authentication_workflow::{
     AuthenticationAdvanceControlEvidence, AuthenticationManualCheckpoint,
     AuthenticationOneTimeCodeProgressionEvidence,
@@ -6,10 +9,9 @@ use crate::authentication_workflow::{
 use crate::page_field_classification::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     AuthenticationUsernameEvidence, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-    PageControlSubmissionMethod, canonicalize_control_destination,
-    has_safe_authentication_route_identity, has_safe_credential_update_route_identity,
-    looks_like_one_time_code_auto_submit_signal, one_time_code_ceremony_context_is_authenticated,
+    OneTimeCodeRouteDecision, PageControlSubmissionMethod,
 };
+use crate::{AuthenticationRouteEvidence, CredentialUpdateRouteEvidence, OneTimeCodeRouteEvidence};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -80,6 +82,21 @@ impl Default for AuthenticationCeremonyContextObservation {
 }
 
 impl AuthenticationCeremonyContextObservation {
+    pub(super) fn approved_scope_compatibility(
+        &self,
+        approved: &Self,
+    ) -> super::revalidation::ApprovedObservationCompatibility {
+        use super::revalidation::ApprovedObservationCompatibility::{Changed, Unchanged};
+        if self.source_origin == approved.source_origin
+            && self.form_identity == approved.form_identity
+            && self.destination_identity == approved.destination_identity
+        {
+            Unchanged
+        } else {
+            Changed
+        }
+    }
+
     fn is_bounded(&self) -> bool {
         [
             &self.source_origin,
@@ -91,21 +108,25 @@ impl AuthenticationCeremonyContextObservation {
     }
 
     pub(super) fn is_authenticated(&self, fields: AuthenticationFieldObservationFacts) -> bool {
-        fields.one_time_code_field_count.raw() > 0
-            && fields.current_password_field_count.raw() == 0
-            && fields.new_password_field_count.raw() == 0
-            && fields.generic_password_field_count.raw() == 0
-            && (fields.username_field_count.raw() > 0)
+        fields.one_time_code_field_count.is_nonzero()
+            && fields.current_password_field_count.is_zero()
+            && fields.new_password_field_count.is_zero()
+            && fields.generic_password_field_count.is_zero()
+            && (fields.username_field_count.is_nonzero())
                 != matches!(
                     self.authentication_username,
                     AuthenticationUsernameEvidence::Absent
                 )
             && self.is_bounded()
-            && one_time_code_ceremony_context_is_authenticated(
-                self.authentication_username,
-                &self.source_origin,
-                &self.form_identity,
-                &self.destination_identity,
+            && matches!(
+                (OneTimeCodeRouteEvidence {
+                    authentication_username: self.authentication_username,
+                    source_origin: &self.source_origin,
+                    form_identity: &self.form_identity,
+                    destination_identity: &self.destination_identity
+                })
+                .classify(),
+                OneTimeCodeRouteDecision::Authentication
             )
     }
 }
@@ -170,11 +191,11 @@ impl AuthenticationCeremonyObservationFacts {
         if !matches!(
             self.implicit_submission_method,
             PageControlSubmissionMethod::Get
-        ) || fields.username_field_count.raw() != 1
-            || fields.current_password_field_count.raw() != 0
-            || fields.generic_password_field_count.raw() != 0
-            || fields.new_password_field_count.raw() != 0
-            || fields.one_time_code_field_count.raw() != 0
+        ) || !fields.username_field_count.is_single()
+            || fields.current_password_field_count.is_nonzero()
+            || fields.generic_password_field_count.is_nonzero()
+            || fields.new_password_field_count.is_nonzero()
+            || fields.one_time_code_field_count.is_nonzero()
             || !matches!(
                 self.authentication_context.authentication_username,
                 AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
@@ -186,9 +207,12 @@ impl AuthenticationCeremonyObservationFacts {
         if !context.form_identity.is_empty() {
             return false;
         }
-        let Some(destination) =
-            canonicalize_control_destination(&context.source_origin, &context.destination_identity)
-        else {
+        let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
+            ControlDestinationEvidence {
+                source_origin: &context.source_origin,
+                destination_identity: &context.destination_identity,
+            },
+        ) else {
             return false;
         };
         if destination
@@ -198,10 +222,12 @@ impl AuthenticationCeremonyObservationFacts {
         {
             return false;
         }
-        has_safe_authentication_route_identity(
-            &context.source_origin,
-            &destination.route_identity,
-            &context.destination_identity,
+        AuthenticationAdvanceControlObservation::has_safe_authentication_route_identity(
+            AuthenticationRouteEvidence {
+                source_origin: &context.source_origin,
+                form_identity: &destination.route_identity,
+                destination_identity: &context.destination_identity,
+            },
         )
     }
 
@@ -218,16 +244,16 @@ impl AuthenticationCeremonyObservationFacts {
 
     pub(super) fn derived_one_time_code_progression(
         &self,
-        has_trusted_authentication_context: bool,
+        fields: AuthenticationFieldObservationFacts,
     ) -> AuthenticationOneTimeCodeProgressionEvidence {
-        if !self.is_bounded() || !has_trusted_authentication_context {
+        if !self.is_bounded() || !self.authentication_context.is_authenticated(fields) {
             return AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired;
         }
-        if looks_like_one_time_code_auto_submit_signal(&self.one_time_code_handler_signal)
-            || self
-                .one_time_code_handler_signals
-                .iter()
-                .any(|signal| looks_like_one_time_code_auto_submit_signal(signal))
+        if AuthenticationControlText::new(&self.one_time_code_handler_signal)
+            .looks_like_one_time_code_auto_submit_signal()
+            || self.one_time_code_handler_signals.iter().any(|signal| {
+                AuthenticationControlText::new(signal).looks_like_one_time_code_auto_submit_signal()
+            })
         {
             AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved
         } else {
@@ -242,50 +268,56 @@ impl AuthenticationCeremonyObservationFacts {
         matches!(
             self.advance_control,
             AuthenticationAdvanceControlEvidence::ImplicitSubmission
-        ) && !password_implicit_submission_uses_get(self, fields)
-            && fields.one_time_code_field_count.raw() == 0
+        ) && !(self).password_implicit_submission_uses_get(fields)
+            && fields.one_time_code_field_count.is_zero()
             && [
-                fields.current_password_field_count.raw(),
-                fields.generic_password_field_count.raw(),
-                fields.new_password_field_count.raw(),
-                fields.username_field_count.raw(),
+                fields.current_password_field_count,
+                fields.generic_password_field_count,
+                fields.new_password_field_count,
+                fields.username_field_count,
             ]
             .into_iter()
-            .any(|count| count > 0)
-            && (fields.username_field_count.raw() > 0)
+            .any(crate::AuthenticationFieldCount::is_nonzero)
+            && (fields.username_field_count.is_nonzero())
                 != matches!(
                     self.authentication_context.authentication_username,
                     AuthenticationUsernameEvidence::Absent
                 )
             && self.authentication_context.is_bounded()
-            && if fields.new_password_field_count.raw() > 0 {
-                has_safe_credential_update_route_identity(
-                    &self.authentication_context.source_origin,
-                    &self.authentication_context.form_identity,
-                    &self.authentication_context.destination_identity,
+            && if fields.new_password_field_count.is_nonzero() {
+                AuthenticationAdvanceControlObservation::has_safe_credential_update_route_identity(
+                    CredentialUpdateRouteEvidence {
+                        source_origin: &self.authentication_context.source_origin,
+                        form_identity: &self.authentication_context.form_identity,
+                        destination_identity: &self.authentication_context.destination_identity,
+                    },
                 )
             } else {
-                has_safe_authentication_route_identity(
-                    &self.authentication_context.source_origin,
-                    &self.authentication_context.form_identity,
-                    &self.authentication_context.destination_identity,
+                AuthenticationAdvanceControlObservation::has_safe_authentication_route_identity(
+                    AuthenticationRouteEvidence {
+                        source_origin: &self.authentication_context.source_origin,
+                        form_identity: &self.authentication_context.form_identity,
+                        destination_identity: &self.authentication_context.destination_identity,
+                    },
                 ) || self.has_safe_identifier_only_login_mode_get(fields)
             }
     }
 }
 
-fn password_implicit_submission_uses_get(
-    ceremony: &AuthenticationCeremonyObservationFacts,
-    fields: AuthenticationFieldObservationFacts,
-) -> bool {
-    (fields.current_password_field_count.raw()
-        + fields.generic_password_field_count.raw()
-        + fields.new_password_field_count.raw())
-        > 0
-        && matches!(
-            ceremony.implicit_submission_method,
-            PageControlSubmissionMethod::Get | PageControlSubmissionMethod::Dialog
-        )
+impl AuthenticationCeremonyObservationFacts {
+    fn password_implicit_submission_uses_get(
+        &self,
+        fields: AuthenticationFieldObservationFacts,
+    ) -> bool {
+        let ceremony = self;
+        (fields.current_password_field_count.is_nonzero()
+            || fields.generic_password_field_count.is_nonzero()
+            || fields.new_password_field_count.is_nonzero())
+            && matches!(
+                ceremony.implicit_submission_method,
+                PageControlSubmissionMethod::Get | PageControlSubmissionMethod::Dialog
+            )
+    }
 }
 
 #[cfg(test)]
@@ -293,7 +325,7 @@ mod tests {
     use super::*;
     use crate::{
         PageControlActionability, PageControlOwnership, PageControlSemantics,
-        PageControlSubmissionDestinationSource, authentication_advance_control_is_safe,
+        PageControlSubmissionDestinationSource,
     };
 
     struct TeslaInertPlanningScenario;
@@ -380,7 +412,7 @@ mod tests {
     #[test]
     fn tesla_inert_next_is_planning_evidence_without_actuation_authority() {
         let inert = TeslaInertPlanningScenario::observation();
-        assert!(!authentication_advance_control_is_safe(&inert));
+        assert!(!inert.authentication_advance_control_is_safe());
         assert!(inert.is_inert_webauthn_email_planning_advance());
         assert!(TeslaInertPlanningScenario::fields().is_compatible_with_detailed_control(&inert));
         assert!(matches!(
@@ -390,7 +422,7 @@ mod tests {
 
         let mut refreshed = inert;
         refreshed.actionability = PageControlActionability::Actionable;
-        assert!(authentication_advance_control_is_safe(&refreshed));
+        assert!(refreshed.authentication_advance_control_is_safe());
         assert!(matches!(
             TeslaInertPlanningScenario::evidence(refreshed),
             AuthenticationAdvanceControlEvidence::Present

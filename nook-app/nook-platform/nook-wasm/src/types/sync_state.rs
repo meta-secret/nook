@@ -32,7 +32,8 @@ impl NookVaultLastSync {
     )]
     pub fn synced(at_unix_milliseconds: f64) -> Result<Self, wasm_bindgen::JsError> {
         let at_unix_milliseconds =
-            valid_javascript_milliseconds(at_unix_milliseconds).map_err(JsError::new)?;
+            NookVaultLastSync::valid_javascript_milliseconds(at_unix_milliseconds)
+                .map_err(JsError::new)?;
         Ok(Self(VaultLastSync::Synced {
             at_unix_milliseconds: at_unix_milliseconds.into(),
         }))
@@ -68,15 +69,17 @@ impl NookVaultLastSync {
 }
 
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn valid_javascript_milliseconds(value: f64) -> Result<u64, &'static str> {
-    if !value.is_finite()
-        || value < 0.0
-        || value.fract() != 0.0
-        || value > MAX_SAFE_JAVASCRIPT_INTEGER
-    {
-        return Err("sync timestamp must be a non-negative safe integer");
+impl NookVaultLastSync {
+    fn valid_javascript_milliseconds(value: f64) -> Result<u64, &'static str> {
+        if !value.is_finite()
+            || value < 0.0
+            || value.fract() != 0.0
+            || value > MAX_SAFE_JAVASCRIPT_INTEGER
+        {
+            return Err("sync timestamp must be a non-negative safe integer");
+        }
+        Ok(value as u64)
     }
-    Ok(value as u64)
 }
 
 #[wasm_bindgen]
@@ -331,11 +334,17 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn javascript_timestamp_validation_rejects_lossy_values() {
-        assert_eq!(valid_javascript_milliseconds(42.0), Ok(42));
-        assert!(valid_javascript_milliseconds(-1.0).is_err());
-        assert!(valid_javascript_milliseconds(1.5).is_err());
-        assert!(valid_javascript_milliseconds(f64::NAN).is_err());
-        assert!(valid_javascript_milliseconds(MAX_SAFE_JAVASCRIPT_INTEGER + 1.0).is_err());
+        assert_eq!(
+            NookVaultLastSync::valid_javascript_milliseconds(42.0),
+            Ok(42)
+        );
+        assert!(NookVaultLastSync::valid_javascript_milliseconds(-1.0).is_err());
+        assert!(NookVaultLastSync::valid_javascript_milliseconds(1.5).is_err());
+        assert!(NookVaultLastSync::valid_javascript_milliseconds(f64::NAN).is_err());
+        assert!(
+            NookVaultLastSync::valid_javascript_milliseconds(MAX_SAFE_JAVASCRIPT_INTEGER + 1.0)
+                .is_err()
+        );
     }
 
     #[wasm_bindgen_test]

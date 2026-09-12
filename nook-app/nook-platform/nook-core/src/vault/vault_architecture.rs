@@ -11,11 +11,9 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::VaultMetaRecord;
-
-use crate::StoredSecretRecord;
 use crate::errors::{ValidationError, ValidationResult};
-use serde::{Deserialize, Deserializer, Serialize, de::Error as DeError};
+use crate::{StoredSecretRecord, VaultMetaRecord};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -36,7 +34,8 @@ pub use shared_storage_grant::{
 };
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default, Deserialize)]
+#[serde(try_from = "String")]
 #[serde(rename_all = "kebab-case")]
 pub enum VaultType {
     /// Existing per-device full vault-key envelope model.
@@ -66,18 +65,16 @@ impl VaultType {
     }
 }
 
-impl<'de> Deserialize<'de> for VaultType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::parse(&value).map_err(D::Error::custom)
+impl TryFrom<String> for VaultType {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default, Deserialize)]
+#[serde(try_from = "String")]
 #[serde(rename_all = "kebab-case")]
 pub enum ReplicationType {
     /// Same owner / highly trusted devices may reuse sync-provider credentials.
@@ -87,13 +84,10 @@ pub enum ReplicationType {
     Shared,
 }
 
-impl<'de> Deserialize<'de> for ReplicationType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::parse(&value).map_err(D::Error::custom)
+impl TryFrom<String> for ReplicationType {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 
@@ -193,22 +187,19 @@ impl Default for SentinelPolicy {
 impl SentinelPolicy {
     #[must_use]
     pub fn is_ready(self) -> bool {
-        let threshold = u8::from(self.threshold);
-        let required = u8::from(self.required_participants);
-        threshold > 1 && threshold <= required && u8::from(self.ready_participants) >= required
+        self.threshold.is_valid_for(self.required_participants)
+            && self
+                .ready_participants
+                .has_reached(self.required_participants)
     }
 
     pub fn validate(self) -> ValidationResult<()> {
-        let threshold = u8::from(self.threshold);
-        let required = u8::from(self.required_participants);
-        let ready = u8::from(self.ready_participants);
-        if threshold <= 1 || threshold > required {
-            return Err(ValidationError::InvalidSentinelPolicy);
-        }
-        if required > 16 {
-            return Err(ValidationError::InvalidSentinelPolicy);
-        }
-        if ready > required {
+        if !self.threshold.is_valid_for(self.required_participants)
+            || !self.required_participants.is_supported_quorum()
+            || !self
+                .ready_participants
+                .fits_within(self.required_participants)
+        {
             return Err(ValidationError::InvalidSentinelPolicy);
         }
         Ok(())
@@ -216,6 +207,7 @@ impl SentinelPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "VaultArchitectureWire")]
 #[serde(rename_all = "snake_case")]
 pub struct VaultArchitecture {
     #[serde(default)]
@@ -231,6 +223,32 @@ pub struct VaultArchitecture {
     pub sentinel: SentinelConfiguration,
 }
 
+#[derive(Deserialize)]
+struct VaultArchitectureWire {
+    #[serde(default)]
+    device_mode: DeviceMode,
+    #[serde(default)]
+    vault_type: VaultType,
+    #[serde(default)]
+    replication_type: ReplicationType,
+    #[serde(default)]
+    sentinel: SentinelConfiguration,
+}
+
+impl TryFrom<VaultArchitectureWire> for VaultArchitecture {
+    type Error = ValidationError;
+    fn try_from(wire: VaultArchitectureWire) -> Result<Self, Self::Error> {
+        let architecture = Self {
+            device_mode: wire.device_mode,
+            vault_type: wire.vault_type,
+            replication_type: wire.replication_type,
+            sentinel: wire.sentinel,
+        };
+        architecture.validate()?;
+        Ok(architecture)
+    }
+}
+
 impl Default for VaultArchitecture {
     fn default() -> Self {
         Self {
@@ -243,6 +261,11 @@ impl Default for VaultArchitecture {
 }
 
 impl VaultArchitecture {
+    /// Serde omission callback for the default architecture.
+    pub(crate) fn is_default(&self) -> bool {
+        self == &Self::default()
+    }
+
     pub fn draft(
         device_mode: DeviceMode,
         vault_type: VaultType,
@@ -313,7 +336,8 @@ impl VaultArchitecture {
         let mut has_auth = false;
 
         for record in records {
-            let classified = VaultMetaRecord::classify(record)
+            let classified = (record)
+                .classify()
                 .map_err(|_| ValidationError::InvalidSentinelShareSet)?;
             match classified {
                 VaultMetaRecord::Auth(..) => has_auth = true,
@@ -341,7 +365,7 @@ impl VaultArchitecture {
                     return Err(ValidationError::SentinelVaultHasFullKeyEnvelopes);
                 }
                 if shares.is_empty() {
-                    return if u8::from(self.sentinel.policy()?.ready_participants) == 0 {
+                    return if self.sentinel.policy()?.ready_participants.is_zero() {
                         Ok(())
                     } else {
                         Err(ValidationError::InvalidSentinelShareSet)
@@ -349,13 +373,14 @@ impl VaultArchitecture {
                 }
 
                 let policy = self.sentinel.policy()?;
-                if shares.len() != usize::from(u8::from(policy.required_participants))
+                if !policy
+                    .required_participants
+                    .matches_share_count(shares.len().into())
                     || policy.ready_participants != policy.required_participants
                     || shares.iter().any(|share| {
                         share.threshold != policy.threshold
                             || share.required_participants != policy.required_participants
-                            || u8::from(share.share_index) == 0
-                            || u8::from(share.share_index) > u8::from(policy.required_participants)
+                            || !share.share_index.belongs_to(policy.required_participants)
                     })
                 {
                     return Err(ValidationError::InvalidSentinelShareSet);
@@ -404,6 +429,7 @@ impl VaultArchitecture {
 
 #[cfg(test)]
 mod tests {
+    use crate::{CreateSentinelShareRecordsRequest, RecordTypeDeclaration, SentinelShareEnvelope};
     use crate::{DeviceIdentity, SecretId, StoredRecordPayload};
 
     use std::slice;
@@ -546,7 +572,13 @@ mod tests {
         let keys = crate::VaultKeys::generate()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2.into())?;
+        let shares = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &[first, second],
+                threshold: 2.into(),
+            },
+        )?;
         let ready = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
@@ -558,7 +590,10 @@ mod tests {
 
         assert!(ready.can_create_secret());
         assert!(!ready.can_create_secret_with_records(&[]));
-        assert!(!ready.can_create_secret_with_records(&shares[..1]));
+        let one_share = shares
+            .get(..1)
+            .unwrap_or_else(|| panic!("sentinel fixture must contain one share"));
+        assert!(!ready.can_create_secret_with_records(one_share));
         assert!(ready.can_create_secret_with_records(&shares));
         Ok(())
     }
@@ -577,10 +612,12 @@ mod tests {
                 ready_participants: 2.into(),
             },
         );
-        let shares = crate::create_sentinel_share_records(
-            &keys,
-            &[first.clone(), second.clone()],
-            2.into(),
+        let shares = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &[first.clone(), second.clone()],
+                threshold: 2.into(),
+            },
         )?;
         architecture.validate_records(&shares)?;
 
@@ -593,7 +630,11 @@ mod tests {
         );
 
         assert_eq!(
-            architecture.validate_records(&shares[..1]),
+            architecture.validate_records(
+                shares
+                    .get(..1)
+                    .unwrap_or_else(|| panic!("sentinel fixture must contain one share"))
+            ),
             Err(ValidationError::InvalidSentinelShareSet)
         );
 
@@ -611,12 +652,23 @@ mod tests {
         );
 
         let mut duplicate_index = shares;
-        let first_envelope =
-            crate::parse_sentinel_share_envelope(duplicate_index[0].value.as_str())?;
-        let mut second_envelope =
-            crate::parse_sentinel_share_envelope(duplicate_index[1].value.as_str())?;
+        let first_envelope = SentinelShareEnvelope::parse_sentinel_share_envelope(
+            duplicate_index.first().map_or_else(
+                || panic!("sentinel fixture must contain a first share"),
+                |share| share.value.as_str(),
+            ),
+        )?;
+        let mut second_envelope = SentinelShareEnvelope::parse_sentinel_share_envelope(
+            duplicate_index.get(1).map_or_else(
+                || panic!("sentinel fixture must contain a second share"),
+                |share| share.value.as_str(),
+            ),
+        )?;
         second_envelope.share_index = first_envelope.share_index;
-        duplicate_index[1].value =
+        let Some(second_share) = duplicate_index.get_mut(1) else {
+            anyhow::bail!("sentinel fixture must contain two shares");
+        };
+        second_share.value =
             StoredRecordPayload::from_trusted(serde_json::to_string(&second_envelope)?);
         assert_eq!(
             architecture.validate_records(&duplicate_index),
@@ -630,7 +682,13 @@ mod tests {
         let keys = crate::VaultKeys::generate()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2.into())?;
+        let shares = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &[first, second],
+                threshold: 2.into(),
+            },
+        )?;
         assert_eq!(
             VaultArchitecture::default().validate_records(&shares),
             Err(ValidationError::SimpleVaultHasSentinelShares)
@@ -642,7 +700,7 @@ mod tests {
     fn malformed_sentinel_share_prefix_fails_closed_for_every_vault_type() {
         let malformed = StoredSecretRecord {
             key: SecretId::from_vault_record("sentinel_share:0123456789abcdef"),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted("not-a-share-envelope".to_owned()),
         };
         let sentinel = VaultArchitecture::sentinel_personal(
@@ -664,3 +722,8 @@ mod tests {
         );
     }
 }
+
+mod sentinel_projection;
+pub use sentinel_projection::{
+    SentinelPolicyDraft, SentinelPolicyDraftAdmission, SentinelPolicyDraftEvaluation,
+};

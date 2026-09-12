@@ -11,37 +11,20 @@ type AppLogsLoadingDocument = {
 type AppLogsDocument =
   AppLogsResponse | AppLogsErrorDocument | AppLogsLoadingDocument;
 
-type JsonSerializationValue =
-  | string
-  | number
-  | boolean
-  | readonly JsonSerializationValue[]
-  | { readonly [key: string]: JsonSerializationValue };
+export class AppLogsJsonDocument {
+  constructor(private readonly document: AppLogsDocument) {}
 
-// JSON.stringify is a host adapter whose replacer necessarily receives every
-// JSON transport value. Keep that generic boundary here and return immediately.
-// eslint-disable-next-line max-params
-function preserveJsonSerializationValue(
-  _key: string,
-  value: JsonSerializationValue,
-): JsonSerializationValue {
-  return value;
-}
+  get text(): string {
+    return JSON.stringify(this.document, null, 2);
+  }
 
-function formatAppLogsDocument(document: AppLogsDocument): string {
-  return JSON.stringify(document, preserveJsonSerializationValue, 2);
-}
+  static error(message: string): AppLogsJsonDocument {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new AppLogsJsonDocument({ error: message });
+  }
 
-export function formatAppLogsError(message: string): string {
-  const document: AppLogsErrorDocument = { error: message };
-  return formatAppLogsDocument(document);
-}
-
-export function formatAppLogsPayload(payload: AppLogsResponse): string {
-  return formatAppLogsDocument(payload);
-}
-
-export function formatAppLogsLoading(): string {
-  const document: AppLogsLoadingDocument = { loading: true };
-  return formatAppLogsDocument(document);
+  static loading(): AppLogsJsonDocument {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new AppLogsJsonDocument({ loading: true });
+  }
 }

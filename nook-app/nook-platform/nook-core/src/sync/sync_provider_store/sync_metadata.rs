@@ -126,15 +126,18 @@ mod tests {
             "2026-07-17T12:00:00Z",
         );
         assert_eq!(
-            updated[0].sync_checkpoint,
-            ProviderSyncCheckpoint::Synced {
+            updated.first().map(|provider| &provider.sync_checkpoint),
+            Some(&ProviderSyncCheckpoint::Synced {
                 version: ProviderSyncedVaultVersion::Version(9.into()),
                 synced_at: "2026-07-17T12:00:00Z".to_owned(),
                 revision: ProviderSyncRevision::Revision("old-revision".to_owned()),
                 common_content_hash: crate::VaultRevision::content_hash(""),
-            }
+            })
         );
-        assert_eq!(updated[0].store_id.as_deref(), Some("store-1"));
-        assert_eq!(updated[1], untouched);
+        assert_eq!(
+            updated.first().map(|provider| &provider.store_id),
+            Some(&crate::ProviderVaultScope::StoreId(("store-1").to_owned()))
+        );
+        assert_eq!(updated.get(1), Some(&untouched));
     }
 }

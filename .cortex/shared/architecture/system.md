@@ -1,5 +1,13 @@
 # Nook System Architecture Specification
 
+## Agent delivery applicability
+
+Follow the [dev delivery contract](../../gizmo/architecture/dev-delivery.md) for
+feature compilation and the manually run dev manager's slow PR cycle.
+Runtime workflow details below do not grant permission to run local tests or
+feature-stage slow checks. Paused Hive remains outside the manual manager
+lifecycle and must not be reactivated by this delivery change.
+
 ## Overview
 
 This document provides a comprehensive guide to Nook's architecture, package boundaries, data flows, and development environments. It serves as the primary technical context map for both human developers and autonomous AI coding agents.
@@ -416,8 +424,10 @@ Kata-backed execution Pods:
 - the worker image carries the native Rust, Bun, Node, and Task toolchain, so
   mandatory `task format` runs directly in the Kata guest without any Docker
   daemon or socket; and
-- the task is not complete until its normal PR is checked, reviewed,
-  squash-merged, its resulting Main state is green, and Workbench is updated.
+- repair delivery follows the feature path into local dev;
+- the manually run dev manager owns slow dev PR checks and guarded
+  fast-forward promotion of the tested SHA to main;
+- incident completion retains required Main verification and Workbench evidence.
 
 See
 [design-docs/hive-isolated-agent-platform.md](../../teams/sre/design-docs/hive-isolated-agent-platform.md)

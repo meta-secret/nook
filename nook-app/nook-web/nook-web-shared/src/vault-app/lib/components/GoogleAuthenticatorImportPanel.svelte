@@ -1,31 +1,35 @@
 <script lang="ts">
+  import {
+    SecretFailurePresentation,
+    type SecretOperationResult,
+  } from '$lib/vault/secret-operation-failure'
   type AuthenticatorMigrationUriCollection = string[]
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { onDestroy } from "svelte";
-  import { Camera, ImageUp, QrCode, Trash2, Upload, X } from "@lucide/svelte";
-  import QrScanner from "qr-scanner";
-  import type { VaultState } from "$lib/vault.svelte";
-  import type { NookImportResult } from "$lib/nook";
-  import { Button } from "$lib/components/ui/button";
-  import { Card, CardContent } from "$lib/components/ui/card";
+  import { onDestroy } from 'svelte'
+  import { Camera, ImageUp, QrCode, Trash2, Upload, X } from '@lucide/svelte'
+  import QrScanner from 'qr-scanner'
+  import type { VaultState } from '$lib/vault.svelte'
+  import type { NookImportResult } from '$lib/nook'
+  import { Button } from '$lib/components/ui/button'
+  import { Card, CardContent } from '$lib/components/ui/card'
   import {
     AuthenticatorImportOutcomeKind,
     ScannerLifecycleKind,
     type AuthenticatorImportOutcome,
     type ScannerLifecycle,
-  } from "./google-authenticator-import-state";
+  } from './google-authenticator-import-state'
 
   type CameraScannerOptions = {
-    readonly preferredCamera: "environment";
-    readonly highlightScanRegion: boolean;
-    readonly highlightCodeOutline: boolean;
-    readonly returnDetailedScanResult: true;
-  };
+    readonly preferredCamera: 'environment'
+    readonly highlightScanRegion: boolean
+    readonly highlightCodeOutline: boolean
+    readonly returnDetailedScanResult: true
+  }
 
   type QrImageScanOptions = {
-    readonly returnDetailedScanResult: true;
-  };
+    readonly returnDetailedScanResult: true
+  }
 
   let {
     vault,
@@ -33,55 +37,60 @@
     onImport,
     embedded = false,
   }: {
-    vault: VaultState;
-    isSaving: boolean;
-    onImport: (migrationUris: AuthenticatorMigrationUriCollection) => Promise<NookImportResult>;
-    embedded?: boolean;
-  } = $props();
+    vault: VaultState
+    isSaving: boolean
+    onImport: (
+      migrationUris: AuthenticatorMigrationUriCollection,
+    ) => Promise<SecretOperationResult<NookImportResult>>
+    embedded?: boolean
+  } = $props()
 
-  let videoElement: HTMLVideoElement;
-  let scannerState: ScannerLifecycle = { kind: ScannerLifecycleKind.NotCreated };
-  let scanning = $state(false);
-  let migrationUris = $state<string[]>([]);
-  let result = $state<AuthenticatorImportOutcome>({ kind: AuthenticatorImportOutcomeKind.NotRun });
-  let error = $state("");
+  let videoElement: HTMLVideoElement
+  let scannerState: ScannerLifecycle = { kind: ScannerLifecycleKind.NotCreated }
+  let scanning = $state(false)
+  let migrationUris = $state<string[]>([])
+  let result = $state<AuthenticatorImportOutcome>({
+    kind: AuthenticatorImportOutcomeKind.NotRun,
+  })
+  let error = $state('')
 
   function stopCamera() {
-    if (scannerState.kind === ScannerLifecycleKind.Created) scannerState.scanner.stop();
-    scanning = false;
+    if (scannerState.kind === ScannerLifecycleKind.Created)
+      scannerState.scanner.stop()
+    scanning = false
   }
 
   function addMigrationUri(value: string) {
-    const uri = value.trim();
-    if (!uri.startsWith("otpauth-migration://offline?")) {
-      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportInvalidQr);
-      return;
+    const uri = value.trim()
+    if (!uri.startsWith('otpauth-migration://offline?')) {
+      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportInvalidQr)
+      return
     }
     if (migrationUris.includes(uri)) {
-      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportDuplicateQr);
-      stopCamera();
-      return;
+      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportDuplicateQr)
+      stopCamera()
+      return
     }
-    migrationUris = [...migrationUris, uri];
-    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
-    error = "";
-    stopCamera();
+    migrationUris = [...migrationUris, uri]
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun }
+    error = ''
+    stopCamera()
   }
 
   async function toggleCamera() {
     if (scanning) {
-      stopCamera();
-      return;
+      stopCamera()
+      return
     }
-    error = "";
-    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
+    error = ''
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun }
     if (scannerState.kind === ScannerLifecycleKind.NotCreated) {
       const scannerOptions: CameraScannerOptions = {
-        preferredCamera: "environment" as const,
+        preferredCamera: 'environment' as const,
         highlightScanRegion: true,
         highlightCodeOutline: true,
         returnDetailedScanResult: true as const,
-      };
+      }
       scannerState = {
         kind: ScannerLifecycleKind.Created,
         scanner: new QrScanner(
@@ -89,59 +98,65 @@
           (scanResult) => addMigrationUri(scanResult.data),
           scannerOptions,
         ),
-      };
+      }
     }
-    scanning = true;
+    scanning = true
     try {
-      await scannerState.scanner.start();
+      await scannerState.scanner.start()
     } catch {
-      scanning = false;
-      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportCameraFailed);
+      scanning = false
+      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportCameraFailed)
     }
   }
 
   async function scanImage(event: Event) {
-    const input = event.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = "";
-    if (!file) return;
-    error = "";
-    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
+    const input = event.currentTarget
+    if (!(input instanceof HTMLInputElement)) return
+    const file = input.files?.[0]
+    input.value = ''
+    if (!file) return
+    error = ''
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun }
     try {
       const scanImageOptions: QrImageScanOptions = {
         returnDetailedScanResult: true as const,
-      };
-      const scanResult = await QrScanner.scanImage(file, scanImageOptions);
-      addMigrationUri(scanResult.data);
+      }
+      const scanResult = await QrScanner.scanImage(file, scanImageOptions)
+      addMigrationUri(scanResult.data)
     } catch {
-      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportImageFailed);
+      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportImageFailed)
     }
   }
 
   function clearScans() {
-    migrationUris = [];
-    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
-    error = "";
-    stopCamera();
+    migrationUris = []
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun }
+    error = ''
+    stopCamera()
   }
 
   async function importScans() {
-    if (migrationUris.length === 0 || isSaving) return;
-    error = "";
-    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
-    try {
-      result = { kind: AuthenticatorImportOutcomeKind.Completed, result: await onImport(migrationUris) };
-      migrationUris = [];
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : String(cause);
+    if (migrationUris.length === 0 || isSaving) return
+    error = ''
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun }
+    const imported = await onImport(migrationUris)
+    if (imported.isErr()) {
+      error = new SecretFailurePresentation(vault).message(imported.error)
+      return
     }
+    result = {
+      kind: AuthenticatorImportOutcomeKind.Completed,
+      result: imported.value,
+    }
+    migrationUris = []
   }
 
   onDestroy(() => {
-    if (scannerState.kind === ScannerLifecycleKind.Created) scannerState.scanner.destroy();
-    scannerState = { kind: ScannerLifecycleKind.NotCreated };
-    migrationUris = [];
-  });
+    if (scannerState.kind === ScannerLifecycleKind.Created)
+      scannerState.scanner.destroy()
+    scannerState = { kind: ScannerLifecycleKind.NotCreated }
+    migrationUris = []
+  })
 </script>
 
 <div class="space-y-4" data-testid="google-authenticator-import-panel">
@@ -219,12 +234,15 @@
           data-testid="google-authenticator-scanned-count"
         >
           <p class="text-sm font-medium text-foreground">
-            {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.GoogleAuthenticatorImportScannedCount,
-  replacements: {
-              count: String(migrationUris.length),
-            },
-}; return vault.t(translationRequest); })()}
+            {(() => {
+              const translationRequest: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.GoogleAuthenticatorImportScannedCount,
+                replacements: {
+                  count: String(migrationUris.length),
+                },
+              }
+              return vault.t(translationRequest)
+            })()}
           </p>
           <Button
             type="button"
@@ -269,21 +287,27 @@
           data-testid="google-authenticator-import-result"
         >
           <p class="font-medium">
-            {(() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.GoogleAuthenticatorImportResultImported,
-  replacements: {
-              count: String(result.result.imported),
-            },
-}; return vault.t(translationRequest2); })()}
+            {(() => {
+              const translationRequest2: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.GoogleAuthenticatorImportResultImported,
+                replacements: {
+                  count: String(result.result.imported),
+                },
+              }
+              return vault.t(translationRequest2)
+            })()}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
-            {(() => { const translationRequest3: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.GoogleAuthenticatorImportResultSkipped,
-  replacements: {
-              unsupported: String(result.result.skippedUnsupported),
-              duplicates: String(result.result.skippedDuplicates),
-            },
-}; return vault.t(translationRequest3); })()}
+            {(() => {
+              const translationRequest3: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.GoogleAuthenticatorImportResultSkipped,
+                replacements: {
+                  unsupported: String(result.result.skippedUnsupported),
+                  duplicates: String(result.result.skippedDuplicates),
+                },
+              }
+              return vault.t(translationRequest3)
+            })()}
           </p>
         </div>
       {/if}

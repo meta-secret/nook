@@ -18,32 +18,29 @@ test.describe('devices and access identity cancellation', () => {
   })
 
   async function identityCreationPending(page: Page): Promise<boolean> {
-    return page.evaluate(() => {
-      if (!('__nookVault' in window)) {
-        throw new Error('Vault runtime is not exposed')
-      }
-      return (
-        window as Window & {
-          __nookVault: {
-            requireManager(): {
-              readonly local_identity_creation_pending: boolean
-            }
+    const pending = await page.evaluate(() => {
+      const vault = window.__nookVault
+      if (!vault)
+        return { ok: false as const, error: 'Vault runtime is not exposed' }
+      const manager = vault.admitManager()
+      return manager.isErr()
+        ? { ok: false as const, error: manager.error.translationKey }
+        : {
+            ok: true as const,
+            value: manager.value.local_identity_creation_pending,
           }
-        }
-      ).__nookVault.requireManager().local_identity_creation_pending
     })
+    if (!pending.ok) throw new Error(pending.error)
+    return pending.value
   }
 
   async function deviceProtectionVerifying(page: Page): Promise<boolean> {
     return page.evaluate(() => {
-      if (!('__nookVault' in window)) {
+      const vault = window.__nookVault
+      if (!vault) {
         throw new Error('Vault runtime is not exposed')
       }
-      return (
-        window as Window & {
-          __nookVault: { readonly isVerifying: boolean }
-        }
-      ).__nookVault.isVerifying
+      return vault.isVerifying
     })
   }
 
@@ -66,13 +63,7 @@ test.describe('devices and access identity cancellation', () => {
         if (!('__nookVault' in window)) {
           throw new Error('Vault runtime is not exposed')
         }
-        return (
-          window as Window & {
-            __nookVault: {
-              readonly deviceProtectionStatus: number
-            }
-          }
-        ).__nookVault.deviceProtectionStatus
+        return window.__nookVault?.deviceProtectionStatus
       }),
     ).toBe(DeviceProtectionStatus.Unlocked)
   })

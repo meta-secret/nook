@@ -6,11 +6,17 @@ import {
   stat,
   writeFile,
 } from 'node:fs/promises';
+
 import type { RmOptions } from 'node:fs';
+
 import { tmpdir } from 'node:os';
+
 import { join } from 'node:path';
+
 import { execFileSync } from 'node:child_process';
+
 import { describe, expect, test } from 'bun:test';
+
 import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
@@ -18,14 +24,42 @@ import {
   TaskTerminalKind,
   WorkflowResultKind,
 } from '../../src/agent-workflow/domain.ts';
+
 import {
   DELEGATION_PLAN_SCHEMA_VERSION,
   DelegationBarrierPolicy,
 } from '../../src/agent-workflow/delegation-domain.ts';
+
 import type { DelegationPlan } from '../../src/agent-workflow/delegation-domain.ts';
+
 import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow/agent-attempt-version.ts';
-import { readVerifiedBarrierAttempt } from '../../src/agent-workflow/attempt-verification.ts';
+
+import { VerifiedAttemptArtifacts } from '../../src/agent-workflow/attempt-verification.ts';
+
 import type { ReadParentAttemptArgs } from '../../src/agent-workflow/attempt-verification.ts';
+
+export class AgentWorkflowDelegationCliScenario {
+  private constructor(private readonly request: string) {}
+
+  static commitFixture(workingDirectory: string): string {
+    return new AgentWorkflowDelegationCliScenario(workingDirectory).execute();
+  }
+
+  private execute(): string {
+    const workingDirectory = this.request;
+    const options = { cwd: workingDirectory, encoding: 'utf8' } as const;
+    execFileSync('git', ['init', '--quiet'], options);
+    execFileSync('git', ['config', 'user.name', 'Loom Test'], options);
+    execFileSync(
+      'git',
+      ['config', 'user.email', 'loom@example.invalid'],
+      options,
+    );
+    execFileSync('git', ['add', '.cortex'], options);
+    execFileSync('git', ['commit', '--quiet', '-m', 'fixture'], options);
+    return execFileSync('git', ['rev-parse', 'HEAD'], options).trim();
+  }
+}
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
@@ -58,7 +92,8 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(registry),
         'utf8',
       );
-      const sourceCommit = commitFixture(workingDirectory);
+      const sourceCommit =
+        AgentWorkflowDelegationCliScenario.commitFixture(workingDirectory);
       const requestPath = join(workingDirectory, 'request.json');
       const request = {
         runId: 'ordinary-coding-run',
@@ -328,7 +363,9 @@ describe('delegated agent journal CLI', () => {
         'utf8',
       );
       await expect(
-        readVerifiedBarrierAttempt(verificationRequest),
+        VerifiedAttemptArtifacts.readVerifiedBarrierAttempt(
+          verificationRequest,
+        ),
       ).rejects.toThrow('parent authorization failed');
 
       const unsafeRequest = {
@@ -534,17 +571,3 @@ describe('delegated agent journal CLI', () => {
     }
   });
 });
-
-function commitFixture(workingDirectory: string): string {
-  const options = { cwd: workingDirectory, encoding: 'utf8' } as const;
-  execFileSync('git', ['init', '--quiet'], options);
-  execFileSync('git', ['config', 'user.name', 'Loom Test'], options);
-  execFileSync(
-    'git',
-    ['config', 'user.email', 'loom@example.invalid'],
-    options,
-  );
-  execFileSync('git', ['add', '.cortex'], options);
-  execFileSync('git', ['commit', '--quiet', '-m', 'fixture'], options);
-  return execFileSync('git', ['rev-parse', 'HEAD'], options).trim();
-}

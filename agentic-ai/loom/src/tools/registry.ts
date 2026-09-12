@@ -1,3 +1,19 @@
+import type { RepositoryDiscoveryFailure } from '../lib/repo.ts';
+import {
+  AgentStatisticsFileCommand,
+  type AgentStatisticsFailure,
+} from '../commands/agent-stats.ts';
+import type { ManifestFailure } from '../lib/dependency-popularity/scan.ts';
+import type { RegistryFailure } from '../lib/dependency-popularity/registry-response.ts';
+import type { PrePushFailure } from '../commands/pre-push.ts';
+import {
+  PullRequestValidationCommand,
+  type PrLandFailure,
+} from '../commands/pr-land.ts';
+import type { SkillScaffoldFailure } from '../commands/skill-scaffold.ts';
+import type { CortexSessionFailure } from '../commands/cortex-session-clean.ts';
+import { err, ok, type Result } from 'neverthrow';
+import type { CortexAuditFailure } from '../commands/cortex-audit.ts';
 import {
   AGENT_STATS_ASSEMBLE_INPUT_SCHEMA,
   AGENT_STATS_FILE_INPUT_SCHEMA,
@@ -20,48 +36,42 @@ import {
 import {
   ExampleCatalogPresence,
   ExampleOperationMarker,
-  exampleDocumentYaml,
-  findExampleCatalogEntry,
   type FindExampleCatalogEntryArgs,
+  LoomRequestExamples,
 } from '../codec/example-documents.ts';
 import type { ObjectJsonSchema } from '../codec/json-schema.ts';
-import { listRequestFamilies, type LoomRequest } from '../codec/request.ts';
+import { type LoomRequest, LoomRequestSchema } from '../codec/request.ts';
 import {
-  runAgentStatsAssemble,
-  runAgentStatsPublish,
-  runAgentStatsValidate,
   type AgentStatsReport,
+  AgentStatisticsCommand,
 } from '../commands/agent-stats.ts';
 import {
-  runCortexAudit,
   type CortexAuditReport,
+  CortexAuditCommand,
 } from '../commands/cortex-audit.ts';
 import {
-  runCortexSessionClean,
   type CortexSessionCleanReport,
+  CortexSessionDirectory,
 } from '../commands/cortex-session-clean.ts';
 import {
-  runDependencyPopularity,
   type DependencyPopularityReport,
+  DependencyPopularityCommand,
 } from '../commands/dependency-popularity.ts';
 import {
-  runPrLandMergeCheck,
-  runPrLandReady,
-  runPrLandStatus,
-  runPrLandValidate,
   type PrLandReport,
+  PullRequestDeliveryCommand,
 } from '../commands/pr-land.ts';
-import { runPrePush, type PrePushReport } from '../commands/pre-push.ts';
+import { type PrePushReport, PrePushCommand } from '../commands/pre-push.ts';
 import {
-  runSkillScaffold,
   type SkillScaffoldReport,
+  SkillScaffoldCommand,
 } from '../commands/skill-scaffold.ts';
-import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
+import { LoomFailureCode } from '../loom-failure.ts';
 import {
   AGENT_TEMP_DIR_TOKEN,
-  resolveAgentTempPath,
+  AgentTemporaryPath,
 } from '../lib/agent-temp-path.ts';
-import { findRepoRoot } from '../lib/repo.ts';
+import { RepositoryRoot, BunExecutable } from '../lib/repo.ts';
 
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 import type { ResolveAgentTempPathRequest } from '../lib/agent-temp-path.ts';
@@ -87,6 +97,50 @@ type DiscoverableRequestDefinition = Omit<
   DiscoverableRequest,
   'exampleYaml' | 'resolvedExampleYaml'
 >;
+
+/** Owns the loom request catalog registry and its capability transitions. */
+export class LoomRequestCatalog {
+  constructor(
+    private readonly definitions: readonly DiscoverableRequestDefinition[] = DISCOVERABLE_DEFINITIONS,
+  ) {}
+
+  listDiscoverableRequests(): Result<
+    readonly DiscoverableRequest[],
+    RepositoryDiscoveryFailure
+  > {
+    const discovery1 = new RepositoryRoot().locate();
+    if (discovery1.isErr()) return err(discovery1.error);
+    const repoRoot = discovery1.value;
+    const agentTempPathRequest: ResolveAgentTempPathRequest = {
+      repoRoot,
+      authoredPath: AGENT_TEMP_DIR_TOKEN,
+    };
+    const temporaryPath1 = new AgentTemporaryPath(
+      agentTempPathRequest,
+    ).resolve();
+    if (temporaryPath1.isErr()) return err(temporaryPath1.error);
+    const agentTempDirectory = temporaryPath1.value;
+
+    const requests: DiscoverableRequest[] = [];
+    for (const definition of this.definitions) {
+      const encoded = new DiscoverableRequestExample(definition).yaml();
+      if (encoded.isErr()) return err(encoded.error);
+      const exampleYaml = encoded.value;
+      requests.push({
+        ...definition,
+        exampleYaml,
+        resolvedExampleYaml: exampleYaml.includes(AGENT_TEMP_DIR_TOKEN)
+          ? exampleYaml.replaceAll(AGENT_TEMP_DIR_TOKEN, agentTempDirectory)
+          : exampleYaml,
+      });
+    }
+    return ok(requests);
+  }
+
+  listAllRequestFamilies(): readonly RequestFamily[] {
+    return LoomRequestSchema.listRequestFamilies();
+  }
+}
 
 const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
   {
@@ -178,101 +232,141 @@ const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
   },
 ];
 
-export function listDiscoverableRequests(): readonly DiscoverableRequest[] {
-  const repoRoot = findRepoRoot();
-  const agentTempPathRequest: ResolveAgentTempPathRequest = {
-    repoRoot,
-    authoredPath: AGENT_TEMP_DIR_TOKEN,
-  };
-  const agentTempDirectory = resolveAgentTempPath(agentTempPathRequest);
-
-  return DISCOVERABLE_DEFINITIONS.map((definition) => {
-    const exampleYaml = exampleYamlForDefinition(definition);
-    if (!exampleYaml.includes(AGENT_TEMP_DIR_TOKEN)) {
-      return { ...definition, exampleYaml, resolvedExampleYaml: exampleYaml };
-    }
-    return {
-      ...definition,
-      exampleYaml,
-      resolvedExampleYaml: exampleYaml.replaceAll(
-        AGENT_TEMP_DIR_TOKEN,
-        agentTempDirectory,
-      ),
-    };
-  });
-}
-
-function exampleYamlForDefinition(
-  definition: DiscoverableRequestDefinition,
-): string {
-  const operation = definition.operation;
-  const findExampleCatalogEntryArgs: FindExampleCatalogEntryArgs =
-    typeof operation === 'string'
-      ? { family: definition.family, operation }
-      : {
-          family: definition.family,
-          operation: ExampleOperationMarker.FamilyRoot,
+export class LoomRequestExecution {
+  constructor(private readonly request: LoomRequest) {}
+  async execute(): Promise<
+    Result<
+      LoomCommandResult,
+      | CortexAuditFailure
+      | CortexSessionFailure
+      | SkillScaffoldFailure
+      | PrLandFailure
+      | PrePushFailure
+      | RegistryFailure
+      | ManifestFailure
+      | AgentStatisticsFailure
+    >
+  > {
+    const request = this.request;
+    switch (request.family) {
+      case RequestFamily.PrePush: {
+        const discovery2 = BunExecutable.discover();
+        if (discovery2.isErr()) return err(discovery2.error);
+        const discovery3 = new RepositoryRoot().locate();
+        if (discovery3.isErr()) return err(discovery3.error);
+        return new PrePushCommand({
+          request: request.prePush,
+          repoRoot: discovery3.value,
+        }).execute();
+      }
+      case RequestFamily.CortexAudit:
+        return CortexAuditCommand.runCortexAudit(request.cortexAudit);
+      case RequestFamily.CortexSessionClean: {
+        const discovery4 = new RepositoryRoot().locate();
+        if (discovery4.isErr()) return err(discovery4.error);
+        return new CortexSessionDirectory({
+          repoRoot: discovery4.value,
+        }).clean();
+      }
+      case RequestFamily.SkillScaffold: {
+        const discovery5 = new RepositoryRoot().locate();
+        if (discovery5.isErr()) return err(discovery5.error);
+        return new SkillScaffoldCommand({
+          request: request.skillScaffold,
+          repoRoot: discovery5.value,
+        }).execute();
+      }
+      case RequestFamily.AgentStats: {
+        switch (request.operation) {
+          case AgentStatsOperation.Assemble:
+            return new AgentStatisticsCommand(request.assemble).execute();
+          case AgentStatsOperation.Validate:
+            return new AgentStatisticsFileCommand(request.validate).validate();
+          case AgentStatsOperation.Publish:
+            return new AgentStatisticsFileCommand(request.publish).publish();
+        }
+        break;
+      }
+      case RequestFamily.PrLand: {
+        switch (request.operation) {
+          case PrLandOperation.Status: {
+            const discovery6 = new RepositoryRoot().locate();
+            if (discovery6.isErr()) return err(discovery6.error);
+            return new PullRequestDeliveryCommand({
+              repoRoot: discovery6.value,
+              prNumber: request.status.prNumber,
+            }).status();
+          }
+          case PrLandOperation.Validate: {
+            const discovery7 = new RepositoryRoot().locate();
+            if (discovery7.isErr()) return err(discovery7.error);
+            return new PullRequestValidationCommand({
+              repoRoot: discovery7.value,
+              request: request.validate,
+            }).execute();
+          }
+          case PrLandOperation.Ready: {
+            const discovery8 = new RepositoryRoot().locate();
+            if (discovery8.isErr()) return err(discovery8.error);
+            return new PullRequestDeliveryCommand({
+              repoRoot: discovery8.value,
+              prNumber: request.ready.prNumber,
+            }).readiness();
+          }
+          case PrLandOperation.MergeCheck: {
+            const discovery9 = new RepositoryRoot().locate();
+            if (discovery9.isErr()) return err(discovery9.error);
+            return new PullRequestDeliveryCommand({
+              repoRoot: discovery9.value,
+              prNumber: request.mergeCheck.prNumber,
+            }).mergeReadiness();
+          }
+        }
+        break;
+      }
+      case RequestFamily.DependencyPopularity:
+        return new DependencyPopularityCommand(
+          request.dependencyPopularity,
+        ).execute();
+      case RequestFamily.ToolsList:
+      case RequestFamily.ToolsCall: {
+        const loomFailureDetailArgs: LoomFailureDetailArgs = {
+          code: LoomFailureCode.ValidationFailed,
+          text: `${request.family} is handled by the dispatcher`,
         };
-  const lookup = findExampleCatalogEntry(findExampleCatalogEntryArgs);
-  if (lookup.presence === ExampleCatalogPresence.Present) {
-    return exampleDocumentYaml(lookup.entry.document);
+        return err({
+          code: loomFailureDetailArgs.code,
+          message: loomFailureDetailArgs.text,
+        });
+      }
+    }
   }
-  const loomFailureDetailArgs: LoomFailureDetailArgs = {
-    code: LoomFailureCode.ValidationFailed,
-    text: `missing example catalog entry for ${definition.family}`,
-  };
-  loomFailureDetail(loomFailureDetailArgs);
 }
-
-export function listAllRequestFamilies(): readonly RequestFamily[] {
-  return listRequestFamilies();
-}
-
-export async function executeRequest(
-  request: LoomRequest,
-): Promise<LoomCommandResult> {
-  switch (request.family) {
-    case RequestFamily.PrePush:
-      return runPrePush(request.prePush);
-    case RequestFamily.CortexAudit:
-      return runCortexAudit(request.cortexAudit);
-    case RequestFamily.CortexSessionClean:
-      return runCortexSessionClean(request.cortexSessionClean);
-    case RequestFamily.SkillScaffold:
-      return runSkillScaffold(request.skillScaffold);
-    case RequestFamily.AgentStats: {
-      switch (request.operation) {
-        case AgentStatsOperation.Assemble:
-          return runAgentStatsAssemble(request.assemble);
-        case AgentStatsOperation.Validate:
-          return runAgentStatsValidate(request.validate);
-        case AgentStatsOperation.Publish:
-          return runAgentStatsPublish(request.publish);
-      }
-      break;
+class DiscoverableRequestExample {
+  constructor(private readonly definition: DiscoverableRequestDefinition) {}
+  yaml(): Result<string, RepositoryDiscoveryFailure> {
+    const definition = this.definition;
+    const operation = definition.operation;
+    const findExampleCatalogEntryArgs: FindExampleCatalogEntryArgs =
+      typeof operation === 'string'
+        ? { family: definition.family, operation }
+        : {
+            family: definition.family,
+            operation: ExampleOperationMarker.FamilyRoot,
+          };
+    const lookup = LoomRequestExamples.findExampleCatalogEntry(
+      findExampleCatalogEntryArgs,
+    );
+    if (lookup.presence === ExampleCatalogPresence.Present) {
+      return ok(LoomRequestExamples.exampleDocumentYaml(lookup.entry.document));
     }
-    case RequestFamily.PrLand: {
-      switch (request.operation) {
-        case PrLandOperation.Status:
-          return runPrLandStatus(request.status);
-        case PrLandOperation.Validate:
-          return runPrLandValidate(request.validate);
-        case PrLandOperation.Ready:
-          return runPrLandReady(request.ready);
-        case PrLandOperation.MergeCheck:
-          return runPrLandMergeCheck(request.mergeCheck);
-      }
-      break;
-    }
-    case RequestFamily.DependencyPopularity:
-      return runDependencyPopularity(request.dependencyPopularity);
-    case RequestFamily.ToolsList:
-    case RequestFamily.ToolsCall: {
-      const loomFailureDetailArgs: LoomFailureDetailArgs = {
-        code: LoomFailureCode.ValidationFailed,
-        text: `${request.family} is handled by the dispatcher`,
-      };
-      loomFailureDetail(loomFailureDetailArgs);
-    }
+    const loomFailureDetailArgs: LoomFailureDetailArgs = {
+      code: LoomFailureCode.ValidationFailed,
+      text: `missing example catalog entry for ${definition.family}`,
+    };
+    return err({
+      code: loomFailureDetailArgs.code,
+      message: loomFailureDetailArgs.text,
+    });
   }
 }

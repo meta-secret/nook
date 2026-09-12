@@ -1,8 +1,11 @@
+use super::passkey::PasskeyFieldContext;
 use super::{
     AuthenticationDetailedPasskeyControlObservation, AuthenticationFieldObservationFacts,
     AuthenticationPasskeyControlObservation,
 };
 use crate::AuthenticationPasskeyAccountCount;
+use crate::BackupCodeCandidatePresence;
+use crate::recovery_code_language::RecoveryCopyRecognition;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -36,34 +39,19 @@ pub enum AuthenticationPasskeyAccountAvailability {
 
 /// Classify non-secret recovery copy before consent. Candidate extraction is deferred
 /// until the user approves the save action.
-#[must_use]
-pub fn classify_authentication_backup_codes_observation(
-    text: &str,
-    candidate_present: bool,
-) -> AuthenticationBackupCodesObservation {
-    let normalized = text.to_ascii_lowercase();
-    let recovery_subject = ["backup codes", "recovery codes", "emergency codes"]
-        .iter()
-        .any(|phrase| normalized.contains(phrase));
-    let preservation_instruction = [
-        "save",
-        "store",
-        "keep",
-        "download",
-        "print",
-        "copy",
-        "generated",
-    ]
-    .iter()
-    .any(|word| {
-        normalized
-            .split(|c: char| !c.is_ascii_alphanumeric())
-            .any(|token| token == *word)
-    });
-    if recovery_subject && (preservation_instruction || candidate_present) {
-        AuthenticationBackupCodesObservation::Present
-    } else {
-        AuthenticationBackupCodesObservation::Absent
+/// Named values required by `AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation`.
+#[derive(Clone, Copy)]
+pub struct AuthenticationBackupCodesEvidence<'a> {
+    pub text: &'a str,
+    pub candidate_presence: BackupCodeCandidatePresence,
+}
+
+impl AuthenticationBackupCodesObservation {
+    #[must_use]
+    pub fn classify_authentication_backup_codes_observation(
+        request: AuthenticationBackupCodesEvidence<'_>,
+    ) -> AuthenticationBackupCodesObservation {
+        RecoveryCopyRecognition::from_text(request.text).classify(request.candidate_presence)
     }
 }
 
@@ -93,15 +81,21 @@ impl AuthenticationAuthenticatorObservationFacts {
 
     pub(super) fn backup_codes_hint(&self) -> bool {
         matches!(
-            classify_authentication_backup_codes_observation(&self.backup_codes_copy, false),
+            AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
+                AuthenticationBackupCodesEvidence {
+                    text: &self.backup_codes_copy,
+                    candidate_presence: BackupCodeCandidatePresence::Absent
+                }
+            ),
             AuthenticationBackupCodesObservation::Present
         )
     }
 
     pub(super) fn is_bounded(&self) -> bool {
         self.backup_codes_copy.len() <= crate::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-            && self.matching_passkey_account_count.raw()
-                <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+            && self
+                .matching_passkey_account_count
+                .is_within_observation_limit()
             && self.detailed_passkey_control.is_bounded()
     }
 
@@ -114,7 +108,7 @@ impl AuthenticationAuthenticatorObservationFacts {
             AuthenticationPasskeyAccountAvailability::Ready
         ) && self
             .detailed_passkey_control
-            .is_safe_for_fields(Some(fields))
+            .is_safe_for_fields(PasskeyFieldContext::Observed(fields))
     }
 
     pub(super) const fn matching_passkey_account_count(&self) -> AuthenticationPasskeyAccountCount {
@@ -136,23 +130,35 @@ mod tests {
     #[test]
     fn backup_code_observation_requires_recovery_preservation_copy() {
         assert_eq!(
-            classify_authentication_backup_codes_observation("Use a backup code instead", false),
+            AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
+                AuthenticationBackupCodesEvidence {
+                    text: "Use a backup code instead",
+                    candidate_presence: BackupCodeCandidatePresence::Absent
+                }
+            ),
             AuthenticationBackupCodesObservation::Absent
         );
         assert_eq!(
-            classify_authentication_backup_codes_observation(
-                "Save your backup codes in a secure place",
-                false,
+            AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
+                AuthenticationBackupCodesEvidence {
+                    text: "Save your backup codes in a secure place",
+                    candidate_presence: BackupCodeCandidatePresence::Absent
+                }
             ),
             AuthenticationBackupCodesObservation::Present
         );
         assert_eq!(
-            classify_authentication_backup_codes_observation("Backup codes", true),
+            AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
+                AuthenticationBackupCodesEvidence {
+                    text: "Backup codes",
+                    candidate_presence: BackupCodeCandidatePresence::Present
+                }
+            ),
             AuthenticationBackupCodesObservation::Present
         );
         for ordinary_otp in ["Authenticator code\n123456", "One-time code\n123456"] {
             assert_eq!(
-                classify_authentication_backup_codes_observation(ordinary_otp, false),
+                AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(AuthenticationBackupCodesEvidence { text: ordinary_otp, candidate_presence: BackupCodeCandidatePresence::Absent }),
                 AuthenticationBackupCodesObservation::Absent
             );
         }

@@ -135,47 +135,18 @@ After:
 
 ## Validation
 
-- The proof is a docs diff that restores agreement.
-- Name the checked docs and the code or Task paths used as evidence.
+1. Compare the touched authorities and their relevant runtime contracts by reading.
+2. Resolve conflicting current instructions in the same scoped change.
+3. Report any runtime contract that must change alongside the documentation.
+4. Commit the complete scoped iteration and return it to the feature Gizmo.
+5. Run mechanical link, index, and contract audits in the manager's slow PR stage.
 
-Run the mechanical link and index audit:
+Follow [dev delivery](../../../../gizmo/architecture/dev-delivery.md).
+Do not run local audits, tests, or broad pre-push commands. Do not present a
+semantic reading as a successful mechanical audit.
 
-Request:
-
-```yaml
-cortexAudit:
-  includeDensityLint: false
-```
-
-```bash
-task loom:cortex-audit
-```
-
-- For density findings, set `includeDensityLint: true` in the cortexAudit
-  request.
-- See [Loom tools](../../references/loom-tools.md).
-- Loom checks broken relative links, skill-index sync, and prohibited tracked
-  harness skill mirrors.
-- Semantic conflicts still require agent judgment.
-
-- For implementation tasks:
-  1. run required formatters and commit every allowed AI source or Cortex
-     mutation in the coherent handoff;
-  2. have Gizmo continue from the direct Team Agent commit and run
-     `task loom:pre-push`;
-  3. return any new formatter mutation in AI-owned content for a fresh AI
-     commit before Gizmo reruns hygiene and pushes; and
-  4. Gizmo dispatches at least one relevant focused remote task when the pushed
-     head is not validation-ready, or complete exact-head validation immediately
-     when it is ready.
-- Gizmo obtains fresh exact-head remote evidence after every replacement push.
-
-For a full Cortex GC request, report:
-
-- obsolete facts removed or rewritten;
-- cross-doc conflicts resolved;
-- code mismatches fixed;
-- remaining historical labels.
+For a full Cortex cleanup, report removed guidance, resolved conflicts,
+runtime mismatches, and any remaining historical references.
 
 ### Deterministic contract compilation
 
@@ -189,7 +160,8 @@ The ownership boundary is explicit:
 - Markdown does not become executable state.
 - The rules and their executable policy remain beside this procedure.
 
-Run the compiler through the normal Cortex consistency command:
+Only in the dev manager's remote slow PR stage, run the compiler through the
+Cortex consistency command below. Never invoke it locally or in feature work.
 
 ```bash
 task loom:cortex-audit
@@ -197,7 +169,8 @@ task loom:cortex-audit
 
 The command reports failures in `contractFindings`.
 
-The co-located application is also a discoverable executable skill:
+The co-located application is also a discoverable executable skill. These
+invocations are likewise restricted to the manager's remote slow PR stage:
 
 ```bash
 task skills:tools-list

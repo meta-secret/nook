@@ -2,11 +2,11 @@ use super::{
     AgeArmoredCiphertext, AuthEnvelopes, Deserialize, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, SENTINEL_SHARE_RECORD_PREFIX, SecretId, SecretType,
     SentinelShareEnvelope, Serialize, StoredRecordPayload, StoredSecretRecord, SymmetricKey,
-    parse_sentinel_share_envelope, sentinel_share_record_key,
 };
+use crate::MemberLabelState;
+use crate::RecordTypeDeclaration;
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{AppId, AuthKeyId, DeviceId};
-use age::secrecy::ExposeSecret;
 use age::x25519::Identity;
 use std::collections::HashMap;
 
@@ -16,8 +16,8 @@ pub const MEMBER_RECORD_PREFIX: &str = "member:";
 pub struct MemberEntry {
     pub pk_id: AuthKeyId,
     pub pk: DevicePublicKey,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "MemberLabelState::is_unnamed")]
+    pub label: MemberLabelState,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub enrolled_at: String,
 }
@@ -28,7 +28,7 @@ pub struct VaultMember {
     pub device_id: DeviceId,
     pub public_key: DevicePublicKey,
     pub enrolled_at: String,
-    pub label: Option<String>,
+    pub label: MemberLabelState,
 }
 
 /// Public Sentinel roster entry retained while materializing event-only vaults.
@@ -47,24 +47,23 @@ pub struct SentinelParticipantEntry {
 /// Whether a flat-record key matches the `pk_id` inside the decrypted member entry.
 /// YAML load normalizes `pk_id` to `key_{digest}` while legacy ciphertext may still
 /// store the bare 64-hex digest — accept both forms.
-pub(super) fn member_record_key_matches(stored_key: &str, entry_pk_id: &AuthKeyId) -> bool {
-    if stored_key == entry_pk_id.member_record_key() {
-        return true;
+impl AuthKeyId {
+    pub(super) fn member_record_key_matches(&self, stored_key: &str) -> bool {
+        if stored_key == self.member_record_key() {
+            return true;
+        }
+        if let Ok(normalized) = crate::AuthKeyId::parse(self.as_str()) {
+            return stored_key == normalized.member_record_key();
+        }
+        false
     }
-    if let Ok(normalized) = crate::AuthKeyId::parse(entry_pk_id.as_str()) {
-        return stored_key == normalized.member_record_key();
-    }
-    false
 }
 
 /// Single classification site for the four record kinds that share the
 /// `StoredSecretRecord { key, secret_type, value }` wire shape.
 ///
-/// Replaces scattered `is_join_stored_record` / `is_auth_stored_record` /
-/// `is_members_stored_record` probing at call sites that need to branch on
-/// record kind. Those helpers remain as thin wrappers over this for
-/// call sites that only need a boolean (e.g. wire-boundary partitioning in
-/// `vault_format.rs`).
+/// `StoredSecretRecord::classify` decodes this outcome once. Consumers select
+/// the typed variant rather than probing the raw record with boolean helpers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VaultMetaRecord {
     /// A user-visible secret: id, its declared type, and the age-armored ciphertext.
@@ -79,50 +78,51 @@ pub enum VaultMetaRecord {
     SentinelShare(DeviceId, SentinelShareEnvelope),
 }
 
-impl VaultMetaRecord {
-    pub fn classify(record: &StoredSecretRecord) -> MultiDeviceResult<Self> {
-        if let Some(device_id_str) = record
-            .key
-            .as_str()
-            .strip_prefix(SENTINEL_SHARE_RECORD_PREFIX)
-        {
+impl StoredSecretRecord {
+    pub fn classify(&self) -> MultiDeviceResult<VaultMetaRecord> {
+        if let Some(device_id_str) = self.key.as_str().strip_prefix(SENTINEL_SHARE_RECORD_PREFIX) {
             let device_id = DeviceId::parse(device_id_str)?;
-            let share = parse_sentinel_share_envelope(record.value.as_str())?;
-            return Ok(Self::SentinelShare(device_id, share));
+            let share = SentinelShareEnvelope::parse_sentinel_share_envelope(self.value.as_str())?;
+            return Ok(VaultMetaRecord::SentinelShare(device_id, share));
         }
-        if let Ok(join) = JoinRequest::parse_json(record.value.as_str()) {
-            return Ok(Self::Join(join.device_id.clone(), join));
+        if let Ok(join) = JoinRequest::parse_json(self.value.as_str()) {
+            return Ok(VaultMetaRecord::Join(join.device_id.clone(), join));
         }
-        if let Some(pk_id_str) = record.key.as_str().strip_prefix(MEMBER_RECORD_PREFIX)
-            && record.value.as_str().contains("BEGIN AGE ENCRYPTED FILE")
+        if let Some(pk_id_str) = self.key.as_str().strip_prefix(MEMBER_RECORD_PREFIX)
+            && self.value.as_str().contains("BEGIN AGE ENCRYPTED FILE")
             && let Ok(auth_id) = AuthKeyId::parse(pk_id_str)
         {
-            return Ok(Self::Member(auth_id, record.value.clone()));
+            return Ok(VaultMetaRecord::Member(auth_id, self.value.clone()));
         }
-        if crate::AuthKeyId::is_valid(record.key.as_str())
-            && let Ok(envelopes) = AuthEnvelopes::parse(record.value.as_str())
-            && let Ok(auth_id) = AuthKeyId::parse(record.key.as_str())
+        if crate::AuthKeyId::is_valid(self.key.as_str())
+            && let Ok(envelopes) = AuthEnvelopes::parse(self.value.as_str())
+            && let Ok(auth_id) = AuthKeyId::parse(self.key.as_str())
         {
-            return Ok(Self::Auth(auth_id, envelopes));
+            return Ok(VaultMetaRecord::Auth(auth_id, envelopes));
         }
-        Ok(Self::Secret(
-            record.key.clone(),
-            record.secret_type.unwrap_or(SecretType::SecureNote),
-            record.value.clone(),
+        Ok(VaultMetaRecord::Secret(
+            self.key.clone(),
+            match self.secret_type {
+                RecordTypeDeclaration::Secret(kind) => kind,
+                RecordTypeDeclaration::Undeclared => SecretType::SecureNote,
+            },
+            self.value.clone(),
         ))
     }
+}
 
+impl VaultMetaRecord {
     /// Wire-boundary encoding back to the shared `StoredSecretRecord` shape.
     pub fn to_stored(&self) -> MultiDeviceResult<StoredSecretRecord> {
         Ok(match self {
             Self::Secret(id, secret_type, payload) => StoredSecretRecord {
                 key: id.clone(),
-                secret_type: Some(*secret_type),
+                secret_type: RecordTypeDeclaration::Secret(*secret_type),
                 value: payload.clone(),
             },
             Self::Auth(auth_id, envelopes) => StoredSecretRecord {
                 key: SecretId::from_vault_record(auth_id.as_str()),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_trusted(
                     serde_json::to_string(envelopes)
                         .map_err(MultiDeviceError::AuthEnvelopesSerialize)?,
@@ -130,19 +130,19 @@ impl VaultMetaRecord {
             },
             Self::Join(_, join) => StoredSecretRecord {
                 key: SecretId::from_vault_record(join.device_id.as_str()),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_trusted(
                     serde_json::to_string(join).map_err(MultiDeviceError::JoinRequestSerialize)?,
                 ),
             },
             Self::Member(auth_id, payload) => StoredSecretRecord {
                 key: SecretId::from_vault_record(&auth_id.member_record_key()),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: payload.clone(),
             },
             Self::SentinelShare(device_id, share) => StoredSecretRecord {
-                key: SecretId::from_vault_record(&sentinel_share_record_key(device_id)),
-                secret_type: None,
+                key: SecretId::from_vault_record(&DeviceId::sentinel_share_record_key(device_id)),
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_trusted(
                     serde_json::to_string(share)
                         .map_err(MultiDeviceError::SentinelShareSerialize)?,
@@ -195,7 +195,7 @@ impl VaultMetaState {
 
     /// Insert or overwrite whichever bucket `record` classifies into.
     pub fn apply_record(&mut self, record: &StoredSecretRecord) -> MultiDeviceResult<()> {
-        match VaultMetaRecord::classify(record)? {
+        match (record).classify()? {
             VaultMetaRecord::Secret(id, secret_type, payload) => {
                 self.secrets.insert(id, (secret_type, payload));
             }
@@ -223,7 +223,7 @@ impl VaultMetaState {
         let mut members = self.members.clone();
         members.clear();
         for record in member_records {
-            if let VaultMetaRecord::Member(auth_id, payload) = VaultMetaRecord::classify(record)? {
+            if let VaultMetaRecord::Member(auth_id, payload) = (record).classify()? {
                 members.insert(auth_id, payload);
             }
         }
@@ -265,7 +265,7 @@ impl VaultMetaState {
         for (id, (secret_type, payload)) in &self.secrets {
             records.push(StoredSecretRecord {
                 key: id.clone(),
-                secret_type: Some(*secret_type),
+                secret_type: RecordTypeDeclaration::Secret(*secret_type),
                 value: payload.clone(),
             });
         }
@@ -286,7 +286,7 @@ impl VaultMetaState {
         for (auth_id, payload) in &self.members {
             records.push(StoredSecretRecord {
                 key: SecretId::from_vault_record(&auth_id.member_record_key()),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: payload.clone(),
             });
         }
@@ -357,7 +357,7 @@ impl AppKey {
 
     #[must_use]
     pub fn secret_string(&self) -> DeviceIdentitySecret {
-        DeviceIdentitySecret::from_trusted(self.identity.to_string().expose_secret().to_owned())
+        DeviceIdentitySecret::from_identity(&self.identity)
     }
 
     #[must_use]

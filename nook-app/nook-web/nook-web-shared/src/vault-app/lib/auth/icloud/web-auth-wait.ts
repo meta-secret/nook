@@ -1,286 +1,262 @@
-/**
- * Wait for / obtain a CloudKit web auth token after Apple sign-in UI runs.
- *
- * Covers token-store polling, Post Message callbacks, and the direct Web
- * Services popup used when Nook still owns the click. Native CloudKit button
- * clicks must not open a second popup.
- */
+import { err, ok, type Result } from "neverthrow";
+import { OAuthFailure, OAuthFailureKind } from "$lib/auth/oauth-failure";
 import {
   ICLOUD_API_TOKEN,
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
 } from "$lib/auth/icloud/config";
-import { createLogger } from "$lib/runtime/log";
 import {
-  cloudKitAuthTokenStore,
-  normalizeWebAuthToken,
-  storeCloudKitWebAuthToken,
+  cloudKitRuntime,
   WebAuthTokenLookupKind,
-  webAuthTokenListeners,
-  type CloudKitAuthChallenge,
   type WebAuthTokenLookup,
 } from "$lib/auth/icloud/cloudkit-runtime";
-import { CloudKitAuthErrorTranslationKey } from "$lib/auth/icloud/auth-errors";
 
 export const ICLOUD_SIGN_IN_TIMEOUT_MS = 60_000;
-const log = createLogger("icloud-oauth");
 
-export function cloudKitSignInTimeoutError(): Error {
-  return new Error(
-    "Apple sign-in did not complete. Check that CloudKit allows this site and try again.",
-  );
+enum CloudKitTokenWaitMode {
+  Stored = "stored",
+  Native = "native",
 }
-
-function readWebAuthTokenFromCookie(): WebAuthTokenLookup {
-  for (const part of document.cookie.split(";")) {
-    const trimmed = part.trim();
-    if (!trimmed.startsWith("ckWebAuthToken")) {
-      continue;
-    }
-    const eq = trimmed.indexOf("=");
-    if (eq === -1) {
-      continue;
-    }
-    const value = trimmed.slice(eq + 1);
-    if (value) {
-      const token = decodeURIComponent(value);
-      log.info("CloudKit web auth token found in cookie");
-      return { kind: WebAuthTokenLookupKind.Available, token };
-    }
-  }
-  return { kind: WebAuthTokenLookupKind.Unavailable };
+enum CloudKitTokenWaitState {
+  Waiting = "waiting",
+  Settled = "settled",
 }
+type CloudKitTokenWaitRequest = {
+  browser: typeof globalThis;
+  owner: CloudKitSignInBrowser;
+  timeoutMs: number;
+  mode: CloudKitTokenWaitMode;
+  popup?: Window;
+};
 
-export function readStoredWebAuthToken(): WebAuthTokenLookup {
-  const fromCookie = readWebAuthTokenFromCookie();
-  if (fromCookie.kind === WebAuthTokenLookupKind.Available) {
-    return fromCookie;
-  }
-  const stored = cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID);
-  const token = normalizeWebAuthToken(stored);
-  if (token.kind === WebAuthTokenLookupKind.Available) {
-    log.info("CloudKit web auth token found in session storage");
-  }
-  return token;
-}
-
-export function waitForStoredWebAuthToken(
-  timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
-): Promise<string> {
-  const existing = readStoredWebAuthToken();
-  if (existing.kind === WebAuthTokenLookupKind.Available) {
-    log.info("CloudKit web auth token already available before wait ");
-    return Promise.resolve(existing.token);
-  }
-  log.info("CloudKit web auth token wait started");
-
-  return new Promise(
-    // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-    (resolve, reject) => {
-      let settled = false;
-
-      const cleanup = () => {
-        settled = true;
-        clearTimeout(timeoutId);
-        clearInterval(pollId);
-        webAuthTokenListeners.delete(listener);
-      };
-
-      const listener = (token: string) => {
-        if (settled) {
-          return;
-        }
-        cleanup();
-        log.info("CloudKit web auth token wait resolved by token store ");
-        resolve(token);
-      };
-      webAuthTokenListeners.add(listener);
-
-      const pollId = setInterval(() => {
-        const token = readStoredWebAuthToken();
-        if (token.kind === WebAuthTokenLookupKind.Available) {
-          cleanup();
-          log.info("CloudKit web auth token wait resolved by polling ");
-          resolve(token.token);
-        }
-      }, 500);
-
-      const timeoutId = setTimeout(() => {
-        cleanup();
-        log.warn("CloudKit web auth token wait timed out");
-        reject(cloudKitSignInTimeoutError());
-      }, timeoutMs);
-    },
-  );
-}
-
-function cloudKitCurrentUserURL(): string {
-  const container = encodeURIComponent(ICLOUD_CONTAINER_ID);
-  const environment = encodeURIComponent(ICLOUD_ENVIRONMENT);
-  const apiToken = encodeURIComponent(ICLOUD_API_TOKEN);
-  return `https://api.apple-cloudkit.com/database/1/${container}/${environment}/public/users/current?ckAPIToken=${apiToken}`;
-}
-
-async function fetchCloudKitWebAuthChallenge(): Promise<CloudKitAuthChallenge> {
-  const fetchArgs: Parameters<typeof fetch>[1] = {
-    method: "GET",
-    headers: { Accept: "application/json" },
+/** Owns every listener, timer and optional popup until one terminal outcome. */
+export class CloudKitTokenWait {
+  private state = CloudKitTokenWaitState.Waiting;
+  private readonly timeout: ReturnType<typeof setTimeout>;
+  private readonly poll: ReturnType<typeof setInterval>;
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+  private resolve: (outcome: Result<string, OAuthFailure>) => void = () => {};
+  readonly completion = new Promise<Result<string, OAuthFailure>>((resolve) => {
+    this.resolve = resolve;
+  });
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+  private readonly tokenListener = (outcome: Result<string, OAuthFailure>) =>
+    this.finish(outcome);
+  private readonly messageListener = (event: MessageEvent<unknown>) => {
+    const token = this.request.owner.webAuthTokenFromMessageData(event.data);
+    if (token.kind === WebAuthTokenLookupKind.Unavailable) return;
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const stored = cloudKitRuntime.storeCloudKitWebAuthToken({
+      containerIdentifier: ICLOUD_CONTAINER_ID,
+      token,
+    });
+    this.finish(stored.isErr() ? err(stored.error) : ok(token.token));
   };
-  const response = await fetch(cloudKitCurrentUserURL(), fetchArgs);
-  const body = (await response
-    .json()
-    .catch(() => ({}))) as CloudKitAuthChallenge;
-  log.info("CloudKit direct web auth challenge received");
-  if (body.serverErrorCode === "AUTHENTICATION_REQUIRED" && body.redirectURL) {
-    return body;
+  constructor(private readonly request: CloudKitTokenWaitRequest) {
+    this.timeout = setTimeout(
+      () => this.finish(err(new OAuthFailure(OAuthFailureKind.TimedOut))),
+      request.timeoutMs,
+    );
+    this.poll = setInterval(() => this.observe(), 500);
+    cloudKitRuntime.addTokenListener(this.tokenListener);
+    if (request.mode === CloudKitTokenWaitMode.Native) {
+      try {
+        request.browser.window.addEventListener(
+          "message",
+          this.messageListener,
+        );
+      } catch {
+        this.finish(
+          err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication)),
+        );
+        return;
+      }
+    }
+    this.observe();
   }
-  if (body.serverErrorCode === "AUTHENTICATION_FAILED") {
-    const ErrorArgs: ConstructorParameters<typeof Error>[1] = {
-      cause: body,
-    };
-    throw new Error(CloudKitAuthErrorTranslationKey.UnknownError, ErrorArgs);
+  private observe(): void {
+    if (this.state === CloudKitTokenWaitState.Settled) return;
+    let popupClosed: boolean;
+    try {
+      popupClosed = this.request.popup ? this.request.popup.closed : false;
+    } catch {
+      this.finish(
+        err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication)),
+      );
+      return;
+    }
+    if (popupClosed) {
+      this.finish(err(new OAuthFailure(OAuthFailureKind.Cancelled)));
+      return;
+    }
+    const token = this.request.owner.readStoredWebAuthToken();
+    if (token.isErr()) this.finish(err(token.error));
+    else if (token.value.kind === WebAuthTokenLookupKind.Available)
+      this.finish(ok(token.value.token));
   }
-  throw new Error(
-    ((
-      ...[
-        v = `Apple CloudKit auth challenge failed with HTTP ${response.status}.`,
-      ]
-    ) => v)(((...[v = body.serverErrorCode]) => v)(body.reason)),
-  );
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+  private finish(outcome: Result<string, OAuthFailure>): void {
+    if (this.state === CloudKitTokenWaitState.Settled) return;
+    this.state = CloudKitTokenWaitState.Settled;
+    clearTimeout(this.timeout);
+    clearInterval(this.poll);
+    cloudKitRuntime.removeTokenListener(this.tokenListener);
+    let terminalOutcome = outcome;
+    try {
+      this.request.browser.window.removeEventListener(
+        "message",
+        this.messageListener,
+      );
+    } catch {
+      terminalOutcome = err(new OAuthFailure(OAuthFailureKind.CleanupFailed));
+    }
+    try {
+      this.request.popup?.close();
+    } catch {
+      terminalOutcome = err(new OAuthFailure(OAuthFailureKind.CleanupFailed));
+    }
+    this.resolve(terminalOutcome);
+  }
+  cancel(): void {
+    this.finish(err(new OAuthFailure(OAuthFailureKind.Cancelled)));
+  }
 }
 
-function webAuthTokenFromMessageData(data: unknown): WebAuthTokenLookup {
-  if (typeof data === "string") {
+/** Browser I/O admission and ownership of each CloudKit token wait. */
+class CloudKitSignInBrowser {
+  constructor(private readonly browser: typeof globalThis) {}
+  readStoredWebAuthToken(): Result<WebAuthTokenLookup, OAuthFailure> {
     try {
-      return webAuthTokenFromMessageData(JSON.parse(data));
+      for (const part of this.browser.document.cookie.split(";")) {
+        const trimmed = part.trim();
+        if (!trimmed.startsWith("ckWebAuthToken")) continue;
+        const eq = trimmed.indexOf("=");
+        if (eq === -1) continue;
+        const value = trimmed.slice(eq + 1);
+        if (value)
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+          return ok({
+            kind: WebAuthTokenLookupKind.Available,
+            token: decodeURIComponent(value),
+          });
+      }
     } catch {
-      return { kind: WebAuthTokenLookupKind.Unavailable };
+      return err(new OAuthFailure(OAuthFailureKind.BrowserStorage));
     }
+    return cloudKitRuntime.readStoredToken(ICLOUD_CONTAINER_ID);
   }
-  if (!data || typeof data !== "object") {
+  startStoredWebAuthTokenWait(
+    timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
+  ): CloudKitTokenWait {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new CloudKitTokenWait({
+      browser: this.browser,
+      owner: this,
+      timeoutMs,
+      mode: CloudKitTokenWaitMode.Stored,
+    });
+  }
+  startNativeCloudKitWebAuthTokenWait(
+    timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
+  ): CloudKitTokenWait {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return new CloudKitTokenWait({
+      browser: this.browser,
+      owner: this,
+      timeoutMs,
+      mode: CloudKitTokenWaitMode.Native,
+    });
+  }
+  private async fetchCloudKitWebAuthChallenge(): Promise<
+    Result<string, OAuthFailure>
+  > {
+    const container = encodeURIComponent(ICLOUD_CONTAINER_ID);
+    const environment = encodeURIComponent(ICLOUD_ENVIRONMENT);
+    const apiToken = encodeURIComponent(ICLOUD_API_TOKEN);
+    let value: unknown;
+    try {
+      const response = await fetch(
+        `https://api.apple-cloudkit.com/database/1/${container}/${environment}/public/users/current?ckAPIToken=${apiToken}`,
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        { method: "GET", headers: { Accept: "application/json" } },
+      );
+      value = await response.json();
+    } catch {
+      return err(new OAuthFailure(OAuthFailureKind.InvalidChallenge));
+    }
+    if (
+      !value ||
+      typeof value !== "object" ||
+      !("serverErrorCode" in value) ||
+      value.serverErrorCode !== "AUTHENTICATION_REQUIRED" ||
+      !("redirectURL" in value) ||
+      typeof value.redirectURL !== "string" ||
+      !value.redirectURL
+    )
+      return err(new OAuthFailure(OAuthFailureKind.InvalidChallenge));
+    return ok(value.redirectURL);
+  }
+  webAuthTokenFromMessageData(data: unknown): WebAuthTokenLookup {
+    if (typeof data === "string") {
+      let decoded: unknown;
+      try {
+        decoded = JSON.parse(data);
+      } catch {
+        return { kind: WebAuthTokenLookupKind.Unavailable };
+      }
+      return this.webAuthTokenFromMessageData(decoded);
+    }
+    if (!data || typeof data !== "object")
+      return { kind: WebAuthTokenLookupKind.Unavailable };
+    for (const key of [
+      "ckWebAuthToken",
+      "webAuthToken",
+      "authToken",
+      "token",
+    ]) {
+      const candidate =
+        key === "ckWebAuthToken" && "ckWebAuthToken" in data
+          ? data.ckWebAuthToken
+          : key === "webAuthToken" && "webAuthToken" in data
+            ? data.webAuthToken
+            : key === "authToken" && "authToken" in data
+              ? data.authToken
+              : key === "token" && "token" in data
+                ? data.token
+                : false;
+      if (typeof candidate === "string" && candidate.trim())
+        return {
+          kind: WebAuthTokenLookupKind.Available,
+          token: candidate.trim(),
+        };
+    }
     return { kind: WebAuthTokenLookupKind.Unavailable };
   }
-  const record = data as Record<string, unknown>;
-  for (const key of ["ckWebAuthToken", "webAuthToken", "authToken", "token"]) {
-    const candidate = record[key];
-    if (typeof candidate === "string" && candidate.trim()) {
-      return {
-        kind: WebAuthTokenLookupKind.Available,
-        token: candidate.trim(),
-      };
+  async requestDirectCloudKitWebAuthToken(
+    timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
+  ): Promise<Result<string, OAuthFailure>> {
+    const challenge = await this.fetchCloudKitWebAuthChallenge();
+    if (challenge.isErr()) return err(challenge.error);
+    let opened: ReturnType<Window["open"]>;
+    try {
+      opened = this.browser.window.open(
+        challenge.value,
+        "nook-icloud-auth",
+        "popup,width=520,height=720",
+      );
+    } catch {
+      return err(new OAuthFailure(OAuthFailureKind.PopupBlocked));
     }
+    if (!opened) return err(new OAuthFailure(OAuthFailureKind.PopupBlocked));
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const wait = new CloudKitTokenWait({
+      browser: this.browser,
+      owner: this,
+      timeoutMs,
+      mode: CloudKitTokenWaitMode.Native,
+      popup: opened,
+    });
+    return wait.completion;
   }
-  return { kind: WebAuthTokenLookupKind.Unavailable };
 }
-
-function listenForCloudKitWebAuthTokenMessage(
-  timeoutMs: number,
-): Promise<string> {
-  log.info("CloudKit web auth postMessage wait started");
-  return new Promise(
-    // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-    (resolve, reject) => {
-      let settled = false;
-      const cleanup = () => {
-        settled = true;
-        window.removeEventListener("message", handleMessage);
-        clearTimeout(timeoutId);
-      };
-      const handleMessage = (event: MessageEvent<unknown>) => {
-        const token = webAuthTokenFromMessageData(event.data);
-        log.info("CloudKit web auth postMessage received");
-        if (token.kind === WebAuthTokenLookupKind.Unavailable || settled) {
-          return;
-        }
-        cleanup();
-        const storeCloudKitWebAuthTokenArgs: Parameters<
-          typeof storeCloudKitWebAuthToken
-        >[0] = {
-          containerIdentifier: ICLOUD_CONTAINER_ID,
-          authToken: token.token,
-        };
-        storeCloudKitWebAuthToken(storeCloudKitWebAuthTokenArgs);
-        resolve(token.token);
-      };
-      window.addEventListener("message", handleMessage);
-      const timeoutId = setTimeout(() => {
-        if (settled) {
-          return;
-        }
-        cleanup();
-        reject(cloudKitSignInTimeoutError());
-      }, timeoutMs);
-    },
-  );
-}
-
-export async function requestDirectCloudKitWebAuthToken(
-  timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
-): Promise<string> {
-  log.info("CloudKit direct web auth fallback started");
-  const challenge = await fetchCloudKitWebAuthChallenge();
-  const authWindow = window.open(
-    challenge.redirectURL,
-    "nook-icloud-auth",
-    "popup,width=520,height=720",
-  );
-  if (!authWindow) {
-    log.warn("CloudKit direct web auth popup blocked");
-    throw new Error(
-      "Apple sign-in popup was blocked. Allow popups and try again.",
-    );
-  }
-  return new Promise(
-    // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-    (resolve, reject) => {
-      let settled = false;
-      const cleanup = () => {
-        settled = true;
-        window.removeEventListener("message", handleMessage);
-        clearTimeout(timeoutId);
-      };
-      const handleMessage = (event: MessageEvent<unknown>) => {
-        const token = webAuthTokenFromMessageData(event.data);
-        log.info("CloudKit direct web auth message received");
-        if (token.kind === WebAuthTokenLookupKind.Unavailable || settled) {
-          return;
-        }
-        cleanup();
-        const storeCloudKitWebAuthTokenArgs2: Parameters<
-          typeof storeCloudKitWebAuthToken
-        >[0] = {
-          containerIdentifier: ICLOUD_CONTAINER_ID,
-          authToken: token.token,
-        };
-        storeCloudKitWebAuthToken(storeCloudKitWebAuthTokenArgs2);
-        try {
-          authWindow.close();
-        } catch {
-          // Ignore browser-specific popup close failures.
-        }
-        resolve(token.token);
-      };
-      window.addEventListener("message", handleMessage);
-      const timeoutId = setTimeout(() => {
-        if (settled) {
-          return;
-        }
-        cleanup();
-        log.warn("CloudKit direct web auth fallback timed out");
-        reject(cloudKitSignInTimeoutError());
-      }, timeoutMs);
-    },
-  );
-}
-
-export function waitForNativeCloudKitWebAuthToken(
-  timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
-): Promise<string> {
-  // The Apple window is already open from the user's CloudKit button click.
-  // Wait for CloudKit JS token storage or the Post Message callback without
-  // opening a second popup (Brave blocks that and fails the flow immediately).
-  return Promise.race([
-    waitForStoredWebAuthToken(timeoutMs),
-    listenForCloudKitWebAuthTokenMessage(timeoutMs),
-  ]);
-}
+export const cloudKitSignInBrowser = new CloudKitSignInBrowser(globalThis);

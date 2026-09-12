@@ -1,3 +1,6 @@
+pub struct RustTestSources<'scan> {
+    pub root: &'scan Path,
+}
 use crate::Violation;
 use std::collections::HashSet;
 use std::fs;
@@ -16,53 +19,62 @@ use syn::{Attribute, Expr, ExprIndex, ExprMethodCall, ItemFn, ItemMod, Local, Ma
 /// # Errors
 ///
 /// Returns an error when authored Rust cannot be read or parsed.
-pub fn rust_test_untyped_json_assertions(root: &Path) -> io::Result<Vec<Violation>> {
-    let mut files = Vec::new();
-    collect_rust_files(root, &mut files)?;
+impl RustTestSources<'_> {
+    /// # Errors
+    ///
+    /// Returns an error when authored Rust cannot be read or parsed.
+    pub fn rust_test_untyped_json_assertions(self) -> io::Result<Vec<Violation>> {
+        let Self { root } = self;
+        let mut files = Vec::new();
+        RustTestSources::collect_rust_files(root, &mut files)?;
 
-    let mut violations = Vec::new();
-    for path in files {
-        let source = fs::read_to_string(&path)?;
-        let syntax = syn::parse_file(&source).map_err(|error| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("failed to parse authored Rust {}: {error}", path.display()),
-            )
-        })?;
-        let mut visitor = TypedJsonAssertionVisitor {
-            in_test: path
-                .components()
-                .any(|component| component.as_os_str() == "tests"),
-            ..TypedJsonAssertionVisitor::default()
-        };
-        visitor.visit_file(&syntax);
-        visitor.lines.sort_unstable();
-        visitor.lines.dedup();
-        violations.extend(visitor.lines.into_iter().map(|line| Violation {
-            path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-            line,
-        }));
+        let mut violations = Vec::new();
+        for path in files {
+            let source = fs::read_to_string(&path)?;
+            let syntax = syn::parse_file(&source).map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("failed to parse authored Rust {}: {error}", path.display()),
+                )
+            })?;
+            let mut visitor = TypedJsonAssertionVisitor {
+                in_test: path
+                    .components()
+                    .any(|component| component.as_os_str() == "tests"),
+                ..TypedJsonAssertionVisitor::default()
+            };
+            visitor.visit_file(&syntax);
+            visitor.lines.sort_unstable();
+            visitor.lines.dedup();
+            violations.extend(visitor.lines.into_iter().map(|line| Violation {
+                path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+                line,
+            }));
+        }
+        violations
+            .sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+        Ok(violations)
     }
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    Ok(violations)
 }
 
-fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
-    for entry in fs::read_dir(directory)? {
-        let entry = entry?;
-        let path = entry.path();
-        if entry.file_type()?.is_dir() {
-            if !matches!(
-                path.file_name().and_then(|name| name.to_str()),
-                Some(".git" | "node_modules" | "target")
-            ) {
-                collect_rust_files(&path, files)?;
+impl RustTestSources<'_> {
+    fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
+        for entry in fs::read_dir(directory)? {
+            let entry = entry?;
+            let path = entry.path();
+            if entry.file_type()?.is_dir() {
+                if !matches!(
+                    path.file_name().and_then(|name| name.to_str()),
+                    Some(".git" | "node_modules" | "target")
+                ) {
+                    RustTestSources::collect_rust_files(&path, files)?;
+                }
+            } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
+                files.push(path);
             }
-        } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
-            files.push(path);
         }
+        Ok(())
     }
-    Ok(())
 }
 
 #[derive(Default)]
@@ -89,11 +101,11 @@ impl TypedJsonAssertionVisitor {
         })
     }
 
-    fn local_identifier(pattern: &Pat) -> Option<&syn::Ident> {
+    fn local_identifier(pattern: &Pat) -> IdentifierPattern<'_> {
         match pattern {
-            Pat::Ident(identifier) => Some(&identifier.ident),
+            Pat::Ident(identifier) => IdentifierPattern::Binding(&identifier.ident),
             Pat::Type(typed) => Self::local_identifier(&typed.pat),
-            _ => None,
+            _ => IdentifierPattern::OtherPattern,
         }
     }
 
@@ -136,24 +148,30 @@ impl TypedJsonAssertionVisitor {
         }
     }
 
-    fn indexed_root_identifier(expression: &Expr) -> Option<&syn::Ident> {
+    fn indexed_root_identifier(expression: &Expr) -> IdentifierPattern<'_> {
         match expression {
-            Expr::Path(path) if path.path.segments.len() == 1 => {
-                path.path.segments.first().map(|segment| &segment.ident)
-            }
+            Expr::Path(path) if path.path.segments.len() == 1 => match path.path.segments.first() {
+                Some(segment) => IdentifierPattern::Binding(&segment.ident),
+                None => IdentifierPattern::OtherPattern,
+            },
             Expr::Index(index) => Self::indexed_root_identifier(&index.expr),
             Expr::Group(value) => Self::indexed_root_identifier(&value.expr),
             Expr::Paren(value) => Self::indexed_root_identifier(&value.expr),
             Expr::Reference(value) => Self::indexed_root_identifier(&value.expr),
-            _ => None,
+            _ => IdentifierPattern::OtherPattern,
         }
     }
 
     fn receiver_is_json_value(&self, expression: &Expr) -> bool {
-        Self::indexed_root_identifier(expression).is_some_and(|identifier| {
-            let name = identifier.to_string();
-            name == "json" || name.ends_with("_json") || self.json_value_bindings.contains(&name)
-        })
+        match Self::indexed_root_identifier(expression) {
+            IdentifierPattern::Binding(identifier) => {
+                let name = identifier.to_string();
+                name == "json"
+                    || name.ends_with("_json")
+                    || self.json_value_bindings.contains(&name)
+            }
+            IdentifierPattern::OtherPattern => false,
+        }
     }
 
     fn macro_contains_untyped_json_assertion(&self, value: &Macro) -> bool {
@@ -166,7 +184,9 @@ impl TypedJsonAssertionVisitor {
                 let mut remaining = tokens.as_str();
                 let index_prefix = format!("{binding} [");
                 while let Some(index) = remaining.find(&index_prefix) {
-                    let after_prefix = &remaining[index + index_prefix.len()..];
+                    let Some(after_prefix) = remaining.get(index + index_prefix.len()..) else {
+                        return false;
+                    };
                     if after_prefix.trim_start().starts_with('"') {
                         return true;
                     }
@@ -211,7 +231,7 @@ impl<'ast> Visit<'ast> for TypedJsonAssertionVisitor {
 
     fn visit_local(&mut self, local: &'ast Local) {
         if self.in_test
-            && let Some(identifier) = Self::local_identifier(&local.pat)
+            && let IdentifierPattern::Binding(identifier) = Self::local_identifier(&local.pat)
             && (Self::type_is_json_value(&local.pat)
                 || local
                     .init
@@ -229,6 +249,11 @@ impl<'ast> Visit<'ast> for TypedJsonAssertionVisitor {
         }
         visit::visit_macro(self, value);
     }
+}
+
+enum IdentifierPattern<'ast> {
+    Binding(&'ast syn::Ident),
+    OtherPattern,
 }
 
 #[cfg(test)]

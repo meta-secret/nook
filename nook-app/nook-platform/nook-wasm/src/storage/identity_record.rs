@@ -1,106 +1,147 @@
 //! Local identity-directory persistence, independent of vault `store_id`.
+pub(crate) use crate::storage::indexed_db::StoredStringRecord;
+pub(crate) use nook_core::AppKeyIdentityMembership;
+pub(crate) use nook_core::LocalIdentityProtection;
+pub(crate) use nook_core::MemberLabelState;
+use nook_core::MigratedIdentityDirectory;
 
 #[cfg(test)]
-use super::indexed_db::{idb_delete_key, idb_get_string, idb_put_string};
-use crate::storage::indexed_db;
-use crate::{NookError, storage::open_nook_database};
+pub(crate) use crate::IdbPutStringRequest;
+pub(crate) use crate::NookDatabase;
+use crate::NookError;
 use nook_core::{AppId, IdentityDirectory, IdentitySelection, MultiDeviceError};
+use nook_core::{
+    DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening, IdentityCreation,
+    IdentityMemberSigningUpdate, IdentityVaultKeyOpening,
+};
 use rexie::TransactionMode;
+mod directory_migration;
+mod lookup;
+mod transition_context;
+pub(crate) use lookup::{
+    LocalIdentityProjection, ProtectedIdentityLookup, ProtectedLocalIdentity,
+    SelectedIdentityRecord, StoredIdentityProtection, StoredIdentityRecord,
+};
+pub(crate) use transition_context::{
+    IdentityMigrationSelection, PreviousLocalSelection, PriorAppAuthorization,
+};
 mod genesis_cleanup;
 mod genesis_flow;
 mod handoff;
 mod keyring;
 mod reconciliation;
+pub(crate) use reconciliation::VerifiedPreviousEpoch;
+mod handoff_authority;
+pub(crate) use handoff_authority::{
+    AuthorizerMemberSigning, AuthorizerSigningUpdate, HandoffAuthorization,
+    HandoffSignerPublication, VaultCreationAuthority, VaultCreationAuthorityRef,
+};
 mod recovery;
 pub(crate) mod simple_genesis;
 mod staged_genesis;
-pub(crate) use genesis_flow::SimpleGenesisCompletion;
-pub(crate) use handoff::{ExistingVaultImportCommit, IdentityHandoffCommit};
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-pub(crate) use keyring::{LOCAL_IDENTITY_KEYRING_KEY, clear_keyring_for_test};
-pub(crate) use keyring::{
-    LocalIdentitySigner, ProtectedLocalIdentitySave, load_entry_for_app_id, load_keyring,
-    load_selected_entry, select_local_identity, selected_legacy_signer_requires_authorization,
+pub(crate) use genesis_flow::{PendingSimpleGenesisFlow, SimpleGenesisCompletion};
+pub(crate) use handoff::{
+    ExistingVaultEnrollment, ExistingVaultImportCommit, IdentityHandoffCommit,
+    IdentityHandoffCommitResult, IdentityHandoffOperation, PairedVaultEnrollment,
 };
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+pub(crate) use keyring::LOCAL_IDENTITY_KEYRING_KEY;
+pub(crate) use keyring::{LocalIdentitySigner, ProtectedLocalIdentitySave};
 
-pub(crate) struct LocalIdentityProjection {
+/// Named values required by `NookDatabase::local_keyring_entry_for_app_id_from_store`.
+pub(crate) struct IdentityDbLocalKeyringEntryForAppIdFromStore<'a> {
+    pub(crate) store: &'a rexie::Store,
+    pub(crate) app_id: &'a AppId,
+}
+
+/// Named values required by `NookDatabase::persist_pending_genesis`.
+pub(crate) struct IdentityDbPersistPendingGenesis<'a> {
+    pub(crate) store: &'a rexie::Store,
+    pub(crate) pending: &'a PendingSimpleGenesis,
+}
+
+/// Named values required by `NookDatabase::migrate_directory_in_store`.
+pub(crate) struct IdentityDbMigrateDirectoryInStore<'a> {
+    pub(crate) store: &'a rexie::Store,
     pub(crate) directory: IdentityDirectory,
-    pub(crate) keyring: nook_core::LocalIdentityKeyring,
-    pub(crate) protected: Option<(String, nook_core::WrappedDeviceIdentity)>,
 }
 
-pub(crate) async fn load_local_identity_projection(
-    session_app_id: &str,
-) -> Result<LocalIdentityProjection, NookError> {
-    let requested_app_id = if session_app_id.is_empty() {
-        None
-    } else {
-        Some(AppId::parse(session_app_id).map_err(|error| NookError::Database(error.to_string()))?)
-    };
-    let rexie = open_nook_database().await?;
-    let transaction = rexie
-        .transaction(&["vault"], TransactionMode::ReadWrite)
-        .map_err(|error| {
-            NookError::IndexedDb(format!("Identity projection transaction error: {error:?}"))
-        })?;
-    let store = transaction.store("vault").map_err(|error| {
-        NookError::IndexedDb(format!("Identity projection store error: {error:?}"))
-    })?;
-    let directory = load_directory_for_write(&store).await?;
-    let keyring = keyring::load_keyring_for_store(&store, &directory).await?;
-    let entry = match requested_app_id.as_ref() {
-        Some(app_id) => keyring
-            .entries()
-            .iter()
-            .find(|entry| entry.app_id() == app_id),
-        None => match directory.selection() {
-            IdentitySelection::Empty => None,
-            IdentitySelection::Selected(identity_id) => keyring.entry(identity_id),
-        },
-    };
-    let protected = match entry {
-        Some(entry) => Some((
-            entry.app_id().as_str().to_owned(),
-            entry.wrapped_app_key().clone(),
-        )),
-        None => indexed_db::load_legacy_wrapped_device_identity_from_store(&store)
-            .await?
-            .filter(|(app_id, _)| {
-                requested_app_id
-                    .as_ref()
-                    .is_none_or(|requested| requested.as_str() == app_id)
-            }),
-    };
-    transaction.done().await.map_err(|error| {
-        NookError::IndexedDb(format!("Identity projection completion error: {error:?}"))
-    })?;
-    Ok(LocalIdentityProjection {
-        directory,
-        keyring,
-        protected,
-    })
+/// Named values required by `NookDatabase::migrate_directory`.
+pub(crate) struct IdentityDbMigrateDirectory<'a> {
+    pub(crate) directory: IdentityDirectory,
+    pub(crate) selection: IdentityMigrationSelection<'a>,
 }
 
-pub(super) async fn selected_local_keyring_entry_for_store(
-    store: &rexie::Store,
-) -> Result<Option<nook_core::LocalIdentityKeyringEntry>, NookError> {
-    keyring::selected_entry_from_store(store).await
+/// Named values required by `NookDatabase::write_identity_directory`.
+pub(crate) struct IdentityDbWriteIdentityDirectory<'a> {
+    pub(crate) store: &'a rexie::Store,
+    pub(crate) directory: &'a IdentityDirectory,
 }
-pub(super) async fn local_keyring_entry_for_app_id_from_store(
-    store: &rexie::Store,
-    app_id: &AppId,
-) -> Result<Option<nook_core::LocalIdentityKeyringEntry>, NookError> {
-    keyring::entry_for_app_id_from_store(store, app_id).await
+
+/// Named values required by `NookDatabase::save_protected_local_identity`.
+pub(crate) struct IdentityDbSaveProtectedLocalIdentity<'a> {
+    pub(crate) app_key: &'a nook_core::AppKey,
+    pub(crate) record: &'a nook_core::WrappedDeviceIdentity,
+    pub(crate) label: &'a str,
 }
+
+/// Named values required by `NookDatabase::save_new_protected_local_identity`.
+pub(crate) struct IdentityDbSaveNewProtectedLocalIdentity<'a> {
+    pub(crate) app_key: &'a nook_core::AppKey,
+    pub(crate) record: &'a nook_core::WrappedDeviceIdentity,
+    pub(crate) prior_app_key: PriorAppAuthorization<'a>,
+    pub(crate) label: &'a str,
+}
+
+/// Named values required by `NookDatabase::set_identity_member_signing_public_key`.
+pub(crate) struct IdentityDbSetIdentityMemberSigningPublicKey<'a> {
+    pub(crate) identity_id: &'a nook_core::IdentityId,
+    pub(crate) app_id: &'a AppId,
+    pub(crate) signing_public_key: &'a nook_core::DeviceSigningPublicKey,
+}
+
+/// Named values required by `NookDatabase::ensure_local_identity_for_app_key`.
+pub(crate) struct IdentityDbEnsureLocalIdentityForAppKey<'a> {
+    pub(crate) app_key: &'a nook_core::AppKey,
+    pub(crate) label: &'a str,
+}
+
+/// Named values required by `NookDatabase::ensure_local_identity_in_directory`.
+pub(crate) struct IdentityDbEnsureLocalIdentityInDirectory<'a> {
+    pub(crate) directory: IdentityDirectory,
+    pub(crate) app_key: &'a nook_core::AppKey,
+    pub(crate) label: &'a str,
+    pub(crate) allow_peer_only_bootstrap: bool,
+}
+
+mod directory_write;
+pub(crate) use directory_write::IdentityDirectoryWrite;
+
+/// Named values required by `NookDatabase::generate_vault_dek_for_identity`.
+pub(crate) struct IdentityDbGenerateVaultDekForIdentity<'a> {
+    pub(crate) identity_id: &'a nook_core::IdentityId,
+    pub(crate) app_key: &'a nook_core::AppKey,
+    pub(crate) store_id: nook_core::StoreId,
+}
+
+/// Named values required by `NookDatabase::validate_vault_identity_enrollment`.
+pub(crate) struct IdentityDbValidateVaultIdentityEnrollment<'a> {
+    pub(crate) app_key: &'a nook_core::AppKey,
+    pub(crate) store_id: &'a nook_core::StoreId,
+}
+
 pub(crate) use reconciliation::{
     IdentityReconciliationStore, PendingIdentityRotation, ReconciliationIntent,
 };
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY;
-pub(crate) use recovery::{LocalIdentityRecovery, LocalIdentityRecoveryRequest};
+pub(crate) use recovery::{
+    LocalIdentityRecovery, LocalIdentityRecoveryRequest, RecoveryTarget, RetiredInstallation,
+};
 pub(crate) use simple_genesis::PENDING_SIMPLE_GENESIS_KEY;
 pub(crate) use simple_genesis::{
     OrdinarySimpleGenesisRequest, PendingSimpleGenesis, SimpleGenesisEventInput,
+    SimpleGenesisProgress,
 };
 pub(crate) use staged_genesis::StagedSimpleGenesisInput;
 
@@ -108,402 +149,290 @@ pub(super) const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
 pub(super) const LEGACY_IDENTITY_RECORD_KEY: &str = "identity_record_v1";
 const RETIRED_APP_IDS_KEY: &str = "retired_app_ids_v1";
 
-fn map_domain_error(error: MultiDeviceError) -> NookError {
-    let message = error.to_string();
-    drop(error);
-    NookError::Database(message)
-}
-
-async fn load_pending_genesis(
-    store: &rexie::Store,
-) -> Result<Option<PendingSimpleGenesis>, NookError> {
-    let pending_id = serde_wasm_bindgen::to_value(PENDING_SIMPLE_GENESIS_KEY)
-        .map_err(|error| NookError::IndexedDb(format!("Pending genesis key error: {error:?}")))?;
-    let pending = store
-        .get(pending_id)
-        .await
-        .map_err(|error| NookError::IndexedDb(format!("Pending genesis read error: {error:?}")))?;
-    pending
-        .filter(|pending| !pending.is_undefined() && !pending.is_null())
-        .map(serde_wasm_bindgen::from_value::<String>)
-        .transpose()
-        .map_err(|error| NookError::IndexedDb(format!("Pending genesis value error: {error:?}")))?
-        .map(|raw| PendingSimpleGenesis::decode(&raw))
-        .transpose()
-}
-
-fn migrate_staged_genesis_directories(
-    pending: &mut PendingSimpleGenesis,
-) -> Result<bool, NookError> {
-    let genesis_flow::PendingSimpleGenesisFlow::Staged(staged) = &mut pending.flow else {
-        return Ok(false);
-    };
-    let legacy_base = staged.base_directory.clone();
-    let (base_directory, base_changed) = staged
-        .base_directory
-        .clone()
-        .migrate_legacy_duplicate_app_key_ownership_preserving(&pending.identity_id)
-        .map_err(map_domain_error)?;
-    let (directory, directory_changed) = staged
-        .directory
-        .clone()
-        .migrate_legacy_duplicate_app_key_ownership_from_base(&legacy_base, &pending.identity_id)
-        .map_err(map_domain_error)?;
-    staged.base_directory = base_directory;
-    staged.directory = directory;
-    Ok(base_changed || directory_changed)
-}
-
-async fn persist_pending_genesis(
-    store: &rexie::Store,
-    pending: &PendingSimpleGenesis,
-) -> Result<(), NookError> {
-    let key = serde_wasm_bindgen::to_value(PENDING_SIMPLE_GENESIS_KEY)
-        .map_err(|error| NookError::IndexedDb(format!("Pending genesis key error: {error:?}")))?;
-    let encoded = pending.encode()?;
-    let value = serde_wasm_bindgen::to_value(&encoded)
-        .map_err(|error| NookError::IndexedDb(format!("Pending genesis value error: {error:?}")))?;
-    store
-        .put(&value, Some(&key))
-        .await
-        .map(|_| ())
-        .map_err(|error| NookError::IndexedDb(format!("Pending genesis write error: {error:?}")))
-}
-
-async fn migrate_directory_in_store(
-    store: &rexie::Store,
-    directory: IdentityDirectory,
-) -> Result<(IdentityDirectory, bool), NookError> {
-    let mut pending = if directory.has_legacy_duplicate_app_key_ownership() {
-        load_pending_genesis(store).await?
-    } else {
-        None
-    };
-    let preserved_identity_id = pending.as_ref().map(|pending| &pending.identity_id);
-    let (directory, migrated) = migrate_directory(directory, preserved_identity_id)?;
-    if let Some(pending) = &mut pending
-        && migrate_staged_genesis_directories(pending)?
-    {
-        persist_pending_genesis(store, pending).await?;
+impl NookDatabase {
+    pub(crate) fn map_domain_error(error: MultiDeviceError) -> NookError {
+        let message = error.to_string();
+        drop(error);
+        NookError::Database(message)
     }
-    Ok((directory, migrated))
 }
 
-async fn load_or_migrate_identity_directory_raw() -> Result<Option<String>, NookError> {
-    let rexie = open_nook_database().await?;
-    let transaction = rexie
-        .transaction(&["vault"], TransactionMode::ReadWrite)
-        .map_err(|error| NookError::IndexedDb(format!("Identity migration error: {error:?}")))?;
-    let store = transaction.store("vault").map_err(|error| {
-        NookError::IndexedDb(format!("Identity migration store error: {error:?}"))
-    })?;
-    let current_id = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY).map_err(|error| {
-        NookError::IndexedDb(format!("Identity directory key error: {error:?}"))
-    })?;
-    let legacy_id = serde_wasm_bindgen::to_value(LEGACY_IDENTITY_RECORD_KEY)
-        .map_err(|error| NookError::IndexedDb(format!("Legacy identity key error: {error:?}")))?;
-    let current = store.get(current_id.clone()).await.map_err(|error| {
-        NookError::IndexedDb(format!("Identity directory read error: {error:?}"))
-    })?;
-    if let Some(value) = current.filter(|value| !value.is_undefined() && !value.is_null()) {
-        let persisted_raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
-            NookError::IndexedDb(format!("Identity directory value error: {error:?}"))
+impl NookDatabase {
+    pub(crate) async fn load_identity_directory() -> Result<IdentityDirectory, NookError> {
+        let raw = NookDatabase::load_or_migrate_identity_directory_raw().await?;
+        match raw {
+            StoredStringRecord::MissingKey => Ok(IdentityDirectory::empty()),
+            StoredStringRecord::Stored(raw) => NookDatabase::decode_directory(&raw),
+        }
+    }
+}
+
+impl NookDatabase {
+    fn decode_directory(raw: &str) -> Result<IdentityDirectory, NookError> {
+        NookDatabase::migrate_directory(IdentityDbMigrateDirectory {
+            directory: NookDatabase::decode_directory_value(raw)?,
+            selection: IdentityMigrationSelection::DirectorySelection,
+        })
+        .map(|migrated| migrated.directory)
+    }
+}
+
+impl NookDatabase {
+    fn decode_directory_value(raw: &str) -> Result<IdentityDirectory, NookError> {
+        serde_json::from_str(raw).map_err(|error| {
+            NookError::IndexedDb(format!("Identity directory decode error: {error}"))
+        })
+    }
+}
+
+impl NookDatabase {
+    fn migrate_directory(
+        request: IdentityDbMigrateDirectory<'_>,
+    ) -> Result<MigratedIdentityDirectory, NookError> {
+        let IdentityDbMigrateDirectory {
+            directory,
+            selection,
+        } = request;
+        match selection {
+            IdentityMigrationSelection::PreserveGenesis(identity_id) => {
+                directory.migrate_legacy_duplicate_app_key_ownership_preserving(identity_id)
+            }
+            IdentityMigrationSelection::DirectorySelection => {
+                directory.migrate_legacy_duplicate_app_key_ownership()
+            }
+        }
+        .map_err(|error| NookError::Database(error.to_string()))
+    }
+}
+
+impl NookDatabase {
+    async fn load_directory_for_write(
+        store: &rexie::Store,
+    ) -> Result<IdentityDirectory, NookError> {
+        let current_id = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY).map_err(|error| {
+            NookError::IndexedDb(format!("Identity update key error: {error:?}"))
         })?;
-        let directory = decode_directory_value(&persisted_raw)?;
-        let (directory, migrated) = migrate_directory_in_store(&store, directory).await?;
-        let raw = if migrated {
-            let normalized = serde_json::to_string(&directory).map_err(|error| {
-                NookError::IndexedDb(format!("Identity directory encode error: {error}"))
+        let current = store.get(current_id).await.map_err(|error| {
+            NookError::IndexedDb(format!("Identity update read error: {error:?}"))
+        })?;
+        let directory = if let Some(value) =
+            current.filter(|value| !value.is_undefined() && !value.is_null())
+        {
+            let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
+                NookError::IndexedDb(format!("Identity update value error: {error:?}"))
             })?;
-            let normalized_value = serde_wasm_bindgen::to_value(&normalized).map_err(|error| {
-                NookError::IndexedDb(format!("Identity directory value error: {error:?}"))
-            })?;
-            store
-                .put(&normalized_value, Some(&current_id))
-                .await
-                .map_err(|error| {
-                    NookError::IndexedDb(format!("Identity directory write error: {error:?}"))
-                })?;
-            normalized
+            NookDatabase::decode_directory_value(&raw)?
         } else {
-            persisted_raw
+            let legacy_id =
+                serde_wasm_bindgen::to_value(LEGACY_IDENTITY_RECORD_KEY).map_err(|error| {
+                    NookError::IndexedDb(format!("Legacy update key error: {error:?}"))
+                })?;
+            let legacy = store.get(legacy_id).await.map_err(|error| {
+                NookError::IndexedDb(format!("Legacy identity update read error: {error:?}"))
+            })?;
+            legacy
+                .filter(|value| !value.is_undefined() && !value.is_null())
+                .map(serde_wasm_bindgen::from_value::<String>)
+                .transpose()
+                .map_err(|error| {
+                    NookError::IndexedDb(format!("Legacy update value error: {error:?}"))
+                })?
+                .map(|raw| {
+                    serde_json::from_str(&raw)
+                        .map_err(|error| {
+                            NookError::IndexedDb(format!("Legacy update decode error: {error}"))
+                        })
+                        .and_then(|record| {
+                            IdentityDirectory::from_legacy_record(record)
+                                .map_err(NookDatabase::map_domain_error)
+                        })
+                })
+                .transpose()?
+                .unwrap_or_else(IdentityDirectory::empty)
         };
+        NookDatabase::migrate_directory_in_store(IdentityDbMigrateDirectoryInStore {
+            store,
+            directory,
+        })
+        .await
+        .map(|migrated| migrated.directory)
+    }
+}
+
+impl NookDatabase {
+    async fn load_retired_app_ids(store: &rexie::Store) -> Result<Vec<AppId>, NookError> {
+        let key = serde_wasm_bindgen::to_value(RETIRED_APP_IDS_KEY).map_err(|error| {
+            NookError::IndexedDb(format!("Retired app IDs key error: {error:?}"))
+        })?;
+        let Some(value) = store
+            .get(key)
+            .await
+            .map_err(|error| {
+                NookError::IndexedDb(format!("Retired app IDs read error: {error:?}"))
+            })?
+            .filter(|value| !value.is_undefined() && !value.is_null())
+        else {
+            return Ok(Vec::new());
+        };
+        let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
+            NookError::IndexedDb(format!("Retired app IDs value error: {error:?}"))
+        })?;
+        serde_json::from_str(&raw)
+            .map_err(|error| NookError::IndexedDb(format!("Retired app IDs decode error: {error}")))
+    }
+}
+
+impl NookDatabase {
+    async fn write_identity_directory(
+        request: IdentityDbWriteIdentityDirectory<'_>,
+    ) -> Result<(), NookError> {
+        let IdentityDbWriteIdentityDirectory { store, directory } = request;
+        directory
+            .validate()
+            .map_err(NookDatabase::map_domain_error)?;
+        let current_id = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY).map_err(|error| {
+            NookError::IndexedDb(format!("Identity update key error: {error:?}"))
+        })?;
+        let legacy_id = serde_wasm_bindgen::to_value(LEGACY_IDENTITY_RECORD_KEY)
+            .map_err(|error| NookError::IndexedDb(format!("Legacy update key error: {error:?}")))?;
+        let encoded = serde_json::to_string(directory).map_err(|error| {
+            NookError::IndexedDb(format!("Identity directory encode error: {error}"))
+        })?;
+        let encoded = serde_wasm_bindgen::to_value(&encoded).map_err(|error| {
+            NookError::IndexedDb(format!("Identity update value error: {error:?}"))
+        })?;
+        store
+            .put(&encoded, Some(&current_id))
+            .await
+            .map_err(|error| {
+                NookError::IndexedDb(format!("Identity directory write error: {error:?}"))
+            })?;
         store.delete(legacy_id).await.map_err(|error| {
             NookError::IndexedDb(format!("Legacy identity delete error: {error:?}"))
         })?;
-        transaction.done().await.map_err(|error| {
-            NookError::IndexedDb(format!("Identity migration completion error: {error:?}"))
-        })?;
-        return Ok(Some(raw));
+        Ok(())
     }
-    let legacy = store
-        .get(legacy_id.clone())
-        .await
-        .map_err(|error| NookError::IndexedDb(format!("Legacy identity read error: {error:?}")))?;
-    let Some(value) = legacy.filter(|value| !value.is_undefined() && !value.is_null()) else {
-        transaction.done().await.map_err(|error| {
-            NookError::IndexedDb(format!("Identity migration completion error: {error:?}"))
-        })?;
-        return Ok(None);
-    };
-    let raw: String = serde_wasm_bindgen::from_value(value)
-        .map_err(|error| NookError::IndexedDb(format!("Legacy identity value error: {error:?}")))?;
-    let record: nook_core::IdentityRecord = serde_json::from_str(&raw).map_err(|error| {
-        NookError::IndexedDb(format!("Legacy identity record decode error: {error}"))
-    })?;
-    let directory = IdentityDirectory::from_legacy_record(record)
-        .map_err(|error| NookError::Database(error.to_string()))?;
-    let raw = serde_json::to_string(&directory).map_err(|error| {
-        NookError::IndexedDb(format!("Identity directory encode error: {error}"))
-    })?;
-    let value = serde_wasm_bindgen::to_value(&raw).map_err(|error| {
-        NookError::IndexedDb(format!("Identity directory value error: {error:?}"))
-    })?;
-    store
-        .put(&value, Some(&current_id))
-        .await
-        .map_err(|error| {
-            NookError::IndexedDb(format!("Identity directory write error: {error:?}"))
-        })?;
-    store.delete(legacy_id).await.map_err(|error| {
-        NookError::IndexedDb(format!("Legacy identity delete error: {error:?}"))
-    })?;
-    transaction.done().await.map_err(|error| {
-        NookError::IndexedDb(format!("Identity migration completion error: {error:?}"))
-    })?;
-    Ok(Some(raw))
 }
 
-pub(crate) async fn load_identity_directory() -> Result<IdentityDirectory, NookError> {
-    let raw = load_or_migrate_identity_directory_raw().await?;
-    raw.map_or_else(
-        || Ok(IdentityDirectory::empty()),
-        |raw| decode_directory(&raw),
-    )
-}
-
-fn decode_directory(raw: &str) -> Result<IdentityDirectory, NookError> {
-    migrate_directory(decode_directory_value(raw)?, None).map(|(directory, _)| directory)
-}
-
-fn decode_directory_value(raw: &str) -> Result<IdentityDirectory, NookError> {
-    serde_json::from_str(raw)
-        .map_err(|error| NookError::IndexedDb(format!("Identity directory decode error: {error}")))
-}
-
-fn migrate_directory(
-    directory: IdentityDirectory,
-    preserved_identity_id: Option<&nook_core::IdentityId>,
-) -> Result<(IdentityDirectory, bool), NookError> {
-    match preserved_identity_id {
-        Some(identity_id) => {
-            directory.migrate_legacy_duplicate_app_key_ownership_preserving(identity_id)
-        }
-        None => directory.migrate_legacy_duplicate_app_key_ownership(),
-    }
-    .map_err(|error| NookError::Database(error.to_string()))
-}
-
-async fn load_directory_for_write(store: &rexie::Store) -> Result<IdentityDirectory, NookError> {
-    let current_id = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY)
-        .map_err(|error| NookError::IndexedDb(format!("Identity update key error: {error:?}")))?;
-    let current = store
-        .get(current_id)
-        .await
-        .map_err(|error| NookError::IndexedDb(format!("Identity update read error: {error:?}")))?;
-    let directory = if let Some(value) =
-        current.filter(|value| !value.is_undefined() && !value.is_null())
+impl NookDatabase {
+    pub(crate) async fn update_identity_directory<F, T>(update: F) -> Result<T, NookError>
+    where
+        F: FnOnce(IdentityDirectory) -> Result<IdentityDirectoryWrite<T>, NookError>,
     {
-        let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
-            NookError::IndexedDb(format!("Identity update value error: {error:?}"))
+        let rexie = NookDatabase::open_nook_database().await?;
+        let transaction = rexie
+            .transaction(&["vault"], TransactionMode::ReadWrite)
+            .map_err(|error| NookError::IndexedDb(format!("Identity update error: {error:?}")))?;
+        let store = transaction.store("vault").map_err(|error| {
+            NookError::IndexedDb(format!("Identity update store error: {error:?}"))
         })?;
-        decode_directory_value(&raw)?
-    } else {
-        let legacy_id = serde_wasm_bindgen::to_value(LEGACY_IDENTITY_RECORD_KEY)
-            .map_err(|error| NookError::IndexedDb(format!("Legacy update key error: {error:?}")))?;
-        let legacy = store.get(legacy_id).await.map_err(|error| {
-            NookError::IndexedDb(format!("Legacy identity update read error: {error:?}"))
+        let directory = NookDatabase::load_directory_for_write(&store).await?;
+        let IdentityDirectoryWrite { directory, value } = update(directory)?;
+        NookDatabase::write_identity_directory(IdentityDbWriteIdentityDirectory {
+            store: &store,
+            directory: &directory,
+        })
+        .await?;
+        transaction.done().await.map_err(|error| {
+            NookError::IndexedDb(format!("Identity update completion error: {error:?}"))
         })?;
-        legacy
-            .filter(|value| !value.is_undefined() && !value.is_null())
-            .map(serde_wasm_bindgen::from_value::<String>)
-            .transpose()
-            .map_err(|error| NookError::IndexedDb(format!("Legacy update value error: {error:?}")))?
-            .map(|raw| {
-                serde_json::from_str(&raw)
-                    .map_err(|error| {
-                        NookError::IndexedDb(format!("Legacy update decode error: {error}"))
-                    })
-                    .and_then(|record| {
-                        IdentityDirectory::from_legacy_record(record).map_err(map_domain_error)
-                    })
-            })
-            .transpose()?
-            .unwrap_or_else(IdentityDirectory::empty)
-    };
-    migrate_directory_in_store(store, directory)
-        .await
-        .map(|(directory, _)| directory)
-}
-
-async fn load_retired_app_ids(store: &rexie::Store) -> Result<Vec<AppId>, NookError> {
-    let key = serde_wasm_bindgen::to_value(RETIRED_APP_IDS_KEY)
-        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs key error: {error:?}")))?;
-    let Some(value) = store
-        .get(key)
-        .await
-        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs read error: {error:?}")))?
-        .filter(|value| !value.is_undefined() && !value.is_null())
-    else {
-        return Ok(Vec::new());
-    };
-    let raw: String = serde_wasm_bindgen::from_value(value)
-        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs value error: {error:?}")))?;
-    serde_json::from_str(&raw)
-        .map_err(|error| NookError::IndexedDb(format!("Retired app IDs decode error: {error}")))
-}
-
-async fn write_identity_directory(
-    store: &rexie::Store,
-    directory: &IdentityDirectory,
-) -> Result<(), NookError> {
-    directory.validate().map_err(map_domain_error)?;
-    let current_id = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY)
-        .map_err(|error| NookError::IndexedDb(format!("Identity update key error: {error:?}")))?;
-    let legacy_id = serde_wasm_bindgen::to_value(LEGACY_IDENTITY_RECORD_KEY)
-        .map_err(|error| NookError::IndexedDb(format!("Legacy update key error: {error:?}")))?;
-    let encoded = serde_json::to_string(directory).map_err(|error| {
-        NookError::IndexedDb(format!("Identity directory encode error: {error}"))
-    })?;
-    let encoded = serde_wasm_bindgen::to_value(&encoded)
-        .map_err(|error| NookError::IndexedDb(format!("Identity update value error: {error:?}")))?;
-    store
-        .put(&encoded, Some(&current_id))
-        .await
-        .map_err(|error| {
-            NookError::IndexedDb(format!("Identity directory write error: {error:?}"))
-        })?;
-    store.delete(legacy_id).await.map_err(|error| {
-        NookError::IndexedDb(format!("Legacy identity delete error: {error:?}"))
-    })?;
-    Ok(())
-}
-
-pub(crate) async fn update_identity_directory<F, T>(update: F) -> Result<T, NookError>
-where
-    F: FnOnce(&mut IdentityDirectory) -> Result<T, NookError>,
-{
-    let rexie = open_nook_database().await?;
-    let transaction = rexie
-        .transaction(&["vault"], TransactionMode::ReadWrite)
-        .map_err(|error| NookError::IndexedDb(format!("Identity update error: {error:?}")))?;
-    let store = transaction
-        .store("vault")
-        .map_err(|error| NookError::IndexedDb(format!("Identity update store error: {error:?}")))?;
-    let mut directory = load_directory_for_write(&store).await?;
-    let value = update(&mut directory)?;
-    write_identity_directory(&store, &directory).await?;
-    transaction.done().await.map_err(|error| {
-        NookError::IndexedDb(format!("Identity update completion error: {error:?}"))
-    })?;
-    Ok(value)
-}
-
-pub(crate) async fn save_protected_local_identity(
-    app_key: &nook_core::AppKey,
-    record: &nook_core::WrappedDeviceIdentity,
-    label: &str,
-) -> Result<ProtectedLocalIdentitySave, NookError> {
-    let rexie = open_nook_database().await?;
-    let transaction = rexie
-        .transaction(&["vault"], TransactionMode::ReadWrite)
-        .map_err(|error| NookError::IndexedDb(format!("Identity setup error: {error:?}")))?;
-    let store = transaction
-        .store("vault")
-        .map_err(|error| NookError::IndexedDb(format!("Identity setup store error: {error:?}")))?;
-    let mut directory = load_directory_for_write(&store).await?;
-    let identity = keyring::ProtectedIdentityPublication {
-        store: &store,
-        directory: &mut directory,
-        app_key,
-        wrapped_app_key: record,
-        label,
-    }
-    .save_existing()
-    .await?;
-    transaction.done().await.map_err(|error| {
-        NookError::IndexedDb(format!("Identity setup completion error: {error:?}"))
-    })?;
-    Ok(identity)
-}
-
-pub(crate) async fn save_new_protected_local_identity(
-    app_key: &nook_core::AppKey,
-    record: &nook_core::WrappedDeviceIdentity,
-    prior_app_key: Option<&nook_core::AppKey>,
-    label: &str,
-) -> Result<ProtectedLocalIdentitySave, NookError> {
-    let rexie = open_nook_database().await?;
-    let transaction = rexie
-        .transaction(&["vault"], TransactionMode::ReadWrite)
-        .map_err(|error| NookError::IndexedDb(format!("Identity creation error: {error:?}")))?;
-    let store = transaction.store("vault").map_err(|error| {
-        NookError::IndexedDb(format!("Identity creation store error: {error:?}"))
-    })?;
-    let mut directory = load_directory_for_write(&store).await?;
-    let identity = keyring::ProtectedIdentityPublication {
-        store: &store,
-        directory: &mut directory,
-        app_key,
-        wrapped_app_key: record,
-        label,
-    }
-    .save_new(prior_app_key)
-    .await?;
-    transaction.done().await.map_err(|error| {
-        NookError::IndexedDb(format!("Identity creation completion error: {error:?}"))
-    })?;
-    Ok(identity)
-}
-
-pub(crate) async fn load_selected_identity() -> Result<Option<nook_core::IdentityRecord>, NookError>
-{
-    let directory = load_identity_directory().await?;
-    match directory.selection() {
-        IdentitySelection::Empty => Ok(None),
-        IdentitySelection::Selected(_) => directory
-            .selected()
-            .cloned()
-            .map(Some)
-            .map_err(|error| NookError::Database(error.to_string())),
+        Ok(value)
     }
 }
 
-pub(crate) async fn load_identity(
-    identity_id: &nook_core::IdentityId,
-) -> Result<Option<nook_core::IdentityRecord>, NookError> {
-    Ok(load_identity_directory()
-        .await?
-        .identities()
-        .iter()
-        .find(|record| record.identity_id == *identity_id)
-        .cloned())
+impl NookDatabase {
+    pub(crate) async fn save_protected_local_identity(
+        request: IdentityDbSaveProtectedLocalIdentity<'_>,
+    ) -> Result<ProtectedLocalIdentitySave, NookError> {
+        let IdentityDbSaveProtectedLocalIdentity {
+            app_key,
+            record,
+            label,
+        } = request;
+        let rexie = NookDatabase::open_nook_database().await?;
+        let transaction = rexie
+            .transaction(&["vault"], TransactionMode::ReadWrite)
+            .map_err(|error| NookError::IndexedDb(format!("Identity setup error: {error:?}")))?;
+        let store = transaction.store("vault").map_err(|error| {
+            NookError::IndexedDb(format!("Identity setup store error: {error:?}"))
+        })?;
+        let directory = NookDatabase::load_directory_for_write(&store).await?;
+        let identity = keyring::ProtectedIdentityPublication {
+            store: &store,
+            directory,
+            app_key,
+            wrapped_app_key: record,
+            label,
+        }
+        .save_existing()
+        .await?;
+        transaction.done().await.map_err(|error| {
+            NookError::IndexedDb(format!("Identity setup completion error: {error:?}"))
+        })?;
+        Ok(identity)
+    }
 }
 
-pub(crate) async fn set_identity_member_signing_public_key(
-    identity_id: &nook_core::IdentityId,
-    app_id: &AppId,
-    signing_public_key: &nook_core::DeviceSigningPublicKey,
-) -> Result<(), NookError> {
-    let identity_id = identity_id.clone();
-    let app_id = app_id.clone();
-    let signing_public_key = signing_public_key.clone();
-    update_identity_directory(move |directory| {
-        directory
-            .set_member_signing_public_key(&identity_id, &app_id, &signing_public_key)
-            .map_err(map_domain_error)
-    })
-    .await
+impl NookDatabase {
+    pub(crate) async fn save_new_protected_local_identity(
+        request: IdentityDbSaveNewProtectedLocalIdentity<'_>,
+    ) -> Result<ProtectedLocalIdentitySave, NookError> {
+        let IdentityDbSaveNewProtectedLocalIdentity {
+            app_key,
+            record,
+            prior_app_key,
+            label,
+        } = request;
+        let rexie = NookDatabase::open_nook_database().await?;
+        let transaction = rexie
+            .transaction(&["vault"], TransactionMode::ReadWrite)
+            .map_err(|error| NookError::IndexedDb(format!("Identity creation error: {error:?}")))?;
+        let store = transaction.store("vault").map_err(|error| {
+            NookError::IndexedDb(format!("Identity creation store error: {error:?}"))
+        })?;
+        let directory = NookDatabase::load_directory_for_write(&store).await?;
+        let identity = keyring::ProtectedIdentityPublication {
+            store: &store,
+            directory,
+            app_key,
+            wrapped_app_key: record,
+            label,
+        }
+        .save_new(prior_app_key)
+        .await?;
+        transaction.done().await.map_err(|error| {
+            NookError::IndexedDb(format!("Identity creation completion error: {error:?}"))
+        })?;
+        Ok(identity)
+    }
+}
+
+impl NookDatabase {
+    pub(crate) async fn set_identity_member_signing_public_key(
+        request: IdentityDbSetIdentityMemberSigningPublicKey<'_>,
+    ) -> Result<(), NookError> {
+        let IdentityDbSetIdentityMemberSigningPublicKey {
+            identity_id,
+            app_id,
+            signing_public_key,
+        } = request;
+        let identity_id = identity_id.clone();
+        let app_id = app_id.clone();
+        let signing_public_key = signing_public_key.clone();
+        NookDatabase::update_identity_directory(move |directory| {
+            directory
+                .set_member_signing_public_key(DirectoryMemberSigningUpdate {
+                    identity_id: &identity_id,
+                    member: IdentityMemberSigningUpdate {
+                        app_id: &app_id,
+                        signing_public_key: &signing_public_key,
+                    },
+                })
+                .map(IdentityDirectoryWrite::from)
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))
+        })
+        .await
+    }
 }
 
 /// Resolve the identity owned by the current app key.
@@ -512,51 +441,76 @@ pub(crate) async fn set_identity_member_signing_public_key(
 /// membership uses the explicit enrollment flow rather than this compatibility path.
 /// Persisted selection is only a default for a new browser session; an already-open
 /// manager remains bound to its own app key when another tab changes that selection.
-pub(crate) async fn ensure_local_identity_for_app_key(
-    app_key: &nook_core::AppKey,
-    label: &str,
-) -> Result<nook_core::IdentityRecord, NookError> {
-    let app_key = app_key.clone();
-    let label = label.to_owned();
-    update_identity_directory(move |directory| {
-        ensure_local_identity_in_directory(directory, &app_key, &label, false)
-    })
-    .await
-}
-
-fn ensure_local_identity_in_directory(
-    directory: &mut IdentityDirectory,
-    app_key: &nook_core::AppKey,
-    label: &str,
-    allow_peer_only_bootstrap: bool,
-) -> Result<nook_core::IdentityRecord, NookError> {
-    let identity_id = match directory
-        .identity_for_app_key(app_key)
-        .map_err(map_domain_error)?
-    {
-        Some(identity_id) => identity_id,
-        None if directory.identities().is_empty() || allow_peer_only_bootstrap => directory
-            .create_identity(label, app_key, None)
-            .map_err(map_domain_error)?,
-        None => {
-            return Err(NookError::Database(
-                MultiDeviceError::IdentityEnrollmentRequired.to_string(),
-            ));
-        }
-    };
-    directory
-        .identities()
-        .iter()
-        .find(|identity| identity.identity_id == identity_id)
-        .cloned()
-        .ok_or_else(|| {
-            NookError::Database(
-                MultiDeviceError::IdentityNotFound {
-                    identity_id: identity_id.to_string(),
-                }
-                .to_string(),
+impl NookDatabase {
+    pub(crate) async fn ensure_local_identity_for_app_key(
+        request: IdentityDbEnsureLocalIdentityForAppKey<'_>,
+    ) -> Result<nook_core::IdentityRecord, NookError> {
+        let IdentityDbEnsureLocalIdentityForAppKey { app_key, label } = request;
+        let app_key = app_key.clone();
+        let label = label.to_owned();
+        NookDatabase::update_identity_directory(move |directory| {
+            NookDatabase::ensure_local_identity_in_directory(
+                IdentityDbEnsureLocalIdentityInDirectory {
+                    directory,
+                    app_key: &app_key,
+                    label: &label,
+                    allow_peer_only_bootstrap: false,
+                },
             )
         })
+        .await
+    }
+}
+
+impl NookDatabase {
+    fn ensure_local_identity_in_directory(
+        request: IdentityDbEnsureLocalIdentityInDirectory<'_>,
+    ) -> Result<IdentityDirectoryWrite<nook_core::IdentityRecord>, NookError> {
+        let IdentityDbEnsureLocalIdentityInDirectory {
+            mut directory,
+            app_key,
+            label,
+            allow_peer_only_bootstrap,
+        } = request;
+        let identity_id = match directory
+            .identity_for_app_key(app_key)
+            .map_err(NookDatabase::map_domain_error)?
+        {
+            AppKeyIdentityMembership::Enrolled(identity_id) => identity_id,
+            AppKeyIdentityMembership::Unenrolled
+                if directory.identities().is_empty() || allow_peer_only_bootstrap =>
+            {
+                let resolved_identity = directory
+                    .create_identity(IdentityCreation {
+                        label,
+                        app_key,
+                        member_label: MemberLabelState::Unnamed,
+                    })
+                    .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+                directory = resolved_identity.directory;
+                resolved_identity.identity_id
+            }
+            AppKeyIdentityMembership::Unenrolled => {
+                return Err(NookError::Database(
+                    MultiDeviceError::IdentityEnrollmentRequired.to_string(),
+                ));
+            }
+        };
+        let value = directory
+            .identities()
+            .iter()
+            .find(|identity| identity.identity_id == identity_id)
+            .cloned()
+            .ok_or_else(|| {
+                NookError::Database(
+                    MultiDeviceError::IdentityNotFound {
+                        identity_id: identity_id.to_string(),
+                    }
+                    .to_string(),
+                )
+            })?;
+        Ok(IdentityDirectoryWrite { directory, value })
+    }
 }
 
 /// Associate a legacy vault with an identity without guessing from active selection.
@@ -566,55 +520,82 @@ pub(crate) struct LegacyVaultIdentityInput<'a> {
     pub(crate) secrets_envelope: nook_core::AgeArmoredCiphertext,
     pub(crate) members_envelope: nook_core::AgeArmoredCiphertext,
     pub(crate) key_epoch: nook_core::IdentityVaultDekEpoch,
-    pub(crate) verified_previous_key_epoch: Option<nook_core::IdentityVaultEventId>,
+    pub(crate) verified_previous_key_epoch: reconciliation::VerifiedPreviousEpoch,
     pub(crate) committed_event_ids: Vec<nook_core::IdentityVaultEventId>,
     pub(crate) checkpoint_ancestors: Vec<nook_core::IdentityVaultEventId>,
     pub(crate) authorized_auth_ids: Vec<nook_core::AuthKeyId>,
     pub(crate) label: &'a str,
 }
 
-pub(crate) async fn ensure_identity_from_legacy_vault(
-    input: LegacyVaultIdentityInput<'_>,
-) -> Result<nook_core::IdentityRecord, NookError> {
-    input.reconcile().await
+impl NookDatabase {
+    pub(crate) async fn ensure_identity_from_legacy_vault(
+        input: LegacyVaultIdentityInput<'_>,
+    ) -> Result<nook_core::IdentityRecord, NookError> {
+        input.reconcile().await
+    }
 }
 
-pub(crate) async fn generate_vault_dek_for_identity(
-    identity_id: &nook_core::IdentityId,
-    app_key: &nook_core::AppKey,
-    store_id: nook_core::StoreId,
-) -> Result<nook_core::VaultKeys, NookError> {
-    let identity_id = identity_id.clone();
-    let app_key = app_key.clone();
-    update_identity_directory(move |directory| {
-        directory
-            .open_or_generate_vault_dek_for_identity(&identity_id, &app_key, store_id)
+impl NookDatabase {
+    pub(crate) async fn generate_vault_dek_for_identity(
+        request: IdentityDbGenerateVaultDekForIdentity<'_>,
+    ) -> Result<nook_core::VaultKeys, NookError> {
+        let IdentityDbGenerateVaultDekForIdentity {
+            identity_id,
+            app_key,
+            store_id,
+        } = request;
+        let identity_id = identity_id.clone();
+        let app_key = app_key.clone();
+        NookDatabase::update_identity_directory(move |directory| {
+            directory
+                .open_or_generate_vault_dek_for_identity(DirectoryOwnedVaultOpening {
+                    identity_id: &identity_id,
+                    vault: IdentityVaultKeyOpening {
+                        app_key: &app_key,
+                        store_id,
+                    },
+                })
+                .map(IdentityDirectoryWrite::from)
+                .map_err(|rejected| NookError::Database(rejected.into_cause().to_string()))
+        })
+        .await
+    }
+}
+
+impl NookDatabase {
+    pub(crate) async fn validate_vault_identity_enrollment(
+        request: IdentityDbValidateVaultIdentityEnrollment<'_>,
+    ) -> Result<(), NookError> {
+        let IdentityDbValidateVaultIdentityEnrollment { app_key, store_id } = request;
+        NookDatabase::load_identity_directory()
+            .await?
+            .validate_vault_enrollment(app_key, store_id)
             .map_err(|error| NookError::Database(error.to_string()))
-    })
-    .await
-}
-
-pub(crate) async fn validate_vault_identity_enrollment(
-    app_key: &nook_core::AppKey,
-    store_id: &nook_core::StoreId,
-) -> Result<(), NookError> {
-    load_identity_directory()
-        .await?
-        .validate_vault_enrollment(app_key, store_id)
-        .map_err(|error| NookError::Database(error.to_string()))
+    }
 }
 
 #[cfg(test)]
-pub(crate) async fn clear_identity_directory_for_test() -> Result<(), NookError> {
-    indexed_db::clear_vault_db().await
+impl NookDatabase {
+    pub(crate) async fn clear_identity_directory_for_test() -> Result<(), NookError> {
+        NookDatabase::clear_vault_db().await
+    }
 }
+
+pub(crate) use keyring::{
+    KeyringDbEntryForAppIdFromStore, KeyringDbKeyringDeleteKey, KeyringDbKeyringReadString,
+    KeyringDbLoadKeyringForStore, KeyringDbValidateKeyringDirectoryBinding, KeyringDbWriteKeyring,
+};
 
 #[cfg(test)]
 mod tests {
+
+    use crate::storage::identity_record::IdentityDirectoryWrite;
+
     use crate::identity_record;
     use crate::identity_record::NookIdentityDirectorySelectionKind;
-    use crate::storage::event_db;
-    use nook_core::{AppKey, IdentityDirectory, IdentityRecord, IdentitySelection, IsoTimestamp};
+
+    use nook_core::{AppKey, IdentityDirectory, IdentityRecord, IdentitySelection};
+    use nook_core::{IdentityCreation, IdentityVaultKeyOpening};
 
     use super::*;
     use wasm_bindgen_test::*;
@@ -623,34 +604,56 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn migrates_legacy_record_then_persists_multiple_identities() -> Result<(), NookError> {
-        clear_identity_directory_for_test().await?;
+        NookDatabase::clear_identity_directory_for_test().await?;
         let app_key = AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
-        let legacy = IdentityRecord::create_with_app_key("Personal", &app_key, None)
-            .map_err(|error| NookError::Database(error.to_string()))?;
+        let legacy =
+            IdentityRecord::create_with_app_key("Personal", &app_key, MemberLabelState::Unnamed)
+                .map_err(|error| NookError::Database(error.to_string()))?;
         let legacy_id = legacy.identity_id.clone();
         let raw = serde_json::to_string(&legacy)
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
-        idb_put_string(LEGACY_IDENTITY_RECORD_KEY, &raw).await?;
-
-        let migrated = load_identity_directory().await?;
-        assert_eq!(
-            migrated.selected().map_err(map_domain_error)?.identity_id,
-            legacy_id
-        );
-        assert!(idb_get_string(LEGACY_IDENTITY_RECORD_KEY).await?.is_none());
-        assert!(idb_get_string(IDENTITY_DIRECTORY_KEY).await?.is_some());
-
-        let work_key = AppKey::generate().map_err(map_domain_error)?;
-        let work_id = update_identity_directory(move |directory| {
-            directory
-                .create_identity("Work", &work_key, None)
-                .map_err(map_domain_error)
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: LEGACY_IDENTITY_RECORD_KEY,
+            value: &raw,
         })
         .await?;
-        let reloaded = load_identity_directory().await?;
+
+        let migrated = NookDatabase::load_identity_directory().await?;
+        assert_eq!(
+            migrated
+                .selected()
+                .map_err(NookDatabase::map_domain_error)?
+                .identity_id,
+            legacy_id
+        );
+        assert!(matches!(
+            NookDatabase::idb_get_string(LEGACY_IDENTITY_RECORD_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
+        assert!(matches!(
+            NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY).await?,
+            StoredStringRecord::Stored(_)
+        ));
+
+        let work_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let work_id = NookDatabase::update_identity_directory(move |directory| {
+            directory
+                .create_identity(IdentityCreation {
+                    label: "Work",
+                    app_key: &work_key,
+                    member_label: MemberLabelState::Unnamed,
+                })
+                .map(IdentityDirectoryWrite::from)
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))
+        })
+        .await?;
+        let reloaded = NookDatabase::load_identity_directory().await?;
         assert_eq!(reloaded.identities().len(), 2);
         assert_eq!(
-            reloaded.selected().map_err(map_domain_error)?.identity_id,
+            reloaded
+                .selected()
+                .map_err(NookDatabase::map_domain_error)?
+                .identity_id,
             work_id
         );
         let snapshot = identity_record::load_identity_directory_snapshot()
@@ -673,263 +676,237 @@ mod tests {
         assert_eq!(selected.label(), "Work");
         assert_eq!(selected.members().len(), 1);
         assert!(selected.vault_store_ids().is_empty());
-        clear_identity_directory_for_test().await
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[wasm_bindgen_test]
     async fn existing_app_key_resolution_ignores_another_tabs_selection() -> Result<(), NookError> {
-        clear_identity_directory_for_test().await?;
-        let first_key = AppKey::generate().map_err(map_domain_error)?;
-        let first = ensure_local_identity_for_app_key(&first_key, "Personal").await?;
-        let second_key = AppKey::generate().map_err(map_domain_error)?;
-        let second_id = update_identity_directory(move |directory| {
+        NookDatabase::clear_identity_directory_for_test().await?;
+        let first_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let first = NookDatabase::ensure_local_identity_for_app_key(
+            IdentityDbEnsureLocalIdentityForAppKey {
+                app_key: &first_key,
+                label: "Personal",
+            },
+        )
+        .await?;
+        let second_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let second_id = NookDatabase::update_identity_directory(move |directory| {
             directory
-                .create_identity("Work", &second_key, None)
-                .map_err(map_domain_error)
+                .create_identity(IdentityCreation {
+                    label: "Work",
+                    app_key: &second_key,
+                    member_label: MemberLabelState::Unnamed,
+                })
+                .map(IdentityDirectoryWrite::from)
+                .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))
         })
         .await?;
 
-        let resolved = ensure_local_identity_for_app_key(&first_key, "Ignored").await?;
+        let resolved = NookDatabase::ensure_local_identity_for_app_key(
+            IdentityDbEnsureLocalIdentityForAppKey {
+                app_key: &first_key,
+                label: "Ignored",
+            },
+        )
+        .await?;
 
         assert_eq!(resolved.identity_id, first.identity_id);
         assert_eq!(
-            load_identity_directory().await?.selection(),
+            NookDatabase::load_identity_directory().await?.selection(),
             &IdentitySelection::Selected(second_id),
         );
-        clear_identity_directory_for_test().await
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[wasm_bindgen_test]
     async fn normalizes_persisted_duplicate_app_key_owners_without_losing_vaults()
     -> Result<(), NookError> {
-        clear_identity_directory_for_test().await?;
-        let app_key = AppKey::generate().map_err(map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let mut legacy = IdentityDirectory::empty();
-        legacy
-            .create_identity("Personal", &app_key, None)
-            .map_err(map_domain_error)?;
-        let store_id = nook_core::StoreId::generate().map_err(map_domain_error)?;
-        let expected = legacy
-            .open_or_generate_vault_dek(&app_key, store_id.clone())
-            .map_err(map_domain_error)?;
-        let selected_id = legacy
-            .create_identity("Work", &app_key, None)
-            .map_err(map_domain_error)?;
+        let resolved_identity = legacy
+            .create_identity(IdentityCreation {
+                label: "Personal",
+                app_key: &app_key,
+                member_label: MemberLabelState::Unnamed,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        legacy = resolved_identity.directory;
+        let store_id = nook_core::StoreId::generate().map_err(NookDatabase::map_domain_error)?;
+        let opened_identity = legacy
+            .open_or_generate_vault_dek(IdentityVaultKeyOpening {
+                app_key: &app_key,
+                store_id: store_id.clone(),
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        legacy = opened_identity.directory;
+        let expected = opened_identity.keys;
+        let resolved_identity = legacy
+            .create_identity(IdentityCreation {
+                label: "Work",
+                app_key: &app_key,
+                member_label: MemberLabelState::Unnamed,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        legacy = resolved_identity.directory;
+        let selected_id = resolved_identity.identity_id;
         let legacy_raw = serde_json::to_string(&legacy)
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
-        idb_put_string(IDENTITY_DIRECTORY_KEY, &legacy_raw).await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: IDENTITY_DIRECTORY_KEY,
+            value: &legacy_raw,
+        })
+        .await?;
 
-        let mut migrated = load_identity_directory().await?;
+        let migrated = NookDatabase::load_identity_directory().await?;
 
         assert_eq!(migrated.identities().len(), 1);
         assert_eq!(
-            migrated.selected().map_err(map_domain_error)?.identity_id,
+            migrated
+                .selected()
+                .map_err(NookDatabase::map_domain_error)?
+                .identity_id,
             selected_id
         );
         assert_eq!(
             migrated
-                .open_or_generate_vault_dek(&app_key, store_id)
-                .map_err(map_domain_error)?,
+                .open_vault_dek(IdentityVaultKeyOpening {
+                    app_key: &app_key,
+                    store_id
+                })
+                .map_err(NookDatabase::map_domain_error)?,
             expected
         );
-        let normalized_raw = idb_get_string(IDENTITY_DIRECTORY_KEY)
-            .await?
-            .ok_or_else(|| NookError::IndexedDb("Normalized directory is missing.".to_owned()))?;
+        let normalized_raw = match NookDatabase::idb_get_string(IDENTITY_DIRECTORY_KEY).await? {
+            StoredStringRecord::Stored(value) => Ok(value),
+            StoredStringRecord::MissingKey => Err(NookError::IndexedDb(
+                "Normalized directory is missing.".to_owned(),
+            )),
+        }?;
         assert_ne!(normalized_raw, legacy_raw);
         let normalized: IdentityDirectory = serde_json::from_str(&normalized_raw)
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
-        normalized.validate().map_err(map_domain_error)?;
-        clear_identity_directory_for_test().await
-    }
-
-    #[wasm_bindgen_test]
-    async fn migration_preserves_identity_referenced_by_pending_genesis() -> Result<(), NookError> {
-        clear_identity_directory_for_test().await?;
-        let app_key = AppKey::generate().map_err(map_domain_error)?;
-        let mut legacy = IdentityDirectory::empty();
-        let pending_identity_id = legacy
-            .create_identity("Pending genesis", &app_key, None)
-            .map_err(map_domain_error)?;
-        let selected_identity_id = legacy
-            .create_identity("Selected", &app_key, None)
-            .map_err(map_domain_error)?;
-        assert_ne!(pending_identity_id, selected_identity_id);
-        idb_put_string(
-            IDENTITY_DIRECTORY_KEY,
-            &serde_json::to_string(&legacy)
-                .map_err(|error| NookError::IndexedDb(error.to_string()))?,
-        )
-        .await?;
-        let store_id = nook_core::StoreId::generate().map_err(map_domain_error)?;
-        let pending_raw = serde_json::json!({
-            "storeId": store_id,
-            "identityId": pending_identity_id,
-        })
-        .to_string();
-        idb_put_string(PENDING_SIMPLE_GENESIS_KEY, &pending_raw).await?;
-
-        let migrated = load_identity_directory().await?;
-
-        assert_eq!(migrated.identities().len(), 1);
-        assert_eq!(
-            migrated.selected().map_err(map_domain_error)?.identity_id,
-            pending_identity_id
-        );
-        let pending = PendingSimpleGenesis::load_for_store(store_id.as_str())
-            .await?
-            .ok_or_else(|| NookError::Database("Pending genesis marker is missing.".to_owned()))?;
-        assert_eq!(pending.identity_id, pending_identity_id);
-        clear_identity_directory_for_test().await
-    }
-
-    #[wasm_bindgen_test]
-    async fn migration_normalizes_staged_genesis_snapshots_atomically() -> Result<(), NookError> {
-        clear_identity_directory_for_test().await?;
-        let app_key = AppKey::generate().map_err(map_domain_error)?;
-        let mut legacy = IdentityDirectory::empty();
-        let pending_identity_id = legacy
-            .create_identity("Pending genesis", &app_key, None)
-            .map_err(map_domain_error)?;
-        legacy
-            .create_identity("Selected", &app_key, None)
-            .map_err(map_domain_error)?;
-        let store_id = nook_core::StoreId::generate().map_err(map_domain_error)?;
-        let mut candidate = legacy.clone();
-        candidate
-            .open_or_generate_vault_dek_for_identity(
-                &pending_identity_id,
-                &app_key,
-                store_id.clone(),
-            )
-            .map_err(map_domain_error)?;
-        let pending = PendingSimpleGenesis {
-            store_id: store_id.clone(),
-            identity_id: pending_identity_id.clone(),
-            created_at: IsoTimestamp::parse("2026-08-15T00:00:00.000Z")
-                .map_err(|error| NookError::Database(error.to_string()))?,
-            event_state: simple_genesis::PendingSimpleGenesisEvent::AwaitingEvent,
-            flow: genesis_flow::PendingSimpleGenesisFlow::Staged(
-                staged_genesis::StagedSimpleGenesisIdentity {
-                    base_directory: legacy.clone(),
-                    directory: candidate,
-                },
-            ),
-        };
-        idb_put_string(
-            IDENTITY_DIRECTORY_KEY,
-            &serde_json::to_string(&legacy)
-                .map_err(|error| NookError::IndexedDb(error.to_string()))?,
-        )
-        .await?;
-        idb_put_string(PENDING_SIMPLE_GENESIS_KEY, &pending.encode()?).await?;
-
-        let migrated = load_identity_directory().await?;
-        let normalized_raw = idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
-            .await?
-            .ok_or_else(|| NookError::Database("Staged marker is missing.".to_owned()))?;
-        let normalized = PendingSimpleGenesis::decode(&normalized_raw)?;
-        let staged = normalized
-            .staged_identity()
-            .ok_or_else(|| NookError::Database("Staged snapshots are missing.".to_owned()))?;
-        assert_eq!(migrated.identities().len(), 1);
-        assert_eq!(staged.base_directory.identities().len(), 1);
-        assert_eq!(staged.directory.identities().len(), 1);
-        SimpleGenesisCompletion::Staged {
-            pending: &normalized,
-            signing_seed: "staged-migration-signing-seed",
-        }
-        .clear_pending()
-        .await?;
-        let published = load_identity_directory().await?;
-        assert!(
-            published
-                .selected()
-                .map_err(map_domain_error)?
-                .owns_vault(&store_id)
-        );
-        idb_delete_key(event_db::SIGNING_SEED_KEY).await?;
-        clear_identity_directory_for_test().await
+        normalized
+            .validate()
+            .map_err(NookDatabase::map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[wasm_bindgen_test]
     async fn valid_directory_ignores_malformed_pending_genesis_marker() -> Result<(), NookError> {
-        clear_identity_directory_for_test().await?;
-        let app_key = AppKey::generate().map_err(map_domain_error)?;
+        NookDatabase::clear_identity_directory_for_test().await?;
+        let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
         let mut directory = IdentityDirectory::empty();
-        let identity_id = directory
-            .create_identity("Personal", &app_key, None)
-            .map_err(map_domain_error)?;
-        idb_put_string(
-            IDENTITY_DIRECTORY_KEY,
-            &serde_json::to_string(&directory)
+        let resolved_identity = directory
+            .create_identity(IdentityCreation {
+                label: "Personal",
+                app_key: &app_key,
+                member_label: MemberLabelState::Unnamed,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        directory = resolved_identity.directory;
+        let identity_id = resolved_identity.identity_id;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: IDENTITY_DIRECTORY_KEY,
+            value: &serde_json::to_string(&directory)
                 .map_err(|error| NookError::IndexedDb(error.to_string()))?,
-        )
+        })
         .await?;
         let malformed_marker = "{\"futureFormat\":true}";
-        idb_put_string(PENDING_SIMPLE_GENESIS_KEY, malformed_marker).await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: PENDING_SIMPLE_GENESIS_KEY,
+            value: malformed_marker,
+        })
+        .await?;
 
-        let loaded = load_identity_directory().await?;
+        let loaded = NookDatabase::load_identity_directory().await?;
 
         assert_eq!(
-            loaded.selected().map_err(map_domain_error)?.identity_id,
+            loaded
+                .selected()
+                .map_err(NookDatabase::map_domain_error)?
+                .identity_id,
             identity_id
         );
         assert_eq!(
-            idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?.as_deref(),
-            Some(malformed_marker)
+            NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?,
+            StoredStringRecord::Stored((malformed_marker).to_owned())
         );
-        clear_identity_directory_for_test().await
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[wasm_bindgen_test]
     async fn current_directory_wins_over_stale_legacy_record() -> Result<(), NookError> {
-        clear_identity_directory_for_test().await?;
-        let app_key = AppKey::generate().map_err(map_domain_error)?;
-        let legacy = IdentityRecord::create_with_app_key("Legacy", &app_key, None)
-            .map_err(map_domain_error)?;
-        idb_put_string(
-            LEGACY_IDENTITY_RECORD_KEY,
-            &serde_json::to_string(&legacy)
+        NookDatabase::clear_identity_directory_for_test().await?;
+        let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let legacy =
+            IdentityRecord::create_with_app_key("Legacy", &app_key, MemberLabelState::Unnamed)
+                .map_err(NookDatabase::map_domain_error)?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: LEGACY_IDENTITY_RECORD_KEY,
+            value: &serde_json::to_string(&legacy)
                 .map_err(|error| NookError::IndexedDb(error.to_string()))?,
-        )
+        })
         .await?;
         let mut current = IdentityDirectory::empty();
-        current
-            .create_identity("Personal", &app_key, None)
-            .map_err(map_domain_error)?;
-        let work_key = AppKey::generate().map_err(map_domain_error)?;
-        current
-            .create_identity("Work", &work_key, None)
-            .map_err(map_domain_error)?;
-        idb_put_string(
-            IDENTITY_DIRECTORY_KEY,
-            &serde_json::to_string(&current)
+        let resolved_identity = current
+            .create_identity(IdentityCreation {
+                label: "Personal",
+                app_key: &app_key,
+                member_label: MemberLabelState::Unnamed,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        current = resolved_identity.directory;
+        let work_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let resolved_identity = current
+            .create_identity(IdentityCreation {
+                label: "Work",
+                app_key: &work_key,
+                member_label: MemberLabelState::Unnamed,
+            })
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        current = resolved_identity.directory;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: IDENTITY_DIRECTORY_KEY,
+            value: &serde_json::to_string(&current)
                 .map_err(|error| NookError::IndexedDb(error.to_string()))?,
-        )
+        })
         .await?;
 
-        let loaded = load_identity_directory().await?;
+        let loaded = NookDatabase::load_identity_directory().await?;
         assert_eq!(loaded, current);
-        assert!(idb_get_string(LEGACY_IDENTITY_RECORD_KEY).await?.is_none());
-        clear_identity_directory_for_test().await
+        assert!(matches!(
+            NookDatabase::idb_get_string(LEGACY_IDENTITY_RECORD_KEY).await?,
+            StoredStringRecord::MissingKey
+        ));
+        NookDatabase::clear_identity_directory_for_test().await
     }
 
     #[wasm_bindgen_test]
     async fn invalid_current_directory_preserves_legacy_record() -> Result<(), NookError> {
-        clear_identity_directory_for_test().await?;
-        let app_key = AppKey::generate().map_err(map_domain_error)?;
-        let legacy = IdentityRecord::create_with_app_key("Legacy", &app_key, None)
-            .map_err(map_domain_error)?;
-        idb_put_string(
-            LEGACY_IDENTITY_RECORD_KEY,
-            &serde_json::to_string(&legacy)
+        NookDatabase::clear_identity_directory_for_test().await?;
+        let app_key = AppKey::generate().map_err(NookDatabase::map_domain_error)?;
+        let legacy =
+            IdentityRecord::create_with_app_key("Legacy", &app_key, MemberLabelState::Unnamed)
+                .map_err(NookDatabase::map_domain_error)?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: LEGACY_IDENTITY_RECORD_KEY,
+            value: &serde_json::to_string(&legacy)
                 .map_err(|error| NookError::IndexedDb(error.to_string()))?,
-        )
+        })
         .await?;
-        idb_put_string(IDENTITY_DIRECTORY_KEY, "{invalid-json").await?;
+        NookDatabase::idb_put_string(IdbPutStringRequest {
+            key: IDENTITY_DIRECTORY_KEY,
+            value: "{invalid-json",
+        })
+        .await?;
 
-        assert!(load_identity_directory().await.is_err());
-        assert!(idb_get_string(LEGACY_IDENTITY_RECORD_KEY).await?.is_some());
-        clear_identity_directory_for_test().await
+        assert!(NookDatabase::load_identity_directory().await.is_err());
+        assert!(matches!(
+            NookDatabase::idb_get_string(LEGACY_IDENTITY_RECORD_KEY).await?,
+            StoredStringRecord::Stored(_)
+        ));
+        NookDatabase::clear_identity_directory_for_test().await
     }
 }

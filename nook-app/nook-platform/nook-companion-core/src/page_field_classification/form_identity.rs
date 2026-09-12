@@ -5,15 +5,58 @@
 )]
 
 use super::control_identity::AuthenticationControlIdentity;
-use super::{
-    AuthenticationUsernameEvidence, PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS, contains_any_word,
-    expand_identity_text, looks_like_non_authentication_submit_control_label,
-    looks_like_password_update_submit_control_label,
-};
+use super::{AuthenticationUsernameEvidence, PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS};
+use crate::AuthenticationAdvanceControlObservation;
+use crate::AuthenticationControlText;
 /// Borrowed route or form evidence; predicates do not confer authorization.
 pub(super) struct AuthenticationRouteIdentity<'a> {
     identity: &'a str,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AuthenticationRouteDecision {
+    Eligible,
+    Destructive,
+    AccountManagement,
+    Unrelated,
+    DisallowedDestination,
+}
+impl AuthenticationRouteIdentity<'_> {
+    pub(super) fn form_admission(&self) -> AuthenticationRouteDecision {
+        if self.indicates_destructive_action() {
+            AuthenticationRouteDecision::Destructive
+        } else if self.indicates_account_management() {
+            AuthenticationRouteDecision::AccountManagement
+        } else {
+            AuthenticationRouteDecision::Eligible
+        }
+    }
+    pub(super) fn one_time_code_destination(&self) -> AuthenticationRouteDecision {
+        if self.indicates_destructive_action() {
+            AuthenticationRouteDecision::Destructive
+        } else if self.indicates_non_authentication() {
+            AuthenticationRouteDecision::Unrelated
+        } else if self.has_disallowed_action_or_provider(DestinationPolicy {
+            credential: CredentialDestination::Authentication,
+            provider: OAuthAuthorization::Disallowed,
+        }) {
+            AuthenticationRouteDecision::DisallowedDestination
+        } else {
+            AuthenticationRouteDecision::Eligible
+        }
+    }
+    pub(super) fn passkey_destination(&self) -> AuthenticationRouteDecision {
+        if self.indicates_destructive_action() {
+            AuthenticationRouteDecision::Destructive
+        } else if self.indicates_non_authentication() {
+            AuthenticationRouteDecision::Unrelated
+        } else if self.has_disallowed_passkey_action_or_provider() {
+            AuthenticationRouteDecision::DisallowedDestination
+        } else {
+            AuthenticationRouteDecision::Eligible
+        }
+    }
+}
+
 impl<'a> AuthenticationRouteIdentity<'a> {
     pub(super) fn new(identity: &'a str) -> Self {
         Self { identity }
@@ -47,23 +90,24 @@ pub(super) struct OneTimeCodeContext<'a> {
 impl AuthenticationRouteIdentity<'_> {
     pub(super) fn indicates_authentication(&self) -> bool {
         let identity = self.identity;
-        contains_any_word(
-            &expand_identity_text(identity),
-            &[
-                "login",
-                "log in",
-                "signin",
-                "sign in",
-                "identity",
-                "auth",
-                "authentication",
-            ],
+        AuthenticationControlText::new(
+            &AuthenticationControlText::new(identity).expand_identity_text(),
         )
+        .contains_any_word(&[
+            "login",
+            "log in",
+            "signin",
+            "sign in",
+            "identity",
+            "auth",
+            "authentication",
+        ])
     }
     pub(super) fn indicates_login(&self) -> bool {
         let identity = self.identity;
-        let identity = expand_identity_text(identity);
-        contains_any_word(&identity, &["login", "log in", "signin", "sign in"])
+        let identity = AuthenticationControlText::new(identity).expand_identity_text();
+        AuthenticationControlText::new(&identity)
+            .contains_any_word(&["login", "log in", "signin", "sign in"])
     }
     fn normalized(&self) -> String {
         let identity = self.identity;
@@ -104,11 +148,14 @@ impl AuthenticationRouteIdentity<'_> {
         let allow_generic_oauth_authorization =
             matches!(authorization, OAuthAuthorization::Allowed);
         AuthenticationControlIdentity::new(destination_identity).route_names_provider()
-            || contains_any_word(
-                &expand_identity_text(destination_identity),
-                &["passkey", "saml", "sso"],
+            || AuthenticationControlText::new(
+                &AuthenticationControlText::new(destination_identity).expand_identity_text(),
             )
-            || (contains_any_word(&expand_identity_text(destination_identity), &["oauth"])
+            .contains_any_word(&["passkey", "saml", "sso"])
+            || (AuthenticationControlText::new(
+                &AuthenticationControlText::new(destination_identity).expand_identity_text(),
+            )
+            .contains_any_word(&["oauth"])
                 && !(allow_generic_oauth_authorization
                     && AuthenticationRouteIdentity::new(destination_identity)
                         .indicates_oauth_authorization()))
@@ -127,8 +174,8 @@ impl AuthenticationRouteIdentity<'_> {
                 let Some((key, value)) = component.split_once('=') else {
                     return true;
                 };
-                expand_identity_text(key) != "response mode"
-                    || expand_identity_text(value) != "form post"
+                AuthenticationControlText::new(key).expand_identity_text() != "response mode"
+                    || AuthenticationControlText::new(value).expand_identity_text() != "form post"
             })
             .collect::<Vec<_>>()
             .join("&");
@@ -148,7 +195,9 @@ impl AuthenticationRouteIdentity<'_> {
             .filter(|component| {
                 let key = component.split_once('=').map_or(*component, |(key, _)| key);
                 !matches!(
-                    expand_identity_text(key).as_str(),
+                    AuthenticationControlText::new(key)
+                        .expand_identity_text()
+                        .as_str(),
                     "next" | "return" | "return to" | "redirect" | "redirect uri" | "continue"
                 )
             })
@@ -176,7 +225,7 @@ impl AuthenticationRouteIdentity<'_> {
                     .map_or("", |(_, value)| value),
             )
             .indicates_alternate_provider(policy.provider)
-            || (looks_like_non_authentication_submit_control_label(&content_identity)
+            || (AuthenticationAdvanceControlObservation::looks_like_non_authentication_submit_control_label(&content_identity)
                 && !password_update_destination
                 && !AuthenticationRouteIdentity::new(destination_identity)
                     .indicates_safe_post_login())
@@ -185,28 +234,26 @@ impl AuthenticationRouteIdentity<'_> {
     }
     fn names_passkey_enrollment_or_management(&self) -> bool {
         let identity = self.identity;
-        contains_any_word(
-            identity,
-            &[
-                "create",
-                "enable",
-                "enroll",
-                "enrollment",
-                "setup",
-                "set up",
-                "register",
-                "registration",
-                "add",
-                "manage",
-                "management",
-                "configure",
-            ],
-        )
+        AuthenticationControlText::new(identity).contains_any_word(&[
+            "create",
+            "enable",
+            "enroll",
+            "enrollment",
+            "setup",
+            "set up",
+            "register",
+            "registration",
+            "add",
+            "manage",
+            "management",
+            "configure",
+        ])
     }
     fn names_passkey_authentication(&self) -> bool {
         let destination_identity = self.identity;
-        let identity = expand_identity_text(destination_identity);
-        contains_any_word(&identity, PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS)
+        let identity = AuthenticationControlText::new(destination_identity).expand_identity_text();
+        AuthenticationControlText::new(&identity)
+            .contains_any_word(PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS)
             && AuthenticationRouteIdentity::new(&identity).indicates_authentication()
             && !AuthenticationRouteIdentity::new(&identity).names_passkey_enrollment_or_management()
             && !AuthenticationControlIdentity::new(destination_identity).names_registered_provider()
@@ -220,12 +267,11 @@ impl AuthenticationRouteIdentity<'_> {
         .without_navigation_metadata();
         let passkey_authentication_route =
             AuthenticationRouteIdentity::new(&content_identity).names_passkey_authentication();
-        let content_identity_text = expand_identity_text(&content_identity);
-        let passkey_enrollment_route =
-            contains_any_word(
-                &content_identity_text,
-                PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS,
-            ) && AuthenticationRouteIdentity::new(&content_identity_text)
+        let content_identity_text =
+            AuthenticationControlText::new(&content_identity).expand_identity_text();
+        let passkey_enrollment_route = AuthenticationControlText::new(&content_identity_text)
+            .contains_any_word(PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS)
+            && AuthenticationRouteIdentity::new(&content_identity_text)
                 .names_passkey_enrollment_or_management();
         passkey_enrollment_route
             || AuthenticationRouteIdentity::new(destination_identity).has_disallowed_route_action()
@@ -235,7 +281,7 @@ impl AuthenticationRouteIdentity<'_> {
                     .map_or("", |(_, value)| value),
             )
             .indicates_alternate_provider(OAuthAuthorization::Disallowed)
-            || (looks_like_non_authentication_submit_control_label(&content_identity)
+            || (AuthenticationAdvanceControlObservation::looks_like_non_authentication_submit_control_label(&content_identity)
                 && !AuthenticationRouteIdentity::new(destination_identity)
                     .indicates_safe_post_login()
                 && !passkey_authentication_route)
@@ -256,48 +302,9 @@ impl AuthenticationRouteIdentity<'_> {
     }
     pub(super) fn indicates_one_time_code_authentication(&self) -> bool {
         let identity = self.identity;
-        let identity = expand_identity_text(identity);
+        let identity = AuthenticationControlText::new(identity).expand_identity_text();
         AuthenticationRouteIdentity::new(&identity).indicates_authentication()
-            || contains_any_word(
-                &identity,
-                &[
-                    "otp",
-                    "totp",
-                    "2 fa",
-                    "2fa",
-                    "mfa",
-                    "two factor",
-                    "one time code",
-                    "auth code",
-                    "authentication code",
-                    "authenticator",
-                ],
-            )
-    }
-    pub(super) fn indicates_authenticator_enrollment(&self) -> bool {
-        let identity = self.identity;
-        let identity = expand_identity_text(identity);
-        contains_any_word(
-            &identity,
-            &[
-                "enroll",
-                "enrollment",
-                "setup",
-                "set up",
-                "register",
-                "create",
-                "enable",
-                "add",
-                "configure",
-                "activate",
-                "pair",
-                "pairing",
-                "provision",
-                "provisioning",
-            ],
-        ) && contains_any_word(
-            &identity,
-            &[
+            || AuthenticationControlText::new(&identity).contains_any_word(&[
                 "otp",
                 "totp",
                 "2 fa",
@@ -305,9 +312,39 @@ impl AuthenticationRouteIdentity<'_> {
                 "mfa",
                 "two factor",
                 "one time code",
+                "auth code",
+                "authentication code",
                 "authenticator",
-            ],
-        )
+            ])
+    }
+    pub(super) fn indicates_authenticator_enrollment(&self) -> bool {
+        let identity = self.identity;
+        let identity = AuthenticationControlText::new(identity).expand_identity_text();
+        AuthenticationControlText::new(&identity).contains_any_word(&[
+            "enroll",
+            "enrollment",
+            "setup",
+            "set up",
+            "register",
+            "create",
+            "enable",
+            "add",
+            "configure",
+            "activate",
+            "pair",
+            "pairing",
+            "provision",
+            "provisioning",
+        ]) && AuthenticationControlText::new(&identity).contains_any_word(&[
+            "otp",
+            "totp",
+            "2 fa",
+            "2fa",
+            "mfa",
+            "two factor",
+            "one time code",
+            "authenticator",
+        ])
     }
 }
 
@@ -348,72 +385,78 @@ impl AuthenticationRouteIdentity<'_> {
     }
     pub(super) fn indicates_destructive_action(&self) -> bool {
         let form_identity = self.identity;
-        let identity = expand_identity_text(form_identity);
-        let changes_account_detail =
-            contains_any_word(&identity, &["change", "update", "edit", "save"])
-                && (contains_any_word(
-                    &identity,
-                    &["email", "username", "user name", "phone", "profile"],
-                ) || (contains_any_word(&identity, &["account detail", "details"])
-                    && !contains_any_word(&identity, &["password", "credential", "credentials"])));
-        let transaction_action =
-            contains_any_word(
-                &identity,
-                &[
-                    "pay",
-                    "payment",
-                    "checkout",
-                    "purchase",
-                    "buy",
-                    "place order",
-                    "confirm order",
-                    "cart",
-                    "transfer",
-                    "wire",
-                    "withdraw",
-                    "withdrawal",
-                    "deposit",
-                    "send money",
-                    "financial transaction",
-                    "authorize transaction",
-                    "transaction authorization",
-                ],
-            ) || (contains_any_word(&identity, &["authorize", "confirm", "submit"])
-                && (contains_any_word(
-                    &identity,
-                    &["transaction", "transactions", "payment", "payments"],
-                ) || contains_any_word(&identity, &["order", "orders"])));
-        let locks_account_or_session = contains_any_word(&identity, &["lock", "freeze", "close"])
-            && contains_any_word(&identity, &["account", "session"]);
+        let identity = AuthenticationControlText::new(form_identity).expand_identity_text();
+        let changes_account_detail = AuthenticationControlText::new(&identity)
+            .contains_any_word(&["change", "update", "edit", "save"])
+            && (AuthenticationControlText::new(&identity).contains_any_word(&[
+                "email",
+                "username",
+                "user name",
+                "phone",
+                "profile",
+            ]) || (AuthenticationControlText::new(&identity)
+                .contains_any_word(&["account detail", "details"])
+                && !AuthenticationControlText::new(&identity).contains_any_word(&[
+                    "password",
+                    "credential",
+                    "credentials",
+                ])));
+        let transaction_action = AuthenticationControlText::new(&identity).contains_any_word(&[
+            "pay",
+            "payment",
+            "checkout",
+            "purchase",
+            "buy",
+            "place order",
+            "confirm order",
+            "cart",
+            "transfer",
+            "wire",
+            "withdraw",
+            "withdrawal",
+            "deposit",
+            "send money",
+            "financial transaction",
+            "authorize transaction",
+            "transaction authorization",
+        ]) || (AuthenticationControlText::new(&identity)
+            .contains_any_word(&["authorize", "confirm", "submit"])
+            && (AuthenticationControlText::new(&identity).contains_any_word(&[
+                "transaction",
+                "transactions",
+                "payment",
+                "payments",
+            ]) || AuthenticationControlText::new(&identity)
+                .contains_any_word(&["order", "orders"])));
+        let locks_account_or_session = AuthenticationControlText::new(&identity)
+            .contains_any_word(&["lock", "freeze", "close"])
+            && AuthenticationControlText::new(&identity).contains_any_word(&["account", "session"]);
         changes_account_detail
             || transaction_action
             || locks_account_or_session
-            || contains_any_word(
-                &identity,
-                &[
-                    "delete",
-                    "remove",
-                    "deactivate",
-                    "disable",
-                    "unlink",
-                    "disconnect",
-                    "logout",
-                    "log out",
-                    "signout",
-                    "sign out",
-                    "logoff",
-                    "log off",
-                    "signoff",
-                    "sign off",
-                    "revoke",
-                    "suspend",
-                    "close account",
-                    "erase",
-                    "destroy",
-                    "terminate",
-                    "eliminar",
-                ],
-            )
+            || AuthenticationControlText::new(&identity).contains_any_word(&[
+                "delete",
+                "remove",
+                "deactivate",
+                "disable",
+                "unlink",
+                "disconnect",
+                "logout",
+                "log out",
+                "signout",
+                "sign out",
+                "logoff",
+                "log off",
+                "signoff",
+                "sign off",
+                "revoke",
+                "suspend",
+                "close account",
+                "erase",
+                "destroy",
+                "terminate",
+                "eliminar",
+            ])
     }
 }
 const NON_AUTHENTICATION_ACCOUNT_WORDS: &[&str] = &[
@@ -428,32 +471,27 @@ const NON_AUTHENTICATION_ACCOUNT_WORDS: &[&str] = &[
 impl AuthenticationRouteIdentity<'_> {
     pub(super) fn indicates_account_management(&self) -> bool {
         let form = self.identity;
-        contains_any_word(
-            &expand_identity_text(form),
-            NON_AUTHENTICATION_ACCOUNT_WORDS,
-        )
+        AuthenticationControlText::new(&AuthenticationControlText::new(form).expand_identity_text())
+            .contains_any_word(NON_AUTHENTICATION_ACCOUNT_WORDS)
     }
     pub(super) fn indicates_non_authentication(&self) -> bool {
         let destination_identity = self.identity;
         if destination_identity.trim().is_empty() {
             return false;
         }
-        let identity = expand_identity_text(destination_identity);
+        let identity = AuthenticationControlText::new(destination_identity).expand_identity_text();
         if AuthenticationRouteIdentity::new(&identity).indicates_destructive_action()
-            || contains_any_word(
-                &identity,
-                &[
-                    "register",
-                    "registration",
-                    "signup",
-                    "sign up",
-                    "recover",
-                    "recovery",
-                    "forgot password",
-                    "reset",
-                    "reset password",
-                ],
-            )
+            || AuthenticationControlText::new(&identity).contains_any_word(&[
+                "register",
+                "registration",
+                "signup",
+                "sign up",
+                "recover",
+                "recovery",
+                "forgot password",
+                "reset",
+                "reset password",
+            ])
         {
             return true;
         }
@@ -471,28 +509,35 @@ impl AuthenticationRouteIdentity<'_> {
     }
     fn has_disallowed_route_action(&self) -> bool {
         let destination_identity = self.identity;
-        let path_identity = expand_identity_text(
+        let path_identity = AuthenticationControlText::new(
             destination_identity
                 .split(['?', '#'])
                 .next()
                 .unwrap_or_default(),
-        );
-        contains_any_word(
-            &path_identity,
-            &["cancel", "back", "help", "profile", "payment"],
-        ) || contains_any_word(
-            &path_identity,
-            &["billing", "subscribe", "search", "publish"],
-        ) || (contains_any_word(&path_identity, &["post"])
-            && !AuthenticationRouteIdentity::new(destination_identity).indicates_safe_post_login())
-            || contains_any_word(&path_identity, &["learn more"])
+        )
+        .expand_identity_text();
+        AuthenticationControlText::new(&path_identity)
+            .contains_any_word(&["cancel", "back", "help", "profile", "payment"])
+            || AuthenticationControlText::new(&path_identity).contains_any_word(&[
+                "billing",
+                "subscribe",
+                "search",
+                "publish",
+            ])
+            || (AuthenticationControlText::new(&path_identity).contains_any_word(&["post"])
+                && !AuthenticationRouteIdentity::new(destination_identity)
+                    .indicates_safe_post_login())
+            || AuthenticationControlText::new(&path_identity).contains_any_word(&["learn more"])
     }
     pub(super) fn indicates_password_update(&self) -> bool {
         let destination_identity = self.identity;
-        let identity = expand_identity_text(destination_identity);
-        (looks_like_password_update_submit_control_label(destination_identity)
-            || (contains_any_word(&identity, &["credential", "credentials"])
-                && contains_any_word(&identity, &["save", "update", "change", "set", "reset"])))
+        let identity = AuthenticationControlText::new(destination_identity).expand_identity_text();
+        (AuthenticationAdvanceControlObservation::looks_like_password_update_submit_control_label(
+            destination_identity,
+        ) || (AuthenticationControlText::new(&identity)
+            .contains_any_word(&["credential", "credentials"])
+            && AuthenticationControlText::new(&identity)
+                .contains_any_word(&["save", "update", "change", "set", "reset"])))
             && !AuthenticationRouteIdentity::new(destination_identity)
                 .indicates_destructive_action()
             && !AuthenticationRouteIdentity::new(destination_identity).has_disallowed_route_action()
@@ -500,18 +545,22 @@ impl AuthenticationRouteIdentity<'_> {
     pub(super) fn indicates_registration(&self) -> bool {
         let destination_identity = self.identity;
         !destination_identity.trim().is_empty()
-            && contains_any_word(
-                &expand_identity_text(destination_identity),
-                &["register", "registration", "signup", "sign up"],
+            && AuthenticationControlText::new(
+                &AuthenticationControlText::new(destination_identity).expand_identity_text(),
             )
+            .contains_any_word(&["register", "registration", "signup", "sign up"])
     }
     pub(super) fn indicates_password_recovery(&self) -> bool {
         let destination_identity = self.identity;
-        let identity = expand_identity_text(destination_identity);
+        let identity = AuthenticationControlText::new(destination_identity).expand_identity_text();
         !destination_identity.trim().is_empty()
-            && (contains_any_word(&identity, &["recover", "recovery", "forgot password"])
-                || (contains_any_word(&identity, &["reset"])
-                    && contains_any_word(&identity, &["password", "credential"])))
+            && (AuthenticationControlText::new(&identity).contains_any_word(&[
+                "recover",
+                "recovery",
+                "forgot password",
+            ]) || (AuthenticationControlText::new(&identity).contains_any_word(&["reset"])
+                && AuthenticationControlText::new(&identity)
+                    .contains_any_word(&["password", "credential"])))
     }
 }
 #[cfg(test)]

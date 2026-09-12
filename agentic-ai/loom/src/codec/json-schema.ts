@@ -1,3 +1,41 @@
+export class JsonSchemaDefinition<TSchema extends JsonSchemaDefinitionValue> {
+  private constructor(private readonly value: TSchema) {}
+  static boolean(): BooleanJsonSchema {
+    const schema: BooleanJsonSchema = { type: JsonSchemaType.Boolean };
+    return new JsonSchemaDefinition(schema).value;
+  }
+
+  static integer(args: IntegerJsonSchemaArgs): IntegerJsonSchema {
+    const schema: IntegerJsonSchema = {
+      type: JsonSchemaType.Integer,
+      minimum: args.minimum,
+    };
+    return new JsonSchemaDefinition(schema).value;
+  }
+
+  static string(): PlainStringJsonSchema {
+    const schema: PlainStringJsonSchema = { type: JsonSchemaType.String };
+    return new JsonSchemaDefinition(schema).value;
+  }
+
+  static pattern(args: PatternStringJsonSchemaArgs): PatternStringJsonSchema {
+    const schema: PatternStringJsonSchema = {
+      type: JsonSchemaType.String,
+      pattern: args.pattern,
+    };
+    return new JsonSchemaDefinition(schema).value;
+  }
+
+  static object(args: ObjectJsonSchemaArgs): ObjectJsonSchema {
+    const schema: ObjectJsonSchema = {
+      type: JsonSchemaType.Object,
+      additionalProperties: false,
+      required: args.required,
+      properties: args.properties,
+    };
+    return new JsonSchemaDefinition(schema).value;
+  }
+}
 /**
  * Typed JSON Schema fragments for Loom toolsList discovery.
  *
@@ -43,33 +81,13 @@ export type ObjectJsonSchema = {
   };
 };
 
-export function booleanJsonSchema(): BooleanJsonSchema {
-  return { type: JsonSchemaType.Boolean };
-}
-
 export type IntegerJsonSchemaArgs = {
   readonly minimum: number;
 };
 
-export function integerJsonSchema(
-  args: IntegerJsonSchemaArgs,
-): IntegerJsonSchema {
-  return { type: JsonSchemaType.Integer, minimum: args.minimum };
-}
-
-export function stringJsonSchema(): PlainStringJsonSchema {
-  return { type: JsonSchemaType.String };
-}
-
 export type PatternStringJsonSchemaArgs = {
   readonly pattern: string;
 };
-
-export function patternStringJsonSchema(
-  args: PatternStringJsonSchemaArgs,
-): PatternStringJsonSchema {
-  return { type: JsonSchemaType.String, pattern: args.pattern };
-}
 
 export type ObjectJsonSchemaArgs = {
   readonly required: readonly string[];
@@ -78,11 +96,4 @@ export type ObjectJsonSchemaArgs = {
   };
 };
 
-export function objectJsonSchema(args: ObjectJsonSchemaArgs): ObjectJsonSchema {
-  return {
-    type: JsonSchemaType.Object,
-    additionalProperties: false,
-    required: args.required,
-    properties: args.properties,
-  };
-}
+type JsonSchemaDefinitionValue = JsonSchemaProperty | ObjectJsonSchema;

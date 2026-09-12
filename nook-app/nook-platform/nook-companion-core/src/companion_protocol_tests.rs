@@ -1,4 +1,5 @@
 use super::*;
+use std::mem;
 
 fn before_expiry() -> CompanionEpochMilliseconds {
     CompanionEpochMilliseconds(100.0)
@@ -264,12 +265,11 @@ fn authorization_requires_capability_and_an_issued_discovery() -> anyhow::Result
         app_key: app_key(vec![ExtensionConnectScope::PasswordFilling]),
     };
     assert!(matches!(
-        CompanionExtensionHandoffEndpoint::new(without_access),
+        ReplayEndpoint::new(without_access),
         Err(CompanionProtocolError::InvalidValue)
     ));
 
-    let mut revoked =
-        CompanionExtensionHandoffEndpoint::new(CompanionExtensionPresence::Unavailable)?;
+    let mut revoked = ReplayEndpoint::new(CompanionExtensionPresence::Unavailable)?;
     let status = revoked.discover(observation())?;
     let transaction =
         CompanionAdmittedIdentityDiscovery::admit(CompanionIdentityStatusAdmissionRequest {
@@ -288,7 +288,7 @@ fn authorization_requires_capability_and_an_issued_discovery() -> anyhow::Result
         Err(CompanionProtocolError::AppKeyUnavailable)
     ));
 
-    let mut endpoint = CompanionExtensionHandoffEndpoint::new(unlocked_presence())?;
+    let mut endpoint = ReplayEndpoint::new(unlocked_presence())?;
     endpoint.discover(observation())?;
     let authorization = CompanionIdentityHandoffAuthorization {
         request: handoff_request()?,
@@ -310,7 +310,7 @@ fn authorization_requires_capability_and_an_issued_discovery() -> anyhow::Result
     reason = "the test intentionally observes fail-closed state consumption after mismatched, stale, and concurrent transactions"
 )]
 fn mismatched_stale_and_concurrent_transactions_consume_endpoint_state() -> anyhow::Result<()> {
-    let mut mismatched = CompanionExtensionHandoffEndpoint::new(unlocked_presence())?;
+    let mut mismatched = ReplayEndpoint::new(unlocked_presence())?;
     mismatched.discover(observation())?;
     let exact = CompanionIdentityHandoffAuthorization {
         request: handoff_request()?,
@@ -332,7 +332,7 @@ fn mismatched_stale_and_concurrent_transactions_consume_endpoint_state() -> anyh
         Err(CompanionProtocolError::NonceUnavailable)
     ));
 
-    let mut revoked = CompanionExtensionHandoffEndpoint::new(unlocked_presence())?;
+    let mut revoked = ReplayEndpoint::new(unlocked_presence())?;
     revoked.discover(observation())?;
     let exact = CompanionIdentityHandoffAuthorization {
         request: handoff_request()?,
@@ -350,7 +350,7 @@ fn mismatched_stale_and_concurrent_transactions_consume_endpoint_state() -> anyh
         Err(CompanionProtocolError::NonceUnavailable)
     ));
 
-    let mut changed_presence = CompanionExtensionHandoffEndpoint::new(unlocked_presence())?;
+    let mut changed_presence = ReplayEndpoint::new(unlocked_presence())?;
     changed_presence.discover(observation())?;
     let mut changed = CompanionIdentityHandoffAuthorization {
         request: handoff_request()?,
@@ -374,7 +374,7 @@ fn mismatched_stale_and_concurrent_transactions_consume_endpoint_state() -> anyh
         Err(CompanionProtocolError::NonceUnavailable)
     ));
 
-    let mut stale = CompanionExtensionHandoffEndpoint::new(unlocked_presence())?;
+    let mut stale = ReplayEndpoint::new(unlocked_presence())?;
     stale.discover(observation())?;
     let stale_authorization = CompanionIdentityHandoffAuthorization {
         request: handoff_request()?,
@@ -390,7 +390,7 @@ fn mismatched_stale_and_concurrent_transactions_consume_endpoint_state() -> anyh
         Err(CompanionProtocolError::NonceUnavailable)
     ));
 
-    let mut concurrent = CompanionExtensionHandoffEndpoint::new(unlocked_presence())?;
+    let mut concurrent = ReplayEndpoint::new(unlocked_presence())?;
     concurrent.discover(observation())?;
     let mut another = observation();
     another.request.request_id = "request-2".to_owned();
@@ -430,4 +430,46 @@ fn unlock_preserves_request_correlation_across_locked_and_unlocked_state() -> an
         CompanionIdentityStatus::Unlocked { request_id, .. } if request_id == "request-2"
     ));
     Ok(())
+}
+
+// Runtime holder exists only in replay tests: the production stages are consuming.
+struct ReplayEndpoint {
+    phase: ReplayEndpointPhase,
+}
+#[allow(clippy::large_enum_variant)]
+enum ReplayEndpointPhase {
+    Awaiting(CompanionExtensionHandoffEndpoint),
+    Discovered(DiscoveredCompanionHandoffEndpoint),
+    Consumed,
+}
+impl ReplayEndpoint {
+    fn new(presence: CompanionExtensionPresence) -> Result<Self, CompanionProtocolError> {
+        Ok(Self {
+            phase: ReplayEndpointPhase::Awaiting(CompanionExtensionHandoffEndpoint::new(presence)?),
+        })
+    }
+    fn discover(
+        &mut self,
+        discovery: CompanionIdentityDiscoveryObservation,
+    ) -> Result<CompanionIdentityStatus, CompanionProtocolError> {
+        let ready = match mem::replace(&mut self.phase, ReplayEndpointPhase::Consumed) {
+            ReplayEndpointPhase::Awaiting(endpoint) => endpoint.discover(discovery)?,
+            ReplayEndpointPhase::Discovered(endpoint) => endpoint.observe(&discovery)?,
+            ReplayEndpointPhase::Consumed => return Err(CompanionProtocolError::NonceUnavailable),
+        };
+        let status = ready.status();
+        self.phase = ReplayEndpointPhase::Discovered(ready);
+        Ok(status)
+    }
+    fn authorize_handoff(
+        &mut self,
+        auth: CompanionIdentityHandoffAuthorization,
+    ) -> Result<AuthorizedCompanionIdentityHandoff, CompanionProtocolError> {
+        match mem::replace(&mut self.phase, ReplayEndpointPhase::Consumed) {
+            ReplayEndpointPhase::Discovered(endpoint) => endpoint.authorize_handoff(auth),
+            ReplayEndpointPhase::Awaiting(_) | ReplayEndpointPhase::Consumed => {
+                Err(CompanionProtocolError::NonceUnavailable)
+            }
+        }
+    }
 }

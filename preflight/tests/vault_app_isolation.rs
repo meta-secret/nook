@@ -1,21 +1,55 @@
 use std::{
     env, fs,
+    ops::Deref,
     os::unix::fs::{self as unix_fs, PermissionsExt},
     path::{Path, PathBuf},
     process::{self, Command},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+use anyhow::Context;
+
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
 }
 
-fn read(root: &Path, path: &str) -> String {
-    fs::read_to_string(root.join(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+trait RepositoryPathRead {
+    fn read(&self, path: &str) -> String;
+}
+
+impl RepositoryPathRead for Path {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
+}
+impl Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
 }
 
 fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
@@ -33,8 +67,7 @@ fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
 fn bake_target_body<'a>(bake: &'a str, target: &str) -> &'a str {
     let marker = format!("target \"{target}\" {{");
     bake.split_once(marker.as_str())
-        .map(|(_, rest)| rest.split("target \"").next().unwrap_or(""))
-        .unwrap_or("")
+        .map_or("", |(_, rest)| rest.split("target \"").next().unwrap_or(""))
 }
 
 fn bake_target_assigns_cache_to(bake: &str, target: &str) -> bool {
@@ -51,7 +84,12 @@ fn taskfile_task_body<'a>(tasks: &'a str, name: &str) -> anyhow::Result<&'a str>
         .ok_or_else(|| anyhow::anyhow!("missing Taskfile task {name}"))?;
     let mut end = rest.len();
     for (idx, _) in rest.match_indices('\n') {
-        let line = rest[idx + 1..].lines().next().unwrap_or("");
+        let line = rest
+            .get(idx + 1..)
+            .with_context(|| format!("Taskfile task {name} line must be valid UTF-8"))?
+            .split('\n')
+            .next()
+            .with_context(|| format!("Taskfile task {name} must expose its next line"))?;
         if line.starts_with("  ")
             && !line.starts_with("   ")
             && line.trim_end().ends_with(':')
@@ -61,7 +99,10 @@ fn taskfile_task_body<'a>(tasks: &'a str, name: &str) -> anyhow::Result<&'a str>
             break;
         }
     }
-    Ok(rest[..end].trim())
+    Ok(rest
+        .get(..end)
+        .with_context(|| format!("Taskfile task {name} boundary must be valid UTF-8"))?
+        .trim())
 }
 
 #[path = "vault_app_isolation/agent_and_local_workflow_contracts.rs"]

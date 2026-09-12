@@ -1,7 +1,8 @@
 //! Website-passkey ceremonies for the unlocked extension vault session.
 
 use super::NookVaultManager;
-use crate::storage::event_db::load_local_event_store;
+use crate::NookDatabase;
+
 use crate::{NookError, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration};
 use js_sys::Object;
 use nook_core::{
@@ -16,6 +17,21 @@ struct DecryptedPasskeys {
     rows: Vec<(nook_core::SecretId, nook_core::PasskeySecret)>,
 }
 
+impl DecryptedPasskeys {
+    fn into_accounts(mut self, rp_id: &str) -> Vec<NookPasskeyAccount> {
+        let mut accounts = Vec::new();
+        self.rows.reverse();
+        while let Some((_, mut passkey)) = self.rows.pop() {
+            if passkey.rp_id.eq_ignore_ascii_case(rp_id) {
+                accounts.push(NookPasskeyAccount::from(passkey));
+            } else {
+                passkey.zeroize_plaintext();
+            }
+        }
+        accounts
+    }
+}
+
 impl Drop for DecryptedPasskeys {
     fn drop(&mut self) {
         for (_, passkey) in &mut self.rows {
@@ -24,28 +40,32 @@ impl Drop for DecryptedPasskeys {
     }
 }
 
-fn passkey_error(error: &nook_core::PasskeyAuthenticatorError) -> JsError {
-    JsError::new(passkey_error_code(error))
+impl NookVaultManager {
+    fn passkey_error(error: &nook_core::PasskeyAuthenticatorError) -> JsError {
+        JsError::new(NookVaultManager::passkey_error_code(error))
+    }
 }
 
-fn passkey_error_code(error: &nook_core::PasskeyAuthenticatorError) -> &'static str {
-    match error {
-        PasskeyAuthenticatorError::InvalidRequest(_) => "passkey-invalid-request",
-        PasskeyAuthenticatorError::RpOriginMismatch => "passkey-rp-origin-mismatch",
-        PasskeyAuthenticatorError::UnsupportedAlgorithm => "passkey-unsupported-algorithm",
-        PasskeyAuthenticatorError::CredentialExcluded => "passkey-credential-excluded",
-        PasskeyAuthenticatorError::CredentialNotFound => "passkey-not-found",
-        PasskeyAuthenticatorError::AmbiguousCredential => "passkey-selection-required",
-        PasskeyAuthenticatorError::InvalidKeyMaterial => "passkey-invalid-key-material",
-        PasskeyAuthenticatorError::SignatureCounterExhausted => "passkey-counter-exhausted",
-        PasskeyAuthenticatorError::RandomnessUnavailable => "passkey-randomness-unavailable",
-        PasskeyAuthenticatorError::Serialization => "passkey-serialization-failed",
+impl NookVaultManager {
+    fn passkey_error_code(error: &nook_core::PasskeyAuthenticatorError) -> &'static str {
+        match error {
+            PasskeyAuthenticatorError::InvalidRequest(_) => "passkey-invalid-request",
+            PasskeyAuthenticatorError::RpOriginMismatch => "passkey-rp-origin-mismatch",
+            PasskeyAuthenticatorError::UnsupportedAlgorithm => "passkey-unsupported-algorithm",
+            PasskeyAuthenticatorError::CredentialExcluded => "passkey-credential-excluded",
+            PasskeyAuthenticatorError::CredentialNotFound => "passkey-not-found",
+            PasskeyAuthenticatorError::AmbiguousCredential => "passkey-selection-required",
+            PasskeyAuthenticatorError::InvalidKeyMaterial => "passkey-invalid-key-material",
+            PasskeyAuthenticatorError::SignatureCounterExhausted => "passkey-counter-exhausted",
+            PasskeyAuthenticatorError::RandomnessUnavailable => "passkey-randomness-unavailable",
+            PasskeyAuthenticatorError::Serialization => "passkey-serialization-failed",
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{NookVaultManager, passkey_error_code};
+    use super::NookVaultManager;
     use crate::manager::VaultCryptoState;
     use nook_core::{
         PasskeyAuthenticatorError, SecretType, StoredRecordPayload, VaultArchitecture,
@@ -55,7 +75,7 @@ mod tests {
     #[wasm_bindgen_test]
     fn randomness_failure_has_a_distinct_browser_error_code() {
         assert_eq!(
-            passkey_error_code(&PasskeyAuthenticatorError::RandomnessUnavailable),
+            NookVaultManager::passkey_error_code(&PasskeyAuthenticatorError::RandomnessUnavailable),
             "passkey-randomness-unavailable"
         );
     }
@@ -105,7 +125,7 @@ mod tests {
             ),
         ];
         for (error, expected) in cases {
-            assert_eq!(passkey_error_code(&error), expected);
+            assert_eq!(NookVaultManager::passkey_error_code(&error), expected);
         }
     }
 
@@ -139,7 +159,7 @@ mod tests {
         let keys = nook_core::VaultKeys::generate()?;
         let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
         let mut manager = NookVaultManager::new();
-        manager.vault.secrets_key = keys.secrets_key.to_string();
+        manager.vault.secrets_key = keys.secrets_key.as_str().to_owned();
         manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
 
         let request: nook_core::PasskeyRegistrationRequest =
@@ -171,7 +191,15 @@ mod tests {
 
         let decrypted = manager.decrypt_passkeys()?;
         assert_eq!(decrypted.rows.len(), 1);
-        assert_eq!(decrypted.rows[0].1.rp_id, "example.com");
+        assert_eq!(
+            decrypted
+                .rows
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("decrypted passkey row must be present"))?
+                .1
+                .rp_id,
+            "example.com"
+        );
         Ok(())
     }
 }
@@ -187,12 +215,12 @@ mod browser_tests {
     #[wasm_bindgen_test]
     fn ceremony_activity_is_fail_closed() -> Result<(), JsError> {
         let active = Function::new_no_args("return true;");
-        assert!(ensure_ceremony_active(&active).is_ok());
+        assert!(NookVaultManager::ensure_ceremony_active(&active).is_ok());
 
         let inactive = Function::new_no_args("return false;");
-        assert!(ensure_ceremony_active(&inactive).is_err());
+        assert!(NookVaultManager::ensure_ceremony_active(&inactive).is_err());
         let throwing = Function::new_no_args("throw new Error('boom');");
-        assert!(ensure_ceremony_active(&throwing).is_err());
+        assert!(NookVaultManager::ensure_ceremony_active(&throwing).is_err());
         Ok(())
     }
 
@@ -216,7 +244,10 @@ mod browser_tests {
         let keys = nook_core::VaultKeys::generate()?;
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
-        manager.apply_vault_keys(&keys.secrets_key.to_string(), &keys.members_key.to_string())?;
+        manager.apply_vault_keys(
+            &keys.secrets_key.as_str().to_owned(),
+            &keys.members_key.as_str().to_owned(),
+        )?;
 
         let accounts = manager
             .list_website_passkey_accounts("example.com", "https://example.com")
@@ -226,27 +257,9 @@ mod browser_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn website_passkey_mutations_reject_invalid_json_after_guard() -> Result<(), JsError> {
-        let identity = nook_core::DeviceIdentity::generate()?;
-        let keys = nook_core::VaultKeys::generate()?;
-        let mut manager = NookVaultManager::new();
-        manager.device.identity_private_key = identity.secret_string().into_inner();
-        manager.apply_vault_keys(&keys.secrets_key.to_string(), &keys.members_key.to_string())?;
-        let active = Function::new_no_args("return true;");
-
-        assert!(
-            manager
-                .register_website_passkey("not-json", &active)
-                .await
-                .is_err()
-        );
-        assert!(
-            manager
-                .assert_website_passkey("not-json", &active)
-                .await
-                .is_err()
-        );
-        Ok(())
+    fn website_passkey_decoders_reject_invalid_json() {
+        assert!(super::decode_website_passkey_registration_request("not-json").is_err());
+        assert!(super::decode_website_passkey_assertion_request("not-json").is_err());
     }
 
     #[wasm_bindgen_test]
@@ -257,13 +270,13 @@ mod browser_tests {
 
         assert!(
             manager
-                .register_website_passkey("not-json", &inactive)
+                .register_website_passkey(super::decode_website_passkey_registration_request(r#"{"origin":"https://example.com","challenge":"challenge","relyingParty":{"id":"example.com","name":"Example"},"user":{"id":"user","name":"User","displayName":"User"},"algorithms":[-7],"residentKeyRequired":true,"userVerificationRequired":true}"#)?, &inactive)
                 .await
                 .is_err()
         );
         assert!(
             manager
-                .assert_website_passkey("not-json", &inactive)
+                .assert_website_passkey(super::decode_website_passkey_assertion_request(r#"{"origin":"https://example.com","challenge":"challenge","rpId":"example.com","userVerificationRequired":true}"#)?, &inactive)
                 .await
                 .is_err()
         );
@@ -305,15 +318,17 @@ mod browser_tests {
     }
 }
 
-fn ensure_ceremony_active(ceremony_active: &js_sys::Function) -> Result<(), JsError> {
-    let receiver = Object::new();
-    let active = ceremony_active
-        .call0(&receiver)
-        .map_err(|_| JsError::new("passkey-ceremony-expired"))?;
-    if active.as_bool() == Some(true) {
-        Ok(())
-    } else {
-        Err(JsError::new("passkey-ceremony-expired"))
+impl NookVaultManager {
+    fn ensure_ceremony_active(ceremony_active: &js_sys::Function) -> Result<(), JsError> {
+        let receiver = Object::new();
+        let active = ceremony_active
+            .call0(&receiver)
+            .map_err(|_| JsError::new("passkey-ceremony-expired"))?;
+        if active.as_bool() == Some(true) {
+            Ok(())
+        } else {
+            Err(JsError::new("passkey-ceremony-expired"))
+        }
     }
 }
 
@@ -342,7 +357,7 @@ impl NookVaultManager {
             ));
         }
         self.vault.store_id = store_id.as_str().to_owned();
-        let store = load_local_event_store(store_id.as_str()).await?;
+        let store = NookDatabase::load_local_event_store(store_id.as_str()).await?;
         let graph = store.load_graph(store_id.as_str())?;
         if !EventGraphDeviceAccess::new(&graph).has_access(&EventGraphDeviceAccessRequest {
             expected_device_id: &expected_device_id,
@@ -452,28 +467,20 @@ impl NookVaultManager {
         self.ensure_vault_crypto_from_cache().await?;
         (nook_core::PasskeyOrigin { rp_id, origin })
             .validate()
-            .map_err(|error| passkey_error(&error))?;
+            .map_err(|error| NookVaultManager::passkey_error(&error))?;
         let passkeys = self.decrypt_passkeys()?;
-        let accounts = passkeys
-            .rows
-            .iter()
-            .filter(|(_, passkey)| passkey.rp_id.eq_ignore_ascii_case(rp_id))
-            .map(|(_, passkey)| NookPasskeyAccount::from_core(passkey))
-            .collect();
-        Ok(accounts)
+        Ok(passkeys.into_accounts(rp_id))
     }
 
     #[wasm_bindgen]
     pub async fn register_website_passkey(
         &mut self,
-        request_json: &str,
+        request: nook_core::PasskeyRegistrationRequest,
         ceremony_active: &js_sys::Function,
     ) -> Result<NookPasskeyRegistration, JsError> {
-        ensure_ceremony_active(ceremony_active)?;
+        NookVaultManager::ensure_ceremony_active(ceremony_active)?;
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        let request: nook_core::PasskeyRegistrationRequest = serde_json::from_str(request_json)
-            .map_err(|_| JsError::new("passkey-invalid-request"))?;
         let existing = self.decrypt_passkeys()?;
         let existing_values = Zeroizing::new(
             existing
@@ -485,7 +492,7 @@ impl NookVaultManager {
         let mut result = request
             .prepare(&existing_values)
             .and_then(nook_core::CheckedPasskeyRegistration::generate)
-            .map_err(|error| passkey_error(&error))?;
+            .map_err(|error| NookVaultManager::passkey_error(&error))?;
         let id = nook_core::SecretId::generate()?;
         let encrypted = self.encrypt_passkey_secret(&id, &result.credential)?;
         let response = NookPasskeyRegistration::new(
@@ -494,7 +501,7 @@ impl NookVaultManager {
             result.attestation_object,
         );
         result.credential.zeroize_plaintext();
-        ensure_ceremony_active(ceremony_active)?;
+        NookVaultManager::ensure_ceremony_active(ceremony_active)?;
         self.append_vault_operations(vec![VaultOperation::SecretCreated { secret: encrypted }])
             .await?;
         Ok(response)
@@ -503,14 +510,12 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn assert_website_passkey(
         &mut self,
-        request_json: &str,
+        request: nook_core::WebsitePasskeyAssertionRequest,
         ceremony_active: &js_sys::Function,
     ) -> Result<NookPasskeyAssertion, JsError> {
-        ensure_ceremony_active(ceremony_active)?;
+        NookVaultManager::ensure_ceremony_active(ceremony_active)?;
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        let request: nook_core::WebsitePasskeyAssertionRequest = serde_json::from_str(request_json)
-            .map_err(|_| JsError::new("passkey-invalid-request"))?;
         let passkeys = self.decrypt_passkeys()?;
         let values = Zeroizing::new(
             passkeys
@@ -522,7 +527,7 @@ impl NookVaultManager {
         let mut result = request
             .prepare(&values)
             .and_then(nook_core::CheckedPasskeyAssertion::sign)
-            .map_err(|error| passkey_error(&error))?;
+            .map_err(|error| NookVaultManager::passkey_error(&error))?;
         let old_id = passkeys
             .rows
             .iter()
@@ -555,8 +560,31 @@ impl NookVaultManager {
                 .into_iter()
                 .map(|secret_id| VaultOperation::SecretDeleted { secret_id }),
         );
-        ensure_ceremony_active(ceremony_active)?;
+        NookVaultManager::ensure_ceremony_active(ceremony_active)?;
         self.append_vault_operations(operations).await?;
         Ok(response)
     }
+}
+
+/// Decode the external JSON message exactly once into the canonical registration request.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_website_passkey_registration_request(
+    json: &str,
+) -> Result<nook_core::PasskeyRegistrationRequest, JsError> {
+    serde_json::from_str(json).map_err(|_| JsError::new("passkey-invalid-request"))
+}
+/// Decode the external JSON message exactly once into the canonical assertion request.
+#[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_website_passkey_assertion_request(
+    json: &str,
+) -> Result<nook_core::WebsitePasskeyAssertionRequest, JsError> {
+    serde_json::from_str(json).map_err(|_| JsError::new("passkey-invalid-request"))
 }

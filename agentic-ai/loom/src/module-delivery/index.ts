@@ -1,17 +1,10 @@
-export { decodeAndValidateModuleDeliveryPlan } from './validation.ts';
-export { decodeCompatibleModuleDeliveryPlan } from './codec.ts';
+export { ModuleDeliveryPlanDecoder } from './validation.ts';
+export { ModuleDeliveryPlanSchema } from './codec.ts';
 export {
   ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryGenerationFenceKind,
-  createModuleDeliveryAdmissionState,
-  createModuleDeliveryGenerationAuthority,
-  recordModuleDeliveryAttemptDisposition,
-  recordModuleDeliveryAttemptLeases,
-  moduleDeliveryAcceptedEvidenceIdentity,
-  restartModuleDeliveryGeneration,
-  selectModuleDeliveryAdmissions,
-  verifyModuleDeliveryEvidenceSubmission,
+  ModuleGenerationAuthority,
 } from './admission.ts';
 export type {
   CreateModuleDeliveryAdmissionStateRequest,
@@ -26,10 +19,7 @@ export type {
   SelectModuleDeliveryAdmissionsRequest,
 } from './admission.ts';
 export { TeamKey } from '../team-agents/catalog.ts';
-export {
-  moduleDeliveryEvidenceArtifactDigest,
-  moduleDeliveryEvidenceClaimIdentities,
-} from './evidence.ts';
+export { ModuleEvidenceBoundary } from './evidence.ts';
 export type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryEvidenceArtifactDigestRequest,
@@ -48,21 +38,23 @@ export type {
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryWriteProviderSubmission,
 } from './integration-provenance.ts';
-export { cleanupModuleWorktree, prepareModuleWorktree } from './workspace.ts';
-export { verifyModuleCommitHandoff } from './handoff.ts';
-export {
-  cleanupModuleIntegration,
-  finalizeModuleDeliveryIntegration,
-  integrateVerifiedModuleDeliveryTask,
-  prepareModuleIntegration,
-} from './integration.ts';
-export { restoreModuleDeliveryIntegrationEvidence } from './integration-evidence-replay.ts';
+export { ModuleWorktree } from './workspace.ts';
+export { ModuleCommitHandoff } from './handoff.ts';
+export { ModuleWaveTree } from './tree-integration.ts';
+export type {
+  ApplyModuleWaveTreeRequest,
+  RestoreModuleWaveTreeRequest,
+  TreeHandoff,
+} from './tree-integration.ts';
+export { ModuleIntegrationCoordinator } from './integration.ts';
+export { ModuleIntegrationEvidence } from './integration-evidence-replay.ts';
 export type { RestoreModuleDeliveryIntegrationEvidenceRequest } from './integration-evidence-replay.ts';
 export * from './domain.ts';
 export type {
   CleanupModuleWorktreeRequest,
   CleanupModuleWorktreeResult,
   ModuleWorktreeHandle,
+  ModuleWorktreeRole,
   PrepareModuleWorktreeRequest,
 } from './workspace.ts';
 export type {

@@ -11,6 +11,7 @@
 
 use super::multi_device::{DeviceIdentity, VaultMetaRecord};
 mod links;
+mod payload;
 mod session;
 pub use super::sentinel_genesis_types::*;
 use crate::{
@@ -134,14 +135,12 @@ struct AnnouncementSigningData<'a> {
 }
 impl SentinelGenesisPublicKeyAnnouncement {
     pub fn create(responder: SentinelGenesisResponder<'_>) -> MultiDeviceResult<Self> {
+        responder.validate_label()?;
         let SentinelGenesisResponder {
             identity,
             signing_key,
             label,
         } = responder;
-        if label.chars().count() > 80 {
-            return Err(MultiDeviceError::DeviceNameTooLong);
-        }
         let encryption_public_key = identity.public_key();
         let signing_public_key = DeviceSigningPublicKey::from_signing_key(signing_key);
         let device_id = identity.device_id().clone();
@@ -170,21 +169,28 @@ impl SentinelGenesisPublicKeyAnnouncement {
         })
     }
 }
+impl SentinelGenesisResponder<'_> {
+    fn validate_label(&self) -> MultiDeviceResult<()> {
+        if self.label.chars().count() > 80 {
+            Err(MultiDeviceError::DeviceNameTooLong)
+        } else {
+            Ok(())
+        }
+    }
+}
 impl SentinelGenesisRequest {
     pub fn prepare_response<'a>(
         &'a self,
         responder: SentinelGenesisResponder<'a>,
     ) -> MultiDeviceResult<CheckedSentinelGenesisResponse<'a>> {
         let request = self;
+        request.validate()?;
+        responder.validate_label()?;
         let SentinelGenesisResponder {
             identity,
             signing_key,
             label,
         } = responder;
-        request.validate()?;
-        if label.chars().count() > 80 {
-            return Err(MultiDeviceError::DeviceNameTooLong);
-        }
         let encryption_public_key = identity.public_key();
         let signing_public_key = DeviceSigningPublicKey::from_signing_key(signing_key);
         let participant = SentinelGenesisParticipant {
@@ -230,40 +236,54 @@ impl SentinelGenesisShareDelivery {
         &'a self,
         recipient: &SentinelGenesisDeliveryRecipient<'_>,
     ) -> MultiDeviceResult<CheckedSentinelGenesisDelivery<'a>> {
-        let delivery = self;
-        let SentinelGenesisDeliveryRecipient {
-            expected_request,
-            identity,
-        } = recipient;
-        delivery.policy.validate()?;
-        if delivery.version != GENESIS_VERSION
-            || delivery.session_id != expected_request.session_id
-            || delivery.policy != expected_request.policy
-            || delivery.initiator_signing_public_key
-                != expected_request.initiator_signing_public_key
-        {
-            return Err(MultiDeviceError::InvalidSentinelGenesisSession);
-        }
-        if delivery.device_id != *identity.device_id()
-            || delivery.encryption_public_key != identity.public_key()
-        {
-            return Err(MultiDeviceError::SentinelGenesisDeliveryRecipientMismatch);
-        }
-        if delivery.share.threshold != delivery.policy.threshold
-            || delivery.share.required_participants != delivery.policy.participant_count
-            || u8::from(delivery.share.share_index) == 0
-            || u8::from(delivery.share.share_index) > u8::from(delivery.policy.participant_count)
-        {
-            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
-        }
+        self.policy.validate()?;
+        self.validate_session(recipient.expected_request)?;
+        self.validate_recipient(recipient.identity)?;
+        self.validate_share_policy()?;
         GenesisSignature {
-            public_key: &delivery.initiator_signing_public_key,
-            signature: &delivery.signature,
-            bytes: &delivery.signing_bytes()?,
+            public_key: &self.initiator_signing_public_key,
+            signature: &self.signature,
+            bytes: &self.signing_bytes()?,
         }
         .verify()?;
 
-        Ok(CheckedSentinelGenesisDelivery { delivery })
+        Ok(CheckedSentinelGenesisDelivery { delivery: self })
+    }
+
+    fn validate_session(&self, expected_request: &SentinelGenesisRequest) -> MultiDeviceResult<()> {
+        if self.version != GENESIS_VERSION
+            || self.session_id != expected_request.session_id
+            || self.policy != expected_request.policy
+            || self.initiator_signing_public_key != expected_request.initiator_signing_public_key
+        {
+            Err(MultiDeviceError::InvalidSentinelGenesisSession)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn validate_recipient(&self, identity: &DeviceIdentity) -> MultiDeviceResult<()> {
+        if self.device_id != *identity.device_id()
+            || self.encryption_public_key != identity.public_key()
+        {
+            Err(MultiDeviceError::SentinelGenesisDeliveryRecipientMismatch)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn validate_share_policy(&self) -> MultiDeviceResult<()> {
+        if self.share.threshold != self.policy.threshold
+            || self.share.required_participants != self.policy.participant_count
+            || !self
+                .share
+                .share_index
+                .belongs_to(self.policy.participant_count)
+        {
+            Err(MultiDeviceError::InvalidSentinelGenesisPayload)
+        } else {
+            Ok(())
+        }
     }
 }
 impl CheckedSentinelGenesisDelivery<'_> {
@@ -278,14 +298,15 @@ impl SentinelGenesisRequest {
         let request = self;
         request.policy.validate()?;
         if request.version != GENESIS_VERSION || request.initiator_signing_public_key.is_empty() {
-            return Err(MultiDeviceError::InvalidSentinelGenesisSession);
+            Err(MultiDeviceError::InvalidSentinelGenesisSession)
+        } else {
+            GenesisSignature {
+                public_key: &request.initiator_signing_public_key,
+                signature: &request.signature,
+                bytes: &request.signing_bytes()?,
+            }
+            .verify()
         }
-        GenesisSignature {
-            public_key: &request.initiator_signing_public_key,
-            signature: &request.signature,
-            bytes: &request.signing_bytes()?,
-        }
-        .verify()
     }
 }
 impl SentinelGenesisRequest {
@@ -313,9 +334,10 @@ impl SentinelGenesisParticipant {
                 })
                 .in_session(session_id)
         {
-            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
+            Err(MultiDeviceError::InvalidSentinelGenesisPayload)
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 }
 impl SentinelGenesisParticipantResponse {
@@ -468,7 +490,7 @@ mod tests {
 
     use super::super::multi_device;
     use super::*;
-    use crate::StoreId;
+    use crate::{SentinelShareEnvelope, StoreId};
 
     struct Fixture;
     impl Fixture {
@@ -729,11 +751,12 @@ mod tests {
 
         let session = session.collect_payload(&payload, "  Ada's iPhone  ")?;
 
-        assert_eq!(session.participants()[1].label, "Ada's iPhone");
-        assert_eq!(
-            session.participants()[1].device_id,
-            peer.device_id().clone()
-        );
+        let participant = session
+            .participants()
+            .get(1)
+            .ok_or_else(|| anyhow::anyhow!("peer participant must be collected"))?;
+        assert_eq!(participant.label, "Ada's iPhone");
+        assert_eq!(participant.device_id, peer.device_id().clone());
         Ok(())
     }
 
@@ -891,12 +914,9 @@ mod tests {
             .prepare(&owner_signing)?
             .issue(&StoreId::parse("store_AAAAAAAAAAA")?)?;
         for record in &issued.records {
-            assert!(!matches!(
-                VaultMetaRecord::classify(record)?,
-                VaultMetaRecord::Auth(..)
-            ));
+            assert!(!matches!((record).classify()?, VaultMetaRecord::Auth(..)));
         }
-        let share_count = multi_device::count_sentinel_share_records(&issued.records)?;
+        let share_count = SentinelShareEnvelope::count_sentinel_share_records(&issued.records)?;
         assert_eq!(usize::from(share_count), 3);
         assert!(
             multi_device::SentinelKeyReconstruction::from_identities(

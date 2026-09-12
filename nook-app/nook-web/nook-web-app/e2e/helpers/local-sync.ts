@@ -12,9 +12,9 @@ import {
 import {
   E2E_GITHUB_ONBOARD_PROVIDER,
   E2E_OAUTH_ONBOARD_PROVIDER,
-  E2eOauthSyncProvider,
   seedExtraGithubProviders,
   seedExtraOauthFileProviders,
+  type E2eOauthSyncProvider,
 } from './auth-providers'
 import {
   keepVaultIdleLockDisabled,
@@ -27,8 +27,8 @@ import {
   sleep,
 } from './environment'
 import {
-  GithubE2eTarget,
   flushRemoteEventsToSyncProviders,
+  type GithubE2eTarget,
 } from './github-sync'
 import {
   assertVaultReady,
@@ -50,6 +50,7 @@ import {
   waitForVaultOperationsIdle,
   waitForVaultSyncIdle,
 } from './vault-runtime'
+import { requireRecord, requireValue } from './guards'
 
 export type E2eOauthFileStub =
   | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
@@ -74,7 +75,8 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
                 ((v) => (v ? v : new Error('idb read failed')))(getReq.error),
               )
             getReq.onsuccess = () => {
-              resolveBlob(String(((v) => (v ? v : ''))(getReq.result)))
+              const value: unknown = getReq.result
+              resolveBlob(typeof value === 'string' ? value : '')
             }
           })
         const activeReq = store.get('active_vault_id')
@@ -83,9 +85,9 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
             ((v) => (v ? v : new Error('idb read failed')))(activeReq.error),
           )
         activeReq.onsuccess = () => {
-          const activeId = String(
-            ((v) => (v ? v : ''))(activeReq.result),
-          ).trim()
+          const activeValue: unknown = activeReq.result
+          const activeId =
+            typeof activeValue === 'string' ? activeValue.trim() : ''
           if (activeId) {
             void readBlob(`vault:${activeId}`).then(resolve).catch(reject)
             return
@@ -198,13 +200,17 @@ export async function installOauthFileRemoteForLocalE2e(
       opts.fileName,
     ),
   ] = [existingStub]
-  if ('vaultYaml' in opts) {
+  if (typeof opts.vaultYaml === 'string') {
     stub.setVaultYaml(opts.vaultYaml)
   }
   await stub.install(page, {
-    vaultYaml: opts.vaultYaml,
+    ...(typeof opts.vaultYaml === 'string'
+      ? { vaultYaml: opts.vaultYaml }
+      : {}),
     fileName: opts.fileName,
-    accessToken: opts.accessToken,
+    ...(typeof opts.accessToken === 'string'
+      ? { accessToken: opts.accessToken }
+      : {}),
   })
 }
 
@@ -217,7 +223,7 @@ export async function stubGithubVaultForLocalE2e(
   const [
     stub = createLocalE2eGithubVaultStub(((v) => (v ? v : ''))(opts.vaultYaml)),
   ] = [existingStub]
-  if ('vaultYaml' in opts && !existingStub) {
+  if (typeof opts.vaultYaml === 'string' && !existingStub) {
     stub.setVaultYaml(opts.vaultYaml)
   }
   await stub.install(page, opts)
@@ -295,7 +301,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
       page: Page,
       opts: { repoName: string; vaultYaml?: string; username?: string },
     ) {
-      if ('vaultYaml' in opts) {
+      if (typeof opts.vaultYaml === 'string') {
         if (opts.vaultYaml !== vaultYaml) {
           bumpSha()
         }
@@ -307,7 +313,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
 
       const handler = async (route: import('@playwright/test').Route) => {
         const request = route.request()
-        const url = request.url().split('?')[0]!
+        const url = request.url().split('?')[0] ?? ''
         const method = request.method()
 
         if (url === 'https://api.github.com/user') {
@@ -376,10 +382,10 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
           `https://api.github.com/repos/${fullRepo}/contents/nook-events`
         ) {
           if (method === 'PUT') {
-            const body = request.postDataJSON() as {
-              content?: string
-              sha?: string
-            }
+            const body = requireRecord(
+              request.postDataJSON(),
+              'GitHub upload request',
+            )
             const hasExistingVault = vaultYaml.trim().length > 0
             if (hasExistingVault && body.sha !== sha) {
               await route.fulfill({
@@ -391,7 +397,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
               })
               return
             }
-            if (body.content) {
+            if (typeof body.content === 'string' && body.content) {
               vaultYaml = Buffer.from(body.content, 'base64').toString('utf8')
               bumpSha()
             }
@@ -423,8 +429,11 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
         if (url.startsWith(`${contentsPrefix}nook-log/`)) {
           const relativePath = url.slice(contentsPrefix.length)
           if (method === 'PUT') {
-            const body = request.postDataJSON() as { content?: string }
-            if (body.content) {
+            const body = requireRecord(
+              request.postDataJSON(),
+              'GitHub event upload request',
+            )
+            if (typeof body.content === 'string' && body.content) {
               const decoded = Buffer.from(body.content, 'base64').toString(
                 'utf8',
               )
@@ -446,7 +455,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
             return
           }
           const stored = eventFiles.get(relativePath)
-          if (eventFiles.has(relativePath)) {
+          if (typeof stored === 'string') {
             const encoded = Buffer.from(stored, 'utf8').toString('base64')
             await route.fulfill({
               status: 200,
@@ -588,7 +597,7 @@ export async function sendJoinRequestLocalE2e(
 
   const snapshot = parseVaultEventLogSnapshot(stub.getEventFileContents())
   assertJoinPendingYaml(snapshot)
-  const join = snapshot.joinEntries[0]!
+  const join = requireValue(snapshot.joinEntries[0], 'join request')
 
   await expect(page.getByTestId('join-enrollment-dialog')).toContainText(
     'Waiting for approval',
@@ -725,10 +734,11 @@ export async function reloadUnlockWithSyncProvider(
   })
   await ensureLoginLocalUnlockReady(page)
   if (opts?.password) {
-    await unlockVaultOnLogin(page, {
+    const unlockRequest: { password: string; entryLabel?: string } = {
       password: opts.password,
-      entryLabel: opts.entryLabel,
-    })
+    }
+    if (opts.entryLabel) unlockRequest.entryLabel = opts.entryLabel
+    await unlockVaultOnLogin(page, unlockRequest)
   } else {
     await unlockVaultOnLogin(page)
   }

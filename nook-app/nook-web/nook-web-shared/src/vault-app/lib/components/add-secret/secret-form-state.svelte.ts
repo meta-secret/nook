@@ -7,7 +7,6 @@ type SecretFormSubmissionAssessment = {
   readonly selectedType: SecretType;
   readonly isSaving: boolean;
 };
-
 import {
   authenticator_setup_key_changed,
   default_password_generation_options,

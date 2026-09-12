@@ -7,6 +7,7 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 use crate::ValidationError;
+use crate::authenticator_issuer_hosts::AuthenticatorHostResolution;
 use crate::secrets::authenticator_issuer_hosts::{
     AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError, AuthenticatorWebsiteHostRequest,
 };
@@ -91,7 +92,7 @@ impl AuthenticatorSecret {
         Ok(())
     }
 
-    pub fn normalize(&mut self) -> Result<(), ValidationError> {
+    pub fn normalize(mut self) -> Result<Self, ValidationError> {
         self.issuer = self.issuer.trim().to_owned();
         self.account = self.account.trim().to_owned();
         self.website_url = self.website_url.trim().to_owned();
@@ -100,29 +101,32 @@ impl AuthenticatorSecret {
             backup_codes::BackupCodeInput::new(&self.backup_codes).soft_normalized();
         self.backup_codes.zeroize();
         self.backup_codes = normalized_backup_codes;
-        self.validate()
+        self.validate()?;
+        Ok(self)
     }
 
     /// Fill [`Self::website_url`] from issuer host text or the popular-issuer map.
     pub fn apply_inferred_website_url_if_empty(
-        &mut self,
-    ) -> Result<(), AuthenticatorIssuerHostsError> {
+        mut self,
+    ) -> Result<Self, AuthenticatorIssuerHostsError> {
         if !self.website_url.trim().is_empty() {
-            return Ok(());
+            return Ok(self);
         }
         let request = AuthenticatorWebsiteHostRequest {
             website_url: "",
             issuer: &self.issuer,
         };
-        let host = if let Some(host) = request.explicit_or_domain_host() {
-            Some(host)
+        let host = if let AuthenticatorHostResolution::Resolved(host) =
+            request.explicit_or_domain_host()
+        {
+            AuthenticatorHostResolution::Resolved(host)
         } else {
             AuthenticatorIssuerHosts::require_bundled()?.resolve_website_host(request)
         };
-        if let Some(host) = host {
-            self.website_url = format!("https://{host}");
+        if let AuthenticatorHostResolution::Resolved(host) = host {
+            self.website_url = format!("https://{}", host.as_str());
         }
-        Ok(())
+        Ok(self)
     }
 
     pub fn current_code(&self, unix_seconds: TotpUnixSeconds) -> Result<TotpCode, ValidationError> {
@@ -152,11 +156,17 @@ impl AuthenticatorSecret {
                 mac.finalize().into_bytes().to_vec()
             }
         };
-        let offset = usize::from(digest[digest.len() - 1] & 0x0f);
-        let binary = (u32::from(digest[offset] & 0x7f) << 24)
-            | (u32::from(digest[offset + 1]) << 16)
-            | (u32::from(digest[offset + 2]) << 8)
-            | u32::from(digest[offset + 3]);
+        let Some(last) = digest.last() else {
+            return Err(ValidationError::AuthenticatorSecretInvalid);
+        };
+        let offset = usize::from(last & 0x0f);
+        let Some([first, second, third, fourth]) = digest.get(offset..offset + 4) else {
+            return Err(ValidationError::AuthenticatorSecretInvalid);
+        };
+        let binary = (u32::from(first & 0x7f) << 24)
+            | (u32::from(*second) << 16)
+            | (u32::from(*third) << 8)
+            | u32::from(*fourth);
         let (modulus, width) = match self.digits {
             TotpDigits::Six => (1_000_000, 6),
             TotpDigits::Seven => (10_000_000, 7),
@@ -212,9 +222,8 @@ impl AuthenticatorSecret {
         }
         item.backup_codes = backup_codes.lines().map(str::to_owned).collect();
         item.apply_inferred_website_url_if_empty()
-            .map_err(|_| ValidationError::AuthenticatorIssuerCatalogInvalid)?;
-        item.normalize()?;
-        Ok(item)
+            .map_err(|_| ValidationError::AuthenticatorIssuerCatalogInvalid)?
+            .normalize()
     }
 
     pub fn from_otpauth_uri(uri: &str) -> Result<Self, ValidationError> {

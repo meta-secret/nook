@@ -1,9 +1,5 @@
-import {
-  ProviderCredentialStagingKind,
-  scrubProviderCredentials,
-  type SerializedExtensionStorageProviders,
-  stageProviderCredentials,
-} from '../lib/provider-credential-staging'
+import { err, type Result } from 'neverthrow'
+import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   SessionOperationCleanupKind,
@@ -11,6 +7,8 @@ import {
   SessionOperationExpiryKind,
   SessionOperationPriority,
   SessionOperationQueue,
+  SessionOperationFailure,
+  SessionOperationFailureKind,
 } from '../lib/session-operation-queue'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import {
@@ -48,32 +46,18 @@ type SensitivePayloadResidency =
   | { kind: SensitivePayloadResidencyKind.Cleared }
 
 export type SessionMessageDispatchContext<SessionResponse> = {
-  handleMessage: (message: ExtensionSessionRequest) => Promise<SessionResponse>
+  handleMessage: (
+    message: ExtensionSessionRequest,
+  ) => Promise<Result<SessionResponse, SessionOperationFailure>>
   handleCompanionIdentityDiscovery: (
     message: CompanionIdentityDiscoverySessionTransportRequest,
-  ) => Promise<SessionResponse>
+  ) => Promise<Result<SessionResponse, SessionOperationFailure>>
   handleCompanionIdentityHandoff: (
     message: CompanionIdentityHandoffSessionTransportRequest,
-  ) => Promise<SessionResponse>
-  decodeProviders: (
-    providers: SerializedExtensionStorageProviders,
-  ) => Promise<StorageProvider[]>
+  ) => Promise<Result<SessionResponse, SessionOperationFailure>>
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Generated Rust collection crosses the admission boundary directly.
+  decodeProviders: (providers: StorageProvider[]) => Promise<StorageProvider[]>
 }
-
-type InvalidProviderPayloadResponse = {
-  ok: false
-  error: 'invalid-provider-payload'
-}
-
-type InvalidSensitivePayloadResponse = {
-  ok: false
-  error: 'invalid-sensitive-payload'
-}
-
-type ExtensionSessionDispatchResponse<SessionResponse> =
-  | SessionResponse
-  | InvalidProviderPayloadResponse
-  | InvalidSensitivePayloadResponse
 
 function sessionMessagePriority(
   type: ExtensionSessionMessageType,
@@ -162,6 +146,21 @@ type ExtensionSessionMessageDispatcherenqueueVaultImportArgs = {
   requestedExpiry: RequestedQueueExpiry
 }
 
+export class ListeningExtensionSession<Response> {
+  private readonly operations: ExtensionSessionMessageDispatcher<Response>
+
+  constructor(context: SessionMessageDispatchContext<Response>) {
+    this.operations = new ExtensionSessionMessageDispatcher(context)
+    chrome.runtime.onMessage.addListener(this.operations.listener())
+  }
+  resetOperations(): void {
+    this.operations.resetOperations()
+  }
+  replaceOperations(error: SessionOperationFailure): void {
+    this.operations.replaceOperations(error)
+  }
+}
+
 export class ExtensionSessionMessageDispatcher<SessionResponse> {
   private operations = new SessionOperationQueue()
   private operationGeneration = 0
@@ -175,7 +174,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     this.operations = new SessionOperationQueue()
   }
 
-  replaceOperations(error: Error): void {
+  replaceOperations(error: SessionOperationFailure): void {
     const previous = this.operations
     this.operationGeneration += 1
     this.operations = new SessionOperationQueue()
@@ -186,7 +185,9 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     request,
     priority,
     expiresAt,
-  }: ExtensionSessionMessageDispatcherenqueueSensitiveMessageArgs): Promise<SessionResponse> {
+  }: ExtensionSessionMessageDispatcherenqueueSensitiveMessageArgs): Promise<
+    Result<SessionResponse, SessionOperationFailure>
+  > {
     let payloadResidency: SensitivePayloadResidency = {
       kind: SensitivePayloadResidencyKind.Resident,
       request,
@@ -200,7 +201,9 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     const nookNamedArgs1_0: EnqueueSessionOperationArgs<SessionResponse> = {
       operation: async () => {
         if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
-          throw new Error('Extension session request expired.')
+          return err(
+            new SessionOperationFailure(SessionOperationFailureKind.Expired),
+          )
         }
         const operationRequest = payloadResidency.request
         payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
@@ -230,66 +233,69 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     priority,
     requestedExpiry,
   }: ExtensionSessionMessageDispatcherenqueueVaultImportArgs): Promise<
-    ExtensionSessionDispatchResponse<SessionResponse>
+    Result<SessionResponse, SessionOperationFailure>
   > {
     const payload = message.payload
     const operationGeneration = this.operationGeneration
     if (!Array.isArray(payload.providers)) {
       payload.providers = []
-      return { ok: false, error: 'invalid-provider-payload' }
+      return err(
+        new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+      )
     }
-    const providerCandidate: SerializedExtensionStorageProviders =
-      payload.providers
-    const stagingArgs: Parameters<typeof stageProviderCredentials>[0] = {
-      providers: providerCandidate,
+    const providerCandidate: StorageProvider[] = payload.providers
+    const stagingArgs: Parameters<ProviderCredentialBuffer['stage']>[0] = {
       decode: this.context.decodeProviders,
     }
-    const stagingOperation = stageProviderCredentials(stagingArgs)
+    const stagingOperation = new ProviderCredentialBuffer(
+      providerCandidate,
+    ).stage(stagingArgs)
     let stagingOwnership = StagingOwnership.Queue
     const clearQueuedStaging = () => {
       if (stagingOwnership !== StagingOwnership.Queue) return
       stagingOwnership = StagingOwnership.Cleared
       void stagingOperation.then((staging) => {
-        if (staging.kind === ProviderCredentialStagingKind.Staged) {
-          scrubProviderCredentials(staging.providers)
+        if (staging.isOk()) {
+          new ProviderCredentialBuffer(staging.value).clear()
         }
       })
     }
     payload.providers = []
-    scrubProviderCredentials(providerCandidate)
+    new ProviderCredentialBuffer(providerCandidate).clear()
     // Reserve the queue position before cold WASM decoding can yield. Reset
     // must remain a terminal barrier after every import accepted before it.
-    const nookNamedArgs1_1: EnqueueSessionOperationArgs<
-      ExtensionSessionDispatchResponse<SessionResponse>
-    > = {
+    const nookNamedArgs1_1: EnqueueSessionOperationArgs<SessionResponse> = {
       operation: async () => {
         stagingOwnership = StagingOwnership.Operation
         const staging = await stagingOperation
         if (operationGeneration !== this.operationGeneration) {
-          if (staging.kind === ProviderCredentialStagingKind.Staged) {
-            scrubProviderCredentials(staging.providers)
+          if (staging.isOk()) {
+            new ProviderCredentialBuffer(staging.value).clear()
           }
           stagingOwnership = StagingOwnership.Cleared
-          throw new Error('Extension session request expired.')
+          return err(
+            new SessionOperationFailure(SessionOperationFailureKind.Expired),
+          )
         }
-        if (staging.kind === ProviderCredentialStagingKind.InvalidInput) {
+        if (staging.isErr()) {
           stagingOwnership = StagingOwnership.Cleared
-          return {
-            ok: false,
-            error: 'invalid-provider-payload',
-          }
+          return err(
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
+          )
         }
-        if (staging.providers.length === 0) {
+        if (staging.value.length === 0) {
           stagingOwnership = StagingOwnership.Cleared
           const emptyProviderRequest: Parameters<
             typeof this.context.handleMessage
           >[0] = {
             ...message,
-            payload: { ...payload, providers: staging.providers },
+            payload: { ...payload, providers: staging.value },
           }
           return this.context.handleMessage(emptyProviderRequest)
         }
-        const stagedProviders = staging.providers
+        const stagedProviders = staging.value
         try {
           const stagedProviderRequest: Parameters<
             typeof this.context.handleMessage
@@ -299,7 +305,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           }
           return await this.context.handleMessage(stagedProviderRequest)
         } finally {
-          scrubProviderCredentials(stagedProviders)
+          new ProviderCredentialBuffer(stagedProviders).clear()
           payload.providers = []
           stagingOwnership = StagingOwnership.Cleared
         }
@@ -324,7 +330,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
 
   private enqueueCompanionIdentityHandoff(
     message: CompanionIdentityHandoffSessionTransportRequest,
-  ): Promise<SessionResponse> {
+  ): Promise<Result<SessionResponse, SessionOperationFailure>> {
     const enqueueArgs: EnqueueSessionOperationArgs<SessionResponse> = {
       operation: () => this.context.handleCompanionIdentityHandoff(message),
       options: {
@@ -341,7 +347,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
 
   private enqueueCompanionIdentityDiscovery(
     message: CompanionIdentityDiscoverySessionTransportRequest,
-  ): Promise<SessionResponse> {
+  ): Promise<Result<SessionResponse, SessionOperationFailure>> {
     const enqueueArgs: EnqueueSessionOperationArgs<SessionResponse> = {
       operation: () => this.context.handleCompanionIdentityDiscovery(message),
       options: {
@@ -358,7 +364,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
 
   enqueue(
     message: ParsedExtensionSessionTransportRequest,
-  ): Promise<ExtensionSessionDispatchResponse<SessionResponse>> {
+  ): Promise<Result<SessionResponse, SessionOperationFailure>> {
     const type = message.type
     const requestedExpiry = requestedQueueExpiry(message)
     const priority =
@@ -381,11 +387,13 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     }
     const sensitiveStage = stageExtensionSessionSensitiveRequest(message)
     if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Invalid) {
-      const invalidSensitiveResponse: InvalidSensitivePayloadResponse = {
-        ok: false,
-        error: 'invalid-sensitive-payload',
-      }
-      return Promise.resolve(invalidSensitiveResponse)
+      return Promise.resolve(
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
+      )
     }
     if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged) {
       const nookNamedArgs0_4: Parameters<
@@ -424,9 +432,9 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     return this.operations.enqueue(nookNamedArgs0_5)
   }
 
-  registerRuntimeListener(): void {
+  listener(): Parameters<typeof chrome.runtime.onMessage.addListener>[0] {
     // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    return (message, sender, sendResponse) => {
       if (sender.id !== chrome.runtime.id) return false
       if (
         !message ||
@@ -454,18 +462,12 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           sendResponse(forbiddenResponse)
           return false
         }
-        void this.enqueueCompanionIdentityDiscovery(message)
-          .then((value) => sendResponse(value))
-          .catch((error) => {
-            const failureResponse: Parameters<typeof sendResponse>[0] = {
-              ok: false,
-              error:
-                error instanceof Error
-                  ? error.message
-                  : 'Companion identity discovery failed.',
-            }
-            return sendResponse(failureResponse)
-          })
+        void this.enqueueCompanionIdentityDiscovery(message).then((result) =>
+          result.match(sendResponse, (failure) =>
+            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing response shape is preserved for this lint-only fix.
+            sendResponse({ ok: false, error: failure.message }),
+          ),
+        )
         return true
       }
       if (message.type === COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE) {
@@ -480,18 +482,12 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           sendResponse(forbiddenResponse)
           return false
         }
-        void this.enqueueCompanionIdentityHandoff(message)
-          .then((value) => sendResponse(value))
-          .catch((error) => {
-            const failureResponse: Parameters<typeof sendResponse>[0] = {
-              ok: false,
-              error:
-                error instanceof Error
-                  ? error.message
-                  : 'Companion identity handoff failed.',
-            }
-            return sendResponse(failureResponse)
-          })
+        void this.enqueueCompanionIdentityHandoff(message).then((result) =>
+          result.match(sendResponse, (failure) =>
+            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing response shape is preserved for this lint-only fix.
+            sendResponse({ ok: false, error: failure.message }),
+          ),
+        )
         return true
       }
       void parseExtensionSessionRequest(message).then((parsed) => {
@@ -525,20 +521,14 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         const response = direct
           ? this.context.handleMessage(request)
           : this.enqueue(request)
-        void response
-          .then((value) => sendResponse(value))
-          .catch((error) => {
-            const nookArrowArgs0: Parameters<typeof sendResponse>[0] = {
-              ok: false,
-              error:
-                error instanceof Error
-                  ? error.message
-                  : 'Extension session failed.',
-            }
-            return sendResponse(nookArrowArgs0)
-          })
+        void response.then((result) =>
+          result.match(sendResponse, (failure) =>
+            // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing response shape is preserved for this lint-only fix.
+            sendResponse({ ok: false, error: failure.message }),
+          ),
+        )
       })
       return true
-    })
+    }
   }
 }

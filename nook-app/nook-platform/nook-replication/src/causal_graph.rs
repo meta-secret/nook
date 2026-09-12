@@ -1,5 +1,13 @@
 //! Generic causal DAG indexing for immutable replicated events.
 
+mod union;
+/// Causal membership distinguishes an unknown event from a recorded root.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EventParents<'a, Id> {
+    UnknownEvent,
+    Known(&'a [Id]),
+}
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
@@ -33,6 +41,20 @@ pub enum CausalInsertStatus<Id> {
     Quarantined { reason: String },
     Duplicate,
     Conflict,
+}
+
+pub struct CausalEventInsertion<Id> {
+    pub id: Id,
+    pub parents: Vec<Id>,
+}
+pub struct CausalQuarantine<Id> {
+    pub id: Id,
+    pub reason: String,
+}
+#[derive(Debug)]
+pub struct CausalInsertion<Id> {
+    pub graph: CausalGraph<Id>,
+    pub status: CausalInsertStatus<Id>,
 }
 
 /// Structural causal-graph failures independent of an application's event
@@ -105,8 +127,11 @@ where
     }
 
     #[must_use]
-    pub fn parents(&self, id: &Id) -> Option<&[Id]> {
-        self.parents.get(id).map(Vec::as_slice)
+    pub fn parents(&self, id: &Id) -> EventParents<'_, Id> {
+        match self.parents.get(id) {
+            Some(parents) => EventParents::Known(parents),
+            None => EventParents::UnknownEvent,
+        }
     }
 
     #[must_use]
@@ -114,26 +139,33 @@ where
         &self.quarantined
     }
 
-    pub fn insert(&mut self, id: Id, parents: impl Into<Vec<Id>>) -> CausalInsertStatus<Id> {
-        let parents = Self::normalize_parents(parents.into());
+    pub fn insert(mut self, request: CausalEventInsertion<Id>) -> CausalInsertion<Id> {
+        let CausalEventInsertion { id, parents } = request;
+        let parents = Self::normalize_parents(parents);
         if let Some(existing) = self.parents.get_mut(&id) {
             if existing == &parents {
-                return CausalInsertStatus::Duplicate;
+                return CausalInsertion {
+                    graph: self,
+                    status: CausalInsertStatus::Duplicate,
+                };
             }
             let replaced = parents < *existing;
             if replaced {
                 existing.clone_from(&parents);
             }
-            Self::merge_quarantine_reason(
-                &mut self.quarantine_roots,
+            self.quarantine_roots = Self::merge_quarantine_reason(
+                self.quarantine_roots,
                 id,
                 "Conflicting causal parent sets for the same event id".to_owned(),
             );
             if replaced {
                 self.cyclic = self.all_cyclic_ids();
             }
-            self.recompute_quarantine();
-            return CausalInsertStatus::Conflict;
+            self = self.recompute_quarantine();
+            return CausalInsertion {
+                graph: self,
+                status: CausalInsertStatus::Conflict,
+            };
         }
         let missing_parents = parents
             .iter()
@@ -142,8 +174,8 @@ where
             .collect::<Vec<_>>();
         self.parents.insert(id.clone(), parents.clone());
         self.cyclic.extend(self.cycle_members(&id));
-        self.recompute_quarantine();
-        if let Some(reason) = self.quarantined.get(&id) {
+        self = self.recompute_quarantine();
+        let status = if let Some(reason) = self.quarantined.get(&id) {
             CausalInsertStatus::Quarantined {
                 reason: reason.clone(),
             }
@@ -151,12 +183,18 @@ where
             CausalInsertStatus::Applied
         } else {
             CausalInsertStatus::Pending { missing_parents }
+        };
+        CausalInsertion {
+            graph: self,
+            status,
         }
     }
 
-    pub fn quarantine(&mut self, id: Id, reason: String) {
-        Self::merge_quarantine_reason(&mut self.quarantine_roots, id, reason);
-        self.recompute_quarantine();
+    #[must_use]
+    pub fn quarantine(mut self, request: CausalQuarantine<Id>) -> Self {
+        let CausalQuarantine { id, reason } = request;
+        self.quarantine_roots = Self::merge_quarantine_reason(self.quarantine_roots, id, reason);
+        self.recompute_quarantine()
     }
 
     #[must_use]
@@ -285,43 +323,17 @@ where
         Ok(ordered)
     }
 
-    #[must_use]
-    pub fn union(&self, other: &Self) -> Self {
-        let mut merged = self.clone();
-        for (id, parents) in &other.parents {
-            let parents = Self::normalize_parents(parents.clone());
-            match merged.parents.get_mut(id) {
-                Some(existing) if existing != &parents => {
-                    if parents < *existing {
-                        existing.clone_from(&parents);
-                    }
-                    Self::merge_quarantine_reason(
-                        &mut merged.quarantine_roots,
-                        id.clone(),
-                        "Conflicting causal parent sets for the same event id".to_owned(),
-                    );
-                }
-                Some(_) => {}
-                None => {
-                    merged.parents.insert(id.clone(), parents);
-                }
-            }
-        }
-        for (id, reason) in &other.quarantine_roots {
-            Self::merge_quarantine_reason(&mut merged.quarantine_roots, id.clone(), reason.clone());
-        }
-        merged.cyclic = merged.all_cyclic_ids();
-        merged.recompute_quarantine();
-        merged
-    }
-
     fn normalize_parents(mut parents: Vec<Id>) -> Vec<Id> {
         parents.sort();
         parents.dedup();
         parents
     }
 
-    fn merge_quarantine_reason(reasons: &mut BTreeMap<Id, String>, id: Id, reason: String) {
+    fn merge_quarantine_reason(
+        mut reasons: BTreeMap<Id, String>,
+        id: Id,
+        reason: String,
+    ) -> BTreeMap<Id, String> {
         reasons
             .entry(id)
             .and_modify(|existing| {
@@ -330,13 +342,14 @@ where
                 }
             })
             .or_insert(reason);
+        reasons
     }
 
-    fn recompute_quarantine(&mut self) {
+    fn recompute_quarantine(mut self) -> Self {
         self.quarantined.clone_from(&self.quarantine_roots);
         for id in &self.cyclic {
-            Self::merge_quarantine_reason(
-                &mut self.quarantined,
+            self.quarantined = Self::merge_quarantine_reason(
+                self.quarantined,
                 id.clone(),
                 "Causal graph contains a cycle".to_owned(),
             );
@@ -354,11 +367,11 @@ where
                 .map(|(id, _)| id.clone())
                 .collect::<Vec<_>>();
             if rejected_descendants.is_empty() {
-                return;
+                return self;
             }
             for id in rejected_descendants {
-                Self::merge_quarantine_reason(
-                    &mut self.quarantined,
+                self.quarantined = Self::merge_quarantine_reason(
+                    self.quarantined,
                     id,
                     "Ancestor event was rejected".to_owned(),
                 );
@@ -425,7 +438,14 @@ mod tests {
         let mut graph = CausalGraph::new();
         assert_eq!(graph.len(), CausalGraphEventCount::EMPTY);
 
-        graph.insert(id("root"), Vec::new());
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("root"),
+                parents: Vec::new(),
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
 
         assert_eq!(graph.len(), CausalGraphEventCount::SINGLE_EVENT);
     }
@@ -434,7 +454,14 @@ mod tests {
     fn event_count_round_trips_dynamic_values_above_one() {
         let mut graph = CausalGraph::new();
         for event_id in ["first", "second", "third"] {
-            graph.insert(id(event_id), Vec::new());
+            {
+                let inserted = graph.insert(CausalEventInsertion {
+                    id: id(event_id),
+                    parents: Vec::new(),
+                });
+                graph = inserted.graph;
+                inserted.status
+            };
         }
         let count = CausalGraphEventCount::from(3);
 
@@ -446,7 +473,14 @@ mod tests {
     fn pending_child_becomes_applicable_when_parent_arrives() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         assert_eq!(
-            graph.insert(id("child"), vec![id("root")]),
+            {
+                let inserted = graph.insert(CausalEventInsertion {
+                    id: id("child"),
+                    parents: vec![id("root")],
+                });
+                graph = inserted.graph;
+                inserted.status
+            },
             CausalInsertStatus::Pending {
                 missing_parents: vec![id("root")]
             }
@@ -454,7 +488,14 @@ mod tests {
         assert_eq!(graph.pending_ids(), vec![&id("child")]);
 
         assert_eq!(
-            graph.insert(id("root"), Vec::new()),
+            {
+                let inserted = graph.insert(CausalEventInsertion {
+                    id: id("root"),
+                    parents: Vec::new(),
+                });
+                graph = inserted.graph;
+                inserted.status
+            },
             CausalInsertStatus::Applied
         );
         assert!(graph.pending_ids().is_empty());
@@ -466,18 +507,39 @@ mod tests {
     fn descendant_stays_pending_until_transitive_ancestor_arrives() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         assert!(matches!(
-            graph.insert(id("parent"), vec![id("root")]),
+            {
+                let inserted = graph.insert(CausalEventInsertion {
+                    id: id("parent"),
+                    parents: vec![id("root")],
+                });
+                graph = inserted.graph;
+                inserted.status
+            },
             CausalInsertStatus::Pending { .. }
         ));
         assert_eq!(
-            graph.insert(id("child"), vec![id("parent")]),
+            {
+                let inserted = graph.insert(CausalEventInsertion {
+                    id: id("child"),
+                    parents: vec![id("parent")],
+                });
+                graph = inserted.graph;
+                inserted.status
+            },
             CausalInsertStatus::Pending {
                 missing_parents: Vec::new()
             }
         );
         assert_eq!(graph.pending_ids(), vec![&id("child"), &id("parent")]);
 
-        graph.insert(id("root"), Vec::new());
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("root"),
+                parents: Vec::new(),
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
         assert!(graph.pending_ids().is_empty());
         Ok(())
     }
@@ -486,46 +548,161 @@ mod tests {
     fn direct_insertion_quarantines_conflicting_parent_sets_deterministically() -> anyhow::Result<()>
     {
         let mut left = CausalGraph::new();
-        left.insert(id("a"), Vec::new());
-        left.insert(id("b"), Vec::new());
-        left.insert(id("same"), vec![id("a")]);
+        {
+            let inserted = left.insert(CausalEventInsertion {
+                id: id("a"),
+                parents: Vec::new(),
+            });
+            left = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = left.insert(CausalEventInsertion {
+                id: id("b"),
+                parents: Vec::new(),
+            });
+            left = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = left.insert(CausalEventInsertion {
+                id: id("same"),
+                parents: vec![id("a")],
+            });
+            left = inserted.graph;
+            inserted.status
+        };
         assert_eq!(
-            left.insert(id("same"), vec![id("b")]),
+            {
+                let inserted = left.insert(CausalEventInsertion {
+                    id: id("same"),
+                    parents: vec![id("b")],
+                });
+                left = inserted.graph;
+                inserted.status
+            },
             CausalInsertStatus::Conflict
         );
 
         let mut right = CausalGraph::new();
-        right.insert(id("a"), Vec::new());
-        right.insert(id("b"), Vec::new());
-        right.insert(id("same"), vec![id("b")]);
+        {
+            let inserted = right.insert(CausalEventInsertion {
+                id: id("a"),
+                parents: Vec::new(),
+            });
+            right = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = right.insert(CausalEventInsertion {
+                id: id("b"),
+                parents: Vec::new(),
+            });
+            right = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = right.insert(CausalEventInsertion {
+                id: id("same"),
+                parents: vec![id("b")],
+            });
+            right = inserted.graph;
+            inserted.status
+        };
         assert_eq!(
-            right.insert(id("same"), vec![id("a")]),
+            {
+                let inserted = right.insert(CausalEventInsertion {
+                    id: id("same"),
+                    parents: vec![id("a")],
+                });
+                right = inserted.graph;
+                inserted.status
+            },
             CausalInsertStatus::Conflict
         );
 
         assert_eq!(left, right);
         assert!(left.quarantined().contains_key("same"));
-        assert_eq!(left.parents(&id("same")), Some([id("a")].as_slice()));
+        assert_eq!(
+            left.parents(&id("same")),
+            EventParents::Known([id("a")].as_slice())
+        );
         Ok(())
     }
 
     #[test]
     fn conflicting_parent_replacement_recomputes_cycles_deterministically() -> anyhow::Result<()> {
         let mut left = CausalGraph::new();
-        left.insert(id("a"), vec![id("same")]);
-        left.insert(id("b"), Vec::new());
-        left.insert(id("same"), vec![id("b")]);
+        {
+            let inserted = left.insert(CausalEventInsertion {
+                id: id("a"),
+                parents: vec![id("same")],
+            });
+            left = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = left.insert(CausalEventInsertion {
+                id: id("b"),
+                parents: Vec::new(),
+            });
+            left = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = left.insert(CausalEventInsertion {
+                id: id("same"),
+                parents: vec![id("b")],
+            });
+            left = inserted.graph;
+            inserted.status
+        };
         assert_eq!(
-            left.insert(id("same"), vec![id("a")]),
+            {
+                let inserted = left.insert(CausalEventInsertion {
+                    id: id("same"),
+                    parents: vec![id("a")],
+                });
+                left = inserted.graph;
+                inserted.status
+            },
             CausalInsertStatus::Conflict
         );
 
         let mut right = CausalGraph::new();
-        right.insert(id("a"), vec![id("same")]);
-        right.insert(id("b"), Vec::new());
-        right.insert(id("same"), vec![id("a")]);
+        {
+            let inserted = right.insert(CausalEventInsertion {
+                id: id("a"),
+                parents: vec![id("same")],
+            });
+            right = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = right.insert(CausalEventInsertion {
+                id: id("b"),
+                parents: Vec::new(),
+            });
+            right = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = right.insert(CausalEventInsertion {
+                id: id("same"),
+                parents: vec![id("a")],
+            });
+            right = inserted.graph;
+            inserted.status
+        };
         assert_eq!(
-            right.insert(id("same"), vec![id("b")]),
+            {
+                let inserted = right.insert(CausalEventInsertion {
+                    id: id("same"),
+                    parents: vec![id("b")],
+                });
+                right = inserted.graph;
+                inserted.status
+            },
             CausalInsertStatus::Conflict
         );
 
@@ -543,17 +720,45 @@ mod tests {
     #[test]
     fn parent_sets_are_normalized_before_duplicate_detection() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
-        graph.insert(id("a"), Vec::new());
-        graph.insert(id("b"), Vec::new());
-        graph.insert(id("same"), vec![id("b"), id("a"), id("b")]);
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("a"),
+                parents: Vec::new(),
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("b"),
+                parents: Vec::new(),
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("same"),
+                parents: vec![id("b"), id("a"), id("b")],
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
 
         assert_eq!(
-            graph.insert(id("same"), vec![id("a"), id("b")]),
+            {
+                let inserted = graph.insert(CausalEventInsertion {
+                    id: id("same"),
+                    parents: vec![id("a"), id("b")],
+                });
+                graph = inserted.graph;
+                inserted.status
+            },
             CausalInsertStatus::Duplicate
         );
         assert_eq!(
             graph.parents(&id("same")),
-            Some([id("a"), id("b")].as_slice())
+            EventParents::Known([id("a"), id("b")].as_slice())
         );
         assert!(!graph.quarantined().contains_key("same"));
         Ok(())
@@ -562,14 +767,42 @@ mod tests {
     #[test]
     fn concurrent_branches_and_join_have_deterministic_heads() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
-        graph.insert(id("root"), Vec::new());
-        graph.insert(id("left"), vec![id("root")]);
-        graph.insert(id("right"), vec![id("root")]);
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("root"),
+                parents: Vec::new(),
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("left"),
+                parents: vec![id("root")],
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("right"),
+                parents: vec![id("root")],
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
 
         assert!(graph.are_concurrent(&id("left"), &id("right")));
         assert_eq!(graph.heads(), vec![id("left"), id("right")]);
 
-        graph.insert(id("join"), vec![id("left"), id("right")]);
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("join"),
+                parents: vec![id("left"), id("right")],
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
         assert_eq!(graph.heads(), vec![id("join")]);
         Ok(())
     }
@@ -577,11 +810,38 @@ mod tests {
     #[test]
     fn quarantined_events_are_excluded_from_projection_order() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
-        graph.insert(id("root"), Vec::new());
-        graph.insert(id("rejected"), vec![id("root")]);
-        graph.insert(id("descendant"), vec![id("rejected")]);
-        graph.quarantine(id("rejected"), "policy rejected".to_owned());
-        graph.quarantine(id("descendant"), "ancestor rejected".to_owned());
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("root"),
+                parents: Vec::new(),
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("rejected"),
+                parents: vec![id("root")],
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("descendant"),
+                parents: vec![id("rejected")],
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
+        graph = graph.quarantine(CausalQuarantine {
+            id: id("rejected"),
+            reason: "policy rejected".to_owned(),
+        });
+        graph = graph.quarantine(CausalQuarantine {
+            id: id("descendant"),
+            reason: "ancestor rejected".to_owned(),
+        });
 
         assert_eq!(graph.topological_order()?, vec![id("root")]);
         assert_eq!(graph.heads(), vec![id("root")]);
@@ -591,15 +851,46 @@ mod tests {
     #[test]
     fn quarantine_propagates_through_indexed_and_future_descendants() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
-        graph.insert(id("root"), Vec::new());
-        graph.insert(id("rejected"), vec![id("root")]);
-        graph.insert(id("descendant"), vec![id("rejected")]);
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("root"),
+                parents: Vec::new(),
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("rejected"),
+                parents: vec![id("root")],
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("descendant"),
+                parents: vec![id("rejected")],
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
 
-        graph.quarantine(id("rejected"), id("invalid signature"));
+        graph = graph.quarantine(CausalQuarantine {
+            id: id("rejected"),
+            reason: id("invalid signature"),
+        });
         assert!(graph.quarantined().contains_key("descendant"));
         assert_eq!(graph.topological_order()?, vec![id("root")]);
         assert_eq!(
-            graph.insert(id("future"), vec![id("descendant")]),
+            {
+                let inserted = graph.insert(CausalEventInsertion {
+                    id: id("future"),
+                    parents: vec![id("descendant")],
+                });
+                graph = inserted.graph;
+                inserted.status
+            },
             CausalInsertStatus::Quarantined {
                 reason: id("Ancestor event was rejected")
             }
@@ -612,14 +903,35 @@ mod tests {
     #[test]
     fn cycles_are_quarantined_and_excluded_from_applicability() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
-        graph.insert(id("left"), vec![id("right")]);
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("left"),
+                parents: vec![id("right")],
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
         assert_eq!(
-            graph.insert(id("right"), vec![id("left")]),
+            {
+                let inserted = graph.insert(CausalEventInsertion {
+                    id: id("right"),
+                    parents: vec![id("left")],
+                });
+                graph = inserted.graph;
+                inserted.status
+            },
             CausalInsertStatus::Quarantined {
                 reason: id("Causal graph contains a cycle")
             }
         );
-        graph.insert(id("unrelated"), Vec::new());
+        {
+            let inserted = graph.insert(CausalEventInsertion {
+                id: id("unrelated"),
+                parents: Vec::new(),
+            });
+            graph = inserted.graph;
+            inserted.status
+        };
 
         assert!(!graph.is_ancestor(&id("unrelated"), &id("left")));
         assert!(graph.is_ancestor(&id("right"), &id("left")));
@@ -629,92 +941,6 @@ mod tests {
         assert_eq!(
             graph.quarantined().keys().cloned().collect::<Vec<_>>(),
             vec![id("left"), id("right")]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn union_is_commutative_associative_and_idempotent() -> anyhow::Result<()> {
-        let mut left = CausalGraph::new();
-        left.insert(id("root"), Vec::new());
-        left.insert(id("left"), vec![id("root")]);
-
-        let mut right = CausalGraph::new();
-        right.insert(id("root"), Vec::new());
-        right.insert(id("right"), vec![id("root")]);
-
-        let mut third = CausalGraph::new();
-        third.insert(id("join"), vec![id("left"), id("right")]);
-
-        assert_eq!(left.union(&right), right.union(&left));
-        assert_eq!(
-            left.union(&right).union(&third),
-            left.union(&right.union(&third))
-        );
-        assert_eq!(left.union(&left), left);
-        Ok(())
-    }
-
-    #[test]
-    fn union_quarantines_conflicting_parent_sets_commutatively() -> anyhow::Result<()> {
-        let mut left = CausalGraph::new();
-        left.insert(id("a"), Vec::new());
-        left.insert(id("same"), vec![id("a")]);
-
-        let mut right = CausalGraph::new();
-        right.insert(id("b"), Vec::new());
-        right.insert(id("same"), vec![id("b")]);
-
-        let left_right = left.union(&right);
-        let right_left = right.union(&left);
-        assert_eq!(left_right, right_left);
-        assert!(left_right.quarantined().contains_key("same"));
-        assert_eq!(left_right.parents(&id("same")), Some([id("a")].as_slice()));
-        Ok(())
-    }
-
-    #[test]
-    fn union_preserves_the_deterministic_minimum_quarantine_reason() -> anyhow::Result<()> {
-        let mut left = CausalGraph::new();
-        left.insert(id("a"), Vec::new());
-        left.insert(id("b"), Vec::new());
-        left.insert(id("same"), vec![id("a")]);
-        left.quarantine(id("same"), id("A-policy"));
-
-        let mut right = CausalGraph::new();
-        right.insert(id("a"), Vec::new());
-        right.insert(id("b"), Vec::new());
-        right.insert(id("same"), vec![id("b")]);
-
-        let left_right = left.union(&right);
-        assert_eq!(left_right, right.union(&left));
-        assert_eq!(
-            left_right.quarantined().get("same").map(String::as_str),
-            Some("A-policy")
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn union_recomputes_derived_quarantine_associatively() -> anyhow::Result<()> {
-        let mut left = CausalGraph::new();
-        left.insert(id("0"), Vec::new());
-        left.insert(id("1"), Vec::new());
-
-        let mut middle = CausalGraph::new();
-        middle.insert(id("0"), Vec::new());
-        middle.quarantine(id("0"), id("policy rejected"));
-
-        let mut right = CausalGraph::new();
-        right.insert(id("0"), Vec::new());
-        right.insert(id("1"), vec![id("0")]);
-
-        let left_associative = left.union(&middle).union(&right);
-        let right_associative = left.union(&middle.union(&right));
-        assert_eq!(left_associative, right_associative);
-        assert_eq!(
-            left_associative.quarantined().get("1").map(String::as_str),
-            Some("Conflicting causal parent sets for the same event id")
         );
         Ok(())
     }

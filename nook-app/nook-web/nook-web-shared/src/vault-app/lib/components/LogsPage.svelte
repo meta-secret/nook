@@ -9,15 +9,7 @@
     CardHeader,
     CardTitle,
   } from '$lib/components/ui/card'
-  import {
-    clearLogs,
-    dumpLogs,
-    getLogLevel,
-    LogLevel,
-    logCount,
-    setLogLevel,
-    type LogEntry,
-  } from '$lib/runtime/log'
+  import { LogLevel, type LogEntry, browserLogRuntime } from '$lib/runtime/log'
 
   let { onClose }: { onClose: () => void } = $props()
 
@@ -42,38 +34,64 @@
   const hasOlder = $derived(offset + PAGE_SIZE < total)
   const hasNewer = $derived(offset > 0)
 
-  const LEVEL_CLASS: Record<LogLevel, string> = {
-    [LogLevel.Error]: 'text-red-400',
-    [LogLevel.Warn]: 'text-amber-400',
-    [LogLevel.Info]: 'text-sky-400',
-    [LogLevel.Debug]: 'text-emerald-400',
-    [LogLevel.Trace]: 'text-muted-foreground',
+  const LEVEL_CLASS = new Map<string, string>([
+    [LogLevel.Error, 'text-red-400'],
+    [LogLevel.Warn, 'text-amber-400'],
+    [LogLevel.Info, 'text-sky-400'],
+    [LogLevel.Debug, 'text-emerald-400'],
+    [LogLevel.Trace, 'text-muted-foreground'],
+  ])
+
+  type LogLevelParseRequest = {
+    readonly value: string
+    readonly fallback: LogLevel
+  }
+
+  function parseLogLevel({ value, fallback }: LogLevelParseRequest): LogLevel {
+    switch (value) {
+      case LogLevel.Error:
+      case LogLevel.Warn:
+      case LogLevel.Info:
+      case LogLevel.Debug:
+      case LogLevel.Trace:
+        return value
+      default:
+        return fallback
+    }
   }
 
   async function load() {
     loading = true
     try {
-      total = await logCount()
-      const dumpLogsArgs: Parameters<typeof dumpLogs>[0] = {
+      total = await browserLogRuntime.logCount()
+      const dumpLogsArgs: Parameters<typeof browserLogRuntime.dumpLogs>[0] = {
         minLevel,
         limit: PAGE_SIZE,
         offset,
       }
-      entries = await dumpLogs(dumpLogsArgs)
+      entries = await browserLogRuntime.dumpLogs(dumpLogsArgs)
     } finally {
       loading = false
     }
   }
 
   function changeMinLevel(value: string) {
-    minLevel = ((...[v = LogLevel.Trace]) => v)(value as LogLevel)
+    const parseMinLevelArgs: LogLevelParseRequest = {
+      value,
+      fallback: LogLevel.Trace,
+    }
+    minLevel = parseLogLevel(parseMinLevelArgs)
     offset = 0
     void load()
   }
 
   function changeCaptureLevel(value: string) {
-    captureLevel = ((...[v = LogLevel.Info]) => v)(value as LogLevel)
-    setLogLevel(captureLevel)
+    const parseCaptureLevelArgs: LogLevelParseRequest = {
+      value,
+      fallback: LogLevel.Info,
+    }
+    captureLevel = parseLogLevel(parseCaptureLevelArgs)
+    browserLogRuntime.setLogLevel(captureLevel)
   }
 
   function older() {
@@ -89,7 +107,7 @@
   }
 
   async function clearAll() {
-    await clearLogs()
+    await browserLogRuntime.clearLogs()
     offset = 0
     await load()
   }
@@ -107,7 +125,7 @@
   }
 
   onMount(() => {
-    captureLevel = getLogLevel()
+    captureLevel = browserLogRuntime.getLogLevel()
     void load()
   })
 </script>
@@ -232,7 +250,7 @@
               <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <span class="text-muted-foreground">{entry.ts}</span>
                 <span
-                  class="font-semibold uppercase {LEVEL_CLASS[entry.level]}"
+                  class="font-semibold uppercase {LEVEL_CLASS.get(entry.level)}"
                 >
                   {entry.level}
                 </span>

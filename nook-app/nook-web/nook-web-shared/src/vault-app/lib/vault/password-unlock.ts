@@ -1,22 +1,32 @@
+import { VaultType } from "$lib/vault/architecture-model";
+import type { Result } from "neverthrow";
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
+export type PasswordOperationResult = Result<
+  void,
+  StorageOperationFailure | OAuthFailure
+>;
+import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
+import { err as storageErr, ok as storageOk } from "neverthrow";
+import {
+  VaultStorageFailure as StorageOperationFailure,
+  VaultStorageFailureKind as StorageOperationFailureKind,
+} from "$lib/runtime/storage-failure";
+import { VaultRecoveryErrorKind } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
 import { EnrollmentEntryKind } from "$lib/vault/state/session.svelte";
-import { createLogger, runtimeFailure } from "$lib/runtime/log";
-import {
-  isSentinelPasswordUnlockForbiddenError,
-  isSentinelVault,
-} from "$lib/vault/sentinel-unlock";
+import { browserLogRuntime } from "$lib/runtime/log";
+import { SentinelUnlockActions } from "$lib/vault/sentinel-unlock";
+
 export {
   findSharedGrantProvider,
-  SharedGrantProviderKind,
   SharedStorageTargetKind,
   shouldFlushSharedDriveGrant,
-  type SharedGrantProvider,
   type SharedStorageTarget,
 } from "$lib/vault/password-enrollment";
 import { JoinEnrollmentState } from "$app-wasm";
 
-const log = createLogger("vault-password");
+const log = browserLogRuntime.createLogger("vault-password");
 
 type E2ePasswordManager = {
   // Generated wasm-bindgen methods are positional host bindings.
@@ -33,240 +43,345 @@ type E2ePasswordManager = {
 };
 
 type VaultPasswordCreation = {
-  readonly state: VaultState;
   readonly label: string;
   readonly password: string;
 };
 
-export async function addVaultPassword({
-  state,
-  label,
-  password,
-}: VaultPasswordCreation): Promise<void> {
-  if (!state.hasManager) {
-    state.passwordError = "Vault engine is not available.";
-    return;
-  }
-  if (!state.isAuthenticated) {
-    state.passwordError = "Unlock the vault before adding a password.";
-    return;
-  }
-  const hadPasswords = state.passwordEntries.length > 0;
-  state.passwordError = "";
-  state.isPasswordBusy = true;
-  try {
-    const manager = state.requireManager();
-    await state.enqueueStorage(() => {
-      const trimmedLabel = label.trim();
-      const e2eManager = manager as typeof manager & E2ePasswordManager;
-      if (
-        state.runtimeConfig.e2eExposeVault &&
-        e2eManager.add_vault_password_for_e2e
-      ) {
-        return e2eManager.add_vault_password_for_e2e(trimmedLabel, password);
-      }
-      return manager.add_vault_password(trimmedLabel, password);
-    });
-    await state.refreshPasswordEntriesList();
-    log.info("vault password added");
-    state.showSuccess(
-      hadPasswords
-        ? state.t(I18N_KEYS.ToastsPasswordAddedRotate)
-        : state.t(I18N_KEYS.ToastsPasswordSet),
-    );
-    await state.hydrateMultiDeviceState();
-    await state.runFanOutSyncAfterLocalSave();
-  } catch (e) {
-    state.passwordError =
-      e instanceof Error ? e.message : "Failed to add vault password.";
-    throw e;
-  } finally {
-    state.isPasswordBusy = false;
-  }
-}
-
 type VaultPasswordUpdate = {
-  readonly state: VaultState;
   readonly entryId: string;
   readonly password: string;
 };
-
-export async function updateVaultPasswordEntry({
-  state,
-  entryId,
-  password,
-}: VaultPasswordUpdate): Promise<void> {
-  if (!state.deviceProtectionReady) {
-    state.passwordError = state.t(I18N_KEYS.VaultPasswordsDeviceUnlockRequired);
-    return;
-  }
-  if (!state.hasManager) {
-    state.passwordError = "Vault engine is not available.";
-    return;
-  }
-  state.passwordError = "";
-  state.isPasswordBusy = true;
-  try {
-    const manager = state.requireManager();
-    await state.enqueueStorage(() => {
-      const e2eManager = manager as typeof manager & E2ePasswordManager;
-      if (
-        state.runtimeConfig.e2eExposeVault &&
-        e2eManager.update_vault_password_entry_for_e2e
-      ) {
-        return e2eManager.update_vault_password_entry_for_e2e(
-          entryId,
-          password,
-        );
-      }
-      return manager.update_vault_password_entry(entryId, password);
-    });
-    await state.refreshPasswordEntriesList();
-    state.showSuccess(state.t(I18N_KEYS.ToastsPasswordUpdated));
-    await state.runFanOutSyncAfterLocalSave();
-  } catch (e) {
-    state.passwordError =
-      e instanceof Error ? e.message : "Failed to update vault password.";
-    throw e;
-  } finally {
-    state.isPasswordBusy = false;
-  }
-}
 
 type VaultPasswordRemoval = {
-  readonly state: VaultState;
   readonly entryId: string;
 };
 
-export async function removeVaultPasswordEntry({
-  state,
-  entryId,
-}: VaultPasswordRemoval): Promise<void> {
-  if (!state.deviceProtectionReady) {
-    state.passwordError = state.t(I18N_KEYS.VaultPasswordsDeviceUnlockRequired);
-    return;
-  }
-  if (!state.hasManager) return;
-  state.passwordError = "";
-  state.isPasswordBusy = true;
-  try {
-    await state.enqueueStorage(() =>
-      state.requireManager().remove_vault_password_entry(entryId),
-    );
-    await state.refreshPasswordEntriesList();
-    if (
-      state.activeEnrollmentEntry.kind === EnrollmentEntryKind.Active &&
-      state.activeEnrollmentEntry.entryId === entryId
-    ) {
-      state.enrollmentCode = "";
-      state.clearActiveEnrollmentEntry();
-    }
-    state.showSuccess(state.t(I18N_KEYS.ToastsPasswordRemoved));
-    await state.runFanOutSyncAfterLocalSave();
-  } catch (e) {
-    state.passwordError =
-      e instanceof Error ? e.message : "Failed to remove vault password.";
-    throw e;
-  } finally {
-    state.isPasswordBusy = false;
-  }
-}
-
 type PasswordUnlockRequest = {
-  readonly state: VaultState;
   readonly entryId: string;
   readonly password: string;
 };
 
-export async function unlockWithPassword({
-  state,
-  entryId,
-  password,
-}: PasswordUnlockRequest): Promise<void> {
-  if (!state.hasManager) {
-    state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
-    return;
-  }
-  if (state.isVerifying) return;
-  if (isSentinelVault(state)) {
-    state.errorMsg = state.t(
-      I18N_KEYS.ArchitectureModesSentinelPasswordForbidden,
-    );
-    state.sentinelCeremonyPrompt = true;
-    return;
-  }
-  if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
-    state.errorMsg =
-      state.storageMode === "oauth-file"
-        ? state.t(I18N_KEYS.ErrorsGoogleSignInRequired)
-        : state.t(I18N_KEYS.ErrorsGithubCredentialsRequired);
-    return;
-  }
-  if (state.storageMode !== "local") {
-    await state.ensureOAuthTokensFresh();
-  }
-  if (!entryId.trim()) {
-    state.errorMsg = state.t(I18N_KEYS.ErrorsVaultPasswordRequired);
-    return;
-  }
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isVerifying = true;
-  try {
-    const page = await state.enqueueStorage(() =>
-      state
-        .requireManager()
-        .connect_with_password(
-          ...state.wasmStorageArgs(),
-          entryId,
-          password,
-          state.secretPageSize,
+export {
+  PasswordEnrollmentActions,
+  PasswordEnrollmentIssue,
+} from "$lib/vault/password-enrollment-flow";
+
+/** Owns browser orchestration for one password unlock context. */
+export class VaultPasswordActions {
+  constructor(private readonly state: VaultState) {}
+
+  async addVaultPassword({
+    label,
+    password,
+  }: VaultPasswordCreation): Promise<PasswordOperationResult> {
+    const state = this.state;
+    if (!state.hasManager) {
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.ManagerUnavailable,
         ),
-    );
-    const connectedPageArgs: Parameters<
-      typeof state.applyConnectedSecretPage
-    >[0] = { page, query: "" };
-    state.applyConnectedSecretPage(connectedPageArgs);
-    if (state.deviceProtectionReady) {
-      await state.ensureProviderSaved();
-      const providerLoadOptions: Parameters<typeof state.loadProviders>[0] = {
-        ensureLocalRow: false,
-      };
-      await state.loadProviders(providerLoadOptions);
+      );
     }
-    await state.refreshPasswordEntriesList();
-    if (state.deviceProtectionReady) {
-      void state.hydrateMultiDeviceState();
+    if (!state.isAuthenticated) {
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.DeviceAuthorizationRequired,
+        ),
+      );
     }
-    state.markVaultUnlocked();
-    log.info("vault unlocked with password");
-    state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-    state.loginPasswordPrompt = false;
-    state.showSuccess(state.t(I18N_KEYS.ToastsVaultUnlocked));
-    state.startIdleSessionTracking();
-    if (state.deviceProtectionReady) {
-      state.startVaultSync();
+    const hadPasswords = state.passwordEntries.length > 0;
+    state.passwordError = "";
+    state.isPasswordBusy = true;
+    try {
+      const changed = await state.enqueueStorage(async () => {
+        const admitted = state.admitManager();
+        if (admitted.isErr()) return storageErr(admitted.error);
+        const manager = admitted.value;
+        try {
+          const trimmedLabel = label.trim();
+          const e2eManager = manager as typeof manager & E2ePasswordManager;
+          if (
+            state.runtimeConfig.e2eExposeVault &&
+            e2eManager.add_vault_password_for_e2e
+          ) {
+            await e2eManager.add_vault_password_for_e2e(trimmedLabel, password);
+            return storageOk();
+          }
+          await manager.add_vault_password(trimmedLabel, password);
+          return storageOk();
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      });
+      if (changed.isErr()) return storageErr(changed.error);
+      const passwordRefresh1 = await state.refreshPasswordEntriesList();
+      if (passwordRefresh1.isErr()) return storageErr(passwordRefresh1.error);
+      log.info("vault password added");
+      const rosterRefresh1 = await state.hydrateMultiDeviceState();
+      if (rosterRefresh1.isErr()) {
+        return storageErr(rosterRefresh1.error);
+      }
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave();
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
+      state.showSuccess(
+        hadPasswords
+          ? state.t(I18N_KEYS.ToastsPasswordAddedRotate)
+          : state.t(I18N_KEYS.ToastsPasswordSet),
+      );
+      return storageOk();
+    } finally {
+      state.isPasswordBusy = false;
     }
-  } catch (e) {
-    state.isAuthenticated = false;
-    const message =
-      e instanceof Error ? e.message : "Failed to unlock with password.";
-    log.warn("vault password unlock failed");
-    if (isSentinelPasswordUnlockForbiddenError(runtimeFailure(e))) {
+  }
+
+  async updateVaultPasswordEntry({
+    entryId,
+    password,
+  }: VaultPasswordUpdate): Promise<PasswordOperationResult> {
+    const state = this.state;
+    if (!state.deviceProtectionReady) {
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.DeviceAuthorizationRequired,
+        ),
+      );
+    }
+    if (!state.hasManager) {
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.ManagerUnavailable,
+        ),
+      );
+    }
+    state.passwordError = "";
+    state.isPasswordBusy = true;
+    try {
+      const changed = await state.enqueueStorage(async () => {
+        const admitted = state.admitManager();
+        if (admitted.isErr()) return storageErr(admitted.error);
+        const manager = admitted.value;
+        try {
+          const e2eManager = manager as typeof manager & E2ePasswordManager;
+          if (
+            state.runtimeConfig.e2eExposeVault &&
+            e2eManager.update_vault_password_entry_for_e2e
+          ) {
+            await e2eManager.update_vault_password_entry_for_e2e(
+              entryId,
+              password,
+            );
+            return storageOk();
+          }
+          await manager.update_vault_password_entry(entryId, password);
+          return storageOk();
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      });
+      if (changed.isErr()) return storageErr(changed.error);
+      const passwordRefresh2 = await state.refreshPasswordEntriesList();
+      if (passwordRefresh2.isErr()) return storageErr(passwordRefresh2.error);
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave();
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
+      state.showSuccess(state.t(I18N_KEYS.ToastsPasswordUpdated));
+      return storageOk();
+    } finally {
+      state.isPasswordBusy = false;
+    }
+  }
+
+  async removeVaultPasswordEntry({
+    entryId,
+  }: VaultPasswordRemoval): Promise<PasswordOperationResult> {
+    const state = this.state;
+    if (!state.deviceProtectionReady) {
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.DeviceAuthorizationRequired,
+        ),
+      );
+    }
+    if (!state.hasManager)
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.ManagerUnavailable,
+        ),
+      );
+    state.passwordError = "";
+    state.isPasswordBusy = true;
+    try {
+      const removal = await state.enqueueStorage(async () => {
+        const admittedManager = state.admitManager();
+        if (admittedManager.isErr()) return storageErr(admittedManager.error);
+        try {
+          return storageOk(
+            await admittedManager.value.remove_vault_password_entry(entryId),
+          );
+        } catch (nativeFailure) {
+          return storageErr(new NativeVaultStorageFailure(nativeFailure));
+        }
+      });
+      if (removal.isErr()) {
+        return storageErr(removal.error);
+      }
+      const passwordRefresh3 = await state.refreshPasswordEntriesList();
+      if (passwordRefresh3.isErr()) return storageErr(passwordRefresh3.error);
+      if (
+        state.activeEnrollmentEntry.kind === EnrollmentEntryKind.Active &&
+        state.activeEnrollmentEntry.entryId === entryId
+      ) {
+        state.enrollmentCode = "";
+        state.clearActiveEnrollmentEntry();
+      }
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave();
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
+      state.showSuccess(state.t(I18N_KEYS.ToastsPasswordRemoved));
+      return storageOk();
+    } finally {
+      state.isPasswordBusy = false;
+    }
+  }
+
+  async unlockWithPassword({
+    entryId,
+    password,
+  }: PasswordUnlockRequest): Promise<void> {
+    const state = this.state;
+    if (!state.hasManager) {
+      state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
+      return;
+    }
+    if (state.isVerifying) return;
+    const vaultType = new SentinelUnlockActions(state).vaultType();
+    if (vaultType.isErr()) {
+      state.errorMsg = state.t(vaultType.error.translationKey);
+      return;
+    }
+    if (vaultType.value === VaultType.Sentinel) {
       state.errorMsg = state.t(
         I18N_KEYS.ArchitectureModesSentinelPasswordForbidden,
       );
       state.sentinelCeremonyPrompt = true;
       return;
     }
-    state.errorMsg = message;
-  } finally {
-    state.isVerifying = false;
+    if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
+      state.errorMsg =
+        state.storageMode === "oauth-file"
+          ? state.t(I18N_KEYS.ErrorsGoogleSignInRequired)
+          : state.t(I18N_KEYS.ErrorsGithubCredentialsRequired);
+      return;
+    }
+    if (state.storageMode !== "local") {
+      const refreshedTokens = await state.ensureOAuthTokensFresh();
+      if (refreshedTokens.isErr()) {
+        state.errorMsg = state.t(refreshedTokens.error.translationKey);
+        return;
+      }
+    }
+    if (!entryId.trim()) {
+      state.errorMsg = state.t(I18N_KEYS.ErrorsVaultPasswordRequired);
+      return;
+    }
+    state.errorMsg = "";
+    state.dismissSuccess();
+    state.isVerifying = true;
+    try {
+      const storageArgs = state.wasmStorageArgs();
+      const page = await state.enqueueStorage(async () => {
+        const admittedManager = state.admitManager();
+        if (admittedManager.isErr()) return storageErr(admittedManager.error);
+        try {
+          return storageOk(
+            await admittedManager.value.connect_with_password(
+              storageArgs.mode,
+              storageArgs.pat,
+              storageArgs.repo,
+              entryId,
+              password,
+              state.secretPageSize,
+            ),
+          );
+        } catch (nativeFailure) {
+          return storageErr(new NativeVaultStorageFailure(nativeFailure));
+        }
+      });
+      if (page.isErr()) {
+        state.isAuthenticated = false;
+        if (
+          page.error.recoveryKind ===
+          VaultRecoveryErrorKind.SentinelPasswordUnlockForbidden
+        ) {
+          state.errorMsg = state.t(
+            I18N_KEYS.ArchitectureModesSentinelPasswordForbidden,
+          );
+          state.sentinelCeremonyPrompt = true;
+        } else {
+          state.errorMsg = state.t(page.error.translationKey);
+        }
+        return;
+      }
+      const connectedPageArgs: Parameters<
+        typeof state.applyConnectedSecretPage
+      >[0] = { page: page.value, query: "" };
+      state.applyConnectedSecretPage(connectedPageArgs);
+      if (state.deviceProtectionReady) {
+        const savedProvider1 = await state.ensureProviderSaved();
+        if (savedProvider1.isErr()) {
+          state.errorMsg = state.t(savedProvider1.error.translationKey);
+          return;
+        }
+        const providerLoadOptions: Parameters<typeof state.loadProviders>[0] = {
+          ensureLocalRow: false,
+        };
+        const loadedProviders1 = await state.loadProviders(providerLoadOptions);
+        if (loadedProviders1.isErr()) {
+          state.errorMsg = state.t(loadedProviders1.error.translationKey);
+          return;
+        }
+      }
+      const passwordRefresh4 = await state.refreshPasswordEntriesList();
+      if (passwordRefresh4.isErr()) {
+        state.errorMsg = state.t(passwordRefresh4.error.translationKey);
+        return;
+      }
+      if (state.deviceProtectionReady) {
+        const rosterRefresh2 = await state.hydrateMultiDeviceState();
+        if (rosterRefresh2.isErr()) {
+          state.errorMsg = state.t(rosterRefresh2.error.translationKey);
+          return;
+        }
+      }
+      const unlocked = state.markVaultUnlocked();
+      if (unlocked.isErr()) {
+        state.errorMsg = state.t(unlocked.error.translationKey);
+        return;
+      }
+      log.info("vault unlocked with password");
+      state.joinEnrollmentPrompt = JoinEnrollmentState.None;
+      state.loginPasswordPrompt = false;
+      state.showSuccess(state.t(I18N_KEYS.ToastsVaultUnlocked));
+      state.startIdleSessionTracking();
+      if (state.deviceProtectionReady) {
+        state.startVaultSync();
+      }
+    } catch (e) {
+      state.isAuthenticated = false;
+      const message =
+        e instanceof Error ? e.message : "Failed to unlock with password.";
+      log.warn("vault password unlock failed");
+      if (
+        browserLogRuntime.runtimeFailure(e).vaultRecoveryKind() ===
+        VaultRecoveryErrorKind.SentinelPasswordUnlockForbidden
+      ) {
+        state.errorMsg = state.t(
+          I18N_KEYS.ArchitectureModesSentinelPasswordForbidden,
+        );
+        state.sentinelCeremonyPrompt = true;
+        return;
+      }
+      state.errorMsg = message;
+    } finally {
+      state.isVerifying = false;
+    }
   }
 }
-
-export {
-  clearEnrollmentCode,
-  connectWithEnrollmentCode,
-  issueEnrollmentCode,
-} from "$lib/vault/password-enrollment-flow";

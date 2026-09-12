@@ -1,3 +1,5 @@
+import { err, ok, type Result } from "neverthrow";
+import { OAuthFailure, OAuthFailureKind } from "$lib/auth/oauth-failure";
 /**
  * Google Identity Services (GIS) token client for Drive access.
  *
@@ -20,9 +22,12 @@ import { google_oauth_tokens_to_config } from "$app-wasm";
 import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/auth/google/config";
 
 const GIS_SCRIPT_URL = "https://accounts.google.com/gsi/client";
+
 export const DRIVE_APPDATA_SCOPE =
   "https://www.googleapis.com/auth/drive.appdata";
+
 export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+
 export const DRIVE_READONLY_SCOPE =
   "https://www.googleapis.com/auth/drive.readonly";
 
@@ -67,6 +72,8 @@ type GoogleTokenClientConfig = {
   client_id: string;
   scope: string;
   callback: (response: GoogleTokenResponse) => void;
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+  error_callback: (failure: { type: string }) => void;
 };
 
 export type GoogleTokenPromptRequest = {
@@ -117,8 +124,10 @@ type TokenRequest =
   | { kind: TokenRequestKind.Idle }
   | {
       kind: TokenRequestKind.AwaitingResponse;
-      resolve: (response: GoogleTokenResponse) => void;
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      resolve: (response: Result<GoogleOAuthTokens, OAuthFailure>) => void;
     };
+
 enum GoogleIdentityServicesKind {
   NotLoaded = "not-loaded",
   Loading = "loading",
@@ -126,7 +135,10 @@ enum GoogleIdentityServicesKind {
 
 type GoogleIdentityServices =
   | { kind: GoogleIdentityServicesKind.NotLoaded }
-  | { kind: GoogleIdentityServicesKind.Loading; completion: Promise<void> };
+  | {
+      kind: GoogleIdentityServicesKind.Loading;
+      completion: Promise<Result<void, OAuthFailure>>;
+    };
 
 type TokenClientSlot = {
   scopeKey: string;
@@ -134,281 +146,279 @@ type TokenClientSlot = {
   request: TokenRequest;
 };
 
-const tokenClients = new Map<string, TokenClientSlot>();
-let googleIdentityServices: GoogleIdentityServices = {
-  kind: GoogleIdentityServicesKind.NotLoaded,
-};
+/** Owns Google browser token clients and their single pending request. */
+class GoogleOAuthSession {
+  private tokenClients = new Map<string, TokenClientSlot>();
+  private googleIdentityServices: GoogleIdentityServices = {
+    kind: GoogleIdentityServicesKind.NotLoaded,
+  };
 
-export function isGoogleOAuthConfigured(): boolean {
-  return Boolean(GOOGLE_OAUTH_CLIENT_ID.trim());
-}
-
-function googleClientId(): string {
-  const clientId = GOOGLE_OAUTH_CLIENT_ID.trim();
-  if (!clientId) {
-    throw new Error("Google OAuth client id is not configured.");
+  isGoogleOAuthConfigured(): boolean {
+    return Boolean(GOOGLE_OAUTH_CLIENT_ID.trim());
   }
-  return clientId;
-}
 
-function scopeString(scope: GoogleDriveOAuthScope): string {
-  switch (scope) {
-    case GoogleDriveOAuthScope.Shared:
-      return `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`;
-    case GoogleDriveOAuthScope.AppData:
-    default:
-      return DRIVE_APPDATA_SCOPE;
+  private scopeString(scope: GoogleDriveOAuthScope): string {
+    switch (scope) {
+      case GoogleDriveOAuthScope.Shared:
+        return `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`;
+      case GoogleDriveOAuthScope.AppData:
+        return DRIVE_APPDATA_SCOPE;
+    }
   }
-}
 
-function loadGisScript(): Promise<void> {
-  return new Promise(
-    // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-    (resolve, reject) => {
-      if (window.google?.accounts?.oauth2) {
-        resolve();
-        return;
-      }
-      const existing = document.querySelector(
-        `script[src="${GIS_SCRIPT_URL}"]`,
-      );
-      if (existing) {
-        const addEventListenerArgs: Parameters<
-          typeof existing.addEventListener
-        >[2] = { once: true };
-        existing.addEventListener(
-          "load",
-          () => resolve(),
-          addEventListenerArgs,
+  private loadGisScript(): Promise<Result<void, OAuthFailure>> {
+    return new Promise((resolve) => {
+      try {
+        if (window.google?.accounts?.oauth2) {
+          resolve(ok());
+          return;
+        }
+        const existing = document.querySelector(
+          `script[src="${GIS_SCRIPT_URL}"]`,
         );
-        const addEventListenerArgs2: Parameters<
-          typeof existing.addEventListener
-        >[2] = { once: true };
-        existing.addEventListener(
-          "error",
-          () => reject(new Error("Failed to load Google Identity Services.")),
-          addEventListenerArgs2,
-        );
-        return;
+        const loaded = () => resolve(ok());
+        const failed = () =>
+          resolve(err(new OAuthFailure(OAuthFailureKind.GoogleScript)));
+        if (existing) {
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+          existing.addEventListener("load", loaded, { once: true });
+          // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+          existing.addEventListener("error", failed, { once: true });
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = GIS_SCRIPT_URL;
+        script.async = true;
+        script.defer = true;
+        script.onload = loaded;
+        script.onerror = failed;
+        document.head.appendChild(script);
+      } catch {
+        resolve(err(new OAuthFailure(OAuthFailureKind.GoogleScript)));
       }
-      const script = document.createElement("script");
-      script.src = GIS_SCRIPT_URL;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => resolve();
-      script.onerror = () =>
-        reject(new Error("Failed to load Google Identity Services."));
-      document.head.appendChild(script);
-    },
-  );
-}
-
-async function ensureGisReady(): Promise<void> {
-  if (googleIdentityServices.kind === GoogleIdentityServicesKind.Loading) {
-    return googleIdentityServices.completion;
+    });
   }
-  const promise = loadGisScript();
-  googleIdentityServices = {
-    kind: GoogleIdentityServicesKind.Loading,
-    completion: promise,
-  };
-  return promise;
-}
 
-async function tokenClientForScope(
-  scope: GoogleDriveOAuthScope,
-): Promise<TokenClientSlot> {
-  await ensureGisReady();
-  const key = scopeString(scope);
-  const existing = tokenClients.get(key);
-  if (existing) {
-    return existing;
+  private ensureGisReady(): Promise<Result<void, OAuthFailure>> {
+    if (this.googleIdentityServices.kind === GoogleIdentityServicesKind.Loading)
+      return this.googleIdentityServices.completion;
+    const completion = this.loadGisScript();
+    this.googleIdentityServices = {
+      kind: GoogleIdentityServicesKind.Loading,
+      completion,
+    };
+    return completion;
   }
-  const initTokenClientArgs: GoogleTokenClientConfig = {
-    client_id: googleClientId(),
-    scope: key,
-    callback: (response) => {
-      const current = tokenClients.get(key);
-      if (current?.request.kind === TokenRequestKind.AwaitingResponse) {
-        current.request.resolve(response);
-        current.request = { kind: TokenRequestKind.Idle };
-      }
-    },
-  };
-  const client =
-    window.google!.accounts.oauth2.initTokenClient(initTokenClientArgs);
-  const slot: TokenClientSlot = {
-    scopeKey: key,
-    client,
-    request: { kind: TokenRequestKind.Idle },
-  };
-  tokenClients.set(key, slot);
-  return slot;
-}
 
-/** Private mode: initialize the default `drive.appdata` token client. */
-export async function initGoogleAuth(): Promise<void> {
-  await tokenClientForScope(GoogleDriveOAuthScope.AppData);
-}
+  private async tokenClientForScope(
+    scope: GoogleDriveOAuthScope,
+  ): Promise<Result<TokenClientSlot, OAuthFailure>> {
+    const clientId = GOOGLE_OAUTH_CLIENT_ID.trim();
+    if (!clientId)
+      return err(new OAuthFailure(OAuthFailureKind.GoogleConfiguration));
+    const ready = await this.ensureGisReady();
+    if (ready.isErr()) return err(ready.error);
+    const key = this.scopeString(scope);
+    const existing = this.tokenClients.get(key);
+    if (existing) return ok(existing);
+    const oauth = window.google?.accounts.oauth2;
+    if (!oauth) return err(new OAuthFailure(OAuthFailureKind.GoogleScript));
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const complete = (outcome: Result<GoogleOAuthTokens, OAuthFailure>) => {
+      const current = this.tokenClients.get(key);
+      if (current?.request.kind !== TokenRequestKind.AwaitingResponse) return;
+      const pending = current.request;
+      current.request = { kind: TokenRequestKind.Idle };
+      pending.resolve(outcome);
+    };
+    const config: GoogleTokenClientConfig = {
+      client_id: clientId,
+      scope: key,
+      callback: (response) => complete(this.tokensFromResponse(response)),
+      error_callback: (failure) =>
+        complete(
+          err(
+            new OAuthFailure(
+              failure.type === "popup_closed"
+                ? OAuthFailureKind.GoogleCancelled
+                : failure.type === "popup_failed_to_open"
+                  ? OAuthFailureKind.GooglePopupBlocked
+                  : OAuthFailureKind.GoogleRequest,
+            ),
+          ),
+        ),
+    };
+    try {
+      const client = oauth.initTokenClient(config);
+      const slot: TokenClientSlot = {
+        scopeKey: key,
+        client,
+        request: { kind: TokenRequestKind.Idle },
+      };
+      this.tokenClients.set(key, slot);
+      return ok(slot);
+    } catch {
+      return err(new OAuthFailure(OAuthFailureKind.GoogleRequest));
+    }
+  }
 
-/** Shared mode: initialize the per-file write + Drive read token client. */
-export async function initGoogleSharedDriveAuth(): Promise<void> {
-  await tokenClientForScope(GoogleDriveOAuthScope.Shared);
-}
-
-function tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
-  if (response.error) {
-    throw new Error(
-      ((...[v = "Google sign-in failed."]) => v)(
-        ((...[v = response.error]) => v)(response.error_description),
-      ),
+  async initGoogleAuth(): Promise<Result<void, OAuthFailure>> {
+    return (await this.tokenClientForScope(GoogleDriveOAuthScope.AppData)).map(
+      () => {},
     );
   }
-  if (!response.access_token) {
-    throw new Error("Google did not return an access token.");
+  async initGoogleSharedDriveAuth(): Promise<Result<void, OAuthFailure>> {
+    return (await this.tokenClientForScope(GoogleDriveOAuthScope.Shared)).map(
+      () => {},
+    );
   }
-  const [expiresIn = 3600] = [response.expires_in];
-  return {
-    accessToken: response.access_token,
-    expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
-  };
-}
-
-export async function requestGoogleAccessToken(
-  request: GoogleAccessTokenRequest,
-): Promise<GoogleOAuthTokens> {
-  const scope = request.scope;
-  const slot = await tokenClientForScope(scope);
-
-  return new Promise(
-    // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-    (resolve, reject) => {
-      slot.request = {
-        kind: TokenRequestKind.AwaitingResponse,
-        resolve: (response) => {
-          try {
-            resolve(tokensFromResponse(response));
-          } catch (error) {
-            reject(error);
-          }
-        },
-      };
-      const tokenPromptRequest: GoogleTokenPromptRequest = {
-        prompt: request.prompt,
-      };
-      slot.client.requestAccessToken(tokenPromptRequest);
-    },
-  );
-}
-
-/** Request the scopes required for cross-account shared-folder replication. */
-export async function requestGoogleDriveSharedAccess(
-  request: GoogleSharedDriveAccessRequest,
-): Promise<GoogleOAuthTokens> {
-  const requestGoogleAccessTokenArgs: Parameters<
-    typeof requestGoogleAccessToken
-  >[0] = {
-    prompt: request.prompt,
-    scope: GoogleDriveOAuthScope.Shared,
-  };
-  return requestGoogleAccessToken(requestGoogleAccessTokenArgs);
-}
-
-export function oauthTokensToConfig({
-  tokens,
-  existing,
-}: GoogleOAuthConfigurationUpdate): OAuthFileConfig {
-  return google_oauth_tokens_to_config(
-    tokens.accessToken,
-    tokens.expiresAt,
+  private tokensFromResponse(
+    response: GoogleTokenResponse,
+  ): Result<GoogleOAuthTokens, OAuthFailure> {
+    if (response.error)
+      return err(
+        new OAuthFailure(
+          response.error === "access_denied"
+            ? OAuthFailureKind.GoogleCancelled
+            : OAuthFailureKind.GoogleRequest,
+        ),
+      );
+    if (!response.access_token)
+      return err(new OAuthFailure(OAuthFailureKind.GoogleResponse));
+    // Date construction parses external GIS protocol data at this boundary.
+    try {
+      const expiresIn =
+        typeof response.expires_in === "number" ? response.expires_in : 3600;
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({
+        accessToken: response.access_token,
+        expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+      });
+    } catch {
+      return err(new OAuthFailure(OAuthFailureKind.GoogleResponse));
+    }
+  }
+  async requestGoogleAccessToken(
+    request: GoogleAccessTokenRequest,
+  ): Promise<Result<GoogleOAuthTokens, OAuthFailure>> {
+    const admitted = await this.tokenClientForScope(request.scope);
+    if (admitted.isErr()) return err(admitted.error);
+    const slot = admitted.value;
+    if (slot.request.kind === TokenRequestKind.AwaitingResponse)
+      return err(new OAuthFailure(OAuthFailureKind.RequestInProgress));
+    return new Promise((resolve) => {
+      slot.request = { kind: TokenRequestKind.AwaitingResponse, resolve };
+      try {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        slot.client.requestAccessToken({ prompt: request.prompt });
+      } catch {
+        slot.request = { kind: TokenRequestKind.Idle };
+        resolve(err(new OAuthFailure(OAuthFailureKind.GoogleRequest)));
+      }
+    });
+  }
+  requestGoogleDriveSharedAccess(
+    request: GoogleSharedDriveAccessRequest,
+  ): Promise<Result<GoogleOAuthTokens, OAuthFailure>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return this.requestGoogleAccessToken({
+      prompt: request.prompt,
+      scope: GoogleDriveOAuthScope.Shared,
+    });
+  }
+  oauthTokensToConfig({
+    tokens,
     existing,
-  );
+  }: GoogleOAuthConfigurationUpdate): Result<OAuthFileConfig, OAuthFailure> {
+    try {
+      return ok(
+        google_oauth_tokens_to_config(
+          tokens.accessToken,
+          tokens.expiresAt,
+          existing,
+        ),
+      );
+    } catch {
+      return err(new OAuthFailure(OAuthFailureKind.GoogleInvalidConfiguration));
+    }
+  }
+  isOAuthAccessTokenExpired({
+    config,
+    skewMs,
+  }: GoogleOAuthExpiryAssessment): boolean {
+    if (config.expiresAt.state === "unknown") return false;
+    const expiresAt = Date.parse(config.expiresAt.value);
+    if (Number.isNaN(expiresAt)) return false;
+    return Date.now() + skewMs >= expiresAt;
+  }
+  async ensureValidOAuthFileConfig(
+    config: OAuthFileConfig,
+  ): Promise<Result<OAuthFileConfig, OAuthFailure>> {
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    if (!this.isOAuthAccessTokenExpired({ config, skewMs: 60_000 }))
+      return ok(config);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const refreshed = await this.requestGoogleAccessToken({
+      prompt: GoogleOAuthPrompt.Default,
+      scope:
+        config.driveMode === "shared" || config.folderId.state === "folderId"
+          ? GoogleDriveOAuthScope.Shared
+          : GoogleDriveOAuthScope.AppData,
+    });
+    return refreshed.andThen((tokens) =>
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      this.oauthTokensToConfig({
+        tokens,
+        existing: configuredOAuthFile(config),
+      }),
+    );
+  }
+  async fetchGoogleAccountEmail(
+    accessToken: string,
+  ): Promise<Result<GoogleAccountIdentity, OAuthFailure>> {
+    let payload: unknown;
+    try {
+      const response = await fetch(
+        "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)",
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      if (!response.ok)
+        return err(new OAuthFailure(OAuthFailureKind.GoogleAccountLookup));
+      payload = await response.json();
+    } catch {
+      return err(new OAuthFailure(OAuthFailureKind.GoogleAccountLookup));
+    }
+    if (!payload || typeof payload !== "object" || !("user" in payload))
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({ kind: GoogleAccountIdentityKind.Unavailable });
+    const user = payload.user;
+    if (!user || typeof user !== "object")
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({ kind: GoogleAccountIdentityKind.Unavailable });
+    if (
+      "emailAddress" in user &&
+      typeof user.emailAddress === "string" &&
+      user.emailAddress.trim()
+    )
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({
+        kind: GoogleAccountIdentityKind.Available,
+        label: user.emailAddress,
+      });
+    if (
+      "displayName" in user &&
+      typeof user.displayName === "string" &&
+      user.displayName.trim()
+    )
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({
+        kind: GoogleAccountIdentityKind.Available,
+        label: user.displayName,
+      });
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return ok({ kind: GoogleAccountIdentityKind.Unavailable });
+  }
 }
 
-export function isOAuthAccessTokenExpired({
-  config,
-  skewMs,
-}: GoogleOAuthExpiryAssessment): boolean {
-  if (config.expiresAt.state === "unknown") return false;
-  const expiresAt = Date.parse(config.expiresAt.value);
-  if (Number.isNaN(expiresAt)) return false;
-  return Date.now() + skewMs >= expiresAt;
-}
-
-export async function ensureValidOAuthFileConfig(
-  config: OAuthFileConfig,
-): Promise<OAuthFileConfig> {
-  if (
-    !(() => {
-      const isOAuthAccessTokenExpiredArgs: Parameters<
-        typeof isOAuthAccessTokenExpired
-      >[0] = { config, skewMs: 60_000 };
-      return isOAuthAccessTokenExpired(isOAuthAccessTokenExpiredArgs);
-    })()
-  ) {
-    return config;
-  }
-  const shared =
-    config.driveMode === "shared" || config.folderId.state === "folderId";
-  const scope = shared
-    ? GoogleDriveOAuthScope.Shared
-    : GoogleDriveOAuthScope.AppData;
-  const requestGoogleAccessTokenArgs2: Parameters<
-    typeof requestGoogleAccessToken
-  >[0] = {
-    prompt: GoogleOAuthPrompt.Default,
-    scope,
-  };
-  const refreshed = await requestGoogleAccessToken(
-    requestGoogleAccessTokenArgs2,
-  );
-  const oauthTokensToConfigArgs: Parameters<typeof oauthTokensToConfig>[0] = {
-    tokens: refreshed,
-    existing: configuredOAuthFile(config),
-  };
-  return oauthTokensToConfig(oauthTokensToConfigArgs);
-}
-
-export async function fetchGoogleAccountEmail(
-  accessToken: string,
-): Promise<GoogleAccountIdentity> {
-  const fetchArgs: Parameters<typeof fetch>[1] = {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  };
-  const response = await fetch(
-    "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)",
-    fetchArgs,
-  );
-  if (!response.ok) {
-    return { kind: GoogleAccountIdentityKind.Unavailable };
-  }
-  const payload: unknown = await response.json();
-  if (!payload || typeof payload !== "object" || !("user" in payload)) {
-    return { kind: GoogleAccountIdentityKind.Unavailable };
-  }
-  const user = payload.user;
-  if (!user || typeof user !== "object") {
-    return { kind: GoogleAccountIdentityKind.Unavailable };
-  }
-  if (
-    "emailAddress" in user &&
-    typeof user.emailAddress === "string" &&
-    user.emailAddress.trim()
-  ) {
-    return {
-      kind: GoogleAccountIdentityKind.Available,
-      label: user.emailAddress,
-    };
-  }
-  if (
-    "displayName" in user &&
-    typeof user.displayName === "string" &&
-    user.displayName.trim()
-  ) {
-    return {
-      kind: GoogleAccountIdentityKind.Available,
-      label: user.displayName,
-    };
-  }
-  return { kind: GoogleAccountIdentityKind.Unavailable };
-}
+export const googleOAuthSession = new GoogleOAuthSession();

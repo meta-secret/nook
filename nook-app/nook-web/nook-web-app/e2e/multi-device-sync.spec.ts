@@ -5,6 +5,7 @@ import {
   type BrowserContext,
   type Page,
 } from './fixtures'
+import { ProviderSyncFreshness } from '$app-wasm'
 import {
   addSecret,
   approveJoinFromBanner,
@@ -39,6 +40,8 @@ import {
   waitForSyncRemoteState,
   type SyncE2eTarget,
 } from './sync-provider'
+import { refreshJoinerVaultOnLoginGate } from './helpers/joiner-vault-refresh'
+import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 
 const providerLabel = e2eSyncProviderDef(resolveE2eSyncProvider()).label
 
@@ -113,6 +116,7 @@ test.describe(`multi-device ${providerLabel} vault`, () => {
     const join = target.stub
       ? await sendJoinRequestLocalE2e(deviceB, target.stub)
       : await sendJoinRequest(deviceB, target.pat, target.repoName, target.stub)
+    if (!join) throw new Error('the joining device must publish a join request')
 
     expect(join.deviceId).toMatch(/^[a-f0-9]{16}$/)
     expect(join.publicKey).toMatch(/^age1/)
@@ -121,8 +125,11 @@ test.describe(`multi-device ${providerLabel} vault`, () => {
       target,
       (snapshot) => snapshot.joinEntries.length === 1,
     )
-    expect(yaml.joinEntries[0].deviceId).toBe(join.deviceId)
-    expect(yaml.joinEntries[0].publicKey).toBe(join.publicKey)
+    const [yamlJoin] = yaml.joinEntries
+    if (!yamlJoin)
+      throw new Error('the remote vault must contain the join request')
+    expect(yamlJoin.deviceId).toBe(join.deviceId)
+    expect(yamlJoin.publicKey).toBe(join.publicKey)
   })
 
   test('device A sees pending join after manual vault refresh', async () => {
@@ -132,6 +139,7 @@ test.describe(`multi-device ${providerLabel} vault`, () => {
         (snapshot) => snapshot.joinEntries.length === 1,
       )
     ).joinEntries[0]
+    if (!join) throw new Error('the remote vault must contain the join request')
 
     await triggerVaultSyncRefresh(deviceA)
     await expect(deviceA.getByTestId('vault-last-sync')).toContainText(
@@ -148,6 +156,7 @@ test.describe(`multi-device ${providerLabel} vault`, () => {
         (snapshot) => snapshot.joinEntries.length === 1,
       )
     ).joinEntries[0]
+    if (!join) throw new Error('the remote vault must contain the join request')
 
     await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
@@ -164,7 +173,11 @@ test.describe(`multi-device ${providerLabel} vault`, () => {
   })
 
   test('device B unlocks and reads genesis secret', async () => {
-    await waitForJoinerVaultReady(deviceB, target)
+    await waitForJoinerVaultReady({
+      page: deviceB,
+      target,
+      testInfo: test.info(),
+    })
     await assertVaultReady(deviceB)
 
     await waitForSecretOnDevice(deviceB, genesisSecretKey, target)
@@ -227,6 +240,7 @@ test.describe(`multi-device approve from settings (${providerLabel})`, () => {
     const join = target.stub
       ? await sendJoinRequestLocalE2e(deviceB, target.stub)
       : await sendJoinRequest(deviceB, target.pat, target.repoName, target.stub)
+    if (!join) throw new Error('the joining device must publish a join request')
 
     await triggerVaultSyncRefresh(deviceA)
     await waitForPendingJoinBanner(deviceA, join.deviceId)
@@ -237,7 +251,11 @@ test.describe(`multi-device approve from settings (${providerLabel})`, () => {
     expect(enrolledYaml.authPkIds).toHaveLength(2)
     expect(enrolledYaml.memberPkIds).toHaveLength(2)
 
-    await waitForJoinerVaultReady(deviceB, target)
+    await waitForJoinerVaultReady({
+      page: deviceB,
+      target,
+      testInfo: test.info(),
+    })
     await assertVaultReady(deviceB)
   })
 })
@@ -272,6 +290,7 @@ test.describe(`multi-device join background sync (${providerLabel})`, () => {
       target.repoName,
       target.stub,
     )
+    if (!join) throw new Error('the joining device must publish a join request')
 
     await expect
       .poll(
@@ -279,18 +298,12 @@ test.describe(`multi-device join background sync (${providerLabel})`, () => {
           if (await deviceA.getByTestId('pending-joins-banner').isVisible()) {
             return true
           }
+          await deviceA.evaluate(refreshJoinerVaultOnLoginGate, {
+            freshness: ProviderSyncFreshness.Forced,
+            authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
+          })
           await deviceA.evaluate(async () => {
-            const vault = (
-              window as Window & {
-                __nookVault?: {
-                  syncFromStorage?: (opts?: {
-                    force?: boolean
-                  }) => Promise<void>
-                  refreshPendingJoinsFromProviders?: () => Promise<void>
-                }
-              }
-            ).__nookVault
-            await vault?.syncFromStorage?.({ force: true })
+            const vault = window.__nookVault
             await vault?.refreshPendingJoinsFromProviders?.()
           })
           return deviceA.getByTestId('pending-joins-banner').isVisible()

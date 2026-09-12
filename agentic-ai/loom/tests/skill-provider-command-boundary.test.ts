@@ -1,47 +1,61 @@
 import { expect, test } from 'bun:test';
+
 import {
-  analyzeShellCommands,
   type ShellCommandInspection,
+  SkillProviderCommandBoundaryScenario,
 } from './skill-provider-command-boundary.ts';
+
 import {
   AUDITED_SOURCE_SEAMS,
-  isAuditedSource,
   type AuditedSourceRequest,
+  SkillProviderSourcedSeamsScenario,
 } from './skill-provider-sourced-seams.ts';
+
+export class SkillProviderCommandBoundaryFixture {
+  private constructor(private readonly request: string) {}
+
+  static inspectShell(source: string) {
+    return new SkillProviderCommandBoundaryFixture(source).execute();
+  }
+
+  private execute() {
+    const source = this.request;
+    return SkillProviderCommandBoundaryFixture.inspectScript([source, false]);
+  }
+
+  static inspectScript([source, sourcePath]: readonly [
+    string,
+    string | false,
+  ]) {
+    const inspection: ShellCommandInspection = {
+      positionalArguments: false,
+      source,
+      sourcePath,
+    };
+    return SkillProviderCommandBoundaryScenario.analyzeShellCommands(
+      inspection,
+    );
+  }
+
+  static inspectProtected(source: string) {
+    const analysis = SkillProviderCommandBoundaryFixture.inspectShell(source);
+    if (
+      analysis.launches.some(
+        (launch) =>
+          launch.specifier.includes('.cortex') &&
+          launch.specifier.includes('dynamic-skills') &&
+          launch.specifier.includes('/scripts/'),
+      )
+    )
+      throw new Error('Protected executable-skill launch.');
+    return analysis;
+  }
+}
 
 const PROTECTED =
   '.cortex/teams/ai/dynamic-skills/example-skill/scripts/src/cli.ts';
+
 const PROTECTED_ROOT = PROTECTED.slice(0, PROTECTED.lastIndexOf('/'));
-
-function inspectShell(source: string) {
-  return inspectScript([source, false]);
-}
-
-function inspectScript([source, sourcePath]: readonly [
-  string,
-  string | false,
-]) {
-  const inspection: ShellCommandInspection = {
-    positionalArguments: false,
-    source,
-    sourcePath,
-  };
-  return analyzeShellCommands(inspection);
-}
-
-function inspectProtected(source: string) {
-  const analysis = inspectShell(source);
-  if (
-    analysis.launches.some(
-      (launch) =>
-        launch.specifier.includes('.cortex') &&
-        launch.specifier.includes('dynamic-skills') &&
-        launch.specifier.includes('/scripts/'),
-    )
-  )
-    throw new Error('Protected executable-skill launch.');
-  return analysis;
-}
 
 test('rejects every protected runtime construction and masked launch', () => {
   const fixtures = [
@@ -63,24 +77,35 @@ test('rejects every protected runtime construction and masked launch', () => {
     'node --conditions="$MODE" scripts/facade.ts',
   ];
   for (const source of fixtures)
-    expect(() => inspectProtected(source), source).toThrow();
+    expect(
+      () => SkillProviderCommandBoundaryFixture.inspectProtected(source),
+      source,
+    ).toThrow();
   for (const source of [
     `${'command '.repeat(33)}bun scripts/catalog.ts`,
     `${'env '.repeat(32)}bun scripts/catalog.ts`,
   ])
-    expect(() => inspectShell(source), source).toThrow();
+    expect(
+      () => SkillProviderCommandBoundaryFixture.inspectShell(source),
+      source,
+    ).toThrow();
   for (const source of [`env -S 'bun ${PROTECTED}'`])
-    expect(() => inspectShell(source), source).toThrow(
-      'Unsupported env option',
-    );
+    expect(
+      () => SkillProviderCommandBoundaryFixture.inspectShell(source),
+      source,
+    ).toThrow('Unsupported env option');
 });
 
 test('enforces UTF-8 source and token bounds before classification', () => {
-  expect(() => inspectShell(`#${'a'.repeat(65_535)}`)).not.toThrow();
-  expect(() => inspectShell(`#${'a'.repeat(65_536)}`)).toThrow(
-    'UTF-8 byte bound',
-  );
-  expect(() => inspectShell('word '.repeat(4_097))).toThrow('token count');
+  expect(() =>
+    SkillProviderCommandBoundaryFixture.inspectShell(`#${'a'.repeat(65_535)}`),
+  ).not.toThrow();
+  expect(() =>
+    SkillProviderCommandBoundaryFixture.inspectShell(`#${'a'.repeat(65_536)}`),
+  ).toThrow('UTF-8 byte bound');
+  expect(() =>
+    SkillProviderCommandBoundaryFixture.inspectShell('word '.repeat(4_097)),
+  ).toThrow('token count');
 });
 
 test('preserves shell execution semantics around state and branches', () => {
@@ -97,7 +122,10 @@ test('preserves shell execution semantics around state and branches', () => {
     `true && set -- ${PROTECTED}; bun "$1"`,
     `ROOT=scripts; true && ROOT=${PROTECTED_ROOT}; bun "$ROOT/cli.ts"`,
   ])
-    expect(() => inspectProtected(source), source).toThrow();
+    expect(
+      () => SkillProviderCommandBoundaryFixture.inspectProtected(source),
+      source,
+    ).toThrow();
 });
 
 test('rejects indirect executable shell input', () => {
@@ -109,7 +137,10 @@ test('rejects indirect executable shell input', () => {
     `trap 'bun ${PROTECTED}' EXIT`,
     `PATH=${PROTECTED_ROOT}:$PATH bun scripts/safe.ts`,
   ])
-    expect(() => inspectProtected(source), source).toThrow();
+    expect(
+      () => SkillProviderCommandBoundaryFixture.inspectProtected(source),
+      source,
+    ).toThrow();
 });
 
 test('shell runtimes reject redirected stdin without classifying lexical data', () => {
@@ -121,9 +152,10 @@ test('shell runtimes reject redirected stdin without classifying lexical data', 
     "bash <<< 'bun scripts/facade.ts'",
     "printf '%s' 'bun scripts/facade.ts' | bash --",
   ])
-    expect(() => inspectShell(source), source).toThrow(
-      /(?:stdin redirection|pipeline input)/u,
-    );
+    expect(
+      () => SkillProviderCommandBoundaryFixture.inspectShell(source),
+      source,
+    ).toThrow(/(?:stdin redirection|pipeline input)/u);
   for (const source of [
     "bash '<' scripts/literal.sh",
     "echo 'bash < scripts/facade.sh'",
@@ -131,7 +163,10 @@ test('shell runtimes reject redirected stdin without classifying lexical data', 
     'cat < scripts/input.txt',
     'bash 1<scripts/not-stdin.txt',
   ])
-    expect(() => inspectShell(source), source).not.toThrow();
+    expect(
+      () => SkillProviderCommandBoundaryFixture.inspectShell(source),
+      source,
+    ).not.toThrow();
 });
 
 test('accepts bounded static shell structures', () => {
@@ -142,19 +177,29 @@ test('accepts bounded static shell structures', () => {
     "bash <<'EOF'\necho ok\nEOF",
     'while read -r value; do echo "$value"; done < <(printf ok)',
   ])
-    expect(() => inspectProtected(source), source).not.toThrow();
+    expect(
+      () => SkillProviderCommandBoundaryFixture.inspectProtected(source),
+      source,
+    ).not.toThrow();
 });
 
 test('rejects dynamic shell options before a static script target', () => {
-  expect(() => inspectShell('bash $OPTS scripts/facade.bash')).toThrow(
-    'Dynamic shell runtime option construction is forbidden.',
-  );
-  expect(() => inspectShell('bash "$OPTS"')).not.toThrow();
+  expect(() =>
+    SkillProviderCommandBoundaryFixture.inspectShell(
+      'bash $OPTS scripts/facade.bash',
+    ),
+  ).toThrow('Dynamic shell runtime option construction is forbidden.');
+  expect(() =>
+    SkillProviderCommandBoundaryFixture.inspectShell('bash "$OPTS"'),
+  ).not.toThrow();
 });
 
 test('accepts quoted dynamic Task targets as data arguments', () => {
   for (const source of ['task "$TASK_NAME"', 'go-task "$TASK_NAME"'])
-    expect(() => inspectShell(source), source).not.toThrow();
+    expect(
+      () => SkillProviderCommandBoundaryFixture.inspectShell(source),
+      source,
+    ).not.toThrow();
 });
 
 test('closes the exact-head shell review batch', () => {
@@ -194,21 +239,34 @@ test('closes the exact-head shell review batch', () => {
     `bun ".cortex/teams/ai/dynamic-skills/example-skill/"scr?pts/src/cli.ts`,
     `npm exec -- bun ${PROTECTED}`,
   ])
-    expect(() => inspectProtected(source), source).toThrow();
+    expect(
+      () => SkillProviderCommandBoundaryFixture.inspectProtected(source),
+      source,
+    ).toThrow();
   expect(() =>
-    inspectShell('ROOT=scripts; cd "$ROOT"; bun safe.ts'),
+    SkillProviderCommandBoundaryFixture.inspectShell(
+      'ROOT=scripts; cd "$ROOT"; bun safe.ts',
+    ),
   ).not.toThrow();
-  expect(() => inspectShell('npm exec -- bun scripts/safe.ts')).toThrow(
-    'Unsupported npm exec command form',
-  );
-  expect(() => inspectShell('cd "$RESEARCH_DIR"; echo ok')).not.toThrow();
   expect(() =>
-    inspectShell(
+    SkillProviderCommandBoundaryFixture.inspectShell(
+      'npm exec -- bun scripts/safe.ts',
+    ),
+  ).toThrow('Unsupported npm exec command form');
+  expect(() =>
+    SkillProviderCommandBoundaryFixture.inspectShell(
+      'cd "$RESEARCH_DIR"; echo ok',
+    ),
+  ).not.toThrow();
+  expect(() =>
+    SkillProviderCommandBoundaryFixture.inspectShell(
       'test "$(unzip -Z1 "$zip_name" | grep -c "^manifest.json$")" -eq 1',
     ),
   ).not.toThrow();
   expect(() =>
-    inspectShell('[ -n "$(git status --porcelain)" ]'),
+    SkillProviderCommandBoundaryFixture.inspectShell(
+      '[ -n "$(git status --porcelain)" ]',
+    ),
   ).not.toThrow();
   for (const seam of AUDITED_SOURCE_SEAMS) {
     const sourceRequest: AuditedSourceRequest = {
@@ -216,28 +274,36 @@ test('closes the exact-head shell review batch', () => {
       sourcePath: seam.sourcePath,
       targetPath: seam.targetPath,
     };
-    expect(isAuditedSource(sourceRequest), seam.sourcePath).toBeTrue();
+    expect(
+      SkillProviderSourcedSeamsScenario.isAuditedSource(sourceRequest),
+      seam.sourcePath,
+    ).toBeTrue();
     const mismatchedRequest: AuditedSourceRequest = {
       ...sourceRequest,
       targetPath: `other/${seam.targetPath}`,
     };
-    expect(isAuditedSource(mismatchedRequest), seam.sourcePath).toBeFalse();
+    expect(
+      SkillProviderSourcedSeamsScenario.isAuditedSource(mismatchedRequest),
+      seam.sourcePath,
+    ).toBeFalse();
   }
   const hostedTest =
     'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.test.sh';
   expect(() =>
-    inspectScript([
+    SkillProviderCommandBoundaryFixture.inspectScript([
       'SCRIPT_DIR=nook-app/nook-web/nook-web-extension/scripts; source "$SCRIPT_DIR/hosted-extension.sh"',
       hostedTest,
     ]),
   ).not.toThrow();
   expect(() =>
-    inspectScript([
+    SkillProviderCommandBoundaryFixture.inspectScript([
       `cd ${PROTECTED_ROOT}; source ./hosted-extension.sh`,
       hostedTest,
     ]),
   ).toThrow('Unsupported sourced shell execution');
   expect(() =>
-    inspectShell('env TOKEN="${DYNAMIC}" true; sed -E "s/\\x1b\\[[0-9;]*m//g"'),
+    SkillProviderCommandBoundaryFixture.inspectShell(
+      'env TOKEN="${DYNAMIC}" true; sed -E "s/\\x1b\\[[0-9;]*m//g"',
+    ),
   ).not.toThrow();
 });

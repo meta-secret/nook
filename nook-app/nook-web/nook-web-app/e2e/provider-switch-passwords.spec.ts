@@ -15,12 +15,16 @@ import {
   installOauthFileRemoteForLocalE2e,
   UI_TIMEOUT_MS,
 } from './helpers'
-import { createSyncTarget, installSyncRemote } from './sync-provider'
+import {
+  createSyncTarget,
+  E2eSyncProviderId,
+  installSyncRemote,
+} from './sync-provider'
 
 test.describe('unified vault backup passwords with sync provider', () => {
   test.describe.configure({ mode: 'serial' })
 
-  const target = createSyncTarget('', 'provider-switch')
+  const target = createSyncTarget('', 'provider-switch', E2eSyncProviderId.File)
 
   test('login gate keeps backup passwords after adding sync providers', async ({
     page,

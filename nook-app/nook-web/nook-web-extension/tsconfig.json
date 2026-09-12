@@ -1,16 +1,15 @@
 {
-  "extends": "../nook-web-app/node_modules/@tsconfig/svelte/tsconfig.json",
+  "extends": [
+    "../nook-web-app/node_modules/@tsconfig/svelte/tsconfig.json",
+    "../tsconfig.safety.json"
+  ],
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "target": "ES2023",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "strict": true,
-    "noEmit": true,
     "skipLibCheck": true,
-    "types": ["svelte"],
-    "allowJs": true,
-    "checkJs": false,
+    "types": ["svelte", "chrome"],
     "moduleDetection": "force",
     "noUnusedLocals": true,
     "noUnusedParameters": true
@@ -22,5 +21,13 @@
     "../nook-web-shared/src/components/NookIcon.svelte",
     "../nook-web-shared/src/extension/**/*.ts",
     "../nook-web-shared/src/vault-app/lib/nook-wasm/**/*.d.ts"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/dist-prod/**",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm-*",
+    "../nook-web-shared/src/extension/nook-companion-wasm"
   ]
 }

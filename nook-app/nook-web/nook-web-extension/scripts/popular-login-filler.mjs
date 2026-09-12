@@ -1,4 +1,5 @@
 /** Large filler set: brand slug + apex host → research template by sector. */
+/** @param {string} sector */
 function sectorTemplate(sector) {
   switch (sector) {
     case 'bank':
@@ -34,6 +35,7 @@ function sectorTemplate(sector) {
   }
 }
 
+/** @param {string} name */
 function slugify(name) {
   return name
     .toLowerCase()
@@ -43,6 +45,7 @@ function slugify(name) {
 }
 
 /** Programmatic expansion to reach exactly 1000 unique ids. */
+/** @param {Set<string>} existingIds */
 export function buildFiller(existingIds) {
   /** @type {Array<[string,string,string,string,string[],string]>} */
   const out = []
@@ -550,6 +553,7 @@ export function buildFiller(existingIds) {
     'Godot Cloud',
     'GameMaker',
   ]
+  /** @type {Array<[string, string[]]>} */
   const sectors = [
     ['bank', banks],
     ['saas', saas],
@@ -575,7 +579,8 @@ export function buildFiller(existingIds) {
         id = `${id}-${n}`
       }
       // Prefer realistic login URL shape; research-only host when unknown.
-      const apex = id.includes('-') ? `${id.split('-')[0]}.com` : `${id}.com`
+      const [apexLabel = id] = id.split('-')
+      const apex = id.includes('-') ? `${apexLabel}.com` : `${id}.com`
       const loginUrl = `https://www.${apex}/login`
       out.push([id, name, sector, loginUrl, [apex], sectorTemplate(sector)])
       n += 1

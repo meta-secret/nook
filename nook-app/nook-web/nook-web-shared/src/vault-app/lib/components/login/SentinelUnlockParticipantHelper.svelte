@@ -1,6 +1,6 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { onMount } from 'svelte'
+  import { untrack } from 'svelte'
   import { Copy, KeyRound, RefreshCw, Users } from '@lucide/svelte'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -10,10 +10,7 @@
     GenesisDeliverySelectionKind,
     type GenesisDeliverySelection,
   } from './sentinel-unlock-participant-state'
-  import {
-    createSentinelUnlockResponse,
-    listSentinelStoredDeliveries,
-  } from '$lib/vault/sentinel-unlock'
+  import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
 
   let {
     vault,
@@ -28,6 +25,7 @@
   } = $props()
 
   let actionBusy = $state(false)
+  let automaticScanStarted = $state(false)
   let loaded = $state(false)
   let open = $state(false)
   let selectedDelivery = $state<GenesisDeliverySelection>({
@@ -36,6 +34,19 @@
   let request = $state('')
   let response = $state('')
   let copied = $state(false)
+  let deliveryRefreshInFlight = false
+
+  function selectDelivery(value: string): void {
+    selectedDelivery =
+      value === GenesisDeliverySelectionKind.NotSelected
+        ? { kind: GenesisDeliverySelectionKind.NotSelected }
+        : { kind: GenesisDeliverySelectionKind.Selected, storeId: value }
+  }
+
+  enum DeliveryRefreshOrigin {
+    Automatic = 'automatic',
+    Requested = 'requested',
+  }
 
   const visible = $derived(
     showWhenEmpty || (loaded && vault.sentinelStoredDeliveries.length > 0),
@@ -52,13 +63,41 @@
     if (expanded) open = true
   })
 
-  onMount(() => {
-    void refreshDeliveries()
+  $effect(() => {
+    if (
+      automaticScanStarted ||
+      !expanded ||
+      !vault.deviceProtectionReady ||
+      vault.isInitializing ||
+      vault.isVerifying ||
+      vault.isSyncActivityVisible
+    )
+      return
+    automaticScanStarted = true
+    untrack(() => void refreshDeliveries(DeliveryRefreshOrigin.Automatic))
   })
 
-  async function refreshDeliveries() {
+  async function refreshDeliveries(
+    origin: DeliveryRefreshOrigin = DeliveryRefreshOrigin.Requested,
+  ) {
+    if (deliveryRefreshInFlight) return
+    deliveryRefreshInFlight = true
     try {
-      const deliveries = await listSentinelStoredDeliveries(vault)
+      if (origin === DeliveryRefreshOrigin.Automatic) {
+        await vault.waitForStorageChain()
+        if (!expanded || vault.isSyncActivityVisible) {
+          automaticScanStarted = false
+          return
+        }
+      }
+      const listed = await new SentinelUnlockActions(
+        vault,
+      ).listSentinelStoredDeliveries()
+      if (listed.isErr()) {
+        vault.errorMsg = vault.t(listed.error.translationKey)
+        return
+      }
+      const deliveries = listed.value
       if (selectedDelivery.kind !== GenesisDeliverySelectionKind.Selected) {
         const firstDelivery = deliveries[0]
         selectedDelivery = firstDelivery
@@ -81,9 +120,8 @@
             }
           : { kind: GenesisDeliverySelectionKind.NotSelected }
       }
-    } catch {
-      // A missing device identity or empty list simply hides the first-vault helper.
     } finally {
+      deliveryRefreshInFlight = false
       loaded = true
     }
   }
@@ -99,18 +137,19 @@
     vault.errorMsg = ''
     try {
       const responseRequest: Parameters<
-        typeof createSentinelUnlockResponse
+        SentinelUnlockActions['createSentinelUnlockResponse']
       >[0] = {
-        state: vault,
         storeId,
         request: payload,
       }
-      response = await createSentinelUnlockResponse(responseRequest)
-    } catch (error) {
-      vault.errorMsg =
-        error instanceof Error
-          ? vault.resolveErrorMessage(error.message)
-          : vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockFailed)
+      const created = await new SentinelUnlockActions(
+        vault,
+      ).createSentinelUnlockResponse(responseRequest)
+      if (created.isErr()) {
+        vault.errorMsg = vault.t(created.error.translationKey)
+        return
+      }
+      response = created.value
     } finally {
       actionBusy = false
     }
@@ -187,15 +226,7 @@
               GenesisDeliverySelectionKind.Selected
                 ? selectedDelivery.storeId
                 : GenesisDeliverySelectionKind.NotSelected}
-              onValueChange={(value) => {
-                selectedDelivery =
-                  value === GenesisDeliverySelectionKind.NotSelected
-                    ? { kind: GenesisDeliverySelectionKind.NotSelected }
-                    : {
-                        kind: GenesisDeliverySelectionKind.Selected,
-                        storeId: value,
-                      }
-              }}
+              onValueChange={selectDelivery}
             >
               <Select.Trigger
                 id="sentinel-delivery-select"

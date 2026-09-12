@@ -1,6 +1,9 @@
+/* eslint-disable nook-typed-api/no-raw-object-arguments -- Existing call shapes are preserved for this lint-only fix. */
+import { PasswordFormSummaryObservation } from "./password-form-summary-observation";
 import { companionWasmReady } from "./companion-ready";
 import {
   authentication_advance_control_is_safe,
+  authentication_control_transportable,
   authentication_page_observation_facts_priority,
   authentication_passkey_control_candidate_is_safe,
   looks_like_one_time_code_auto_submit_signal,
@@ -15,104 +18,69 @@ import type {
   AuthenticationUsernameEvidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
-  findPasskeyControls,
-  findOneTimeCodeFields,
-  findPasswordFields,
-  findUsernameFields,
-  hasAutocompleteToken,
-  isAuthUsernameField,
-  localOwnedLoginObservationRoot,
-  ownedObservationIsLocallyBounded,
-  controlAssociatesWithObservation,
-  isLocallyAdjacentToOwnedForm,
-  nearestUnownedAuthContainer,
-  pageHasManualCheckpoint,
-  pageHasPasskeyControl,
   PasskeyControlLookupKind,
   PasswordFormScopeKind,
-  usernameEvidence,
+  passwordFieldDiscovery,
 } from "./password-form-fields";
 import type {
   ControlObservationAssociationRequest,
-  LocalOwnedLoginObservationRootRequest,
   LocalOwnedFormAdjacencyRequest,
   PasskeyControlLookup,
-  PasswordFieldQuery,
   PasswordFormScope,
 } from "./password-form-fields";
 import {
-  associatedAuthenticationForm, AuthenticationSubmissionDestination,
+  AuthenticationSubmissionDestination,
   authenticationAdvanceControlSelector,
-  authenticationFactStringsAreTransportable,
-  authenticationPolicyTextFits,
-  boundAuthenticationControlObservations,
-  countedSemanticSubmitControls,
-  observedFormDestination,
-  observedFormIdentity,
-  clickAdvanceControl,
-  controlDestinationIdentity,
-  controlIsInert,
-  controlLabel,
-  controlMachineIdentity,
-  controlSubmissionMethod,
-  formBlocksCredentialDisclosure,
-  selectedSubmitterBlocksCredentialDisclosure,
-  formSubmissionMethod,
-  FormSubmissionResult, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, PageControlSubmissionMethod,
-  isRenderedControl,
-  observeSubmit,
-  ownedFormIdentity,
+  FormSubmissionResult,
+  MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+  PageControlSubmissionMethod,
   PasswordFormQueryKind,
   semanticSubmitControlSelector,
   type LoginAdvanceControl,
   type FormSubmissionApproval,
   type PasswordFormScopeQuery,
+  authenticationSubmissionControls,
 } from "./password-form-submission-controls";
 import {
-  appendIndependentPasskeyOnlyWorkflows,
-  summarizePasskeyOnlyWorkflowForms,
+  IndependentPasskeyWorkflows,
+  PasskeyOnlyWorkflowSummary,
 } from "./password-form-passkey-only-workflows";
 import {
-  beginLoginCredentialFill,
-  clearLoginCredentials,
-  setNativeInputValue,
-  trackLoginCredentialField,
   type LoginCredentialsFillRequest,
-  LoginCredentialsLookupKind,
-  type LoginCredentialsLookup,
+  passwordFormCredentialInteraction,
 } from "./password-form-field-actions";
 import {
   OwnedAdvanceControlActivationKind,
-  requestApprovedImplicitAuthenticationSubmit,
+  ApprovedImplicitAuthenticationSubmission,
   type ApprovedImplicitAuthenticationSubmitRequest,
   type OwnedAdvanceControlActivation,
   type OwnedAuthenticationControlRequest,
 } from "./password-form-implicit-actuation";
 import {
   emptyPasswordFormSummary,
-  passwordFieldQuery,
+  PasswordFormFieldQuery,
 } from "./password-form-summary-state";
+import {
+  ApprovedPasswordFormKind,
+  CredentialDisclosureRevalidation,
+  type ApprovedPasswordForm,
+} from "./credential-disclosure-revalidation";
+
 export {
-  findOneTimeCodeFields,
-  findPasswordFields,
-  findUsernameFields,
-  findPasskeyControl,
   oneTimeCodeFieldSelectors,
-  pageHasManualCheckpoint,
-  pageHasPasskeyControl,
   PasskeyControlLookupKind,
   PasswordFormScopeKind,
   usernameFieldSelectors,
+  passwordFieldDiscovery,
 } from "./password-form-fields";
+
 export type {
   PasskeyControlLookup,
   PasswordFormScope,
 } from "./password-form-fields";
-export {
-  clearLoginCredentials,
-  fillGeneratedPassword,
-  fillOneTimeCode,
-} from "./password-form-field-actions";
+
+export { passwordFormCredentialInteraction } from "./password-form-field-actions";
+
 export type {
   GeneratedPasswordFillRequest,
   LoginCredentials,
@@ -120,21 +88,29 @@ export type {
   LoginCredentialsLookup,
   OneTimeCodeFillRequest,
 } from "./password-form-field-actions";
+
 export { LoginCredentialsLookupKind } from "./password-form-field-actions";
+
 export {
   FormSubmissionResult,
   PasswordFormQueryKind,
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
+
 void companionWasmReady;
+
 const passkeyControlAbsent =
   "absent" satisfies AuthenticationPasskeyControlObservation;
+
 const passkeyControlPresent =
   "present" satisfies AuthenticationPasskeyControlObservation;
+
 const credentialSubmissionAbsent =
   "absent" satisfies AuthenticationCredentialSubmissionObservation["kind"];
+
 const credentialSubmissionObserved =
   "observed" satisfies AuthenticationCredentialSubmissionObservation["kind"];
+
 export type PasswordFormSummary = {
   passwordFieldCount: number;
   currentPasswordFieldCount: number;
@@ -147,113 +123,22 @@ export type PasswordFormSummary = {
   formCount: number;
   observedAt: number;
 };
+
 export type PasswordFormObservation = {
   root: ParentNode;
   formScope: PasswordFormScope;
   summary: PasswordFormSummary;
 };
+
 type AuthenticationObservationFactsRequest = {
   observation: PasswordFormObservation;
   authenticatorSetupHint: boolean;
   backupCodesHint?: boolean;
   backupCodesCopy?: string;
 };
-type PasswordFormSummaryRequest = PasswordFormScopeQuery;
-export function summarizeRoot(
-  request: PasswordFormSummaryRequest,
-): PasswordFormSummary {
-  const { root } = request;
-  const passwordFields = findPasswordFields(passwordFieldQuery(request));
-  const usernameFields = findUsernameFields(passwordFieldQuery(request));
-  const oneTimeCodeFields = findOneTimeCodeFields(passwordFieldQuery(request));
-  const currentPasswordFieldCount = passwordFields.filter((field) => {
-    const tokenRequest: Parameters<typeof hasAutocompleteToken>[0] = {
-      field,
-      expected: "current-password",
-    };
-    return hasAutocompleteToken(tokenRequest);
-  }).length;
-  const newPasswordFieldCount = passwordFields.filter((field) => {
-    const tokenRequest: Parameters<typeof hasAutocompleteToken>[0] = {
-      field,
-      expected: "new-password",
-    };
-    return hasAutocompleteToken(tokenRequest);
-  }).length;
-  const forms = new Set<HTMLFormElement>();
-  for (const field of [
-    ...passwordFields,
-    ...usernameFields,
-    ...oneTimeCodeFields,
-  ]) {
-    if (field.form) forms.add(field.form);
-  }
-  return {
-    passwordFieldCount: passwordFields.length,
-    currentPasswordFieldCount,
-    newPasswordFieldCount,
-    genericPasswordFieldCount:
-      passwordFields.length - currentPasswordFieldCount - newPasswordFieldCount,
-    usernameFieldCount: usernameFields.length,
-    oneTimeCodeFieldCount: oneTimeCodeFields.length,
-    manualCheckpointPresent: pageHasManualCheckpoint(root),
-    passkeyControlPresent: pageHasPasskeyControl(root),
-    formCount: forms.size,
-    observedAt: Date.now(),
-  };
-}
-export function summarizePasswordForms(): PasswordFormSummary {
-  const request: PasswordFormSummaryRequest = {
-    kind: PasswordFormQueryKind.Root,
-    root: document,
-  };
-  return summarizeRoot(request);
-}
-function passwordFormPriority(observation: PasswordFormObservation): number {
-  const factsRequest: AuthenticationObservationFactsRequest = {
-    observation,
-    authenticatorSetupHint: false,
-    backupCodesCopy: "",
-  };
-  return authentication_page_observation_facts_priority(
-    authenticationPageObservationFacts(factsRequest),
-  );
-}
-function scopedControlRoot({
-  root,
-  formScope,
-}: PasswordFormObservation): ParentNode {
-  return formScope.kind === PasswordFormScopeKind.Owned &&
-    (root === formScope.owner.ownerDocument || root === formScope.owner)
-    ? formScope.owner.ownerDocument
-    : root;
-}
-function scopedAdvanceControls(
-  observation: PasswordFormObservation,
-): LoginAdvanceControl[] {
-  return Array.from(
-    scopedControlRoot(observation).querySelectorAll<HTMLElement>(
-      authenticationAdvanceControlSelector,
-    ),
-  ).filter((control): control is LoginAdvanceControl => {
-    if (
-      !(control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement)
-    ) return false;
-    return observation.formScope.kind === PasswordFormScopeKind.Owned
-      ? control.form === observation.formScope.owner
-      : !control.form;
-  });
-}
+
 type SemanticSubmitControlPair = [LoginAdvanceControl, LoginAdvanceControl];
-function semanticSubmitControlsFirst(
-  ...pair: SemanticSubmitControlPair
-): number {
-  return (
-    Number(pair[1].matches(semanticSubmitControlSelector)) -
-    Number(pair[0].matches(semanticSubmitControlSelector))
-  );
-}
+
 type PageControlObservationRequest = {
   observation: PasswordFormObservation;
   control: HTMLElement;
@@ -261,740 +146,831 @@ type PageControlObservationRequest = {
   semanticSubmitControlCount: number;
   explicitlyLocallyScoped?: boolean;
 };
-function pageControlObservation({
-  observation,
-  control,
-  authenticationUsername,
-  explicitlyLocallyScoped = false,
-  semanticSubmitControlCount,
-}: PageControlObservationRequest): AuthenticationAdvanceControlObservation {
-  const semanticSubmit = control.matches(semanticSubmitControlSelector);
-  const controlForm = associatedAuthenticationForm(control);
-  const owned = controlForm.kind === PasswordFormScopeKind.Owned;
-  const destinationRequest: Parameters<typeof controlDestinationIdentity>[0] = {
-    control,
-    formScope: observation.formScope,
+
+type CompleteAuthenticationAdvanceControlObservation =
+  AuthenticationAdvanceControlObservation & {
+    readonly submissionMethod: PageControlSubmissionMethod;
   };
-  const unownedIdentityRequest: Parameters<typeof observedFormIdentity>[0] = {
-    root: observation.root,
-    formScope: observation.formScope,
-  };
-  return {
-    actionability: controlIsInert(control) ? "inert" : "actionable",
-    ownership: owned
-      ? "owned-form"
-      : explicitlyLocallyScoped ||
-          (observation.root !== document && observation.root.contains(control))
-        ? "locally-scoped"
-        : "unowned",
-    semantics: semanticSubmit ? "semantic-submit" : "activation",
-    authenticationUsername,
-    passwordFieldCount: observation.summary.passwordFieldCount,
-    newPasswordFieldCount: observation.summary.newPasswordFieldCount,
-    oneTimeCodeFieldCount: observation.summary.oneTimeCodeFieldCount,
-    semanticSubmitControlCount,
-    sourceOrigin: location.origin,
-    formIdentity: owned
-      ? ownedFormIdentity(controlForm.owner)
-      : observedFormIdentity(unownedIdentityRequest),
-    destinationIdentity: controlDestinationIdentity(destinationRequest),
-    label: controlLabel(control),
-    machineIdentity: controlMachineIdentity(control),
-    submissionMethod: controlSubmissionMethod(control), submissionDestinationSource: AuthenticationSubmissionDestination.source(control),
-  };
-}
-function transportableControlObservation(
-  request: PageControlObservationRequest,
-): AuthenticationAdvanceControlObservation[] {
-  const observation = pageControlObservation(request);
-  if (observation.submissionMethod === PageControlSubmissionMethod.Dialog) return [];
-  if (
-    observation.submissionMethod === PageControlSubmissionMethod.Get &&
-    request.observation.summary.usernameFieldCount !== 1
-  )
-    return [];
-  return authenticationFactStringsAreTransportable([
-    observation.sourceOrigin,
-    observation.formIdentity,
-    observation.destinationIdentity,
-    observation.label,
-    controlMachineIdentity(request.control),
-  ])
-    ? [observation]
-    : [];
-}
+
 type PasskeyCandidateSafetyRequest = {
   candidate: { control: HTMLElement; explicitlyMarked: boolean };
   observation: PasswordFormObservation;
 };
 
-function passkeyCandidateIsRustSafe({
-  candidate,
-  observation,
-}: PasskeyCandidateSafetyRequest): boolean {
-  const { control, explicitlyMarked } = candidate;
-  if (!isRenderedControl(control)) return false;
-  const adjacencyRequest: LocalOwnedFormAdjacencyRequest | false =
-    observation.formScope.kind === PasswordFormScopeKind.Owned
-      ? { control, owner: observation.formScope.owner }
-      : false;
-  const factsRequest: PageControlObservationRequest = {
+export type LoginFormSubmissionRequest = PasswordFormScopeQuery & {
+  submissionApproval?: FormSubmissionApproval;
+};
+
+type OwnedAdvanceControlRequest =
+  OwnedAuthenticationControlRequest<LoginFormSubmissionRequest>;
+
+/** Owns this browser host’s resources and interaction lifecycle. */
+class PasswordFormInteraction extends PasswordFormSummaryObservation {
+  private passwordFormPriority(observation: PasswordFormObservation): number {
+    return authentication_page_observation_facts_priority(
+      this.authenticationPageObservationFacts({
+        observation,
+        authenticatorSetupHint: false,
+        backupCodesCopy: "",
+      }),
+    );
+  }
+
+  private scopedControlRoot({
+    root,
+    formScope,
+  }: PasswordFormObservation): ParentNode {
+    return formScope.kind === PasswordFormScopeKind.Owned &&
+      (root === formScope.owner.ownerDocument || root === formScope.owner)
+      ? formScope.owner.ownerDocument
+      : root;
+  }
+
+  private scopedAdvanceControls(
+    observation: PasswordFormObservation,
+  ): LoginAdvanceControl[] {
+    return Array.from(
+      this.scopedControlRoot(observation).querySelectorAll<HTMLElement>(
+        authenticationAdvanceControlSelector,
+      ),
+    ).filter((control): control is LoginAdvanceControl => {
+      if (!(
+        control instanceof HTMLButtonElement ||
+        control instanceof HTMLInputElement
+      ))
+        return false;
+      return observation.formScope.kind === PasswordFormScopeKind.Owned
+        ? control.form === observation.formScope.owner
+        : !control.form;
+    });
+  }
+
+  private semanticSubmitControlsFirst(
+    ...pair: SemanticSubmitControlPair
+  ): number {
+    return (
+      Number(pair[1].matches(semanticSubmitControlSelector)) -
+      Number(pair[0].matches(semanticSubmitControlSelector))
+    );
+  }
+
+  private pageControlObservation({
     observation,
     control,
-    authenticationUsername: usernameEvidence(observation),
-    semanticSubmitControlCount: countedSemanticSubmitControls(
-      scopedAdvanceControls(observation),
-    ),
-    explicitlyLocallyScoped:
-      (observation.root === document &&
-        observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
-      Boolean(
-        adjacencyRequest && isLocallyAdjacentToOwnedForm(adjacencyRequest),
-      ),
-  };
-  const [transported] = transportableControlObservation(factsRequest);
-  if (!transported) return false;
-  const evidence: AuthenticationDetailedPasskeyControlCandidateObservation = {
-    kind: explicitlyMarked ? "explicitly-marked" : "labeled",
-    observation: transported,
-  };
-  return authentication_passkey_control_candidate_is_safe(evidence);
-}
+    authenticationUsername,
+    explicitlyLocallyScoped = false,
+    semanticSubmitControlCount,
+  }: PageControlObservationRequest): CompleteAuthenticationAdvanceControlObservation {
+    const semanticSubmit = control.matches(semanticSubmitControlSelector);
+    const controlForm =
+      authenticationSubmissionControls.associatedAuthenticationForm(control);
+    const owned = controlForm.kind === PasswordFormScopeKind.Owned;
 
-export function findWorkflowPasskeyControl(
-  observation: PasswordFormObservation,
-): PasskeyControlLookup {
-  const summaryRequest: Parameters<typeof summarizeRoot>[0] = {
-    kind: PasswordFormQueryKind.Scoped,
-    root: observation.root,
-    formScope: observation.formScope,
-  };
-  const liveObservation: PasswordFormObservation = {
-    ...observation,
-    summary: summarizeRoot(summaryRequest),
-  };
-  const candidate = findPasskeyControls(
-    scopedControlRoot(liveObservation),
-  ).find((passkeyCandidate) => {
-    const associationRequest: ControlObservationAssociationRequest = {
-      control: passkeyCandidate.control,
-      formScope: liveObservation.formScope,
-      root: liveObservation.root,
-    };
-    const safetyRequest: PasskeyCandidateSafetyRequest = {
-      candidate: passkeyCandidate,
-      observation: liveObservation,
-    };
-    return (
-      controlAssociatesWithObservation(associationRequest) &&
-      passkeyCandidateIsRustSafe(safetyRequest)
-    );
-  });
-  return candidate
-    ? { kind: PasskeyControlLookupKind.Found, control: candidate.control }
-    : { kind: PasskeyControlLookupKind.Absent };
-}
-
-export function authenticationPageObservationFacts({
-  observation,
-  authenticatorSetupHint,
-  backupCodesHint = false,
-  backupCodesCopy,
-}: AuthenticationObservationFactsRequest): AuthenticationPageObservationFacts {
-  const controlRoot = scopedControlRoot(observation);
-  const authenticationUsername = usernameEvidence(observation);
-  const advanceControls = scopedAdvanceControls(observation).sort(
-    semanticSubmitControlsFirst,
-  );
-  const semanticSubmitControlCount = Math.min(
-    advanceControls.filter((control) => control.matches(semanticSubmitControlSelector)).length,
-    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
-  );
-  const passkeyControls = findPasskeyControls(controlRoot).filter(
-    ({ control }) => {
-      const associationRequest: ControlObservationAssociationRequest = {
-        control,
-        formScope: observation.formScope,
-        root: observation.root,
-      };
-      return controlAssociatesWithObservation(associationRequest);
-    },
-  );
-  const oneTimeCodeQuery: Parameters<typeof findOneTimeCodeFields>[0] = {
-    root: observation.root,
-    formScope: observation.formScope,
-  };
-  const oneTimeCodeBoundRequest: Parameters<
-    typeof boundAuthenticationControlObservations<string>
-  >[0] = {
-    candidates: findOneTimeCodeFields(oneTimeCodeQuery).flatMap((field) =>
-      ["oninput", "onchange"].flatMap((attribute) => {
-        const handler = field.getAttribute(attribute);
-        if (typeof handler !== "string") return [];
-        const signal = `${attribute}=${handler}`;
-        return authenticationPolicyTextFits(signal) ? [signal] : [];
-      }),
-    ),
-    isPreferred: (signal) =>
-      looks_like_one_time_code_auto_submit_signal(signal),
-  };
-  const oneTimeCodeHandlerSignals = boundAuthenticationControlObservations(
-    oneTimeCodeBoundRequest,
-  );
-  const passwordFieldQuery: PasswordFieldQuery = {
-    root: observation.root,
-    formScope: observation.formScope,
-  };
-  const passwordFields = findPasswordFields(passwordFieldQuery);
-  const readonlyPasswordFieldCount = passwordFields.filter(
-    (field) => field.readOnly,
-  ).length;
-  let detailedAdvanceControl: AuthenticationPageObservationFacts["detailedAdvanceControl"] =
-    { kind: PasskeyControlLookupKind.Absent };
-  const advanceObservations = advanceControls.flatMap((control) => {
-    const request: PageControlObservationRequest = {
-      observation,
-      control,
+    return {
+      actionability: authenticationSubmissionControls.controlIsInert(control)
+        ? "inert"
+        : "actionable",
+      ownership: owned
+        ? "owned-form"
+        : explicitlyLocallyScoped ||
+            (observation.root !== this.browser.document &&
+              observation.root.contains(control))
+          ? "locally-scoped"
+          : "unowned",
+      semantics: semanticSubmit ? "semantic-submit" : "activation",
       authenticationUsername,
+      passwordFieldCount: observation.summary.passwordFieldCount,
+      newPasswordFieldCount: observation.summary.newPasswordFieldCount,
+      oneTimeCodeFieldCount: observation.summary.oneTimeCodeFieldCount,
       semanticSubmitControlCount,
-    };
-    return transportableControlObservation(request);
-  });
-  const advanceBoundRequest: Parameters<
-    typeof boundAuthenticationControlObservations<
-      (typeof advanceObservations)[number]
-    >
-  >[0] = {
-    candidates: advanceObservations,
-    isPreferred: (candidate) =>
-      candidate.actionability === "actionable" &&
-      authentication_advance_control_is_safe(candidate),
-  };
-  const boundedAdvanceObservations =
-    boundAuthenticationControlObservations(advanceBoundRequest);
-  if (boundedAdvanceObservations.length > 0) {
-    detailedAdvanceControl = {
-      kind: "observed",
-      observations: boundedAdvanceObservations,
+      sourceOrigin: this.browser.location.origin,
+      formIdentity: owned
+        ? authenticationSubmissionControls.ownedFormIdentity(controlForm.owner)
+        : authenticationSubmissionControls.observedFormIdentity({
+            root: observation.root,
+            formScope: observation.formScope,
+          }),
+      destinationIdentity:
+        authenticationSubmissionControls.controlDestinationIdentity({
+          control,
+          formScope: observation.formScope,
+        }),
+      label: authenticationSubmissionControls.controlLabel(control),
+      machineIdentity:
+        authenticationSubmissionControls.controlMachineIdentity(control),
+      submissionMethod:
+        authenticationSubmissionControls.controlSubmissionMethod(control),
+      submissionDestinationSource:
+        AuthenticationSubmissionDestination.source(control),
     };
   }
-  let detailedPasskeyControl: AuthenticationDetailedPasskeyControlObservation =
-    { kind: PasskeyControlLookupKind.Absent };
-  const passkeyCandidates = passkeyControls.flatMap(
-    ({ control, explicitlyMarked }) => {
-      const adjacencyRequest: LocalOwnedFormAdjacencyRequest | false =
-        observation.formScope.kind === PasswordFormScopeKind.Owned
-          ? { control, owner: observation.formScope.owner }
-          : false;
-      const passkeyRequest: PageControlObservationRequest = {
+
+  private transportableControlObservation(
+    request: PageControlObservationRequest,
+  ): AuthenticationAdvanceControlObservation[] {
+    const observation = this.pageControlObservation(request);
+    if (
+      !authentication_control_transportable({
+        submissionMethod: observation.submissionMethod,
+        usernameFieldCount: request.observation.summary.usernameFieldCount,
+      })
+    )
+      return [];
+    return authenticationSubmissionControls.authenticationFactStringsAreTransportable(
+      [
+        observation.sourceOrigin,
+        observation.formIdentity,
+        observation.destinationIdentity,
+        observation.label,
+        authenticationSubmissionControls.controlMachineIdentity(
+          request.control,
+        ),
+      ],
+    )
+      ? [observation]
+      : [];
+  }
+
+  private passkeyCandidateIsRustSafe({
+    candidate,
+    observation,
+  }: PasskeyCandidateSafetyRequest): boolean {
+    const { control, explicitlyMarked } = candidate;
+    if (!authenticationSubmissionControls.isRenderedControl(control))
+      return false;
+    const adjacencyRequest: LocalOwnedFormAdjacencyRequest | false =
+      observation.formScope.kind === PasswordFormScopeKind.Owned
+        ? { control, owner: observation.formScope.owner }
+        : false;
+    const [transported] = this.transportableControlObservation({
+      observation,
+      control,
+      authenticationUsername:
+        passwordFieldDiscovery.usernameEvidence(observation),
+      semanticSubmitControlCount:
+        authenticationSubmissionControls.countedSemanticSubmitControls(
+          this.scopedAdvanceControls(observation),
+        ),
+      explicitlyLocallyScoped:
+        (observation.root === this.browser.document &&
+          observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
+        Boolean(
+          adjacencyRequest &&
+          passwordFieldDiscovery.isLocallyAdjacentToOwnedForm(adjacencyRequest),
+        ),
+    });
+    if (!transported) return false;
+    return authentication_passkey_control_candidate_is_safe({
+      kind: explicitlyMarked ? "explicitly-marked" : "labeled",
+      observation: transported,
+    });
+  }
+
+  findWorkflowPasskeyControl(
+    observation: PasswordFormObservation,
+  ): PasskeyControlLookup {
+    const liveObservation: PasswordFormObservation = {
+      ...observation,
+      summary: this.summarizeRoot({
+        kind: PasswordFormQueryKind.Scoped,
+        root: observation.root,
+        formScope: observation.formScope,
+      }),
+    };
+    const candidate = passwordFieldDiscovery
+      .findPasskeyControls(this.scopedControlRoot(liveObservation))
+      .find((passkeyCandidate) => {
+        const associationRequest: ControlObservationAssociationRequest = {
+          control: passkeyCandidate.control,
+          formScope: liveObservation.formScope,
+          root: liveObservation.root,
+        };
+
+        return (
+          passwordFieldDiscovery.controlAssociatesWithObservation(
+            associationRequest,
+          ) &&
+          this.passkeyCandidateIsRustSafe({
+            candidate: passkeyCandidate,
+            observation: liveObservation,
+          })
+        );
+      });
+    return candidate
+      ? { kind: PasskeyControlLookupKind.Found, control: candidate.control }
+      : { kind: PasskeyControlLookupKind.Absent };
+  }
+
+  authenticationPageObservationFacts({
+    observation,
+    authenticatorSetupHint,
+    backupCodesHint = false,
+    backupCodesCopy,
+  }: AuthenticationObservationFactsRequest): AuthenticationPageObservationFacts {
+    const controlRoot = this.scopedControlRoot(observation);
+    const authenticationUsername =
+      passwordFieldDiscovery.usernameEvidence(observation);
+    const advanceControls = this.scopedAdvanceControls(observation).sort(
+      this.semanticSubmitControlsFirst.bind(this),
+    );
+    const semanticSubmitControlCount = Math.min(
+      advanceControls.filter((control) =>
+        control.matches(semanticSubmitControlSelector),
+      ).length,
+      MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+    );
+    const passkeyControls = passwordFieldDiscovery
+      .findPasskeyControls(controlRoot)
+      .filter(({ control }) => {
+        return passwordFieldDiscovery.controlAssociatesWithObservation({
+          control,
+          formScope: observation.formScope,
+          root: observation.root,
+        });
+      });
+
+    const oneTimeCodeBoundRequest: Parameters<
+      typeof authenticationSubmissionControls.boundAuthenticationControlObservations<string>
+    >[0] = {
+      candidates: passwordFieldDiscovery
+        .findOneTimeCodeFields({
+          root: observation.root,
+          formScope: observation.formScope,
+        })
+        .flatMap((field) =>
+          ["oninput", "onchange"].flatMap((attribute) => {
+            const handler = field.getAttribute(attribute);
+            if (typeof handler !== "string") return [];
+            const signal = `${attribute}=${handler}`;
+            return authenticationSubmissionControls.authenticationPolicyTextFits(
+              signal,
+            )
+              ? [signal]
+              : [];
+          }),
+        ),
+      isPreferred: (signal) =>
+        looks_like_one_time_code_auto_submit_signal(signal),
+    };
+    const oneTimeCodeHandlerSignals =
+      authenticationSubmissionControls.boundAuthenticationControlObservations(
+        oneTimeCodeBoundRequest,
+      );
+    const passwordFields = passwordFieldDiscovery.findPasswordFields({
+      root: observation.root,
+      formScope: observation.formScope,
+    });
+    const readonlyPasswordFieldCount = passwordFields.filter(
+      (field) => field.readOnly,
+    ).length;
+    let detailedAdvanceControl: AuthenticationPageObservationFacts["detailedAdvanceControl"] =
+      { kind: PasskeyControlLookupKind.Absent };
+    const advanceObservations = advanceControls.flatMap((control) => {
+      return this.transportableControlObservation({
         observation,
         control,
         authenticationUsername,
         semanticSubmitControlCount,
-        explicitlyLocallyScoped:
-          (observation.root === document &&
-            observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
-          Boolean(
-            adjacencyRequest && isLocallyAdjacentToOwnedForm(adjacencyRequest),
-          ),
-      };
-      return transportableControlObservation(passkeyRequest).map(
-        (candidateObservation) =>
-          ({
-            kind: explicitlyMarked ? "explicitly-marked" : "labeled",
-            observation: candidateObservation,
-          }) as AuthenticationDetailedPasskeyControlCandidateObservation,
-      );
-    },
-  );
-  const passkeyBoundRequest: Parameters<
-    typeof boundAuthenticationControlObservations<
-      (typeof passkeyCandidates)[number]
-    >
-  >[0] = {
-    candidates: passkeyCandidates,
-    isPreferred: (candidate) =>
-      candidate.observation.actionability === "actionable" &&
-      authentication_passkey_control_candidate_is_safe(candidate),
-    isNextPreferred: (candidate) =>
-      candidate.observation.actionability === "actionable",
-  };
-  const boundedPasskeyCandidates =
-    boundAuthenticationControlObservations(passkeyBoundRequest);
-  if (boundedPasskeyCandidates.length > 0) {
-    detailedPasskeyControl = {
-      kind: "candidates",
-      observation: boundedPasskeyCandidates,
-    };
-  }
-  const contextIdentityRequest: Parameters<typeof observedFormIdentity>[0] = {
-    root: observation.root,
-    formScope: observation.formScope,
-  };
-  const contextFormIdentity = observedFormIdentity(contextIdentityRequest);
-  const contextDestinationIdentity = observedFormDestination(
-    observation.formScope,
-  );
-  const implicitSubmissionAvailable =
-    observation.formScope.kind === PasswordFormScopeKind.Owned &&
-    !ownedObservationIsLocallyBounded(observation) &&
-    !boundedAdvanceObservations.some(
-      (candidate) =>
+      });
+    });
+    const advanceBoundRequest: Parameters<
+      typeof authenticationSubmissionControls.boundAuthenticationControlObservations<
+        (typeof advanceObservations)[number]
+      >
+    >[0] = {
+      candidates: advanceObservations,
+      isPreferred: (candidate) =>
         candidate.actionability === "actionable" &&
         authentication_advance_control_is_safe(candidate),
-    ) &&
-    !advanceControls.some(
-      (control) =>
-        control.matches(semanticSubmitControlSelector) &&
-        !controlIsInert(control),
-    ) &&
-    !(
-      observation.summary.currentPasswordFieldCount +
-        observation.summary.genericPasswordFieldCount +
-        observation.summary.newPasswordFieldCount >
-        0 && formBlocksCredentialDisclosure(observation.formScope.owner)
-    );
-  let credentialSubmission: AuthenticationCredentialSubmissionObservation = {
-    kind: credentialSubmissionAbsent,
-  };
-  const selectedAdvanceObservation = boundedAdvanceObservations[0];
-  const selectedSubmissionMethod = selectedAdvanceObservation?.submissionMethod;
-  if (
-    selectedAdvanceObservation &&
-    selectedAdvanceObservation.actionability === "actionable" &&
-    selectedSubmissionMethod &&
-    selectedSubmissionMethod !== PageControlSubmissionMethod.Absent
-  ) {
-    credentialSubmission = {
-      kind: credentialSubmissionObserved,
-      facts: {
-        actionability: selectedAdvanceObservation.actionability,
-        method: selectedSubmissionMethod,
-        sourceOrigin: selectedAdvanceObservation.sourceOrigin,
-        formIdentity: selectedAdvanceObservation.formIdentity,
-        destinationIdentity: selectedAdvanceObservation.destinationIdentity,
-      },
     };
-  } else if (
-    implicitSubmissionAvailable &&
-    observation.formScope.kind === PasswordFormScopeKind.Owned
-  ) {
-    credentialSubmission = {
-      kind: credentialSubmissionObserved,
-      facts: {
-        actionability: "actionable",
-        method: formSubmissionMethod(observation.formScope.owner),
-        sourceOrigin: location.origin,
-        formIdentity: contextFormIdentity,
-        destinationIdentity: contextDestinationIdentity,
-      },
-    };
-  }
-  return {
-    fields: {
-      usernameFieldCount: observation.summary.usernameFieldCount,
-      currentPasswordFieldCount: observation.summary.currentPasswordFieldCount,
-      newPasswordFieldCount: observation.summary.newPasswordFieldCount,
-      genericPasswordFieldCount: observation.summary.genericPasswordFieldCount,
-      oneTimeCodeFieldCount: observation.summary.oneTimeCodeFieldCount,
-      actionablePasswordFieldCount:
-        passwordFields.length - readonlyPasswordFieldCount,
-      readonlyPasswordFieldCount,
-    },
-    ceremony: {
-      oneTimeCodeProgression: "advance-control-required",
-      oneTimeCodeHandlerSignal: "",
-      oneTimeCodeHandlerSignals,
-      authenticationContext: {
-        authenticationUsername,
-        sourceOrigin: location.origin,
-        formIdentity: contextFormIdentity,
-        destinationIdentity: contextDestinationIdentity,
-      },
-      manualCheckpoint: observation.summary.manualCheckpointPresent
-        ? "present"
-        : "absent",
-      implicitSubmissionMethod:
-        observation.formScope.kind === PasswordFormScopeKind.Owned &&
-        !ownedObservationIsLocallyBounded(observation)
-          ? formSubmissionMethod(observation.formScope.owner)
-          : PageControlSubmissionMethod.Absent,
-      advanceControl: implicitSubmissionAvailable
-        ? "implicit-submission"
-        : "absent",
-    },
-    authenticator: {
-      authenticatorSetup: authenticatorSetupHint ? "present" : "absent",
-      backupCodesCopy:
-        ((...[v = backupCodesHint ? "Save backup codes" : ""]) => v)(backupCodesCopy),
-      passkeyControl:
-        passkeyControls.length > 0
-          ? passkeyControlPresent
-          : passkeyControlAbsent,
-      passkeyAccountAvailability: "unavailable",
-      matchingPasskeyAccountCount: 0,
-      detailedPasskeyControl,
-    },
-    credentialSubmission,
-    detailedAdvanceControl,
-  };
-}
-export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[] {
-  const root = document;
-  const nookTypedArgs0_10: Parameters<typeof findPasswordFields>[0] = { root };
-  const allPasswordFields = findPasswordFields(nookTypedArgs0_10);
-  const nookTypedArgs0_11: Parameters<typeof findUsernameFields>[0] = { root };
-  const allUsernameFields = findUsernameFields(nookTypedArgs0_11);
-  const nookTypedArgs0_12: Parameters<typeof findOneTimeCodeFields>[0] = {
-    root,
-  };
-  const allOneTimeCodeFields = findOneTimeCodeFields(nookTypedArgs0_12);
-  const authUsernameFields = allUsernameFields.filter(isAuthUsernameField);
-  const authFieldCount =
-    allPasswordFields.length +
-    authUsernameFields.length +
-    allOneTimeCodeFields.length;
-  const passkeyOnlyRequest: Parameters<
-    typeof summarizePasskeyOnlyWorkflowForms<PasswordFormSummary>
-  >[0] = {
-    root,
-    summarizeRoot,
-    observationPriority: passwordFormPriority,
-    passkeyControlIsSafe: passkeyCandidateIsRustSafe,
-    emptySummary: emptyPasswordFormSummary,
-  };
-  const passkeyOnly = summarizePasskeyOnlyWorkflowForms(passkeyOnlyRequest);
-  if (authFieldCount === 0) {
-    return passkeyOnly;
-  }
-  const forms = Array.from(
-    root.querySelectorAll<HTMLFormElement>("form"),
-  ).filter((form) => {
-    const formScope: PasswordFormScope = {
-      kind: PasswordFormScopeKind.Owned,
-      owner: form,
-    };
-    const nookTypedArgs0_14: Parameters<typeof summarizeRoot>[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root,
-      formScope,
-    };
-    const summary = summarizeRoot(nookTypedArgs0_14);
-    const nookNamedArgs0_2: Parameters<typeof findUsernameFields>[0] = {
-      root,
-      formScope,
-    };
-    return (
-      summary.passwordFieldCount > 0 ||
-      summary.oneTimeCodeFieldCount > 0 ||
-      findUsernameFields(nookNamedArgs0_2).some(isAuthUsernameField)
-    );
-  });
-  const observations: PasswordFormObservation[] = forms.map((form) => {
-    const formScope: PasswordFormScope = {
-      kind: PasswordFormScopeKind.Owned,
-      owner: form,
-    };
-    const observationRootRequest: LocalOwnedLoginObservationRootRequest = {
-      owner: form,
-      passwordFields: allPasswordFields,
-      usernameFields: authUsernameFields,
-      oneTimeCodeFields: allOneTimeCodeFields,
-    };
-    const observationRoot = localOwnedLoginObservationRoot(
-      observationRootRequest,
-    );
-    const summaryArgs: Parameters<typeof summarizeRoot>[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: observationRoot,
-      formScope,
-    };
-    return {
-      root: observationRoot,
-      formScope,
-      summary: summarizeRoot(summaryArgs),
-    };
-  });
-  const unownedFields = [
-    ...allPasswordFields,
-    ...authUsernameFields,
-    ...allOneTimeCodeFields,
-  ].filter((field) => !field.form);
-  const unownedContainers = new Set(
-    unownedFields.flatMap((field) => {
-      const nookArrowArgs2: Parameters<typeof nearestUnownedAuthContainer>[0] =
-        { field, root };
-      const container = nearestUnownedAuthContainer(nookArrowArgs2);
-      return container === field ? [] : [container];
-    }),
-  );
-  for (const container of unownedContainers) {
-    const formScope: PasswordFormScope = {
-      kind: PasswordFormScopeKind.Unowned,
-    };
-    const nookTypedArgs0_15: Parameters<typeof summarizeRoot>[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: container,
-      formScope,
-    };
-    const nookTypedArgs0_3: Parameters<typeof observations.push>[0] = {
-      root: container,
-      formScope,
-      summary: summarizeRoot(nookTypedArgs0_15),
-    };
-    observations.push(nookTypedArgs0_3);
-  }
-  const mergeRequest: Parameters<
-    typeof appendIndependentPasskeyOnlyWorkflows<PasswordFormObservation>
-  >[0] = {
-    fieldBearing: observations,
-    passkeyOnly,
-    observationPriority: passwordFormPriority,
-    passkeyControlIsSafe: passkeyCandidateIsRustSafe,
-  };
-  return appendIndependentPasskeyOnlyWorkflows(mergeRequest);
-}
-export function fillLoginCredentials(
-  request: LoginCredentialsFillRequest,
-): boolean {
-  beginLoginCredentialFill(request);
-  const nookTypedArgs0_18 = passwordFieldQuery(request);
-  const observedPasswordFields = findPasswordFields(nookTypedArgs0_18);
-  const passwordFields = observedPasswordFields.filter(
-    (field) => !field.readOnly,
-  );
-  const nookTypedArgs0_19 = passwordFieldQuery(request);
-  const usernameCandidates = findUsernameFields(nookTypedArgs0_19);
-  const usernameField = usernameCandidates[0];
-  if (observedPasswordFields.length > 0 && passwordFields.length === 0) {
-    return false;
-  }
-  if (passwordFields.length === 0) {
-    if (!usernameField) return false;
-    const nookTypedArgs0_20: Parameters<typeof trackLoginCredentialField>[0] = {
-      input: usernameField,
-      request,
-      value: request.credentials.username,
-    };
-    trackLoginCredentialField(nookTypedArgs0_20);
-    setNativeInputValue(nookTypedArgs0_20);
-    usernameField.focus();
-    return true;
-  }
-  const passwordField = passwordFields[0];
-  const approvedPasswordForm = passwordField.form;
-  const passwordFieldRemainsEligible = (): boolean =>
-    !passwordField.readOnly &&
-    passwordField.form === approvedPasswordForm &&
-    findPasswordFields(passwordFieldQuery(request)).includes(passwordField);
-  function formBlocksFill(form: HTMLFormElement): boolean {
-    const advanceRequest: OwnedAdvanceControlRequest = { request, form };
-    const disclosureRequest: Parameters<
-      typeof selectedSubmitterBlocksCredentialDisclosure
-    >[0] = {
-      form,
-      selectedSubmitter: findApprovedOwnedAdvanceControl(advanceRequest),
-    };
-    return selectedSubmitterBlocksCredentialDisclosure(disclosureRequest);
-  }
-  function passwordFieldBlocksFill(): boolean {
-    if (!passwordFieldRemainsEligible()) return true;
-    return approvedPasswordForm ? formBlocksFill(approvedPasswordForm) : false;
-  }
-  if (passwordFieldBlocksFill()) return false;
-  if (usernameField) {
-    const nookTypedArgs0_21: Parameters<typeof trackLoginCredentialField>[0] = {
-      input: usernameField,
-      request,
-      value: request.credentials.username,
-    };
-    trackLoginCredentialField(nookTypedArgs0_21);
-    setNativeInputValue(nookTypedArgs0_21);
-    if (passwordFieldBlocksFill()) {
-      clearLoginCredentials(request);
-      return false;
-    }
-  }
-  const nookTypedArgs0_22: Parameters<typeof trackLoginCredentialField>[0] = {
-    input: passwordField,
-    request,
-    value: request.credentials.password,
-  };
-  trackLoginCredentialField(nookTypedArgs0_22);
-  setNativeInputValue(nookTypedArgs0_22);
-  if (passwordFieldBlocksFill()) {
-    clearLoginCredentials(request);
-    return false;
-  }
-  return true;
-}
-export function readLoginCredentials(
-  request: PasswordFormScopeQuery,
-): LoginCredentialsLookup {
-  const nookTypedArgs0_25 = passwordFieldQuery(request);
-  const passwordFields = findPasswordFields(nookTypedArgs0_25);
-  if (passwordFields.length === 0) {
-    return { kind: LoginCredentialsLookupKind.Absent };
-  }
-
-  const newPasswordFields = passwordFields.filter((field) => {
-    const nookArrowArgs4: Parameters<typeof hasAutocompleteToken>[0] = {
-      field,
-      expected: "new-password",
-    };
-    return hasAutocompleteToken(nookArrowArgs4);
-  });
-  const [passwordField = passwordFields[0]] = [((...[v = passwordFields.find((field) => {
-      const nookArrowArgs5: Parameters<typeof hasAutocompleteToken>[0] = {
-        field,
-        expected: "current-password",
+    const boundedAdvanceObservations =
+      authenticationSubmissionControls.boundAuthenticationControlObservations(
+        advanceBoundRequest,
+      );
+    if (boundedAdvanceObservations.length > 0) {
+      detailedAdvanceControl = {
+        kind: "observed",
+        observations: boundedAdvanceObservations,
       };
-      return hasAutocompleteToken(nookArrowArgs5);
-    })]) => v)(newPasswordFields[0])];
-  const password = passwordField.value.trim();
-  const nookNamedArgs0_3 = passwordFieldQuery(request);
-  const username = ((v) => (v ? v : ""))(findUsernameFields(nookNamedArgs0_3)[0]?.value.trim());
-  if (!username || !password) {
-    return { kind: LoginCredentialsLookupKind.Absent };
-  }
-  return {
-    kind: LoginCredentialsLookupKind.Found,
-    credentials: { username, password },
-  };
-}
-
-export type LoginFormSubmissionRequest = PasswordFormScopeQuery & {
-  submissionApproval?: FormSubmissionApproval;
-};
-type OwnedAdvanceControlRequest = OwnedAuthenticationControlRequest<LoginFormSubmissionRequest>;
-
-function findApprovedOwnedAdvanceControl({
-  request,
-  form,
-}: OwnedAdvanceControlRequest): LoginAdvanceControl | false {
-  const formWithinRequestRoot =
-    request.root === form.ownerDocument ||
-    (request.root instanceof Node && request.root.contains(form));
-  const observation: PasswordFormObservation | false =
-    request.kind === PasswordFormQueryKind.Scoped
-      ? {
-          root: request.root,
-          formScope: request.formScope,
-          summary: summarizeRoot(request),
-        }
-      : (((v) => (v ? v : false))(summarizeAuthenticationWorkflowForms().find(
-          (candidate) =>
-            formWithinRequestRoot &&
-            candidate.formScope.kind === PasswordFormScopeKind.Owned &&
-            candidate.formScope.owner === form,
-        )));
-  return (
-    observation &&
-    (((v) => (v ? v : false))(scopedAdvanceControls(observation)
-      .sort(semanticSubmitControlsFirst)
-      .find((control) => {
-        if (!isRenderedControl(control)) return false;
-        const factsRequest: PageControlObservationRequest = {
+    }
+    let detailedPasskeyControl: AuthenticationDetailedPasskeyControlObservation =
+      { kind: PasskeyControlLookupKind.Absent };
+    const passkeyCandidates = passkeyControls.flatMap(
+      ({ control, explicitlyMarked }) => {
+        const adjacencyRequest: LocalOwnedFormAdjacencyRequest | false =
+          observation.formScope.kind === PasswordFormScopeKind.Owned
+            ? { control, owner: observation.formScope.owner }
+            : false;
+        return this.transportableControlObservation({
           observation,
           control,
-          authenticationUsername: usernameEvidence(observation),
-          semanticSubmitControlCount: countedSemanticSubmitControls(
-            scopedAdvanceControls(observation),
-          ),
-        };
-        const [transported] = transportableControlObservation(factsRequest);
-        return (
-          Boolean(transported) &&
-          authentication_advance_control_is_safe(transported)
+          authenticationUsername,
+          semanticSubmitControlCount,
+          explicitlyLocallyScoped:
+            (observation.root === this.browser.document &&
+              observation.formScope.kind === PasswordFormScopeKind.Unowned) ||
+            Boolean(
+              adjacencyRequest &&
+              passwordFieldDiscovery.isLocallyAdjacentToOwnedForm(
+                adjacencyRequest,
+              ),
+            ),
+        }).map(
+          (candidateObservation) =>
+            ({
+              kind: explicitlyMarked ? "explicitly-marked" : "labeled",
+              observation: candidateObservation,
+            }) as AuthenticationDetailedPasskeyControlCandidateObservation,
         );
-      })))
-  );
-}
-
-function activateApprovedOwnedAdvanceControl({
-  request,
-  form,
-}: OwnedAdvanceControlRequest): OwnedAdvanceControlActivation {
-  const approvedRequest: OwnedAdvanceControlRequest = { request, form };
-  const approved = findApprovedOwnedAdvanceControl(approvedRequest);
-  if (!approved) return { kind: OwnedAdvanceControlActivationKind.Absent };
-  if (!approved.matches(semanticSubmitControlSelector)) {
-    approved.click();
-    return {
-      kind: OwnedAdvanceControlActivationKind.Activated,
-      result: FormSubmissionResult.Submitted,
+      },
+    );
+    const passkeyBoundRequest: Parameters<
+      typeof authenticationSubmissionControls.boundAuthenticationControlObservations<
+        (typeof passkeyCandidates)[number]
+      >
+    >[0] = {
+      candidates: passkeyCandidates,
+      isPreferred: (candidate) =>
+        candidate.observation.actionability === "actionable" &&
+        authentication_passkey_control_candidate_is_safe(candidate),
+      isNextPreferred: (candidate) =>
+        candidate.observation.actionability === "actionable",
     };
-  }
-  const clickSubmission: Parameters<typeof observeSubmit>[0] = {
-    form,
-    action: () => approved.click(),
-    approval: ((v) => (v ? v : false))(request.submissionApproval),
-    expectedSubmitter: approved,
-  };
-  const result = observeSubmit(clickSubmission);
-  if (
-    result === FormSubmissionResult.NotObserved &&
-    approved instanceof HTMLInputElement &&
-    approved.type === "image"
-  ) {
-    clickSubmission.action = () => form.requestSubmit(approved);
-    return {
-      kind: OwnedAdvanceControlActivationKind.Activated,
-      result: observeSubmit(clickSubmission),
-    };
-  }
-  return {
-    kind: OwnedAdvanceControlActivationKind.Activated,
-    result,
-  };
-}
-
-export function submitLoginForm(
-  request: LoginFormSubmissionRequest,
-): FormSubmissionResult {
-  const nookTypedArgs0_26 = passwordFieldQuery(request);
-  const passwordField = findPasswordFields(nookTypedArgs0_26)[0];
-  const nookTypedArgs0_27 = passwordFieldQuery(request);
-  const usernameFields = findUsernameFields(nookTypedArgs0_27);
-  const usernameField = usernameFields[0];
-  const hasAuthenticationUsername = usernameFields.some(isAuthUsernameField);
-  const [anchor = usernameField] = [passwordField];
-  if (!anchor) return FormSubmissionResult.NotObserved;
-  const form = anchor.form;
-  if (form) {
-    const activationRequest: OwnedAdvanceControlRequest = { request, form };
-    const activation = activateApprovedOwnedAdvanceControl(activationRequest);
-    if (activation.kind === OwnedAdvanceControlActivationKind.Activated) {
-      return activation.result;
-    }
-  }
-  if (
-    request.kind === PasswordFormQueryKind.Scoped &&
-    ownedObservationIsLocallyBounded(request)
-  ) return FormSubmissionResult.NotObserved;
-  if (!passwordField || !form) {
-    const nookNamedArgs0_4: Parameters<typeof clickAdvanceControl>[0] = {
-      ...request,
-      usernameField,
-    };
-    if (clickAdvanceControl(nookNamedArgs0_4))
-      return FormSubmissionResult.Submitted;
-  }
-  if (!form) return FormSubmissionResult.NotObserved;
-  const implicitSubmitRequest: ApprovedImplicitAuthenticationSubmitRequest<PasswordFormObservation> = {
-    root: request.root,
-    form,
-    observations: summarizeAuthenticationWorkflowForms,
-    factsForObservation: (observation) => {
-      const factsRequest: AuthenticationObservationFactsRequest = {
-        observation,
-        authenticatorSetupHint: false,
+    const boundedPasskeyCandidates =
+      authenticationSubmissionControls.boundAuthenticationControlObservations(
+        passkeyBoundRequest,
+      );
+    if (boundedPasskeyCandidates.length > 0) {
+      detailedPasskeyControl = {
+        kind: "candidates",
+        observation: boundedPasskeyCandidates,
       };
-      return authenticationPageObservationFacts(factsRequest);
-    },
-    hasAuthenticationUsername,
-    hasAuthenticationPassword: Boolean(passwordField),
-    requestedApproval: ((v) => (v ? v : false))(request.submissionApproval),
-  };
-  return requestApprovedImplicitAuthenticationSubmit(implicitSubmitRequest);
+    }
+
+    const contextFormIdentity =
+      authenticationSubmissionControls.observedFormIdentity({
+        root: observation.root,
+        formScope: observation.formScope,
+      });
+    const contextDestinationIdentity =
+      authenticationSubmissionControls.observedFormDestination(
+        observation.formScope,
+      );
+    const implicitSubmissionAvailable =
+      observation.formScope.kind === PasswordFormScopeKind.Owned &&
+      !passwordFieldDiscovery.ownedObservationIsLocallyBounded(observation) &&
+      !boundedAdvanceObservations.some(
+        (candidate) =>
+          candidate.actionability === "actionable" &&
+          authentication_advance_control_is_safe(candidate),
+      ) &&
+      !advanceControls.some(
+        (control) =>
+          control.matches(semanticSubmitControlSelector) &&
+          !authenticationSubmissionControls.controlIsInert(control),
+      ) &&
+      !(
+        observation.summary.currentPasswordFieldCount +
+          observation.summary.genericPasswordFieldCount +
+          observation.summary.newPasswordFieldCount >
+          0 &&
+        authenticationSubmissionControls.formBlocksCredentialDisclosure(
+          observation.formScope.owner,
+        )
+      );
+    let credentialSubmission: AuthenticationCredentialSubmissionObservation = {
+      kind: credentialSubmissionAbsent,
+    };
+    const selectedAdvanceObservation = boundedAdvanceObservations[0];
+    const selectedSubmissionMethod =
+      selectedAdvanceObservation?.submissionMethod;
+    if (
+      selectedAdvanceObservation &&
+      selectedAdvanceObservation.actionability === "actionable" &&
+      selectedSubmissionMethod &&
+      selectedSubmissionMethod !== PageControlSubmissionMethod.Absent
+    ) {
+      credentialSubmission = {
+        kind: credentialSubmissionObserved,
+        facts: {
+          actionability: selectedAdvanceObservation.actionability,
+          method: selectedSubmissionMethod,
+          sourceOrigin: selectedAdvanceObservation.sourceOrigin,
+          formIdentity: selectedAdvanceObservation.formIdentity,
+          destinationIdentity: selectedAdvanceObservation.destinationIdentity,
+        },
+      };
+    } else if (
+      implicitSubmissionAvailable &&
+      observation.formScope.kind === PasswordFormScopeKind.Owned
+    ) {
+      credentialSubmission = {
+        kind: credentialSubmissionObserved,
+        facts: {
+          actionability: "actionable",
+          method: authenticationSubmissionControls.formSubmissionMethod(
+            observation.formScope.owner,
+          ),
+          sourceOrigin: this.browser.location.origin,
+          formIdentity: contextFormIdentity,
+          destinationIdentity: contextDestinationIdentity,
+        },
+      };
+    }
+    return {
+      fields: {
+        usernameFieldCount: observation.summary.usernameFieldCount,
+        currentPasswordFieldCount:
+          observation.summary.currentPasswordFieldCount,
+        newPasswordFieldCount: observation.summary.newPasswordFieldCount,
+        genericPasswordFieldCount:
+          observation.summary.genericPasswordFieldCount,
+        oneTimeCodeFieldCount: observation.summary.oneTimeCodeFieldCount,
+        actionablePasswordFieldCount:
+          passwordFields.length - readonlyPasswordFieldCount,
+        readonlyPasswordFieldCount,
+      },
+      ceremony: {
+        oneTimeCodeProgression: "advance-control-required",
+        oneTimeCodeHandlerSignal: "",
+        oneTimeCodeHandlerSignals,
+        authenticationContext: {
+          authenticationUsername,
+          sourceOrigin: this.browser.location.origin,
+          formIdentity: contextFormIdentity,
+          destinationIdentity: contextDestinationIdentity,
+        },
+        manualCheckpoint: observation.summary.manualCheckpointPresent
+          ? "present"
+          : "absent",
+        implicitSubmissionMethod:
+          observation.formScope.kind === PasswordFormScopeKind.Owned &&
+          !passwordFieldDiscovery.ownedObservationIsLocallyBounded(observation)
+            ? authenticationSubmissionControls.formSubmissionMethod(
+                observation.formScope.owner,
+              )
+            : PageControlSubmissionMethod.Absent,
+        advanceControl: implicitSubmissionAvailable
+          ? "implicit-submission"
+          : "absent",
+      },
+      authenticator: {
+        authenticatorSetup: authenticatorSetupHint ? "present" : "absent",
+        backupCodesCopy: ((
+          ...[v = backupCodesHint ? "Save backup codes" : ""]
+        ) => v)(backupCodesCopy),
+        passkeyControl:
+          passkeyControls.length > 0
+            ? passkeyControlPresent
+            : passkeyControlAbsent,
+        passkeyAccountAvailability: "unavailable",
+        matchingPasskeyAccountCount: 0,
+        detailedPasskeyControl,
+      },
+      credentialSubmission,
+      detailedAdvanceControl,
+    };
+  }
+
+  summarizeAuthenticationWorkflowForms(): PasswordFormObservation[] {
+    const root = this.browser.document;
+    const allPasswordFields = passwordFieldDiscovery.findPasswordFields({
+      root,
+    });
+    const allUsernameFields = passwordFieldDiscovery.findUsernameFields({
+      root,
+    });
+    const allOneTimeCodeFields = passwordFieldDiscovery.findOneTimeCodeFields({
+      root,
+    });
+    const authUsernameFields = allUsernameFields.filter(
+      passwordFieldDiscovery.isAuthUsernameField.bind(passwordFieldDiscovery),
+    );
+    const authFieldCount =
+      allPasswordFields.length +
+      authUsernameFields.length +
+      allOneTimeCodeFields.length;
+    const passkeyOnly = new PasskeyOnlyWorkflowSummary({
+      root,
+      summarizeRoot: this.summarizeRoot.bind(this),
+      observationPriority: this.passwordFormPriority.bind(this),
+      passkeyControlIsSafe: this.passkeyCandidateIsRustSafe.bind(this),
+      emptySummary: emptyPasswordFormSummary,
+    }).observations;
+    if (authFieldCount === 0) {
+      return passkeyOnly;
+    }
+    const forms = Array.from(
+      root.querySelectorAll<HTMLFormElement>("form"),
+    ).filter((form) => {
+      const formScope: PasswordFormScope = {
+        kind: PasswordFormScopeKind.Owned,
+        owner: form,
+      };
+      const summary = this.summarizeRoot({
+        kind: PasswordFormQueryKind.Scoped,
+        root,
+        formScope,
+      });
+
+      return (
+        summary.passwordFieldCount > 0 ||
+        summary.oneTimeCodeFieldCount > 0 ||
+        passwordFieldDiscovery
+          .findUsernameFields({
+            root,
+            formScope,
+          })
+          .some(
+            passwordFieldDiscovery.isAuthUsernameField.bind(
+              passwordFieldDiscovery,
+            ),
+          )
+      );
+    });
+    const observations: PasswordFormObservation[] = forms.map((form) => {
+      const formScope: PasswordFormScope = {
+        kind: PasswordFormScopeKind.Owned,
+        owner: form,
+      };
+
+      const observationRoot =
+        passwordFieldDiscovery.localOwnedLoginObservationRoot({
+          owner: form,
+          passwordFields: allPasswordFields,
+          usernameFields: authUsernameFields,
+          oneTimeCodeFields: allOneTimeCodeFields,
+        });
+
+      return {
+        root: observationRoot,
+        formScope,
+        summary: this.summarizeRoot({
+          kind: PasswordFormQueryKind.Scoped,
+          root: observationRoot,
+          formScope,
+        }),
+      };
+    });
+    const unownedFields = [
+      ...allPasswordFields,
+      ...authUsernameFields,
+      ...allOneTimeCodeFields,
+    ].filter((field) => !field.form);
+    const unownedContainers = new Set(
+      unownedFields.flatMap((field) => {
+        const container = passwordFieldDiscovery.nearestUnownedAuthContainer({
+          field,
+          root,
+        });
+        return container === field ? [] : [container];
+      }),
+    );
+    for (const container of unownedContainers) {
+      const formScope: PasswordFormScope = {
+        kind: PasswordFormScopeKind.Unowned,
+      };
+      observations.push({
+        root: container,
+        formScope,
+        summary: this.summarizeRoot({
+          kind: PasswordFormQueryKind.Scoped,
+          root: container,
+          formScope,
+        }),
+      });
+    }
+    return new IndependentPasskeyWorkflows({
+      fieldBearing: observations,
+      passkeyOnly,
+      observationPriority: this.passwordFormPriority.bind(this),
+      passkeyControlIsSafe: this.passkeyCandidateIsRustSafe.bind(this),
+    }).observations;
+  }
+
+  fillLoginCredentials(request: LoginCredentialsFillRequest): boolean {
+    passwordFormCredentialInteraction.beginLoginCredentialFill(request);
+    const nookTypedArgs0_18 = new PasswordFormFieldQuery(request).query;
+    const observedPasswordFields =
+      passwordFieldDiscovery.findPasswordFields(nookTypedArgs0_18);
+    const passwordFields = observedPasswordFields.filter(
+      (field) => !field.readOnly,
+    );
+    const nookTypedArgs0_19 = new PasswordFormFieldQuery(request).query;
+    const usernameCandidates =
+      passwordFieldDiscovery.findUsernameFields(nookTypedArgs0_19);
+    const usernameField = usernameCandidates[0];
+    if (observedPasswordFields.length > 0 && passwordFields.length === 0) {
+      return false;
+    }
+    const [passwordField] = passwordFields;
+    if (!passwordField) {
+      if (!usernameField) return false;
+      const nookTypedArgs0_20: Parameters<
+        typeof passwordFormCredentialInteraction.trackLoginCredentialField
+      >[0] = {
+        input: usernameField,
+        request,
+        value: request.credentials.username,
+      };
+      passwordFormCredentialInteraction.trackLoginCredentialField(
+        nookTypedArgs0_20,
+      );
+      passwordFormCredentialInteraction.setNativeInputValue(nookTypedArgs0_20);
+      usernameField.focus();
+      return true;
+    }
+    const passwordForm = passwordField.form;
+    const approvedPasswordForm: ApprovedPasswordForm = passwordForm
+      ? { kind: ApprovedPasswordFormKind.Available, form: passwordForm }
+      : { kind: ApprovedPasswordFormKind.Unavailable };
+    const disclosureRevalidation = new CredentialDisclosureRevalidation({
+      passwordField,
+      approvedPasswordForm,
+      request,
+      selectedSubmitter: (form) =>
+        this.findApprovedOwnedAdvanceControl({ request, form }),
+    });
+    if (disclosureRevalidation.blocks()) return false;
+    if (usernameField) {
+      const nookTypedArgs0_21: Parameters<
+        typeof passwordFormCredentialInteraction.trackLoginCredentialField
+      >[0] = {
+        input: usernameField,
+        request,
+        value: request.credentials.username,
+      };
+      passwordFormCredentialInteraction.trackLoginCredentialField(
+        nookTypedArgs0_21,
+      );
+      passwordFormCredentialInteraction.setNativeInputValue(nookTypedArgs0_21);
+      if (disclosureRevalidation.blocks()) {
+        passwordFormCredentialInteraction.clearLoginCredentials(request);
+        return false;
+      }
+    }
+    const nookTypedArgs0_22: Parameters<
+      typeof passwordFormCredentialInteraction.trackLoginCredentialField
+    >[0] = {
+      input: passwordField,
+      request,
+      value: request.credentials.password,
+    };
+    passwordFormCredentialInteraction.trackLoginCredentialField(
+      nookTypedArgs0_22,
+    );
+    passwordFormCredentialInteraction.setNativeInputValue(nookTypedArgs0_22);
+    if (disclosureRevalidation.blocks()) {
+      passwordFormCredentialInteraction.clearLoginCredentials(request);
+      return false;
+    }
+    return true;
+  }
+
+  private findApprovedOwnedAdvanceControl({
+    request,
+    form,
+  }: OwnedAdvanceControlRequest): LoginAdvanceControl | false {
+    const formWithinRequestRoot =
+      request.root === form.ownerDocument ||
+      (request.root instanceof Node && request.root.contains(form));
+    const observation: PasswordFormObservation | false =
+      request.kind === PasswordFormQueryKind.Scoped
+        ? {
+            root: request.root,
+            formScope: request.formScope,
+            summary: this.summarizeRoot(request),
+          }
+        : ((v) => (v ? v : false))(
+            this.summarizeAuthenticationWorkflowForms().find(
+              (candidate) =>
+                formWithinRequestRoot &&
+                candidate.formScope.kind === PasswordFormScopeKind.Owned &&
+                candidate.formScope.owner === form,
+            ),
+          );
+    return (
+      observation &&
+      ((v) => (v ? v : false))(
+        this.scopedAdvanceControls(observation)
+          .sort(this.semanticSubmitControlsFirst.bind(this))
+          .find((control) => {
+            if (!authenticationSubmissionControls.isRenderedControl(control))
+              return false;
+            const [transported] = this.transportableControlObservation({
+              observation,
+              control,
+              authenticationUsername:
+                passwordFieldDiscovery.usernameEvidence(observation),
+              semanticSubmitControlCount:
+                authenticationSubmissionControls.countedSemanticSubmitControls(
+                  this.scopedAdvanceControls(observation),
+                ),
+            });
+            if (!transported) return false;
+            return authentication_advance_control_is_safe(transported);
+          }),
+      )
+    );
+  }
+
+  private activateApprovedOwnedAdvanceControl({
+    request,
+    form,
+  }: OwnedAdvanceControlRequest): OwnedAdvanceControlActivation {
+    const approved = this.findApprovedOwnedAdvanceControl({ request, form });
+    if (!approved) return { kind: OwnedAdvanceControlActivationKind.Absent };
+    if (!approved.matches(semanticSubmitControlSelector)) {
+      approved.click();
+      return {
+        kind: OwnedAdvanceControlActivationKind.Activated,
+        result: FormSubmissionResult.Submitted,
+      };
+    }
+    const clickSubmission: Parameters<
+      typeof authenticationSubmissionControls.observeSubmit
+    >[0] = {
+      form,
+      action: () => approved.click(),
+      approval: ((v) => (v ? v : false))(request.submissionApproval),
+      expectedSubmitter: approved,
+    };
+    const result =
+      authenticationSubmissionControls.observeSubmit(clickSubmission);
+    if (
+      result === FormSubmissionResult.NotObserved &&
+      approved instanceof HTMLInputElement &&
+      approved.type === "image"
+    ) {
+      clickSubmission.action = () => form.requestSubmit(approved);
+      return {
+        kind: OwnedAdvanceControlActivationKind.Activated,
+        result: authenticationSubmissionControls.observeSubmit(clickSubmission),
+      };
+    }
+    return {
+      kind: OwnedAdvanceControlActivationKind.Activated,
+      result,
+    };
+  }
+
+  submitLoginForm(request: LoginFormSubmissionRequest): FormSubmissionResult {
+    const nookTypedArgs0_26 = new PasswordFormFieldQuery(request).query;
+    const passwordField =
+      passwordFieldDiscovery.findPasswordFields(nookTypedArgs0_26)[0];
+    const nookTypedArgs0_27 = new PasswordFormFieldQuery(request).query;
+    const usernameFields =
+      passwordFieldDiscovery.findUsernameFields(nookTypedArgs0_27);
+    const usernameField = usernameFields[0];
+    const hasAuthenticationUsername = usernameFields.some(
+      passwordFieldDiscovery.isAuthUsernameField.bind(passwordFieldDiscovery),
+    );
+    const [anchor = usernameField] = [passwordField];
+    if (!anchor) return FormSubmissionResult.NotObserved;
+    const form = anchor.form;
+    if (form) {
+      const activation = this.activateApprovedOwnedAdvanceControl({
+        request,
+        form,
+      });
+      if (activation.kind === OwnedAdvanceControlActivationKind.Activated) {
+        return activation.result;
+      }
+    }
+    if (
+      request.kind === PasswordFormQueryKind.Scoped &&
+      passwordFieldDiscovery.ownedObservationIsLocallyBounded(request)
+    )
+      return FormSubmissionResult.NotObserved;
+    if ((!passwordField || !form) && usernameField) {
+      if (
+        authenticationSubmissionControls.clickAdvanceControl({
+          ...request,
+          usernameField,
+        })
+      )
+        return FormSubmissionResult.Submitted;
+    }
+    if (!form) return FormSubmissionResult.NotObserved;
+    const implicitSubmitRequest: ApprovedImplicitAuthenticationSubmitRequest<PasswordFormObservation> =
+      {
+        root: request.root,
+        form,
+        observations: this.summarizeAuthenticationWorkflowForms.bind(this),
+        factsForObservation: (observation) => {
+          return this.authenticationPageObservationFacts({
+            observation,
+            authenticatorSetupHint: false,
+          });
+        },
+        hasAuthenticationUsername,
+        hasAuthenticationPassword: Boolean(passwordField),
+        requestedApproval: ((v) => (v ? v : false))(request.submissionApproval),
+      };
+    return new ApprovedImplicitAuthenticationSubmission(
+      implicitSubmitRequest,
+    ).execute();
+  }
 }
+
+export const passwordFormInteraction = new PasswordFormInteraction(globalThis);

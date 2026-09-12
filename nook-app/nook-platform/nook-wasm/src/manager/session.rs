@@ -1,12 +1,14 @@
+use super::companion_protocol::PendingCompanionWebsiteHandoff;
+use super::device_protection::ExtensionIdentityPublication;
+use crate::ConfiguredVaultApplication;
 use nook_core::{
     DriveEventParent, ICloudEventTarget, SentinelGenesisPhase, StorageMode, VaultArchitecture,
     VaultMetaState, VaultUnlock,
 };
+use std::rc::Rc;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
-use super::device_protection::PendingExtensionIdentityHandoff;
-use crate::application;
 use crate::{NookError, NookEventLogSyncIssue};
 
 pub(in crate::manager) struct StorageSession {
@@ -156,6 +158,7 @@ impl SearchCatalogState {
         }
     }
 
+    #[cfg(test)]
     pub(in crate::manager) fn is_ready(&self) -> bool {
         matches!(self, Self::Ready(..))
     }
@@ -201,6 +204,45 @@ impl Default for VaultSessionState {
     }
 }
 
+/// Presence only; cryptographic validation and authorization remain at effects.
+pub(in crate::manager) enum VaultKeyMaterial<'a> {
+    Unavailable,
+    Available { secrets: &'a str, members: &'a str },
+}
+pub(in crate::manager) enum SessionCatalogAvailability<'a> {
+    UnavailableStore,
+    Restore,
+    Reconcile,
+    Ready(&'a nook_core::SecretSearchCatalog),
+}
+impl VaultSessionState {
+    pub(in crate::manager) fn key_material(&self) -> VaultKeyMaterial<'_> {
+        if self.secrets_key.is_empty() || self.members_key.is_empty() {
+            VaultKeyMaterial::Unavailable
+        } else {
+            VaultKeyMaterial::Available {
+                secrets: &self.secrets_key,
+                members: &self.members_key,
+            }
+        }
+    }
+    pub(in crate::manager) fn catalog_availability(&self) -> SessionCatalogAvailability<'_> {
+        if self.store_id.is_empty() {
+            return SessionCatalogAvailability::UnavailableStore;
+        }
+        if self.search_catalog_store_id != self.store_id {
+            return SessionCatalogAvailability::Restore;
+        }
+        match &self.search_catalog {
+            SearchCatalogState::Unavailable => SessionCatalogAvailability::Restore,
+            SearchCatalogState::Ready(_) if self.search_catalog_dirty => {
+                SessionCatalogAvailability::Reconcile
+            }
+            SearchCatalogState::Ready(catalog) => SessionCatalogAvailability::Ready(catalog),
+        }
+    }
+}
+
 impl VaultSessionState {
     pub(in crate::manager) fn reset(&mut self) {
         let architecture = self.architecture.clone();
@@ -226,13 +268,21 @@ impl VaultSessionState {
     }
 }
 
+#[derive(Clone, Default)]
+pub(in crate::manager) enum LocalIdentityCreation {
+    #[default]
+    ExistingIdentity,
+    Creating(String),
+}
+
 #[derive(Default)]
 pub(in crate::manager) struct DeviceSessionState {
+    pub(in crate::manager) handoff_generation: Rc<()>,
     pub(in crate::manager) id: String,
     pub(in crate::manager) identity_private_key: String,
-    pub(in crate::manager) extension_handoff_private_key: String,
-    pub(in crate::manager) pending_extension_handoff: Option<PendingExtensionIdentityHandoff>,
-    pub(in crate::manager) pending_local_identity_label: Option<String>,
+    pub(in crate::manager) extension_handoff_private_key: ExtensionHandoffState,
+    pub(in crate::manager) pending_extension_handoff: ExtensionIdentityPublication,
+    pub(in crate::manager) pending_local_identity_label: LocalIdentityCreation,
 }
 
 impl DeviceSessionState {
@@ -335,7 +385,7 @@ impl NookVaultManager {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
-            application: application::configured_vault_application(),
+            application: ConfiguredVaultApplication::configured_vault_application(),
             storage: StorageSession::default(),
             vault: VaultSessionState::default(),
             device: DeviceSessionState::default(),
@@ -374,9 +424,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn ceremony_state_returns_active_sessions() {
+    fn ceremony_state_returns_active_sessions() -> Result<(), JsError> {
         let active = CeremonyState::Active(7_u8);
-        assert_eq!(active.get("unused").expect("active ceremony"), &7);
+        assert_eq!(active.get("unused")?, &7);
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -398,10 +449,12 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn vault_session_reset_clears_sensitive_and_derived_state() {
-        let mut state = VaultSessionState::default();
-        state.secrets_key = "secrets".to_owned();
-        state.members_key = "members".to_owned();
-        state.last_synced_content = "content".to_owned();
+        let mut state = VaultSessionState {
+            secrets_key: "secrets".to_owned(),
+            members_key: "members".to_owned(),
+            last_synced_content: "content".to_owned(),
+            ..VaultSessionState::default()
+        };
         state.password_entries.push(nook_core::PasswordUnlockEntry {
             id: "password-entry".to_owned(),
             label: "Backup".to_owned(),
@@ -463,13 +516,11 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn status_channel_round_trips_messages() {
+    fn status_channel_round_trips_messages() -> anyhow::Result<()> {
         let channel = StatusChannel::new();
-        channel
-            .tx
-            .send("ready".to_owned())
-            .expect("receiver exists");
-        assert_eq!(channel.rx.recv().expect("message exists"), "ready");
+        channel.tx.send("ready".to_owned())?;
+        assert_eq!(channel.rx.recv()?, "ready");
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -491,5 +542,41 @@ mod tests {
     fn sync_issue_result_exposes_clear_state() {
         let result = NookEventLogSyncIssueResult(EventLogSyncIssueState::Clear);
         assert_eq!(result.state(), NookEventLogSyncIssueState::Clear);
+    }
+}
+
+/// The recipient secret and companion transaction are distinct in-memory states.
+/// Neither state is serialized, and replacing it immediately drops protected material.
+#[derive(Default)]
+pub(in crate::manager) enum ExtensionHandoffState {
+    #[default]
+    Idle,
+    Recipient(Zeroizing<String>),
+    Companion(Box<PendingCompanionWebsiteHandoff>),
+}
+impl ExtensionHandoffState {
+    pub(in crate::manager) fn companion(pending: PendingCompanionWebsiteHandoff) -> Self {
+        Self::Companion(Box::new(pending))
+    }
+
+    pub(in crate::manager) fn clear(&mut self) {
+        *self = Self::Idle;
+    }
+    #[cfg(test)]
+    pub(in crate::manager) fn is_empty(&self) -> bool {
+        matches!(self, Self::Idle)
+    }
+    pub(in crate::manager) fn into_recipient(self) -> Result<Zeroizing<String>, NookError> {
+        match self {
+            Self::Recipient(secret) => Ok(secret),
+            Self::Idle | Self::Companion(_) => Err(NookError::Decryption(
+                "Extension identity handoff was not initialized.".to_owned(),
+            )),
+        }
+    }
+}
+impl Zeroize for ExtensionHandoffState {
+    fn zeroize(&mut self) {
+        self.clear();
     }
 }

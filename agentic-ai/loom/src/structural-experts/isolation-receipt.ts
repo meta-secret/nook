@@ -1,5 +1,7 @@
+import { err, ok, type Result } from 'neverthrow';
+import { type AgentExecutionFailure } from '../agent-workflow/runtime.ts';
 import { createHash } from 'node:crypto';
-import { runIsolatedReadOnlyExpertCodex } from '../agent-workflow/codex-runtime.ts';
+import { ReadOnlyExpertCodexRuntime } from '../agent-workflow/codex-runtime.ts';
 import type { RunIsolatedReadOnlyExpertCodexRequest } from '../agent-workflow/codex-runtime.ts';
 import type {
   AgentExecutionCompletion,
@@ -11,9 +13,22 @@ export enum StructuralExpertIsolationReceiptKind {
   Isolated = 'structural-expert-isolation-receipt',
 }
 
-export type StructuralExpertIsolationReceipt = {
-  readonly kind: StructuralExpertIsolationReceiptKind.Isolated;
-};
+export class StructuralExpertIsolationReceipt {
+  readonly kind = StructuralExpertIsolationReceiptKind.Isolated;
+  private seal(): void {
+    Object.freeze(this);
+  }
+  private constructor() {}
+  static issue(
+    key: typeof AUTHORITY_ISSUANCE,
+  ): StructuralExpertIsolationReceipt {
+    if (key !== AUTHORITY_ISSUANCE)
+      throw new Error('Invalid capability issuance.');
+    const capability = new StructuralExpertIsolationReceipt();
+    capability.seal();
+    return capability;
+  }
+}
 
 export type IsolatedStructuralExpertExecution = {
   readonly completion: AgentExecutionCompletion;
@@ -40,83 +55,113 @@ type StructuralExpertIsolationReceiptRecord = {
   readonly isolationDigest: string;
 };
 
-const RECEIPTS = new WeakMap<
-  StructuralExpertIsolationReceipt,
-  StructuralExpertIsolationReceiptRecord
->();
+/** Owns the structural expert isolation receipts registry and its capability transitions. */
+export class StructuralExpertIsolationReceipts {
+  private constructor() {}
+  private static readonly RECEIPTS = new WeakMap<
+    StructuralExpertIsolationReceipt,
+    StructuralExpertIsolationReceiptRecord
+  >();
 
-export async function executeIsolatedStructuralExpert<
-  TTask extends string,
-  TAgent extends string,
->(
-  request: ExecuteIsolatedStructuralExpertRequest<TTask, TAgent>,
-): Promise<IsolatedStructuralExpertExecution> {
-  const completion = await runIsolatedReadOnlyExpertCodex(request);
-  const receiptValue = {
-    kind: StructuralExpertIsolationReceiptKind.Isolated,
-  } as const;
-  const receipt: StructuralExpertIsolationReceipt = Object.freeze(receiptValue);
-  const record: StructuralExpertIsolationReceiptRecord = {
-    completionDigest: completionDigest(completion),
-    invocationDigest: invocationDigest(request.invocation),
-    isolationDigest: isolationDigest(request.isolationRequest),
-  };
-  RECEIPTS.set(receipt, record);
-  const execution: IsolatedStructuralExpertExecution = { completion, receipt };
-  return Object.freeze(execution);
-}
-
-export function consumeIsolatedStructuralExpertExecution<
-  TTask extends string,
-  TAgent extends string,
->(
-  request: ConsumeIsolatedStructuralExpertExecutionRequest<TTask, TAgent>,
-): void {
-  const record = RECEIPTS.get(request.execution.receipt);
-  if (
-    !record ||
-    record.completionDigest !==
-      completionDigest(request.execution.completion) ||
-    record.invocationDigest !== invocationDigest(request.invocation) ||
-    record.isolationDigest !== isolationDigest(request.isolationRequest)
-  ) {
-    throw new Error('Structural expert isolation receipt is invalid.');
+  static async executeIsolatedStructuralExpert<
+    TTask extends string,
+    TAgent extends string,
+  >(
+    request: ExecuteIsolatedStructuralExpertRequest<TTask, TAgent>,
+  ): Promise<Result<IsolatedStructuralExpertExecution, AgentExecutionFailure>> {
+    const completionResult =
+      await ReadOnlyExpertCodexRuntime.executeIsolated(request);
+    if (completionResult.isErr()) return err(completionResult.error);
+    const completion = completionResult.value;
+    const receiptValue =
+      StructuralExpertIsolationReceipt.issue(AUTHORITY_ISSUANCE);
+    const receipt: StructuralExpertIsolationReceipt = receiptValue;
+    const record: StructuralExpertIsolationReceiptRecord = {
+      completionDigest:
+        StructuralExpertIsolationReceipts.completionDigest(completion),
+      invocationDigest: StructuralExpertIsolationReceipts.invocationDigest(
+        request.invocation,
+      ),
+      isolationDigest: StructuralExpertIsolationReceipts.isolationDigest(
+        request.isolationRequest,
+      ),
+    };
+    StructuralExpertIsolationReceipts.RECEIPTS.set(receipt, record);
+    const execution: IsolatedStructuralExpertExecution = {
+      completion,
+      receipt,
+    };
+    return ok(Object.freeze(execution));
   }
-  RECEIPTS.delete(request.execution.receipt);
+
+  static consumeIsolatedStructuralExpertExecution<
+    TTask extends string,
+    TAgent extends string,
+  >(
+    request: ConsumeIsolatedStructuralExpertExecutionRequest<TTask, TAgent>,
+  ): void {
+    const record = StructuralExpertIsolationReceipts.RECEIPTS.get(
+      request.execution.receipt,
+    );
+    if (
+      !record ||
+      record.completionDigest !==
+        StructuralExpertIsolationReceipts.completionDigest(
+          request.execution.completion,
+        ) ||
+      record.invocationDigest !==
+        StructuralExpertIsolationReceipts.invocationDigest(
+          request.invocation,
+        ) ||
+      record.isolationDigest !==
+        StructuralExpertIsolationReceipts.isolationDigest(
+          request.isolationRequest,
+        )
+    ) {
+      throw new Error('Structural expert isolation receipt is invalid.');
+    }
+    StructuralExpertIsolationReceipts.RECEIPTS.delete(
+      request.execution.receipt,
+    );
+  }
+
+  private static completionDigest(
+    completion: AgentExecutionCompletion,
+  ): string {
+    return StructuralExpertIsolationReceipts.sha256(JSON.stringify(completion));
+  }
+
+  private static invocationDigest<TTask extends string, TAgent extends string>(
+    invocation: AgentExecutionInvocation<TTask, TAgent>,
+  ): string {
+    const identity = {
+      task: invocation.task,
+      attempt: invocation.attempt,
+      sourceCommit: invocation.sourceCommit,
+      runId: invocation.runId,
+      workingDirectory: invocation.workingDirectory,
+      upstreamOutputs: invocation.upstreamOutputs,
+      execution: invocation.execution,
+      agentProfile: invocation.agentProfile,
+    };
+    return StructuralExpertIsolationReceipts.sha256(JSON.stringify(identity));
+  }
+
+  private static isolationDigest(
+    request: ReadOnlyExpertRuntimeIsolationRequest,
+  ): string {
+    const identity = {
+      expertName: request.expertName,
+      sourceCommit: request.sourceCommit,
+      workingDirectory: request.workingDirectory,
+      snapshot: request.snapshot,
+    };
+    return StructuralExpertIsolationReceipts.sha256(JSON.stringify(identity));
+  }
+
+  private static sha256(value: string): string {
+    return createHash('sha256').update(value).digest('hex');
+  }
 }
 
-function completionDigest(completion: AgentExecutionCompletion): string {
-  return sha256(JSON.stringify(completion));
-}
-
-function invocationDigest<TTask extends string, TAgent extends string>(
-  invocation: AgentExecutionInvocation<TTask, TAgent>,
-): string {
-  const identity = {
-    task: invocation.task,
-    attempt: invocation.attempt,
-    sourceCommit: invocation.sourceCommit,
-    runId: invocation.runId,
-    workingDirectory: invocation.workingDirectory,
-    upstreamOutputs: invocation.upstreamOutputs,
-    execution: invocation.execution,
-    agentProfile: invocation.agentProfile,
-  };
-  return sha256(JSON.stringify(identity));
-}
-
-function isolationDigest(
-  request: ReadOnlyExpertRuntimeIsolationRequest,
-): string {
-  const identity = {
-    expertName: request.expertName,
-    sourceCommit: request.sourceCommit,
-    workingDirectory: request.workingDirectory,
-    snapshot: request.snapshot,
-  };
-  return sha256(JSON.stringify(identity));
-}
-
-function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
-}
+const AUTHORITY_ISSUANCE = Symbol('expert-authority-issuance');

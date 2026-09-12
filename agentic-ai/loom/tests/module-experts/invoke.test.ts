@@ -1,21 +1,34 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { err, ok, type Result } from 'neverthrow';
+import {
+  type AgentExecutionFailure,
+  AgentExecutionFailureKind,
+} from '../../src/agent-workflow/runtime.ts';
+import { ModuleExpertsInvokeScenario, REPO_ROOT } from './invoke.fixture.ts';
+export { ModuleExpertsInvokeScenario } from './invoke.fixture.ts';
+
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+
 import type { RmOptions } from 'node:fs';
+
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+
+import { join } from 'node:path';
+
 import { describe, expect, test } from 'bun:test';
+
 import {
   AgentAttemptJournal,
   type AgentAttemptJournalConfiguration,
 } from '../../src/agent-workflow/agent-journal.ts';
-import { replayAgentAttemptJournal } from '../../src/agent-workflow/agent-replay.ts';
-import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts';
+
+import { AgentAttemptReplay } from '../../src/agent-workflow/agent-replay.ts';
+
 import type {
   CompletedTaskTerminal,
   FailedTaskTerminal,
-  ModuleExpertContinuation,
   TaskTerminal,
 } from '../../src/agent-workflow/domain.ts';
+
 import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
@@ -27,31 +40,37 @@ import {
   WorkflowExecutorKind,
   WorkflowResultKind,
 } from '../../src/agent-workflow/domain.ts';
+
 import { WorkflowRuntimeActivityKind } from '../../src/agent-workflow/events.ts';
+
 import type { RuntimeActivityObservation } from '../../src/agent-workflow/events.ts';
+
 import type {
   AgentExecutionCompletion,
   AgentExecutionInvocation,
   AgentTaskRuntime,
 } from '../../src/agent-workflow/runtime.ts';
-import { parseModuleExpertCommandLine } from '../../src/module-experts/cli.ts';
-import {
-  invokeModuleExpert,
-  verifyModuleExpertInvocationResult,
-} from '../../src/module-experts/invoke.ts';
+
+import { ModuleExpertCommandParser } from '../../src/module-experts/cli.ts';
+
+import { ModuleExpertInvocation } from '../../src/module-experts/invoke.ts';
+
 import type {
   InvokeModuleExpertArgs,
   ModuleExpertInvocationResult,
   ModuleExpertInvocationRequest,
 } from '../../src/module-experts/invoke.ts';
+
 import { MODULE_EXPERT_WORKFLOW_VERSION } from '../../src/module-experts/trusted-runtime.ts';
-import { createAuthorizedDirectParent } from './invoke-parent-fixture.ts';
-import { registerModuleExpertRuntimeMock } from './module-expert-runtime-mock.ts';
+
+import { ModuleExpertsInvokeParentFixtureScenario } from './invoke-parent-fixture.ts';
+
+import { ModuleExpertsModuleExpertRuntimeMockScenario } from './module-expert-runtime-mock.ts';
+
 import type { RegisterModuleExpertRuntimeMockArgs } from './module-expert-runtime-mock.ts';
+
 import type { WebExpertAllowedContextPath } from '../../src/module-experts/catalog.ts';
 
-const REPO_ROOT = resolve(import.meta.dir, '../../../..');
-const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
 
 type ExtendedModuleExpertInvocationRequest = ModuleExpertInvocationRequest & {
@@ -66,7 +85,7 @@ class RecordingAgentRuntime implements AgentTaskRuntime<string, string> {
 
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     this.executionCount += 1;
     this.invocation = invocation;
     const observation: RuntimeActivityObservation = {
@@ -74,7 +93,7 @@ class RecordingAgentRuntime implements AgentTaskRuntime<string, string> {
       detail: 'Codex turn completed.',
     };
     await invocation.observe(observation);
-    return {
+    return ok({
       threadId: 'module-expert-thread',
       output: {
         summary: 'Core contract inspected.',
@@ -83,22 +102,25 @@ class RecordingAgentRuntime implements AgentTaskRuntime<string, string> {
         notesForParent: [],
         artifacts: [],
         resultKind: WorkflowResultKind.ModuleExpertEvidence,
-        continuation: moduleExpertContinuation(),
+        continuation: ModuleExpertsInvokeScenario.moduleExpertContinuation(),
       },
-    };
+    });
   }
 }
 
 class FailingAgentRuntime implements AgentTaskRuntime<string, string> {
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     const observation: RuntimeActivityObservation = {
       activity: WorkflowRuntimeActivityKind.TurnFailed,
       detail: 'Codex turn failed.',
     };
     await invocation.observe(observation);
-    throw new Error('private runtime detail must not be recorded');
+    return err({
+      kind: AgentExecutionFailureKind.FailedTurn,
+      message: 'private runtime detail must not be recorded',
+    });
   }
 }
 
@@ -110,14 +132,14 @@ class InvalidCompletionAgentRuntime implements AgentTaskRuntime<
 
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     this.executionCount += 1;
     const observation: RuntimeActivityObservation = {
       activity: WorkflowRuntimeActivityKind.TurnCompleted,
       detail: 'Codex turn completed.',
     };
     await invocation.observe(observation);
-    return {
+    return ok({
       threadId: '',
       output: {
         resultKind: WorkflowResultKind.ModuleExpertEvidence,
@@ -126,9 +148,9 @@ class InvalidCompletionAgentRuntime implements AgentTaskRuntime<
         findings: [],
         notesForParent: [],
         artifacts: [],
-        continuation: moduleExpertContinuation(),
+        continuation: ModuleExpertsInvokeScenario.moduleExpertContinuation(),
       },
-    };
+    });
   }
 }
 
@@ -138,7 +160,7 @@ class MissingContinuationAgentRuntime implements AgentTaskRuntime<
 > {
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
-  ): Promise<AgentExecutionCompletion> {
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
     const observation: RuntimeActivityObservation = {
       activity: WorkflowRuntimeActivityKind.TurnCompleted,
       detail: 'Codex turn completed.',
@@ -156,31 +178,43 @@ class MissingContinuationAgentRuntime implements AgentTaskRuntime<
         artifacts: [],
       },
     };
-    return JSON.parse(
-      JSON.stringify(incompleteCompletion),
-    ) as AgentExecutionCompletion;
+    return ok(
+      JSON.parse(
+        JSON.stringify(incompleteCompletion),
+      ) as AgentExecutionCompletion,
+    );
   }
 }
 
 describe('module expert invocation runtime', () => {
   test('invokes one read-only expert and finalizes immutable evidence', async () => {
     const runtime = new RecordingAgentRuntime();
-    const request = directRequest(uniqueRunId('module-expert-success'));
-    const runDirectory = processingRunDirectory(request.runId);
+    const request = ModuleExpertsInvokeScenario.directRequest(
+      ModuleExpertsInvokeScenario.uniqueRunId('module-expert-success'),
+    );
+    const runDirectory = ModuleExpertsInvokeScenario.processingRunDirectory(
+      request.runId,
+    );
     const controller = new AbortController();
     const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
       runId: request.runId,
       runtime,
     };
-    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
+    const runtimeMock =
+      ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
+        runtimeMockArgs,
+      );
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
       signal: controller.signal,
     };
     try {
-      await createAuthorizedDirectParent(request);
-      const result = await invokeModuleExpert(invokeArgs);
+      await ModuleExpertsInvokeParentFixtureScenario.createAuthorizedDirectParent(
+        request,
+      );
+      const result =
+        await ModuleExpertInvocation.invokeModuleExpert(invokeArgs);
 
       expect(result.expert).toBe('core_expert');
       expect(result.selectedContextPaths).toEqual([]);
@@ -197,7 +231,7 @@ describe('module expert invocation runtime', () => {
         WorkflowResultKind.ModuleExpertEvidence,
       );
       expect(result.terminal.output.continuation).toEqual(
-        moduleExpertContinuation(),
+        ModuleExpertsInvokeScenario.moduleExpertContinuation(),
       );
       expect(runtime.invocation).not.toBe(false);
       if (!runtime.invocation) throw new Error('Expected captured invocation.');
@@ -231,7 +265,7 @@ describe('module expert invocation runtime', () => {
         result.processing.events.path,
       );
       const eventsSerialized = await readFile(eventsPath, 'utf8');
-      const events = await readEvents(eventsPath);
+      const events = await ModuleExpertsInvokeScenario.readEvents(eventsPath);
       for (const [index, event] of events.entries()) {
         expect(event.adapter).toBe(
           AgentAttemptAdapterKind.ModuleExpertInvocation,
@@ -245,16 +279,18 @@ describe('module expert invocation runtime', () => {
         expect(event.parent).toEqual(request.parent);
         expect(event.sequence).toBe(index + 1);
       }
-      expect(result.processing.events.sha256).toBe(sha256(eventsSerialized));
+      expect(result.processing.events.sha256).toBe(
+        ModuleExpertsInvokeScenario.sha256(eventsSerialized),
+      );
       expect(events[0]).toMatchObject({
         kind: 'attempt-started',
-        invocationContextSha256: sha256(
+        invocationContextSha256: ModuleExpertsInvokeScenario.sha256(
           JSON.stringify(request.selectedContextPaths),
         ),
       });
       expect(eventsSerialized.includes('runtime-activity')).toBe(false);
       const replayRequest = { events };
-      expect(replayAgentAttemptJournal(replayRequest).terminalKind).toBe(
+      expect(AgentAttemptReplay.replay(replayRequest).terminalKind).toBe(
         TaskTerminalKind.Completed,
       );
       expect(result.processing.view.presence).toBe(
@@ -279,7 +315,7 @@ describe('module expert invocation runtime', () => {
         throw new Error('Expected projected completed module expert terminal.');
       }
       expect(projectedTerminal.output.continuation).toEqual(
-        moduleExpertContinuation(),
+        ModuleExpertsInvokeScenario.moduleExpertContinuation(),
       );
     } finally {
       runtimeMock.dispose();
@@ -296,25 +332,35 @@ describe('module expert invocation runtime', () => {
       '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
     ];
     const request: ModuleExpertInvocationRequest = {
-      ...directRequest(uniqueRunId('web-expert-context-evidence')),
+      ...ModuleExpertsInvokeScenario.directRequest(
+        ModuleExpertsInvokeScenario.uniqueRunId('web-expert-context-evidence'),
+      ),
       expert: 'web_expert',
       selectedContextPaths,
     };
-    const runDirectory = processingRunDirectory(request.runId);
+    const runDirectory = ModuleExpertsInvokeScenario.processingRunDirectory(
+      request.runId,
+    );
     const controller = new AbortController();
     const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
       runId: request.runId,
       runtime,
     };
-    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
+    const runtimeMock =
+      ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
+        runtimeMockArgs,
+      );
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
       signal: controller.signal,
     };
     try {
-      await createAuthorizedDirectParent(request);
-      const result = await invokeModuleExpert(invokeArgs);
+      await ModuleExpertsInvokeParentFixtureScenario.createAuthorizedDirectParent(
+        request,
+      );
+      const result =
+        await ModuleExpertInvocation.invokeModuleExpert(invokeArgs);
 
       expect(result.selectedContextPaths).toEqual(selectedContextPaths);
       if (!runtime.invocation) throw new Error('Expected captured invocation.');
@@ -333,24 +379,35 @@ describe('module expert invocation runtime', () => {
 
   test('rejects a duplicate immutable attempt before running it again', async () => {
     const runtime = new RecordingAgentRuntime();
-    const request = directRequest(uniqueRunId('module-expert-duplicate'));
-    const runDirectory = processingRunDirectory(request.runId);
+    const request = ModuleExpertsInvokeScenario.directRequest(
+      ModuleExpertsInvokeScenario.uniqueRunId('module-expert-duplicate'),
+    );
+    const runDirectory = ModuleExpertsInvokeScenario.processingRunDirectory(
+      request.runId,
+    );
     const controller = new AbortController();
     const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
       runId: request.runId,
       runtime,
     };
-    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
+    const runtimeMock =
+      ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
+        runtimeMockArgs,
+      );
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
       signal: controller.signal,
     };
     try {
-      await createAuthorizedDirectParent(request);
-      await invokeModuleExpert(invokeArgs);
+      await ModuleExpertsInvokeParentFixtureScenario.createAuthorizedDirectParent(
+        request,
+      );
+      await ModuleExpertInvocation.invokeModuleExpert(invokeArgs);
 
-      await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow();
+      await expect(
+        ModuleExpertInvocation.invokeModuleExpert(invokeArgs),
+      ).rejects.toThrow();
       expect(runtime.executionCount).toBe(1);
     } finally {
       runtimeMock.dispose();
@@ -360,22 +417,32 @@ describe('module expert invocation runtime', () => {
 
   test('finalizes a failed terminal when the runtime throws', async () => {
     const runtime = new FailingAgentRuntime();
-    const request = directRequest(uniqueRunId('module-expert-failure'));
-    const runDirectory = processingRunDirectory(request.runId);
+    const request = ModuleExpertsInvokeScenario.directRequest(
+      ModuleExpertsInvokeScenario.uniqueRunId('module-expert-failure'),
+    );
+    const runDirectory = ModuleExpertsInvokeScenario.processingRunDirectory(
+      request.runId,
+    );
     const controller = new AbortController();
     const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
       runId: request.runId,
       runtime,
     };
-    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
+    const runtimeMock =
+      ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
+        runtimeMockArgs,
+      );
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
       signal: controller.signal,
     };
     try {
-      await createAuthorizedDirectParent(request);
-      const result = await invokeModuleExpert(invokeArgs);
+      await ModuleExpertsInvokeParentFixtureScenario.createAuthorizedDirectParent(
+        request,
+      );
+      const result =
+        await ModuleExpertInvocation.invokeModuleExpert(invokeArgs);
 
       const expectedTerminal: FailedTaskTerminal<string> = {
         kind: TaskTerminalKind.Failed,
@@ -389,12 +456,12 @@ describe('module expert invocation runtime', () => {
         result.processing.events.path,
       );
       const eventsSerialized = await readFile(eventsPath, 'utf8');
-      const events = await readEvents(eventsPath);
+      const events = await ModuleExpertsInvokeScenario.readEvents(eventsPath);
       expect(eventsSerialized).not.toContain('private runtime detail');
       expect(eventsSerialized.includes('runtime-activity')).toBe(false);
       expect(eventsSerialized).not.toContain('"detail"');
       const replayRequest = { events };
-      expect(replayAgentAttemptJournal(replayRequest).terminalKind).toBe(
+      expect(AgentAttemptReplay.replay(replayRequest).terminalKind).toBe(
         TaskTerminalKind.Failed,
       );
       expect(result.processing.view.presence).toBe(
@@ -421,22 +488,32 @@ describe('module expert invocation runtime', () => {
 
   test('finalizes replayable failure when the runtime resolves invalid completion', async () => {
     const runtime = new InvalidCompletionAgentRuntime();
-    const request = directRequest(uniqueRunId('module-expert-invalid-result'));
-    const runDirectory = processingRunDirectory(request.runId);
+    const request = ModuleExpertsInvokeScenario.directRequest(
+      ModuleExpertsInvokeScenario.uniqueRunId('module-expert-invalid-result'),
+    );
+    const runDirectory = ModuleExpertsInvokeScenario.processingRunDirectory(
+      request.runId,
+    );
     const controller = new AbortController();
     const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
       runId: request.runId,
       runtime,
     };
-    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
+    const runtimeMock =
+      ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
+        runtimeMockArgs,
+      );
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
       signal: controller.signal,
     };
     try {
-      await createAuthorizedDirectParent(request);
-      const result = await invokeModuleExpert(invokeArgs);
+      await ModuleExpertsInvokeParentFixtureScenario.createAuthorizedDirectParent(
+        request,
+      );
+      const result =
+        await ModuleExpertInvocation.invokeModuleExpert(invokeArgs);
 
       expect(runtime.executionCount).toBe(1);
       expect(result.terminal.kind).toBe(TaskTerminalKind.Failed);
@@ -444,9 +521,9 @@ describe('module expert invocation runtime', () => {
         result.runDirectory,
         result.processing.events.path,
       );
-      const events = await readEvents(eventsPath);
+      const events = await ModuleExpertsInvokeScenario.readEvents(eventsPath);
       const replayRequest = { events };
-      expect(replayAgentAttemptJournal(replayRequest).terminalKind).toBe(
+      expect(AgentAttemptReplay.replay(replayRequest).terminalKind).toBe(
         TaskTerminalKind.Failed,
       );
       expect(
@@ -464,31 +541,41 @@ describe('module expert invocation runtime', () => {
 
   test('finalizes replayable failure when expert evidence omits typed continuation', async () => {
     const runtime = new MissingContinuationAgentRuntime();
-    const request = directRequest(uniqueRunId('module-expert-incomplete'));
-    const runDirectory = processingRunDirectory(request.runId);
+    const request = ModuleExpertsInvokeScenario.directRequest(
+      ModuleExpertsInvokeScenario.uniqueRunId('module-expert-incomplete'),
+    );
+    const runDirectory = ModuleExpertsInvokeScenario.processingRunDirectory(
+      request.runId,
+    );
     const controller = new AbortController();
     const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
       runId: request.runId,
       runtime,
     };
-    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
+    const runtimeMock =
+      ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
+        runtimeMockArgs,
+      );
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
       signal: controller.signal,
     };
     try {
-      await createAuthorizedDirectParent(request);
-      const result = await invokeModuleExpert(invokeArgs);
+      await ModuleExpertsInvokeParentFixtureScenario.createAuthorizedDirectParent(
+        request,
+      );
+      const result =
+        await ModuleExpertInvocation.invokeModuleExpert(invokeArgs);
 
       expect(result.terminal.kind).toBe(TaskTerminalKind.Failed);
       const eventsPath = join(
         result.runDirectory,
         result.processing.events.path,
       );
-      const events = await readEvents(eventsPath);
+      const events = await ModuleExpertsInvokeScenario.readEvents(eventsPath);
       const replayRequest = { events };
-      expect(replayAgentAttemptJournal(replayRequest).terminalKind).toBe(
+      expect(AgentAttemptReplay.replay(replayRequest).terminalKind).toBe(
         TaskTerminalKind.Failed,
       );
       expect(
@@ -503,22 +590,32 @@ describe('module expert invocation runtime', () => {
 
   test('rejects corrupted projections and a forged generic adapter', async () => {
     const runtime = new RecordingAgentRuntime();
-    const request = directRequest(uniqueRunId('module-expert-corruption'));
-    const runDirectory = processingRunDirectory(request.runId);
+    const request = ModuleExpertsInvokeScenario.directRequest(
+      ModuleExpertsInvokeScenario.uniqueRunId('module-expert-corruption'),
+    );
+    const runDirectory = ModuleExpertsInvokeScenario.processingRunDirectory(
+      request.runId,
+    );
     const controller = new AbortController();
     const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
       runId: request.runId,
       runtime,
     };
-    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
+    const runtimeMock =
+      ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
+        runtimeMockArgs,
+      );
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
       signal: controller.signal,
     };
     try {
-      await createAuthorizedDirectParent(request);
-      const result = await invokeModuleExpert(invokeArgs);
+      await ModuleExpertsInvokeParentFixtureScenario.createAuthorizedDirectParent(
+        request,
+      );
+      const result =
+        await ModuleExpertInvocation.invokeModuleExpert(invokeArgs);
       if (
         result.processing.view.presence !== MaterializedViewPresence.Recorded
       ) {
@@ -536,7 +633,9 @@ describe('module expert invocation runtime', () => {
         await writeFile(absolutePath, `${original}corrupted`, 'utf8');
         const verificationArgs = { result };
         await expect(
-          verifyModuleExpertInvocationResult(verificationArgs),
+          ModuleExpertInvocation.verifyModuleExpertInvocationResult(
+            verificationArgs,
+          ),
         ).rejects.toThrow('processing verification failed');
         await writeFile(absolutePath, original, 'utf8');
       }
@@ -549,7 +648,9 @@ describe('module expert invocation runtime', () => {
       };
       const reboundContextVerification = { result: reboundContextResult };
       await expect(
-        verifyModuleExpertInvocationResult(reboundContextVerification),
+        ModuleExpertInvocation.verifyModuleExpertInvocationResult(
+          reboundContextVerification,
+        ),
       ).rejects.toThrow('processing verification failed');
 
       const eventsPath = join(
@@ -557,7 +658,9 @@ describe('module expert invocation runtime', () => {
         result.processing.events.path,
       );
       const originalEvents = await readFile(eventsPath, 'utf8');
-      const forgedEvents = (await readEvents(eventsPath)).map((event) => ({
+      const forgedEvents = (
+        await ModuleExpertsInvokeScenario.readEvents(eventsPath)
+      ).map((event) => ({
         ...event,
         adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
       }));
@@ -571,13 +674,15 @@ describe('module expert invocation runtime', () => {
           ...result.processing,
           events: {
             ...result.processing.events,
-            sha256: sha256(forgedEventsSerialized),
+            sha256: ModuleExpertsInvokeScenario.sha256(forgedEventsSerialized),
           },
         },
       };
       const forgedVerificationArgs = { result: forgedResult };
       await expect(
-        verifyModuleExpertInvocationResult(forgedVerificationArgs),
+        ModuleExpertInvocation.verifyModuleExpertInvocationResult(
+          forgedVerificationArgs,
+        ),
       ).rejects.toThrow('processing verification failed');
       await writeFile(eventsPath, originalEvents, 'utf8');
     } finally {
@@ -587,7 +692,9 @@ describe('module expert invocation runtime', () => {
   });
 
   test('rejects generic Cortex evidence wrapped as module expert evidence', async () => {
-    const request = directRequest(uniqueRunId('module-expert-forged-generic'));
+    const request = ModuleExpertsInvokeScenario.directRequest(
+      ModuleExpertsInvokeScenario.uniqueRunId('module-expert-forged-generic'),
+    );
     const runDirectory = await mkdtemp(
       join(tmpdir(), 'loom-module-expert-forged-generic-'),
     );
@@ -605,7 +712,9 @@ describe('module expert invocation runtime', () => {
       parent: request.parent,
       now: () => '2026-08-22T00:00:00.000Z',
     };
-    const journal = new AgentAttemptJournal<string>(journalConfiguration);
+    const preparedJournal = new AgentAttemptJournal<string>(
+      journalConfiguration,
+    );
     const terminal: CompletedTaskTerminal<string> = {
       kind: TaskTerminalKind.Completed,
       task: request.task,
@@ -623,7 +732,7 @@ describe('module expert invocation runtime', () => {
     };
 
     try {
-      await journal.initialize();
+      const journal = await preparedJournal.initialize();
       const processing = await journal.finalize(terminal);
       const [defaulted1 = []] = [request.selectedContextPaths];
       const forgedResult: ModuleExpertInvocationResult = {
@@ -642,7 +751,9 @@ describe('module expert invocation runtime', () => {
       const verificationArgs = { result: forgedResult };
 
       await expect(
-        verifyModuleExpertInvocationResult(verificationArgs),
+        ModuleExpertInvocation.verifyModuleExpertInvocationResult(
+          verificationArgs,
+        ),
       ).rejects.toThrow('processing verification failed');
     } finally {
       await rm(runDirectory, REMOVE_RECURSIVELY);
@@ -651,7 +762,9 @@ describe('module expert invocation runtime', () => {
 
   test('rejects invalid direct lineage before runtime or journal creation', async () => {
     const runtime = new RecordingAgentRuntime();
-    const valid = directRequest(uniqueRunId('module-expert-lineage'));
+    const valid = ModuleExpertsInvokeScenario.directRequest(
+      ModuleExpertsInvokeScenario.uniqueRunId('module-expert-lineage'),
+    );
     const workflowRootRequest: ModuleExpertInvocationRequest = {
       ...valid,
       depth: 1,
@@ -695,7 +808,10 @@ describe('module expert invocation runtime', () => {
       runId: valid.runId,
       runtime,
     };
-    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
+    const runtimeMock =
+      ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
+        runtimeMockArgs,
+      );
 
     try {
       for (const request of invalidRequests) {
@@ -704,12 +820,14 @@ describe('module expert invocation runtime', () => {
           request,
           signal: controller.signal,
         };
-        await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow(
-          'request is invalid',
-        );
+        await expect(
+          ModuleExpertInvocation.invokeModuleExpert(invokeArgs),
+        ).rejects.toThrow('request is invalid');
       }
       expect(runtime.executionCount).toBe(0);
-      const runDirectory = processingRunDirectory(valid.runId);
+      const runDirectory = ModuleExpertsInvokeScenario.processingRunDirectory(
+        valid.runId,
+      );
       expect(Bun.file(runDirectory).exists()).resolves.toBe(false);
     } finally {
       runtimeMock.dispose();
@@ -718,7 +836,9 @@ describe('module expert invocation runtime', () => {
 
   test('revalidates the complete direct request before runtime execution', async () => {
     const runtime = new RecordingAgentRuntime();
-    const valid = directRequest(uniqueRunId('module-expert-direct-request'));
+    const valid = ModuleExpertsInvokeScenario.directRequest(
+      ModuleExpertsInvokeScenario.uniqueRunId('module-expert-direct-request'),
+    );
     const oversizedRequest: ModuleExpertInvocationRequest = {
       ...valid,
       instruction: 'x'.repeat(16_385),
@@ -737,7 +857,10 @@ describe('module expert invocation runtime', () => {
       runId: valid.runId,
       runtime,
     };
-    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
+    const runtimeMock =
+      ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
+        runtimeMockArgs,
+      );
 
     try {
       for (const request of invalidRequests) {
@@ -746,12 +869,14 @@ describe('module expert invocation runtime', () => {
           request,
           signal: controller.signal,
         };
-        await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow(
-          'request is invalid',
-        );
+        await expect(
+          ModuleExpertInvocation.invokeModuleExpert(invokeArgs),
+        ).rejects.toThrow('request is invalid');
       }
       expect(runtime.executionCount).toBe(0);
-      const runDirectory = processingRunDirectory(valid.runId);
+      const runDirectory = ModuleExpertsInvokeScenario.processingRunDirectory(
+        valid.runId,
+      );
       expect(Bun.file(runDirectory).exists()).resolves.toBe(false);
     } finally {
       runtimeMock.dispose();
@@ -760,18 +885,25 @@ describe('module expert invocation runtime', () => {
 
   test('rejects an unregistered expert before creating attempt evidence', async () => {
     const runtime = new RecordingAgentRuntime();
-    const direct = directRequest(uniqueRunId('module-expert-unknown'));
+    const direct = ModuleExpertsInvokeScenario.directRequest(
+      ModuleExpertsInvokeScenario.uniqueRunId('module-expert-unknown'),
+    );
     const request: ModuleExpertInvocationRequest = {
       ...direct,
       expert: 'shadow_expert',
     };
-    const runDirectory = processingRunDirectory(request.runId);
+    const runDirectory = ModuleExpertsInvokeScenario.processingRunDirectory(
+      request.runId,
+    );
     const controller = new AbortController();
     const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
       runId: request.runId,
       runtime,
     };
-    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
+    const runtimeMock =
+      ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
+        runtimeMockArgs,
+      );
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
@@ -779,9 +911,9 @@ describe('module expert invocation runtime', () => {
     };
 
     try {
-      await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow(
-        'not registered',
-      );
+      await expect(
+        ModuleExpertInvocation.invokeModuleExpert(invokeArgs),
+      ).rejects.toThrow('not registered');
       expect(runtime.executionCount).toBe(0);
       expect(Bun.file(runDirectory).exists()).resolves.toBe(false);
     } finally {
@@ -803,12 +935,12 @@ describe('module expert invocation runtime', () => {
       REPO_ROOT,
     ];
     const invalidArguments: ModuleExpertCommandArguments = ['invoke'];
-    const validate = parseModuleExpertCommandLine(validateArguments);
-    const invoke = parseModuleExpertCommandLine(invokeArguments);
+    const validate = ModuleExpertCommandParser.parse(validateArguments);
+    const invoke = ModuleExpertCommandParser.parse(invokeArguments);
 
     expect(validate).not.toBe(false);
     expect(invoke).not.toBe(false);
-    expect(parseModuleExpertCommandLine(invalidArguments)).toBe(false);
+    expect(ModuleExpertCommandParser.parse(invalidArguments)).toBe(false);
   });
 
   test('CLI rejects invalid requests before starting a Codex thread', async () => {
@@ -842,68 +974,3 @@ describe('module expert invocation runtime', () => {
     }
   });
 });
-
-function directRequest(runId: string): ModuleExpertInvocationRequest {
-  return {
-    runId,
-    expert: 'core_expert',
-    selectedContextPaths: [],
-    sourceCommit: SOURCE_COMMIT,
-    task: 'inspect-core-contract',
-    attempt: 1,
-    depth: 2,
-    parent: {
-      kind: AgentAttemptParentKind.AgentAttempt,
-      task: 'feature-synthesis',
-      agent: 'delivery-owner',
-      attempt: 1,
-    },
-    instruction: 'Describe the external vault API used by nook-wasm.',
-  };
-}
-
-function uniqueRunId(prefix: string): string {
-  return `${prefix}-${randomUUID()}`;
-}
-
-function moduleExpertContinuation(): ModuleExpertContinuation {
-  return {
-    externalApi: ['VaultService exposes typed vault operations.'],
-    dependencies: ['nook-crypto supplies protected cryptographic primitives.'],
-    consumers: ['nook-wasm consumes the public Rust facade.'],
-    behaviorInvariants: ['Vault operations preserve domain state transitions.'],
-    securityInvariants: [
-      'Protected material never crosses the public projection.',
-    ],
-    compatibilityInvariants: ['The existing WASM DTO remains stable.'],
-    owningTests: ['The nook-core suite owns domain behavior.'],
-    focusedValidation: ['Run the focused nook-core behavior tests.'],
-    risks: ['No new implementation risk was found.'],
-    unresolvedDecisions: ['No unresolved decisions remain.'],
-    parentActions: [
-      'Use the facade contract when planning the consumer slice.',
-    ],
-  };
-}
-
-function processingRunDirectory(runId: string): string {
-  return join(
-    REPO_ROOT,
-    'workflow',
-    'processing',
-    DelegatedAgentWorkflowName.AgentWork,
-    runId,
-  );
-}
-
-async function readEvents(eventsPath: string): Promise<AgentAttemptEvent[]> {
-  const serialized = await readFile(eventsPath, 'utf8');
-  return serialized
-    .trim()
-    .split('\n')
-    .map((line) => JSON.parse(line) as AgentAttemptEvent);
-}
-
-function sha256(serialized: string): string {
-  return createHash('sha256').update(serialized).digest('hex');
-}

@@ -1,889 +1,435 @@
 import {
-  UntrustedYamlPropertyPresence,
-  isRecord,
-  sealUntrustedYamlMap,
-  untrustedYamlProperty,
+  GitHubActionAttemptPages,
+  GitHubDispatchedActionPages,
+  GitHubApiPages,
+} from './agent-stats-github-api.ts';
+import {
+  GitHubReviewReactions,
+  GitHubReviewEvidence,
+} from './agent-stats-github-review-evidence.ts';
+import { GitHubEvidenceField } from './agent-stats-github-field.ts';
+import type {
+  AgentStatsGitHubEvidenceRequest,
+  AgentStatsGitHubEvidence,
+  BuildActionsEvidenceRequest,
+  BuildReviewEvidenceRequest,
+  ActionsEvidence,
+  HeadObservation,
+  CollectReviewReactionPagesRequest,
+  BuildHeadObservationRequest,
+} from './agent-stats-github-contracts.ts';
+export type {
+  AgentStatsGitHubEvidenceRequest,
+  AgentStatsGitHubEvidence,
+  BuildActionsEvidenceRequest,
+  BuildReviewEvidenceRequest,
+} from './agent-stats-github-contracts.ts';
+import { LoomFailureCode } from '../loom-failure.ts';
+import { err, ok, type Result } from 'neverthrow';
+import type { GitHubEvidenceFailure } from './agent-stats-github-api.ts';
+import {
   type UntrustedYamlMap,
   type UntrustedYamlNode,
+  UntrustedYamlBoundary,
 } from './guards.ts';
 import {
-  collectDispatchedActionAttemptPages,
-  expandActionAttemptPages,
-  failGitHubCollection,
-  flattenApiPages,
-  numberProperty,
-  requiredArrayProperty,
-  requiredNumberProperty,
-  requiredStringProperty,
-  runGitHubApi,
-  stringProperty,
   type ExpandActionAttemptPagesRequest,
   type CollectDispatchedActionAttemptPagesRequest,
   type GitHubApiRequest,
   type GitHubPropertyRequest as PropertyRequest,
+  GithubActionEvidenceApi,
 } from './agent-stats-github-api.ts';
 
-import type { UntrustedYamlPropertyArgs } from './guards.ts';
 import {
-  headSupersededAt,
-  isValidationWorkflow,
-  obsoleteRunSeconds,
   type HeadSupersededRequest,
   type ObsoleteRunSecondsRequest,
+  ValidationWorkflowHistory,
 } from './agent-stats-github-validation.ts';
 import {
-  deliveryHeadStarts,
-  maximumTimestamp,
-  mergeReviewedDeliveryHeads,
-  minimumTimestamp,
-  type DeliveryHeadStart,
+  DeliveryHeadTimeline,
+  LatestTimestamp,
+  ReviewedDeliveryHistory,
+  EarliestTimestamp,
 } from './agent-stats-github-delivery.ts';
+
 import {
-  ReviewOutcome,
-  substantiveReviewBodyFindingCount,
-} from './agent-stats-github-review.ts';
-import {
-  actionObservation,
-  actionObservationRecord,
-  actionAttemptStartedAt,
-  actionRunId,
-  isSourcePrRun,
-  validationCycleRecord,
   type ActionObservation,
   type ActionObservationRequest,
   type SourcePrRunRequest,
   type ValidationCycleRecordRequest,
+  ActionRunObservation,
+  ActionObservationRecord,
+  ActionAttemptStart,
+  ActionRunIdentity,
+  PullRequestActionRun,
+  ValidationCycleRecord,
 } from './agent-stats-github-actions.ts';
 
-const CODEX_LOGIN = 'chatgpt-codex-connector[bot]';
-const GITHUB_ACTIONS_LOGIN = 'github-actions[bot]';
-const TRUSTED_REVIEW_ASSOCIATIONS = new Set([
-  'OWNER',
-  'MEMBER',
-  'COLLABORATOR',
-]);
-
-export type AgentStatsGitHubEvidenceRequest = {
-  readonly repoRoot: string;
-  readonly prNumber: number;
-  readonly branch: string;
-  readonly openedAt: string;
-  readonly startedAt: string;
-  readonly mergedAt: string;
-  readonly finalHeadSha: string;
-};
-
-export type AgentStatsGitHubEvidence = {
-  readonly githubActionsRuns: UntrustedYamlMap[];
-  readonly deliveryHeads: UntrustedYamlMap[];
-  readonly reviewEvents: UntrustedYamlMap[];
-  readonly validationCycles: UntrustedYamlMap[];
-  readonly obsoleteValidationSeconds: number;
-  readonly obsoleteValidationCount: number;
-  readonly cancelledValidationSeconds: number;
-  readonly cancelledValidationCount: number;
-  readonly reviewRequestCount: number;
-  readonly reviewFindingBatchCount: number;
-  readonly reviewFindingCount: number;
-};
-
-export type BuildActionsEvidenceRequest = {
-  readonly pages: UntrustedYamlNode;
-  readonly prNumber: number;
-  readonly finalHeadSha: string;
-  readonly mergedAt: string;
-  readonly reviewEvents: readonly UntrustedYamlMap[];
-  readonly deliveryHeadOrder: readonly string[];
-};
-
-export type BuildReviewEvidenceRequest = {
-  readonly issueCommentPages: UntrustedYamlNode;
-  readonly reviewPages: UntrustedYamlNode;
-  readonly reviewCommentPages: UntrustedYamlNode;
-  readonly reviewReactionPages: UntrustedYamlNode;
-  readonly knownHeadShas: readonly string[];
-  readonly mergedAt: string;
-};
-
-type ActionsEvidence = {
-  readonly runs: UntrustedYamlMap[];
-  readonly heads: UntrustedYamlMap[];
-  readonly validationCycles: UntrustedYamlMap[];
-  readonly obsoleteValidationSeconds: number;
-  readonly obsoleteValidationCount: number;
-  readonly cancelledValidationSeconds: number;
-  readonly cancelledValidationCount: number;
-};
-
-type HeadObservation = {
-  readonly headSha: string;
-  readonly firstObservedAt: string;
-  readonly lastObservedAt: string;
-  readonly final: boolean;
-  readonly actionRunCount: number;
-  readonly actionSeconds: number;
-  readonly obsoleteActionSeconds: number;
-};
-
-type ReviewRequestObservation = {
-  readonly commentId: number;
-  readonly headSha: string;
-  readonly requestedAt: string;
-};
-
-type ReviewResultObservation = {
-  readonly headSha: string;
-  readonly completedAt: string;
-  readonly outcome: ReviewOutcome;
-  readonly findingCount: number;
-  readonly requestCommentId: number;
-};
-
-type ReviewEventObservation = {
-  readonly headSha: string;
-  readonly requestedAt: string;
-  readonly completedAt: string;
-  readonly outcome: ReviewOutcome;
-  readonly requested: boolean;
-  readonly findingCount: number;
-  readonly latencySeconds: number;
-};
-
-type ReviewEvidence = {
-  readonly events: UntrustedYamlMap[];
-  readonly requestCount: number;
-  readonly findingBatchCount: number;
-  readonly findingCount: number;
-};
-
-export function collectAgentStatsGitHubEvidence(
-  request: AgentStatsGitHubEvidenceRequest,
-): AgentStatsGitHubEvidence {
-  const actionsEndpoint = 'repos/{owner}/{repo}/actions/runs';
-  const createdRange = `created=${request.startedAt}..${request.mergedAt}`;
-  const branchField = `branch=${request.branch}`;
-  const actionsApiRequest: GitHubApiRequest = {
-    repoRoot: request.repoRoot,
-    endpoint: actionsEndpoint,
-    fields: [branchField, createdRange, 'per_page=100'],
-  };
-  const actionPages = runGitHubApi(actionsApiRequest);
-  const attemptPagesRequest: ExpandActionAttemptPagesRequest = {
-    repoRoot: request.repoRoot,
-    pages: actionPages,
-  };
-  const expandedActionPages = expandActionAttemptPages(attemptPagesRequest);
-  const dispatchedApiRequest: GitHubApiRequest = {
-    repoRoot: request.repoRoot,
-    endpoint: 'repos/{owner}/{repo}/actions/workflows/e2e-pr.yml/runs',
-    fields: [createdRange, 'event=workflow_dispatch', 'per_page=100'],
-  };
-  const dispatchedRequest: CollectDispatchedActionAttemptPagesRequest = {
-    repoRoot: request.repoRoot,
-    pages: runGitHubApi(dispatchedApiRequest),
-    prNumber: request.prNumber,
-  };
-  const dispatchedActionPages =
-    collectDispatchedActionAttemptPages(dispatchedRequest);
-  const allActionPages: UntrustedYamlNode = [
-    ...flattenApiPages(expandedActionPages),
-    ...flattenApiPages(dispatchedActionPages),
-  ];
-  const issueCommentsRequest: GitHubApiRequest = {
-    repoRoot: request.repoRoot,
-    endpoint: `repos/{owner}/{repo}/issues/${request.prNumber}/comments`,
-    fields: ['per_page=100'],
-  };
-  const reviewsRequest: GitHubApiRequest = {
-    repoRoot: request.repoRoot,
-    endpoint: `repos/{owner}/{repo}/pulls/${request.prNumber}/reviews`,
-    fields: ['per_page=100'],
-  };
-  const reviewCommentsRequest: GitHubApiRequest = {
-    repoRoot: request.repoRoot,
-    endpoint: `repos/{owner}/{repo}/pulls/${request.prNumber}/comments`,
-    fields: ['per_page=100'],
-  };
-  const commitsRequest: GitHubApiRequest = {
-    repoRoot: request.repoRoot,
-    endpoint: `repos/{owner}/{repo}/pulls/${request.prNumber}/commits`,
-    fields: ['per_page=100'],
-  };
-  const commitPages = runGitHubApi(commitsRequest);
-  const knownHeadShas: string[] = [];
-  for (const commit of flattenApiPages(commitPages)) {
-    if (!isRecord(commit)) continue;
-    const propertyRequest: PropertyRequest = { record: commit, key: 'sha' };
-    const headSha = requiredStringProperty(propertyRequest);
-    knownHeadShas.push(headSha);
-  }
-  if (!knownHeadShas.includes(request.finalHeadSha)) {
-    knownHeadShas.push(request.finalHeadSha);
-  }
-  const issueCommentPages = runGitHubApi(issueCommentsRequest);
-  const reactionsRequest: CollectReviewReactionPagesRequest = {
-    repoRoot: request.repoRoot,
-    issueCommentPages,
-  };
-  const reviewRequest: BuildReviewEvidenceRequest = {
-    issueCommentPages,
-    reviewPages: runGitHubApi(reviewsRequest),
-    reviewCommentPages: runGitHubApi(reviewCommentsRequest),
-    reviewReactionPages: collectReviewReactionPages(reactionsRequest),
-    knownHeadShas,
-    mergedAt: request.mergedAt,
-  };
-  const reviews = buildReviewEvidence(reviewRequest);
-  const actionsRequest: BuildActionsEvidenceRequest = {
-    pages: allActionPages,
-    prNumber: request.prNumber,
-    finalHeadSha: request.finalHeadSha,
-    mergedAt: request.mergedAt,
-    reviewEvents: reviews.events,
-    deliveryHeadOrder: knownHeadShas,
-  };
-  const actions = buildActionsEvidence(actionsRequest);
-  const deliveryHeadsRequest = {
-    actionHeads: actions.heads,
-    reviewEvents: reviews.events,
-    finalHeadSha: request.finalHeadSha,
-  };
-  const deliveryHeads = mergeReviewedDeliveryHeads(deliveryHeadsRequest);
-
-  return {
-    githubActionsRuns: actions.runs,
-    deliveryHeads,
-    reviewEvents: reviews.events,
-    validationCycles: actions.validationCycles,
-    obsoleteValidationSeconds: actions.obsoleteValidationSeconds,
-    obsoleteValidationCount: actions.obsoleteValidationCount,
-    cancelledValidationSeconds: actions.cancelledValidationSeconds,
-    cancelledValidationCount: actions.cancelledValidationCount,
-    reviewRequestCount: reviews.requestCount,
-    reviewFindingBatchCount: reviews.findingBatchCount,
-    reviewFindingCount: reviews.findingCount,
-  };
-}
-
-export function buildActionsEvidence(
-  request: BuildActionsEvidenceRequest,
-): ActionsEvidence {
-  const pages = flattenApiPages(request.pages);
-  const rawRuns: UntrustedYamlMap[] = [];
-  let expectedRunCount = 0;
-  for (const page of pages) {
-    if (!isRecord(page)) continue;
-    const totalCountRequest: PropertyRequest = {
-      record: page,
-      key: 'total_count',
-    };
-    const totalCount = requiredNumberProperty(totalCountRequest);
-    expectedRunCount = Math.max(expectedRunCount, totalCount);
-    const workflowRunsRequest: PropertyRequest = {
-      record: page,
-      key: 'workflow_runs',
-    };
-    const workflowRuns = requiredArrayProperty(workflowRunsRequest);
-    rawRuns.push(...workflowRuns.filter(isRecord));
-  }
-  const collectedRunIds = new Set(rawRuns.map(actionRunId));
-  if (collectedRunIds.size < expectedRunCount) {
-    failGitHubCollection(
-      `GitHub Actions history is incomplete: expected ${expectedRunCount}, collected ${collectedRunIds.size}`,
-    );
-  }
-  const deduplicatedRuns = new Map<string, ActionObservation>();
-  for (const rawRun of rawRuns) {
-    const associationRequest: SourcePrRunRequest = {
-      run: rawRun,
-      prNumber: request.prNumber,
-    };
-    if (!isSourcePrRun(associationRequest)) continue;
-    if (actionAttemptStartedAt(rawRun) > request.mergedAt) continue;
-    const observationRequest: ActionObservationRequest = {
-      record: rawRun,
-      prNumber: request.prNumber,
-      observedThrough: request.mergedAt,
-    };
-    const observation = actionObservation(observationRequest);
-    const observationKey = `${observation.runId}:${observation.runAttempt}`;
-    deduplicatedRuns.set(observationKey, observation);
-  }
-  const observations = [...deduplicatedRuns.values()];
-  const attributedObservations = observations.filter(
-    (observation) => observation.sourceAttributed,
-  );
-  const headStartsRequest = {
-    actions: attributedObservations,
-    reviewEvents: request.reviewEvents,
-    finalHeadSha: request.finalHeadSha,
-    deliveryHeadOrder: request.deliveryHeadOrder,
-  };
-  const headStarts = deliveryHeadStarts(headStartsRequest);
-  const headShas = headStarts.map((head) => head.headSha);
-  if (!headShas.includes(request.finalHeadSha))
-    headShas.push(request.finalHeadSha);
-  const headObservations = headShas.map((headSha) => {
-    const runs = attributedObservations.filter(
-      (run) => run.headSha === headSha,
-    );
-    const headRequest: BuildHeadObservationRequest = {
-      headSha,
-      runs,
-      finalHeadSha: request.finalHeadSha,
-      headStarts,
-    };
-    return buildHeadObservation(headRequest);
-  });
-  const runs = observations.map(actionObservationRecord);
-  const heads = headObservations.map(headObservationRecord);
-  const validationObservations = observations.filter(
-    (run) =>
-      isValidationWorkflow(run.workflow) &&
-      run.validationRequested &&
-      run.trigger === 'pull_request',
-  );
-  const validationCycles = validationObservations.map((run) => {
-    const supersededRequest: HeadSupersededRequest = {
-      headSha: run.headSha,
-      headStarts,
-    };
-    const supersededAt = headSupersededAt(supersededRequest);
-    const obsoleteRequest: ObsoleteRunSecondsRequest = { run, supersededAt };
-    const obsoleteSeconds = obsoleteRunSeconds(obsoleteRequest);
-    const cycleRequest: ValidationCycleRecordRequest = { run, obsoleteSeconds };
-    return validationCycleRecord(cycleRequest);
-  });
-  let obsoleteValidationSeconds = 0;
-  let obsoleteValidationCount = 0;
-  let cancelledValidationSeconds = 0;
-  let cancelledValidationCount = 0;
-  for (const cycle of validationCycles) {
-    const obsoleteRequest: PropertyRequest = {
-      record: cycle,
-      key: 'obsolete_seconds',
-    };
-    const obsoleteSeconds = numberProperty(obsoleteRequest);
-    obsoleteValidationSeconds += obsoleteSeconds;
-    if (obsoleteSeconds > 0) obsoleteValidationCount += 1;
-    const conclusionRequest: PropertyRequest = {
-      record: cycle,
-      key: 'conclusion',
-    };
-    if (stringProperty(conclusionRequest) === 'cancelled') {
-      cancelledValidationCount += 1;
-      const durationRequest: PropertyRequest = {
-        record: cycle,
-        key: 'duration_seconds',
-      };
-      cancelledValidationSeconds += numberProperty(durationRequest);
-    }
-  }
-  return {
-    runs,
-    heads,
-    validationCycles,
-    obsoleteValidationSeconds,
-    obsoleteValidationCount,
-    cancelledValidationSeconds,
-    cancelledValidationCount,
-  };
-}
-
-export function buildReviewEvidence(
-  request: BuildReviewEvidenceRequest,
-): ReviewEvidence {
-  const issueComments = flattenApiPages(request.issueCommentPages).filter(
-    isRecord,
-  );
-  const reviews = flattenApiPages(request.reviewPages).filter(isRecord);
-  const reviewComments = flattenApiPages(request.reviewCommentPages).filter(
-    isRecord,
-  );
-  const reviewReactions = flattenApiPages(request.reviewReactionPages).filter(
-    isRecord,
-  );
-  const requestsRequest: ReviewRequestsRequest = {
-    comments: issueComments,
-    knownHeadShas: request.knownHeadShas,
-    mergedAt: request.mergedAt,
-  };
-  const requests = reviewRequests(requestsRequest);
-  const resultsRequest: ReviewResultsRequest = {
-    issueComments,
-    reviews,
-    reviewComments,
-    reviewReactions,
-    requests,
-    knownHeadShas: request.knownHeadShas,
-    mergedAt: request.mergedAt,
-  };
-  const results = reviewResults(resultsRequest);
-  const events: ReviewEventObservation[] = [];
-  const matchedResultKeys = new Set<string>();
-  for (const reviewRequest of requests) {
-    const result = results.find(
-      (candidate) =>
-        candidate.headSha === reviewRequest.headSha &&
-        candidate.completedAt >= reviewRequest.requestedAt &&
-        (candidate.requestCommentId === 0 ||
-          candidate.requestCommentId === reviewRequest.commentId) &&
-        !matchedResultKeys.has(reviewResultKey(candidate)),
-    );
-    if (result) {
-      matchedResultKeys.add(reviewResultKey(result));
-      const pairRequest: ReviewEventPairRequest = { reviewRequest, result };
-      events.push(reviewEventFromPair(pairRequest));
-    } else {
-      const event: ReviewEventObservation = {
-        headSha: reviewRequest.headSha,
-        requestedAt: reviewRequest.requestedAt,
-        completedAt: '',
-        outcome: ReviewOutcome.Unavailable,
-        requested: true,
-        findingCount: 0,
-        latencySeconds: 0,
-      };
-      events.push(event);
-    }
-  }
-  for (const result of results) {
-    if (matchedResultKeys.has(reviewResultKey(result))) continue;
-    const event: ReviewEventObservation = {
-      headSha: result.headSha,
-      requestedAt: result.completedAt,
-      completedAt: result.completedAt,
-      outcome: result.outcome,
-      requested: false,
-      findingCount: result.findingCount,
-      latencySeconds: 0,
-    };
-    events.push(event);
-  }
-  let findingBatchCount = 0;
-  let findingCount = 0;
-  for (const event of events) {
-    if (event.outcome !== ReviewOutcome.Findings) continue;
-    findingBatchCount += 1;
-    findingCount += event.findingCount;
-  }
-  return {
-    events: events.map(reviewEventRecord),
-    requestCount: requests.length,
-    findingBatchCount,
-    findingCount,
-  };
-}
-
-type CollectReviewReactionPagesRequest = {
-  readonly repoRoot: string;
-  readonly issueCommentPages: UntrustedYamlNode;
-};
-
-function collectReviewReactionPages(
-  request: CollectReviewReactionPagesRequest,
-): UntrustedYamlNode {
-  const reactions: UntrustedYamlMap[] = [];
-  const comments = flattenApiPages(request.issueCommentPages).filter(isRecord);
-  for (const comment of comments) {
-    if (!isTrustedReviewRequester(comment)) continue;
-    const bodyRequest: PropertyRequest = { record: comment, key: 'body' };
-    const body = requiredStringProperty(bodyRequest);
-    if (!/nook-codex-review:[0-9a-f]{7,40}/.test(body)) continue;
-    const commentIdRequest: PropertyRequest = { record: comment, key: 'id' };
-    const commentId = requiredNumberProperty(commentIdRequest);
-    const apiRequest: GitHubApiRequest = {
+/** Owns the github agent evidence registry and its capability transitions. */
+export class GithubAgentEvidence {
+  constructor(private readonly request: AgentStatsGitHubEvidenceRequest) {}
+  collect(): Result<AgentStatsGitHubEvidence, GitHubEvidenceFailure> {
+    const request = this.request;
+    const actionsEndpoint = 'repos/{owner}/{repo}/actions/runs';
+    const createdRange = `created=${request.startedAt}..${request.mergedAt}`;
+    const branchField = `branch=${request.branch}`;
+    const actionsApiRequest: GitHubApiRequest = {
       repoRoot: request.repoRoot,
-      endpoint: `repos/{owner}/{repo}/issues/comments/${commentId}/reactions`,
+      endpoint: actionsEndpoint,
+      fields: [branchField, createdRange, 'per_page=100'],
+    };
+    const githubResult1 = new GithubActionEvidenceApi(
+      actionsApiRequest,
+    ).execute();
+    if (githubResult1.isErr()) return err(githubResult1.error);
+    const actionPages = githubResult1.value;
+    const attemptPagesRequest: ExpandActionAttemptPagesRequest = {
+      repoRoot: request.repoRoot,
+      pages: actionPages,
+    };
+    const githubResult2 = new GitHubActionAttemptPages(
+      attemptPagesRequest,
+    ).expand();
+    if (githubResult2.isErr()) return err(githubResult2.error);
+    const expandedActionPages = githubResult2.value;
+    const dispatchedApiRequest: GitHubApiRequest = {
+      repoRoot: request.repoRoot,
+      endpoint: 'repos/{owner}/{repo}/actions/workflows/e2e-pr.yml/runs',
+      fields: [createdRange, 'event=workflow_dispatch', 'per_page=100'],
+    };
+    const githubResult3 = new GithubActionEvidenceApi(
+      dispatchedApiRequest,
+    ).execute();
+    if (githubResult3.isErr()) return err(githubResult3.error);
+    const dispatchedRequest: CollectDispatchedActionAttemptPagesRequest = {
+      repoRoot: request.repoRoot,
+      pages: githubResult3.value,
+      prNumber: request.prNumber,
+    };
+    const githubResult4 = new GitHubDispatchedActionPages(
+      dispatchedRequest,
+    ).collect();
+    if (githubResult4.isErr()) return err(githubResult4.error);
+    const dispatchedActionPages = githubResult4.value;
+    const pageAdmission1 = new GitHubApiPages(expandedActionPages).flatten();
+    if (pageAdmission1.isErr()) return err(pageAdmission1.error);
+    const pageAdmission2 = new GitHubApiPages(dispatchedActionPages).flatten();
+    if (pageAdmission2.isErr()) return err(pageAdmission2.error);
+    const allActionPages: UntrustedYamlNode = [
+      ...pageAdmission1.value,
+      ...pageAdmission2.value,
+    ];
+    const issueCommentsRequest: GitHubApiRequest = {
+      repoRoot: request.repoRoot,
+      endpoint: `repos/{owner}/{repo}/issues/${request.prNumber}/comments`,
       fields: ['per_page=100'],
     };
-    for (const reaction of flattenApiPages(runGitHubApi(apiRequest))) {
-      if (!isRecord(reaction)) {
-        failGitHubCollection('GitHub reaction must be a mapping');
-      }
-      const contentRequest: PropertyRequest = {
-        record: reaction,
-        key: 'content',
-      };
-      const createdAtRequest: PropertyRequest = {
-        record: reaction,
-        key: 'created_at',
-      };
-      const userRequest: UntrustedYamlPropertyArgs = {
-        record: reaction,
-        key: 'user',
-      };
-      const user = untrustedYamlProperty(userRequest);
-      if (
-        user.presence === UntrustedYamlPropertyPresence.Absent ||
-        !isRecord(user.value)
-      ) {
-        failGitHubCollection('GitHub reaction user must be a mapping');
-      }
-      const reactionRecord = {
-        request_comment_id: commentId,
-        content: requiredStringProperty(contentRequest),
-        created_at: requiredStringProperty(createdAtRequest),
-        user: user.value,
-      };
-      reactions.push(sealUntrustedYamlMap(reactionRecord));
+    const reviewsRequest: GitHubApiRequest = {
+      repoRoot: request.repoRoot,
+      endpoint: `repos/{owner}/{repo}/pulls/${request.prNumber}/reviews`,
+      fields: ['per_page=100'],
+    };
+    const reviewCommentsRequest: GitHubApiRequest = {
+      repoRoot: request.repoRoot,
+      endpoint: `repos/{owner}/{repo}/pulls/${request.prNumber}/comments`,
+      fields: ['per_page=100'],
+    };
+    const commitsRequest: GitHubApiRequest = {
+      repoRoot: request.repoRoot,
+      endpoint: `repos/{owner}/{repo}/pulls/${request.prNumber}/commits`,
+      fields: ['per_page=100'],
+    };
+    const githubResult5 = new GithubActionEvidenceApi(commitsRequest).execute();
+    if (githubResult5.isErr()) return err(githubResult5.error);
+    const commitPages = githubResult5.value;
+    const knownHeadShas: string[] = [];
+    const pageAdmission3 = new GitHubApiPages(commitPages).flatten();
+    if (pageAdmission3.isErr()) return err(pageAdmission3.error);
+    for (const commit of pageAdmission3.value) {
+      if (!UntrustedYamlBoundary.isRecord(commit)) continue;
+      const propertyRequest: PropertyRequest = { record: commit, key: 'sha' };
+      const requiredField1 = new GitHubEvidenceField(propertyRequest).string();
+      if (requiredField1.isErr()) return err(requiredField1.error);
+      const headSha = requiredField1.value;
+      knownHeadShas.push(headSha);
     }
+    if (!knownHeadShas.includes(request.finalHeadSha)) {
+      knownHeadShas.push(request.finalHeadSha);
+    }
+    const githubResult6 = new GithubActionEvidenceApi(
+      issueCommentsRequest,
+    ).execute();
+    if (githubResult6.isErr()) return err(githubResult6.error);
+    const issueCommentPages = githubResult6.value;
+    const reactionsRequest: CollectReviewReactionPagesRequest = {
+      repoRoot: request.repoRoot,
+      issueCommentPages,
+    };
+    const githubResult7 = new GithubActionEvidenceApi(reviewsRequest).execute();
+    if (githubResult7.isErr()) return err(githubResult7.error);
+    const githubResult8 = new GithubActionEvidenceApi(
+      reviewCommentsRequest,
+    ).execute();
+    if (githubResult8.isErr()) return err(githubResult8.error);
+    const githubResult9 = new GitHubReviewReactions(reactionsRequest).collect();
+    if (githubResult9.isErr()) return err(githubResult9.error);
+    const reviewRequest: BuildReviewEvidenceRequest = {
+      issueCommentPages,
+      reviewPages: githubResult7.value,
+      reviewCommentPages: githubResult8.value,
+      reviewReactionPages: githubResult9.value,
+      knownHeadShas,
+      mergedAt: request.mergedAt,
+    };
+    const pageAdmission4 = new GitHubReviewEvidence(reviewRequest).build();
+    if (pageAdmission4.isErr()) return err(pageAdmission4.error);
+    const reviews = pageAdmission4.value;
+    const actionsRequest: BuildActionsEvidenceRequest = {
+      pages: allActionPages,
+      prNumber: request.prNumber,
+      finalHeadSha: request.finalHeadSha,
+      mergedAt: request.mergedAt,
+      reviewEvents: reviews.events,
+      deliveryHeadOrder: knownHeadShas,
+    };
+    const pageAdmission5 = new GitHubActionEvidence(actionsRequest).build();
+    if (pageAdmission5.isErr()) return err(pageAdmission5.error);
+    const actions = pageAdmission5.value;
+    const deliveryHeadsRequest = {
+      actionHeads: actions.heads,
+      reviewEvents: reviews.events,
+      finalHeadSha: request.finalHeadSha,
+    };
+    const deliveryHeads = ReviewedDeliveryHistory.merge(deliveryHeadsRequest);
+
+    return ok({
+      githubActionsRuns: actions.runs,
+      deliveryHeads,
+      reviewEvents: reviews.events,
+      validationCycles: actions.validationCycles,
+      obsoleteValidationSeconds: actions.obsoleteValidationSeconds,
+      obsoleteValidationCount: actions.obsoleteValidationCount,
+      cancelledValidationSeconds: actions.cancelledValidationSeconds,
+      cancelledValidationCount: actions.cancelledValidationCount,
+      reviewRequestCount: reviews.requestCount,
+      reviewFindingBatchCount: reviews.findingBatchCount,
+      reviewFindingCount: reviews.findingCount,
+    });
   }
-  return [reactions];
 }
-
-type BuildHeadObservationRequest = {
-  readonly headSha: string;
-  readonly runs: readonly ActionObservation[];
-  readonly finalHeadSha: string;
-  readonly headStarts: readonly DeliveryHeadStart[];
-};
-
-function buildHeadObservation(
-  request: BuildHeadObservationRequest,
-): HeadObservation {
-  const timestamps = request.runs.flatMap((run) => [
-    run.startedAt,
-    run.finishedAt,
-  ]);
-  const deliveryStart = request.headStarts.find(
-    (head) => head.headSha === request.headSha,
-  );
-  if (deliveryStart) timestamps.push(deliveryStart.observedAt);
-  const timestampRequest = { values: timestamps };
-  const firstObservedAt = minimumTimestamp(timestampRequest);
-  const lastObservedAt = maximumTimestamp(timestampRequest);
-  const supersededRequest: HeadSupersededRequest = {
-    headSha: request.headSha,
-    headStarts: request.headStarts,
-  };
-  const supersededAt = headSupersededAt(supersededRequest);
-  let actionSeconds = 0;
-  let obsoleteActionSeconds = 0;
-  for (const run of request.runs) {
-    actionSeconds += run.durationSeconds;
-    const obsoleteRequest: ObsoleteRunSecondsRequest = { run, supersededAt };
-    obsoleteActionSeconds += obsoleteRunSeconds(obsoleteRequest);
-  }
-  return {
-    headSha: request.headSha,
-    firstObservedAt,
-    lastObservedAt,
-    final: request.headSha === request.finalHeadSha,
-    actionRunCount: request.runs.length,
-    actionSeconds,
-    obsoleteActionSeconds,
-  };
-}
-
-type ReviewRequestsRequest = {
-  readonly comments: readonly UntrustedYamlMap[];
-  readonly knownHeadShas: readonly string[];
-  readonly mergedAt: string;
-};
-
-function reviewRequests(
-  request: ReviewRequestsRequest,
-): ReviewRequestObservation[] {
-  const observations: ReviewRequestObservation[] = [];
-  for (const comment of request.comments) {
-    const cutoffRequest: PropertyRequest = {
-      record: comment,
-      key: 'created_at',
-    };
-    if (requiredStringProperty(cutoffRequest) > request.mergedAt) continue;
-    if (!isTrustedReviewRequester(comment)) continue;
-    const bodyRequest: PropertyRequest = { record: comment, key: 'body' };
-    const body = requiredStringProperty(bodyRequest);
-    const marker = body.match(/nook-codex-review:([0-9a-f]{7,40})/);
-    if (!marker) continue;
-    const [defaulted1 = ''] = [marker[1]];
-    const headRequest: ResolveHeadShaRequest = {
-      candidate: defaulted1,
-      knownHeadShas: request.knownHeadShas,
-    };
-    const headSha = resolveHeadSha(headRequest);
-    if (headSha.length === 0) continue;
-    const createdAtRequest: PropertyRequest = {
-      record: comment,
-      key: 'created_at',
-    };
-    const commentIdRequest: PropertyRequest = { record: comment, key: 'id' };
-    const commentId = requiredNumberProperty(commentIdRequest);
-    const requestedAt = requiredStringProperty(createdAtRequest);
-    const observation: ReviewRequestObservation = {
-      commentId,
-      headSha,
-      requestedAt,
-    };
-    observations.push(observation);
-  }
-  return observations;
-}
-
-type ReviewResultsRequest = {
-  readonly issueComments: readonly UntrustedYamlMap[];
-  readonly reviews: readonly UntrustedYamlMap[];
-  readonly reviewComments: readonly UntrustedYamlMap[];
-  readonly reviewReactions: readonly UntrustedYamlMap[];
-  readonly requests: readonly ReviewRequestObservation[];
-  readonly knownHeadShas: readonly string[];
-  readonly mergedAt: string;
-};
-
-function reviewResults(
-  request: ReviewResultsRequest,
-): ReviewResultObservation[] {
-  const results: ReviewResultObservation[] = [];
-  for (const review of request.reviews) {
-    const reviewLoginRequest: HasLoginRequest = {
-      record: review,
-      expected: CODEX_LOGIN,
-    };
-    if (!hasLogin(reviewLoginRequest)) continue;
-    const stateRequest: PropertyRequest = { record: review, key: 'state' };
-    if (stringProperty(stateRequest) === 'PENDING') continue;
-    const cutoffRequest: PropertyRequest = {
-      record: review,
-      key: 'submitted_at',
-    };
-    if (requiredStringProperty(cutoffRequest) > request.mergedAt) continue;
-    const reviewIdRequest: PropertyRequest = { record: review, key: 'id' };
-    const reviewId = requiredNumberProperty(reviewIdRequest);
-    const inlineFindingCount = request.reviewComments.filter((comment) => {
-      const commentLoginRequest: HasLoginRequest = {
-        record: comment,
-        expected: CODEX_LOGIN,
+export class GitHubActionEvidence {
+  constructor(private readonly request: BuildActionsEvidenceRequest) {}
+  build(): Result<ActionsEvidence, GitHubEvidenceFailure> {
+    const request = this.request;
+    const pageAdmission6 = new GitHubApiPages(request.pages).flatten();
+    if (pageAdmission6.isErr()) return err(pageAdmission6.error);
+    const pages = pageAdmission6.value;
+    const rawRuns: UntrustedYamlMap[] = [];
+    let expectedRunCount = 0;
+    for (const page of pages) {
+      if (!UntrustedYamlBoundary.isRecord(page)) continue;
+      const totalCountRequest: PropertyRequest = {
+        record: page,
+        key: 'total_count',
       };
-      const reviewRequest: PropertyRequest = {
-        record: comment,
-        key: 'pull_request_review_id',
+      const fieldAdmission1 = new GitHubEvidenceField(
+        totalCountRequest,
+      ).number();
+      if (fieldAdmission1.isErr()) return err(fieldAdmission1.error);
+      const totalCount = fieldAdmission1.value;
+      expectedRunCount = Math.max(expectedRunCount, totalCount);
+      const workflowRunsRequest: PropertyRequest = {
+        record: page,
+        key: 'workflow_runs',
       };
-      const replyRequest: PropertyRequest = {
-        record: comment,
-        key: 'in_reply_to_id',
+      const fieldAdmission2 = new GitHubEvidenceField(
+        workflowRunsRequest,
+      ).array();
+      if (fieldAdmission2.isErr()) return err(fieldAdmission2.error);
+      const workflowRuns = fieldAdmission2.value;
+      rawRuns.push(...workflowRuns.filter(UntrustedYamlBoundary.isRecord));
+    }
+    const collectedRunIds = new Set<number>();
+    for (const run of rawRuns) {
+      const identity = new ActionRunIdentity(run).execute();
+      if (identity.isErr()) return err(identity.error);
+      collectedRunIds.add(identity.value);
+    }
+    if (collectedRunIds.size < expectedRunCount) {
+      return err({
+        code: LoomFailureCode.CommandFailed,
+        message: `GitHub Actions history is incomplete: expected ${expectedRunCount}, collected ${collectedRunIds.size}`,
+      });
+    }
+    const deduplicatedRuns = new Map<string, ActionObservation>();
+    for (const rawRun of rawRuns) {
+      const associationRequest: SourcePrRunRequest = {
+        run: rawRun,
+        prNumber: request.prNumber,
       };
-      return (
-        hasLogin(commentLoginRequest) &&
-        requiredNumberProperty(reviewRequest) === reviewId &&
-        numberProperty(replyRequest) === 0
+      const association = new PullRequestActionRun(
+        associationRequest,
+      ).execute();
+      if (association.isErr()) return err(association.error);
+      if (!association.value) continue;
+      const attemptStart = new ActionAttemptStart(rawRun).execute();
+      if (attemptStart.isErr()) return err(attemptStart.error);
+      if (attemptStart.value > request.mergedAt) continue;
+      const observationRequest: ActionObservationRequest = {
+        record: rawRun,
+        prNumber: request.prNumber,
+        observedThrough: request.mergedAt,
+      };
+      const observationResult = new ActionRunObservation(
+        observationRequest,
+      ).execute();
+      if (observationResult.isErr()) return err(observationResult.error);
+      const observation = observationResult.value;
+      const observationKey = `${observation.runId}:${observation.runAttempt}`;
+      deduplicatedRuns.set(observationKey, observation);
+    }
+    const observations = [...deduplicatedRuns.values()];
+    const attributedObservations = observations.filter(
+      (observation) => observation.sourceAttributed,
+    );
+    const headStartsRequest = {
+      actions: attributedObservations,
+      reviewEvents: request.reviewEvents,
+      finalHeadSha: request.finalHeadSha,
+      deliveryHeadOrder: request.deliveryHeadOrder,
+    };
+    const headStarts = DeliveryHeadTimeline.starts(headStartsRequest);
+    const headShas = headStarts.map((head) => head.headSha);
+    if (!headShas.includes(request.finalHeadSha))
+      headShas.push(request.finalHeadSha);
+    const headObservations = headShas.map((headSha) => {
+      const runs = attributedObservations.filter(
+        (run) => run.headSha === headSha,
       );
-    }).length;
-    const bodyRequest: PropertyRequest = { record: review, key: 'body' };
-    const bodyFindingCount = substantiveReviewBodyFindingCount(
-      stringProperty(bodyRequest),
+      const headRequest: BuildHeadObservationRequest = {
+        headSha,
+        runs,
+        finalHeadSha: request.finalHeadSha,
+        headStarts,
+      };
+      return this.buildHeadObservation(headRequest);
+    });
+    const runs = observations.map(ActionObservationRecord.encode);
+    const heads = headObservations.map(this.headObservationRecord);
+    const validationObservations = observations.filter(
+      (run) =>
+        ValidationWorkflowHistory.isValidationWorkflow(run.workflow) &&
+        run.validationRequested &&
+        run.trigger === 'pull_request',
     );
-    const findingCount = inlineFindingCount + bodyFindingCount;
-    if (findingCount === 0) continue;
-    const commitRequest: PropertyRequest = { record: review, key: 'commit_id' };
-    const candidate = requiredStringProperty(commitRequest);
-    const headRequest: ResolveHeadShaRequest = {
-      candidate,
-      knownHeadShas: request.knownHeadShas,
-    };
-    const headSha = resolveHeadSha(headRequest);
-    if (headSha.length === 0) continue;
-    const submittedAtRequest: PropertyRequest = {
-      record: review,
-      key: 'submitted_at',
-    };
-    const observation: ReviewResultObservation = {
-      headSha,
-      completedAt: requiredStringProperty(submittedAtRequest),
-      outcome: ReviewOutcome.Findings,
-      findingCount,
-      requestCommentId: 0,
-    };
-    results.push(observation);
-  }
-  for (const comment of request.issueComments) {
-    const cutoffRequest: PropertyRequest = {
-      record: comment,
-      key: 'created_at',
-    };
-    if (requiredStringProperty(cutoffRequest) > request.mergedAt) continue;
-    const commentLoginRequest: HasLoginRequest = {
-      record: comment,
-      expected: CODEX_LOGIN,
-    };
-    if (!hasLogin(commentLoginRequest)) continue;
-    const bodyRequest: PropertyRequest = { record: comment, key: 'body' };
-    const body = requiredStringProperty(bodyRequest);
-    if (!body.includes('find any major issues')) continue;
-    const match = body.match(/Reviewed commit:\*\* `([0-9a-f]{7,40})/i);
-    if (!match) continue;
-    const [defaulted2 = ''] = [match[1]];
-    const headRequest: ResolveHeadShaRequest = {
-      candidate: defaulted2,
-      knownHeadShas: request.knownHeadShas,
-    };
-    const headSha = resolveHeadSha(headRequest);
-    if (headSha.length === 0) continue;
-    const createdAtRequest: PropertyRequest = {
-      record: comment,
-      key: 'created_at',
-    };
-    const observation: ReviewResultObservation = {
-      headSha,
-      completedAt: requiredStringProperty(createdAtRequest),
-      outcome: ReviewOutcome.Clean,
-      findingCount: 0,
-      requestCommentId: 0,
-    };
-    results.push(observation);
-  }
-  for (const reaction of request.reviewReactions) {
-    const cutoffRequest: PropertyRequest = {
-      record: reaction,
-      key: 'created_at',
-    };
-    if (requiredStringProperty(cutoffRequest) > request.mergedAt) continue;
-    const reactionLoginRequest: HasLoginRequest = {
-      record: reaction,
-      expected: CODEX_LOGIN,
-    };
-    if (!hasLogin(reactionLoginRequest)) continue;
-    const contentRequest: PropertyRequest = {
-      record: reaction,
-      key: 'content',
-    };
-    if (requiredStringProperty(contentRequest) !== '+1') continue;
-    const commentIdRequest: PropertyRequest = {
-      record: reaction,
-      key: 'request_comment_id',
-    };
-    const commentId = requiredNumberProperty(commentIdRequest);
-    const reviewRequest = request.requests.find(
-      (candidate) => candidate.commentId === commentId,
-    );
-    if (!reviewRequest) continue;
-    if (
-      results.some(
-        (result) =>
-          result.headSha === reviewRequest.headSha &&
-          result.completedAt >= reviewRequest.requestedAt,
-      )
-    ) {
-      continue;
+    const validationCycles = validationObservations.map((run) => {
+      const supersededRequest: HeadSupersededRequest = {
+        headSha: run.headSha,
+        headStarts,
+      };
+      const supersededAt =
+        ValidationWorkflowHistory.headSupersededAt(supersededRequest);
+      const obsoleteRequest: ObsoleteRunSecondsRequest = { run, supersededAt };
+      const obsoleteSeconds =
+        ValidationWorkflowHistory.obsoleteRunSeconds(obsoleteRequest);
+      const cycleRequest: ValidationCycleRecordRequest = {
+        run,
+        obsoleteSeconds,
+      };
+      return ValidationCycleRecord.encode(cycleRequest);
+    });
+    let obsoleteValidationSeconds = 0;
+    let obsoleteValidationCount = 0;
+    let cancelledValidationSeconds = 0;
+    let cancelledValidationCount = 0;
+    for (const cycle of validationCycles) {
+      const obsoleteRequest: PropertyRequest = {
+        record: cycle,
+        key: 'obsolete_seconds',
+      };
+      const obsoleteSeconds = new GitHubEvidenceField(
+        obsoleteRequest,
+      ).optionalNumber();
+      obsoleteValidationSeconds += obsoleteSeconds;
+      if (obsoleteSeconds > 0) obsoleteValidationCount += 1;
+      const conclusionRequest: PropertyRequest = {
+        record: cycle,
+        key: 'conclusion',
+      };
+      if (
+        new GitHubEvidenceField(conclusionRequest).optionalString() ===
+        'cancelled'
+      ) {
+        cancelledValidationCount += 1;
+        const durationRequest: PropertyRequest = {
+          record: cycle,
+          key: 'duration_seconds',
+        };
+        cancelledValidationSeconds += new GitHubEvidenceField(
+          durationRequest,
+        ).optionalNumber();
+      }
     }
-    const createdAtRequest: PropertyRequest = {
-      record: reaction,
-      key: 'created_at',
+    return ok({
+      runs,
+      heads,
+      validationCycles,
+      obsoleteValidationSeconds,
+      obsoleteValidationCount,
+      cancelledValidationSeconds,
+      cancelledValidationCount,
+    });
+  }
+  private buildHeadObservation(
+    request: BuildHeadObservationRequest,
+  ): HeadObservation {
+    const timestamps = request.runs.flatMap((run) => [
+      run.startedAt,
+      run.finishedAt,
+    ]);
+    const deliveryStart = request.headStarts.find(
+      (head) => head.headSha === request.headSha,
+    );
+    if (deliveryStart) timestamps.push(deliveryStart.observedAt);
+    const timestampRequest = { values: timestamps };
+    const firstObservedAt = EarliestTimestamp.select(timestampRequest);
+    const lastObservedAt = LatestTimestamp.select(timestampRequest);
+    const supersededRequest: HeadSupersededRequest = {
+      headSha: request.headSha,
+      headStarts: request.headStarts,
     };
-    const observation: ReviewResultObservation = {
-      headSha: reviewRequest.headSha,
-      completedAt: requiredStringProperty(createdAtRequest),
-      outcome: ReviewOutcome.Clean,
-      findingCount: 0,
-      requestCommentId: commentId,
+    const supersededAt =
+      ValidationWorkflowHistory.headSupersededAt(supersededRequest);
+    let actionSeconds = 0;
+    let obsoleteActionSeconds = 0;
+    for (const run of request.runs) {
+      actionSeconds += run.durationSeconds;
+      const obsoleteRequest: ObsoleteRunSecondsRequest = { run, supersededAt };
+      obsoleteActionSeconds +=
+        ValidationWorkflowHistory.obsoleteRunSeconds(obsoleteRequest);
+    }
+    return {
+      headSha: request.headSha,
+      firstObservedAt,
+      lastObservedAt,
+      final: request.headSha === request.finalHeadSha,
+      actionRunCount: request.runs.length,
+      actionSeconds,
+      obsoleteActionSeconds,
     };
-    results.push(observation);
   }
-  return results;
-}
-
-type ResolveHeadShaRequest = {
-  readonly candidate: string;
-  readonly knownHeadShas: readonly string[];
-};
-
-function resolveHeadSha(request: ResolveHeadShaRequest): string {
-  // Full SHAs arrive only through trusted request markers or Codex-authored
-  // results. Keep them even when a later rebase removes them from PR ancestry.
-  if (/^[0-9a-f]{40}$/.test(request.candidate)) {
-    return request.candidate;
+  private headObservationRecord(
+    observation: HeadObservation,
+  ): UntrustedYamlMap {
+    const record = {
+      head_sha: observation.headSha,
+      first_observed_at: observation.firstObservedAt,
+      last_observed_at: observation.lastObservedAt,
+      final: observation.final,
+      action_run_count: observation.actionRunCount,
+      action_seconds: observation.actionSeconds,
+      obsolete_action_seconds: observation.obsoleteActionSeconds,
+    };
+    return UntrustedYamlBoundary.seal(record);
   }
-  const matches = request.knownHeadShas.filter((headSha) =>
-    headSha.startsWith(request.candidate),
-  );
-  const [defaulted3 = ''] = [matches[0]];
-  return matches.length === 1 ? defaulted3 : '';
-}
-
-type ReviewEventPairRequest = {
-  readonly reviewRequest: ReviewRequestObservation;
-  readonly result: ReviewResultObservation;
-};
-
-function reviewEventFromPair(
-  request: ReviewEventPairRequest,
-): ReviewEventObservation {
-  const requestedAt = Date.parse(request.reviewRequest.requestedAt);
-  const completedAt = Date.parse(request.result.completedAt);
-  return {
-    headSha: request.reviewRequest.headSha,
-    requestedAt: request.reviewRequest.requestedAt,
-    completedAt: request.result.completedAt,
-    outcome: request.result.outcome,
-    requested: true,
-    findingCount: request.result.findingCount,
-    latencySeconds: Math.max(0, Math.round((completedAt - requestedAt) / 1000)),
-  };
-}
-
-function reviewResultKey(result: ReviewResultObservation): string {
-  return `${result.headSha}:${result.completedAt}:${result.outcome}:${result.requestCommentId}`;
-}
-
-function headObservationRecord(observation: HeadObservation): UntrustedYamlMap {
-  const record = {
-    head_sha: observation.headSha,
-    first_observed_at: observation.firstObservedAt,
-    last_observed_at: observation.lastObservedAt,
-    final: observation.final,
-    action_run_count: observation.actionRunCount,
-    action_seconds: observation.actionSeconds,
-    obsolete_action_seconds: observation.obsoleteActionSeconds,
-  };
-  return sealUntrustedYamlMap(record);
-}
-
-function reviewEventRecord(event: ReviewEventObservation): UntrustedYamlMap {
-  const record = {
-    head_sha: event.headSha,
-    requested_at: event.requestedAt,
-    completed_at: event.completedAt,
-    reviewer: 'codex',
-    outcome: event.outcome,
-    requested: event.requested,
-    finding_count: event.findingCount,
-    latency_seconds: event.latencySeconds,
-  };
-  return sealUntrustedYamlMap(record);
-}
-
-type HasLoginRequest = {
-  readonly record: UntrustedYamlMap;
-  readonly expected: string;
-};
-
-function hasLogin(request: HasLoginRequest): boolean {
-  const userArgs: UntrustedYamlPropertyArgs = {
-    record: request.record,
-    key: 'user',
-  };
-  const user = untrustedYamlProperty(userArgs);
-  if (
-    user.presence === UntrustedYamlPropertyPresence.Absent ||
-    !isRecord(user.value)
-  ) {
-    return false;
-  }
-  const loginRequest: PropertyRequest = { record: user.value, key: 'login' };
-  return stringProperty(loginRequest) === request.expected;
-}
-
-function isTrustedReviewRequester(comment: UntrustedYamlMap): boolean {
-  const associationRequest: PropertyRequest = {
-    record: comment,
-    key: 'author_association',
-  };
-  if (TRUSTED_REVIEW_ASSOCIATIONS.has(stringProperty(associationRequest))) {
-    return true;
-  }
-  const loginRequest: HasLoginRequest = {
-    record: comment,
-    expected: GITHUB_ACTIONS_LOGIN,
-  };
-  return hasLogin(loginRequest);
 }

@@ -217,7 +217,7 @@ test('keeps the Linear credential out of the untrusted pull request workflow', a
   assert.match(trustedWorkflow, /pull_request_target:/)
   assert.match(
     trustedWorkflow,
-    /format\('pr-\{0\}-\{1\}', github\.event\.pull_request\.number, github\.event\.pull_request\.head\.sha\)/,
+    /group: linear-ui-demo-\$\{\{ github\.run_id \}\}/,
   )
   assert.match(trustedWorkflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/)
 })

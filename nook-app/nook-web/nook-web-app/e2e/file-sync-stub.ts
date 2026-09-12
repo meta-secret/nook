@@ -167,7 +167,7 @@ export function createLocalE2eFileSyncVaultStub(
       if (opts?.fileName) {
         fileName = opts.fileName
       }
-      if (opts && 'vaultYaml' in opts) {
+      if (typeof opts?.vaultYaml === 'string') {
         vaultYaml = opts.vaultYaml
         vaultFileExists = true
         if (!fileId) {
@@ -197,7 +197,7 @@ export function createLocalE2eFileSyncVaultStub(
         }
 
         const request = route.request()
-        const url = request.url().split('?')[0]!
+        const url = request.url().split('?')[0] ?? ''
         const method = request.method()
         const fullUrl = request.url()
 

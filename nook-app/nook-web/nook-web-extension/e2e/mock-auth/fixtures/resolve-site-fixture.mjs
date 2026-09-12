@@ -16,8 +16,8 @@ export const ShellTemplatePilotExpectation = Object.freeze({
   FailClosedAlternateAuthentication: 'fail-closed-alternate-authentication',
 })
 
-/** @typedef {{ id: string, quirks: string[], steps: unknown[], pilotExpectation: string }} ShellTemplate */
-/** @typedef {{ template: string, source: string, loginUrl: string, quirks?: string[], steps?: unknown[] }} SiteShellRef */
+/** @typedef {{ id: string, quirks: string[], steps: Array<{ fields: Array<{ type?: string }>, submit: { label: string } }>, pilotExpectation: string }} ShellTemplate */
+/** @typedef {{ template: string, source: string, loginUrl: string, quirks?: string[], steps?: ShellTemplate['steps'] }} SiteShellRef */
 
 const siteShells = /** @type {Record<string, SiteShellRef>} */ (
   JSON.parse(readFileSync(siteShellsPath, 'utf8'))

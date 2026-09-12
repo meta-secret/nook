@@ -9,6 +9,7 @@ use super::super::import_support::{
     MAX_CSV_BYTES, SourceLabelMetadata,
 };
 use super::{ApplePasswordsImportError, ApplePasswordsImportPlan};
+use crate::secrets::import_support::CsvExportColumn;
 use crate::{
     AuthenticatorIssuerHostsError, AuthenticatorSecret, LoginSecret, SecretValue, ValidationError,
 };
@@ -19,8 +20,8 @@ struct ApplePasswordColumns {
     url: usize,
     username: usize,
     password: usize,
-    notes: Option<usize>,
-    otp_auth: Option<usize>,
+    notes: CsvExportColumn,
+    otp_auth: CsvExportColumn,
 }
 
 /// A CSV input retains its source bytes until the admitted reader is consumed.
@@ -64,8 +65,10 @@ impl<'a> ApplePasswordsCsvInput<'a> {
         if self.text.len() > MAX_CSV_BYTES {
             return Err(ApplePasswordsImportError::CsvTooLarge);
         }
-        let mut reader = CsvImportReader::new(self.text);
-        let columns = ApplePasswordHeaders::new(reader.headers()?).admit()?;
+        let reader = CsvImportReader::new(self.text);
+        let read = reader.headers()?;
+        let reader = read.reader;
+        let columns = ApplePasswordHeaders::new(&read.headers).admit()?;
         Ok(CheckedApplePasswordsCsv { reader, columns })
     }
 }
@@ -84,8 +87,8 @@ impl CheckedApplePasswordsCsv<'_> {
                 too_many_records: ApplePasswordsImportError::TooManyRecords,
                 convert: |record: &StringRecord| self.columns.convert(record),
             },
-            |items: &mut Vec<SecretValue>| {
-                for item in items {
+            |items: Vec<SecretValue>| {
+                for mut item in items {
                     item.zeroize_plaintext();
                 }
             },
@@ -115,11 +118,16 @@ impl ApplePasswordHeaders {
             .position(|header| header == &CsvHeader::new(name).normalized())
             .ok_or(ApplePasswordsImportError::MissingColumn(name))
     }
-    fn optional(&self, name: &str) -> Option<usize> {
+    fn optional(&self, name: &str) -> CsvExportColumn {
         let expected = CsvHeader::new(name).normalized();
-        self.normalized
+        let column = self
+            .normalized
             .iter()
-            .position(|header| header == &expected)
+            .position(|header| header == &expected);
+        match column {
+            Some(index) => CsvExportColumn::Exported(index),
+            None => CsvExportColumn::NotExported,
+        }
     }
     fn admit(self) -> Result<ApplePasswordColumns, ApplePasswordsImportError> {
         Ok(ApplePasswordColumns {
@@ -138,7 +146,7 @@ struct ApplePasswordTitle<'a> {
 }
 impl ApplePasswordTitle<'_> {
     fn append_to(&self, notes: &mut String) {
-        if let Some(entry) = (SourceLabelMetadata {
+        if let Ok(entry) = (SourceLabelMetadata {
             key: "title",
             label: self.title,
             website_url: self.website_url,
@@ -204,12 +212,15 @@ impl ApplePasswordColumns {
                     {
                         authenticator.website_url = website_url;
                     }
-                    if let Err(error) = authenticator.apply_inferred_website_url_if_empty() {
-                        for item in &mut items {
-                            item.zeroize_plaintext();
+                    let authenticator = match authenticator.apply_inferred_website_url_if_empty() {
+                        Ok(authenticator) => authenticator,
+                        Err(error) => {
+                            for item in &mut items {
+                                item.zeroize_plaintext();
+                            }
+                            return Err(error.into());
                         }
-                        return Err(error.into());
-                    }
+                    };
                     items.push(SecretValue::Authenticator(authenticator));
                 }
                 Err(ValidationError::AuthenticatorIssuerCatalogInvalid) => {

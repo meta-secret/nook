@@ -5,15 +5,15 @@
 )]
 use super::NookVaultManager;
 use crate::{NookError, NookImportResult};
-use nook_core::ApplePasswordsExportInput;
-use nook_core::DashlaneExport;
-use nook_core::GoogleAuthenticatorMigrationInput;
-use nook_core::KeeperCsvInput;
-use nook_core::OnePasswordExport;
-use nook_core::ProtonPassImportInput;
+use nook_core::BitwardenExportAccess;
+use nook_core::RecordTypeDeclaration;
 use nook_core::{
     AgeArmoredCiphertext, SecretImportUnsupportedRecordCount, SecretValue, SymmetricKey,
     VaultOperation,
+};
+use nook_core::{
+    ApplePasswordsExportInput, DashlaneExport, GoogleAuthenticatorMigrationInput, KeeperCsvInput,
+    OnePasswordExport, ProtonPassImportInput,
 };
 use nook_core::{ChromePasswordsCsvInput, KeePassXcCsvInput, LastPassCsvInput};
 use std::collections::{HashMap, HashSet};
@@ -74,10 +74,15 @@ impl<'a> CoalescedSecretImport<'a> {
         for mut value in items {
             let fingerprint = value.fingerprint(secrets_key)?;
             if let Some(index) = indexes.get(&fingerprint).copied() {
-                let enriched = coalesced[index].enriched_with(&value);
-                coalesced[index].zeroize_plaintext();
+                let Some(existing) = coalesced.get_mut(index) else {
+                    return Err(NookError::Database(
+                        "Secret import coalescing index was invalid.".to_owned(),
+                    ));
+                };
+                let enriched = existing.enriched_with(&value);
+                existing.zeroize_plaintext();
                 value.zeroize_plaintext();
-                coalesced[index] = enriched;
+                *existing = enriched;
                 duplicates += 1;
             } else {
                 indexes.insert(fingerprint, coalesced.len());
@@ -109,9 +114,12 @@ impl<'a> CoalescedSecretImport<'a> {
                         .find(|(_, existing)| existing == &fingerprint)
                 })
         {
-            let secret_type = record.secret_type.ok_or_else(|| {
-                NookError::Database(format!("Secret {} is missing its type.", record.key))
-            })?;
+            let RecordTypeDeclaration::Secret(secret_type) = record.secret_type else {
+                return Err(NookError::Database(format!(
+                    "Secret {} is missing its type.",
+                    record.key
+                )));
+            };
             let ciphertext = AgeArmoredCiphertext::parse(record.value.as_str())?;
             let mut plaintext = crypto.decrypt_value(&ciphertext)?;
             let mut existing = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
@@ -269,7 +277,7 @@ impl NookVaultManager {
         skipped_unsupported: SecretImportUnsupportedRecordCount,
         source: SecretImportSource,
     ) -> Result<NookImportResult, JsError> {
-        let _ = self.status.tx.send(source.status().to_owned());
+        drop(self.status.tx.send(source.status().to_owned()));
         self.ensure_vault_crypto_from_cache().await?;
         if !self
             .vault
@@ -314,7 +322,7 @@ impl PreparedSecretImport {
         if !operations.is_empty() {
             manager.append_vault_operations(operations).await?;
         }
-        let _ = manager.status.tx.send("READY".to_owned());
+        drop(manager.status.tx.send("READY".to_owned()));
         tracing::info!(
             scope = "wasm-secrets",
             action = source.action(),
@@ -347,7 +355,7 @@ impl NookVaultManager {
         let password = Zeroizing::new(password);
         let plan = nook_core::BitwardenExport {
             json: json.as_str(),
-            password: (!password.is_empty()).then_some(password.as_str()),
+            password: BitwardenExportAccess::PasswordProvided(password.as_str()),
         }
         .plan()
         .map_err(|error| NookError::Database(error.to_string()))?;
@@ -600,7 +608,7 @@ mod import_tests {
             yaml.zeroize_plaintext();
             let record = StoredSecretRecord {
                 key: nook_core::SecretId::generate()?,
-                secret_type: Some(value.secret_type()),
+                secret_type: RecordTypeDeclaration::Secret(value.secret_type()),
                 value: StoredRecordPayload::from_age_armored(encrypted),
             };
             value.zeroize_plaintext();
@@ -674,7 +682,7 @@ mod import_tests {
     )]
     fn malformed_existing_record_rejects_preparation() -> anyhow::Result<()> {
         let mut fixture = ImportFixture::new()?;
-        fixture.record.secret_type = None;
+        fixture.record.secret_type = RecordTypeDeclaration::Undeclared;
         let original = fixture.record.clone();
         match fixture.prepare("same note\n\n## LastPass\n- group: Personal") {
             Err(NookError::Database(message)) => {
@@ -713,7 +721,7 @@ mod import_tests {
         } = CoalescedSecretImport::new(items, &key)?;
         assert_eq!(duplicates, 1);
         assert_eq!(items.len(), 1);
-        let SecretValue::SecureNote(note) = &items[0] else {
+        let Some(SecretValue::SecureNote(note)) = items.first() else {
             return Err(anyhow::anyhow!(
                 "coalesced import item must be a secure note"
             ));

@@ -60,8 +60,8 @@ describe('Airbnb authentication mock', () => {
     expect(AirbnbAuthMockScenario.submittedControl('Primary')).toBe(
       AirbnbAuthControl.Unrecognized,
     )
-    expect(AirbnbAuthPresentationState.Ready).toBe('ready')
-    expect(AirbnbAuthPresentationState.Rejected).toBe('rejected')
+    expect(String(AirbnbAuthPresentationState.Ready)).toBe('ready')
+    expect(String(AirbnbAuthPresentationState.Rejected)).toBe('rejected')
   })
 
   test('promotes both Airbnb catalog entries to the captured shell', () => {

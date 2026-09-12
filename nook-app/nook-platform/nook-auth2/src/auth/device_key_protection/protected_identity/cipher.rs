@@ -200,34 +200,35 @@ impl DeviceIdentityAssociatedData {
             PIN_AAD_CONTEXT.len() + salt.len() + nonce.len() + 16,
         )));
         aad.0.extend_from_slice(PIN_AAD_CONTEXT);
-        aad.append(&PIN_DEVICE_KEY_PROTECTION_VERSION.to_be_bytes());
-        aad.append(PIN_KDF_NAME.as_bytes());
-        aad.append(&iterations.to_be_bytes());
-        aad.append(salt);
-        aad.append(nonce);
+        aad = aad.append(&PIN_DEVICE_KEY_PROTECTION_VERSION.to_be_bytes());
+        aad = aad.append(PIN_KDF_NAME.as_bytes());
+        aad = aad.append(&iterations.to_be_bytes());
+        aad = aad.append(salt);
+        aad = aad.append(nonce);
         aad.0
     }
     pub(super) fn passkey(record: &PasskeyWrappedLocalDeviceIdentity) -> Zeroizing<Vec<u8>> {
         let mut aad = Self(Zeroizing::new(Vec::new()));
         aad.0.extend_from_slice(PASSKEY_WRAPPED_AAD_CONTEXT);
-        aad.append(&record.version.to_be_bytes());
-        aad.append(record.protection.as_bytes());
-        aad.append(record.device_mode.as_bytes());
-        aad.append(record.credential_id.as_bytes());
-        aad.append(record.user_handle.as_bytes());
-        aad.append(record.prf_input.as_bytes());
-        aad.append(record.kdf.as_bytes());
-        aad.append(record.hkdf_salt.as_bytes());
-        aad.append(record.cipher.as_bytes());
-        aad.append(record.nonce.as_bytes());
+        aad = aad.append(&record.version.to_be_bytes());
+        aad = aad.append(record.protection.as_bytes());
+        aad = aad.append(record.device_mode.as_bytes());
+        aad = aad.append(record.credential_id.as_bytes());
+        aad = aad.append(record.user_handle.as_bytes());
+        aad = aad.append(record.prf_input.as_bytes());
+        aad = aad.append(record.kdf.as_bytes());
+        aad = aad.append(record.hkdf_salt.as_bytes());
+        aad = aad.append(record.cipher.as_bytes());
+        aad = aad.append(record.nonce.as_bytes());
         aad.0
     }
-    fn append(&mut self, value: &[u8]) {
+    fn append(mut self, value: &[u8]) -> Self {
         let target = &mut self.0;
 
         let length = u32::try_from(value.len()).unwrap_or(u32::MAX);
         target.extend_from_slice(&length.to_be_bytes());
         target.extend_from_slice(value);
+        self
     }
 }
 pub(in super::super) struct DeviceIdentitySecretEncoding<'a> {
@@ -292,7 +293,10 @@ mod tests {
         Nonce,
     }
     impl AuthenticatedMetadata {
-        fn tamper(&self, record: &mut PasskeyWrappedLocalDeviceIdentity) -> anyhow::Result<()> {
+        fn tamper(
+            &self,
+            mut record: PasskeyWrappedLocalDeviceIdentity,
+        ) -> anyhow::Result<PasskeyWrappedLocalDeviceIdentity> {
             let encoded = match self {
                 Self::Credential => &record.credential_id,
                 Self::UserHandle => &record.user_handle,
@@ -301,7 +305,10 @@ mod tests {
                 Self::Nonce => &record.nonce,
             };
             let mut bytes = Engine::decode(&URL_SAFE_NO_PAD, encoded)?;
-            bytes[0] ^= 0x80;
+            let first = bytes
+                .first_mut()
+                .ok_or_else(|| anyhow::anyhow!("authenticated metadata must not be empty"))?;
+            *first ^= 0x80;
             let encoded = match self {
                 Self::Credential => &mut record.credential_id,
                 Self::UserHandle => &mut record.user_handle,
@@ -310,7 +317,7 @@ mod tests {
                 Self::Nonce => &mut record.nonce,
             };
             *encoded = Engine::encode(&URL_SAFE_NO_PAD, &bytes);
-            Ok(())
+            Ok(record)
         }
     }
 
@@ -372,8 +379,7 @@ mod tests {
             AuthenticatedMetadata::Salt,
             AuthenticatedMetadata::Nonce,
         ] {
-            let mut tampered = fixture.record.clone();
-            field.tamper(&mut tampered)?;
+            let tampered = field.tamper(fixture.record.clone())?;
             assert!(matches!(
                 tampered.prepare(&fixture.output)?.decrypt(),
                 Err(DeviceKeyProtectionError::Decrypt)

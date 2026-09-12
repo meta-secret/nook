@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { WorkspaceLocation } from '$lib/app/workspace-route'
+  import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
   type EnrollmentCodeUnlock = {
     readonly code: string
     readonly password: string
@@ -11,30 +13,30 @@
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { KeyRound, RefreshCw, ShieldCheck } from '@lucide/svelte'
-  import { onMount, tick, untrack } from 'svelte'
+  import { onMount, tick, untrack, type ComponentProps } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     type DevicesAccessHostMount,
     DevicesAccessHostMountKind,
     DevicesAccessNudgePreference,
     DevicesAccessTriggerKind,
-    parseDevicesAccessNudgePreference,
-    readDevicesAccessNudgeStorage,
-    shouldShowDevicesAccessNudge,
+    StoredDevicesAccessNudge,
+    DevicesAccessNudgeStorage,
+    DevicesAccessNudgePresentation,
   } from './devices-access-dashboard-state'
   import { type StartSentinelGenesisArgs } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import type {
+    OAuthFilePreset,
     ProviderSetupRequest,
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth/providers'
   import {
     DEFAULT_GITHUB_REPO,
-    localFolderHandle,
+    LocalFolderPresentation,
     LocalFolderHandleKind,
-    oauthAccessToken,
-    OAuthAccessTokenKind,
+    oauth_access_token,
   } from '$lib/auth/providers'
   import {
     Card,
@@ -48,9 +50,9 @@
   import {
     WorkspaceRoute,
     WorkspaceRouteLookupKind,
-    workspaceRouteFromPath,
+    WorkspacePath,
   } from '$lib/app/workspace-route'
-  import { applyWorkspaceRoute, pushWorkspaceRoute } from '$lib/vault/ui'
+  import { VaultWorkspaceActions } from '$lib/vault/ui'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
@@ -61,13 +63,20 @@
     type LoginVaultEntry,
   } from '$lib/components/login/login-unlock-state'
   import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
+  import type { SentinelGenesisParticipation } from '$lib/components/login/login-create-vault-chooser-contract'
   import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
+  import {
+    focusIdentityContextWhenAvailable as restoreIdentityContextFocus,
+  } from './login-gate-focus'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
-  import { sentinelCeremonyIsVisible } from '$lib/vault/sentinel-unlock'
+  import {
+    SentinelUnlockActions,
+    SentinelCeremonyVisibility,
+  } from '$lib/vault/sentinel-unlock'
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import {
@@ -144,11 +153,12 @@
     onSentinelUnlocked?: () => void | Promise<void>
     onCreateDeviceVault: (label: string) => void | Promise<void>
     onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
-    onCreateSentinelGenesisPublicKeyAnnouncement?: () =>
-      string | Promise<string>
+    onCreateSentinelGenesisPublicKeyAnnouncement?: () => Promise<
+      SentinelActionResult<string>
+    >
     onCreateSentinelGenesisParticipantResponse?: (
       requestPayload: string,
-    ) => string | Promise<string>
+    ) => Promise<SentinelActionResult<string>>
     onRemoveProvider?: (id: string) => void | Promise<void>
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
@@ -163,11 +173,62 @@
     ) => void | Promise<void>
   } = $props()
 
+  type CreateVaultChooserOptionalProps = Partial<
+    Pick<
+      ComponentProps<typeof LoginCreateVaultChooser>,
+      'onAcceptSentinelOnboardingPackage' | 'onFinishSentinelInvitation'
+    >
+  >
+  type CreateVaultChooserProps = ComponentProps<typeof LoginCreateVaultChooser>
+  type EnrollmentQrOnboardCardProps = ComponentProps<
+    typeof EnrollmentQrOnboardCard
+  >
+  type LoginUnlockStepProps = ComponentProps<typeof LoginUnlockStep>
+  type LoginVaultPickerProps = ComponentProps<typeof LoginVaultPicker>
+  type EnrollmentPanelOptionalProps = Partial<
+    Pick<ComponentProps<typeof LoginEnrollmentPanel>, 'onUseEnrollmentCode'>
+  >
+  type SentinelCeremonyOptionalProps = Partial<
+    Pick<ComponentProps<typeof SentinelCeremonyPanel>, 'onUnlocked'>
+  >
+  type ProviderManagementOptionalProps = Partial<
+    Pick<
+      ComponentProps<typeof LoginProviderManagement>,
+      'onBeginAddProvider' | 'onCancelAddProvider' | 'onRemoveProvider'
+    >
+  >
+  const createVaultChooserOptionalProps = $derived.by(() => {
+    const props: CreateVaultChooserOptionalProps = {}
+    if (onAcceptSentinelOnboardingPackage)
+      props.onAcceptSentinelOnboardingPackage =
+        onAcceptSentinelOnboardingPackage
+    if (onSentinelUnlocked)
+      props.onFinishSentinelInvitation = onSentinelUnlocked
+    return props
+  })
+  const enrollmentPanelOptionalProps = $derived.by(() => {
+    const props: EnrollmentPanelOptionalProps = {}
+    if (onUseEnrollmentCode) props.onUseEnrollmentCode = onUseEnrollmentCode
+    return props
+  })
+  const sentinelCeremonyOptionalProps = $derived.by(() => {
+    const props: SentinelCeremonyOptionalProps = {}
+    if (onSentinelUnlocked) props.onUnlocked = onSentinelUnlocked
+    return props
+  })
+  const providerManagementOptionalProps = $derived.by(() => {
+    const props: ProviderManagementOptionalProps = {}
+    if (onBeginAddProvider) props.onBeginAddProvider = onBeginAddProvider
+    if (onCancelAddProvider) props.onCancelAddProvider = onCancelAddProvider
+    if (onRemoveProvider) props.onRemoveProvider = onRemoveProvider
+    return props
+  })
+
   let enrollmentPanelOpen = $state(false)
   let showProviderSetupLink = $state(false)
   function loginDevicesAccessRouteOpen(): boolean {
     if (!('window' in globalThis)) return false
-    const route = workspaceRouteFromPath(window.location.pathname)
+    const route = new WorkspacePath(window.location.pathname).route
     return (
       route.kind === WorkspaceRouteLookupKind.Workspace &&
       route.route === WorkspaceRoute.DevicesAccess
@@ -218,63 +279,73 @@
   }
 
   async function focusIdentityContextWhenAvailable(): Promise<void> {
-    for (let frame = 0; frame < 30; frame += 1) {
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => resolve()),
-      )
-
-      const activeElement = document.activeElement
-      if (
-        activeElement !== document.body &&
-        activeElement !== document.documentElement
-      ) {
-        return
-      }
-
-      if (
-        document.querySelector('[data-testid="login-vault-identity-loading"]')
-      ) {
-        continue
-      }
-      const remountedButton = document.querySelector<HTMLButtonElement>(
-        '[data-testid="login-review-identities"]',
-      )
-      if (remountedButton) {
-        remountedButton.focus()
-        return
-      }
+    const focusIdentityContextArgs: Parameters<
+      typeof restoreIdentityContextFocus
+    >[0] = {
+      waitForNextFrame: () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        ),
+      identityContextLoading: () =>
+        Boolean(
+          document.querySelector(
+            '[data-testid="login-vault-identity-loading"]',
+          ),
+        ),
+      reviewButton: () =>
+        document.querySelector<HTMLButtonElement>(
+          '[data-testid="login-review-identities"]',
+        ) || false,
     }
+    await restoreIdentityContextFocus(focusIdentityContextArgs)
   }
 
   async function openDevicesAccess(
     trigger: DevicesAccessTriggerKind,
   ): Promise<void> {
-    const currentRoute = workspaceRouteFromPath(window.location.pathname)
+    const currentRoute = new WorkspacePath(window.location.pathname).route
     devicesAccessReturnRoute =
       currentRoute.kind === WorkspaceRouteLookupKind.Workspace
         ? currentRoute.route
         : WorkspaceRoute.Vault
     devicesAccessTrigger = trigger
+    const navigation = new WorkspaceLocation(
+      WorkspaceRoute.DevicesAccess,
+    ).navigate()
+    if (navigation.isErr()) {
+      vault.errorMsg = vault.t(navigation.error.translationKey)
+      return
+    }
     devicesAccessOpen = true
-    pushWorkspaceRoute(WorkspaceRoute.DevicesAccess)
-    const applyWorkspaceRouteArgs: Parameters<typeof applyWorkspaceRoute>[0] = {
-      state: vault,
+    const applyWorkspaceRouteArgs: Parameters<
+      VaultWorkspaceActions['applyWorkspaceRoute']
+    >[0] = {
       route: WorkspaceRoute.DevicesAccess,
     }
-    applyWorkspaceRoute(applyWorkspaceRouteArgs)
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(
+      applyWorkspaceRouteArgs,
+    )
     await tick()
     focusHostButton('devices-access-back')
   }
 
   async function closeDevicesAccess(): Promise<void> {
+    const navigation = new WorkspaceLocation(
+      devicesAccessReturnRoute,
+    ).navigate()
+    if (navigation.isErr()) {
+      vault.errorMsg = vault.t(navigation.error.translationKey)
+      return
+    }
     devicesAccessOpen = false
-    pushWorkspaceRoute(devicesAccessReturnRoute)
-    const applyWorkspaceRouteArgs2: Parameters<typeof applyWorkspaceRoute>[0] =
-      {
-        state: vault,
-        route: devicesAccessReturnRoute,
-      }
-    applyWorkspaceRoute(applyWorkspaceRouteArgs2)
+    const applyWorkspaceRouteArgs2: Parameters<
+      VaultWorkspaceActions['applyWorkspaceRoute']
+    >[0] = {
+      route: devicesAccessReturnRoute,
+    }
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(
+      applyWorkspaceRouteArgs2,
+    )
     await tick()
     const testId =
       devicesAccessTrigger === DevicesAccessTriggerKind.Nudge
@@ -294,15 +365,15 @@
     }
     window.addEventListener('popstate', syncDevicesAccessRoute)
     try {
-      const readDevicesAccessNudgeStorageArgs: Parameters<
-        typeof readDevicesAccessNudgeStorage
+      const readDevicesAccessNudgeStorageArgs: ConstructorParameters<
+        typeof DevicesAccessNudgeStorage
       >[0] = {
         storage: localStorage,
         storageKey: devicesAccessNudgeStorageKey,
       }
-      devicesAccessNudgePreference = parseDevicesAccessNudgePreference(
-        readDevicesAccessNudgeStorage(readDevicesAccessNudgeStorageArgs),
-      )
+      devicesAccessNudgePreference = new StoredDevicesAccessNudge(
+        new DevicesAccessNudgeStorage(readDevicesAccessNudgeStorageArgs).state,
+      ).preference
     } catch {
       devicesAccessNudgePreference = DevicesAccessNudgePreference.Visible
     }
@@ -332,7 +403,17 @@
   const showVaultPicker = $derived(
     vault.showLoginVaultPicker && !showProviderSetupLink,
   )
-  const showSentinelCeremony = $derived(sentinelCeremonyIsVisible(vault))
+  const sentinelVisibility = $derived(
+    new SentinelUnlockActions(vault).ceremonyVisibility(),
+  )
+  const showSentinelCeremony = $derived(
+    sentinelVisibility.isOk() &&
+      sentinelVisibility.value === SentinelCeremonyVisibility.Visible,
+  )
+  $effect(() => {
+    if (sentinelVisibility.isErr())
+      vault.errorMsg = vault.t(sentinelVisibility.error.translationKey)
+  })
   const hasKnownLocalVault = $derived(
     vault.localVaultPresent || vault.localVaults.length > 0,
   )
@@ -399,12 +480,12 @@
     setupIs('local') ||
       (setupIs('local-folder') &&
         vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
-        localFolderHandle(vault.localFolderDraft.config).kind ===
-          LocalFolderHandleKind.Selected) ||
+        new LocalFolderPresentation(
+          vault.localFolderDraft.config,
+        ).localFolderHandle().kind === LocalFolderHandleKind.Selected) ||
       (setupIs('oauth-file') &&
         vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-        oauthAccessToken(vault.oauthFileDraft.config).kind ===
-          OAuthAccessTokenKind.Available) ||
+        oauth_access_token(vault.oauthFileDraft.config).kind === 'available') ||
       (setupIs('github') && Boolean(githubPat.trim())),
   )
   const recoveryPasswordEntries = $derived(
@@ -412,7 +493,7 @@
       ? vault.recoveryDiscovery.summary.passwordEntries
       : [],
   )
-  const oauthPreset = $derived(
+  const oauthPreset = $derived<OAuthFilePreset>(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? vault.oauthFileDraft.config.preset
       : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
@@ -438,6 +519,7 @@
       untrack(() => void vault.prepareLocalLogin())
     }
     if (
+      vault.deviceProtectionReady &&
       !deviceAuthorizationPending &&
       !vault.isAuthenticated &&
       (vault.syncProviders.length > 0 || vault.localVaultPresent)
@@ -470,8 +552,8 @@
     </div>
 
     {#if (() => {
-      const shouldShowDevicesAccessNudgeArgs: Parameters<typeof shouldShowDevicesAccessNudge>[0] = { hasActiveLocalVault: vault.localVaultPresent, localVaultCount: vault.localVaults.length, preference: devicesAccessNudgePreference }
-      return shouldShowDevicesAccessNudge(shouldShowDevicesAccessNudgeArgs)
+      const shouldShowDevicesAccessNudgeArgs: ConstructorParameters<typeof DevicesAccessNudgePresentation>[0] = { hasActiveLocalVault: vault.localVaultPresent, localVaultCount: vault.localVaults.length, preference: devicesAccessNudgePreference }
+      return new DevicesAccessNudgePresentation(shouldShowDevicesAccessNudgeArgs).visible
     })()}
       <aside
         class="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/8 p-4 sm:flex-row sm:items-center sm:justify-between"
@@ -523,18 +605,21 @@
       </p>
     {/if}
 
-    {#if showQrOnboarding}
+    {#if showQrOnboarding && onUseEnrollmentCode}
       <EnrollmentQrOnboardCard
         {vault}
         code={prefillEnrollmentCode}
         passwordEntryId={peek_enrollment_entry_id(prefillEnrollmentCode)}
         passwordEntryLabel={prefillEnrollmentEntryLabel}
         {isVerifying}
-        onSubmit={(password) => {
-          const enrollmentRequest: Parameters<
-            NonNullable<typeof onUseEnrollmentCode>
-          >[0] = { code: prefillEnrollmentCode, password }
-          return onUseEnrollmentCode!(enrollmentRequest)
+        onSubmit={(
+          password: Parameters<EnrollmentQrOnboardCardProps['onSubmit']>[0],
+        ) => {
+          const enrollmentRequest: Parameters<typeof onUseEnrollmentCode>[0] = {
+            code: prefillEnrollmentCode,
+            password,
+          }
+          return onUseEnrollmentCode(enrollmentRequest)
         }}
       />
     {:else if showCreateVault || sentinelInvitationRequest.trim()}
@@ -549,55 +634,74 @@
         onAddSentinelGenesisParticipantResponse={({
           payload,
           participantLabel,
-        }) => {
+        }: SentinelGenesisParticipation) => {
           const participantRequest: Parameters<
-            typeof sentinelGenesisActions.addParticipantResponse
+            sentinelGenesisActions.SentinelGenesisActions['addParticipantResponse']
           >[0] = {
-            state: vault,
             payload,
-            participantLabel: ((v) => (v ? v : ''))(participantLabel),
+            participantLabel: participantLabel ? participantLabel : '',
           }
-          return sentinelGenesisActions.addParticipantResponse(
-            participantRequest,
-          )
+          return new sentinelGenesisActions.SentinelGenesisActions(
+            vault,
+          ).addParticipantResponse(participantRequest)
         }}
-        onFinalizeSentinelGenesis={() => sentinelGenesisActions.finalize(vault)}
+        onFinalizeSentinelGenesis={() =>
+          new sentinelGenesisActions.SentinelGenesisActions(vault).finalize()}
         onCreateSentinelGenesisParticipantResponse={((
           ...[
             v = (payload) =>
               (() => {
                 const createParticipantResponseArgs: Parameters<
-                  typeof sentinelGenesisActions.createParticipantResponse
-                >[0] = { state: vault, requestPayload: payload }
-                return sentinelGenesisActions.createParticipantResponse(
-                  createParticipantResponseArgs,
-                )
+                  sentinelGenesisActions.SentinelGenesisActions['createParticipantResponse']
+                >[0] = { requestPayload: payload }
+                return new sentinelGenesisActions.SentinelGenesisActions(
+                  vault,
+                ).createParticipantResponse(createParticipantResponseArgs)
               })(),
           ]
         ) => v)(onCreateSentinelGenesisParticipantResponse)}
         onCreateSentinelGenesisPublicKeyAnnouncement={((
           ...[
-            v = () => sentinelGenesisActions.createPublicKeyAnnouncement(vault),
+            v = () =>
+              new sentinelGenesisActions.SentinelGenesisActions(
+                vault,
+              ).createPublicKeyAnnouncement(),
           ]
         ) => v)(onCreateSentinelGenesisPublicKeyAnnouncement)}
-        onRememberSentinelGenesisRequest={(payload) =>
+        onRememberSentinelGenesisRequest={(
+          payload: Parameters<
+            NonNullable<
+              CreateVaultChooserProps['onRememberSentinelGenesisRequest']
+            >
+          >[0],
+        ) =>
           (() => {
             const rememberRequestArgs: Parameters<
-              typeof sentinelGenesisActions.rememberRequest
-            >[0] = { state: vault, requestPayload: payload }
-            return sentinelGenesisActions.rememberRequest(rememberRequestArgs)
+              sentinelGenesisActions.SentinelGenesisActions['rememberRequest']
+            >[0] = { requestPayload: payload }
+            return new sentinelGenesisActions.SentinelGenesisActions(
+              vault,
+            ).rememberRequest(rememberRequestArgs)
           })()}
-        onReceiveSentinelGenesisShare={(payload) =>
+        onReceiveSentinelGenesisShare={(
+          payload: Parameters<
+            NonNullable<
+              CreateVaultChooserProps['onReceiveSentinelGenesisShare']
+            >
+          >[0],
+        ) =>
           (() => {
             const acceptShareDeliveryArgs: Parameters<
-              typeof sentinelGenesisActions.acceptShareDelivery
-            >[0] = { state: vault, payload }
-            return sentinelGenesisActions.acceptShareDelivery(
-              acceptShareDeliveryArgs,
-            )
+              sentinelGenesisActions.SentinelGenesisActions['acceptShareDelivery']
+            >[0] = { payload }
+            return new sentinelGenesisActions.SentinelGenesisActions(
+              vault,
+            ).acceptShareDelivery(acceptShareDeliveryArgs)
           })()}
         onCompleteSentinelGenesisDelivery={() =>
-          sentinelGenesisActions.completeDelivery(vault)}
+          new sentinelGenesisActions.SentinelGenesisActions(
+            vault,
+          ).completeDelivery()}
         sentinelGenesisPhase={vault.sentinelGenesisPhase}
         sentinelGenesisRequest={vault.sentinelGenesisRequest}
         sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
@@ -606,8 +710,7 @@
         {sentinelParticipantResponsePending}
         {sentinelParticipantResponse}
         {sentinelOnboardingPackage}
-        {onAcceptSentinelOnboardingPackage}
-        onFinishSentinelInvitation={onSentinelUnlocked}
+        {...createVaultChooserOptionalProps}
         onConnectStorage={() => {
           vault.beginExistingVaultOpen()
           showProviderSetupLink = true
@@ -621,7 +724,7 @@
           {isVerifying}
           initialCode={prefillEnrollmentCode}
           openFormInitially={false}
-          {onUseEnrollmentCode}
+          {...enrollmentPanelOptionalProps}
         />
       {/if}
     {:else}
@@ -704,7 +807,7 @@
               {vault}
               {isVerifying}
               {isInitializing}
-              onUnlocked={onSentinelUnlocked}
+              {...sentinelCeremonyOptionalProps}
             />
           {:else if showVaultPicker && onCreateDeviceVault}
             <LoginVaultPicker
@@ -712,7 +815,9 @@
               vaults={vault.localVaults}
               {isVerifying}
               {isInitializing}
-              onChooseVault={(storeId) => vault.chooseLoginVault(storeId)}
+              onChooseVault={(
+                storeId: Parameters<LoginVaultPickerProps['onChooseVault']>[0],
+              ) => vault.chooseLoginVault(storeId)}
               onCreateVault={onCreateDeviceVault}
               onConnectStorage={() => {
                 vault.beginExistingVaultOpen()
@@ -728,7 +833,11 @@
                 ? vault.passwordEntries
                 : recoveryPasswordEntries}
               selectedPasswordEntry={vault.selectedPasswordEntry}
-              onSelectPasswordEntry={(selection) => {
+              onSelectPasswordEntry={(
+                selection: Parameters<
+                  LoginUnlockStepProps['onSelectPasswordEntry']
+                >[0],
+              ) => {
                 vault.selectedPasswordEntry = selection
               }}
               {isVerifying}
@@ -783,7 +892,11 @@
                       onRecover={() => vault.confirmRecoverRemoteVault()}
                       onCreateFresh={() =>
                         vault.confirmCreateFreshRemoteVault()}
-                      onDismiss={() => vault.clearRemoteVaultRecovery()}
+                      onDismiss={() => {
+                        const cleared = vault.clearRemoteVaultRecovery()
+                        if (cleared.isErr())
+                          vault.errorMsg = vault.t(cleared.error.translationKey)
+                      }}
                     />
                   {/if}
                 {/snippet}
@@ -846,10 +959,8 @@
               {isVerifying}
               {isInitializing}
               addingProvider={addProviderOpen}
-              {onBeginAddProvider}
+              {...providerManagementOptionalProps}
               {onBeginSetup}
-              {onCancelAddProvider}
-              {onRemoveProvider}
             />
           {/if}
         </CardContent>
@@ -862,7 +973,7 @@
           {isVerifying}
           initialCode={prefillEnrollmentCode}
           openFormInitially={false}
-          {onUseEnrollmentCode}
+          {...enrollmentPanelOptionalProps}
         />
       {/if}
     {/if}

@@ -66,11 +66,11 @@ impl NookVaultManager {
         );
         let id = SecretId::parse(secret_id).map_err(NookError::from)?;
         let crypto = self.vault.crypto.get()?;
-        let mut record = nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto)
+        let record = nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto)
             .decrypt(&id)
             .map_err(NookError::from)?;
-        let result = match &mut record.data {
-            SecretValue::Authenticator(authenticator) => {
+        let result = match record.data {
+            SecretValue::Authenticator(mut authenticator) => {
                 let attached = nook_core::BackupCodeApplication {
                     existing: &authenticator.backup_codes,
                     incoming: &codes,
@@ -80,18 +80,20 @@ impl NookVaultManager {
                 .map_err(NookError::from)?;
                 authenticator.backup_codes.zeroize();
                 authenticator.backup_codes = attached;
-                authenticator.normalize().map_err(NookError::from)?;
+                let authenticator = authenticator.normalize().map_err(NookError::from)?;
                 let expected_codes = Zeroizing::new(authenticator.backup_codes.clone());
-                let yaml = SecretValue::Authenticator(authenticator.clone())
+                let yaml = SecretValue::Authenticator(authenticator)
                     .to_yaml()
                     .map_err(NookError::from)?;
                 Ok((yaml.as_str().to_owned(), expected_codes))
             }
-            _ => Err(NookError::Decryption(
-                "Selected secret is not an authenticator item.".to_owned(),
-            )),
+            mut other => {
+                other.zeroize_plaintext();
+                Err(NookError::Decryption(
+                    "Selected secret is not an authenticator item.".to_owned(),
+                ))
+            }
         };
-        record.zeroize_plaintext();
         let (yaml, expected_codes) = result?;
         let yaml = Zeroizing::new(yaml);
         let new_id = nook_core::SecretId::generate()
@@ -231,7 +233,7 @@ impl NookVaultManager {
         if !origin.is_empty() {
             authenticator.website_url = origin.to_owned();
         }
-        authenticator.normalize().map_err(NookError::from)?;
+        let authenticator = authenticator.normalize().map_err(NookError::from)?;
         let yaml = Zeroizing::new(
             SecretValue::Authenticator(authenticator)
                 .to_yaml()

@@ -1,4 +1,4 @@
-import { isRuntimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
+import { simpleVaultRuntime } from '../../lib/simple-vault-runtime'
 
 /** Trust only messages issued by this installed extension runtime. */
 export function isExtensionRuntimeSender(
@@ -8,7 +8,9 @@ export function isExtensionRuntimeSender(
 }
 
 /** Trust external messages only when they originate from Simple Vault. */
-export function isNokeySender(sender: chrome.runtime.MessageSender): boolean {
-  if (!sender.url) return false
-  return isRuntimeSimpleVaultUrl(sender.url)
+export class ExternalSenderTrustPolicy {
+  static async admits(sender: chrome.runtime.MessageSender): Promise<boolean> {
+    if (!sender.url) return false
+    return simpleVaultRuntime.isRuntimeSimpleVaultUrl(sender.url)
+  }
 }

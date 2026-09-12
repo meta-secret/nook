@@ -1,10 +1,10 @@
+import {
+  CortexNavigationExtraction,
+  CortexNavigationStripping,
+  CORTEX_CONTEXT_ROUTER_MARKDOWN,
+} from '../src/cortex-index.ts';
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import {
-  extractCortexIndex,
-  renderCortexIndexMarkdown,
-  stripDocumentNavigation,
-} from '../src/cortex-index.ts';
 
 test('extracts index metadata and renders markdown', () => {
   const documents = [
@@ -39,11 +39,11 @@ Model text.
   ];
 
   const extractArgs = { documents, repoRoot: '/repo' };
-  const index = extractCortexIndex(extractArgs);
+  const index = new CortexNavigationExtraction(extractArgs).execute();
   expect(index.documents.length).toBe(2);
 
   const renderArgs = { index };
-  const markdown = renderCortexIndexMarkdown(renderArgs);
+  const markdown = CORTEX_CONTEXT_ROUTER_MARKDOWN;
   expect(markdown).toContain('# Cortex Context Router');
   expect(markdown).toContain('## Owning contexts');
   expect(markdown).toContain('[Gizmo Prime](gizmo/knowledge-graph.md)');
@@ -58,8 +58,7 @@ Model text.
 });
 
 test('renders the complete canonical Cortex context router', () => {
-  const renderArgs = { index: { documents: [] } };
-  const markdown = renderCortexIndexMarkdown(renderArgs);
+  const markdown = CORTEX_CONTEXT_ROUTER_MARKDOWN;
   const canonicalRouter = readFileSync(
     new URL('../../../../../../knowledge-graph.md', import.meta.url),
     'utf8',
@@ -77,6 +76,10 @@ test('renders the complete canonical Cortex context router', () => {
   }
 
   const teamOwnershipContracts = [
+    '[Dev manager](teams/dev-manager/knowledge-graph.md): manually operated dev',
+    'publication, dev PR creation/update, slow evidence, readiness, repair',
+    'feature review, feature acceptance, local landing requests, and Workbench.',
+    "and promotion mechanics under the dev manager's packet.",
     '[PR Steward](teams/pr-steward/knowledge-graph.md): authorized mechanical',
     '[AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,',
     '[Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault',
@@ -115,7 +118,7 @@ This is the actual overview text.
 `;
 
   const stripArgs = { content };
-  const stripped = stripDocumentNavigation(stripArgs);
+  const stripped = new CortexNavigationStripping(stripArgs).execute();
   expect(stripped).toContain('# Sample Doc');
   expect(stripped).toContain('Intro paragraph.');
   expect(stripped).toContain('## Overview');

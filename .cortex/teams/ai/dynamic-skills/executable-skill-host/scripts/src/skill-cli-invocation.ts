@@ -1,3 +1,42 @@
+export class ExecutableSkillInvocation {
+  private constructor(
+    private readonly request: ParseSkillCliInvocationRequest,
+  ) {}
+
+  static from(
+    request: ParseSkillCliInvocationRequest,
+  ): ExecutableSkillInvocation {
+    return new ExecutableSkillInvocation(request);
+  }
+
+  public execute(): SkillCliInvocation {
+    const request = this.request;
+    const token = request.argv.at(0);
+    if (typeof token !== 'string' || token === '--tools-list') {
+      return request.argv.length <= 1
+        ? { kind: SkillCliInvocationKind.ToolsList }
+        : {
+            kind: SkillCliInvocationKind.UsageError,
+            message: 'Expected --tools-list without additional arguments.',
+          };
+    }
+    const requestYamlPrefix = '--request-yaml=';
+    if (
+      !token.startsWith(requestYamlPrefix) ||
+      token.length === requestYamlPrefix.length ||
+      request.argv.length !== 1
+    ) {
+      return {
+        kind: SkillCliInvocationKind.UsageError,
+        message: 'Expected exactly one --request-yaml=<strict-yaml> argument.',
+      };
+    }
+    return {
+      kind: SkillCliInvocationKind.RequestYaml,
+      requestYaml: token.slice(requestYamlPrefix.length),
+    };
+  }
+}
 export enum SkillCliInvocationKind {
   RequestYaml = 'requestYaml',
   ToolsList = 'toolsList',
@@ -18,32 +57,3 @@ export type SkillCliInvocation =
 export type ParseSkillCliInvocationRequest = {
   readonly argv: readonly string[];
 };
-
-export function parseSkillCliInvocation(
-  request: ParseSkillCliInvocationRequest,
-): SkillCliInvocation {
-  const token = request.argv.at(0);
-  if (typeof token !== 'string' || token === '--tools-list') {
-    return request.argv.length <= 1
-      ? { kind: SkillCliInvocationKind.ToolsList }
-      : {
-          kind: SkillCliInvocationKind.UsageError,
-          message: 'Expected --tools-list without additional arguments.',
-        };
-  }
-  const requestYamlPrefix = '--request-yaml=';
-  if (
-    !token.startsWith(requestYamlPrefix) ||
-    token.length === requestYamlPrefix.length ||
-    request.argv.length !== 1
-  ) {
-    return {
-      kind: SkillCliInvocationKind.UsageError,
-      message: 'Expected exactly one --request-yaml=<strict-yaml> argument.',
-    };
-  }
-  return {
-    kind: SkillCliInvocationKind.RequestYaml,
-    requestYaml: token.slice(requestYamlPrefix.length),
-  };
-}

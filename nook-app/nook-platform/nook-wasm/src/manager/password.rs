@@ -5,11 +5,18 @@
 //! (or refreshes) this device's auth row so device-key unlock works again.
 
 use super::NookVaultManager;
-use crate::NookError;
-use crate::NookPasswordEntrySummary;
-use crate::conversion::wasm_iso_timestamp;
-use crate::storage::indexed_db::{get_active_vault_id, load_vault_local_cache};
-use crate::types::password_entries_to_vec;
+use super::session::VaultKeyMaterial;
+use crate::BrowserTimestamp;
+use crate::VaultSnapshotLookup;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::storage::indexed_db::ImportVaultLabel;
+use nook_core::ActiveVaultScope;
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::ImportVaultBlobRequest;
+use crate::NookDatabase;
+
+use crate::{NookError, NookPasswordEntrySummary};
 use nook_core::{
     IsoTimestamp, MultiDeviceError, PasswordEntryId, SymmetricKey, VaultOperation, VaultType,
     VaultUnlock,
@@ -23,7 +30,9 @@ const E2E_PASSWORD_SCRYPT_LOG_N: u8 = 10;
 impl NookVaultManager {
     #[wasm_bindgen]
     pub fn list_vault_password_entries(&self) -> Result<Vec<NookPasswordEntrySummary>, JsError> {
-        Ok(password_entries_to_vec(&self.vault.password_entries))
+        Ok(NookPasswordEntrySummary::password_entries_to_vec(
+            &self.vault.password_entries,
+        ))
     }
 
     #[wasm_bindgen]
@@ -42,13 +51,16 @@ impl NookVaultManager {
         let mut vault_missing = false;
         let mut content = self.fetch_vault_content(&mut vault_missing).await?;
         if (vault_missing || content.trim().is_empty())
-            && let Some(cached) = load_vault_local_cache(&self.local_cache_ref()).await?
+            && let VaultSnapshotLookup::Stored(cached) =
+                NookDatabase::load_vault_local_cache(&self.local_cache_ref()).await?
             && !cached.trim().is_empty()
         {
             content = cached;
         }
         self.hydrate_listed_password_entries(&content).await?;
-        Ok(password_entries_to_vec(&self.vault.password_entries))
+        Ok(NookPasswordEntrySummary::password_entries_to_vec(
+            &self.vault.password_entries,
+        ))
     }
 
     async fn hydrate_listed_password_entries(&mut self, content: &str) -> Result<(), NookError> {
@@ -61,7 +73,7 @@ impl NookVaultManager {
             self.capture_vault_unlock(content)?;
         }
         if self.vault.store_id.trim().is_empty()
-            && let Some(store_id) = get_active_vault_id().await?
+            && let ActiveVaultScope::StoreId(store_id) = NookDatabase::get_active_vault_id().await?
             && !store_id.trim().is_empty()
         {
             self.vault.store_id = store_id;
@@ -119,7 +131,7 @@ impl NookVaultManager {
             return Err(MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
         self.ensure_vault_crypto_from_cache().await?;
-        if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
+        if matches!(self.vault.key_material(), VaultKeyMaterial::Unavailable) {
             return Err(NookError::Database(
                 "Vault must be unlocked before adding a password.".to_owned(),
             )
@@ -133,7 +145,7 @@ impl NookVaultManager {
             &keys,
             nook_core::CompactToken::generate()?.as_str(),
             &label,
-            &wasm_iso_timestamp(),
+            &BrowserTimestamp::now().into_iso_string(),
             &password,
             work_factor.into(),
         )
@@ -195,7 +207,7 @@ impl NookVaultManager {
             return Err(MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
         self.ensure_vault_crypto_from_cache().await?;
-        if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
+        if matches!(self.vault.key_material(), VaultKeyMaterial::Unavailable) {
             return Err(NookError::Database(
                 "Vault must be unlocked before updating a password.".to_owned(),
             )
@@ -332,9 +344,12 @@ mod metadata_tests {
             .list_vault_password_entries()
             .map_err(|_| anyhow::anyhow!("password listing failed"))?;
         assert_eq!(summaries.len(), 1);
-        assert_eq!(summaries[0].id(), entry.id);
-        assert_eq!(summaries[0].label(), "Recovery");
-        assert_eq!(summaries[0].created_at(), "2026-09-06T00:00:00Z");
+        let summary = summaries
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("password summary must be present"))?;
+        assert_eq!(summary.id(), entry.id);
+        assert_eq!(summary.label(), "Recovery");
+        assert_eq!(summary.created_at(), "2026-09-06T00:00:00Z");
         assert!(manager.verify_vault_password(&entry.id, "correct horse battery staple"));
         assert!(!manager.verify_vault_password(&entry.id, "wrong password"));
         assert!(!manager.verify_vault_password("pwdentry002", "correct horse battery staple"));
@@ -548,9 +563,7 @@ mod metadata_tests {
 mod wasm_tests {
     use super::*;
     use crate::manager::VaultNameState;
-    use crate::storage::event_db::load_local_event_store;
-    use crate::storage::indexed_db;
-    use crate::storage::indexed_db::{import_vault_blob, switch_active_vault};
+
     use nook_core::{
         Database, DeviceIdentity, SecretId, SecretValue, StorageMode, VaultCrypto, VaultName,
         VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite,
@@ -621,7 +634,7 @@ mod wasm_tests {
                 .iter()
                 .all(|entry| entry.envelope.supports_key_rewrap())
         );
-        let graph = load_local_event_store(&manager.vault.store_id)
+        let graph = NookDatabase::load_local_event_store(&manager.vault.store_id)
             .await?
             .load_graph(&manager.vault.store_id)?;
         let upgrades = graph
@@ -652,8 +665,8 @@ mod wasm_tests {
                 &manager.vault.architecture,
             )?
             .into_inner();
-        manager.vault.secrets_key = keys.secrets_key.to_string();
-        manager.vault.members_key = keys.members_key.to_string();
+        manager.vault.secrets_key = keys.secrets_key.as_str().to_owned();
+        manager.vault.members_key = keys.members_key.as_str().to_owned();
         let identity = DeviceIdentity::generate()?;
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.bootstrap_event_log_genesis().await?;
@@ -675,9 +688,12 @@ mod wasm_tests {
             nook_core::VaultFormatDocument::new(&manager.vault.last_synced_content).name()?,
             VaultName::Named("Personal".to_owned())
         );
-        let persisted_projection = indexed_db::load_from_indexed_db()
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("persisted rolled-back projection is missing"))?;
+        let persisted_projection = match NookDatabase::load_from_indexed_db().await? {
+            VaultSnapshotLookup::Stored(content) => content,
+            VaultSnapshotLookup::NotStored => {
+                return Err(anyhow::anyhow!("persisted rolled-back projection is missing").into());
+            }
+        };
         assert_eq!(
             nook_core::VaultFormatDocument::new(&persisted_projection).name()?,
             VaultName::Named("Personal".to_owned())
@@ -720,8 +736,12 @@ mod wasm_tests {
             VaultNameRef::Named("Projection rejection test"),
             VaultVersionWrite::Initial,
         )?;
-        import_vault_blob(yaml.as_str(), Some("Projection rejection test")).await?;
-        switch_active_vault(&store_id).await?;
+        NookDatabase::import_vault_blob(ImportVaultBlobRequest {
+            content: yaml.as_str(),
+            label: ImportVaultLabel::Override("Projection rejection test"),
+        })
+        .await?;
+        NookDatabase::switch_active_vault(&store_id).await?;
 
         let mut manager = NookVaultManager::new();
         let result = manager
@@ -760,8 +780,12 @@ mod wasm_tests {
         owner.bootstrap_event_log_genesis().await?;
         let yaml = owner.serialize_current_projection_yaml()?;
         let store_id = owner.vault.store_id.clone();
-        import_vault_blob(yaml.as_str(), Some("Password recovery")).await?;
-        switch_active_vault(&store_id).await?;
+        NookDatabase::import_vault_blob(ImportVaultBlobRequest {
+            content: yaml.as_str(),
+            label: ImportVaultLabel::Override("Password recovery"),
+        })
+        .await?;
+        NookDatabase::switch_active_vault(&store_id).await?;
 
         // This manager represents the recovered browser: no app identity is
         // available, so password recovery must not enrol or require one.
@@ -805,8 +829,12 @@ mod wasm_tests {
         owner.bootstrap_event_log_genesis().await?;
         let yaml = owner.serialize_current_projection_yaml()?;
         let store_id = owner.vault.store_id.clone();
-        import_vault_blob(yaml.as_str(), Some("Password recovery")).await?;
-        switch_active_vault(&store_id).await?;
+        NookDatabase::import_vault_blob(ImportVaultBlobRequest {
+            content: yaml.as_str(),
+            label: ImportVaultLabel::Override("Password recovery"),
+        })
+        .await?;
+        NookDatabase::switch_active_vault(&store_id).await?;
 
         let mut recovered = NookVaultManager::new();
         let listed = recovered

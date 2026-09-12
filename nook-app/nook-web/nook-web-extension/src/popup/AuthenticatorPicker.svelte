@@ -9,9 +9,9 @@
   import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
   import {
     ExtensionTranslationRequestKind,
-    plainExtensionTranslation,
     type ExtensionI18n,
     type ExtensionTranslationRequest,
+    extensionLocaleCatalog,
   } from '../lib/i18n'
 
   let {
@@ -23,7 +23,7 @@
   } = $props()
 
   function translatePlain(key: I18nKey): string {
-    return i18n.t(plainExtensionTranslation(key))
+    return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
   }
 
   let query = $state('')

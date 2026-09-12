@@ -5,10 +5,8 @@
 )]
 
 use super::{LocalEventStore, RemoteEventLogClassification};
-use crate::{
-    EventError, EventId, EventResult, EventStorageBytes, StoreId, VaultEvent,
-    parse_remote_event_storage_bytes,
-};
+use crate::LocalEventBytes;
+use crate::{EventError, EventId, EventResult, EventStorageBytes, StoreId, VaultEvent};
 use std::collections::BTreeSet;
 
 /// A remote envelope with a matching content ID, supported schema and actor signature.
@@ -25,7 +23,7 @@ pub struct CheckedRemoteEvent {
 
 impl CheckedRemoteEvent {
     pub fn parse(event_id: &EventId, bytes: &EventStorageBytes) -> EventResult<Self> {
-        let event = parse_remote_event_storage_bytes(bytes)?;
+        let event = VaultEvent::parse_remote_event_storage_bytes(bytes)?;
         if event.id()? != *event_id {
             return Err(EventError::RemoteEventIdMismatch {
                 event_id: event_id.as_str().to_owned(),
@@ -53,6 +51,13 @@ impl CheckedRemoteEvent {
     }
 }
 
+/// Local selection against which a provider event batch is classified.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteStoreIdentity<'a> {
+    Empty,
+    Identified(&'a str),
+}
+
 /// Borrowed provider records; classification validates every envelope before reporting scope.
 pub struct RemoteEventBatch<'a> {
     events: &'a [(EventId, EventStorageBytes)],
@@ -64,7 +69,7 @@ impl<'a> RemoteEventBatch<'a> {
     }
     pub fn classify(
         &self,
-        active_store_id: Option<&str>,
+        active_store_id: RemoteStoreIdentity<'_>,
     ) -> EventResult<RemoteEventLogClassification> {
         let mut remote_store_ids = BTreeSet::new();
         for (event_id, bytes) in self.events {
@@ -80,9 +85,14 @@ impl<'a> RemoteEventBatch<'a> {
             return Ok(RemoteEventLogClassification::Empty);
         }
 
-        let active_store_id = active_store_id
-            .map(str::trim)
-            .filter(|store_id| !store_id.is_empty());
+        let active_store_id = match active_store_id {
+            RemoteStoreIdentity::Identified(store_id) if !store_id.trim().is_empty() => {
+                RemoteStoreIdentity::Identified(store_id.trim())
+            }
+            RemoteStoreIdentity::Identified(_) | RemoteStoreIdentity::Empty => {
+                RemoteStoreIdentity::Empty
+            }
+        };
 
         if remote_store_ids.len() > 1 {
             return Ok(RemoteEventLogClassification::MultipleStores {
@@ -99,7 +109,9 @@ impl<'a> RemoteEventBatch<'a> {
                 })?;
 
         match active_store_id {
-            Some(local_store_id) if local_store_id != remote_store_id => {
+            RemoteStoreIdentity::Identified(local_store_id)
+                if local_store_id != remote_store_id =>
+            {
                 Ok(RemoteEventLogClassification::DifferentStore {
                     local_store_id: local_store_id.to_owned(),
                     remote_store_id,
@@ -112,92 +124,126 @@ impl<'a> RemoteEventBatch<'a> {
     }
 }
 
-struct PreparedRemoteUnion<'a> {
-    local: &'a mut LocalEventStore,
-    accepted: LocalEventStore,
-    imported: Vec<EventId>,
+#[derive(Clone, Copy)]
+pub struct LocalRemoteUnion<'a> {
+    pub remote_events: &'a [(EventId, EventStorageBytes)],
+    pub store_id: &'a str,
 }
-impl<'a> PreparedRemoteUnion<'a> {
+#[derive(Debug)]
+pub struct LocalRemoteUnionOutcome {
+    pub store: LocalEventStore,
+    pub imported: Vec<EventId>,
+    pub heads: Vec<String>,
+}
+struct PreparedRemoteUnion {
+    local: LocalEventStore,
+    additions: Vec<(EventId, EventStorageBytes)>,
+    excluded: BTreeSet<EventId>,
+    heads: Vec<String>,
+}
+impl PreparedRemoteUnion {
     fn prepare(
-        local: &'a mut LocalEventStore,
-        remote_events: &[(EventId, EventStorageBytes)],
-        store_id: &str,
-    ) -> EventResult<Self> {
-        let visible_remote_events =
-            local.visibility_gated_remote_events(remote_events, store_id)?;
-        let mut candidate = local.clone();
-        let mut candidates = Vec::new();
-        for (event_id, bytes) in &visible_remote_events {
-            if local.get_bytes(event_id).is_some() || candidate.get_bytes(event_id).is_some() {
-                continue;
+        local: LocalEventStore,
+        request: LocalRemoteUnion<'_>,
+    ) -> Result<Self, super::LocalEventStoreRejection> {
+        let LocalRemoteUnion {
+            remote_events,
+            store_id,
+        } = request;
+        let prepared: EventResult<_> = (|| {
+            let expected_store = StoreId::parse(store_id)?;
+            for (event_id, bytes) in remote_events {
+                let event = VaultEvent::parse_remote_event_storage_bytes(bytes)?;
+                if event.id()? != *event_id {
+                    return Err(EventError::RemoteEventIdMismatch {
+                        event_id: event_id.as_str().to_owned(),
+                    });
+                }
+                event.validate_envelope(&expected_store)?;
             }
-            let event = parse_remote_event_storage_bytes(bytes)?;
-            if event.id()? != *event_id {
-                return Err(EventError::RemoteEventIdMismatch {
-                    event_id: event_id.as_str().to_owned(),
-                });
+            let visible = local.visibility_gated_remote_events(remote_events, store_id)?;
+            let mut additions = Vec::new();
+            let mut addition_ids = BTreeSet::new();
+            for (event_id, bytes) in visible {
+                if matches!(local.get_bytes(&event_id), LocalEventBytes::Stored(_))
+                    || addition_ids.contains(&event_id)
+                {
+                    continue;
+                }
+                addition_ids.insert(event_id.clone());
+                additions.push((event_id, bytes));
             }
-            event.validate_envelope(&StoreId::parse(store_id)?)?;
-            candidate.put_event(event_id.clone(), bytes.clone());
-            candidates.push(event_id.clone());
+            let graph = crate::remote_epoch_visibility::LocalGraphProjection {
+                local: &local,
+                remote: &additions,
+                store_id,
+                excluded: &BTreeSet::new(),
+            }
+            .build()?;
+            let mut excluded = graph.quarantined().keys().cloned().collect::<BTreeSet<_>>();
+            excluded.extend(graph.incomplete_security_transition_events()?);
+            let accepted_graph = crate::remote_epoch_visibility::LocalGraphProjection {
+                local: &local,
+                remote: &additions,
+                store_id,
+                excluded: &excluded,
+            }
+            .build()?;
+            let heads = accepted_graph
+                .heads()
+                .into_iter()
+                .map(|id| id.to_string())
+                .collect();
+            let additions = additions
+                .into_iter()
+                .filter(|(id, _)| !excluded.contains(id))
+                .collect();
+            Ok((additions, excluded, heads))
+        })();
+        match prepared {
+            Ok((additions, excluded, heads)) => Ok(Self {
+                local,
+                additions,
+                excluded,
+                heads,
+            }),
+            Err(cause) => Err(super::LocalEventStoreRejection {
+                store: local,
+                cause,
+            }),
         }
-        let graph = candidate.load_graph(store_id)?;
-        let mut quarantined: BTreeSet<EventId> = graph.quarantined().keys().cloned().collect();
-        quarantined.extend(candidate.incomplete_security_transition_events(store_id)?);
-        let mut accepted = LocalEventStore::new();
-        for event_id in candidate.event_ids() {
-            if quarantined.contains(&event_id) {
-                continue;
-            }
-            let bytes = candidate
-                .get_bytes(&event_id)
-                .ok_or_else(|| EventError::MissingEvent {
-                    event_id: event_id.as_str().to_owned(),
-                })?;
-            accepted.put_event(event_id, bytes);
-        }
-        for (provider_id, event_id, bytes) in local.replica.outbox_entries() {
-            if !quarantined.contains(&event_id) {
-                accepted.queue_outbox(&provider_id, event_id, bytes.into());
-            }
-        }
-        let imported = candidates
-            .into_iter()
-            .filter(|event_id| !quarantined.contains(event_id))
-            .collect();
-        let _ = accepted.load_graph(store_id)?;
-        Ok(Self {
-            local,
-            accepted,
-            imported,
-        })
     }
-    fn commit(self) -> Vec<EventId> {
-        *self.local = self.accepted;
-        self.imported
+    #[cfg(test)]
+    fn cancel(self) -> LocalEventStore {
+        self.local
+    }
+
+    fn commit(self) -> LocalRemoteUnionOutcome {
+        let Self {
+            mut local,
+            additions,
+            excluded,
+            heads,
+        } = self;
+        local.replica = local.replica.excluding_events(&excluded);
+        let mut imported = Vec::with_capacity(additions.len());
+        for (event_id, bytes) in additions {
+            imported.push(event_id.clone());
+            local = local.put_event(super::LocalEventWrite { event_id, bytes });
+        }
+        LocalRemoteUnionOutcome {
+            store: local,
+            imported,
+            heads,
+        }
     }
 }
-
 impl LocalEventStore {
     pub fn union_remote(
-        &mut self,
-        remote_events: &[(EventId, EventStorageBytes)],
-        store_id: &str,
-    ) -> EventResult<Vec<EventId>> {
-        Ok(PreparedRemoteUnion::prepare(self, remote_events, store_id)?.commit())
-    }
-    pub fn union_remote_and_heads(
-        &mut self,
-        remote_events: &[(EventId, EventStorageBytes)],
-        store_id: &str,
-    ) -> EventResult<Vec<String>> {
-        self.union_remote(remote_events, store_id)?;
-        let graph = self.load_graph(store_id)?;
-        Ok(graph
-            .heads()
-            .into_iter()
-            .map(|id| id.as_str().to_owned())
-            .collect())
+        self,
+        request: LocalRemoteUnion<'_>,
+    ) -> Result<LocalRemoteUnionOutcome, super::LocalEventStoreRejection> {
+        Ok(PreparedRemoteUnion::prepare(self, request)?.commit())
     }
 }
 
@@ -205,8 +251,8 @@ impl LocalEventStore {
 mod tests {
     use super::*;
     use crate::{
-        Ed25519Signature, GenesisImportPayload, IsoTimestamp, Sha256Hex,
-        build_genesis_import_event, serialize_event_storage_yaml, test_support,
+        Ed25519Signature, GenesisImportPayload, GenesisImportRequest, IsoTimestamp,
+        LocalEventStoreRejection, Sha256Hex, test_support,
     };
 
     const STORE: &str = "store_testtoken11";
@@ -219,49 +265,97 @@ mod tests {
     impl RemoteFixture {
         fn new() -> EventResult<Self> {
             let key = test_support::signing_key();
-            let event = build_genesis_import_event(
-                &test_support::store()?,
-                &test_support::actor(&key)?,
-                &test_support::epoch()?,
-                GenesisImportPayload {
+            let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+                store_id: &test_support::store()?,
+                actor_id: &test_support::actor(&key)?,
+                key_epoch: &test_support::epoch()?,
+                payload: GenesisImportPayload {
                     source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                     secrets: Vec::new(),
                     password_entries: Vec::new(),
                 },
-                &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-                &key,
-            )?;
-            let records = vec![(event.id()?, serialize_event_storage_yaml(&event)?)];
+                created_at: &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+                signing_key: &key,
+            })?;
+            let records = vec![(
+                event.id()?,
+                VaultEvent::serialize_event_storage_yaml(&event)?,
+            )];
             Ok(Self { event, records })
         }
     }
 
     #[test]
-    fn dropping_prepared_union_preserves_destination_and_outbox() -> EventResult<()> {
+    fn cancelling_prepared_union_returns_destination_and_outbox() -> anyhow::Result<()> {
         let fixture = RemoteFixture::new()?;
-        let (id, bytes) = &fixture.records[0];
+        let (id, bytes) = fixture
+            .records
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
         let mut local = LocalEventStore::new();
-        local.queue_outbox("provider", id.clone(), bytes.clone());
+        local = local.queue_outbox(crate::LocalOutboxWrite {
+            provider_id: "provider",
+            event: crate::LocalEventWrite {
+                event_id: id.clone(),
+                bytes: bytes.clone(),
+            },
+        });
         let outbox = local.pending_outbox("provider");
-        let prepared = PreparedRemoteUnion::prepare(&mut local, &fixture.records, STORE)?;
-        assert_eq!(prepared.imported, vec![id.clone()]);
-        assert_eq!(prepared.accepted.get_bytes(id), Some(bytes.clone()));
-        drop(prepared);
+        let prepared = PreparedRemoteUnion::prepare(
+            local,
+            LocalRemoteUnion {
+                remote_events: &fixture.records,
+                store_id: STORE,
+            },
+        )
+        .map_err(LocalEventStoreRejection::into_cause)?;
+        assert_eq!(prepared.additions, vec![(id.clone(), bytes.clone())]);
+        local = prepared.cancel();
         assert!(local.event_ids().is_empty());
         assert_eq!(local.pending_outbox("provider"), outbox);
         Ok(())
     }
 
     #[test]
-    fn consuming_commit_matches_public_union_and_preserves_outbox() -> EventResult<()> {
+    fn consuming_commit_matches_public_union_and_preserves_outbox() -> anyhow::Result<()> {
         let fixture = RemoteFixture::new()?;
-        let (id, bytes) = &fixture.records[0];
+        let (id, bytes) = fixture
+            .records
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
         let mut local = LocalEventStore::new();
-        local.queue_outbox("provider", id.clone(), bytes.clone());
+        local = local.queue_outbox(crate::LocalOutboxWrite {
+            provider_id: "provider",
+            event: crate::LocalEventWrite {
+                event_id: id.clone(),
+                bytes: bytes.clone(),
+            },
+        });
         let mut expected = local.clone();
-        let expected_ids = expected.union_remote(&fixture.records, STORE)?;
-        let prepared = PreparedRemoteUnion::prepare(&mut local, &fixture.records, STORE)?;
-        assert_eq!(prepared.commit(), expected_ids);
+        let expected_ids = match expected.union_remote(crate::LocalRemoteUnion {
+            remote_events: &fixture.records,
+            store_id: STORE,
+        }) {
+            Ok(outcome) => {
+                expected = outcome.store;
+                Ok(outcome.imported)
+            }
+            Err(rejected) => {
+                expected = rejected.store;
+                Err(rejected.cause)
+            }
+        }?;
+        let prepared = PreparedRemoteUnion::prepare(
+            local,
+            LocalRemoteUnion {
+                remote_events: &fixture.records,
+                store_id: STORE,
+            },
+        )
+        .map_err(LocalEventStoreRejection::into_cause)?;
+        let committed = prepared.commit();
+        local = committed.store;
+        assert_eq!(committed.imported, expected_ids);
         assert_eq!(local.event_ids(), expected.event_ids());
         assert_eq!(local.get_bytes(id), expected.get_bytes(id));
         assert_eq!(
@@ -276,19 +370,118 @@ mod tests {
     }
 
     #[test]
+    fn conflicting_duplicate_ids_reject_without_changing_store_or_outbox() -> anyhow::Result<()> {
+        let fixture = RemoteFixture::new()?;
+        let (id, bytes) = fixture
+            .records
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
+        let mut different_event = fixture.event.clone();
+        different_event.body.created_at =
+            IsoTimestamp::from_trusted("2026-06-29T00:00:00Z".to_owned());
+        let different_bytes = VaultEvent::serialize_event_storage_yaml(&different_event)?;
+        assert_ne!(different_event.id()?, *id);
+        for existing in [false, true] {
+            let mut local = LocalEventStore::new();
+            if existing {
+                local = local.put_event(crate::LocalEventWrite {
+                    event_id: id.clone(),
+                    bytes: bytes.clone(),
+                });
+            }
+            local = local.queue_outbox(crate::LocalOutboxWrite {
+                provider_id: "provider",
+                event: crate::LocalEventWrite {
+                    event_id: id.clone(),
+                    bytes: bytes.clone(),
+                },
+            });
+            let original_ids = local.event_ids();
+            let original_bytes = local.get_bytes(id);
+            let original_outbox = local.pending_outbox("provider");
+            let records = if existing {
+                vec![(id.clone(), different_bytes.clone())]
+            } else {
+                vec![
+                    (id.clone(), bytes.clone()),
+                    (id.clone(), different_bytes.clone()),
+                ]
+            };
+            let Err(rejected) = local.union_remote(LocalRemoteUnion {
+                remote_events: &records,
+                store_id: STORE,
+            }) else {
+                anyhow::bail!("conflicting duplicate ID was accepted");
+            };
+            assert!(matches!(
+                rejected.cause,
+                EventError::RemoteEventIdMismatch { .. }
+            ));
+            assert_eq!(rejected.store.event_ids(), original_ids);
+            assert_eq!(rejected.store.get_bytes(id), original_bytes);
+            assert_eq!(rejected.store.pending_outbox("provider"), original_outbox);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn identical_remote_duplicates_are_admitted_once() -> anyhow::Result<()> {
+        let fixture = RemoteFixture::new()?;
+        let record = fixture
+            .records
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
+        let records = vec![record.clone(), record.clone()];
+        let admitted = LocalEventStore::new()
+            .union_remote(LocalRemoteUnion {
+                remote_events: &records,
+                store_id: STORE,
+            })
+            .map_err(LocalEventStoreRejection::into_cause)?;
+        assert_eq!(admitted.imported, vec![record.0.clone()]);
+        assert_eq!(
+            admitted.store.get_bytes(&record.0),
+            LocalEventBytes::Stored(record.1)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn failed_preparation_retains_existing_bytes_and_outbox() -> anyhow::Result<()> {
         let fixture = RemoteFixture::new()?;
-        let (id, _) = &fixture.records[0];
+        let (id, _) = fixture
+            .records
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
         let mut local = LocalEventStore::new();
         let corrupt = EventStorageBytes::from(b"invalid local event".to_vec());
-        local.put_event(id.clone(), corrupt.clone());
-        local.queue_outbox("provider", id.clone(), corrupt.clone());
-        match PreparedRemoteUnion::prepare(&mut local, &[], STORE) {
-            Err(EventError::ParseStoredEvent(_)) => {}
-            Err(error) => return Err(error.into()),
-            Ok(_) => anyhow::bail!("corrupt local graph was prepared"),
-        }
-        assert_eq!(local.get_bytes(id), Some(corrupt.clone()));
+        local = local.put_event(crate::LocalEventWrite {
+            event_id: id.clone(),
+            bytes: corrupt.clone(),
+        });
+        local = local.queue_outbox(crate::LocalOutboxWrite {
+            provider_id: "provider",
+            event: crate::LocalEventWrite {
+                event_id: id.clone(),
+                bytes: corrupt.clone(),
+            },
+        });
+        let Err(rejected) = PreparedRemoteUnion::prepare(
+            local,
+            LocalRemoteUnion {
+                remote_events: &[],
+                store_id: STORE,
+            },
+        ) else {
+            anyhow::bail!("corrupt local graph was prepared");
+        };
+        local = rejected.store;
+        assert!(matches!(rejected.cause, EventError::ParseStoredEvent(_)));
+        assert_eq!(
+            local.get_bytes(id),
+            LocalEventBytes::Stored(corrupt.clone())
+        );
         assert_eq!(
             local.pending_outbox("provider"),
             vec![(id.clone(), corrupt)]
@@ -297,17 +490,21 @@ mod tests {
     }
 
     #[test]
-    fn checked_observation_and_batch_preserve_scope_without_claiming_membership() -> EventResult<()>
-    {
+    fn checked_observation_and_batch_preserve_scope_without_claiming_membership()
+    -> anyhow::Result<()> {
         let fixture = RemoteFixture::new()?;
-        let (id, bytes) = &fixture.records[0];
+        let (id, bytes) = fixture
+            .records
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
         let checked = CheckedRemoteEvent::parse(id, bytes)?;
         assert!(checked.belongs_to_store(STORE));
         assert!(!checked.belongs_to_store("store_otherstore1"));
         assert_eq!(checked.store_id().as_str(), STORE);
         assert_eq!(checked.into_store_id().as_str(), STORE);
         assert_eq!(
-            RemoteEventBatch::new(&fixture.records).classify(Some("  store_testtoken11  "))?,
+            RemoteEventBatch::new(&fixture.records)
+                .classify(RemoteStoreIdentity::Identified("  store_testtoken11  "))?,
             RemoteEventLogClassification::SameStore {
                 store_id: STORE.to_owned()
             }
@@ -316,12 +513,15 @@ mod tests {
     }
 
     #[test]
-    fn checked_admission_rejects_id_before_invalid_signature() -> EventResult<()> {
+    fn checked_admission_rejects_id_before_invalid_signature() -> anyhow::Result<()> {
         let mut fixture = RemoteFixture::new()?;
-        let (id, _) = &fixture.records[0];
+        let (id, _) = fixture
+            .records
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("remote fixture must contain its genesis event"))?;
         fixture.event.signature =
             Ed25519Signature::from_trusted(format!("ed25519:{}", "00".repeat(64)));
-        let bytes = serialize_event_storage_yaml(&fixture.event)?;
+        let bytes = VaultEvent::serialize_event_storage_yaml(&fixture.event)?;
         let wrong_id = EventId::parse("sha256u:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0")?;
         assert!(matches!(
             CheckedRemoteEvent::parse(&wrong_id, &bytes),

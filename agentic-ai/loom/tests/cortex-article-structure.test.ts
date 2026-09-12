@@ -1,11 +1,40 @@
+import { ok } from 'neverthrow';
 import path from 'node:path';
+
 import { expect, test } from 'bun:test';
+
 import {
-  auditCortexArticleStructure,
   CortexArticleFindingCode,
+  CortexMarkdownArticle,
 } from '../src/lib/cortex-article-structure.ts';
+
 import type { AuditCortexArticleStructureArgs } from '../src/lib/cortex-article-structure.ts';
+
 import type { CortexDocumentSource } from '../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
+
+export class CortexArticleStructureScenario {
+  private constructor(private readonly request: MakeDocumentArgs) {}
+
+  static makeDocument(args: MakeDocumentArgs): CortexDocumentSource {
+    return new CortexArticleStructureScenario(args).execute();
+  }
+
+  private execute(): CortexDocumentSource {
+    const args = this.request;
+    return {
+      absolutePath: path.join(REPO_ROOT, args.path),
+      relativePath: args.path,
+      content: args.content,
+    };
+  }
+
+  static audit(documents: readonly CortexDocumentSource[]) {
+    const args: AuditCortexArticleStructureArgs = {
+      documents,
+    };
+    return CortexMarkdownArticle.from(args).execute();
+  }
+}
 
 const REPO_ROOT = '/repo';
 
@@ -13,21 +42,6 @@ type MakeDocumentArgs = {
   readonly path: string;
   readonly content: string;
 };
-
-function makeDocument(args: MakeDocumentArgs): CortexDocumentSource {
-  return {
-    absolutePath: path.join(REPO_ROOT, args.path),
-    relativePath: args.path,
-    content: args.content,
-  };
-}
-
-function audit(documents: readonly CortexDocumentSource[]) {
-  const args: AuditCortexArticleStructureArgs = {
-    documents,
-  };
-  return auditCortexArticleStructure(args);
-}
 
 const STRUCTURED_DOCUMENT_ARGS: MakeDocumentArgs = {
   path: '.cortex/structured.md',
@@ -64,8 +78,10 @@ Follow the steps in order.
 };
 
 test('accepts explanatory, rule-list, and ordered procedure structure', () => {
-  const document = makeDocument(STRUCTURED_DOCUMENT_ARGS);
-  expect(audit([document])).toEqual([]);
+  const document = CortexArticleStructureScenario.makeDocument(
+    STRUCTURED_DOCUMENT_ARGS,
+  );
+  expect(CortexArticleStructureScenario.audit([document])).toEqual(ok([]));
 });
 
 test('rejects excessive consecutive prose blocks', () => {
@@ -94,10 +110,12 @@ Third paragraph.
 Fourth paragraph.
 `,
   };
-  const document = makeDocument(documentArgs);
-  expect(audit([document]).map((finding) => finding.code)).toContain(
-    CortexArticleFindingCode.DenseArticle,
-  );
+  const document = CortexArticleStructureScenario.makeDocument(documentArgs);
+  expect(
+    CortexArticleStructureScenario.audit([document])
+      .map((findings) => findings.map((finding) => finding.code))
+      .map((codes) => codes.includes(CortexArticleFindingCode.DenseArticle)),
+  ).toEqual(ok(true));
 });
 
 test('requires procedure-like articles to expose ordered actions', () => {
@@ -122,10 +140,14 @@ test('requires procedure-like articles to expose ordered actions', () => {
 - Validate the result.
 `,
   };
-  const document = makeDocument(documentArgs);
-  expect(audit([document]).map((finding) => finding.code)).toContain(
-    CortexArticleFindingCode.UnorderedProcedure,
-  );
+  const document = CortexArticleStructureScenario.makeDocument(documentArgs);
+  expect(
+    CortexArticleStructureScenario.audit([document])
+      .map((findings) => findings.map((finding) => finding.code))
+      .map((codes) =>
+        codes.includes(CortexArticleFindingCode.UnorderedProcedure),
+      ),
+  ).toEqual(ok(true));
 });
 
 test('recognizes qualified procedure and runbook headings', () => {
@@ -163,10 +185,14 @@ test('recognizes qualified procedure and runbook headings', () => {
 - Validate the result.
 `,
     };
-    const document = makeDocument(documentArgs);
-    expect(audit([document]).map((finding) => finding.code)).toContain(
-      CortexArticleFindingCode.UnorderedProcedure,
-    );
+    const document = CortexArticleStructureScenario.makeDocument(documentArgs);
+    expect(
+      CortexArticleStructureScenario.audit([document])
+        .map((findings) => findings.map((finding) => finding.code))
+        .map((codes) =>
+          codes.includes(CortexArticleFindingCode.UnorderedProcedure),
+        ),
+    ).toEqual(ok(true));
   }
 });
 
@@ -199,8 +225,8 @@ test('allows workflow and migration headings that define unordered rules', () =>
 - The ledger must not grow.
 `,
   };
-  const document = makeDocument(documentArgs);
-  expect(audit([document])).toEqual([]);
+  const document = CortexArticleStructureScenario.makeDocument(documentArgs);
+  expect(CortexArticleStructureScenario.audit([document])).toEqual(ok([]));
 });
 
 test('rejects mapless substantive articles with no body content', () => {
@@ -211,10 +237,12 @@ test('rejects mapless substantive articles with no body content', () => {
 ## Empty article
 `,
   };
-  const document = makeDocument(documentArgs);
-  expect(audit([document]).map((finding) => finding.code)).toContain(
-    CortexArticleFindingCode.EmptyArticle,
-  );
+  const document = CortexArticleStructureScenario.makeDocument(documentArgs);
+  expect(
+    CortexArticleStructureScenario.audit([document])
+      .map((findings) => findings.map((finding) => finding.code))
+      .map((codes) => codes.includes(CortexArticleFindingCode.EmptyArticle)),
+  ).toEqual(ok(true));
 });
 
 test('audits an empty H3 independently from its parent article', () => {
@@ -229,7 +257,12 @@ The parent has content.
 ### Empty child
 `,
   };
-  const findings = audit([makeDocument(documentArgs)]);
+  const findingsOutcome = CortexArticleStructureScenario.audit([
+    CortexArticleStructureScenario.makeDocument(documentArgs),
+  ]);
+  expect(findingsOutcome.isOk()).toBe(true);
+  if (findingsOutcome.isErr()) return;
+  const findings = findingsOutcome.value;
   expect(findings).toHaveLength(1);
   expect(findings[0]?.code).toBe(CortexArticleFindingCode.EmptyArticle);
   expect(findings[0]?.line).toBe(7);
@@ -240,8 +273,8 @@ test('does not treat an H1 title as a substantive article', () => {
     path: '.cortex/title-only.md',
     content: '# Title only\n',
   };
-  const document = makeDocument(documentArgs);
-  expect(audit([document])).toEqual([]);
+  const document = CortexArticleStructureScenario.makeDocument(documentArgs);
+  expect(CortexArticleStructureScenario.audit([document])).toEqual(ok([]));
 });
 
 test('rejects Markdown containers without visible content', () => {
@@ -267,8 +300,10 @@ test('rejects Markdown containers without visible content', () => {
         ]
       : [CortexArticleFindingCode.EmptyArticle];
     expect(
-      audit([makeDocument(documentArgs)]).map((item) => item.code),
-    ).toEqual(expectedCodes);
+      CortexArticleStructureScenario.audit([
+        CortexArticleStructureScenario.makeDocument(documentArgs),
+      ]).map((findings) => findings.map((item) => item.code)),
+    ).toEqual(ok(expectedCodes));
   }
 });
 
@@ -278,7 +313,11 @@ test('accepts Markdown content that renders a visible image or link', () => {
       path: '.cortex/visible-reference.md',
       content: `# Visible\n\n## Reference\n\n${body}\n`,
     };
-    expect(audit([makeDocument(documentArgs)])).toEqual([]);
+    expect(
+      CortexArticleStructureScenario.audit([
+        CortexArticleStructureScenario.makeDocument(documentArgs),
+      ]),
+    ).toEqual(ok([]));
   }
 });
 
@@ -288,7 +327,11 @@ test('treats GFM task checkboxes as visible article content', () => {
       path: '.cortex/task-item.md',
       content: `# Task item\n\n## Checklist\n\n${taskItem}\n`,
     };
-    expect(audit([makeDocument(documentArgs)])).toEqual([]);
+    expect(
+      CortexArticleStructureScenario.audit([
+        CortexArticleStructureScenario.makeDocument(documentArgs),
+      ]),
+    ).toEqual(ok([]));
   }
 });
 
@@ -304,10 +347,12 @@ test('rejects documents with no content articles after the map', () => {
 ## Document map
 `,
   };
-  const document = makeDocument(documentArgs);
-  expect(audit([document]).map((finding) => finding.code)).toContain(
-    CortexArticleFindingCode.EmptyArticle,
-  );
+  const document = CortexArticleStructureScenario.makeDocument(documentArgs);
+  expect(
+    CortexArticleStructureScenario.audit([document])
+      .map((findings) => findings.map((finding) => finding.code))
+      .map((codes) => codes.includes(CortexArticleFindingCode.EmptyArticle)),
+  ).toEqual(ok(true));
 });
 
 test('rejects a GFM table with a typed source-line finding', () => {
@@ -341,8 +386,11 @@ Third paragraph.
 Fourth paragraph.
 `,
   };
-  const document = makeDocument(documentArgs);
-  const findings = audit([document]);
+  const document = CortexArticleStructureScenario.makeDocument(documentArgs);
+  const findingsOutcome = CortexArticleStructureScenario.audit([document]);
+  expect(findingsOutcome.isOk()).toBe(true);
+  if (findingsOutcome.isErr()) return;
+  const findings = findingsOutcome.value;
   expect(findings).toContainEqual({
     code: CortexArticleFindingCode.MarkdownTable,
     file: '.cortex/table-structure.md',
@@ -371,7 +419,12 @@ test('preserves visible container prose while rejecting its nested GFM table', (
 > | Rule | Parallel constraints |
 `,
   };
-  const findings = audit([makeDocument(documentArgs)]);
+  const findingsOutcome = CortexArticleStructureScenario.audit([
+    CortexArticleStructureScenario.makeDocument(documentArgs),
+  ]);
+  expect(findingsOutcome.isOk()).toBe(true);
+  if (findingsOutcome.isErr()) return;
+  const findings = findingsOutcome.value;
   expect(findings).toContainEqual({
     code: CortexArticleFindingCode.MarkdownTable,
     file: '.cortex/nested-table.md',
@@ -406,10 +459,12 @@ test('does not count a link definition as article content', () => {
 [^note]: Hidden explanation.
 `,
   };
-  const document = makeDocument(documentArgs);
-  expect(audit([document]).map((finding) => finding.code)).toContain(
-    CortexArticleFindingCode.EmptyArticle,
-  );
+  const document = CortexArticleStructureScenario.makeDocument(documentArgs);
+  expect(
+    CortexArticleStructureScenario.audit([document])
+      .map((findings) => findings.map((finding) => finding.code))
+      .map((codes) => codes.includes(CortexArticleFindingCode.EmptyArticle)),
+  ).toEqual(ok(true));
 });
 
 test('treats link definitions as transparent to dense prose runs', () => {
@@ -446,10 +501,12 @@ Third paragraph.
 Fourth paragraph.
 `,
   };
-  const document = makeDocument(documentArgs);
-  expect(audit([document]).map((finding) => finding.code)).toContain(
-    CortexArticleFindingCode.DenseArticle,
-  );
+  const document = CortexArticleStructureScenario.makeDocument(documentArgs);
+  expect(
+    CortexArticleStructureScenario.audit([document])
+      .map((findings) => findings.map((finding) => finding.code))
+      .map((codes) => codes.includes(CortexArticleFindingCode.DenseArticle)),
+  ).toEqual(ok(true));
 });
 
 test('uses a thematic break as structural relief but not article content', () => {
@@ -470,15 +527,21 @@ Third paragraph.
 Fourth paragraph.
 `,
   };
-  expect(audit([makeDocument(structuredArgs)])).toEqual([]);
+  expect(
+    CortexArticleStructureScenario.audit([
+      CortexArticleStructureScenario.makeDocument(structuredArgs),
+    ]),
+  ).toEqual(ok([]));
 
   const emptyArgs: MakeDocumentArgs = {
     path: '.cortex/thematic-empty.md',
     content: '# Thematic empty\n\n## Empty article\n\n* * *\n',
   };
-  expect(audit([makeDocument(emptyArgs)]).map((item) => item.code)).toEqual([
-    CortexArticleFindingCode.EmptyArticle,
-  ]);
+  expect(
+    CortexArticleStructureScenario.audit([
+      CortexArticleStructureScenario.makeDocument(emptyArgs),
+    ]).map((findings) => findings.map((item) => item.code)),
+  ).toEqual(ok([CortexArticleFindingCode.EmptyArticle]));
 });
 
 test('treats image-only paragraphs as structural rather than prose', () => {
@@ -497,7 +560,11 @@ test('treats image-only paragraphs as structural rather than prose', () => {
 ![](four.png)
 `,
   };
-  expect(audit([makeDocument(documentArgs)])).toEqual([]);
+  expect(
+    CortexArticleStructureScenario.audit([
+      CortexArticleStructureScenario.makeDocument(documentArgs),
+    ]),
+  ).toEqual(ok([]));
 });
 
 test('continues H3 density auditing below an H4 heading', () => {
@@ -523,8 +590,12 @@ Fourth paragraph.
 `,
   };
   expect(
-    audit([makeDocument(documentArgs)]).map((item) => item.code),
-  ).toContain(CortexArticleFindingCode.DenseArticle);
+    CortexArticleStructureScenario.audit([
+      CortexArticleStructureScenario.makeDocument(documentArgs),
+    ])
+      .map((findings) => findings.map((item) => item.code))
+      .map((codes) => codes.includes(CortexArticleFindingCode.DenseArticle)),
+  ).toEqual(ok(true));
 });
 
 test('recognizes ordered actions nested in normal Markdown containers', () => {
@@ -533,16 +604,22 @@ test('recognizes ordered actions nested in normal Markdown containers', () => {
     content:
       '# Nested\n\n## Recovery procedure\n\n- When recovery is required:\n  1. Restore the backup.\n',
   };
-  expect(audit([makeDocument(acceptedArgs)])).toEqual([]);
+  expect(
+    CortexArticleStructureScenario.audit([
+      CortexArticleStructureScenario.makeDocument(acceptedArgs),
+    ]),
+  ).toEqual(ok([]));
 
   const rejectedArgs: MakeDocumentArgs = {
     path: '.cortex/example-procedure.md',
     content:
       '# Example\n\n## Recovery procedure\n\n> 1. Quoted.\n\n```markdown\n1. Fenced.\n```\n\n[^hidden]:\n    1. Footnote.\n',
   };
-  expect(audit([makeDocument(rejectedArgs)]).map((item) => item.code)).toEqual([
-    CortexArticleFindingCode.UnorderedProcedure,
-  ]);
+  expect(
+    CortexArticleStructureScenario.audit([
+      CortexArticleStructureScenario.makeDocument(rejectedArgs),
+    ]).map((findings) => findings.map((item) => item.code)),
+  ).toEqual(ok([CortexArticleFindingCode.UnorderedProcedure]));
 });
 
 test('does not satisfy a procedure with an empty ordered item', () => {
@@ -551,9 +628,11 @@ test('does not satisfy a procedure with an empty ordered item', () => {
     content:
       '# Procedure\n\n## Recovery procedure\n\nExplanation.\n\n1. \u200B\n',
   };
-  expect(audit([makeDocument(documentArgs)]).map((item) => item.code)).toEqual([
-    CortexArticleFindingCode.UnorderedProcedure,
-  ]);
+  expect(
+    CortexArticleStructureScenario.audit([
+      CortexArticleStructureScenario.makeDocument(documentArgs),
+    ]).map((findings) => findings.map((item) => item.code)),
+  ).toEqual(ok([CortexArticleFindingCode.UnorderedProcedure]));
 });
 
 test('does not treat a checkbox alone as a procedure action', () => {
@@ -561,9 +640,11 @@ test('does not treat a checkbox alone as a procedure action', () => {
     path: '.cortex/checkbox-procedure.md',
     content: '# Procedure\n\n## Recovery procedure\n\n1. [ ] \u200B\n',
   };
-  expect(audit([makeDocument(documentArgs)]).map((item) => item.code)).toEqual([
-    CortexArticleFindingCode.UnorderedProcedure,
-  ]);
+  expect(
+    CortexArticleStructureScenario.audit([
+      CortexArticleStructureScenario.makeDocument(documentArgs),
+    ]).map((findings) => findings.map((item) => item.code)),
+  ).toEqual(ok([CortexArticleFindingCode.UnorderedProcedure]));
 });
 
 test('does not qualify ordered items containing only excluded examples', () => {
@@ -577,8 +658,10 @@ test('does not qualify ordered items containing only excluded examples', () => {
       content: `# Example\n\n## Recovery procedure\n\n${body}\n`,
     };
     expect(
-      audit([makeDocument(documentArgs)]).map((item) => item.code),
-    ).toEqual([CortexArticleFindingCode.UnorderedProcedure]);
+      CortexArticleStructureScenario.audit([
+        CortexArticleStructureScenario.makeDocument(documentArgs),
+      ]).map((findings) => findings.map((item) => item.code)),
+    ).toEqual(ok([CortexArticleFindingCode.UnorderedProcedure]));
   }
 });
 
@@ -612,6 +695,6 @@ Literal examples do not create structural articles.
 > - This is quoted text.
 `,
   };
-  const document = makeDocument(documentArgs);
-  expect(audit([document])).toEqual([]);
+  const document = CortexArticleStructureScenario.makeDocument(documentArgs);
+  expect(CortexArticleStructureScenario.audit([document])).toEqual(ok([]));
 });

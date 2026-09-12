@@ -1,15 +1,30 @@
 use super::NookVaultManager;
-use crate::NookError;
-use crate::NookSecretPage;
-use crate::conversion::wasm_iso_timestamp;
-use crate::storage::event_db::load_local_event_store;
-use crate::storage::identity_record;
-use crate::storage::indexed_db::save_to_indexed_db;
+use crate::BrowserTimestamp;
+use crate::IdentityDbValidateVaultIdentityEnrollment;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::storage::indexed_db::ImportVaultLabel;
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use crate::ImportVaultBlobRequest;
+use crate::NookDatabase;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use nook_core::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
+
+use crate::{NookError, NookSecretPage};
+use nook_core::{
+    BuildMembersRecordsRequest, MemberFromIdentityRequest, ResolveMemberRosterRequest,
+    RosterAddMemberRequest, VaultMember,
+};
 use nook_core::{
     DeviceSigningPublicKey, MemberLabel, MultiDeviceError, SecretTypeFilter, StorageMode, StoreId,
     VaultMetaGraphProjection, VaultMetaState, VaultOperation, VaultType, VaultUnlock,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
+
+enum PasswordUnlockMembership {
+    ProtectedIdentity,
+    AvailableIdentity(nook_core::DeviceIdentity),
+}
 
 #[wasm_bindgen]
 impl NookVaultManager {
@@ -30,7 +45,7 @@ impl NookVaultManager {
         password: String,
         page_limit: u32,
     ) -> Result<NookSecretPage, JsError> {
-        let _ = self.status.tx.send("CONNECT_START".to_owned());
+        drop(self.status.tx.send("CONNECT_START".to_owned()));
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         // A backup password is an alternate vault-key credential. After an
@@ -39,9 +54,9 @@ impl NookVaultManager {
         // authorizing that identity. When the identity is already available
         // (for example during QR enrolment), refresh membership as before.
         let identity = if self.device.identity_private_key.is_empty() {
-            None
+            PasswordUnlockMembership::ProtectedIdentity
         } else {
-            Some(self.ensure_device_identity()?)
+            PasswordUnlockMembership::AvailableIdentity(self.ensure_device_identity()?)
         };
 
         let mut vault_missing = false;
@@ -83,11 +98,16 @@ impl NookVaultManager {
         self.vault.unlock = VaultUnlock::Keys;
         self.vault.meta = meta;
         self.ensure_event_log_ready().await?;
-        if let Some(identity) = identity.as_ref() {
+        if let PasswordUnlockMembership::AvailableIdentity(identity) = &identity {
             let store_id = StoreId::parse(&self.vault.store_id)
                 .map_err(|error| NookError::Database(error.to_string()))?;
-            if let Err(error) =
-                identity_record::validate_vault_identity_enrollment(identity, &store_id).await
+            if let Err(error) = NookDatabase::validate_vault_identity_enrollment(
+                IdentityDbValidateVaultIdentityEnrollment {
+                    app_key: identity,
+                    store_id: &store_id,
+                },
+            )
+            .await
             {
                 self.reset_vault_session();
                 return Err(error.into());
@@ -102,10 +122,10 @@ impl NookVaultManager {
 
         if event_log_remote {
             let yaml = self.serialize_current_projection_yaml()?;
-            save_to_indexed_db(&yaml).await?;
+            NookDatabase::save_to_indexed_db(&yaml).await?;
         }
         self.purge_legacy_plaintext_search_catalog().await?;
-        let _ = self.status.tx.send("READY".to_owned());
+        drop(self.status.tx.send("READY".to_owned()));
         NookSecretPage::from_core(self.query_secret_page(
             "",
             SecretTypeFilter::All,
@@ -119,8 +139,7 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
-    use crate::storage::event_db::load_local_event_store;
-    use crate::storage::indexed_db::{import_vault_blob, switch_active_vault};
+
     use nook_core::{
         Database, DeviceIdentity, DeviceMode, SecretId, SecretValue, SentinelPolicy,
         VaultArchitecture, VaultCrypto, VaultNameRef, VaultRecordSet, VaultStoreIdentityRef,
@@ -137,7 +156,13 @@ mod browser_tests {
     async fn password_unlock_rejects_sentinel_vaults_before_decryption() -> anyhow::Result<()> {
         let keys = nook_core::VaultKeys::generate()?;
         let participants = [DeviceIdentity::generate()?, DeviceIdentity::generate()?];
-        let mut records = nook_core::create_sentinel_share_records(&keys, &participants, 2.into())?;
+        let mut records = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &participants,
+                threshold: 2.into(),
+            },
+        )?;
         let mut database = Database::new();
         let secret_id = SecretId::from_vault_record(
             format!("secret_{}", nook_core::CompactToken::generate()?).as_str(),
@@ -178,8 +203,12 @@ mod browser_tests {
             VaultVersionWrite::Initial,
             &architecture,
         )?;
-        import_vault_blob(yaml.as_str(), Some("Sentinel password")).await?;
-        switch_active_vault(&store_id).await?;
+        NookDatabase::import_vault_blob(ImportVaultBlobRequest {
+            content: yaml.as_str(),
+            label: ImportVaultLabel::Override("Sentinel password"),
+        })
+        .await?;
+        NookDatabase::switch_active_vault(&store_id).await?;
 
         let mut manager = NookVaultManager::new();
         let result = manager
@@ -226,8 +255,12 @@ mod browser_tests {
             VaultNameRef::Named("No backup"),
             VaultVersionWrite::Initial,
         )?;
-        import_vault_blob(yaml.as_str(), Some("No backup")).await?;
-        switch_active_vault(&store_id).await?;
+        NookDatabase::import_vault_blob(ImportVaultBlobRequest {
+            content: yaml.as_str(),
+            label: ImportVaultLabel::Override("No backup"),
+        })
+        .await?;
+        NookDatabase::switch_active_vault(&store_id).await?;
 
         let mut manager = NookVaultManager::new();
         let result = manager
@@ -266,8 +299,12 @@ mod browser_tests {
         owner.bootstrap_event_log_genesis().await?;
         let yaml = owner.serialize_current_projection_yaml()?;
         let store_id = owner.vault.store_id.clone();
-        import_vault_blob(yaml.as_str(), Some("Password fallback")).await?;
-        switch_active_vault(&store_id).await?;
+        NookDatabase::import_vault_blob(ImportVaultBlobRequest {
+            content: yaml.as_str(),
+            label: ImportVaultLabel::Override("Password fallback"),
+        })
+        .await?;
+        NookDatabase::switch_active_vault(&store_id).await?;
 
         let mut recovered = NookVaultManager::new();
         let page = recovered
@@ -320,7 +357,10 @@ mod browser_tests {
             .await?;
         assert!(!event_log_remote);
         assert_eq!(retained.len(), 1);
-        assert!(!nook_core::VaultMetaRecord::is_join(&retained[0])?);
+        assert!(!matches!(
+            (&retained[0]).classify()?,
+            nook_core::VaultMetaRecord::Join(..)
+        ));
         Ok(())
     }
 
@@ -340,7 +380,7 @@ mod browser_tests {
             .persist_password_unlock_membership(&records, &joiner_identity, &keys)
             .await
             .map_err(|error| anyhow::anyhow!("membership persistence failed: {error:?}"))?;
-        let graph = load_local_event_store(&manager.vault.store_id)
+        let graph = NookDatabase::load_local_event_store(&manager.vault.store_id)
             .await?
             .load_graph(&manager.vault.store_id)?;
         let approvals = graph
@@ -390,7 +430,7 @@ impl NookVaultManager {
                         .to_owned(),
                 ));
             }
-            let store = load_local_event_store(&self.vault.store_id).await?;
+            let store = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
             let graph = store.load_graph(&self.vault.store_id)?;
             let projection = nook_core::VaultProjection::from_graph(&graph, &self.vault.store_id)?;
             let user_records: Vec<nook_core::StoredSecretRecord> =
@@ -412,7 +452,7 @@ impl NookVaultManager {
         let records = nook_core::VaultFormatDocument::new(content).deserialize(format)?;
         let mut retained = Vec::with_capacity(records.len());
         for record in records {
-            if !nook_core::VaultMetaRecord::is_join(&record)? {
+            if !matches!(record.classify()?, nook_core::VaultMetaRecord::Join(..)) {
                 retained.push(record);
             }
         }
@@ -450,12 +490,21 @@ impl NookVaultManager {
         let signing = self.ensure_signing_identity().await?;
         let signing_pk =
             DeviceSigningPublicKey::from_trusted(hex::encode(signing.verifying_key().as_bytes()));
-        let existing_roster = nook_core::resolve_member_roster(records, &keys.members_key)?;
-        let updated_roster = nook_core::roster_add_member(
-            existing_roster,
-            nook_core::member_from_identity(identity, &wasm_iso_timestamp()),
-        );
-        let member_records = nook_core::build_members_records(&updated_roster, &keys.members_key)?;
+        let existing_roster = VaultMember::resolve_member_roster(ResolveMemberRosterRequest {
+            records,
+            members_key: &keys.members_key,
+        })?;
+        let updated_roster = VaultMember::roster_add_member(RosterAddMemberRequest {
+            roster: existing_roster,
+            member: VaultMember::member_from_identity(MemberFromIdentityRequest {
+                identity,
+                enrolled_at: &BrowserTimestamp::now().into_iso_string(),
+            }),
+        });
+        let member_records = VaultMember::build_members_records(BuildMembersRecordsRequest {
+            roster: updated_roster,
+            members_key: &keys.members_key,
+        })?;
         for record in &member_records {
             self.vault.meta.apply_record(record)?;
         }

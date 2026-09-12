@@ -38,127 +38,143 @@ impl RunEvidence {
     }
 }
 
-pub(super) async fn fetch_run(run_id: u64) -> crate::HiveResult<RunEvidence> {
-    let url = format!("{NOOK_RUN_URL}/{run_id}");
-    let mut command = Command::new("curl");
-    command
-        .args([
-            "--fail",
-            "--silent",
-            "--show-error",
-            "--location",
-            "--retry",
-            "3",
-            "--connect-timeout",
-            "10",
-            "--max-time",
-            "90",
-            "--max-filesize",
-            "1048576",
-            "--user-agent",
-            "nook-hive-workbench-dispatcher",
-            &url,
-        ])
-        .kill_on_drop(true);
-    let output = async_time::timeout(Duration::from_secs(100), command.output())
-        .await
-        .map_err(|_| crate::HiveError::message("Workbench fetch exceeded 100 seconds"))?
-        .hive_context("start Workbench fetch")?;
-    if !output.status.success() {
-        return Err(crate::HiveError::message(format!(
-            "Workbench fetch failed with status {}: {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
+impl RunEvidence {
+    pub(super) async fn fetch_run(run_id: u64) -> crate::HiveResult<RunEvidence> {
+        let url = format!("{NOOK_RUN_URL}/{run_id}");
+        let mut command = Command::new("curl");
+        command
+            .args([
+                "--fail",
+                "--silent",
+                "--show-error",
+                "--location",
+                "--retry",
+                "3",
+                "--connect-timeout",
+                "10",
+                "--max-time",
+                "90",
+                "--max-filesize",
+                "1048576",
+                "--user-agent",
+                "nook-hive-workbench-dispatcher",
+                &url,
+            ])
+            .kill_on_drop(true);
+        let output = async_time::timeout(Duration::from_secs(100), command.output())
+            .await
+            .map_err(|_| crate::HiveError::message("Workbench fetch exceeded 100 seconds"))?
+            .hive_context("start Workbench fetch")?;
+        if !output.status.success() {
+            return Err(crate::HiveError::message(format!(
+                "Workbench fetch failed with status {}: {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr).trim()
+            )));
+        }
+        let page = String::from_utf8(output.stdout).hive_context("GitHub run page is not UTF-8")?;
+        RunEvidence::parse_run_page(run_id, &page)
     }
-    let page = String::from_utf8(output.stdout).hive_context("GitHub run page is not UTF-8")?;
-    parse_run_page(run_id, &page)
 }
 
-fn parse_run_page(run_id: u64, page: &str) -> crate::HiveResult<RunEvidence> {
-    let header = run_scope(page, run_id, "header_partial", "</page-header>", "header")?;
-    let summary = run_scope(
-        page,
-        run_id,
-        "summary_partial",
-        "aria-label=\"Workflow run graph\"",
-        "summary",
-    )?;
-    let graph = run_scope(page, run_id, "graph_partial", "</action-graph>", "graph")?;
+impl RunEvidence {
+    fn parse_run_page(run_id: u64, page: &str) -> crate::HiveResult<RunEvidence> {
+        let header =
+            RunEvidence::run_scope(page, run_id, "header_partial", "</page-header>", "header")?;
+        let summary = RunEvidence::run_scope(
+            page,
+            run_id,
+            "summary_partial",
+            "aria-label=\"Workflow run graph\"",
+            "summary",
+        )?;
+        let graph =
+            RunEvidence::run_scope(page, run_id, "graph_partial", "</action-graph>", "graph")?;
 
-    let head_sha = summary
-        .split_once(COMMIT_LINK_PREFIX)
-        .and_then(|(_, remainder)| remainder.get(..40))
-        .filter(|value| value.bytes().all(|byte| byte.is_ascii_hexdigit()))
-        .hive_context("GitHub run page has no full commit identity")?;
-    require_marker(
-        summary,
-        "title=\"main\" href=\"/meta-secret/nook/tree/refs/heads/main\"",
-        "main branch",
-    )?;
-    require_marker(
-        header,
-        "href=\"/meta-secret/nook/actions/workflows/main.yml\"",
-        "Main workflow",
-    )?;
-    require_marker(
-        graph,
-        &format!("href=\"/meta-secret/nook/actions/runs/{run_id}/workflow\""),
-        "run workflow",
-    )?;
-    require_marker(graph, ">on: push</div>", "push trigger")?;
+        let head_sha = summary
+            .split_once(COMMIT_LINK_PREFIX)
+            .and_then(|(_, remainder)| remainder.get(..40))
+            .filter(|value| value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+            .ok_or_else(|| {
+                crate::HiveError::message("GitHub run page has no full commit identity")
+            })?;
+        RunEvidence::require_marker(
+            summary,
+            "title=\"main\" href=\"/meta-secret/nook/tree/refs/heads/main\"",
+            "main branch",
+        )?;
+        RunEvidence::require_marker(
+            header,
+            "href=\"/meta-secret/nook/actions/workflows/main.yml\"",
+            "Main workflow",
+        )?;
+        RunEvidence::require_marker(
+            graph,
+            &format!("href=\"/meta-secret/nook/actions/runs/{run_id}/workflow\""),
+            "run workflow",
+        )?;
+        RunEvidence::require_marker(graph, ">on: push</div>", "push trigger")?;
 
-    let lifecycle = if header.contains("favicons/favicon-success.svg") {
-        RunLifecycle::Completed(RunConclusion::Success)
-    } else if header.contains("favicons/favicon-failure.svg") {
-        RunLifecycle::Completed(RunConclusion::Failure)
-    } else if header.contains("aria-label=\"cancelled: \"") {
-        RunLifecycle::Completed(RunConclusion::Cancelled)
-    } else if header.contains("aria-label=\"skipped: \"") {
-        RunLifecycle::Completed(RunConclusion::Skipped)
-    } else if header.contains("favicons/favicon-pending.svg") {
-        RunLifecycle::InProgress
-    } else {
-        return Err(crate::HiveError::message(
-            "GitHub run page has no recognized workflow status",
-        ));
-    };
+        let lifecycle = if header.contains("favicons/favicon-success.svg") {
+            RunLifecycle::Completed(RunConclusion::Success)
+        } else if header.contains("favicons/favicon-failure.svg") {
+            RunLifecycle::Completed(RunConclusion::Failure)
+        } else if header.contains("aria-label=\"cancelled: \"") {
+            RunLifecycle::Completed(RunConclusion::Cancelled)
+        } else if header.contains("aria-label=\"skipped: \"") {
+            RunLifecycle::Completed(RunConclusion::Skipped)
+        } else if header.contains("favicons/favicon-pending.svg") {
+            RunLifecycle::InProgress
+        } else {
+            return Err(crate::HiveError::message(
+                "GitHub run page has no recognized workflow status",
+            ));
+        };
 
-    Ok(RunEvidence {
-        head_sha: head_sha.to_owned(),
-        lifecycle,
-    })
+        Ok(RunEvidence {
+            head_sha: head_sha.to_owned(),
+            lifecycle,
+        })
+    }
 }
 
-fn run_scope<'a>(
-    page: &'a str,
-    run_id: u64,
-    partial: &str,
-    end: &str,
-    evidence: &str,
-) -> crate::HiveResult<&'a str> {
-    let start = format!("data-url=\"/meta-secret/nook/actions/runs/{run_id}/{partial}\"");
-    let (_, remainder) = page
-        .split_once(&start)
-        .with_hive_context(|| format!("GitHub run page has no run-scoped {evidence}"))?;
-    remainder
-        .split_once(end)
-        .map(|(scope, _)| scope)
-        .with_hive_context(|| format!("GitHub run page has no bounded {evidence}"))
+impl RunEvidence {
+    fn run_scope<'a>(
+        page: &'a str,
+        run_id: u64,
+        partial: &str,
+        end: &str,
+        evidence: &str,
+    ) -> crate::HiveResult<&'a str> {
+        let start = format!("data-url=\"/meta-secret/nook/actions/runs/{run_id}/{partial}\"");
+        let (_, remainder) = page.split_once(&start).ok_or_else(|| {
+            crate::HiveError::message(format!("GitHub run page has no run-scoped {evidence}"))
+        })?;
+        remainder
+            .split_once(end)
+            .map(|(scope, _)| scope)
+            .ok_or_else(|| {
+                crate::HiveError::message(format!("GitHub run page has no bounded {evidence}"))
+            })
+    }
 }
 
-fn require_marker(page: &str, marker: &str, evidence: &str) -> crate::HiveResult<()> {
-    if page.contains(marker) {
-        Ok(())
-    } else {
-        Err(crate::HiveError::message(format!(
-            "GitHub run page has no {evidence} evidence"
-        )))
+impl RunEvidence {
+    fn require_marker(page: &str, marker: &str, evidence: &str) -> crate::HiveResult<()> {
+        if page.contains(marker) {
+            Ok(())
+        } else {
+            Err(crate::HiveError::message(format!(
+                "GitHub run page has no {evidence} evidence"
+            )))
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::RunEvidence;
+
     const SHA: &str = "1783e5db6458451a3ce30f16b8b64f87a8e148cf";
 
     fn run_page(run_id: u64, status: &str) -> String {
@@ -176,11 +192,11 @@ mod tests {
     }
 
     fn parse_run(status: &str) -> crate::HiveResult<super::RunEvidence> {
-        super::parse_run_page(42, &run_page(42, status))
+        RunEvidence::parse_run_page(42, &run_page(42, status))
     }
 
     fn expect_rejection(page: &str, evidence: &str) -> crate::HiveResult<()> {
-        match super::parse_run_page(42, page) {
+        match RunEvidence::parse_run_page(42, page) {
             Ok(run) => Err(crate::HiveError::message(format!(
                 "page without {evidence} unexpectedly parsed as {run:?}"
             ))),

@@ -3,9 +3,14 @@ import {
   clearBrowserVault,
   createIsolatedContext,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  NookAppLogAttachmentName,
+  attachNookLogsForTest,
   flushNookLogPersistQueue,
   readPersistedAppLogs,
   UI_TIMEOUT_MS,
+  parseJson,
+  readStringProperty,
+  requireRecord,
 } from './helpers'
 
 async function openFreshDevice(
@@ -197,8 +202,15 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
       .nth(1)
       .getByTestId('sentinel-genesis-delivery-output')
       .inputValue()
-    const parsedDelivery = JSON.parse(deviceBDelivery) as { storeId: string }
-    memberStoreId = parsedDelivery.storeId
+    const parsedDelivery = requireRecord(
+      parseJson(deviceBDelivery),
+      'Sentinel delivery payload',
+    )
+    memberStoreId = readStringProperty(
+      parsedDelivery,
+      'storeId',
+      'Sentinel delivery payload',
+    )
     expect(memberStoreId.length).toBeGreaterThan(0)
     expect(deviceBDelivery).not.toContain('githubPat')
     expect(deviceBDelivery).not.toContain('oauthFile')
@@ -250,7 +262,15 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     const unlockRequestOutput = deviceA.getByTestId(
       'sentinel-unlock-request-output',
     )
-    await expect(unlockRequestOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    try {
+      await expect(unlockRequestOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    } catch (error) {
+      await attachNookLogsForTest(deviceA, test.info(), {
+        attachmentName: NookAppLogAttachmentName.SentinelInitiator,
+        print: true,
+      })
+      throw error
+    }
     const unlockRequest = await unlockRequestOutput.inputValue()
     expect(unlockRequest).not.toContain('mnemonic')
     expect(unlockRequest).not.toContain('share_mnemonic')

@@ -5,65 +5,13 @@ run-name: >-
   || format('Main {0}', github.sha) }}
 
 on:
-  pull_request:
-    paths:
-      - .github/workflows/hive.yml
-      - .github/actions/nook-cache-connect/**
-      - .github/actions/nook-docker-setup/**
-      - .github/scripts/rust-deps-cache-fingerprint.sh
-      - .github/formatting/**
-      - .github/scripts/format-host-apply.sh
-      - .github/scripts/format-host-apply.test.sh
-      - .github/scripts/hive-manifest-contract.rb
-      - .github/scripts/ovh-dedicated-contract.ts
-      - agentic-ai/minds/hive/controller/reaper.ts
-      - agentic-ai/minds/hive/controller/reaper.test.ts
-      - .github/scripts/k0s-firewall-rollback-test.ts
-      - .github/scripts/k0s-cni-migration-test.ts
-      - .github/scripts/services-network-repair-test.ts
-      - .github/scripts/zot-registry-public-contract-test.ts
-      - .github/scripts/wait-hive-neo4j.sh
-      - .task/agentic-ai.yml
-      - .task/ci-workflows.yml
-      - .github/scripts/infra-surface-check.sh
-      - Taskfile.yml
-      - agentic-ai/minds/**
-      - nook-app/nook-platform/nook-core/coverage-floor.json
-      - infra/compose.yaml
-      - infra/k0s/**
-      - infra/providers/**
-      - infra/tasks/**
-      - infra/Taskfile.yml
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/hive.yml
-      - .github/actions/nook-cache-connect/**
-      - .github/actions/nook-docker-setup/**
-      - .github/scripts/rust-deps-cache-fingerprint.sh
-      - .github/formatting/**
-      - .github/scripts/format-host-apply.sh
-      - .github/scripts/format-host-apply.test.sh
-      - .github/scripts/hive-manifest-contract.rb
-      - .github/scripts/ovh-dedicated-contract.ts
-      - agentic-ai/minds/hive/controller/reaper.ts
-      - agentic-ai/minds/hive/controller/reaper.test.ts
-      - .github/scripts/k0s-firewall-rollback-test.ts
-      - .github/scripts/k0s-cni-migration-test.ts
-      - .github/scripts/services-network-repair-test.ts
-      - .github/scripts/zot-registry-public-contract-test.ts
-      - .github/scripts/wait-hive-neo4j.sh
-      - .task/agentic-ai.yml
-      - .task/ci-workflows.yml
-      - .github/scripts/infra-surface-check.sh
-      - Taskfile.yml
-      - agentic-ai/minds/**
-      - nook-app/nook-platform/nook-core/coverage-floor.json
-      - infra/compose.yaml
-      - infra/k0s/**
-      - infra/providers/**
-      - infra/tasks/**
-      - infra/Taskfile.yml
+  workflow_call:
+    inputs:
+      source_sha:
+        description: Exact pull-request head SHA for source-pinned checkouts.
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -74,10 +22,6 @@ env:
   HIVE_CACHE_FROM: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v2:buildcache
   HIVE_CONSOLE_CACHE_FROM: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-console-v1:buildcache
 
-concurrency:
-  group: hive-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   console-image:
     name: Build Hive Control Center browser image
@@ -86,15 +30,19 @@ jobs:
       (github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]')
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 10
     env:
       HIVE_CONSOLE_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-hive-console:run-${{ github.run_id }}-${{ github.run_attempt }}
-      HIVE_CONSOLE_CACHE_EXACT_FROM: ${{ github.event_name == 'pull_request' && format('type=registry,ref=registry.dev.nokey.sh/nook/remote-buildcache/nook-hive-console-v1-git-{0}:buildcache', github.event.pull_request.head.sha) || '' }}
-      HIVE_CONSOLE_CACHE_TO: ${{ github.event_name == 'pull_request' && format('type=registry,ref=registry.dev.nokey.sh/nook/remote-buildcache/nook-hive-console-v1-git-{0}:buildcache,mode=max,timeout=10m', github.event.pull_request.head.sha) || 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-console-v1:buildcache,mode=max,timeout=10m' }}
+      HIVE_CONSOLE_CACHE_TO: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-console-v1:buildcache,mode=max,timeout=10m' || '' }}
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Task
         uses: go-task/setup-task@v2
@@ -109,7 +57,7 @@ jobs:
       - name: Install Ruby for the legacy manifest contract
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.4'
+          ruby-version: "3.4"
 
       - name: Validate Taskfile command surface
         run: task infra:surface:check
@@ -137,6 +85,7 @@ jobs:
       github.event.pull_request.user.login != 'dependabot[bot]')
     needs: console-image
     runs-on: nook-k0s-container
+    timeout-minutes: 10
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-hive-console:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:
@@ -164,9 +113,14 @@ jobs:
       (github.event.pull_request.head.repo.full_name != github.repository ||
       github.event.pull_request.user.login == 'dependabot[bot]')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout untrusted source without private credentials
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Task
         uses: go-task/setup-task@v2
@@ -189,9 +143,14 @@ jobs:
       (github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]'))
     runs-on: nook-k0s-hive
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Task
         uses: go-task/setup-task@v2
@@ -241,6 +200,7 @@ jobs:
       (github.event.pull_request.head.repo.full_name != github.repository ||
       github.event.pull_request.user.login == 'dependabot[bot]')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       neo4j:
         image: registry.dev.nokey.sh/library/neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
@@ -256,6 +216,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Task
         uses: go-task/setup-task@v2

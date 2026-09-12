@@ -1,9 +1,17 @@
-import { appPath } from "$lib/content/legal";
-import { runtimeError, suspendWasmLogging } from "$lib/runtime/log";
+import { err, ok, type Result } from "neverthrow";
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from "$lib/runtime/storage-failure";
+import { ApplicationRoutePresentation } from "$lib/content/legal";
+import { browserLogRuntime } from "$lib/runtime/log";
 
 const LOCAL_DATA_RESET_CHANNEL = "nook-local-data-reset";
+
 const LOCAL_DATA_STORAGE_LOCK = "nook-local-data-storage";
+
 const LOCAL_DATA_STORAGE_GENERATION = "nook-local-data-storage-generation";
+
 const TAB_ID = crypto.randomUUID();
 
 enum LocalDataResetMessageType {
@@ -33,7 +41,10 @@ enum LocalDataResetReadinessKind {
 
 type LocalDataResetReadiness =
   | { kind: LocalDataResetReadinessKind.Ready }
-  | { kind: LocalDataResetReadinessKind.Failed; error: string };
+  | {
+      kind: LocalDataResetReadinessKind.Failed;
+      failure: VaultStorageFailureKind;
+    };
 
 type LocalDataResetReady = {
   type: LocalDataResetMessageType.Ready;
@@ -54,302 +65,401 @@ type LocalDataResetMessage =
   | LocalDataResetReady
   | LocalDataResetReload;
 
-type BrowserDataDeletionErrors = Error[];
-
-export type LocalDataStorageOperation<T> = {
+export type LocalDataStorageOperation<T, E = never> = {
   readonly generation: string;
-  readonly generationChangedMessage: string;
-  readonly operation: () => T | Promise<T>;
+  readonly operation: () => Result<T, E> | Promise<Result<T, E>>;
 };
 
-export function captureLocalDataStorageGeneration(): string {
-  return ((v) => (v ? v : ""))(
-    localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION),
-  );
-}
-
-export async function runWithLocalDataStorageLock<T>(
-  input: LocalDataStorageOperation<T>,
-): Promise<T> {
-  if (!("locks" in navigator)) return input.operation();
-  const options: LockOptions = { mode: "shared" };
-  return navigator.locks.request(LOCAL_DATA_STORAGE_LOCK, options, () => {
-    if (
-      ((v) => (v ? v : ""))(
-        localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION),
-      ) !== input.generation
-    ) {
-      throw new Error(input.generationChangedMessage);
-    }
-    return input.operation();
-  });
-}
-
-export async function runWithExclusiveLocalDataStorageLock<T>(
-  operation: () => T | Promise<T>,
-): Promise<T> {
-  if (!("locks" in navigator)) {
-    throw new Error("Safe cross-tab local data recovery is unavailable");
+export class BrowserDataCleanupFailure extends VaultStorageFailure {
+  constructor(readonly failures: readonly VaultStorageFailure[]) {
+    super(VaultStorageFailureKind.BrowserCleanupFailed);
   }
-  const options: LockOptions = { mode: "exclusive" };
-  return navigator.locks.request(LOCAL_DATA_STORAGE_LOCK, options, async () => {
+}
+
+/** Owns this browser host’s resources and interaction lifecycle. */
+class BrowserDataLifecycle {
+  constructor(private readonly browser: typeof globalThis) {}
+
+  captureLocalDataStorageGeneration(): Result<string, VaultStorageFailure> {
     try {
-      return await operation();
-    } finally {
-      localStorage.setItem(LOCAL_DATA_STORAGE_GENERATION, crypto.randomUUID());
-    }
-  });
-}
-
-function combineErrors(errors: BrowserDataDeletionErrors): Error {
-  return new Error(errors.map((error) => error.message).join("; "));
-}
-
-function visibleCookiePaths(): string[] {
-  const paths = new Set<string>(["/"]);
-  const addPath = (path: string) => {
-    if (!path.startsWith("/")) return;
-    paths.add(path);
-    paths.add(path.endsWith("/") ? path.slice(0, -1) || "/" : `${path}/`);
-  };
-
-  addPath(appPath("/"));
-  const segments = window.location.pathname.split("/").filter(Boolean);
-  for (let length = 1; length <= segments.length; length += 1) {
-    addPath(`/${segments.slice(0, length).join("/")}`);
-  }
-  return [...paths];
-}
-
-function clearAccessibleCookies(): void {
-  const paths = visibleCookiePaths();
-  const hostname = window.location.hostname.toLowerCase();
-  const labels = hostname.split(".").filter(Boolean);
-  const domains = new Set<string>();
-  if (labels.length === 1) {
-    domains.add(hostname);
-  } else {
-    for (let index = 0; index < labels.length - 1; index += 1) {
-      domains.add(labels.slice(index).join("."));
-    }
-  }
-  for (const cookie of document.cookie.split(";")) {
-    const separator = cookie.indexOf("=");
-    const name = (
-      separator === -1 ? cookie : cookie.slice(0, separator)
-    ).trim();
-    if (!name) continue;
-    for (const path of paths) {
-      document.cookie = `${name}=; Max-Age=0; Path=${path}; SameSite=Lax`;
-      for (const domain of domains) {
-        document.cookie = `${name}=; Max-Age=0; Path=${path}; Domain=${domain}; SameSite=Lax`;
-      }
-    }
-  }
-}
-
-export function clearTabScopedBrowserData(): void {
-  sessionStorage.clear();
-}
-
-async function clearBrowserManagedStorage(): Promise<void> {
-  const errors: Error[] = [];
-  const operations: Array<() => void | Promise<void>> = [
-    () => localStorage.clear(),
-    () => sessionStorage.clear(),
-    () => clearAccessibleCookies(),
-    async () => {
-      if (!("caches" in globalThis)) return;
-      const cacheNames = await caches.keys();
-      await Promise.all(cacheNames.map((name) => caches.delete(name)));
-    },
-  ];
-  for (const operation of operations) {
-    try {
-      await operation();
-    } catch (error) {
-      errors.push(runtimeError(error));
-    }
-  }
-  if (errors.length > 0) {
-    throw combineErrors(errors);
-  }
-}
-
-export function subscribeToLocalBrowserDataDeletion(
-  handler: () => Promise<void>,
-): () => void {
-  if (!("BroadcastChannel" in globalThis)) return () => {};
-  const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
-  const handledRequests = new Set<string>();
-
-  const handleRequest = async (message: LocalDataResetMessage) => {
-    if (
-      message.type !== LocalDataResetMessageType.Request ||
-      message.senderId === TAB_ID ||
-      handledRequests.has(message.requestId)
-    ) {
-      return;
-    }
-    handledRequests.add(message.requestId);
-    const postMessageArgs: Parameters<typeof channel.postMessage>[0] = {
-      type: LocalDataResetMessageType.Seen,
-      requestId: message.requestId,
-      senderId: message.senderId,
-      responderId: TAB_ID,
-    } satisfies LocalDataResetMessage;
-    channel.postMessage(postMessageArgs);
-    try {
-      await handler();
-      const postMessageArgs2: Parameters<typeof channel.postMessage>[0] = {
-        type: LocalDataResetMessageType.Ready,
-        requestId: message.requestId,
-        senderId: message.senderId,
-        responderId: TAB_ID,
-        readiness: { kind: LocalDataResetReadinessKind.Ready },
-      } satisfies LocalDataResetMessage;
-      channel.postMessage(postMessageArgs2);
-    } catch (error) {
-      const postMessageArgs3: Parameters<typeof channel.postMessage>[0] = {
-        type: LocalDataResetMessageType.Ready,
-        requestId: message.requestId,
-        senderId: message.senderId,
-        responderId: TAB_ID,
-        readiness: {
-          kind: LocalDataResetReadinessKind.Failed,
-          error: runtimeError(error).message,
-        },
-      } satisfies LocalDataResetMessage;
-      channel.postMessage(postMessageArgs3);
-    }
-  };
-
-  channel.onmessage = (event: MessageEvent<LocalDataResetMessage>) => {
-    if (event.data.type === LocalDataResetMessageType.Reload) {
-      if (event.data.senderId !== TAB_ID) window.location.reload();
-      return;
-    }
-    void handleRequest(event.data);
-  };
-  return () => {
-    channel.close();
-  };
-}
-
-export function requireLocalDataRecoverySupport(): void {
-  if (!("BroadcastChannel" in globalThis) || !("locks" in navigator)) {
-    throw new Error("Safe cross-tab local data deletion is unavailable");
-  }
-}
-
-export async function quiesceOtherTabsForLocalRecovery(): Promise<void> {
-  requireLocalDataRecoverySupport();
-  const request: LocalDataResetRequest = {
-    type: LocalDataResetMessageType.Request,
-    requestId: crypto.randomUUID(),
-    senderId: TAB_ID,
-  };
-  const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
-  const seen = new Set<string>();
-  const ready = new Map<string, LocalDataResetReadiness>();
-  channel.onmessage = (event: MessageEvent<LocalDataResetMessage>) => {
-    const message = event.data;
-    if (
-      message.type === LocalDataResetMessageType.Reload ||
-      message.requestId !== request.requestId ||
-      message.senderId !== TAB_ID ||
-      message.type === LocalDataResetMessageType.Request
-    ) {
-      return;
-    }
-    if (message.type === LocalDataResetMessageType.Seen)
-      seen.add(message.responderId);
-    if (message.type === LocalDataResetMessageType.Ready) {
-      ready.set(message.responderId, message.readiness);
-    }
-  };
-  try {
-    channel.postMessage(request);
-
-    const waitUntil = Date.now() + 20_000;
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    while ([...seen].some((tabId) => !ready.has(tabId))) {
-      if (Date.now() >= waitUntil) {
-        throw new Error("Another Nook tab did not stop local storage work");
-      }
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    const errors = [...ready.values()]
-      .filter(
-        (readiness) => readiness.kind === LocalDataResetReadinessKind.Failed,
-      )
-      .map((readiness) => readiness.error);
-    if (errors.length > 0) {
-      throw new Error(errors.join("; "));
-    }
-  } catch (error) {
-    try {
-      await reloadQuiescedTabsAfterLocalRecovery();
+      const generation = this.browser.localStorage.getItem(
+        LOCAL_DATA_STORAGE_GENERATION,
+      );
+      return ok(typeof generation === "string" ? generation : "");
     } catch {
-      // A peer may already be suspended even when another peer reports a
-      // failure. Reload is best-effort because the channel can disappear as a
-      // tab or origin is torn down.
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.GenerationUnavailable),
+      );
     }
-    throw error;
-  } finally {
-    channel.close();
   }
-}
 
-export async function reloadQuiescedTabsAfterLocalRecovery(): Promise<void> {
-  if (!("BroadcastChannel" in globalThis)) return;
-  const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
-  try {
-    const message: LocalDataResetReload = {
-      type: LocalDataResetMessageType.Reload,
-      senderId: TAB_ID,
+  async runWithLocalDataStorageLock<T, E = never>(
+    input: LocalDataStorageOperation<T, E>,
+  ): Promise<Result<T, E | VaultStorageFailure>> {
+    const run = () => {
+      const generation = this.captureLocalDataStorageGeneration();
+      if (generation.isErr()) return err(generation.error);
+      if (generation.value !== input.generation)
+        return err(
+          new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
+        );
+      return input.operation();
     };
-    channel.postMessage(message);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  } finally {
-    channel.close();
+    if (!("locks" in this.browser.navigator)) return run();
+    try {
+      return await this.browser.navigator.locks.request(
+        LOCAL_DATA_STORAGE_LOCK,
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        { mode: "shared" },
+        run,
+      );
+    } catch {
+      return err(new VaultStorageFailure(VaultStorageFailureKind.LockFailed));
+    }
+  }
+
+  async runWithExclusiveLocalDataStorageLock<T, E = never>(
+    operation: () => Result<T, E> | Promise<Result<T, E>>,
+  ): Promise<Result<T, E | VaultStorageFailure>> {
+    if (!("locks" in this.browser.navigator))
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.LockUnavailable),
+      );
+    try {
+      return await this.browser.navigator.locks.request(
+        LOCAL_DATA_STORAGE_LOCK,
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        { mode: "exclusive" },
+        async () => {
+          const result = await operation();
+          try {
+            this.browser.localStorage.setItem(
+              LOCAL_DATA_STORAGE_GENERATION,
+              this.browser.crypto.randomUUID(),
+            );
+          } catch {
+            return err(
+              new VaultStorageFailure(
+                VaultStorageFailureKind.GenerationUnavailable,
+              ),
+            );
+          }
+          return result;
+        },
+      );
+    } catch {
+      return err(new VaultStorageFailure(VaultStorageFailureKind.LockFailed));
+    }
+  }
+
+  private visibleCookiePaths(): string[] {
+    const paths = new Set<string>(["/"]);
+    const addPath = (path: string) => {
+      if (!path.startsWith("/")) return;
+      paths.add(path);
+      paths.add(path.endsWith("/") ? path.slice(0, -1) || "/" : `${path}/`);
+    };
+
+    addPath(new ApplicationRoutePresentation("/").appPath());
+    const segments = this.browser.window.location.pathname
+      .split("/")
+      .filter(Boolean);
+    for (let length = 1; length <= segments.length; length += 1) {
+      addPath(`/${segments.slice(0, length).join("/")}`);
+    }
+    return [...paths];
+  }
+
+  private clearAccessibleCookies(): void {
+    const paths = this.visibleCookiePaths();
+    const hostname = this.browser.window.location.hostname.toLowerCase();
+    const labels = hostname.split(".").filter(Boolean);
+    const domains = new Set<string>();
+    if (labels.length === 1) {
+      domains.add(hostname);
+    } else {
+      for (let index = 0; index < labels.length - 1; index += 1) {
+        domains.add(labels.slice(index).join("."));
+      }
+    }
+    for (const cookie of this.browser.document.cookie.split(";")) {
+      const separator = cookie.indexOf("=");
+      const name = (
+        separator === -1 ? cookie : cookie.slice(0, separator)
+      ).trim();
+      if (!name) continue;
+      for (const path of paths) {
+        this.browser.document.cookie = `${name}=; Max-Age=0; Path=${path}; SameSite=Lax`;
+        for (const domain of domains) {
+          this.browser.document.cookie = `${name}=; Max-Age=0; Path=${path}; Domain=${domain}; SameSite=Lax`;
+        }
+      }
+    }
+  }
+
+  clearTabScopedBrowserData(): Result<void, VaultStorageFailure> {
+    try {
+      this.browser.sessionStorage.clear();
+      return ok();
+    } catch {
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.BrowserCleanupFailed),
+      );
+    }
+  }
+
+  private async clearBrowserManagedStorage(): Promise<
+    Result<void, VaultStorageFailure>
+  > {
+    const failures: VaultStorageFailureKind[] = [];
+    const operations: Array<() => void | Promise<void>> = [
+      () => this.browser.localStorage.clear(),
+      () => this.browser.sessionStorage.clear(),
+      () => this.clearAccessibleCookies(),
+      async () => {
+        if (!("caches" in this.browser)) return;
+        const names = await this.browser.caches.keys();
+        await Promise.all(
+          names.map((name) => this.browser.caches.delete(name)),
+        );
+      },
+    ];
+    for (const operation of operations) {
+      try {
+        await operation();
+      } catch {
+        failures.push(VaultStorageFailureKind.BrowserCleanupFailed);
+      }
+    }
+    return failures.length
+      ? err(
+          new VaultStorageFailure(VaultStorageFailureKind.BrowserCleanupFailed),
+        )
+      : ok();
+  }
+
+  subscribeToLocalBrowserDataDeletion(
+    handler: () => Promise<Result<void, VaultStorageFailure>>,
+  ): Result<() => void, VaultStorageFailure> {
+    if (!("BroadcastChannel" in this.browser)) return ok(() => {});
+    let channel: BroadcastChannel;
+    try {
+      channel = new this.browser.BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
+    } catch {
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.BroadcastFailed),
+      );
+    }
+    const handled = new Set<string>();
+    const handleRequest = async (message: LocalDataResetMessage) => {
+      if (
+        message.type !== LocalDataResetMessageType.Request ||
+        message.senderId === TAB_ID ||
+        handled.has(message.requestId)
+      )
+        return;
+      handled.add(message.requestId);
+      try {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        channel.postMessage({
+          type: LocalDataResetMessageType.Seen,
+          requestId: message.requestId,
+          senderId: message.senderId,
+          responderId: TAB_ID,
+        } satisfies LocalDataResetMessage);
+      } catch {
+        browserLogRuntime
+          .createLogger("browser-data")
+          .warn("Peer storage stop acknowledgement could not be sent");
+      }
+      let outcome: Result<void, VaultStorageFailure>;
+      try {
+        outcome = await handler();
+      } catch {
+        outcome = err(
+          new VaultStorageFailure(VaultStorageFailureKind.PeerFailed),
+        );
+      }
+      const readiness: LocalDataResetReadiness = outcome.isOk()
+        ? { kind: LocalDataResetReadinessKind.Ready }
+        : {
+            kind: LocalDataResetReadinessKind.Failed,
+            failure: outcome.error.kind,
+          };
+      try {
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        channel.postMessage({
+          type: LocalDataResetMessageType.Ready,
+          requestId: message.requestId,
+          senderId: message.senderId,
+          responderId: TAB_ID,
+          readiness,
+        } satisfies LocalDataResetMessage);
+      } catch {
+        /* The requesting tab cannot acknowledge this peer and will fail its deadline. */
+      }
+    };
+    channel.onmessage = (event: MessageEvent<LocalDataResetMessage>) => {
+      if (event.data.type === LocalDataResetMessageType.Reload) {
+        if (event.data.senderId !== TAB_ID)
+          this.browser.window.location.reload();
+        return;
+      }
+      void handleRequest(event.data);
+    };
+    return ok(() => channel.close());
+  }
+
+  requireLocalDataRecoverySupport(): Result<void, VaultStorageFailure> {
+    return "BroadcastChannel" in this.browser &&
+      "locks" in this.browser.navigator
+      ? ok()
+      : err(new VaultStorageFailure(VaultStorageFailureKind.LockUnavailable));
+  }
+
+  async quiesceOtherTabsForLocalRecovery(): Promise<
+    Result<void, VaultStorageFailure>
+  > {
+    const support = this.requireLocalDataRecoverySupport();
+    if (support.isErr()) return err(support.error);
+    let channel: BroadcastChannel;
+    let request: LocalDataResetRequest;
+    try {
+      channel = new this.browser.BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
+      request = {
+        type: LocalDataResetMessageType.Request,
+        requestId: this.browser.crypto.randomUUID(),
+        senderId: TAB_ID,
+      };
+    } catch {
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.BroadcastFailed),
+      );
+    }
+    const seen = new Set<string>();
+    const ready = new Map<string, LocalDataResetReadiness>();
+    channel.onmessage = (event: MessageEvent<LocalDataResetMessage>) => {
+      const message = event.data;
+      if (
+        message.type === LocalDataResetMessageType.Reload ||
+        message.requestId !== request.requestId ||
+        message.senderId !== TAB_ID ||
+        message.type === LocalDataResetMessageType.Request
+      )
+        return;
+      if (message.type === LocalDataResetMessageType.Seen)
+        seen.add(message.responderId);
+      if (message.type === LocalDataResetMessageType.Ready)
+        ready.set(message.responderId, message.readiness);
+    };
+    let outcome: Result<void, VaultStorageFailure> = ok();
+    try {
+      try {
+        channel.postMessage(request);
+      } catch {
+        outcome = err(
+          new VaultStorageFailure(VaultStorageFailureKind.BroadcastFailed),
+        );
+      }
+      if (outcome.isOk()) {
+        const deadline = Date.now() + 20_000;
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        while ([...seen].some((tab) => !ready.has(tab))) {
+          if (Date.now() >= deadline) {
+            outcome = err(
+              new VaultStorageFailure(VaultStorageFailureKind.PeerTimeout),
+            );
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        if (
+          outcome.isOk() &&
+          [...ready.values()].some(
+            (value) => value.kind === LocalDataResetReadinessKind.Failed,
+          )
+        )
+          outcome = err(
+            new VaultStorageFailure(VaultStorageFailureKind.PeerFailed),
+          );
+      }
+    } finally {
+      channel.close();
+    }
+    if (outcome.isErr()) {
+      await this.reloadQuiescedTabsAfterLocalRecovery();
+    }
+    return outcome;
+  }
+
+  async reloadQuiescedTabsAfterLocalRecovery(): Promise<
+    Result<void, VaultStorageFailure>
+  > {
+    if (!("BroadcastChannel" in this.browser)) return ok();
+    let channel: BroadcastChannel;
+    try {
+      channel = new this.browser.BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
+    } catch {
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.BroadcastFailed),
+      );
+    }
+    try {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      channel.postMessage({
+        type: LocalDataResetMessageType.Reload,
+        senderId: TAB_ID,
+      } satisfies LocalDataResetMessage);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return ok();
+    } catch {
+      return err(new VaultStorageFailure(VaultStorageFailureKind.ReloadFailed));
+    } finally {
+      channel.close();
+    }
+  }
+
+  async deleteLocalBrowserData(
+    clearNookDatabases: () => Promise<Result<void, VaultStorageFailure>>,
+  ): Promise<Result<void, VaultStorageFailure>> {
+    const support = this.requireLocalDataRecoverySupport();
+    if (support.isErr()) return err(support.error);
+    const peers = await this.quiesceOtherTabsForLocalRecovery();
+    if (peers.isErr()) return err(peers.error);
+    let outcome: Result<void, VaultStorageFailure>;
+    let logging: Result<void, VaultStorageFailure>;
+    try {
+      await browserLogRuntime.suspendWasmLogging();
+      logging = ok();
+    } catch {
+      logging = err(
+        new VaultStorageFailure(VaultStorageFailureKind.LoggingCleanupFailed),
+      );
+    }
+    if (logging.isErr()) outcome = err(logging.error);
+    else {
+      outcome = await this.runWithExclusiveLocalDataStorageLock(async () => {
+        const database = await clearNookDatabases();
+        const browser = await this.clearBrowserManagedStorage();
+        if (database.isErr() && browser.isErr())
+          return err(
+            new BrowserDataCleanupFailure([database.error, browser.error]),
+          );
+        return database.isErr() ? err(database.error) : browser;
+      });
+    }
+    const reloaded = await this.reloadQuiescedTabsAfterLocalRecovery();
+    if (outcome.isErr()) return err(outcome.error);
+    if (reloaded.isErr()) return err(reloaded.error);
+    try {
+      this.browser.window.location.replace(
+        new ApplicationRoutePresentation("/").appPath(),
+      );
+    } catch {
+      return err(new VaultStorageFailure(VaultStorageFailureKind.ReloadFailed));
+    }
+    return ok();
   }
 }
 
-/**
- * Delete the complete Nook working copy from this browser.
- *
- * Rust owns the Nook database list and zeroizes the active session. This thin
- * browser adapter clears origin storage APIs that are only available in JS.
- */
-export async function deleteLocalBrowserData(
-  clearNookDatabases: () => Promise<void>,
-): Promise<void> {
-  requireLocalDataRecoverySupport();
-  await quiesceOtherTabsForLocalRecovery();
-  try {
-    await suspendWasmLogging();
-    await runWithExclusiveLocalDataStorageLock(async () => {
-      const errors: Error[] = [];
-      try {
-        await clearNookDatabases();
-      } catch (error) {
-        errors.push(runtimeError(error));
-      }
-      try {
-        await clearBrowserManagedStorage();
-      } catch (error) {
-        errors.push(runtimeError(error));
-      }
-      if (errors.length > 0) throw combineErrors(errors);
-    });
-  } finally {
-    try {
-      await reloadQuiescedTabsAfterLocalRecovery();
-    } catch {
-      // Browser cleanup already completed. Peer reload is best-effort because
-      // a browser may revoke BroadcastChannel while origin data is cleared.
-    }
-  }
-  window.location.replace(appPath("/"));
-}
+export const browserDataLifecycle = new BrowserDataLifecycle(globalThis);

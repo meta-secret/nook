@@ -1,161 +1,199 @@
-import { describe, expect, test } from 'bun:test'
+import { err } from 'neverthrow'
+import { beforeAll, describe, expect, test } from 'bun:test'
 import {
-  type ProviderCredentialCleanupArgs,
-  ProviderCredentialStagingKind,
-  runWithProviderCredentialCleanup,
-  scrubProviderCredentials,
-  stageProviderCredentials,
-  type SerializedStorageProvider,
+  ProviderCredentialFailure,
+  ProviderCredentialBuffer,
 } from '../src/lib/provider-credential-staging'
-import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import initNookWasm, {
+  admit_extension_storage_providers,
+  type StorageProvider,
+} from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
+import {
+  ExtensionSessionRequestParseKind,
+  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+  parseExtensionSessionRequest,
+} from '../src/offscreen/session-request-adapter'
 
-async function stageFixture(providers: SerializedStorageProvider[]) {
-  const args: Parameters<typeof stageProviderCredentials>[0] = {
-    providers,
-    decode: async (candidate) =>
-      structuredClone(candidate) as StorageProvider[],
+beforeAll(async () => {
+  await initNookWasm({
+    module_or_path: await Bun.file(
+      new URL(
+        '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
+        import.meta.url,
+      ),
+    ).arrayBuffer(),
+  })
+})
+
+class ProviderStagingFixture {
+  github(): StorageProvider {
+    return {
+      id: 'github',
+      type: 'github',
+      label: 'GitHub',
+      githubPat: { state: 'token', value: 'github_pat_secret' },
+      githubRepo: { state: 'defaultRepository' },
+      oauthFile: { state: 'notApplicable' },
+      localFolder: { state: 'notApplicable' },
+      storeId: { state: 'unscoped' },
+      syncCheckpoint: { state: 'neverSynced' },
+      createdAt: '2026-06-24T00:00:00.000Z',
+    }
   }
-  return stageProviderCredentials(args)
+  async stage(
+    providers: ConstructorParameters<typeof ProviderCredentialBuffer>[0],
+  ) {
+    return new ProviderCredentialBuffer(providers).stage({
+      decode: async (candidate) => admit_extension_storage_providers(candidate),
+    })
+  }
+}
+
+const providerStagingFixture = new ProviderStagingFixture()
+
+function parseProviderImport(providers: unknown[]) {
+  return parseExtensionSessionRequest({
+    type: ExtensionSessionMessageType.ImportVault,
+    payload: {
+      vaultStoreId: 'vault',
+      deviceId: 'device',
+      devicePublicKey: 'public',
+      deviceSigningPublicKey: 'signing',
+      providers,
+      eventLogRecords: [],
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    },
+  })
 }
 
 describe('provider credential staging', () => {
-  test('copies provider credentials into decoded domain providers', async () => {
-    const source = [
-      {
-        id: 'github',
-        githubPat: 'github_pat_secret',
-      },
-      {
-        id: 'drive',
-        oauthFile: {
-          accessToken: 'access-secret',
-          refreshToken: 'refresh-secret',
-          fileName: 'nook-events',
-        },
-      },
-    ]
+  test('invalid identity is a typed rejection', () => {
+    expect(
+      new ProviderCredentialBuffer([{ id: '', type: 'github' }]).identities(),
+    ).toEqual(err(ProviderCredentialFailure.InvalidIdentity))
+  })
 
-    const staging = await stageFixture(source)
+  test('foreign admission rejection erases the staged credential copy', async () => {
+    const source = [providerStagingFixture.github()]
+    let staged: unknown[] = []
+    const result = await new ProviderCredentialBuffer(source).stage({
+      decode: async (candidate) => {
+        staged = candidate
+        return Promise.reject('foreign admission rejected')
+      },
+    })
+    expect(result).toEqual(err(ProviderCredentialFailure.AdmissionRejected))
+    expect(staged).toEqual([{ ...source[0], githubPat: { state: 'missing' } }])
+    expect(source[0]?.githubPat).toEqual({
+      state: 'token',
+      value: 'github_pat_secret',
+    })
+  })
 
-    expect(staging.kind).toBe(ProviderCredentialStagingKind.Staged)
-    if (staging.kind !== ProviderCredentialStagingKind.Staged) return
-    expect(staging.providers).toEqual([
-      {
-        id: 'github',
-        githubPat: 'github_pat_secret',
-      },
-      {
-        id: 'drive',
-        oauthFile: {
-          accessToken: 'access-secret',
-          refreshToken: 'refresh-secret',
-          fileName: 'nook-events',
-        },
-      },
-    ])
-    expect(source[0]?.githubPat).toBe('github_pat_secret')
-    expect(source[1]?.oauthFile?.accessToken).toBe('access-secret')
-    expect(source[1]?.oauthFile?.refreshToken).toBe('refresh-secret')
+  test('copies complete providers through canonical admission', async () => {
+    const source = [providerStagingFixture.github()]
+    const staging = await providerStagingFixture.stage(source)
+    expect(staging.isOk()).toBe(true)
+    if (staging.isErr()) return
+    expect(staging.value).toEqual(source)
+    expect(staging.value[0]).not.toBe(source[0])
+    expect(source[0]?.githubPat).toEqual({
+      state: 'token',
+      value: 'github_pat_secret',
+    })
   })
 
   test('scrubs decoded providers when queued import work expires', async () => {
-    const staging = await stageFixture([
-      {
-        id: 'drive',
-        oauthFile: {
-          accessToken: 'access-secret',
-          refreshToken: 'refresh-secret',
-        },
-      },
+    const staging = await providerStagingFixture.stage([
+      providerStagingFixture.github(),
     ])
+    expect(staging.isOk()).toBe(true)
+    if (staging.isErr()) return
+    new ProviderCredentialBuffer(staging.value).clear()
+    expect(staging.value[0]?.githubPat).toEqual({ state: 'missing' })
+  })
 
-    expect(staging.kind).toBe(ProviderCredentialStagingKind.Staged)
-    if (staging.kind !== ProviderCredentialStagingKind.Staged) return
-    scrubProviderCredentials(staging.providers)
-
-    expect(staging.providers[0]).toEqual({
-      id: 'drive',
-      oauthFile: {
-        accessToken: '',
-      },
-    })
+  test('scrubs a raw IPC snapshot after successful handoff', async () => {
+    const providers = [providerStagingFixture.github()]
+    let observedDuringHandoff = false
     expect(
-      (staging.providers[0] as { oauthFile?: unknown }).oauthFile,
-    ).not.toHaveProperty('refreshToken')
-  })
-
-  test('scrubs an IPC snapshot after a successful handoff', async () => {
-    const providers = [{ githubPat: 'github_pat_snapshot_secret' }]
-    let observedDuringHandoff = ''
-    const args: ProviderCredentialCleanupArgs<{ ok: boolean }> = {
-      providers,
-      operation: async () => {
-        observedDuringHandoff = ((v) => (v ? v : ''))(providers[0]?.githubPat)
+      await new ProviderCredentialBuffer(providers).runWithCleanup(async () => {
+        observedDuringHandoff = providers[0]?.githubPat.state === 'token'
         return { ok: true }
-      },
-    }
-
-    await expect(runWithProviderCredentialCleanup(args)).resolves.toEqual({
-      ok: true,
-    })
-    expect(observedDuringHandoff).toBe('github_pat_snapshot_secret')
-    expect(providers[0]).not.toHaveProperty('githubPat')
+      }),
+    ).toEqual({ ok: true })
+    expect(observedDuringHandoff).toBe(true)
+    expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
-  test('scrubs an IPC snapshot after a failed handoff', async () => {
-    const providers = [{ githubPat: 'github_pat_failed_snapshot' }]
-    const args: ProviderCredentialCleanupArgs<never> = {
-      providers,
-      operation: async () => {
-        throw new Error('handoff failed')
-      },
-    }
-
-    await expect(runWithProviderCredentialCleanup(args)).rejects.toThrow(
-      'handoff failed',
-    )
-    expect(providers[0]).not.toHaveProperty('githubPat')
+  test('scrubs a raw IPC snapshot after failed handoff', async () => {
+    const providers = [providerStagingFixture.github()]
+    expect(
+      await new ProviderCredentialBuffer(providers).runWithCleanup(async () => {
+        return err(ProviderCredentialFailure.AdmissionRejected)
+      }),
+    ).toEqual(err(ProviderCredentialFailure.AdmissionRejected))
+    expect(providers[0]?.githubPat).toEqual({ state: 'missing' })
   })
 
-  test('continues scrubbing after a malformed oauth provider', () => {
+  test('continues scrubbing after malformed OAuth transport', async () => {
     const providers = [
       { oauthFile: 'malformed' },
       { oauthFile: { config: 'malformed' } },
       { githubPat: 'github_pat_following_secret' },
-    ] as StorageProvider[]
-
-    scrubProviderCredentials(providers)
-
-    expect(providers[2]).not.toHaveProperty('githubPat')
-  })
-
-  test('rejects values outside the serialized external model', async () => {
-    const source = [
-      {
-        id: 'github',
-        githubPat: 'github_pat_rejected_secret',
-        metadata: new Date(),
-      },
     ]
-    const staging = await stageFixture(source)
-
-    expect(staging.kind).toBe(ProviderCredentialStagingKind.InvalidInput)
-    scrubProviderCredentials(source)
-    expect(source[0]).not.toHaveProperty('githubPat')
+    expect((await parseProviderImport(providers)).kind).toBe(
+      ExtensionSessionRequestParseKind.Invalid,
+    )
+    expect(providers[2]).toHaveProperty('githubPat.state', 'missing')
   })
 
-  test('clones __proto__ as an own data property', async () => {
-    const source = JSON.parse(
-      '[{"id":"github","__proto__":{"githubPat":"inherited-secret"}}]',
-    )
-    const staging = await stageFixture(source)
+  test('rejects values outside serialized external data', async () => {
+    const source = [
+      { ...providerStagingFixture.github(), metadata: new Date() },
+    ]
+    const credentialBuffer = new ProviderCredentialBuffer(source)
+    try {
+      expect(
+        await credentialBuffer.stage({
+          decode: async (candidate) =>
+            admit_extension_storage_providers(candidate),
+        }),
+      ).toEqual(err(ProviderCredentialFailure.InvalidTransport))
+      expect(source[0]?.githubPat.state).toBe('token')
+    } finally {
+      credentialBuffer.clear()
+    }
+    expect(source[0]?.githubPat).toEqual({ state: 'missing' })
+  })
 
-    expect(staging.kind).toBe(ProviderCredentialStagingKind.Staged)
-    if (staging.kind !== ProviderCredentialStagingKind.Staged) return
-    const provider = staging.providers[0]
-    expect(provider && typeof provider === 'object').toBe(true)
-    if (!provider || typeof provider !== 'object') return
-    expect(Object.hasOwn(provider, '__proto__')).toBe(true)
-    expect('githubPat' in provider).toBe(false)
+  test('preserves valid identity-only metadata for canonical provider admission', async () => {
+    const providerIdentity: Pick<StorageProvider, 'id' | 'type'> = {
+      id: 'github',
+      type: 'github',
+    }
+    const parsed = await parseProviderImport([providerIdentity])
+    expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
+    if (parsed.kind !== ExtensionSessionRequestParseKind.Parsed) return
+    expect(parsed.request.type).toBe(ExtensionSessionMessageType.ImportVault)
+    if (parsed.request.type !== ExtensionSessionMessageType.ImportVault) return
+    expect(parsed.request.payload.providers).toHaveLength(1)
+    expect(parsed.request.payload.providers[0]?.id).toBe(providerIdentity.id)
+    expect(parsed.request.payload.providers[0]?.type).toBe(
+      providerIdentity.type,
+    )
+  })
+
+  test('canonical admission does not retain prototype metadata', async () => {
+    const source = providerStagingFixture.github()
+    Object.defineProperty(source, '__proto__', {
+      value: { githubPat: 'inherited-secret' },
+      enumerable: true,
+    })
+    const staging = await providerStagingFixture.stage([source])
+    expect(staging.isOk()).toBe(true)
+    if (staging.isErr()) return
+    expect(Object.hasOwn(staging.value[0] || {}, '__proto__')).toBe(false)
   })
 })

@@ -92,10 +92,11 @@ impl<'a> SentinelSecretSplitRequest<'a> {
     }
 
     fn validate_policy(threshold: u8, share_count: u8) -> MultiDeviceResult<()> {
-        if threshold < 2 || threshold > share_count || share_count > 16 {
-            return Err(MultiDeviceError::InvalidSentinelThreshold);
+        crate::SentinelUnlockPolicy {
+            threshold: threshold.into(),
+            required_participants: share_count.into(),
         }
-        Ok(())
+        .validate()
     }
 }
 
@@ -103,7 +104,7 @@ impl<'a> SentinelSecretSplitRequest<'a> {
 pub(crate) struct SentinelSecretRecoveryRequest<'a> {
     mnemonics: &'a [String],
     passphrase: &'a [u8],
-    reject_threshold_one: bool,
+    threshold_policy: RecoveryThresholdPolicy,
 }
 
 impl<'a> SentinelSecretRecoveryRequest<'a> {
@@ -112,7 +113,7 @@ impl<'a> SentinelSecretRecoveryRequest<'a> {
         Self {
             mnemonics,
             passphrase: b"",
-            reject_threshold_one: true,
+            threshold_policy: RecoveryThresholdPolicy::SentinelQuorum,
         }
     }
 
@@ -122,15 +123,17 @@ impl<'a> SentinelSecretRecoveryRequest<'a> {
         Self {
             mnemonics,
             passphrase,
-            reject_threshold_one: false,
+            threshold_policy: RecoveryThresholdPolicy::InteroperabilityVector,
         }
     }
 
     /// Validate the passphrase, admit a private quorum, and consume it to recover the root.
     pub(crate) fn recover(self) -> MultiDeviceResult<[u8; SECRET_BYTES]> {
         Self::validate_passphrase(self.passphrase)?;
-        if self.reject_threshold_one
-            && let Some(first) = self.mnemonics.first()
+        if matches!(
+            self.threshold_policy,
+            RecoveryThresholdPolicy::SentinelQuorum
+        ) && let Some(first) = self.mnemonics.first()
             && Share::decode(first)?.member_threshold < 2
         {
             return Err(MultiDeviceError::InvalidSentinelThreshold);
@@ -284,12 +287,18 @@ mod tests {
             assert_eq!(decoded.iteration_exponent, 0);
             assert_eq!(decoded.member_threshold, 3);
         }
+        let quorum = shares
+            .get(1..4)
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain a three-share quorum"))?;
         assert_eq!(
-            SentinelSecretRecoveryRequest::sentinel(&shares[1..4]).recover()?,
+            SentinelSecretRecoveryRequest::sentinel(quorum).recover()?,
             root
         );
+        let insufficient = shares
+            .get(..2)
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain two shares"))?;
         assert!(
-            SentinelSecretRecoveryRequest::sentinel(&shares[..2])
+            SentinelSecretRecoveryRequest::sentinel(insufficient)
                 .recover()
                 .is_err()
         );
@@ -300,24 +309,36 @@ mod tests {
     fn checksum_and_padding_corruption_are_rejected() -> anyhow::Result<()> {
         let root = [42_u8; SECRET_BYTES];
         let mut shares = SentinelSecretSplitRequest::new(&root, 2, 3).issue()?;
-        let last = shares[0]
+        let first = shares
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain a share"))?;
+        let last = first
             .rfind(' ')
             .ok_or_else(|| io::Error::other("share must contain words"))?
             + 1;
-        let replacement = if &shares[0][last..] == "academic" {
+        let replacement = if first
+            .get(last..)
+            .ok_or_else(|| anyhow::anyhow!("last word must start at a character boundary"))?
+            == "academic"
+        {
             "acid"
         } else {
             "academic"
         };
-        shares[0].replace_range(last.., replacement);
+        first.replace_range(last.., replacement);
+        let quorum = shares
+            .get(..2)
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain a two-share quorum"))?;
         assert!(
-            SentinelSecretRecoveryRequest::sentinel(&shares[..2])
+            SentinelSecretRecoveryRequest::sentinel(quorum)
                 .recover()
                 .is_err()
         );
 
         let mut valid = SentinelSecretSplitRequest::new(&root, 2, 3).issue()?;
-        let mut indices = valid[0]
+        let mut indices = valid
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain a valid share"))?
             .split_whitespace()
             .map(|word| {
                 WordList::values()
@@ -329,17 +350,40 @@ mod tests {
                     })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        indices[METADATA_WORDS] |= 1 << 9;
-        let data_len = indices.len() - CHECKSUM_WORDS;
-        let checksum = mnemonic::Checksum::create(&indices[..data_len]);
-        indices[data_len..].copy_from_slice(&checksum);
-        valid[0] = indices
+        *indices
+            .get_mut(METADATA_WORDS)
+            .ok_or_else(|| anyhow::anyhow!("share must contain metadata words"))? |= 1 << 9;
+        let data_len = indices
+            .len()
+            .checked_sub(CHECKSUM_WORDS)
+            .ok_or_else(|| anyhow::anyhow!("share must contain checksum words"))?;
+        let checksum = mnemonic::Checksum::create(
+            indices
+                .get(..data_len)
+                .ok_or_else(|| anyhow::anyhow!("share data range must be valid"))?,
+        );
+        indices
+            .get_mut(data_len..)
+            .ok_or_else(|| anyhow::anyhow!("share checksum range must be valid"))?
+            .copy_from_slice(&checksum);
+        let rewritten = indices
             .into_iter()
-            .map(|index| WordList::values()[usize::from(index)])
-            .collect::<Vec<_>>()
+            .map(|index| {
+                WordList::values()
+                    .get(usize::from(index))
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("share word index must be valid"))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?
             .join(" ");
+        *valid
+            .first_mut()
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain a valid share"))? = rewritten;
+        let quorum = valid
+            .get(..2)
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain a two-share quorum"))?;
         assert!(
-            SentinelSecretRecoveryRequest::sentinel(&valid[..2])
+            SentinelSecretRecoveryRequest::sentinel(quorum)
                 .recover()
                 .is_err()
         );
@@ -350,13 +394,22 @@ mod tests {
     fn rejects_mixed_sets_duplicates_and_invalid_policy() -> anyhow::Result<()> {
         let left = SentinelSecretSplitRequest::new(&[1_u8; SECRET_BYTES], 2, 3).issue()?;
         let right = SentinelSecretSplitRequest::new(&[2_u8; SECRET_BYTES], 2, 3).issue()?;
+        let left_first = left
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("left fixture must contain its first share"))?;
+        let left_duplicate = left_first.clone();
+        let right_second = right
+            .get(1)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("right fixture must contain its second share"))?;
         assert!(
-            SentinelSecretRecoveryRequest::sentinel(&[left[0].clone(), right[1].clone()])
+            SentinelSecretRecoveryRequest::sentinel(&[left_first.clone(), right_second])
                 .recover()
                 .is_err()
         );
         assert!(
-            SentinelSecretRecoveryRequest::sentinel(&[left[0].clone(), left[0].clone()])
+            SentinelSecretRecoveryRequest::sentinel(&[left_first, left_duplicate])
                 .recover()
                 .is_err()
         );
@@ -386,4 +439,12 @@ mod tests {
             Err(MultiDeviceError::InvalidSentinelShareEncoding)
         ));
     }
+}
+
+/// The relaxed policy is constructible only by existing test-vector admission.
+#[derive(Clone, Copy)]
+enum RecoveryThresholdPolicy {
+    SentinelQuorum,
+    #[cfg(test)]
+    InteroperabilityVector,
 }

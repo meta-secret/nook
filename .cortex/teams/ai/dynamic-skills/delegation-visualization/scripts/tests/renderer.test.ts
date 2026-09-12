@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow';
 import { describe, expect, test } from 'bun:test';
 import {
   DelegationVisualizationContractKind,
@@ -6,9 +7,9 @@ import {
   DelegationVisualizationTeam,
   type RenderDelegationVisualizationRequest,
 } from '../src/domain.ts';
-import { renderDelegationVisualization } from '../src/renderer.ts';
-import { executeDelegationVisualizationApplication } from '../src/application.ts';
-import { verifyDelegationVisualizationResult } from '../src/result-codec.ts';
+import { DelegationVisualization } from '../src/renderer.ts';
+import { DelegationVisualizationApplication } from '../src/application.ts';
+import { DelegationVisualizationVerifier } from '../src/result-codec.ts';
 
 describe('delegation visualization renderer', () => {
   test('renders independent Team Agents as ordered Gizmo siblings', () => {
@@ -36,12 +37,14 @@ describe('delegation visualization renderer', () => {
       ],
     };
     expect(
-      renderDelegationVisualization(request).gizmo.tasks.map((task) => ({
-        id: task.id,
-        team: task.team,
-        description: task.description,
-        depends_on: task.depends_on,
-      })),
+      DelegationVisualization.from(request)
+        .execute()
+        .gizmo.tasks.map((task) => ({
+          id: task.id,
+          team: task.team,
+          description: task.description,
+          depends_on: task.depends_on,
+        })),
     ).toEqual([
       {
         id: 'update-cortex',
@@ -83,9 +86,11 @@ describe('delegation visualization renderer', () => {
       ],
     };
     expect(
-      renderDelegationVisualization(request).gizmo.tasks.filter(
-        (task) => task.team === DelegationVisualizationTeam.Ai,
-      ),
+      DelegationVisualization.from(request)
+        .execute()
+        .gizmo.tasks.filter(
+          (task) => task.team === DelegationVisualizationTeam.Ai,
+        ),
     ).toHaveLength(2);
   });
 
@@ -102,12 +107,13 @@ describe('delegation visualization renderer', () => {
         },
       ],
     };
-    const rendered = renderDelegationVisualization(request);
+    const rendered = DelegationVisualization.from(request).execute();
     expect(rendered.gizmo.tasks[0]?.description).toBe(description);
     expect(
-      executeDelegationVisualizationApplication(request).document.gizmo.tasks[0]
-        ?.description,
-    ).toBe(description);
+      DelegationVisualizationApplication.from(request)
+        .execute()
+        .map((result) => result.document.gizmo.tasks[0]?.description),
+    ).toEqual(ok(description));
   });
 
   test('constructs typed classes and verifies the admitted request', () => {
@@ -122,22 +128,31 @@ describe('delegation visualization renderer', () => {
         },
       ],
     };
-    const result = executeDelegationVisualizationApplication(request);
+    const execution =
+      DelegationVisualizationApplication.from(request).execute();
+    expect(execution.isOk()).toBe(true);
+    if (execution.isErr()) return;
+    const result = execution.value;
     expect(result.document).toBeInstanceOf(DelegationVisualizationDocument);
     expect(result.document.gizmo.tasks[0]).toBeInstanceOf(
       DelegationVisualizationDocumentTask,
     );
     expect(
-      verifyDelegationVisualizationResult({
+      DelegationVisualizationVerifier.from({
         request,
         result,
-      }),
-    ).toEqual(result);
+      }).execute(),
+    ).toEqual(ok(result));
     const extraResult = { ...result };
     Object.assign(extraResult, { unverified: true });
-    expect(() =>
-      verifyDelegationVisualizationResult({ request, result: extraResult }),
-    ).toThrow();
+    expect(
+      DelegationVisualizationVerifier.from({
+        request,
+        result: extraResult,
+      })
+        .execute()
+        .isErr(),
+    ).toBe(true);
   });
 
   test('rejects every tampered typed field and ordering invariant', () => {
@@ -164,9 +179,14 @@ describe('delegation visualization renderer', () => {
         },
       ],
     };
-    const result = executeDelegationVisualizationApplication(request);
+    const execution =
+      DelegationVisualizationApplication.from(request).execute();
+    expect(execution.isOk()).toBe(true);
+    if (execution.isErr()) return;
+    const result = execution.value;
     const [first, second, third] = result.document.gizmo.tasks;
-    if (!first || !second || !third) throw new Error('Missing test task.');
+    expect(first && second && third).not.toEqual(void 0);
+    if (!first || !second || !third) return;
     const tamperedDocuments = [
       new DelegationVisualizationDocument([
         new DelegationVisualizationDocumentTask({
@@ -211,12 +231,14 @@ describe('delegation visualization renderer', () => {
       ]),
     ];
     for (const document of tamperedDocuments) {
-      expect(() =>
-        verifyDelegationVisualizationResult({
+      expect(
+        DelegationVisualizationVerifier.from({
           request,
           result: { ...result, document },
-        }),
-      ).toThrow();
+        })
+          .execute()
+          .isErr(),
+      ).toBe(true);
     }
   });
 });

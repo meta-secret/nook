@@ -6,12 +6,12 @@
 )]
 
 use crate::{DatabaseError, MultiDeviceError, VaultMetaRecord, VaultName, VaultStoreIdentity};
+use nook_auth2::AssessConnectAccessRequest;
 
 use crate::errors::{self, VaultResult};
 use crate::{
     ConnectAccessStatus, Database, DeviceIdentity, StoredSecretRecord, VaultArchitecture,
     VaultCrypto, VaultFormatDocument, VaultMetaState, VaultRecordView, VaultType, VaultUnlock,
-    assess_connect_access,
 };
 use std::fmt;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -69,7 +69,20 @@ pub struct LoadedVault {
 }
 
 /// Unlocked vault material without a hydrated plaintext secret database.
+/// ```compile_fail,E0451
+/// use nook_core::{UnlockedVault, VaultMetaState, SymmetricKey};
+/// let forge = |meta: VaultMetaState, secrets_key: SymmetricKey, members_key: SymmetricKey| {
+///     UnlockedVault { meta, secrets_key, members_key }
+/// };
+/// ```
 pub struct UnlockedVault {
+    meta: VaultMetaState,
+    secrets_key: crate::SymmetricKey,
+    members_key: crate::SymmetricKey,
+}
+
+/// Extracted session data; this DTO cannot invoke hydration or mint an unlocked capability.
+pub struct UnlockedVaultMaterial {
     pub meta: VaultMetaState,
     pub secrets_key: crate::SymmetricKey,
     pub members_key: crate::SymmetricKey,
@@ -97,8 +110,8 @@ impl<'a> VaultContent<'a> {
     }
 
     /// Whether connect should bootstrap a genesis vault for this content.
-    pub fn requires_genesis(&self, force_genesis: bool) -> VaultResult<bool> {
-        if force_genesis || self.content.trim().is_empty() {
+    pub fn requires_genesis(&self, intent: VaultGenesisIntent) -> VaultResult<bool> {
+        if matches!(intent, VaultGenesisIntent::ForceFresh) || self.content.trim().is_empty() {
             return Ok(true);
         }
         let format = VaultFormatDocument::new(self.content).detect()?;
@@ -116,7 +129,13 @@ impl<'a> VaultContent<'a> {
         if !VaultRecordView::new(&records).has_multi_device_records()? {
             return Ok(VaultAccessStatus::NewVault);
         }
-        Ok(assess_connect_access(&records, identity)?.into())
+        Ok(
+            VaultMetaState::assess_connect_access(AssessConnectAccessRequest {
+                records: &records,
+                identity,
+            })?
+            .into(),
+        )
     }
 
     /// Read unlock metadata without decrypting secrets.
@@ -219,11 +238,8 @@ impl<'a> VaultContent<'a> {
 
     fn validate_user_secret_types(records: &[StoredSecretRecord]) -> VaultResult<()> {
         for record in records {
-            if record.secret_type.is_none()
-                && matches!(
-                    VaultMetaRecord::classify(record)?,
-                    VaultMetaRecord::Secret(..)
-                )
+            if record.secret_type.is_undeclared()
+                && matches!((record).classify()?, VaultMetaRecord::Secret(..))
             {
                 return Err(DatabaseError::MissingSecretType {
                     key: record.key.clone(),
@@ -236,6 +252,15 @@ impl<'a> VaultContent<'a> {
 }
 
 impl UnlockedVault {
+    #[must_use]
+    pub fn into_material(self) -> UnlockedVaultMaterial {
+        UnlockedVaultMaterial {
+            meta: self.meta,
+            secrets_key: self.secrets_key,
+            members_key: self.members_key,
+        }
+    }
+
     /// Consume resolved keys into a hydrated plaintext session database.
     pub fn hydrate(self) -> VaultResult<LoadedVault> {
         let crypto = VaultCrypto::new(&self.secrets_key)?;
@@ -253,6 +278,7 @@ impl UnlockedVault {
 
 #[cfg(test)]
 mod tests {
+    use crate::{CreateSentinelShareRecordsRequest, RecordTypeDeclaration, SentinelShareEnvelope};
     use crate::{
         DatabaseError, SecretId, SentinelConfiguration, StoredRecordPayload, ValidationError,
         VaultError, VaultFormatError, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite,
@@ -285,7 +311,7 @@ mod tests {
     fn encrypted_unlock_rejects_user_rows_without_a_secret_type() -> anyhow::Result<()> {
         let record = StoredSecretRecord {
             key: SecretId::from_vault_record("secret_missing_type"),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(
                 "-----BEGIN AGE ENCRYPTED FILE-----\ninvalid".to_owned(),
             ),
@@ -304,8 +330,10 @@ mod tests {
 
     #[test]
     fn empty_content_requires_genesis() -> VaultResult<()> {
-        assert!(VaultContent::new("").requires_genesis(false)?);
-        assert!(VaultContent::new("  ").requires_genesis(false)?);
+        assert!(VaultContent::new("").requires_genesis(crate::VaultGenesisIntent::DetectExisting)?);
+        assert!(
+            VaultContent::new("  ").requires_genesis(crate::VaultGenesisIntent::DetectExisting)?
+        );
         Ok(())
     }
 
@@ -327,7 +355,10 @@ mod tests {
     #[test]
     fn genesis_yaml_reports_ready_for_enrolled_device() -> VaultResult<()> {
         let (keys, identity, yaml) = test_support::simple_genesis_projection()?;
-        assert!(!VaultContent::new(yaml.as_str()).requires_genesis(false)?);
+        assert!(
+            !VaultContent::new(yaml.as_str())
+                .requires_genesis(crate::VaultGenesisIntent::DetectExisting)?
+        );
         assert_eq!(
             VaultContent::new(yaml.as_str()).access_status(&identity)?,
             VaultAccessStatus::Ready
@@ -388,10 +419,12 @@ mod tests {
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
         let third = DeviceIdentity::generate()?;
-        let records = crate::create_sentinel_share_records(
-            &keys,
-            &[first.clone(), second.clone(), third],
-            2.into(),
+        let records = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &[first.clone(), second.clone(), third],
+                threshold: 2.into(),
+            },
         )?;
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
@@ -419,4 +452,10 @@ mod tests {
         assert_eq!(loaded.meta.sentinel_shares.len(), 3);
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultGenesisIntent {
+    DetectExisting,
+    ForceFresh,
 }

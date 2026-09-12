@@ -17,6 +17,51 @@ use crate::{
     MultiDeviceResult, SigningSeedHex, WrappedDeviceIdentity,
 };
 
+mod transition;
+use transition::SealedSigningMaterial;
+pub use transition::{
+    IdentitySigningSeedProtection, KeyringEntryRejection, KeyringRejection,
+    ProtectedIdentityKeyring, ProtectedSigningEntry, RemovedLocalIdentityKey,
+    SigningSeedProtection, WrappedAppKeyReplacement,
+};
+
+/// Protected material must be opened or explicitly supplied by legacy migration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProtectedSigningMaterial {
+    Opened(SigningSeedHex),
+    LegacySeedRequired,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+enum SigningSeedProtectionState {
+    Protected(AgeArmoredCiphertext),
+    #[default]
+    LegacyMigrationRequired,
+}
+
+impl SigningSeedProtectionState {
+    fn requires_legacy_migration(&self) -> bool {
+        matches!(self, Self::LegacyMigrationRequired)
+    }
+}
+
+pub enum LocalIdentityProtection<'a> {
+    Protected(&'a LocalIdentityKeyringEntry),
+    Unprotected,
+}
+
+impl<'a> LocalIdentityProtection<'a> {
+    pub fn require_protected(self) -> MultiDeviceResult<&'a LocalIdentityKeyringEntry> {
+        match self {
+            Self::Protected(entry) => Ok(entry),
+            Self::Unprotected => Err(MultiDeviceError::InvalidDeviceIdentity(
+                "Identity has no protected local keyring entry".to_owned(),
+            )),
+        }
+    }
+}
+
 pub const LOCAL_IDENTITY_KEYRING_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -25,8 +70,11 @@ pub struct LocalIdentityKeyringEntry {
     identity_id: IdentityId,
     app_id: AppId,
     wrapped_app_key: WrappedDeviceIdentity,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    signing_seed_envelope: Option<AgeArmoredCiphertext>,
+    #[serde(
+        default,
+        skip_serializing_if = "SigningSeedProtectionState::requires_legacy_migration"
+    )]
+    signing_seed_envelope: SigningSeedProtectionState,
 }
 
 impl LocalIdentityKeyringEntry {
@@ -42,7 +90,7 @@ impl LocalIdentityKeyringEntry {
             identity_id,
             app_id: app_key.app_id().clone(),
             wrapped_app_key,
-            signing_seed_envelope: Some(signing_seed_envelope),
+            signing_seed_envelope: SigningSeedProtectionState::Protected(signing_seed_envelope),
         };
         if entry.signing_public_key(app_key)? != signing_public_key {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
@@ -62,7 +110,7 @@ impl LocalIdentityKeyringEntry {
             identity_id,
             app_id,
             wrapped_app_key,
-            signing_seed_envelope: None,
+            signing_seed_envelope: SigningSeedProtectionState::LegacyMigrationRequired,
         }
     }
 
@@ -83,52 +131,90 @@ impl LocalIdentityKeyringEntry {
 
     #[must_use]
     pub fn has_signing_seed(&self) -> bool {
-        self.signing_seed_envelope.is_some()
+        matches!(
+            self.signing_seed_envelope,
+            SigningSeedProtectionState::Protected(_)
+        )
     }
 
-    pub fn open_signing_seed(&self, app_key: &AppKey) -> MultiDeviceResult<Option<String>> {
+    pub fn open_signing_seed(
+        &self,
+        app_key: &AppKey,
+    ) -> MultiDeviceResult<ProtectedSigningMaterial> {
         self.require_matching_app_key(app_key)?;
-        self.signing_seed_envelope
-            .as_ref()
-            .map(|envelope| app_key.open_utf8(envelope))
-            .transpose()
+        match &self.signing_seed_envelope {
+            SigningSeedProtectionState::Protected(envelope) => {
+                Ok(ProtectedSigningMaterial::Opened(SigningSeedHex::try_from(
+                    app_key.open_utf8(envelope)?,
+                )?))
+            }
+            SigningSeedProtectionState::LegacyMigrationRequired => {
+                Ok(ProtectedSigningMaterial::LegacySeedRequired)
+            }
+        }
     }
 
     pub fn signing_public_key(
         &self,
         app_key: &AppKey,
     ) -> MultiDeviceResult<DeviceSigningPublicKey> {
-        let seed = self.open_signing_seed(app_key)?.ok_or_else(|| {
-            MultiDeviceError::InvalidDeviceIdentity(
-                "local identity keyring entry has no protected signing seed".to_owned(),
-            )
-        })?;
-        DeviceSigningPublicKey::derive_from_seed(&seed)
+        match self.open_signing_seed(app_key)? {
+            ProtectedSigningMaterial::Opened(seed) => {
+                DeviceSigningPublicKey::derive_from_seed(seed.as_str())
+            }
+            ProtectedSigningMaterial::LegacySeedRequired => {
+                Err(MultiDeviceError::InvalidDeviceIdentity(
+                    "local identity keyring entry has no protected signing seed".to_owned(),
+                ))
+            }
+        }
     }
 
     pub fn protect_signing_seed(
-        &mut self,
-        app_key: &AppKey,
-        signing_seed: &str,
-    ) -> MultiDeviceResult<DeviceSigningPublicKey> {
-        self.require_matching_app_key(app_key)?;
-        let signing_public_key = DeviceSigningPublicKey::derive_from_seed(signing_seed)?;
-        self.signing_seed_envelope = Some(app_key.seal_utf8(signing_seed)?);
-        Ok(signing_public_key)
+        mut self,
+        request: SigningSeedProtection<'_>,
+    ) -> Result<ProtectedSigningEntry, KeyringEntryRejection> {
+        let prepared = self.seal_signing_material(request);
+        match prepared {
+            Ok(material) => {
+                self.signing_seed_envelope =
+                    SigningSeedProtectionState::Protected(material.envelope);
+                Ok(ProtectedSigningEntry {
+                    entry: self,
+                    signing_public_key: material.public_key,
+                })
+            }
+            Err(cause) => Err(KeyringEntryRejection { entry: self, cause }),
+        }
     }
 
     pub fn replace_wrapped_app_key(
-        &mut self,
-        app_id: &AppId,
-        wrapped_app_key: WrappedDeviceIdentity,
-    ) -> MultiDeviceResult<()> {
-        if self.app_id != *app_id {
-            return Err(MultiDeviceError::InvalidDeviceIdentity(
-                "cannot replace a wrapped app key owned by a different app id".to_owned(),
-            ));
+        mut self,
+        request: WrappedAppKeyReplacement<'_>,
+    ) -> Result<Self, KeyringEntryRejection> {
+        if self.app_id != *request.app_id {
+            return Err(KeyringEntryRejection {
+                entry: self,
+                cause: MultiDeviceError::InvalidDeviceIdentity(
+                    "cannot replace a wrapped app key owned by a different app id".to_owned(),
+                ),
+            });
         }
-        self.wrapped_app_key = wrapped_app_key;
-        Ok(())
+        self.wrapped_app_key = request.wrapped_app_key;
+        Ok(self)
+    }
+
+    fn seal_signing_material(
+        &self,
+        request: SigningSeedProtection<'_>,
+    ) -> MultiDeviceResult<SealedSigningMaterial> {
+        self.require_matching_app_key(request.app_key)?;
+        let public_key = DeviceSigningPublicKey::derive_from_seed(request.signing_seed)?;
+        let envelope = request.app_key.seal_utf8(request.signing_seed)?;
+        Ok(SealedSigningMaterial {
+            public_key,
+            envelope,
+        })
     }
 
     fn require_matching_app_key(&self, app_key: &AppKey) -> MultiDeviceResult<()> {
@@ -217,51 +303,183 @@ impl LocalIdentityKeyring {
     }
 
     #[must_use]
-    pub fn entry(&self, identity_id: &IdentityId) -> Option<&LocalIdentityKeyringEntry> {
-        self.entries
+    pub fn entry(&self, identity_id: &IdentityId) -> LocalIdentityProtection<'_> {
+        match self
+            .entries
             .iter()
             .find(|entry| entry.identity_id() == identity_id)
-    }
-
-    pub fn insert(&mut self, entry: LocalIdentityKeyringEntry) -> MultiDeviceResult<()> {
-        if self.entry(entry.identity_id()).is_some() {
-            return Err(MultiDeviceError::DuplicateIdentity {
-                identity_id: entry.identity_id().to_string(),
-            });
+        {
+            Some(entry) => LocalIdentityProtection::Protected(entry),
+            None => LocalIdentityProtection::Unprotected,
         }
-        self.entries.push(entry);
-        self.validate()
     }
 
-    pub fn replace(&mut self, entry: LocalIdentityKeyringEntry) -> MultiDeviceResult<()> {
-        let existing = self
+    pub fn protect_signing_seed(
+        mut self,
+        request: IdentitySigningSeedProtection<'_>,
+    ) -> Result<ProtectedIdentityKeyring, KeyringRejection> {
+        let prepared = self.entry_index(request.identity_id).and_then(|index| {
+            self.entries
+                .get(index)
+                .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                    identity_id: request.identity_id.to_string(),
+                })?
+                .seal_signing_material(request.material)
+                .map(|material| (index, material))
+        });
+        match prepared {
+            Err(cause) => Err(KeyringRejection {
+                keyring: self,
+                cause,
+            }),
+            Ok((index, material)) => {
+                let Some(entry) = self.entries.get_mut(index) else {
+                    return Err(KeyringRejection {
+                        keyring: self,
+                        cause: MultiDeviceError::IdentityNotFound {
+                            identity_id: request.identity_id.to_string(),
+                        },
+                    });
+                };
+                entry.signing_seed_envelope =
+                    SigningSeedProtectionState::Protected(material.envelope);
+                Ok(ProtectedIdentityKeyring {
+                    keyring: self,
+                    signing_public_key: material.public_key,
+                })
+            }
+        }
+    }
+
+    pub fn replace_wrapped_app_key(
+        mut self,
+        request: WrappedAppKeyReplacement<'_>,
+    ) -> Result<Self, KeyringRejection> {
+        match self
             .entries
-            .iter_mut()
-            .find(|candidate| candidate.identity_id() == entry.identity_id())
+            .iter()
+            .position(|entry| entry.app_id() == request.app_id)
+        {
+            None => Err(KeyringRejection {
+                keyring: self,
+                cause: MultiDeviceError::InvalidDeviceIdentity(
+                    "wrapped app key has no local keyring owner".to_owned(),
+                ),
+            }),
+            Some(index) => {
+                let Some(entry) = self.entries.get_mut(index) else {
+                    return Err(KeyringRejection {
+                        keyring: self,
+                        cause: MultiDeviceError::InvalidDeviceIdentity(
+                            "wrapped app key has no local keyring owner".to_owned(),
+                        ),
+                    });
+                };
+                entry.wrapped_app_key = request.wrapped_app_key;
+                Ok(self)
+            }
+        }
+    }
+
+    pub fn insert(mut self, entry: LocalIdentityKeyringEntry) -> Result<Self, KeyringRejection> {
+        match self.admit_insertion(&entry) {
+            Err(cause) => Err(KeyringRejection {
+                keyring: self,
+                cause,
+            }),
+            Ok(()) => {
+                self.entries.push(entry);
+                Ok(self)
+            }
+        }
+    }
+
+    fn admit_insertion(&self, entry: &LocalIdentityKeyringEntry) -> MultiDeviceResult<()> {
+        match self.entry(entry.identity_id()) {
+            LocalIdentityProtection::Protected(_) => Err(MultiDeviceError::DuplicateIdentity {
+                identity_id: entry.identity_id().to_string(),
+            }),
+            LocalIdentityProtection::Unprotected => {
+                if self
+                    .entries
+                    .iter()
+                    .any(|existing| existing.app_id() == entry.app_id())
+                {
+                    return Err(MultiDeviceError::DuplicateAppKeyOwnership {
+                        app_id: entry.app_id().to_string(),
+                    });
+                }
+                self.validate()
+            }
+        }
+    }
+
+    pub fn replace(mut self, entry: LocalIdentityKeyringEntry) -> Result<Self, KeyringRejection> {
+        match self.admit_replacement(&entry) {
+            Err(cause) => Err(KeyringRejection {
+                keyring: self,
+                cause,
+            }),
+            Ok(index) => {
+                let Some(existing) = self.entries.get_mut(index) else {
+                    return Err(KeyringRejection {
+                        keyring: self,
+                        cause: MultiDeviceError::IdentityNotFound {
+                            identity_id: entry.identity_id().to_string(),
+                        },
+                    });
+                };
+                *existing = entry;
+                Ok(self)
+            }
+        }
+    }
+
+    fn admit_replacement(&self, entry: &LocalIdentityKeyringEntry) -> MultiDeviceResult<usize> {
+        self.validate()?;
+        let index = self.entry_index(entry.identity_id())?;
+        if self
+            .entries
+            .get(index)
             .ok_or_else(|| MultiDeviceError::IdentityNotFound {
                 identity_id: entry.identity_id().to_string(),
-            })?;
-        if existing.app_id() != entry.app_id() {
+            })?
+            .app_id()
+            != entry.app_id()
+        {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
                 "cannot replace a local identity keyring entry with a different app id".to_owned(),
             ));
         }
-        *existing = entry;
-        self.validate()
+        Ok(index)
     }
 
-    pub fn remove(
-        &mut self,
-        identity_id: &IdentityId,
-    ) -> MultiDeviceResult<LocalIdentityKeyringEntry> {
-        let index = self
-            .entries
+    fn entry_index(&self, identity_id: &IdentityId) -> MultiDeviceResult<usize> {
+        self.entries
             .iter()
             .position(|entry| entry.identity_id() == identity_id)
             .ok_or_else(|| MultiDeviceError::IdentityNotFound {
                 identity_id: identity_id.to_string(),
-            })?;
-        Ok(self.entries.remove(index))
+            })
+    }
+
+    pub fn remove(
+        mut self,
+        identity_id: &IdentityId,
+    ) -> Result<RemovedLocalIdentityKey, KeyringRejection> {
+        match self.entry_index(identity_id) {
+            Err(cause) => Err(KeyringRejection {
+                keyring: self,
+                cause,
+            }),
+            Ok(index) => {
+                let entry = self.entries.remove(index);
+                Ok(RemovedLocalIdentityKey {
+                    keyring: self,
+                    entry,
+                })
+            }
+        }
     }
 }
 
@@ -273,6 +491,8 @@ impl Default for LocalIdentityKeyring {
 
 #[cfg(test)]
 mod tests {
+    use crate::{SigningSeedProtection, WrappedAppKeyReplacement};
+
     use super::*;
     use crate::ValidationError;
 
@@ -339,14 +559,28 @@ mod tests {
             ProtectedEntryFixture::expect_invalid_seed(DeviceSigningPublicKey::derive_from_seed(
                 &seed,
             ))?;
-            ProtectedEntryFixture::expect_invalid_seed(
-                entry.protect_signing_seed(&app_key, &seed),
-            )?;
+            let rejected = match entry.protect_signing_seed(SigningSeedProtection {
+                app_key: &app_key,
+                signing_seed: &seed,
+            }) {
+                Err(rejected) => rejected,
+                Ok(_) => anyhow::bail!("Invalid signing seed unexpectedly succeeded"),
+            };
+            entry = rejected.entry;
+            ProtectedEntryFixture::expect_invalid_seed::<()>(Err(rejected.cause))?;
             assert_eq!(entry, original);
         }
         let other_key = AppKey::generate()?;
-        ProtectedEntryFixture::expect_invalid_identity(
-            entry.protect_signing_seed(&other_key, "invalid"),
+        let rejected = match entry.protect_signing_seed(SigningSeedProtection {
+            app_key: &other_key,
+            signing_seed: "invalid",
+        }) {
+            Err(rejected) => rejected,
+            Ok(_) => anyhow::bail!("Mismatched app key unexpectedly succeeded"),
+        };
+        entry = rejected.entry;
+        ProtectedEntryFixture::expect_invalid_identity::<()>(
+            Err(rejected.cause),
             "local identity keyring app id does not match the unlocked app key",
         )?;
         assert_eq!(entry, original);
@@ -398,8 +632,54 @@ mod tests {
         decoded.validate()?;
         assert!(!encoded.contains(app_key.secret_string().as_str()));
         assert_eq!(
-            decoded.entries()[0].signing_public_key(&app_key)?,
+            decoded
+                .entries()
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("decoded keyring must contain its entry"))?
+                .signing_public_key(&app_key)?,
             signing_public_key
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn signing_seed_protection_wire_preserves_legacy_and_protected_states() -> anyhow::Result<()> {
+        let ProtectedEntryFixture {
+            entry,
+            app_key,
+            signing_public_key,
+        } = ProtectedEntryFixture::new()?;
+        let protected_wire = serde_json::to_value(&entry)?;
+        let protected: LocalIdentityKeyringEntry = serde_json::from_value(protected_wire.clone())?;
+
+        assert!(protected.has_signing_seed());
+        assert_eq!(protected.signing_public_key(&app_key)?, signing_public_key);
+
+        let mut omitted_wire = protected_wire.clone();
+        let serde_json::Value::Object(omitted_fields) = &mut omitted_wire else {
+            anyhow::bail!("local identity keyring entry did not serialize as an object");
+        };
+        omitted_fields.remove("signingSeedEnvelope");
+        let omitted: LocalIdentityKeyringEntry = serde_json::from_value(omitted_wire)?;
+        assert_eq!(
+            omitted.open_signing_seed(&app_key)?,
+            ProtectedSigningMaterial::LegacySeedRequired
+        );
+        assert!(
+            serde_json::to_value(&omitted)?
+                .get("signingSeedEnvelope")
+                .is_none()
+        );
+
+        let mut null_wire = protected_wire;
+        let serde_json::Value::Object(null_fields) = &mut null_wire else {
+            anyhow::bail!("local identity keyring entry did not serialize as an object");
+        };
+        null_fields.insert("signingSeedEnvelope".to_owned(), serde_json::Value::Null);
+        let explicit_null: LocalIdentityKeyringEntry = serde_json::from_value(null_wire)?;
+        assert_eq!(
+            explicit_null.open_signing_seed(&app_key)?,
+            ProtectedSigningMaterial::LegacySeedRequired
         );
         Ok(())
     }
@@ -414,13 +694,19 @@ mod tests {
         let replacement = DeviceIdentityProtection::new(&app_key.secret_string())
             .with_pin("replacement browser protection")?;
 
-        entry.replace_wrapped_app_key(app_key.app_id(), replacement.clone())?;
+        entry = entry.replace_wrapped_app_key(WrappedAppKeyReplacement {
+            app_id: app_key.app_id(),
+            wrapped_app_key: replacement.clone(),
+        })?;
 
         assert_eq!(entry.wrapped_app_key(), &replacement);
         assert_eq!(entry.signing_public_key(&app_key)?, signing_public_key);
         assert!(
             entry
-                .replace_wrapped_app_key(AppKey::generate()?.app_id(), replacement)
+                .replace_wrapped_app_key(WrappedAppKeyReplacement {
+                    app_id: AppKey::generate()?.app_id(),
+                    wrapped_app_key: replacement
+                })
                 .is_err()
         );
         Ok(())

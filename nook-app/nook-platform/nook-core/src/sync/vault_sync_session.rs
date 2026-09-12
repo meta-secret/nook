@@ -39,7 +39,7 @@ pub struct YamlSyncSession<'a> {
     members_key: &'a str,
     identity: &'a DeviceIdentity,
     state: &'a mut VaultMetaState,
-    event_log_mode: bool,
+    event_log_mode: YamlSyncBacking,
 }
 
 impl<'a> YamlSyncSession<'a> {
@@ -50,7 +50,7 @@ impl<'a> YamlSyncSession<'a> {
         members_key: &'a str,
         identity: &'a DeviceIdentity,
         state: &'a mut VaultMetaState,
-        event_log_mode: bool,
+        event_log_mode: YamlSyncBacking,
     ) -> Self {
         Self {
             content,
@@ -65,7 +65,9 @@ impl<'a> YamlSyncSession<'a> {
     /// Consume the session into the correct unchanged, access, new-vault, or reload outcome.
     pub fn reconcile(self) -> VaultResult<YamlSyncOutcome> {
         if self.content.trim() == self.last_synced_content.trim() {
-            if self.members_key.is_empty() && self.event_log_mode && !self.content.trim().is_empty()
+            if self.members_key.is_empty()
+                && matches!(self.event_log_mode, YamlSyncBacking::EventLog)
+                && !self.content.trim().is_empty()
             {
                 return Ok(YamlSyncOutcome::Reloaded(Box::new(self.reload()?)));
             }
@@ -111,8 +113,8 @@ mod tests {
     use super::*;
     use crate::errors;
     use crate::{
-        PasswordEnvelope, PasswordUnlockEntry, StoreId, VaultKeys, VaultRecordSet, VaultResult,
-        genesis_members_records,
+        GenesisMembersRecordsRequest, PasswordEnvelope, PasswordUnlockEntry, StoreId, VaultKeys,
+        VaultMember, VaultRecordSet, VaultResult,
     };
 
     struct YamlSyncTestData;
@@ -123,10 +125,12 @@ mod tests {
             identity: &DeviceIdentity,
         ) -> VaultResult<crate::StoredVaultYaml> {
             let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
-            records.extend(genesis_members_records(
-                identity,
-                &keys.members_key,
-                "2026-06-28T00:00:00Z",
+            records.extend(VaultMember::genesis_members_records(
+                GenesisMembersRecordsRequest {
+                    identity,
+                    members_key: &keys.members_key,
+                    enrolled_at: "2026-06-28T00:00:00Z",
+                },
             )?);
             let store_id = StoreId::generate()?;
             VaultRecordSet::serialize_yaml_with_unlock(
@@ -169,7 +173,7 @@ mod tests {
             keys.members_key.as_str(),
             &identity,
             &mut state,
-            false,
+            YamlSyncBacking::LegacyYaml,
         )
         .reconcile()?;
         assert_eq!(outcome, YamlSyncOutcome::Unchanged);
@@ -182,10 +186,12 @@ mod tests {
         let identity = DeviceIdentity::generate()?;
         let password_entries = vec![YamlSyncTestData::password_entry("backup-password")];
         let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
-        records.extend(genesis_members_records(
-            &identity,
-            &keys.members_key,
-            "2026-06-28T00:00:00Z",
+        records.extend(VaultMember::genesis_members_records(
+            GenesisMembersRecordsRequest {
+                identity: &identity,
+                members_key: &keys.members_key,
+                enrolled_at: "2026-06-28T00:00:00Z",
+            },
         )?);
         let store_id = StoreId::generate()?;
         let yaml = VaultRecordSet::serialize_yaml_with_unlock_and_name(
@@ -205,7 +211,7 @@ mod tests {
             "",
             &identity,
             &mut state,
-            true,
+            YamlSyncBacking::EventLog,
         )
         .reconcile()?;
         match outcome {
@@ -227,4 +233,10 @@ mod tests {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum YamlSyncBacking {
+    LegacyYaml,
+    EventLog,
 }

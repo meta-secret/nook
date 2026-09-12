@@ -10,6 +10,7 @@ repository.workspace = true
 mock-passkey = []
 
 [dependencies]
+tsify = { version = "0.5.6", default-features = false, features = ["js"] }
 nook-app-common = { path = "../nook-app-common" }
 nook-authenticator-domain = { path = "../nook-authenticator-domain" }
 aes-gcm = { version = "0.11.0", default-features = false, features = ["aes", "alloc"] }

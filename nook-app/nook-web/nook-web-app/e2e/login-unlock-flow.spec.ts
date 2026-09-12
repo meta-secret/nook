@@ -69,14 +69,40 @@ test.describe('login unlock flow (local-first)', () => {
       'true',
     )
     const prfEnabledAfterReload = await page.evaluate(async () => {
-      const credential = await navigator.credentials.get({
+      const credential: unknown = await navigator.credentials.get({
         publicKey: {
           challenge: new Uint8Array([1]),
           extensions: { prf: { eval: { first: new Uint8Array([2]) } } },
         },
       })
-      return (credential as PublicKeyCredential).getClientExtensionResults().prf
-        ?.enabled
+      if (typeof credential !== 'object' || credential === null) {
+        throw new Error('Expected a public-key credential.')
+      }
+      const methodValue: unknown = Object.getOwnPropertyDescriptor(
+        credential,
+        'getClientExtensionResults',
+      )?.value
+      if (typeof methodValue !== 'function') {
+        throw new Error('Expected a public-key extension result method.')
+      }
+      type CredentialMethod = {
+        call: (thisArg: unknown, ...args: never[]) => unknown
+      }
+      const method: CredentialMethod = methodValue
+      const extensionResults: unknown = method.call(credential)
+      if (typeof extensionResults !== 'object' || extensionResults === null) {
+        throw new Error('Expected public-key extension results.')
+      }
+      const prf: unknown = Object.getOwnPropertyDescriptor(
+        extensionResults,
+        'prf',
+      )?.value
+      if (typeof prf !== 'object' || prf === null) return undefined
+      const enabled: unknown = Object.getOwnPropertyDescriptor(
+        prf,
+        'enabled',
+      )?.value
+      return typeof enabled === 'boolean' ? enabled : undefined
     })
     expect(prfEnabledAfterReload).toBe(true)
     await page.getByTestId('unlock-vault-btn').click()
@@ -180,7 +206,26 @@ test.describe('login unlock flow (local-first)', () => {
     await reviewIdentities.click()
     await expect(page.getByTestId('devices-access-back')).toBeFocused()
     await page.getByTestId('devices-access-back').click()
-    await expect(reviewIdentities).toBeFocused()
+    try {
+      await expect(reviewIdentities).toBeFocused()
+    } catch (error) {
+      const activeElement = await page.evaluate(() => {
+        const active = document.activeElement
+        return active
+          ? {
+              tag: active.tagName.toLowerCase(),
+              testId: ((value) => (value ? value : 'absent'))(
+                active.getAttribute('data-testid'),
+              ),
+            }
+          : { tag: 'absent', testId: 'absent' }
+      })
+      await test.info().attach('identity-focus-state.json', {
+        body: Buffer.from(JSON.stringify(activeElement)),
+        contentType: 'application/json',
+      })
+      throw error
+    }
     await page.keyboard.press('Tab')
     const focusAfterTab = await page.evaluate(() =>
       ((v) => (v ? v : ''))(

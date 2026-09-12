@@ -1,4 +1,8 @@
 <script lang="ts">
+  import type { ComponentProps } from 'svelte'
+  import type { PasswordOperationResult } from '$lib/vault/password-unlock'
+  import { type SecretOperationResult } from '$lib/vault/secret-operation-failure'
+  import type { EnrollmentCodeIssueResult } from '$lib/vault/enrollment-issue-failure'
   type VaultNameDraftChange = {
     readonly entry: NookLocalVaultEntry
     readonly value: string
@@ -24,8 +28,8 @@
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
   import {
-    vaultEntryHoldsExtensionGrant,
-    resolveVaultExtensionLink,
+    VaultGrantPresentation,
+    VaultExtensionPresentation,
     type ExtensionConnectedEntryRequest,
     type VaultExtensionLinkRequest,
     type VaultSwitcherEntryLabel,
@@ -149,27 +153,69 @@
     onBeginSetup: (request: ProviderSetupRequest) => void
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
-    onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>
-    onUpdatePassword: (args: VaultPasswordEntryUpdate) => void | Promise<void>
-    onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>
-    onIssueCode: (args: EnrollmentCodeIssue) => Promise<string>
+    onAddPassword: (
+      args: VaultPasswordCreation,
+    ) => Promise<PasswordOperationResult>
+    onUpdatePassword: (
+      args: VaultPasswordEntryUpdate,
+    ) => Promise<PasswordOperationResult>
+    onRemovePassword: (
+      entryId: PasswordEntryId,
+    ) => Promise<PasswordOperationResult>
+    onIssueCode: (
+      args: EnrollmentCodeIssue,
+    ) => Promise<EnrollmentCodeIssueResult>
     onClearCode: () => void
-    onImportBitwarden: (args: BitwardenVaultImport) => Promise<NookImportResult>
-    onImportKeePassXc: (csv: string) => Promise<NookImportResult>
-    onImportLastPass: (csv: string) => Promise<NookImportResult>
-    onImportKeeper: (csv: string) => Promise<NookImportResult>
-    onImportOnePassword: (archive: Uint8Array) => Promise<NookImportResult>
+    onImportBitwarden: (
+      args: BitwardenVaultImport,
+    ) => Promise<SecretOperationResult<NookImportResult>>
+    onImportKeePassXc: (
+      csv: string,
+    ) => Promise<SecretOperationResult<NookImportResult>>
+    onImportLastPass: (
+      csv: string,
+    ) => Promise<SecretOperationResult<NookImportResult>>
+    onImportKeeper: (
+      csv: string,
+    ) => Promise<SecretOperationResult<NookImportResult>>
+    onImportOnePassword: (
+      archive: Uint8Array,
+    ) => Promise<SecretOperationResult<NookImportResult>>
     onImportApplePasswords: (
       exportBytes: Uint8Array,
-    ) => Promise<NookImportResult>
-    onImportChromePasswords: (csv: string) => Promise<NookImportResult>
-    onImportDashlane: (exportBytes: Uint8Array) => Promise<NookImportResult>
+    ) => Promise<SecretOperationResult<NookImportResult>>
+    onImportChromePasswords: (
+      csv: string,
+    ) => Promise<SecretOperationResult<NookImportResult>>
+    onImportDashlane: (
+      exportBytes: Uint8Array,
+    ) => Promise<SecretOperationResult<NookImportResult>>
     onImportGoogleAuthenticator: (
       migrationUris: AuthenticatorMigrationUriCollection,
-    ) => Promise<NookImportResult>
-    onImportProtonPass: (exportBytes: Uint8Array) => Promise<NookImportResult>
+    ) => Promise<SecretOperationResult<NookImportResult>>
+    onImportProtonPass: (
+      exportBytes: Uint8Array,
+    ) => Promise<SecretOperationResult<NookImportResult>>
     activeSection?: AdminAccordionSection
   } = $props()
+
+  type AuthStorageOptionalProps = Partial<
+    Pick<
+      ComponentProps<typeof AuthStorage>,
+      | 'onSyncProvider'
+      | 'onBeginAddProvider'
+      | 'onCancelAddProvider'
+      | 'onRemoveProvider'
+    >
+  >
+  const authStorageOptionalProps = $derived.by(() => {
+    const props: AuthStorageOptionalProps = {}
+    if (onSyncProvider) props.onSyncProvider = onSyncProvider
+    if (onBeginAddProvider) props.onBeginAddProvider = onBeginAddProvider
+    if (onCancelAddProvider) props.onCancelAddProvider = onCancelAddProvider
+    if (onRemoveProvider) props.onRemoveProvider = onRemoveProvider
+    return props
+  })
 
   let newVaultName = $state('')
   let drafts = $state<Record<string, string>>({})
@@ -229,7 +275,7 @@
       activeStoreId,
       entries: extensionEntryLabels,
     }
-    return resolveVaultExtensionLink(request)
+    return new VaultExtensionPresentation(request).link
   })
   const hasPasswords = $derived(passwordEntries.length > 0)
   const isBusy = $derived(
@@ -329,7 +375,10 @@
     }
     try {
       const renameLocalVaultArgs: Parameters<typeof vault.renameLocalVault>[0] =
-        { storeId: entry.storeId, label: draftFor(entry) }
+        {
+          storeId: entry.storeId,
+          label: draftFor(entry),
+        }
       await vault.renameLocalVault(renameLocalVaultArgs)
       if (!vault.errorMsg) {
         editingStoreId = { kind: VaultLabelEditorKind.Closed }
@@ -487,7 +536,7 @@
                     <span class="truncate text-sm font-medium text-foreground">
                       {entry.display_label(unnamedVaultLabel)}
                     </span>
-                    {#if vaultEntryHoldsExtensionGrant(grantRequest)}
+                    {#if new VaultGrantPresentation(grantRequest).connected}
                       <span
                         class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
                         data-testid="vault-admin-extension-badge"
@@ -604,12 +653,9 @@
       bind:githubPat
       bind:githubRepo
       {onReconnect}
-      {onSyncProvider}
-      {onBeginAddProvider}
-      {onCancelAddProvider}
+      {...authStorageOptionalProps}
       {onBeginSetup}
       {onCancelSetup}
-      {onRemoveProvider}
     />
   </SettingsAccordionSection>
 

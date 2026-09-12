@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
   type EnrollmentCodeUnlock = {
     readonly code: string
     readonly password: string
@@ -21,11 +22,21 @@
   import {
     WorkspaceRoute,
     WorkspaceRouteLookupKind,
-    workspaceRouteFromPath,
+    WorkspacePath,
   } from '$lib/app/workspace-route'
   import type { VaultState } from '$lib/vault.svelte'
+  import type { ProviderSetupRequest } from '$lib/auth/providers'
 
   const APP_KIND = configured_vault_application()
+
+  function beginProviderSetup(request: ProviderSetupRequest): void {
+    vault.beginProviderSetup(request)
+  }
+
+  async function removeProvider(id: string): Promise<void> {
+    const removed = await vault.removeProvider(id)
+    if (removed.isErr()) vault.errorMsg = vault.t(removed.error.translationKey)
+  }
 
   let {
     vault,
@@ -66,10 +77,10 @@
     onSentinelUnlocked: () => Promise<void>
     onCreateDeviceVault: (label: string) => Promise<void>
     onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
-    onCreateSentinelParticipantKey: () => Promise<string>
+    onCreateSentinelParticipantKey: () => Promise<SentinelActionResult<string>>
     onCreateSentinelParticipantResponse: (
       requestPayload: string,
-    ) => Promise<string>
+    ) => Promise<SentinelActionResult<string>>
     onDismissPasskey: () => void
   } = $props()
 
@@ -77,7 +88,7 @@
 
   function devicesAccessRouteOpen(): boolean {
     if (!('window' in globalThis)) return false
-    const route = workspaceRouteFromPath(window.location.pathname)
+    const route = new WorkspacePath(window.location.pathname).route
     return (
       route.kind === WorkspaceRouteLookupKind.Workspace &&
       route.route === WorkspaceRoute.DevicesAccess
@@ -101,7 +112,7 @@
 </script>
 
 <div class="space-y-6">
-  {#if showAccessGate || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
+  {#if showAccessGate || vault.errorMsg || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
     {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
       <LoginGate
         {vault}
@@ -118,7 +129,7 @@
         {onUnlock}
         onBeginAddProvider={() => vault.beginAddProvider()}
         onCancelAddProvider={() => vault.cancelAddProvider()}
-        onBeginSetup={(setupRequest) => vault.beginProviderSetup(setupRequest)}
+        onBeginSetup={beginProviderSetup}
         onCancelSetup={() => vault.cancelProviderSetup()}
         onOpenHelp={() => vault.openHelp()}
         {onUseEnrollmentCode}
@@ -136,25 +147,25 @@
         {onStartSentinelGenesis}
         onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelParticipantKey}
         onCreateSentinelGenesisParticipantResponse={onCreateSentinelParticipantResponse}
-        onRemoveProvider={(id) => vault.removeProvider(id)}
-      />
-      <VaultStatusBar
-        {vault}
-        storageMode={vault.storageMode}
-        githubRepo={vault.githubRepo}
-        lastSync={vault.lastSync}
-        isSyncing={vault.isSyncActivityVisible}
-        successMsg={vault.successMsg}
-        errorMsg={vault.errorMsg}
-        {appVersion}
-        label="Nook"
-        showSyncStatus={false}
-        showStorageIcon={false}
-        variant={VaultStatusBarVariant.Quiet}
-        onDismissSuccess={() => vault.dismissSuccess()}
-        onDismissError={() => vault.dismissError()}
+        onRemoveProvider={removeProvider}
       />
     {/if}
+    <VaultStatusBar
+      {vault}
+      storageMode={vault.storageMode}
+      githubRepo={vault.githubRepo}
+      lastSync={vault.lastSync}
+      isSyncing={vault.isSyncActivityVisible}
+      successMsg={vault.successMsg}
+      errorMsg={vault.errorMsg}
+      {appVersion}
+      label="Nook"
+      showSyncStatus={false}
+      showStorageIcon={false}
+      variant={VaultStatusBarVariant.Quiet}
+      onDismissSuccess={() => vault.dismissSuccess()}
+      onDismissError={() => vault.dismissError()}
+    />
     {#if showPasskeyOverlay}
       <PasskeyAuthOverlay {vault} onDismiss={onDismissPasskey} />
     {/if}

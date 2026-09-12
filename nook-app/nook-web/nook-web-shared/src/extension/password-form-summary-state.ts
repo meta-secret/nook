@@ -1,15 +1,19 @@
-import type { PasswordFieldQuery } from './password-form-fields'
+import type { PasswordFieldQuery } from "./password-form-fields";
 import {
   PasswordFormQueryKind,
   type PasswordFormScopeQuery,
-} from './password-form-submission-controls'
-import type { PasswordFormSummary } from './password-forms'
+} from "./password-form-submission-controls";
+import type { PasswordFormSummary } from "./password-forms";
 
-export function passwordFieldQuery(
-  request: PasswordFormScopeQuery,
-): PasswordFieldQuery {
-  if (request.kind === PasswordFormQueryKind.Root) return { root: request.root }
-  return { root: request.root, formScope: request.formScope }
+export class PasswordFormFieldQuery {
+  constructor(private readonly request: PasswordFormScopeQuery) {}
+  get query(): PasswordFieldQuery {
+    const request = this.request;
+
+    if (request.kind === PasswordFormQueryKind.Root)
+      return { root: request.root };
+    return { root: request.root, formScope: request.formScope };
+  }
 }
 
 export const emptyPasswordFormSummary: PasswordFormSummary = {
@@ -23,4 +27,4 @@ export const emptyPasswordFormSummary: PasswordFormSummary = {
   passkeyControlPresent: false,
   formCount: 0,
   observedAt: 0,
-}
+};

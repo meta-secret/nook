@@ -1,5 +1,10 @@
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
     forbid(invalid_raw_numeric_api_suppression)
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
@@ -8,6 +13,7 @@
     clippy::missing_panics_doc,
     clippy::uninlined_format_args
 )]
+
 mod auth;
 mod crypto;
 mod errors;
@@ -21,16 +27,20 @@ pub(crate) use auth::{
 };
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub use device_access::{
-    DEVICE_ACCESS_PROFILE_VERSION, DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS,
+    AuthenticatorGuidEvidence, DEVICE_ACCESS_PROFILE_VERSION,
+    DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS, DeviceAccessCredentialKind,
     DeviceAccessIdentityObservation, DeviceAccessIdentityState, DeviceAccessProfile,
     DeviceAccessProfileDecodeResult, DeviceAccessProfileTransitionError,
     DeviceAccessProfileVersion, DeviceAccessProtectionKind, DeviceAccessProviderLabelError,
-    IdentityVaultAppGrant, IdentityVaultAppGrantKind, IdentityVaultLinks,
-    IdentityVaultLinksRequest, PasskeyAccessProfile, PasskeyAuthenticatorAttachment,
-    PasskeyBackupState, PasskeyBrowserObservation, PasskeyCreatedAtEvidence,
-    PasskeyCreationCeremony, PasskeyKeeperKind, PasskeyLastUsedAtEvidence, PasskeyObservedBrowser,
-    PasskeyObservedPlatform, PasskeyTransport, VerifiedVaultAccess,
+    DeviceCredentialProfile, DiscardedClientEnvironment, IdentityVaultAppGrant,
+    IdentityVaultAppGrantKind, IdentityVaultLinks, IdentityVaultLinksRequest, PasskeyAccessProfile,
+    PasskeyAuthenticatorAttachment, PasskeyBackupState, PasskeyBrowserObservation,
+    PasskeyCreatedAtEvidence, PasskeyCreationCeremony, PasskeyKeeperKind,
+    PasskeyLastUsedAtEvidence, PasskeyMetadataUnrecorded, PasskeyObservedBrowser,
+    PasskeyObservedPlatform, PasskeyTransport, PersistedDeviceIdentityState, VerifiedVaultAccess,
 };
+pub use nook_auth2::MemberLabelState;
+pub use nook_auth2::RecordTypeDeclaration;
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
     chrome_passwords_import, credit_card, dashlane_import, google_authenticator_import,
@@ -60,21 +70,23 @@ pub use authenticator::{
     TotpPeriod, TotpRemainingSeconds, TotpSecret, TotpUnixSeconds,
 };
 pub use authenticator_issuer_hosts::{
-    AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError, AuthenticatorWebsiteHostRequest,
+    AuthenticatorHostResolution, AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError,
+    AuthenticatorWebsiteHostRequest,
 };
+pub use bip39::UnsupportedMnemonicWordCount;
 pub use bip39::{
-    Bip39MnemonicWordCount, Bip39WordSequenceExpectedCount, Bip39WordSuggestionLimit,
-    bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,
-    is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,
-    validate_bip39_mnemonic,
+    Bip39MnemonicWordCount, Bip39WordSequence, Bip39WordSequenceExpectedCount,
+    Bip39WordSuggestionLimit, Bip39WordSuggestions,
 };
-pub use bitwarden_import::{BitwardenExport, BitwardenImportError, BitwardenImportPlan};
+pub use bitwarden_import::{
+    BitwardenExport, BitwardenExportAccess, BitwardenImportError, BitwardenImportPlan,
+};
 pub use chrome_passwords_import::{
     ChromePasswordsCsvInput, ChromePasswordsImportError, ChromePasswordsImportPlan,
 };
-pub use credit_card::CreditCardSecret;
+pub use credit_card::{CreditCardFields, CreditCardSecret};
 pub use dashlane_import::{DashlaneExport, DashlaneImportError, DashlaneImportPlan};
-pub use database::Database;
+pub use database::{Database, SecretRemoval};
 pub use device_key_protection::{
     AwaitingPasskeyAssertion, DeviceIdentityProtection, DeviceKeyProtectionSetup,
     DeviceKeyProtectionVersion, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
@@ -97,11 +109,13 @@ pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, EventResult,
     ExtensionIdentityHandoffError, MultiDeviceError, PasswordError, SecretPayloadError,
     SessionError, ValidationError, VaultCryptoError, VaultEpochError, VaultError, VaultFormatError,
-    VaultRecoveryErrorKind, VaultResult, VaultSyncError, classify_vault_recovery_error,
+    VaultRecoveryErrorKind, VaultResult, VaultSyncError,
 };
 pub use extension_identity_handoff::{
     ExtensionIdentityHandoffMaterial, ExtensionIdentityHandoffOpen, ExtensionIdentityHandoffSeal,
-    HandoffEventLog, HandoffSigningSeedChoice, HandoffSigningSeedSelection,
+    ExtensionIdentityHandoffSealRequest, ExtensionIdentityHandoffSource,
+    ExtensionIdentityHandoffSourceBinding, HandoffEventLog, HandoffSigningSeedChoice,
+    HandoffSigningSeedSelection, StoredSigningSeed,
 };
 pub use google_authenticator_import::{
     GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan,
@@ -112,17 +126,15 @@ pub use keepassxc_import::{KeePassXcCsvInput, KeePassXcImportError, KeePassXcImp
 pub use keeper_import::{KeeperCsvInput, KeeperImportError, KeeperImportPlan};
 pub use lastpass_import::{LastPassCsvInput, LastPassImportError, LastPassImportPlan};
 pub use nook_app_common::i18n_keys;
-pub use nook_app_common::{
-    AppLocale, get_translation_catalog, lookup_translation, merge_translation_catalogs,
-    parse_app_locale, resolve_app_locale_from_tag, resolve_app_locale_from_tags,
-    resolve_error_message, resolve_translation_catalog, translate, translate_from_catalog,
-    translate_with_replacements,
-};
+pub use nook_app_common::{AppLocale, SupportedAppLocale};
 pub use nook_auth2::{
-    LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
-    SentinelUnlockPolicy, SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection,
-    SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus,
-    SentinelUnlockVersion,
+    ContextBoundSentinelUnlock, IdentitySigningSeedProtection, KeyringEntryRejection,
+    KeyringRejection, LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring,
+    LocalIdentityKeyringEntry, LocalIdentityProtection, ProtectedIdentityKeyring,
+    ProtectedSigningEntry, ProtectedSigningMaterial, RemovedLocalIdentityKey, SentinelUnlockPolicy,
+    SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
+    SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus, SentinelUnlockVersion,
+    SigningSeedProtection, WrappedAppKeyReplacement,
 };
 #[cfg(feature = "mock-passkey")]
 pub use nook_auth2::{
@@ -146,18 +158,7 @@ pub use nook_companion_core::{
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     OAuthOriginSupport, OAuthOriginUnsupportedReason, PageInputFieldObservation, PageInputType,
     VaultHostPolicyError, WebsiteLoginMatchAvailability, WebsiteLoginMatchAvailabilityKind,
-    WebsiteLoginMatchAvailabilityWire, WebsitePasskeyProposal,
-    authentication_form_observation_priority, authentication_page_observations_are_valid,
-    belongs_to_sentinel_vault, belongs_to_simple_vault,
-    classify_authentication_backup_codes_observation, classify_authentication_outcome,
-    classify_authentication_workflow, classify_authentication_workflow_candidates,
-    expand_identity_text, extract_backup_code_candidates, has_login_context, is_nook_vault_app_url,
-    is_sentinel_vault_hostname, is_simple_vault_hostname, looks_like_email_verification_body,
-    looks_like_login_advance_control_label, looks_like_manual_checkpoint_label,
-    looks_like_one_time_code_field, looks_like_passkey_control_label, looks_like_username_field,
-    matching_sentinel_vault_base_url, nook_vault_app_exclude_match_patterns,
-    normalize_simple_vault_base_url, page_has_backup_code_hint, propose_website_passkey,
-    sentinel_vault_match_patterns, simple_vault_match_pattern, simple_vault_url,
+    WebsiteLoginMatchAvailabilityWire, WebsitePasskeyEvidence, WebsitePasskeyProposal,
 };
 pub use nook_companion_core::{
     AuthenticationFieldCount, AuthenticationPasskeyAccountCount,
@@ -188,9 +189,9 @@ pub use secret_view::{
     AuthenticatorSecretForm, CreditCardSecretForm, FileAttachmentSecretForm, LoginHostMatchRequest,
     LoginSecretForm, LoginSiteHostsError, SecretFormFields, SecretGroupKey, SecretListItem,
     SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm, SeedPhraseWordCount,
-    WebsiteHost, build_secret_yaml, build_secret_yaml_from_form,
+    WebsiteHost, WebsiteHostError,
 };
-pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
+pub use vault_security::{VaultSecurityAssessment, VaultSecurityRecommendations};
 pub use vault_sentinel_onboarding::{
     AcceptedSentinelOnboarding, SentinelOnboardingIssuance, SentinelOnboardingPackage,
     SentinelOnboardingRecipient, SentinelOnboardingVersion,
@@ -222,48 +223,52 @@ pub use nook_auth2::{
 };
 
 pub use auth::vault_meta_actions::{
-    EventGraphAuthorizationProjection, EventGraphDeviceAccess, EventGraphDeviceAccessRequest,
-    SentinelMemberRecordProjection, SentinelMemberRecordProjectionRequest,
-    VaultMetaGraphProjection, VaultMetaOperationApplier, VaultMetaOperationRequest,
+    DeviceAuthorization, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
+    EventGraphDeviceAccessRequest, SentinelMemberRecordProjection,
+    SentinelMemberRecordProjectionRequest, VaultMetaGraphProjection, VaultMetaOperationApplier,
+    VaultMetaOperationRequest,
 };
 pub use multi_device::SimpleIdentityGenesisOperationsInput;
 pub use nook_auth2::{
-    AppId, AppKey, IdentityDirectory, IdentityId, IdentityMember, IdentityRecord,
-    IdentitySelection, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
-    IdentityVaultDekReconciliation, IdentityVaultEventId, MemberDekEnvelope, identity_fingerprint,
-    identity_vault_genesis_records,
+    AppId, AppKey, AppKeyIdentityMembership, DirectoryCreationEnrollment, DirectoryLegacyMigration,
+    DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
+    DirectoryVaultEnrollment, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
+    IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentityId, IdentityLegacyVaultImport,
+    IdentityLegacyVaultReconciliation, IdentityMember, IdentityMemberSigningUpdate,
+    IdentityMemberVaultGrant, IdentityRecord, IdentityRecordRejection, IdentitySelection,
+    IdentityVaultBinding, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
+    IdentityVaultDekReconciliation, IdentityVaultEventId, IdentityVaultKeyOpening,
+    IdentityVaultKeys, LegacyDirectoryBase, LocalIdentityKeyRetirement, MemberDekEnvelope,
+    MigratedIdentityDirectory, PreparedLegacyDirectoryMigration, RecoveryRetirement,
+    SentinelShareEnvelope, StagedIdentityRebase, VaultMember,
 };
 
 pub use multi_device::{
     AuthEnvelopes, AuthRecordIssuance, ConnectAccessStatus, DeviceEnrollment, DeviceIdentity,
     JoinRequest, JoinRequestApproval, JoinRequestDenial, JoinRequestIssuance, MEMBER_RECORD_PREFIX,
     MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SelfRosterSync,
-    SentinelKeyReconstruction, SentinelParticipantEntry, SentinelShareEnvelope,
-    SentinelShareOpening, SentinelShareVersion, VaultKeys, VaultMember, VaultMetaRecord,
-    VaultMetaState, VaultRecordView, assess_connect_access, build_members_records,
-    count_sentinel_share_records, create_sentinel_share_records,
-    create_sentinel_share_records_for_recipients, device_is_enrolled, encrypt_member_entry,
-    ensure_self_in_roster, genesis_members_records, is_sentinel_share_stored_record,
-    member_from_identity, member_from_join, parse_sentinel_share_envelope, pending_join_for_device,
-    rename_vault_member, replace_member_records, resolve_member_roster, revoke_vault_member,
-    roster_add_member, sentinel_share_record_key,
+    SentinelKeyReconstruction, SentinelParticipantEntry, SentinelShareOpening,
+    SentinelShareVersion, VaultKeys, VaultMetaRecord, VaultMetaState, VaultRecordView,
 };
 
 pub use nook_event_log::{
-    AppendEventInput, CanonicalEventBodyBytes, CheckedRemoteEvent, Ed25519Signature,
-    EncryptedSecretPayload, EpochMetadataState, EpochPasswordState, EpochRecord,
-    EpochRotationReason, EpochTransition, EventCount, EventGraph, EventGraphVaultArchitecture,
-    EventId, EventInsertStatus, EventPendingReason, EventStorageBytes, GenesisImportPayload,
-    KeyEpoch, LocalEventStore, ObservedHeads, ProjectedSecret, ProjectedSecretLifecycle,
-    ProjectedSecretOrigin, ProjectionEpoch, RemoteEventBatch, RemoteEventLogClassification,
-    RemoteEventWrites, SecretFingerprint, SecretReplacementConflict, SecurityConflict,
-    SentinelShareIssuedPayload, SigningIdentity, VaultEvent, VaultEventBody,
-    VaultEventSchemaVersion, VaultOperation, VaultProjection, build_genesis_import_event,
-    concurrent_epoch_rotations_conflict, operation_starts_epoch, parse_event_storage_bytes,
-    parse_remote_event_storage_bytes, serialize_event_storage_yaml,
+    AppendEventInput, CanonicalEventBodyBytes, CheckedRemoteEvent, ConcurrentEpochRotations,
+    Ed25519Signature, EncryptedSecretPayload, EpochCheckpoint, EpochMetadataState,
+    EpochPasswordState, EpochRecord, EpochRotationReason, EpochTransition, EventCount, EventGraph,
+    EventGraphInsert, EventGraphInsertion, EventGraphRejection, EventGraphVaultArchitecture,
+    EventId, EventInsertStatus, EventLookup, EventPendingReason, EventStorageBytes,
+    GenesisImportPayload, GenesisImportRequest, KeyEpoch, LocalEventAppend,
+    LocalEventAppendOutcome, LocalEventBytes, LocalEventStore, LocalEventStoreRejection,
+    LocalEventWrite, LocalOutboxRemoval, LocalOutboxRemovalResult, LocalOutboxRemoved,
+    LocalOutboxWrite, LocalRemoteUnion, LocalRemoteUnionOutcome, ObservedHeads, ProjectedSecret,
+    ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch, RemoteEventBatch,
+    RemoteEventLogClassification, RemoteEventWrites, RemoteStoreIdentity, SecretFingerprint,
+    SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload, SigningIdentity,
+    VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation, VaultProjection,
 };
 pub use password::{
-    MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordGenerationOptions, generate_password,
+    MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,
+    PasswordGenerationOptions,
 };
 pub use password_envelope::{
     PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEntryIssuance, PasswordEntryResolution,
@@ -271,38 +276,50 @@ pub use password_envelope::{
     PasswordEnvelopeRewrap, PasswordEnvelopeVersion, PasswordPolicy, PasswordUnlockEntry,
     VaultUnlock,
 };
-pub use secrets::{filter_secrets, validate_secret_data};
+
+pub use secrets::SecretRecordFilter;
 pub use session::{
     EncryptedSecretSession, PlaintextSecretSession, PreparedEncryptedSecretReplacement,
     ReplaceSecretInput, VerifiedAuthenticatorReplacementInput,
 };
 pub use sync_provider_credentials::{
-    AGE_ARMOR_MARKER, ProviderCredentialEncoding, ProviderCredentialStorageAdmission,
+    AGE_ARMOR_MARKER, ProviderCredentialEncoding, ProviderCredentialOpening,
+    ProviderCredentialRejection, ProviderCredentialStorageAdmission,
 };
 pub use sync_provider_store::{
     ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,
     ActiveProviderCredentialsRequest, ActiveProviderLoginSetup, ActiveVaultProviderRows,
-    ActiveVaultScope, AuthProvidersSnapshotData, DraftStorageConnection,
-    DuplicateProviderSelection, GoogleOAuthTokenInput, ICloudOAuthTokenInput,
-    LocalFolderConfigData, LocalProviderRowRequest, ManagerStoreScopeRef, NormalizedAuthSnapshot,
-    OAuthAccessTokenRef, OAuthFileConfigData, ProviderEnrollmentRequest, ProviderLabelLabels,
-    ProviderRows, ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup,
-    ProviderSelectionRequest, ProviderStorageDetailLabels, ProviderSyncCheckpoint,
-    ProviderSyncRevision, ProviderSyncRevisionRef, ProviderSyncedVaultVersion, ProviderVaultScope,
-    SharedGrantProviderSelection, StagedRemoteConnection, StorageConnectArgs, StorageProviderData,
-    StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
+    ActiveVaultScope, AuthProvidersSnapshotData, DraftStorageConnection, DuplicateCandidatePolicy,
+    DuplicateProviderSelection, DuplicateSyncProvider, EnrollmentAudience, GithubStorageDraft,
+    GoogleOAuthTokenInput, ICloudOAuthTokenInput, LegacyAuthProvidersSnapshot,
+    LocalFolderConfigData, LocalProviderRowChange, LocalProviderRowOutcome,
+    LocalProviderRowRequest, LocalProviderSelection, ManagerStoreScopeRef, NormalizedAuthSnapshot,
+    OAuthAccessToken, OAuthAccessTokenRef, OAuthFileConfigData, OAuthRemoteConfigurationUpdate,
+    OAuthRemoteStorageReference, OAuthStorageDraft, OAuthStorageReference,
+    ProviderEnrollmentRequest, ProviderEventFlushTarget, ProviderId, ProviderLabelLabels,
+    ProviderRows, ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup, ProviderSelection,
+    ProviderSelectionPolicy, ProviderSelectionRequest, ProviderStorageDetailLabels,
+    ProviderSyncCheckpoint, ProviderSyncRevision, ProviderSyncRevisionRef,
+    ProviderSyncedVaultVersion, ProviderVaultScope, ProviderWireMigration,
+    RemoteEventFlushProviderRequest, SharedGoogleEnrollmentAudience, SharedGrantProviderSelection,
+    StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedStorageConnection,
+    StorageConnectArgs, StorageProvider, StorageProviderData, StoredGithubPat,
+    StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
     StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredLocalFolderHandle,
     StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
     StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
     StoredOAuthTokenExpiry, VaultStorageConnection,
 };
 pub use validation::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_SHARED_FOLDER_REF_PREFIX,
-    DRIVE_STORAGE_REF_SEP, DriveBackupName, DriveEventParent, ExistingVaultProviderReadiness,
-    GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget, GoogleDriveFolderId,
-    GoogleDriveMode, ICloudEventTarget, ICloudMode, ICloudShareRole, ICloudSharedTarget,
-    LocalFolderSyncTarget, OauthAccessToken, OauthFilePreset, OauthFileSyncTarget,
-    STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget,
+    ConnectionCredentialValidation, DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME,
+    DRIVE_SHARED_FOLDER_REF_PREFIX, DRIVE_STORAGE_REF_SEP, DriveBackupName, DriveEventParent,
+    ExistingVaultProviderReadiness, GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget,
+    GoogleDriveFolderId, GoogleDriveMode, ICloudEventTarget, ICloudMode, ICloudShareRole,
+    ICloudSharedTarget, LocalFolderSyncTarget, OAuthFilePreset, OAuthProviderLabel,
+    OauthAccessToken, OauthFilePreset, OauthFileSyncTarget, ProviderCredentialEvidence,
+    ProviderCredentialReadiness, ProviderLabel, ProviderTargetKey, STORAGE_MODE_GITHUB,
+    STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget,
+    SyncProviderTargetIdentity,
 };
 pub use vault::vault_recovery_options::{
     VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword,
@@ -324,22 +341,28 @@ pub use vault_architecture::{
 };
 pub use vault_client_policy::{
     ActiveVaultStore, DeviceIdentityInitializationMode, DeviceProtectionStatus,
-    ExternalDeviceIdentityAuthorizationMode, JoinEnrollmentState, ProviderSyncFailureHandling,
-    ProviderSyncFreshness, ProviderSyncVisibility, RemoteVaultAssessDecision,
-    RemoteVaultRecoveryState, SentinelVaultUnlockState, UnauthenticatedSyncDecision,
-    VaultAccessObservation, VaultClientPolicy, VaultConnectGateDecision, VaultConnectProbeDecision,
-    VaultEditDecision, VaultStorageSyncDecision, VaultSwitchDecision, VaultSyncTimerStartDecision,
-    VaultSyncTimerTickDecision,
+    ExternalDeviceIdentityAuthorizationMode, InvalidDeviceProtectionStatus, JoinEnrollmentState,
+    ProviderSyncFailureHandling, ProviderSyncFreshness, ProviderSyncVisibility,
+    RemoteVaultAssessDecision, RemoteVaultRecoveryState, SentinelVaultUnlockState,
+    UnauthenticatedSyncDecision, VaultAccessObservation, VaultClientPolicy,
+    VaultConnectGateDecision, VaultConnectProbeDecision, VaultEditDecision, VaultEditMessage,
+    VaultEditTranslation, VaultStorageSyncDecision, VaultSwitchDecision,
+    VaultSyncTimerStartDecision, VaultSyncTimerTickDecision,
 };
 pub use vault_connect::{
-    LoadedVault, UnlockedVault, VaultAccessStatus, VaultContent, VaultContentMetadata,
+    LoadedVault, UnlockedVault, UnlockedVaultMaterial, VaultAccessStatus, VaultContent,
+    VaultContentMetadata,
 };
 pub use vault_crypto::VaultCrypto;
 pub use vault_epoch_crypto::{
     MembersCheckpointHash, SecretEpochReencryption, VaultKeyRotation, VaultMetaRecordRewrap,
     VaultMetaRewrap,
 };
-pub use vault_event_session::{VaultEventSession, VaultSecurityEpochRotationInput};
+pub use vault_event_session::{
+    EventPublicationDestination, VaultEpochRotated, VaultEventAppend, VaultEventAppended,
+    VaultEventSession, VaultEventSessionRejection, VaultOutboxFlush, VaultOutboxFlushed,
+    VaultSecurityEpochRotationInput,
+};
 pub use vault_format::{
     VaultFormat, VaultFormatDocument, VaultName, VaultNameRef, VaultRecordSet, VaultStoreIdentity,
     VaultStoreIdentityRef, VaultVersionWrite,
@@ -358,7 +381,8 @@ pub use vault_search_catalog::{
     SecretSearchCatalogChangeCount, SecretSearchCatalogReconcile,
 };
 pub use vault_sentinel_genesis::{
-    SentinelGenesisOutput, SentinelGenesisPhase, StartSentinelGenesisArgs,
+    SentinelDeliveryNotPending, SentinelGenesisOutput, SentinelGenesisPhase,
+    StartSentinelGenesisArgs,
 };
 pub use vault_sentinel_unlock::SentinelUnlockSigning;
 pub use vault_session::{
@@ -371,8 +395,9 @@ pub use vault_sync::{
 };
 pub use vault_sync_session::{YamlSyncOutcome, YamlSyncReloaded, YamlSyncSession};
 pub use vault_sync_store::{
-    MemoryVaultStore, PreparedVaultSync, RevisionGuardedWrite, StoreRevision, StoreRevisionRef,
-    VaultSyncFanOut, VaultSyncPair,
+    CompletedVaultFanOut, GuardedVaultWrite, MemoryVaultStore, PreparedVaultSync,
+    RejectedVaultFanOut, RejectedVaultSync, RejectedVaultWrite, RevisionGuardedWrite,
+    StoreRevision, StoreRevisionRef, SyncedVaultStores, VaultSyncFanOut, VaultSyncPair,
 };
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -389,12 +414,14 @@ pub use vault_wire::{
 };
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod test_support {
     use crate::{VaultStoreIdentityRef, VaultVersionWrite};
 
     use crate::{
-        DeviceIdentity, SecretId, StoreId, StoredRecordPayload, StoredVaultYaml, VaultKeys,
-        VaultRecordSet, VaultResult, VaultUnlock, genesis_members_records,
+        DeviceIdentity, GenesisMembersRecordsRequest, RecordTypeDeclaration, SecretId, StoreId,
+        StoredRecordPayload, StoredVaultYaml, VaultKeys, VaultMember, VaultRecordSet, VaultResult,
+        VaultUnlock,
     };
 
     pub(crate) fn sample_vault_yaml(
@@ -405,7 +432,7 @@ mod test_support {
         Ok(VaultRecordSet::serialize_yaml_with_unlock(
             &[crate::StoredSecretRecord {
                 key: SecretId::from_vault_record("secret_SMypl8K0w9Y"),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_trusted(format!(
                     "-----BEGIN AGE ENCRYPTED FILE-----\n{armor_line}\n-----END AGE ENCRYPTED FILE-----"
                 )),
@@ -423,10 +450,12 @@ mod test_support {
         let keys = crate::VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
         let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
-        records.extend(genesis_members_records(
-            &identity,
-            &keys.members_key,
-            "2026-06-28T00:00:00Z",
+        records.extend(VaultMember::genesis_members_records(
+            GenesisMembersRecordsRequest {
+                identity: &identity,
+                members_key: &keys.members_key,
+                enrolled_at: "2026-06-28T00:00:00Z",
+            },
         )?);
         let store_id = StoreId::generate()?;
         let yaml = VaultRecordSet::serialize_yaml_with_unlock(
@@ -439,3 +468,85 @@ mod test_support {
         Ok((keys, identity, yaml))
     }
 }
+
+pub use nook_auth2::{
+    AssessConnectAccessRequest, BuildMembersRecordsRequest, DecryptMemberEntryRequest,
+    DeviceIsEnrolledRequest, EncryptMemberEntryRequest, EnsureSelfInRosterRequest,
+    GenesisMembersRecordsRequest, IdentityVaultGenesisRecordsRequest, MemberFromIdentityRequest,
+    PendingJoinForDeviceRequest, RenameVaultMemberRequest, ReplaceMemberRecordsRequest,
+    ResolveMemberRosterRequest, RevokeVaultMemberRequest,
+};
+
+pub use nook_auth2::RosterAddMemberRequest;
+
+pub use nook_auth2::{
+    CreateSentinelRootShareRecordsForRecipientsRequest,
+    CreateSentinelShareRecordsForRecipientsRequest, CreateSentinelShareRecordsRequest,
+};
+
+pub use nook_app_common::{
+    LookupTranslationRequest, MergeTranslationCatalogsRequest, ResolveErrorMessageRequest,
+    ResolveTranslationCatalogRequest, TranslateFromCatalogRequest, TranslateRequest,
+    TranslateWithReplacementsRequest, TranslationCatalog, TranslationCatalogSource,
+    TranslationLookup,
+};
+
+pub use nook_companion_core::AuthenticationControlText;
+
+pub use nook_companion_core::{
+    AuthenticationRouteActuation, AuthenticationRouteEvidence, AutocompleteTokenQuery,
+    CredentialUpdateRouteEvidence, OneTimeCodeRouteEvidence,
+};
+
+pub use nook_companion_core::PasskeyControlMarking;
+
+pub use nook_companion_core::{
+    AuthenticationBackupCodesEvidence, AuthenticationEnrollmentObservation,
+};
+
+pub use nook_companion_core::BackupCodePageText;
+
+pub use nook_companion_core::{VaultHostObservation, VaultHostPolicy};
+
+pub use vault_client_policy::{
+    LoginDeviceKeyAvailability, LoginPasswordPromptUpdate, LoginUnlockAssessment,
+    LoginUnlockDecision, PasswordEntryPresence,
+};
+
+pub use sync_provider_store::{AuthProviderPersistenceMode, AuthProviderPersistenceRequest};
+
+pub use sync_provider_store::{
+    EnrollmentOAuthConfigurationError, EnrollmentOAuthConfigurationRequest,
+};
+
+pub use sync_provider_store::{SharedGrantProviderOutcome, SharedGrantProviderRequest};
+
+pub use nook_companion_core::BackupCodeCandidatePresence;
+
+pub use vault_client_policy::{
+    AddProviderPromptState, DeviceProtectionReadiness, EditBlockMessageRequest,
+    EditBlockReasonRequest, EditsBlockedRequest, ExistingVaultIdentityRecoveryRequiredRequest,
+    LocalVaultPresence, ManualSyncHasTargetRequest, ProviderSetupState,
+    RemoteVaultAssessDecisionRequest, RemoteVaultCredentialPresence,
+    ShouldAutoConnectAfterApprovalRequest, ShouldAutoUnlockRequest,
+    ShouldShowLoginVaultPickerRequest, ShouldSyncFromProvidersRequest,
+    ShouldUseJoinProviderForConnectRequest, SyncActivityVisibleRequest,
+    UnauthenticatedSyncDecisionRequest, VaultAuthenticationState, VaultConnectProbeDecisionRequest,
+    VaultExistenceRequirement, VaultFanOutSyncState, VaultIdleExpiration, VaultJoinApprovalWait,
+    VaultPasswordActivity, VaultPasswordPromptState, VaultProviderSyncState, VaultSaveActivity,
+    VaultSecretCreationPermission, VaultSelectionState, VaultSessionLockIntent,
+    VaultStorageSyncDecisionRequest, VaultSwitchTargetRequest, VaultSyncActivity, VaultSyncChange,
+    VaultSyncConflictState, VaultSyncIntent, VaultSyncPermission,
+    VaultSyncTimerStartDecisionRequest, VaultSyncTimerTickDecisionRequest, VaultVerificationState,
+};
+
+pub use device_access::DeviceSessionLockState;
+pub use vault_connect::VaultGenesisIntent;
+pub use vault_runtime_policy::RuntimeTestCapabilityExposure;
+pub use vault_sync_session::YamlSyncBacking;
+
+pub use vault_architecture::{
+    SentinelPolicyDraft, SentinelPolicyDraftAdmission, SentinelPolicyDraftEvaluation,
+};
+
+pub use nook_companion_core::ImportedExtensionEventLog;

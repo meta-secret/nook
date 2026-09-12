@@ -1,181 +1,92 @@
-import { isRecord } from '../lib/guards.ts';
-import type { UntrustedYamlMap, UntrustedYamlNode } from '../lib/guards.ts';
+import { z } from 'zod';
+import type { UntrustedYamlNode } from '../lib/guards.ts';
 
-const MAX_ITEMS = 100;
-const MAX_TEXT = 4096;
-const MAX_EVIDENCE_PATHS = 64;
+const missingFields = 'structural result contains missing or extra fields';
+export const structuralError = (message: string) => ({
+  error: (issue: { readonly code: string }) =>
+    issue.code === 'invalid_type' && Reflect.get(issue, 'input') === void 0
+      ? missingFields
+      : message,
+});
+export const structuralObjectError = { error: missingFields };
 
-export type ExactStructuralKeys = readonly [
-  UntrustedYamlMap,
-  readonly string[],
-];
-
-export function assertExactStructuralKeys(values: ExactStructuralKeys): void {
-  const [node, expectedKeys] = values;
-  const allowed = new Set(expectedKeys);
-  const keys = Object.keys(node);
-  if (keys.length !== allowed.size || keys.some((key) => !allowed.has(key))) {
-    invalid('structural result contains missing or extra fields');
-  }
-}
-
-export type StructuralNodeProperty = readonly [UntrustedYamlMap, string];
-
-export function structuralProperty(
-  values: StructuralNodeProperty,
-): UntrustedYamlNode {
-  const [node, key] = values;
-  if (!Object.prototype.hasOwnProperty.call(node, key)) {
-    invalid('structural result contains missing or extra fields');
-  }
-  return node[key] as UntrustedYamlNode;
-}
-
-export type LabeledStructuralNode = readonly [UntrustedYamlNode, string];
-
-export function requiredStructuralRecord(
-  values: LabeledStructuralNode,
-): UntrustedYamlMap {
-  const [node, label] = values;
-  if (!isRecord(node)) invalid(`${label} must be an object`);
-  return node;
-}
-
-export type BoundedStructuralArray = readonly [UntrustedYamlNode, number];
-
-export function requiredStructuralArray(
-  values: BoundedStructuralArray,
-): readonly UntrustedYamlNode[] {
-  const [node, min] = values;
-  if (!Array.isArray(node) || node.length < min || node.length > MAX_ITEMS) {
-    invalid('structural result array is invalid');
-  }
-  return node;
-}
-
-export type BoundedStructuralStrings = readonly [UntrustedYamlNode, number];
-
-export function boundedStructuralStrings(
-  input: BoundedStructuralStrings,
-): readonly string[] {
-  const [node, min] = input;
-  const values = requiredStructuralArray([node, min]).map((entry) =>
-    boundedStructuralString([entry, MAX_TEXT]),
-  );
-  if (new Set(values).size !== values.length) {
-    invalid('structural result strings must be unique');
-  }
-  return values;
-}
-
-export type BoundedStructuralString = readonly [UntrustedYamlNode, number];
-
-export function boundedStructuralString(
-  values: BoundedStructuralString,
-): string {
-  const [node, max] = values;
-  if (
-    typeof node !== 'string' ||
-    node.trim() === '' ||
-    node.length > max ||
-    forbiddenControl(node)
-  ) {
-    invalid('structural result string is invalid');
-  }
-  return node;
-}
-
-export function safeStructuralId(node: UntrustedYamlNode): string {
-  const value = boundedStructuralString([node, 128]);
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(value)) {
-    invalid('structural result identifier is invalid');
-  }
-  return value;
-}
-
-export function positiveStructuralInteger(node: UntrustedYamlNode): number {
-  if (typeof node !== 'number' || !Number.isSafeInteger(node) || node < 1) {
-    invalid('structural result integer is invalid');
-  }
-  return node;
-}
-
-export type BoundedStructuralPaths = readonly [UntrustedYamlNode, number];
-
-export function safeStructuralPaths(
-  input: BoundedStructuralPaths,
-): readonly string[] {
-  const [node, min] = input;
-  const values = requiredStructuralArray([node, min]).map((entry) =>
-    safeStructuralPath(entry),
-  );
-  if (
-    values.length > MAX_EVIDENCE_PATHS ||
-    new Set(values).size !== values.length
-  ) {
-    invalid('structural paths are invalid');
-  }
-  return values;
-}
-
-export function safeStructuralPath(node: UntrustedYamlNode): string {
-  const value = boundedStructuralString([node, 512]);
-  if (
-    value.startsWith('/') ||
-    value.includes('\\') ||
-    value
+export const structuralText = (maximum = 4096) =>
+  z
+    .string(structuralError('structural result string is invalid'))
+    .min(1, 'structural result string is invalid')
+    .max(maximum, 'structural result string is invalid')
+    .refine(
+      (value) => value.trim() !== '',
+      'structural result string is invalid',
+    )
+    .refine(
+      (value) =>
+        !Array.from(value).some((character) => {
+          const code = character.charCodeAt(0);
+          return (
+            code <= 8 ||
+            code === 11 ||
+            code === 12 ||
+            code === 127 ||
+            (code >= 14 && code <= 31)
+          );
+        }),
+      'structural result string is invalid',
+    )
+    .meta({ pattern: '\\S' });
+export const STRUCTURAL_ID = structuralText(128).regex(
+  /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u,
+  'structural result identifier is invalid',
+);
+export const STRUCTURAL_INTEGER = z
+  .int(structuralError('structural result integer is invalid'))
+  .positive('structural result integer is invalid');
+export const STRUCTURAL_PATH = structuralText(512).refine(
+  (value) =>
+    !value.startsWith('/') &&
+    !value.includes('\\') &&
+    !value
       .split('/')
-      .some((segment) => segment === '' || segment === '.' || segment === '..')
-  ) {
-    invalid('structural path is invalid');
-  }
-  return value;
-}
+      .some((segment) => segment === '' || segment === '.' || segment === '..'),
+  'structural path is invalid',
+);
+export const structuralStrings = (minimum = 1) =>
+  z
+    .array(
+      structuralText(),
+      structuralError('structural result array is invalid'),
+    )
+    .min(minimum, 'structural result array is invalid')
+    .max(100, 'structural result array is invalid')
+    .refine(
+      (values) => new Set(values).size === values.length,
+      'structural result strings must be unique',
+    );
+export const structuralPaths = (minimum = 1) =>
+  z
+    .array(
+      STRUCTURAL_PATH,
+      structuralError('structural result array is invalid'),
+    )
+    .min(minimum, 'structural result array is invalid')
+    .max(64, 'structural paths are invalid')
+    .refine(
+      (values) => new Set(values).size === values.length,
+      'structural paths are invalid',
+    );
 
-export function structuralSha(node: UntrustedYamlNode): string {
-  const value = boundedStructuralString([node, 64]);
-  if (!/^[0-9a-f]{64}$/u.test(value)) {
-    invalid('structural projection hash is invalid');
-  }
-  return value;
-}
-
-export type StructuralEnumValue<T extends string> = readonly [
-  UntrustedYamlNode,
-  readonly T[],
-];
-
-export function structuralEnumValue<T extends string>(
-  input: StructuralEnumValue<T>,
-): T {
-  const [node, values] = input;
-  const value = boundedStructuralString([node, 128]);
-  if (!values.includes(value as T)) {
-    invalid('structural closed vocabulary is invalid');
-  }
-  return value as T;
-}
-
-export type UniqueStructuralIds = {
-  readonly ids: readonly string[];
-  readonly label: string;
+type ParseStructuralRequest<T> = {
+  readonly schema: z.ZodType<T>;
+  readonly input: UntrustedYamlNode;
 };
 
-export function assertUniqueStructuralIds(request: UniqueStructuralIds): void {
-  if (new Set(request.ids).size !== request.ids.length) {
-    invalid(`${request.label} identifiers must be unique`);
-  }
-}
-
-function forbiddenControl(value: string): boolean {
-  return Array.from(value).some((character) => {
-    const code = character.charCodeAt(0);
-    return (
-      code === 127 || (code < 32 && code !== 9 && code !== 10 && code !== 13)
+export class StructuralResultCodec {
+  private constructor() {}
+  static decode<T>(request: ParseStructuralRequest<T>): T {
+    const result = request.schema.safeParse(request.input);
+    if (result.success) return result.data;
+    throw new Error(
+      `Invalid workflow structured result: ${result.error.issues.length > 0 ? result.error.issues[0]!.message : missingFields}.`,
     );
-  });
-}
-
-function invalid(detail: string): never {
-  throw new Error(`Invalid workflow structured result: ${detail}.`);
+  }
 }

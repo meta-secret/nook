@@ -6,6 +6,7 @@
 //! Ownership proof for migrating the single-profile compatibility record.
 
 use super::DeviceAccessProfile;
+use nook_core::DeviceCredentialProfile;
 
 pub(super) struct LegacyProfileMembership<'a> {
     pub(super) profile: &'a DeviceAccessProfile,
@@ -16,15 +17,16 @@ impl LegacyProfileMembership<'_> {
     pub(super) fn matches(&self) -> bool {
         let Self { profile, entry } = self;
 
-        let passkey_belongs = profile.passkey.as_ref().is_none_or(|passkey| {
-            entry
+        let passkey_belongs = match &profile.credential {
+            DeviceCredentialProfile::Unrecorded => true,
+            DeviceCredentialProfile::Passkey(passkey) => entry
                 .wrapped_app_key()
                 .credential_id()
                 .is_ok_and(|credential_id| {
                     nook_core::PasskeyAccessProfile::credential_identifier(credential_id.as_ref())
                         == passkey.credential_fingerprint
-                })
-        });
+                }),
+        };
         passkey_belongs
             && profile
                 .verified_vaults
@@ -60,7 +62,7 @@ mod tests {
         );
         let store_id = nook_core::StoreId::generate()?;
         let mut selected_profile = DeviceAccessProfile::default();
-        selected_profile.record_verified_vault_access(
+        selected_profile = selected_profile.record_verified_vault_access(
             &DeviceId::parse(selected.app_id().as_str())?,
             &store_id,
             IsoTimestamp::from_trusted("2026-08-24T01:00:00.000Z".to_owned()),
@@ -74,7 +76,7 @@ mod tests {
         );
 
         let mut companion_profile = DeviceAccessProfile::default();
-        companion_profile.record_verified_vault_access(
+        companion_profile = companion_profile.record_verified_vault_access(
             &DeviceId::parse(companion.app_id().as_str())?,
             &store_id,
             IsoTimestamp::from_trusted("2026-08-24T02:00:00.000Z".to_owned()),

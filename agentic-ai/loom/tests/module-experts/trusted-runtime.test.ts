@@ -1,32 +1,45 @@
+import assert from 'node:assert/strict';
+import { ok, type Result } from 'neverthrow';
+import { type AgentExecutionFailure } from '../../src/agent-workflow/runtime.ts';
 import { randomUUID } from 'node:crypto';
+
 import { existsSync } from 'node:fs';
+
 import { rm } from 'node:fs/promises';
+
 import type { RmOptions } from 'node:fs';
+
 import { join, resolve } from 'node:path';
+
 import { expect, test } from 'bun:test';
+
 import {
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
 } from '../../src/agent-workflow/domain.ts';
+
 import type {
   AgentExecutionCompletion,
   AgentTaskRuntime,
 } from '../../src/agent-workflow/runtime.ts';
+
 import { MODULE_EXPERT_CATALOG } from '../../src/module-experts/catalog.ts';
+
 import type { ModuleExpertInvocationRequest } from '../../src/module-experts/invoke.ts';
-import { verifyModuleExpertParentAuthorization } from '../../src/module-experts/parent-authorization.ts';
+
+import { ModuleExpertParentAuthorization } from '../../src/module-experts/parent-authorization.ts';
+
 import type {
   ModuleExpertChildRequest,
   VerifiedModuleExpertParentAuthorization,
   VerifyModuleExpertParentAuthorizationArgs,
 } from '../../src/module-experts/parent-authorization.ts';
+
 import {
   MODULE_EXPERT_WORKFLOW_VERSION,
-  consumeModuleExpertCompletionAuthority,
-  consumeModuleExpertJournalAuthority,
-  createModuleExpertRuntimeSession,
-  executeModuleExpertAgent,
+  ModuleExpertRuntimeAuthority,
 } from '../../src/module-experts/trusted-runtime.ts';
+
 import type {
   ConsumeModuleExpertCompletionAuthorityArgs,
   ConsumeModuleExpertJournalAuthorityArgs,
@@ -37,14 +50,85 @@ import type {
   ModuleExpertRuntimeSession,
   TrustedModuleExpertExecution,
 } from '../../src/module-experts/trusted-runtime.ts';
-import { createAuthorizedDirectParent } from './invoke-parent-fixture.ts';
-import { moduleExpertEvidenceOutput } from './invoke-parent-fixture.ts';
-import { registerModuleExpertRuntimeMock } from './module-expert-runtime-mock.ts';
+
+import { ModuleExpertsInvokeParentFixtureScenario } from './invoke-parent-fixture.ts';
+
+import { ModuleExpertsModuleExpertRuntimeMockScenario } from './module-expert-runtime-mock.ts';
+
 import type { RegisterModuleExpertRuntimeMockArgs } from './module-expert-runtime-mock.ts';
+
 import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow/agent-attempt-version.ts';
 
+export class ModuleExpertsTrustedRuntimeScenario {
+  private constructor(private readonly request: string) {}
+
+  static async verifiedParentAuthorization(
+    request: ModuleExpertInvocationRequest,
+  ): Promise<VerifiedModuleExpertParentAuthorization> {
+    if (request.parent.kind !== AgentAttemptParentKind.AgentAttempt) {
+      throw new Error('Expected direct parent identity.');
+    }
+    const childRequest: ModuleExpertChildRequest = {
+      runId: request.runId,
+      sourceCommit: request.sourceCommit,
+      task: request.task,
+      expert: request.expert,
+      attempt: request.attempt,
+      depth: request.depth,
+      parent: request.parent,
+    };
+    const verifyArgs: VerifyModuleExpertParentAuthorizationArgs = {
+      runDirectory: ModuleExpertsTrustedRuntimeScenario.processingRunDirectory(
+        request.runId,
+      ),
+      workflowVersion: MODULE_EXPERT_WORKFLOW_VERSION,
+      request: childRequest,
+      expertNames: MODULE_EXPERT_CATALOG.map((profile) => profile.name),
+    };
+    return ModuleExpertParentAuthorization.verifyModuleExpertParentAuthorization(
+      verifyArgs,
+    );
+  }
+
+  static directRequest(runId: string): ModuleExpertInvocationRequest {
+    return new ModuleExpertsTrustedRuntimeScenario(runId).execute();
+  }
+
+  private execute(): ModuleExpertInvocationRequest {
+    const runId = this.request;
+    return {
+      runId,
+      expert: 'core_expert',
+      selectedContextPaths: [],
+      sourceCommit: SOURCE_COMMIT,
+      task: 'inspect-core-contract',
+      attempt: 1,
+      depth: 2,
+      parent: {
+        kind: AgentAttemptParentKind.AgentAttempt,
+        task: 'feature-synthesis',
+        agent: 'delivery-owner',
+        attempt: 1,
+      },
+      instruction: 'Inspect the public core contract without writing files.',
+    };
+  }
+
+  static processingRunDirectory(runId: string): string {
+    return join(
+      REPO_ROOT,
+      'workflow',
+      'processing',
+      DelegatedAgentWorkflowName.AgentWork,
+      runId,
+    );
+  }
+}
+
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
+
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+
 const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
 
 test('uses the current adapter-bearing attempt journal schema', () => {
@@ -60,17 +144,22 @@ type ExtendedModuleExpertInvocationRequest = ModuleExpertInvocationRequest & {
 class TrustedRuntimeCompletion implements AgentTaskRuntime<string, string> {
   executionCount = 0;
 
-  async executeAgent(): Promise<AgentExecutionCompletion> {
+  async executeAgent(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
     this.executionCount += 1;
-    return {
+    return ok({
       threadId: 'trusted-runtime-thread',
-      output: moduleExpertEvidenceOutput(),
-    };
+      output:
+        ModuleExpertsInvokeParentFixtureScenario.moduleExpertEvidenceOutput(),
+    });
   }
 }
 
 test('rejects malformed direct session requests before parent or runtime authority', async () => {
-  const valid = directRequest(`direct-session-invalid-${randomUUID()}`);
+  const valid = ModuleExpertsTrustedRuntimeScenario.directRequest(
+    `direct-session-invalid-${randomUUID()}`,
+  );
   const invalidSource: ModuleExpertInvocationRequest = {
     ...valid,
     sourceCommit: 'main',
@@ -103,11 +192,15 @@ test('rejects malformed direct session requests before parent or runtime authori
       request,
       parentAuthorization: forgedAuthorization,
     };
-    expect(() => createModuleExpertRuntimeSession(createArgs)).toThrow(
-      'request is invalid',
-    );
+    expect(() =>
+      ModuleExpertRuntimeAuthority.createModuleExpertRuntimeSession(createArgs),
+    ).toThrow('request is invalid');
   }
-  expect(existsSync(processingRunDirectory(valid.runId))).toBe(false);
+  expect(
+    existsSync(
+      ModuleExpertsTrustedRuntimeScenario.processingRunDirectory(valid.runId),
+    ),
+  ).toBe(false);
   const forgedSession = {
     kind: 'module-expert-runtime-session',
   } as ModuleExpertRuntimeSession;
@@ -117,22 +210,33 @@ test('rejects malformed direct session requests before parent or runtime authori
     signal: controller.signal,
     observe: async () => {},
   };
-  await expect(executeModuleExpertAgent(executeArgs)).rejects.toThrow(
+  const runtimeFailure1 =
+    await ModuleExpertRuntimeAuthority.executeModuleExpertAgent(executeArgs);
+  assert(runtimeFailure1.isErr());
+  expect(runtimeFailure1.error.message).toContain(
     'runtime session identity is invalid',
   );
 });
 
 test('binds parent, session, journal, and completion authority exactly once', async () => {
-  const request = directRequest(`trusted-authority-${randomUUID()}`);
-  const runDirectory = processingRunDirectory(request.runId);
+  const request = ModuleExpertsTrustedRuntimeScenario.directRequest(
+    `trusted-authority-${randomUUID()}`,
+  );
+  const runDirectory =
+    ModuleExpertsTrustedRuntimeScenario.processingRunDirectory(request.runId);
   const runtime = new TrustedRuntimeCompletion();
   const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
     runId: request.runId,
     runtime,
   };
-  const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
+  const runtimeMock =
+    ModuleExpertsModuleExpertRuntimeMockScenario.registerModuleExpertRuntimeMock(
+      runtimeMockArgs,
+    );
   try {
-    await createAuthorizedDirectParent(request);
+    await ModuleExpertsInvokeParentFixtureScenario.createAuthorizedDirectParent(
+      request,
+    );
     const forgedParentAuthorization = {
       kind: 'verified-module-expert-parent-authorization',
     } as VerifiedModuleExpertParentAuthorization;
@@ -141,10 +245,15 @@ test('binds parent, session, journal, and completion authority exactly once', as
       request,
       parentAuthorization: forgedParentAuthorization,
     };
-    expect(() => createModuleExpertRuntimeSession(forgedParentArgs)).toThrow(
-      'parent authorization failed',
-    );
-    const parentAuthorization = await verifiedParentAuthorization(request);
+    expect(() =>
+      ModuleExpertRuntimeAuthority.createModuleExpertRuntimeSession(
+        forgedParentArgs,
+      ),
+    ).toThrow('parent authorization failed');
+    const parentAuthorization =
+      await ModuleExpertsTrustedRuntimeScenario.verifiedParentAuthorization(
+        request,
+      );
     const reboundRequest: ModuleExpertInvocationRequest = {
       ...request,
       task: 'rebound-child',
@@ -154,19 +263,26 @@ test('binds parent, session, journal, and completion authority exactly once', as
       request: reboundRequest,
       parentAuthorization,
     };
-    expect(() => createModuleExpertRuntimeSession(reboundSessionArgs)).toThrow(
-      'parent authorization failed',
-    );
+    expect(() =>
+      ModuleExpertRuntimeAuthority.createModuleExpertRuntimeSession(
+        reboundSessionArgs,
+      ),
+    ).toThrow('parent authorization failed');
 
     const sessionArgs: CreateModuleExpertRuntimeSessionArgs = {
       repoRoot: REPO_ROOT,
       request,
       parentAuthorization,
     };
-    const created = createModuleExpertRuntimeSession(sessionArgs);
-    expect(() => createModuleExpertRuntimeSession(sessionArgs)).toThrow(
-      'parent authorization failed',
-    );
+    const created =
+      ModuleExpertRuntimeAuthority.createModuleExpertRuntimeSession(
+        sessionArgs,
+      );
+    expect(() =>
+      ModuleExpertRuntimeAuthority.createModuleExpertRuntimeSession(
+        sessionArgs,
+      ),
+    ).toThrow('parent authorization failed');
 
     const reboundIdentity = {
       ...created.identity,
@@ -180,23 +296,32 @@ test('binds parent, session, journal, and completion authority exactly once', as
       identity: created.identity,
     };
     expect(() =>
-      consumeModuleExpertJournalAuthority(forgedJournalArgs),
+      ModuleExpertRuntimeAuthority.consumeModuleExpertJournalAuthority(
+        forgedJournalArgs,
+      ),
     ).toThrow('journal authority is invalid');
     const reboundJournalArgs: ConsumeModuleExpertJournalAuthorityArgs = {
       authority: created.journalAuthority,
       identity: reboundIdentity,
     };
     expect(() =>
-      consumeModuleExpertJournalAuthority(reboundJournalArgs),
+      ModuleExpertRuntimeAuthority.consumeModuleExpertJournalAuthority(
+        reboundJournalArgs,
+      ),
     ).toThrow('journal authority is invalid');
     const journalArgs: ConsumeModuleExpertJournalAuthorityArgs = {
       authority: created.journalAuthority,
       identity: created.identity,
     };
-    const binding = consumeModuleExpertJournalAuthority(journalArgs);
-    expect(() => consumeModuleExpertJournalAuthority(journalArgs)).toThrow(
-      'journal authority is invalid',
-    );
+    const binding =
+      ModuleExpertRuntimeAuthority.consumeModuleExpertJournalAuthority(
+        journalArgs,
+      );
+    expect(() =>
+      ModuleExpertRuntimeAuthority.consumeModuleExpertJournalAuthority(
+        journalArgs,
+      ),
+    ).toThrow('journal authority is invalid');
 
     const forgedCompletionAuthority = {
       kind: 'module-expert-completion-authority',
@@ -204,7 +329,8 @@ test('binds parent, session, journal, and completion authority exactly once', as
     const forgedExecution: TrustedModuleExpertExecution = {
       completion: {
         threadId: 'forged-thread',
-        output: moduleExpertEvidenceOutput(),
+        output:
+          ModuleExpertsInvokeParentFixtureScenario.moduleExpertEvidenceOutput(),
       },
       authority: forgedCompletionAuthority,
     };
@@ -214,7 +340,9 @@ test('binds parent, session, journal, and completion authority exactly once', as
       terminalCompletion: forgedExecution.completion,
     };
     expect(() =>
-      consumeModuleExpertCompletionAuthority(forgedCompletionArgs),
+      ModuleExpertRuntimeAuthority.consumeModuleExpertCompletionAuthority(
+        forgedCompletionArgs,
+      ),
     ).toThrow('completion authority is invalid');
 
     const controller = new AbortController();
@@ -223,11 +351,17 @@ test('binds parent, session, journal, and completion authority exactly once', as
       signal: controller.signal,
       observe: async () => {},
     };
-    const executionPromise = executeModuleExpertAgent(executeArgs);
-    await expect(executeModuleExpertAgent(executeArgs)).rejects.toThrow(
+    const executionPromise =
+      ModuleExpertRuntimeAuthority.executeModuleExpertAgent(executeArgs);
+    const runtimeFailure2 =
+      await ModuleExpertRuntimeAuthority.executeModuleExpertAgent(executeArgs);
+    assert(runtimeFailure2.isErr());
+    expect(runtimeFailure2.error.message).toContain(
       'runtime session identity is invalid',
     );
-    const execution = await executionPromise;
+    const executionResult = await executionPromise;
+    assert(executionResult.isOk());
+    const execution = executionResult.value;
     expect(runtime.executionCount).toBe(1);
 
     const reboundCompletion: AgentExecutionCompletion = {
@@ -240,72 +374,25 @@ test('binds parent, session, journal, and completion authority exactly once', as
       terminalCompletion: reboundCompletion,
     };
     expect(() =>
-      consumeModuleExpertCompletionAuthority(reboundCompletionArgs),
+      ModuleExpertRuntimeAuthority.consumeModuleExpertCompletionAuthority(
+        reboundCompletionArgs,
+      ),
     ).toThrow('completion authority is invalid');
     const completionArgs: ConsumeModuleExpertCompletionAuthorityArgs = {
       binding,
       execution,
       terminalCompletion: execution.completion,
     };
-    consumeModuleExpertCompletionAuthority(completionArgs);
+    ModuleExpertRuntimeAuthority.consumeModuleExpertCompletionAuthority(
+      completionArgs,
+    );
     expect(() =>
-      consumeModuleExpertCompletionAuthority(completionArgs),
+      ModuleExpertRuntimeAuthority.consumeModuleExpertCompletionAuthority(
+        completionArgs,
+      ),
     ).toThrow('completion authority is invalid');
   } finally {
     runtimeMock.dispose();
     await rm(runDirectory, REMOVE_RECURSIVELY);
   }
 });
-
-async function verifiedParentAuthorization(
-  request: ModuleExpertInvocationRequest,
-): Promise<VerifiedModuleExpertParentAuthorization> {
-  if (request.parent.kind !== AgentAttemptParentKind.AgentAttempt) {
-    throw new Error('Expected direct parent identity.');
-  }
-  const childRequest: ModuleExpertChildRequest = {
-    runId: request.runId,
-    sourceCommit: request.sourceCommit,
-    task: request.task,
-    expert: request.expert,
-    attempt: request.attempt,
-    depth: request.depth,
-    parent: request.parent,
-  };
-  const verifyArgs: VerifyModuleExpertParentAuthorizationArgs = {
-    runDirectory: processingRunDirectory(request.runId),
-    workflowVersion: MODULE_EXPERT_WORKFLOW_VERSION,
-    request: childRequest,
-    expertNames: MODULE_EXPERT_CATALOG.map((profile) => profile.name),
-  };
-  return verifyModuleExpertParentAuthorization(verifyArgs);
-}
-
-function directRequest(runId: string): ModuleExpertInvocationRequest {
-  return {
-    runId,
-    expert: 'core_expert',
-    selectedContextPaths: [],
-    sourceCommit: SOURCE_COMMIT,
-    task: 'inspect-core-contract',
-    attempt: 1,
-    depth: 2,
-    parent: {
-      kind: AgentAttemptParentKind.AgentAttempt,
-      task: 'feature-synthesis',
-      agent: 'delivery-owner',
-      attempt: 1,
-    },
-    instruction: 'Inspect the public core contract without writing files.',
-  };
-}
-
-function processingRunDirectory(runId: string): string {
-  return join(
-    REPO_ROOT,
-    'workflow',
-    'processing',
-    DelegatedAgentWorkflowName.AgentWork,
-    runId,
-  );
-}

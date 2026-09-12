@@ -95,9 +95,9 @@ impl OtpParameters {
             MigrationSecretBytes {
                 bytes: &secret_bytes,
             }
-            .base32(),
+            .base32()?,
         );
-        let mut authenticator = AuthenticatorSecret {
+        let authenticator = AuthenticatorSecret {
             issuer,
             account,
             website_url: String::new(),
@@ -108,10 +108,9 @@ impl OtpParameters {
             period: TotpPeriod::try_from(30).map_err(|_| OtpParameterError::Unsupported)?,
             backup_codes: Vec::new(),
         };
-        authenticator
+        let authenticator = authenticator
             .apply_inferred_website_url_if_empty()
-            .map_err(OtpParameterError::IssuerCatalog)?;
-        authenticator
+            .map_err(OtpParameterError::IssuerCatalog)?
             .normalize()
             .map_err(|_| OtpParameterError::Unsupported)?;
         Ok(SecretValue::Authenticator(authenticator))
@@ -127,7 +126,7 @@ struct MigrationSecretBytes<'a> {
     bytes: &'a [u8],
 }
 impl MigrationSecretBytes<'_> {
-    fn base32(&self) -> String {
+    fn base32(&self) -> Result<String, OtpParameterError> {
         const ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
         let mut output = String::with_capacity(self.bytes.len().div_ceil(5) * 8);
         let mut buffer = 0_u16;
@@ -137,15 +136,23 @@ impl MigrationSecretBytes<'_> {
             bits += 8;
             while bits >= 5 {
                 bits -= 5;
-                output.push(char::from(ALPHABET[usize::from((buffer >> bits) & 0x1f)]));
+                let index = usize::from((buffer >> bits) & 0x1f);
+                let symbol = ALPHABET
+                    .get(index)
+                    .copied()
+                    .ok_or(OtpParameterError::Unsupported)?;
+                output.push(char::from(symbol));
             }
         }
         if bits > 0 {
-            output.push(char::from(
-                ALPHABET[usize::from((buffer << (5 - bits)) & 0x1f)],
-            ));
+            let index = usize::from((buffer << (5 - bits)) & 0x1f);
+            let symbol = ALPHABET
+                .get(index)
+                .copied()
+                .ok_or(OtpParameterError::Unsupported)?;
+            output.push(char::from(symbol));
         }
-        output
+        Ok(output)
     }
 }
 struct MigrationAccountLabel<'a> {
@@ -193,7 +200,10 @@ mod tests {
             (b"fooba".as_slice(), "MZXW6YTB"),
             (b"foobar".as_slice(), "MZXW6YTBOI"),
         ] {
-            assert_eq!(MigrationSecretBytes { bytes }.base32(), expected);
+            assert_eq!(
+                MigrationSecretBytes { bytes }.base32(),
+                Ok(expected.to_owned())
+            );
         }
     }
 

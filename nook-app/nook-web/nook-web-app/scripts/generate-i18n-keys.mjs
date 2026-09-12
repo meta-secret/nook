@@ -30,10 +30,6 @@ const obsoleteRustOutputs = [
     'nook-app/nook-platform/nook-auth2/src/generated/i18n_keys.rs',
   ),
 ]
-const landingMessagesPath = resolve(
-  repositoryRoot,
-  'nook-app/nook-web/nook-web-app/src/landing/messages.js',
-)
 const landingOutput = resolve(
   repositoryRoot,
   'nook-app/nook-web/nook-web-app/src/landing/generated-message-keys.ts',
@@ -44,6 +40,18 @@ const browserMessageKeysPath = resolve(
 )
 const checkOnly = process.argv.includes('--check')
 
+/** @typedef {Record<string, string>} CatalogBranch3 */
+/** @typedef {Record<string, string | CatalogBranch3>} CatalogBranch2 */
+/** @typedef {Record<string, string | CatalogBranch2>} CatalogBranch1 */
+/** @typedef {string | CatalogBranch1 | CatalogBranch2 | CatalogBranch3} CatalogNode */
+/** @typedef {Record<string, string | CatalogBranch1>} Catalog */
+/** @typedef {Catalog | CatalogBranch1 | CatalogBranch2 | CatalogBranch3} CatalogTree */
+
+/**
+ * @param {CatalogTree} value
+ * @param {string[]} prefix
+ * @param {string[]} entries
+ */
 function flattenCatalog(value, prefix = [], entries = []) {
   for (const [segment, child] of Object.entries(value)) {
     const path = [...prefix, segment]
@@ -58,35 +66,68 @@ function flattenCatalog(value, prefix = [], entries = []) {
   return entries
 }
 
+/** @param {string} key */
 function words(key) {
   return key.split(/[^A-Za-z0-9]+/).filter(Boolean)
 }
 
+/** @param {string} key */
 function typescriptName(key) {
   return words(key)
-    .map((word) => `${word[0].toUpperCase()}${word.slice(1)}`)
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
     .join('')
 }
 
+/** @param {string} key */
 function rustName(key) {
   return words(key)
     .map((word) => word.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase())
     .join('_')
 }
 
+/** @param {string} value */
 function typescriptString(value) {
   return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
 }
 
+/** @param {string} value */
+function camelCase(value) {
+  const segments = value.split('_')
+  return (
+    segments[0] +
+    segments
+      .slice(1)
+      .map((segment) => `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`)
+      .join('')
+  )
+}
+
+/** @param {Catalog} catalog @param {string} key */
 function catalogValue(catalog, key) {
+  /** @type {Catalog | CatalogNode} */
   let value = catalog
-  for (const segment of key.split('.')) value = value?.[segment]
+  for (const segment of key.split('.')) {
+    if (typeof value === 'string')
+      throw new Error(`bootstrap translation ${key} traverses a string`)
+    /** @type {[string, CatalogNode] | false} */
+    let entry = false
+    for (const candidate of Object.entries(value)) {
+      if (candidate[0] !== segment) continue
+      entry = candidate
+      break
+    }
+    if (!entry) throw new Error(`bootstrap translation ${key} is missing`)
+    /** @type {CatalogNode} */
+    const nextCatalogValue = entry[1]
+    value = nextCatalogValue
+  }
   if (typeof value !== 'string') {
     throw new Error(`bootstrap translation ${key} must be a string`)
   }
   return value
 }
 
+/** @param {Record<string, Catalog>} catalogs */
 function bootstrapMessagesSource(catalogs) {
   const fields = {
     loading: 'onboarding.loading_engine',
@@ -111,7 +152,9 @@ function bootstrapMessagesSource(catalogs) {
   ].join('\n')
 }
 
+/** @param {string[]} keys @param {(key: string) => string} naming @param {string} language */
 function validateNames(keys, naming, language) {
+  /** @type {Map<string, string>} */
   const owners = new Map()
   for (const key of keys) {
     const name = naming(key)
@@ -124,6 +167,7 @@ function validateNames(keys, naming, language) {
   }
 }
 
+/** @param {string[]} keys */
 function typescriptSource(keys) {
   const importPrefixes = [
     'apple_passwords_import',
@@ -147,6 +191,7 @@ function typescriptSource(keys) {
     'result_imported',
     'result_skipped',
   ]
+  /** @type {Record<string, string>} */
   const importGroupNames = {
     apple_passwords_import: 'ApplePasswords',
     chrome_passwords_import: 'ChromePasswords',
@@ -161,7 +206,7 @@ function typescriptSource(keys) {
     `  ${importGroupNames[prefix]}: {`,
     ...importSuffixes.map(
       (suffix) =>
-        `    ${suffix.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())}: I18N_KEYS.${typescriptName(`${prefix}.${suffix}`)},`,
+        `    ${camelCase(suffix)}: I18N_KEYS.${typescriptName(`${prefix}.${suffix}`)},`,
     ),
     '  },',
   ])
@@ -181,10 +226,7 @@ function typescriptSource(keys) {
     'export type I18nTranslator = (request: I18nTranslationRequest) => string',
     '',
     'export type PasswordImportMessageKeys = {',
-    ...importSuffixes.map(
-      (suffix) =>
-        `  ${suffix.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())}: I18nKey`,
-    ),
+    ...importSuffixes.map((suffix) => `  ${camelCase(suffix)}: I18nKey`),
     '}',
     '',
     'export const PASSWORD_IMPORT_MESSAGE_KEYS = {',
@@ -194,6 +236,7 @@ function typescriptSource(keys) {
   ].join('\n')
 }
 
+/** @param {string[]} keys */
 function landingTypescriptSource(keys) {
   return [
     '// @generated by scripts/generate-i18n-keys.mjs; do not edit.',
@@ -208,6 +251,7 @@ function landingTypescriptSource(keys) {
   ].join('\n')
 }
 
+/** @param {string[]} keys */
 function rustSource(keys) {
   const declarations = keys.map((key) => {
     const declaration = `pub const ${rustName(key)}: &str = ${JSON.stringify(key)};`
@@ -223,12 +267,32 @@ function rustSource(keys) {
   ].join('\n')
 }
 
+/** @param {string} locale @returns {Promise<Catalog>} */
 async function readCatalog(locale) {
-  return JSON.parse(
+  /** @type {unknown} */
+  const parsed = JSON.parse(
     await readFile(resolve(localeDirectory, `${locale}.json`), 'utf8'),
   )
+  if (!isCatalog(parsed)) {
+    throw new Error(`locale ${locale} must contain a catalog object`)
+  }
+  return parsed
 }
 
+/** @param {unknown} value @returns {value is Catalog} */
+function isCatalog(value) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false
+  }
+  for (const key of Object.keys(value)) {
+    /** @type {unknown} */
+    const child = Reflect.get(value, key)
+    if (typeof child !== 'string' && !isCatalog(child)) return false
+  }
+  return true
+}
+
+/** @param {string[]} englishKeys @param {string[]} russianKeys */
 function compareCatalogKeys(englishKeys, russianKeys) {
   const english = new Set(englishKeys)
   const russian = new Set(russianKeys)
@@ -241,6 +305,7 @@ function compareCatalogKeys(englishKeys, russianKeys) {
   }
 }
 
+/** @param {string} path @param {string} expected */
 async function verifyOutput(path, expected) {
   let actual = ''
   try {
@@ -272,6 +337,7 @@ const excludedDirectories = new Set([
   'target',
 ])
 
+/** @param {string} directory @param {string[]} files */
 async function sourceFiles(directory, files = []) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (entry.isDirectory() && excludedDirectories.has(entry.name)) continue
@@ -283,15 +349,18 @@ async function sourceFiles(directory, files = []) {
   return files
 }
 
+/** @param {string} source */
 function literalValues(source) {
   const values = []
   const pattern = /(['"])((?:\\.|(?!\1).)*)\1/g
   for (const match of source.matchAll(pattern)) {
-    if (!match[2].includes('\\')) values.push(match[2])
+    const value = match[2]
+    if (value && !value.includes('\\')) values.push(value)
   }
   return values
 }
 
+/** @param {string[]} keys */
 async function verifyNoRawCanonicalKeys(keys) {
   const canonical = new Set(keys)
   const allowed = new Set([generatorPath, typescriptOutput, rustOutput])
@@ -321,7 +390,12 @@ async function verifyNoObsoleteRustKeyRegistries() {
       await readFile(path, 'utf8')
       violations.push(relative(repositoryRoot, path))
     } catch (error) {
-      if (error?.code !== 'ENOENT') throw error
+      if (
+        !(error instanceof Error) ||
+        !('code' in error) ||
+        error.code !== 'ENOENT'
+      )
+        throw error
     }
   }
   if (violations.length) {
@@ -383,11 +457,7 @@ async function verifyNoRawBrowserMessageKeys() {
 }
 
 async function landingKeys() {
-  const source = await readFile(landingMessagesPath, 'utf8')
-  const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
-  // The URL contains only the local translation catalog read immediately above.
-  // eslint-disable-next-line no-unsanitized/method
-  const { landingMessages } = await import(moduleUrl)
+  const { landingMessages } = await import('../src/landing/messages.js')
   const englishKeys = Object.keys(landingMessages.en).sort()
   const russianKeys = Object.keys(landingMessages.ru).sort()
   compareCatalogKeys(englishKeys, russianKeys)

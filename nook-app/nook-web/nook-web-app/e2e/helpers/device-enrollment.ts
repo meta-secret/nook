@@ -1,11 +1,16 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Page, type TestInfo } from '@playwright/test'
+import { ProviderSyncFreshness } from '$app-wasm'
 import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import {
   assertJoinPendingYaml,
   joinCountFromYaml,
   parseVaultYamlSnapshot,
 } from '../vault-yaml'
-import { dumpNookLogs } from './app-logs'
+import {
+  NookAppLogAttachmentName,
+  attachNookLogsForTest,
+  dumpNookLogs,
+} from './app-logs'
 import {
   DEFAULT_GITHUB_REPO,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -14,13 +19,17 @@ import {
   configuredGithubSyncTimeoutMs,
 } from './environment'
 import {
-  GithubE2eTarget,
   assertNoVaultErrors,
   triggerVaultSyncRefresh,
+  type GithubE2eTarget,
+  type VaultEventLogRemote,
   waitForGithubVaultState,
   waitForSyncRemoteVaultState,
 } from './github-sync'
-import { E2eOauthFileStub, createLocalE2eGithubVaultStub } from './local-sync'
+import {
+  createLocalE2eGithubVaultStub,
+  type E2eOauthFileStub,
+} from './local-sync'
 import {
   assertEnrolledVaultOnGithub,
   assertGenesisVaultOnGithub,
@@ -44,6 +53,21 @@ import {
   waitForVaultOperationsIdle,
 } from './vault-runtime'
 import { createLocalVaultOnLogin } from './vault-setup'
+import {
+  refreshJoinerVaultOnLoginGateIfIdle,
+  RefreshJoinerVaultOnLoginGateOutcome,
+} from './joiner-vault-refresh'
+import {
+  AuthenticatedWorkspaceObservation,
+  AuthenticatedWorkspaceState,
+  type AuthenticatedWorkspaceVisibility,
+} from './authenticated-workspace'
+import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
+import {
+  E2eSyncProviderId,
+  installSyncRemote,
+  type SyncE2eTarget,
+} from '../sync-provider'
 
 export async function expectEmptyLocalFolderRejected(
   page: Page,
@@ -70,7 +94,8 @@ export async function connectGithubVault(
   repoName = DEFAULT_GITHUB_REPO,
   stub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
 ) {
-  const target = { pat, repoName, stub }
+  const target: GithubE2eTarget = { pat, repoName }
+  if (stub) target.stub = stub
   if (stub) {
     await stub.install(page, { repoName })
   }
@@ -181,7 +206,8 @@ export async function connectGithubJoinerDevice(
   repoName: string,
   stub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
 ) {
-  const target = { pat, repoName, stub }
+  const target: GithubE2eTarget = { pat, repoName }
+  if (stub) target.stub = stub
   await assertGenesisVaultOnGithub(target)
   if (stub) {
     await stub.install(page, { repoName })
@@ -199,14 +225,16 @@ export async function sendJoinRequest(
   page: Page,
   pat: string,
   repoName: string,
-  stub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
+  stub?: VaultEventLogRemote,
 ) {
   await page.getByTestId('join-enrollment-confirm').click()
   await waitForVaultOperationsIdle(page)
   await waitForStorageChainIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
 
+  const target: GithubE2eTarget = { pat, repoName }
+  if (stub) target.stub = stub
   const snapshot = await waitForGithubVaultState(
-    { pat, repoName, stub },
+    target,
     (yaml) => yaml.joinEntries.length >= 1 || joinCountFromYaml(yaml.raw) >= 1,
     { page, timeoutMs: GITHUB_CONNECT_TIMEOUT_MS },
   )
@@ -237,24 +265,14 @@ export async function waitForPendingJoinBanner(page: Page, deviceId?: string) {
       async () => {
         await dismissSyncConflictIfVisible(page)
         await page.evaluate(async () => {
-          const vault = (
-            window as Window & {
-              __nookVault?: {
-                refreshPendingJoinsFromProviders?: () => Promise<void>
-              }
-            }
-          ).__nookVault
+          const vault = window.__nookVault
           await vault?.refreshPendingJoinsFromProviders?.()
         })
         try {
           await triggerVaultSyncRefresh(page)
         } catch {
           await page.evaluate(async () => {
-            const vault = (
-              window as Window & {
-                __nookVault?: { manualSync?: () => Promise<void> }
-              }
-            ).__nookVault
+            const vault = window.__nookVault
             await vault?.manualSync?.()
           })
         }
@@ -269,11 +287,7 @@ export async function waitForPendingJoinBanner(page: Page, deviceId?: string) {
           return true
         }
         const pending = await page.evaluate(() => {
-          const vault = (
-            window as Window & {
-              __nookVault?: { pendingJoins?: unknown[] }
-            }
-          ).__nookVault
+          const vault = window.__nookVault
           return ((v) => (v ? v : 0))(vault?.pendingJoins?.length)
         })
         return pending > 0
@@ -323,13 +337,7 @@ export async function waitForPendingJoinInSettings(
     .poll(
       async () => {
         await page.evaluate(async () => {
-          const vault = (
-            window as Window & {
-              __nookVault?: {
-                refreshPendingJoinsFromProviders?: () => Promise<void>
-              }
-            }
-          ).__nookVault
+          const vault = window.__nookVault
           await vault?.refreshPendingJoinsFromProviders?.()
         })
         if (await row.isVisible()) return true
@@ -356,33 +364,29 @@ export async function dismissJoinEnrollmentDialog(page: Page) {
 
 export /** Pull remote vault state on the login gate (joiner waiting for / after approval). */
 async function refreshGithubVaultOnLoginGate(page: Page) {
-  await page.evaluate(async () => {
-    const vault = (
-      window as Window & {
-        __nookVault?: {
-          syncFromStorage?: (opts?: { force?: boolean }) => Promise<void>
-        }
-      }
-    ).__nookVault
-    await vault?.syncFromStorage?.({ force: true })
+  await page.evaluate(refreshJoinerVaultOnLoginGateIfIdle, {
+    freshness: ProviderSyncFreshness.Forced,
+    authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
+    refreshedOutcome: RefreshJoinerVaultOnLoginGateOutcome.Refreshed,
   })
-  await waitForVaultOperationsIdle(page)
 }
 
-export type JoinerVaultReadyTarget = {
-  pat: string
-  repoName: string
-  providerId?: string
-  stub?: {
-    install: (page: Page, opts: Record<string, unknown>) => Promise<void>
-  }
+export type JoinerVaultReadyTarget = SyncE2eTarget
+
+export function isJoinerVaultReady(
+  visibility: AuthenticatedWorkspaceVisibility,
+): boolean {
+  return (
+    new AuthenticatedWorkspaceObservation(visibility).state() ===
+    AuthenticatedWorkspaceState.Unlocked
+  )
 }
 
 export function isOauthFileJoinerTarget(target: JoinerVaultReadyTarget) {
   return (
-    target.providerId === 'file' ||
-    target.providerId === 'local' ||
-    target.providerId === 'google-drive'
+    target.providerId === E2eSyncProviderId.File ||
+    target.providerId === E2eSyncProviderId.Local ||
+    target.providerId === E2eSyncProviderId.GoogleDrive
   )
 }
 
@@ -390,16 +394,13 @@ export async function tryGithubVaultConnect(
   page: Page,
   target: JoinerVaultReadyTarget,
 ) {
-  await refreshGithubVaultOnLoginGate(page)
   await dismissSyncConflictIfVisible(page)
   await dismissJoinEnrollmentDialog(page)
 
   const quickConnect = page.getByTestId('connect-provider-btn').first()
   if (await quickConnect.isVisible()) {
-    if (await quickConnect.isEnabled()) {
-      await quickConnect.click()
-      await waitForVaultOperationsIdle(page)
-    }
+    await quickConnect.click()
+    await waitForVaultOperationsIdle(page)
     return
   }
   if (await page.getByTestId('login-provider-setup').isVisible()) {
@@ -424,16 +425,13 @@ export async function tryOauthFileVaultConnect(
   page: Page,
   target: JoinerVaultReadyTarget,
 ) {
-  await refreshGithubVaultOnLoginGate(page)
   await dismissSyncConflictIfVisible(page)
   await dismissJoinEnrollmentDialog(page)
 
   const quickConnect = page.getByTestId('connect-provider-btn').first()
   if (await quickConnect.isVisible()) {
-    if (await quickConnect.isEnabled()) {
-      await quickConnect.click()
-      await waitForVaultOperationsIdle(page)
-    }
+    await quickConnect.click()
+    await waitForVaultOperationsIdle(page)
     return
   }
 
@@ -476,18 +474,18 @@ export async function keepVaultIdleLockDisabled(page: Page) {
   })
 }
 
-export async function waitForJoinerVaultReady(
-  page: Page,
-  target: JoinerVaultReadyTarget,
-) {
-  if (target.stub) {
-    await target.stub.install(
-      page,
-      isOauthFileJoinerTarget(target)
-        ? { fileName: target.repoName }
-        : { repoName: target.repoName },
-    )
-  }
+type WaitForJoinerVaultReadyRequest = {
+  readonly page: Page
+  readonly target: JoinerVaultReadyTarget
+  readonly testInfo: TestInfo
+}
+
+export async function waitForJoinerVaultReady({
+  page,
+  target,
+  testInfo,
+}: WaitForJoinerVaultReadyRequest) {
+  await installSyncRemote(page, target)
   if (isOauthFileJoinerTarget(target)) {
     await installGoogleOAuthMock(page, target.pat)
   }
@@ -499,23 +497,28 @@ export async function waitForJoinerVaultReady(
           await refreshGithubVaultOnLoginGate(page)
           await dismissSyncConflictIfVisible(page)
           await dismissJoinEnrollmentDialog(page)
-          if (
-            (await page.getByTestId('vault-panel').isVisible()) ||
-            (await page.getByTestId('secret-row').count()) > 0
-          ) {
-            return true
-          }
+          const isWorkspaceReady = async () =>
+            isJoinerVaultReady({
+              authenticatedShellVisible: await page
+                .getByTestId('authenticated-shell')
+                .isVisible(),
+              loginGateVisible: await page
+                .getByTestId('login-gate')
+                .isVisible(),
+            })
+          if (await isWorkspaceReady()) return true
           await tryJoinerVaultConnect(page, target)
-          return (
-            (await page.getByTestId('vault-panel').isVisible()) ||
-            (await page.getByTestId('secret-row').count()) > 0
-          )
+          return await isWorkspaceReady()
         },
         { timeout: GITHUB_CONNECT_TIMEOUT_MS },
       )
       .toBe(true)
   } catch (error) {
     await dumpNookLogs(page, 'waitForJoinerVaultReady')
+    await attachNookLogsForTest(page, testInfo, {
+      attachmentName: NookAppLogAttachmentName.Joiner,
+      print: true,
+    })
     throw error
   }
   await disableVaultIdleLock(page)

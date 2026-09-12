@@ -1,5 +1,5 @@
-use super::repository_root;
-use std::collections::BTreeSet;
+use super::RepositoryFixture;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -44,10 +44,8 @@ fn collect_behavior_specs(
 }
 
 fn manifest_specs(manifest_path: PathBuf) -> anyhow::Result<BTreeSet<String>> {
-    let manifest: serde_json::Value = serde_json::from_str(&fs::read_to_string(manifest_path)?)?;
-    let gates = manifest
-        .as_object()
-        .ok_or_else(|| anyhow::anyhow!("Playwright gate manifest must be a JSON object"))?;
+    let gates: BTreeMap<String, Vec<String>> =
+        serde_json::from_str(&fs::read_to_string(manifest_path)?)?;
     let expected_gates = BTreeSet::from(["isolation", "manual", "stable", "unstable"]);
     let actual_gates = gates.keys().map(String::as_str).collect::<BTreeSet<_>>();
     anyhow::ensure!(
@@ -56,16 +54,10 @@ fn manifest_specs(manifest_path: PathBuf) -> anyhow::Result<BTreeSet<String>> {
     );
 
     let mut specs = BTreeSet::new();
-    for (gate, entries) in gates {
-        let entries = entries
-            .as_array()
-            .ok_or_else(|| anyhow::anyhow!("Playwright gate {gate} must be an array"))?;
-        for entry in entries {
-            let spec = entry.as_str().ok_or_else(|| {
-                anyhow::anyhow!("Playwright gate {gate} contains a non-string entry")
-            })?;
+    for entries in gates.into_values() {
+        for spec in entries {
             anyhow::ensure!(
-                specs.insert(spec.to_owned()),
+                specs.insert(spec.clone()),
                 "Playwright behavior spec {spec} belongs to more than one gate"
             );
         }
@@ -75,7 +67,7 @@ fn manifest_specs(manifest_path: PathBuf) -> anyhow::Result<BTreeSet<String>> {
 
 #[test]
 fn every_nook_web_app_behavior_spec_belongs_to_exactly_one_gate() -> anyhow::Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     let e2e_directory = root.join("nook-app/nook-web/nook-web-app/e2e");
     let mut discovered = BTreeSet::new();
     collect_behavior_specs(&e2e_directory, &e2e_directory, &mut discovered)?;

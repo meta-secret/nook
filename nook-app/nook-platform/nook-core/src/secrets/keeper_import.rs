@@ -8,6 +8,7 @@ mod columns;
 mod records;
 use super::import_support::{CsvImportConversion, CsvImportReader, MAX_CSV_BYTES};
 use crate::SecretValue;
+use crate::secrets::import_support::ImportItemDisposition;
 use columns::{KeeperColumns, KeeperHeaders};
 use csv::StringRecord;
 use records::KeeperRecord;
@@ -71,8 +72,10 @@ impl<'a> KeeperCsvInput<'a> {
         if self.text.len() > MAX_CSV_BYTES {
             return Err(KeeperImportError::CsvTooLarge);
         }
-        let mut reader = CsvImportReader::new(self.text);
-        let columns = KeeperHeaders::new(reader.headers()?).admit()?;
+        let reader = CsvImportReader::new(self.text);
+        let read = reader.headers()?;
+        let reader = read.reader;
+        let columns = KeeperHeaders::new(&read.headers).admit()?;
         Ok(CheckedKeeperCsv { reader, columns })
     }
 }
@@ -94,8 +97,8 @@ impl CheckedKeeperCsv<'_> {
             })
             .convert()
             {
-                Some(item) => (vec![item], 0),
-                None => (Vec::new(), 1),
+                ImportItemDisposition::Imported(item) => (vec![item], 0),
+                ImportItemDisposition::Skipped(_) => (Vec::new(), 1),
             },
         })?;
         Ok(KeeperImportPlan {
@@ -169,7 +172,10 @@ mod tests {
         assert_eq!(usize::from(plan.source_count), 2);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a login")),
             SecretValue::Login(LoginSecret {
                 website_url: "https://github.com/login".to_owned(),
                 username: "alice".to_owned(),
@@ -183,7 +189,10 @@ mod tests {
             })
         );
         assert_eq!(
-            plan.items[1],
+            *plan
+                .items
+                .get(1)
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Recovery".to_owned(),
                 note: "# Offline note\n\n## Keeper\n- folder: Personal\n- shared folder: Team"
@@ -207,7 +216,10 @@ mod tests {
         assert_eq!(usize::from(plan.skipped_unsupported), 1);
         assert_eq!(plan.items.len(), 2);
         assert_eq!(
-            plan.items[0],
+            *plan
+                .items
+                .first()
+                .unwrap_or_else(|| panic!("import fixture must contain a login")),
             SecretValue::Login(LoginSecret {
                 website_url: "Router".to_owned(),
                 username: "admin".to_owned(),
@@ -221,7 +233,10 @@ mod tests {
             })
         );
         assert_eq!(
-            plan.items[1],
+            *plan
+                .items
+                .get(1)
+                .unwrap_or_else(|| panic!("import fixture must contain a note")),
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "Wi-Fi memo".to_owned(),
                 note: "Guest network details\n\n## Keeper\n- field.$type: general".to_owned(),

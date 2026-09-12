@@ -1,88 +1,5 @@
-use async_trait::async_trait;
-
-use crate::model::{
-    ActivityLease, AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact,
-    EnqueueTask, LeaseToken, TaskActivity, TaskId,
-};
-
-#[async_trait]
-pub trait TaskStore: Clone + Send + Sync + 'static {
-    async fn migrate(&self) -> crate::HiveResult<()>;
-
-    async fn register_agent(&self, agent_id: &AgentId, pod_name: &str) -> crate::HiveResult<()>;
-
-    async fn enqueue(&self, task: &EnqueueTask) -> crate::HiveResult<()>;
-
-    async fn active_delivery(
-        &self,
-        source_commit: &str,
-        kind: &str,
-    ) -> crate::HiveResult<Option<TaskId>>;
-
-    async fn cancel(&self, task_id: &TaskId, reason: &str) -> crate::HiveResult<bool>;
-
-    async fn cancellation_targets(
-        &self,
-        task_id: &TaskId,
-    ) -> crate::HiveResult<Vec<CancellationTarget>>;
-
-    async fn finalize_cancellation(&self, task_id: &TaskId) -> crate::HiveResult<bool>;
-
-    async fn acknowledge_cancellation(
-        &self,
-        task: &ClaimedTask,
-        agent_id: &AgentId,
-    ) -> crate::HiveResult<bool>;
-
-    async fn claim(
-        &self,
-        agent_id: &AgentId,
-        lease_seconds: i64,
-    ) -> crate::HiveResult<ClaimOutcome>;
-
-    async fn heartbeat(
-        &self,
-        task_id: &TaskId,
-        agent_id: &AgentId,
-        lease_token: &LeaseToken,
-        lease_seconds: i64,
-    ) -> crate::HiveResult<bool>;
-
-    async fn record_activity(
-        &self,
-        _lease: &ActivityLease,
-        _agent_id: &AgentId,
-        _activity: &TaskActivity,
-    ) -> crate::HiveResult<bool> {
-        Ok(false)
-    }
-
-    async fn release(&self, task: &ClaimedTask, agent_id: &AgentId) -> crate::HiveResult<bool>;
-
-    async fn complete(
-        &self,
-        task: &ClaimedTask,
-        agent_id: &AgentId,
-        obsolete: bool,
-        summary: &str,
-        artifact: &CompletionArtifact,
-    ) -> crate::HiveResult<bool>;
-
-    async fn fail(
-        &self,
-        task: &ClaimedTask,
-        agent_id: &AgentId,
-        error: &str,
-    ) -> crate::HiveResult<bool>;
-
-    async fn block(
-        &self,
-        task: &ClaimedTask,
-        agent_id: &AgentId,
-        blocker: &EnqueueTask,
-        reason: &str,
-    ) -> crate::HiveResult<bool>;
-}
+mod contract;
+pub use contract::TaskStore;
 
 #[cfg(test)]
 pub(crate) mod tests {
@@ -90,24 +7,45 @@ pub(crate) mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
-    use crate::HiveContext;
     use async_trait::async_trait;
     use uuid::Uuid;
 
     use super::TaskStore;
     use crate::model::{
-        ActivityLease, AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
-        CompletionArtifact, EnqueueTask, LeaseToken, TaskActivity, TaskId, TaskTrigger,
+        ActiveDelivery, ActiveDeliveryQuery, ActivityLease, AgentId, AttemptId, CancellationTarget,
+        ClaimOutcome, ClaimedTask, Completion, CompletionArtifact, CompletionRelevance,
+        EnqueueTask, LeaseToken, TaskActivity, TaskId, TaskKind, TaskTrigger,
     };
 
+    #[derive(Debug, Clone)]
+    enum TestLease {
+        Unleased,
+        Leased { token: LeaseToken, until: Instant },
+    }
+    impl TestLease {
+        fn owns(&self, candidate: &LeaseToken) -> bool {
+            matches!(self, Self::Leased { token, .. } if token == candidate)
+        }
+        fn live(&self) -> bool {
+            matches!(self, Self::Leased { until, .. } if *until > Instant::now())
+        }
+        fn expired(&self) -> bool {
+            matches!(self, Self::Leased { until, .. } if *until <= Instant::now())
+        }
+        fn renew(mut self, deadline: Instant) -> Self {
+            if let Self::Leased { until, .. } = &mut self {
+                *until = deadline;
+            }
+            self
+        }
+    }
     #[derive(Debug, Clone)]
     struct TestTask {
         definition: EnqueueTask,
         status: &'static str,
         obsolete: bool,
         attempt_count: i64,
-        lease_token: Option<LeaseToken>,
-        lease_until: Option<Instant>,
+        lease: TestLease,
     }
 
     #[derive(Clone, Default)]
@@ -117,12 +55,17 @@ pub(crate) mod tests {
 
     impl MemoryStore {
         fn expire(&self, task_id: &TaskId) -> crate::HiveResult<()> {
-            self.tasks
+            let mut tasks = self
+                .tasks
                 .lock()
-                .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))?
+                .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))?;
+            let task = tasks
                 .get_mut(task_id.as_str())
-                .hive_context("task to expire must exist")?
-                .lease_until = Some(Instant::now() - Duration::from_secs(1));
+                .ok_or_else(|| crate::HiveError::message("task to expire must exist"))?;
+            task.lease = task
+                .lease
+                .clone()
+                .renew(Instant::now() - Duration::from_secs(1));
             Ok(())
         }
 
@@ -175,9 +118,9 @@ pub(crate) mod tests {
             } else {
                 "BLOCKED"
             };
-            let task = tasks
-                .get_mut(task_id.as_str())
-                .hive_context("obsolete task must remain present while rearming")?;
+            let task = tasks.get_mut(task_id.as_str()).ok_or_else(|| {
+                crate::HiveError::message("obsolete task must remain present while rearming")
+            })?;
             task.status = status;
             task.obsolete = false;
             task.definition.max_attempts = task.attempt_count + 3;
@@ -231,8 +174,7 @@ pub(crate) mod tests {
                     },
                     obsolete: false,
                     attempt_count: 0,
-                    lease_token: None,
-                    lease_until: None,
+                    lease: TestLease::Unleased,
                 },
             );
             Ok(())
@@ -240,9 +182,12 @@ pub(crate) mod tests {
 
         async fn active_delivery(
             &self,
-            source_commit: &str,
-            kind: &str,
-        ) -> crate::HiveResult<Option<TaskId>> {
+            request: ActiveDeliveryQuery<'_>,
+        ) -> crate::HiveResult<ActiveDelivery> {
+            let ActiveDeliveryQuery {
+                source_commit,
+                kind,
+            } = request;
             Ok(self
                 .tasks
                 .lock()
@@ -250,10 +195,11 @@ pub(crate) mod tests {
                 .values()
                 .find(|task| {
                     task.definition.source_commit == source_commit
-                        && task.definition.kind == kind
+                        && &task.definition.kind == kind
                         && matches!(task.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
                 })
-                .map(|task| task.definition.id.clone()))
+                .map(|task| ActiveDelivery::Active(task.definition.id.clone()))
+                .unwrap_or(ActiveDelivery::Idle))
         }
 
         async fn cancel(&self, task_id: &TaskId, _reason: &str) -> crate::HiveResult<bool> {
@@ -301,15 +247,14 @@ pub(crate) mod tests {
                 .cloned()
                 .collect::<Vec<_>>();
             for id in members {
-                let task = tasks
-                    .get_mut(&id)
-                    .hive_context("selected cancellation graph member must exist")?;
+                let task = tasks.get_mut(&id).ok_or_else(|| {
+                    crate::HiveError::message("selected cancellation graph member must exist")
+                })?;
                 if task.status == "RUNNING" {
                     task.status = "CANCELLING";
                 } else {
                     task.status = "CANCELLED";
-                    task.lease_token = None;
-                    task.lease_until = None;
+                    task.lease = TestLease::Unleased;
                 }
             }
             Ok(true)
@@ -327,14 +272,11 @@ pub(crate) mod tests {
             let Some(stored) = tasks.get_mut(task.id.as_str()) else {
                 return Ok(false);
             };
-            if stored.status != "CANCELLING"
-                || stored.lease_token.as_ref() != Some(&task.lease_token)
-            {
+            if stored.status != "CANCELLING" || !stored.lease.owns(&task.lease_token) {
                 return Ok(false);
             }
             stored.status = "CANCELLED";
-            stored.lease_token = None;
-            stored.lease_until = None;
+            stored.lease = TestLease::Unleased;
             Ok(true)
         }
 
@@ -357,8 +299,7 @@ pub(crate) mod tests {
                 return Ok(false);
             }
             task.status = "CANCELLED";
-            task.lease_token = None;
-            task.lease_until = None;
+            task.lease = TestLease::Unleased;
             Ok(true)
         }
 
@@ -377,9 +318,7 @@ pub(crate) mod tests {
                 .map(|(id, _)| id.clone())
                 .collect::<Vec<_>>();
             let Some(task_id) = tasks.iter().find_map(|(id, task)| {
-                let lease_expired = task
-                    .lease_until
-                    .is_some_and(|lease| lease <= Instant::now());
+                let lease_expired = task.lease.expired();
                 ((task.status == "READY" || (task.status == "RUNNING" && lease_expired))
                     && task.attempt_count < task.definition.max_attempts
                     && task
@@ -394,7 +333,7 @@ pub(crate) mod tests {
             let active_owners = tasks
                 .iter()
                 .filter(|(id, owner)| {
-                    owner.definition.kind != "blocker"
+                    owner.definition.kind.allows_prerequisite()
                         && matches!(owner.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
                         && Self::reaches(&tasks, id, &task_id)
                 })
@@ -402,7 +341,7 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>();
             let owning_repairs = if active_owners
                 .iter()
-                .all(|owner| owner.definition.kind == "main-repair")
+                .all(|owner| owner.definition.kind.is_main_repair())
             {
                 active_owners
                     .iter()
@@ -413,19 +352,20 @@ pub(crate) mod tests {
             };
             let task = tasks
                 .get_mut(&task_id)
-                .hive_context("claimable task must remain present")?;
+                .ok_or_else(|| crate::HiveError::message("claimable task must remain present"))?;
             task.status = "RUNNING";
             task.attempt_count += 1;
-            let lease_token = LeaseToken::new(Uuid::new_v4().to_string())?;
-            task.lease_token = Some(lease_token.clone());
-            task.lease_until =
-                Some(Instant::now() + Duration::from_secs(u64::try_from(lease_seconds)?));
+            let lease_token = LeaseToken::try_from(Uuid::new_v4().to_string())?;
+            task.lease = TestLease::Leased {
+                token: lease_token.clone(),
+                until: Instant::now() + Duration::from_secs(u64::try_from(lease_seconds)?),
+            };
             Ok(ClaimOutcome::Claimed(Box::new(ClaimedTask {
                 id: task.definition.id.clone(),
                 kind: task.definition.kind.clone(),
                 prompt: task.definition.prompt.clone(),
                 source_commit: task.definition.source_commit.clone(),
-                attempt_id: AttemptId::new(Uuid::new_v4().to_string())?,
+                attempt_id: AttemptId::try_from(Uuid::new_v4().to_string())?,
                 attempt_number: task.attempt_count,
                 lease_token,
                 owning_repairs,
@@ -447,13 +387,14 @@ pub(crate) mod tests {
                 .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))?;
             let task = tasks
                 .get_mut(task_id.as_str())
-                .hive_context("heartbeat task must exist")?;
-            let accepted = task.status == "RUNNING"
-                && task.lease_token.as_ref() == Some(lease_token)
-                && task.lease_until.is_some_and(|lease| lease > Instant::now());
+                .ok_or_else(|| crate::HiveError::message("heartbeat task must exist"))?;
+            let accepted =
+                task.status == "RUNNING" && task.lease.owns(lease_token) && task.lease.live();
             if accepted {
-                task.lease_until =
-                    Some(Instant::now() + Duration::from_secs(u64::try_from(lease_seconds)?));
+                task.lease = task
+                    .lease
+                    .clone()
+                    .renew(Instant::now() + Duration::from_secs(u64::try_from(lease_seconds)?));
             }
             Ok(accepted)
         }
@@ -470,19 +411,18 @@ pub(crate) mod tests {
                 .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))?
                 .get(lease.task_id.as_str())
                 .is_some_and(|stored| {
-                    stored.status == "RUNNING"
-                        && stored.lease_token.as_ref() == Some(&lease.lease_token)
+                    stored.status == "RUNNING" && stored.lease.owns(&lease.lease_token)
                 }))
         }
 
-        async fn complete(
-            &self,
-            claimed: &ClaimedTask,
-            _agent_id: &AgentId,
-            obsolete: bool,
-            _summary: &str,
-            _artifact: &CompletionArtifact,
-        ) -> crate::HiveResult<bool> {
+        async fn complete(&self, completion: Completion<'_>) -> crate::HiveResult<bool> {
+            let Completion {
+                task: claimed,
+                agent_id: _agent_id,
+                relevance,
+                summary: _summary,
+                artifact: _artifact,
+            } = completion;
             let mut tasks = self
                 .tasks
                 .lock()
@@ -490,30 +430,29 @@ pub(crate) mod tests {
             let active_owners = tasks
                 .iter()
                 .filter(|(id, owner)| {
-                    owner.definition.kind != "blocker"
+                    owner.definition.kind.allows_prerequisite()
                         && matches!(owner.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
                         && Self::reaches(&tasks, id, claimed.id.as_str())
                 })
                 .map(|(_, owner)| owner)
                 .collect::<Vec<_>>();
-            let retirement_guard_matches = !obsolete
+            let retirement_guard_matches = relevance == CompletionRelevance::Current
                 || (!claimed.owning_repairs.is_empty()
                     && active_owners.len() == claimed.owning_repairs.len()
                     && active_owners.iter().all(|owner| {
-                        owner.definition.kind == "main-repair"
+                        owner.definition.kind.is_main_repair()
                             && claimed.owning_repairs.contains(&owner.definition.id)
                     }));
             let task = tasks
                 .get_mut(claimed.id.as_str())
-                .hive_context("completed task must exist")?;
-            let accepted = task.lease_token.as_ref() == Some(&claimed.lease_token)
-                && task.lease_until.is_some_and(|lease| lease > Instant::now())
+                .ok_or_else(|| crate::HiveError::message("completed task must exist"))?;
+            let accepted = task.lease.owns(&claimed.lease_token)
+                && task.lease.live()
                 && retirement_guard_matches;
             if accepted {
                 task.status = "COMPLETED";
-                task.obsolete = obsolete;
-                task.lease_token = None;
-                task.lease_until = None;
+                task.obsolete = matches!(relevance, CompletionRelevance::Obsolete);
+                task.lease = TestLease::Unleased;
             }
             let completed = tasks
                 .iter()
@@ -547,14 +486,13 @@ pub(crate) mod tests {
                 .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))?;
             let task = tasks
                 .get_mut(claimed.id.as_str())
-                .hive_context("released task must exist")?;
-            if task.lease_token.as_ref() != Some(&claimed.lease_token) {
+                .ok_or_else(|| crate::HiveError::message("released task must exist"))?;
+            if !task.lease.owns(&claimed.lease_token) {
                 return Ok(false);
             }
             task.status = "READY";
             task.attempt_count -= 1;
-            task.lease_token = None;
-            task.lease_until = None;
+            task.lease = TestLease::Unleased;
             Ok(true)
         }
 
@@ -570,8 +508,8 @@ pub(crate) mod tests {
                 .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))?;
             let task = tasks
                 .get_mut(claimed.id.as_str())
-                .hive_context("failed task must exist")?;
-            if task.lease_token.as_ref() != Some(&claimed.lease_token) {
+                .ok_or_else(|| crate::HiveError::message("failed task must exist"))?;
+            if !task.lease.owns(&claimed.lease_token) {
                 return Ok(false);
             }
             task.status = if task.attempt_count < task.definition.max_attempts {
@@ -579,8 +517,7 @@ pub(crate) mod tests {
             } else {
                 "FAILED"
             };
-            task.lease_token = None;
-            task.lease_until = None;
+            task.lease = TestLease::Unleased;
             Ok(true)
         }
 
@@ -592,7 +529,7 @@ pub(crate) mod tests {
             _reason: &str,
         ) -> crate::HiveResult<bool> {
             blocker.validate()?;
-            if claimed.kind == "blocker" {
+            if claimed.kind.is_blocker() {
                 return Err(crate::HiveError::message(
                     "a blocker task cannot create another blocking dependency",
                 ));
@@ -603,7 +540,7 @@ pub(crate) mod tests {
                 .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))?;
             let lease_valid = tasks
                 .get(claimed.id.as_str())
-                .is_some_and(|task| task.lease_token.as_ref() == Some(&claimed.lease_token));
+                .is_some_and(|task| task.lease.owns(&claimed.lease_token));
             if !lease_valid {
                 return Ok(false);
             }
@@ -620,8 +557,7 @@ pub(crate) mod tests {
                         status: "READY",
                         obsolete: false,
                         attempt_count: 0,
-                        lease_token: None,
-                        lease_until: None,
+                        lease: TestLease::Unleased,
                     },
                 );
             }
@@ -633,7 +569,7 @@ pub(crate) mod tests {
                 .is_some_and(|stored| stored.status == "FAILED");
             let task = tasks
                 .get_mut(claimed.id.as_str())
-                .hive_context("blocked task must exist")?;
+                .ok_or_else(|| crate::HiveError::message("blocked task must exist"))?;
             task.status = if blocker_completed {
                 "READY"
             } else if blocker_failed {
@@ -642,8 +578,7 @@ pub(crate) mod tests {
                 "BLOCKED"
             };
             task.attempt_count -= 1;
-            task.lease_token = None;
-            task.lease_until = None;
+            task.lease = TestLease::Unleased;
             task.definition.dependencies.push(blocker.id.clone());
             Ok(true)
         }
@@ -651,8 +586,8 @@ pub(crate) mod tests {
 
     pub(crate) fn task(id: &str, dependencies: Vec<TaskId>) -> crate::HiveResult<EnqueueTask> {
         Ok(EnqueueTask {
-            id: TaskId::new(id)?,
-            kind: "code".to_owned(),
+            id: TaskId::try_from(id)?,
+            kind: "code".into(),
             trigger: TaskTrigger::ManualCli,
             prompt: "Implement it".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
@@ -666,8 +601,8 @@ pub(crate) mod tests {
     async fn concurrent_workers_cannot_claim_the_same_attempt() -> crate::HiveResult<()> {
         let store = MemoryStore::default();
         store.enqueue(&task("task-1", Vec::new())?).await?;
-        let agent_a = AgentId::new("agent-a")?;
-        let agent_b = AgentId::new("agent-b")?;
+        let agent_a = AgentId::try_from("agent-a")?;
+        let agent_b = AgentId::try_from("agent-b")?;
         let (claim_a, claim_b) =
             tokio::join!(store.claim(&agent_a, 300), store.claim(&agent_b, 300));
 
@@ -689,9 +624,9 @@ pub(crate) mod tests {
         store
             .enqueue(&task("dependent", vec![dependency.id.clone()])?)
             .await?;
-        let agent = AgentId::new("agent")?;
+        let agent = AgentId::try_from("agent")?;
 
-        let first = store.claim(&agent, 300).await?.into_claimed()?;
+        let first = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(first.id, dependency.id);
         assert!(store.claim(&agent, 300).await?.is_idle());
         Ok(())
@@ -712,7 +647,7 @@ pub(crate) mod tests {
             for retired in [&child.id, &parent.id] {
                 let task = tasks
                     .get_mut(retired.as_str())
-                    .hive_context("retired task must exist")?;
+                    .ok_or_else(|| crate::HiveError::message("retired task must exist"))?;
                 task.status = "COMPLETED";
                 task.obsolete = true;
                 task.attempt_count = 2;
@@ -721,23 +656,23 @@ pub(crate) mod tests {
         store
             .enqueue(&task("future", vec![parent.id.clone()])?)
             .await?;
-        let agent = AgentId::new("agent")?;
+        let agent = AgentId::try_from("agent")?;
 
-        let rearmed_child = store.claim(&agent, 300).await?.into_claimed()?;
+        let rearmed_child = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(rearmed_child.id, child.id);
         assert_eq!(rearmed_child.attempt_number, 3);
         assert!(
             store
-                .complete(
-                    &rearmed_child,
-                    &agent,
-                    false,
-                    "child repaired",
-                    &CompletionArtifact::NotProduced,
-                )
+                .complete(Completion {
+                    task: &rearmed_child,
+                    agent_id: &agent,
+                    relevance: CompletionRelevance::Current,
+                    summary: "child repaired",
+                    artifact: &CompletionArtifact::NotProduced
+                })
                 .await?
         );
-        let rearmed_parent = store.claim(&agent, 300).await?.into_claimed()?;
+        let rearmed_parent = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(rearmed_parent.id, parent.id);
         assert_eq!(rearmed_parent.attempt_number, 3);
         Ok(())
@@ -747,11 +682,11 @@ pub(crate) mod tests {
     async fn rollout_release_does_not_consume_an_attempt() -> crate::HiveResult<()> {
         let store = MemoryStore::default();
         store.enqueue(&task("task-1", Vec::new())?).await?;
-        let agent = AgentId::new("agent")?;
+        let agent = AgentId::try_from("agent")?;
 
-        let first = store.claim(&agent, 300).await?.into_claimed()?;
+        let first = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert!(store.release(&first, &agent).await?);
-        let replacement = store.claim(&agent, 300).await?.into_claimed()?;
+        let replacement = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
 
         assert_eq!(replacement.attempt_number, 1);
         Ok(())
@@ -762,8 +697,8 @@ pub(crate) mod tests {
     {
         let store = MemoryStore::default();
         store.enqueue(&task("original", Vec::new())?).await?;
-        let agent = AgentId::new("agent")?;
-        let original = store.claim(&agent, 300).await?.into_claimed()?;
+        let agent = AgentId::try_from("agent")?;
+        let original = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         let mut blocker = task("blocker", Vec::new())?;
         blocker.priority = 100;
 
@@ -772,20 +707,20 @@ pub(crate) mod tests {
                 .block(&original, &agent, &blocker, "blocked by prerequisite")
                 .await?
         );
-        let blocker_claim = store.claim(&agent, 300).await?.into_claimed()?;
+        let blocker_claim = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(blocker_claim.id, blocker.id);
         assert!(
             store
-                .complete(
-                    &blocker_claim,
-                    &agent,
-                    false,
-                    "blocker fixed",
-                    &CompletionArtifact::NotProduced
-                )
+                .complete(Completion {
+                    task: &blocker_claim,
+                    agent_id: &agent,
+                    relevance: CompletionRelevance::Current,
+                    summary: "blocker fixed",
+                    artifact: &CompletionArtifact::NotProduced
+                })
                 .await?
         );
-        let resumed = store.claim(&agent, 300).await?.into_claimed()?;
+        let resumed = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(resumed.id, original.id);
         assert_eq!(resumed.attempt_number, 1);
         Ok(())
@@ -796,11 +731,11 @@ pub(crate) mod tests {
         let store = MemoryStore::default();
         let definition = task("task-1", Vec::new())?;
         store.enqueue(&definition).await?;
-        let agent_a = AgentId::new("agent-a")?;
-        let agent_b = AgentId::new("agent-b")?;
-        let stale = store.claim(&agent_a, 300).await?.into_claimed()?;
+        let agent_a = AgentId::try_from("agent-a")?;
+        let agent_b = AgentId::try_from("agent-b")?;
+        let stale = ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
         store.expire(&definition.id)?;
-        let current = store.claim(&agent_b, 300).await?.into_claimed()?;
+        let current = ClaimedTask::try_from(store.claim(&agent_b, 300).await?)?;
 
         assert_ne!(stale.lease_token, current.lease_token);
         assert_eq!(current.attempt_number, 2);
@@ -811,24 +746,24 @@ pub(crate) mod tests {
         );
         assert!(
             !store
-                .complete(
-                    &stale,
-                    &agent_a,
-                    false,
-                    "late",
-                    &CompletionArtifact::NotProduced
-                )
+                .complete(Completion {
+                    task: &stale,
+                    agent_id: &agent_a,
+                    relevance: CompletionRelevance::Current,
+                    summary: "late",
+                    artifact: &CompletionArtifact::NotProduced
+                })
                 .await?
         );
         assert!(
             store
-                .complete(
-                    &current,
-                    &agent_b,
-                    false,
-                    "done",
-                    &CompletionArtifact::NotProduced
-                )
+                .complete(Completion {
+                    task: &current,
+                    agent_id: &agent_b,
+                    relevance: CompletionRelevance::Current,
+                    summary: "done",
+                    artifact: &CompletionArtifact::NotProduced
+                })
                 .await?
         );
         Ok(())
@@ -839,8 +774,8 @@ pub(crate) mod tests {
         let store = MemoryStore::default();
         let definition = task("main-failure-sha", Vec::new())?;
         store.enqueue(&definition).await?;
-        let agent = AgentId::new("agent")?;
-        let stale = store.claim(&agent, 300).await?.into_claimed()?;
+        let agent = AgentId::try_from("agent")?;
+        let stale = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
 
         assert!(
             store
@@ -854,16 +789,22 @@ pub(crate) mod tests {
         );
         assert_eq!(
             store
-                .active_delivery("0123456789abcdef0123456789abcdef01234567", "code")
+                .active_delivery(ActiveDeliveryQuery {
+                    source_commit: "0123456789abcdef0123456789abcdef01234567",
+                    kind: &TaskKind::from("code")
+                })
                 .await?,
-            Some(definition.id.clone())
+            ActiveDelivery::Active(definition.id.clone())
         );
         assert!(store.acknowledge_cancellation(&stale, &agent).await?);
         assert_eq!(
             store
-                .active_delivery("0123456789abcdef0123456789abcdef01234567", "code")
+                .active_delivery(ActiveDeliveryQuery {
+                    source_commit: "0123456789abcdef0123456789abcdef01234567",
+                    kind: &TaskKind::from("code")
+                })
                 .await?,
-            None
+            ActiveDelivery::Idle
         );
         assert!(store.claim(&agent, 300).await?.is_idle());
         Ok(())
@@ -874,8 +815,8 @@ pub(crate) mod tests {
         let store = MemoryStore::default();
         let definition = task("main-failure-failed-sha", Vec::new())?;
         store.enqueue(&definition).await?;
-        let agent = AgentId::new("agent")?;
-        let claimed = store.claim(&agent, 300).await?.into_claimed()?;
+        let agent = AgentId::try_from("agent")?;
+        let claimed = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert!(store.fail(&claimed, &agent, "terminal failure").await?);
 
         assert!(
@@ -892,8 +833,8 @@ pub(crate) mod tests {
         let store = MemoryStore::default();
         let root = task("main-failure-sha", Vec::new())?;
         store.enqueue(&root).await?;
-        let agent = AgentId::new("agent")?;
-        let claimed_root = store.claim(&agent, 300).await?.into_claimed()?;
+        let agent = AgentId::try_from("agent")?;
+        let claimed_root = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         let blocker = task("main-failure-sha-blocker", Vec::new())?;
         assert!(
             store
@@ -911,8 +852,8 @@ pub(crate) mod tests {
         let store = MemoryStore::default();
         let root = task("main-failure-sha", Vec::new())?;
         store.enqueue(&root).await?;
-        let agent = AgentId::new("agent")?;
-        let claimed_root = store.claim(&agent, 300).await?.into_claimed()?;
+        let agent = AgentId::try_from("agent")?;
+        let claimed_root = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         let blocker = task("shared-blocker", Vec::new())?;
         assert!(
             store
@@ -924,7 +865,7 @@ pub(crate) mod tests {
             .await?;
 
         assert!(store.cancel(&root.id, "deferred E2E-only rerun").await?);
-        let preserved = store.claim(&agent, 300).await?.into_claimed()?;
+        let preserved = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(preserved.id, blocker.id);
         Ok(())
     }
@@ -935,24 +876,24 @@ pub(crate) mod tests {
         let store = MemoryStore::default();
         let old = task("main-failure-sha-run-1-attempt-1", Vec::new())?;
         store.enqueue(&old).await?;
-        let agent = AgentId::new("agent")?;
-        let completed = store.claim(&agent, 300).await?.into_claimed()?;
+        let agent = AgentId::try_from("agent")?;
+        let completed = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert!(
             store
-                .complete(
-                    &completed,
-                    &agent,
-                    false,
-                    "fixed",
-                    &CompletionArtifact::NotProduced
-                )
+                .complete(Completion {
+                    task: &completed,
+                    agent_id: &agent,
+                    relevance: CompletionRelevance::Current,
+                    summary: "fixed",
+                    artifact: &CompletionArtifact::NotProduced
+                })
                 .await?
         );
         assert!(!store.cancel(&old.id, "deferred E2E-only rerun").await?);
 
         let current = task("main-failure-sha-run-1-attempt-3", Vec::new())?;
         store.enqueue(&current).await?;
-        let claimed = store.claim(&agent, 300).await?.into_claimed()?;
+        let claimed = ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
         assert_eq!(claimed.id, current.id);
         assert_eq!(claimed.attempt_number, 1);
         Ok(())
@@ -966,9 +907,12 @@ pub(crate) mod tests {
 
         assert_eq!(
             store
-                .active_delivery(&active.source_commit, &active.kind)
+                .active_delivery(ActiveDeliveryQuery {
+                    source_commit: &active.source_commit,
+                    kind: &active.kind
+                })
                 .await?,
-            Some(active.id)
+            ActiveDelivery::Active(active.id)
         );
         Ok(())
     }

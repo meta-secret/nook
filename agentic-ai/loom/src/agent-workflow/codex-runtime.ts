@@ -1,3 +1,9 @@
+import { err, ok, type Result } from 'neverthrow';
+import {
+  AgentExecutionFailureKind as CodexExecutionFailureKind,
+  type AgentExecutionFailure,
+} from './runtime.ts';
+export { AgentExecutionFailureKind as CodexExecutionFailureKind } from './runtime.ts';
 import { Codex } from '@openai/codex-sdk';
 import type {
   McpToolCallItem,
@@ -14,19 +20,14 @@ import type {
   AgentTaskRuntime,
   RuntimeActivityObserver,
 } from './runtime.ts';
-import {
-  decodeWorkflowTaskOutput,
-  workflowTaskOutputSchema,
-} from './structured-result-codec.ts';
+import { WorkflowResultSchema } from './structured-result-codec.ts';
 import { WorkflowRuntimeActivityKind } from './events.ts';
 import type { RuntimeActivityObservation } from './events.ts';
-import { runCommand } from '../lib/run.ts';
-import type { RunCommandArgs } from '../lib/run.ts';
+import { RepositoryCommand, RepositoryCommandExecutable } from '../lib/run.ts';
+import type { RepositoryCommandRequest } from '../lib/run.ts';
 import {
   MODULE_EXPERT_CONTEXT_MCP,
-  createReadOnlyExpertRuntimeIsolation,
-  moduleExpertThreadOptions,
-  withModuleExpertRuntimeIsolation,
+  ModuleExpertIsolation,
 } from '../module-experts/runtime-contract.ts';
 import type {
   ModuleExpertRuntimeIsolationRequest,
@@ -39,28 +40,23 @@ export enum AgentSourceStabilityPhase {
   BeforeAttempt = 'before attempt',
   AfterAttempt = 'after attempt',
 }
-
 export type AgentSourceStabilityCheck = {
   readonly workingDirectory: string;
   readonly sourceCommit: string;
   readonly phase: AgentSourceStabilityPhase;
 };
-
-export class ModuleExpertCodexSdkAgentRuntime<
-  TTask extends string,
-  TAgent extends string,
-> implements AgentTaskRuntime<TTask, TAgent> {
-  async executeAgent(
-    invocation: AgentExecutionInvocation<TTask, TAgent>,
-  ): Promise<AgentExecutionCompletion> {
-    const executionArgs: RunIsolatedModuleExpertCodexArgs<TTask, TAgent> = {
-      invocation,
-      selectedContextPaths: [],
-    };
-    return runIsolatedModuleExpertCodex(executionArgs);
+export type CodexExecutionFailureRequest = {
+  readonly kind: CodexExecutionFailureKind;
+  readonly message: string;
+};
+export class CodexExecutionFailure {
+  readonly message: string;
+  readonly kind: CodexExecutionFailureKind;
+  constructor(request: CodexExecutionFailureRequest) {
+    this.message = request.message;
+    this.kind = request.kind;
   }
 }
-
 export type RunIsolatedModuleExpertCodexArgs<
   TTask extends string,
   TAgent extends string,
@@ -68,36 +64,6 @@ export type RunIsolatedModuleExpertCodexArgs<
   readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
   readonly selectedContextPaths: readonly string[];
 };
-
-export async function runIsolatedModuleExpertCodex<
-  TTask extends string,
-  TAgent extends string,
->(
-  args: RunIsolatedModuleExpertCodexArgs<TTask, TAgent>,
-): Promise<AgentExecutionCompletion> {
-  const invocation = args.invocation;
-  const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
-    expertName: invocation.agentProfile.name,
-    parentEnvironment: process.env,
-    selectedContextPaths: args.selectedContextPaths,
-    sourceCommit: invocation.sourceCommit,
-    workingDirectory: invocation.workingDirectory,
-  };
-  const isolationUse: ModuleExpertRuntimeIsolationUse<AgentExecutionCompletion> =
-    {
-      isolationRequest,
-      run: async (isolation) => {
-        const execution: GuardedAgentExecution<TTask, TAgent> = {
-          codex: new Codex(isolation.codexOptions),
-          invocation,
-          threadOptions: isolation.threadOptions,
-        };
-        return executeGuardedAgent(execution);
-      },
-    };
-  return withModuleExpertRuntimeIsolation(isolationUse);
-}
-
 export type RunIsolatedReadOnlyExpertCodexRequest<
   TTask extends string,
   TAgent extends string,
@@ -105,306 +71,527 @@ export type RunIsolatedReadOnlyExpertCodexRequest<
   readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
   readonly isolationRequest: ReadOnlyExpertRuntimeIsolationRequest;
 };
-
-export async function runIsolatedReadOnlyExpertCodex<
+export class ModuleExpertCodexSdkAgentRuntime<
   TTask extends string,
   TAgent extends string,
->(
-  request: RunIsolatedReadOnlyExpertCodexRequest<TTask, TAgent>,
-): Promise<AgentExecutionCompletion> {
-  const isolation = await createReadOnlyExpertRuntimeIsolation(
-    request.isolationRequest,
-  );
-  try {
-    const execution: GuardedAgentExecution<TTask, TAgent> = {
-      codex: new Codex(isolation.codexOptions),
-      invocation: request.invocation,
-      threadOptions: isolation.threadOptions,
+> implements AgentTaskRuntime<TTask, TAgent> {
+  async executeAgent(
+    invocation: AgentExecutionInvocation<TTask, TAgent>,
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
+    return ModuleExpertCodexSdkAgentRuntime.executeIsolated({
+      invocation,
+      selectedContextPaths: [],
+    });
+  }
+  static async executeIsolated<TTask extends string, TAgent extends string>(
+    args: RunIsolatedModuleExpertCodexArgs<TTask, TAgent>,
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
+    const invocation = args.invocation;
+    const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
+      expertName: invocation.agentProfile.name,
+      parentEnvironment: process.env,
+      selectedContextPaths: args.selectedContextPaths,
+      sourceCommit: invocation.sourceCommit,
+      workingDirectory: invocation.workingDirectory,
     };
-    return await executeGuardedAgent(execution);
-  } finally {
-    await isolation.dispose();
+    const isolationUse: ModuleExpertRuntimeIsolationUse<
+      AgentExecutionCompletion,
+      AgentExecutionFailure
+    > = {
+      isolationRequest,
+      run: async (isolation) => {
+        const execution: GuardedAgentExecution<TTask, TAgent> = {
+          codex: new Codex(isolation.codexOptions),
+          invocation,
+          threadOptions: isolation.threadOptions,
+        };
+        return new GuardedCodexExecution(execution).execute();
+      },
+    };
+    return ModuleExpertIsolation.withModuleExpertRuntimeIsolation(isolationUse);
   }
 }
-
+export class ReadOnlyExpertCodexRuntime<
+  TTask extends string,
+  TAgent extends string,
+> {
+  private constructor(
+    private readonly request: RunIsolatedReadOnlyExpertCodexRequest<
+      TTask,
+      TAgent
+    >,
+  ) {}
+  static executeIsolated<TTask extends string, TAgent extends string>(
+    request: RunIsolatedReadOnlyExpertCodexRequest<TTask, TAgent>,
+  ): Promise<Result<AgentExecutionCompletion, AgentExecutionFailure>> {
+    return new ReadOnlyExpertCodexRuntime(request).execute();
+  }
+  async execute(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
+    const request = this.request;
+    const isolation =
+      await ModuleExpertIsolation.createReadOnlyExpertRuntimeIsolation(
+        request.isolationRequest,
+      );
+    if (isolation.isErr()) return err(isolation.error);
+    try {
+      const execution: GuardedAgentExecution<TTask, TAgent> = {
+        codex: new Codex(isolation.value.codexOptions),
+        invocation: request.invocation,
+        threadOptions: isolation.value.threadOptions,
+      };
+      return await new GuardedCodexExecution(execution).execute();
+    } finally {
+      await isolation.value.dispose();
+    }
+  }
+}
 type GuardedAgentExecution<TTask extends string, TAgent extends string> = {
   readonly codex: Codex;
   readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
   readonly threadOptions?: ThreadOptions;
 };
-
+class GuardedCodexExecution<TTask extends string, TAgent extends string> {
+  constructor(
+    private readonly execution: GuardedAgentExecution<TTask, TAgent>,
+  ) {}
+  async execute(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
+    const execution = this.execution;
+    if (
+      execution.invocation.agentProfile.workspacePolicy !==
+      AgentWorkspacePolicy.ReadOnly
+    ) {
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.WorkspacePolicy,
+          message: 'Write-capable Codex workflow workers are not enabled.',
+        }),
+      );
+    }
+    const beforeAttempt: AgentSourceStabilityCheck = {
+      workingDirectory: execution.invocation.workingDirectory,
+      sourceCommit: execution.invocation.sourceCommit,
+      phase: AgentSourceStabilityPhase.BeforeAttempt,
+    };
+    const before = new AgentSourceSnapshot(beforeAttempt).assertStable();
+    if (before.isErr()) return err(before.error);
+    let outcome: Result<AgentExecutionCompletion, AgentExecutionFailure>;
+    let after: ReturnType<AgentSourceSnapshot['assertStable']>;
+    try {
+      outcome = await this.executeStable();
+    } finally {
+      const afterAttempt: AgentSourceStabilityCheck = {
+        workingDirectory: execution.invocation.workingDirectory,
+        sourceCommit: execution.invocation.sourceCommit,
+        phase: AgentSourceStabilityPhase.AfterAttempt,
+      };
+      after = new AgentSourceSnapshot(afterAttempt).assertStable();
+    }
+    if (after.isErr()) return err(after.error);
+    return outcome;
+  }
+  private async executeStable(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
+    const execution = this.execution;
+    const moduleExpertThreadOptionsArgs = {
+      workingDirectory: execution.invocation.workingDirectory,
+    };
+    const [
+      baseThreadOptions = ModuleExpertIsolation.moduleExpertThreadOptions(
+        moduleExpertThreadOptionsArgs,
+      ),
+    ] = [execution.threadOptions];
+    const threadOptions: ThreadOptions = {
+      ...baseThreadOptions,
+      modelReasoningEffort: this.reasoningEffort(
+        execution.invocation.agentProfile.reasoningEffort,
+      ),
+    };
+    let thread;
+    try {
+      thread = execution.codex.startThread(threadOptions);
+    } catch {
+      return err({
+        kind: CodexExecutionFailureKind.RuntimeBoundary,
+        message: 'Codex could not create the requested thread.',
+      });
+    }
+    const prompt = this.buildPrompt();
+    const outputSchema = WorkflowResultSchema.workflowTaskOutputSchema(
+      execution.invocation.execution.resultKind,
+    );
+    const turnOptions: TurnOptions = {
+      outputSchema,
+      signal: execution.invocation.signal,
+    };
+    let streamedTurn;
+    try {
+      streamedTurn = await thread.runStreamed(prompt, turnOptions);
+    } catch {
+      return err({
+        kind: CodexExecutionFailureKind.RuntimeBoundary,
+        message: 'Codex could not start the requested turn.',
+      });
+    }
+    const collectionArgs: CollectCodexTurnArgs = {
+      events: streamedTurn.events,
+      expectedResultKind: execution.invocation.execution.resultKind,
+      observe: execution.invocation.observe,
+    };
+    return new CodexTurn(collectionArgs).collect();
+  }
+  private buildPrompt(): string {
+    const invocation = this.execution.invocation;
+    const upstream = JSON.stringify(invocation.upstreamOutputs);
+    return [
+      invocation.agentProfile.instructionPrefix,
+      invocation.execution.instruction,
+      `Immutable source commit: ${invocation.sourceCommit}`,
+      `Required resultKind: ${invocation.execution.resultKind}`,
+      'Author materializedViewMarkdown as a concise Markdown read model of outcomes, evidence, risks, and parent actions. It must not contain hidden reasoning, prompts, credentials, or raw command output.',
+      'Return only the requested structured result. Do not create unscheduled subagents.',
+      invocation.upstreamOutputs.length > 0
+        ? `Verified upstream materialized views:\n${upstream}`
+        : 'No upstream results.',
+    ].join('\n\n');
+  }
+  private reasoningEffort(effort: AgentReasoningEffort): ModelReasoningEffort {
+    if (effort === AgentReasoningEffort.Low) {
+      return 'low';
+    }
+    if (effort === AgentReasoningEffort.Medium) {
+      return 'medium';
+    }
+    return 'high';
+  }
+}
 export type CollectCodexTurnArgs = {
   readonly events: AsyncIterable<ThreadEvent>;
   readonly expectedResultKind: WorkflowResultKind;
   readonly observe: RuntimeActivityObserver;
 };
-
-async function executeGuardedAgent<TTask extends string, TAgent extends string>(
-  execution: GuardedAgentExecution<TTask, TAgent>,
-): Promise<AgentExecutionCompletion> {
-  if (
-    execution.invocation.agentProfile.workspacePolicy !==
-    AgentWorkspacePolicy.ReadOnly
-  ) {
-    throw new Error('Write-capable Codex workflow workers are not enabled.');
-  }
-  const beforeAttempt: AgentSourceStabilityCheck = {
-    workingDirectory: execution.invocation.workingDirectory,
-    sourceCommit: execution.invocation.sourceCommit,
-    phase: AgentSourceStabilityPhase.BeforeAttempt,
-  };
-  assertAgentSourceStable(beforeAttempt);
-  try {
-    return await executeStableAgent(execution);
-  } finally {
-    const afterAttempt: AgentSourceStabilityCheck = {
-      workingDirectory: execution.invocation.workingDirectory,
-      sourceCommit: execution.invocation.sourceCommit,
-      phase: AgentSourceStabilityPhase.AfterAttempt,
-    };
-    assertAgentSourceStable(afterAttempt);
-  }
+enum TurnTermination {
+  Pending = 'pending',
+  Completed = 'completed',
+  Failed = 'failed',
 }
-
-async function executeStableAgent<TTask extends string, TAgent extends string>(
-  execution: GuardedAgentExecution<TTask, TAgent>,
-): Promise<AgentExecutionCompletion> {
-  const moduleExpertThreadOptionsArgs = {
-    workingDirectory: execution.invocation.workingDirectory,
-  };
-  const [
-    baseThreadOptions = moduleExpertThreadOptions(
-      moduleExpertThreadOptionsArgs,
-    ),
-  ] = [execution.threadOptions];
-  const threadOptions: ThreadOptions = {
-    ...baseThreadOptions,
-    modelReasoningEffort: reasoningEffort(
-      execution.invocation.agentProfile.reasoningEffort,
-    ),
-  };
-  const thread = execution.codex.startThread(threadOptions);
-  const prompt = buildPrompt(execution.invocation);
-  const outputSchema = workflowTaskOutputSchema(
-    execution.invocation.execution.resultKind,
-  );
-  const turnOptions: TurnOptions = {
-    outputSchema,
-    signal: execution.invocation.signal,
-  };
-  const streamedTurn = await thread.runStreamed(prompt, turnOptions);
-  const collectionArgs: CollectCodexTurnArgs = {
-    events: streamedTurn.events,
-    expectedResultKind: execution.invocation.execution.resultKind,
-    observe: execution.invocation.observe,
-  };
-  return collectCodexTurn(collectionArgs);
+enum TurnValuePresence {
+  Missing = 'missing',
+  Present = 'present',
 }
+type TurnText =
+  | { readonly presence: TurnValuePresence.Missing }
+  | { readonly presence: TurnValuePresence.Present; readonly text: string };
+type CodexTurnStateRequest = {
+  readonly termination: TurnTermination;
+  readonly thread: TurnText;
+  readonly output: TurnText;
+};
+class CodexTurnState {
+  readonly termination: TurnTermination;
+  readonly thread: TurnText;
+  readonly output: TurnText;
+  constructor(request: CodexTurnStateRequest) {
+    this.termination = request.termination;
+    this.thread = request.thread;
+    this.output = request.output;
+  }
 
-export async function collectCodexTurn(
-  args: CollectCodexTurnArgs,
-): Promise<AgentExecutionCompletion> {
-  let threadId = '';
-  let serializedOutput = '';
-  let turnCompleted = false;
-  let terminalFailureSeen = false;
-  for await (const event of args.events) {
-    if (event.type === 'thread.started') {
-      threadId = event.thread_id;
-    }
-    if (event.type === 'turn.completed') {
-      turnCompleted = true;
-    }
-    if (event.type === 'turn.failed' || event.type === 'error') {
-      terminalFailureSeen = true;
-    }
-    if (
-      !terminalFailureSeen &&
+  static pending(): CodexTurnState {
+    const missing: TurnText = { presence: TurnValuePresence.Missing };
+    return new CodexTurnState({
+      termination: TurnTermination.Pending,
+      thread: missing,
+      output: missing,
+    });
+  }
+
+  advance(event: ThreadEvent): CodexTurnState {
+    const thread =
+      event.type === 'thread.started'
+        ? new CodexTurnText(event.thread_id).value()
+        : this.thread;
+    const termination =
+      event.type === 'turn.failed' || event.type === 'error'
+        ? TurnTermination.Failed
+        : event.type === 'turn.completed' &&
+            this.termination !== TurnTermination.Failed
+          ? TurnTermination.Completed
+          : this.termination;
+    const output =
+      termination !== TurnTermination.Failed &&
       event.type === 'item.completed' &&
       event.item.type === 'agent_message'
-    ) {
-      serializedOutput = event.item.text;
+        ? new CodexTurnText(event.item.text).value()
+        : this.output;
+    return new CodexTurnState({ termination, thread, output });
+  }
+}
+
+class CodexTurnText {
+  constructor(private readonly text: string) {}
+  value(): TurnText {
+    return this.text.length === 0
+      ? { presence: TurnValuePresence.Missing }
+      : { presence: TurnValuePresence.Present, text: this.text };
+  }
+}
+
+enum CodexStreamLifecycle {
+  Open = 'open',
+  Exhausted = 'exhausted',
+}
+
+class CodexEventStream {
+  constructor(private readonly events: AsyncIterable<ThreadEvent>) {}
+  async collect(
+    observe: RuntimeActivityObserver,
+  ): Promise<Result<CodexTurnState, AgentExecutionFailure>> {
+    let iterator;
+    try {
+      const open = this.events[Symbol.asyncIterator];
+      iterator = open.call(this.events);
+    } catch {
+      return err({
+        kind: CodexExecutionFailureKind.RuntimeBoundary,
+        message: 'Codex event stream could not be opened.',
+      });
     }
-    const observation = normalizeEvent(event);
-    if (observation) {
-      await args.observe(observation);
+    let state = CodexTurnState.pending();
+    let lifecycle = CodexStreamLifecycle.Open;
+    let outcome: Result<CodexTurnState, AgentExecutionFailure> | false = false;
+    let closeFailure: AgentExecutionFailure | false = false;
+    try {
+      while (outcome === false) {
+        let next;
+        try {
+          next = await iterator.next();
+        } catch {
+          outcome = err({
+            kind: CodexExecutionFailureKind.RuntimeBoundary,
+            message: 'Codex event stream failed.',
+          });
+          break;
+        }
+        if (next.done) {
+          lifecycle = CodexStreamLifecycle.Exhausted;
+          outcome = ok(state);
+          break;
+        }
+        state = state.advance(next.value);
+        const observation = new CodexActivity(next.value).normalize();
+        if (observation) await observe(observation);
+      }
+    } finally {
+      if (lifecycle === CodexStreamLifecycle.Open && iterator.return) {
+        try {
+          await iterator.return();
+        } catch {
+          closeFailure = {
+            kind: CodexExecutionFailureKind.RuntimeBoundary,
+            message: 'Codex event stream could not be closed.',
+          };
+        }
+      }
     }
+    return closeFailure === false ? outcome : err(closeFailure);
   }
-  if (terminalFailureSeen) {
-    throw new Error('Codex turn failed before a valid structured result.');
-  }
-  if (
-    !turnCompleted ||
-    threadId.length === 0 ||
-    serializedOutput.length === 0
-  ) {
-    throw new Error(
-      'Codex completed without a thread identity or structured result.',
+}
+
+export class CodexTurn {
+  constructor(private readonly request: CollectCodexTurnArgs) {}
+  async collect(): Promise<
+    Result<AgentExecutionCompletion, AgentExecutionFailure>
+  > {
+    const collected = await new CodexEventStream(this.request.events).collect(
+      this.request.observe,
     );
+    if (collected.isErr()) return err(collected.error);
+    const state = collected.value;
+    if (state.termination === TurnTermination.Failed)
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.FailedTurn,
+          message: 'Codex turn failed before a valid structured result.',
+        }),
+      );
+    if (
+      state.termination !== TurnTermination.Completed ||
+      state.thread.presence === TurnValuePresence.Missing ||
+      state.output.presence === TurnValuePresence.Missing
+    )
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.IncompleteTurn,
+          message:
+            'Codex completed without a thread identity or structured result.',
+        }),
+      );
+    let output: AgentExecutionCompletion['output'];
+    try {
+      output = WorkflowResultSchema.decodeWorkflowTaskOutput(state.output.text);
+    } catch {
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.RuntimeBoundary,
+          message: 'Codex structured result could not be decoded.',
+        }),
+      );
+    }
+    if (output.resultKind !== this.request.expectedResultKind)
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.ResultKind,
+          message: `Codex result kind ${output.resultKind} does not match ${this.request.expectedResultKind}.`,
+        }),
+      );
+    return ok({ threadId: state.thread.text, output });
   }
-  const output = decodeWorkflowTaskOutput(serializedOutput);
-  if (output.resultKind !== args.expectedResultKind) {
-    throw new Error(
-      `Codex result kind ${output.resultKind} does not match ${args.expectedResultKind}.`,
-    );
-  }
-  return { threadId, output };
 }
-
-export function assertAgentSourceStable(
-  check: AgentSourceStabilityCheck,
-): void {
-  const headCommand: RunCommandArgs = {
-    command: 'git',
-    args: ['rev-parse', 'HEAD'],
-    cwd: check.workingDirectory,
-  };
-  const head = runCommand(headCommand);
-  const actualHead = head.stdout.trim();
-  if (head.exitCode !== 0 || actualHead !== check.sourceCommit) {
-    throw new Error(
-      `Codex agent source is not at immutable commit ${check.sourceCommit} ${check.phase}.`,
-    );
-  }
-  const statusCommand: RunCommandArgs = {
-    command: 'git',
-    args: ['status', '--porcelain', '--untracked-files=normal'],
-    cwd: check.workingDirectory,
-  };
-  const status = runCommand(statusCommand);
-  if (status.exitCode !== 0 || status.stdout.trim().length > 0) {
-    throw new Error(`Codex agent worktree is not clean ${check.phase}.`);
+export class AgentSourceSnapshot {
+  constructor(private readonly check: AgentSourceStabilityCheck) {}
+  assertStable(): Result<void, AgentExecutionFailure> {
+    const check = this.check;
+    const headCommand: RepositoryCommandRequest = {
+      command: RepositoryCommandExecutable.Git,
+      args: ['rev-parse', 'HEAD'],
+      rootDirectory: check.workingDirectory,
+      workingDirectory: check.workingDirectory,
+    };
+    const headLaunch = new RepositoryCommand(headCommand).execute();
+    if (headLaunch.isErr()) return err(headLaunch.error);
+    const head = headLaunch.value;
+    const actualHead = head.stdout.trim();
+    if (head.exitCode !== 0 || actualHead !== check.sourceCommit) {
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.SourceCommit,
+          message: `Codex agent source is not at immutable commit ${check.sourceCommit} ${check.phase}.`,
+        }),
+      );
+    }
+    const statusCommand: RepositoryCommandRequest = {
+      command: RepositoryCommandExecutable.Git,
+      args: ['status', '--porcelain', '--untracked-files=normal'],
+      rootDirectory: check.workingDirectory,
+      workingDirectory: check.workingDirectory,
+    };
+    const statusLaunch = new RepositoryCommand(statusCommand).execute();
+    if (statusLaunch.isErr()) return err(statusLaunch.error);
+    const status = statusLaunch.value;
+    if (status.exitCode !== 0 || status.stdout.trim().length > 0) {
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.DirtyWorktree,
+          message: `Codex agent worktree is not clean ${check.phase}.`,
+        }),
+      );
+    }
+    return ok();
   }
 }
-
-function buildPrompt<TTask extends string, TAgent extends string>(
-  invocation: AgentExecutionInvocation<TTask, TAgent>,
-): string {
-  const upstream = JSON.stringify(invocation.upstreamOutputs);
-  return [
-    invocation.agentProfile.instructionPrefix,
-    invocation.execution.instruction,
-    `Immutable source commit: ${invocation.sourceCommit}`,
-    `Required resultKind: ${invocation.execution.resultKind}`,
-    'Author materializedViewMarkdown as a concise Markdown read model of outcomes, evidence, risks, and parent actions. It must not contain hidden reasoning, prompts, credentials, or raw command output.',
-    'Return only the requested structured result. Do not create unscheduled subagents.',
-    invocation.upstreamOutputs.length > 0
-      ? `Verified upstream materialized views:\n${upstream}`
-      : 'No upstream results.',
-  ].join('\n\n');
-}
-
-function reasoningEffort(effort: AgentReasoningEffort): ModelReasoningEffort {
-  if (effort === AgentReasoningEffort.Low) {
-    return 'low';
-  }
-  if (effort === AgentReasoningEffort.Medium) {
-    return 'medium';
-  }
-  return 'high';
-}
-
-function normalizeEvent(
-  event: ThreadEvent,
-): RuntimeActivityObservation | false {
-  if (event.type === 'thread.started') {
-    return observation([
-      WorkflowRuntimeActivityKind.ThreadStarted,
-      event.thread_id,
-    ]);
-  }
-  if (event.type === 'turn.started') {
-    return observation([
-      WorkflowRuntimeActivityKind.TurnStarted,
-      'Codex turn started.',
-    ]);
-  }
-  if (event.type === 'turn.completed') {
-    return observation([
-      WorkflowRuntimeActivityKind.TurnCompleted,
-      'Codex turn completed.',
-    ]);
-  }
-  if (event.type === 'turn.failed') {
-    return observation([
-      WorkflowRuntimeActivityKind.TurnFailed,
-      'Codex turn failed. Inspect the typed task terminal projection.',
-    ]);
-  }
-  if (event.type === 'error') {
-    return observation([
-      WorkflowRuntimeActivityKind.RuntimeError,
-      'Codex runtime reported an error. Inspect local diagnostics.',
-    ]);
-  }
-  if (event.type !== 'item.completed') {
+class CodexActivity {
+  constructor(private readonly event: ThreadEvent) {}
+  normalize(): RuntimeActivityObservation | false {
+    const event = this.event;
+    if (event.type === 'thread.started') {
+      return this.observation([
+        WorkflowRuntimeActivityKind.ThreadStarted,
+        event.thread_id,
+      ]);
+    }
+    if (event.type === 'turn.started') {
+      return this.observation([
+        WorkflowRuntimeActivityKind.TurnStarted,
+        'Codex turn started.',
+      ]);
+    }
+    if (event.type === 'turn.completed') {
+      return this.observation([
+        WorkflowRuntimeActivityKind.TurnCompleted,
+        'Codex turn completed.',
+      ]);
+    }
+    if (event.type === 'turn.failed') {
+      return this.observation([
+        WorkflowRuntimeActivityKind.TurnFailed,
+        'Codex turn failed. Inspect the typed task terminal projection.',
+      ]);
+    }
+    if (event.type === 'error') {
+      return this.observation([
+        WorkflowRuntimeActivityKind.RuntimeError,
+        'Codex runtime reported an error. Inspect local diagnostics.',
+      ]);
+    }
+    if (event.type !== 'item.completed') {
+      return false;
+    }
+    if (event.item.type === 'command_execution') {
+      return this.observation([
+        WorkflowRuntimeActivityKind.CommandCompleted,
+        `Command ${event.item.status}.`,
+      ]);
+    }
+    if (event.item.type === 'file_change') {
+      return this.observation([
+        WorkflowRuntimeActivityKind.FileChangeCompleted,
+        `File change ${event.item.status}.`,
+      ]);
+    }
+    if (event.item.type === 'mcp_tool_call') {
+      return this.sourceReadObservation(event.item);
+    }
+    if (event.item.type === 'agent_message') {
+      return this.observation([
+        WorkflowRuntimeActivityKind.AgentMessageCompleted,
+        'Structured agent message completed.',
+      ]);
+    }
     return false;
   }
-  if (event.item.type === 'command_execution') {
-    return observation([
-      WorkflowRuntimeActivityKind.CommandCompleted,
-      `Command ${event.item.status}.`,
+  private sourceReadObservation(
+    item: McpToolCallItem,
+  ): RuntimeActivityObservation | false {
+    if (item.server !== MODULE_EXPERT_CONTEXT_MCP) {
+      return false;
+    }
+    const action = this.sourceReadAction(item.tool);
+    if (!action) {
+      return false;
+    }
+    return this.observation([
+      WorkflowRuntimeActivityKind.SourceReadCompleted,
+      `Repository ${action} ${this.sourceReadStatus(item.status)}.`,
     ]);
   }
-  if (event.item.type === 'file_change') {
-    return observation([
-      WorkflowRuntimeActivityKind.FileChangeCompleted,
-      `File change ${event.item.status}.`,
-    ]);
-  }
-  if (event.item.type === 'mcp_tool_call') {
-    return sourceReadObservation(event.item);
-  }
-  if (event.item.type === 'agent_message') {
-    return observation([
-      WorkflowRuntimeActivityKind.AgentMessageCompleted,
-      'Structured agent message completed.',
-    ]);
-  }
-  return false;
-}
-
-function sourceReadObservation(
-  item: McpToolCallItem,
-): RuntimeActivityObservation | false {
-  if (item.server !== MODULE_EXPERT_CONTEXT_MCP) {
+  private sourceReadAction(tool: string): string | false {
+    if (tool === MODULE_EXPERT_READ_CONTEXT_TOOLS[0]) {
+      return 'file listing';
+    }
+    if (tool === MODULE_EXPERT_READ_CONTEXT_TOOLS[1]) {
+      return 'file read';
+    }
+    if (tool === MODULE_EXPERT_READ_CONTEXT_TOOLS[2]) {
+      return 'text search';
+    }
     return false;
   }
-  const action = sourceReadAction(item.tool);
-  if (!action) {
-    return false;
+  private sourceReadStatus(status: McpToolCallItem['status']): string {
+    if (status === 'completed') {
+      return 'completed';
+    }
+    if (status === 'failed') {
+      return 'failed';
+    }
+    return 'ended without a terminal status';
   }
-  return observation([
-    WorkflowRuntimeActivityKind.SourceReadCompleted,
-    `Repository ${action} ${sourceReadStatus(item.status)}.`,
-  ]);
+  private observation(values: ObservationValues): RuntimeActivityObservation {
+    return { activity: values[0], detail: values[1] };
+  }
 }
-
-function sourceReadAction(tool: string): string | false {
-  if (tool === MODULE_EXPERT_READ_CONTEXT_TOOLS[0]) {
-    return 'file listing';
-  }
-  if (tool === MODULE_EXPERT_READ_CONTEXT_TOOLS[1]) {
-    return 'file read';
-  }
-  if (tool === MODULE_EXPERT_READ_CONTEXT_TOOLS[2]) {
-    return 'text search';
-  }
-  return false;
-}
-
-function sourceReadStatus(status: McpToolCallItem['status']): string {
-  if (status === 'completed') {
-    return 'completed';
-  }
-  if (status === 'failed') {
-    return 'failed';
-  }
-  return 'ended without a terminal status';
-}
-
 type ObservationValues = readonly [WorkflowRuntimeActivityKind, string];
-
-function observation(values: ObservationValues): RuntimeActivityObservation {
-  return { activity: values[0], detail: values[1] };
-}

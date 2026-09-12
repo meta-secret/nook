@@ -1,3 +1,14 @@
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
+import {
+  SecretEditRejection,
+  type SecretOperationResult,
+} from "./secret-operation-failure";
+import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
+import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
+import {
+  VaultStorageFailure as StorageOperationFailure,
+  VaultStorageFailureKind as StorageOperationFailureKind,
+} from "$lib/runtime/storage-failure";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import type {
@@ -7,627 +18,739 @@ import type {
   SecretType,
 } from "$lib/nook";
 import { generate_secret_id } from "$lib/nook";
-import { createLogger } from "$lib/runtime/log";
+import { browserLogRuntime } from "$lib/runtime/log";
 import { type NookSecretPage, type NookVaultManager } from "$app-wasm";
 import { VaultEditDecision } from "$app-wasm";
 import { PasswordEntrySelectionKind } from "$lib/vault/state/session.svelte";
 
-export { loadDb } from "$lib/vault/connection";
+export { VaultConnectionActions } from "$lib/vault/connection";
 
-const log = createLogger("connect");
+const log = browserLogRuntime.createLogger("connect");
 
 interface VaultSecretAllocation {
   free(): void;
 }
+
 type VaultSecretAllocationCollection = ReadonlyArray<VaultSecretAllocation>;
 
 interface PasswordManagerImportExecution {
-  readonly state: VaultState;
   readonly importFromManager: (
     manager: NookVaultManager,
-  ) => Promise<NookImportResult>;
+  ) => Promise<SecretOperationResult<NookImportResult>>;
   readonly sourceName: string;
   readonly successKey: string;
   readonly failureKey: string;
 }
 
 interface SecretCreation {
-  readonly state: VaultState;
   readonly id: string;
   readonly type: SecretType;
   readonly data: string;
 }
 
 interface BitwardenVaultImport {
-  readonly state: VaultState;
   readonly json: string;
   readonly password: string;
 }
 
 interface KeePassXcVaultImport {
-  readonly state: VaultState;
   readonly csv: string;
 }
 
 interface LastPassVaultImport {
-  readonly state: VaultState;
   readonly csv: string;
 }
 
 interface KeeperVaultImport {
-  readonly state: VaultState;
   readonly csv: string;
 }
 
 interface OnePasswordVaultImport {
-  readonly state: VaultState;
   readonly archive: Uint8Array;
 }
 
 interface ApplePasswordsVaultImport {
-  readonly state: VaultState;
   readonly exportBytes: Uint8Array;
 }
 
 interface ChromePasswordsVaultImport {
-  readonly state: VaultState;
   readonly csv: string;
 }
 
 interface DashlaneVaultImport {
-  readonly state: VaultState;
   readonly exportBytes: Uint8Array;
 }
 
 interface ProtonPassVaultImport {
-  readonly state: VaultState;
   readonly exportBytes: Uint8Array;
 }
 
 interface AuthenticatorMigrationImport {
-  readonly state: VaultState;
   readonly migrationUris: string[];
 }
 
 interface SecretDeletion {
-  readonly state: VaultState;
   readonly id: string;
 }
 
 interface SecretReplacement {
-  readonly state: VaultState;
   readonly oldId: string;
   readonly type: SecretType;
   readonly data: string;
 }
 
 interface SecretPageRequest {
-  readonly state: VaultState;
   readonly query: string;
   readonly requestedOffset: number;
 }
 
 interface ConnectedSecretPageApplication {
-  readonly state: VaultState;
   readonly page: NookSecretPage;
   readonly query: string;
 }
 
 interface SecretDecryption {
-  readonly state: VaultState;
   readonly id: string;
 }
 
 interface AuthenticatorCodeRequest {
-  readonly state: VaultState;
   readonly id: string;
 }
 
-function freeSecretRecords(records: VaultSecretAllocationCollection) {
-  for (const record of records) record.free();
-}
+/** Owns browser orchestration for one secrets context. */
+export class VaultSecretActions {
+  constructor(private readonly state: VaultState) {}
 
-async function runPasswordManagerImport({
-  state,
-  importFromManager,
-  sourceName,
-  successKey,
-  failureKey,
-}: PasswordManagerImportExecution): Promise<NookImportResult> {
-  if (!state.hasManager)
-    throw new Error(state.t(I18N_KEYS.ErrorsEngineUnavailable));
-  const manager = state.requireManager();
-  const editRestriction = state.editRestriction;
-  if (editRestriction.decision !== VaultEditDecision.Allowed) {
-    throw new Error(editRestriction.reason);
+  private freeSecretRecords(records: VaultSecretAllocationCollection) {
+    for (const record of records) record.free();
   }
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isSaving = true;
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-  try {
-    const result = await state.enqueueStorage(() => importFromManager(manager));
-    await state.runFanOutSyncAfterLocalSave();
-    await state.refreshSecretsFromSession();
-    log.info(`${sourceName} import completed`);
-    const tArgs: Parameters<typeof state.t>[0] = {
-      key: successKey,
-      replacements: { count: String(result.imported) },
-    };
-    state.showSuccess(state.t(tArgs));
-    return result;
-  } catch (error) {
-    const tArgs2: Parameters<typeof state.t>[0] = {
-      key: failureKey,
-      replacements: {
-        error: error instanceof Error ? error.message : String(error),
-      },
-    };
-    state.errorMsg = state.t(tArgs2);
-    throw error;
-  } finally {
-    state.isSaving = false;
-  }
-}
 
-async function prepareSecretMutation(state: VaultState): Promise<boolean> {
-  if (!state.hasManager) return false;
-  const editRestriction = state.editRestriction;
-  if (editRestriction.decision !== VaultEditDecision.Allowed) {
-    state.errorMsg = editRestriction.reason;
-    return false;
-  }
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isSaving = true;
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-  return true;
-}
-
-export async function handleAddSecret({
-  state,
-  id,
-  type,
-  data,
-}: SecretCreation) {
-  if (!(await prepareSecretMutation(state))) return;
-  try {
-    await state.enqueueStorage(async () => {
-      const raceStorageTimeoutArgs: Parameters<
-        typeof state.raceStorageTimeout
-      >[0] = {
-        promise: state.requireManager().add_secret(id, type, data),
-        label: "Add secret",
-      };
-      const rawRecords = (await state.raceStorageTimeout(
-        raceStorageTimeoutArgs,
-      )) as NookSecretRecord[];
-      freeSecretRecords(rawRecords);
-    });
-    await state.refreshSecretsFromSession();
-    log.info("secret added");
-    state.showSuccess(state.t(I18N_KEYS.ToastsSecretSaved));
-    await state.runFanOutSyncAfterLocalSave();
-    await state.refreshSecretsFromSession();
-  } catch (e) {
-    state.errorMsg = `Failed to save secret: ${e instanceof Error ? e.message : String(e)}`;
-    throw e;
-  } finally {
-    state.isSaving = false;
-  }
-}
-
-export async function handleBitwardenImport({
-  state,
-  json,
-  password,
-}: BitwardenVaultImport): Promise<NookImportResult> {
-  const runPasswordManagerImportArgs: Parameters<
-    typeof runPasswordManagerImport
-  >[0] = {
-    state,
-    importFromManager: (manager) =>
-      manager.import_bitwarden_json(json, password),
-    sourceName: "Bitwarden",
-    successKey: I18N_KEYS.ToastsBitwardenImported,
-    failureKey: I18N_KEYS.BitwardenImportFailed,
-  };
-  return runPasswordManagerImport(runPasswordManagerImportArgs);
-}
-
-export async function handleKeePassXcImport({
-  state,
-  csv,
-}: KeePassXcVaultImport): Promise<NookImportResult> {
-  const runPasswordManagerImportArgs2: Parameters<
-    typeof runPasswordManagerImport
-  >[0] = {
-    state,
-    importFromManager: (manager) => manager.import_keepassxc_csv(csv),
-    sourceName: "KeePassXC",
-    successKey: I18N_KEYS.ToastsKeepassxcImported,
-    failureKey: I18N_KEYS.KeepassxcImportFailed,
-  };
-  return runPasswordManagerImport(runPasswordManagerImportArgs2);
-}
-
-export async function handleLastPassImport({
-  state,
-  csv,
-}: LastPassVaultImport): Promise<NookImportResult> {
-  const runPasswordManagerImportArgs3: Parameters<
-    typeof runPasswordManagerImport
-  >[0] = {
-    state,
-    importFromManager: (manager) => manager.import_lastpass_csv(csv),
-    sourceName: "LastPass",
-    successKey: I18N_KEYS.ToastsLastpassImported,
-    failureKey: I18N_KEYS.LastpassImportFailed,
-  };
-  return runPasswordManagerImport(runPasswordManagerImportArgs3);
-}
-
-export async function handleKeeperImport({
-  state,
-  csv,
-}: KeeperVaultImport): Promise<NookImportResult> {
-  const runPasswordManagerImportArgs4: Parameters<
-    typeof runPasswordManagerImport
-  >[0] = {
-    state,
-    importFromManager: (manager) => manager.import_keeper_csv(csv),
-    sourceName: "Keeper",
-    successKey: I18N_KEYS.ToastsKeeperImported,
-    failureKey: I18N_KEYS.KeeperImportFailed,
-  };
-  return runPasswordManagerImport(runPasswordManagerImportArgs4);
-}
-
-export async function handleOnePasswordImport({
-  state,
-  archive,
-}: OnePasswordVaultImport): Promise<NookImportResult> {
-  const runPasswordManagerImportArgs5: Parameters<
-    typeof runPasswordManagerImport
-  >[0] = {
-    state,
-    importFromManager: (manager) => manager.import_onepassword_pux(archive),
-    sourceName: "1Password",
-    successKey: I18N_KEYS.ToastsOnepasswordImported,
-    failureKey: I18N_KEYS.OnepasswordImportFailed,
-  };
-  return runPasswordManagerImport(runPasswordManagerImportArgs5);
-}
-
-export async function handleApplePasswordsImport({
-  state,
-  exportBytes,
-}: ApplePasswordsVaultImport): Promise<NookImportResult> {
-  const runPasswordManagerImportArgs6: Parameters<
-    typeof runPasswordManagerImport
-  >[0] = {
-    state,
-    importFromManager: (manager) =>
-      manager.import_apple_passwords_export(exportBytes),
-    sourceName: "Safari / Apple Passwords",
-    successKey: I18N_KEYS.ToastsApplePasswordsImported,
-    failureKey: I18N_KEYS.ApplePasswordsImportFailed,
-  };
-  return runPasswordManagerImport(runPasswordManagerImportArgs6);
-}
-
-export async function handleChromePasswordsImport({
-  state,
-  csv,
-}: ChromePasswordsVaultImport): Promise<NookImportResult> {
-  const runPasswordManagerImportArgs7: Parameters<
-    typeof runPasswordManagerImport
-  >[0] = {
-    state,
-    importFromManager: (manager) => manager.import_chrome_passwords_csv(csv),
-    sourceName: "Chrome passwords",
-    successKey: I18N_KEYS.ToastsChromePasswordsImported,
-    failureKey: I18N_KEYS.ChromePasswordsImportFailed,
-  };
-  return runPasswordManagerImport(runPasswordManagerImportArgs7);
-}
-
-export async function handleDashlaneImport({
-  state,
-  exportBytes,
-}: DashlaneVaultImport): Promise<NookImportResult> {
-  const runPasswordManagerImportArgs8: Parameters<
-    typeof runPasswordManagerImport
-  >[0] = {
-    state,
-    importFromManager: (manager) => manager.import_dashlane_export(exportBytes),
-    sourceName: "Dashlane",
-    successKey: I18N_KEYS.ToastsDashlaneImported,
-    failureKey: I18N_KEYS.DashlaneImportFailed,
-  };
-  return runPasswordManagerImport(runPasswordManagerImportArgs8);
-}
-
-export async function handleGoogleAuthenticatorImport({
-  state,
-  migrationUris,
-}: AuthenticatorMigrationImport): Promise<NookImportResult> {
-  const runPasswordManagerImportArgs9: Parameters<
-    typeof runPasswordManagerImport
-  >[0] = {
-    state,
-    importFromManager: (manager) =>
-      manager.import_google_authenticator_migration(migrationUris),
-    sourceName: "Google Authenticator",
-    successKey: I18N_KEYS.ToastsGoogleAuthenticatorImported,
-    failureKey: I18N_KEYS.GoogleAuthenticatorImportFailed,
-  };
-  return runPasswordManagerImport(runPasswordManagerImportArgs9);
-}
-
-export async function handleProtonPassImport({
-  state,
-  exportBytes,
-}: ProtonPassVaultImport): Promise<NookImportResult> {
-  const runPasswordManagerImportArgs10: Parameters<
-    typeof runPasswordManagerImport
-  >[0] = {
-    state,
-    importFromManager: (manager) => manager.import_proton_pass(exportBytes),
-    sourceName: "Proton Pass",
-    successKey: I18N_KEYS.ToastsProtonPassImported,
-    failureKey: I18N_KEYS.ProtonPassImportFailed,
-  };
-  return runPasswordManagerImport(runPasswordManagerImportArgs10);
-}
-
-export async function handleDeleteSecret({ state, id }: SecretDeletion) {
-  if (!state.hasManager) return;
-  const editRestriction = state.editRestriction;
-  if (editRestriction.decision !== VaultEditDecision.Allowed) {
-    state.errorMsg = editRestriction.reason;
-    return;
-  }
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isSaving = true;
-  // Drop the row immediately so the UI reflects the delete without waiting for
-  // the authoritative wasm op, which can queue behind background sync work
-  // (restored below if the delete fails).
-  const previousSecrets = state.secrets;
-  const deletedRecord = state.secrets.find((record) => record.id === id);
-  let committed = false;
-  state.secrets = state.secrets.filter((record) => record.id !== id);
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
-  try {
-    await state.enqueueStorage(async () => {
-      const rawRecords = (await state
-        .requireManager()
-        .delete_secret(id)) as NookSecretRecord[];
-      freeSecretRecords(rawRecords);
-    });
-    committed = true;
-    deletedRecord?.free();
-    await state.refreshSecretsFromSession();
-    log.info("secret deleted");
-    state.showSuccess(state.t(I18N_KEYS.ToastsSecretDeleted));
-    // Match add/replace: await fan-out so the delete event is pushed before
-    // callers observe remote state (and so an empty provider list is not a
-    // silent no-op race right after unlock).
-    await state.runFanOutSyncAfterLocalSave();
-    await state.refreshSecretsFromSession();
-  } catch (e) {
-    if (!committed) {
-      state.secrets = previousSecrets;
+  private async runPasswordManagerImport({
+    importFromManager,
+    sourceName,
+    successKey,
+  }: PasswordManagerImportExecution): Promise<
+    SecretOperationResult<NookImportResult>
+  > {
+    const state = this.state;
+    const prepared = await this.prepareSecretMutation();
+    if (prepared.isErr()) return storageErr(prepared.error);
+    state.isSaving = true;
+    try {
+      const imported = await state.enqueueStorage(async () => {
+        const manager = state.admitManager();
+        if (manager.isErr()) return storageErr(manager.error);
+        return importFromManager(manager.value);
+      });
+      if (imported.isErr()) return storageErr(imported.error);
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave();
+      if (localSaveSync.isErr()) {
+        imported.value.free();
+        return storageErr(localSaveSync.error);
+      }
+      const refreshed = await state.refreshSecretsFromSession();
+      if (refreshed.isErr()) {
+        imported.value.free();
+        return storageErr(refreshed.error);
+      }
+      log.info(sourceName + " import completed");
+      state.showSuccess(
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        state.t({
+          key: successKey,
+          replacements: { count: String(imported.value.imported) },
+        }),
+      );
+      return imported;
+    } finally {
+      state.isSaving = false;
     }
-    state.errorMsg = `Failed to delete secret: ${e instanceof Error ? e.message : String(e)}`;
-    throw e;
-  } finally {
-    state.isSaving = false;
   }
-}
 
-export async function handleReplaceSecret({
-  state,
-  oldId,
-  type,
-  data,
-}: SecretReplacement) {
-  if (!(await prepareSecretMutation(state))) return;
-  try {
-    const newId = generate_secret_id();
-    await state.enqueueStorage(async () => {
-      const rawRecords = (await state
-        .requireManager()
-        .replace_secret(oldId, newId, type, data)) as NookSecretRecord[];
-      freeSecretRecords(rawRecords);
-    });
-    await state.refreshSecretsFromSession();
-    log.info("secret replaced");
-    await state.runFanOutSyncAfterLocalSave();
-    state.showSuccess(state.t(I18N_KEYS.ToastsItemUpdated));
-  } catch (e) {
-    state.errorMsg = `Failed to update item: ${e instanceof Error ? e.message : String(e)}`;
-    throw e;
-  } finally {
-    state.isSaving = false;
+  private async prepareSecretMutation(): Promise<SecretOperationResult<void>> {
+    const state = this.state;
+    const manager = state.admitManager();
+    if (manager.isErr()) return storageErr(manager.error);
+    const restriction = state.editRestriction;
+    if (restriction.decision !== VaultEditDecision.Allowed)
+      return storageErr(new SecretEditRejection(restriction));
+    state.errorMsg = "";
+    state.dismissSuccess();
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    return storageOk();
   }
-}
 
-export async function refreshPasswordEntriesList(
-  state: VaultState,
-): Promise<boolean> {
-  if (!state.hasManager) return false;
-  try {
+  async handleAddSecret({
+    id,
+    type,
+    data,
+  }: SecretCreation): Promise<SecretOperationResult<void>> {
+    const state = this.state;
+    const prepared = await this.prepareSecretMutation();
+    if (prepared.isErr()) return storageErr(prepared.error);
+    state.isSaving = true;
+    try {
+      const added = await state.enqueueStorage(async () => {
+        const manager = state.admitManager();
+        if (manager.isErr()) return storageErr(manager.error);
+        const operation = (async () => {
+          try {
+            return storageOk(await manager.value.add_secret(id, type, data));
+          } catch (nativeFailure) {
+            return storageErr(new NativeVaultStorageFailure(nativeFailure));
+          }
+        })();
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        return state.raceStorageTimeout({
+          promise: operation,
+          releaseLateValue: (records) => this.freeSecretRecords(records),
+        });
+      });
+      if (added.isErr()) {
+        return storageErr(added.error);
+      }
+      this.freeSecretRecords(added.value);
+      const refreshed = await state.refreshSecretsFromSession();
+      if (refreshed.isErr()) return storageErr(refreshed.error);
+      log.info("secret added");
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave();
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
+      const synchronized = await state.refreshSecretsFromSession();
+      if (synchronized.isErr()) return storageErr(synchronized.error);
+      state.showSuccess(state.t(I18N_KEYS.ToastsSecretSaved));
+      return storageOk();
+    } finally {
+      state.isSaving = false;
+    }
+  }
+
+  async handleBitwardenImport({
+    json,
+    password,
+  }: BitwardenVaultImport): Promise<SecretOperationResult<NookImportResult>> {
+    const runPasswordManagerImportArgs: Parameters<
+      VaultSecretActions["runPasswordManagerImport"]
+    >[0] = {
+      importFromManager: async (manager) => {
+        try {
+          return storageOk(await manager.import_bitwarden_json(json, password));
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      },
+      sourceName: "Bitwarden",
+      successKey: I18N_KEYS.ToastsBitwardenImported,
+      failureKey: I18N_KEYS.BitwardenImportFailed,
+    };
+    return this.runPasswordManagerImport(runPasswordManagerImportArgs);
+  }
+
+  async handleKeePassXcImport({
+    csv,
+  }: KeePassXcVaultImport): Promise<SecretOperationResult<NookImportResult>> {
+    const runPasswordManagerImportArgs2: Parameters<
+      VaultSecretActions["runPasswordManagerImport"]
+    >[0] = {
+      importFromManager: async (manager) => {
+        try {
+          return storageOk(await manager.import_keepassxc_csv(csv));
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      },
+      sourceName: "KeePassXC",
+      successKey: I18N_KEYS.ToastsKeepassxcImported,
+      failureKey: I18N_KEYS.KeepassxcImportFailed,
+    };
+    return this.runPasswordManagerImport(runPasswordManagerImportArgs2);
+  }
+
+  async handleLastPassImport({
+    csv,
+  }: LastPassVaultImport): Promise<SecretOperationResult<NookImportResult>> {
+    const runPasswordManagerImportArgs3: Parameters<
+      VaultSecretActions["runPasswordManagerImport"]
+    >[0] = {
+      importFromManager: async (manager) => {
+        try {
+          return storageOk(await manager.import_lastpass_csv(csv));
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      },
+      sourceName: "LastPass",
+      successKey: I18N_KEYS.ToastsLastpassImported,
+      failureKey: I18N_KEYS.LastpassImportFailed,
+    };
+    return this.runPasswordManagerImport(runPasswordManagerImportArgs3);
+  }
+
+  async handleKeeperImport({
+    csv,
+  }: KeeperVaultImport): Promise<SecretOperationResult<NookImportResult>> {
+    const runPasswordManagerImportArgs4: Parameters<
+      VaultSecretActions["runPasswordManagerImport"]
+    >[0] = {
+      importFromManager: async (manager) => {
+        try {
+          return storageOk(await manager.import_keeper_csv(csv));
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      },
+      sourceName: "Keeper",
+      successKey: I18N_KEYS.ToastsKeeperImported,
+      failureKey: I18N_KEYS.KeeperImportFailed,
+    };
+    return this.runPasswordManagerImport(runPasswordManagerImportArgs4);
+  }
+
+  async handleOnePasswordImport({
+    archive,
+  }: OnePasswordVaultImport): Promise<SecretOperationResult<NookImportResult>> {
+    const runPasswordManagerImportArgs5: Parameters<
+      VaultSecretActions["runPasswordManagerImport"]
+    >[0] = {
+      importFromManager: async (manager) => {
+        try {
+          return storageOk(await manager.import_onepassword_pux(archive));
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      },
+      sourceName: "1Password",
+      successKey: I18N_KEYS.ToastsOnepasswordImported,
+      failureKey: I18N_KEYS.OnepasswordImportFailed,
+    };
+    return this.runPasswordManagerImport(runPasswordManagerImportArgs5);
+  }
+
+  async handleApplePasswordsImport({
+    exportBytes,
+  }: ApplePasswordsVaultImport): Promise<
+    SecretOperationResult<NookImportResult>
+  > {
+    const runPasswordManagerImportArgs6: Parameters<
+      VaultSecretActions["runPasswordManagerImport"]
+    >[0] = {
+      importFromManager: async (manager) => {
+        try {
+          return storageOk(
+            await manager.import_apple_passwords_export(exportBytes),
+          );
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      },
+      sourceName: "Safari / Apple Passwords",
+      successKey: I18N_KEYS.ToastsApplePasswordsImported,
+      failureKey: I18N_KEYS.ApplePasswordsImportFailed,
+    };
+    return this.runPasswordManagerImport(runPasswordManagerImportArgs6);
+  }
+
+  async handleChromePasswordsImport({
+    csv,
+  }: ChromePasswordsVaultImport): Promise<
+    SecretOperationResult<NookImportResult>
+  > {
+    const runPasswordManagerImportArgs7: Parameters<
+      VaultSecretActions["runPasswordManagerImport"]
+    >[0] = {
+      importFromManager: async (manager) => {
+        try {
+          return storageOk(await manager.import_chrome_passwords_csv(csv));
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      },
+      sourceName: "Chrome passwords",
+      successKey: I18N_KEYS.ToastsChromePasswordsImported,
+      failureKey: I18N_KEYS.ChromePasswordsImportFailed,
+    };
+    return this.runPasswordManagerImport(runPasswordManagerImportArgs7);
+  }
+
+  async handleDashlaneImport({
+    exportBytes,
+  }: DashlaneVaultImport): Promise<SecretOperationResult<NookImportResult>> {
+    const runPasswordManagerImportArgs8: Parameters<
+      VaultSecretActions["runPasswordManagerImport"]
+    >[0] = {
+      importFromManager: async (manager) => {
+        try {
+          return storageOk(await manager.import_dashlane_export(exportBytes));
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      },
+      sourceName: "Dashlane",
+      successKey: I18N_KEYS.ToastsDashlaneImported,
+      failureKey: I18N_KEYS.DashlaneImportFailed,
+    };
+    return this.runPasswordManagerImport(runPasswordManagerImportArgs8);
+  }
+
+  async handleGoogleAuthenticatorImport({
+    migrationUris,
+  }: AuthenticatorMigrationImport): Promise<
+    SecretOperationResult<NookImportResult>
+  > {
+    const runPasswordManagerImportArgs9: Parameters<
+      VaultSecretActions["runPasswordManagerImport"]
+    >[0] = {
+      importFromManager: async (manager) => {
+        try {
+          return storageOk(
+            await manager.import_google_authenticator_migration(migrationUris),
+          );
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      },
+      sourceName: "Google Authenticator",
+      successKey: I18N_KEYS.ToastsGoogleAuthenticatorImported,
+      failureKey: I18N_KEYS.GoogleAuthenticatorImportFailed,
+    };
+    return this.runPasswordManagerImport(runPasswordManagerImportArgs9);
+  }
+
+  async handleProtonPassImport({
+    exportBytes,
+  }: ProtonPassVaultImport): Promise<SecretOperationResult<NookImportResult>> {
+    const runPasswordManagerImportArgs10: Parameters<
+      VaultSecretActions["runPasswordManagerImport"]
+    >[0] = {
+      importFromManager: async (manager) => {
+        try {
+          return storageOk(await manager.import_proton_pass(exportBytes));
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      },
+      sourceName: "Proton Pass",
+      successKey: I18N_KEYS.ToastsProtonPassImported,
+      failureKey: I18N_KEYS.ProtonPassImportFailed,
+    };
+    return this.runPasswordManagerImport(runPasswordManagerImportArgs10);
+  }
+
+  async handleDeleteSecret({
+    id,
+  }: SecretDeletion): Promise<SecretOperationResult<void>> {
+    const state = this.state;
+    const prepared = await this.prepareSecretMutation();
+    if (prepared.isErr()) return storageErr(prepared.error);
+    state.isSaving = true;
+    const previousSecrets = state.secrets;
+    const deletedRecord = previousSecrets.find((record) => record.id === id);
+    state.secrets = previousSecrets.filter((record) => record.id !== id);
+    let committed = false;
+    try {
+      const deleted = await state.enqueueStorage(async () => {
+        const manager = state.admitManager();
+        if (manager.isErr()) return storageErr(manager.error);
+        try {
+          return storageOk(await manager.value.delete_secret(id));
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      });
+      if (deleted.isErr()) return storageErr(deleted.error);
+      this.freeSecretRecords(deleted.value);
+      committed = true;
+      deletedRecord?.free();
+      const refreshed = await state.refreshSecretsFromSession();
+      if (refreshed.isErr()) return storageErr(refreshed.error);
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave();
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
+      const synchronized = await state.refreshSecretsFromSession();
+      if (synchronized.isErr()) return storageErr(synchronized.error);
+      state.showSuccess(state.t(I18N_KEYS.ToastsSecretDeleted));
+      return storageOk();
+    } finally {
+      if (!committed) state.secrets = previousSecrets;
+      state.isSaving = false;
+    }
+  }
+
+  async handleReplaceSecret({
+    oldId,
+    type,
+    data,
+  }: SecretReplacement): Promise<SecretOperationResult<void>> {
+    const state = this.state;
+    const prepared = await this.prepareSecretMutation();
+    if (prepared.isErr()) return storageErr(prepared.error);
+    state.isSaving = true;
+    try {
+      const replaced = await state.enqueueStorage(async () => {
+        const manager = state.admitManager();
+        if (manager.isErr()) return storageErr(manager.error);
+        try {
+          return storageOk(
+            await manager.value.replace_secret(
+              oldId,
+              generate_secret_id(),
+              type,
+              data,
+            ),
+          );
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      });
+      if (replaced.isErr()) return storageErr(replaced.error);
+      this.freeSecretRecords(replaced.value);
+      const refreshed = await state.refreshSecretsFromSession();
+      if (refreshed.isErr()) return storageErr(refreshed.error);
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave();
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error);
+      state.showSuccess(state.t(I18N_KEYS.ToastsItemUpdated));
+      return storageOk();
+    } finally {
+      state.isSaving = false;
+    }
+  }
+
+  async refreshPasswordEntriesList(): Promise<
+    Result<void, OAuthFailure | StorageOperationFailure>
+  > {
+    const state = this.state;
     if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
       state.passwordEntries = [];
-      return false;
+      return storageOk();
     }
     if (state.storageMode !== "local") {
-      await state.ensureOAuthTokensFresh();
+      const refreshed = await state.ensureOAuthTokensFresh();
+      if (refreshed.isErr()) return storageErr(refreshed.error);
     }
-    const raw = await state.enqueueStorage(() =>
-      state
-        .requireManager()
-        .fetch_vault_password_entries(...state.wasmStorageArgs()),
-    );
-    state.passwordEntries = raw;
+    const entries = await state.enqueueStorage(async () => {
+      const manager = state.admitManager();
+      if (manager.isErr()) return storageErr(manager.error);
+      const args = state.wasmStorageArgs();
+      try {
+        return storageOk(
+          await manager.value.fetch_vault_password_entries(
+            args.mode,
+            args.pat,
+            args.repo,
+          ),
+        );
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure));
+      }
+    });
+    if (entries.isErr()) return storageErr(entries.error);
+    state.passwordEntries = entries.value;
     if (
       state.passwordEntries.length === 1 &&
       state.selectedPasswordEntry.kind ===
         PasswordEntrySelectionKind.NotSelected
     ) {
-      for (const entry of state.passwordEntries) {
+      for (const entry of state.passwordEntries)
         state.selectPasswordEntry(entry.id);
+    }
+    return storageOk();
+  }
+
+  async refreshSecretsFromSession(): Promise<
+    Result<void, StorageOperationFailure>
+  > {
+    const state = this.state;
+    if (!state.hasManager) {
+      this.freeSecretRecords(state.secrets);
+      state.secrets = [];
+      state.secretTotal = 0;
+      state.secretPageOffset = 0;
+      state.secretPageRequestOffset = 0;
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.ManagerUnavailable,
+        ),
+      );
+    }
+    const loadSecretPageArgs2: Parameters<
+      VaultSecretActions["loadSecretPage"]
+    >[0] = {
+      query: state.secretQuery,
+      requestedOffset: state.secretPageRequestOffset,
+    };
+    return this.loadSecretPage(loadSecretPageArgs2);
+  }
+
+  async loadSecretPage({
+    query,
+    requestedOffset,
+  }: SecretPageRequest): Promise<Result<void, StorageOperationFailure>> {
+    const state = this.state;
+    if (!state.hasManager)
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.ManagerUnavailable,
+        ),
+      );
+    // Publish the request immediately so maintenance refreshes queued behind it
+    // cannot re-submit the previous query or page.
+    state.secretQuery = query;
+    state.secretPageRequestOffset = requestedOffset;
+    // Each request supersedes every older page request. The storage queue
+    // serializes WASM access, but it does not prevent an earlier caller from
+    // applying its result after a newer search has already been requested.
+    const generation = ++state.secretPageGeneration;
+    const page = await state.enqueueStorage(async () => {
+      const admittedManager = state.admitManager();
+      if (admittedManager.isErr()) return storageErr(admittedManager.error);
+      try {
+        return storageOk(
+          await admittedManager.value.query_prepared_secret_page_js(
+            query,
+            state.secretTypeFilter,
+            requestedOffset,
+            state.secretPageSize,
+          ),
+        );
+      } catch (nativeFailure) {
+        return storageErr(new NativeVaultStorageFailure(nativeFailure));
+      }
+    });
+    if (page.isErr()) {
+      if (generation === state.secretPageGeneration) {
+        state.errorMsg = state.t(page.error.translationKey);
+      }
+      return storageErr(page.error);
+    }
+    let records = page.value.take_items();
+    let total = page.value.total;
+    let offset = page.value.offset;
+    page.value.free();
+    if (generation !== state.secretPageGeneration) {
+      this.freeSecretRecords(records);
+      return storageErr(
+        new StorageOperationFailure(
+          StorageOperationFailureKind.GenerationChanged,
+        ),
+      );
+    }
+
+    if (records.length === 0 && total > 0 && offset >= total) {
+      const lastOffset = state.clientPolicy.normalized_secret_page_offset(
+        total,
+        offset,
+        state.secretPageSize,
+      );
+      const lastPage = await state.enqueueStorage(async () => {
+        const admittedManager = state.admitManager();
+        if (admittedManager.isErr()) return storageErr(admittedManager.error);
+        try {
+          return storageOk(
+            admittedManager.value.query_secret_page_js(
+              query,
+              state.secretTypeFilter,
+              lastOffset,
+              state.secretPageSize,
+            ),
+          );
+        } catch (nativeFailure) {
+          return storageErr(new NativeVaultStorageFailure(nativeFailure));
+        }
+      });
+      if (lastPage.isErr()) {
+        this.freeSecretRecords(records);
+        if (generation === state.secretPageGeneration) {
+          state.errorMsg = state.t(lastPage.error.translationKey);
+        }
+        return storageErr(lastPage.error);
+      }
+      records = lastPage.value.take_items();
+      total = lastPage.value.total;
+      offset = lastPage.value.offset;
+      lastPage.value.free();
+      if (generation !== state.secretPageGeneration) {
+        this.freeSecretRecords(records);
+        return storageErr(
+          new StorageOperationFailure(
+            StorageOperationFailureKind.GenerationChanged,
+          ),
+        );
       }
     }
-    return true;
-  } catch {
-    state.passwordEntries = [];
-    return false;
-  }
-}
 
-export async function refreshSecretsFromSession(
-  state: VaultState,
-): Promise<void> {
-  if (!state.hasManager) {
-    freeSecretRecords(state.secrets);
-    state.secrets = [];
-    state.secretTotal = 0;
-    state.secretPageOffset = 0;
-    state.secretPageRequestOffset = 0;
-    return;
-  }
-  const loadSecretPageArgs2: Parameters<typeof loadSecretPage>[0] = {
-    state,
-    query: state.secretQuery,
-    requestedOffset: state.secretPageRequestOffset,
-  };
-  await loadSecretPage(loadSecretPageArgs2);
-}
-
-export async function loadSecretPage({
-  state,
-  query,
-  requestedOffset,
-}: SecretPageRequest): Promise<void> {
-  if (!state.hasManager) return;
-  // Publish the request immediately so maintenance refreshes queued behind it
-  // cannot re-submit the previous query or page.
-  state.secretQuery = query;
-  state.secretPageRequestOffset = requestedOffset;
-  // Each request supersedes every older page request. The storage queue
-  // serializes WASM access, but it does not prevent an earlier caller from
-  // applying its result after a newer search has already been requested.
-  const generation = ++state.secretPageGeneration;
-  const page = await state.enqueueStorage(() =>
-    state
-      .requireManager()
-      .query_prepared_secret_page_js(
-        query,
-        state.secretTypeFilter,
-        requestedOffset,
-        state.secretPageSize,
-      ),
-  );
-  let records = page.take_items();
-  let total = page.total;
-  let offset = page.offset;
-  page.free();
-  if (generation !== state.secretPageGeneration) {
-    freeSecretRecords(records);
-    return;
+    this.freeSecretRecords(state.secrets);
+    state.secrets = records;
+    state.secretTotal = total;
+    state.secretPageOffset = offset;
+    state.secretPageRequestOffset = offset;
+    state.secretQuery = query;
+    return storageOk();
   }
 
-  if (records.length === 0 && total > 0 && offset >= total) {
-    const lastOffset = state.clientPolicy.normalized_secret_page_offset(
-      total,
-      offset,
-      state.secretPageSize,
-    );
-    const lastPage = await state.enqueueStorage(() =>
-      state
-        .requireManager()
-        .query_secret_page_js(
-          query,
-          state.secretTypeFilter,
-          lastOffset,
-          state.secretPageSize,
-        ),
-    );
-    records = lastPage.take_items();
-    total = lastPage.total;
-    offset = lastPage.offset;
-    lastPage.free();
-    if (generation !== state.secretPageGeneration) {
-      freeSecretRecords(records);
-      return;
+  applyConnectedSecretPage({
+    page,
+    query,
+  }: ConnectedSecretPageApplication): void {
+    const state = this.state;
+    const records = page.take_items();
+    const total = page.total;
+    const offset = page.offset;
+    page.free();
+    this.freeSecretRecords(state.secrets);
+    state.secrets = records;
+    state.secretTotal = total;
+    state.secretPageOffset = offset;
+    state.secretPageRequestOffset = offset;
+    state.secretQuery = query;
+  }
+
+  async decryptSecret({
+    id,
+  }: SecretDecryption): Promise<
+    Result<NookSecretRecord, StorageOperationFailure>
+  > {
+    const state = this.state;
+
+    return state.enqueueStorage(async () => {
+      const admittedManager = state.admitManager();
+      if (admittedManager.isErr()) return storageErr(admittedManager.error);
+      try {
+        return storageOk(admittedManager.value.decrypt_secret_js(id));
+      } catch (nativeFailure) {
+        return storageErr(new NativeVaultStorageFailure(nativeFailure));
+      }
+    });
+  }
+
+  async currentAuthenticatorCode({
+    id,
+  }: AuthenticatorCodeRequest): Promise<
+    Result<AuthenticatorCodeView, StorageOperationFailure>
+  > {
+    const state = this.state;
+    const unixSeconds = Math.floor(Date.now() / 1000);
+    const result = await state.enqueueStorage(async () => {
+      const admittedManager = state.admitManager();
+      if (admittedManager.isErr()) return storageErr(admittedManager.error);
+      try {
+        return storageOk(
+          admittedManager.value.current_authenticator_code(id, unixSeconds),
+        );
+      } catch (nativeFailure) {
+        return storageErr(new NativeVaultStorageFailure(nativeFailure));
+      }
+    });
+    if (result.isErr()) return storageErr(result.error);
+    try {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return storageOk({
+        code: result.value.code,
+        secondsRemaining: result.value.secondsRemaining,
+        period: result.value.period,
+        expiresAtUnixSeconds: result.value.expiresAtUnixSeconds,
+      });
+    } finally {
+      result.value.free();
     }
-  }
-
-  freeSecretRecords(state.secrets);
-  state.secrets = records;
-  state.secretTotal = total;
-  state.secretPageOffset = offset;
-  state.secretPageRequestOffset = offset;
-  state.secretQuery = query;
-}
-
-export function applyConnectedSecretPage({
-  state,
-  page,
-  query,
-}: ConnectedSecretPageApplication): void {
-  const records = page.take_items();
-  const total = page.total;
-  const offset = page.offset;
-  page.free();
-  freeSecretRecords(state.secrets);
-  state.secrets = records;
-  state.secretTotal = total;
-  state.secretPageOffset = offset;
-  state.secretPageRequestOffset = offset;
-  state.secretQuery = query;
-}
-
-export async function decryptSecret({
-  state,
-  id,
-}: SecretDecryption): Promise<NookSecretRecord> {
-  if (!state.hasManager) {
-    throw new Error("Vault manager is not initialized.");
-  }
-  return state.enqueueStorage(() =>
-    state.requireManager().decrypt_secret_js(id),
-  );
-}
-
-export async function currentAuthenticatorCode({
-  state,
-  id,
-}: AuthenticatorCodeRequest): Promise<AuthenticatorCodeView> {
-  if (!state.hasManager) {
-    throw new Error("Vault manager is not initialized.");
-  }
-  const unixSeconds = Math.floor(Date.now() / 1000);
-  const result = await state.enqueueStorage(() =>
-    state.requireManager().current_authenticator_code(id, unixSeconds),
-  );
-  try {
-    return {
-      code: result.code,
-      secondsRemaining: result.secondsRemaining,
-      period: result.period,
-      expiresAtUnixSeconds: result.expiresAtUnixSeconds,
-    };
-  } finally {
-    result.free();
   }
 }

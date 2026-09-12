@@ -7,13 +7,13 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 mod operation_application;
+mod security_conflicts;
 
+use crate::EventLookup;
 use crate::canonical::EventId;
-use crate::epoch::{
-    EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
-    concurrent_epoch_rotations_conflict, operation_starts_epoch,
-};
+use crate::epoch::{EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch};
 use crate::graph::EventGraph;
+use crate::{ConcurrentEpochRotations, VaultOperation};
 use crate::{EventError, EventResult};
 use crate::{PasswordUnlockEntry, SecretFingerprint};
 use nook_auth2::StoredSecretRecord;
@@ -104,6 +104,25 @@ impl Default for VaultProjection {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProjectionIntegrity {
+    UnresolvedSchema,
+    BlockingConflicts,
+    Resolved,
+}
+impl VaultProjection {
+    #[must_use]
+    pub fn integrity(&self) -> ProjectionIntegrity {
+        if self.unresolved_schema {
+            ProjectionIntegrity::UnresolvedSchema
+        } else if self.has_blocking_conflicts() {
+            ProjectionIntegrity::BlockingConflicts
+        } else {
+            ProjectionIntegrity::Resolved
+        }
+    }
+}
+
 impl VaultProjection {
     #[must_use]
     pub fn live_secrets(&self, graph: &EventGraph) -> BTreeMap<String, StoredSecretRecord> {
@@ -136,9 +155,14 @@ impl VaultProjection {
         let mut replacements_by_old: BTreeMap<SecretId, Vec<(EventId, SecretId)>> = BTreeMap::new();
 
         for event_id in order {
-            let event = graph.get(&event_id).ok_or(EventError::MissingEvent {
-                event_id: event_id.as_str().to_owned(),
-            })?;
+            let event = match graph.get(&event_id) {
+                EventLookup::Recorded(event) => event,
+                EventLookup::UnknownEvent => {
+                    return Err(EventError::MissingEvent {
+                        event_id: event_id.as_str().to_owned(),
+                    });
+                }
+            };
             if event.body.store_id != expected_store {
                 return Err(EventError::ProjectionStoreMismatch);
             }
@@ -147,25 +171,27 @@ impl VaultProjection {
                 continue;
             }
 
-            let mut security_reason = None;
             for operation in &event.body.operations {
-                if let EpochTransition::Rotated(reason) = operation_starts_epoch(operation) {
+                if let EpochTransition::Rotated(reason) =
+                    VaultOperation::operation_starts_epoch(operation)
+                {
                     epoch_events.insert(event_id.clone(), reason);
-                    security_reason = Some(reason);
+                    security_events.insert(event_id.clone(), reason);
                 }
                 if matches!(operation, crate::VaultOperation::JoinApproved { .. }) {
-                    security_reason.get_or_insert(EpochRotationReason::AccessGrant);
+                    security_events
+                        .entry(event_id.clone())
+                        .or_insert(EpochRotationReason::AccessGrant);
                 } else if !matches!(
                     operation,
                     crate::VaultOperation::EpochCheckpoint { .. }
                         | crate::VaultOperation::JoinRequested { .. }
                 ) {
-                    security_reason.get_or_insert(EpochRotationReason::ConcurrentVaultMutation);
+                    security_events
+                        .entry(event_id.clone())
+                        .or_insert(EpochRotationReason::ConcurrentVaultMutation);
                 }
                 projection.apply_operation(&event_id, operation, &mut replacements_by_old);
-            }
-            if let Some(reason) = security_reason {
-                security_events.insert(event_id.clone(), reason);
             }
 
             if let Ok(epoch_id) = EventId::parse(event.body.key_epoch.as_str()) {
@@ -218,30 +244,6 @@ impl VaultProjection {
         conflicts
     }
 
-    fn detect_security_conflicts(
-        graph: &EventGraph,
-        epoch_events: &BTreeMap<EventId, EpochRotationReason>,
-    ) -> Vec<SecurityConflict> {
-        let ids: Vec<EventId> = epoch_events.keys().cloned().collect();
-        let mut conflicts = Vec::new();
-        for (idx, left_id) in ids.iter().enumerate() {
-            for right_id in ids.iter().skip(idx + 1) {
-                if !graph.are_concurrent(left_id, right_id) {
-                    continue;
-                }
-                let left_reason = epoch_events[left_id];
-                let right_reason = epoch_events[right_id];
-                if concurrent_epoch_rotations_conflict(left_reason, right_reason) {
-                    conflicts.push(SecurityConflict {
-                        events: vec![left_id.clone(), right_id.clone()],
-                        reasons: vec![left_reason, right_reason],
-                    });
-                }
-            }
-        }
-        conflicts
-    }
-
     /// Verify projection invariance under event permutation (property-style check).
     pub fn assert_replay_invariant(graph: &EventGraph, store_id: &str) -> EventResult<()> {
         let baseline = Self::from_graph(graph, store_id)?;
@@ -255,15 +257,27 @@ impl VaultProjection {
     }
 }
 
+/// The initial epoch has no rotation checkpoint; rotated epochs name their commit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EpochCheckpoint {
+    Unrotated,
+    Committed(EventId),
+}
+
 impl EventGraph {
     /// Select the checkpoint that commits the projection's current rotated epoch.
     /// Concurrent access-neutral heads must not replace this causal checkpoint.
-    pub fn current_epoch_checkpoint(&self) -> EventResult<Option<EventId>> {
+    pub fn current_epoch_checkpoint(&self) -> EventResult<EpochCheckpoint> {
         let mut checkpoints = Vec::new();
         for event_id in self.topological_order()? {
-            let event = self.get(&event_id).ok_or(EventError::MissingEvent {
-                event_id: event_id.as_str().to_owned(),
-            })?;
+            let event = match self.get(&event_id) {
+                EventLookup::Recorded(event) => event,
+                EventLookup::UnknownEvent => {
+                    return Err(EventError::MissingEvent {
+                        event_id: event_id.as_str().to_owned(),
+                    });
+                }
+            };
             if !event
                 .body
                 .operations
@@ -293,42 +307,62 @@ impl EventGraph {
                 reason: "multiple concurrent epoch checkpoints remain",
             });
         }
-        Ok(current.into_iter().next())
+        Ok(match current.into_iter().next() {
+            Some(checkpoint) => EpochCheckpoint::Committed(checkpoint),
+            None => EpochCheckpoint::Unrotated,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    pub(super) struct FixtureGraphEvent {
+        pub(super) graph: EventGraph,
+        pub(super) event_id: EventId,
+    }
+
+    pub(super) struct ProjectionGraphInsert {
+        pub(super) graph: EventGraph,
+        pub(super) event: VaultEvent,
+    }
+
     use super::*;
     use crate::PasswordEnvelope;
     use crate::event::{
         EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
-        VaultEventSchemaVersion, VaultOperation, build_genesis_import_event,
+        VaultEventSchemaVersion, VaultOperation,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key as key, store};
-    use crate::{
-        AgeArmoredCiphertext, DevicePublicKey, EventResult, MemberLabel, SecretFingerprint,
-    };
+    use crate::{EventGraphRejection, EventResult, GenesisImportRequest, SecretFingerprint};
     use ed25519_dalek::SigningKey;
     use nook_auth2::SecretType;
-    use nook_auth2::{
-        DeviceId, IsoTimestamp, OpaqueCiphertext, PasswordEntryId, SecretId, Sha256Hex,
-    };
+    use nook_auth2::{IsoTimestamp, OpaqueCiphertext, PasswordEntryId, SecretId, Sha256Hex};
 
-    const STORE: &str = "store_testtoken11";
+    pub(super) const STORE: &str = "store_testtoken11";
 
-    struct ProjectionFixtures;
+    pub(super) struct ProjectionFixtures;
 
     impl ProjectionFixtures {
-        fn ts(value: &str) -> IsoTimestamp {
+        pub(super) fn insert(request: ProjectionGraphInsert) -> EventResult<EventGraph> {
+            let ProjectionGraphInsert { graph, event } = request;
+            graph
+                .insert(crate::EventGraphInsert {
+                    event,
+                    expected_store_id: STORE,
+                })
+                .map(|inserted| inserted.graph)
+                .map_err(EventGraphRejection::into_cause)
+        }
+
+        pub(super) fn ts(value: &str) -> IsoTimestamp {
             IsoTimestamp::from_trusted(value.to_owned())
         }
 
-        fn sid(value: &str) -> SecretId {
+        pub(super) fn sid(value: &str) -> SecretId {
             SecretId::from_vault_record(value)
         }
 
-        fn password_envelope(ciphertext: &str) -> PasswordEnvelope {
+        pub(super) fn password_envelope(ciphertext: &str) -> PasswordEnvelope {
             PasswordEnvelope {
                 version: crate::PasswordEnvelopeVersion::LEGACY,
                 kdf: "scrypt".to_owned(),
@@ -339,15 +373,15 @@ mod tests {
             }
         }
 
-        fn password_envelope_fixture(ciphertext: &str) -> PasswordEnvelope {
+        pub(super) fn password_envelope_fixture(ciphertext: &str) -> PasswordEnvelope {
             Self::password_envelope(ciphertext)
         }
 
-        fn genesis_source_hash() -> Sha256Hex {
+        pub(super) fn genesis_source_hash() -> Sha256Hex {
             Sha256Hex::from_trusted("deadbeef".repeat(8))
         }
 
-        fn signed_operation(
+        pub(super) fn signed_operation(
             signing_key: &SigningKey,
             parents: Vec<EventId>,
             operation: VaultOperation,
@@ -367,7 +401,7 @@ mod tests {
             )
         }
 
-        fn replacement_event(
+        pub(super) fn replacement_event(
             signing_key: &SigningKey,
             parent: &EventId,
             new_id: &str,
@@ -392,25 +426,31 @@ mod tests {
             )
         }
 
-        fn genesis(graph: &mut EventGraph, signing_key: &SigningKey) -> EventResult<EventId> {
-            let event = build_genesis_import_event(
-                &store()?,
-                &actor(signing_key)?,
-                &epoch()?,
-                GenesisImportPayload {
+        pub(super) fn genesis(
+            mut graph: EventGraph,
+            signing_key: &SigningKey,
+        ) -> EventResult<FixtureGraphEvent> {
+            let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
+                store_id: &store()?,
+                actor_id: &actor(signing_key)?,
+                key_epoch: &epoch()?,
+                payload: GenesisImportPayload {
                     source_content_hash: Self::genesis_source_hash(),
                     secrets: vec![],
                     password_entries: vec![],
                 },
-                &Self::ts("2026-06-28T00:00:00Z"),
+                created_at: &Self::ts("2026-06-28T00:00:00Z"),
                 signing_key,
-            )?;
+            })?;
             let id = event.id()?;
-            graph.insert(event, STORE)?;
-            Ok(id)
+            graph = Self::insert(ProjectionGraphInsert { graph, event })?;
+            Ok(FixtureGraphEvent {
+                graph,
+                event_id: id,
+            })
         }
 
-        fn secret_created(
+        pub(super) fn secret_created(
             parents: Vec<EventId>,
             secret_id: &str,
             signing_key: &SigningKey,
@@ -445,7 +485,11 @@ mod tests {
     fn concurrent_secret_additions_both_survive() -> anyhow::Result<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = ProjectionFixtures::genesis(&mut graph, &signing_key)?;
+        let genesis_id = {
+            let prepared = ProjectionFixtures::genesis(graph, &signing_key)?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
 
         let a = ProjectionFixtures::secret_created(
             vec![genesis_id.clone()],
@@ -457,8 +501,8 @@ mod tests {
             "secret_bbbbbbbbbbb",
             &signing_key,
         )?;
-        graph.insert(a, STORE)?;
-        graph.insert(b, STORE)?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: a })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: b })?;
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert_eq!(projection.live_secrets(&graph).len(), 2);
@@ -470,21 +514,25 @@ mod tests {
     fn concurrent_replacements_create_conflict_group() -> anyhow::Result<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = ProjectionFixtures::genesis(&mut graph, &signing_key)?;
+        let genesis_id = {
+            let prepared = ProjectionFixtures::genesis(graph, &signing_key)?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
         let base = ProjectionFixtures::secret_created(
             vec![genesis_id.clone()],
             "secret_original1",
             &signing_key,
         )?;
         let base_id = base.id()?;
-        graph.insert(base, STORE)?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: base })?;
 
         let r1 =
             ProjectionFixtures::replacement_event(&signing_key, &base_id, "secret_newaaaaaaa")?;
         let r2 =
             ProjectionFixtures::replacement_event(&signing_key, &base_id, "secret_newbbbbbbb")?;
-        graph.insert(r1, STORE)?;
-        graph.insert(r2, STORE)?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: r1 })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: r2 })?;
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert_eq!(projection.live_secrets(&graph).len(), 2);
@@ -497,26 +545,77 @@ mod tests {
     }
 
     #[test]
+    fn causally_ordered_replacements_do_not_create_a_conflict() -> EventResult<()> {
+        let signing_key = key();
+        let prepared = ProjectionFixtures::genesis(EventGraph::new(), &signing_key)?;
+        let base = ProjectionFixtures::secret_created(
+            vec![prepared.event_id],
+            "secret_original1",
+            &signing_key,
+        )?;
+        let base_id = base.id()?;
+        let graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph: prepared.graph,
+            event: base,
+        })?;
+
+        let first =
+            ProjectionFixtures::replacement_event(&signing_key, &base_id, "secret_newaaaaaaa")?;
+        let first_id = first.id()?;
+        let graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
+            event: first,
+        })?;
+        let second =
+            ProjectionFixtures::replacement_event(&signing_key, &first_id, "secret_newbbbbbbb")?;
+        let graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
+            event: second,
+        })?;
+
+        let projection = VaultProjection::from_graph(&graph, STORE)?;
+        assert!(projection.replacement_conflicts.is_empty());
+        assert!(!projection.has_blocking_conflicts());
+        Ok(())
+    }
+
+    #[test]
+    fn projection_rejects_a_different_store_identity() -> EventResult<()> {
+        let signing_key = key();
+        let prepared = ProjectionFixtures::genesis(EventGraph::new(), &signing_key)?;
+
+        assert!(matches!(
+            VaultProjection::from_graph(&prepared.graph, "store_otherid0001"),
+            Err(EventError::ProjectionStoreMismatch)
+        ));
+        Ok(())
+    }
+
+    #[test]
     fn projection_is_replay_invariant() -> anyhow::Result<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = ProjectionFixtures::genesis(&mut graph, &signing_key)?;
-        graph.insert(
-            ProjectionFixtures::secret_created(
+        let genesis_id = {
+            let prepared = ProjectionFixtures::genesis(graph, &signing_key)?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
+            event: ProjectionFixtures::secret_created(
                 vec![genesis_id.clone()],
                 "secret_aaaaaaaaaaa",
                 &signing_key,
             )?,
-            STORE,
-        )?;
-        graph.insert(
-            ProjectionFixtures::secret_created(
+        })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
+            event: ProjectionFixtures::secret_created(
                 vec![genesis_id],
                 "secret_bbbbbbbbbbb",
                 &signing_key,
             )?,
-            STORE,
-        )?;
+        })?;
         VaultProjection::assert_replay_invariant(&graph, STORE)?;
         Ok(())
     }
@@ -525,21 +624,25 @@ mod tests {
     fn secret_conflict_resolved_picks_winner() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = ProjectionFixtures::genesis(&mut graph, &signing_key)?;
+        let genesis_id = {
+            let prepared = ProjectionFixtures::genesis(graph, &signing_key)?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
         let base = ProjectionFixtures::secret_created(
             vec![genesis_id.clone()],
             "secret_original1",
             &signing_key,
         )?;
         let base_id = base.id()?;
-        graph.insert(base, STORE)?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: base })?;
 
         let r1 =
             ProjectionFixtures::replacement_event(&signing_key, &base_id, "secret_newaaaaaaa")?;
         let r2 =
             ProjectionFixtures::replacement_event(&signing_key, &base_id, "secret_newbbbbbbb")?;
-        graph.insert(r1, STORE)?;
-        graph.insert(r2, STORE)?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: r1 })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: r2 })?;
 
         let resolve_body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
@@ -556,7 +659,10 @@ mod tests {
             }],
         };
         let resolved = VaultEvent::sign(resolve_body, &signing_key)?;
-        graph.insert(resolved, STORE)?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
+            event: resolved,
+        })?;
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert!(!projection.has_blocking_conflicts());
@@ -570,14 +676,21 @@ mod tests {
     fn concurrent_deletes_tombstone_secret() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = ProjectionFixtures::genesis(&mut graph, &signing_key)?;
+        let genesis_id = {
+            let prepared = ProjectionFixtures::genesis(graph, &signing_key)?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
         let created = ProjectionFixtures::secret_created(
             vec![genesis_id.clone()],
             "secret_aaaaaaaaaaa",
             &signing_key,
         )?;
         let created_id = created.id()?;
-        graph.insert(created, STORE)?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
+            event: created,
+        })?;
 
         let delete_body = |parents: Vec<EventId>| -> EventResult<VaultEventBody> {
             Ok(VaultEventBody {
@@ -596,8 +709,8 @@ mod tests {
 
         let d1 = VaultEvent::sign(delete_body(vec![created_id.clone()])?, &signing_key)?;
         let d2 = VaultEvent::sign(delete_body(vec![created_id])?, &signing_key)?;
-        graph.insert(d1, STORE)?;
-        graph.insert(d2, STORE)?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: d1 })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: d2 })?;
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert!(projection.live_secrets(&graph).is_empty());
@@ -605,133 +718,14 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_security_rotations_surface_conflict() -> EventResult<()> {
-        let signing_key = key();
-        let mut graph = EventGraph::new();
-        let genesis_id = ProjectionFixtures::genesis(&mut graph, &signing_key)?;
-
-        let revoke = ProjectionFixtures::signed_operation(
-            &signing_key,
-            vec![genesis_id.clone()],
-            VaultOperation::DeviceRevoked {
-                device_id: DeviceId::parse("abcd1234ef567890")?,
-            },
-        )?;
-        let rotate = ProjectionFixtures::signed_operation(
-            &signing_key,
-            vec![genesis_id],
-            VaultOperation::PasswordRotated {
-                entry_id: PasswordEntryId::parse("pwdentry001")?,
-                envelope: ProjectionFixtures::password_envelope_fixture("x"),
-            },
-        )?;
-        graph.insert(revoke, STORE)?;
-        graph.insert(rotate, STORE)?;
-
-        let projection = VaultProjection::from_graph(&graph, STORE)?;
-        assert!(!projection.security_conflicts.is_empty());
-        assert!(projection.has_blocking_conflicts());
-        Ok(())
-    }
-
-    #[test]
-    fn concurrent_access_grant_and_rotation_surface_conflict() -> EventResult<()> {
-        let signing_key = key();
-        let mut graph = EventGraph::new();
-        let genesis_id = ProjectionFixtures::genesis(&mut graph, &signing_key)?;
-        let grant = ProjectionFixtures::signed_operation(
-            &signing_key,
-            vec![genesis_id.clone()],
-            VaultOperation::JoinApproved {
-                device_id: DeviceId::parse("abcd1234ef567890")?,
-                encryption_public_key: DevicePublicKey::from_trusted("age1member".to_owned()),
-                signing_public_key: public_key(&signing_key),
-                label: MemberLabel::from_trusted("Member".to_owned()),
-                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secret".to_owned()),
-                members_key_ciphertext: AgeArmoredCiphertext::from_trusted("members".to_owned()),
-            },
-        )?;
-        let revoke = ProjectionFixtures::signed_operation(
-            &signing_key,
-            vec![genesis_id],
-            VaultOperation::DeviceRevoked {
-                device_id: DeviceId::parse("fedcba9876543210")?,
-            },
-        )?;
-        graph.insert(grant, STORE)?;
-        graph.insert(revoke, STORE)?;
-
-        let projection = VaultProjection::from_graph(&graph, STORE)?;
-        assert!(projection.has_blocking_conflicts());
-        assert!(
-            projection
-                .security_conflicts
-                .iter()
-                .any(|conflict| { conflict.reasons.contains(&EpochRotationReason::AccessGrant) })
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn concurrent_join_request_does_not_conflict_with_rotation() -> EventResult<()> {
-        let owner_key = key();
-        let joiner_key = key();
-        let mut graph = EventGraph::new();
-        let genesis_id = ProjectionFixtures::genesis(&mut graph, &owner_key)?;
-        let request = ProjectionFixtures::signed_operation(
-            &joiner_key,
-            vec![genesis_id.clone()],
-            VaultOperation::JoinRequested {
-                device_id: DeviceId::parse("abcd1234ef567890")?,
-                encryption_public_key: DevicePublicKey::from_trusted("age1joiner".to_owned()),
-                signing_public_key: public_key(&joiner_key),
-                label: MemberLabel::from_trusted("Joiner".to_owned()),
-            },
-        )?;
-        let request_id = request.id()?;
-        let rotation = ProjectionFixtures::signed_operation(
-            &owner_key,
-            vec![genesis_id],
-            VaultOperation::PasswordRemoved {
-                entry_id: PasswordEntryId::parse("pwdentry001")?,
-            },
-        )?;
-        let rotation_id = rotation.id()?;
-        let checkpoint = VaultEvent::sign(
-            VaultEventBody {
-                schema_version: VaultEventSchemaVersion::CURRENT,
-                store_id: store()?,
-                actor_id: actor(&owner_key)?,
-                actor_signing_public_key: public_key(&owner_key),
-                parents: vec![rotation_id.clone()],
-                created_at: ProjectionFixtures::ts("2026-06-28T00:00:01Z"),
-                key_epoch: rotation_id,
-                operations: vec![VaultOperation::EpochCheckpoint {
-                    secrets: Vec::new(),
-                    members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
-                    rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
-                    password_entries: crate::EpochPasswordState::Replace(Vec::new()),
-                }],
-            },
-            &owner_key,
-        )?;
-        let checkpoint_id = checkpoint.id()?;
-        graph.insert(request, STORE)?;
-        graph.insert(rotation, STORE)?;
-        graph.insert(checkpoint, STORE)?;
-
-        let projection = VaultProjection::from_graph(&graph, STORE)?;
-        assert!(projection.security_conflicts.is_empty());
-        assert_eq!(graph.current_epoch_checkpoint()?, Some(checkpoint_id));
-        assert!(graph.heads().contains(&request_id));
-        Ok(())
-    }
-
-    #[test]
     fn old_epoch_mutation_concurrent_with_rotation_fails_closed() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = ProjectionFixtures::genesis(&mut graph, &signing_key)?;
+        let genesis_id = {
+            let prepared = ProjectionFixtures::genesis(graph, &signing_key)?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
         let mutation = ProjectionFixtures::signed_operation(
             &signing_key,
             vec![genesis_id.clone()],
@@ -744,8 +738,14 @@ mod tests {
                 entry_id: PasswordEntryId::parse("pwdentry001")?,
             },
         )?;
-        graph.insert(mutation, STORE)?;
-        graph.insert(rotation, STORE)?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
+            event: mutation,
+        })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert {
+            graph,
+            event: rotation,
+        })?;
 
         let projection = VaultProjection::from_graph(&graph, STORE)?;
         assert!(projection.has_blocking_conflicts());
@@ -761,7 +761,11 @@ mod tests {
     fn three_way_fork_projection_is_replay_invariant() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = ProjectionFixtures::genesis(&mut graph, &signing_key)?;
+        let genesis_id = {
+            let prepared = ProjectionFixtures::genesis(graph, &signing_key)?;
+            graph = prepared.graph;
+            prepared.event_id
+        };
 
         let a = ProjectionFixtures::secret_created(
             vec![genesis_id.clone()],
@@ -778,9 +782,9 @@ mod tests {
             "secret_forkcccccc",
             &signing_key,
         )?;
-        graph.insert(a, STORE)?;
-        graph.insert(b, STORE)?;
-        graph.insert(c, STORE)?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: a })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: b })?;
+        graph = ProjectionFixtures::insert(ProjectionGraphInsert { graph, event: c })?;
 
         VaultProjection::assert_replay_invariant(&graph, STORE)?;
         let projection = VaultProjection::from_graph(&graph, STORE)?;

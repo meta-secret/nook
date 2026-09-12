@@ -18,6 +18,10 @@ import {
   submitOnboardEnrollmentCode,
   enrollmentCodeFromLink,
   uniqueSecretKey,
+  parseJson,
+  readStringProperty,
+  requireRecord,
+  requireValue,
   openOnboardDevicePanel,
   reloadUnlockLocalVaultWithSync,
   UI_TIMEOUT_MS,
@@ -177,7 +181,7 @@ test.describe('vault password envelope (local)', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page.getByTestId('onboard-error')).toContainText(
-      'does not match',
+      'Failed to issue code.',
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     await expect(page.getByTestId('onboarding-link-url')).toHaveCount(0)
@@ -217,21 +221,17 @@ test.describe('vault password envelope (local)', () => {
     expect(code.length).toBeGreaterThan(40)
     expect(code).toMatch(/^[A-Za-z0-9_-]+$/)
 
-    const outer = JSON.parse(
-      Buffer.from(code, 'base64url').toString('utf8'),
-    ) as {
-      issued_at: string
-      entry_id?: string
-      entry_label?: unknown
-      ct?: string
-      password?: string
-      provider?: unknown
-    }
-    expect(typeof outer.issued_at).toBe('string')
-    expect(Date.parse(outer.issued_at)).not.toBeNaN()
-    expect(Math.abs(Date.now() - Date.parse(outer.issued_at))).toBeLessThan(
-      60_000,
+    const outer = requireRecord(
+      parseJson(Buffer.from(code, 'base64url').toString('utf8')),
+      'enrollment link payload',
     )
+    const issuedAt = readStringProperty(
+      outer,
+      'issued_at',
+      'enrollment link payload',
+    )
+    expect(Date.parse(issuedAt)).not.toBeNaN()
+    expect(Math.abs(Date.now() - Date.parse(issuedAt))).toBeLessThan(60_000)
     expect(outer.entry_id).toBeTruthy()
     expect(outer.entry_label).toEqual({
       label: 'Enrollment test',
@@ -242,9 +242,16 @@ test.describe('vault password envelope (local)', () => {
     expect(Object.hasOwn(outer, 'provider')).toBe(false)
 
     // The QR/link wraps the raw code so phone cameras open a browser tab.
-    const srLink = (await page.getByTestId('onboard-link').textContent())!
+    const srLink = requireValue(
+      await page.getByTestId('onboard-link').textContent(),
+      'onboarding link text',
+    )
     expect(srLink).toBe(link)
-    expect(decodeURIComponent(srLink.split('#enroll=')[1]!)).toBe(code)
+    expect(
+      decodeURIComponent(
+        requireValue(srLink.split('#enroll=')[1], 'enrollment link code'),
+      ),
+    ).toBe(code)
 
     // The UI surfaces the timestamp as audit info next to the QR.
     await expect(page.getByText('Issued')).toBeVisible()
@@ -312,7 +319,10 @@ test.describe('enrollment link deep link (local)', () => {
 
     await openOnboardDevicePanel(pageA)
     await submitOnboardEnrollmentCode(pageA, 'link-pass')
-    const link = (await pageA.getByTestId('onboard-link').textContent())!.trim()
+    const link = requireValue(
+      await pageA.getByTestId('onboard-link').textContent(),
+      'onboarding link text',
+    ).trim()
     expect(link).toContain('#enroll=')
 
     const pageB = await context.newPage()
@@ -367,7 +377,10 @@ test.describe('enrollment link deep link (local)', () => {
 
     await openOnboardDevicePanel(pageA)
     await submitOnboardEnrollmentCode(pageA, 'manual-link-pass')
-    const link = (await pageA.getByTestId('onboard-link').textContent())!.trim()
+    const link = requireValue(
+      await pageA.getByTestId('onboard-link').textContent(),
+      'onboarding link text',
+    ).trim()
     expect(link).toContain('#enroll=')
 
     // Fresh empty browser: deferred-passkey create landing must not win over

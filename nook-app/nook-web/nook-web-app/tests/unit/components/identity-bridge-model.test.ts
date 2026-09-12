@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import {
-  buildIdentityBridge,
+  IdentityBridgePresentation,
   IdentityBridgeDeviceIconKind,
   IdentityBridgeNodeKind,
   IdentityBridgePerspective,
@@ -8,7 +8,10 @@ import {
   type IdentityBridgeCopy,
   type IdentityBridgeInput,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-bridge-model'
-import { DashboardTextKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
+import {
+  KnownDashboardText,
+  UnknownDashboardText,
+} from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
 import { DeviceAccessIdentityState } from '$app-wasm'
 import {
   PasskeyCardFactKind,
@@ -57,9 +60,9 @@ const vault = (storeId: string, verified: boolean) => ({
   label: storeId === 'home' ? 'Home' : 'Archive',
   verified,
   verifiedAt: verified
-    ? { kind: DashboardTextKind.Known as const, value: '2026-08-04T10:00:00Z' }
-    : { kind: DashboardTextKind.Unknown as const },
-  lastLocalUpdateAt: { kind: DashboardTextKind.Unknown as const },
+    ? new KnownDashboardText('2026-08-04T10:00:00Z')
+    : new UnknownDashboardText(),
+  lastLocalUpdateAt: new UnknownDashboardText(),
 })
 
 function input(
@@ -114,9 +117,9 @@ function input(
 
 describe('identity bridge graph', () => {
   test('centers identity between app and vaults', () => {
-    const graph = buildIdentityBridge(
+    const graph = new IdentityBridgePresentation(
       input(IdentityBridgePerspective.Identities),
-    )
+    ).graph
     const device = graph.nodes.find((node) => node.id === 'device-current')
     const identity = graph.nodes.find((node) => node.id === 'identity-current')
 
@@ -132,9 +135,9 @@ describe('identity bridge graph', () => {
   })
 
   test('draws passkey → app → identity → verified vaults', () => {
-    const graph = buildIdentityBridge(
+    const graph = new IdentityBridgePresentation(
       input(IdentityBridgePerspective.Identities),
-    )
+    ).graph
 
     expect(graph.nodes.some((node) => node.id === 'vault-home')).toBe(true)
     expect(graph.nodes.some((node) => node.id === 'vault-archive')).toBe(false)
@@ -154,10 +157,10 @@ describe('identity bridge graph', () => {
   })
 
   test('compact identity vault edges use lateral vault-access handles', () => {
-    const graph = buildIdentityBridge({
+    const graph = new IdentityBridgePresentation({
       ...input(IdentityBridgePerspective.Identities),
       compact: true,
-    })
+    }).graph
     const identity = graph.nodes.find((node) => node.id === 'identity-current')
     expect(identity?.data.kind).toBe(IdentityBridgeNodeKind.Identity)
     if (identity?.data.kind === IdentityBridgeNodeKind.Identity) {
@@ -172,26 +175,25 @@ describe('identity bridge graph', () => {
   })
 
   test('shows the passkey that protects the app', () => {
-    const graph = buildIdentityBridge(
+    const graph = new IdentityBridgePresentation(
       input(IdentityBridgePerspective.Identities),
-    )
+    ).graph
 
-    expect(
-      graph.nodes.find((node) => node.id === 'protection-current')?.data,
-    ).toMatchObject({
-      kind: IdentityBridgeNodeKind.Protection,
-      label: 'Work laptop',
-      description: 'Passkey protected',
-      summary: {
-        kind: PasskeyCardSummaryKind.Present,
-        summary: {
-          facts: expect.arrayContaining([
-            expect.objectContaining({ value: 'passkey_1234' }),
-            expect.objectContaining({ value: 'Proton Pass' }),
-          ]),
-        },
-      },
-    })
+    const protection = graph.nodes.find(
+      (node) => node.id === 'protection-current',
+    )
+    if (!protection) expect.fail('protection node is required')
+    expect(protection.data.kind).toBe(IdentityBridgeNodeKind.Protection)
+    if (protection.data.kind === IdentityBridgeNodeKind.Protection) {
+      expect(protection.data.label).toBe('Work laptop')
+      expect(protection.data.description).toBe('Passkey protected')
+      expect(protection.data.summary.kind).toBe(PasskeyCardSummaryKind.Present)
+      if (protection.data.summary.kind === PasskeyCardSummaryKind.Present) {
+        expect(
+          protection.data.summary.summary.facts.map((fact) => fact.value),
+        ).toEqual(expect.arrayContaining(['passkey_1234', 'Proton Pass']))
+      }
+    }
     expect(
       graph.edges.find((edge) => edge.id === 'protection-to-device'),
     ).toMatchObject({
@@ -207,7 +209,9 @@ describe('identity bridge graph', () => {
   })
 
   test('routes vault-first evidence to the exact app', () => {
-    const graph = buildIdentityBridge(input(IdentityBridgePerspective.Vaults))
+    const graph = new IdentityBridgePresentation(
+      input(IdentityBridgePerspective.Vaults),
+    ).graph
 
     expect(graph.nodes.some((node) => node.id === 'vault-selected')).toBe(true)
     expect(graph.nodes.some((node) => node.id === 'device-current')).toBe(true)
@@ -225,9 +229,9 @@ describe('identity bridge graph', () => {
   })
 
   test('shows an honest empty state for an unverified selected vault', () => {
-    const graph = buildIdentityBridge(
+    const graph = new IdentityBridgePresentation(
       input(IdentityBridgePerspective.Vaults, 'archive'),
-    )
+    ).graph
 
     expect(graph.nodes.some((node) => node.id === 'device-empty')).toBe(true)
     expect(graph.nodes.some((node) => node.id === 'identity-current')).toBe(
@@ -252,9 +256,9 @@ describe('identity bridge graph', () => {
   })
 
   test('formats timestamp evidence and keeps vault identifiers out of graph cards', () => {
-    const graph = buildIdentityBridge(
+    const graph = new IdentityBridgePresentation(
       input(IdentityBridgePerspective.Identities),
-    )
+    ).graph
     const vaultNode = graph.nodes.find((node) => node.id === 'vault-home')
 
     expect(vaultNode?.data.kind).toBe(IdentityBridgeNodeKind.Vault)
@@ -270,7 +274,7 @@ describe('identity bridge graph', () => {
   test('uses a perspective-specific empty state when no known vault was opened', () => {
     const noAccess = input(IdentityBridgePerspective.Identities)
     noAccess.vaults = [vault('archive', false)]
-    const graph = buildIdentityBridge(noAccess)
+    const graph = new IdentityBridgePresentation(noAccess).graph
     const empty = graph.nodes.find((node) => node.id === 'vault-empty')
 
     expect(empty?.data).toMatchObject({
@@ -286,7 +290,7 @@ describe('identity bridge graph', () => {
       kind: IdentityBridgeVaultSelectionKind.Empty,
     }
     noVaultInput.vaults = []
-    const graph = buildIdentityBridge(noVaultInput)
+    const graph = new IdentityBridgePresentation(noVaultInput).graph
 
     expect(graph.nodes.some((node) => node.id === 'device-current')).toBe(false)
     expect(graph.nodes.some((node) => node.id === 'vault-empty')).toBe(true)
@@ -298,7 +302,7 @@ describe('identity bridge graph', () => {
     const paired = input(IdentityBridgePerspective.Identities)
     paired.deviceIconKind = IdentityBridgeDeviceIconKind.PairedDevice
     paired.copy.currentDevice = 'Paired device identity'
-    const graph = buildIdentityBridge(paired)
+    const graph = new IdentityBridgePresentation(paired).graph
     const device = graph.nodes.find((node) => node.id === 'device-current')
 
     expect(device?.data.kind).toBe(IdentityBridgeNodeKind.Device)

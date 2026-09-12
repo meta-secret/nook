@@ -5,6 +5,11 @@
 //! crates need without depending on either of them.
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
     forbid(invalid_raw_numeric_api_suppression)
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
@@ -13,9 +18,11 @@ mod generated;
 mod i18n;
 
 pub use generated::i18n_keys;
+pub use i18n::{AppLocale, SupportedAppLocale};
+
 pub use i18n::{
-    AppLocale, get_translation_catalog, lookup_translation, merge_translation_catalogs,
-    parse_app_locale, resolve_app_locale_from_tag, resolve_app_locale_from_tags,
-    resolve_error_message, resolve_translation_catalog, translate, translate_from_catalog,
-    translate_with_replacements,
+    LookupTranslationRequest, MergeTranslationCatalogsRequest, ResolveErrorMessageRequest,
+    ResolveTranslationCatalogRequest, TranslateFromCatalogRequest, TranslateRequest,
+    TranslateWithReplacementsRequest, TranslationCatalog, TranslationCatalogSource,
+    TranslationLookup,
 };

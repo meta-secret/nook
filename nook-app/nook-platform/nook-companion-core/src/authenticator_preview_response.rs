@@ -17,11 +17,8 @@ pub struct AuthenticatorEnrollmentPreviewWire {
     issuer: String,
     account: String,
     website_url: String,
-    #[tsify(type = "'SHA1' | 'SHA256' | 'SHA512'")]
     algorithm: TotpAlgorithm,
-    #[tsify(type = "number")]
     digits: TotpDigits,
-    #[tsify(type = "number")]
     period: TotpPeriod,
 }
 
@@ -59,18 +56,15 @@ pub enum AuthenticatorPreviewResponseWire {
     Rejected(AuthenticatorPreviewRejectedWire),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi)]
 pub struct AuthenticatorEnrollmentPreview {
     pub issuer: String,
     pub account: String,
     pub website_url: String,
-    #[tsify(type = "'SHA1' | 'SHA256' | 'SHA512'")]
     pub algorithm: TotpAlgorithm,
-    #[tsify(type = "number")]
     pub digits: TotpDigits,
-    #[tsify(type = "number")]
     pub period: TotpPeriod,
 }
 

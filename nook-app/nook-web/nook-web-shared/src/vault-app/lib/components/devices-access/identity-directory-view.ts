@@ -1,3 +1,8 @@
+import { err, ok, type Result } from "neverthrow";
+import {
+  NativeVaultStorageFailure,
+  type VaultStorageFailure,
+} from "$lib/runtime/storage-failure";
 import {
   type DeviceAccessProtectionKind,
   type NookDeviceAccessSnapshot,
@@ -18,8 +23,12 @@ import {
   type DashboardTimestamp,
   DashboardTimestampKind,
   type DashboardText,
-  DashboardTextKind,
+  KnownDashboardText,
+  UnknownDashboardText,
   type DashboardView,
+  type DashboardLoadState,
+  DashboardReadyProjectionOwner,
+  type DashboardReadyProjectionState,
 } from "../devices-access-dashboard-state";
 import type { VaultAccessView } from "./access-chain";
 
@@ -73,6 +82,33 @@ export type IdentityDirectoryAccessView = {
   readonly access: DashboardView;
 };
 
+type DevicesAccessDashboardReadyProjectionRequest = {
+  readonly accessState: DashboardLoadState<DashboardView>;
+  readonly directoryState: IdentityDirectoryLoadState;
+  readonly selectedIdentity: SelectedIdentityEntry;
+};
+
+export type DevicesAccessDashboardReadyProjectionState =
+  DashboardReadyProjectionState<
+    DashboardView,
+    IdentityDirectoryView,
+    IdentityDirectoryEntry
+  >;
+
+export class DashboardReadyProjection extends DashboardReadyProjectionOwner<
+  DashboardView,
+  IdentityDirectoryView,
+  IdentityDirectoryEntry
+> {
+  constructor(request: DevicesAccessDashboardReadyProjectionRequest) {
+    super(request);
+  }
+
+  override get state(): DevicesAccessDashboardReadyProjectionState {
+    return super.state;
+  }
+}
+
 export type IdentityDirectoryLoadState =
   | { readonly kind: IdentityDirectoryLoadKind.Loading }
   | { readonly kind: IdentityDirectoryLoadKind.Failed }
@@ -81,131 +117,251 @@ export type IdentityDirectoryLoadState =
       readonly view: IdentityDirectoryView;
     };
 
-function readMember(member: NookIdentityMemberSnapshot): IdentityMemberView {
-  try {
-    return {
-      appId: member.appId,
-      currentBrowser: member.currentBrowser,
-      localProtection: member.localProtection,
-      label:
-        member.labelKind === NookIdentityMemberLabelKind.Known
-          ? { kind: DashboardTextKind.Known, value: member.label() }
-          : { kind: DashboardTextKind.Unknown },
-    };
-  } finally {
-    member.free();
-  }
-}
-
-function readText(value: NookDeviceAccessText): DashboardText {
-  try {
-    return value.kind === NookDeviceAccessTextKind.Known
-      ? { kind: DashboardTextKind.Known, value: value.value() }
-      : { kind: DashboardTextKind.Unknown };
-  } finally {
-    value.free();
-  }
-}
-
-function readTimestamp(
-  value: NookPasskeyTimestampEvidence,
-): DashboardTimestamp {
-  try {
-    if (value.kind === NookPasskeyTimestampEvidenceKind.Known) {
-      return { kind: DashboardTimestampKind.Known, value: value.value() };
+export class IdentityDirectoryReader {
+  constructor(private readonly manager: NookVaultManager) {}
+  async load(): Promise<
+    Result<IdentityDirectoryAccessView, VaultStorageFailure>
+  > {
+    let request: ReturnType<
+      NookVaultManager["identity_directory_snapshot_request"]
+    >;
+    try {
+      request = this.manager.identity_directory_snapshot_request();
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
     }
-    return value.kind === NookPasskeyTimestampEvidenceKind.NotYetObserved
-      ? { kind: DashboardTimestampKind.NotYetObserved }
-      : { kind: DashboardTimestampKind.Unavailable };
-  } finally {
-    value.free();
-  }
-}
-
-function readVaultAccess(entry: NookDeviceVaultAccess): VaultAccessView {
-  try {
-    return {
-      storeId: entry.storeId,
-      label: entry.label,
-      verified: entry.accessState === NookDeviceVaultAccessState.Verified,
-      verifiedAt: readText(entry.verifiedAt),
-      lastLocalUpdateAt: readText(entry.lastLocalUpdateAt),
-    };
-  } finally {
-    entry.free();
-  }
-}
-
-function readAccess(snapshot: NookDeviceAccessSnapshot): DashboardView {
-  try {
-    return {
-      protection: snapshot.protection,
-      identityState: snapshot.identityState,
-      deviceId: readText(snapshot.deviceId),
-      credentialId: readText(snapshot.credentialId),
-      passkeyName: readText(snapshot.passkeyName),
-      providerLabel: readText(snapshot.providerLabel),
-      createdAt: readTimestamp(snapshot.createdAt),
-      lastUsedAt: readTimestamp(snapshot.lastUsedAt),
-      keeper: snapshot.keeper,
-      vaults: snapshot.vaults().map(readVaultAccess),
-    };
-  } finally {
-    snapshot.free();
-  }
-}
-
-function readIdentity(identity: NookIdentitySnapshot): IdentityDirectoryEntry {
-  try {
-    return {
-      identityId: identity.identityId,
-      label: identity.label,
-      localAccess: identity.localAccess,
-      members: identity.members().map(readMember),
-      vaults: identity.vaults().map(readVaultAccess),
-    };
-  } finally {
-    identity.free();
-  }
-}
-
-export async function loadIdentityDirectoryAccessView(
-  manager: NookVaultManager,
-): Promise<IdentityDirectoryAccessView> {
-  const request = manager.identity_directory_snapshot_request();
-  const snapshot = await request.resolve().finally(() => request.free());
-  try {
-    const identities: IdentityDirectoryEntry[] = [];
-    for (let index = 0; index < snapshot.length; index += 1) {
-      identities.push(readIdentity(snapshot.identity(index)));
+    let snapshot: Awaited<ReturnType<typeof request.resolve>>;
+    try {
+      snapshot = await request.resolve();
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    } finally {
+      request.free();
     }
-    const selection: IdentityDirectorySelection =
-      snapshot.selectionKind === NookIdentityDirectorySelectionKind.Selected
-        ? {
-            kind: IdentityDirectorySelectionKind.Selected,
-            identityId: snapshot.selectedIdentityId,
-          }
-        : { kind: IdentityDirectorySelectionKind.Empty };
-    return {
-      directory: { identities, selection },
-      access: readAccess(snapshot.device_access()),
-    };
-  } finally {
-    snapshot.free();
+    try {
+      const identities: IdentityDirectoryEntry[] = [];
+      for (let index = 0; index < snapshot.length; index += 1) {
+        const identity = new NativeDirectoryIdentity(
+          snapshot.identity(index),
+        ).read();
+        if (identity.isErr()) return err(identity.error);
+        identities.push(identity.value);
+      }
+      const selection: IdentityDirectorySelection =
+        snapshot.selectionKind === NookIdentityDirectorySelectionKind.Selected
+          ? {
+              kind: IdentityDirectorySelectionKind.Selected,
+              identityId: snapshot.selectedIdentityId,
+            }
+          : { kind: IdentityDirectorySelectionKind.Empty };
+      const access = new NativeDeviceAccess(snapshot.device_access()).read();
+      if (access.isErr()) return err(access.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({ directory: { identities, selection }, access: access.value });
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    } finally {
+      snapshot.free();
+    }
   }
 }
 
-export function selectedIdentity(
-  directory: IdentityDirectoryView,
-): SelectedIdentityEntry {
-  if (directory.selection.kind === IdentityDirectorySelectionKind.Empty) {
+export class IdentityDirectoryPresentation {
+  constructor(private readonly directory: IdentityDirectoryView) {}
+  selectedIdentity(): SelectedIdentityEntry {
+    const directory = this.directory;
+    if (directory.selection.kind === IdentityDirectorySelectionKind.Empty)
+      return { kind: IdentityDirectorySelectionKind.Empty };
+    for (const identity of directory.identities) {
+      if (identity.identityId === directory.selection.identityId)
+        return { kind: IdentityDirectorySelectionKind.Selected, identity };
+    }
     return { kind: IdentityDirectorySelectionKind.Empty };
   }
-  const selectedIdentityId = directory.selection.identityId;
-  for (const identity of directory.identities) {
-    if (identity.identityId === selectedIdentityId) {
-      return { kind: IdentityDirectorySelectionKind.Selected, identity };
+}
+
+class NativeIdentityMember {
+  constructor(private readonly member: NookIdentityMemberSnapshot) {}
+  read(): Result<IdentityMemberView, VaultStorageFailure> {
+    const member = this.member;
+    try {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({
+        appId: member.appId,
+        currentBrowser: member.currentBrowser,
+        localProtection: member.localProtection,
+        label:
+          member.labelKind === NookIdentityMemberLabelKind.Known
+            ? new KnownDashboardText(member.label())
+            : new UnknownDashboardText(),
+      });
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    } finally {
+      member.free();
     }
   }
-  return { kind: IdentityDirectorySelectionKind.Empty };
+}
+class NativeAccessText {
+  constructor(private readonly value: NookDeviceAccessText) {}
+  read(): Result<DashboardText, VaultStorageFailure> {
+    try {
+      return ok(
+        this.value.kind === NookDeviceAccessTextKind.Known
+          ? new KnownDashboardText(this.value.value())
+          : new UnknownDashboardText(),
+      );
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    } finally {
+      this.value.free();
+    }
+  }
+}
+class NativeAccessTimestamp {
+  constructor(private readonly value: NookPasskeyTimestampEvidence) {}
+  read(): Result<DashboardTimestamp, VaultStorageFailure> {
+    const value = this.value;
+    try {
+      if (value.kind === NookPasskeyTimestampEvidenceKind.Known)
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        return ok({ kind: DashboardTimestampKind.Known, value: value.value() });
+      return ok(
+        value.kind === NookPasskeyTimestampEvidenceKind.NotYetObserved
+          ? // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+            { kind: DashboardTimestampKind.NotYetObserved }
+          : // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+            { kind: DashboardTimestampKind.Unavailable },
+      );
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    } finally {
+      value.free();
+    }
+  }
+}
+class NativeVaultAccess {
+  constructor(private readonly entry: NookDeviceVaultAccess) {}
+  read(): Result<VaultAccessView, VaultStorageFailure> {
+    const entry = this.entry;
+    try {
+      const verifiedAt = new NativeAccessText(entry.verifiedAt).read();
+      if (verifiedAt.isErr()) return err(verifiedAt.error);
+      const updatedAt = new NativeAccessText(entry.lastLocalUpdateAt).read();
+      if (updatedAt.isErr()) return err(updatedAt.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({
+        storeId: entry.storeId,
+        label: entry.label,
+        verified: entry.accessState === NookDeviceVaultAccessState.Verified,
+        verifiedAt: verifiedAt.value,
+        lastLocalUpdateAt: updatedAt.value,
+      });
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    } finally {
+      entry.free();
+    }
+  }
+}
+class NativeVaultAccessList {
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+  constructor(private readonly entries: NookDeviceVaultAccess[]) {}
+  read(): Result<VaultAccessView[], VaultStorageFailure> {
+    const projected: VaultAccessView[] = [];
+    let consumed = 0;
+    try {
+      for (const entry of this.entries) {
+        consumed += 1;
+        const value = new NativeVaultAccess(entry).read();
+        if (value.isErr()) return err(value.error);
+        projected.push(value.value);
+      }
+      return ok(projected);
+    } finally {
+      for (const entry of this.entries.slice(consumed)) entry.free();
+    }
+  }
+}
+class NativeIdentityMembers {
+  // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+  constructor(private readonly entries: NookIdentityMemberSnapshot[]) {}
+  read(): Result<IdentityMemberView[], VaultStorageFailure> {
+    const projected: IdentityMemberView[] = [];
+    let consumed = 0;
+    try {
+      for (const entry of this.entries) {
+        consumed += 1;
+        const value = new NativeIdentityMember(entry).read();
+        if (value.isErr()) return err(value.error);
+        projected.push(value.value);
+      }
+      return ok(projected);
+    } finally {
+      for (const entry of this.entries.slice(consumed)) entry.free();
+    }
+  }
+}
+class NativeDeviceAccess {
+  constructor(private readonly snapshot: NookDeviceAccessSnapshot) {}
+  read(): Result<DashboardView, VaultStorageFailure> {
+    const snapshot = this.snapshot;
+    try {
+      const deviceId = new NativeAccessText(snapshot.deviceId).read();
+      if (deviceId.isErr()) return err(deviceId.error);
+      const credentialId = new NativeAccessText(snapshot.credentialId).read();
+      if (credentialId.isErr()) return err(credentialId.error);
+      const passkeyName = new NativeAccessText(snapshot.passkeyName).read();
+      if (passkeyName.isErr()) return err(passkeyName.error);
+      const providerLabel = new NativeAccessText(snapshot.providerLabel).read();
+      if (providerLabel.isErr()) return err(providerLabel.error);
+      const createdAt = new NativeAccessTimestamp(snapshot.createdAt).read();
+      if (createdAt.isErr()) return err(createdAt.error);
+      const lastUsedAt = new NativeAccessTimestamp(snapshot.lastUsedAt).read();
+      if (lastUsedAt.isErr()) return err(lastUsedAt.error);
+      const vaults = new NativeVaultAccessList(snapshot.vaults()).read();
+      if (vaults.isErr()) return err(vaults.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({
+        protection: snapshot.protection,
+        identityState: snapshot.identityState,
+        deviceId: deviceId.value,
+        credentialId: credentialId.value,
+        passkeyName: passkeyName.value,
+        providerLabel: providerLabel.value,
+        createdAt: createdAt.value,
+        lastUsedAt: lastUsedAt.value,
+        keeper: snapshot.keeper,
+        vaults: vaults.value,
+      });
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    } finally {
+      snapshot.free();
+    }
+  }
+}
+class NativeDirectoryIdentity {
+  constructor(private readonly identity: NookIdentitySnapshot) {}
+  read(): Result<IdentityDirectoryEntry, VaultStorageFailure> {
+    const identity = this.identity;
+    try {
+      const members = new NativeIdentityMembers(identity.members()).read();
+      if (members.isErr()) return err(members.error);
+      const vaults = new NativeVaultAccessList(identity.vaults()).read();
+      if (vaults.isErr()) return err(vaults.error);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({
+        identityId: identity.identityId,
+        label: identity.label,
+        localAccess: identity.localAccess,
+        members: members.value,
+        vaults: vaults.value,
+      });
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    } finally {
+      identity.free();
+    }
+  }
 }

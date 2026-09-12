@@ -1,21 +1,14 @@
 # Cross-Package Changes
 
-## Overview
+## Delivery and ownership
 
-Use this workflow for feature work that touches more than one package.
+Use [mission delivery](../../../gizmo/workflows/mission-delivery.md) and the
+[dev contract](../../../gizmo/architecture/dev-delivery.md). Each feature Gizmo
+owns a branch and isolated Team Agent children. The AI worker returns scoped
+commits to its feature Gizmo. The worker does not publish or promote branches.
 
-0. Follow [mission delivery](../../../gizmo/workflows/mission-delivery.md).
-   Fetch `origin/main`, branch, and never push to `main`. See
-   [pull requests](../../../gizmo/workflows/pull-requests.md).
-   0b. **Merge with squash only.** When a PR is merged, use **Squash and
-   merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See
-   [pull requests](../../../gizmo/workflows/pull-requests.md#squash-merge-only---no-exceptions).
-   0c. Estimate authored additions and map package ownership before editing.
-   Do not create a PR whose planned authored diff exceeds 2,000 lines. Do not
-   split, stack, or rebuild a PR to recover from size growth. If review fixes
-   exceed 2,000 authored additions, stop and simplify the design.
-   Follow
-   [pull request size](../../../gizmo/workflows/pull-requests.md#pull-request-size-and-modularity).
+## Implementation procedure
+
 1. Identify the lowest package that should own the behavior.
 2. Put portable logic and domain models in `nook-core`; keep browser I/O and JS-friendly conversion in `nook-wasm`.
 3. Expose typed core DTOs/enums through WASM when possible instead of recreating their tags in TypeScript.
@@ -24,35 +17,14 @@ Use this workflow for feature work that touches more than one package.
 6. Add or update tests in the owning package (`nook-core` Rust tests for domain logic; Playwright for UI flows).
 7. Add new app routine commands to the nearest owning Taskfile: web-family tasks under `nook-app/nook-web/Taskfile.yml` , Docker tasks under `nook-app/nook-platform/docker/Taskfile.yml`, CI tasks under `nook-app/ci/Taskfile.yml`, and repo-level non-app commands under the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.
-9. Run required formatters and commit every resulting mutation in the allowed
-   AI paths. Gizmo continues from that coherent commit and runs
-   `task loom:pre-push`.
-   - If hygiene mutates AI-owned source or Cortex content, the AI team returns
-     a fresh formatted commit. Gizmo continues from it and reruns hygiene before
-     pushing.
-   - Do not add broad local builds, tests, e2e, container product gates, or
-     duplicate hosted-check mirrors before push.
-   - If the pushed head is not validation-ready, Gizmo dispatches at least one
-     relevant focused hosted task immediately.
-   - When the head is validation-ready, Gizmo dispatches complete exact-head
-     validation immediately. Focused tasks are optional on that path.
-   - Gizmo obtains fresh exact-head remote evidence after every replacement
-     push.
+9. Commit the complete scoped iteration.
+10. Return authored tests and interface evidence to Gizmo.
+11. Have Gizmo push the feature and request remote build-only execution through Steward.
+12. Route corrections through the responsible team and repeat compilation.
+13. After acceptance, Gizmo authorizes Steward's serialized local integration.
+14. Hand publication, full slow checks, and promotion to the dev manager.
 
-For a PR that changes multiple packages:
-
-1. Introduce or stabilize the narrowest owning interface first.
-2. Keep AI work inside the PR scope identified by its assigned Gizmo ID. The
-   feature-slice Gizmo is a passive immutable Workbench record, not a process
-   or controller. Team Agent count does not determine record or PR count.
-3. Return the AI Team Agent's existing typed handoff directly to Gizmo Prime;
-   bind it to the assigned Gizmo ID through existing plan/task context. Gizmo
-   Prime aggregates scope, stable interfaces, estimate, exact direct commits,
-   and evidence under that record. This introduces no new handoff transport.
-   The AI worker does not create PRs, request readiness, or merge.
-4. Gizmo Prime owns the complete PR lifecycle: same-repository branch and PR
-   creation, full checks, exact-head readiness, and squash merge.
-5. Keep unrelated package changes out of the PR.
+## Package boundaries
 
 Dependency direction must stay:
 
@@ -65,7 +37,7 @@ nook-core → nook-wasm → nook-web
   - `wasm-bindgen` annotations on simple core DTOs and enums are allowed when
     they preserve one typed domain model across Rust and web.
 - Use Bun for Nook web and Loom JavaScript tooling.
-- Run project commands through Taskfile and Docker.
+- Use remote Task execution for compilation and the manager's slow checks.
 - Do not introduce npm flows or lockfiles into Bun-owned packages.
   - `agentic-ai/ci-agent` is the maintained Node/npm exception and owns its
     `package-lock.json`.

@@ -8,8 +8,8 @@ import {
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   PasswordFormScopeKind,
-  summarizeAuthenticationWorkflowForms,
   type PasswordFormObservation,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { AuthenticationWorkflowSnapshotMessage } from '../../../../nook-web-extension/src/lib/auth-workflow-messages'
 
@@ -22,14 +22,16 @@ vi.mock(
       Delivered: 'delivered',
       Unavailable: 'unavailable',
     },
-    sendAuthenticationWorkflowSnapshotRuntimeMessage: runtime.sendSnapshot,
+    authenticationRuntimeTransport: {
+      sendAuthenticationWorkflowSnapshotRuntimeMessage: runtime.sendSnapshot,
+    },
   }),
 )
 
 import { RuntimeMessageDeliveryKind } from '../../../../nook-web-extension/src/content/autofill/runtime-message-adapter'
 import {
   AuthenticationObservationBindingKind,
-  performRevalidatedAuthenticationAction,
+  RevalidatedAuthenticationAction,
   RevalidatedAuthenticationActionOutcomeKind,
   RevalidatedAuthenticationActResultKind,
   type AuthenticationObservationBinding,
@@ -39,7 +41,8 @@ const explicitUserApproval =
   'explicit-user-approval' satisfies AuthenticationApprovalRequirement
 
 function firstWorkflow(): PasswordFormObservation {
-  const workflow = summarizeAuthenticationWorkflowForms()[0]
+  const workflow =
+    passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
   if (!workflow) throw new Error('expected an authentication workflow')
   return workflow
 }
@@ -64,6 +67,7 @@ function matchedDelivery(
         },
       },
       loginMatches: [],
+      selectedFacts: { state: 'notApplicable' as const },
     },
   }
 }
@@ -77,7 +81,10 @@ function matchedDeliveryWithSelectedFacts(
   const delivery = matchedDelivery(action)
   return {
     ...delivery,
-    response: { ...delivery.response, selectedFacts },
+    response: {
+      ...delivery.response,
+      selectedFacts: { state: 'selected' as const, facts: selectedFacts },
+    },
   }
 }
 
@@ -93,10 +100,13 @@ function enrichedMatchedDelivery(
     response: {
       ...delivery.response,
       selectedFacts: {
-        ...selectedFacts,
-        authenticator: {
-          ...selectedFacts.authenticator,
-          passkeyAccountAvailability: 'ready' as const,
+        state: 'selected' as const,
+        facts: {
+          ...selectedFacts,
+          authenticator: {
+            ...selectedFacts.authenticator,
+            passkeyAccountAvailability: 'ready' as const,
+          },
         },
       },
     },
@@ -109,6 +119,38 @@ afterEach(() => {
 })
 
 describe('credential-bearing workflow revalidation', () => {
+  test('rejects a matched verdict whose selected facts are not applicable', async () => {
+    document.body.innerHTML = `
+      <form action="/login" method="post">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+    const workflow = firstWorkflow()
+    runtime.sendSnapshot.mockResolvedValue(
+      matchedDelivery(AuthenticationWorkflowAction.ContinueWithNook),
+    )
+    const act = vi.fn(() => ({
+      kind: RevalidatedAuthenticationActResultKind.Acted,
+    }))
+
+    await expect(
+      new RevalidatedAuthenticationAction({
+        workflow,
+        expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+        observationBinding: {
+          kind: AuthenticationObservationBindingKind.Unbound,
+        },
+        approvalIsActive: () => true,
+        act,
+      }).execute(),
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
+    })
+    expect(act).not.toHaveBeenCalled()
+  })
+
   test.each([
     {
       flow: 'saved-login',
@@ -134,7 +176,7 @@ describe('credential-bearing workflow revalidation', () => {
       }
 
       await expect(
-        performRevalidatedAuthenticationAction({
+        new RevalidatedAuthenticationAction({
           workflow,
           expectedAction: action,
           observationBinding: {
@@ -148,7 +190,7 @@ describe('credential-bearing workflow revalidation', () => {
             }
             return { kind: RevalidatedAuthenticationActResultKind.Acted }
           },
-        }),
+        }).execute(),
       ).resolves.toEqual({
         kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
       })
@@ -163,13 +205,13 @@ describe('credential-bearing workflow revalidation', () => {
       }))
 
       await expect(
-        performRevalidatedAuthenticationAction({
+        new RevalidatedAuthenticationAction({
           workflow,
           expectedAction: action,
           observationBinding: releaseState.binding,
           approvalIsActive: () => true,
           act: stagedAct,
-        }),
+        }).execute(),
       ).resolves.toEqual({
         kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
       })
@@ -185,34 +227,22 @@ describe('credential-bearing workflow revalidation', () => {
       </form>
     `
     const workflow = firstWorkflow()
-    runtime.sendSnapshot.mockImplementation(async () => {
-      const form = document.querySelector<HTMLFormElement>('#otp')
-      if (form) form.action = '/transfer/confirm'
-      return {
-        kind: RuntimeMessageDeliveryKind.Delivered,
-        response: {
-          verdict: {
-            kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
-            snapshot: {
-              kind: AuthenticationWorkflowKind.TotpChallenge,
-              stage: AuthenticationWorkflowStage.SecondFactor,
-              action: AuthenticationWorkflowAction.FillTotp,
-              currentStep: 2,
-              totalSteps: 3,
-              approvalRequirement: explicitUserApproval,
-              observationIndex: 0,
-            },
-          },
-          loginMatches: [],
-        },
-      }
-    })
+    runtime.sendSnapshot.mockImplementation(
+      async (message: AuthenticationWorkflowSnapshotMessage) => {
+        const form = document.querySelector<HTMLFormElement>('#otp')
+        if (form) form.action = '/transfer/confirm'
+        return matchedDeliveryWithSelectedFacts(
+          message,
+          AuthenticationWorkflowAction.FillTotp,
+        )
+      },
+    )
     const act = vi.fn(() => ({
       kind: RevalidatedAuthenticationActResultKind.Acted,
     }))
 
     await expect(
-      performRevalidatedAuthenticationAction({
+      new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.FillTotp,
         observationBinding: {
@@ -220,7 +250,7 @@ describe('credential-bearing workflow revalidation', () => {
         },
         approvalIsActive: () => true,
         act,
-      }),
+      }).execute(),
     ).resolves.toEqual({
       kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
     })
@@ -250,33 +280,21 @@ describe('credential-bearing workflow revalidation', () => {
         observedAt: Date.now(),
       },
     }
-    runtime.sendSnapshot.mockImplementation(async () => {
-      root.remove()
-      return {
-        kind: RuntimeMessageDeliveryKind.Delivered,
-        response: {
-          verdict: {
-            kind: AuthenticationWorkflowSnapshotResponseKind.Matched,
-            snapshot: {
-              kind: AuthenticationWorkflowKind.TotpChallenge,
-              stage: AuthenticationWorkflowStage.SecondFactor,
-              action: AuthenticationWorkflowAction.FillTotp,
-              currentStep: 2,
-              totalSteps: 3,
-              approvalRequirement: explicitUserApproval,
-              observationIndex: 0,
-            },
-          },
-          loginMatches: [],
-        },
-      }
-    })
+    runtime.sendSnapshot.mockImplementation(
+      async (message: AuthenticationWorkflowSnapshotMessage) => {
+        root.remove()
+        return matchedDeliveryWithSelectedFacts(
+          message,
+          AuthenticationWorkflowAction.FillTotp,
+        )
+      },
+    )
     const act = vi.fn(() => ({
       kind: RevalidatedAuthenticationActResultKind.Acted,
     }))
 
     await expect(
-      performRevalidatedAuthenticationAction({
+      new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.FillTotp,
         observationBinding: {
@@ -284,7 +302,7 @@ describe('credential-bearing workflow revalidation', () => {
         },
         approvalIsActive: () => true,
         act,
-      }),
+      }).execute(),
     ).resolves.toEqual({
       kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
     })
@@ -309,7 +327,7 @@ describe('credential-bearing workflow revalidation', () => {
     )
     let observationBindingToken = ''
     await expect(
-      performRevalidatedAuthenticationAction({
+      new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
         observationBinding: {
@@ -320,7 +338,7 @@ describe('credential-bearing workflow revalidation', () => {
           observationBindingToken = approvedToken
           return { kind: RevalidatedAuthenticationActResultKind.Acted }
         },
-      }),
+      }).execute(),
     ).resolves.toEqual({
       kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
     })
@@ -333,7 +351,7 @@ describe('credential-bearing workflow revalidation', () => {
     }))
 
     await expect(
-      performRevalidatedAuthenticationAction({
+      new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
         observationBinding: {
@@ -342,7 +360,7 @@ describe('credential-bearing workflow revalidation', () => {
         },
         approvalIsActive: () => true,
         act,
-      }),
+      }).execute(),
     ).resolves.toEqual({
       kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
     })
@@ -374,6 +392,7 @@ describe('credential-bearing workflow revalidation', () => {
               kind: AuthenticationWorkflowSnapshotResponseKind.NoMatch,
             },
             loginMatches: [],
+            selectedFacts: { state: 'notApplicable' },
           },
         }
       },
@@ -383,7 +402,7 @@ describe('credential-bearing workflow revalidation', () => {
     }))
 
     await expect(
-      performRevalidatedAuthenticationAction({
+      new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
         observationBinding: {
@@ -391,7 +410,7 @@ describe('credential-bearing workflow revalidation', () => {
         },
         approvalIsActive: () => true,
         act,
-      }),
+      }).execute(),
     ).resolves.toEqual({
       kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
     })
@@ -417,7 +436,7 @@ describe('credential-bearing workflow revalidation', () => {
     }))
 
     await expect(
-      performRevalidatedAuthenticationAction({
+      new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
         observationBinding: {
@@ -425,7 +444,7 @@ describe('credential-bearing workflow revalidation', () => {
         },
         approvalIsActive: () => approvalIsActive,
         act,
-      }),
+      }).execute(),
     ).resolves.toEqual({
       kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
     })
@@ -451,7 +470,7 @@ describe('credential-bearing workflow revalidation', () => {
     }))
 
     await expect(
-      performRevalidatedAuthenticationAction({
+      new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
         observationBinding: {
@@ -459,7 +478,7 @@ describe('credential-bearing workflow revalidation', () => {
         },
         approvalIsActive: () => true,
         act,
-      }),
+      }).execute(),
     ).resolves.toEqual({
       kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
     })
@@ -480,20 +499,22 @@ describe('credential-bearing workflow revalidation', () => {
     `
     const workflow = firstWorkflow()
     expect(workflow.root).toBe(document.querySelector('.login-panel'))
-    runtime.sendSnapshot.mockImplementation(async (message) => {
-      const search = document.querySelector<HTMLInputElement>('#search')
-      if (search) search.replaceWith(search.cloneNode(true))
-      return matchedDeliveryWithSelectedFacts(
-        message,
-        AuthenticationWorkflowAction.ContinueWithNook,
-      )
-    })
+    runtime.sendSnapshot.mockImplementation(
+      async (message: AuthenticationWorkflowSnapshotMessage) => {
+        const search = document.querySelector<HTMLInputElement>('#search')
+        if (search) search.replaceWith(search.cloneNode(true))
+        return matchedDeliveryWithSelectedFacts(
+          message,
+          AuthenticationWorkflowAction.ContinueWithNook,
+        )
+      },
+    )
     const act = vi.fn(() => ({
       kind: RevalidatedAuthenticationActResultKind.Acted,
     }))
 
     await expect(
-      performRevalidatedAuthenticationAction({
+      new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
         observationBinding: {
@@ -501,7 +522,7 @@ describe('credential-bearing workflow revalidation', () => {
         },
         approvalIsActive: () => true,
         act,
-      }),
+      }).execute(),
     ).resolves.toEqual({
       kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
     })
@@ -539,7 +560,7 @@ describe('credential-bearing workflow revalidation', () => {
     }))
 
     await expect(
-      performRevalidatedAuthenticationAction({
+      new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
         observationBinding: {
@@ -547,7 +568,7 @@ describe('credential-bearing workflow revalidation', () => {
         },
         approvalIsActive: () => true,
         act,
-      }),
+      }).execute(),
     ).resolves.toEqual({
       kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
     })
@@ -572,7 +593,7 @@ describe('credential-bearing workflow revalidation', () => {
     )
     let token = ''
     await expect(
-      performRevalidatedAuthenticationAction({
+      new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
         observationBinding: {
@@ -583,7 +604,7 @@ describe('credential-bearing workflow revalidation', () => {
           token = observationBindingToken
           return { kind: RevalidatedAuthenticationActResultKind.Acted }
         },
-      }),
+      }).execute(),
     ).resolves.toEqual({
       kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
     })
@@ -601,26 +622,26 @@ describe('credential-bearing workflow revalidation', () => {
 
     password.readOnly = true
     await expect(
-      performRevalidatedAuthenticationAction({
+      new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
         observationBinding: requiredBinding,
         approvalIsActive: () => true,
         act,
-      }),
+      }).execute(),
     ).resolves.toEqual({
       kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
     })
     password.readOnly = false
     form.method = 'get'
     await expect(
-      performRevalidatedAuthenticationAction({
+      new RevalidatedAuthenticationAction({
         workflow,
         expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
         observationBinding: requiredBinding,
         approvalIsActive: () => true,
         act,
-      }),
+      }).execute(),
     ).resolves.toEqual({
       kind: RevalidatedAuthenticationActionOutcomeKind.Rejected,
     })

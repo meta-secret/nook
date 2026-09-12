@@ -1,90 +1,149 @@
+import {
+  NativeVaultStorageFailure,
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from "$lib/runtime/storage-failure";
+import { err, ok, type Result } from "neverthrow";
 import type { ArchitectureActionsContext } from "$lib/vault/action-contexts";
 import {
   vault_architecture_can_create_secret,
   type VaultArchitecture,
 } from "$lib/vault/architecture-model";
 import { NookVaultArchitecture } from "$app-wasm";
-import { createLogger } from "$lib/runtime/log";
-
-const log = createLogger("vault-architecture");
-
-export function draftVaultArchitecture(
-  state: ArchitectureActionsContext,
-): VaultArchitecture {
-  return NookVaultArchitecture.draft(
-    state.draftDeviceMode,
-    state.draftVaultType,
-    state.draftReplicationType,
-  );
-}
 
 type VaultArchitectureReplacement = {
-  readonly state: ArchitectureActionsContext;
   readonly architecture: VaultArchitecture;
 };
 
-export function replaceVaultArchitecture({
-  state,
-  architecture,
-}: VaultArchitectureReplacement): void {
-  const previous = state.vaultArchitecture;
-  state.vaultArchitecture = architecture;
-  if (previous !== architecture) previous.free();
-}
+/** Owns architecture presentation and admission of native metadata. */
+export class VaultArchitectureActions {
+  constructor(private readonly state: ArchitectureActionsContext) {}
 
-export function applyDraftVaultArchitecture(
-  state: ArchitectureActionsContext,
-): void {
-  const replaceVaultArchitectureArgs: Parameters<
-    typeof replaceVaultArchitecture
-  >[0] = { state, architecture: draftVaultArchitecture(state) };
-  replaceVaultArchitecture(replaceVaultArchitectureArgs);
-  state.architectureSecretCreationAllowed =
-    vault_architecture_can_create_secret(state.vaultArchitecture);
-  if (state.hasManager) {
-    state.requireManager().set_vault_architecture(state.vaultArchitecture);
+  replaceVaultArchitecture({
+    architecture,
+  }: VaultArchitectureReplacement): void {
+    const previous = this.state.vaultArchitecture;
+    this.state.vaultArchitecture = architecture;
+    if (previous !== architecture) previous.free();
   }
-}
 
-export function refreshVaultArchitectureFromManager(
-  state: ArchitectureActionsContext,
-): void {
-  if (!state.hasManager) return;
-  let architecture: VaultArchitecture;
-  try {
-    architecture = state.requireManager()
-      .vaultArchitecture as VaultArchitecture;
-  } catch {
-    log.warn("vault architecture metadata could not be loaded");
-    return;
+  applyDraftVaultArchitecture(): Result<void, VaultStorageFailure> {
+    const state = this.state;
+    let architecture: VaultArchitecture;
+    try {
+      architecture = NookVaultArchitecture.draft(
+        state.draftDeviceMode,
+        state.draftVaultType,
+        state.draftReplicationType,
+      );
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    }
+    let allowed: boolean;
+    try {
+      allowed = vault_architecture_can_create_secret(architecture);
+    } catch (failure) {
+      architecture.free();
+      return err(new NativeVaultStorageFailure(failure));
+    }
+    if (state.hasManager) {
+      const manager = state.admitManager();
+      if (manager.isErr()) {
+        architecture.free();
+        return err(manager.error);
+      }
+      try {
+        manager.value.set_vault_architecture(architecture);
+      } catch (failure) {
+        architecture.free();
+        return err(new NativeVaultStorageFailure(failure));
+      }
+    }
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    this.replaceVaultArchitecture({ architecture });
+    state.architectureSecretCreationAllowed = allowed;
+    return ok();
   }
-  const replaceVaultArchitectureArgs2: Parameters<
-    typeof replaceVaultArchitecture
-  >[0] = { state, architecture };
-  replaceVaultArchitecture(replaceVaultArchitectureArgs2);
-  state.architectureSecretCreationAllowed =
-    vault_architecture_can_create_secret(state.vaultArchitecture);
-  state.draftDeviceMode = state.vaultArchitecture.device_mode;
-  state.draftVaultType = state.vaultArchitecture.vault_type;
-  state.draftReplicationType = state.vaultArchitecture.replication_type;
-  void refreshArchitectureSecretCreationAllowed(state);
-}
 
-export async function refreshArchitectureSecretCreationAllowed(
-  state: ArchitectureActionsContext,
-): Promise<void> {
-  const fallback = vault_architecture_can_create_secret(
-    state.vaultArchitecture,
-  );
-  if (!state.hasManager) {
-    state.architectureSecretCreationAllowed = fallback;
-    return;
+  refreshVaultArchitectureFromManager(): Result<void, VaultStorageFailure> {
+    const state = this.state;
+    const manager = state.admitManager();
+    if (manager.isErr()) return err(manager.error);
+    let architecture: VaultArchitecture;
+    try {
+      architecture = manager.value.vaultArchitecture;
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    }
+    let deviceMode: VaultArchitecture["device_mode"];
+    let vaultType: VaultArchitecture["vault_type"];
+    let replicationType: VaultArchitecture["replication_type"];
+    try {
+      deviceMode = architecture.device_mode;
+      vaultType = architecture.vault_type;
+      replicationType = architecture.replication_type;
+    } catch (failure) {
+      architecture.free();
+      return err(new NativeVaultStorageFailure(failure));
+    }
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    this.replaceVaultArchitecture({ architecture });
+    state.architectureSecretCreationAllowed = false;
+    state.draftDeviceMode = deviceMode;
+    state.draftVaultType = vaultType;
+    state.draftReplicationType = replicationType;
+    void this.refreshArchitectureSecretCreationAllowed().then((permission) => {
+      if (permission.isErr()) {
+        const current = state.admitManager();
+        if (
+          current.isOk() &&
+          current.value === manager.value &&
+          state.vaultArchitecture === architecture
+        ) {
+          state.errorMsg = state.t(permission.error.translationKey);
+        }
+      }
+    });
+    return ok();
   }
-  try {
-    state.architectureSecretCreationAllowed = await state.enqueueStorage(() =>
-      state.requireManager().can_create_secret_for_vault_architecture(),
-    );
-  } catch {
-    state.architectureSecretCreationAllowed = fallback;
+
+  async refreshArchitectureSecretCreationAllowed(): Promise<
+    Result<void, VaultStorageFailure>
+  > {
+    const state = this.state;
+    const architecture = state.vaultArchitecture;
+    const manager = state.admitManager();
+    if (manager.isErr()) return err(manager.error);
+    state.architectureSecretCreationAllowed = false;
+    const permission = await state.enqueueStorage(async () => {
+      const current = state.admitManager();
+      if (current.isErr()) return err(current.error);
+      if (
+        current.value !== manager.value ||
+        state.vaultArchitecture !== architecture
+      ) {
+        return err(
+          new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
+        );
+      }
+      try {
+        return ok(current.value.can_create_secret_for_vault_architecture());
+      } catch (failure) {
+        return err(new NativeVaultStorageFailure(failure));
+      }
+    });
+    if (permission.isErr()) return err(permission.error);
+    const current = state.admitManager();
+    if (current.isErr()) return err(current.error);
+    if (
+      current.value !== manager.value ||
+      state.vaultArchitecture !== architecture
+    ) {
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
+      );
+    }
+    state.architectureSecretCreationAllowed = permission.value;
+    return ok();
   }
 }

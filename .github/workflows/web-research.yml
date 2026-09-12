@@ -1,32 +1,12 @@
 name: Web research
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - .github/workflows/web-research.yml
-      - .github/scripts/web-research-deploy.sh
-      - .github/scripts/web-research-verify-live.sh
-      - .task/ci-workflows.yml
-      - nook-app/nook-web/nook-web-research/**
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/web-research.yml
-      - .github/scripts/web-research-deploy.sh
-      - .github/scripts/web-research-verify-live.sh
-      - .task/ci-workflows.yml
-      - nook-app/nook-web/nook-web-research/**
-  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
   deployments: write
   pull-requests: write
-
-concurrency:
-  group: web-research-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 env:
   CF_PAGES_PROJECT_NAME: nook-web-research
@@ -42,6 +22,7 @@ jobs:
       (github.event.pull_request.head.repo.full_name != github.repository ||
       github.event.pull_request.user.login == 'dependabot[bot]')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -75,6 +56,7 @@ jobs:
       (github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]')
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    timeout-minutes: 10
     env:
       DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-research:run-${{ github.run_id }}-${{ github.run_attempt }}
       DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-research:run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -87,6 +69,7 @@ jobs:
       - name: Connect private ARC BuildKit
         uses: ./.github/actions/nook-docker-setup
         with:
+          cache-selection: web-e2e
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
@@ -101,6 +84,7 @@ jobs:
     name: Build and deploy research catalog
     needs: image
     runs-on: nook-k0s-container
+    timeout-minutes: 10
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-research:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:
@@ -112,7 +96,6 @@ jobs:
     env:
       PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
     steps:
-
       - name: Install dependencies
         run: task web:research:install
 

@@ -1,13 +1,10 @@
 import { lstatSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  isValidTaskResourceClaim,
-  taskResourcePatternsOverlap,
-} from '../agent-workflow/domain.ts';
+import { TaskResourceClaim } from '../agent-workflow/domain.ts';
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
-import { resourceClaimMatchesPath } from '../module-delivery/resource-claims.ts';
+import { ModuleWriteClaim } from '../module-delivery/resource-claims.ts';
 import type { ResourcePathMatchRequest } from '../module-delivery/resource-claims.ts';
-import { teamAgentProfile } from './catalog.ts';
+import { TeamAuthorityCatalog } from './catalog.ts';
 import type { TeamAgentKey } from './catalog.ts';
 
 export const CORTEX_AUTHORING_SKILL_PATHS = [
@@ -16,7 +13,146 @@ export const CORTEX_AUTHORING_SKILL_PATHS = [
   '.cortex/teams/ai/dynamic-skills/cortex-consistency/SKILL.md',
 ] as const;
 
-const CORTEX_RESOURCE_CLAIM = '.cortex/**';
+/** Owns the team task context resolver registry and its capability transitions. */
+export class TeamTaskContextResolver {
+  private constructor() {}
+  private static readonly CORTEX_RESOURCE_CLAIM = '.cortex/**';
+
+  static resolveTeamTaskContext(
+    request: TeamTaskContextRequest,
+  ): TeamTaskContext {
+    TeamTaskContextResolver.assertValidReadClaims(request.readClaims);
+    TeamTaskContextResolver.assertValidWriteClaims(request.writeClaims);
+    TeamTaskContextResolver.assertValidSkillPaths(request);
+
+    const automaticSkills = TeamTaskContextResolver.writesCortex(
+      request.writeClaims,
+    )
+      ? CORTEX_AUTHORING_SKILL_PATHS
+      : [];
+    if (
+      automaticSkills.some(
+        (path) =>
+          !TeamTaskContextResolver.isRegularFile(
+            join(request.repositoryRoot, path),
+          ),
+      )
+    )
+      throw new Error(
+        'Canonical Cortex authoring skills must be existing regular files.',
+      );
+    const pathRequest: TeamTaskContextPathRequest = request;
+    return TeamTaskContextResolver.composeTeamTaskContextPaths(pathRequest);
+  }
+
+  static composeTeamTaskContextPaths(
+    request: TeamTaskContextPathRequest,
+  ): TeamTaskContext {
+    const authority = TeamAuthorityCatalog.teamAgentProfile(request.team);
+    if (!authority) throw new Error(`Unknown team authority: ${request.team}`);
+    const automaticSkills = TeamTaskContextResolver.writesCortex(
+      request.writeClaims,
+    )
+      ? CORTEX_AUTHORING_SKILL_PATHS
+      : [];
+    const automaticSkillPaths: readonly string[] = automaticSkills;
+    const selectedSkills = [...new Set(request.selectedSkillPaths)]
+      .filter((path) => !automaticSkillPaths.includes(path))
+      .sort();
+    const skillPaths = Object.freeze([...automaticSkills, ...selectedSkills]);
+    const context: TeamTaskContext = {
+      team: request.team,
+      contextPaths: Object.freeze([...authority.contextPaths, ...skillPaths]),
+      skillPaths,
+    };
+    return Object.freeze(context);
+  }
+
+  static isCortexAuthoringSkillPath(path: string): boolean {
+    return CORTEX_AUTHORING_SKILL_PATHS.some(
+      (authoringSkillPath) => authoringSkillPath === path,
+    );
+  }
+
+  private static writesCortex(writeClaims: readonly string[]): boolean {
+    return writeClaims.some((claim) => {
+      const pair: TaskResourcePatternPair = {
+        first: claim,
+        second: TeamTaskContextResolver.CORTEX_RESOURCE_CLAIM,
+      };
+      return TaskResourceClaim.taskResourcePatternsOverlap(pair);
+    });
+  }
+
+  private static assertValidWriteClaims(writeClaims: readonly string[]): void {
+    if (
+      writeClaims.some(
+        (claim) => !TaskResourceClaim.isValidTaskResourceClaim(claim),
+      )
+    )
+      throw new Error(
+        'Team task write claims must be canonical resource paths.',
+      );
+  }
+
+  private static assertValidReadClaims(readClaims: readonly string[]): void {
+    if (
+      readClaims.some(
+        (claim) => !TaskResourceClaim.isValidTaskResourceClaim(claim),
+      )
+    )
+      throw new Error(
+        'Team task read claims must be canonical resource paths.',
+      );
+  }
+
+  private static assertValidSkillPaths(request: TeamTaskContextRequest): void {
+    if (
+      request.selectedSkillPaths.some(
+        (path) =>
+          !TaskResourceClaim.isValidTaskResourceClaim(path) ||
+          path.includes('*') ||
+          !path.startsWith('.cortex/') ||
+          !path.includes('/dynamic-skills/') ||
+          !path.endsWith('.md') ||
+          !TeamTaskContextResolver.isRegularFile(
+            join(request.repositoryRoot, path),
+          ) ||
+          (!(
+            TeamTaskContextResolver.writesCortex(request.writeClaims) &&
+            TeamTaskContextResolver.isCortexAuthoringSkillPath(path)
+          ) &&
+            !request.readClaims.some((claim) => {
+              const authorizationRequest: SkillReadAuthorizationRequest = {
+                claim,
+                path,
+              };
+              return TeamTaskContextResolver.claimAuthorizesPath(
+                authorizationRequest,
+              );
+            })),
+      )
+    )
+      throw new Error(
+        'Team task skills must be exact existing task-authorized Cortex Markdown files.',
+      );
+  }
+
+  private static claimAuthorizesPath(
+    request: SkillReadAuthorizationRequest,
+  ): boolean {
+    const matchRequest: ResourcePathMatchRequest = request;
+    return ModuleWriteClaim.resourceClaimMatchesPath(matchRequest);
+  }
+
+  private static isRegularFile(path: string): boolean {
+    try {
+      return lstatSync(path).isFile();
+    } catch {
+      return false;
+    }
+  }
+}
 
 export type TeamTaskContextRequest = {
   readonly repositoryRoot: string;
@@ -41,109 +177,3 @@ type SkillReadAuthorizationRequest = {
   readonly claim: string;
   readonly path: string;
 };
-
-export function resolveTeamTaskContext(
-  request: TeamTaskContextRequest,
-): TeamTaskContext {
-  assertValidReadClaims(request.readClaims);
-  assertValidWriteClaims(request.writeClaims);
-  assertValidSkillPaths(request);
-
-  const automaticSkills = writesCortex(request.writeClaims)
-    ? CORTEX_AUTHORING_SKILL_PATHS
-    : [];
-  if (
-    automaticSkills.some(
-      (path) => !isRegularFile(join(request.repositoryRoot, path)),
-    )
-  )
-    throw new Error(
-      'Canonical Cortex authoring skills must be existing regular files.',
-    );
-  const pathRequest: TeamTaskContextPathRequest = request;
-  return composeTeamTaskContextPaths(pathRequest);
-}
-
-export function composeTeamTaskContextPaths(
-  request: TeamTaskContextPathRequest,
-): TeamTaskContext {
-  const authority = teamAgentProfile(request.team);
-  if (!authority) throw new Error(`Unknown team authority: ${request.team}`);
-  const automaticSkills = writesCortex(request.writeClaims)
-    ? CORTEX_AUTHORING_SKILL_PATHS
-    : [];
-  const automaticSkillPaths: readonly string[] = automaticSkills;
-  const selectedSkills = [...new Set(request.selectedSkillPaths)]
-    .filter((path) => !automaticSkillPaths.includes(path))
-    .sort();
-  const skillPaths = Object.freeze([...automaticSkills, ...selectedSkills]);
-  const context: TeamTaskContext = {
-    team: request.team,
-    contextPaths: Object.freeze([...authority.contextPaths, ...skillPaths]),
-    skillPaths,
-  };
-  return Object.freeze(context);
-}
-
-function writesCortex(writeClaims: readonly string[]): boolean {
-  return writeClaims.some((claim) => {
-    const pair: TaskResourcePatternPair = {
-      first: claim,
-      second: CORTEX_RESOURCE_CLAIM,
-    };
-    return taskResourcePatternsOverlap(pair);
-  });
-}
-
-function assertValidWriteClaims(writeClaims: readonly string[]): void {
-  if (writeClaims.some((claim) => !isValidTaskResourceClaim(claim)))
-    throw new Error('Team task write claims must be canonical resource paths.');
-}
-
-function assertValidReadClaims(readClaims: readonly string[]): void {
-  if (readClaims.some((claim) => !isValidTaskResourceClaim(claim)))
-    throw new Error('Team task read claims must be canonical resource paths.');
-}
-
-function assertValidSkillPaths(request: TeamTaskContextRequest): void {
-  if (
-    request.selectedSkillPaths.some(
-      (path) =>
-        !isValidTaskResourceClaim(path) ||
-        path.includes('*') ||
-        !path.startsWith('.cortex/') ||
-        !path.includes('/dynamic-skills/') ||
-        !path.endsWith('.md') ||
-        !isRegularFile(join(request.repositoryRoot, path)) ||
-        (!(
-          writesCortex(request.writeClaims) &&
-          CORTEX_AUTHORING_SKILL_PATHS.includes(
-            path as (typeof CORTEX_AUTHORING_SKILL_PATHS)[number],
-          )
-        ) &&
-          !request.readClaims.some((claim) => {
-            const authorizationRequest: SkillReadAuthorizationRequest = {
-              claim,
-              path,
-            };
-            return claimAuthorizesPath(authorizationRequest);
-          })),
-    )
-  )
-    throw new Error(
-      'Team task skills must be exact existing task-authorized Cortex Markdown files.',
-    );
-}
-
-function claimAuthorizesPath(request: SkillReadAuthorizationRequest): boolean {
-  const matchRequest: ResourcePathMatchRequest = request;
-  return resourceClaimMatchesPath(matchRequest);
-}
-
-function isRegularFile(path: string): boolean {
-  try {
-    return lstatSync(path).isFile();
-  } catch {
-    return false;
-  }
-}

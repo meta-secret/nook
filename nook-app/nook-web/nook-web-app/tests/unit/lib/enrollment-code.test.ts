@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { buildEnrollmentLink, enrollmentAppRootUrl } from '$lib/enrollment/code'
+import { enrollmentBrowser } from '$lib/enrollment/code'
 import {
   NookEnrollmentIssueInput,
   NookEnrollmentEntryLabelState,
@@ -45,24 +45,24 @@ function enrollmentEntryLabel(code: string): string {
   }
 }
 
-function decodeOuterJson(code: string): Record<string, unknown> {
+function decodeOuterPayload(code: string): string {
   const normalized = code.replace(/-/g, '+').replace(/_/g, '/')
   const padded = normalized + '='.repeat((4 - (normalized.length % 4 || 4)) % 4)
   const binary = atob(padded)
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
-  return JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>
+  return new TextDecoder().decode(bytes)
 }
 
 describe('enrollment-code links', () => {
   test('isolated applications generate links at their own root', () => {
     expect(
-      enrollmentAppRootUrl({
+      enrollmentBrowser.enrollmentAppRootUrl({
         siteRoot: 'https://simple.nokey.sh',
         appKind: VaultApplication.Simple,
       }),
     ).toBe('https://simple.nokey.sh/')
     expect(
-      enrollmentAppRootUrl({
+      enrollmentBrowser.enrollmentAppRootUrl({
         siteRoot: 'https://sentinel.nokey.sh/',
         appKind: VaultApplication.Sentinel,
       }),
@@ -71,7 +71,7 @@ describe('enrollment-code links', () => {
 
   test('the unified development application keeps its /app route', () => {
     expect(
-      enrollmentAppRootUrl({
+      enrollmentBrowser.enrollmentAppRootUrl({
         siteRoot: 'https://nokey.sh',
         appKind: VaultApplication.UnifiedDevelopment,
       }),
@@ -84,7 +84,7 @@ describe('enrollment-code links', () => {
       'hunter2',
     )
     expect(
-      buildEnrollmentLink({
+      enrollmentBrowser.buildEnrollmentLink({
         code: code,
         baseUrl: 'https://nook.example',
       }),
@@ -104,7 +104,7 @@ describe('enrollment-code links', () => {
       samplePayload(),
       'hunter2',
     )
-    const link = buildEnrollmentLink({
+    const link = enrollmentBrowser.buildEnrollmentLink({
       code: code,
       baseUrl: 'https://nook.example',
     })
@@ -117,7 +117,7 @@ describe('enrollment-code links', () => {
       'hunter2',
       'Desk',
     )
-    const link = buildEnrollmentLink({
+    const link = enrollmentBrowser.buildEnrollmentLink({
       code: code,
       baseUrl: 'https://nook.example',
     })
@@ -138,13 +138,12 @@ describe('enrollment payloads', () => {
     expect(enrollmentEntryLabel(code)).toBe('Work laptop')
     expect(peek_enrollment_issued_at(code)).toBe('2026-06-23T12:00:00Z')
 
-    const outer = decodeOuterJson(code)
-    const serialized = JSON.stringify(outer)
+    const serialized = decodeOuterPayload(code)
     expect(serialized).not.toContain('vault-pass-99')
     expect(serialized).not.toContain('github_pat_11AAAAbbbbCCCC')
     expect(serialized).not.toContain('Team vault')
-    expect(outer.entry_id).toBe('entry-1')
-    expect(outer.ct).toBeTruthy()
+    expect(serialized).toContain('"entry_id":"entry-1"')
+    expect(serialized).toContain('"ct":')
 
     const decrypted = decrypt_enrollment_payload(code, 'vault-pass-99')
     expect(decrypted.entryId).toBe('entry-1')

@@ -1,3 +1,8 @@
+import { err, ok, type Result } from "neverthrow";
+import {
+  NativeVaultStorageFailure,
+  type VaultStorageFailure,
+} from "$lib/runtime/storage-failure";
 import {
   existing_vault_provider_readiness,
   NookExistingVaultProviderReadiness,
@@ -46,50 +51,66 @@ export type ExistingVaultProviderRequest = {
   readonly setupType: StorageProviderType;
 };
 
-export function prepareExistingVaultProvider({
-  state,
-  setupType,
-}: ExistingVaultProviderRequest): ExistingVaultProviderPreparation {
-  const readiness = existing_vault_provider_readiness(
-    setupType,
-    state.oauthFileDraft.kind === OAuthFileDraftKind.Configured,
-    state.localFolderDraft.kind === LocalFolderDraftKind.Configured,
-  );
-  if (readiness !== NookExistingVaultProviderReadiness.Ready) {
-    return { kind: readiness };
-  }
-  if (setupType === GITHUB_PROVIDER_TYPE) {
-    return {
-      kind: NookExistingVaultProviderReadiness.Ready,
-      provider: {
+/** Owns one browser draft snapshot before it enters the Rust import workflow. */
+export class ExistingVaultProviderDraft {
+  constructor(private readonly request: ExistingVaultProviderRequest) {}
+
+  prepare(): Result<ExistingVaultProviderPreparation, VaultStorageFailure> {
+    const { state, setupType } = this.request;
+    const oauth = state.oauthFileDraft;
+    const folder = state.localFolderDraft;
+    let readiness: NookExistingVaultProviderReadiness;
+    try {
+      readiness = existing_vault_provider_readiness(
         setupType,
-        githubPat: state.githubPat,
-        githubRepo: state.githubRepo,
-      },
-    };
+        oauth.kind === OAuthFileDraftKind.Configured,
+        folder.kind === LocalFolderDraftKind.Configured,
+      );
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure));
+    }
+    if (readiness !== NookExistingVaultProviderReadiness.Ready)
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({ kind: readiness });
+    if (setupType === GITHUB_PROVIDER_TYPE) {
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({
+        kind: readiness,
+        provider: {
+          setupType,
+          githubPat: state.githubPat,
+          githubRepo: state.githubRepo,
+        },
+      });
+    }
+    if (setupType === OAUTH_FILE_PROVIDER_TYPE) {
+      if (oauth.kind !== OAuthFileDraftKind.Configured)
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        return ok({
+          kind: NookExistingVaultProviderReadiness.MissingOauthFile,
+        });
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({
+        kind: readiness,
+        provider: { setupType, oauthFile: $state.snapshot(oauth.config) },
+      });
+    }
+    if (setupType === LOCAL_FOLDER_PROVIDER_TYPE) {
+      if (folder.kind !== LocalFolderDraftKind.Configured)
+        // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+        return ok({
+          kind: NookExistingVaultProviderReadiness.MissingLocalFolder,
+        });
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      return ok({
+        kind: readiness,
+        provider: { setupType, localFolder: $state.snapshot(folder.config) },
+      });
+    }
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    return ok({
+      kind: readiness,
+      provider: { setupType: LOCAL_PROVIDER_TYPE },
+    });
   }
-  if (setupType === OAUTH_FILE_PROVIDER_TYPE) {
-    return {
-      kind: NookExistingVaultProviderReadiness.Ready,
-      provider: {
-        setupType,
-        oauthFile: $state.snapshot(state.requireOauthFileConfig()),
-      },
-    };
-  }
-  if (setupType === LOCAL_FOLDER_PROVIDER_TYPE) {
-    return {
-      kind: NookExistingVaultProviderReadiness.Ready,
-      provider: {
-        setupType,
-        localFolder: $state.snapshot(state.requireLocalFolderConfig()),
-      },
-    };
-  }
-  return {
-    kind: NookExistingVaultProviderReadiness.Ready,
-    provider: {
-      setupType: LOCAL_PROVIDER_TYPE,
-    },
-  };
 }

@@ -1,4 +1,5 @@
 use crate::IsoTimestamp;
+use serde::de::IgnoredAny;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -59,14 +60,41 @@ pub enum PasskeyBackupState {
     BackedUp,
 }
 
+/// Browser-reported authenticator identity evidence, never an authorization proof.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(untagged)]
+pub enum AuthenticatorGuidEvidence {
+    #[default]
+    NotReported,
+    Reported(String),
+}
+impl AuthenticatorGuidEvidence {
+    #[must_use]
+    pub fn is_unreported(&self) -> bool {
+        matches!(self, Self::NotReported)
+    }
+}
+
+/// Historical English metadata is admitted as string/null and immediately discarded.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DiscardedClientEnvironment;
+impl<'de> Deserialize<'de> for DiscardedClientEnvironment {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        IgnoredAny::deserialize(deserializer).map(|_| Self)
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyBrowserObservation {
     pub attachment: PasskeyAuthenticatorAttachment,
     pub transports: Vec<PasskeyTransport>,
     pub backup_state: PasskeyBackupState,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub aaguid: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "AuthenticatorGuidEvidence::is_unreported"
+    )]
+    pub aaguid: AuthenticatorGuidEvidence,
     #[serde(default)]
     pub browser: PasskeyObservedBrowser,
     #[serde(default)]
@@ -76,11 +104,12 @@ pub struct PasskeyBrowserObservation {
     // text into localized UI.
     #[doc(hidden)]
     #[serde(default, alias = "clientEnvironment", skip_serializing)]
-    pub legacy_client_environment: Option<String>,
+    pub legacy_client_environment: DiscardedClientEnvironment,
 }
 
 impl PasskeyBrowserObservation {
-    pub fn merge_usage(&mut self, usage: Self) {
+    #[must_use]
+    pub fn merge_usage(mut self, usage: Self) -> Self {
         if self.attachment == PasskeyAuthenticatorAttachment::Unknown {
             self.attachment = usage.attachment;
         }
@@ -90,7 +119,7 @@ impl PasskeyBrowserObservation {
         if usage.backup_state != PasskeyBackupState::Unknown {
             self.backup_state = usage.backup_state;
         }
-        if self.aaguid.is_none() {
+        if matches!(self.aaguid, AuthenticatorGuidEvidence::NotReported) {
             self.aaguid = usage.aaguid;
         }
         if usage.browser != PasskeyObservedBrowser::Unknown {
@@ -99,6 +128,7 @@ impl PasskeyBrowserObservation {
         if usage.platform != PasskeyObservedPlatform::Unknown {
             self.platform = usage.platform;
         }
+        self
     }
 }
 
@@ -118,23 +148,21 @@ pub enum PasskeyCreatedAtEvidence {
     },
 }
 
-impl PasskeyCreatedAtEvidence {
-    pub(super) fn deserialize_legacy<'de, D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum WireEvidence {
-            Explicit(PasskeyCreatedAtEvidence),
-            Legacy(Option<IsoTimestamp>),
+#[derive(Default, Deserialize)]
+#[serde(untagged)]
+pub(super) enum PasskeyCreatedAtEvidenceWire {
+    Explicit(PasskeyCreatedAtEvidence),
+    LegacyTimestamp(IsoTimestamp),
+    #[default]
+    LegacyUnavailable,
+}
+impl From<PasskeyCreatedAtEvidenceWire> for PasskeyCreatedAtEvidence {
+    fn from(wire: PasskeyCreatedAtEvidenceWire) -> Self {
+        match wire {
+            PasskeyCreatedAtEvidenceWire::Explicit(evidence) => evidence,
+            PasskeyCreatedAtEvidenceWire::LegacyTimestamp(timestamp) => Self::Known { timestamp },
+            PasskeyCreatedAtEvidenceWire::LegacyUnavailable => Self::Unavailable,
         }
-
-        Ok(match WireEvidence::deserialize(deserializer)? {
-            WireEvidence::Explicit(evidence) => evidence,
-            WireEvidence::Legacy(Some(timestamp)) => Self::Known { timestamp },
-            WireEvidence::Legacy(None) => Self::Unavailable,
-        })
     }
 }
 
@@ -149,23 +177,21 @@ pub enum PasskeyLastUsedAtEvidence {
     },
 }
 
-impl PasskeyLastUsedAtEvidence {
-    pub(super) fn deserialize_legacy<'de, D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum WireEvidence {
-            Explicit(PasskeyLastUsedAtEvidence),
-            Legacy(Option<IsoTimestamp>),
+#[derive(Default, Deserialize)]
+#[serde(untagged)]
+pub(super) enum PasskeyLastUsedAtEvidenceWire {
+    Explicit(PasskeyLastUsedAtEvidence),
+    LegacyTimestamp(IsoTimestamp),
+    #[default]
+    LegacyUnavailable,
+}
+impl From<PasskeyLastUsedAtEvidenceWire> for PasskeyLastUsedAtEvidence {
+    fn from(wire: PasskeyLastUsedAtEvidenceWire) -> Self {
+        match wire {
+            PasskeyLastUsedAtEvidenceWire::Explicit(evidence) => evidence,
+            PasskeyLastUsedAtEvidenceWire::LegacyTimestamp(timestamp) => Self::Known { timestamp },
+            PasskeyLastUsedAtEvidenceWire::LegacyUnavailable => Self::Unavailable,
         }
-
-        Ok(match WireEvidence::deserialize(deserializer)? {
-            WireEvidence::Explicit(evidence) => evidence,
-            WireEvidence::Legacy(Some(timestamp)) => Self::Known { timestamp },
-            WireEvidence::Legacy(None) => Self::Unavailable,
-        })
     }
 }
 
@@ -179,13 +205,13 @@ mod tests {
             attachment: PasskeyAuthenticatorAttachment::Platform,
             transports: vec![PasskeyTransport::Internal],
             backup_state: PasskeyBackupState::Eligible,
-            aaguid: Some("aaguid-one".to_owned()),
+            aaguid: AuthenticatorGuidEvidence::Reported("aaguid-one".to_owned()),
             browser: PasskeyObservedBrowser::Safari,
             platform: PasskeyObservedPlatform::MacOs,
-            legacy_client_environment: None,
+            legacy_client_environment: DiscardedClientEnvironment,
         };
 
-        creation.merge_usage(PasskeyBrowserObservation {
+        creation = creation.merge_usage(PasskeyBrowserObservation {
             backup_state: PasskeyBackupState::BackedUp,
             browser: PasskeyObservedBrowser::Firefox,
             platform: PasskeyObservedPlatform::Linux,
@@ -198,7 +224,10 @@ mod tests {
         );
         assert_eq!(creation.transports, [PasskeyTransport::Internal]);
         assert_eq!(creation.backup_state, PasskeyBackupState::BackedUp);
-        assert_eq!(creation.aaguid.as_deref(), Some("aaguid-one"));
+        assert_eq!(
+            creation.aaguid,
+            AuthenticatorGuidEvidence::Reported("aaguid-one".to_owned())
+        );
         assert_eq!(creation.browser, PasskeyObservedBrowser::Firefox);
         assert_eq!(creation.platform, PasskeyObservedPlatform::Linux);
     }

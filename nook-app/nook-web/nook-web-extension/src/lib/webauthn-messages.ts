@@ -1,42 +1,170 @@
-export enum WebsitePasskeyCeremony {
-  Create = 'create',
-  Get = 'get',
-}
+import {
+  decode_website_passkey_registration_request,
+  decode_website_passkey_assertion_request,
+  type PasskeyRegistrationRequest,
+  type PasskeyAssertionRequest,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import { extensionWasmRuntime } from './nook-wasm'
+import {
+  WebsitePasskeyCancelMessageType,
+  WebsitePasskeyCeremony,
+  WebsitePasskeyOptionsMessageType,
+  WebsitePasskeyOptionsStatus,
+  WebsitePasskeyPerformMessageType,
+} from './webauthn-message-types'
 
-export enum WebsitePasskeyOptionsMessageType {
-  NookWebsitePasskeyOptions = 'nook:website-passkey-options',
-}
+export {
+  WebsitePasskeyCancelMessageType,
+  WebsitePasskeyCeremony,
+  WebsitePasskeyOptionsMessageType,
+  WebsitePasskeyOptionsStatus,
+  WebsitePasskeyPerformMessageType,
+} from './webauthn-message-types'
 
-export type WebsitePasskeyOptionsMessage = {
-  type: WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions
-  payload: {
+/** Structural browser wire value; validation requires no instance methods or runtime state. */
+export class WebsitePasskeyOptionsMessage {
+  private constructor() {}
+  declare readonly type: WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions
+  declare readonly payload: {
     requestId: string
     ceremony: WebsitePasskeyCeremony
     requestJson: string
     expiresAt: number
   }
-}
+  static validBase(message: unknown): message is {
+    payload: WebsitePasskeyOptionsMessage['payload']
+  } {
+    if (!message || typeof message !== 'object' || !('payload' in message)) {
+      return false
+    }
+    const payload = message.payload
+    return (
+      !!payload &&
+      typeof payload === 'object' &&
+      'requestId' in payload &&
+      typeof payload.requestId === 'string' &&
+      payload.requestId.length >= 16 &&
+      payload.requestId.length <= 128 &&
+      'ceremony' in payload &&
+      (payload.ceremony === WebsitePasskeyCeremony.Create ||
+        payload.ceremony === WebsitePasskeyCeremony.Get) &&
+      'requestJson' in payload &&
+      typeof payload.requestJson === 'string' &&
+      payload.requestJson.length > 0 &&
+      payload.requestJson.length <= 65_536 &&
+      'expiresAt' in payload &&
+      typeof payload.expiresAt === 'number' &&
+      Number.isFinite(payload.expiresAt) &&
+      payload.expiresAt > Date.now()
+    )
+  }
 
-export enum WebsitePasskeyPerformMessageType {
-  NookWebsitePasskeyPerform = 'nook:website-passkey-perform',
-}
+  static is(message: unknown): message is WebsitePasskeyOptionsMessage {
+    return (
+      WebsitePasskeyOptionsMessage.validBase(message) &&
+      'type' in message &&
+      message.type ===
+        WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions
+    )
+  }
 
-export type WebsitePasskeyPerformMessage = {
-  type: WebsitePasskeyPerformMessageType.NookWebsitePasskeyPerform
-  payload: WebsitePasskeyOptionsMessage['payload'] & {
-    vaultStoreId: string
-    credentialId?: string
+  static async parsedWebsitePasskeyRequest(
+    args: ParseWebsitePasskeyRequestArgs,
+  ): Promise<WebsitePasskeyRequestParse> {
+    await extensionWasmRuntime.ensureNookWasm()
+    try {
+      if (args.ceremony === WebsitePasskeyCeremony.Get) {
+        const value = decode_website_passkey_assertion_request(args.requestJson)
+        return {
+          kind: WebsitePasskeyRequestParseKind.Parsed,
+          request: {
+            ceremony: WebsitePasskeyCeremony.Get,
+            value,
+          },
+        }
+      }
+      const value = decode_website_passkey_registration_request(
+        args.requestJson,
+      )
+      return {
+        kind: WebsitePasskeyRequestParseKind.Parsed,
+        request: {
+          ceremony: WebsitePasskeyCeremony.Create,
+          value,
+        },
+      }
+    } catch {
+      return { kind: WebsitePasskeyRequestParseKind.Rejected }
+    }
+  }
+
+  static websitePasskeyRequestJson(
+    args: WebsitePasskeyRequestJsonArgs,
+  ): string {
+    if (
+      args.request.ceremony !== WebsitePasskeyCeremony.Get ||
+      args.credentialSelection.kind ===
+        WebsitePasskeyCredentialSelectionKind.RequestDefaults
+    ) {
+      return JSON.stringify(args.request.value)
+    }
+    if (args.credentialSelection.credentialId.length === 0) {
+      throw new Error('Selected passkey credential ID must not be empty.')
+    }
+    const request: PasskeyAssertionRequest = {
+      ...args.request.value,
+      allowCredentials: [{ id: args.credentialSelection.credentialId }],
+    }
+    return JSON.stringify(request)
   }
 }
 
-export enum WebsitePasskeyCancelMessageType {
-  NookWebsitePasskeyCancel = 'nook:website-passkey-cancel',
+/** Structural browser wire value; validation requires no instance methods or runtime state. */
+export class WebsitePasskeyPerformMessage {
+  private constructor() {}
+  declare readonly type: WebsitePasskeyPerformMessageType.NookWebsitePasskeyPerform
+  declare readonly payload: WebsitePasskeyOptionsMessage['payload'] & {
+    vaultStoreId: string
+    credentialId?: string
+  }
+  static is(message: unknown): message is WebsitePasskeyPerformMessage {
+    return (
+      WebsitePasskeyOptionsMessage.validBase(message) &&
+      'type' in message &&
+      message.type ===
+        WebsitePasskeyPerformMessageType.NookWebsitePasskeyPerform &&
+      'vaultStoreId' in message.payload &&
+      typeof message.payload.vaultStoreId === 'string' &&
+      message.payload.vaultStoreId.length > 0 &&
+      (!('credentialId' in message.payload) ||
+        (typeof message.payload.credentialId === 'string' &&
+          message.payload.credentialId.length > 0))
+    )
+  }
 }
 
-export type WebsitePasskeyCancelMessage = {
-  type: WebsitePasskeyCancelMessageType.NookWebsitePasskeyCancel
-  payload: {
+/** Structural browser wire value; validation requires no instance methods or runtime state. */
+export class WebsitePasskeyCancelMessage {
+  private constructor() {}
+  declare readonly type: WebsitePasskeyCancelMessageType.NookWebsitePasskeyCancel
+  declare readonly payload: {
     requestId: string
+  }
+  static is(message: unknown): message is WebsitePasskeyCancelMessage {
+    return Boolean(
+      message &&
+      typeof message === 'object' &&
+      'type' in message &&
+      message.type ===
+        WebsitePasskeyCancelMessageType.NookWebsitePasskeyCancel &&
+      'payload' in message &&
+      message.payload &&
+      typeof message.payload === 'object' &&
+      'requestId' in message.payload &&
+      typeof message.payload.requestId === 'string' &&
+      message.payload.requestId.length >= 16 &&
+      message.payload.requestId.length <= 128,
+    )
   }
 }
 
@@ -50,13 +178,6 @@ export type WebsitePasskeyVaultOption = {
   vaultStoreId: string
   vaultName: string
   account?: WebsitePasskeyAccount
-}
-
-export enum WebsitePasskeyOptionsStatus {
-  Unavailable = 'unavailable',
-  Locked = 'locked',
-  Invalid = 'invalid',
-  Ready = 'ready',
 }
 
 export type WebsitePasskeyOptionsResponse =
@@ -89,79 +210,6 @@ export type WebsitePasskeyPerformResponse =
   | WebsitePasskeyRegistrationResponse
   | WebsitePasskeyAssertionResponse
 
-function validBase(message: unknown): message is {
-  payload: WebsitePasskeyOptionsMessage['payload']
-} {
-  if (!message || typeof message !== 'object' || !('payload' in message)) {
-    return false
-  }
-  const payload = message.payload
-  return (
-    !!payload &&
-    typeof payload === 'object' &&
-    'requestId' in payload &&
-    typeof payload.requestId === 'string' &&
-    payload.requestId.length >= 16 &&
-    payload.requestId.length <= 128 &&
-    'ceremony' in payload &&
-    (payload.ceremony === WebsitePasskeyCeremony.Create ||
-      payload.ceremony === WebsitePasskeyCeremony.Get) &&
-    'requestJson' in payload &&
-    typeof payload.requestJson === 'string' &&
-    payload.requestJson.length > 0 &&
-    payload.requestJson.length <= 65_536 &&
-    'expiresAt' in payload &&
-    typeof payload.expiresAt === 'number' &&
-    Number.isFinite(payload.expiresAt) &&
-    payload.expiresAt > Date.now()
-  )
-}
-
-export function isWebsitePasskeyOptionsMessage(
-  message: unknown,
-): message is WebsitePasskeyOptionsMessage {
-  return (
-    validBase(message) &&
-    'type' in message &&
-    message.type === WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions
-  )
-}
-
-export function isWebsitePasskeyPerformMessage(
-  message: unknown,
-): message is WebsitePasskeyPerformMessage {
-  return (
-    validBase(message) &&
-    'type' in message &&
-    message.type ===
-      WebsitePasskeyPerformMessageType.NookWebsitePasskeyPerform &&
-    'vaultStoreId' in message.payload &&
-    typeof message.payload.vaultStoreId === 'string' &&
-    message.payload.vaultStoreId.length > 0 &&
-    (!('credentialId' in message.payload) ||
-      (typeof message.payload.credentialId === 'string' &&
-        message.payload.credentialId.length > 0))
-  )
-}
-
-export function isWebsitePasskeyCancelMessage(
-  message: unknown,
-): message is WebsitePasskeyCancelMessage {
-  return Boolean(
-    message &&
-    typeof message === 'object' &&
-    'type' in message &&
-    message.type === WebsitePasskeyCancelMessageType.NookWebsitePasskeyCancel &&
-    'payload' in message &&
-    message.payload &&
-    typeof message.payload === 'object' &&
-    'requestId' in message.payload &&
-    typeof message.payload.requestId === 'string' &&
-    message.payload.requestId.length >= 16 &&
-    message.payload.requestId.length <= 128,
-  )
-}
-
 export enum WebsitePasskeyRequestParseKind {
   Parsed = 'parsed',
   Rejected = 'rejected',
@@ -177,80 +225,16 @@ export type WebsitePasskeyRequestParse =
 export type WebsitePasskeyRequest =
   | {
       ceremony: WebsitePasskeyCeremony.Create
-      origin: string
-      rpId: string
-      requestJson: string
+      value: PasskeyRegistrationRequest
     }
   | {
       ceremony: WebsitePasskeyCeremony.Get
-      origin: string
-      rpId: string
-      requestJson: string
+      value: PasskeyAssertionRequest
     }
 
 export type ParseWebsitePasskeyRequestArgs = {
   ceremony: WebsitePasskeyCeremony
   requestJson: string
-}
-
-type WebsitePasskeyCreateRequestCandidate = {
-  origin?: string
-  relyingParty?: { id?: string }
-}
-
-type WebsitePasskeyGetRequestCandidate = {
-  origin?: string
-  rpId?: string
-  allowCredentials?: { id: string }[]
-}
-
-export function parsedWebsitePasskeyRequest(
-  args: ParseWebsitePasskeyRequestArgs,
-): WebsitePasskeyRequestParse {
-  try {
-    const parsed = JSON.parse(args.requestJson) as
-      WebsitePasskeyCreateRequestCandidate | WebsitePasskeyGetRequestCandidate
-    if (
-      !parsed ||
-      typeof parsed !== 'object' ||
-      Array.isArray(parsed) ||
-      !('origin' in parsed) ||
-      typeof parsed.origin !== 'string'
-    ) {
-      return { kind: WebsitePasskeyRequestParseKind.Rejected }
-    }
-    if (args.ceremony === WebsitePasskeyCeremony.Get) {
-      return 'rpId' in parsed && typeof parsed.rpId === 'string'
-        ? {
-            kind: WebsitePasskeyRequestParseKind.Parsed,
-            request: {
-              ceremony: WebsitePasskeyCeremony.Get,
-              origin: parsed.origin,
-              rpId: parsed.rpId,
-              requestJson: args.requestJson,
-            },
-          }
-        : { kind: WebsitePasskeyRequestParseKind.Rejected }
-    }
-    const relyingParty = 'relyingParty' in parsed ? parsed.relyingParty : false
-    return relyingParty &&
-      typeof relyingParty === 'object' &&
-      !Array.isArray(relyingParty) &&
-      'id' in relyingParty &&
-      typeof relyingParty.id === 'string'
-      ? {
-          kind: WebsitePasskeyRequestParseKind.Parsed,
-          request: {
-            ceremony: WebsitePasskeyCeremony.Create,
-            origin: parsed.origin,
-            rpId: relyingParty.id,
-            requestJson: args.requestJson,
-          },
-        }
-      : { kind: WebsitePasskeyRequestParseKind.Rejected }
-  } catch {
-    return { kind: WebsitePasskeyRequestParseKind.Rejected }
-  }
 }
 
 export type WebsitePasskeyRequestJsonArgs = {
@@ -269,32 +253,3 @@ export type WebsitePasskeyCredentialSelection =
       kind: WebsitePasskeyCredentialSelectionKind.Selected
       credentialId: string
     }
-
-export function websitePasskeyRequestJson(
-  args: WebsitePasskeyRequestJsonArgs,
-): string {
-  if (
-    args.request.ceremony !== WebsitePasskeyCeremony.Get ||
-    args.credentialSelection.kind ===
-      WebsitePasskeyCredentialSelectionKind.RequestDefaults
-  ) {
-    return args.request.requestJson
-  }
-  if (args.credentialSelection.credentialId.length === 0) {
-    throw new Error('Selected passkey credential ID must not be empty.')
-  }
-  const parsed = JSON.parse(
-    args.request.requestJson,
-  ) as WebsitePasskeyGetRequestCandidate
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Validated passkey request could not be reconstructed.')
-  }
-  const descriptor: PropertyDescriptor = {
-    value: [{ id: args.credentialSelection.credentialId }],
-    enumerable: true,
-    configurable: true,
-    writable: true,
-  }
-  Object.defineProperty(parsed, 'allowCredentials', descriptor)
-  return JSON.stringify(parsed)
-}

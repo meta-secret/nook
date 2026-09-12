@@ -13,7 +13,7 @@ import {
   type ExistingVaultImportQueue,
 } from "$lib/vault/creation-queue";
 import type { VaultState } from "$lib/vault.svelte";
-import { prepareExistingVaultProvider } from "$lib/vault/existing-vault-provider.svelte";
+import { ExistingVaultProviderDraft } from "$lib/vault/existing-vault-provider.svelte";
 import {
   ActiveVaultKind,
   LocalVaultCatalogKind,
@@ -22,22 +22,6 @@ import {
   RecoveryDiscoveryKind,
   type ActiveVault,
 } from "$lib/vault/state/provider.svelte";
-
-export function loginUnlockStoreId(vault: VaultState): string {
-  if (vault.activeVault.kind === ActiveVaultKind.Open) {
-    const storeId = vault.activeVault.storeId.trim();
-    if (storeId) return storeId;
-  }
-  if (vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected) {
-    const storeId = vault.selectedLoginVault.storeId.trim();
-    if (storeId) return storeId;
-  }
-  if (vault.localVaultCatalog.kind === LocalVaultCatalogKind.Available) {
-    const storeId = vault.localVaultCatalog.first.storeId.trim();
-    if (storeId) return storeId;
-  }
-  return "";
-}
 
 /** Browser orchestration for an existing-vault import retained across device unlock. */
 type ExistingVaultPasswordUnlock = {
@@ -52,18 +36,39 @@ export class ExistingVaultImportLifecycle {
 
   constructor(private readonly vault: VaultState) {}
 
+  get unlockStoreId(): string {
+    const vault = this.vault;
+    if (vault.activeVault.kind === ActiveVaultKind.Open) {
+      const storeId = vault.activeVault.storeId.trim();
+      if (storeId) return storeId;
+    }
+    if (vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected) {
+      const storeId = vault.selectedLoginVault.storeId.trim();
+      if (storeId) return storeId;
+    }
+    if (vault.localVaultCatalog.kind === LocalVaultCatalogKind.Available) {
+      const storeId = vault.localVaultCatalog.first.storeId.trim();
+      if (storeId) return storeId;
+    }
+    return "";
+  }
+
   get waitingForDevice(): boolean {
     return this.queue.kind === ExistingVaultImportQueueKind.WaitingForDevice;
   }
 
   remember(storeId: string): void {
     if (this.vault.loginSetup.kind !== LoginSetupKind.Active) return;
-    const prepareExistingVaultProviderArgs: Parameters<
-      typeof prepareExistingVaultProvider
-    >[0] = { state: this.vault, setupType: this.vault.loginSetup.providerType };
-    const preparation = prepareExistingVaultProvider(
-      prepareExistingVaultProviderArgs,
-    );
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const prepared = new ExistingVaultProviderDraft({
+      state: this.vault,
+      setupType: this.vault.loginSetup.providerType,
+    }).prepare();
+    if (prepared.isErr()) {
+      this.vault.errorMsg = this.vault.t(prepared.error.translationKey);
+      return;
+    }
+    const preparation = prepared.value;
     if (
       preparation.kind === NookExistingVaultProviderReadiness.MissingOauthFile
     ) {
@@ -102,15 +107,26 @@ export class ExistingVaultImportLifecycle {
       (entry) => entry.storeId === pending.storeId,
     );
     if (existingLocalVault) {
-      await this.vault.selectVaultForUnlock(pending.storeId);
+      const selected = await this.vault.selectVaultForUnlock(pending.storeId);
+      if (selected.isErr()) {
+        this.vault.errorMsg = this.vault.t(selected.error.translationKey);
+        return;
+      }
       if (
         this.vault.activeVault.kind !== ActiveVaultKind.Open ||
         this.vault.activeVault.storeId !== pending.storeId
       ) {
-        throw new Error(this.vault.t(I18N_KEYS.ErrorsVaultSelectionFailed));
+        this.vault.errorMsg = this.vault.t(
+          I18N_KEYS.ErrorsVaultSelectionFailed,
+        );
+        return;
       }
     } else {
-      await this.vault.prepareExistingVaultImportSlot();
+      const prepared = await this.vault.prepareExistingVaultImportSlot();
+      if (prepared.isErr()) {
+        this.vault.errorMsg = this.vault.t(prepared.error.translationKey);
+        return;
+      }
     }
     this.vault.loginRequiresExistingVault = true;
     this.vault.activateLoginSetup(pending.provider.setupType);
@@ -190,7 +206,13 @@ export class ExistingVaultImportLifecycle {
         : { kind: ActiveVaultKind.Closed };
     this.cancel();
     if (previousActiveVault.kind === ActiveVaultKind.Open) {
-      await this.vault.selectVaultForUnlock(previousActiveVault.storeId);
+      const selected = await this.vault.selectVaultForUnlock(
+        previousActiveVault.storeId,
+      );
+      if (selected.isErr()) {
+        this.vault.errorMsg = this.vault.t(selected.error.translationKey);
+        return;
+      }
     }
     this.vault.beginLoginVaultPicker();
   }
@@ -201,10 +223,20 @@ export class ExistingVaultImportLifecycle {
   }
 
   private async activatePendingVault(): Promise<void> {
-    if (this.queue.kind !== ExistingVaultImportQueueKind.WaitingForDevice) {
+    if (
+      this.queue.kind !== ExistingVaultImportQueueKind.WaitingForDevice ||
+      !this.vault.isAuthenticated
+    ) {
       return;
     }
-    await this.vault.activateConnectedExistingVault(this.queue.request.storeId);
-    this.cancel();
+    const pending = this.queue;
+    const activated = await this.vault.activateConnectedExistingVault(
+      pending.request.storeId,
+    );
+    if (activated.isErr()) {
+      this.vault.errorMsg = this.vault.t(activated.error.translationKey);
+      return;
+    }
+    if (this.queue === pending) this.cancel();
   }
 }

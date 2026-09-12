@@ -1,6 +1,13 @@
 use super::AuthenticationFieldObservationFacts;
+#[derive(Clone, Copy)]
+pub(super) enum PasskeyFieldContext {
+    Unobserved,
+    Observed(AuthenticationFieldObservationFacts),
+}
+use crate::PasskeyControlMarking;
+
 use crate::page_field_classification::{
-    AuthenticationAdvanceControlObservation, authentication_passkey_control_is_safe,
+    AuthenticationAdvanceControlObservation, PasskeyControlDecision,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -31,27 +38,32 @@ impl AuthenticationDetailedPasskeyControlCandidateObservation {
     }
 
     fn is_safe(&self) -> bool {
-        authentication_passkey_control_is_safe(
-            self.observation(),
-            matches!(self, Self::ExplicitlyMarked(_)),
-        )
+        (self.observation()).classify_authentication_passkey_control(
+            if matches!(self, Self::ExplicitlyMarked(_)) {
+                PasskeyControlMarking::Explicit
+            } else {
+                PasskeyControlMarking::Implicit
+            },
+        ) == PasskeyControlDecision::Assertion
     }
 }
 
 /// Validate one bounded passkey candidate before binding it to a DOM control.
-#[must_use]
-pub fn authentication_passkey_control_candidate_is_safe(
-    candidate: &AuthenticationDetailedPasskeyControlCandidateObservation,
-) -> bool {
-    candidate.is_safe()
+impl AuthenticationDetailedPasskeyControlCandidateObservation {
+    #[must_use]
+    pub fn authentication_passkey_control_candidate_is_safe(&self) -> bool {
+        let candidate = self;
+        candidate.is_safe()
+    }
 }
 
 /// Validate detailed passkey evidence before enriching it with vault metadata.
-#[must_use]
-pub fn authentication_passkey_control_evidence_is_safe(
-    evidence: &AuthenticationDetailedPasskeyControlObservation,
-) -> bool {
-    evidence.is_safe()
+impl AuthenticationDetailedPasskeyControlObservation {
+    #[must_use]
+    pub fn authentication_passkey_control_evidence_is_safe(&self) -> bool {
+        let evidence = self;
+        evidence.is_safe()
+    }
 }
 
 /// Detailed browser evidence for the passkey control selected by the host.
@@ -79,29 +91,29 @@ impl AuthenticationDetailedPasskeyControlObservation {
     }
 
     pub(super) fn is_safe(&self) -> bool {
-        self.is_safe_for_fields(None)
+        self.is_safe_for_fields(PasskeyFieldContext::Unobserved)
     }
 
-    pub(super) fn is_safe_for_fields(
-        &self,
-        fields: Option<AuthenticationFieldObservationFacts>,
-    ) -> bool {
+    pub(super) fn is_safe_for_fields(&self, fields: PasskeyFieldContext) -> bool {
         if !self.is_bounded() {
             return false;
         }
-        let compatible = |observation: &AuthenticationAdvanceControlObservation| {
-            fields.is_none_or(|fields| fields.is_compatible_with_detailed_control(observation))
+        let compatible = |observation: &AuthenticationAdvanceControlObservation| match fields {
+            PasskeyFieldContext::Unobserved => true,
+            PasskeyFieldContext::Observed(fields) => {
+                fields.is_compatible_with_detailed_control(observation)
+            }
         };
         matches!(
             self,
             Self::Observed(observation)
                 if compatible(observation)
-                    && authentication_passkey_control_is_safe(observation, false)
+                    && (observation).classify_authentication_passkey_control(PasskeyControlMarking::Implicit) == PasskeyControlDecision::Assertion
         ) || matches!(
             self,
             Self::ExplicitlyMarked(observation)
                 if compatible(observation)
-                    && authentication_passkey_control_is_safe(observation, true)
+                    && (observation).classify_authentication_passkey_control(PasskeyControlMarking::Explicit) == PasskeyControlDecision::Assertion
         ) || matches!(
             self,
             Self::Candidates(candidates)
@@ -145,35 +157,33 @@ mod tests {
         let labeled = AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
             passkey_control("Use passkey"),
         );
-        assert!(authentication_passkey_control_candidate_is_safe(&labeled));
+        assert!(labeled.authentication_passkey_control_candidate_is_safe());
 
         let explicitly_marked =
             AuthenticationDetailedPasskeyControlCandidateObservation::ExplicitlyMarked(
                 passkey_control("Continue"),
             );
-        assert!(authentication_passkey_control_candidate_is_safe(
-            &explicitly_marked
-        ));
+        assert!(explicitly_marked.authentication_passkey_control_candidate_is_safe());
 
         let mut unsafe_route = passkey_control("Use passkey");
         unsafe_route.destination_identity = "https://login.example.test/register".to_owned();
         let unsafe_candidate =
             AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(unsafe_route);
-        assert!(!authentication_passkey_control_candidate_is_safe(
-            &unsafe_candidate
-        ));
+        assert!(!unsafe_candidate.authentication_passkey_control_candidate_is_safe());
 
         let mut get_submitter = passkey_control("Use passkey");
         get_submitter.submission_method = PageControlSubmissionMethod::Get;
         get_submitter.password_field_count = 1.into();
-        assert!(!authentication_passkey_control_candidate_is_safe(
-            &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(get_submitter)
-        ));
+        assert!(
+            !AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(get_submitter)
+                .authentication_passkey_control_candidate_is_safe()
+        );
         let mut dialog_submitter = passkey_control("Use passkey");
         dialog_submitter.submission_method = PageControlSubmissionMethod::Dialog;
-        assert!(!authentication_passkey_control_candidate_is_safe(
-            &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(dialog_submitter)
-        ));
+        assert!(
+            !AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(dialog_submitter)
+                .authentication_passkey_control_candidate_is_safe()
+        );
     }
 
     #[test]
@@ -183,9 +193,7 @@ mod tests {
         let candidate =
             AuthenticationDetailedPasskeyControlCandidateObservation::ExplicitlyMarked(observation);
 
-        assert!(!authentication_passkey_control_candidate_is_safe(
-            &candidate
-        ));
+        assert!(!candidate.authentication_passkey_control_candidate_is_safe());
     }
 
     #[test]
@@ -195,9 +203,7 @@ mod tests {
                 AuthenticationDetailedPasskeyControlCandidateObservation::ExplicitlyMarked(
                     passkey_control(label),
                 );
-            assert!(!authentication_passkey_control_candidate_is_safe(
-                &candidate
-            ));
+            assert!(!candidate.authentication_passkey_control_candidate_is_safe());
         }
     }
 
@@ -210,9 +216,7 @@ mod tests {
         let candidate =
             AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(observation);
 
-        assert!(!authentication_passkey_control_candidate_is_safe(
-            &candidate
-        ));
+        assert!(!candidate.authentication_passkey_control_candidate_is_safe());
     }
 
     #[test]
@@ -234,9 +238,7 @@ mod tests {
                 AuthenticationDetailedPasskeyControlCandidateObservation::ExplicitlyMarked(
                     passkey_control(label),
                 );
-            assert!(!authentication_passkey_control_candidate_is_safe(
-                &candidate
-            ));
+            assert!(!candidate.authentication_passkey_control_candidate_is_safe());
         }
     }
 
@@ -251,7 +253,7 @@ mod tests {
             let candidate =
                 AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(observation);
             assert!(
-                authentication_passkey_control_candidate_is_safe(&candidate),
+                candidate.authentication_passkey_control_candidate_is_safe(),
                 "{destination}"
             );
         }
@@ -273,7 +275,7 @@ mod tests {
             let candidate =
                 AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(observation);
             assert!(
-                !authentication_passkey_control_candidate_is_safe(&candidate),
+                !candidate.authentication_passkey_control_candidate_is_safe(),
                 "{destination}"
             );
         }
@@ -293,7 +295,7 @@ mod tests {
             let candidate =
                 AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(observation);
             assert!(
-                !authentication_passkey_control_candidate_is_safe(&candidate),
+                !candidate.authentication_passkey_control_candidate_is_safe(),
                 "{label} {destination}"
             );
         }
@@ -305,23 +307,26 @@ mod tests {
         signup.new_password_field_count = 1.into();
         signup.form_identity = "auth-form".to_owned();
         signup.destination_identity = "https://login.example.test/auth/passkey".to_owned();
-        assert!(!authentication_passkey_control_candidate_is_safe(
-            &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(signup.clone())
-        ));
-        assert!(!authentication_passkey_control_candidate_is_safe(
-            &AuthenticationDetailedPasskeyControlCandidateObservation::ExplicitlyMarked({
+        assert!(
+            !AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(signup.clone())
+                .authentication_passkey_control_candidate_is_safe()
+        );
+        assert!(
+            !AuthenticationDetailedPasskeyControlCandidateObservation::ExplicitlyMarked({
                 let mut marked = signup;
                 marked.label = "Continue".to_owned();
                 marked
             })
-        ));
+            .authentication_passkey_control_candidate_is_safe()
+        );
 
         let mut assertion = passkey_control("Use passkey");
         assertion.new_password_field_count = 1.into();
         assertion.destination_identity = "https://login.example.test/webauthn/login".to_owned();
-        assert!(authentication_passkey_control_candidate_is_safe(
-            &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(assertion)
-        ));
+        assert!(
+            AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(assertion)
+                .authentication_passkey_control_candidate_is_safe()
+        );
     }
 
     #[test]
@@ -335,6 +340,6 @@ mod tests {
                 + 1
         ]);
 
-        assert!(!authentication_passkey_control_evidence_is_safe(&evidence));
+        assert!(!evidence.authentication_passkey_control_evidence_is_safe());
     }
 }

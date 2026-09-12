@@ -21,7 +21,7 @@ guest_formatter="$(
 
 printf '%s\n' "$script" | grep -q 'formatter_image="nook-source-formatter:' \
   || { echo 'format-host-apply test: expected shared content-addressed image' >&2; exit 1; }
-for hash_input in Dockerfile package.json bun.lock prettier-default.json prettier-shared-typescript.json prettier-web.json format.sh; do
+for hash_input in Dockerfile package.json bun.lock prettier-default.json prettier-shared-typescript.json prettier-web.json prettier-skill.json format.sh; do
   printf '%s\n' "$script" | grep -Fq "$hash_input" \
     || { echo "format-host-apply test: formatter hash misses $hash_input" >&2; exit 1; }
 done
@@ -87,7 +87,7 @@ for required in \
   'skill_application_files+=("${BASH_REMATCH[3]}")' \
   'skill_application_files+=' \
   'skill_application_roots+=' \
-  '"$repo_root/$skill_root/.prettierrc"' \
+  '"$formatter_root/prettier-skill.json"' \
   'done <"$changed_files"'; do
   printf '%s\n' "$formatter" | grep -Fq "$required" \
     || { echo "format-host-apply test: missing shared-tooling formatter contract: $required" >&2; exit 1; }
@@ -165,7 +165,6 @@ test "$#" -ge 6 && test "$1" = --edition && test "$2" = 2024
 test "$3" = --config && test "$4" = skip_children=true && test "$5" = --
 shift 5
 printf '%s\n' "$@" >>"$FORMAT_TEST_RUST_LOG"
-"$FORMAT_TEST_REAL_RUSTFMT" --edition 2024 --config skip_children=true -- "$@"
 EOF
 cat >"$fixture_root/.github/formatting/node_modules/.bin/prettier" <<'EOF'
 #!/usr/bin/env bash
@@ -192,6 +191,7 @@ chmod +x \
 printf '{}\n' >"$fixture_root/.github/formatting/prettier-web.json"
 printf '{}\n' >"$fixture_root/.github/formatting/prettier-default.json"
 printf '{}\n' >"$fixture_root/.github/formatting/prettier-shared-typescript.json"
+printf '{}\n' >"$fixture_root/.github/formatting/prettier-skill.json"
 printf '{}\n' >"$fixture_root/agentic-ai/loom/.prettierrc"
 printf '{}\n' >"$fixture_root/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/.prettierrc"
 printf '{}\n' >"$fixture_root/.cortex/teams/ai/dynamic-skills/scripts/scripts/.prettierrc"
@@ -240,12 +240,12 @@ printf 'baseline\n' >"$fixture_root/README.md"
   printf '<p>sentinel</p>\n' >nook-app/nook-web/nook-vault-sentinel/src/sentinel.svelte
   FORMAT_TEST_LOG="$fixture_root/format.log" \
   FORMAT_TEST_RUST_LOG="$fixture_root/rust.log" \
-  FORMAT_TEST_REAL_RUSTFMT="$(command -v rustfmt)" \
   FORMAT_TEST_REAL_TASK="$(command -v task)" \
   FORMAT_TEST_SCRIPTS_SLUG_ROOT="$fixture_root/.cortex/teams/ai/dynamic-skills/scripts/scripts" \
   FORMAT_TEST_NESTED_SCRIPTS_ROOT="$fixture_root/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts" \
   HIVE_SEALED_GUEST=1 \
   NOOK_FORMATTER_ROOT="$fixture_root/.github/formatting" \
+  REPO_ROOT="$fixture_root" \
   PATH="$fixture_root/bin:$PATH" \
     bash .github/scripts/format-host-apply.sh >/dev/null
   test "$(git hash-object nook-app/nook-platform/src/child.rs)" = "$(git rev-parse HEAD:nook-app/nook-platform/src/child.rs)"
@@ -282,12 +282,12 @@ cmp -s "$fixture_root/expected-rust.log" "$fixture_root/actual-rust.log" \
   git update-ref refs/remotes/origin/main HEAD
   FORMAT_TEST_LOG="$fixture_root/format.log" \
   FORMAT_TEST_RUST_LOG="$fixture_root/rust.log" \
-  FORMAT_TEST_REAL_RUSTFMT="$(command -v rustfmt)" \
   FORMAT_TEST_REAL_TASK="$(command -v task)" \
   FORMAT_TEST_SCRIPTS_SLUG_ROOT="$fixture_root/.cortex/teams/ai/dynamic-skills/scripts/scripts" \
   FORMAT_TEST_NESTED_SCRIPTS_ROOT="$fixture_root/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts" \
   HIVE_SEALED_GUEST=1 \
   NOOK_FORMATTER_ROOT="$fixture_root/.github/formatting" \
+  REPO_ROOT="$fixture_root" \
   PATH="$fixture_root/bin:$PATH" \
     bash .github/scripts/format-host-apply.sh >/dev/null
 )

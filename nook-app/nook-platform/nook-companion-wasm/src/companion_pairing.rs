@@ -29,7 +29,15 @@ impl NookCompanionPairingExtensionProtocol {
             .map_err(|error| JsError::new(&error.to_string()))
     }
 
-    pub fn take_authority(&mut self) -> Result<NookCompanionPairingApprovalAuthority, JsError> {
+    /// Request authority cannot be taken from a consumed protocol handle.
+    /// ```compile_fail,E0382
+    /// use nook_companion_wasm::NookCompanionPairingExtensionProtocol;
+    /// fn consume_twice(protocol: NookCompanionPairingExtensionProtocol) {
+    ///     let _ = protocol.take_authority();
+    ///     let _ = protocol.take_authority();
+    /// }
+    /// ```
+    pub fn take_authority(self) -> Result<NookCompanionPairingApprovalAuthority, JsError> {
         Ok(NookCompanionPairingApprovalAuthority {
             inner: self
                 .inner
@@ -115,47 +123,50 @@ mod tests {
         ExtensionConnectScope, ExtensionPairingVaultType,
     };
 
-    fn epoch(value: &str) -> Result<CompanionPairingEpochMilliseconds, wasm_bindgen::JsValue> {
-        serde_json::from_str(value)
-            .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))
-    }
+    struct PairingProtocolFixture;
+    impl PairingProtocolFixture {
+        fn epoch(value: &str) -> Result<CompanionPairingEpochMilliseconds, wasm_bindgen::JsValue> {
+            serde_json::from_str(value)
+                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))
+        }
 
-    fn request() -> Result<CompanionPairingRequest, wasm_bindgen::JsValue> {
-        Ok(CompanionPairingRequest {
-            request_id: "request-1".to_owned(),
-            nonce: "nonce-1".to_owned(),
-            issued_at: epoch("100")?,
-            expires_at: epoch("200")?,
-            vault_type: ExtensionPairingVaultType::Simple,
-            installation: CompanionPairingInstallation {
-                extension_runtime_id: "runtime-1".to_owned(),
-                app_id: "app-1".to_owned(),
-                encryption_public_key: "age1extension".to_owned(),
-                signing_public_key: "signing-1".to_owned(),
-                installation_label: "Nook Extension".to_owned(),
-            },
-            scopes: vec![ExtensionConnectScope::VaultAccess],
-        })
-    }
+        fn request() -> Result<CompanionPairingRequest, wasm_bindgen::JsValue> {
+            Ok(CompanionPairingRequest {
+                request_id: "request-1".to_owned(),
+                nonce: "nonce-1".to_owned(),
+                issued_at: Self::epoch("100")?,
+                expires_at: Self::epoch("200")?,
+                vault_type: ExtensionPairingVaultType::Simple,
+                installation: CompanionPairingInstallation {
+                    extension_runtime_id: "runtime-1".to_owned(),
+                    app_id: "app-1".to_owned(),
+                    encryption_public_key: "age1extension".to_owned(),
+                    signing_public_key: "signing-1".to_owned(),
+                    installation_label: "Nook Extension".to_owned(),
+                },
+                scopes: vec![ExtensionConnectScope::VaultAccess],
+            })
+        }
 
-    fn approval() -> Result<CompanionPairingApproval, wasm_bindgen::JsValue> {
-        Ok(CompanionPairingApproval {
-            request: request()?,
-            vault_store_id: "store-1".to_owned(),
-            vault_name: "Personal".to_owned(),
-            approved_at: "2026-09-07T00:00:00Z".to_owned(),
-            provider_manifest_digest: CompanionPairingProviderManifestDigest::parse(
-                &"a".repeat(64),
-            )
-            .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
-        })
+        fn approval() -> Result<CompanionPairingApproval, wasm_bindgen::JsValue> {
+            Ok(CompanionPairingApproval {
+                request: Self::request()?,
+                vault_store_id: "store-1".to_owned(),
+                vault_name: "Personal".to_owned(),
+                approved_at: "2026-09-07T00:00:00Z".to_owned(),
+                provider_manifest_digest: CompanionPairingProviderManifestDigest::parse(
+                    &"a".repeat(64),
+                )
+                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
+            })
+        }
     }
 
     #[wasm_bindgen_test::wasm_bindgen_test]
     fn generated_pairing_endpoint_rejects_an_expired_request() -> Result<(), wasm_bindgen::JsValue>
     {
-        let mut request = request()?;
-        request.expires_at = epoch("100")?;
+        let mut request = PairingProtocolFixture::request()?;
+        request.expires_at = PairingProtocolFixture::epoch("100")?;
         assert!(NookCompanionPairingExtensionProtocol::new(request).is_err());
         Ok(())
     }
@@ -163,14 +174,90 @@ mod tests {
     #[wasm_bindgen_test::wasm_bindgen_test]
     fn generated_authority_is_one_use_and_returns_opaque_admission()
     -> Result<(), wasm_bindgen::JsValue> {
-        let mut protocol = NookCompanionPairingExtensionProtocol::new(request()?)?;
+        let protocol =
+            NookCompanionPairingExtensionProtocol::new(PairingProtocolFixture::request()?)?;
         let authority = protocol.take_authority()?;
-        assert!(protocol.take_authority().is_err());
         let admission = authority.admit(CompanionPairingApprovalAttempt {
-            approval: approval()?,
-            observed_at: epoch("150")?,
+            approval: PairingProtocolFixture::approval()?,
+            observed_at: PairingProtocolFixture::epoch("150")?,
         })?;
         drop(admission);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn generated_pairing_protocols_preserve_request_and_website_authorization()
+    -> Result<(), wasm_bindgen::JsValue> {
+        let request = PairingProtocolFixture::request()?;
+        let extension = NookCompanionPairingExtensionProtocol::new(request.clone())?;
+        assert_eq!(extension.request()?.request_id, request.request_id);
+
+        let website =
+            NookCompanionPairingWebsiteProtocol::new(CompanionPairingRequestObservation {
+                request: request.clone(),
+                observed_at: PairingProtocolFixture::epoch("150")?,
+            })?;
+        assert_eq!(website.request()?.nonce, request.nonce);
+        let outcome = website.authorize(
+            CompanionPairingWebsiteAuthorization {
+                request,
+                observed_at: PairingProtocolFixture::epoch("175")?,
+                vault_store_id: "store-1".to_owned(),
+                vault_name: "Personal".to_owned(),
+                approved_at: "2026-09-07T00:00:00Z".to_owned(),
+            },
+            CompanionPairingProviderManifestDigest::parse(&"b".repeat(64))
+                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
+        );
+        assert!(matches!(
+            outcome,
+            CompanionPairingWebsiteAuthorizationOutcome::Approved { .. }
+        ));
+
+        let mut expired = PairingProtocolFixture::request()?;
+        expired.expires_at = PairingProtocolFixture::epoch("100")?;
+        assert!(
+            NookCompanionPairingWebsiteProtocol::new(CompanionPairingRequestObservation {
+                request: expired,
+                observed_at: PairingProtocolFixture::epoch("150")?,
+            })
+            .is_err()
+        );
+
+        let rejected_website =
+            NookCompanionPairingWebsiteProtocol::new(CompanionPairingRequestObservation {
+                request: PairingProtocolFixture::request()?,
+                observed_at: PairingProtocolFixture::epoch("150")?,
+            })?;
+        let rejected = rejected_website.authorize(
+            CompanionPairingWebsiteAuthorization {
+                request: PairingProtocolFixture::request()?,
+                observed_at: PairingProtocolFixture::epoch("149")?,
+                vault_store_id: "store-1".to_owned(),
+                vault_name: "Personal".to_owned(),
+                approved_at: "2026-09-07T00:00:00Z".to_owned(),
+            },
+            CompanionPairingProviderManifestDigest::parse(&"b".repeat(64))
+                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
+        );
+        assert!(matches!(
+            rejected,
+            CompanionPairingWebsiteAuthorizationOutcome::Rejected { .. }
+        ));
+
+        let protocol =
+            NookCompanionPairingExtensionProtocol::new(PairingProtocolFixture::request()?)?;
+        let authority = protocol.take_authority()?;
+        let mut invalid_approval = PairingProtocolFixture::approval()?;
+        invalid_approval.request.request_id = "different-request".to_owned();
+        assert!(
+            authority
+                .admit(CompanionPairingApprovalAttempt {
+                    approval: invalid_approval,
+                    observed_at: PairingProtocolFixture::epoch("150")?,
+                })
+                .is_err()
+        );
         Ok(())
     }
 }

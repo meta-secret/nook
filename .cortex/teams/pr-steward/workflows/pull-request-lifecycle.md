@@ -1,80 +1,73 @@
 # Pull-Request Lifecycle
 
-PR Steward performs the mechanical pull-request lifecycle after Gizmo Prime
-has prepared a coherent exact head and supplied an operation packet.
+## Authority
 
-## Outcome
+PR Steward performs bounded mechanics under the
+[authorization handshake](authorization-handshake.md). Feature Gizmos own
+feature compilation and local integration decisions. The manually run dev
+manager owns publication, slow PR validation, and promotion.
 
-The named pull-request operation completes against the packet's exact head.
-PR Steward returns observable evidence or a bounded blocker.
+## Required actions
 
-## Inputs
+- Execute only the packet's repository, revision, task, and target.
+- Invoke local integration only under the feature Gizmo's packet.
+- Invoke snapshot publication and fast-forward promotion only under a dev-manager packet.
+- Let the task enforce shared-checkout locking and revision guards.
+- Return full review observations without deciding technical dispositions.
+- Publish Workbench records only from exact parent-authored content.
+- Keep shared Git mutations inside these bounded task invocations.
 
-- one repository and base ref;
-- one branch and pull-request number;
-- one expected head SHA;
-- one named operation; and
-- the evidence that Gizmo requires.
+## Prohibited actions
+
+- Do not decide readiness, feature scope, or promotion policy.
+- Do not author functional fixes or create workers.
+- Do not squash, rebase, force-push, or create a promotion merge commit.
+- Do not use a stock PR merge method in place of fast-forward promotion.
+- Do not close a PR manually to simulate merged status.
+- Do not use administrator capability to skip required checks.
+- Do not create a continuous manager, scheduler, or custom polling loop.
 
 ## Procedure
 
-1. **Confirm the live target.** Re-read the pull request and compare the live
-   repository, base, branch, number, and head with the packet.
-   - Stop and report a blocker when any identity or head differs.
-2. **Update pull-request metadata.** Create or update the title and
-   description from the parent packet.
-   - Keep the metadata faithful to the current diff and canonical pull-request
-     contract.
-3. **Observe review state.** Request the authorized review path and collect
-   submitted review bodies, inline conversations, top-level comments, and
-   unresolved threads.
-   - Return the complete observed set without deciding whether a finding is
-     technically valid or in scope.
-4. **Observe validation state.** Collect failed checks, running checks,
-   deployments, mergeability, and bounded wait outcomes for the exact head.
-   - A selected successful job does not hide another required running or
-     failed result.
-5. **Retrigger named validation.** Dispatch only the exact-head validation
-   operation named by Gizmo.
-   - A retrigger does not authorize a new head or a new validation scope.
-6. **Collect readiness evidence.** Run the read-only readiness evidence
-   command when Gizmo requests it.
-   - Return the command result as evidence. Gizmo decides readiness.
-7. **Execute authorized merge.** Recheck the separate merge packet and run
-   `gh pr merge <number> --squash` only when every named remote precondition
-   still matches.
-   - For the path-excluded route, run
-     `gh pr merge <number> --squash --admin` only with a separate admin-merge
-     packet.
-   - This is the established path-excluded merge route. It is not a fallback
-     or a generic bypass.
-   - The packet must prove that the pull-request path policy intentionally
-     excludes the ruleset-required preview deployment.
-   - The packet must include passing exact-head checks and
-     `task pr:ready PR=<number>` evidence.
-   - Do not use this route when an applicable check, deployment, or review is
-     failed or unresolved.
-8. **Verify the remote result.** Confirm the pull request is merged and return
-   the resulting commit, URL, run identifiers, and observed head.
+1. Confirm the packet's live target and expected SHA.
+2. Execute the named operation.
+   - Feature compilation uses remote build-only execution.
+   - Local landing uses local integration with positive feature build evidence.
+   - Manager publication uses snapshot publication.
+3. For the slow cycle, create or update one open dev-to-main PR.
+   - Use [PR metadata](../../../gizmo/workflows/pull-requests.md#pr-title-and-description).
+   - A merged PR is never reused for a later cycle.
+4. Request the full existing slow PR checks under the manager packet.
+   - Preserve e2e opt-ins and security-required focused checks.
+   - Freeze the captured dev SHA.
+   - Return failed, running, and successful results without hiding any gate.
+5. Collect review and security evidence for the manager's verdict.
+6. Execute fast-forward promotion only under a separate promotion packet.
+   - Require successful checks and verdicts for the unchanged dev SHA.
+   - Require remote main ancestry.
+   - Use the authorized publication identity through the guarded task.
+7. Verify remote main equals the tested SHA.
+8. Read actual remote PR status and return it separately.
+   - If it is not merged, report that incomplete outcome.
+   - Preserve permanent dev and newer local commits.
 
 ## Failure handling
 
-- A missing packet is a blocker for the named operation.
-- A stale head or identity mismatch is a blocker for the named operation.
-- An unavailable remote result is a blocker for the named operation.
-- A failed required check is a blocker for the named operation.
-- A missing applicable deployment is a blocker for the named operation.
-- An unresolved review thread is a blocker for the named operation.
-- Missing ruleset-required preview deployment needs path-policy evidence before
-  the path-excluded route can be considered.
-- A path-excluded admin merge needs a passing `task pr:ready` result.
-- Report the smallest useful evidence for the blocker.
-- Do not invent a retry, broaden the operation, or create a fallback path.
-- Gizmo decides whether to route a correction, issue a fresh packet, or stop.
+- A missing packet, changed target, or unavailable evidence blocks the operation.
+- Failed checks and unresolved review/security verdicts block promotion.
+- Protection rejection is visible and never selects another merge method.
+- Return repair evidence to the controller for the normal feature path.
+- For every failed e2e test, return the evidence needed to analyze the
+  underlying cause and route the repair to its owning boundary. Before fixing,
+  the repair must write a focused unit test at that boundary. Direct e2e-test
+  edits are allowed only when a unit test is infeasible (rare).
+- Do not mutate scope or automatically retry publication under stale authority.
 
 ## Reactive observation
 
-Gizmo may run PR Steward as a mission-scoped child while delivery is active.
+The controller starts a fresh PR Steward child for each check-observation iteration.
+Each child subscribes before reading its initial GitHub snapshot. That snapshot
+freezes the iteration head. A changed head is a blocker, never a new assignment.
 
 ### Required actions
 
@@ -85,7 +78,7 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
    ```
 
    Run this direct Bun process in the child task's foreground PTY. Do not place
-   a package-script wrapper between Gizmo and the subscriber.
+   a package-script wrapper between the controller and the subscriber.
 
    The default credential path is
    `~/.nook/events/pr-steward-client.yaml`. Use
@@ -108,61 +101,81 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
    - Suppress foreign or unattributable malformed input.
    - Emit a sanitized blocker for attributable malformed input, then continue.
    - Treat the notification as a prompt to perform only the next operation
-     that Gizmo authorizes.
-3. Stop when Gizmo directs the child to finish.
-   - Send Ctrl-C to the same foreground PTY. The direct process receives
+     that the controller authorizes.
+3. Stop when iteration checks complete, the PR closes, or the controller directs.
+   - For a requested stop, send Ctrl-C to the same foreground PTY. It receives
      `SIGINT`, drains NATS, and exits with status zero.
    - An operating-system termination may use `SIGTERM` against the direct
      process.
-   - Wait for exit before Gizmo finishes. A nonzero result is a blocker.
+   - Wait for exit before the controller finishes. A nonzero result is a blocker.
 
 ### Subscription boundary
 
 - The client connects to `wss://events.dev.nokey.sh` with trusted TLS.
 - It subscribes directly to `default.github-webhook.pr-lifecycle`.
-- It uses no queue group. Concurrent Gizmo missions each receive the live
+- It uses no queue group. Concurrent controller missions each receive the live
   event.
-- Each Gizmo owns its own child and assigned PR filter. One Gizmo never stops,
-  switches, or consumes another Gizmo's subscription.
+- Each controller owns its own child and assigned PR filter. One controller never stops,
+  switches, or consumes another controller's subscription.
 - The subscription is Core NATS live fan-out. It does not bind the shared
   durable work-queue consumer.
 - JetStream persistence serves the platform. It does not make this ephemeral
   child replay missed notifications.
 - Missed and duplicate notifications are acceptable hints.
 - One child never changes its assigned PR dynamically.
-- Gizmo must reconcile the final GitHub state directly before its readiness
-  or completion verdict.
+- The controller must authorize PR Steward to read final GitHub state before its
+  readiness or completion verdict.
+- PR Steward returns that direct observation to the controller for reconciliation.
 
 ### Output contract
 
+The observer retains fingerprints of the last 128 successfully emitted payloads.
+An identical byte payload is suppressed before another GitHub read. Changed
+envelopes remain observable even when their meaning is unchanged. Failed
+deliveries remain eligible for fresh observation. Repeated blockers with the
+same code, target, source, head, and summary emit once. Successful routing
+clears that suppression so a later recurrence is visible. Event identifiers
+do not define a blocker change. This bounded memory is never persisted.
+
 Output contains only bounded hints. It never contains bodies, review text,
-logs, raw payloads, or credentials. Failure reconciliation and summaries are
-deferred.
+logs, raw payloads, or credentials. Steward performs authorized reconciliation
+from these hints. The subscriber does not summarize or decide readiness.
 
-### Live reactive pipeline canary
+### Active-task waiting
 
-This staged canary proves that one active PR can reach its assigned Steward.
+- Keep the subscription active during one check-observation iteration.
+- Read an initial snapshot after subscribing. Already-completed checks can end
+  the iteration immediately.
+- Valid, newly routed current-head notifications reset the inactivity deadline.
+  Suppressed duplicate payloads, stale events, and foreign traffic do not reset it.
+- Current-head check-run, check-suite, and workflow-run hints trigger a fresh
+  completion snapshot. Other valid routes reset inactivity without that query.
+- The process checks elapsed time against the last relevant notification.
+  Only more than five minutes without one permits an idle completion query.
+- An incomplete snapshot stays silent. After an idle query, wait another five
+  minutes before another idle query. Do not create a hot loop or wake reasoning.
+- Event activity invalidates an in-flight idle result. Check observations never
+  overlap. Stop clears the timer and invalidates pending completion callbacks.
+- A nonempty rollup completes when every check has a terminal result.
+  Failed conclusions complete the iteration too. They do not establish readiness.
+- Empty rollups remain pending. Unknown states or unavailable evidence fail closed.
+  One GraphQL snapshot uses complete aggregate counts instead of paginated nodes.
+  The rollup commit must equal the snapshot head. Group totals must match counts.
+- Completion drains NATS, then emits one line on stderr with the outcome, PR URL,
+  exact head, total count, failed count, and unknown-conclusion count. Standard output stays v2 NDJSON.
+- A merged or closed PR stops the child with that distinct outcome. It never
+  substitutes a closure result for completed checks.
+- After successful exit, send one compact handoff to the controller and end the child.
+  The controller acts on the result and starts a fresh child for another iteration.
+- The controller authorizes PR Steward to collect final direct GitHub evidence.
+  PR Steward returns the evidence to the controller for reconciliation.
+- The controller retains readiness and merge authority.
+- Use a harness wait that wakes on output when available. Otherwise use the
+  longest host-bounded PTY read. Empty reads produce no messages or GitHub queries.
 
-1. Confirm the scoped credential file and exact pull-request number exist.
-2. Start the documented direct Bun subscription in the foreground PTY.
-3. Poll the child PTY with reads bounded to at most five seconds.
-   - Poll only the local foreground PTY and NATS stream, never GitHub.
-   - Return to reasoning after each read and notify Gizmo when matching NDJSON
-     arrives.
-4. Correlate its `deliveryId` across GitHub, Argo, and the NATS envelope.
-5. Have PR Steward send the bounded matching notification to Gizmo.
-6. Have Gizmo perform a bounded direct GitHub reconciliation.
-7. After terminal state, send Ctrl-C to the same PTY.
-   - Require the NATS drain and process exit to complete with status zero.
 
-## Validation
+## Completion evidence
 
-- Every external mutation used the packet's repository, pull request, and
-  exact head.
-- Review and check observations were returned without technical adjudication.
-- Bounded waits stayed inside the active task.
-- A merge result is a verified squash merge when merge was authorized.
-- An administrator merge used the path-excluded route only with its separate
-  Gizmo packet and exact-head evidence.
-- Gizmo's terminal decision used a direct GitHub reconciliation instead of
-  notification history.
+Return the operation, controller, source SHA, observed result, and relevant run
+or PR identifiers. Promotion completion includes remote main equality and
+actual GitHub PR state. The controller retains the delivery verdict.

@@ -91,21 +91,47 @@ export const accessGrants = [
 ] as const
 
 export type Identity = (typeof identities)[number]
+
 export type Vault = (typeof vaults)[number]
+
 export type AccessGrant = (typeof accessGrants)[number]
 
-export function identityById(id: string): Identity {
-  const identity = identities.find((candidate) => candidate.id === id)
-  if (identity) return identity
-  throw new Error(`Unknown identity fixture: ${id}`)
+/** Owns lookup over this research identity and vault fixture catalog. */
+type IdentityVaultFixturesContext = {
+  readonly identities: typeof identities
+  readonly vaults: typeof vaults
+  readonly accessGrants: typeof accessGrants
+}
+class IdentityVaultFixtures {
+  constructor(private readonly catalog: IdentityVaultFixturesContext) {}
+
+  identityById(id: string): Identity {
+    const identity = this.catalog.identities.find(
+      (candidate) => candidate.id === id,
+    )
+    if (identity) return identity
+    throw new Error(`Unknown identity fixture: ${id}`)
+  }
+
+  vaultById(id: string): Vault {
+    const vault = this.catalog.vaults.find((candidate) => candidate.id === id)
+    if (vault) return vault
+    throw new Error(`Unknown vault fixture: ${id}`)
+  }
+
+  grantsForIdentity(identityId: string): AccessGrant[] {
+    return this.catalog.accessGrants.filter(
+      (grant) => grant.identityId === identityId,
+    )
+  }
 }
 
-export function vaultById(id: string): Vault {
-  const vault = vaults.find((candidate) => candidate.id === id)
-  if (vault) return vault
-  throw new Error(`Unknown vault fixture: ${id}`)
+const identityVaultFixturesContext: IdentityVaultFixturesContext = {
+  identities,
+  vaults,
+  accessGrants,
 }
 
-export function grantsForIdentity(identityId: string): AccessGrant[] {
-  return accessGrants.filter((grant) => grant.identityId === identityId)
-}
+export const identityVaultFixtures = new IdentityVaultFixtures(
+  identityVaultFixturesContext,
+)

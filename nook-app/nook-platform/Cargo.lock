@@ -1863,7 +1863,10 @@ dependencies = [
 name = "nook-app-common"
 version = "1.0.0"
 dependencies = [
+ "serde",
  "serde_json",
+ "tsify",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1889,6 +1892,7 @@ dependencies = [
  "sha2 0.11.0",
  "thiserror 2.0.20",
  "tracing",
+ "tsify",
  "wasm-bindgen",
  "zeroize",
 ]
@@ -1900,6 +1904,8 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+ "tsify",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1910,6 +1916,7 @@ dependencies = [
  "nook-authenticator-domain",
  "nook-event-log",
  "percent-encoding",
+ "proptest",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
@@ -1928,6 +1935,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "tsify",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]
@@ -1945,6 +1953,7 @@ dependencies = [
  "bip39",
  "cbc",
  "ciborium",
+ "coset",
  "csv",
  "ed25519-dalek",
  "flate2",
@@ -1994,6 +2003,8 @@ dependencies = [
  "serde_yaml",
  "sha2 0.11.0",
  "thiserror 2.0.20",
+ "tsify",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -2034,6 +2045,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-web",
+ "tsify",
  "urlencoding",
  "wasm-bindgen",
  "wasm-bindgen-futures",

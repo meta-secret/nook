@@ -1,31 +1,54 @@
 use std::{
     env, fs,
+    ops::Deref,
     path::{Path, PathBuf},
 };
 
 use anyhow::Context;
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
 }
 
-fn read(path: &str) -> String {
-    fs::read_to_string(repository_root().join(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
 }
 
 fn infra_taskfile_graph() -> String {
-    let root = read("infra/Taskfile.yml");
+    let root = RepositoryFixture::repository_root().read("infra/Taskfile.yml");
     let mut graph = root.clone();
     for line in root.lines() {
         let Some(relative_path) = line.trim().strip_prefix("taskfile: ") else {
             continue;
         };
         if relative_path.starts_with("tasks/") {
-            graph.push_str(&read(&format!("infra/{relative_path}")));
+            graph.push_str(
+                &RepositoryFixture::repository_root().read(&format!("infra/{relative_path}")),
+            );
         }
     }
     graph
@@ -67,7 +90,7 @@ fn remote_cache_and_registry_are_public_over_tls() -> anyhow::Result<()> {
 }
 
 fn assert_remote_compose_contract() -> anyhow::Result<()> {
-    let compose = read("infra/compose.yaml");
+    let compose = RepositoryFixture::repository_root().read("infra/compose.yaml");
     for required in [
         "network_mode: host",
         "chrislusf/seaweedfs:",
@@ -112,9 +135,9 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "infrastructure service images must be digest pinned"
     );
 
-    let root_tasks = read("Taskfile.yml");
+    let root_tasks = RepositoryFixture::repository_root().read("Taskfile.yml");
     assert!(root_tasks.contains("taskfile: infra/Taskfile.yml"));
-    let infra_root = read("infra/Taskfile.yml");
+    let infra_root = RepositoryFixture::repository_root().read("infra/Taskfile.yml");
     let expected_domains = [
         "manifests",
         "providers",
@@ -149,13 +172,14 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
             "infra Taskfile must flatten the {domain} operational domain"
         );
     }
-    let mut actual_domain_taskfiles = fs::read_dir(repository_root().join("infra/tasks"))?
-        .map(|entry| {
-            entry?.file_name().into_string().map_err(|name| {
-                anyhow::anyhow!("non-UTF-8 infra task filename: {}", name.display())
+    let mut actual_domain_taskfiles =
+        fs::read_dir(RepositoryFixture::repository_root().join("infra/tasks"))?
+            .map(|entry| {
+                entry?.file_name().into_string().map_err(|name| {
+                    anyhow::anyhow!("non-UTF-8 infra task filename: {}", name.display())
+                })
             })
-        })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<anyhow::Result<Vec<_>>>()?;
     actual_domain_taskfiles.sort();
     let mut expected_domain_taskfiles = expected_domains
         .map(|domain| format!("{domain}.yml"))
@@ -166,9 +190,9 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "every infra/tasks/*.yml domain must be reachable from the composition root"
     );
 
-    assert_no_shell_scripts(&repository_root().join("infra"));
+    assert_no_shell_scripts(&RepositoryFixture::repository_root().join("infra"));
 
-    let traefik = read("infra/traefik-dynamic.yaml");
+    let traefik = RepositoryFixture::repository_root().read("infra/traefik-dynamic.yaml");
     for required in [
         "certResolver: letsencrypt",
         "Host(`registry.dev.nokey.sh`)",
@@ -189,7 +213,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "Traefik must not retain Redis TCP routing after the SeaweedFS cutover"
     );
 
-    let nftables = read("infra/nftables.conf");
+    let nftables = RepositoryFixture::repository_root().read("infra/nftables.conf");
     for required in [
         "chain input",
         "chain forward",
@@ -216,10 +240,10 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
 }
 
 fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
-    let infra_root = read("infra/Taskfile.yml");
+    let infra_root = RepositoryFixture::repository_root().read("infra/Taskfile.yml");
     let infra_tasks = infra_taskfile_graph();
-    let host_services = read("infra/tasks/host-services.yml");
-    let operations = read("infra/tasks/operations.yml");
+    let host_services = RepositoryFixture::repository_root().read("infra/tasks/host-services.yml");
+    let operations = RepositoryFixture::repository_root().read("infra/tasks/operations.yml");
     assert!(
         infra_root.contains(
             "INFRA_SSH_TARGET: '{{default \"debian@ssh-ovh-borg-1.bynull.link\" .INFRA_SSH_TARGET}}'"
@@ -260,7 +284,7 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
     assert!(!deploy.contains("cloudflare"));
 
     assert_sccache_credential_contract();
-    let registry = read("infra/tasks/registry.yml");
+    let registry = RepositoryFixture::repository_root().read("infra/tasks/registry.yml");
     for required in [
         "home_cache=\"${HOME}/.nook/cache\"",
         "docker login \"$host\"",
@@ -279,13 +303,21 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
     assert!(!operations.contains("redis:credential"));
     assert!(!operations.contains("redis:stats"));
 
-    assert!(read(".gitignore").contains("/infra/secrets/"));
-    assert!(read(".dockerignore").contains("infra/secrets"));
+    assert!(
+        RepositoryFixture::repository_root()
+            .read(".gitignore")
+            .contains("/infra/secrets/")
+    );
+    assert!(
+        RepositoryFixture::repository_root()
+            .read(".dockerignore")
+            .contains("infra/secrets")
+    );
     Ok(())
 }
 
 fn assert_sccache_credential_contract() {
-    let sccache = read("infra/tasks/sccache.yml");
+    let sccache = RepositoryFixture::repository_root().read("infra/tasks/sccache.yml");
     for required in [
         "sccache:credential:ensure:",
         "sccache:credential:sync:",
@@ -364,7 +396,8 @@ fn assert_sccache_credential_contract() {
 }
 
 fn assert_zot_registry_contract() -> anyhow::Result<()> {
-    let manifest = read("infra/k0s/manifests/registry/zot.yaml");
+    let manifest =
+        RepositoryFixture::repository_root().read("infra/k0s/manifests/registry/zot.yaml");
     assert!(
         manifest.contains("\"compat\": [\"docker2s2\"]"),
         "Zot must accept legacy Docker Schema 2 manifests without changing their digests"
@@ -390,7 +423,7 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
             "Zot repository authorization is missing: {required}"
         );
     }
-    let tasks = read("infra/tasks/registry.yml");
+    let tasks = RepositoryFixture::repository_root().read("infra/tasks/registry.yml");
     let deploy = tasks
         .split("\n  registry:deploy:\n")
         .nth(1)
@@ -481,7 +514,7 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         "credential generation and manifest rendering must both reject a shared Zot principal"
     );
 
-    let uninstall = read("infra/tasks/k0s.yml");
+    let uninstall = RepositoryFixture::repository_root().read("infra/tasks/k0s.yml");
     assert!(
         uninstall.contains("disable --now nook-zot-registry-loopback.service")
             && uninstall.contains("test -d /var/lib/hive/zot")
@@ -492,7 +525,7 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
 }
 
 fn assert_mesh_node_contract() -> anyhow::Result<()> {
-    let mesh_tasks = read("infra/tasks/mesh.yml");
+    let mesh_tasks = RepositoryFixture::repository_root().read("infra/tasks/mesh.yml");
     let mesh_add = mesh_tasks
         .split("\n  mesh:node:add:\n")
         .nth(1)

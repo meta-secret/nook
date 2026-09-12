@@ -14,7 +14,17 @@ workspace = true
 name = "hive"
 path = "src/main.rs"
 
+[[bin]]
+name = "hive-export-observer-contract"
+path = "src/bin/export_observer_contract.rs"
+required-features = ["observer-contract-export"]
+
+[features]
+observer-contract-export = ["dep:ts-rs", "dep:schemars"]
+
 [dependencies]
+schemars = { version = "=0.8.22", optional = true }
+ts-rs = { version = "=11.1.0", optional = true }
 async-trait = "0.1.92"
 axum = "0.8.8"
 clap = { version = "4.6.4", features = ["derive", "env"] }

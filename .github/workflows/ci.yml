@@ -1,0 +1,273 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, edited, closed]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    ${{ github.event_name == 'push' && 'main' ||
+    (github.event_name == 'pull_request' &&
+    github.event.pull_request.head.repo.full_name == github.repository &&
+    github.event.pull_request.head.ref == 'dev' &&
+    github.event.pull_request.base.ref == 'main' &&
+    (contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) ||
+    (github.event.action == 'edited' && github.event.changes.base.ref.from != '') ||
+    (github.event.action == 'labeled' && github.event.label.name == 'ci:full-e2e')) &&
+    'dev-pr') ||
+    (github.event_name == 'pull_request' &&
+    github.event.pull_request.head.repo.full_name == github.repository &&
+    github.event.pull_request.head.ref == 'dev' &&
+    github.event.pull_request.base.ref == 'main' &&
+    format('dev-pr-event-{0}', github.run_id)) ||
+    (github.event_name == 'pull_request' &&
+    (github.event.action != 'labeled' && github.event.action != 'edited' ||
+    github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e' ||
+    github.event.changes.base.ref.from != '') && format('pr-{0}', github.event.pull_request.number)) ||
+    format('ci-{0}', github.run_id) }}
+  cancel-in-progress: >-
+    ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  scope:
+    name: Classify CI paths
+    permissions:
+      contents: read
+      pull-requests: read
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'dev' &&
+      github.event.pull_request.base.ref == 'main' &&
+      (contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) ||
+      (github.event.action == 'edited' && github.event.changes.base.ref.from != '') ||
+      (github.event.action == 'labeled' && github.event.label.name == 'ci:full-e2e')) ||
+      (!(github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'dev' &&
+      github.event.pull_request.base.ref == 'main') &&
+      (contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) ||
+      github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e'))))
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      validation-requested: ${{ steps.paths.outputs.validation-requested }}
+      full-e2e-requested: ${{ steps.paths.outputs.full-e2e-requested }}
+      product: ${{ steps.paths.outputs.product }}
+      minds: ${{ steps.paths.outputs.minds }}
+      hive: ${{ steps.paths.outputs.hive }}
+      research: ${{ steps.paths.outputs.research }}
+      dev-pr: ${{ steps.paths.outputs.dev-pr }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify changed paths without executing source
+        id: paths
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          DEV_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'dev' && github.event.pull_request.base.ref == 'main' && 'true' || 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed_paths="$(mktemp)"
+          trap 'rm -f "$changed_paths"' EXIT
+          if [ "$EVENT_NAME" = pull_request ]; then
+            git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$changed_paths"
+          elif [[ "$BASE_SHA" =~ ^0+$ ]]; then
+            git diff-tree --root --no-commit-id --name-only -r -z "$HEAD_SHA" > "$changed_paths"
+          else
+            git diff --name-only -z "$BASE_SHA" "$HEAD_SHA" > "$changed_paths"
+          fi
+          validation_requested=false
+          full_e2e_requested=false
+          dev_pr="$DEV_PR"
+          if [ "$EVENT_NAME" = pull_request ]; then
+            label_scope="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name] | [any(. == "ci:validate" or . == "ci:full-e2e"), any(. == "ci:full-e2e")] | @tsv')"
+            IFS=$'\t' read -r validation_requested full_e2e_requested <<< "$label_scope"
+            if [ "$DEV_PR" = "true" ]; then
+              # Dev PRs always run ordinary validation, while full browser e2e
+              # remains an explicit ci:full-e2e opt-in.
+              validation_requested=true
+            fi
+          fi
+          echo "validation-requested=$validation_requested" >> "$GITHUB_OUTPUT"
+          echo "full-e2e-requested=$full_e2e_requested" >> "$GITHUB_OUTPUT"
+          echo "dev-pr=$dev_pr" >> "$GITHUB_OUTPUT"
+          product=false
+          minds=false
+          hive=false
+          research=false
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              .cortex/* | .cursor/* | .vale.ini | .vale/* | .github/workflows/repository-policy.yml | .github/workflows/web-research.yml | agentic-ai/* | nook-app/nook-web/nook-web-research/*) ;;
+              *) product=true ;;
+            esac
+            case "$path" in agentic-ai/minds/*) minds=true ;; esac
+            case "$path" in .github/workflows/hive.yml | .github/actions/nook-cache-connect/* | .github/actions/nook-docker-setup/* | .github/scripts/rust-deps-cache-fingerprint.sh | .github/formatting/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/scripts/hive-manifest-contract.rb | .github/scripts/ovh-dedicated-contract.ts | agentic-ai/minds/hive/controller/reaper.ts | agentic-ai/minds/hive/controller/reaper.test.ts | .github/scripts/k0s-firewall-rollback-test.ts | .github/scripts/k0s-cni-migration-test.ts | .github/scripts/services-network-repair-test.ts | .github/scripts/zot-registry-public-contract-test.ts | .github/scripts/wait-hive-neo4j.sh | .task/agentic-ai.yml | .task/ci-workflows.yml | .github/scripts/infra-surface-check.sh | Taskfile.yml | agentic-ai/minds/* | nook-app/nook-platform/nook-core/coverage-floor.json | infra/compose.yaml | infra/k0s/* | infra/providers/* | infra/tasks/* | infra/Taskfile.yml) hive=true ;; esac
+            case "$path" in .github/workflows/web-research.yml | .github/scripts/web-research-deploy.sh | .github/scripts/web-research-verify-live.sh | .task/ci-workflows.yml | nook-app/nook-web/nook-web-research/*) research=true ;; esac
+          done < "$changed_paths"
+          if [ "$DEV_PR" = "true" ]; then
+            product=true
+            hive=true
+          fi
+          echo "product=$product" >> "$GITHUB_OUTPUT"
+          echo "minds=$minds" >> "$GITHUB_OUTPUT"
+          echo "hive=$hive" >> "$GITHUB_OUTPUT"
+          echo "research=$research" >> "$GITHUB_OUTPUT"
+
+  policy:
+    name: Repository policy
+    needs: scope
+    uses: ./.github/workflows/repository-policy.yml
+    secrets: inherit
+    with:
+      source_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+  pr:
+    name: PR validation
+    needs: scope
+    if: >-
+      github.event_name == 'pull_request' &&
+      (needs.scope.outputs.dev-pr == 'true' ||
+      (needs.scope.outputs.product == 'true' &&
+      needs.scope.outputs.validation-requested == 'true'))
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
+      pull-requests: write
+      issues: write
+    uses: ./.github/workflows/pr.yml
+    secrets: inherit
+    with:
+      validation_requested: ${{ needs.scope.outputs.validation-requested == 'true' }}
+      full_e2e_requested: ${{ needs.scope.outputs.full-e2e-requested == 'true' }}
+      source_sha: ${{ github.event.pull_request.head.sha }}
+
+  main:
+    name: Main validation
+    needs: scope
+    if: github.event_name == 'push' && (needs.scope.outputs.product == 'true' || needs.scope.outputs.minds == 'true')
+    permissions:
+      contents: read
+      pull-requests: read
+      deployments: write
+    uses: ./.github/workflows/main.yml
+    secrets: inherit
+    with:
+      product_changed: ${{ needs.scope.outputs.product == 'true' }}
+
+  hive:
+    name: Hive
+    needs: scope
+    if: needs.scope.outputs.hive == 'true'
+    uses: ./.github/workflows/hive.yml
+    secrets: inherit
+    with:
+      source_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+  research:
+    name: Web research
+    needs: scope
+    if: needs.scope.outputs.research == 'true'
+    permissions:
+      contents: read
+      deployments: write
+      pull-requests: write
+    uses: ./.github/workflows/web-research.yml
+    secrets: inherit
+
+  ecosystem:
+    name: Rust ecosystem
+    needs: scope
+    if: >-
+      always() && !cancelled() &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && needs.scope.outputs.product == 'false' &&
+      needs.scope.outputs.minds == 'true' &&
+      needs.scope.outputs.validation-requested == 'true'))
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/rust-ecosystem-checks.yml
+    secrets: inherit
+    with:
+      fuzz_seconds: "20"
+      isolated_cache_write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+
+  # Stable manager-facing check. The called PR workflow owns the full named
+  # suite; this job is the one exact-head conclusion used for promotion.
+  # Required caller gates: Repository policy, PR validation, and Hive.
+  dev-promotion-readiness:
+    name: Dev promotion readiness
+    concurrency:
+      group: dev-promotion-readiness
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    needs: [scope, policy, pr, hive, research]
+    if: >-
+      always() &&
+      needs.scope.outputs.dev-pr == 'true'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require successful exact-head dev gates
+        env:
+          DEV_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          POLICY_RESULT: ${{ needs.policy.result }}
+          PR_RESULT: ${{ needs.pr.result }}
+          HIVE_RESULT: ${{ needs.hive.result }}
+          RESEARCH_REQUIRED: ${{ needs.scope.outputs.research }}
+          RESEARCH_RESULT: ${{ needs.research.result }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$DEV_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Dev promotion requires the immutable PR head SHA; got: ${DEV_HEAD_SHA:-empty}" >&2
+            exit 1
+          fi
+          for gate in \
+            "Repository policy=$POLICY_RESULT" \
+            "PR validation=$PR_RESULT" \
+            "Hive=$HIVE_RESULT"
+          do
+            name="${gate%%=*}"
+            result="${gate#*=}"
+            if [ "$result" != "success" ]; then
+              echo "::error::$name finished with $result for dev PR head $DEV_HEAD_SHA"
+              exit 1
+            fi
+          done
+          if [ "$RESEARCH_REQUIRED" = "true" ] && [ "$RESEARCH_RESULT" != "success" ]; then
+            echo "::error::Web research finished with $RESEARCH_RESULT for dev PR head $DEV_HEAD_SHA"
+            exit 1
+          fi
+          {
+            echo "## Dev promotion readiness"
+            echo
+            echo "- Workflow: CI"
+            echo "- Run: ${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"
+            echo "- PR head SHA: \`${DEV_HEAD_SHA}\`"
+            echo "- Repository policy: ${POLICY_RESULT}"
+            echo "- PR validation: ${PR_RESULT}"
+            echo "- Hive: ${HIVE_RESULT}"
+            if [ "$RESEARCH_REQUIRED" = "true" ]; then
+              echo "- Web research: ${RESEARCH_RESULT}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Dev promotion readiness passed for exact PR head $DEV_HEAD_SHA"

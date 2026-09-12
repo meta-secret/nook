@@ -6,16 +6,70 @@
 //! Bitwarden plaintext items, nullable text and ordered metadata conversion.
 use super::super::import_support::{ImportMetadata, SourceLabelMetadata};
 use super::{BitwardenImportError, BitwardenImportPlan};
+use crate::CreditCardFields;
+use crate::secrets::import_support::{ImportItemDisposition, ImportSkipReason};
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
-use serde::Deserialize;
-use serde_json::Value;
+use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer};
+use std::fmt;
 use std::ops::Deref;
-#[derive(Debug, Default, Deserialize)]
-#[serde(from = "Option<String>")]
+#[derive(Debug, Default)]
 struct BitwardenText(String);
-impl From<Option<String>> for BitwardenText {
-    fn from(value: Option<String>) -> Self {
-        Self(value.unwrap_or_default())
+// Bitwarden owns null/missing text in its foreign export schema.
+impl<'de> Deserialize<'de> for BitwardenText {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct TextVisitor;
+        impl Visitor<'_> for TextVisitor {
+            type Value = BitwardenText;
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("Bitwarden text or null")
+            }
+            fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+                Ok(BitwardenText::default())
+            }
+            fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                Ok(BitwardenText(value.to_owned()))
+            }
+            fn visit_string<E: de::Error>(self, value: String) -> Result<Self::Value, E> {
+                Ok(BitwardenText(value))
+            }
+        }
+        deserializer.deserialize_any(TextVisitor)
+    }
+}
+// These alternatives describe foreign Bitwarden payload declarations, before
+// item conversion classifies unsupported and incomplete exported records.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum BitwardenLoginPayload {
+    Login(BitwardenLogin),
+    Undeclared(()),
+}
+impl Default for BitwardenLoginPayload {
+    fn default() -> Self {
+        Self::Undeclared(())
+    }
+}
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum BitwardenCardPayload {
+    Card(BitwardenCard),
+    Undeclared(()),
+}
+impl Default for BitwardenCardPayload {
+    fn default() -> Self {
+        Self::Undeclared(())
+    }
+}
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum BitwardenItemsDeclaration {
+    Items(Vec<BitwardenItem>),
+    Undeclared(()),
+}
+impl Default for BitwardenItemsDeclaration {
+    fn default() -> Self {
+        Self::Undeclared(())
     }
 }
 impl Deref for BitwardenText {
@@ -35,8 +89,10 @@ struct BitwardenItem {
     notes: BitwardenText,
     #[serde(default)]
     fields: Vec<BitwardenField>,
-    login: Option<BitwardenLogin>,
-    card: Option<BitwardenCard>,
+    #[serde(default)]
+    login: BitwardenLoginPayload,
+    #[serde(default)]
+    card: BitwardenCardPayload,
 }
 
 #[derive(Debug, Deserialize)]
@@ -82,26 +138,34 @@ struct BitwardenUri {
     uri: BitwardenText,
 }
 
+#[derive(Deserialize)]
+struct BitwardenItemsWire {
+    #[serde(default)]
+    items: BitwardenItemsDeclaration,
+}
+
 pub(super) struct BitwardenItems {
     items: Vec<BitwardenItem>,
 }
 impl BitwardenItems {
-    pub(super) fn parse(value: &Value) -> Result<Self, BitwardenImportError> {
-        let items = value
-            .get("items")
-            .ok_or(BitwardenImportError::InvalidResponse)?;
+    pub(super) fn parse(json: &str) -> Result<Self, BitwardenImportError> {
+        let wire: BitwardenItemsWire = serde_json::from_str(json)?;
         Ok(Self {
-            items: serde_json::from_value(items.clone())?,
+            items: match wire.items {
+                BitwardenItemsDeclaration::Items(items) => items,
+                BitwardenItemsDeclaration::Undeclared(()) => {
+                    return Err(BitwardenImportError::InvalidResponse);
+                }
+            },
         })
     }
     #[must_use]
     pub(super) fn plan(self) -> BitwardenImportPlan {
         let source_count = self.items.len();
-        let converted = self
-            .items
-            .into_iter()
-            .filter_map(BitwardenItem::convert)
-            .collect::<Vec<_>>();
+        let mut converted = Vec::new();
+        for item in self.items {
+            item.convert().append(&mut converted);
+        }
         let skipped_unsupported = source_count.saturating_sub(converted.len());
         BitwardenImportPlan {
             items: converted,
@@ -111,8 +175,10 @@ impl BitwardenItems {
     }
 }
 impl BitwardenItem {
-    fn login(self) -> Option<SecretValue> {
-        let login = self.login?;
+    fn login(self) -> ImportItemDisposition {
+        let BitwardenLoginPayload::Login(login) = self.login else {
+            return ImportItemDisposition::Skipped(ImportSkipReason::IncompletePayload);
+        };
         let uris = login
             .uris
             .into_iter()
@@ -124,7 +190,7 @@ impl BitwardenItem {
             .cloned()
             .unwrap_or_else(|| self.name.trim().to_owned());
         let mut metadata = Vec::new();
-        if let Some(name) = (SourceLabelMetadata {
+        if let Ok(name) = (SourceLabelMetadata {
             key: "name",
             label: &self.name,
             website_url: &website_url,
@@ -149,7 +215,7 @@ impl BitwardenItem {
         let mut notes = self.notes.0;
         BitwardenNotes { notes: &mut notes }.append(metadata);
 
-        Some(SecretValue::Login(LoginSecret {
+        ImportItemDisposition::Imported(SecretValue::Login(LoginSecret {
             website_url: website_url.trim().to_owned(),
             username: login.username.0,
             password: login.password.0,
@@ -158,8 +224,10 @@ impl BitwardenItem {
     }
 }
 impl BitwardenItem {
-    fn card(self) -> Option<SecretValue> {
-        let card = self.card?;
+    fn card(self) -> ImportItemDisposition {
+        let BitwardenCardPayload::Card(card) = self.card else {
+            return ImportItemDisposition::Skipped(ImportSkipReason::IncompletePayload);
+        };
         let mut notes = self.notes.0;
         let mut metadata = BitwardenFields {
             fields: self.fields,
@@ -169,21 +237,23 @@ impl BitwardenItem {
             metadata.insert(0, ("brand".to_owned(), card.brand.0));
         }
         BitwardenNotes { notes: &mut notes }.append(metadata);
-        CreditCardSecret::from_fields(
-            self.name.trim(),
-            card.cardholder_name.trim(),
-            card.number.trim(),
-            card.exp_month.trim(),
-            card.exp_year.trim(),
-            card.code.trim(),
-            &notes,
+        CreditCardSecret::from_fields(CreditCardFields {
+            title: self.name.trim(),
+            cardholder_name: card.cardholder_name.trim(),
+            number: card.number.trim(),
+            expiration_month: card.exp_month.trim(),
+            expiration_year: card.exp_year.trim(),
+            cvv: card.code.trim(),
+            notes: &notes,
+        })
+        .map_or(
+            ImportItemDisposition::Skipped(ImportSkipReason::InvalidCard),
+            |card| ImportItemDisposition::Imported(SecretValue::CreditCard(card)),
         )
-        .ok()
-        .map(SecretValue::CreditCard)
     }
 }
 impl BitwardenItem {
-    fn convert(self) -> Option<SecretValue> {
+    fn convert(self) -> ImportItemDisposition {
         match self.item_type {
             1 => self.login(),
             2 => {
@@ -194,13 +264,13 @@ impl BitwardenItem {
                     }
                     .metadata(),
                 );
-                Some(SecretValue::SecureNote(SecureNoteSecret {
+                ImportItemDisposition::Imported(SecretValue::SecureNote(SecureNoteSecret {
                     title: self.name.trim().to_owned(),
                     note: notes,
                 }))
             }
             3 => self.card(),
-            _ => None,
+            _ => ImportItemDisposition::Skipped(ImportSkipReason::UnsupportedKind),
         }
     }
 }
@@ -258,7 +328,7 @@ mod tests {
     #[test]
     fn login_conversion_keeps_credential_bytes_and_trimmed_url() -> anyhow::Result<()> {
         let json = r#"{"items":[{"type":1,"name":"Title","login":{"username":"  alice  ","password":"  sécret 🔑  ","uris":[{"uri":"  https://example.com  "}]}}]}"#;
-        let plan = BitwardenItems::parse(&serde_json::from_str(json)?)?.plan();
+        let plan = BitwardenItems::parse(json)?.plan();
         let [SecretValue::Login(login)] = plan.items.as_slice() else {
             anyhow::bail!("expected one login")
         };

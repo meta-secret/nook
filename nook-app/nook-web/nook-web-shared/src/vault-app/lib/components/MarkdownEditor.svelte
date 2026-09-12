@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { renderMarkdown } from '$lib/content/markdown'
+  import { markdownRenderer } from '$lib/content/markdown'
   import MarkdownBody from './MarkdownBody.svelte'
   import {
     MarkdownEditorTab,
@@ -24,7 +24,7 @@
 
   let tab = $state(MarkdownEditorTab.Write)
 
-  const previewHtml = $derived(renderMarkdown(value))
+  const previewHtml = $derived(markdownRenderer.renderMarkdown(value))
 
   let textareaState: TextareaMount = { kind: TextareaMountKind.Unmounted }
 

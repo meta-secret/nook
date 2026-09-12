@@ -102,8 +102,9 @@ impl CheckedSentinelUnlockRequest {
         if opened_share.threshold != request.policy.threshold
             || opened_share.required_participants != request.policy.required_participants
             || opened_share.device_id != identity.device_id().as_str()
-            || u8::from(opened_share.share_index) == 0
-            || u8::from(opened_share.share_index) > u8::from(request.policy.required_participants)
+            || !opened_share
+                .share_index
+                .belongs_to(request.policy.required_participants)
         {
             return Err(MultiDeviceError::InvalidSentinelUnlockPayload);
         }
@@ -147,8 +148,9 @@ impl SentinelUnlockResponse {
             || self.store_id != request.store_id
             || self.policy != request.policy
             || self.participant_signing_public_key.is_empty()
-            || u8::from(self.share_index) == 0
-            || u8::from(self.share_index) > u8::from(request.policy.required_participants)
+            || !self
+                .share_index
+                .belongs_to(request.policy.required_participants)
         {
             return Err(MultiDeviceError::InvalidSentinelUnlockSession);
         }

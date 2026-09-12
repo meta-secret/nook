@@ -1,8 +1,12 @@
 use super::*;
 
 #[test]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "integration contracts share a fallible test signature"
+)]
 fn agent_prs_cannot_be_merged_automatically() -> anyhow::Result<()> {
-    let root = repository_root();
+    let root = RepositoryFixture::repository_root();
     assert!(
         !root.join(".github/workflows/agent-pr-monitor.yml").exists(),
         "the retired agent PR monitor workflow must not be restored"
@@ -26,7 +30,7 @@ fn agent_prs_cannot_be_merged_automatically() -> anyhow::Result<()> {
             &["pr:monitor", "CI_AGENT_CMD=pr-monitor"][..],
         ),
     ] {
-        let source = read(&root, path);
+        let source = root.read(path);
         for token in forbidden {
             assert!(
                 !source.contains(token),
@@ -38,9 +42,13 @@ fn agent_prs_cannot_be_merged_automatically() -> anyhow::Result<()> {
 }
 
 #[test]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "integration contracts share a fallible test signature"
+)]
 fn ci_agent_runs_directly_without_a_nested_runtime() -> anyhow::Result<()> {
-    let root = repository_root();
-    let tasks = read(&root, ".task/agentic-ai.yml");
+    let root = RepositoryFixture::repository_root();
+    let tasks = root.read(".task/agentic-ai.yml");
     let host_run = section(&tasks, "  ci-agent:host:run:\n", "  ci-agent:run:\n");
 
     assert!(
@@ -54,9 +62,13 @@ fn ci_agent_runs_directly_without_a_nested_runtime() -> anyhow::Result<()> {
 }
 
 #[test]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "integration contracts share a fallible test signature"
+)]
 fn ui_demo_rebuilds_the_preview_with_test_only_debug_hooks() -> anyhow::Result<()> {
-    let root = repository_root();
-    let tasks = read(&root, "nook-app/nook-web/Taskfile.yml");
+    let root = RepositoryFixture::repository_root();
+    let tasks = root.read("nook-app/nook-web/Taskfile.yml");
     let ui_demo = section(
         &tasks,
         "  _web:test:ui-demo:\n",
@@ -78,11 +90,15 @@ fn ui_demo_rebuilds_the_preview_with_test_only_debug_hooks() -> anyhow::Result<(
 }
 
 #[test]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "integration contracts share a fallible test signature"
+)]
 fn local_https_material_lives_under_home_nook_across_worktrees() -> anyhow::Result<()> {
-    let root = repository_root();
-    let app_tasks = read(&root, "nook-app/Taskfile.yml");
-    let web_tasks = read(&root, "nook-app/nook-web/Taskfile.yml");
-    let docker_tasks = read(&root, "nook-app/nook-web/docker/Taskfile.yml");
+    let root = RepositoryFixture::repository_root();
+    let app_tasks = root.read("nook-app/Taskfile.yml");
+    let web_tasks = root.read("nook-app/nook-web/Taskfile.yml");
+    let docker_tasks = root.read("nook-app/nook-web/docker/Taskfile.yml");
 
     for required in [
         "${HOME}/.nook/https",
@@ -128,11 +144,15 @@ fn local_https_material_lives_under_home_nook_across_worktrees() -> anyhow::Resu
 }
 
 #[test]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "integration contracts share a fallible test signature"
+)]
 fn pr_audit_wrappers_accept_pat_only_authentication() -> anyhow::Result<()> {
-    let root = repository_root();
-    let tasks = read(&root, ".task/agentic-ai.yml");
+    let root = RepositoryFixture::repository_root();
+    let tasks = root.read(".task/agentic-ai.yml");
     let audit = section(&tasks, "  pr:ci-agent:audit:\n", "  pr:preflight:\n");
-    let token_fallback = r#"${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}"#;
+    let token_fallback = r"${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";
 
     assert_eq!(
         audit.matches(token_fallback).count(),

@@ -12,18 +12,34 @@ use tsify::Tsify;
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, ICloudMode,
-    ICloudSharedTarget, OauthFilePreset, ProviderReplicationCapability, ReplicationType,
-    StorageMode, StorageProviderType,
+    ICloudSharedTarget, OAuthFilePreset, OauthFilePreset, ProviderReplicationCapability,
+    ReplicationType, StorageMode, StorageProviderType,
 };
 
 mod active_credentials;
 mod catalog;
+mod draft_connection;
+pub use draft_connection::{
+    DraftStorageConnection, GithubStorageDraft, OAuthStorageDraft, VaultStorageConnection,
+};
+mod wire;
+pub use wire::ProviderWireMigration;
 mod enrollment;
 mod legacy_storage;
+pub use legacy_storage::LegacyAuthProvidersSnapshot;
 mod oauth;
 mod save;
 mod scope;
+mod selection;
+pub use selection::{
+    ProviderId, ProviderSelection, ProviderSelectionPolicy, ProviderSelectionRequest,
+};
+mod staged_connection;
+pub use staged_connection::{
+    StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedStorageConnection,
+};
 mod state;
+mod state_storage;
 mod storage_args;
 mod sync_metadata;
 
@@ -31,27 +47,36 @@ pub use active_credentials::{
     ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,
     ActiveProviderCredentialsRequest, ActiveProviderLoginSetup,
 };
-pub use catalog::{DuplicateProviderSelection, LocalProviderRowRequest};
-pub use enrollment::{ProviderEnrollmentRequest, SharedGrantProviderSelection};
-pub use oauth::{GoogleOAuthTokenInput, ICloudOAuthTokenInput};
-pub use save::{ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup};
-pub use scope::{ActiveVaultProviderRows, ProviderRows};
-pub use state::*;
-pub use storage_args::{
-    DraftStorageConnection, ProviderLabelLabels, ProviderSelectionRequest,
-    ProviderStorageDetailLabels, StagedRemoteConnection, StorageConnectArgs,
-    VaultStorageConnection,
+pub use catalog::{
+    DuplicateCandidatePolicy, DuplicateProviderSelection, LocalProviderRowChange,
+    LocalProviderRowOutcome, LocalProviderRowRequest,
 };
+pub use enrollment::{
+    EnrollmentAudience, ProviderEnrollmentRequest, SharedGoogleEnrollmentAudience,
+    SharedGrantProviderSelection,
+};
+pub use oauth::{
+    GoogleOAuthTokenInput, ICloudOAuthTokenInput, OAuthRemoteConfigurationUpdate,
+    OAuthRemoteStorageReference, OAuthStorageReference,
+};
+pub use save::{ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup};
+pub use scope::{
+    ActiveVaultProviderRows, LocalProviderSelection, ProviderEventFlushTarget, ProviderRows,
+    RemoteEventFlushProviderRequest,
+};
+pub use state::*;
+pub use storage_args::{ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs};
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
 ///
 /// Field names are `camelCase` on the wire to match the structured-clone object
 /// the web layer and e2e seeders read/write directly in `IndexedDB`.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Tsify, Deserialize)]
+#[serde(from = "OAuthFileConfigWire")]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct OAuthFileConfig {
-    pub preset: OauthFilePreset,
+    pub preset: OAuthFilePreset,
     pub access_token: StoredOAuthAccessCredential,
     pub refresh_token: StoredOAuthRefreshCredential,
     pub expires_at: StoredOAuthTokenExpiry,
@@ -91,13 +116,9 @@ struct OAuthFileConfigWire {
     icloud_share_target: StoredICloudShareTarget,
 }
 
-impl<'de> Deserialize<'de> for OAuthFileConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let wire = OAuthFileConfigWire::deserialize(deserializer)?;
-        Ok(Self {
+impl From<OAuthFileConfigWire> for OAuthFileConfig {
+    fn from(wire: OAuthFileConfigWire) -> Self {
+        Self {
             preset: wire.preset,
             access_token: wire.access_token,
             refresh_token: wire.refresh_token,
@@ -109,11 +130,42 @@ impl<'de> Deserialize<'de> for OAuthFileConfig {
             folder_id: wire.folder_id,
             icloud_mode: wire.icloud_mode,
             icloud_share_target: wire.icloud_share_target,
-        })
+        }
     }
 }
 
 pub type OAuthFileConfigData = OAuthFileConfig;
+
+/// Owned credential snapshot returned to the browser for immediate use.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+#[tsify(into_wasm_abi)]
+pub enum OAuthAccessToken {
+    Missing,
+    Available { token: String },
+}
+impl From<OAuthAccessTokenRef<'_>> for OAuthAccessToken {
+    fn from(value: OAuthAccessTokenRef<'_>) -> Self {
+        match value {
+            OAuthAccessTokenRef::Missing => Self::Missing,
+            OAuthAccessTokenRef::Available(token) => Self::Available {
+                token: token.to_owned(),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[serde(tag = "state", rename_all = "kebab-case")]
+#[tsify(into_wasm_abi)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the typed WASM result preserves the provider's existing wire shape"
+)]
+pub enum DuplicateSyncProvider {
+    Unique,
+    Duplicate { provider: StorageProvider },
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OAuthAccessTokenRef<'a> {
@@ -134,9 +186,12 @@ impl OAuthFileConfigData {
 
     #[must_use]
     pub fn usable_access_token(&self) -> OAuthAccessTokenRef<'_> {
-        match self.access_token.as_deref().map(str::trim) {
-            Some(token) if !token.is_empty() => OAuthAccessTokenRef::Available(token),
-            _ => OAuthAccessTokenRef::Missing,
+        match &self.access_token {
+            StoredOAuthAccessCredential::AccessToken(token) if !token.trim().is_empty() => {
+                OAuthAccessTokenRef::Available(token.trim())
+            }
+            StoredOAuthAccessCredential::AccessToken(_)
+            | StoredOAuthAccessCredential::SignedOut => OAuthAccessTokenRef::Missing,
         }
     }
 }
@@ -246,20 +301,20 @@ pub struct AuthProvidersSnapshot {
 
 pub type AuthProvidersSnapshotData = AuthProvidersSnapshot;
 
-/// Result of [`NormalizedAuthSnapshot::from_wire`].
+/// Owned wire admission with an explicit migration observation.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NormalizedAuthSnapshot {
     pub snapshot: AuthProvidersSnapshot,
-    pub changed: bool,
+    pub migration: ProviderWireMigration,
 }
 
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
     use crate::{
-        ProviderVaultScope, StoredGithubPat, StoredGithubRepository, StoredICloudShareTarget,
-        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+        ProviderOauthPreset, ProviderVaultScope, StoredGithubPat, StoredGithubRepository,
+        StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
     };
     use serde_json::Error;
 
@@ -324,4 +379,26 @@ mod tests {
         assert_eq!(current.target, StoredICloudShareTarget::Personal);
         Ok(())
     }
+
+    #[test]
+    fn exported_provider_contracts_reference_the_canonical_oauth_preset() {
+        for declaration in [
+            OAuthFileConfig::DECL,
+            ProviderSaveRequest::DECL,
+            SharedGrantProviderRequest::DECL,
+            ProviderOauthPreset::DECL,
+        ] {
+            assert!(declaration.contains("OAuthFilePreset"));
+            assert!(!declaration.contains("OauthFilePreset"));
+        }
+    }
 }
+
+mod persistence;
+pub use persistence::*;
+
+mod enrollment_projection;
+pub use enrollment_projection::*;
+
+mod shared_grant;
+pub use shared_grant::*;

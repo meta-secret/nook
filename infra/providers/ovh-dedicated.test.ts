@@ -1,14 +1,34 @@
+import { resolve } from "node:path";
+import { ok } from "neverthrow";
+import {
+  OvhRecoveryMarkerObservation,
+  RecoveryMarkerCompatibilityKind,
+} from "./ovh-dedicated-observations";
+import { ArcTier, EndpointMode, OvhTaskState } from "./ovh-dedicated-contracts";
 import { describe, expect, test } from "bun:test";
 
 import {
-  createOvhSignature,
-  isTerminalTaskFailure,
+  OvhDedicatedCreateOvhSignature,
+  OvhTaskOutcome,
   OvhTaskStatus,
-  recoveryMarkerMatches,
-  requiresReinstall,
+  OvhReinstallIntent,
+  ReinstallDecision,
+  ReinstallAuthorization,
 } from "./ovh-dedicated";
+import { OvhFailureKind } from "./ovh-dedicated-failure";
+import { OvhLocalFile, OvhPathPresence } from "./ovh-dedicated-local";
 
 describe("OVH dedicated provider", () => {
+  test("distinguishes a missing local path from a failed lookup", async () => {
+    const missingPath = resolve(process.cwd(), `.nook-missing-${crypto.randomUUID()}`);
+    const missing = await new OvhLocalFile(missingPath).presence();
+    expect(missing).toEqual(ok(OvhPathPresence.Absent));
+
+    const failed = await new OvhLocalFile("/dev/null/child").presence();
+    expect(failed.isErr()).toBe(true);
+    if (failed.isErr()) expect(failed.error.kind).toBe(OvhFailureKind.Filesystem);
+  });
+
   test("signs the canonical OVH request material", () => {
     const input = {
       applicationSecret: "secret",
@@ -18,14 +38,14 @@ describe("OVH dedicated provider", () => {
       timestamp: 1_700_000_000,
       url: "https://api.us.ovhcloud.com/1.0/dedicated/server",
     };
-    expect(createOvhSignature(input)).toBe(
+    expect(new OvhDedicatedCreateOvhSignature(input).execute()).toBe(
       "$1$fb37e9a312d2e1a8a8653b0cac91c4ed7195ca7a",
     );
   });
 
   test("reinstalls a blank server and converges the declared OS", () => {
     const blankInput = {
-      allowReinstall: false,
+      allowReinstall: ReinstallAuthorization.Preserve,
       currentOperatingSystem: "none_64",
       desiredOperatingSystem: "debian13_64",
     };
@@ -33,39 +53,49 @@ describe("OVH dedicated provider", () => {
       ...blankInput,
       currentOperatingSystem: "debian13_64",
     };
-    expect(requiresReinstall(blankInput)).toBeTrue();
-    expect(requiresReinstall(convergedInput)).toBeFalse();
+    expect(new OvhReinstallIntent(blankInput).decision()).toEqual(ok(ReinstallDecision.Required));
+    expect(new OvhReinstallIntent(convergedInput).decision()).toEqual(ok(ReinstallDecision.Converged));
   });
 
   test("refuses to replace an installed OS without disaster recovery", () => {
     const input = {
-      allowReinstall: false,
+      allowReinstall: ReinstallAuthorization.Preserve,
       currentOperatingSystem: "debian12_64",
       desiredOperatingSystem: "debian13_64",
     };
-    expect(() => requiresReinstall(input)).toThrow("refusing to replace");
+    const decision = new OvhReinstallIntent(input).decision();
+    expect(decision.isErr()).toBe(true);
+    if (decision.isErr()) expect(decision.error.message).toContain("refusing to replace");
   });
 
   test("honors an explicit same-OS disaster-recovery reinstall", () => {
     const input = {
-      allowReinstall: true,
+      allowReinstall: ReinstallAuthorization.Replace,
       currentOperatingSystem: "debian13_64",
       desiredOperatingSystem: "debian13_64",
     };
-    expect(requiresReinstall(input)).toBeTrue();
+    expect(new OvhReinstallIntent(input).decision()).toEqual(ok(ReinstallDecision.Required));
   });
 
   test("recognizes every OVH terminal reinstall failure", () => {
-    expect(isTerminalTaskFailure(OvhTaskStatus.Cancelled)).toBeTrue();
-    expect(isTerminalTaskFailure(OvhTaskStatus.CustomerError)).toBeTrue();
-    expect(isTerminalTaskFailure(OvhTaskStatus.OvhError)).toBeTrue();
-    expect(isTerminalTaskFailure(OvhTaskStatus.Doing)).toBeFalse();
+    expect(new OvhTaskState(OvhTaskStatus.Cancelled).outcome()).toBe(
+      OvhTaskOutcome.Failed,
+    );
+    expect(new OvhTaskState(OvhTaskStatus.CustomerError).outcome()).toBe(
+      OvhTaskOutcome.Failed,
+    );
+    expect(new OvhTaskState(OvhTaskStatus.OvhError).outcome()).toBe(
+      OvhTaskOutcome.Failed,
+    );
+    expect(new OvhTaskState(OvhTaskStatus.Doing).outcome()).toBe(
+      OvhTaskOutcome.Pending,
+    );
   });
 
   test("accepts only the exact durable recovery operation", () => {
     const definition = {
-      arcTier: "primary",
-      endpointMode: "direct",
+      arcTier: ArcTier.Primary,
+      endpointMode: EndpointMode.Direct,
       expectedCommercialRange: "RISE-S | AMD Ryzen 7 9700X",
       expectedDatacenter: "vin",
       meshAddress: "10.202.0.4",
@@ -82,18 +112,16 @@ describe("OVH dedicated provider", () => {
       version: 1,
     } as const;
     expect(
-      recoveryMarkerMatches({
+      OvhRecoveryMarkerObservation.fromRecord(marker).compatibility({
         definition,
         hostname: "nook-rise-s-2",
-        marker,
-      }),
-    ).toBeTrue();
+      }).kind,
+    ).toBe(RecoveryMarkerCompatibilityKind.Matching);
     expect(
-      recoveryMarkerMatches({
+      OvhRecoveryMarkerObservation.fromRecord(marker).compatibility({
         definition,
         hostname: "nook-rise-s-1",
-        marker,
-      }),
-    ).toBeFalse();
+      }).kind,
+    ).toBe(RecoveryMarkerCompatibilityKind.DifferentInventory);
   });
 });

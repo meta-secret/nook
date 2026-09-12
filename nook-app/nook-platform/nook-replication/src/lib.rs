@@ -18,5 +18,12 @@
 mod causal_graph;
 mod replica_store;
 
-pub use causal_graph::{CausalGraph, CausalGraphError, CausalGraphEventCount, CausalInsertStatus};
-pub use replica_store::{RemoteEventLogClassification, ReplicaInsertStatus, ReplicaStore};
+pub use causal_graph::{
+    CausalEventInsertion, CausalGraph, CausalGraphError, CausalGraphEventCount, CausalInsertStatus,
+    CausalInsertion, CausalQuarantine, EventParents,
+};
+pub use replica_store::{
+    RemoteEventLogClassification, ReplicaDequeue, ReplicaEventBytes, ReplicaEventWrite,
+    ReplicaInsertStatus, ReplicaOutboxRemoval, ReplicaOutboxRemovalResult, ReplicaOutboxWrite,
+    ReplicaStore, ReplicaWrite,
+};

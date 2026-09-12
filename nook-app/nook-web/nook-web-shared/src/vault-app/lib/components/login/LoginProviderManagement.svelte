@@ -43,9 +43,7 @@
     isInitializing: boolean
     open?: boolean
     addingProvider?: boolean
-    onBeginSetup?: (
-      request: ProviderSetupRequest,
-    ) => void
+    onBeginSetup?: (request: ProviderSetupRequest) => void
     onCancelAddProvider?: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
@@ -55,13 +53,14 @@
 
   function confirmRemoveProvider(provider: StorageProvider) {
     if (!onRemoveProvider) return
-    const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.AuthStorageConfirmRemove, replacements: {
+    const tArgs: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.AuthStorageConfirmRemove,
+      replacements: {
         label: provider.label,
         signedOutNote: '',
-      } };
-    const ok = confirm(
-      vault.t(tArgs),
-    )
+      },
+    }
+    const ok = confirm(vault.t(tArgs))
     if (ok) {
       void onRemoveProvider(provider.id)
     }
@@ -169,13 +168,25 @@
               {/if}
               <div class="min-w-0 flex-1">
                 <div class="truncate text-sm font-medium text-foreground">
-                  {(() => { const localizeProviderLabelArgs: Parameters<typeof localizeProviderLabel>[0] = { label: provider.label, t: vault.t }; return localizeProviderLabel(localizeProviderLabelArgs); })()}
+                  {(() => {
+                    const localizeProviderLabelArgs: Parameters<
+                      typeof localizeProviderLabel
+                    >[0] = { label: provider.label, t: vault.t }
+                    return localizeProviderLabel(localizeProviderLabelArgs)
+                  })()}
                 </div>
                 <div
                   class="truncate text-xs text-muted-foreground"
                   data-testid="provider-detail-{provider.id}"
                 >
-                  {(() => { const localizedProviderStorageDetailRequest: Parameters<typeof localizedProviderStorageDetail>[0] = { provider, t: vault.t }; return localizedProviderStorageDetail(localizedProviderStorageDetailRequest); })()}
+                  {(() => {
+                    const localizedProviderStorageDetailRequest: Parameters<
+                      typeof localizedProviderStorageDetail
+                    >[0] = { provider, t: vault.t }
+                    return localizedProviderStorageDetail(
+                      localizedProviderStorageDetailRequest,
+                    )
+                  })()}
                 </div>
               </div>
               {#if onRemoveProvider}

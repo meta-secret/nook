@@ -1,9 +1,14 @@
+import { ActiveVaultSyncSchedule } from "$lib/vault/sync-schedule";
 import { NookBrowserLocale } from "$app-wasm";
 import {
   EnrollmentLocationKind,
-  consumeEnrollmentFromLocation,
+  enrollmentBrowser,
 } from "$lib/enrollment/code";
-import type { VaultIdleSessionTracker } from "$lib/vault/idle-session-tracker";
+import {
+  VaultIdleSessionStartKind,
+  type VaultIdleSessionStart,
+  type VaultIdleSessionTracker,
+} from "$lib/vault/idle-session-tracker";
 import { VaultStateSlices } from "$lib/vault/state/index.svelte";
 import { VaultRuntimeState as VaultRuntimeSliceState } from "$lib/vault/state/runtime.svelte";
 
@@ -33,7 +38,7 @@ enum SyncScheduleKind {
 
 type SyncSchedule =
   | { kind: SyncScheduleKind.Stopped }
-  | { kind: SyncScheduleKind.Scheduled; timer: ReturnType<typeof setInterval> };
+  | { kind: SyncScheduleKind.Scheduled; schedule: ActiveVaultSyncSchedule };
 export enum VaultInitializationKind {
   NotStarted = "not-started",
   Initializing = "initializing",
@@ -51,22 +56,30 @@ export type EnrollmentLink =
   | { kind: EnrollmentLinkKind.Absent }
   | { kind: EnrollmentLinkKind.Pending; payload: string };
 
-function initialEnrollmentLink(): EnrollmentLink {
-  if (!("window" in globalThis)) return { kind: EnrollmentLinkKind.Absent };
-  const enrollment = consumeEnrollmentFromLocation();
-  return enrollment.kind === EnrollmentLocationKind.Consumed
-    ? { kind: EnrollmentLinkKind.Pending, payload: enrollment.payload }
-    : { kind: EnrollmentLinkKind.Absent };
-}
-
 type LifecycleSyncSchedule = {
   readonly callback: () => void;
   readonly intervalMs: number;
 };
 
 export class VaultLifecycleState extends VaultStateSlices {
+  private static initialBrowserLocale(): NookBrowserLocale {
+    return "window" in globalThis
+      ? new NookBrowserLocale()
+      : NookBrowserLocale.from_tags([]);
+  }
+
+  private initialEnrollmentLink(): EnrollmentLink {
+    if (!("window" in globalThis)) return { kind: EnrollmentLinkKind.Absent };
+    const enrollment = enrollmentBrowser.consumeEnrollmentFromLocation();
+    return enrollment.kind === EnrollmentLocationKind.Consumed
+      ? { kind: EnrollmentLinkKind.Pending, payload: enrollment.payload }
+      : { kind: EnrollmentLinkKind.Absent };
+  }
+
   constructor() {
-    super(new VaultRuntimeSliceState(new NookBrowserLocale()));
+    super(
+      new VaultRuntimeSliceState(VaultLifecycleState.initialBrowserLocale()),
+    );
   }
 
   private successDismissSchedule: SuccessDismissSchedule = {
@@ -101,6 +114,9 @@ export class VaultLifecycleState extends VaultStateSlices {
     this.clearSuccessDismissTimer();
   }
 
+  private activeIdleSession: VaultIdleSessionStart = {
+    kind: VaultIdleSessionStartKind.Unavailable,
+  };
   private idleSessionTracking: IdleSessionTracking = {
     kind: IdleSessionTrackingKind.Inactive,
   };
@@ -110,6 +126,7 @@ export class VaultLifecycleState extends VaultStateSlices {
   }
 
   setIdleSessionTracker(value: VaultIdleSessionTracker): void {
+    this.stopIdleSessionTracker();
     this.idleSessionTracking = {
       kind: IdleSessionTrackingKind.Active,
       tracker: value,
@@ -117,19 +134,22 @@ export class VaultLifecycleState extends VaultStateSlices {
   }
 
   clearIdleSessionTracker(): void {
+    this.stopIdleSessionTracker();
     this.idleSessionTracking = { kind: IdleSessionTrackingKind.Inactive };
   }
 
   startIdleSessionTracker(): void {
     if (this.idleSessionTracking.kind === IdleSessionTrackingKind.Active) {
-      this.idleSessionTracking.tracker.start();
+      this.stopIdleSessionTracker();
+      this.activeIdleSession = this.idleSessionTracking.tracker.start();
     }
   }
 
   stopIdleSessionTracker(): void {
-    if (this.idleSessionTracking.kind === IdleSessionTrackingKind.Active) {
-      this.idleSessionTracking.tracker.stop();
-    }
+    const active = this.activeIdleSession;
+    this.activeIdleSession = { kind: VaultIdleSessionStartKind.Unavailable };
+    if (active.kind === VaultIdleSessionStartKind.Tracking)
+      active.session.stop();
   }
 
   private syncSchedule: SyncSchedule = { kind: SyncScheduleKind.Stopped };
@@ -142,13 +162,14 @@ export class VaultLifecycleState extends VaultStateSlices {
     this.stopScheduledSync();
     this.syncSchedule = {
       kind: SyncScheduleKind.Scheduled,
-      timer: setInterval(callback, intervalMs),
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      schedule: new ActiveVaultSyncSchedule({ callback, intervalMs }),
     };
   }
 
   stopScheduledSync(): boolean {
     if (this.syncSchedule.kind === SyncScheduleKind.Stopped) return false;
-    clearInterval(this.syncSchedule.timer);
+    this.syncSchedule.schedule.stop();
     this.syncSchedule = { kind: SyncScheduleKind.Stopped };
     return true;
   }
@@ -172,7 +193,7 @@ export class VaultLifecycleState extends VaultStateSlices {
     this.initialization = { kind: VaultInitializationKind.NotStarted };
   }
 
-  private enrollmentLink: EnrollmentLink = initialEnrollmentLink();
+  private enrollmentLink: EnrollmentLink = this.initialEnrollmentLink();
 
   get enrollmentLinkState(): EnrollmentLink {
     return this.enrollmentLink;

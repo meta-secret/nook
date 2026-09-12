@@ -3,25 +3,49 @@
 #[path = "sccache_s3/delivery_cache_contracts.rs"]
 mod delivery_cache_contracts;
 
-use std::{env, fs, path::PathBuf};
+use std::{
+    env, fs,
+    ops::Deref,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
 
-fn repository_root() -> PathBuf {
-    env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        PathBuf::from,
-    )
+struct RepositoryFixture {
+    path: PathBuf,
+}
+impl RepositoryFixture {
+    fn repository_root() -> Self {
+        Self {
+            path: env::var_os("NOOK_REPO_ROOT").map_or_else(
+                || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+                PathBuf::from,
+            ),
+        }
+    }
+}
+impl Deref for RepositoryFixture {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.path
+    }
+}
+impl AsRef<Path> for RepositoryFixture {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
 }
 
-fn read(path: &str) -> String {
-    fs::read_to_string(repository_root().join(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+impl RepositoryFixture {
+    fn read(&self, path: &str) -> String {
+        fs::read_to_string(self.join(path))
+            .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+    }
 }
 
 #[test]
 fn hive_materializes_test_and_clippy_dependency_graphs_in_parallel() -> anyhow::Result<()> {
-    let dockerfile = read("agentic-ai/minds/hive/Dockerfile");
+    let dockerfile = RepositoryFixture::repository_root().read("agentic-ai/minds/hive/Dockerfile");
     for required in [
         "FROM fetched-dependencies AS test-dependencies",
         "FROM fetched-dependencies AS clippy-dependencies",
@@ -48,10 +72,13 @@ fn hive_materializes_test_and_clippy_dependency_graphs_in_parallel() -> anyhow::
 
 #[test]
 fn hive_named_sccache_helper_context_never_uploads_nook_app() -> anyhow::Result<()> {
-    let hive_tasks = read("agentic-ai/minds/hive/Taskfile.yml");
-    let hive_dockerfile = read("agentic-ai/minds/hive/Dockerfile");
-    let prepare = read("agentic-ai/minds/hive/prepare-sccache-context.sh");
-    let infra_hive = read("infra/tasks/hive.yml");
+    let hive_tasks =
+        RepositoryFixture::repository_root().read("agentic-ai/minds/hive/Taskfile.yml");
+    let hive_dockerfile =
+        RepositoryFixture::repository_root().read("agentic-ai/minds/hive/Dockerfile");
+    let prepare = RepositoryFixture::repository_root()
+        .read("agentic-ai/minds/hive/prepare-sccache-context.sh");
+    let infra_hive = RepositoryFixture::repository_root().read("infra/tasks/hive.yml");
     for required in [
         "prepare-sccache-context.sh",
         "prepare_nook_sccache_helpers_context",
@@ -99,8 +126,9 @@ fn hive_named_sccache_helper_context_never_uploads_nook_app() -> anyhow::Result<
 
 #[test]
 fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyhow::Result<()> {
-    let app_tasks = read("nook-app/Taskfile.yml");
-    let platform_tasks = read("nook-app/nook-platform/Taskfile.yml");
+    let app_tasks = RepositoryFixture::repository_root().read("nook-app/Taskfile.yml");
+    let platform_tasks =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/Taskfile.yml");
     let sccache_tasks = format!("{app_tasks}\n{platform_tasks}");
     for required in [
         "https://sccache.dev.nokey.sh",
@@ -137,7 +165,7 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
             && !sccache_tasks.contains("rediss://"),
         "Taskfile must not retain Redis sccache wiring"
     );
-    let dockerignore = read(".dockerignore");
+    let dockerignore = RepositoryFixture::repository_root().read(".dockerignore");
     assert!(
         dockerignore.lines().any(|line| line == ".nook"),
         "ignored local credentials must never enter a Docker build context"
@@ -147,14 +175,15 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
         "nook-app/nook-platform/nook-wasm/Dockerfile.dockerignore",
     ] {
         assert!(
-            read(dockerfile_ignore)
+            RepositoryFixture::repository_root()
+                .read(dockerfile_ignore)
                 .lines()
                 .any(|line| line == "**/docker-bake.hcl"),
             "{dockerfile_ignore} must keep Bake policy out of source-sensitive Rust COPY layers"
         );
     }
 
-    let bake = read("nook-app/docker-bake.hcl");
+    let bake = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"SCCACHE_ENDPOINT\""));
     assert!(bake.contains("variable \"SCCACHE_BUCKET\""));
     assert!(bake.contains("variable \"SCCACHE_S3_MODE\""));
@@ -162,7 +191,8 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
     assert!(!bake.contains("extra-hosts"));
     assert!(!bake.contains("SCCACHE_REDIS"));
 
-    let rust_base = read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+    let rust_base = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     assert!(rust_base.contains("ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh"));
     assert!(rust_base.contains("ENV SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT}"));
     assert!(rust_base.contains("ENV SCCACHE_BUCKET=${SCCACHE_BUCKET}"));
@@ -176,14 +206,18 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
         "nook-app/nook-platform/docker/rust/product.Dockerfile",
     ] {
         assert!(
-            !read(path).contains("host.docker.internal")
-                && !read(path).contains("SCCACHE_REDIS_HOST_IP"),
+            !RepositoryFixture::repository_root()
+                .read(path)
+                .contains("host.docker.internal")
+                && !RepositoryFixture::repository_root()
+                    .read(path)
+                    .contains("SCCACHE_REDIS_HOST_IP"),
             "{path} must not route the compiler cache through the Docker host"
         );
     }
 
     assert!(
-        !repository_root()
+        !RepositoryFixture::repository_root()
             .join("nook-app/docker/resolve-docker-host-ip.sh")
             .exists()
     );
@@ -199,7 +233,8 @@ fn trusted_github_actions_share_compiler_objects_without_weakening_prs() -> anyh
 }
 
 fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
-    let action = read(".github/actions/nook-docker-setup/action.yml");
+    let action =
+        RepositoryFixture::repository_root().read(".github/actions/nook-docker-setup/action.yml");
     for required in [
         "sccache-access-key",
         "sccache-secret-key",
@@ -216,12 +251,14 @@ fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
     assert!(!action.contains("cloudflare-client"));
     assert!(!action.contains("ssh -fNT") && !action.contains("CACHE_SSH_PRIVATE_KEY"));
 
-    let cache_action = read(".github/actions/nook-cache-connect/action.yml");
+    let cache_action =
+        RepositoryFixture::repository_root().read(".github/actions/nook-cache-connect/action.yml");
     assert!(cache_action.contains("using: node24"));
     assert!(cache_action.contains("sccache-access-key"));
     assert!(cache_action.contains("sccache-secret-key"));
     assert!(!cache_action.contains("cloudflare"));
-    let cache_action_main = read(".github/actions/nook-cache-connect/main.js");
+    let cache_action_main =
+        RepositoryFixture::repository_root().read(".github/actions/nook-cache-connect/main.js");
     for required in [
         "mode: 0o700",
         "mode: 0o600",
@@ -249,6 +286,10 @@ fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
     assert!(!cache_action_main.contains("REDIS"));
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one credential contract verifies every hosted workflow"
+)]
 fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     for path in [
         ".github/workflows/agent-implement.yml",
@@ -256,7 +297,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         ".github/workflows/release.yml",
         ".github/workflows/rust-dependency-updates.yml",
     ] {
-        let workflow = read(path);
+        let workflow = RepositoryFixture::repository_root().read(path);
         for secret in [
             "NOOK_SCCACHE_ACCESS_KEY",
             "NOOK_SCCACHE_SECRET_KEY",
@@ -270,7 +311,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         }
     }
 
-    let main = read(".github/workflows/main.yml");
+    let main = RepositoryFixture::repository_root().read(".github/workflows/main.yml");
     assert!(
         main.matches("NOOK_SCCACHE_ACCESS_KEY").count() == 4
             && main.matches("NOOK_SCCACHE_SECRET_KEY").count() == 4
@@ -279,7 +320,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     );
     assert!(!main.contains("NOOK_CLOUDFLARE_ACCESS"));
 
-    let pr = read(".github/workflows/pr.yml");
+    let pr = RepositoryFixture::repository_root().read(".github/workflows/pr.yml");
     let pr_docker_setups = pr
         .matches("uses: ./.github/actions/nook-docker-setup")
         .count();
@@ -324,7 +365,8 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     );
     assert!(!pr.contains("NOOK_CACHE_REDIS_PASSWORD"));
 
-    let ecosystem = read(".github/workflows/rust-ecosystem-checks.yml");
+    let ecosystem =
+        RepositoryFixture::repository_root().read(".github/workflows/rust-ecosystem-checks.yml");
     let ecosystem_docker_setups = ecosystem
         .matches("uses: ./.github/actions/nook-docker-setup")
         .count();
@@ -334,37 +376,67 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         "Rust ecosystem Docker jobs must mount SeaweedFS sccache"
     );
     assert!(ecosystem.contains("isolated-cache-write: ${{ inputs.isolated_cache_write }}"));
-    let ecosystem_entry = read(".github/workflows/rust-ecosystem.yml");
+    let ecosystem_entry = RepositoryFixture::repository_root().read(".github/workflows/ci.yml");
     assert!(ecosystem_entry.contains(
         "isolated_cache_write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
     ));
 
-    let remote = read(".github/workflows/remote.yml");
-    let compiler_jobs = 2;
+    let remote = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");
+    let remote_compiler_jobs = [
+        ("task batch", "\n  batch:\n", "\n  web-verify:\n"),
+        (
+            "web verification",
+            "\n  web-verify:\n",
+            "\n  web-e2e-image:\n",
+        ),
+        ("browser image", "\n  web-e2e-image:\n", "\n  web-e2e:\n"),
+    ];
+    let remote_compiler_credentials = [
+        "NOOK_SCCACHE_REMOTE_ACCESS_KEY",
+        "NOOK_SCCACHE_REMOTE_SECRET_KEY",
+        "NOOK_SCCACHE_REMOTE_BUCKET",
+        "NOOK_SCCACHE_ENDPOINT",
+    ];
+    assert!(remote.contains("on:\n  workflow_dispatch:") && !remote.contains("pull_request:"));
+    for &(job_name, start, end) in &remote_compiler_jobs {
+        let job = remote
+            .split_once(start)
+            .and_then(|(_, tail)| tail.split_once(end))
+            .map(|(job, _)| job)
+            .with_context(|| format!("remote workflow must keep the {job_name} job"))?;
+        assert!(
+            job.contains("uses: ./.github/actions/nook-docker-setup"),
+            "trusted remote compiler job {job_name} must own Docker setup"
+        );
+        assert!(
+            job.contains("runs-on:")
+                && job.contains("vars.NOOK_RUNS_ON")
+                && job.contains("'nook-k0s'"),
+            "trusted remote compiler job {job_name} must remain on the private ARC pool"
+        );
+        for credential in remote_compiler_credentials {
+            assert!(
+                job.contains(credential),
+                "trusted remote compiler job {job_name} must receive {credential}"
+            );
+        }
+    }
     assert!(remote.contains("if: inputs.task == 'rust-cache:promote'"));
-    assert_eq!(
-        remote.matches("NOOK_SCCACHE_REMOTE_ACCESS_KEY").count(),
-        compiler_jobs
-    );
-    assert_eq!(
-        remote.matches("NOOK_SCCACHE_REMOTE_SECRET_KEY").count(),
-        compiler_jobs
-    );
-    assert_eq!(
-        remote.matches("NOOK_SCCACHE_REMOTE_BUCKET").count(),
-        compiler_jobs
-    );
-    assert_eq!(
-        remote.matches("NOOK_SCCACHE_ENDPOINT").count(),
-        compiler_jobs
-    );
+    for credential in remote_compiler_credentials {
+        assert_eq!(
+            remote.matches(credential).count(),
+            remote_compiler_jobs.len(),
+            "only enumerated trusted remote compiler jobs may receive {credential}"
+        );
+    }
     assert!(remote.contains(
         "isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}"
     ));
-    let remote_batch = read(".github/scripts/remote-task-batch.sh");
+    let remote_batch =
+        RepositoryFixture::repository_root().read(".github/scripts/remote-task-batch.sh");
     assert!(remote_batch.contains("env HIVE_CACHE_TO= task hive:verify"));
 
-    let hive = read(".github/workflows/hive.yml");
+    let hive = RepositoryFixture::repository_root().read(".github/workflows/hive.yml");
     assert!(hive.contains("NOOK_SCCACHE_ACCESS_KEY"));
     assert!(hive.contains("NOOK_SCCACHE_SECRET_KEY"));
     assert!(hive.contains("uses: ./.github/actions/nook-docker-setup"));
@@ -377,9 +449,10 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
 }
 
 fn assert_rust_build_cache_boundary() {
-    let bake = read("nook-app/docker-bake.hcl");
-    let app_tasks = read("nook-app/Taskfile.yml");
-    let platform_tasks = read("nook-app/nook-platform/Taskfile.yml");
+    let bake = RepositoryFixture::repository_root().read("nook-app/docker-bake.hcl");
+    let app_tasks = RepositoryFixture::repository_root().read("nook-app/Taskfile.yml");
+    let platform_tasks =
+        RepositoryFixture::repository_root().read("nook-app/nook-platform/Taskfile.yml");
     let sccache_tasks = format!("{app_tasks}\n{platform_tasks}");
     assert!(!bake.contains("SCCACHE_S3_ACCESS_KEY"));
     assert!(!bake.contains("secret =") && !bake.contains("SCCACHE_REDIS"));
@@ -404,7 +477,8 @@ fn assert_rust_build_cache_boundary() {
         "sccache stats must paginate the full bucket and stream per-page progress"
     );
 
-    let wrapper = read("nook-app/nook-platform/docker/sccache-wrapper.sh");
+    let wrapper = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/sccache-wrapper.sh");
     assert!(wrapper.contains("/run/secrets/sccache_s3_access_key"));
     assert!(wrapper.contains("/run/secrets/sccache_s3_secret_key"));
     assert!(wrapper.contains("NOOK_SCCACHE_S3_MODE"));
@@ -413,7 +487,8 @@ fn assert_rust_build_cache_boundary() {
     assert!(wrapper.contains("exec /usr/local/bin/sccache \"$@\""));
     assert!(!wrapper.contains("REDIS"));
 
-    let rust_base = read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+    let rust_base = RepositoryFixture::repository_root()
+        .read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     assert!(rust_base.contains("RUSTC_WRAPPER=/usr/local/bin/nook-sccache"));
     assert!(rust_base.contains("NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}"));
     assert!(rust_base.contains("SCCACHE_IGNORE_SERVER_IO_ERROR=1"));
@@ -422,7 +497,7 @@ fn assert_rust_build_cache_boundary() {
     assert!(app_tasks.contains("--set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'"));
 
     let path = "nook-app/nook-platform/docker/rust/product.Dockerfile";
-    let dockerfile = read(path);
+    let dockerfile = RepositoryFixture::repository_root().read(path);
     let reports = dockerfile.matches("nook-sccache-report ").count();
     assert!(
         reports > 0

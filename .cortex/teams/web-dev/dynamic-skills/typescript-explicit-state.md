@@ -93,10 +93,10 @@ mutable flags create the same problem.
   `Present`/`Absent` wrappers, and `valueFromState` merely rename `undefined`;
   they do not explain why a value is absent or what transition makes it
   available.
-- Never introduce a hand-rolled TypeScript `Result<T>` utility. Rust `Result`
-  is language-provided and fine. TypeScript codecs may use a decode-local
-  outcome type; runtime failures use domain throws or command-specific unions.
-  See [typescript-domain-structure.md](typescript-domain-structure.md).
+- Use `neverthrow` `Result<T, E>` for TypeScript failures.
+- Keep accumulated codec field issues in the concrete error type.
+- Rust uses its standard Result.
+- Follow [TypeScript domain structure](typescript-domain-structure.md) for failure propagation.
 - Same-prefix closed values almost always belong on a nested object plus an
   operation enum. Do not flatten `AgentStatsAssemble` / `AgentStatsValidate`
   into one sibling list. Field allow-lists must be enums, not string sets.

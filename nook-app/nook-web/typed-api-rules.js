@@ -8,6 +8,7 @@ export const typedApiSourceFiles = [
 
 export const untrustedInputAdapterFiles = [
   "nook-web-app/src/landing/github-stars-state.ts",
+  "nook-web-app/src/landing/structured-data.ts",
   "nook-web-extension/src/chrome.d.ts",
   "nook-web-extension/src/content/simple-vault-bridge.ts",
   "nook-web-extension/src/content/webauthn-content.ts",
@@ -50,9 +51,7 @@ export const untrustedInputAdapterFiles = [
   "nook-web-extension/src/popup/PopupApp.svelte",
   // WebAssembly initialization is the sole shared generic module boundary.
   "nook-web-shared/src/extension/companion-ready.ts",
-  "nook-web-shared/src/extension/companion-launcher-message-adapter.ts",
   "nook-web-shared/src/extension/extension-connect-scope.ts",
-  "nook-web-shared/src/extension/lifecycle-runtime-message-adapter.ts",
   "nook-web-shared/src/extension/runtime-messages.ts",
   "nook-web-shared/src/vault-app/lib/auth/icloud/auth-errors.ts",
   "nook-web-shared/src/vault-app/lib/auth/icloud/cloudkit-runtime.ts",

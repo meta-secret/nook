@@ -19,6 +19,13 @@ import {
 } from '../../../nook-web-extension/src/lib/login-fill-messages'
 import { WebsiteAuthenticatorBackupAttachMessageType } from '../../../nook-web-extension/src/lib/enrollment-messages'
 import { GeneratePasswordRequestType } from '../../../nook-web-shared/src/extension/runtime-messages'
+import type { AuthenticationOutcomeObservationView } from '../../../nook-web-extension/src/lib/outcome-evidence-messages'
+
+declare global {
+  interface Window {
+    __nookDemoRuntimeMessageTypes?: string[]
+  }
+}
 
 type DemoLoginSaveResponses = {
   offerAvailable: WebsiteLoginSaveOfferResponse['kind']
@@ -68,13 +75,13 @@ export const demoDomainEnumArgs = {
     pendingUnavailable: 'unavailable',
     completed: 'completed',
   } satisfies DemoLoginSaveResponses,
-}
+} as const
 
 export type ChromeMessage = { message: string }
 
 export type DemoChromeStubArgs = {
   localizedMessages: Record<string, ChromeMessage>
-  loginSaveCreateDecision: NookWebsiteLoginSaveDecision
+  loginSaveCreateDecision: NookWebsiteLoginSaveDecision.Create
   sufficientAuthenticationOutcome: AuthenticationOutcomeVerdict
   insufficientAuthenticationOutcome: AuthenticationOutcomeVerdict
   generatePasswordMessageType: GeneratePasswordRequestType
@@ -91,6 +98,7 @@ export type DemoChromeStubArgs = {
     fillTotpAction: AuthenticationWorkflowAction.FillTotp
     createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey
     saveBackupCodesAction: AuthenticationWorkflowAction.SaveBackupCodes
+    explicitUserApproval: AuthenticationApprovalRequirement
   }
   authenticatorProtocol: {
     optionsMessageType: WebsiteAuthenticatorOptionsMessageType
@@ -123,7 +131,11 @@ export type DemoChromeStubArgs = {
 export function installDemoChromeStub(args: DemoChromeStubArgs) {
   type RuntimeMessage = {
     type: string
-    payload?: { secretId?: string; observations?: unknown[] }
+    payload?: {
+      secretId?: string
+      observations?: unknown[]
+      observation?: AuthenticationOutcomeObservationView
+    }
   }
   type RuntimeCallback = (response?: unknown) => void
   type AuthenticationSnapshotResponse = {
@@ -292,16 +304,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             expiresAt: Date.now() + 30_000,
           }
         case 'nook:authentication-outcome-classify': {
-          const observation = (
-            message as {
-              payload?: {
-                observation?: {
-                  successMarkerPresent?: boolean
-                  errorMarkerPresent?: boolean
-                }
-              }
-            }
-          ).payload?.observation
+          const observation = message.payload?.observation
           if (observation?.errorMarkerPresent) {
             return {
               ok: true,
@@ -396,16 +399,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             },
           }
         case 'nook:authentication-outcome-classify': {
-          const observation = (
-            message as {
-              payload?: {
-                observation?: {
-                  successMarkerPresent?: boolean
-                  errorMarkerPresent?: boolean
-                }
-              }
-            }
-          ).payload?.observation
+          const observation = message.payload?.observation
           if (observation?.errorMarkerPresent) {
             return {
               ok: true,
@@ -432,20 +426,22 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             },
           }
         }
-        case 'nook:website-login-save-offer':
+        case 'nook:website-login-save-offer': {
+          const offer: StagedSaveOffer = {
+            offerId: 'demo-save-offer',
+            decision: loginSaveCreateDecision,
+            vaultStoreId: 'demo-vault',
+            vaultName: 'Demo vault',
+          }
           stagedOffer = {
             kind: StagedOfferKind.Present,
-            offer: {
-              offerId: 'demo-save-offer',
-              decision: loginSaveCreateDecision,
-              vaultStoreId: 'demo-vault',
-              vaultName: 'Demo vault',
-            },
+            offer,
           }
           return {
             kind: loginSaveResponses.offerAvailable,
-            offer: stagedOffer.offer,
+            offer,
           }
+        }
         case 'nook:website-login-save-pending':
           return stagedOffer.kind === StagedOfferKind.Present
             ? {
@@ -609,15 +605,24 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       return {
         workflow: response,
         loginMatches: { kind: 'unavailable' },
+        selectedFacts: { state: 'notApplicable' },
       }
     }
     const observedFacts = observations[observationIndex]
+    const observedAuthenticator =
+      observedFacts &&
+      typeof observedFacts === 'object' &&
+      'authenticator' in observedFacts &&
+      observedFacts.authenticator &&
+      typeof observedFacts.authenticator === 'object'
+        ? observedFacts.authenticator
+        : {}
     const selectedFacts =
       passkeyPilotFlow && observedFacts
         ? {
             ...observedFacts,
             authenticator: {
-              ...observedFacts.authenticator,
+              ...observedAuthenticator,
               passkeyAccountAvailability: 'ready',
             },
           }
@@ -626,6 +631,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       return {
         workflow: response,
         loginMatches: { kind: 'unavailable' },
+        selectedFacts: { state: 'notApplicable' },
       }
     }
     const loginMatches = loginPilotFlow
@@ -633,7 +639,11 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       : savePilotFlow
         ? { kind: 'ready' as const, count: 1 }
         : { kind: 'unavailable' as const }
-    return { workflow: response, loginMatches, selectedFacts }
+    return {
+      workflow: response,
+      loginMatches,
+      selectedFacts: { state: 'selected', facts: selectedFacts },
+    }
   }
 
   if (barcodeRawValue) {
@@ -669,13 +679,10 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       },
       sendMessage(message: RuntimeMessage, callback?: RuntimeCallback) {
         if (recordRuntimeMessageTypes && message.type) {
-          const demoWindow = globalThis as unknown as {
-            __nookDemoRuntimeMessageTypes?: string[]
-          }
-          demoWindow.__nookDemoRuntimeMessageTypes = ((v) => (v ? v : []))(
-            demoWindow.__nookDemoRuntimeMessageTypes,
+          window.__nookDemoRuntimeMessageTypes = ((v) => (v ? v : []))(
+            window.__nookDemoRuntimeMessageTypes,
           )
-          demoWindow.__nookDemoRuntimeMessageTypes.push(message.type)
+          window.__nookDemoRuntimeMessageTypes.push(message.type)
         }
         const responseRequest: AuthenticationSnapshotResponseAdapterRequest = {
           message,

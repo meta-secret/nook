@@ -1,24 +1,24 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  isLoginPickerCancelMessage,
-  isLoginPickerQueryMessage,
-  isLoginPickerSelectMessage,
-  isWebsiteLoginCanceledMessage,
-  isWebsiteLoginPickerOpenMessage,
-  isWebsiteLoginSelectedMessage,
   MAX_LOGIN_SEARCH_LENGTH,
+  LoginPickerCancelMessage as LoginPickerCancelMessageSchema,
+  LoginPickerQueryMessage as LoginPickerQueryMessageSchema,
+  LoginPickerSelectMessage as LoginPickerSelectMessageSchema,
+  WebsiteLoginCanceledMessage as WebsiteLoginCanceledMessageSchema,
+  WebsiteLoginPickerOpenMessage as WebsiteLoginPickerOpenMessageSchema,
+  WebsiteLoginSelectedMessage as WebsiteLoginSelectedMessageSchema,
 } from '../src/lib/login-picker-messages'
 
 describe('login picker runtime messages', () => {
   test('accepts open messages with a non-empty origin', () => {
     expect(
-      isWebsiteLoginPickerOpenMessage({
+      WebsiteLoginPickerOpenMessageSchema.is({
         type: 'nook:website-login-picker-open',
         payload: { origin: 'https://login.example.test' },
       }),
     ).toBe(true)
     expect(
-      isWebsiteLoginPickerOpenMessage({
+      WebsiteLoginPickerOpenMessageSchema.is({
         type: 'nook:website-login-picker-open',
         payload: { origin: '' },
       }),
@@ -27,13 +27,13 @@ describe('login picker runtime messages', () => {
 
   test('bounds query length and requires a request id', () => {
     expect(
-      isLoginPickerQueryMessage({
+      LoginPickerQueryMessageSchema.is({
         type: 'nook:login-picker-query',
         payload: { requestId: 'req-1', query: 'alice' },
       }),
     ).toBe(true)
     expect(
-      isLoginPickerQueryMessage({
+      LoginPickerQueryMessageSchema.is({
         type: 'nook:login-picker-query',
         payload: {
           requestId: 'req-1',
@@ -45,7 +45,7 @@ describe('login picker runtime messages', () => {
 
   test('requires select and cancel identity fields', () => {
     expect(
-      isLoginPickerSelectMessage({
+      LoginPickerSelectMessageSchema.is({
         type: 'nook:login-picker-select',
         payload: {
           requestId: 'req-1',
@@ -55,7 +55,7 @@ describe('login picker runtime messages', () => {
       }),
     ).toBe(true)
     expect(
-      isLoginPickerCancelMessage({
+      LoginPickerCancelMessageSchema.is({
         type: 'nook:login-picker-cancel',
         payload: { requestId: 'req-1' },
       }),
@@ -64,7 +64,7 @@ describe('login picker runtime messages', () => {
 
   test('accepts selected and canceled page callbacks', () => {
     expect(
-      isWebsiteLoginSelectedMessage({
+      WebsiteLoginSelectedMessageSchema.is({
         type: 'nook:website-login-selected',
         payload: {
           origin: 'https://login.example.test',
@@ -78,7 +78,7 @@ describe('login picker runtime messages', () => {
       }),
     ).toBe(true)
     expect(
-      isWebsiteLoginCanceledMessage({
+      WebsiteLoginCanceledMessageSchema.is({
         type: 'nook:website-login-canceled',
         payload: {
           origin: 'https://login.example.test',

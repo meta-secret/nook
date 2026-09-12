@@ -133,10 +133,17 @@ When you see `Option<T>`, ask:
   - Prefer methods that validate, transform, or return a domain state.
   - Match the enum directly so new variants remain compiler-visible.
 - Narrow enum variants before reading their payloads.
-  - Prefer a positive `let ... else` followed by simple named-field checks when
-    every other variant is intentionally handled the same way.
   - Use an exhaustive `match` when variants represent evolving domain decisions
     or require distinct behavior.
+  - Prefer an expression-oriented `match` that shows genuine domain alternatives
+    symmetrically instead of a guard return followed by the success path.
+  - Let each arm produce the operation's result when the alternatives are peers.
+  - Prefer `if let` or positive `let ... else` for interrelated or admission
+    branches when every unmatched variant intentionally receives the same handling.
+  - Keep ordinary failure propagation with `?`.
+  - Keep an early return when it clearly expresses admission or control flow.
+  - Apply [decision locality](../../../shared/dynamic-skills/function-ownership.md#decision-locality)
+    when nesting reveals decisions that belong to other owners.
 - Use a membership collection for uniqueness checks.
   - Prefer `HashSet::insert` when rejecting duplicate identifiers.
 - Group a focused vocabulary under its owning module.
@@ -168,6 +175,11 @@ When you see `Option<T>`, ask:
 - Keep raw YAML or JSON strings at I/O boundaries. Parse them into typed Rust
   records immediately after deserialization, and serialize typed records back to
   wire strings when crossing storage, provider, or JS boundaries.
+- Deserialize known JSON schemas directly into concrete serde structs or enums.
+- Use `serde_json::Result<T>` for codecs whose only failure is serde JSON.
+- Return the decoded record from internal APIs instead of its JSON string.
+- Keep `JsValue` conversion at an externally required WASM or browser ABI.
+- Convert that ABI value before calling domain or application methods.
 - Tests of a known JSON contract serialize and deserialize through the concrete
   Rust wire or domain type, then assert typed fields and enum variants.
 - Raw `serde_json::Value` is reserved for tests whose actual subject is unknown,
@@ -222,6 +234,8 @@ When you see `Option<T>`, ask:
 - Do not add `is_*` methods that only decode one enum variant into `bool`.
 - Do not use `let ... else` when doing so would silently collapse variants that
   need exhaustive domain handling.
+- Do not force boolean predicates into `match` or invent enum wrappers for symmetry.
+- Do not deepen nested matches merely to make branches look symmetrical.
 - Avoid negated compound conditions and deeply nested destructuring patterns.
 - Do not scan every prior element when a membership collection expresses the
   same uniqueness rule.
@@ -264,6 +278,33 @@ When you see `Option<T>`, ask:
 - Do not expose `Option<T>` through a `Tsify`-derived field or `wasm_bindgen`
   parameter or return.
 - Do not use `void` as a serialized field-state escape hatch.
+
+## Standard conversions
+
+Use standard conversion traits when converting one value into another has an
+obvious meaning. A one-input signature alone does not make an operation a
+conversion.
+
+### Required actions
+
+- Prefer `From<T>` for an infallible, value-preserving conversion from one
+  input value.
+- Prefer `TryFrom<T>` for the corresponding fallible conversion. Return a
+  concrete error that describes the failure.
+- Implement `From` or `TryFrom` on the destination type. Use their provided
+  `Into` or `TryInto` implementations at suitable call sites.
+- Preserve private validated construction inside conversion implementations.
+- Keep named methods for context-dependent policy or ambiguous interpretations.
+- Keep named operations for external effects or authorization-sensitive
+  capability transitions. Preserve their runtime freshness checks.
+
+### Prohibited actions
+
+- Do not convert every unary function into a conversion trait.
+- Do not panic or substitute a default to make a fallible conversion fit
+  `From<T>`.
+- Do not discard meaningful information to claim a value-preserving conversion.
+- Do not use a conversion trait to bypass validation or forge an advanced state.
 
 ## Enums instead of booleans
 

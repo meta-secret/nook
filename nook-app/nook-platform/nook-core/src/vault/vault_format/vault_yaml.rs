@@ -1,3 +1,5 @@
+use super::{VaultName, VaultStoreIdentity};
+use crate::RecordTypeDeclaration;
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::{
     AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, PasswordUnlockEntry, SecretId,
@@ -27,19 +29,16 @@ pub(super) struct StoredVaultYaml {
     #[serde(default, skip_serializing_if = "StoredVaultYaml::version_is_zero")]
     pub(super) vault_version: u64,
     /// Logical secret-store identity — same id on every provider replica of this vault.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(super) store_id: Option<String>,
+    #[serde(default, skip_serializing_if = "VaultStoreIdentity::is_unassigned")]
+    pub(super) store_id: VaultStoreIdentity,
     /// Human-readable vault label.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(super) name: Option<String>,
+    #[serde(default, skip_serializing_if = "VaultName::is_unnamed")]
+    pub(super) name: VaultName,
     /// Active unlock mechanism. Omitted on write when `Keys` (the default).
-    #[serde(default, skip_serializing_if = "StoredVaultYaml::unlock_is_keys")]
+    #[serde(default, skip_serializing_if = "VaultUnlock::is_keys")]
     pub(super) unlock: VaultUnlock,
     /// Grouped vault architecture modes.
-    #[serde(
-        default,
-        skip_serializing_if = "StoredVaultYaml::architecture_is_default"
-    )]
+    #[serde(default, skip_serializing_if = "VaultArchitecture::is_default")]
     pub(super) architecture: VaultArchitecture,
     #[serde(default)]
     pub(super) secrets: Vec<StoredSecretRecord>,
@@ -77,7 +76,7 @@ impl AuthYamlRecord {
             .unwrap_or(self.pk_id);
         Ok(StoredSecretRecord {
             key: SecretId::from_vault_record(&pk_id),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(
                 serde_json::to_string(&AuthEnvelopes {
                     secrets_key: AgeArmoredCiphertext::from_trusted_armored(self.secrets_key),
@@ -96,7 +95,7 @@ impl MembersYamlRecord {
             .unwrap_or(self.pk_id);
         Ok(StoredSecretRecord {
             key: SecretId::from_vault_record(&AuthKeyId::parse(&pk_id)?.member_record_key()),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(self.ciphertext),
         })
     }
@@ -110,14 +109,15 @@ impl StoredVaultYaml {
             // serialization boundary defensive even if a caller accidentally
             // mixes an IndexedDB wrapper into the vault record collection.
             if Self::is_local_device_wrapper(record.value.as_str()) {
-                if record.secret_type.is_some() {
+                if !record.secret_type.is_undeclared() {
                     return Err(VaultFormatError::InvalidAuthRecord(
                         "browser-local device wrapper cannot be a typed vault secret".to_owned(),
                     ));
                 }
                 continue;
             }
-            match VaultMetaRecord::classify(record)
+            match (record)
+                .classify()
                 .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?
             {
                 VaultMetaRecord::Join(..) => vault.joins.push(record.clone()),
@@ -159,14 +159,6 @@ impl StoredVaultYaml {
         Ok(records)
     }
 
-    pub(super) fn unlock_is_keys(unlock: &VaultUnlock) -> bool {
-        matches!(unlock, VaultUnlock::Keys)
-    }
-
-    pub(super) fn architecture_is_default(architecture: &VaultArchitecture) -> bool {
-        architecture == &VaultArchitecture::default()
-    }
-
     #[allow(clippy::trivially_copy_pass_by_ref)]
     pub(super) fn version_is_zero(version: &u64) -> bool {
         *version == 0
@@ -187,6 +179,7 @@ impl StoredVaultYaml {
 
 #[cfg(test)]
 mod tests {
+    use crate::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
     use crate::{DeviceIdentity, DeviceMode, DeviceSigningPublicKey, SecretType};
     use crate::{
         PasskeyDeviceProtectionMode, PasskeyRegistration, PasskeyRegistrationInput,
@@ -265,7 +258,7 @@ mod tests {
         let records = vec![
             StoredSecretRecord {
                 key: VaultYamlTestData::sid("github.com"),
-                secret_type: Some(SecretType::Login),
+                secret_type: RecordTypeDeclaration::Secret(SecretType::Login),
                 value: StoredRecordPayload::from_trusted("encrypted-user-secret".to_owned()),
             },
             VaultYamlTestData::auth_to_stored_record(AuthYamlRecord {
@@ -279,7 +272,7 @@ mod tests {
             })?,
             StoredSecretRecord {
                 key: VaultYamlTestData::sid(join_id),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_trusted(serde_json::to_string(&join_request)?),
             },
         ];
@@ -307,7 +300,7 @@ mod tests {
         let auth_id = format!("key_{}", "c".repeat(64));
         let records = vec![StoredSecretRecord {
             key: VaultYamlTestData::sid(&format!("member:{auth_id}")),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(
                 "-----BEGIN AGE ENCRYPTED FILE-----\nline\n-----END AGE ENCRYPTED FILE-----"
                     .to_owned(),
@@ -323,7 +316,10 @@ mod tests {
 
         let parsed = VaultYamlTestData::deserialize_stored_yaml(stored.as_str())?;
         assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].key.as_str(), format!("member:{auth_id}"));
+        assert_eq!(
+            parsed.first().map(|record| record.key.as_str()),
+            Some(format!("member:{auth_id}").as_str())
+        );
         Ok(())
     }
 
@@ -331,7 +327,7 @@ mod tests {
     fn invalid_reserved_sentinel_share_never_enters_secret_yaml() {
         let invalid = StoredSecretRecord {
             key: VaultYamlTestData::sid("sentinel_share:0123456789abcdef"),
-            secret_type: None,
+            secret_type: RecordTypeDeclaration::Undeclared,
             value: StoredRecordPayload::from_trusted(r#"{"version":3}"#.to_owned()),
         };
         assert!(matches!(
@@ -366,7 +362,7 @@ mod tests {
         );
         let invalid_typed = StoredSecretRecord {
             key: VaultYamlTestData::sid("typed_wrapper_shape"),
-            secret_type: Some(SecretType::Login),
+            secret_type: RecordTypeDeclaration::Secret(SecretType::Login),
             value: StoredRecordPayload::from_trusted(
                 r#"{"version":4,"protection":"passkey-wrapped-local","credentialId":7,"userHandle":"local","prfInput":"local","kdf":"HKDF-SHA256"}"#.to_owned(),
             ),
@@ -384,7 +380,7 @@ mod tests {
             .enumerate()
             .map(|(index, value)| StoredSecretRecord {
                 key: VaultYamlTestData::sid(&format!("device_identity_wrapped_{index}")),
-                secret_type: None,
+                secret_type: RecordTypeDeclaration::Undeclared,
                 value: StoredRecordPayload::from_trusted(value),
             })
             .collect::<Vec<_>>();
@@ -419,7 +415,13 @@ mod tests {
         let keys = crate::VaultKeys::generate()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2.into())?;
+        let shares = SentinelShareEnvelope::create_sentinel_share_records(
+            CreateSentinelShareRecordsRequest {
+                keys: &keys,
+                participants: &[first, second],
+                threshold: 2.into(),
+            },
+        )?;
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             crate::SentinelPolicy {
@@ -445,7 +447,10 @@ mod tests {
         let parsed = VaultYamlTestData::deserialize_stored_yaml(yaml.as_str())?;
         assert_eq!(parsed, shares);
         for record in &parsed {
-            assert!(crate::is_sentinel_share_stored_record(record)?);
+            assert!(matches!(
+                (record).classify()?,
+                VaultMetaRecord::SentinelShare(..)
+            ));
         }
         Ok(())
     }
@@ -469,9 +474,15 @@ mod tests {
 
         let parsed = VaultYamlTestData::deserialize_stored_yaml(yaml.as_str())?;
         assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].key.as_str(), auth_id);
+        assert_eq!(
+            parsed.first().map(|record| record.key.as_str()),
+            Some(auth_id.as_str())
+        );
 
-        let envelopes = crate::AuthEnvelopes::parse(parsed[0].value.as_str())?;
+        let record = parsed
+            .first()
+            .unwrap_or_else(|| panic!("vault YAML fixture must contain one record"));
+        let envelopes = crate::AuthEnvelopes::parse(record.value.as_str())?;
         assert!(
             envelopes
                 .secrets_key

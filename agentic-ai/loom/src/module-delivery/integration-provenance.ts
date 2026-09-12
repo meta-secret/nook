@@ -1,17 +1,13 @@
 import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, readlinkSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
-import { gitText, runModuleDeliveryGit } from './git-command.ts';
-import { pathExists } from './workspace-paths.ts';
-import {
-  assertPreparedModuleWorktreeIdentity,
-  cleanupModuleWorktree,
-} from './workspace.ts';
+import { ModuleRepositoryGit } from './git-command.ts';
+import { FilesystemPathPresence } from './workspace-paths.ts';
+import { ModuleWorktree } from './workspace.ts';
 import {
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryGenerationFenceKind,
-  assertModuleDeliveryAdmissionStateAuthority,
-  recordModuleDeliveryAttemptDisposition,
+  ModuleGenerationAuthority,
 } from './admission.ts';
 
 import type { GitCommandRequest } from './git-command.ts';
@@ -212,8 +208,659 @@ export type CleanupModuleIntegrationRequest = Readonly<{
 
 export type CleanupModuleIntegrationResult = Readonly<{ removed: boolean }>;
 
-export function moduleDeliveryEvidenceSha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
+/** Owns the module integration provenance registry registry and its capability transitions. */
+export class ModuleIntegrationProvenanceRegistry {
+  private constructor() {}
+  private static readonly PROVENANCE = new WeakMap<
+    ModuleIntegrationState,
+    ModuleIntegrationProvenance
+  >();
+
+  private static readonly SESSIONS = new WeakMap<
+    ModuleIntegrationCleanupHandle,
+    ModuleIntegrationSession
+  >();
+
+  private static readonly RETIRED_STATES =
+    new WeakSet<ModuleIntegrationState>();
+
+  static moduleDeliveryEvidenceSha256(value: string): string {
+    return createHash('sha256').update(value).digest('hex');
+  }
+
+  private static gitRequest(
+    invocation: ModuleGitInvocation,
+  ): GitCommandRequest {
+    if ('allowFailure' in invocation) {
+      return {
+        cwd: invocation.cwd,
+        args: invocation.args,
+        allowFailure: invocation.allowFailure,
+      };
+    }
+    return { cwd: invocation.cwd, args: invocation.args };
+  }
+
+  private static gitBytes(invocation: ModuleGitInvocation): Buffer {
+    return ModuleRepositoryGit.runModuleDeliveryGit(
+      ModuleIntegrationProvenanceRegistry.gitRequest(invocation),
+    ).stdout;
+  }
+
+  private static digestBuffers(buffers: readonly Buffer[]): string {
+    const hash = createHash('sha256');
+    for (const bytes of buffers) {
+      const length = Buffer.allocUnsafe(8);
+      length.writeBigUInt64BE(BigInt(bytes.length));
+      hash.update(length);
+      hash.update(bytes);
+    }
+    return hash.digest('hex');
+  }
+
+  private static nullSeparatedPaths(bytes: Buffer): readonly string[] {
+    if (bytes.length === 0) return [];
+    if (bytes.at(-1) !== 0) {
+      throw new Error('Repository path list requires NUL termination.');
+    }
+    const paths: string[] = [];
+    let start = 0;
+    for (let index = 0; index < bytes.length; index += 1) {
+      if (bytes[index] !== 0) continue;
+      const encoded = bytes.subarray(start, index);
+      const path = encoded.toString('utf8');
+      if (!Buffer.from(path, 'utf8').equals(encoded)) {
+        throw new Error('Repository path is not valid UTF-8.');
+      }
+      paths.push(path);
+      start = index + 1;
+    }
+    return paths;
+  }
+
+  private static assertNoSymlinkAncestor(
+    inspection: SymlinkAncestorInspection,
+  ): void {
+    let parent = dirname(inspection.absolutePath);
+    while (parent !== inspection.root) {
+      if (lstatSync(parent).isSymbolicLink()) {
+        throw new Error('Repository entry has a symlink ancestor.');
+      }
+      parent = dirname(parent);
+    }
+  }
+
+  private static entryFingerprint(
+    request: EntryFingerprintRequest,
+  ): EntryFingerprint {
+    const absolutePath = resolve(request.repositoryRoot, request.path);
+    const fromRoot = relative(request.repositoryRoot, absolutePath);
+    if (fromRoot === '' || fromRoot.startsWith('..') || isAbsolute(fromRoot)) {
+      throw new Error('Repository entry escapes its root.');
+    }
+    const ancestorInspection: SymlinkAncestorInspection = {
+      root: request.repositoryRoot,
+      absolutePath,
+    };
+    ModuleIntegrationProvenanceRegistry.assertNoSymlinkAncestor(
+      ancestorInspection,
+    );
+    const pathTag = Buffer.from(`path:${request.path}`, 'utf8');
+    if (!FilesystemPathPresence.exists(absolutePath)) {
+      return {
+        content: [pathTag, Buffer.from('content:missing', 'utf8')],
+        metadata: [pathTag, Buffer.from('kind:missing', 'utf8')],
+      };
+    }
+    const metadata = lstatSync(absolutePath, BIGINT_STATS_OPTIONS);
+    const kind = metadata.isSymbolicLink()
+      ? 'symlink'
+      : metadata.isFile()
+        ? 'file'
+        : metadata.isDirectory()
+          ? 'directory'
+          : 'other';
+    const metadataTag = Buffer.from(
+      [
+        `kind:${kind}`,
+        `mode:${metadata.mode.toString(8)}`,
+        `dev:${metadata.dev.toString()}`,
+        `ino:${metadata.ino.toString()}`,
+        `size:${metadata.size.toString()}`,
+        `mtime:${metadata.mtimeNs.toString()}`,
+        `ctime:${metadata.ctimeNs.toString()}`,
+      ].join('|'),
+      'utf8',
+    );
+    if (kind === 'symlink') {
+      return {
+        content: request.includeContent
+          ? [
+              pathTag,
+              Buffer.from('content:symlink-target', 'utf8'),
+              Buffer.from(readlinkSync(absolutePath), 'utf8'),
+            ]
+          : [],
+        metadata: [pathTag, metadataTag],
+      };
+    }
+    if (kind === 'file') {
+      return {
+        content: request.includeContent
+          ? [
+              pathTag,
+              Buffer.from('content:file-bytes', 'utf8'),
+              readFileSync(absolutePath),
+            ]
+          : [],
+        metadata: [pathTag, metadataTag],
+      };
+    }
+    return {
+      content: [pathTag, Buffer.from(`content:${kind}`, 'utf8')],
+      metadata: [pathTag, metadataTag],
+    };
+  }
+
+  private static repositoryFingerprint(
+    paths: RepositoryPathSet,
+  ): RepositoryFingerprint {
+    const content: Buffer[] = [];
+    const metadata: Buffer[] = [];
+    for (const path of [...paths.paths].sort()) {
+      const request: EntryFingerprintRequest = {
+        repositoryRoot: paths.repositoryRoot,
+        path,
+        includeContent: paths.includeContent,
+      };
+      const fingerprint =
+        ModuleIntegrationProvenanceRegistry.entryFingerprint(request);
+      content.push(...fingerprint.content);
+      metadata.push(...fingerprint.metadata);
+    }
+    return {
+      contentDigest: ModuleIntegrationProvenanceRegistry.digestBuffers(content),
+      metadataDigest:
+        ModuleIntegrationProvenanceRegistry.digestBuffers(metadata),
+    };
+  }
+
+  private static repositoryPaths(repositoryRoot: string): readonly string[] {
+    const trackedInvocation: ModuleGitInvocation = {
+      cwd: repositoryRoot,
+      args: ['ls-files', '-z'],
+    };
+    const untrackedInvocation: ModuleGitInvocation = {
+      cwd: repositoryRoot,
+      args: ['ls-files', '--others', '--exclude-standard', '-z'],
+    };
+    return [
+      ...new Set([
+        ...ModuleIntegrationProvenanceRegistry.nullSeparatedPaths(
+          ModuleIntegrationProvenanceRegistry.gitBytes(trackedInvocation),
+        ),
+        ...ModuleIntegrationProvenanceRegistry.nullSeparatedPaths(
+          ModuleIntegrationProvenanceRegistry.gitBytes(untrackedInvocation),
+        ),
+      ]),
+    ];
+  }
+
+  private static relevantRefsDigest(repositoryRoot: string): string {
+    const invocation: ModuleGitInvocation = {
+      cwd: repositoryRoot,
+      args: [
+        'for-each-ref',
+        '--sort=refname',
+        '--format=%(refname)%00%(objectname)%00%(symref)',
+        'refs',
+      ],
+    };
+    const fields: Buffer[] = [];
+    for (const record of ModuleIntegrationProvenanceRegistry.gitBytes(
+      invocation,
+    )
+      .toString('utf8')
+      .split('\n')) {
+      if (record.length === 0) continue;
+      const [ref = '', objectId = '', symref = ''] = record.split('\0');
+      if (/^refs\/nook\/module-delivery\//u.test(ref)) continue;
+      if (ref.length === 0 || objectId.length === 0)
+        throw new Error('Repository ref fingerprint record is malformed.');
+      fields.push(
+        Buffer.from(ref, 'utf8'),
+        Buffer.from(objectId, 'ascii'),
+        Buffer.from(symref, 'utf8'),
+      );
+    }
+    return ModuleIntegrationProvenanceRegistry.digestBuffers(fields);
+  }
+
+  private static captureRepositorySnapshot(
+    request: RepositorySnapshotRequest,
+  ): SourceRepositorySnapshot {
+    const repositoryRoot = request.repositoryRoot;
+    const headInvocation: ModuleGitInvocation = {
+      cwd: repositoryRoot,
+      args: ['rev-parse', '--verify', 'HEAD^{commit}'],
+    };
+    const branchInvocation: ModuleGitInvocation = {
+      cwd: repositoryRoot,
+      args: ['symbolic-ref', '--quiet', 'HEAD'],
+      allowFailure: true,
+    };
+    const branch = ModuleRepositoryGit.runModuleDeliveryGit(
+      ModuleIntegrationProvenanceRegistry.gitRequest(branchInvocation),
+    );
+    const indexPathInvocation: ModuleGitInvocation = {
+      cwd: repositoryRoot,
+      args: ['rev-parse', '--path-format=absolute', '--git-path', 'index'],
+    };
+    const configInvocation: ModuleGitInvocation = {
+      cwd: repositoryRoot,
+      args: ['config', '--local', '--null', '--list'],
+    };
+    const pathSet: RepositoryPathSet = {
+      repositoryRoot,
+      paths:
+        ModuleIntegrationProvenanceRegistry.repositoryPaths(repositoryRoot),
+      includeContent: request.includeContent,
+    };
+    const fingerprint =
+      ModuleIntegrationProvenanceRegistry.repositoryFingerprint(pathSet);
+    const indexPath = ModuleRepositoryGit.gitText(
+      ModuleRepositoryGit.runModuleDeliveryGit(
+        ModuleIntegrationProvenanceRegistry.gitRequest(indexPathInvocation),
+      ),
+    );
+    return {
+      headCommit: ModuleRepositoryGit.gitText(
+        ModuleRepositoryGit.runModuleDeliveryGit(
+          ModuleIntegrationProvenanceRegistry.gitRequest(headInvocation),
+        ),
+      ),
+      symbolicHead:
+        branch.exitCode === 0
+          ? ModuleRepositoryGit.gitText(branch)
+          : '(detached)',
+      contentDigest: fingerprint.contentDigest,
+      metadataDigest: fingerprint.metadataDigest,
+      indexDigest: ModuleIntegrationProvenanceRegistry.digestBuffers([
+        readFileSync(indexPath),
+      ]),
+      refsDigest:
+        ModuleIntegrationProvenanceRegistry.relevantRefsDigest(repositoryRoot),
+      configDigest: ModuleIntegrationProvenanceRegistry.digestBuffers([
+        ModuleIntegrationProvenanceRegistry.gitBytes(configInvocation),
+      ]),
+    };
+  }
+
+  static captureSourceSnapshot(
+    repositoryRoot: string,
+  ): SourceRepositorySnapshot {
+    const request: RepositorySnapshotRequest = {
+      repositoryRoot,
+      includeContent: true,
+    };
+    return ModuleIntegrationProvenanceRegistry.captureRepositorySnapshot(
+      request,
+    );
+  }
+
+  static assertSourceSnapshot(expectation: SourceSnapshotExpectation): void {
+    const request: RepositorySnapshotRequest = {
+      repositoryRoot: expectation.repositoryRoot,
+      includeContent: false,
+    };
+    const current =
+      ModuleIntegrationProvenanceRegistry.captureRepositorySnapshot(request);
+    if (
+      current.headCommit !== expectation.expected.headCommit ||
+      current.symbolicHead !== expectation.expected.symbolicHead ||
+      current.metadataDigest !== expectation.expected.metadataDigest ||
+      current.indexDigest !== expectation.expected.indexDigest ||
+      current.refsDigest !== expectation.expected.refsDigest ||
+      current.configDigest !== expectation.expected.configDigest
+    ) {
+      throw new Error(
+        'Source repository changed after integration preparation.',
+      );
+    }
+  }
+
+  static createIntegrationSession(
+    registration: IntegrationSessionRegistration,
+  ): ModuleIntegrationSession {
+    const session: ModuleIntegrationSession = {
+      cleanupHandle: registration.cleanupHandle,
+      workspace: registration.workspace,
+      integrationRef: registration.integrationRef,
+      currentHead: registration.currentHead,
+      cleaned: false,
+    };
+    ModuleIntegrationProvenanceRegistry.SESSIONS.set(
+      registration.cleanupHandle,
+      session,
+    );
+    return session;
+  }
+
+  static integrationSession(
+    handle: ModuleIntegrationCleanupHandle,
+  ): ModuleIntegrationSession {
+    const session = ModuleIntegrationProvenanceRegistry.SESSIONS.get(handle);
+    if (!session)
+      throw new Error('Module integration cleanup handle is invalid.');
+    return session;
+  }
+
+  static registerIntegrationState(
+    registration: IntegrationStateRegistration,
+  ): void {
+    const provenanceValue: ModuleIntegrationProvenance = {
+      authority: registration.authority,
+      planDigest: registration.state.planDigest,
+      sourceCommit: registration.state.sourceCommit,
+      completedWaveCount: registration.state.completedWaveCount,
+      headCommit: registration.state.headCommit,
+      workspace: registration.state.workspace,
+      sourceSnapshot: registration.sourceSnapshot,
+      workspaceSnapshot: registration.workspaceSnapshot,
+      session: registration.session,
+    };
+    ModuleIntegrationProvenanceRegistry.PROVENANCE.set(
+      registration.state,
+      Object.freeze(provenanceValue),
+    );
+  }
+
+  static integrationProvenance(
+    state: ModuleIntegrationState,
+  ): ModuleIntegrationProvenance {
+    if (ModuleIntegrationProvenanceRegistry.RETIRED_STATES.has(state)) {
+      throw new Error('Module integration state is stale.');
+    }
+    const provenance =
+      ModuleIntegrationProvenanceRegistry.PROVENANCE.get(state);
+    if (!provenance) {
+      throw new Error('Module integration state lacks private provenance.');
+    }
+    return provenance;
+  }
+
+  static retireIntegrationState(state: ModuleIntegrationState): void {
+    ModuleIntegrationProvenanceRegistry.RETIRED_STATES.add(state);
+  }
+
+  private static frozenAcceptedWrite(
+    entry: AcceptedModuleDeliveryWrite,
+  ): AcceptedModuleDeliveryWrite {
+    const handoffValue: ModuleDeliveryHandoffSubmission = { ...entry.handoff };
+    const handoff = Object.freeze(handoffValue);
+    const value: AcceptedModuleDeliveryWrite = { ...entry, handoff };
+    return Object.freeze(value);
+  }
+
+  static immutableModuleIntegrationState(
+    state: ModuleIntegrationState,
+  ): ModuleIntegrationState {
+    const workspaceValue: ModuleWorktreeHandle = { ...state.workspace };
+    const workspace = Object.isFrozen(state.workspace)
+      ? state.workspace
+      : Object.freeze(workspaceValue);
+    const value: ModuleIntegrationState = {
+      ...state,
+      topologicalOrder: Object.freeze([...state.topologicalOrder]),
+      waves: Object.freeze(state.waves.map((wave) => Object.freeze([...wave]))),
+      integratedTaskIds: Object.freeze([...state.integratedTaskIds]),
+      acceptedWrites: Object.freeze(
+        state.acceptedWrites.map(
+          ModuleIntegrationProvenanceRegistry.frozenAcceptedWrite,
+        ),
+      ),
+      acceptedEvidence: Object.freeze([...state.acceptedEvidence]),
+      workspace,
+    };
+    return Object.freeze(value);
+  }
+
+  static moduleIntegrationRef(request: ModuleIntegrationRefRequest): string {
+    return `refs/nook/module-delivery/${request.planDigest}/${request.workspace.worktreeId}`;
+  }
+
+  static updateModuleIntegrationRef(
+    request: UpdateModuleIntegrationRefRequest,
+  ): void {
+    if (request.rollback)
+      request.provenance.session.currentHead = request.provenance.headCommit;
+    else request.provenance.session.currentHead = request.nextCommit;
+  }
+
+  static assertFreshModuleIntegrationState(
+    request: FreshModuleIntegrationStateInspection,
+  ): void {
+    const { state, provenance } = request;
+    if (
+      provenance.planDigest !== state.planDigest ||
+      provenance.sourceCommit !== state.sourceCommit ||
+      provenance.completedWaveCount !== state.completedWaveCount ||
+      provenance.headCommit !== state.headCommit ||
+      provenance.workspace !== state.workspace
+    )
+      throw new Error(
+        'Module integration state violates its private provenance.',
+      );
+    if (
+      state.phase !== ModuleIntegrationPhase.AcceptingProviders &&
+      state.phase !== ModuleIntegrationPhase.Finalized
+    )
+      throw new Error('Module integration state has an invalid phase.');
+    if (
+      !Number.isSafeInteger(state.completedWaveCount) ||
+      state.completedWaveCount < 0 ||
+      state.completedWaveCount > state.waves.length
+    )
+      throw new Error('Module integration state has an invalid wave frontier.');
+    if (
+      new Set(state.integratedTaskIds).size !== state.integratedTaskIds.length
+    )
+      throw new Error(
+        'Module integration state has an inconsistent task frontier.',
+      );
+    ModuleWorktree.assertIntegrationWorkspaceIdentity(state.workspace);
+    if (
+      state.workspace.planDigest !== state.planDigest ||
+      state.workspace.baselineCommit !== state.sourceCommit ||
+      state.workspace.taskId !== INTEGRATION_TASK_ID ||
+      state.workspace.attempt !== 1
+    )
+      throw new Error('Module integration workspace metadata is inconsistent.');
+    if (
+      provenance.session.cleaned ||
+      provenance.session.cleanupHandle !== state.cleanupHandle ||
+      provenance.session.workspace !== state.workspace ||
+      provenance.session.currentHead !== state.headCommit
+    )
+      throw new Error(
+        'Module integration session is stale or already cleaned.',
+      );
+  }
+
+  static recordIntegratedLeaseAcceptance(
+    accepted: RecordIntegratedLeaseAcceptanceRequest,
+  ): void {
+    const outcome: ModuleDeliveryDispositionOutcome = {
+      kind: ModuleDeliveryAttemptDispositionKind.Accepted,
+      conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
+    };
+    const request: RecordModuleDeliveryAttemptDispositionRequest = {
+      authority: accepted.authority,
+      state: accepted.state,
+      lease: accepted.lease,
+      outcome,
+    };
+    ModuleGenerationAuthority.recordModuleDeliveryAttemptDisposition(request);
+  }
+
+  static assertModuleIntegrationHandoffRepository(
+    inspection: ModuleIntegrationHandoffRepositoryInspection,
+  ): void {
+    const integrationInvocation: GitCommandRequest = {
+      cwd: inspection.state.workspace.sourceRepositoryRoot,
+      args: ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+    };
+    const handoffInvocation: GitCommandRequest = {
+      cwd: inspection.handoff.workspace.worktreePath,
+      args: ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+    };
+    const integrationGit = realpathSync(
+      ModuleRepositoryGit.gitText(
+        ModuleRepositoryGit.runModuleDeliveryGit(integrationInvocation),
+      ),
+    );
+    const handoffGit = realpathSync(
+      ModuleRepositoryGit.gitText(
+        ModuleRepositoryGit.runModuleDeliveryGit(handoffInvocation),
+      ),
+    );
+    if (
+      inspection.handoff.workspace.sourceRepositoryRoot !==
+        inspection.state.workspace.sourceRepositoryRoot ||
+      handoffGit !== integrationGit
+    )
+      throw new Error('Module delivery handoff repository is invalid.');
+  }
+
+  static assertCurrentModuleIntegrationAdmission(
+    inspection: CurrentModuleIntegrationAdmissionInspection,
+  ): void {
+    const authorityInspection: AdmissionStateAuthorityInspection = {
+      authority: inspection.authority,
+      state: inspection.state.admissionState,
+    };
+    ModuleGenerationAuthority.assertModuleDeliveryAdmissionStateAuthority(
+      authorityInspection,
+    );
+  }
+
+  static assertModuleIntegrationLeaseFrontier(
+    inspection: ModuleIntegrationLeaseFrontierInspection,
+  ): void {
+    if (!/^[0-9a-f]{40}$/u.test(inspection.lease.startingFrontier))
+      throw new Error('Provider lease has an invalid starting frontier.');
+    const invocation: GitCommandRequest = {
+      cwd: inspection.state.workspace.sourceRepositoryRoot,
+      args: [
+        'merge-base',
+        '--is-ancestor',
+        inspection.lease.startingFrontier,
+        inspection.state.headCommit,
+      ],
+      allowFailure: true,
+    };
+    if (ModuleRepositoryGit.runModuleDeliveryGit(invocation).exitCode !== 0)
+      throw new Error(
+        'Provider lease starting frontier is stale or unrelated.',
+      );
+  }
+
+  static assertModuleIntegrationProviderPrecedence(
+    inspection: ModuleIntegrationProviderPrecedenceInspection,
+  ): void {
+    const predecessors = inspection.acceptedPlan.executionPrecedence
+      .filter((edge) => edge.successorTaskId === inspection.taskId)
+      .map((edge) => edge.predecessorTaskId);
+    for (const predecessor of predecessors) {
+      const acceptedWrite = inspection.state.acceptedWrites.find(
+        (entry) => entry.taskId === predecessor,
+      );
+      const evidenceAccepted = inspection.state.acceptedEvidence.some(
+        (entry) => entry.taskId === predecessor,
+      );
+      if (!acceptedWrite && !evidenceAccepted)
+        throw new Error(
+          `Provider ${inspection.taskId} is not ready; predecessor ${predecessor} is undispositioned.`,
+        );
+      if (!acceptedWrite) continue;
+      const invocation: GitCommandRequest = {
+        cwd: inspection.state.workspace.sourceRepositoryRoot,
+        args: [
+          'merge-base',
+          '--is-ancestor',
+          acceptedWrite.integrationCommit,
+          inspection.lease.startingFrontier,
+        ],
+        allowFailure: true,
+      };
+      if (ModuleRepositoryGit.runModuleDeliveryGit(invocation).exitCode !== 0)
+        throw new Error(
+          `Provider ${inspection.taskId} lease predates integrated predecessor ${predecessor}.`,
+        );
+    }
+  }
+
+  static moduleIntegrationCompletedWaveCount(
+    request: ModuleIntegrationCompletedWaveCountRequest,
+  ): number {
+    let completed = 0;
+    for (const wave of request.acceptedPlan.waves) {
+      const complete = wave.every(
+        (taskId) =>
+          request.state.integratedTaskIds.includes(taskId) ||
+          request.state.acceptedEvidence.some(
+            (entry) => entry.taskId === taskId,
+          ),
+      );
+      if (!complete) break;
+      completed += 1;
+    }
+    return completed;
+  }
+
+  static assertModuleIntegrationAcceptedPlanState(
+    inspection: AcceptedPlanStateInspection,
+  ): void {
+    const validation = inspection.acceptedPlan;
+    if (
+      inspection.state.planDigest !== validation.planDigest ||
+      inspection.state.generation !== validation.plan.generation ||
+      inspection.state.sourceCommit !== validation.plan.sourceCommit ||
+      JSON.stringify(inspection.state.topologicalOrder) !==
+        JSON.stringify(validation.topologicalOrder) ||
+      JSON.stringify(inspection.state.waves) !==
+        JSON.stringify(validation.waves)
+    )
+      throw new Error(
+        'Module integration state does not match the accepted plan.',
+      );
+  }
+
+  static moduleIntegrationNodeByTaskId(
+    lookup: ModuleIntegrationNodeLookup,
+  ): ModuleDeliveryNode {
+    const node = lookup.acceptedPlan.plan.nodes.find(
+      (candidate) => candidate.taskId === lookup.taskId,
+    );
+    if (!node)
+      throw new Error(`Accepted plan is missing task ${lookup.taskId}.`);
+    return node;
+  }
+
+  static cleanupRegisteredModuleIntegration(
+    request: CleanupModuleIntegrationRequest,
+  ): CleanupModuleIntegrationResult {
+    const session = ModuleIntegrationProvenanceRegistry.integrationSession(
+      request.cleanupHandle,
+    );
+    if (session.cleaned) return { removed: false };
+    const cleanupRequest: CleanupModuleWorktreeRequest = {
+      workspace: session.workspace,
+    };
+    ModuleWorktree.cleanupSharedIntegrationWorkspace(cleanupRequest);
+    session.cleaned = true;
+    return { removed: true };
+  }
 }
 
 export type SourceRepositorySnapshot = {
@@ -346,580 +993,4 @@ export type ModuleIntegrationCompletedWaveCountRequest = Readonly<{
 
 const BIGINT_STATS_OPTIONS = { bigint: true } as const;
 
-const PROVENANCE = new WeakMap<
-  ModuleIntegrationState,
-  ModuleIntegrationProvenance
->();
-const SESSIONS = new WeakMap<
-  ModuleIntegrationCleanupHandle,
-  ModuleIntegrationSession
->();
-const RETIRED_STATES = new WeakSet<ModuleIntegrationState>();
 const INTEGRATION_TASK_ID = 'module-delivery-integration';
-function gitRequest(invocation: ModuleGitInvocation): GitCommandRequest {
-  if ('allowFailure' in invocation) {
-    return {
-      cwd: invocation.cwd,
-      args: invocation.args,
-      allowFailure: invocation.allowFailure,
-    };
-  }
-  return { cwd: invocation.cwd, args: invocation.args };
-}
-
-function gitBytes(invocation: ModuleGitInvocation): Buffer {
-  return runModuleDeliveryGit(gitRequest(invocation)).stdout;
-}
-
-function digestBuffers(buffers: readonly Buffer[]): string {
-  const hash = createHash('sha256');
-  for (const bytes of buffers) {
-    const length = Buffer.allocUnsafe(8);
-    length.writeBigUInt64BE(BigInt(bytes.length));
-    hash.update(length);
-    hash.update(bytes);
-  }
-  return hash.digest('hex');
-}
-
-function nullSeparatedPaths(bytes: Buffer): readonly string[] {
-  if (bytes.length === 0) return [];
-  if (bytes.at(-1) !== 0) {
-    throw new Error('Repository path list requires NUL termination.');
-  }
-  const paths: string[] = [];
-  let start = 0;
-  for (let index = 0; index < bytes.length; index += 1) {
-    if (bytes[index] !== 0) continue;
-    const encoded = bytes.subarray(start, index);
-    const path = encoded.toString('utf8');
-    if (!Buffer.from(path, 'utf8').equals(encoded)) {
-      throw new Error('Repository path is not valid UTF-8.');
-    }
-    paths.push(path);
-    start = index + 1;
-  }
-  return paths;
-}
-
-function assertNoSymlinkAncestor(inspection: SymlinkAncestorInspection): void {
-  let parent = dirname(inspection.absolutePath);
-  while (parent !== inspection.root) {
-    if (lstatSync(parent).isSymbolicLink()) {
-      throw new Error('Repository entry has a symlink ancestor.');
-    }
-    parent = dirname(parent);
-  }
-}
-
-function entryFingerprint(request: EntryFingerprintRequest): EntryFingerprint {
-  const absolutePath = resolve(request.repositoryRoot, request.path);
-  const fromRoot = relative(request.repositoryRoot, absolutePath);
-  if (fromRoot === '' || fromRoot.startsWith('..') || isAbsolute(fromRoot)) {
-    throw new Error('Repository entry escapes its root.');
-  }
-  const ancestorInspection: SymlinkAncestorInspection = {
-    root: request.repositoryRoot,
-    absolutePath,
-  };
-  assertNoSymlinkAncestor(ancestorInspection);
-  const pathTag = Buffer.from(`path:${request.path}`, 'utf8');
-  if (!pathExists(absolutePath)) {
-    return {
-      content: [pathTag, Buffer.from('content:missing', 'utf8')],
-      metadata: [pathTag, Buffer.from('kind:missing', 'utf8')],
-    };
-  }
-  const metadata = lstatSync(absolutePath, BIGINT_STATS_OPTIONS);
-  const kind = metadata.isSymbolicLink()
-    ? 'symlink'
-    : metadata.isFile()
-      ? 'file'
-      : metadata.isDirectory()
-        ? 'directory'
-        : 'other';
-  const metadataTag = Buffer.from(
-    [
-      `kind:${kind}`,
-      `mode:${metadata.mode.toString(8)}`,
-      `dev:${metadata.dev.toString()}`,
-      `ino:${metadata.ino.toString()}`,
-      `size:${metadata.size.toString()}`,
-      `mtime:${metadata.mtimeNs.toString()}`,
-      `ctime:${metadata.ctimeNs.toString()}`,
-    ].join('|'),
-    'utf8',
-  );
-  if (kind === 'symlink') {
-    return {
-      content: request.includeContent
-        ? [
-            pathTag,
-            Buffer.from('content:symlink-target', 'utf8'),
-            Buffer.from(readlinkSync(absolutePath), 'utf8'),
-          ]
-        : [],
-      metadata: [pathTag, metadataTag],
-    };
-  }
-  if (kind === 'file') {
-    return {
-      content: request.includeContent
-        ? [
-            pathTag,
-            Buffer.from('content:file-bytes', 'utf8'),
-            readFileSync(absolutePath),
-          ]
-        : [],
-      metadata: [pathTag, metadataTag],
-    };
-  }
-  return {
-    content: [pathTag, Buffer.from(`content:${kind}`, 'utf8')],
-    metadata: [pathTag, metadataTag],
-  };
-}
-
-function repositoryFingerprint(
-  paths: RepositoryPathSet,
-): RepositoryFingerprint {
-  const content: Buffer[] = [];
-  const metadata: Buffer[] = [];
-  for (const path of [...paths.paths].sort()) {
-    const request: EntryFingerprintRequest = {
-      repositoryRoot: paths.repositoryRoot,
-      path,
-      includeContent: paths.includeContent,
-    };
-    const fingerprint = entryFingerprint(request);
-    content.push(...fingerprint.content);
-    metadata.push(...fingerprint.metadata);
-  }
-  return {
-    contentDigest: digestBuffers(content),
-    metadataDigest: digestBuffers(metadata),
-  };
-}
-
-function repositoryPaths(repositoryRoot: string): readonly string[] {
-  const trackedInvocation: ModuleGitInvocation = {
-    cwd: repositoryRoot,
-    args: ['ls-files', '-z'],
-  };
-  const untrackedInvocation: ModuleGitInvocation = {
-    cwd: repositoryRoot,
-    args: ['ls-files', '--others', '--exclude-standard', '-z'],
-  };
-  return [
-    ...new Set([
-      ...nullSeparatedPaths(gitBytes(trackedInvocation)),
-      ...nullSeparatedPaths(gitBytes(untrackedInvocation)),
-    ]),
-  ];
-}
-
-function relevantRefsDigest(repositoryRoot: string): string {
-  const invocation: ModuleGitInvocation = {
-    cwd: repositoryRoot,
-    args: [
-      'for-each-ref',
-      '--sort=refname',
-      '--format=%(refname)%00%(objectname)%00%(symref)',
-      'refs',
-    ],
-  };
-  const fields: Buffer[] = [];
-  for (const record of gitBytes(invocation).toString('utf8').split('\n')) {
-    if (record.length === 0) continue;
-    const [ref = '', objectId = '', symref = ''] = record.split('\0');
-    if (/^refs\/nook\/module-delivery\//u.test(ref)) continue;
-    if (ref.length === 0 || objectId.length === 0)
-      throw new Error('Repository ref fingerprint record is malformed.');
-    fields.push(
-      Buffer.from(ref, 'utf8'),
-      Buffer.from(objectId, 'ascii'),
-      Buffer.from(symref, 'utf8'),
-    );
-  }
-  return digestBuffers(fields);
-}
-
-function captureRepositorySnapshot(
-  request: RepositorySnapshotRequest,
-): SourceRepositorySnapshot {
-  const repositoryRoot = request.repositoryRoot;
-  const headInvocation: ModuleGitInvocation = {
-    cwd: repositoryRoot,
-    args: ['rev-parse', '--verify', 'HEAD^{commit}'],
-  };
-  const branchInvocation: ModuleGitInvocation = {
-    cwd: repositoryRoot,
-    args: ['symbolic-ref', '--quiet', 'HEAD'],
-    allowFailure: true,
-  };
-  const branch = runModuleDeliveryGit(gitRequest(branchInvocation));
-  const indexPathInvocation: ModuleGitInvocation = {
-    cwd: repositoryRoot,
-    args: ['rev-parse', '--path-format=absolute', '--git-path', 'index'],
-  };
-  const configInvocation: ModuleGitInvocation = {
-    cwd: repositoryRoot,
-    args: ['config', '--local', '--null', '--list'],
-  };
-  const pathSet: RepositoryPathSet = {
-    repositoryRoot,
-    paths: repositoryPaths(repositoryRoot),
-    includeContent: request.includeContent,
-  };
-  const fingerprint = repositoryFingerprint(pathSet);
-  const indexPath = gitText(
-    runModuleDeliveryGit(gitRequest(indexPathInvocation)),
-  );
-  return {
-    headCommit: gitText(runModuleDeliveryGit(gitRequest(headInvocation))),
-    symbolicHead: branch.exitCode === 0 ? gitText(branch) : '(detached)',
-    contentDigest: fingerprint.contentDigest,
-    metadataDigest: fingerprint.metadataDigest,
-    indexDigest: digestBuffers([readFileSync(indexPath)]),
-    refsDigest: relevantRefsDigest(repositoryRoot),
-    configDigest: digestBuffers([gitBytes(configInvocation)]),
-  };
-}
-
-export function captureSourceSnapshot(
-  repositoryRoot: string,
-): SourceRepositorySnapshot {
-  const request: RepositorySnapshotRequest = {
-    repositoryRoot,
-    includeContent: true,
-  };
-  return captureRepositorySnapshot(request);
-}
-
-export function assertSourceSnapshot(
-  expectation: SourceSnapshotExpectation,
-): void {
-  const request: RepositorySnapshotRequest = {
-    repositoryRoot: expectation.repositoryRoot,
-    includeContent: false,
-  };
-  const current = captureRepositorySnapshot(request);
-  if (
-    current.headCommit !== expectation.expected.headCommit ||
-    current.symbolicHead !== expectation.expected.symbolicHead ||
-    current.metadataDigest !== expectation.expected.metadataDigest ||
-    current.indexDigest !== expectation.expected.indexDigest ||
-    current.refsDigest !== expectation.expected.refsDigest ||
-    current.configDigest !== expectation.expected.configDigest
-  ) {
-    throw new Error('Source repository changed after integration preparation.');
-  }
-}
-
-export function createIntegrationSession(
-  registration: IntegrationSessionRegistration,
-): ModuleIntegrationSession {
-  const session: ModuleIntegrationSession = {
-    cleanupHandle: registration.cleanupHandle,
-    workspace: registration.workspace,
-    integrationRef: registration.integrationRef,
-    currentHead: registration.currentHead,
-    cleaned: false,
-  };
-  SESSIONS.set(registration.cleanupHandle, session);
-  return session;
-}
-
-export function integrationSession(
-  handle: ModuleIntegrationCleanupHandle,
-): ModuleIntegrationSession {
-  const session = SESSIONS.get(handle);
-  if (!session)
-    throw new Error('Module integration cleanup handle is invalid.');
-  return session;
-}
-
-export function registerIntegrationState(
-  registration: IntegrationStateRegistration,
-): void {
-  const provenanceValue: ModuleIntegrationProvenance = {
-    authority: registration.authority,
-    planDigest: registration.state.planDigest,
-    sourceCommit: registration.state.sourceCommit,
-    completedWaveCount: registration.state.completedWaveCount,
-    headCommit: registration.state.headCommit,
-    workspace: registration.state.workspace,
-    sourceSnapshot: registration.sourceSnapshot,
-    workspaceSnapshot: registration.workspaceSnapshot,
-    session: registration.session,
-  };
-  PROVENANCE.set(registration.state, Object.freeze(provenanceValue));
-}
-
-export function integrationProvenance(
-  state: ModuleIntegrationState,
-): ModuleIntegrationProvenance {
-  if (RETIRED_STATES.has(state)) {
-    throw new Error('Module integration state is stale.');
-  }
-  const provenance = PROVENANCE.get(state);
-  if (!provenance) {
-    throw new Error('Module integration state lacks private provenance.');
-  }
-  return provenance;
-}
-
-export function retireIntegrationState(state: ModuleIntegrationState): void {
-  RETIRED_STATES.add(state);
-}
-
-function frozenAcceptedWrite(
-  entry: AcceptedModuleDeliveryWrite,
-): AcceptedModuleDeliveryWrite {
-  const handoffValue: ModuleDeliveryHandoffSubmission = { ...entry.handoff };
-  const handoff = Object.freeze(handoffValue);
-  const value: AcceptedModuleDeliveryWrite = { ...entry, handoff };
-  return Object.freeze(value);
-}
-
-export function immutableModuleIntegrationState(
-  state: ModuleIntegrationState,
-): ModuleIntegrationState {
-  const workspaceValue: ModuleWorktreeHandle = { ...state.workspace };
-  const workspace = Object.isFrozen(state.workspace)
-    ? state.workspace
-    : Object.freeze(workspaceValue);
-  const value: ModuleIntegrationState = {
-    ...state,
-    topologicalOrder: Object.freeze([...state.topologicalOrder]),
-    waves: Object.freeze(state.waves.map((wave) => Object.freeze([...wave]))),
-    integratedTaskIds: Object.freeze([...state.integratedTaskIds]),
-    acceptedWrites: Object.freeze(
-      state.acceptedWrites.map(frozenAcceptedWrite),
-    ),
-    acceptedEvidence: Object.freeze([...state.acceptedEvidence]),
-    workspace,
-  };
-  return Object.freeze(value);
-}
-
-export function moduleIntegrationRef(
-  request: ModuleIntegrationRefRequest,
-): string {
-  return `refs/nook/module-delivery/${request.planDigest}/${request.workspace.worktreeId}`;
-}
-
-export function updateModuleIntegrationRef(
-  request: UpdateModuleIntegrationRefRequest,
-): void {
-  if (request.rollback)
-    request.provenance.session.currentHead = request.provenance.headCommit;
-  else request.provenance.session.currentHead = request.nextCommit;
-}
-
-export function assertFreshModuleIntegrationState(
-  request: FreshModuleIntegrationStateInspection,
-): void {
-  const { state, provenance } = request;
-  if (
-    provenance.planDigest !== state.planDigest ||
-    provenance.sourceCommit !== state.sourceCommit ||
-    provenance.completedWaveCount !== state.completedWaveCount ||
-    provenance.headCommit !== state.headCommit ||
-    provenance.workspace !== state.workspace
-  )
-    throw new Error(
-      'Module integration state violates its private provenance.',
-    );
-  if (
-    state.phase !== ModuleIntegrationPhase.AcceptingProviders &&
-    state.phase !== ModuleIntegrationPhase.Finalized
-  )
-    throw new Error('Module integration state has an invalid phase.');
-  if (
-    !Number.isSafeInteger(state.completedWaveCount) ||
-    state.completedWaveCount < 0 ||
-    state.completedWaveCount > state.waves.length
-  )
-    throw new Error('Module integration state has an invalid wave frontier.');
-  if (new Set(state.integratedTaskIds).size !== state.integratedTaskIds.length)
-    throw new Error(
-      'Module integration state has an inconsistent task frontier.',
-    );
-  assertPreparedModuleWorktreeIdentity(state.workspace);
-  if (
-    state.workspace.planDigest !== state.planDigest ||
-    state.workspace.baselineCommit !== state.sourceCommit ||
-    state.workspace.taskId !== INTEGRATION_TASK_ID ||
-    state.workspace.attempt !== 1
-  )
-    throw new Error('Module integration workspace metadata is inconsistent.');
-  if (
-    provenance.session.cleaned ||
-    provenance.session.cleanupHandle !== state.cleanupHandle ||
-    provenance.session.workspace !== state.workspace ||
-    provenance.session.currentHead !== state.headCommit
-  )
-    throw new Error('Module integration session is stale or already cleaned.');
-}
-
-export function recordIntegratedLeaseAcceptance(
-  accepted: RecordIntegratedLeaseAcceptanceRequest,
-): void {
-  const outcome: ModuleDeliveryDispositionOutcome = {
-    kind: ModuleDeliveryAttemptDispositionKind.Accepted,
-    conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
-  };
-  const request: RecordModuleDeliveryAttemptDispositionRequest = {
-    authority: accepted.authority,
-    state: accepted.state,
-    lease: accepted.lease,
-    outcome,
-  };
-  recordModuleDeliveryAttemptDisposition(request);
-}
-
-export function assertModuleIntegrationHandoffRepository(
-  inspection: ModuleIntegrationHandoffRepositoryInspection,
-): void {
-  const integrationInvocation: GitCommandRequest = {
-    cwd: inspection.state.workspace.sourceRepositoryRoot,
-    args: ['rev-parse', '--path-format=absolute', '--git-common-dir'],
-  };
-  const handoffInvocation: GitCommandRequest = {
-    cwd: inspection.handoff.workspace.worktreePath,
-    args: ['rev-parse', '--path-format=absolute', '--git-common-dir'],
-  };
-  const integrationGit = realpathSync(
-    gitText(runModuleDeliveryGit(integrationInvocation)),
-  );
-  const handoffGit = realpathSync(
-    gitText(runModuleDeliveryGit(handoffInvocation)),
-  );
-  if (
-    inspection.handoff.workspace.sourceRepositoryRoot !==
-      inspection.state.workspace.sourceRepositoryRoot ||
-    handoffGit !== integrationGit
-  )
-    throw new Error('Module delivery handoff repository is invalid.');
-}
-
-export function assertCurrentModuleIntegrationAdmission(
-  inspection: CurrentModuleIntegrationAdmissionInspection,
-): void {
-  const authorityInspection: AdmissionStateAuthorityInspection = {
-    authority: inspection.authority,
-    state: inspection.state.admissionState,
-  };
-  assertModuleDeliveryAdmissionStateAuthority(authorityInspection);
-}
-
-export function assertModuleIntegrationLeaseFrontier(
-  inspection: ModuleIntegrationLeaseFrontierInspection,
-): void {
-  if (!/^[0-9a-f]{40}$/u.test(inspection.lease.startingFrontier))
-    throw new Error('Provider lease has an invalid starting frontier.');
-  const invocation: GitCommandRequest = {
-    cwd: inspection.state.workspace.sourceRepositoryRoot,
-    args: [
-      'merge-base',
-      '--is-ancestor',
-      inspection.lease.startingFrontier,
-      inspection.state.headCommit,
-    ],
-    allowFailure: true,
-  };
-  if (runModuleDeliveryGit(invocation).exitCode !== 0)
-    throw new Error('Provider lease starting frontier is stale or unrelated.');
-}
-
-export function assertModuleIntegrationProviderPrecedence(
-  inspection: ModuleIntegrationProviderPrecedenceInspection,
-): void {
-  const predecessors = inspection.acceptedPlan.executionPrecedence
-    .filter((edge) => edge.successorTaskId === inspection.taskId)
-    .map((edge) => edge.predecessorTaskId);
-  for (const predecessor of predecessors) {
-    const acceptedWrite = inspection.state.acceptedWrites.find(
-      (entry) => entry.taskId === predecessor,
-    );
-    const evidenceAccepted = inspection.state.acceptedEvidence.some(
-      (entry) => entry.taskId === predecessor,
-    );
-    if (!acceptedWrite && !evidenceAccepted)
-      throw new Error(
-        `Provider ${inspection.taskId} is not ready; predecessor ${predecessor} is undispositioned.`,
-      );
-    if (!acceptedWrite) continue;
-    const invocation: GitCommandRequest = {
-      cwd: inspection.state.workspace.sourceRepositoryRoot,
-      args: [
-        'merge-base',
-        '--is-ancestor',
-        acceptedWrite.integrationCommit,
-        inspection.lease.startingFrontier,
-      ],
-      allowFailure: true,
-    };
-    if (runModuleDeliveryGit(invocation).exitCode !== 0)
-      throw new Error(
-        `Provider ${inspection.taskId} lease predates integrated predecessor ${predecessor}.`,
-      );
-  }
-}
-
-export function moduleIntegrationCompletedWaveCount(
-  request: ModuleIntegrationCompletedWaveCountRequest,
-): number {
-  let completed = 0;
-  for (const wave of request.acceptedPlan.waves) {
-    const complete = wave.every(
-      (taskId) =>
-        request.state.integratedTaskIds.includes(taskId) ||
-        request.state.acceptedEvidence.some((entry) => entry.taskId === taskId),
-    );
-    if (!complete) break;
-    completed += 1;
-  }
-  return completed;
-}
-
-export function assertModuleIntegrationAcceptedPlanState(
-  inspection: AcceptedPlanStateInspection,
-): void {
-  const validation = inspection.acceptedPlan;
-  if (
-    inspection.state.planDigest !== validation.planDigest ||
-    inspection.state.generation !== validation.plan.generation ||
-    inspection.state.sourceCommit !== validation.plan.sourceCommit ||
-    JSON.stringify(inspection.state.topologicalOrder) !==
-      JSON.stringify(validation.topologicalOrder) ||
-    JSON.stringify(inspection.state.waves) !== JSON.stringify(validation.waves)
-  )
-    throw new Error(
-      'Module integration state does not match the accepted plan.',
-    );
-}
-
-export function moduleIntegrationNodeByTaskId(
-  lookup: ModuleIntegrationNodeLookup,
-): ModuleDeliveryNode {
-  const node = lookup.acceptedPlan.plan.nodes.find(
-    (candidate) => candidate.taskId === lookup.taskId,
-  );
-  if (!node) throw new Error(`Accepted plan is missing task ${lookup.taskId}.`);
-  return node;
-}
-
-export function cleanupRegisteredModuleIntegration(
-  request: CleanupModuleIntegrationRequest,
-): CleanupModuleIntegrationResult {
-  const session = integrationSession(request.cleanupHandle);
-  if (session.cleaned) return { removed: false };
-  const cleanupRequest: CleanupModuleWorktreeRequest = {
-    workspace: session.workspace,
-  };
-  cleanupModuleWorktree(cleanupRequest);
-  session.cleaned = true;
-  return { removed: true };
-}

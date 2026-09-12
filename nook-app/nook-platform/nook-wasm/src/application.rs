@@ -9,55 +9,78 @@ use std::cell::Cell;
 #[cfg(test)]
 use nook_core::VaultApplication;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct ConfiguredVaultApplication {
+    application: nook_core::VaultApplication,
+}
+#[derive(Clone, Copy)]
+enum ApplicationConfiguration {
+    Unconfigured,
+    Configured(ConfiguredVaultApplication),
+}
+
 thread_local! {
-    static CONFIGURED_APPLICATION: Cell<Option<nook_core::VaultApplication>> = const { Cell::new(None) };
+    static CONFIGURED_APPLICATION: Cell<ApplicationConfiguration> = const { Cell::new(ApplicationConfiguration::Unconfigured) };
 }
 
-pub fn configure_vault_application(application: nook_core::VaultApplication) {
-    CONFIGURED_APPLICATION.with(|configured| match configured.get() {
-        None => configured.set(Some(application)),
-        Some(existing) if existing == application => {}
-        Some(existing) => panic!(
-            "WASM application already configured as {}; cannot change it to {}",
-            existing.as_str(),
-            application.as_str()
-        ),
-    });
+impl ConfiguredVaultApplication {
+    pub fn configure_vault_application(application: nook_core::VaultApplication) {
+        CONFIGURED_APPLICATION.with(|configured| match configured.get() {
+            ApplicationConfiguration::Unconfigured => configured.set(
+                ApplicationConfiguration::Configured(ConfiguredVaultApplication { application }),
+            ),
+            ApplicationConfiguration::Configured(existing)
+                if existing.application == application => {}
+            ApplicationConfiguration::Configured(existing) => panic!(
+                "WASM application already configured as {}; cannot change it to {}",
+                existing.application.as_str(),
+                application.as_str()
+            ),
+        });
+    }
 }
 
-#[must_use]
-pub fn configured_vault_application() -> nook_core::VaultApplication {
-    CONFIGURED_APPLICATION.with(|configured| {
-        #[cfg(test)]
-        return configured
-            .get()
-            .unwrap_or(VaultApplication::UnifiedDevelopment);
-
-        #[cfg(not(test))]
-        configured
-            .get()
-            .unwrap_or_else(|| panic!("WASM application capability was not configured before use"))
-    })
+impl ConfiguredVaultApplication {
+    #[must_use]
+    pub fn configured_vault_application() -> nook_core::VaultApplication {
+        CONFIGURED_APPLICATION.with(|configured| match configured.get() {
+            ApplicationConfiguration::Configured(configured) => configured.application,
+            ApplicationConfiguration::Unconfigured => {
+                #[cfg(test)]
+                {
+                    VaultApplication::UnifiedDevelopment
+                }
+                #[cfg(not(test))]
+                panic!("WASM application capability was not configured before use")
+            }
+        })
+    }
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
-    use super::{configure_vault_application, configured_vault_application};
+    use super::ConfiguredVaultApplication;
     use nook_core::VaultApplication;
     use std::{panic, thread};
 
     #[test]
     fn application_configuration_is_idempotent_and_immutable() -> anyhow::Result<()> {
         thread::spawn(|| {
-            configure_vault_application(VaultApplication::Simple);
-            configure_vault_application(VaultApplication::Simple);
-            assert_eq!(configured_vault_application(), VaultApplication::Simple);
+            ConfiguredVaultApplication::configure_vault_application(VaultApplication::Simple);
+            ConfiguredVaultApplication::configure_vault_application(VaultApplication::Simple);
+            assert_eq!(
+                ConfiguredVaultApplication::configured_vault_application(),
+                VaultApplication::Simple
+            );
 
             let changed = panic::catch_unwind(|| {
-                configure_vault_application(VaultApplication::Sentinel);
+                ConfiguredVaultApplication::configure_vault_application(VaultApplication::Sentinel);
             });
             assert!(changed.is_err());
-            assert_eq!(configured_vault_application(), VaultApplication::Simple);
+            assert_eq!(
+                ConfiguredVaultApplication::configured_vault_application(),
+                VaultApplication::Simple
+            );
         })
         .join()
         .map_err(|_| anyhow::anyhow!("application configuration test thread panicked"))?;

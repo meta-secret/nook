@@ -4,8 +4,8 @@ import {
   DEFAULT_DRIVE_BACKUP_NAME,
   configuredOAuthFile,
   defaultOAuthFileConfig,
-  missingOAuthAccessToken,
-  oauthAccessToken,
+  missing_oauth_access_token,
+  oauth_access_token,
   providerPersistenceDefaults,
   rootGoogleDriveFolder,
   storedGoogleDriveFolder,
@@ -14,7 +14,6 @@ import {
 } from '$lib/auth/providers'
 import {
   findSharedGrantProvider,
-  SharedGrantProviderKind,
   SharedStorageTargetKind,
   shouldFlushSharedDriveGrant,
 } from '$lib/vault/password-unlock'
@@ -56,7 +55,7 @@ describe('shared enrollment provider selection', () => {
           storageTargetId: 'folder-required',
         },
       }),
-    ).toEqual({ kind: SharedGrantProviderKind.AuthorizationRequired })
+    ).toEqual({ kind: 'authorizationRequired' })
   })
 
   test('reuses only the provider saved for the granted target', () => {
@@ -72,20 +71,20 @@ describe('shared enrollment provider selection', () => {
         },
       }),
     ).toEqual({
-      kind: SharedGrantProviderKind.Existing,
+      kind: 'existing',
       provider: matchingDrive,
     })
   })
 
   test('flushes every created Drive target when the owner token is usable', () => {
-    const available = oauthAccessToken({
+    const available = oauth_access_token({
       ...defaultOAuthFileConfig({
         preset: 'google-drive',
         fileName: DEFAULT_DRIVE_BACKUP_NAME,
       }),
       accessToken: storedOAuthCredential('token-owner'),
     })
-    const missing = missingOAuthAccessToken()
+    const missing = missing_oauth_access_token()
     expect(
       shouldFlushSharedDriveGrant({
         grant: {

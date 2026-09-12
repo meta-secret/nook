@@ -1,7 +1,7 @@
 //! End-to-end vault workflows mirroring the WASM session save path.
 
-use nook_core::AgeArmoredCiphertext;
-
+use nook_core::RecordTypeDeclaration;
+use nook_core::{AgeArmoredCiphertext, SecretRecord, SecretRecordFilter};
 use std::io;
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -9,8 +9,7 @@ use nook_core::{
     ApiKeySecret, Database, PasskeyRegistrationRequest, PasskeyRelyingParty, PasskeyUser,
     PasswordGenerationOptions, PlaintextSecretSession, ReplaceSecretInput, SecretId, SecretType,
     SecretValue, StorageMode, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat,
-    VaultFormatDocument, VaultMetaState, VaultRecordSet, filter_secrets, generate_password,
-    validate_secret_data,
+    VaultFormatDocument, VaultMetaState, VaultRecordSet,
 };
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -123,9 +122,18 @@ fn passkey_round_trips_through_encrypted_vault_storage() -> anyhow::Result<()> {
     database.insert(sid("passkey-example"), expected.clone());
 
     let stored = database.to_stored_records_with_crypto(&crypto)?;
-    assert_eq!(stored[0].secret_type, Some(SecretType::Passkey));
-    assert!(!stored[0].value.as_str().contains("alice@example.com"));
-    assert!(!stored[0].value.as_str().contains("login.example.com"));
+    assert_eq!(
+        stored
+            .first()
+            .unwrap_or_else(|| panic!("stored fixture must contain one record"))
+            .secret_type,
+        RecordTypeDeclaration::Secret(SecretType::Passkey)
+    );
+    let stored_record = stored
+        .first()
+        .unwrap_or_else(|| panic!("stored fixture must contain one record"));
+    assert!(!stored_record.value.as_str().contains("alice@example.com"));
+    assert!(!stored_record.value.as_str().contains("login.example.com"));
 
     let yaml = VaultRecordSet::serialize(&stored, VaultFormat::Yaml)?;
     let parsed = VaultFormatDocument::new(yaml.as_str()).deserialize(VaultFormat::Yaml)?;
@@ -150,7 +158,7 @@ fn incremental_add_secret_matches_full_reencrypt() -> anyhow::Result<()> {
     let mut armored = armored_cache_from_db(&db, &crypto)?;
 
     let label = SecretId::parse("  secret_SMypl8K0w9Y  ")?;
-    validate_secret_data("generated-secret")?;
+    SecretValue::validate_secret_data("generated-secret")?;
     armored.insert(
         label.clone(),
         encrypted_api_key(&crypto, "generated-secret")?,
@@ -183,7 +191,10 @@ fn incremental_delete_secret() -> anyhow::Result<()> {
     let (restored, _) = load_vault(&yaml, &crypto)?;
 
     assert_eq!(restored.list().len(), 1);
-    assert_eq!(restored.list()[0].id, sid("github.com"));
+    assert_eq!(
+        restored.list().first().map(|item| &item.id),
+        Some(&sid("github.com"))
+    );
     Ok(())
 }
 
@@ -221,8 +232,12 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() -> anyhow::Re
     })?;
 
     assert_eq!(db.list().len(), 1);
-    assert_eq!(db.list()[0].id.as_str(), new_id);
-    assert_eq!(db.list()[0].data, api_key("new-token"));
+    let items = db.list();
+    let item = items
+        .first()
+        .unwrap_or_else(|| panic!("database fixture must contain one item"));
+    assert_eq!(item.id.as_str(), new_id);
+    assert_eq!(item.data, api_key("new-token"));
 
     assert!(!state.secrets.contains_key(&old_secret_id));
     assert!(state.secrets.contains_key(&new_secret_id));
@@ -358,12 +373,12 @@ fn incremental_update_secret_replaces_armored_entry() -> anyhow::Result<()> {
 #[test]
 fn generated_password_can_be_stored_and_reloaded() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
-    let password = generate_password(PasswordGenerationOptions {
+    let password = PasswordGenerationOptions::generate(PasswordGenerationOptions {
         length: 20.into(),
-        lowercase: true,
-        uppercase: true,
-        numbers: true,
-        symbols: true,
+        lowercase: nook_core::PasswordCharacterSet::Included,
+        uppercase: nook_core::PasswordCharacterSet::Included,
+        numbers: nook_core::PasswordCharacterSet::Included,
+        symbols: nook_core::PasswordCharacterSet::Included,
     })?;
 
     let mut armored = HashMap::new();
@@ -371,7 +386,10 @@ fn generated_password_can_be_stored_and_reloaded() -> anyhow::Result<()> {
 
     let yaml = save_armored_cache(&armored)?;
     let (restored, _) = load_vault(&yaml, &crypto)?;
-    assert_eq!(restored.list()[0].data, api_key(&password));
+    assert_eq!(
+        restored.list().first().map(|item| &item.data),
+        Some(&api_key(&password))
+    );
     Ok(())
 }
 
@@ -380,14 +398,11 @@ fn connect_validation_matches_ui_rules() -> anyhow::Result<()> {
     assert!(StorageMode::parse("dropbox").is_err());
     assert_eq!(
         StorageMode::parse("local")?.validate_connect("ignored")?,
-        None
+        nook_core::ConnectionCredentialValidation::Local
     );
     assert_eq!(
-        StorageMode::parse("github")?
-            .validate_connect("  ghp_abc  ")?
-            .ok_or_else(|| io::Error::other("GitHub credential must be returned"))?
-            .as_str(),
-        "ghp_abc"
+        StorageMode::parse("github")?.validate_connect("  ghp_abc  ")?,
+        nook_core::ConnectionCredentialValidation::Github(nook_core::GithubPat::parse("ghp_abc")?)
     );
     Ok(())
 }
@@ -400,12 +415,35 @@ fn filter_secrets_on_loaded_vault() -> anyhow::Result<()> {
     let records = db.list();
 
     assert_eq!(
-        filter_secrets(&records, sid("github.com").as_str()).len(),
+        SecretRecord::filter_secrets(SecretRecordFilter {
+            records: &records,
+            query: sid("github.com").as_str()
+        })
+        .len(),
         1
     );
-    assert_eq!(filter_secrets(&records, sid("work-vpn").as_str()).len(), 1);
-    assert!(filter_secrets(&records, "missing").is_empty());
-    assert_eq!(filter_secrets(&records, ""), records);
+    assert_eq!(
+        SecretRecord::filter_secrets(SecretRecordFilter {
+            records: &records,
+            query: sid("work-vpn").as_str()
+        })
+        .len(),
+        1
+    );
+    assert!(
+        SecretRecord::filter_secrets(SecretRecordFilter {
+            records: &records,
+            query: "missing"
+        })
+        .is_empty()
+    );
+    assert_eq!(
+        SecretRecord::filter_secrets(SecretRecordFilter {
+            records: &records,
+            query: ""
+        }),
+        records
+    );
     Ok(())
 }
 
@@ -444,13 +482,14 @@ fn stored_records_from_armored_matches_serialize_order() -> anyhow::Result<()> {
         .collect();
     let records = Database::stored_records_from_armored(&armored, &secret_types);
 
-    assert_eq!(records[0].key, sid("github.com"));
-    assert_eq!(records[1].key, sid("work-vpn"));
-    assert!(
-        records[0]
-            .value
-            .as_str()
-            .contains("BEGIN AGE ENCRYPTED FILE")
-    );
+    let first = records
+        .first()
+        .unwrap_or_else(|| panic!("record fixture must contain first record"));
+    let second = records
+        .get(1)
+        .unwrap_or_else(|| panic!("record fixture must contain second record"));
+    assert_eq!(first.key, sid("github.com"));
+    assert_eq!(second.key, sid("work-vpn"));
+    assert!(first.value.as_str().contains("BEGIN AGE ENCRYPTED FILE"));
     Ok(())
 }

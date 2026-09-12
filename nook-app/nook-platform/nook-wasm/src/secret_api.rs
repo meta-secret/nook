@@ -1,6 +1,7 @@
 use super::types::{NookOtpauthPreview, NookTotpCode};
 use super::{NookError, NookSecretFormFields, types, wasm_bindgen};
 use js_sys::Date;
+use nook_core::SecretFormFields;
 use nook_core::{
     AuthenticatorSecret, BackupCodeAttachMode, SecretListItemData, SecretType, SecretTypeFilter,
     ValidationError,
@@ -42,7 +43,7 @@ impl NookSecretTypeFilter {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn secret_type_name(secret_type: nook_core::SecretType) -> String {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn secret_type_name(secret_type: nook_core::SecretType) -> String {
     secret_type.as_str().to_owned()
 }
 
@@ -288,19 +289,24 @@ impl NookSecretListItem {
 }
 
 /// Serialize validated form fields into the YAML payload expected by `add_secret`.
-fn build_secret_yaml_inner(fields: &NookSecretFormFields) -> Result<String, NookError> {
-    Ok(nook_core::build_secret_yaml_from_form(&fields.inner)?
-        .as_str()
-        .to_owned())
+impl NookSecretFormFields {
+    fn build_secret_yaml_inner(&self) -> Result<String, NookError> {
+        let fields = self;
+        Ok(
+            SecretFormFields::build_secret_yaml_from_form(&fields.inner)?
+                .as_str()
+                .to_owned(),
+        )
+    }
 }
 
 #[wasm_bindgen]
-pub fn build_secret_yaml(fields: &NookSecretFormFields) -> Result<String, wasm_bindgen::JsError> {
-    build_secret_yaml_inner(fields).map_err(Into::into)
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn build_secret_yaml(fields: &NookSecretFormFields) -> Result<String, wasm_bindgen::JsError> {
+    (fields).build_secret_yaml_inner().map_err(Into::into)
 }
 
 #[wasm_bindgen]
-pub fn authenticator_setup_key_changed(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authenticator_setup_key_changed(
     stored_key: &str,
     candidate_key: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
@@ -311,7 +317,7 @@ pub fn authenticator_setup_key_changed(
 }
 
 #[wasm_bindgen]
-pub fn preview_otpauth_uri(uri: &str) -> Result<types::NookOtpauthPreview, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn preview_otpauth_uri(uri: &str) -> Result<types::NookOtpauthPreview, wasm_bindgen::JsError> {
     AuthenticatorSecret::preview_otpauth_uri(uri)
         .map(NookOtpauthPreview::from_core)
         .map_err(NookError::from)
@@ -319,7 +325,7 @@ pub fn preview_otpauth_uri(uri: &str) -> Result<types::NookOtpauthPreview, wasm_
 }
 
 #[wasm_bindgen]
-pub fn current_code_from_otpauth_uri(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn current_code_from_otpauth_uri(
     uri: &str,
 ) -> Result<types::NookTotpCode, wasm_bindgen::JsError> {
     let millis = Date::now();
@@ -336,7 +342,7 @@ pub fn current_code_from_otpauth_uri(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn normalize_backup_codes(codes: Vec<String>) -> Result<Vec<String>, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn normalize_backup_codes(codes: Vec<String>) -> Result<Vec<String>, wasm_bindgen::JsError> {
     // Owned `Vec<String>` is required by the wasm-bindgen JS array boundary.
     nook_core::BackupCodeInput::new(&codes)
         .normalize()
@@ -346,7 +352,7 @@ pub fn normalize_backup_codes(codes: Vec<String>) -> Result<Vec<String>, wasm_bi
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-pub fn apply_backup_codes(
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn apply_backup_codes(
     existing: Vec<String>,
     incoming: Vec<String>,
     mode: &str,
@@ -375,7 +381,8 @@ mod wasm_tests {
     };
     use nook_core::{
         AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict, AuthenticatorIssuerHosts,
-        CreditCardSecret, OauthFilePreset, SecretId, SecretValue, StorageProviderType,
+        CreditCardFields, CreditCardSecret, OauthFilePreset, SecretId, SecretValue,
+        StorageProviderType,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -547,15 +554,15 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn credit_card_list_and_detail_keep_distinct_secret_boundaries() -> anyhow::Result<()> {
-        let card = CreditCardSecret::from_fields(
-            "Personal Visa",
-            "Ada Lovelace",
-            "4111111111111111",
-            "12",
-            "2030",
-            "123",
-            "private billing note",
-        )?;
+        let card = CreditCardSecret::from_fields(CreditCardFields {
+            title: "Personal Visa",
+            cardholder_name: "Ada Lovelace",
+            number: "4111111111111111",
+            expiration_month: "12",
+            expiration_year: "2030",
+            cvv: "123",
+            notes: "private billing note",
+        })?;
         let record = nook_core::SecretRecord {
             id: SecretId::from_vault_record("secret_credit_card"),
             secret_type: SecretType::CreditCard,
@@ -578,19 +585,25 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
-    fn issuer_host_map_loads_under_wasm() {
+    fn issuer_host_map_loads_under_wasm() -> anyhow::Result<()> {
+        use nook_core::{AuthenticatorHostResolution, WebsiteHost};
         assert_eq!(
-            AuthenticatorIssuerHosts::bundled().and_then(|catalog| catalog.mapped_host("OpenAI")),
-            Some("openai.com")
+            AuthenticatorIssuerHosts::require_bundled()
+                .map(|catalog| catalog.mapped_host("OpenAI")),
+            Ok(AuthenticatorHostResolution::Resolved(
+                WebsiteHost::normalize("openai.com")?
+            ))
         );
         assert_eq!(
-            AuthenticatorIssuerHosts::bundled().and_then(|catalog| {
+            AuthenticatorIssuerHosts::require_bundled().map(|catalog| {
                 catalog.resolve_website_host(nook_core::AuthenticatorWebsiteHostRequest {
                     website_url: "",
                     issuer: "GitHub",
                 })
             }),
-            Some("github.com".to_owned())
+            Ok(AuthenticatorHostResolution::Resolved(
+                WebsiteHost::normalize("github.com")?
+            ))
         );
         assert_eq!(
             nook_core::AuthenticatorGroupKeyRequest {
@@ -601,6 +614,7 @@ mod wasm_tests {
             .unwrap_or_else(|error| panic!("bundled issuer catalog: {error}")),
             "namecheap.com"
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -660,23 +674,35 @@ mod wasm_tests {
 
 #[cfg(test)]
 mod tests {
-    use crate::public_api::is_google_drive_shared_grant_request;
+    use crate::public_api::{AutomaticSharedGrantRoute, SharedDriveGrantPolicy};
     use nook_core::{OauthFilePreset, ProviderOauthPreset, StorageProviderType};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
     fn google_drive_grant_requires_explicit_preset() -> anyhow::Result<()> {
-        assert!(!is_google_drive_shared_grant_request(
-            StorageProviderType::OauthFile,
-            ProviderOauthPreset::NotApplicable,
+        assert!(!matches!(
+            (SharedDriveGrantPolicy {
+                provider_type: StorageProviderType::OauthFile,
+                oauth_preset: ProviderOauthPreset::NotApplicable
+            })
+            .automatic_grant_route(),
+            AutomaticSharedGrantRoute::GoogleDrive
         ));
-        assert!(is_google_drive_shared_grant_request(
-            StorageProviderType::OauthFile,
-            ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
+        assert!(matches!(
+            (SharedDriveGrantPolicy {
+                provider_type: StorageProviderType::OauthFile,
+                oauth_preset: ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive)
+            })
+            .automatic_grant_route(),
+            AutomaticSharedGrantRoute::GoogleDrive
         ));
-        assert!(!is_google_drive_shared_grant_request(
-            StorageProviderType::OauthFile,
-            ProviderOauthPreset::Preset(OauthFilePreset::ICloud),
+        assert!(!matches!(
+            (SharedDriveGrantPolicy {
+                provider_type: StorageProviderType::OauthFile,
+                oauth_preset: ProviderOauthPreset::Preset(OauthFilePreset::ICloud)
+            })
+            .automatic_grant_route(),
+            AutomaticSharedGrantRoute::GoogleDrive
         ));
         Ok(())
     }

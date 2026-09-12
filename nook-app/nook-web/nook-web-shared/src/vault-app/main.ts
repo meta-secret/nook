@@ -1,36 +1,56 @@
 import { mount } from "svelte";
+import { err, ok, type Result } from "neverthrow";
 import "./app.css";
 import { configured_vault_application, type VaultApplication } from "$app-wasm";
-import { createVaultStartupShell } from "$lib/app/startup-shell";
-import { ensureAppWasm } from "$lib/runtime/wasm-bootstrap";
+import { VaultStartupShell } from "$lib/app/startup-shell";
+import { vaultApplicationRuntime } from "$lib/runtime/wasm-bootstrap";
 
-export async function mountVaultApp(
-  expectedKind: VaultApplication,
-): Promise<void> {
-  const target = document.getElementById("app");
-  if (!target) throw new Error("Vault app mount target is missing");
-  const startupShellArgs: Parameters<typeof createVaultStartupShell>[0] = {
-    target,
-  };
-  const startupShell = createVaultStartupShell(startupShellArgs);
+export enum VaultMountFailure {
+  MissingTarget = "missing-target",
+  EngineUnavailable = "engine-unavailable",
+  ApplicationMismatch = "application-mismatch",
+  DetachedTarget = "detached-target",
+  RenderUnavailable = "render-unavailable",
+}
 
-  try {
-    await ensureAppWasm(expectedKind);
-    const { default: App } = await import("./App.svelte");
-    const configuredKind = configured_vault_application();
-    if (configuredKind !== expectedKind) {
-      throw new Error(
-        `Expected ${expectedKind} vault build, received ${configuredKind}.`,
-      );
+class VaultAppMount {
+  constructor(private readonly application: VaultApplication) {}
+  async mount(): Promise<Result<void, VaultMountFailure>> {
+    const target = document.getElementById("app");
+    if (!target) return err(VaultMountFailure.MissingTarget);
+    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const startupShell = new VaultStartupShell({ target });
+    const ready = await vaultApplicationRuntime.ensureAppWasm(this.application);
+    if (ready.isErr()) {
+      startupShell.showUnavailable();
+      return err(VaultMountFailure.EngineUnavailable);
     }
-    if (!target.isConnected || document.getElementById("app") !== target) {
-      return;
+    // Dynamic module loading and Svelte mount are foreign runtime boundaries.
+    try {
+      const { default: App } = await import("./App.svelte");
+      if (configured_vault_application() !== this.application) {
+        startupShell.showUnavailable();
+        return err(VaultMountFailure.ApplicationMismatch);
+      }
+      if (!target.isConnected || document.getElementById("app") !== target)
+        return err(VaultMountFailure.DetachedTarget);
+      // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+      mount(App, { target });
+      startupShell.remove();
+      return ok();
+    } catch {
+      startupShell.showUnavailable();
+      return err(VaultMountFailure.RenderUnavailable);
     }
-    const mountArgs: { readonly target: HTMLElement } = { target };
-    mount(App, mountArgs);
-    startupShell.remove();
-  } catch (error) {
-    startupShell.showUnavailable();
-    throw error;
   }
 }
+
+/** The browser entrypoint renders failure and records its concrete terminal cause. */
+class VaultApplicationEntrypoint {
+  async start(application: VaultApplication): Promise<void> {
+    const result = await new VaultAppMount(application).mount();
+    if (result.isErr())
+      console.error("Vault application startup failed", result.error);
+  }
+}
+export const vaultApplicationEntrypoint = new VaultApplicationEntrypoint();

@@ -61,10 +61,33 @@ test('search a paginated vault through encrypted metadata', async ({
           const registry = read.objectStore('vault').get('vault_registry')
           registry.onerror = () => reject(registry.error)
           registry.onsuccess = () => {
-            const parsed = JSON.parse(String(registry.result)) as {
-              vaults?: Array<{ store_id?: string }>
+            const parsed: unknown = JSON.parse(String(registry.result))
+            if (typeof parsed !== 'object' || parsed === null) {
+              reject(new Error('Vault registry was not an object'))
+              return
             }
-            const storeId = parsed.vaults?.[0]?.store_id
+            const vaultsValue: unknown = Object.getOwnPropertyDescriptor(
+              parsed,
+              'vaults',
+            )?.value
+            if (!Array.isArray(vaultsValue)) {
+              reject(new Error('Vault registry did not contain vaults'))
+              return
+            }
+            const firstVault: unknown = vaultsValue[0]
+            if (typeof firstVault !== 'object' || firstVault === null) {
+              reject(new Error('Vault registry did not contain a store id'))
+              return
+            }
+            const storeIdValue: unknown = Object.getOwnPropertyDescriptor(
+              firstVault,
+              'store_id',
+            )?.value
+            if (typeof storeIdValue !== 'string') {
+              reject(new Error('Vault registry did not contain a store id'))
+              return
+            }
+            const storeId = storeIdValue
             if (!storeId) {
               reject(
                 new Error('Expected the local vault in the vault registry'),
@@ -104,7 +127,7 @@ test('search a paginated vault through encrypted metadata', async ({
               get.onsuccess = () => {
                 const resultState = !get.result
                   ? { kind: 'missing' as const }
-                  : { kind: 'found' as const, value: get.result }
+                  : { kind: 'found' as const }
                 resolve(resultState.kind === 'missing')
               }
             }

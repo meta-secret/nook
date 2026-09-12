@@ -1,4 +1,11 @@
 import {
+  CortexRuntimeCommand,
+  CortexRuntimeEntrypoints,
+  CortexRuntimeRegistration,
+  CortexRuntimePrefixRelationship,
+} from './runtime-command.ts';
+
+import {
   CortexContractFindingCode,
   CortexContextAuthorityDocument,
   CortexPolicyArea,
@@ -12,6 +19,431 @@ import {
   type CortexRuntimeContract,
 } from './domain.ts';
 
+export class CortexConsistencyContract {
+  private constructor(private readonly request: AuditCortexContractsArgs) {}
+
+  static from(args: AuditCortexContractsArgs): CortexConsistencyContract {
+    return new CortexConsistencyContract(args);
+  }
+
+  public execute(): CortexContractFinding[] {
+    const args = this.request;
+    const findings: CortexContractFinding[] = [];
+    const documents = new Map(
+      args.documents.map((document) => [
+        this.normalizePath(document.relativePath),
+        document,
+      ]),
+    );
+    const contextArgs: UniqueCortexContextsArgs = {
+      contexts: args.registry.contexts,
+      findings,
+    };
+    const contexts = this.uniqueContexts(contextArgs);
+    const policyArgs: UniqueCortexPoliciesArgs = {
+      policies: args.registry.policies,
+      findings,
+    };
+    const policies = this.uniquePolicies(policyArgs);
+
+    for (const policy of policies.values()) {
+      const policyPath = this.normalizePath(policy.document);
+      if (!documents.has(policyPath)) {
+        findings.push({
+          code: CortexContractFindingCode.MissingPolicyDocument,
+          file: policyPath,
+          message: `Cortex policy references a missing document: ${policyPath}`,
+        });
+      }
+      const documentOwner = this.cortexDocumentOwner(policyPath);
+      if (
+        documentOwner.kind === CortexDocumentOwnerResolutionKind.Unrecognized
+      ) {
+        findings.push({
+          code: CortexContractFindingCode.InvalidPolicyOwner,
+          file: policyPath,
+          message: `Cortex policy ${policyPath} is outside every recognized ownership path.`,
+        });
+      }
+      const safeguardArgs: ValidatePolicySafeguardsArgs = {
+        policy,
+        policies,
+        documents,
+        findings,
+      };
+      this.validatePolicySafeguards(safeguardArgs);
+    }
+
+    for (const [authorityPath, context] of contexts) {
+      const authority = documents.get(authorityPath);
+      if (!authority) {
+        findings.push({
+          code: CortexContractFindingCode.MissingAuthorityDocument,
+          file: authorityPath,
+          message: `Cortex context references a missing authority document: ${authorityPath}`,
+        });
+        continue;
+      }
+      const contextOwner = this.cortexDocumentOwner(authorityPath);
+      const contextArgs: ValidateContextArgs = {
+        context,
+        contextOwner,
+        authority,
+        policies,
+        findings,
+      };
+      this.validateContextImports(contextArgs);
+      this.validatePolicyReachability(contextArgs);
+    }
+
+    for (const runtime of args.registry.runtimes) {
+      this.validateRuntimeContract({
+        runtime,
+        documents,
+        findings,
+      });
+    }
+
+    return findings;
+  }
+
+  private validateRuntimeContract(
+    request: ValidateRuntimeContractRequest,
+  ): void {
+    const documentPath = this.normalizePath(request.runtime.document);
+    const document = request.documents.get(documentPath);
+    if (!document) {
+      request.findings.push({
+        code: CortexContractFindingCode.MissingRuntimeDocument,
+        file: documentPath,
+        message: `Cortex runtime references a missing document: ${documentPath}`,
+      });
+      return;
+    }
+    const commands = document.commands.map(
+      (command) => new CortexRuntimeCommand(command),
+    );
+    const entrypoints = new CortexRuntimeEntrypoints(request.runtime);
+    for (const command of commands) {
+      if (
+        entrypoints.registrationOf(command) !==
+        CortexRuntimeRegistration.Unregistered
+      )
+        continue;
+      request.findings.push({
+        code: CortexContractFindingCode.MissingRuntimeEntrypoint,
+        file: documentPath,
+        message: `Cortex workflow names an unregistered runtime entrypoint: ${command.text}`,
+      });
+    }
+    for (const required of request.runtime.requiredCommandPrefixes) {
+      if (
+        commands.some(
+          (command) =>
+            command.relationshipTo(required) ===
+            CortexRuntimePrefixRelationship.Matches,
+        )
+      )
+        continue;
+      request.findings.push({
+        code: CortexContractFindingCode.MissingRuntimeEntrypoint,
+        file: documentPath,
+        message: `Cortex workflow is missing its required runtime entrypoint: ${required}`,
+      });
+    }
+    for (const retired of request.runtime.retiredCommandPrefixes) {
+      if (
+        !commands.some(
+          (command) =>
+            command.relationshipTo(retired) ===
+            CortexRuntimePrefixRelationship.Matches,
+        )
+      )
+        continue;
+      request.findings.push({
+        code: CortexContractFindingCode.RetiredRuntimeEntrypoint,
+        file: documentPath,
+        message: `Cortex workflow names a retired runtime entrypoint: ${retired}`,
+      });
+    }
+  }
+
+  private uniqueContexts(
+    args: UniqueCortexContextsArgs,
+  ): ReadonlyMap<CortexContextAuthorityDocument, CortexContextContract> {
+    const entries = new Map<
+      CortexContextAuthorityDocument,
+      CortexContextContract
+    >();
+    for (const context of args.contexts) {
+      const authorityPath = this.normalizePath(context.authorityDocument);
+      const authority = this.resolveContextAuthority(authorityPath);
+      if (authority.kind === CortexDocumentOwnerResolutionKind.Unrecognized) {
+        args.findings.push({
+          code: CortexContractFindingCode.InvalidContextOwner,
+          file: authorityPath,
+          message: `Cortex context authority is not a canonical AGENTS.md document: ${authorityPath}`,
+        });
+        continue;
+      }
+      if (entries.has(authority.authorityDocument)) {
+        args.findings.push({
+          code: CortexContractFindingCode.DuplicateContext,
+          file: authorityPath,
+          message: `Cortex context authority is registered more than once: ${authorityPath}`,
+        });
+        continue;
+      }
+      entries.set(authority.authorityDocument, context);
+    }
+    return entries;
+  }
+
+  private uniquePolicies(
+    args: UniqueCortexPoliciesArgs,
+  ): ReadonlyMap<string, CortexPolicyContract> {
+    const entries = new Map<string, CortexPolicyContract>();
+    for (const policy of args.policies) {
+      const policyPath = this.normalizePath(policy.document);
+      if (entries.has(policyPath)) {
+        args.findings.push({
+          code: CortexContractFindingCode.DuplicatePolicy,
+          file: policyPath,
+          message: `Cortex policy document is registered more than once: ${policyPath}`,
+        });
+        continue;
+      }
+      entries.set(policyPath, policy);
+    }
+    return entries;
+  }
+
+  private cortexDocumentOwner(
+    documentPath: string,
+  ): CortexDocumentOwnerResolution {
+    if (documentPath === '.cortex/AGENTS.md') {
+      return {
+        kind: CortexDocumentOwnerResolutionKind.Known,
+        owner: CortexContractTeam.GizmoPrime,
+      };
+    }
+    const owners: readonly (readonly [string, CortexContractTeam])[] = [
+      ['.cortex/gizmo/', CortexContractTeam.GizmoPrime],
+      ['.cortex/shared/', CortexContractTeam.Shared],
+      ['.cortex/teams/ai/', CortexContractTeam.Ai],
+      ['.cortex/teams/dev-core/', CortexContractTeam.DevelopmentCore],
+      ['.cortex/teams/security/', CortexContractTeam.Security],
+      ['.cortex/teams/sre/', CortexContractTeam.Sre],
+      ['.cortex/teams/web-dev/', CortexContractTeam.WebDevelopment],
+    ];
+    for (const [prefix, owner] of owners) {
+      if (documentPath.startsWith(prefix)) {
+        return { kind: CortexDocumentOwnerResolutionKind.Known, owner };
+      }
+    }
+    return { kind: CortexDocumentOwnerResolutionKind.Unrecognized };
+  }
+
+  private resolveContextAuthority(
+    authorityPath: string,
+  ): CortexContextAuthorityResolution {
+    for (const authority of Object.values(CortexContextAuthorityDocument)) {
+      if (authority === authorityPath) {
+        return {
+          kind: CortexDocumentOwnerResolutionKind.Known,
+          authorityDocument: authority,
+        };
+      }
+    }
+    return { kind: CortexDocumentOwnerResolutionKind.Unrecognized };
+  }
+
+  private validatePolicySafeguards(args: ValidatePolicySafeguardsArgs): void {
+    if (args.policy.kind !== CortexPolicyContractKind.PersistedRepresentation)
+      return;
+    const authority = args.policies.get(
+      this.normalizePath(args.policy.schemaAuthority),
+    );
+    if (
+      !authority ||
+      !authority.capabilities.includes(CortexPolicyCapability.SchemaVersioning)
+    ) {
+      args.findings.push({
+        code: CortexContractFindingCode.InvalidSchemaAuthority,
+        file: args.policy.document,
+        message: `Persisted policy ${args.policy.document} requires a schema-versioning authority; ${args.policy.schemaAuthority} does not provide it.`,
+      });
+    } else {
+      const policyDocument = args.documents.get(
+        this.normalizePath(args.policy.document),
+      );
+      if (policyDocument) {
+        const referenceArgs: CortexDocumentReferenceArgs = {
+          authority: policyDocument,
+          targetPath: authority.document,
+        };
+        if (!this.referencesDocument(referenceArgs)) {
+          args.findings.push({
+            code: CortexContractFindingCode.MissingSchemaAuthorityReference,
+            file: args.policy.document,
+            message: `Persisted policy ${args.policy.document} does not reference its schema authority document ${authority.document}.`,
+          });
+        }
+      }
+    }
+    if (args.policy.evidence.length === 0) {
+      args.findings.push({
+        code: CortexContractFindingCode.MissingCompatibilityEvidence,
+        file: args.policy.document,
+        message: `Persisted policy ${args.policy.document} must require a legacy decode test or migration test.`,
+      });
+    }
+  }
+
+  private validateContextImports(args: ValidateContextArgs): void {
+    for (const importedPath of args.context.imports) {
+      const policyPath = this.normalizePath(importedPath);
+      const policy = args.policies.get(policyPath);
+      if (!policy) {
+        args.findings.push({
+          code: CortexContractFindingCode.UnknownPolicyImport,
+          file: args.authority.relativePath,
+          message: `Cortex context ${args.context.authorityDocument} imports an unknown policy document: ${policyPath}`,
+        });
+        continue;
+      }
+      const referenceArgs: CortexDocumentReferenceArgs = {
+        authority: args.authority,
+        targetPath: policy.document,
+      };
+      if (!this.referencesDocument(referenceArgs)) {
+        const findingArgs: MissingPolicyReferenceArgs = {
+          context: args.context,
+          policy,
+        };
+        args.findings.push(this.missingPolicyReference(findingArgs));
+      }
+    }
+  }
+
+  private validatePolicyReachability(args: ValidateContextArgs): void {
+    for (const policy of args.policies.values()) {
+      if (
+        this.contextOwnsPolicy({
+          contextOwner: args.contextOwner,
+          policy,
+        })
+      )
+        continue;
+      const coverageArgs: SharedPolicyAreaArgs = {
+        contextAreas: args.context.ownsAreas,
+        policyAreas: policy.areas,
+      };
+      if (!this.sharesArea(coverageArgs)) continue;
+      const importsPolicy = args.context.imports.some(
+        (policyPath) =>
+          this.normalizePath(policyPath) ===
+          this.normalizePath(policy.document),
+      );
+      if (!importsPolicy) {
+        args.findings.push({
+          code: CortexContractFindingCode.MissingPolicyImport,
+          file: args.authority.relativePath,
+          message: `Cortex context ${args.context.authorityDocument} owns an area covered by foreign policy ${policy.document} but does not import it.`,
+        });
+        continue;
+      }
+      const referenceArgs: CortexDocumentReferenceArgs = {
+        authority: args.authority,
+        targetPath: policy.document,
+      };
+      if (!this.referencesDocument(referenceArgs)) {
+        const alreadyReported = args.findings.some(
+          (finding) =>
+            finding.code === CortexContractFindingCode.MissingPolicyReference &&
+            finding.file === args.authority.relativePath &&
+            finding.message.includes(policy.document),
+        );
+        if (!alreadyReported) {
+          const findingArgs: MissingPolicyReferenceArgs = {
+            context: args.context,
+            policy,
+          };
+          args.findings.push(this.missingPolicyReference(findingArgs));
+        }
+      }
+    }
+  }
+
+  private contextOwnsPolicy(args: ContextOwnsPolicyArgs): boolean {
+    if (args.contextOwner.kind !== CortexDocumentOwnerResolutionKind.Known)
+      return false;
+    const policyOwner = this.cortexDocumentOwner(
+      this.normalizePath(args.policy.document),
+    );
+    return (
+      policyOwner.kind === CortexDocumentOwnerResolutionKind.Known &&
+      policyOwner.owner === args.contextOwner.owner
+    );
+  }
+
+  private missingPolicyReference(
+    args: MissingPolicyReferenceArgs,
+  ): CortexContractFinding {
+    return {
+      code: CortexContractFindingCode.MissingPolicyReference,
+      file: args.context.authorityDocument,
+      message: `Cortex context ${args.context.authorityDocument} imports policy ${args.policy.document} but its authority document does not reference it.`,
+    };
+  }
+
+  private referencesDocument(args: CortexDocumentReferenceArgs): boolean {
+    const authorityPath = this.normalizePath(args.authority.relativePath);
+    const target = this.normalizePath(args.targetPath);
+    return args.authority.references.some((reference) => {
+      const documentReference = this.stripDocumentFragment(reference);
+      const resolved = documentReference.startsWith('.cortex/')
+        ? this.normalizePath(documentReference)
+        : this.normalizePath(
+            `${this.directoryName(authorityPath)}/${documentReference}`,
+          );
+      return resolved === target;
+    });
+  }
+
+  private stripDocumentFragment(reference: string): string {
+    const suffixIndexes = [
+      reference.indexOf('?'),
+      reference.indexOf('#'),
+    ].filter((index) => index >= 0);
+    const suffixIndex = Math.min(...suffixIndexes, reference.length);
+    return reference.slice(0, suffixIndex);
+  }
+
+  private sharesArea(args: SharedPolicyAreaArgs): boolean {
+    return args.contextAreas.some((area) => args.policyAreas.includes(area));
+  }
+
+  private normalizePath(filePath: string): string {
+    const normalized: string[] = [];
+    for (const segment of filePath.replaceAll('\\', '/').split('/')) {
+      if (segment === '' || segment === '.') continue;
+      if (segment === '..') {
+        const previous = normalized.at(-1);
+        if (previous && previous !== '..') normalized.pop();
+        else normalized.push(segment);
+        continue;
+      }
+      normalized.push(segment);
+    }
+    return normalized.join('/');
+  }
+
+  private directoryName(filePath: string): string {
+    return filePath.split('/').slice(0, -1).join('/');
+  }
+}
+
 enum CortexContractTeam {
   Ai = 'ai',
   DevelopmentCore = 'development-core',
@@ -22,222 +454,21 @@ enum CortexContractTeam {
   WebDevelopment = 'web-development',
 }
 
-export function compileCortexContracts(
-  args: AuditCortexContractsArgs,
-): CortexContractFinding[] {
-  const findings: CortexContractFinding[] = [];
-  const documents = new Map(
-    args.documents.map((document) => [
-      normalizePath(document.relativePath),
-      document,
-    ]),
-  );
-  const contextArgs: UniqueCortexContextsArgs = {
-    contexts: args.registry.contexts,
-    findings,
-  };
-  const contexts = uniqueContexts(contextArgs);
-  const policyArgs: UniqueCortexPoliciesArgs = {
-    policies: args.registry.policies,
-    findings,
-  };
-  const policies = uniquePolicies(policyArgs);
-
-  for (const policy of policies.values()) {
-    const policyPath = normalizePath(policy.document);
-    if (!documents.has(policyPath)) {
-      findings.push({
-        code: CortexContractFindingCode.MissingPolicyDocument,
-        file: policyPath,
-        message: `Cortex policy references a missing document: ${policyPath}`,
-      });
-    }
-    const documentOwner = cortexDocumentOwner(policyPath);
-    if (documentOwner.kind === CortexDocumentOwnerResolutionKind.Unrecognized) {
-      findings.push({
-        code: CortexContractFindingCode.InvalidPolicyOwner,
-        file: policyPath,
-        message: `Cortex policy ${policyPath} is outside every recognized ownership path.`,
-      });
-    }
-    const safeguardArgs: ValidatePolicySafeguardsArgs = {
-      policy,
-      policies,
-      documents,
-      findings,
-    };
-    validatePolicySafeguards(safeguardArgs);
-  }
-
-  for (const [authorityPath, context] of contexts) {
-    const authority = documents.get(authorityPath);
-    if (!authority) {
-      findings.push({
-        code: CortexContractFindingCode.MissingAuthorityDocument,
-        file: authorityPath,
-        message: `Cortex context references a missing authority document: ${authorityPath}`,
-      });
-      continue;
-    }
-    const contextOwner = cortexDocumentOwner(authorityPath);
-    const contextArgs: ValidateContextArgs = {
-      context,
-      contextOwner,
-      authority,
-      policies,
-      findings,
-    };
-    validateContextImports(contextArgs);
-    validatePolicyReachability(contextArgs);
-  }
-
-  for (const runtime of args.registry.runtimes) {
-    validateRuntimeContract({ runtime, documents, findings });
-  }
-
-  return findings;
-}
-
 type ValidateRuntimeContractRequest = {
   readonly runtime: CortexRuntimeContract;
   readonly documents: ReadonlyMap<string, CortexContractDocument>;
   readonly findings: CortexContractFinding[];
 };
 
-function validateRuntimeContract(
-  request: ValidateRuntimeContractRequest,
-): void {
-  const documentPath = normalizePath(request.runtime.document);
-  const document = request.documents.get(documentPath);
-  if (!document) {
-    request.findings.push({
-      code: CortexContractFindingCode.MissingRuntimeDocument,
-      file: documentPath,
-      message: `Cortex runtime references a missing document: ${documentPath}`,
-    });
-    return;
-  }
-  const commands = document.commands.map(normalizeCommand);
-  for (const command of commands) {
-    if (!runtimeCommand(command)) continue;
-    const recognized = [
-      ...request.runtime.allowedCommandPrefixes,
-      ...request.runtime.retiredCommandPrefixes,
-    ].some((prefix) => commandMatchesPrefix({ command, prefix }));
-    if (recognized) continue;
-    request.findings.push({
-      code: CortexContractFindingCode.MissingRuntimeEntrypoint,
-      file: documentPath,
-      message: `Cortex workflow names an unregistered runtime entrypoint: ${command}`,
-    });
-  }
-  for (const required of request.runtime.requiredCommandPrefixes) {
-    if (
-      commands.some((command) =>
-        commandMatchesPrefix({ command, prefix: required }),
-      )
-    )
-      continue;
-    request.findings.push({
-      code: CortexContractFindingCode.MissingRuntimeEntrypoint,
-      file: documentPath,
-      message: `Cortex workflow is missing its required runtime entrypoint: ${required}`,
-    });
-  }
-  for (const retired of request.runtime.retiredCommandPrefixes) {
-    if (
-      !commands.some((command) =>
-        commandMatchesPrefix({ command, prefix: retired }),
-      )
-    )
-      continue;
-    request.findings.push({
-      code: CortexContractFindingCode.RetiredRuntimeEntrypoint,
-      file: documentPath,
-      message: `Cortex workflow names a retired runtime entrypoint: ${retired}`,
-    });
-  }
-}
-
-type CommandPrefixMatchRequest = {
-  readonly command: string;
-  readonly prefix: string;
-};
-
-function commandMatchesPrefix(request: CommandPrefixMatchRequest): boolean {
-  return (
-    request.command === request.prefix ||
-    request.command.startsWith(`${request.prefix} `)
-  );
-}
-
-function normalizeCommand(command: string): string {
-  return command.replaceAll(/\s+/gu, ' ').trim();
-}
-
-function runtimeCommand(command: string): boolean {
-  return command.startsWith('task ') || /^loom-[A-Za-z0-9:_-]+/u.test(command);
-}
-
 type UniqueCortexContextsArgs = {
   readonly contexts: readonly CortexContextContract[];
   readonly findings: CortexContractFinding[];
 };
 
-function uniqueContexts(
-  args: UniqueCortexContextsArgs,
-): ReadonlyMap<CortexContextAuthorityDocument, CortexContextContract> {
-  const entries = new Map<
-    CortexContextAuthorityDocument,
-    CortexContextContract
-  >();
-  for (const context of args.contexts) {
-    const authorityPath = normalizePath(context.authorityDocument);
-    const authority = resolveContextAuthority(authorityPath);
-    if (authority.kind === CortexDocumentOwnerResolutionKind.Unrecognized) {
-      args.findings.push({
-        code: CortexContractFindingCode.InvalidContextOwner,
-        file: authorityPath,
-        message: `Cortex context authority is not a canonical AGENTS.md document: ${authorityPath}`,
-      });
-      continue;
-    }
-    if (entries.has(authority.authorityDocument)) {
-      args.findings.push({
-        code: CortexContractFindingCode.DuplicateContext,
-        file: authorityPath,
-        message: `Cortex context authority is registered more than once: ${authorityPath}`,
-      });
-      continue;
-    }
-    entries.set(authority.authorityDocument, context);
-  }
-  return entries;
-}
-
 type UniqueCortexPoliciesArgs = {
   readonly policies: readonly CortexPolicyContract[];
   readonly findings: CortexContractFinding[];
 };
-
-function uniquePolicies(
-  args: UniqueCortexPoliciesArgs,
-): ReadonlyMap<string, CortexPolicyContract> {
-  const entries = new Map<string, CortexPolicyContract>();
-  for (const policy of args.policies) {
-    const policyPath = normalizePath(policy.document);
-    if (entries.has(policyPath)) {
-      args.findings.push({
-        code: CortexContractFindingCode.DuplicatePolicy,
-        file: policyPath,
-        message: `Cortex policy document is registered more than once: ${policyPath}`,
-      });
-      continue;
-    }
-    entries.set(policyPath, policy);
-  }
-  return entries;
-}
 
 enum CortexDocumentOwnerResolutionKind {
   Known = 'known',
@@ -251,51 +482,12 @@ type CortexDocumentOwnerResolution =
     }
   | { readonly kind: CortexDocumentOwnerResolutionKind.Unrecognized };
 
-function cortexDocumentOwner(
-  documentPath: string,
-): CortexDocumentOwnerResolution {
-  if (documentPath === '.cortex/AGENTS.md') {
-    return {
-      kind: CortexDocumentOwnerResolutionKind.Known,
-      owner: CortexContractTeam.GizmoPrime,
-    };
-  }
-  const owners: readonly (readonly [string, CortexContractTeam])[] = [
-    ['.cortex/gizmo/', CortexContractTeam.GizmoPrime],
-    ['.cortex/shared/', CortexContractTeam.Shared],
-    ['.cortex/teams/ai/', CortexContractTeam.Ai],
-    ['.cortex/teams/dev-core/', CortexContractTeam.DevelopmentCore],
-    ['.cortex/teams/security/', CortexContractTeam.Security],
-    ['.cortex/teams/sre/', CortexContractTeam.Sre],
-    ['.cortex/teams/web-dev/', CortexContractTeam.WebDevelopment],
-  ];
-  for (const [prefix, owner] of owners) {
-    if (documentPath.startsWith(prefix)) {
-      return { kind: CortexDocumentOwnerResolutionKind.Known, owner };
-    }
-  }
-  return { kind: CortexDocumentOwnerResolutionKind.Unrecognized };
-}
-
 type CortexContextAuthorityResolution =
   | {
       readonly kind: CortexDocumentOwnerResolutionKind.Known;
       readonly authorityDocument: CortexContextAuthorityDocument;
     }
   | { readonly kind: CortexDocumentOwnerResolutionKind.Unrecognized };
-function resolveContextAuthority(
-  authorityPath: string,
-): CortexContextAuthorityResolution {
-  for (const authority of Object.values(CortexContextAuthorityDocument)) {
-    if (authority === authorityPath) {
-      return {
-        kind: CortexDocumentOwnerResolutionKind.Known,
-        authorityDocument: authority,
-      };
-    }
-  }
-  return { kind: CortexDocumentOwnerResolutionKind.Unrecognized };
-}
 
 type ValidatePolicySafeguardsArgs = {
   readonly policy: CortexPolicyContract;
@@ -303,48 +495,6 @@ type ValidatePolicySafeguardsArgs = {
   readonly documents: ReadonlyMap<string, CortexContractDocument>;
   readonly findings: CortexContractFinding[];
 };
-
-function validatePolicySafeguards(args: ValidatePolicySafeguardsArgs): void {
-  if (args.policy.kind !== CortexPolicyContractKind.PersistedRepresentation)
-    return;
-  const authority = args.policies.get(
-    normalizePath(args.policy.schemaAuthority),
-  );
-  if (
-    !authority ||
-    !authority.capabilities.includes(CortexPolicyCapability.SchemaVersioning)
-  ) {
-    args.findings.push({
-      code: CortexContractFindingCode.InvalidSchemaAuthority,
-      file: args.policy.document,
-      message: `Persisted policy ${args.policy.document} requires a schema-versioning authority; ${args.policy.schemaAuthority} does not provide it.`,
-    });
-  } else {
-    const policyDocument = args.documents.get(
-      normalizePath(args.policy.document),
-    );
-    if (policyDocument) {
-      const referenceArgs: CortexDocumentReferenceArgs = {
-        authority: policyDocument,
-        targetPath: authority.document,
-      };
-      if (!referencesDocument(referenceArgs)) {
-        args.findings.push({
-          code: CortexContractFindingCode.MissingSchemaAuthorityReference,
-          file: args.policy.document,
-          message: `Persisted policy ${args.policy.document} does not reference its schema authority document ${authority.document}.`,
-        });
-      }
-    }
-  }
-  if (args.policy.evidence.length === 0) {
-    args.findings.push({
-      code: CortexContractFindingCode.MissingCompatibilityEvidence,
-      file: args.policy.document,
-      message: `Persisted policy ${args.policy.document} must require a legacy decode test or migration test.`,
-    });
-  }
-}
 
 type ValidateContextArgs = {
   readonly context: CortexContextContract;
@@ -354,154 +504,22 @@ type ValidateContextArgs = {
   readonly findings: CortexContractFinding[];
 };
 
-function validateContextImports(args: ValidateContextArgs): void {
-  for (const importedPath of args.context.imports) {
-    const policyPath = normalizePath(importedPath);
-    const policy = args.policies.get(policyPath);
-    if (!policy) {
-      args.findings.push({
-        code: CortexContractFindingCode.UnknownPolicyImport,
-        file: args.authority.relativePath,
-        message: `Cortex context ${args.context.authorityDocument} imports an unknown policy document: ${policyPath}`,
-      });
-      continue;
-    }
-    const referenceArgs: CortexDocumentReferenceArgs = {
-      authority: args.authority,
-      targetPath: policy.document,
-    };
-    if (!referencesDocument(referenceArgs)) {
-      const findingArgs: MissingPolicyReferenceArgs = {
-        context: args.context,
-        policy,
-      };
-      args.findings.push(missingPolicyReference(findingArgs));
-    }
-  }
-}
-
-function validatePolicyReachability(args: ValidateContextArgs): void {
-  for (const policy of args.policies.values()) {
-    if (contextOwnsPolicy({ contextOwner: args.contextOwner, policy }))
-      continue;
-    const coverageArgs: SharedPolicyAreaArgs = {
-      contextAreas: args.context.ownsAreas,
-      policyAreas: policy.areas,
-    };
-    if (!sharesArea(coverageArgs)) continue;
-    const importsPolicy = args.context.imports.some(
-      (policyPath) =>
-        normalizePath(policyPath) === normalizePath(policy.document),
-    );
-    if (!importsPolicy) {
-      args.findings.push({
-        code: CortexContractFindingCode.MissingPolicyImport,
-        file: args.authority.relativePath,
-        message: `Cortex context ${args.context.authorityDocument} owns an area covered by foreign policy ${policy.document} but does not import it.`,
-      });
-      continue;
-    }
-    const referenceArgs: CortexDocumentReferenceArgs = {
-      authority: args.authority,
-      targetPath: policy.document,
-    };
-    if (!referencesDocument(referenceArgs)) {
-      const alreadyReported = args.findings.some(
-        (finding) =>
-          finding.code === CortexContractFindingCode.MissingPolicyReference &&
-          finding.file === args.authority.relativePath &&
-          finding.message.includes(policy.document),
-      );
-      if (!alreadyReported) {
-        const findingArgs: MissingPolicyReferenceArgs = {
-          context: args.context,
-          policy,
-        };
-        args.findings.push(missingPolicyReference(findingArgs));
-      }
-    }
-  }
-}
-
 type ContextOwnsPolicyArgs = {
   readonly contextOwner: CortexDocumentOwnerResolution;
   readonly policy: CortexPolicyContract;
 };
-
-function contextOwnsPolicy(args: ContextOwnsPolicyArgs): boolean {
-  if (args.contextOwner.kind !== CortexDocumentOwnerResolutionKind.Known)
-    return false;
-  const policyOwner = cortexDocumentOwner(normalizePath(args.policy.document));
-  return (
-    policyOwner.kind === CortexDocumentOwnerResolutionKind.Known &&
-    policyOwner.owner === args.contextOwner.owner
-  );
-}
 
 type MissingPolicyReferenceArgs = {
   readonly context: CortexContextContract;
   readonly policy: CortexPolicyContract;
 };
 
-function missingPolicyReference(
-  args: MissingPolicyReferenceArgs,
-): CortexContractFinding {
-  return {
-    code: CortexContractFindingCode.MissingPolicyReference,
-    file: args.context.authorityDocument,
-    message: `Cortex context ${args.context.authorityDocument} imports policy ${args.policy.document} but its authority document does not reference it.`,
-  };
-}
-
 type CortexDocumentReferenceArgs = {
   readonly authority: CortexContractDocument;
   readonly targetPath: string;
 };
 
-function referencesDocument(args: CortexDocumentReferenceArgs): boolean {
-  const authorityPath = normalizePath(args.authority.relativePath);
-  const target = normalizePath(args.targetPath);
-  return args.authority.references.some((reference) => {
-    const documentReference = stripDocumentFragment(reference);
-    const resolved = documentReference.startsWith('.cortex/')
-      ? normalizePath(documentReference)
-      : normalizePath(`${directoryName(authorityPath)}/${documentReference}`);
-    return resolved === target;
-  });
-}
-
-function stripDocumentFragment(reference: string): string {
-  const suffixIndexes = [reference.indexOf('?'), reference.indexOf('#')].filter(
-    (index) => index >= 0,
-  );
-  const suffixIndex = Math.min(...suffixIndexes, reference.length);
-  return reference.slice(0, suffixIndex);
-}
-
 type SharedPolicyAreaArgs = {
   readonly contextAreas: readonly CortexPolicyArea[];
   readonly policyAreas: readonly CortexPolicyArea[];
 };
-
-function sharesArea(args: SharedPolicyAreaArgs): boolean {
-  return args.contextAreas.some((area) => args.policyAreas.includes(area));
-}
-
-function normalizePath(filePath: string): string {
-  const normalized: string[] = [];
-  for (const segment of filePath.replaceAll('\\', '/').split('/')) {
-    if (segment === '' || segment === '.') continue;
-    if (segment === '..') {
-      const previous = normalized.at(-1);
-      if (previous && previous !== '..') normalized.pop();
-      else normalized.push(segment);
-      continue;
-    }
-    normalized.push(segment);
-  }
-  return normalized.join('/');
-}
-
-function directoryName(filePath: string): string {
-  return filePath.split('/').slice(0, -1).join('/');
-}

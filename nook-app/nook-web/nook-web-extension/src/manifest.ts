@@ -1,4 +1,4 @@
-import { defaultSimpleVaultBaseUrl } from './lib/simple-vault-target'
+import { SimpleVaultTarget } from './lib/simple-vault-target'
 import {
   nook_vault_app_exclude_match_patterns,
   sentinel_vault_match_patterns,
@@ -18,7 +18,7 @@ export enum ExtensionManifestType {
   Module = 'module',
 }
 
-enum ContentScriptRunAt {
+export enum ContentScriptRunAt {
   DocumentIdle = 'document_idle',
   DocumentStart = 'document_start',
 }
@@ -28,7 +28,7 @@ enum ContentScriptWorld {
   Main = 'MAIN',
 }
 
-enum ExtensionPermission {
+export enum ExtensionPermission {
   ActiveTab = 'activeTab',
   Offscreen = 'offscreen',
   Storage = 'storage',
@@ -115,7 +115,7 @@ export function createManifest(
 ): ExtensionManifest {
   const simpleVaultBaseUrl =
     args.kind === ExtensionManifestBuildKind.StoreRelease
-      ? defaultSimpleVaultBaseUrl()
+      ? SimpleVaultTarget.defaultBase()
       : args.simpleVaultBaseUrl
   const simpleVaultMatch = simple_vault_match_pattern(simpleVaultBaseUrl)
   const vaultAppExclusions =

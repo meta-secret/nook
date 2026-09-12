@@ -1,24 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  formatLogLine,
-  formatLogTimestamp,
-  LogLevel,
-} from "../main/logger.js";
+import { LogRecord, LogTimestamp, LogLevel } from "../main/logger.js";
 
-test("formatLogTimestamp uses log4j-style UTC timestamps", () => {
-  const ts = formatLogTimestamp(new Date("2026-06-29T20:14:32.879Z"));
+void test("formatLogTimestamp uses log4j-style UTC timestamps", () => {
+  const ts = new LogTimestamp(new Date("2026-06-29T20:14:32.879Z")).format();
   assert.equal(ts, "2026-06-29 20:14:32,879");
 });
 
-test("formatLogLine includes level and component", () => {
-  const line = formatLogLine(
-    LogLevel.Info,
-    "ci-agent/agent-wait",
-    "Agent still running (20m 0s)",
-    new Date("2026-06-29T20:14:32.879Z"),
-  );
+void test("formatLogLine includes level and component", () => {
+  const line = new LogRecord({
+    level: LogLevel.Info,
+    component: "ci-agent/agent-wait",
+    message: "Agent still running (20m 0s)",
+    timestamp: new Date("2026-06-29T20:14:32.879Z"),
+  }).format();
   assert.equal(
     line,
     "2026-06-29 20:14:32,879 INFO  [ci-agent/agent-wait] Agent still running (20m 0s)",

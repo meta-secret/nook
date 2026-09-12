@@ -1,17 +1,170 @@
+import { CortexMarkdownSyntaxAudit } from '../src/cortex-document-structure.ts';
 import path from 'node:path';
+import { ok } from 'neverthrow';
+
 import { expect, test } from 'bun:test';
-import { executeCortexDocumentMapApplication } from '../src/application.ts';
+
+import { CortexDocumentMapApplication } from '../src/application.ts';
+
 import {
-  auditCortexMarkdownSyntax,
-  auditCortexDocumentStructure,
   CortexStructureFindingCode,
+  CortexDocumentStructure,
 } from '../src/cortex-document-structure.ts';
+
 import type {
   AuditCortexMarkdownSyntaxArgs,
   AuditCortexDocumentStructureArgs,
   CortexDocumentSource,
+  CortexStructureFinding,
 } from '../src/cortex-document-structure.ts';
+
 import { CortexDocumentMapContractKind } from '../src/domain.ts';
+
+export class CortexDocumentMapCortexDocumentStructureScenario {
+  private constructor(private readonly request: MakeDocumentArgs) {}
+
+  static makeDocument(args: MakeDocumentArgs): CortexDocumentSource {
+    return new CortexDocumentMapCortexDocumentStructureScenario(args).execute();
+  }
+
+  private execute(): CortexDocumentSource {
+    const args = this.request;
+    return {
+      absolutePath: path.join(REPO_ROOT, args.path),
+      relativePath: args.path,
+      content: args.content,
+    };
+  }
+
+  static audit(documents: readonly CortexDocumentSource[]) {
+    const args: AuditCortexDocumentStructureArgs = {
+      documents,
+      excludedDocumentPaths: new Set(),
+      repoRoot: REPO_ROOT,
+    };
+    const expected = CortexDocumentStructure.from(args).execute();
+    const result = CortexDocumentMapApplication.from({
+      kind: CortexDocumentMapContractKind.Request,
+      documents: documents.map((document) => ({
+        relativePath: document.relativePath,
+        content: document.content,
+      })),
+      excludedDocumentPaths: [],
+    }).execute();
+    expect(result.map((value) => value.findings)).toEqual(ok(expected));
+    return expected;
+  }
+
+  static auditSyntax(documents: readonly CortexDocumentSource[]) {
+    const args: AuditCortexMarkdownSyntaxArgs = { documents };
+    return new CortexMarkdownSyntaxAudit(args).execute();
+  }
+
+  static hasFinding(
+    ...[findings, expected]: readonly [
+      findings: readonly CortexStructureFinding[],
+      expected: Partial<CortexStructureFinding>,
+    ]
+  ): boolean {
+    return findings.some(
+      (finding) =>
+        (!('code' in expected) || finding.code === expected.code) &&
+        (!('file' in expected) || finding.file === expected.file) &&
+        (!('message' in expected) || finding.message === expected.message),
+    );
+  }
+
+  static distributedDocuments(
+    args: DistributedDocumentsArgs,
+  ): CortexDocumentSource[] {
+    const rootDocumentArgs: MakeDocumentArgs = {
+      path: '.cortex/knowledge-graph.md',
+      content: `# Cortex Knowledge Graph
+
+- [AI](teams/ai/knowledge-graph.md)
+- [Development core](teams/dev-core/knowledge-graph.md)
+- [Dev manager](teams/dev-manager/knowledge-graph.md)
+- [Security](teams/security/knowledge-graph.md)
+- [SRE](teams/sre/knowledge-graph.md)
+- [Web development](teams/web-dev/knowledge-graph.md)
+- [Shared](shared/knowledge-graph.md)
+- [Gizmo](gizmo/knowledge-graph.md)
+${args.rootExtra}`,
+    };
+    const aiGraphArgs: MakeDocumentArgs = {
+      path: '.cortex/teams/ai/knowledge-graph.md',
+      content: '# AI Knowledge Graph\n',
+    };
+    const devGraphArgs: MakeDocumentArgs = {
+      path: '.cortex/teams/dev-core/knowledge-graph.md',
+      content: `# Development Core Knowledge Graph\n\n- [Core policy](${args.devTarget})\n`,
+    };
+    const sreGraphArgs: MakeDocumentArgs = {
+      path: '.cortex/teams/sre/knowledge-graph.md',
+      content: '# SRE Knowledge Graph\n',
+    };
+    const securityGraphArgs: MakeDocumentArgs = {
+      path: '.cortex/teams/security/knowledge-graph.md',
+      content: '# Security Knowledge Graph\n',
+    };
+    const webGraphArgs: MakeDocumentArgs = {
+      path: '.cortex/teams/web-dev/knowledge-graph.md',
+      content: '# Web Development Knowledge Graph\n',
+    };
+    const sharedGraphArgs: MakeDocumentArgs = {
+      path: '.cortex/shared/knowledge-graph.md',
+      content: '# Shared Knowledge Graph\n',
+    };
+    const gizmoGraphArgs: MakeDocumentArgs = {
+      path: '.cortex/gizmo/knowledge-graph.md',
+      content: `# Gizmo Knowledge Graph\n\n- [Gizmo policy](${args.gizmoTarget})\n`,
+    };
+    const corePolicyArgs: MakeDocumentArgs = {
+      path: '.cortex/teams/dev-core/policy.md',
+      content: '# Core Policy\n\n## Boundary\n\nPolicy text.\n',
+    };
+    const gizmoPolicyArgs: MakeDocumentArgs = {
+      path: '.cortex/gizmo/policy.md',
+      content: '# Gizmo Policy\n\n## Boundary\n\nPolicy text.\n',
+    };
+    return [
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+        rootDocumentArgs,
+      ),
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+        path: '.cortex/teams/dev-manager/knowledge-graph.md',
+        content: '# Dev Manager Knowledge Graph\n',
+      }),
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+        aiGraphArgs,
+      ),
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+        devGraphArgs,
+      ),
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+        securityGraphArgs,
+      ),
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+        sreGraphArgs,
+      ),
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+        webGraphArgs,
+      ),
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+        sharedGraphArgs,
+      ),
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+        gizmoGraphArgs,
+      ),
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+        corePolicyArgs,
+      ),
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+        gizmoPolicyArgs,
+      ),
+    ];
+  }
+}
 
 const REPO_ROOT = '/repo';
 
@@ -19,38 +172,6 @@ type MakeDocumentArgs = {
   readonly path: string;
   readonly content: string;
 };
-
-function makeDocument(args: MakeDocumentArgs): CortexDocumentSource {
-  return {
-    absolutePath: path.join(REPO_ROOT, args.path),
-    relativePath: args.path,
-    content: args.content,
-  };
-}
-
-function audit(documents: readonly CortexDocumentSource[]) {
-  const args: AuditCortexDocumentStructureArgs = {
-    documents,
-    excludedDocumentPaths: new Set(),
-    repoRoot: REPO_ROOT,
-  };
-  const expected = auditCortexDocumentStructure(args);
-  const result = executeCortexDocumentMapApplication({
-    kind: CortexDocumentMapContractKind.Request,
-    documents: documents.map((document) => ({
-      relativePath: document.relativePath,
-      content: document.content,
-    })),
-    excludedDocumentPaths: [],
-  });
-  expect(result.findings).toEqual(expected);
-  return expected;
-}
-
-function auditSyntax(documents: readonly CortexDocumentSource[]) {
-  const args: AuditCortexMarkdownSyntaxArgs = { documents };
-  return auditCortexMarkdownSyntax(args);
-}
 
 const INDEX_DOC_ARGS: MakeDocumentArgs = {
   path: '.cortex/knowledge-graph.md',
@@ -66,7 +187,9 @@ Central index.
 - [B](b.md)
 `,
 };
-const INDEX_DOC = makeDocument(INDEX_DOC_ARGS);
+
+const INDEX_DOC =
+  CortexDocumentMapCortexDocumentStructureScenario.makeDocument(INDEX_DOC_ARGS);
 
 const DOCUMENT_A_ARGS: MakeDocumentArgs = {
   path: '.cortex/a.md',
@@ -83,7 +206,11 @@ Overview text.
 Details text.
 `,
 };
-const DOCUMENT_A = makeDocument(DOCUMENT_A_ARGS);
+
+const DOCUMENT_A =
+  CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+    DOCUMENT_A_ARGS,
+  );
 
 const DOCUMENT_B_ARGS: MakeDocumentArgs = {
   path: '.cortex/b.md',
@@ -94,10 +221,20 @@ const DOCUMENT_B_ARGS: MakeDocumentArgs = {
 Details text.
 `,
 };
-const DOCUMENT_B = makeDocument(DOCUMENT_B_ARGS);
+
+const DOCUMENT_B =
+  CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+    DOCUMENT_B_ARGS,
+  );
 
 test('accepts clean documents and valid centralized knowledge-graph.md', () => {
-  expect(audit([INDEX_DOC, DOCUMENT_A, DOCUMENT_B])).toEqual([]);
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit([
+      INDEX_DOC,
+      DOCUMENT_A,
+      DOCUMENT_B,
+    ]),
+  ).toEqual([]);
 });
 
 type DistributedDocumentsArgs = {
@@ -106,79 +243,92 @@ type DistributedDocumentsArgs = {
   readonly gizmoTarget: string;
 };
 
-function distributedDocuments(
-  args: DistributedDocumentsArgs,
-): CortexDocumentSource[] {
-  const rootDocumentArgs: MakeDocumentArgs = {
-    path: '.cortex/knowledge-graph.md',
-    content: `# Cortex Knowledge Graph
-
-- [AI](teams/ai/knowledge-graph.md)
-- [Development core](teams/dev-core/knowledge-graph.md)
-- [Security](teams/security/knowledge-graph.md)
-- [SRE](teams/sre/knowledge-graph.md)
-- [Web development](teams/web-dev/knowledge-graph.md)
-- [Shared](shared/knowledge-graph.md)
-- [Gizmo](gizmo/knowledge-graph.md)
-${args.rootExtra}`,
-  };
-  const aiGraphArgs: MakeDocumentArgs = {
-    path: '.cortex/teams/ai/knowledge-graph.md',
-    content: '# AI Knowledge Graph\n',
-  };
-  const devGraphArgs: MakeDocumentArgs = {
-    path: '.cortex/teams/dev-core/knowledge-graph.md',
-    content: `# Development Core Knowledge Graph\n\n- [Core policy](${args.devTarget})\n`,
-  };
-  const sreGraphArgs: MakeDocumentArgs = {
-    path: '.cortex/teams/sre/knowledge-graph.md',
-    content: '# SRE Knowledge Graph\n',
-  };
-  const securityGraphArgs: MakeDocumentArgs = {
-    path: '.cortex/teams/security/knowledge-graph.md',
-    content: '# Security Knowledge Graph\n',
-  };
-  const webGraphArgs: MakeDocumentArgs = {
-    path: '.cortex/teams/web-dev/knowledge-graph.md',
-    content: '# Web Development Knowledge Graph\n',
-  };
-  const sharedGraphArgs: MakeDocumentArgs = {
-    path: '.cortex/shared/knowledge-graph.md',
-    content: '# Shared Knowledge Graph\n',
-  };
-  const gizmoGraphArgs: MakeDocumentArgs = {
-    path: '.cortex/gizmo/knowledge-graph.md',
-    content: `# Gizmo Knowledge Graph\n\n- [Gizmo policy](${args.gizmoTarget})\n`,
-  };
-  const corePolicyArgs: MakeDocumentArgs = {
-    path: '.cortex/teams/dev-core/policy.md',
-    content: '# Core Policy\n\n## Boundary\n\nPolicy text.\n',
-  };
-  const gizmoPolicyArgs: MakeDocumentArgs = {
-    path: '.cortex/gizmo/policy.md',
-    content: '# Gizmo Policy\n\n## Boundary\n\nPolicy text.\n',
-  };
-  return [
-    makeDocument(rootDocumentArgs),
-    makeDocument(aiGraphArgs),
-    makeDocument(devGraphArgs),
-    makeDocument(securityGraphArgs),
-    makeDocument(sreGraphArgs),
-    makeDocument(webGraphArgs),
-    makeDocument(sharedGraphArgs),
-    makeDocument(gizmoGraphArgs),
-    makeDocument(corePolicyArgs),
-    makeDocument(gizmoPolicyArgs),
-  ];
-}
-
 test('accepts document-level team and shared graphs', () => {
   const distributedArgs: DistributedDocumentsArgs = {
     rootExtra: '',
     devTarget: 'policy.md',
     gizmoTarget: 'policy.md',
   };
-  expect(audit(distributedDocuments(distributedArgs))).toEqual([]);
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(
+      CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments(
+        distributedArgs,
+      ),
+    ),
+  ).toEqual([]);
+});
+
+test('indexes dev-manager documents only through their owning graph', () => {
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments({
+      rootExtra: '',
+      devTarget: 'policy.md',
+      gizmoTarget: 'policy.md',
+    });
+  const managerGraphPath = '.cortex/teams/dev-manager/knowledge-graph.md';
+  const policyPath = '.cortex/teams/dev-manager/policy.md';
+  documents.push(
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+      path: policyPath,
+      content: '# Dev Publication Policy\n',
+    }),
+  );
+  const findings =
+    CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
+  expect(findings).toContainEqual({
+    code: CortexStructureFindingCode.MissingFromIndex,
+    file: managerGraphPath,
+    line: 1,
+    message: `Document is not indexed in its owning knowledge graph ${managerGraphPath}: ${policyPath}`,
+  });
+  const indexedDocuments = documents.map((document) =>
+    document.relativePath === managerGraphPath
+      ? { ...document, content: `${document.content}\n- [Policy](policy.md)\n` }
+      : document,
+  );
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(indexedDocuments),
+  ).toEqual([]);
+  const foreignIndex = indexedDocuments.map((document) =>
+    document.relativePath === '.cortex/gizmo/knowledge-graph.md'
+      ? {
+          ...document,
+          content: `${document.content}\n- [Dev policy](../teams/dev-manager/policy.md)\n`,
+        }
+      : document,
+  );
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(foreignIndex),
+  ).toContainEqual({
+    code: CortexStructureFindingCode.InvalidIndexEntry,
+    file: '.cortex/gizmo/knowledge-graph.md',
+    line: 1,
+    message: `Owning knowledge graph cannot index another context's document: ${policyPath}`,
+  });
+});
+
+test('requires the root knowledge graph to link the dev-manager graph', () => {
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments({
+      rootExtra: '',
+      devTarget: 'policy.md',
+      gizmoTarget: 'policy.md',
+    }).map((document) => ({
+      ...document,
+      content: document.content.replace(
+        '- [Dev manager](teams/dev-manager/knowledge-graph.md)\n',
+        '',
+      ),
+    }));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(documents),
+  ).toContainEqual({
+    code: CortexStructureFindingCode.MissingFromIndex,
+    file: '.cortex/knowledge-graph.md',
+    line: 1,
+    message:
+      'Root knowledge graph must link the owner graph: .cortex/teams/dev-manager/knowledge-graph.md',
+  });
 });
 
 test('requires the root knowledge graph to link the Gizmo graph', () => {
@@ -187,7 +337,10 @@ test('requires the root knowledge graph to link the Gizmo graph', () => {
     devTarget: 'policy.md',
     gizmoTarget: 'policy.md',
   };
-  const documents = distributedDocuments(distributedArgs);
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments(
+      distributedArgs,
+    );
   const rootDocument = documents[0];
   if (!rootDocument) throw new Error('Expected distributed root document');
   documents[0] = {
@@ -197,14 +350,20 @@ test('requires the root knowledge graph to link the Gizmo graph', () => {
       '',
     ),
   };
-  const findings = audit(documents);
+  const findings =
+    CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
   const expectedFinding = {
     code: CortexStructureFindingCode.MissingFromIndex,
     file: '.cortex/knowledge-graph.md',
     message:
       'Root knowledge graph must link the owner graph: .cortex/gizmo/knowledge-graph.md',
   };
-  expect(findings).toContainEqual(expect.objectContaining(expectedFinding));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
+      findings,
+      expectedFinding,
+    ),
+  ).toBe(true);
 });
 
 test('maps Gizmo-owned documents to the Gizmo knowledge graph', () => {
@@ -213,14 +372,23 @@ test('maps Gizmo-owned documents to the Gizmo knowledge graph', () => {
     devTarget: 'policy.md',
     gizmoTarget: 'missing-policy.md',
   };
-  const findings = audit(distributedDocuments(distributedArgs));
+  const findings = CortexDocumentMapCortexDocumentStructureScenario.audit(
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments(
+      distributedArgs,
+    ),
+  );
   const expectedFinding = {
     code: CortexStructureFindingCode.MissingFromIndex,
     file: '.cortex/gizmo/knowledge-graph.md',
     message:
       'Document is not indexed in its owning knowledge graph .cortex/gizmo/knowledge-graph.md: .cortex/gizmo/policy.md',
   };
-  expect(findings).toContainEqual(expect.objectContaining(expectedFinding));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
+      findings,
+      expectedFinding,
+    ),
+  ).toBe(true);
 });
 
 test('rejects section links and duplicate document entries in knowledge graphs', () => {
@@ -229,12 +397,21 @@ test('rejects section links and duplicate document entries in knowledge graphs',
     devTarget: 'policy.md#boundary',
     gizmoTarget: 'policy.md',
   };
-  const findings = audit(distributedDocuments(distributedArgs));
+  const findings = CortexDocumentMapCortexDocumentStructureScenario.audit(
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments(
+      distributedArgs,
+    ),
+  );
   const expectedFinding = {
     code: CortexStructureFindingCode.InvalidIndexEntry,
     file: '.cortex/teams/dev-core/knowledge-graph.md',
   };
-  expect(findings).toContainEqual(expect.objectContaining(expectedFinding));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
+      findings,
+      expectedFinding,
+    ),
+  ).toBe(true);
 });
 
 test('rejects root navigation that bypasses an owning graph', () => {
@@ -243,7 +420,11 @@ test('rejects root navigation that bypasses an owning graph', () => {
     devTarget: 'policy.md',
     gizmoTarget: 'policy.md',
   };
-  const findings = audit(distributedDocuments(distributedArgs));
+  const findings = CortexDocumentMapCortexDocumentStructureScenario.audit(
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments(
+      distributedArgs,
+    ),
+  );
   expect(findings.map((finding) => finding.code)).toContain(
     CortexStructureFindingCode.InvalidIndexEntry,
   );
@@ -255,18 +436,31 @@ test('rejects a team graph that indexes another team document', () => {
     devTarget: '../sre/policy.md',
     gizmoTarget: 'policy.md',
   };
-  const documents = distributedDocuments(distributedArgs);
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments(
+      distributedArgs,
+    );
   const srePolicyArgs: MakeDocumentArgs = {
     path: '.cortex/teams/sre/policy.md',
     content: '# SRE Policy\n',
   };
-  documents.push(makeDocument(srePolicyArgs));
-  const findings = audit(documents);
+  documents.push(
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+      srePolicyArgs,
+    ),
+  );
+  const findings =
+    CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
   const expectedFinding = {
     code: CortexStructureFindingCode.InvalidIndexEntry,
     file: '.cortex/teams/dev-core/knowledge-graph.md',
   };
-  expect(findings).toContainEqual(expect.objectContaining(expectedFinding));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
+      findings,
+      expectedFinding,
+    ),
+  ).toBe(true);
 });
 
 test('rejects cross-owner indexing between Gizmo and team graphs', () => {
@@ -275,24 +469,42 @@ test('rejects cross-owner indexing between Gizmo and team graphs', () => {
     devTarget: 'policy.md',
     gizmoTarget: '../teams/dev-core/policy.md',
   };
-  const gizmoFindings = audit(distributedDocuments(gizmoIndexesTeamArgs));
+  const gizmoFindings = CortexDocumentMapCortexDocumentStructureScenario.audit(
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments(
+      gizmoIndexesTeamArgs,
+    ),
+  );
   const gizmoFinding = {
     code: CortexStructureFindingCode.InvalidIndexEntry,
     file: '.cortex/gizmo/knowledge-graph.md',
   };
-  expect(gizmoFindings).toContainEqual(expect.objectContaining(gizmoFinding));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
+      gizmoFindings,
+      gizmoFinding,
+    ),
+  ).toBe(true);
 
   const teamIndexesGizmoArgs: DistributedDocumentsArgs = {
     rootExtra: '',
     devTarget: '../../gizmo/policy.md',
     gizmoTarget: 'policy.md',
   };
-  const teamFindings = audit(distributedDocuments(teamIndexesGizmoArgs));
+  const teamFindings = CortexDocumentMapCortexDocumentStructureScenario.audit(
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments(
+      teamIndexesGizmoArgs,
+    ),
+  );
   const teamFinding = {
     code: CortexStructureFindingCode.InvalidIndexEntry,
     file: '.cortex/teams/dev-core/knowledge-graph.md',
   };
-  expect(teamFindings).toContainEqual(expect.objectContaining(teamFinding));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
+      teamFindings,
+      teamFinding,
+    ),
+  ).toBe(true);
 });
 
 test('accepts k-graph.md as an alias for the centralized knowledge graph', () => {
@@ -300,12 +512,24 @@ test('accepts k-graph.md as an alias for the centralized knowledge graph', () =>
     path: '.cortex/k-graph.md',
     content: INDEX_DOC_ARGS.content,
   };
-  const kGraphDoc = makeDocument(kGraphDocArgs);
-  expect(audit([kGraphDoc, DOCUMENT_A, DOCUMENT_B])).toEqual([]);
+  const kGraphDoc =
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+      kGraphDocArgs,
+    );
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit([
+      kGraphDoc,
+      DOCUMENT_A,
+      DOCUMENT_B,
+    ]),
+  ).toEqual([]);
 });
 
 test('reports missing knowledge-graph.md when centralized index is absent', () => {
-  const findings = audit([DOCUMENT_A, DOCUMENT_B]);
+  const findings = CortexDocumentMapCortexDocumentStructureScenario.audit([
+    DOCUMENT_A,
+    DOCUMENT_B,
+  ]);
   const codes = findings.map((finding) => finding.code);
   expect(codes).toContain(CortexStructureFindingCode.MissingIndex);
 });
@@ -320,10 +544,14 @@ test('requires the sole H1 title to be the first document node', () => {
 ## Purpose
 `,
   };
-  const document = makeDocument(documentArgs);
-  expect(audit([INDEX_DOC, document]).map((finding) => finding.code)).toContain(
-    CortexStructureFindingCode.InvalidTitle,
-  );
+  const document =
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(documentArgs);
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit([
+      INDEX_DOC,
+      document,
+    ]).map((finding) => finding.code),
+  ).toContain(CortexStructureFindingCode.InvalidTitle);
 });
 
 test('rejects block, inline, comment, and indexed Cortex HTML nodes', () => {
@@ -339,20 +567,28 @@ test('rejects block, inline, comment, and indexed Cortex HTML nodes', () => {
       path: '.cortex/html.md',
       content: `# HTML\n\n## Policy\n\n${content}\n`,
     };
-    const document = makeDocument(documentArgs);
-    expect(auditSyntax([document]).map((finding) => finding.code)).toContain(
-      CortexStructureFindingCode.ProhibitedHtml,
-    );
+    const document =
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+        documentArgs,
+      );
+    expect(
+      CortexDocumentMapCortexDocumentStructureScenario.auditSyntax([
+        document,
+      ]).map((finding) => finding.code),
+    ).toContain(CortexStructureFindingCode.ProhibitedHtml);
   }
 
   const indexArgs: MakeDocumentArgs = {
     path: '.cortex/knowledge-graph.md',
     content: '# Index\n\n<!-- hidden index note -->\n',
   };
-  const index = makeDocument(indexArgs);
-  expect(auditSyntax([index]).map((finding) => finding.code)).toContain(
-    CortexStructureFindingCode.ProhibitedHtml,
-  );
+  const index =
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(indexArgs);
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.auditSyntax([index]).map(
+      (finding) => finding.code,
+    ),
+  ).toContain(CortexStructureFindingCode.ProhibitedHtml);
 });
 
 test('allows escaped HTML text and HTML examples inside code', () => {
@@ -381,8 +617,11 @@ Autolink: <https://example.com>.
 Details text.
 `,
   };
-  const document = makeDocument(documentArgs);
-  expect(auditSyntax([document])).toEqual([]);
+  const document =
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(documentArgs);
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.auditSyntax([document]),
+  ).toEqual([]);
 });
 
 test('does not exempt legacy documents from the HTML prohibition', () => {
@@ -390,10 +629,13 @@ test('does not exempt legacy documents from the HTML prohibition', () => {
     path: '.cortex/legacy.md',
     content: '# Legacy\n\n## Policy\n\n<div>Legacy HTML</div>\n',
   };
-  const legacy = makeDocument(legacyArgs);
-  expect(auditSyntax([legacy]).map((finding) => finding.code)).toContain(
-    CortexStructureFindingCode.ProhibitedHtml,
-  );
+  const legacy =
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(legacyArgs);
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.auditSyntax([legacy]).map(
+      (finding) => finding.code,
+    ),
+  ).toContain(CortexStructureFindingCode.ProhibitedHtml);
 });
 
 test('rejects index links pointing to non-existent documents', () => {
@@ -404,8 +646,12 @@ test('rejects index links pointing to non-existent documents', () => {
 - [Missing](missing-file.md)
 `,
   };
-  const badIndex = makeDocument(badIndexArgs);
-  const codes = audit([badIndex, DOCUMENT_A]).map((finding) => finding.code);
+  const badIndex =
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(badIndexArgs);
+  const codes = CortexDocumentMapCortexDocumentStructureScenario.audit([
+    badIndex,
+    DOCUMENT_A,
+  ]).map((finding) => finding.code);
   expect(codes).toContain(CortexStructureFindingCode.InvalidIndexEntry);
 });
 
@@ -420,10 +666,13 @@ test('rejects index links pointing to missing heading fragments', () => {
   - [Details](b.md#details)
 `,
   };
-  const badIndex = makeDocument(badIndexArgs);
-  const codes = audit([badIndex, DOCUMENT_A, DOCUMENT_B]).map(
-    (finding) => finding.code,
-  );
+  const badIndex =
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(badIndexArgs);
+  const codes = CortexDocumentMapCortexDocumentStructureScenario.audit([
+    badIndex,
+    DOCUMENT_A,
+    DOCUMENT_B,
+  ]).map((finding) => finding.code);
   expect(codes).toContain(CortexStructureFindingCode.BrokenFragment);
 });
 
@@ -437,9 +686,14 @@ test('reports unindexed documents missing from knowledge-graph.md', () => {
   - [Details](a.md#details)
 `,
   };
-  const incompleteIndex = makeDocument(incompleteIndexArgs);
-  const codes = audit([incompleteIndex, DOCUMENT_A, DOCUMENT_B]).map(
-    (finding) => finding.code,
-  );
+  const incompleteIndex =
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+      incompleteIndexArgs,
+    );
+  const codes = CortexDocumentMapCortexDocumentStructureScenario.audit([
+    incompleteIndex,
+    DOCUMENT_A,
+    DOCUMENT_B,
+  ]).map((finding) => finding.code);
   expect(codes).toContain(CortexStructureFindingCode.MissingFromIndex);
 });

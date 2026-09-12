@@ -1,5 +1,10 @@
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
     forbid(invalid_raw_numeric_api_suppression)
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
@@ -33,28 +38,35 @@ mod store;
 pub use builder::{AppendEventInput, ObservedHeads};
 pub use canonical::{Ed25519Signature, EventId};
 pub use epoch::{
-    EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
-    concurrent_epoch_rotations_conflict, operation_starts_epoch,
+    ConcurrentEpochRotations, EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
 };
 pub use errors::{EventError, EventResult};
 pub use event::{
-    EncryptedSecretPayload, EpochMetadataState, EpochPasswordState, GenesisImportPayload,
+    EncryptedSecretPayload, EpochCheckpointRequirement, EpochMetadataState, EpochPasswordState,
+    GenesisImportContents, GenesisImportPayload, GenesisImportRequest, SecurityRotationTrigger,
     SentinelShareIssuedPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion,
-    VaultOperation, build_genesis_import_event, parse_event_storage_bytes,
-    parse_remote_event_storage_bytes, serialize_event_storage_yaml,
+    VaultOperation,
 };
 pub use event_bytes::{CanonicalEventBodyBytes, EventStorageBytes};
 pub use fingerprint::SecretFingerprint;
-pub use graph::{EventGraph, EventGraphVaultArchitecture, EventInsertStatus, EventPendingReason};
+pub use graph::{
+    EventGraph, EventGraphInsert, EventGraphInsertion, EventGraphRejection,
+    EventGraphReplacementEvidence, EventGraphVaultArchitecture, EventInsertStatus, EventLookup,
+    EventPendingReason,
+};
 pub use nook_replication::CausalGraphEventCount as EventCount;
 pub use projection::{
-    ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch,
-    SecretReplacementConflict, SecurityConflict, VaultProjection,
+    EpochCheckpoint, ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin,
+    ProjectionEpoch, ProjectionIntegrity, SecretReplacementConflict, SecurityConflict,
+    VaultProjection,
 };
 pub use remote_epoch_visibility::RemoteEventWrites;
 pub use signing::SigningIdentity;
 pub use store::{
-    CheckedRemoteEvent, LocalEventStore, RemoteEventBatch, RemoteEventLogClassification,
+    CheckedRemoteEvent, LocalEventAppend, LocalEventAppendOutcome, LocalEventBytes,
+    LocalEventStore, LocalEventStoreRejection, LocalEventWrite, LocalOutboxRemoval,
+    LocalOutboxRemovalResult, LocalOutboxRemoved, LocalOutboxWrite, LocalRemoteUnion,
+    LocalRemoteUnionOutcome, RemoteEventBatch, RemoteEventLogClassification, RemoteStoreIdentity,
 };
 
 // Re-export typed wire values that appear in the event-log public API.
@@ -86,7 +98,9 @@ mod test_support {
 
         let sequence = NEXT_SIGNING_KEY.fetch_add(1, Ordering::Relaxed);
         let mut bytes = [0_u8; 32];
-        bytes[..size_of::<u64>()].copy_from_slice(&sequence.to_le_bytes());
+        for (slot, byte) in bytes.iter_mut().zip(sequence.to_le_bytes()) {
+            *slot = byte;
+        }
         SigningKey::from_bytes(&bytes)
     }
 

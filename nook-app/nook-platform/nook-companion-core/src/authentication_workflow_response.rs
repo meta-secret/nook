@@ -6,8 +6,10 @@ use crate::authentication_workflow::{
     AuthenticationWorkflowStage,
 };
 use crate::{
-    AuthenticationSavedLoginAccountCount, AuthenticationWorkflowCurrentStep,
-    AuthenticationWorkflowObservationIndex, AuthenticationWorkflowTotalSteps,
+    AuthenticationObservationBindingToken, AuthenticationPageObservationFacts,
+    AuthenticationPageObservationFactsBatch, AuthenticationSavedLoginAccountCount,
+    AuthenticationWorkflowCurrentStep, AuthenticationWorkflowObservationIndex,
+    AuthenticationWorkflowTotalSteps,
 };
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
@@ -26,22 +28,23 @@ pub struct AuthenticationWorkflowSnapshotWire {
     observation_index: u32,
 }
 
-impl AuthenticationWorkflowSnapshotWire {
-    const fn into_snapshot(self) -> Option<AuthenticationWorkflowSnapshot> {
+impl TryFrom<AuthenticationWorkflowSnapshotWire> for AuthenticationWorkflowSnapshot {
+    type Error = AuthenticationWorkflowSnapshotResponseDecodeError;
+    fn try_from(wire: AuthenticationWorkflowSnapshotWire) -> Result<Self, Self::Error> {
         let snapshot = AuthenticationWorkflowSnapshot {
-            kind: self.kind,
-            stage: self.stage,
-            action: self.action,
-            current_step: AuthenticationWorkflowCurrentStep(self.current_step),
-            total_steps: AuthenticationWorkflowTotalSteps(self.total_steps),
-            approval_requirement: self.approval_requirement,
-            saved_login_capability: self.saved_login_capability,
-            observation_index: AuthenticationWorkflowObservationIndex(self.observation_index),
+            kind: wire.kind,
+            stage: wire.stage,
+            action: wire.action,
+            current_step: AuthenticationWorkflowCurrentStep(wire.current_step),
+            total_steps: AuthenticationWorkflowTotalSteps(wire.total_steps),
+            approval_requirement: wire.approval_requirement,
+            saved_login_capability: wire.saved_login_capability,
+            observation_index: AuthenticationWorkflowObservationIndex(wire.observation_index),
         };
         if snapshot.matches_classifier_contract() {
-            Some(snapshot)
+            Ok(snapshot)
         } else {
-            None
+            Err(AuthenticationWorkflowSnapshotResponseDecodeError)
         }
     }
 }
@@ -157,6 +160,44 @@ pub struct AuthenticationWorkflowRuntimeResponse {
     pub login_matches: WebsiteLoginMatchAvailability,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(tag = "state", rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
+pub enum AuthenticationWorkflowSelectedFactsWire {
+    Selected {
+        facts: Box<AuthenticationPageObservationFacts>,
+    },
+    NotApplicable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[serde(tag = "state", rename_all = "camelCase")]
+#[tsify(into_wasm_abi)]
+pub enum AuthenticationWorkflowSelectedFacts {
+    Selected {
+        facts: Box<AuthenticationPageObservationFacts>,
+    },
+    NotApplicable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
+pub struct AuthenticationWorkflowRoutingResponseWire {
+    workflow: AuthenticationWorkflowSnapshotResponseWire,
+    login_matches: WebsiteLoginMatchAvailabilityWire,
+    selected_facts: AuthenticationWorkflowSelectedFactsWire,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi)]
+pub struct AuthenticationWorkflowRoutingResponse {
+    pub workflow: AuthenticationWorkflowSnapshotResponse,
+    pub login_matches: WebsiteLoginMatchAvailability,
+    pub selected_facts: AuthenticationWorkflowSelectedFacts,
+}
+
 impl Serialize for AuthenticationWorkflowSnapshotResponseKind {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -174,102 +215,182 @@ pub struct AuthenticationWorkflowSnapshotResponseDecodeError;
 #[error("authentication workflow runtime response is malformed")]
 pub struct AuthenticationWorkflowRuntimeResponseDecodeError;
 
-pub fn decode_authentication_workflow_snapshot_response(
-    wire: AuthenticationWorkflowSnapshotResponseWire,
-) -> Result<AuthenticationWorkflowSnapshotResponse, AuthenticationWorkflowSnapshotResponseDecodeError>
-{
-    match wire {
-        AuthenticationWorkflowSnapshotResponseWire::Matched(
-            AuthenticationWorkflowMatchedResponseWire { ok: true, snapshot },
-        ) => {
-            let Some(snapshot) = snapshot.into_snapshot() else {
-                return Err(AuthenticationWorkflowSnapshotResponseDecodeError);
-            };
-            Ok(AuthenticationWorkflowSnapshotResponse::Matched {
-                kind: AuthenticationWorkflowSnapshotResponseKind::Matched,
-                snapshot,
-            })
-        }
-        AuthenticationWorkflowSnapshotResponseWire::NoMatch(
-            AuthenticationWorkflowNoMatchResponseWire { ok: true },
-        ) => Ok(AuthenticationWorkflowSnapshotResponse::NoMatch {
-            kind: AuthenticationWorkflowSnapshotResponseKind::NoMatch,
-        }),
-        AuthenticationWorkflowSnapshotResponseWire::Rejected(
-            AuthenticationWorkflowRejectedResponseWire { ok: false, reason },
-        ) if !reason.trim().is_empty() => Ok(AuthenticationWorkflowSnapshotResponse::Rejected {
-            kind: AuthenticationWorkflowSnapshotResponseKind::Rejected,
-            reason,
-        }),
-        AuthenticationWorkflowSnapshotResponseWire::Matched(_)
-        | AuthenticationWorkflowSnapshotResponseWire::NoMatch(_)
-        | AuthenticationWorkflowSnapshotResponseWire::Rejected(_) => {
-            Err(AuthenticationWorkflowSnapshotResponseDecodeError)
+impl AuthenticationWorkflowSnapshotResponse {
+    pub fn decode_authentication_workflow_snapshot_response(
+        wire: AuthenticationWorkflowSnapshotResponseWire,
+    ) -> Result<
+        AuthenticationWorkflowSnapshotResponse,
+        AuthenticationWorkflowSnapshotResponseDecodeError,
+    > {
+        match wire {
+            AuthenticationWorkflowSnapshotResponseWire::Matched(
+                AuthenticationWorkflowMatchedResponseWire { ok: true, snapshot },
+            ) => {
+                let snapshot = AuthenticationWorkflowSnapshot::try_from(snapshot)?;
+                Ok(AuthenticationWorkflowSnapshotResponse::Matched {
+                    kind: AuthenticationWorkflowSnapshotResponseKind::Matched,
+                    snapshot,
+                })
+            }
+            AuthenticationWorkflowSnapshotResponseWire::NoMatch(
+                AuthenticationWorkflowNoMatchResponseWire { ok: true },
+            ) => Ok(AuthenticationWorkflowSnapshotResponse::NoMatch {
+                kind: AuthenticationWorkflowSnapshotResponseKind::NoMatch,
+            }),
+            AuthenticationWorkflowSnapshotResponseWire::Rejected(
+                AuthenticationWorkflowRejectedResponseWire { ok: false, reason },
+            ) if !reason.trim().is_empty() => {
+                Ok(AuthenticationWorkflowSnapshotResponse::Rejected {
+                    kind: AuthenticationWorkflowSnapshotResponseKind::Rejected,
+                    reason,
+                })
+            }
+            AuthenticationWorkflowSnapshotResponseWire::Matched(_)
+            | AuthenticationWorkflowSnapshotResponseWire::NoMatch(_)
+            | AuthenticationWorkflowSnapshotResponseWire::Rejected(_) => {
+                Err(AuthenticationWorkflowSnapshotResponseDecodeError)
+            }
         }
     }
 }
 
-pub fn decode_authentication_workflow_runtime_response(
-    wire: AuthenticationWorkflowRuntimeResponseWire,
-) -> Result<AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowRuntimeResponseDecodeError>
-{
-    let workflow = decode_authentication_workflow_snapshot_response(wire.workflow)
+impl AuthenticationWorkflowRuntimeResponse {
+    pub fn decode_authentication_workflow_runtime_response(
+        wire: AuthenticationWorkflowRuntimeResponseWire,
+    ) -> Result<
+        AuthenticationWorkflowRuntimeResponse,
+        AuthenticationWorkflowRuntimeResponseDecodeError,
+    > {
+        let workflow = AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(wire.workflow)
         .map_err(|_| AuthenticationWorkflowRuntimeResponseDecodeError)?;
-    let login_matches = match wire.login_matches {
-        WebsiteLoginMatchAvailabilityWire::WithCount(
-            WebsiteLoginMatchAvailabilityWithCountWire {
-                kind: WebsiteLoginMatchAvailabilityKind::Ready,
-                count,
-            },
-        ) => WebsiteLoginMatchAvailability::Ready {
-            count: count.into(),
-        },
-        WebsiteLoginMatchAvailabilityWire::WithoutCount(
-            WebsiteLoginMatchAvailabilityWithoutCountWire {
-                kind: WebsiteLoginMatchAvailabilityKind::Locked,
-            },
-        ) => WebsiteLoginMatchAvailability::Locked,
-        WebsiteLoginMatchAvailabilityWire::WithoutCount(
-            WebsiteLoginMatchAvailabilityWithoutCountWire {
-                kind: WebsiteLoginMatchAvailabilityKind::Unavailable,
-            },
-        ) => WebsiteLoginMatchAvailability::Unavailable,
-        WebsiteLoginMatchAvailabilityWire::WithCount(_)
-        | WebsiteLoginMatchAvailabilityWire::WithoutCount(_) => {
+        let login_matches = WebsiteLoginMatchAvailability::try_from(wire.login_matches)?;
+        let login_matches_match_workflow = match (login_matches, &workflow) {
+            (
+                WebsiteLoginMatchAvailability::Ready {
+                    count: AuthenticationSavedLoginAccountCount::ZERO,
+                }
+                | WebsiteLoginMatchAvailability::Unavailable,
+                _,
+            ) => true,
+            (
+                WebsiteLoginMatchAvailability::Ready { .. } | WebsiteLoginMatchAvailability::Locked,
+                AuthenticationWorkflowSnapshotResponse::Matched { snapshot, .. },
+            ) => {
+                snapshot.saved_login_capability()
+                    == AuthenticationSavedLoginCapability::FillSavedLogin
+            }
+            (
+                WebsiteLoginMatchAvailability::Ready { .. } | WebsiteLoginMatchAvailability::Locked,
+                _,
+            ) => false,
+        };
+        if !login_matches_match_workflow {
             return Err(AuthenticationWorkflowRuntimeResponseDecodeError);
         }
-    };
-    let login_matches_match_workflow = match (login_matches, &workflow) {
-        (
-            WebsiteLoginMatchAvailability::Ready {
-                count: AuthenticationSavedLoginAccountCount::ZERO,
-            }
-            | WebsiteLoginMatchAvailability::Unavailable,
-            _,
-        ) => true,
-        (
-            WebsiteLoginMatchAvailability::Ready { .. } | WebsiteLoginMatchAvailability::Locked,
-            AuthenticationWorkflowSnapshotResponse::Matched { snapshot, .. },
-        ) => {
-            snapshot.saved_login_capability() == AuthenticationSavedLoginCapability::FillSavedLogin
-        }
-        (
-            WebsiteLoginMatchAvailability::Ready { .. } | WebsiteLoginMatchAvailability::Locked,
-            _,
-        ) => false,
-    };
-    if !login_matches_match_workflow {
-        return Err(AuthenticationWorkflowRuntimeResponseDecodeError);
+        Ok(AuthenticationWorkflowRuntimeResponse {
+            workflow,
+            login_matches,
+        })
     }
-    Ok(AuthenticationWorkflowRuntimeResponse {
-        workflow,
-        login_matches,
-    })
+}
+
+impl AuthenticationWorkflowRoutingResponse {
+    pub fn decode_authentication_workflow_routing_response(
+        wire: AuthenticationWorkflowRoutingResponseWire,
+    ) -> Result<Self, AuthenticationWorkflowRuntimeResponseDecodeError> {
+        let AuthenticationWorkflowRoutingResponseWire {
+            workflow,
+            login_matches,
+            selected_facts,
+        } = wire;
+        let runtime =
+            AuthenticationWorkflowRuntimeResponse::decode_authentication_workflow_runtime_response(
+                AuthenticationWorkflowRuntimeResponseWire {
+                    workflow,
+                    login_matches,
+                },
+            )?;
+        let selected_facts = match (&runtime.workflow, selected_facts) {
+            (
+                AuthenticationWorkflowSnapshotResponse::Matched { .. },
+                AuthenticationWorkflowSelectedFactsWire::Selected { facts },
+            ) => {
+                AuthenticationObservationBindingToken::bind_authentication_page_observation_facts(
+                    &AuthenticationPageObservationFactsBatch {
+                        observations: vec![facts.as_ref().clone()],
+                    },
+                )
+                .map_err(|_| AuthenticationWorkflowRuntimeResponseDecodeError)?;
+                AuthenticationWorkflowSelectedFacts::Selected { facts }
+            }
+            (
+                AuthenticationWorkflowSnapshotResponse::NoMatch { .. }
+                | AuthenticationWorkflowSnapshotResponse::Rejected { .. },
+                AuthenticationWorkflowSelectedFactsWire::NotApplicable,
+            ) => AuthenticationWorkflowSelectedFacts::NotApplicable,
+            (
+                AuthenticationWorkflowSnapshotResponse::Matched { .. }
+                | AuthenticationWorkflowSnapshotResponse::NoMatch { .. }
+                | AuthenticationWorkflowSnapshotResponse::Rejected { .. },
+                _,
+            ) => return Err(AuthenticationWorkflowRuntimeResponseDecodeError),
+        };
+        Ok(Self {
+            workflow: runtime.workflow,
+            login_matches: runtime.login_matches,
+            selected_facts,
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn routing_response_atomically_requires_bounded_selected_facts() -> anyhow::Result<()> {
+        let selected_facts = AuthenticationPageObservationFacts::default();
+        let response = serde_json::json!({
+            "workflow": {
+                "ok": true,
+                "snapshot": {
+                    "kind": 0,
+                    "stage": 0,
+                    "action": 0,
+                    "currentStep": 1,
+                    "totalSteps": 3,
+                    "approvalRequirement": "explicit-user-approval",
+                    "savedLoginCapability": "fill-saved-login",
+                    "observationIndex": 0
+                }
+            },
+            "loginMatches": { "kind": "ready", "count": 1 },
+            "selectedFacts": { "state": "selected", "facts": selected_facts }
+        });
+        let wire =
+            serde_json::from_value::<AuthenticationWorkflowRoutingResponseWire>(response.clone())?;
+        let decoded =
+            AuthenticationWorkflowRoutingResponse::decode_authentication_workflow_routing_response(
+                wire,
+            )?;
+        assert_eq!(
+            decoded.selected_facts,
+            AuthenticationWorkflowSelectedFacts::Selected {
+                facts: Box::new(selected_facts)
+            }
+        );
+
+        let mut missing_facts = response;
+        missing_facts
+            .as_object_mut()
+            .ok_or_else(|| anyhow::anyhow!("routing fixture must be an object"))?
+            .remove("selectedFacts");
+        assert!(
+            serde_json::from_value::<AuthenticationWorkflowRoutingResponseWire>(missing_facts)
+                .is_err()
+        );
+        Ok(())
+    }
 
     #[test]
     fn enforces_closed_approval_requirements() -> anyhow::Result<()> {
@@ -280,7 +401,7 @@ mod tests {
             let wire =
                 serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(mismatched)?;
             assert_eq!(
-                decode_authentication_workflow_snapshot_response(wire),
+                AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(wire),
                 Err(AuthenticationWorkflowSnapshotResponseDecodeError)
             );
         }
@@ -289,7 +410,7 @@ mod tests {
             r#"{"ok":true,"snapshot":{"kind":0,"stage":5,"action":6,"currentStep":1,"totalSteps":3,"approvalRequirement":"takeover-required","savedLoginCapability":"unavailable","observationIndex":0}}"#,
         )?;
         assert!(matches!(
-            decode_authentication_workflow_snapshot_response(takeover)?,
+            AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(takeover)?,
             AuthenticationWorkflowSnapshotResponse::Matched {
                 snapshot: AuthenticationWorkflowSnapshot {
                     approval_requirement: AuthenticationApprovalRequirement::TakeoverRequired,
@@ -319,7 +440,7 @@ mod tests {
             r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","savedLoginCapability":"fill-saved-login","observationIndex":0}}"#,
         )?;
         assert!(matches!(
-            decode_authentication_workflow_snapshot_response(valid)?,
+            AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(valid)?,
             AuthenticationWorkflowSnapshotResponse::Matched { .. }
         ));
 
@@ -329,7 +450,7 @@ mod tests {
             r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","savedLoginCapability":"unavailable","observationIndex":0}}"#,
         )?;
         assert_eq!(
-            decode_authentication_workflow_snapshot_response(continue_without_saved_login),
+            AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(continue_without_saved_login),
             Err(AuthenticationWorkflowSnapshotResponseDecodeError)
         );
 
@@ -344,7 +465,7 @@ mod tests {
             AuthenticationWorkflowNoMatchResponseWire { ok: true },
         );
         assert_eq!(
-            decode_authentication_workflow_snapshot_response(no_match)?,
+            AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(no_match)?,
             AuthenticationWorkflowSnapshotResponse::NoMatch {
                 kind: AuthenticationWorkflowSnapshotResponseKind::NoMatch,
             }
@@ -357,7 +478,7 @@ mod tests {
             },
         );
         assert_eq!(
-            decode_authentication_workflow_snapshot_response(rejected)?,
+            AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(rejected)?,
             AuthenticationWorkflowSnapshotResponse::Rejected {
                 kind: AuthenticationWorkflowSnapshotResponseKind::Rejected,
                 reason: "vault-locked".to_owned(),
@@ -370,7 +491,7 @@ mod tests {
             r#"{"ok":false,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","savedLoginCapability":"fill-saved-login","observationIndex":0}}"#,
         )?;
         assert_eq!(
-            decode_authentication_workflow_snapshot_response(contradictory_matched),
+            AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(contradictory_matched),
             Err(AuthenticationWorkflowSnapshotResponseDecodeError)
         );
 
@@ -378,7 +499,7 @@ mod tests {
             r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":6,"currentStep":1,"totalSteps":3,"approvalRequirement":"takeover-required","savedLoginCapability":"unavailable","observationIndex":0}}"#,
         )?;
         assert_eq!(
-            decode_authentication_workflow_snapshot_response(impossible_snapshot),
+            AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(impossible_snapshot),
             Err(AuthenticationWorkflowSnapshotResponseDecodeError)
         );
 
@@ -388,7 +509,7 @@ mod tests {
             r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","savedLoginCapability":"fill-saved-login","observationIndex":20}}"#,
         )?;
         assert_eq!(
-            decode_authentication_workflow_snapshot_response(out_of_bounds_observation),
+            AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(out_of_bounds_observation),
             Err(AuthenticationWorkflowSnapshotResponseDecodeError)
         );
 
@@ -410,7 +531,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                decode_authentication_workflow_snapshot_response(malformed),
+                AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(malformed),
                 Err(AuthenticationWorkflowSnapshotResponseDecodeError)
             );
         }
@@ -422,7 +543,7 @@ mod tests {
         for availability in [r#"{"kind":"ready","count":0}"#, r#"{"kind":"unavailable"}"#] {
             let json = format!(r#"{{"workflow":{{"ok":true}},"loginMatches":{availability}}}"#);
             let wire = serde_json::from_str::<AuthenticationWorkflowRuntimeResponseWire>(&json)?;
-            assert!(decode_authentication_workflow_runtime_response(wire).is_ok());
+            assert!(AuthenticationWorkflowRuntimeResponse::decode_authentication_workflow_runtime_response(wire).is_ok());
         }
 
         for malformed in [
@@ -433,7 +554,7 @@ mod tests {
             let wire =
                 serde_json::from_str::<AuthenticationWorkflowRuntimeResponseWire>(malformed)?;
             assert_eq!(
-                decode_authentication_workflow_runtime_response(wire),
+                AuthenticationWorkflowRuntimeResponse::decode_authentication_workflow_runtime_response(wire),
                 Err(AuthenticationWorkflowRuntimeResponseDecodeError)
             );
         }
@@ -461,7 +582,7 @@ mod tests {
             let wire =
                 serde_json::from_str::<AuthenticationWorkflowRuntimeResponseWire>(contradictory)?;
             assert_eq!(
-                decode_authentication_workflow_runtime_response(wire),
+                AuthenticationWorkflowRuntimeResponse::decode_authentication_workflow_runtime_response(wire),
                 Err(AuthenticationWorkflowRuntimeResponseDecodeError)
             );
         }
@@ -472,8 +593,65 @@ mod tests {
             );
             let consistent =
                 serde_json::from_str::<AuthenticationWorkflowRuntimeResponseWire>(&json)?;
-            assert!(decode_authentication_workflow_runtime_response(consistent).is_ok());
+            assert!(AuthenticationWorkflowRuntimeResponse::decode_authentication_workflow_runtime_response(consistent).is_ok());
         }
         Ok(())
+    }
+}
+
+impl TryFrom<WebsiteLoginMatchAvailabilityWire> for WebsiteLoginMatchAvailability {
+    type Error = AuthenticationWorkflowRuntimeResponseDecodeError;
+    fn try_from(wire: WebsiteLoginMatchAvailabilityWire) -> Result<Self, Self::Error> {
+        Ok(match wire {
+            WebsiteLoginMatchAvailabilityWire::WithCount(
+                WebsiteLoginMatchAvailabilityWithCountWire {
+                    kind: WebsiteLoginMatchAvailabilityKind::Ready,
+                    count,
+                },
+            ) => WebsiteLoginMatchAvailability::Ready {
+                count: count.into(),
+            },
+            WebsiteLoginMatchAvailabilityWire::WithoutCount(
+                WebsiteLoginMatchAvailabilityWithoutCountWire {
+                    kind: WebsiteLoginMatchAvailabilityKind::Locked,
+                },
+            ) => WebsiteLoginMatchAvailability::Locked,
+            WebsiteLoginMatchAvailabilityWire::WithoutCount(
+                WebsiteLoginMatchAvailabilityWithoutCountWire {
+                    kind: WebsiteLoginMatchAvailabilityKind::Unavailable,
+                },
+            ) => WebsiteLoginMatchAvailability::Unavailable,
+            WebsiteLoginMatchAvailabilityWire::WithCount(_)
+            | WebsiteLoginMatchAvailabilityWire::WithoutCount(_) => {
+                return Err(AuthenticationWorkflowRuntimeResponseDecodeError);
+            }
+        })
+    }
+}
+impl WebsiteLoginMatchAvailability {
+    #[must_use]
+    pub fn supports_alternative_saved_login(self, action: AuthenticationWorkflowAction) -> bool {
+        matches!(
+            action,
+            AuthenticationWorkflowAction::UsePasskey | AuthenticationWorkflowAction::CreatePasskey
+        ) && match self {
+            Self::Ready { count } => count.is_nonzero(),
+            Self::Locked => true,
+            Self::Unavailable => false,
+        }
+    }
+}
+#[derive(Debug, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(from_wasm_abi)]
+pub struct SavedLoginActionPresentationRequest {
+    pub action: AuthenticationWorkflowAction,
+    pub login_matches: WebsiteLoginMatchAvailabilityWire,
+}
+impl SavedLoginActionPresentationRequest {
+    #[must_use]
+    pub fn is_available(self) -> bool {
+        WebsiteLoginMatchAvailability::try_from(self.login_matches)
+            .is_ok_and(|availability| availability.supports_alternative_saved_login(self.action))
     }
 }

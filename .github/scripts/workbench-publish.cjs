@@ -15,32 +15,52 @@ const SourceTaskFileKind = Object.freeze({
   Present: 'present',
 })
 
+/** @typedef {{ kind: 'missing' } | { kind: 'present', path: string }} SourceTaskFile */
+/** @typedef {{ kind: 'missing' } | { kind: 'present', sha: string }} WorkbenchRemoteFile */
+/** @typedef {{ kind: 'invalid', message: string } | { kind: 'valid', gizmoId: string, issuePath: string }} PlanFrontmatter */
+/** @typedef {{ kind: 'invalid' } | { kind: 'legacy' } | { kind: 'assigned', value: string }} RemoteAssignment */
+
 const gizmoIdPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const issuePathPattern = /^issues\/[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9._-]+)*\.md$/
 
+/** @param {string} content @param {string} field @returns {string[] | false} */
 function frontmatterValues(content, field) {
   const frontmatterMatch = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content)
   if (!frontmatterMatch) return false
+  const frontmatter = frontmatterMatch[1]
+  if (typeof frontmatter !== 'string') return false
   const pattern = new RegExp(`^${field}:\\s*(.*?)\\s*$`, 'gm')
-  return [...frontmatterMatch[1].matchAll(pattern)].map((match) => match[1].trim())
+  return [...frontmatter.matchAll(pattern)]
+    .map((match) => match[1])
+    .filter((value) => typeof value === 'string')
+    .map((value) => value.trim())
 }
 
+/** @param {string} content @returns {PlanFrontmatter} */
 function parsePlanFrontmatter(content) {
   const issue = frontmatterValues(content, 'issue')
   const gizmoId = frontmatterValues(content, 'gizmo_id')
   if (!issue || !gizmoId || issue.length !== 1 || gizmoId.length !== 1) {
     return { kind: 'invalid', message: 'YAML frontmatter requires one issue and gizmo_id' }
   }
-  if (gizmoId[0] === 'null' || !gizmoIdPattern.test(gizmoId[0])) {
+  const gizmoIdValue = gizmoId[0]
+  const issueValue = issue[0]
+  if (
+    typeof gizmoIdValue !== 'string' ||
+    typeof issueValue !== 'string' ||
+    gizmoIdValue === 'null' ||
+    !gizmoIdPattern.test(gizmoIdValue)
+  ) {
     return { kind: 'invalid', message: 'YAML frontmatter gizmo_id is invalid' }
   }
-  const issuePath = issue[0] === 'null' ? '' : issue[0]
+  const issuePath = issueValue === 'null' ? '' : issueValue
   if (issuePath && (!issuePathPattern.test(issuePath) || issuePath.includes('..'))) {
     return { kind: 'invalid', message: 'YAML frontmatter issue path is invalid' }
   }
-  return { kind: 'valid', gizmoId: gizmoId[0], issuePath }
+  return { kind: 'valid', gizmoId: gizmoIdValue, issuePath }
 }
 
+/** @param {string} issuePath @returns {RemoteAssignment} */
 function fetchRemoteIssueAssignment(issuePath) {
   try {
     const content = execFileSync(
@@ -55,9 +75,11 @@ function fetchRemoteIssueAssignment(issuePath) {
     if (Buffer.byteLength(content, 'utf8') > 32_000) return { kind: 'invalid' }
     const gizmoId = frontmatterValues(content, 'gizmo_id')
     if (!gizmoId || gizmoId.length > 1) return { kind: 'invalid' }
-    if (gizmoId.length === 0 || gizmoId[0] === 'null') return { kind: 'legacy' }
-    return gizmoIdPattern.test(gizmoId[0])
-      ? { kind: 'assigned', value: gizmoId[0] }
+    const gizmoIdValue = gizmoId[0]
+    if (gizmoId.length === 0 || gizmoIdValue === 'null') return { kind: 'legacy' }
+    if (typeof gizmoIdValue !== 'string') return { kind: 'invalid' }
+    return gizmoIdPattern.test(gizmoIdValue)
+      ? { kind: 'assigned', value: gizmoIdValue }
       : { kind: 'invalid' }
   } catch {
     return { kind: 'invalid' }
@@ -71,6 +93,7 @@ const assignedIssuePath =
   process.env.NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH?.trim() || ''
 const assignedGizmoId =
   process.env.NOOK_WORKBENCH_ASSIGNED_GIZMO_ID?.trim() || ''
+/** @type {SourceTaskFile} */
 let sourceTaskFile = { kind: SourceTaskFileKind.Missing }
 if (typeof process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE === 'string') {
   const path = process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE.trim()
@@ -140,6 +163,7 @@ if (remotePath.startsWith('plans/')) {
     console.error('Refusing invalid Workbench plan: trusted caller identity does not match plan')
     process.exit(7)
   }
+  /** @type {RemoteAssignment} */
   const assignment = assignedIssuePath
     ? fetchRemoteIssueAssignment(assignedIssuePath)
     : { kind: 'legacy' }
@@ -170,6 +194,7 @@ if (remotePath.startsWith('plans/')) {
   }
 }
 const content = Buffer.from(localContent).toString('base64')
+/** @type {WorkbenchRemoteFile} */
 let remoteFile = { kind: WorkbenchRemoteFileKind.Missing }
 try {
   remoteFile = {

@@ -280,22 +280,9 @@ where
     }
 }
 
-impl<T> HiveContext<T> for Option<T> {
-    fn hive_context(self, context: impl Into<String>) -> HiveResult<T> {
-        self.ok_or_else(|| HiveError::message(context))
-    }
-
-    fn with_hive_context<F>(self, context: F) -> HiveResult<T>
-    where
-        F: FnOnce() -> String,
-    {
-        self.ok_or_else(|| HiveError::message(context()))
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{HiveContext, HiveError};
+    use super::HiveError;
     use crate::codex;
     use std::env;
     use std::hint;
@@ -307,7 +294,7 @@ mod tests {
         let Err(json_error) = serde_json::from_str::<serde_json::Value>("{") else {
             return Err(HiveError::message("invalid JSON fixture parsed"));
         };
-        let Err(model_error) = crate::TaskId::new("") else {
+        let Err(model_error) = crate::TaskId::try_from("") else {
             return Err(HiveError::message("empty identifier fixture was accepted"));
         };
         let Err(utf8_error) = String::from_utf8(vec![0xff]) else {
@@ -368,8 +355,11 @@ mod tests {
                 .starts_with("join:")
         );
 
-        let missing: Option<()> = None;
-        let Err(missing) = missing.hive_context("required state") else {
+        let missing = []
+            .first()
+            .copied()
+            .ok_or_else(|| HiveError::message("required state"));
+        let Err(missing): Result<(), _> = missing else {
             return Err(HiveError::message("missing option produced a value"));
         };
         assert_eq!(missing.to_string(), "required state");

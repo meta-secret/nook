@@ -23,22 +23,15 @@ use crate::{
 };
 use crate::{SentinelParticipantCount, SentinelShareCount, SentinelShareIndex, SentinelThreshold};
 use ed25519_dalek::{Signer, SigningKey};
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32")]
 pub struct SentinelUnlockVersion(u32);
 
 impl SentinelUnlockVersion {
     pub const CURRENT: Self = Self(1);
-
-    fn parse(value: u32) -> Result<Self, &'static str> {
-        match value {
-            1 => Ok(Self::CURRENT),
-            _ => Err("unsupported Sentinel unlock version"),
-        }
-    }
 }
 
 impl From<SentinelUnlockVersion> for u32 {
@@ -47,12 +40,20 @@ impl From<SentinelUnlockVersion> for u32 {
     }
 }
 
-impl<'de> Deserialize<'de> for SentinelUnlockVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Self::parse(u32::deserialize(deserializer)?).map_err(de::Error::custom)
+impl TryFrom<u32> for SentinelUnlockVersion {
+    type Error = &'static str;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::CURRENT),
+            _ => Err("unsupported Sentinel unlock version"),
+        }
     }
 }
 
@@ -67,10 +68,8 @@ pub struct SentinelUnlockPolicy {
 
 impl SentinelUnlockPolicy {
     pub fn validate(self) -> MultiDeviceResult<()> {
-        if u8::from(self.threshold) < 2
-            || u8::from(self.required_participants) < 2
-            || u8::from(self.threshold) > u8::from(self.required_participants)
-            || u8::from(self.required_participants) > 16
+        if !self.threshold.is_valid_for(self.required_participants)
+            || !self.required_participants.is_supported_quorum()
         {
             return Err(MultiDeviceError::InvalidSentinelThreshold);
         }
@@ -126,11 +125,11 @@ pub enum SentinelUnlockReadiness {
 ///
 /// ```
 /// use nook_auth2::{SentinelUnlockSession, SentinelUnlockResponse, DeviceIdentity,
-///     MultiDeviceResult, VaultKeys};
+///     MultiDeviceResult, VaultKeys, StoreId, SentinelUnlockPolicy};
 /// let complete = |session: SentinelUnlockSession, response: SentinelUnlockResponse,
-///     identity: &DeviceIdentity| -> MultiDeviceResult<VaultKeys> {
+///     identity: &DeviceIdentity, store_id: &StoreId, policy: SentinelUnlockPolicy| -> MultiDeviceResult<VaultKeys> {
 ///     let session = session.collect(response).map_err(|rejected| rejected.into_parts().1)?;
-///     session.into_quorum(identity).map_err(|rejected| rejected.into_parts().1)?.finalize()
+///     session.into_quorum(identity).map_err(|rejected| rejected.into_parts().1)?.check_context(store_id, policy)?.finalize()
 /// };
 /// ```
 ///
@@ -189,49 +188,16 @@ impl SentinelUnlockRejection {
     }
 }
 
-/// A quorum bound to the requester identity checked during admission.
-/// Fields are private; callers cannot substitute the borrowed identity.
-/// Finalization consumes the quorum and uses its originally borrowed identity.
-///
-/// ```
-/// use nook_auth2::SentinelUnlockQuorum;
-/// let finalize = |quorum: SentinelUnlockQuorum<'_>| quorum.finalize();
-/// ```
-///
-/// ```compile_fail,E0382
-/// use nook_auth2::{SentinelUnlockQuorum, MultiDeviceResult, VaultKeys};
-/// let repeat = |quorum: SentinelUnlockQuorum<'_>| -> MultiDeviceResult<VaultKeys> {
-///     quorum.finalize()?;
-///     quorum.finalize()
-/// };
-/// ```
+/// A quorum awaiting binding to the live vault context before key reconstruction.
 ///
 /// ```compile_fail,E0599
 /// use nook_auth2::SentinelUnlockQuorum;
-/// let duplicate = |quorum: SentinelUnlockQuorum<'_>| quorum.clone();
+/// let premature = |quorum: SentinelUnlockQuorum<'_>| quorum.finalize();
 /// ```
 ///
 /// ```compile_fail,E0277
 /// use nook_auth2::SentinelUnlockQuorum;
 /// let decode = |json: &str| serde_json::from_str::<SentinelUnlockQuorum<'_>>(json);
-/// ```
-///
-/// ```compile_fail,E0451
-/// use nook_auth2::{SentinelUnlockQuorum, SentinelUnlockSession, DeviceIdentity};
-/// struct Probe;
-/// impl Probe {
-///     fn forge<'a>(session: SentinelUnlockSession, requester_identity: &'a DeviceIdentity)
-///         -> SentinelUnlockQuorum<'a> {
-///         SentinelUnlockQuorum { session, requester_identity }
-///     }
-/// }
-/// ```
-///
-/// ```compile_fail,E0061
-/// use nook_auth2::{SentinelUnlockQuorum, DeviceIdentity};
-/// let substitute = |quorum: SentinelUnlockQuorum<'_>, identity: &DeviceIdentity| {
-///     quorum.finalize(identity)
-/// };
 /// ```
 pub struct SentinelUnlockQuorum<'a> {
     session: SentinelUnlockSession,
@@ -281,14 +247,16 @@ impl SentinelUnlockSession {
         mut self,
         response: SentinelUnlockResponse,
     ) -> Result<Self, SentinelUnlockRejection> {
-        if let Err(error) = self.validate_response(&response) {
-            return Err(SentinelUnlockRejection {
+        match self.validate_response(&response) {
+            Ok(()) => {
+                self.responses.push(response);
+                Ok(self)
+            }
+            Err(error) => Err(SentinelUnlockRejection {
                 session: Box::new(self),
                 error,
-            });
+            }),
         }
-        self.responses.push(response);
-        Ok(self)
     }
 
     fn validate_response(&self, response: &SentinelUnlockResponse) -> MultiDeviceResult<()> {
@@ -301,27 +269,28 @@ impl SentinelUnlockSession {
                     == response.participant_signing_public_key
                 || existing.share_index == response.share_index
         }) {
-            return Err(MultiDeviceError::DuplicateSentinelUnlockParticipant {
+            Err(MultiDeviceError::DuplicateSentinelUnlockParticipant {
                 device_id: response.participant_device_id.to_string(),
-            });
+            })
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     pub fn into_quorum(
         self,
         requester_identity: &DeviceIdentity,
     ) -> Result<SentinelUnlockQuorum<'_>, SentinelUnlockRejection> {
-        if let Err(error) = self.validate_quorum_identity(requester_identity) {
-            return Err(SentinelUnlockRejection {
+        match self.validate_quorum_identity(requester_identity) {
+            Ok(()) => Ok(SentinelUnlockQuorum {
+                session: self,
+                requester_identity,
+            }),
+            Err(error) => Err(SentinelUnlockRejection {
                 session: Box::new(self),
                 error,
-            });
+            }),
         }
-        Ok(SentinelUnlockQuorum {
-            session: self,
-            requester_identity,
-        })
     }
 
     fn validate_quorum_identity(
@@ -332,15 +301,15 @@ impl SentinelUnlockSession {
         if requester_identity.device_id() != &self.request.requester_device_id
             || requester_identity.public_key() != self.request.requester_encryption_public_key
         {
-            return Err(MultiDeviceError::SentinelUnlockRecipientMismatch);
-        }
-        if self.responses.len() < usize::from(u8::from(self.request.policy.threshold)) {
-            return Err(MultiDeviceError::NotEnoughSentinelShares {
+            Err(MultiDeviceError::SentinelUnlockRecipientMismatch)
+        } else if self.responses.len() < usize::from(u8::from(self.request.policy.threshold)) {
+            Err(MultiDeviceError::NotEnoughSentinelShares {
                 threshold: self.request.policy.threshold,
                 available: self.responses.len().into(),
-            });
+            })
+        } else {
+            Ok(())
         }
-        Ok(())
     }
     #[must_use]
     pub fn status(&self) -> SentinelUnlockStatus {
@@ -359,25 +328,49 @@ impl SentinelUnlockSession {
     }
 }
 
-impl SentinelUnlockQuorum<'_> {
+impl<'a> SentinelUnlockQuorum<'a> {
     pub fn check_context(
-        &self,
+        self,
         store_id: &StoreId,
         policy: SentinelUnlockPolicy,
-    ) -> MultiDeviceResult<()> {
+    ) -> MultiDeviceResult<ContextBoundSentinelUnlock<'a>> {
         if &self.session.request.store_id != store_id || self.session.request.policy != policy {
-            return Err(MultiDeviceError::InvalidSentinelUnlockSession);
+            Err(MultiDeviceError::InvalidSentinelUnlockSession)
+        } else {
+            Ok(ContextBoundSentinelUnlock { quorum: self })
         }
-        Ok(())
     }
+}
 
+/// Context-admitted, single-use reconstruction capability. No public constructor,
+/// clone or deserializer can skip quorum and live-context admission.
+///
+/// ```compile_fail,E0382
+/// use nook_auth2::{ContextBoundSentinelUnlock, MultiDeviceResult, VaultKeys};
+/// let twice = |ready: ContextBoundSentinelUnlock<'_>| -> MultiDeviceResult<VaultKeys> {
+///     ready.finalize()?;
+///     ready.finalize()
+/// };
+/// ```
+///
+/// ```compile_fail,E0451
+/// use nook_auth2::{ContextBoundSentinelUnlock, SentinelUnlockQuorum};
+/// let forge = |quorum: SentinelUnlockQuorum<'_>| ContextBoundSentinelUnlock { quorum };
+/// ```
+pub struct ContextBoundSentinelUnlock<'a> {
+    quorum: SentinelUnlockQuorum<'a>,
+}
+
+impl ContextBoundSentinelUnlock<'_> {
     pub fn finalize(self) -> MultiDeviceResult<VaultKeys> {
-        self.session
-            .validate_quorum_identity(self.requester_identity)?;
-        let Self {
+        let quorum = self.quorum;
+        quorum
+            .session
+            .validate_quorum_identity(quorum.requester_identity)?;
+        let SentinelUnlockQuorum {
             session,
             requester_identity,
-        } = self;
+        } = quorum;
         let SentinelUnlockSession {
             request,
             records,
@@ -447,7 +440,10 @@ impl SentinelUnlockRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SentinelShareOpening, create_sentinel_root_share_records_for_recipients};
+    use crate::{
+        CreateSentinelRootShareRecordsForRecipientsRequest, SentinelShareEnvelope,
+        SentinelShareOpening,
+    };
 
     struct Fixture {
         keys: VaultKeys,
@@ -476,8 +472,11 @@ mod tests {
         let request = session.request();
         let first = fixture.response(&request, 0)?;
         let second = fixture.response(&request, 1)?;
-        let local_plaintext =
-            SentinelShareOpening::new(&fixture.records, &fixture.participants[0]).open()?;
+        let participant = fixture
+            .participants
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("fixture must contain its first participant"))?;
+        let local_plaintext = SentinelShareOpening::new(&fixture.records, participant).open()?;
         assert!(!serde_json::to_string(&first)?.contains(&local_plaintext.share));
         session = Fixture::collect(session, first)?;
         assert_eq!(
@@ -494,6 +493,7 @@ mod tests {
             session
                 .into_quorum(&fixture.requester)
                 .map_err(|rejected| rejected.into_parts().1)?
+                .check_context(&fixture.store_id, fixture.policy)?
                 .finalize()?,
             fixture.keys
         );
@@ -533,6 +533,7 @@ mod tests {
             session
                 .into_quorum(&fixture.requester)
                 .map_err(|rejected| rejected.into_parts().1)?
+                .check_context(&fixture.store_id, fixture.policy)?
                 .finalize()?,
             fixture.keys
         );
@@ -584,7 +585,9 @@ mod tests {
             ))?
             .respond(
                 &fixture.records,
-                &fixture.participants[1],
+                fixture.participants.get(1).ok_or_else(|| {
+                    anyhow::anyhow!("fixture must contain its second participant")
+                })?,
                 &Fixture::signing_key(1),
             )?;
         let before = session.status();
@@ -717,7 +720,10 @@ mod tests {
         assert!(matches!(
             checked.respond(
                 &fixture.records,
-                &fixture.participants[0],
+                fixture
+                    .participants
+                    .first()
+                    .ok_or_else(|| anyhow::anyhow!("fixture must contain its first participant"))?,
                 &Fixture::signing_key(1)
             ),
             Err(MultiDeviceError::InvalidSentinelUnlockPayload)
@@ -737,23 +743,41 @@ mod tests {
             let quorum = session
                 .into_quorum(&fixture.requester)
                 .map_err(|rejected| rejected.into_parts().1)?;
-            quorum.check_context(&fixture.store_id, fixture.policy)?;
+            assert_eq!(
+                quorum
+                    .check_context(&fixture.store_id, fixture.policy)?
+                    .finalize()?,
+                fixture.keys
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn context_admission_rejects_wrong_store_and_policy() -> anyhow::Result<()> {
+        let fixture = Fixture::new()?;
+        for (store_id, policy) in [
+            (StoreId::parse("store_BBBBBBBBBBB")?, fixture.policy),
+            (
+                fixture.store_id.clone(),
+                SentinelUnlockPolicy {
+                    threshold: 3.into(),
+                    ..fixture.policy
+                },
+            ),
+        ] {
+            let mut session = fixture.session()?;
+            let request = session.request();
+            for index in [0, 1] {
+                session = Fixture::collect(session, fixture.response(&request, index)?)?;
+            }
+            let quorum = session
+                .into_quorum(&fixture.requester)
+                .map_err(|rejected| rejected.into_parts().1)?;
             assert!(matches!(
-                quorum.check_context(&StoreId::parse("store_BBBBBBBBBBB")?, fixture.policy),
+                quorum.check_context(&store_id, policy),
                 Err(MultiDeviceError::InvalidSentinelUnlockSession)
             ));
-            assert!(
-                quorum
-                    .check_context(
-                        &fixture.store_id,
-                        SentinelUnlockPolicy {
-                            threshold: 3.into(),
-                            ..fixture.policy
-                        }
-                    )
-                    .is_err()
-            );
-            assert_eq!(quorum.finalize()?, fixture.keys);
         }
         Ok(())
     }
@@ -775,7 +799,12 @@ mod tests {
         let quorum = session
             .into_quorum(&fixture.requester)
             .map_err(|rejected| rejected.into_parts().1)?;
-        assert!(quorum.finalize().is_err());
+        assert!(
+            quorum
+                .check_context(&fixture.store_id, fixture.policy)?
+                .finalize()
+                .is_err()
+        );
         Ok(())
     }
 
@@ -813,8 +842,16 @@ mod tests {
                 .map(|identity| (identity.device_id().clone(), identity.public_key()))
                 .collect::<Vec<_>>();
             let (keys, records) =
-                create_sentinel_root_share_records_for_recipients(&recipients, 2.into())?;
-            let requester = participants[2].clone();
+                SentinelShareEnvelope::create_sentinel_root_share_records_for_recipients(
+                    CreateSentinelRootShareRecordsForRecipientsRequest {
+                        recipients: &recipients,
+                        threshold: 2.into(),
+                    },
+                )?;
+            let requester = participants
+                .get(2)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("fixture must contain its requester"))?;
             Ok(Fixture {
                 keys,
                 records,
@@ -851,7 +888,9 @@ mod tests {
                 ))?
                 .respond(
                     &self.records,
-                    &self.participants[index],
+                    self.participants.get(index).ok_or_else(|| {
+                        anyhow::anyhow!("participant index must be in the fixture")
+                    })?,
                     &Self::signing_key(u8::try_from(index + 1)?),
                 )?)
         }

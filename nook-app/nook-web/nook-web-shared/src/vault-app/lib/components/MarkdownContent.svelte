@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { renderMarkdown } from '$lib/content/markdown'
+  import { markdownRenderer } from '$lib/content/markdown'
   import MarkdownBody from './MarkdownBody.svelte'
 
   let {
@@ -10,7 +10,11 @@
     testId?: string
   } = $props()
 
-  const html = $derived(renderMarkdown(source))
+  const html = $derived(markdownRenderer.renderMarkdown(source))
 </script>
 
-<MarkdownBody {html} {testId} />
+{#if testId}
+  <MarkdownBody {html} {testId} />
+{:else}
+  <MarkdownBody {html} />
+{/if}

@@ -1,3 +1,5 @@
+import { err, ok, type Result } from "neverthrow";
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { DeviceMode, type NookVaultManager } from "$app-wasm";
 
 const PASSKEY_PRF_UNAVAILABLE = "PASSKEY_PRF_UNAVAILABLE";
@@ -95,27 +97,113 @@ function sanitizedPasskeyErrorName(error: unknown): SanitizedPasskeyErrorName {
     : { kind: SanitizedPasskeyErrorNameKind.Omitted };
 }
 
+export enum PasskeyCeremonyAction {
+  Create = "create",
+  Recover = "recover",
+  Unlock = "unlock",
+}
+
+export enum PasskeyFallback {
+  Unchanged = "unchanged",
+  OfferPin = "offer-pin",
+}
+
+/** Admits a foreign ceremony failure without retaining its error or credential data. */
+export class PasskeyCeremonyFailure {
+  readonly diagnostic: ReturnType<typeof sanitizedPasskeyCeremonyData>;
+  // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
+  constructor(
+    private readonly action: PasskeyCeremonyAction,
+    failure: unknown,
+  ) {
+    this.diagnostic = sanitizedPasskeyCeremonyData(failure);
+  }
+  get fallback(): PasskeyFallback {
+    if (this.action === PasskeyCeremonyAction.Unlock)
+      return PasskeyFallback.Unchanged;
+    switch (this.diagnostic.outcome) {
+      case PasskeyCeremonyOutcome.PasskeyUnavailable:
+      case PasskeyCeremonyOutcome.PrfUnavailable:
+        return PasskeyFallback.OfferPin;
+      case PasskeyCeremonyOutcome.CeremonyNotAllowed:
+      case PasskeyCeremonyOutcome.CeremonyFailed:
+        return PasskeyFallback.Unchanged;
+    }
+  }
+  get translationKey() {
+    switch (this.action) {
+      case PasskeyCeremonyAction.Create:
+        switch (this.diagnostic.outcome) {
+          case PasskeyCeremonyOutcome.CeremonyNotAllowed:
+            return I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed;
+          case PasskeyCeremonyOutcome.PasskeyUnavailable:
+            return I18N_KEYS.DeviceProtectionPasskeyUnavailablePinFallbackReady;
+          case PasskeyCeremonyOutcome.PrfUnavailable:
+            return I18N_KEYS.DeviceProtectionPinFallbackReady;
+          case PasskeyCeremonyOutcome.CeremonyFailed:
+            return I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed;
+        }
+      // Falls through only if a future generated outcome escapes the exhaustive switch.
+      case PasskeyCeremonyAction.Recover:
+        switch (this.diagnostic.outcome) {
+          case PasskeyCeremonyOutcome.CeremonyNotAllowed:
+            return I18N_KEYS.DeviceProtectionPasskeyRecoveryNotAllowed;
+          case PasskeyCeremonyOutcome.PasskeyUnavailable:
+            return I18N_KEYS.DeviceProtectionRecoveryPasskeyUnavailablePinFallbackReady;
+          case PasskeyCeremonyOutcome.PrfUnavailable:
+            return I18N_KEYS.DeviceProtectionRecoveryPinFallbackReady;
+          case PasskeyCeremonyOutcome.CeremonyFailed:
+            return I18N_KEYS.DeviceProtectionRecoveryFailed;
+        }
+      // Falls through only if a future generated outcome escapes the exhaustive switch.
+      case PasskeyCeremonyAction.Unlock:
+        return I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed;
+    }
+  }
+}
+
 export async function setupDeviceProtection({
   manager,
   passkeyLabel,
   deviceMode,
-}: DeviceProtectionSetup): Promise<void> {
-  await manager.setup_device_protection_with_passkey_mode(
-    location.hostname,
-    "Nook",
-    passkeyLabel,
-    deviceMode,
-  );
+}: DeviceProtectionSetup): Promise<Result<void, PasskeyCeremonyFailure>> {
+  try {
+    await manager.setup_device_protection_with_passkey_mode(
+      location.hostname,
+      "Nook",
+      passkeyLabel,
+      deviceMode,
+    );
+    return ok();
+  } catch (failure) {
+    return err(
+      new PasskeyCeremonyFailure(PasskeyCeremonyAction.Create, failure),
+    );
+  }
 }
 
 export async function unlockDeviceProtection(
   manager: NookVaultManager,
-): Promise<void> {
-  await manager.unlock_device_protection_with_passkey(location.hostname);
+): Promise<Result<void, PasskeyCeremonyFailure>> {
+  try {
+    await manager.unlock_device_protection_with_passkey(location.hostname);
+    return ok();
+  } catch (failure) {
+    return err(
+      new PasskeyCeremonyFailure(PasskeyCeremonyAction.Unlock, failure),
+    );
+  }
 }
 
 export async function recoverDeviceProtectionWithPasskey(
   manager: NookVaultManager,
-): Promise<void> {
-  await manager.recover_device_protection_with_passkey(location.hostname);
+): Promise<Result<void, PasskeyCeremonyFailure>> {
+  try {
+    await manager.recover_device_protection_with_passkey(location.hostname);
+    return ok();
+  } catch (failure) {
+    return err(
+      new PasskeyCeremonyFailure(PasskeyCeremonyAction.Recover, failure),
+    );
+  }
 }

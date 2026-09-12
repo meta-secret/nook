@@ -12,6 +12,10 @@ use zip::ZipArchive;
 pub(super) struct DashlaneArchive<'a> {
     archive: ZipArchive<Cursor<&'a [u8]>>,
 }
+struct ReadDashlaneEntry<'a> {
+    archive: DashlaneArchive<'a>,
+    csv: String,
+}
 impl<'a> DashlaneArchive<'a> {
     pub(super) fn open(bytes: &'a [u8]) -> Result<Self, DashlaneImportError> {
         Ok(Self {
@@ -30,7 +34,7 @@ impl<'a> DashlaneArchive<'a> {
             if !(DashlaneEntryName { name: &name }).is_csv() {
                 continue;
             }
-            if let Some(kind) = (DashlaneEntryName { name: &name }).kind() {
+            if let DashlaneEntryKind::Supported(kind) = (DashlaneEntryName { name: &name }).kind() {
                 selected.push((kind, index));
             }
         }
@@ -44,7 +48,9 @@ impl<'a> DashlaneArchive<'a> {
             skipped_unsupported: 0.into(),
         };
         for (kind, index) in selected {
-            let csv = self.read_entry(index)?;
+            let read = self.read_entry(index)?;
+            self = read.archive;
+            let csv = read.csv;
             let collection = DashlaneCsvInput {
                 text: &csv,
                 selection: DashlaneCsvSelection::Archive(kind),
@@ -60,7 +66,7 @@ impl<'a> DashlaneArchive<'a> {
         }
         Ok(plan)
     }
-    fn read_entry(&mut self, index: usize) -> Result<String, DashlaneImportError> {
+    fn read_entry(mut self, index: usize) -> Result<ReadDashlaneEntry<'a>, DashlaneImportError> {
         let file = self
             .archive
             .by_index(index)
@@ -75,8 +81,13 @@ impl<'a> DashlaneArchive<'a> {
         if csv.len() > MAX_CSV_BYTES {
             return Err(DashlaneImportError::CsvTooLarge);
         }
-        Ok(csv)
+        Ok(ReadDashlaneEntry { archive: self, csv })
     }
+}
+#[derive(Debug, PartialEq, Eq)]
+enum DashlaneEntryKind {
+    Supported(DashlaneCsvKind),
+    Ignored,
 }
 struct DashlaneEntryName<'a> {
     name: &'a str,
@@ -95,23 +106,25 @@ impl DashlaneEntryName<'_> {
     fn normalized(&self) -> String {
         CsvHeader::new(self.basename().trim_end_matches(".csv")).normalized()
     }
-    fn kind(&self) -> Option<DashlaneCsvKind> {
+    fn kind(&self) -> DashlaneEntryKind {
         let base = self.normalized();
         if base == "credentials" || base == "credential" {
-            Some(DashlaneCsvKind::Credentials)
+            DashlaneEntryKind::Supported(DashlaneCsvKind::Credentials)
         } else if base == "securenotes" || base == "securenote" || base == "notes" {
-            Some(DashlaneCsvKind::SecureNotes)
+            DashlaneEntryKind::Supported(DashlaneCsvKind::SecureNotes)
         } else if base == "payments" || base == "payment" {
-            Some(DashlaneCsvKind::Payments)
+            DashlaneEntryKind::Supported(DashlaneCsvKind::Payments)
         } else {
-            None
+            DashlaneEntryKind::Ignored
         }
     }
 }
 #[cfg(test)]
 pub(super) mod tests {
     use super::super::DashlaneExport;
-    use super::{DashlaneCsvKind, DashlaneEntryName, DashlaneImportError, MAX_CSV_BYTES};
+    use super::{
+        DashlaneCsvKind, DashlaneEntryKind, DashlaneEntryName, DashlaneImportError, MAX_CSV_BYTES,
+    };
     use crate::SecretValue;
     use std::io::{Cursor, Write};
     use zip::write::SimpleFileOptions;
@@ -142,18 +155,22 @@ pub(super) mod tests {
             (
                 "nested/credentials.csv",
                 true,
-                Some(DashlaneCsvKind::Credentials),
+                DashlaneEntryKind::Supported(DashlaneCsvKind::Credentials),
             ),
             (
                 "nested\\notes.csv",
                 true,
-                Some(DashlaneCsvKind::SecureNotes),
+                DashlaneEntryKind::Supported(DashlaneCsvKind::SecureNotes),
             ),
-            ("PAYMENTS.csv", true, Some(DashlaneCsvKind::Payments)),
-            ("credentials.CSV", true, None),
-            ("credentials.csv/", false, None),
-            ("credentials.txt", false, None),
-            ("ids.csv", true, None),
+            (
+                "PAYMENTS.csv",
+                true,
+                DashlaneEntryKind::Supported(DashlaneCsvKind::Payments),
+            ),
+            ("credentials.CSV", true, DashlaneEntryKind::Ignored),
+            ("credentials.csv/", false, DashlaneEntryKind::Ignored),
+            ("credentials.txt", false, DashlaneEntryKind::Ignored),
+            ("ids.csv", true, DashlaneEntryKind::Ignored),
         ] {
             let entry = DashlaneEntryName { name };
             assert_eq!(entry.is_csv(), csv);

@@ -5,12 +5,15 @@ export type TranslationRequest =
       readonly replacements: Readonly<Record<string, string>>;
     };
 
-export function translationKey(request: TranslationRequest): string {
-  return typeof request === "string" ? request : request.key;
-}
+export class TranslationMessage {
+  constructor(private readonly value: TranslationRequest) {}
+  translationKey(): string {
+    const request = this.value;
+    return typeof request === "string" ? request : request.key;
+  }
 
-export function translationReplacements(
-  request: TranslationRequest,
-): Readonly<Record<string, string>> {
-  return typeof request === "string" ? {} : request.replacements;
+  translationReplacements(): Readonly<Record<string, string>> {
+    const request = this.value;
+    return typeof request === "string" ? {} : request.replacements;
+  }
 }

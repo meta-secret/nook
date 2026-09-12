@@ -4,6 +4,11 @@ import type { ProviderLoadOptions } from '$lib/vault/providers.svelte'
 import { parseVaultYamlSnapshot, type VaultYamlSnapshot } from '../vault-yaml'
 import { E2E_OAUTH_ONBOARD_PROVIDER } from './auth-providers'
 import {
+  AuthenticatedWorkspaceObservation,
+  AuthenticatedWorkspaceState,
+  type AuthenticatedWorkspaceVisibility,
+} from './authenticated-workspace'
+import {
   dismissJoinEnrollmentDialog,
   keepVaultIdleLockDisabled,
 } from './device-enrollment'
@@ -21,12 +26,44 @@ import {
   waitForVaultOperationsIdle,
 } from './vault-runtime'
 
-interface VaultProviderReload {
-  readonly loadProviders: (options: ProviderLoadOptions) => Promise<void>
+export type DeviceProtectionAuthorizationObservation = {
+  readonly overlayVisible: boolean
+  readonly unlockVisible: boolean
+  readonly pickerVisible: boolean
+  readonly lockedAccessVisible: boolean
+  readonly authorizeReady: boolean
+  readonly workspaceUnlocked: boolean
 }
 
-interface VaultProviderReloadWindow extends Window {
-  readonly __nookVault: VaultProviderReload
+export enum DeviceProtectionAuthorizationGateState {
+  Overlay = 'overlay',
+  Unlock = 'unlock',
+  Picker = 'picker',
+  LockedAccess = 'locked-access',
+  Authorize = 'authorize',
+  Unlocked = 'unlocked',
+  Waiting = 'waiting',
+}
+
+export function deviceProtectionAuthorizationGateState({
+  overlayVisible,
+  unlockVisible,
+  pickerVisible,
+  lockedAccessVisible,
+  authorizeReady,
+  workspaceUnlocked,
+}: DeviceProtectionAuthorizationObservation): DeviceProtectionAuthorizationGateState {
+  if (overlayVisible) return DeviceProtectionAuthorizationGateState.Overlay
+  if (unlockVisible) return DeviceProtectionAuthorizationGateState.Unlock
+  if (pickerVisible) return DeviceProtectionAuthorizationGateState.Picker
+  if (lockedAccessVisible) {
+    return DeviceProtectionAuthorizationGateState.LockedAccess
+  }
+  if (workspaceUnlocked) {
+    return DeviceProtectionAuthorizationGateState.Unlocked
+  }
+  if (authorizeReady) return DeviceProtectionAuthorizationGateState.Authorize
+  return DeviceProtectionAuthorizationGateState.Waiting
 }
 
 /** Expand the login enrollment accordion on the login gate. */
@@ -414,24 +451,42 @@ export async function authorizeDeviceProtection(
   page: Page,
   opts?: { storeId?: string },
 ) {
+  await keepVaultIdleLockDisabled(page)
   const overlay = page.getByTestId('passkey-auth-overlay')
   const loginGate = page.getByTestId('login-gate')
   const vaultPicker = page.getByTestId('login-vault-picker')
   const unlockVaultButton = page.getByTestId('unlock-vault-btn')
+  const vaultError = page.getByTestId('vault-error')
   const lockedAccessDashboard = loginGate.getByTestId(
     'devices-access-dashboard',
   )
-  const workspacePanel = page
-    .getByTestId('vault-panel')
-    .or(page.getByTestId('vault-admin-panel'))
-    .or(page.getByTestId('devices-access-dashboard'))
-    .or(page.getByTestId('storage-settings-panel'))
-    .or(page.getByTestId('onboard-device-panel'))
-    .or(page.getByTestId('help-page'))
+  const authenticatedShell = page.getByTestId('authenticated-shell')
   const button = page.getByTestId('device-protection-unlock-btn')
 
-  const isAuthenticatedWorkspace = async () =>
-    (await workspacePanel.isVisible()) && !(await loginGate.isVisible())
+  const isAuthenticatedWorkspace = async () => {
+    // Read both surfaces in one browser turn. Separate locator calls can
+    // straddle Svelte's access-gate transition and observe a mixed frame
+    // (shell from the new state, gate from the old state) indefinitely under
+    // a busy worker.
+    const probe = await page.evaluate(() => {
+      const shell = document.querySelector(
+        '[data-testid="authenticated-shell"]',
+      )
+      const gate = document.querySelector('[data-testid="login-gate"]')
+      return {
+        visibility: {
+          authenticatedShellVisible: Boolean(
+            shell && shell.getClientRects().length > 0,
+          ),
+          loginGateVisible: Boolean(gate && gate.getClientRects().length > 0),
+        } satisfies AuthenticatedWorkspaceVisibility,
+      }
+    })
+    return (
+      new AuthenticatedWorkspaceObservation(probe.visibility).state() ===
+      AuthenticatedWorkspaceState.Unlocked
+    )
+  }
 
   const authorizeButtonReady = async () => {
     if (!(await button.isVisible())) return false
@@ -442,24 +497,43 @@ export async function authorizeDeviceProtection(
     }
   }
 
+  const authorizationGateState = async () => {
+    const observation: DeviceProtectionAuthorizationObservation = {
+      overlayVisible: await overlay.isVisible(),
+      unlockVisible: await unlockVaultButton.isVisible(),
+      pickerVisible: await vaultPicker.isVisible(),
+      lockedAccessVisible: await lockedAccessDashboard.isVisible(),
+      authorizeReady: await authorizeButtonReady(),
+      workspaceUnlocked: await isAuthenticatedWorkspace(),
+    }
+    return deviceProtectionAuthorizationGateState(observation)
+  }
+
   // Locked /devices-access keeps Access inside LoginGate with no Unlock.
   // Multi-vault lock shows the vault picker before Unlock. Wait for a real
   // unlock affordance, locked Access (leave via back), or true auth.
   await expect
     .poll(
       async () => {
-        if (await overlay.isVisible()) return 'overlay'
-        if (await unlockVaultButton.isVisible()) return 'unlock'
-        if (await vaultPicker.isVisible()) return 'picker'
-        if (await lockedAccessDashboard.isVisible()) return 'locked-access'
-        if (await isAuthenticatedWorkspace()) return 'unlocked'
-        return 'waiting'
+        return authorizationGateState()
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .not.toBe('waiting')
 
   if (await isAuthenticatedWorkspace()) {
+    await waitForVaultOperationsIdle(page)
+    return
+  }
+
+  if (await authorizeButtonReady()) {
+    await button.click()
+    await expect(loginGate).toBeHidden({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(authenticatedShell).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await waitForVaultOperationsIdle(page)
     return
   }
@@ -499,6 +573,23 @@ export async function authorizeDeviceProtection(
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       await option.click()
+      await expect
+        .poll(
+          async () => {
+            if (await unlockVaultButton.isVisible()) return 'unlock'
+            if (await overlay.isVisible()) return 'overlay'
+            if (await vaultError.isVisible()) return 'error'
+            if (await vaultPicker.isVisible()) return 'picker'
+            return 'waiting'
+          },
+          { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+        )
+        .not.toBe('waiting')
+      if (await vaultError.isVisible()) {
+        throw new Error(
+          `Vault selection failed before unlock: ${await vaultError.textContent()}`,
+        )
+      }
     }
     await expect(unlockVaultButton).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -520,7 +611,7 @@ export async function authorizeDeviceProtection(
     await expect(loginGate).toBeHidden({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(workspacePanel).toBeVisible({
+    await expect(authenticatedShell).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
   }
@@ -548,7 +639,7 @@ export async function invokeInitializedVaultProviderReload(page: Page) {
 
     interface AvailableVaultProviderReload {
       readonly kind: VaultProviderReloadAvailabilityKind.Available
-      readonly vault: VaultProviderReload
+      readonly vault: NonNullable<Window['__nookVault']>
     }
 
     interface UnavailableVaultProviderReload {
@@ -558,13 +649,12 @@ export async function invokeInitializedVaultProviderReload(page: Page) {
     type VaultProviderReloadAvailability =
       AvailableVaultProviderReload | UnavailableVaultProviderReload
 
-    const availability: VaultProviderReloadAvailability =
-      '__nookVault' in window
-        ? {
-            kind: VaultProviderReloadAvailabilityKind.Available,
-            vault: (window as VaultProviderReloadWindow).__nookVault,
-          }
-        : { kind: VaultProviderReloadAvailabilityKind.Unavailable }
+    const availability: VaultProviderReloadAvailability = window.__nookVault
+      ? {
+          kind: VaultProviderReloadAvailabilityKind.Available,
+          vault: window.__nookVault,
+        }
+      : { kind: VaultProviderReloadAvailabilityKind.Unavailable }
     if (availability.kind === VaultProviderReloadAvailabilityKind.Unavailable) {
       throw new Error('Initialized vault provider reload is unavailable')
     }
@@ -594,14 +684,7 @@ async function ensureLoginLocalUnlockReady(page: Page) {
         if (await localUnlock.isVisible()) return 'ready'
         if (await vaultPicker.isVisible()) return 'ready'
         await page.evaluate(async () => {
-          const vault = (
-            window as Window & {
-              __nookVault?: {
-                refreshLocalVaultCatalog?: () => Promise<void>
-                prepareLocalLogin?: () => Promise<void>
-              }
-            }
-          ).__nookVault
+          const vault = window.__nookVault
           await vault?.refreshLocalVaultCatalog?.()
           await vault?.prepareLocalLogin?.()
         })

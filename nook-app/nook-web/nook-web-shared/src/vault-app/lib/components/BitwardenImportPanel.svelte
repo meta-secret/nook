@@ -1,5 +1,12 @@
 <script lang="ts">
-  type BitwardenVaultImport = { readonly json: string; readonly password: string }
+  import {
+    SecretFailurePresentation,
+    type SecretOperationResult,
+  } from '$lib/vault/secret-operation-failure'
+  type BitwardenVaultImport = {
+    readonly json: string
+    readonly password: string
+  }
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ArrowLeft, FileJson, Upload } from '@lucide/svelte'
@@ -24,7 +31,9 @@
   }: {
     vault: VaultState
     isSaving: boolean
-    onImport: (args: BitwardenVaultImport) => Promise<NookImportResult>
+    onImport: (
+      args: BitwardenVaultImport,
+    ) => Promise<SecretOperationResult<NookImportResult>>
     onClose?: () => void
     embedded?: boolean
   } = $props()
@@ -39,7 +48,9 @@
   const busy = $derived(isImporting || isSaving)
 
   function selectFile(event: Event) {
-    const file = (event.currentTarget as HTMLInputElement).files?.[0]
+    const input = event.currentTarget
+    if (!(input instanceof HTMLInputElement)) return
+    const file = input.files?.[0]
     selectedFile = file
       ? { kind: ImportFileSelectionKind.Selected, file }
       : { kind: ImportFileSelectionKind.NotSelected }
@@ -55,14 +66,24 @@
     result = { kind: ImportOutcomeKind.NotRun }
     isImporting = true
     try {
-      const onImportArgs: Parameters<typeof onImport>[0] = { json: await file.text(), password };
+      let json: string
+      try {
+        json = await file.text()
+      } catch {
+        error = vault.t(I18N_KEYS.BitwardenImportFailed)
+        return
+      }
+      const onImportArgs: Parameters<typeof onImport>[0] = { json, password }
+      const imported = await onImport(onImportArgs)
+      if (imported.isErr()) {
+        error = new SecretFailurePresentation(vault).message(imported.error)
+        return
+      }
       result = {
         kind: ImportOutcomeKind.Completed,
-        result: await onImport(onImportArgs),
+        result: imported.value,
       }
       password = ''
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : String(cause)
     } finally {
       isImporting = false
     }
@@ -170,15 +191,27 @@
           data-testid="bitwarden-import-result"
         >
           <p class="font-medium">
-            {(() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.BitwardenImportResultImported, replacements: {
-              count: String(result.result.imported),
-            } }; return vault.t(tArgs); })()}
+            {(() => {
+              const tArgs: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.BitwardenImportResultImported,
+                replacements: {
+                  count: String(result.result.imported),
+                },
+              }
+              return vault.t(tArgs)
+            })()}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
-            {(() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.BitwardenImportResultSkipped, replacements: {
-              unsupported: String(result.result.skippedUnsupported),
-              duplicates: String(result.result.skippedDuplicates),
-            } }; return vault.t(tArgs2); })()}
+            {(() => {
+              const tArgs2: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.BitwardenImportResultSkipped,
+                replacements: {
+                  unsupported: String(result.result.skippedUnsupported),
+                  duplicates: String(result.result.skippedDuplicates),
+                },
+              }
+              return vault.t(tArgs2)
+            })()}
           </p>
         </div>
       {/if}

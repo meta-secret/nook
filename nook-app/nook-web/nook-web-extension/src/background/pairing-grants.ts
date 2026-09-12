@@ -1,5 +1,6 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
+  compare_extension_pairing_records,
   create_extension_pairing_state,
   extension_pairing_grant_storage_key,
   extension_setup_after_pairing_grant_removal,
@@ -191,6 +192,7 @@ function migratedLegacyPairingStorageItems(
 }
 
 export type ExtensionPairingGrantPolicy = {
+  compare_extension_pairing_records: typeof compare_extension_pairing_records
   pairingGrantStorageKey: typeof pairingGrantStorageKey
   isStoredExtensionPairingGrant: typeof isStoredExtensionPairingGrant
   isExtensionReadySetupState: typeof isExtensionReadySetupState
@@ -205,6 +207,7 @@ export type ExtensionPairingGrantPolicy = {
 
 export const extensionPairingGrantPolicyReady: Promise<ExtensionPairingGrantPolicy> =
   companionWasmReady.then(() => ({
+    compare_extension_pairing_records,
     pairingGrantStorageKey,
     isStoredExtensionPairingGrant,
     isExtensionReadySetupState,

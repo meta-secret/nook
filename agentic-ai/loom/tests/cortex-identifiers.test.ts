@@ -11,27 +11,86 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import {
-  auditCortexIdentifierRegistry,
-  auditCortexIdentifierStability,
   CortexIdentifierKind,
-  cortexIdentifierSet,
+  CortexIdentifierCatalog,
 } from '../src/lib/cortex-identifiers.ts';
 import {
-  assertCortexReferences,
   CortexReferenceRelation,
+  CortexIdentifierSyntax,
 } from '../src/agent-workflow/cortex-references.ts';
 
-const REMOVE_OPTIONS: RmOptions = { recursive: true, force: true };
+/** Owns the cortex identifiers fixture registry and its capability transitions. */
+export class CortexIdentifiersFixture {
+  private constructor() {}
+  static readonly REMOVE_OPTIONS: RmOptions = { recursive: true, force: true };
+
+  static async fixtureRepository(): Promise<string> {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'cortex-identifiers-'));
+    const cortexRoot = join(repoRoot, '.cortex');
+    await mkdir(cortexRoot);
+    await writeFile(
+      join(cortexRoot, 'knowledge-graph.md'),
+      '# Knowledge graph\n',
+      'utf8',
+    );
+    await writeFile(
+      join(cortexRoot, 'policy.md'),
+      '# Policy\n\n## Event evidence\n',
+      'utf8',
+    );
+    const registry = {
+      schemaVersion: 1,
+      entries: [
+        CortexIdentifiersFixture.categoryEntry(),
+        {
+          id: 'CX-AI-4D7NQ',
+          kind: CortexIdentifierKind.Document,
+          authority: 'policy',
+          categoryId: 'CX-AI',
+          title: 'Policy',
+          locator: '.cortex/policy.md',
+        },
+        {
+          id: 'CX-AI-7K3M2',
+          kind: CortexIdentifierKind.Item,
+          authority: 'event-evidence',
+          categoryId: 'CX-AI',
+          title: 'Event evidence',
+          locator: '.cortex/policy.md#event-evidence',
+        },
+      ],
+    };
+    await writeFile(
+      join(cortexRoot, 'identifiers.json'),
+      JSON.stringify(registry),
+      'utf8',
+    );
+    return repoRoot;
+  }
+
+  static categoryEntry(): Record<string, string> {
+    return {
+      id: 'CX-AI',
+      kind: CortexIdentifierKind.Category,
+      authority: 'ai',
+      title: 'AI',
+      locator: '.cortex/knowledge-graph.md',
+    };
+  }
+}
 
 describe('Cortex identifiers', () => {
   test('accepts stable category, document, and item locators', async () => {
-    const repoRoot = await fixtureRepository();
+    const repoRoot = await CortexIdentifiersFixture.fixtureRepository();
     try {
-      const audit = auditCortexIdentifierRegistry(repoRoot);
+      const audit =
+        CortexIdentifierCatalog.auditCortexIdentifierRegistry(repoRoot);
       expect(audit.findings).toEqual([]);
       expect(audit.registry).not.toBe(false);
       if (!audit.registry) throw new Error('Expected a decoded registry.');
-      const identifiers = cortexIdentifierSet(audit.registry);
+      const identifiers = CortexIdentifierCatalog.cortexIdentifierSet(
+        audit.registry,
+      );
       expect(identifiers).toEqual(
         new Set(['CX-AI', 'CX-AI-4D7NQ', 'CX-AI-7K3M2']),
       );
@@ -44,14 +103,16 @@ describe('Cortex identifiers', () => {
         ],
         knownIdentifiers: identifiers,
       };
-      expect(() => assertCortexReferences(referenceArgs)).not.toThrow();
+      expect(() =>
+        CortexIdentifierSyntax.assertCortexReferences(referenceArgs),
+      ).not.toThrow();
     } finally {
-      await rm(repoRoot, REMOVE_OPTIONS);
+      await rm(repoRoot, CortexIdentifiersFixture.REMOVE_OPTIONS);
     }
   });
 
   test('rejects duplicate locators, missing fragments, and unknown references', async () => {
-    const repoRoot = await fixtureRepository();
+    const repoRoot = await CortexIdentifiersFixture.fixtureRepository();
     try {
       const registryPath = join(repoRoot, '.cortex', 'identifiers.json');
       await writeFile(join(repoRoot, 'outside.md'), '# Outside\n', 'utf8');
@@ -75,7 +136,7 @@ describe('Cortex identifiers', () => {
       const invalidRegistry = {
         schemaVersion: 1,
         entries: [
-          categoryEntry(),
+          CortexIdentifiersFixture.categoryEntry(),
           {
             id: 'CX-AI-4D7NQ',
             kind: CortexIdentifierKind.Document,
@@ -143,7 +204,8 @@ describe('Cortex identifiers', () => {
         ],
       };
       await writeFile(registryPath, JSON.stringify(invalidRegistry), 'utf8');
-      const audit = auditCortexIdentifierRegistry(repoRoot);
+      const audit =
+        CortexIdentifierCatalog.auditCortexIdentifierRegistry(repoRoot);
       expect(audit.findings.map((finding) => finding.message)).toEqual(
         expect.arrayContaining([
           'Cortex locator .cortex/policy.md#missing-item has no matching heading.',
@@ -165,9 +227,9 @@ describe('Cortex identifiers', () => {
         ],
         knownIdentifiers: new Set(['CX-AI']),
       };
-      expect(() => assertCortexReferences(unknownReferenceArgs)).toThrow(
-        'invalid Cortex reference',
-      );
+      expect(() =>
+        CortexIdentifierSyntax.assertCortexReferences(unknownReferenceArgs),
+      ).toThrow('invalid Cortex reference');
       const extraFieldArgs = {
         references: [
           {
@@ -178,16 +240,16 @@ describe('Cortex identifiers', () => {
         ],
         knownIdentifiers: new Set(['CX-AI']),
       } as never;
-      expect(() => assertCortexReferences(extraFieldArgs)).toThrow(
-        'invalid Cortex reference',
-      );
+      expect(() =>
+        CortexIdentifierSyntax.assertCortexReferences(extraFieldArgs),
+      ).toThrow('invalid Cortex reference');
     } finally {
-      await rm(repoRoot, REMOVE_OPTIONS);
+      await rm(repoRoot, CortexIdentifiersFixture.REMOVE_OPTIONS);
     }
   });
 
   test('derives heading fragments from Markdown syntax', async () => {
-    const repoRoot = await fixtureRepository();
+    const repoRoot = await CortexIdentifiersFixture.fixtureRepository();
     try {
       await writeFile(
         join(repoRoot, '.cortex', 'policy.md'),
@@ -204,14 +266,17 @@ describe('Cortex identifiers', () => {
         ].join('\n'),
         'utf8',
       );
-      expect(auditCortexIdentifierRegistry(repoRoot).findings).toEqual([]);
+      expect(
+        CortexIdentifierCatalog.auditCortexIdentifierRegistry(repoRoot)
+          .findings,
+      ).toEqual([]);
     } finally {
-      await rm(repoRoot, REMOVE_OPTIONS);
+      await rm(repoRoot, CortexIdentifiersFixture.REMOVE_OPTIONS);
     }
   });
 
   test('excludes skill frontmatter from registered fragments', async () => {
-    const repoRoot = await fixtureRepository();
+    const repoRoot = await CortexIdentifiersFixture.fixtureRepository();
     try {
       const skillRoot = join(repoRoot, '.cortex', 'skill');
       await mkdir(skillRoot);
@@ -245,21 +310,22 @@ describe('Cortex identifiers', () => {
       });
       await writeFile(registryPath, JSON.stringify(registry), 'utf8');
       expect(
-        auditCortexIdentifierRegistry(repoRoot).findings.map(
-          (finding) => finding.message,
-        ),
+        CortexIdentifierCatalog.auditCortexIdentifierRegistry(
+          repoRoot,
+        ).findings.map((finding) => finding.message),
       ).toContain(
         'Cortex locator .cortex/skill/SKILL.md#name-synthetic-description-card has no matching heading.',
       );
     } finally {
-      await rm(repoRoot, REMOVE_OPTIONS);
+      await rm(repoRoot, CortexIdentifiersFixture.REMOVE_OPTIONS);
     }
   });
 
   test('rejects removal or reassignment of published identifiers', async () => {
-    const repoRoot = await fixtureRepository();
+    const repoRoot = await CortexIdentifiersFixture.fixtureRepository();
     try {
-      const currentAudit = auditCortexIdentifierRegistry(repoRoot);
+      const currentAudit =
+        CortexIdentifierCatalog.auditCortexIdentifierRegistry(repoRoot);
       expect(currentAudit.registry).not.toBe(false);
       if (!currentAudit.registry) throw new Error('Expected current registry.');
       const published = {
@@ -285,7 +351,7 @@ describe('Cortex identifiers', () => {
         ),
       };
       expect(
-        auditCortexIdentifierStability({
+        CortexIdentifierCatalog.auditCortexIdentifierStability({
           current: reassigned,
           published,
         }).map((finding) => finding.message),
@@ -296,61 +362,7 @@ describe('Cortex identifiers', () => {
         ]),
       );
     } finally {
-      await rm(repoRoot, REMOVE_OPTIONS);
+      await rm(repoRoot, CortexIdentifiersFixture.REMOVE_OPTIONS);
     }
   });
 });
-
-async function fixtureRepository(): Promise<string> {
-  const repoRoot = await mkdtemp(join(tmpdir(), 'cortex-identifiers-'));
-  const cortexRoot = join(repoRoot, '.cortex');
-  await mkdir(cortexRoot);
-  await writeFile(
-    join(cortexRoot, 'knowledge-graph.md'),
-    '# Knowledge graph\n',
-    'utf8',
-  );
-  await writeFile(
-    join(cortexRoot, 'policy.md'),
-    '# Policy\n\n## Event evidence\n',
-    'utf8',
-  );
-  const registry = {
-    schemaVersion: 1,
-    entries: [
-      categoryEntry(),
-      {
-        id: 'CX-AI-4D7NQ',
-        kind: CortexIdentifierKind.Document,
-        authority: 'policy',
-        categoryId: 'CX-AI',
-        title: 'Policy',
-        locator: '.cortex/policy.md',
-      },
-      {
-        id: 'CX-AI-7K3M2',
-        kind: CortexIdentifierKind.Item,
-        authority: 'event-evidence',
-        categoryId: 'CX-AI',
-        title: 'Event evidence',
-        locator: '.cortex/policy.md#event-evidence',
-      },
-    ],
-  };
-  await writeFile(
-    join(cortexRoot, 'identifiers.json'),
-    JSON.stringify(registry),
-    'utf8',
-  );
-  return repoRoot;
-}
-
-function categoryEntry(): Record<string, string> {
-  return {
-    id: 'CX-AI',
-    kind: CortexIdentifierKind.Category,
-    authority: 'ai',
-    title: 'AI',
-    locator: '.cortex/knowledge-graph.md',
-  };
-}

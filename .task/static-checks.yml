@@ -1,0 +1,78 @@
+version: "3"
+
+tasks:
+  tooling:static:
+    desc: Report every repository tooling and AI lint/typecheck group, failing if any group fails.
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - |
+        failed=0
+        failed_installs="|"
+        for directory in . agentic-ai/loom agentic-ai/ci-agent .cortex/teams/ai/dynamic-skills/*/scripts; do
+          test -f "$directory/package.json" || continue
+          if [ "$directory" = agentic-ai/ci-agent ]; then
+            npm ci --prefix "$directory" --ignore-scripts || {
+              failed=1
+              failed_installs="${failed_installs}${directory}|"
+            }
+          else
+            bun install --cwd "$directory" --frozen-lockfile --ignore-scripts || {
+              failed=1
+              failed_installs="${failed_installs}${directory}|"
+            }
+          fi
+        done
+        for directory in . agentic-ai/loom agentic-ai/ci-agent .cortex/teams/ai/dynamic-skills/*/scripts; do
+          test -f "$directory/package.json" || continue
+          case "$failed_installs" in *"|${directory}|"*) continue ;; esac
+          bun run --cwd "$directory" lint || failed=1
+          bun run --cwd "$directory" check || failed=1
+        done
+        exit "$failed"
+
+  web:static:
+    desc: Check every web surface after preparing the required WASM contracts, without production builds.
+    deps: [setup:web:focused]
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:static }
+
+  _web:static:
+    internal: true
+    desc: Independently lint and typecheck all authored web sources against prepared WASM contracts.
+    dir: "{{.ROOT_DIR}}/nook-app/nook-web"
+    cmds:
+      - |
+        failed=0
+        nook-web-app/node_modules/.bin/eslint --config eslint.config.js . || failed=1
+        for directory in nook-web-app nook-web-extension nook-web-research nook-vault-simple nook-vault-sentinel; do
+          for config in "$directory"/tsconfig*.json; do
+            case "$config" in
+              */tsconfig.json)
+                if [ "$directory" = nook-web-app ]; then continue; fi
+                ;;
+            esac
+            nook-web-app/node_modules/.bin/tsc --noEmit -p "$config" || failed=1
+          done
+          config="$directory/tsconfig.json"
+          if [ "$directory" = nook-web-app ]; then config="$directory/tsconfig.app.json"; fi
+          nook-web-app/node_modules/.bin/svelte-check --workspace "$directory" --tsconfig "${config#*/}" || failed=1
+        done
+        exit "$failed"
+
+  hive:console:static:
+    desc: Generate native Hive contracts and report independent console lint and compiler diagnostics.
+    dir: "{{.ROOT_DIR}}/agentic-ai/minds/hive-console"
+    cmds:
+      - task: hive:console:install
+      - bun run check
+
+  static:check:
+    desc: Run every tooling, web, and Hive static group and retain every failure.
+    cmds:
+      - |
+        failed=0
+        task tooling:static || failed=1
+        task web:static || failed=1
+        task hive:console:static || failed=1
+        exit "$failed"

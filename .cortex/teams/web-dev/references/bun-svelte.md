@@ -79,23 +79,14 @@ and `preflight` sources. Unused-code ownership is split as follows:
 - Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; explicit manual runs only. Requires `NOOK_GITHUB_PAT` in `nook-app/nook-web/.env.test.local`.
 - Vite `import.meta.env` values used by e2e are build-time constants; Task targets that serve `dist` must rebuild the e2e dist with the e2e env before Playwright runs.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
-- Before integration, the Web worker runs the applicable focused proof for the
-  behavior it changes, deterministically formats every allowed web or web-owned
-  Cortex file, and commits one coherent exact handoff. The worker promptly
-  returns that commit and focused evidence without pushing or taking PR
-  lifecycle ownership. Required agent browser E2E is not pre-integration
-  handoff evidence: it runs on the configured GitHub Actions worker against a
-  published SHA. Humans may use local single-spec Docker e2e for interactive
-  debugging.
-- Gizmo continues from accepted formatted commits and runs `task loom:pre-push`
-  on the combined head. If that gate formats web-owned content, Gizmo returns
-  the exact diff to web development for a fresh formatted commit instead of
-  committing it.
-- After the owner commit and a clean gate, Gizmo pushes.
-- Run a relevant focused remote task while the head is not validation-ready.
-- Include required Web-owned browser E2E through `task remote`.
-- Run complete exact-head validation when the head is ready.
-- Gizmo collects every required browser E2E result against that published head.
-  Web development owns the browser acceptance requirement; Gizmo owns
-  publication, remote dispatch and collection, readiness, and merge.
-  See [workflows/remote-execution.md](../../sre/workflows/remote-execution.md).
+- A failed browser scenario follows the canonical
+  [unit-first browser failure loop](../../../shared/dynamic-skills/testing-pyramid-and-regression.md#unit-first-browser-failure-loop).
+- Before integration, the Web worker authors focused behavior tests and commits
+  a coherent scoped handoff. Local feedback permits only bounded inexpensive
+  diagnostics or formatting. Browser and behavior tests execute in the dev
+  manager's slow PR stage against the published SHA.
+- Gizmo pushes feature commits and requests remote build-only evidence.
+- Tests and required browser E2E execute in the manager's slow dev PR stage.
+- Web development owns browser acceptance requirements.
+- The manager owns snapshot publication and promotion.
+- Missing build-only tooling does not authorize feature tests.

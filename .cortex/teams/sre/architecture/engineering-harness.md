@@ -91,8 +91,10 @@ PR delivery helpers live in `agentic-ai/ci-agent`.
 
 - Nook has no event-driven PR auto-merger.
 - Workflows do not merge blindly from check events.
-- The task-owning agent runs the readiness audit.
-- The agent squash-merges immediately when the audit passes.
+- The dev manager requires full slow PR checks and review/security acceptance.
+- Guarded promotion must fast-forward main to the tested dev SHA.
+- This requires the integrated publication tooling defined by the
+  [dev delivery contract](../../../gizmo/architecture/dev-delivery.md).
 
 Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace the audit binary between build and readiness execution.
 
@@ -103,12 +105,9 @@ Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace 
 - Extension iteration and other heavy agent feedback use named GitHub Actions Task targets.
 - Required product validation runs on GitHub Actions only.
 - Validation starts after the coherent pushed iteration is explicitly selected with a validation label.
-- Every replacement PR head enumerates active validation runs associated with
-  that PR and cancels runs whose head SHA is obsolete. The cancellation covers
-  the main PR, Rust ecosystem, and web research workflows without allowing a
-  delayed synchronization job to cancel current-head validation. The
-  no-checkout `pull_request_target` handler reads the live head before each
-  cancellation so the same safe path covers forks and Dependabot.
+- Central CI owns PR cancellation through native workflow concurrency.
+- See [workflow concurrency policy](../workflows/ci-pipeline.md#workflow-concurrency-policy)
+  for cancellation events and scopes.
 - Agents do not run local `task check` or `task ci:pr` gates.
 
 ### Focused dispatches

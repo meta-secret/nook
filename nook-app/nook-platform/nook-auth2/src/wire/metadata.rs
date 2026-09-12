@@ -2,12 +2,16 @@
 
 use super::HEX_32_BYTE_LEN;
 use crate::errors::{ValidationError, ValidationResult};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde::{Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use std::fmt;
 
 /// Bare SHA-256 hex digest (64 chars).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify, Serialize,
+)]
+#[tsify(type = "string")]
+#[serde(try_from = "String")]
 pub struct Sha256Hex(String);
 
 impl Sha256Hex {
@@ -59,21 +63,16 @@ impl AsRef<str> for Sha256Hex {
     }
 }
 
-impl Serialize for Sha256Hex {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for Sha256Hex {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for Sha256Hex {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 
 /// Content-addressed event reference used to version an identity-owned vault DEK.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
+#[serde(try_from = "String")]
 pub struct IdentityVaultEventId(String);
 
 impl IdentityVaultEventId {
@@ -110,21 +109,19 @@ impl AsRef<str> for IdentityVaultEventId {
     }
 }
 
-impl Serialize for IdentityVaultEventId {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for IdentityVaultEventId {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for IdentityVaultEventId {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 
 /// Ed25519 verifying-key state used by persisted membership and event records.
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify,
+)]
+#[tsify(type = "string")]
+#[serde(try_from = "String")]
 pub enum DeviceSigningPublicKey {
     #[default]
     Unavailable,
@@ -192,15 +189,19 @@ impl Serialize for DeviceSigningPublicKey {
     }
 }
 
-impl<'de> Deserialize<'de> for DeviceSigningPublicKey {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for DeviceSigningPublicKey {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 
 /// RFC 3339 timestamp string (`created_at`, `enrolled_at`, `requested_at`, ...).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, tsify::Tsify, Serialize,
+)]
+#[tsify(type = "string")]
+#[serde(try_from = "String")]
 pub struct IsoTimestamp(String);
 
 impl IsoTimestamp {
@@ -243,16 +244,10 @@ impl AsRef<str> for IsoTimestamp {
     }
 }
 
-impl Serialize for IsoTimestamp {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for IsoTimestamp {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for IsoTimestamp {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 

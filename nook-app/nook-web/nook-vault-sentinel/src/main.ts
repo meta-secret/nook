@@ -1,6 +1,6 @@
 import { VaultApplication } from "$app-wasm";
-import { mountVaultApp } from "$vault-shared/main";
+import { vaultApplicationEntrypoint } from "$vault-shared/main";
 
-await mountVaultApp(VaultApplication.Sentinel);
+await vaultApplicationEntrypoint.start(VaultApplication.Sentinel);
 
 export default {};

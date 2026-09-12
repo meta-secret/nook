@@ -1,5 +1,6 @@
 //! Sentinel vault key-share lifecycle integration tests.
 
+use nook_auth2::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
 use nook_core::{VaultError, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
 
 use std::slice;
@@ -7,7 +8,7 @@ use std::slice;
 use nook_core::{
     DeviceIdentity, DeviceMode, MultiDeviceError, SentinelKeyReconstruction, SentinelPolicy,
     SentinelShareOpening, StoreId, VaultArchitecture, VaultContent, VaultKeys, VaultRecordSet,
-    VaultType, VaultUnlock, create_sentinel_share_records,
+    VaultType, VaultUnlock,
 };
 
 #[test]
@@ -16,11 +17,12 @@ fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> any
     let first = DeviceIdentity::generate()?;
     let second = DeviceIdentity::generate()?;
     let third = DeviceIdentity::generate()?;
-    let shares = create_sentinel_share_records(
-        &keys,
-        &[first.clone(), second.clone(), third.clone()],
-        2.into(),
-    )?;
+    let shares =
+        SentinelShareEnvelope::create_sentinel_share_records(CreateSentinelShareRecordsRequest {
+            keys: &keys,
+            participants: &[first.clone(), second.clone(), third.clone()],
+            threshold: 2.into(),
+        })?;
 
     let architecture = VaultArchitecture::sentinel_personal(
         DeviceMode::Standard,
@@ -31,7 +33,7 @@ fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> any
         },
     );
     assert!(!architecture.can_create_secret_with_records(&[]));
-    assert!(!architecture.can_create_secret_with_records(&shares[..1]));
+    assert!(!architecture.can_create_secret_with_records(shares.get(..1).unwrap_or_default()));
     assert!(architecture.can_create_secret_with_records(&shares));
 
     let store_id = StoreId::generate()?;
