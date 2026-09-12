@@ -179,7 +179,9 @@ separate Task-backed harness.
 - An unsuccessful Main run is handled separately by [`main-failure-handoff.yml`](../../../../.github/workflows/main-failure-handoff.yml).
 - Trusted default-branch code writes a deduplicated `status: ready`, `automation: hive` Workbench incident without copying raw logs.
 - The token-free k0s dispatcher reconciles it into Neo4j.
-- One isolated logical task owns diagnosis through exact-head checks, review resolution, squash merge, and replacement Main verification.
+- A repair task owns diagnosis and feature implementation through local dev landing.
+- The dev manager owns slow dev PR checks, review acceptance, and fast-forward
+  promotion. Incident completion retains replacement Main verification.
 - The explicitly dispatched implementation worker does not claim Hive
   incidents.
 - Browser E2E failures enter the same durable repair queue as native, WASM,
@@ -387,8 +389,9 @@ publication steps. Registry credentials are not used. Prompt:
    - Every actionable unsuccessful Main run is reconciled through one
      `automation: hive` Workbench incident.
      - Browser E2E failures are included.
-     - One isolated task owns the repair PR, review loop, squash merge, and
-       replacement Main verification.
+     - The repair follows the feature path into local dev.
+     - The dev manager controls slow checks and fast-forward promotion.
+     - Incident completion retains replacement Main verification.
    - Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 

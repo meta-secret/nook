@@ -56,9 +56,12 @@ timestamps, or PR titles from producing invalid YAML.
 
 ## Publication and isolation
 
-The collector checks out Workbench, commits exactly its generated record, rebases
-on the latest Workbench `main`, and pushes it directly with the trusted
-`NOOK_GITHUB_PAT`. The workflow fails explicitly if the token is unavailable.
+The collector checks out Workbench and commits exactly its generated record.
+It fetches and merges the latest Workbench `main`, preserving concurrent records,
+then uses an ordinary fast-forward push with the trusted `NOOK_GITHUB_PAT`.
+A rejected push requires a fresh fetch and merge. Do not rebase or force-push.
+The workflow fails explicitly if the token is unavailable.
+Collector runtime must implement this publication contract before it is used.
 Rerunning the collector is idempotent: a valid record already present in
 Workbench is accepted without another commit, while a GitHub rerun attempt
 receives a distinct filename.

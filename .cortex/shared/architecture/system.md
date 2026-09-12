@@ -424,8 +424,10 @@ Kata-backed execution Pods:
 - the worker image carries the native Rust, Bun, Node, and Task toolchain, so
   mandatory `task format` runs directly in the Kata guest without any Docker
   daemon or socket; and
-- the task is not complete until its normal PR is checked, reviewed,
-  squash-merged, its resulting Main state is green, and Workbench is updated.
+- repair delivery follows the feature path into local dev;
+- the manually run dev manager owns slow dev PR checks and guarded
+  fast-forward promotion of the tested SHA to main;
+- incident completion retains required Main verification and Workbench evidence.
 
 See
 [design-docs/hive-isolated-agent-platform.md](../../teams/sre/design-docs/hive-isolated-agent-platform.md)
