@@ -131,6 +131,49 @@ describe('extension pairing grant transport', () => {
       )
     },
   )
+  test('reports a failed local session update transport', async () => {
+    const policy = await extensionPairingGrantPolicyReady
+    const key = policy.pairingGrantStorageKey(storedGrant.vaultStoreId)
+    const sendSession = mock(
+      async (message: Parameters<ImportDependencies['sendSession']>[0]) => {
+        if (!message || typeof message !== 'object' || !('type' in message)) {
+          throw new Error('expected a typed session request')
+        }
+        if (
+          message.type === ExtensionSessionMessageType.ClassifyGrantAuthority
+        ) {
+          return ok({ kind: 'Authorized' as const, grant: storedGrant })
+        }
+        expect(message.type).toBe(ExtensionSessionMessageType.UpdateVault)
+        return err(
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.DeliveryFailed,
+          ),
+        )
+      },
+    )
+    const response = await importLocalEventLogUpdateWithDependencies({
+      vaultStoreId: storedGrant.vaultStoreId,
+      eventLogRecords: [],
+      loadPairingStorage: async () => ({ [key]: storedGrant }),
+      pairingPolicyReady: extensionPairingGrantPolicyReady,
+      ensureSession: async () => ok(),
+      importEventLog: async () => ({
+        vaultStoreId: storedGrant.vaultStoreId,
+        accessGranted: true,
+        eventCount: 1,
+        heads: ['event-1'],
+      }),
+      persistPairingStorage: async () => {},
+      sendSession,
+    })
+
+    expect(response).toEqual({
+      ok: false,
+      reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+    })
+    expect(sendSession).toHaveBeenCalledTimes(2)
+  })
   test('rejects malformed and wrong-target manager responses', async () => {
     await extensionPairingGrantPolicyReady
     for (const response of [

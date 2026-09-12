@@ -467,7 +467,13 @@ export async function importLocalEventLogUpdateWithDependencies({
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
-    await sendSession(nookTypedArgs0_4)
+    const updateDelivery = await sendSession(nookTypedArgs0_4)
+    if (updateDelivery.isErr()) {
+      return {
+        ok: false,
+        reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+      }
+    }
     return { ok: true, eventCount: imported.eventCount }
   } catch {
     return {
