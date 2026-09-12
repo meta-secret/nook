@@ -18,26 +18,28 @@ fn task(id: String, dependencies: Vec<TaskId>) -> anyhow::Result<EnqueueTask> {
     })
 }
 
-async fn complete(request: FixtureCompletion<'_>) -> anyhow::Result<()> {
-    let FixtureCompletion {
-        store,
-        task,
-        agent,
-        obsolete,
-        summary,
-    } = request;
-    assert!(
-        store
-            .complete(hive::model::Completion {
-                task,
-                agent_id: agent,
-                relevance: obsolete,
-                summary,
-                artifact: &CompletionArtifact::NotProduced
-            })
-            .await?
-    );
-    Ok(())
+impl<'a> FixtureCompletion<'a> {
+    async fn complete(self) -> anyhow::Result<()> {
+        let Self {
+            store,
+            task,
+            agent,
+            obsolete,
+            summary,
+        } = self;
+        assert!(
+            store
+                .complete(hive::model::Completion {
+                    task,
+                    agent_id: agent,
+                    relevance: obsolete,
+                    summary,
+                    artifact: &CompletionArtifact::NotProduced,
+                })
+                .await?
+        );
+        Ok(())
+    }
 }
 
 pub async fn verify_completed_parent_gate(
@@ -96,13 +98,14 @@ pub async fn verify_completed_parent_gate(
         .ok_or_else(|| anyhow::anyhow!("retired descendant fixture was missing"))?;
     assert_eq!(retired_row.get::<String>("status")?, "COMPLETED");
     assert!(retired_row.get::<bool>("obsolete")?);
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &consumer_claim,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "normally completed parent remained satisfied",
-    })
+    }
+    .complete()
     .await?;
     graph
         .run(
@@ -129,13 +132,14 @@ pub async fn verify_block_serializes_with_retirement(
     store.enqueue(&owner).await?;
     let blocker_claim = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(blocker_claim.id, blocker.id);
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &blocker_claim,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "blocker initially completed",
-    })
+    }
+    .complete()
     .await?;
     let owner_claim = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(owner_claim.id, owner.id);
@@ -177,23 +181,25 @@ pub async fn verify_block_serializes_with_retirement(
     let rearmed = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(rearmed.id, blocker.id);
     assert_eq!(rearmed.attempt_number, 2);
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &rearmed,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "concurrently retired blocker repaired",
-    })
+    }
+    .complete()
     .await?;
     let resumed_owner = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(resumed_owner.id, owner.id);
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &resumed_owner,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "owner resumed after concurrent retirement",
-    })
+    }
+    .complete()
     .await
 }
 
@@ -215,13 +221,14 @@ pub async fn verify_release_retry(
     store.enqueue(&owner).await?;
     let blocker_claim = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(blocker_claim.id, blocker.id);
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &blocker_claim,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "prerequisite initially completed",
-    })
+    }
+    .complete()
     .await?;
     let owner_claim = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(owner_claim.id, owner.id);
@@ -283,23 +290,25 @@ pub async fn verify_release_retry(
         "release-scoped retry must rearm an obsolete dependency before its owner"
     );
     assert_eq!(rearmed_blocker.attempt_number, 2);
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &rearmed_blocker,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "retired prerequisite repaired for retry",
-    })
+    }
+    .complete()
     .await?;
     let resumed_owner = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(resumed_owner.id, owner.id);
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &resumed_owner,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "release-scoped retry completed",
-    })
+    }
+    .complete()
     .await
 }
 
@@ -430,44 +439,48 @@ pub async fn verify_blocked_release_retry(
         "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         "refusing an active graph must not consume the new release"
     );
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &revived_leaf,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "historical prerequisite is obsolete",
-    })
+    }
+    .complete()
     .await?;
     let revived_ready = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(revived_ready.id, ready.id);
     assert_eq!(revived_ready.attempt_number, 3);
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &revived_ready,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "ready prerequisite completed within the renewed budget",
-    })
+    }
+    .complete()
     .await?;
     let revived_parent = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(revived_parent.id, parent.id);
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &revived_parent,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "stalled dependency reconciled",
-    })
+    }
+    .complete()
     .await?;
     let revived_repair = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(revived_repair.id, repair.id);
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &revived_repair,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "stalled Main repair resumed",
-    })
+    }
+    .complete()
     .await
 }
 
@@ -482,13 +495,14 @@ pub async fn verify_enqueue_serializes_with_retirement(
     store.enqueue(&blocker).await?;
     let blocker_claim = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(blocker_claim.id, blocker.id);
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &blocker_claim,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "direct dependency initially completed",
-    })
+    }
+    .complete()
     .await?;
     let consumer = task(
         format!("enqueue-retirement-consumer-{suffix}"),
@@ -516,23 +530,25 @@ pub async fn verify_enqueue_serializes_with_retirement(
     let rearmed = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(rearmed.id, blocker.id);
     assert_eq!(rearmed.attempt_number, 2);
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &rearmed,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "concurrently retired direct dependency repaired",
-    })
+    }
+    .complete()
     .await?;
     let resumed_consumer = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(resumed_consumer.id, consumer.id);
-    complete(FixtureCompletion {
+    FixtureCompletion {
         store,
         task: &resumed_consumer,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "direct consumer resumed after concurrent retirement",
-    })
+    }
+    .complete()
     .await
 }
 

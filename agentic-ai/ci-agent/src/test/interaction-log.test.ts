@@ -8,86 +8,83 @@ import {
   type LogWriter,
 } from "../main/interaction-log.js";
 
-function captureLog() {
-  const lines: string[] = [];
-  const streamed: { text: string } = { text: "" };
-  const writer: LogWriter = {
-    log: (line = "") => lines.push(line),
+class InteractionLogTestFixture {
+  readonly lines: string[] = [];
+  readonly streamed: { text: string } = { text: "" };
+  readonly writer: LogWriter = {
+    log: (line = "") => this.lines.push(line),
     write: (chunk) => {
-      streamed.text += chunk;
+      this.streamed.text += chunk;
     },
   };
-  return { lines, streamed, writer };
-}
 
-function assertLogLines(
-  lines: string[],
-  component: string,
-  message: string,
-  count = 1,
-): void {
-  assert.equal(lines.length, count);
-  for (const line of lines) {
-    assert.match(
-      line,
-      new RegExp(
-        `^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3} INFO  \\[${component}\\] ${message}$`,
-      ),
-    );
+  assertLogLines(component: string, message: string, count = 1): void {
+    assert.equal(this.lines.length, count);
+    for (const line of this.lines) {
+      assert.match(
+        line,
+        new RegExp(
+          `^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3} INFO  \\[${component}\\] ${message}$`,
+        ),
+      );
+    }
   }
 }
 
 void test("AgentTextLog opens a block and streams agent text incrementally", () => {
-  const { lines, streamed, writer } = captureLog();
-  let log = new AgentTextLog(writer);
+  const fixture = new InteractionLogTestFixture();
+  let log = new AgentTextLog(fixture.writer);
 
   log = log.write("The run may still");
   log = log.write(" be finishing;\nI'll check");
   log = log.write(" the logs.");
   log = log.closeBlock();
 
-  assertLogLines(lines, "ci-agent/cursor/agent", "agent output");
+  fixture.assertLogLines("ci-agent/cursor/agent", "agent output");
   assert.equal(
-    streamed.text,
+    fixture.streamed.text,
     "    The run may still be finishing;\n    I'll check the logs.\n",
   );
 });
 
 void test("AgentTextLog closes an in-progress line before the next block", () => {
-  const { lines, streamed, writer } = captureLog();
-  let log = new AgentTextLog(writer);
+  const fixture = new InteractionLogTestFixture();
+  let log = new AgentTextLog(fixture.writer);
 
   log = log.write("partial");
   log = log.closeBlock();
   log = log.write("next message");
   log = log.closeBlock();
 
-  assertLogLines(lines, "ci-agent/cursor/agent", "agent output", 2);
-  assert.equal(streamed.text, "    partial\n    next message\n");
+  fixture.assertLogLines("ci-agent/cursor/agent", "agent output", 2);
+  assert.equal(fixture.streamed.text, "    partial\n    next message\n");
 });
 
 void test("ShellStreamLog prefixes live shell output", () => {
-  const { lines, streamed, writer } = captureLog();
-  let log = new ShellStreamLog(writer);
+  const fixture = new InteractionLogTestFixture();
+  let log = new ShellStreamLog(fixture.writer);
 
   log = log.openBlock();
   log = log.write("task: ci:verify\nerror: failed");
   log = log.closeBlock();
 
-  assertLogLines(lines, "ci-agent/cursor/shell", "output");
-  assert.equal(streamed.text, "    | task: ci:verify\n    | error: failed\n");
+  fixture.assertLogLines("ci-agent/cursor/shell", "output");
+  assert.equal(
+    fixture.streamed.text,
+    "    | task: ci:verify\n    | error: failed\n",
+  );
   assert.equal(log.observation(), StreamEvidence.Seen);
 });
 
 void test("ShellStreamLog streams partial shell output before newline", () => {
-  const { lines, streamed, writer } = captureLog();
-  let log = new ShellStreamLog(writer);
+  const fixture = new InteractionLogTestFixture();
+  let log = new ShellStreamLog(fixture.writer);
 
   log = log.openBlock();
   log = log.write("running");
   log = log.write(" tests");
   log = log.closeBlock();
 
-  assertLogLines(lines, "ci-agent/cursor/shell", "output");
-  assert.equal(streamed.text, "    | running tests\n");
+  fixture.assertLogLines("ci-agent/cursor/shell", "output");
+  assert.equal(fixture.streamed.text, "    | running tests\n");
 });

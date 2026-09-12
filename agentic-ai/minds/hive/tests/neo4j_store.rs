@@ -876,13 +876,14 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         "final lease failure must propagate to every descendant: {lease_failed_statuses:?}"
     );
 
-    cancellation::exercise_cancellation(cancellation::CancellationScenario {
+    cancellation::CancellationScenario {
         store: &store,
         graph: &graph,
         agent_a: &agent_a,
         agent_b: &agent_b,
         suffix: &suffix,
-    })
+    }
+    .exercise()
     .await?;
 
     schema::verify_migrations(&store, &graph).await?;

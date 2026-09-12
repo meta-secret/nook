@@ -47,32 +47,34 @@ const request: ExtensionConnectRequest = {
   scopes: [ExtensionConnectScope.VaultAccess],
 }
 
-function approvalFixture() {
-  const records = {
-    to_array: vi.fn(() => []),
-    free: vi.fn(),
-    [Symbol.dispose]: vi.fn(),
-  } satisfies NookEventLogRecords
-  const manager = new NookVaultManager()
-  Object.defineProperty(manager, 'vaultStoreId', {
-    configurable: true,
-    value: 'store-1',
-  })
-  manager.export_event_log_records_js = vi.fn(async () => records)
-  const admitManager = vi.fn<
-    () => Result<NookVaultManager, VaultStorageFailure>
-  >(() => ok(manager))
-  const vault = VaultStateTestFixture.create()
-  vault.openActiveVault('store-1')
-  vault.openManager(manager)
-  const immediateStorage: VaultState['enqueueStorage'] = async (operation) =>
-    operation()
-  vault.enqueueStorage = immediateStorage
-  vault.localVaults = []
-  vault.admitManager = admitManager
-  vault.t = (key: Parameters<VaultState['t']>[0]) =>
-    typeof key === 'string' ? key : 'Unnamed vault'
-  return { admitManager, manager, records, vault }
+class ExtensionApprovalTestFixture {
+  static create() {
+    const records = {
+      to_array: vi.fn(() => []),
+      free: vi.fn(),
+      [Symbol.dispose]: vi.fn(),
+    } satisfies NookEventLogRecords
+    const manager = new NookVaultManager()
+    Object.defineProperty(manager, 'vaultStoreId', {
+      configurable: true,
+      value: 'store-1',
+    })
+    manager.export_event_log_records_js = vi.fn(async () => records)
+    const admitManager = vi.fn<
+      () => Result<NookVaultManager, VaultStorageFailure>
+    >(() => ok(manager))
+    const vault = VaultStateTestFixture.create()
+    vault.openActiveVault('store-1')
+    vault.openManager(manager)
+    const immediateStorage: VaultState['enqueueStorage'] = async (operation) =>
+      operation()
+    vault.enqueueStorage = immediateStorage
+    vault.localVaults = []
+    vault.admitManager = admitManager
+    vault.t = (key: Parameters<VaultState['t']>[0]) =>
+      typeof key === 'string' ? key : 'Unnamed vault'
+    return { admitManager, manager, records, vault }
+  }
 }
 
 beforeEach(() => {
@@ -82,7 +84,7 @@ beforeEach(() => {
 
 describe('extension vault approval', () => {
   test('authorizes, exports, and delivers one generation-consistent grant', async () => {
-    const fixture = approvalFixture()
+    const fixture = ExtensionApprovalTestFixture.create()
     const deliver = vi
       .spyOn(extensionConnectionBrowser, 'deliverExtensionPairingApproval')
       .mockResolvedValue({ kind: ExtensionPairingDeliveryKind.Delivered })
@@ -110,7 +112,7 @@ describe('extension vault approval', () => {
   })
 
   test('returns native authorization failures before exporting records', async () => {
-    const fixture = approvalFixture()
+    const fixture = ExtensionApprovalTestFixture.create()
     wasm.approveExtensionDevice.mockRejectedValueOnce(
       new Error('authorization rejected'),
     )
@@ -125,7 +127,7 @@ describe('extension vault approval', () => {
   })
 
   test('rejects a manager generation change between authorization and export', async () => {
-    const fixture = approvalFixture()
+    const fixture = ExtensionApprovalTestFixture.create()
     const replacement = new NookVaultManager()
     fixture.admitManager
       .mockReturnValueOnce(ok(fixture.manager))
@@ -144,7 +146,7 @@ describe('extension vault approval', () => {
   })
 
   test('does not deliver after the prepared generation is replaced', async () => {
-    const fixture = approvalFixture()
+    const fixture = ExtensionApprovalTestFixture.create()
     const deliver = vi.spyOn(
       extensionConnectionBrowser,
       'deliverExtensionPairingApproval',
