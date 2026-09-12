@@ -13,7 +13,6 @@ import {
   refreshJoinerVaultOnLoginGate,
   refreshJoinerVaultOnLoginGateIfIdle,
   RefreshJoinerVaultOnLoginGateOutcome,
-  shouldAttemptJoinerVaultConnect,
 } from '../../../e2e/helpers/joiner-vault-refresh'
 
 const installVault = (
@@ -31,20 +30,7 @@ afterEach(() => {
 })
 
 describe('joiner vault refresh', () => {
-  test('only attempts connect after a completed refresh', () => {
-    expect(
-      shouldAttemptJoinerVaultConnect(
-        RefreshJoinerVaultOnLoginGateOutcome.Busy,
-      ),
-    ).toBe(false)
-    expect(
-      shouldAttemptJoinerVaultConnect(
-        RefreshJoinerVaultOnLoginGateOutcome.Refreshed,
-      ),
-    ).toBe(true)
-  })
-
-  test('skips a forced refresh while auto-connect is verifying', async () => {
+  test('performs a forced refresh while auto-connect is verifying', async () => {
     const syncFromStorage: VaultState['syncFromStorage'] = vi.fn(async () =>
       ok(ProviderSyncOutcome.Synced),
     )
@@ -53,12 +39,11 @@ describe('joiner vault refresh', () => {
     const outcome = await refreshJoinerVaultOnLoginGateIfIdle({
       freshness: ProviderSyncFreshness.Forced,
       authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
-      busyOutcome: RefreshJoinerVaultOnLoginGateOutcome.Busy,
       refreshedOutcome: RefreshJoinerVaultOnLoginGateOutcome.Refreshed,
     })
 
-    expect(outcome).toBe(RefreshJoinerVaultOnLoginGateOutcome.Busy)
-    expect(syncFromStorage).not.toHaveBeenCalled()
+    expect(outcome).toBe(RefreshJoinerVaultOnLoginGateOutcome.Refreshed)
+    expect(syncFromStorage).toHaveBeenCalledWith(ProviderSyncFreshness.Forced)
   })
 
   test('uses the typed forced-refresh boundary', async () => {

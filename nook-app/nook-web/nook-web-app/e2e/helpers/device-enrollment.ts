@@ -56,7 +56,6 @@ import { createLocalVaultOnLogin } from './vault-setup'
 import {
   refreshJoinerVaultOnLoginGateIfIdle,
   RefreshJoinerVaultOnLoginGateOutcome,
-  shouldAttemptJoinerVaultConnect,
 } from './joiner-vault-refresh'
 import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
 import {
@@ -360,16 +359,12 @@ export async function dismissJoinEnrollmentDialog(page: Page) {
 
 export /** Pull remote vault state on the login gate (joiner waiting for / after approval). */
 async function refreshGithubVaultOnLoginGate(page: Page) {
-  const outcome = await page.evaluate(refreshJoinerVaultOnLoginGateIfIdle, {
+  await page.evaluate(refreshJoinerVaultOnLoginGateIfIdle, {
     freshness: ProviderSyncFreshness.Forced,
     authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
-    busyOutcome: RefreshJoinerVaultOnLoginGateOutcome.Busy,
     refreshedOutcome: RefreshJoinerVaultOnLoginGateOutcome.Refreshed,
   })
-  if (shouldAttemptJoinerVaultConnect(outcome)) {
-    await waitForVaultOperationsIdle(page)
-  }
-  return outcome
+  await waitForVaultOperationsIdle(page)
 }
 
 export type JoinerVaultReadyTarget = SyncE2eTarget
@@ -486,8 +481,7 @@ export async function waitForJoinerVaultReady({
     await expect
       .poll(
         async () => {
-          const refreshOutcome = await refreshGithubVaultOnLoginGate(page)
-          if (!shouldAttemptJoinerVaultConnect(refreshOutcome)) return false
+          await refreshGithubVaultOnLoginGate(page)
           await dismissSyncConflictIfVisible(page)
           await dismissJoinEnrollmentDialog(page)
           if (

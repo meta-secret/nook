@@ -9,18 +9,10 @@ export type RefreshJoinerVaultOnLoginGateArgs = {
 
 export enum RefreshJoinerVaultOnLoginGateOutcome {
   Refreshed = 'refreshed',
-  Busy = 'busy',
-}
-
-export function shouldAttemptJoinerVaultConnect(
-  outcome: RefreshJoinerVaultOnLoginGateOutcome,
-): boolean {
-  return outcome === RefreshJoinerVaultOnLoginGateOutcome.Refreshed
 }
 
 export type RefreshJoinerVaultOnLoginGateIfIdleArgs =
   RefreshJoinerVaultOnLoginGateArgs & {
-    readonly busyOutcome: RefreshJoinerVaultOnLoginGateOutcome
     readonly refreshedOutcome: RefreshJoinerVaultOnLoginGateOutcome
   }
 
@@ -40,19 +32,17 @@ export async function refreshJoinerVaultOnLoginGate(
 }
 
 /**
- * Refresh only when an auto-connect is not already verifying the vault.
+ * Refresh the approved joiner's vault in a single browser-evaluable callback.
  *
- * This check and the refresh start in the same browser evaluation, so a
- * forced polling refresh cannot re-enter the storage flow after auto-connect
- * has begun.
+ * The forced freshness policy owns concurrency with auto-connect, so this
+ * callback must always invoke the typed vault sync even while verification is
+ * active.
  */
 export async function refreshJoinerVaultOnLoginGateIfIdle(
   args: RefreshJoinerVaultOnLoginGateIfIdleArgs,
 ): Promise<RefreshJoinerVaultOnLoginGateOutcome> {
-  const { freshness, authStorageSyncFailedKey, busyOutcome, refreshedOutcome } =
-    args
+  const { freshness, authStorageSyncFailedKey, refreshedOutcome } = args
   const vault = (window as VaultDebugWindow).__nookVault
-  if (vault?.isVerifying) return busyOutcome
   if (!vault) throw new Error('joiner-vault-runtime-unavailable')
   const refreshed = await vault.syncFromStorage(freshness)
   if (refreshed.isErr()) {
