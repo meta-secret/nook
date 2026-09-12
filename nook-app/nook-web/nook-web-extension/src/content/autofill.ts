@@ -166,7 +166,7 @@ async function performScanAndRender(): Promise<void> {
   if (
     verdict.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
     !('snapshot' in verdict) ||
-    !response.selectedFacts
+    response.selectedFacts.state !== 'selected'
   ) {
     removeScannedWidget()
     return
@@ -190,7 +190,7 @@ async function performScanAndRender(): Promise<void> {
   >[0] = {
     snapshot,
     workflow: selected.observation,
-    facts: response.selectedFacts,
+    facts: response.selectedFacts.facts,
     loginMatches,
     vaultConnection,
   }

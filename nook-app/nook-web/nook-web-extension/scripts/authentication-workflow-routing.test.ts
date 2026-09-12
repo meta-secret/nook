@@ -120,7 +120,8 @@ describe('authentication workflow routing', () => {
       workflow: { ok: true },
       loginMatches: { kind: 'ready', count: 2 },
       selectedFacts: {
-        authenticator: { matchingPasskeyAccountCount: 2 },
+        state: 'selected',
+        facts: { authenticator: { matchingPasskeyAccountCount: 2 } },
       },
     })
     expect(events).toEqual([
@@ -155,6 +156,7 @@ describe('authentication workflow routing', () => {
     expect(await authenticationWorkflowMessageResponse(request)).toEqual({
       workflow: { ok: true },
       loginMatches: { kind: 'unavailable' },
+      selectedFacts: { state: 'notApplicable' },
     })
   })
 
@@ -190,7 +192,8 @@ describe('authentication workflow routing', () => {
         },
         loginMatches: { kind: 'unavailable' },
         selectedFacts: {
-          authenticator: { matchingPasskeyAccountCount: 2 },
+          state: 'selected',
+          facts: { authenticator: { matchingPasskeyAccountCount: 2 } },
         },
       })
     }
@@ -219,6 +222,7 @@ describe('authentication workflow routing', () => {
     expect(await authenticationWorkflowMessageResponse(request)).toMatchObject({
       workflow: { ok: true, snapshot: { action: 0 } },
       loginMatches: { kind: 'unavailable' },
+      selectedFacts: { state: 'selected' },
     })
     expect(availabilityCalls).toBe(0)
   })
@@ -246,6 +250,7 @@ describe('authentication workflow routing', () => {
     expect(await authenticationWorkflowMessageResponse(request)).toEqual({
       workflow: { ok: false, reason: 'workflow-snapshot-failed' },
       loginMatches: { kind: 'unavailable' },
+      selectedFacts: { state: 'notApplicable' },
     })
   })
 
@@ -276,6 +281,7 @@ describe('authentication workflow routing', () => {
     ).toEqual({
       workflow: { ok: true },
       loginMatches: { kind: 'unavailable' },
+      selectedFacts: { state: 'notApplicable' },
     })
     expect(observedAvailability).toEqual(['unavailable'])
   })

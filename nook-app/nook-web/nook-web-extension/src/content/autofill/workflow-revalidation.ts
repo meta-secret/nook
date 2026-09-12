@@ -239,14 +239,14 @@ export class RevalidatedAuthenticationAction {
     if (
       verdict.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
       !('snapshot' in verdict) ||
-      !delivery.response.selectedFacts ||
+      delivery.response.selectedFacts.state !== 'selected' ||
       verdict.snapshot.observationIndex !== approvedObservation.selectedIndex ||
       verdict.snapshot.action !== expectedAction
     ) {
       return rejected()
     }
     const selectedFactsBatch: AuthenticationPageObservationFactsBatch = {
-      observations: [delivery.response.selectedFacts],
+      observations: [delivery.response.selectedFacts.facts],
     }
     let selectedObservationBindingToken: AuthenticationObservationBindingToken
     try {

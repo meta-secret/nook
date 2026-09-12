@@ -2,10 +2,7 @@ import { companionWasmReady } from '../../../../nook-web-shared/src/extension/co
 
 import type { GeneratePasswordRequest } from '../../../../nook-web-shared/src/extension/runtime-messages'
 
-import {
-  type AuthenticationPageObservationView,
-  type AuthenticationWorkflowSnapshotMessage,
-} from '../../lib/auth-workflow-messages'
+import { type AuthenticationWorkflowSnapshotMessage } from '../../lib/auth-workflow-messages'
 
 import type {
   AuthenticatorPickerCancelMessage,
@@ -58,6 +55,7 @@ import {
   decode_website_login_save_pending_response,
   decode_website_login_options,
   type AuthenticationWorkflowRuntimeResponse,
+  type AuthenticationWorkflowSelectedFacts,
   type AuthenticationWorkflowSnapshotResponse,
   type AuthenticatorBackupAttachResponse,
   type AuthenticatorCodeResponse,
@@ -87,7 +85,7 @@ export type RuntimeMessageDelivery<Response> =
 export type AuthenticationWorkflowSnapshotRuntimeResponse = {
   verdict: AuthenticationWorkflowSnapshotResponse
   loginMatches: AuthenticationWorkflowRuntimeResponse['loginMatches']
-  selectedFacts?: AuthenticationPageObservationView
+  selectedFacts: AuthenticationWorkflowSelectedFacts
 }
 
 export type ExtensionRuntimeRequest =
@@ -313,16 +311,9 @@ class AuthenticationRuntimeTransport {
         delivery.response,
       )
       const { workflow: verdict, loginMatches, selectedFacts } = runtimeResponse
-      if ('snapshot' in verdict) {
-        if (!selectedFacts) return this.unavailable()
-        return {
-          kind: RuntimeMessageDeliveryKind.Delivered,
-          response: { verdict, loginMatches, selectedFacts },
-        }
-      }
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: { verdict, loginMatches },
+        response: { verdict, loginMatches, selectedFacts },
       }
     } catch {
       return this.unavailable()

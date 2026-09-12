@@ -612,6 +612,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       return {
         workflow: response,
         loginMatches: { kind: 'unavailable' },
+        selectedFacts: { state: 'notApplicable' },
       }
     }
     const observedFacts = observations[observationIndex]
@@ -637,6 +638,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       return {
         workflow: response,
         loginMatches: { kind: 'unavailable' },
+        selectedFacts: { state: 'notApplicable' },
       }
     }
     const loginMatches = loginPilotFlow
@@ -644,7 +646,11 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       : savePilotFlow
         ? { kind: 'ready' as const, count: 1 }
         : { kind: 'unavailable' as const }
-    return { workflow: response, loginMatches, selectedFacts }
+    return {
+      workflow: response,
+      loginMatches,
+      selectedFacts: { state: 'selected', facts: selectedFacts },
+    }
   }
 
   if (barcodeRawValue) {

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   AuthenticationOutcomeVerdict,
   AuthenticationOutcomeResponseKind,
+  type AuthenticationPageObservationFacts,
   AuthenticationWorkflowSnapshotResponseKind,
   AuthenticatorBackupAttachResponseKind,
   AuthenticatorCodeResponseKind,
@@ -111,6 +112,39 @@ const workflowSnapshotMessage: Parameters<
   type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
   payload: { origin: 'https://example.test', observations: [] },
 }
+const selectedWorkflowFacts = {
+  fields: {
+    usernameFieldCount: 0,
+    currentPasswordFieldCount: 0,
+    newPasswordFieldCount: 0,
+    genericPasswordFieldCount: 0,
+    oneTimeCodeFieldCount: 0,
+    actionablePasswordFieldCount: 0,
+    readonlyPasswordFieldCount: 0,
+  },
+  ceremony: {
+    oneTimeCodeProgression: 'advance-control-required',
+    oneTimeCodeHandlerSignal: '',
+    authenticationContext: {
+      authenticationUsername: 'absent',
+      sourceOrigin: 'https://example.test',
+      formIdentity: 'passkey-login',
+      destinationIdentity: '/login',
+    },
+    manualCheckpoint: 'absent',
+    advanceControl: 'absent',
+  },
+  authenticator: {
+    authenticatorSetup: 'absent',
+    backupCodesCopy: '',
+    passkeyControl: 'absent',
+    passkeyAccountAvailability: 'unavailable',
+    matchingPasskeyAccountCount: 0,
+    detailedPasskeyControl: { kind: 'absent' },
+  },
+  credentialSubmission: { kind: 'absent' },
+  detailedAdvanceControl: { kind: 'absent' },
+} satisfies AuthenticationPageObservationFacts
 const authenticatorPreviewMessage: Parameters<
   typeof authenticationRuntimeTransport.sendAuthenticatorPreviewRuntimeMessage
 >[0] = {
@@ -362,39 +396,7 @@ describe('runtime message adapters', () => {
   })
 
   test('decodes a valid workflow snapshot through Rust', async () => {
-    const selectedFacts = {
-      fields: {
-        usernameFieldCount: 0,
-        currentPasswordFieldCount: 0,
-        newPasswordFieldCount: 0,
-        genericPasswordFieldCount: 0,
-        oneTimeCodeFieldCount: 0,
-        actionablePasswordFieldCount: 0,
-        readonlyPasswordFieldCount: 0,
-      },
-      ceremony: {
-        oneTimeCodeProgression: 'advance-control-required',
-        oneTimeCodeHandlerSignal: '',
-        authenticationContext: {
-          authenticationUsername: 'absent',
-          sourceOrigin: 'https://example.test',
-          formIdentity: 'passkey-login',
-          destinationIdentity: '/login',
-        },
-        manualCheckpoint: 'absent',
-        advanceControl: 'absent',
-      },
-      authenticator: {
-        authenticatorSetup: 'absent',
-        backupCodesCopy: '',
-        passkeyControl: 'absent',
-        passkeyAccountAvailability: 'unavailable',
-        matchingPasskeyAccountCount: 0,
-        detailedPasskeyControl: { kind: 'absent' },
-      },
-      credentialSubmission: { kind: 'absent' },
-      detailedAdvanceControl: { kind: 'absent' },
-    }
+    const selectedFacts = selectedWorkflowFacts
     const response = {
       workflow: {
         ok: true,
@@ -410,7 +412,7 @@ describe('runtime message adapters', () => {
         },
       },
       loginMatches: { kind: 'ready', count: 2 },
-      selectedFacts,
+      selectedFacts: { state: 'selected', facts: selectedFacts },
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
@@ -425,13 +427,55 @@ describe('runtime message adapters', () => {
         AuthenticationWorkflowSnapshotResponseKind.Matched,
       )
       const decodedFacts = delivery.response.selectedFacts
-      expect(decodedFacts).toMatchObject(selectedFacts)
-      expect(decodedFacts?.ceremony.oneTimeCodeHandlerSignals).toEqual([])
-      expect(decodedFacts?.ceremony.implicitSubmissionMethod).toBe('absent')
+      expect(decodedFacts.state).toBe('selected')
+      if (decodedFacts.state === 'selected') {
+        expect(decodedFacts.facts).toMatchObject(selectedFacts)
+        expect(decodedFacts.facts.ceremony.oneTimeCodeHandlerSignals).toEqual(
+          [],
+        )
+        expect(decodedFacts.facts.ceremony.implicitSubmissionMethod).toBe(
+          'absent',
+        )
+      }
       expect(String(delivery.response.loginMatches.kind)).toBe('ready')
       if ('count' in delivery.response.loginMatches) {
         expect(delivery.response.loginMatches.count).toBe(2)
       }
+    }
+  })
+
+  test('rejects workflow and selected-facts states that contradict', async () => {
+    const matchedWithoutFacts = {
+      workflow: {
+        ok: true,
+        snapshot: {
+          kind: 0,
+          stage: 0,
+          action: 0,
+          currentStep: 1,
+          totalSteps: 3,
+          approvalRequirement: 'explicit-user-approval',
+          savedLoginCapability: 'fill-saved-login',
+          observationIndex: 0,
+        },
+      },
+      loginMatches: { kind: 'unavailable' },
+      selectedFacts: { state: 'notApplicable' },
+    }
+    const unmatchedWithFacts = {
+      workflow: { ok: true },
+      loginMatches: { kind: 'unavailable' },
+      selectedFacts: { state: 'selected', facts: selectedWorkflowFacts },
+    }
+
+    for (const response of [matchedWithoutFacts, unmatchedWithFacts]) {
+      installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+      const delivery =
+        await authenticationRuntimeTransport.sendAuthenticationWorkflowSnapshotRuntimeMessage(
+          workflowSnapshotMessage,
+        )
+
+      expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
     }
   })
 
@@ -451,6 +495,7 @@ describe('runtime message adapters', () => {
         },
       },
       loginMatches: { kind: 'unavailable' },
+      selectedFacts: { state: 'notApplicable' },
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
@@ -745,6 +790,7 @@ describe('runtime message adapters', () => {
         },
       },
       loginMatches: { kind: 'unavailable' },
+      selectedFacts: { state: 'notApplicable' },
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
