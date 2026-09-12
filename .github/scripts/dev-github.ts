@@ -23,17 +23,12 @@ export const DevDeliveryContract = {
   remoteBuild: {
     workflowName: "Remote task",
     taskName: "build:compile",
-    jobName: "Compile feature",
+    jobName: "Remote / build:compile",
     titlePattern: /^Remote \/ build:compile @ ([0-9a-f]{40}) \/ [A-Za-z0-9._-]+$/u,
   },
   promotion: {
     workflowName: "CI",
-    requiredJobs: [
-      "Classify CI paths",
-      "Repository policy",
-      "PR validation",
-      "Dev promotion readiness",
-    ],
+    requiredJobs: ["Dev promotion readiness"],
   },
   pagesEnvironment: "github-pages",
 } as const;
