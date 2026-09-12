@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AuthenticationWorkflowSnapshotMessage } from '../src/lib/auth-workflow-messages'
+import { AuthenticationWorkflowSnapshotIngress } from '../src/lib/auth-workflow-messages'
 import {
   authenticationWorkflowMessageResponse,
   type AuthenticationWorkflowRoutingDependencies,
@@ -7,22 +7,52 @@ import {
 import { MatchingPasskeyAvailabilityKind } from '../src/background/service-worker/passkey-availability'
 import { AuthenticationWorkflowSnapshotKind } from '../src/background/vault-runtime'
 
-const message = {
+const messageAdmission = AuthenticationWorkflowSnapshotIngress.admit({
   type: 'nook:authentication-workflow-snapshot',
   payload: {
     origin: 'https://login.example.test',
     observations: [
       {
+        fields: {
+          usernameFieldCount: 0,
+          currentPasswordFieldCount: 0,
+          newPasswordFieldCount: 0,
+          genericPasswordFieldCount: 0,
+          oneTimeCodeFieldCount: 0,
+          actionablePasswordFieldCount: 0,
+          readonlyPasswordFieldCount: 0,
+        },
+        ceremony: {
+          oneTimeCodeProgression: 'advance-control-required',
+          oneTimeCodeHandlerSignal: '',
+          authenticationContext: {
+            authenticationUsername: 'absent',
+            sourceOrigin: 'https://login.example.test',
+            formIdentity: 'login',
+            destinationIdentity: '/login',
+          },
+          manualCheckpoint: 'absent',
+          advanceControl: 'absent',
+        },
         authenticator: {
-          detailedPasskeyControl: { control: 'candidate' },
+          authenticatorSetup: 'absent',
+          backupCodesCopy: '',
+          passkeyControl: 'absent',
           passkeyAccountAvailability: 'unavailable',
           matchingPasskeyAccountCount: 0,
+          detailedPasskeyControl: { kind: 'absent' },
         },
+        credentialSubmission: { kind: 'absent' },
+        detailedAdvanceControl: { kind: 'absent' },
       },
     ],
   },
-} as unknown as AuthenticationWorkflowSnapshotMessage
-const sender = {} as chrome.runtime.MessageSender
+})
+if (messageAdmission.kind !== 'accepted') {
+  throw new Error('workflow routing fixture must pass Rust admission')
+}
+const message = messageAdmission.message
+const sender: chrome.runtime.MessageSender = {}
 type WorkflowSnapshotRequest = Parameters<
   AuthenticationWorkflowRoutingDependencies['authenticationWorkflowSnapshot']
 >[0]

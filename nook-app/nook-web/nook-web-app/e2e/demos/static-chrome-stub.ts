@@ -19,6 +19,13 @@ import {
 } from '../../../nook-web-extension/src/lib/login-fill-messages'
 import { WebsiteAuthenticatorBackupAttachMessageType } from '../../../nook-web-extension/src/lib/enrollment-messages'
 import { GeneratePasswordRequestType } from '../../../nook-web-shared/src/extension/runtime-messages'
+import type { AuthenticationOutcomeObservationView } from '../../../nook-web-extension/src/lib/outcome-evidence-messages'
+
+declare global {
+  interface Window {
+    __nookDemoRuntimeMessageTypes?: string[]
+  }
+}
 
 type DemoLoginSaveResponses = {
   offerAvailable: WebsiteLoginSaveOfferResponse['kind']
@@ -124,7 +131,11 @@ export type DemoChromeStubArgs = {
 export function installDemoChromeStub(args: DemoChromeStubArgs) {
   type RuntimeMessage = {
     type: string
-    payload?: { secretId?: string; observations?: unknown[] }
+    payload?: {
+      secretId?: string
+      observations?: unknown[]
+      observation?: AuthenticationOutcomeObservationView
+    }
   }
   type RuntimeCallback = (response?: unknown) => void
   type AuthenticationSnapshotResponse = {
@@ -293,16 +304,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             expiresAt: Date.now() + 30_000,
           }
         case 'nook:authentication-outcome-classify': {
-          const observation = (
-            message as {
-              payload?: {
-                observation?: {
-                  successMarkerPresent?: boolean
-                  errorMarkerPresent?: boolean
-                }
-              }
-            }
-          ).payload?.observation
+          const observation = message.payload?.observation
           if (observation?.errorMarkerPresent) {
             return {
               ok: true,
@@ -397,16 +399,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             },
           }
         case 'nook:authentication-outcome-classify': {
-          const observation = (
-            message as {
-              payload?: {
-                observation?: {
-                  successMarkerPresent?: boolean
-                  errorMarkerPresent?: boolean
-                }
-              }
-            }
-          ).payload?.observation
+          const observation = message.payload?.observation
           if (observation?.errorMarkerPresent) {
             return {
               ok: true,
@@ -686,13 +679,10 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       },
       sendMessage(message: RuntimeMessage, callback?: RuntimeCallback) {
         if (recordRuntimeMessageTypes && message.type) {
-          const demoWindow = globalThis as unknown as {
-            __nookDemoRuntimeMessageTypes?: string[]
-          }
-          demoWindow.__nookDemoRuntimeMessageTypes = ((v) => (v ? v : []))(
-            demoWindow.__nookDemoRuntimeMessageTypes,
+          window.__nookDemoRuntimeMessageTypes = ((v) => (v ? v : []))(
+            window.__nookDemoRuntimeMessageTypes,
           )
-          demoWindow.__nookDemoRuntimeMessageTypes.push(message.type)
+          window.__nookDemoRuntimeMessageTypes.push(message.type)
         }
         const responseRequest: AuthenticationSnapshotResponseAdapterRequest = {
           message,

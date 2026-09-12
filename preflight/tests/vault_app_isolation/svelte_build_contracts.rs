@@ -25,10 +25,13 @@ fn svelte_build_surfaces_support_runtime_typescript_enums() {
     );
 
     let dashboard = root.read("nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/DevicesAccessDashboard.svelte");
+    let selected_identity = root.read("nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/devices-access/SelectedIdentityProjection.svelte");
     let dashboard_state = root.read("nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state.ts");
     assert!(dashboard_state.contains("export enum DashboardLoadKind"));
     assert!(dashboard_state.contains("kind: typeof DashboardLoadKind.Ready; view: ReadyView"));
     assert!(dashboard.contains("DashboardLoadKind,"));
-    assert!(dashboard.contains("from './devices-access-dashboard-state'"));
+    assert!(dashboard.contains("from \"./devices-access-dashboard-state\""));
     assert!(dashboard.contains("DashboardLoadState<DashboardView>"));
+    assert!(selected_identity.contains("DashboardReadyProjectionKind,"));
+    assert!(selected_identity.contains("from \"../devices-access-dashboard-state\""));
 }

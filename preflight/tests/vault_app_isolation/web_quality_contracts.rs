@@ -41,7 +41,7 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         "\"security\": \"bun audit --prod --audit-level=high\"",
         "\"check\": \"bun run security",
         "bun run lint",
-        "\"lint\": \"cd .. && nook-web-app/node_modules/.bin/eslint --config eslint.config.js nook-web-research/src\"",
+        "\"lint\": \"cd .. && nook-web-app/node_modules/.bin/eslint --config eslint.config.js nook-web-research\"",
     ] {
         assert!(
             research_manifest.contains(required),
@@ -138,22 +138,47 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
     }
 
     let typed_project = root.read("nook-app/nook-web/tsconfig.eslint.json");
-    for required in [
-        "nook-web-extension/src/**/*.ts",
-        "nook-web-extension/src/**/*.svelte",
-    ] {
+    let Ok(typed_project_config) = serde_json::from_str::<serde_json::Value>(&typed_project) else {
+        panic!("the typed lint project must remain valid JSON");
+    };
+    let Some(typed_project_includes) = typed_project_config["include"].as_array() else {
+        panic!("the typed lint project must declare its authored source coverage");
+    };
+    for required in ["**/*.ts", "**/*.svelte"] {
         assert!(
-            typed_project.contains(required),
-            "the typed lint project must retain extension production sources matching `{required}`"
+            typed_project_includes
+                .iter()
+                .any(|include| include.as_str() == Some(required)),
+            "the typed lint project must retain authored sources matching `{required}`"
         );
     }
+    let Some(typed_project_excludes) = typed_project_config["exclude"].as_array() else {
+        panic!("the typed lint project must declare its generated source exclusions");
+    };
+    for required in [
+        "nook-web-shared/src/vault-app/lib/nook-wasm",
+        "nook-web-shared/src/extension/nook-companion-wasm",
+    ] {
+        assert!(
+            typed_project_excludes
+                .iter()
+                .any(|exclude| exclude.as_str() == Some(required)),
+            "the typed lint project must retain generated source exclusion `{required}`"
+        );
+    }
+    assert!(
+        !typed_project_excludes.iter().any(|exclude| exclude
+            .as_str()
+            .is_some_and(|pattern| pattern.contains("nook-web-extension"))),
+        "the typed lint project must not exclude extension authored sources"
+    );
 
     let extension_manifest = root.read("nook-app/nook-web/nook-web-extension/package.json");
     assert!(
         extension_manifest.contains(
-            "eslint --config eslint.config.js nook-web-extension/scripts nook-web-extension/src nook-web-extension/e2e nook-web-extension/playwright.config.ts"
+            "eslint --config eslint.config.js nook-web-extension nook-web-shared/src/extension nook-web-shared/src/components nook-web-shared/src/generated"
         ),
-        "the extension lint command must retain its production source tree"
+        "the extension lint command must retain its complete authored and shared source trees"
     );
 
     let typed_api_tests =

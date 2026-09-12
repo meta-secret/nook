@@ -75,7 +75,8 @@ function installRuntimeMock(mock: RuntimeMock): void {
     }
     Object.defineProperty(runtime, 'lastError', lastErrorDescriptor)
   }
-  globalThis.chrome = { runtime } as typeof chrome
+  const runtimeHost = { chrome: { runtime } }
+  Object.assign(globalThis, runtimeHost)
 }
 
 const loginOptionsMessage: Parameters<
