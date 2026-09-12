@@ -52,15 +52,29 @@ Report the blocker instead of reporting an intermediate state as complete.
 3. **Assign Team Agent work.**
    - Give each task one team identity.
    - Name allowed files, forbidden files, and acceptance evidence.
+   - Name acceptance command read, write, and output scopes.
    - Assign one writer for shared files.
-4. **Sequence writers.**
-   - Run only one write-capable Team Agent at a time.
-   - Use the current checkout and current branch.
-   - Let the Team Agent run focused checks.
-   - Ask for a complete scoped commit when useful.
-   - Continue directly from that shared-branch state.
+   - Treat shared generated and output paths as shared files.
+   - Inventory and attribute existing dirty paths and hunks.
+   - Block scope overlap with user or foreign changes without an exact handoff
+     or same-task attribution.
+4. **Run write waves.**
+   - Group dependency-ready tasks only when their explicit file scopes are
+     disjoint.
+   - Require concurrency-safe acceptance command scopes.
+   - Run those Team Agents in parallel in the current checkout and branch.
+   - Preserve dependency order for overlapping or provider-dependent tasks.
+   - Let every Team Agent run concurrency-safe focused checks.
+   - Grant one commit turn at a time.
+   - Require every writer to commit its complete scoped iteration.
+   - Run deferred checks serially after the wave has a stable committed head.
+   - Require the terminal handoff to enumerate every iteration commit.
+   - Have later iterations read the last one or two relevant commits and diffs.
+   - Continue directly from the resulting shared-branch state.
 5. **Prepare the delivery head.**
    - Verify changed paths and focused evidence.
+   - Co-validate named provider and consumer interface evidence.
+   - Use only locally permitted checks or hosted evidence for co-validation.
    - Route formatter or implementation corrections to the owning team.
    - Run `task loom:pre-push PR=<number>` before a push.
    - Push the coherent shared branch as the shared-branch owner.
@@ -81,7 +95,9 @@ Report the blocker instead of reporting an intermediate state as complete.
    - Have PR Steward use `task remote TASK_NAME=web:build` for a remote web build.
    - Have PR Steward use `task remote TASK_NAME=web:e2e` for remote browser validation.
    - Route every finding to its functional owner.
-   - Sequence the responsible writer in the current checkout.
+   - Assign the responsible provider, consumer, or both in the current
+     checkout.
+   - Run disjoint, dependency-ready repair scopes in parallel.
    - Push the corrected head and obtain fresh exact-head evidence.
 7. **Finish delivery.**
    - Tell the reactive PR Steward child to stop and wait for its exit.
@@ -103,7 +119,7 @@ Report the blocker instead of reporting an intermediate state as complete.
 Mission delivery must not introduce:
 
 - Team Agent worktrees;
-- parallel Team Agent lifecycle or Git-state machinery; or
+- a Team Agent lifecycle service, scheduler, or Git-state machinery; or
 - a persistent PR Steward service, scheduler, or notification journal; or
 - deletion-report fields or schema versions.
 - stacked branches, stacked pull requests, or implementation against an
@@ -126,7 +142,17 @@ Delivery is complete only when:
 
 - all requested behavior is implemented by its functional owners across every
   planned slice;
-- only one writer changed the shared checkout at a time;
+- concurrent writers had disjoint explicit file scopes;
+- overlapping and dependent tasks ran in order;
+- dirty paths and hunks were attributed before dispatch;
+- no commit included unrelated pre-existing changes;
+- acceptance commands were concurrency-safe or ran serially on a stable
+  committed head;
+- only one writer mutated the Git index or committed at a time;
+- every writer committed its complete scoped iteration;
+- terminal handoffs enumerated every iteration SHA, outcome, evidence, and
+  unresolved blockers;
+- provider-consumer evidence passed on the combined branch;
 - the shared branch contains every accepted change;
 - repository-owned checks pass on the exact head;
 - actionable review findings are resolved;
