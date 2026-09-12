@@ -16,10 +16,15 @@ import AuthenticatorPicker from './AuthenticatorPicker.svelte'
 import LoginPicker from './LoginPicker.svelte'
 import './popup.css'
 
-async function loadCompanionVaultConnection(): Promise<{
-  isConnected: boolean
-  vaultName?: string
-}> {
+async function loadCompanionVaultConnection(): Promise<
+  | {
+      isConnected: false
+    }
+  | {
+      isConnected: true
+      vaultName: string
+    }
+> {
   const setup =
     await ExtensionPairingStateQueryMessageSchema.loadExtensionSetupState()
   return setup.kind === ExtensionSetupLoadKind.Ready
@@ -71,7 +76,9 @@ async function main() {
     props: {
       i18n,
       isConnected: vaultConnection.isConnected,
-      vaultName: vaultConnection.vaultName,
+      ...(vaultConnection.isConnected
+        ? { vaultName: vaultConnection.vaultName }
+        : {}),
       pairingRequested: searchParams.get('intent') === 'pair',
       protectionStatus,
       activeSessionDevice,

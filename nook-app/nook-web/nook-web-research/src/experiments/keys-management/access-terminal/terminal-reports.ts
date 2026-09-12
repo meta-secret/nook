@@ -847,7 +847,7 @@ export class KeyTerminalReport {
   }
 
   outputFor({ command }: OutputForArgs): string[] {
-    const [verb, ...rest] = command.split(' ')
+    const [verb = '', ...rest] = command.split(' ')
     const argument = rest.join(' ')
     if (command === 'map') return this.mapLines()
     if (command === 'ls') {

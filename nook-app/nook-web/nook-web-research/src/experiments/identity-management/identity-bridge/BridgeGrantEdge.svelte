@@ -17,6 +17,12 @@
   const path = $derived(
     `M ${sourceX} ${sourceY} L ${sourceX} ${exitY - 6} Q ${sourceX} ${exitY} ${sourceX - 6} ${exitY} L ${trunkX + 6} ${exitY} Q ${trunkX} ${exitY} ${trunkX} ${exitY + 6} L ${trunkX} ${targetY - 6} Q ${trunkX} ${targetY} ${trunkX + 6} ${targetY} L ${targetX} ${targetY}`,
   )
+  const edgePresentation = $derived({
+    id,
+    path,
+    ...(markerEnd ? { markerEnd } : {}),
+    ...(style ? { style } : {}),
+  })
 </script>
 
-<BaseEdge {id} {path} {markerEnd} {style} />
+<BaseEdge {...edgePresentation} />

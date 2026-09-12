@@ -728,7 +728,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
   }
 
   function outputFor({ graph, command }: OutputForArgs): string[] {
-    const [verb, ...rest] = command.split(' ')
+    const [verb = '', ...rest] = command.split(' ')
     const argument = rest.join(' ')
     if (command === 'ls') {
       return [
@@ -854,7 +854,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
   <ExperimentBack {navigate} />
   <GraphSwitch
     {graph}
-    onGraph={(next) => {
+    onGraph={(next: GraphId) => {
       graphId = next
       history = []
       historyIndex = 0
