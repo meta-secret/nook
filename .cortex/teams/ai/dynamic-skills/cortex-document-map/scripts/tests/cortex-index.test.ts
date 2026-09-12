@@ -76,6 +76,10 @@ test('renders the complete canonical Cortex context router', () => {
   }
 
   const teamOwnershipContracts = [
+    '[Dev manager](teams/dev-manager/knowledge-graph.md): manually operated dev',
+    'publication, dev PR creation/update, slow evidence, readiness, repair',
+    'feature review, feature acceptance, local landing requests, and Workbench.',
+    "and promotion mechanics under the dev manager's packet.",
     '[PR Steward](teams/pr-steward/knowledge-graph.md): authorized mechanical',
     '[AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,',
     '[Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault',

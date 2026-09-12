@@ -83,6 +83,7 @@ export class CortexDocumentMapCortexDocumentStructureScenario {
 
 - [AI](teams/ai/knowledge-graph.md)
 - [Development core](teams/dev-core/knowledge-graph.md)
+- [Dev manager](teams/dev-manager/knowledge-graph.md)
 - [Security](teams/security/knowledge-graph.md)
 - [SRE](teams/sre/knowledge-graph.md)
 - [Web development](teams/web-dev/knowledge-graph.md)
@@ -130,6 +131,10 @@ ${args.rootExtra}`,
       CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
         rootDocumentArgs,
       ),
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+        path: '.cortex/teams/dev-manager/knowledge-graph.md',
+        content: '# Dev Manager Knowledge Graph\n',
+      }),
       CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
         aiGraphArgs,
       ),
@@ -251,6 +256,79 @@ test('accepts document-level team and shared graphs', () => {
       ),
     ),
   ).toEqual([]);
+});
+
+test('indexes dev-manager documents only through their owning graph', () => {
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments({
+      rootExtra: '',
+      devTarget: 'policy.md',
+      gizmoTarget: 'policy.md',
+    });
+  const managerGraphPath = '.cortex/teams/dev-manager/knowledge-graph.md';
+  const policyPath = '.cortex/teams/dev-manager/policy.md';
+  documents.push(
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+      path: policyPath,
+      content: '# Dev Publication Policy\n',
+    }),
+  );
+  const findings =
+    CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
+  expect(findings).toContainEqual({
+    code: CortexStructureFindingCode.MissingFromIndex,
+    file: managerGraphPath,
+    line: 1,
+    message: `Document is not indexed in its owning knowledge graph ${managerGraphPath}: ${policyPath}`,
+  });
+  const indexedDocuments = documents.map((document) =>
+    document.relativePath === managerGraphPath
+      ? { ...document, content: `${document.content}\n- [Policy](policy.md)\n` }
+      : document,
+  );
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(indexedDocuments),
+  ).toEqual([]);
+  const foreignIndex = indexedDocuments.map((document) =>
+    document.relativePath === '.cortex/gizmo/knowledge-graph.md'
+      ? {
+          ...document,
+          content: `${document.content}\n- [Dev policy](../teams/dev-manager/policy.md)\n`,
+        }
+      : document,
+  );
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(foreignIndex),
+  ).toContainEqual({
+    code: CortexStructureFindingCode.InvalidIndexEntry,
+    file: '.cortex/gizmo/knowledge-graph.md',
+    line: 1,
+    message: `Owning knowledge graph cannot index another context's document: ${policyPath}`,
+  });
+});
+
+test('requires the root knowledge graph to link the dev-manager graph', () => {
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments({
+      rootExtra: '',
+      devTarget: 'policy.md',
+      gizmoTarget: 'policy.md',
+    }).map((document) => ({
+      ...document,
+      content: document.content.replace(
+        '- [Dev manager](teams/dev-manager/knowledge-graph.md)\n',
+        '',
+      ),
+    }));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(documents),
+  ).toContainEqual({
+    code: CortexStructureFindingCode.MissingFromIndex,
+    file: '.cortex/knowledge-graph.md',
+    line: 1,
+    message:
+      'Root knowledge graph must link the owner graph: .cortex/teams/dev-manager/knowledge-graph.md',
+  });
 });
 
 test('requires the root knowledge graph to link the Gizmo graph', () => {

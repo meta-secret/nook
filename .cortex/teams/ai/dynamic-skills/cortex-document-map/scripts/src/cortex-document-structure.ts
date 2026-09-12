@@ -57,6 +57,7 @@ export class CortexDocumentStructure {
         '.cortex/gizmo/knowledge-graph.md',
         '.cortex/teams/ai/knowledge-graph.md',
         '.cortex/teams/dev-core/knowledge-graph.md',
+        '.cortex/teams/dev-manager/knowledge-graph.md',
         '.cortex/teams/security/knowledge-graph.md',
         '.cortex/teams/sre/knowledge-graph.md',
         '.cortex/teams/web-dev/knowledge-graph.md',
@@ -362,7 +363,7 @@ export class CortexDocumentStructure {
       filePath === 'k-graph.md' ||
       filePath === '.cortex/INDEX.md' ||
       filePath === 'INDEX.md' ||
-      /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|security|sre|web-dev)|shared)\/knowledge-graph\.md$/.test(
+      /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|dev-manager|security|sre|web-dev)|shared)\/knowledge-graph\.md$/.test(
         filePath,
       )
     );
@@ -375,6 +376,7 @@ export class CortexDocumentStructure {
     for (const team of [
       CortexGraphOwner.Ai,
       CortexGraphOwner.DevCore,
+      CortexGraphOwner.DevManager,
       CortexGraphOwner.Security,
       CortexGraphOwner.Sre,
       CortexGraphOwner.WebDev,
@@ -392,13 +394,14 @@ export class CortexDocumentStructure {
   private cortexGraphOwner(filePath: string): CortexGraphOwner | false {
     if (filePath.startsWith('.cortex/gizmo/')) return CortexGraphOwner.Gizmo;
     if (filePath.startsWith('.cortex/shared/')) return CortexGraphOwner.Shared;
-    const match = /^\.cortex\/teams\/(ai|dev-core|security|sre|web-dev)\//.exec(
+    const match = /^\.cortex\/teams\/(ai|dev-core|dev-manager|security|sre|web-dev)\//.exec(
       filePath,
     );
     const owner = match?.[1];
     if (
       owner === CortexGraphOwner.Ai ||
       owner === CortexGraphOwner.DevCore ||
+      owner === CortexGraphOwner.DevManager ||
       owner === CortexGraphOwner.Security ||
       owner === CortexGraphOwner.Sre ||
       owner === CortexGraphOwner.WebDev
@@ -465,6 +468,7 @@ export enum CortexStructureFindingCode {
 enum CortexGraphOwner {
   Ai = 'ai',
   DevCore = 'dev-core',
+  DevManager = 'dev-manager',
   Gizmo = 'gizmo',
   Security = 'security',
   Sre = 'sre',

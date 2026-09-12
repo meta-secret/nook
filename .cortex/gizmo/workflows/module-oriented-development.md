@@ -27,6 +27,12 @@ creating a separate Git integration system.
 - Read-only experts return evidence only. They do not mutate Git or delivery
   state.
 - Shared files receive one explicitly assigned writer.
+- Do not run local tests, including Loom tests, or local product compilation,
+  Docker, coverage, e2e, or preflight. Local validation is limited to scoped
+  rustfmt and bounded inexpensive TypeScript diagnostics or formatting.
+- Author meaningful behavior tests for the dev-manager slow PR stage. Feature
+  validation uses repeatable remote `build:compile` evidence only; compilation
+  does not replace security review or authored tests.
 
 ## Procedure
 
@@ -35,13 +41,15 @@ creating a separate Git integration system.
 3. Define provider exports, consumer assumptions, and acceptance evidence.
 4. Create one child worktree for each dependency-ready task from the parent
    feature worktree's current commit.
-5. Run only concurrency-safe focused checks during the wave.
+5. Use only the permitted lightweight local diagnostics during the wave.
 6. Verify each completed child commit and integrate it into the parent worktree.
-7. Run deferred checks serially on the stable parent head.
-8. Verify focused tests and scoped changes.
+7. Push the feature branch and request remote build-only compilation for its
+   exact committed head; do not run feature tests or slow PR checks.
+8. Review authored focused tests and scoped changes without executing tests.
 9. Start dependent consumers from the integrated provider commit.
-10. Co-validate compilation, types, and behavior on the combined branch.
-   - Use only locally permitted checks or hosted evidence.
+10. Obtain remote compilation and type evidence on the combined feature head.
+    Gizmo authorizes Steward's bounded `dev:land` packet for serialized local
+    dev integration; Gizmo does not publish dev.
 11. Route failures to the responsible provider, consumer, or both.
 
 ## Review and corrections
@@ -65,9 +73,11 @@ Verify:
   committed head;
 - only one writer mutated the Git index or committed at a time;
 - every writer committed its complete scoped iteration;
-- focused module tests passed;
-- provider-consumer evidence passed on the combined branch;
+- meaningful module tests were authored for the slow stage;
+- exact-head remote build-only provider-consumer evidence passed;
 - the parent feature worktree contains the complete result; and
-- Gizmo owns push sequencing, pull-request authorization, readiness and merge
-  verdicts. PR Steward performs the named pull-request mechanics after
-  authorization.
+- Gizmo owns feature push sequencing, review, acceptance, and local landing
+  requests. The manually operated dev manager owns dev publication, dev PR
+  creation/update, slow evidence, readiness, and fast-forward promotion.
+  PR Steward performs dev PR and promotion mechanics only under the manager's
+  bounded packet, as defined by the [dev delivery contract](../architecture/dev-delivery.md).
