@@ -55,7 +55,7 @@ jobs:
       github.event.pull_request.head.ref == 'dev' &&
       github.event.pull_request.base.ref == 'main') &&
       (contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) ||
-      github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e')))
+      github.event.label.name == 'ci:validate' || github.event.label.name == 'ci:full-e2e'))))
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
