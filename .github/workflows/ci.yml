@@ -136,8 +136,6 @@ jobs:
   policy:
     name: Repository policy
     needs: scope
-    if: >-
-      github.event_name == 'push' || needs.scope.outputs.dev-pr == 'true'
     uses: ./.github/workflows/repository-policy.yml
     secrets: inherit
     with:
