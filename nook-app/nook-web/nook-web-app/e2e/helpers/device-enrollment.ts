@@ -364,7 +364,6 @@ async function refreshGithubVaultOnLoginGate(page: Page) {
     authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
     refreshedOutcome: RefreshJoinerVaultOnLoginGateOutcome.Refreshed,
   })
-  await waitForVaultOperationsIdle(page)
 }
 
 export type JoinerVaultReadyTarget = SyncE2eTarget
