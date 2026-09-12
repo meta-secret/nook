@@ -1,0 +1,11 @@
+version: "3"
+
+tasks:
+  compile:
+    desc: Hosted-only compile graph for native Rust, WASM, web, extension, and agent apps.
+    dir: "{{.ROOT_DIR}}"
+    preconditions:
+      - sh: test "${GITHUB_ACTIONS:-}" = "true"
+        msg: "build:compile is hosted-only; invoke it through `task remote TASK_NAME=build:compile`."
+    cmds:
+      - bash "{{.ROOT_DIR}}/.github/scripts/compile-remote.sh"

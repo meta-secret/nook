@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "scripts/**/*.ts",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "e2e/**",
+    "tests/**",
+    "playwright*.ts",
+    "src/generated/**",
+    "node_modules/**",
+    "dist/**",
+    "playwright-report/**",
+    "test-results/**"
+  ]
+}
