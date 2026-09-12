@@ -13,7 +13,12 @@ enum ProjectionAppSelection {
 
 pub(crate) enum StoredIdentityProtection {
     Unprotected,
-    Protected(LocalIdentityKeyringEntry),
+    Protected(Box<LocalIdentityKeyringEntry>),
+}
+impl StoredIdentityProtection {
+    pub(crate) fn protected(entry: LocalIdentityKeyringEntry) -> Self {
+        Self::Protected(Box::new(entry))
+    }
 }
 
 use nook_core::WrappedDeviceIdentity;
@@ -25,7 +30,12 @@ pub(crate) struct ProtectedLocalIdentity {
 
 pub(crate) enum ProtectedIdentityLookup {
     Unconfigured,
-    Configured(ProtectedLocalIdentity),
+    Configured(Box<ProtectedLocalIdentity>),
+}
+impl ProtectedIdentityLookup {
+    pub(crate) fn configured(identity: ProtectedLocalIdentity) -> Self {
+        Self::Configured(Box::new(identity))
+    }
 }
 
 pub(crate) enum StoredIdentityRecord {
@@ -87,7 +97,7 @@ impl NookDatabase {
         };
         let protected = match entry {
             LocalIdentityProtection::Protected(entry) => {
-                ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
+                ProtectedIdentityLookup::configured(ProtectedLocalIdentity {
                     app_id: entry.app_id().clone(),
                     wrapped_identity: entry.wrapped_app_key().clone(),
                 })

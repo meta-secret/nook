@@ -378,7 +378,7 @@ async fn staged_genesis_uses_the_live_authorizer_after_another_tab_switches_iden
     first_tab.device.id = extension_key.app_id().as_str().to_owned();
     first_tab.device.identity_private_key = extension_key.secret_string().into_inner();
     first_tab.device.pending_extension_handoff =
-        ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+        ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
             enrollment: PendingExtensionIdentityEnrollment::VaultCreation {
                 authorizer: VaultCreationAuthority::ExistingIdentity(first_key.clone()),
             },

@@ -96,13 +96,15 @@ impl NookVaultManager {
     pub(super) async fn persisted_device_protection_status(
         &self,
     ) -> Result<nook_core::DeviceProtectionStatus, NookError> {
-        let ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
-            wrapped_identity: wrapped,
-            ..
-        }) = self.load_protected_local_identity().await?
+        let ProtectedIdentityLookup::Configured(identity) =
+            self.load_protected_local_identity().await?
         else {
             return Ok(DeviceProtectionStatus::Missing);
         };
+        let ProtectedLocalIdentity {
+            wrapped_identity: wrapped,
+            ..
+        } = *identity;
         DeviceProtectionStatus::from_persisted(wrapped.protection_mode()).map_err(|_| {
             NookError::IndexedDb(format!(
                 "Unsupported persisted device-protection status: {}",
@@ -139,7 +141,7 @@ mod tests {
         let mut manager = NookVaultManager::new();
         assert!(!manager.extension_identity_handoff_requires_connect());
         manager.device.pending_extension_handoff =
-            ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+            ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
                 enrollment: PendingExtensionIdentityEnrollment::VaultCreation {
                     authorizer: VaultCreationAuthority::NewIdentity,
                 },

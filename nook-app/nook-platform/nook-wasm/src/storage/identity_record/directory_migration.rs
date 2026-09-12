@@ -37,7 +37,7 @@ impl NookDatabase {
         let raw = serde_wasm_bindgen::from_value::<String>(pending).map_err(|error| {
             NookError::IndexedDb(format!("Pending genesis value error: {error:?}"))
         })?;
-        PendingSimpleGenesis::decode(&raw).map(SimpleGenesisProgress::Pending)
+        PendingSimpleGenesis::decode(&raw).map(SimpleGenesisProgress::pending)
     }
 }
 

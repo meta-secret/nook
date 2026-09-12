@@ -75,7 +75,7 @@ fn pending_handoff_state_can_be_confirmed_and_rolled_back() -> Result<(), JsErro
     manager.device.id = extension.device_id().as_str().to_owned();
     manager.device.identity_private_key = extension.secret_string().into_inner();
     manager.device.pending_extension_handoff =
-        ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+        ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
             enrollment: PendingExtensionIdentityEnrollment::PairedVault {
                 authorizer,
                 store_id: store_id.clone(),

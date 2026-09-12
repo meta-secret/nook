@@ -266,7 +266,7 @@ impl NookDatabase {
         };
         Ok(match keyring.entry(identity_id) {
             LocalIdentityProtection::Protected(entry) => {
-                StoredIdentityProtection::Protected(entry.clone())
+                StoredIdentityProtection::protected(entry.clone())
             }
             LocalIdentityProtection::Unprotected => StoredIdentityProtection::Unprotected,
         })
@@ -289,7 +289,7 @@ impl NookDatabase {
             .iter()
             .find(|entry| entry.app_id() == app_id)
             .map_or(StoredIdentityProtection::Unprotected, |entry| {
-                StoredIdentityProtection::Protected(entry.clone())
+                StoredIdentityProtection::protected(entry.clone())
             }),
         )
     }
@@ -360,7 +360,7 @@ impl NookDatabase {
         .iter()
         .find(|entry| entry.app_id() == app_id)
         .map_or(StoredIdentityProtection::Unprotected, |entry| {
-            StoredIdentityProtection::Protected(entry.clone())
+            StoredIdentityProtection::protected(entry.clone())
         });
         transaction.done().await.map_err(|error| {
             NookError::IndexedDb(format!(

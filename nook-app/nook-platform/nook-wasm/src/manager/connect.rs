@@ -208,7 +208,7 @@ mod tests {
         manager.device.identity_private_key = extension.secret_string().into_inner();
         manager.vault.store_id = store_id.to_string();
         manager.device.pending_extension_handoff =
-            ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+            ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
                 enrollment: PendingExtensionIdentityEnrollment::PairedVault {
                     authorizer,
                     store_id,
@@ -259,7 +259,7 @@ mod tests {
         manager.device.identity_private_key = extension.secret_string().into_inner();
         manager.vault.store_id = connected_store_id.to_string();
         manager.device.pending_extension_handoff =
-            ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+            ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
                 enrollment: PendingExtensionIdentityEnrollment::PairedVault {
                     authorizer: AppKey::generate()?,
                     store_id: staged_store_id,
@@ -299,7 +299,7 @@ mod tests {
         manager.device.identity_private_key = extension.secret_string().into_inner();
         manager.vault.store_id = store_id.to_string();
         manager.device.pending_extension_handoff =
-            ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+            ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
                 enrollment: PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
                     store_id,
                 },
@@ -680,7 +680,7 @@ impl NookVaultManager {
         };
 
         let completed_genesis = if use_genesis {
-            SimpleGenesisProgress::Pending(self.bootstrap_genesis_connect(&identity).await?)
+            SimpleGenesisProgress::pending(self.bootstrap_genesis_connect(&identity).await?)
         } else if event_log_only_remote {
             self.connect_event_log_only_remote(&identity).await?;
             SimpleGenesisProgress::NotPending

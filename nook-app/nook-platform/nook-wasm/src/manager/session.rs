@@ -554,9 +554,13 @@ pub(in crate::manager) enum ExtensionHandoffState {
     #[default]
     Idle,
     Recipient(Zeroizing<String>),
-    Companion(PendingCompanionWebsiteHandoff),
+    Companion(Box<PendingCompanionWebsiteHandoff>),
 }
 impl ExtensionHandoffState {
+    pub(in crate::manager) fn companion(pending: PendingCompanionWebsiteHandoff) -> Self {
+        Self::Companion(Box::new(pending))
+    }
+
     pub(in crate::manager) fn clear(&mut self) {
         *self = Self::Idle;
     }

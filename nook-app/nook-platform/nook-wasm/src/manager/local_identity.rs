@@ -309,7 +309,7 @@ mod tests {
         manager.device.extension_handoff_private_key =
             ExtensionHandoffState::Recipient(("handoff-private-key".to_owned()).into());
         manager.device.pending_extension_handoff =
-            ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+            ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
                 enrollment: PendingExtensionIdentityEnrollment::PairedVault {
                     authorizer,
                     store_id: nook_core::StoreId::generate()?,

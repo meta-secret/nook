@@ -43,13 +43,15 @@ impl NookDatabase {
     #[allow(dead_code)]
     async fn device_identity_protection_status()
     -> Result<nook_core::DeviceProtectionStatus, NookError> {
-        let ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
-            wrapped_identity: wrapped,
-            ..
-        }) = NookDatabase::load_wrapped_device_identity().await?
+        let ProtectedIdentityLookup::Configured(identity) =
+            NookDatabase::load_wrapped_device_identity().await?
         else {
             return Ok(DeviceProtectionStatus::Missing);
         };
+        let ProtectedLocalIdentity {
+            wrapped_identity: wrapped,
+            ..
+        } = *identity;
         DeviceProtectionStatus::from_persisted(wrapped.protection_mode()).map_err(|_| {
             NookError::IndexedDb(format!(
                 "Unsupported persisted device-protection status: {}",
@@ -71,13 +73,15 @@ pub enum DeviceProtectionDeviceModeState {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 impl NookDatabase {
     async fn device_identity_device_mode() -> Result<DeviceProtectionDeviceModeState, NookError> {
-        let ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
-            wrapped_identity: wrapped,
-            ..
-        }) = NookDatabase::load_wrapped_device_identity().await?
+        let ProtectedIdentityLookup::Configured(identity) =
+            NookDatabase::load_wrapped_device_identity().await?
         else {
             return Ok(DeviceProtectionDeviceModeState::Missing);
         };
+        let ProtectedLocalIdentity {
+            wrapped_identity: wrapped,
+            ..
+        } = *identity;
         Ok(match wrapped {
             WrappedDeviceIdentity::Pin(_) => DeviceProtectionDeviceModeState::Pin,
             WrappedDeviceIdentity::PasskeyDerived(_) => DeviceProtectionDeviceModeState::Standard,
@@ -94,7 +98,7 @@ impl NookDatabase {
         if let StoredIdentityProtection::Protected(entry) =
             NookDatabase::load_selected_entry().await?
         {
-            return Ok(ProtectedIdentityLookup::Configured(
+            return Ok(ProtectedIdentityLookup::configured(
                 ProtectedLocalIdentity {
                     app_id: entry.app_id().clone(),
                     wrapped_identity: entry.wrapped_app_key().clone(),
@@ -114,7 +118,7 @@ impl NookDatabase {
         if let StoredIdentityProtection::Protected(entry) =
             NookDatabase::load_entry_for_app_id(&app_id).await?
         {
-            return Ok(ProtectedIdentityLookup::Configured(
+            return Ok(ProtectedIdentityLookup::configured(
                 ProtectedLocalIdentity {
                     app_id: entry.app_id().clone(),
                     wrapped_identity: entry.wrapped_app_key().clone(),
@@ -188,7 +192,7 @@ impl NookDatabase {
             }
         };
         let wrapped = WrappedDeviceIdentity::parse(&raw)?;
-        Ok(ProtectedIdentityLookup::Configured(
+        Ok(ProtectedIdentityLookup::configured(
             ProtectedLocalIdentity {
                 app_id: AppId::parse(&app_id)
                     .map_err(|error| NookError::Database(error.to_string()))?,
@@ -334,7 +338,7 @@ mod tests {
         let ProtectedLocalIdentity {
             wrapped_identity: reloaded,
             ..
-        } = match NookDatabase::load_wrapped_device_identity().await? {
+        } = *match NookDatabase::load_wrapped_device_identity().await? {
             ProtectedIdentityLookup::Configured(value) => Ok(value),
             ProtectedIdentityLookup::Unconfigured => {
                 Err(JsError::new("wrapped device identity record should exist"))
@@ -415,8 +419,10 @@ mod tests {
         let ProtectedLocalIdentity {
             app_id,
             wrapped_identity: reloaded,
-        } = match NookDatabase::load_wrapped_device_identity_for_app_id(first_key.app_id().as_str())
-            .await?
+        } = *match NookDatabase::load_wrapped_device_identity_for_app_id(
+            first_key.app_id().as_str(),
+        )
+        .await?
         {
             ProtectedIdentityLookup::Configured(value) => Ok(value),
             ProtectedIdentityLookup::Unconfigured => {

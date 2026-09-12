@@ -81,9 +81,13 @@ pub(in crate::manager) struct HandoffNotPending;
 pub(in crate::manager) enum ExtensionIdentityPublication {
     #[default]
     Idle,
-    Staged(PendingExtensionIdentityHandoff),
+    Staged(Box<PendingExtensionIdentityHandoff>),
 }
 impl ExtensionIdentityPublication {
+    pub(in crate::manager) fn staged(pending: PendingExtensionIdentityHandoff) -> Self {
+        Self::Staged(Box::new(pending))
+    }
+
     pub(in crate::manager) fn pending(
         &self,
     ) -> Result<&PendingExtensionIdentityHandoff, HandoffNotPending> {
@@ -125,7 +129,7 @@ mod tests {
         let mut manager = NookVaultManager::new();
         manager.event_log.signing_seed = "session-signer".to_owned();
         manager.device.pending_extension_handoff =
-            ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+            ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
                 enrollment: PendingExtensionIdentityEnrollment::PairedVault {
                     authorizer,
                     store_id: staged_store_id,
@@ -471,13 +475,15 @@ impl NookVaultManager {
     pub async fn device_protection_device_mode(
         &self,
     ) -> Result<crate::DeviceProtectionDeviceModeState, JsError> {
-        let ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
-            wrapped_identity: wrapped,
-            ..
-        }) = self.load_protected_local_identity().await?
+        let ProtectedIdentityLookup::Configured(identity) =
+            self.load_protected_local_identity().await?
         else {
             return Ok(DeviceProtectionDeviceModeState::Missing);
         };
+        let ProtectedLocalIdentity {
+            wrapped_identity: wrapped,
+            ..
+        } = *identity;
         Ok(match wrapped {
             WrappedDeviceIdentity::Pin(_) => DeviceProtectionDeviceModeState::Pin,
             WrappedDeviceIdentity::PasskeyDerived(_) => DeviceProtectionDeviceModeState::Standard,
@@ -804,7 +810,7 @@ impl NookVaultManager {
         let ProtectedLocalIdentity {
             wrapped_identity: record,
             ..
-        } = match self.load_protected_local_identity().await? {
+        } = *match self.load_protected_local_identity().await? {
             ProtectedIdentityLookup::Configured(value) => Ok(value),
             ProtectedIdentityLookup::Unconfigured => Err({
                 NookError::IndexedDb("No passkey-protected device identity found.".to_owned())
@@ -853,7 +859,7 @@ impl NookVaultManager {
             let ProtectedLocalIdentity {
                 app_id: stored_device_id,
                 wrapped_identity: record,
-            } = match self.load_protected_local_identity().await? {
+            } = *match self.load_protected_local_identity().await? {
                 ProtectedIdentityLookup::Configured(value) => Ok(value),
                 ProtectedIdentityLookup::Unconfigured => Err({
                     NookError::IndexedDb("No passkey-protected device identity found.".to_owned())
@@ -879,7 +885,7 @@ impl NookVaultManager {
             let ProtectedLocalIdentity {
                 app_id: stored_device_id,
                 wrapped_identity: record,
-            } = match self.load_protected_local_identity().await? {
+            } = *match self.load_protected_local_identity().await? {
                 ProtectedIdentityLookup::Configured(value) => Ok(value),
                 ProtectedIdentityLookup::Unconfigured => Err({
                     NookError::IndexedDb("No PIN-protected device identity found.".to_owned())

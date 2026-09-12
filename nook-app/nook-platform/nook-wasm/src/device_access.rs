@@ -10,7 +10,7 @@ use crate::SaveVaultBlobRequest;
 use crate::storage::device_access::DeviceAccessProfileKey;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::storage::identity_record::PriorAppAuthorization;
-use crate::storage::identity_record::{ProtectedIdentityLookup, ProtectedLocalIdentity};
+use crate::storage::identity_record::ProtectedIdentityLookup;
 use crate::storage::indexed_db::VaultUnlockHistory;
 use display_text::NookDeviceAccessTextValue;
 pub use display_text::{NookDeviceAccessText, NookDeviceAccessTextKind};
@@ -446,10 +446,9 @@ impl NookDeviceAccessSnapshot {
             (session_device_id.to_owned(), String::new(), String::new())
         } else {
             match &protected {
-                ProtectedIdentityLookup::Configured(ProtectedLocalIdentity {
-                    app_id: device_id,
-                    wrapped_identity: record,
-                }) => {
+                ProtectedIdentityLookup::Configured(identity) => {
+                    let device_id = &identity.app_id;
+                    let record = &identity.wrapped_identity;
                     let credential_id = record
                         .credential_id()
                         .map(|bytes| {

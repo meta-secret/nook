@@ -65,13 +65,17 @@ pub(crate) struct PinnedSimpleGenesisEvent {
 #[derive(Debug)]
 pub(crate) enum SimpleGenesisProgress {
     NotPending,
-    Pending(PendingSimpleGenesis),
+    Pending(Box<PendingSimpleGenesis>),
 }
 impl SimpleGenesisProgress {
+    pub(crate) fn pending(pending: PendingSimpleGenesis) -> Self {
+        Self::Pending(Box::new(pending))
+    }
+
     #[cfg(test)]
     pub(crate) fn require_pending(self) -> Result<PendingSimpleGenesis, NookError> {
         match self {
-            Self::Pending(pending) => Ok(pending),
+            Self::Pending(pending) => Ok(*pending),
             Self::NotPending => Err(NookError::IndexedDb(
                 "Pending Simple genesis is missing.".to_owned(),
             )),
@@ -132,7 +136,7 @@ impl PendingSimpleGenesis {
             return Ok(SimpleGenesisProgress::NotPending);
         };
         Ok(if pending.store_id == store_id {
-            SimpleGenesisProgress::Pending(pending)
+            SimpleGenesisProgress::pending(*pending)
         } else {
             SimpleGenesisProgress::NotPending
         })
@@ -141,7 +145,7 @@ impl PendingSimpleGenesis {
         match NookDatabase::idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? {
             StoredStringRecord::MissingKey => Ok(SimpleGenesisProgress::NotPending),
             StoredStringRecord::Stored(raw) => {
-                PendingSimpleGenesis::decode(&raw).map(SimpleGenesisProgress::Pending)
+                PendingSimpleGenesis::decode(&raw).map(SimpleGenesisProgress::pending)
             }
         }
     }

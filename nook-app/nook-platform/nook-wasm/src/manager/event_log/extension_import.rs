@@ -77,7 +77,8 @@ impl NookVaultManager {
         let ProtectedLocalIdentity {
             app_id: stored_device_id,
             ..
-        } = match NookDatabase::load_wrapped_device_identity_for_app_id(device_id.as_str()).await? {
+        } = *match NookDatabase::load_wrapped_device_identity_for_app_id(device_id.as_str()).await?
+        {
             ProtectedIdentityLookup::Configured(value) => Ok(value),
             ProtectedIdentityLookup::Unconfigured => Err({
                 NookError::IndexedDb(

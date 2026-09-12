@@ -259,7 +259,7 @@ impl NookVaultManager {
         response: &CompanionIdentityHandoffResponse,
     ) -> Result<PendingCompanionWebsiteHandoff, CompanionOperationError> {
         let pending = match mem::take(&mut self.device.extension_handoff_private_key) {
-            ExtensionHandoffState::Companion(pending) => pending,
+            ExtensionHandoffState::Companion(pending) => *pending,
             ExtensionHandoffState::Idle | ExtensionHandoffState::Recipient(_) => {
                 return Err(CompanionOperationError::HandoffNotPending);
             }
@@ -290,7 +290,7 @@ impl NookVaultManager {
             context,
             recipient_secret: recipient.secret_string().into_inner(),
         };
-        self.device.extension_handoff_private_key = ExtensionHandoffState::Companion(pending);
+        self.device.extension_handoff_private_key = ExtensionHandoffState::companion(pending);
         Ok(request)
     }
 }

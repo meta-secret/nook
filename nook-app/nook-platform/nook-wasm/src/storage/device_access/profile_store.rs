@@ -25,7 +25,7 @@ const DEVICE_ACCESS_PROFILE_VERSION_ERROR: &str =
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum DeviceAccessProfileUpdate {
-    Writable(DeviceAccessProfile),
+    Writable(Box<DeviceAccessProfile>),
     PreserveFutureVersion,
 }
 
@@ -42,7 +42,7 @@ pub(super) enum DeviceAccessProfileUpdateIntent {
 /// ```
 enum LegacyProfileOwner {
     NotAdoptable,
-    SoleProtectedIdentity(nook_core::LocalIdentityKeyringEntry),
+    SoleProtectedIdentity(Box<nook_core::LocalIdentityKeyringEntry>),
 }
 
 pub(crate) struct DeviceAccessProfileKey {
@@ -50,10 +50,20 @@ pub(crate) struct DeviceAccessProfileKey {
     legacy_owner: LegacyProfileOwner,
 }
 
+impl LegacyProfileOwner {
+    fn sole_protected_identity(entry: nook_core::LocalIdentityKeyringEntry) -> Self {
+        Self::SoleProtectedIdentity(Box::new(entry))
+    }
+}
+
 impl DeviceAccessProfileUpdate {
+    fn writable(profile: DeviceAccessProfile) -> Self {
+        Self::Writable(Box::new(profile))
+    }
+
     pub(super) fn into_interactive_profile(self) -> Result<DeviceAccessProfile, NookError> {
         match self {
-            Self::Writable(profile) => Ok(profile),
+            Self::Writable(profile) => Ok(*profile),
             Self::PreserveFutureVersion => Err(NookError::Database(
                 DEVICE_ACCESS_PROFILE_VERSION_ERROR.to_owned(),
             )),
@@ -74,7 +84,7 @@ impl DeviceAccessProfileKey {
         Ok(DeviceAccessProfileKey {
             value: format!("{DEVICE_ACCESS_PROFILE_KEY}:{}", entry.app_id()),
             legacy_owner: if keyring.entries().len() == 1 {
-                LegacyProfileOwner::SoleProtectedIdentity(entry)
+                LegacyProfileOwner::sole_protected_identity(*entry)
             } else {
                 LegacyProfileOwner::NotAdoptable
             },
@@ -96,7 +106,7 @@ impl DeviceAccessProfileKey {
         Ok(DeviceAccessProfileKey {
             value: format!("{DEVICE_ACCESS_PROFILE_KEY}:{app_id}"),
             legacy_owner: if keyring.entries().len() == 1 {
-                LegacyProfileOwner::SoleProtectedIdentity(entry.clone())
+                LegacyProfileOwner::sole_protected_identity(entry.clone())
             } else {
                 LegacyProfileOwner::NotAdoptable
             },
@@ -114,7 +124,7 @@ impl DeviceAccessProfileKey {
             return Ok(DeviceAccessProfileKey {
                 value: format!("{DEVICE_ACCESS_PROFILE_KEY}:{app_id}"),
                 legacy_owner: if keyring.entries().len() == 1 {
-                    LegacyProfileOwner::SoleProtectedIdentity(entry.clone())
+                    LegacyProfileOwner::sole_protected_identity(entry.clone())
                 } else {
                     LegacyProfileOwner::NotAdoptable
                 },
@@ -247,7 +257,7 @@ where
                 disposition.into_interactive_profile()?
             }
             DeviceAccessProfileUpdateIntent::BestEffort => match disposition {
-                DeviceAccessProfileUpdate::Writable(profile) => profile,
+                DeviceAccessProfileUpdate::Writable(profile) => *profile,
                 DeviceAccessProfileUpdate::PreserveFutureVersion => {
                     return match raw {
                         StoredStringRecord::Stored(raw) => Ok(raw),
@@ -288,14 +298,14 @@ impl DeviceAccessProfileUpdate {
     #[must_use]
     pub(super) fn observe(raw: &StoredStringRecord) -> Self {
         let StoredStringRecord::Stored(raw) = raw else {
-            return DeviceAccessProfileUpdate::Writable(DeviceAccessProfile::default());
+            return DeviceAccessProfileUpdate::writable(DeviceAccessProfile::default());
         };
         match nook_core::DeviceAccessProfile::decode(raw) {
             DeviceAccessProfileDecodeResult::Current(profile) => {
-                DeviceAccessProfileUpdate::Writable(*profile)
+                DeviceAccessProfileUpdate::writable(*profile)
             }
             DeviceAccessProfileDecodeResult::RecoverableDefault => {
-                DeviceAccessProfileUpdate::Writable(DeviceAccessProfile::default())
+                DeviceAccessProfileUpdate::writable(DeviceAccessProfile::default())
             }
             DeviceAccessProfileDecodeResult::FutureVersion => {
                 DeviceAccessProfileUpdate::PreserveFutureVersion

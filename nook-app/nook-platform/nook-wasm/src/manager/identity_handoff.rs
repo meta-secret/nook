@@ -226,7 +226,7 @@ mod tests {
             ExistingVaultImportState::NotImporting
         ));
 
-        manager.device.pending_extension_handoff = ExtensionIdentityPublication::Staged(
+        manager.device.pending_extension_handoff = ExtensionIdentityPublication::staged(
             staged_handoff(PendingExtensionIdentityEnrollment::VaultCreation {
                 authorizer: VaultCreationAuthority::NewIdentity,
             })?,
@@ -242,7 +242,7 @@ mod tests {
         ));
 
         let paired_store = nook_core::StoreId::generate()?;
-        manager.device.pending_extension_handoff = ExtensionIdentityPublication::Staged(
+        manager.device.pending_extension_handoff = ExtensionIdentityPublication::staged(
             staged_handoff(PendingExtensionIdentityEnrollment::PairedVault {
                 authorizer: AppKey::generate()?,
                 store_id: paired_store,
@@ -256,7 +256,7 @@ mod tests {
 
         let unlock_store = nook_core::StoreId::generate()?;
         manager.device.pending_extension_handoff =
-            ExtensionIdentityPublication::Staged(staged_handoff(
+            ExtensionIdentityPublication::staged(staged_handoff(
                 PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
                     store_id: unlock_store,
                 },
@@ -264,7 +264,7 @@ mod tests {
         assert!(manager.defers_identity_reconciliation_until_handoff());
 
         let import_store = nook_core::StoreId::generate()?;
-        manager.device.pending_extension_handoff = ExtensionIdentityPublication::Staged(
+        manager.device.pending_extension_handoff = ExtensionIdentityPublication::staged(
             staged_handoff(PendingExtensionIdentityEnrollment::ExistingVaultImport {
                 store_id: import_store.clone(),
             })?,

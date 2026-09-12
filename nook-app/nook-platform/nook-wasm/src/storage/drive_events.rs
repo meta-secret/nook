@@ -39,7 +39,12 @@ struct AcceptedDriveEvent {
 }
 enum DriveCandidateSelection {
     NoMatchingEvent,
-    Accepted(AcceptedDriveEvent),
+    Accepted(Box<AcceptedDriveEvent>),
+}
+impl DriveCandidateSelection {
+    fn accepted(event: AcceptedDriveEvent) -> Self {
+        Self::Accepted(Box::new(event))
+    }
 }
 struct DriveEventQuery<'a> {
     url: &'a str,
@@ -187,7 +192,7 @@ impl DriveEventStore<'_> {
                     "Drive duplicate event files contain different events.".to_owned(),
                 ));
             }
-            accepted = DriveCandidateSelection::Accepted(AcceptedDriveEvent { event, bytes });
+            accepted = DriveCandidateSelection::accepted(AcceptedDriveEvent { event, bytes });
         }
         Ok(match accepted {
             DriveCandidateSelection::NoMatchingEvent => RemoteEventRead::Unavailable,

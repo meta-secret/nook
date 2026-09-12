@@ -113,7 +113,7 @@ impl NookVaultManager {
             }
         }
         self.device.pending_extension_handoff =
-            ExtensionIdentityPublication::Staged(PendingExtensionIdentityHandoff {
+            ExtensionIdentityPublication::staged(PendingExtensionIdentityHandoff {
                 enrollment,
                 authorizer_signing: match authorizer {
                     HandoffAuthorizer::Authenticated(AuthenticatedHandoffAuthorizer {
