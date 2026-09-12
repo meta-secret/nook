@@ -181,16 +181,10 @@ fn disconnected_pair_with_shared_head()
 #[test]
 fn disconnect_then_concurrent_same_identity_logins_both_survive_on_reconnect() -> VaultResult<()> {
     // 1–4. device-a owns vault-a; device-b joins and has its own file-sync target.
-    let (mut device_a, mut device_b, mut providers) = enrolled_pair_with_file_providers()?;
-    let shared_head = device_a
-        .session
-        .heads
-        .first()
-        .cloned()
-        .unwrap_or_else(|| panic!("genesis head must exist"));
+    let (mut device_a, mut device_b, mut providers, shared_head) =
+        disconnected_pair_with_shared_head()?;
 
-    // 5. Remove the shared vault-a file-sync target (devices go offline from each other).
-    providers = clear_provider(providers, VAULT_A).map_err(|rejected| rejected.cause)?;
+    // 5. The shared vault-a file-sync target is absent (devices are offline from each other).
     assert_eq!(provider_event_count(&providers, VAULT_A)?, 0);
 
     // 6–7. Concurrent offline creates of the same login identity, different passwords.
@@ -331,15 +325,8 @@ fn disconnect_then_concurrent_same_identity_logins_both_survive_on_reconnect() -
 
 #[test]
 fn reconnect_keeps_identical_password_duplicates_as_separate_records() -> VaultResult<()> {
-    let (mut device_a, mut device_b, mut providers) = enrolled_pair_with_file_providers()?;
-    let shared_head = device_a
-        .session
-        .heads
-        .first()
-        .cloned()
-        .unwrap_or_else(|| panic!("genesis head must exist"));
-
-    providers = clear_provider(providers, VAULT_A).map_err(|rejected| rejected.cause)?;
+    let (mut device_a, mut device_b, mut providers, shared_head) =
+        disconnected_pair_with_shared_head()?;
 
     device_a.session.heads = vec![shared_head.clone()];
     match device_a.append_login(

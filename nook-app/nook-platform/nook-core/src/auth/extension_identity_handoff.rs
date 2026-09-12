@@ -313,9 +313,8 @@ mod tests {
         StoredSigningSeed,
     };
     use crate::{
-        AgeArmoredCiphertext, DeviceIdentity, DevicePublicKey,
-        DeviceSigningPublicKey, ExtensionIdentityHandoffError, SigningIdentity, SigningSeedHex,
-        VaultError, VaultResult,
+        AgeArmoredCiphertext, DeviceIdentity, DevicePublicKey, DeviceSigningPublicKey,
+        ExtensionIdentityHandoffError, SigningIdentity, SigningSeedHex, VaultError, VaultResult,
     };
     use std::ptr;
     use zeroize::{Zeroize, Zeroizing};
