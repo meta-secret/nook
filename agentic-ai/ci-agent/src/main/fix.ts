@@ -595,7 +595,12 @@ export class DependencyFixParsePorcelainStatus {
     const records = new NulSeparatedRecords(output).values();
     let changes: ChangedPath[] = [];
     for (let index = 0; index < records.length; index += 1) {
-      const record = records[index]!;
+      const record = records.at(index);
+      if (!record)
+        return err({
+          kind: CiFailureKind.Dependency,
+          message: "Malformed Git status record",
+        });
       if (record.length < 4 || record[2] !== " ") {
         return err({
           kind: CiFailureKind.Dependency,

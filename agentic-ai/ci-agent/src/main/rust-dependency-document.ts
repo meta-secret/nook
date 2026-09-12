@@ -41,19 +41,23 @@ class CargoSourceText {
   constructor(private readonly content: string) {}
   lockSources(): Set<string> {
     const content = this.content;
-
-    return new Set(
-      [...content.matchAll(/^\s*source\s*=\s*["']([^"']+)["']/gmu)].map(
-        (m) => m[1]!,
-      ),
-    );
+    const sources = new Set<string>();
+    for (const match of content.matchAll(
+      /^\s*source\s*=\s*["']([^"']+)["']/gmu,
+    )) {
+      const source = match.at(1);
+      if (source) sources.add(source);
+    }
+    return sources;
   }
   gitSources(): Set<string> {
     const content = this.content;
-
-    return new Set(
-      [...content.matchAll(/\bgit\s*=\s*["']([^"']+)["']/gu)].map((m) => m[1]!),
-    );
+    const sources = new Set<string>();
+    for (const match of content.matchAll(/\bgit\s*=\s*["']([^"']+)["']/gu)) {
+      const source = match.at(1);
+      if (source) sources.add(source);
+    }
+    return sources;
   }
 }
 export class RustDependencyPath {

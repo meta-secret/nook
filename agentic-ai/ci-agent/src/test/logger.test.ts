@@ -3,12 +3,12 @@ import test from "node:test";
 
 import { LogRecord, LogTimestamp, LogLevel } from "../main/logger.js";
 
-test("formatLogTimestamp uses log4j-style UTC timestamps", () => {
+void test("formatLogTimestamp uses log4j-style UTC timestamps", () => {
   const ts = new LogTimestamp(new Date("2026-06-29T20:14:32.879Z")).format();
   assert.equal(ts, "2026-06-29 20:14:32,879");
 });
 
-test("formatLogLine includes level and component", () => {
+void test("formatLogLine includes level and component", () => {
   const line = new LogRecord({
     level: LogLevel.Info,
     component: "ci-agent/agent-wait",

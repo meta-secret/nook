@@ -179,6 +179,10 @@ export class StartedToolCall {
         return "update todos";
       case "createPlan":
         return `plan ${new ToolOutputText(new ToolArgument({ args: toolCall.args, key: "name" }).text()).truncate({ max: 80 })}`;
+      case "generateImage":
+        return "generate image";
+      case "recordScreen":
+        return "record screen";
       case "mcp": {
         const server = new ToolArgument({
           args: toolCall.args,
@@ -190,9 +194,6 @@ export class StartedToolCall {
         }).text();
         return server && tool ? `mcp ${server}/${tool}` : "mcp";
       }
-      default:
-        const [defaulted1 = "tool"] = [toolCall.type];
-        return defaulted1;
     }
   }
 }
@@ -241,7 +242,19 @@ export class CompletedToolCall {
       }
       case "mcp":
         return ["mcp done"];
-      default:
+      case "delete":
+      case "edit":
+      case "write":
+      case "glob":
+      case "grep":
+      case "read":
+      case "ls":
+      case "readLints":
+      case "generateImage":
+      case "semSearch":
+      case "recordScreen":
+      case "createPlan":
+      case "updateTodos":
         return [];
     }
   }

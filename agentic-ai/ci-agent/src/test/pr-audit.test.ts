@@ -3,10 +3,11 @@ import { ok, type Result } from "neverthrow";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { Octokit } from "@octokit/rest";
+import { Octokit } from "@octokit/rest";
 
 import type { RepoRef } from "../main/github.js";
 import {
+  ExactHeadDeploymentAvailability,
   PullRequestAuditClient,
   PullRequestMergeability,
 } from "../main/pr-audit.js";
@@ -422,13 +423,13 @@ class PrAuditCreateMockOctokit {
         },
       }),
     };
-    return octokit as unknown as Octokit;
+    return Object.assign(new Octokit(), octokit);
   }
 }
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
 
-test("buildPrAudit keeps exact-head validation ready after a later unrelated CI run", async () => {
+void test("buildPrAudit keeps exact-head validation ready after a later unrelated CI run", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ laterNoopRun: true }).execute(),
   )
@@ -445,13 +446,23 @@ test("buildPrAudit keeps exact-head validation ready after a later unrelated CI 
     audit.requiredWorkflows.map((workflow) => workflow.workflowName),
     ["CI"],
   );
-  assert.equal(audit.exactHeadDeployment?.state, "success");
+  assert.equal(
+    audit.exactHeadDeployment.availability,
+    ExactHeadDeploymentAvailability.Found,
+  );
+  if (
+    audit.exactHeadDeployment.availability !==
+    ExactHeadDeploymentAvailability.Found
+  ) {
+    throw new Error("Expected an exact-head deployment");
+  }
+  assert.equal(audit.exactHeadDeployment.state, "success");
   assert.equal(audit.feedback.cursorReview.requested, true);
   assert.equal(audit.feedback.cursorReview.settled, false);
   assert.equal(audit.feedback.substantiveComments, 0);
 });
 
-test("buildPrAudit ignores a Cursor Bugbot disabled-account upsell comment", async () => {
+void test("buildPrAudit ignores a Cursor Bugbot disabled-account upsell comment", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({}).execute(),
   )
@@ -462,7 +473,7 @@ test("buildPrAudit ignores a Cursor Bugbot disabled-account upsell comment", asy
   assert.equal(audit.feedback.substantiveComments, 0);
 });
 
-test("buildPrAudit ignores a Cursor request comment and stale Cursor status review", async () => {
+void test("buildPrAudit ignores a Cursor request comment and stale Cursor status review", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.Missing,
@@ -479,7 +490,7 @@ test("buildPrAudit ignores a Cursor request comment and stale Cursor status revi
   assert.equal(audit.feedback.substantiveReviews, 0);
 });
 
-test("buildPrAudit blocks an actionable Cursor review body", async () => {
+void test("buildPrAudit blocks an actionable Cursor review body", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.Missing,
@@ -494,7 +505,7 @@ test("buildPrAudit blocks an actionable Cursor review body", async () => {
   assert.equal(audit.feedback.substantiveReviews, 1);
 });
 
-test("buildPrAudit keeps old actionable comments in scope", async () => {
+void test("buildPrAudit keeps old actionable comments in scope", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.Missing,
@@ -509,7 +520,7 @@ test("buildPrAudit keeps old actionable comments in scope", async () => {
   assert.equal(audit.feedback.unhandledComments, 1);
 });
 
-test("buildPrAudit deletes retired automation comments", async () => {
+void test("buildPrAudit deletes retired automation comments", async () => {
   const deletedCommentIds: number[] = [];
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
@@ -525,7 +536,7 @@ test("buildPrAudit deletes retired automation comments", async () => {
   assert.equal(audit.feedback.substantiveComments, 0);
 });
 
-test("buildPrAudit deletes retired automation but blocks genuine comments", async () => {
+void test("buildPrAudit deletes retired automation but blocks genuine comments", async () => {
   const deletedCommentIds: number[] = [];
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
@@ -543,7 +554,7 @@ test("buildPrAudit deletes retired automation but blocks genuine comments", asyn
   assert.equal(audit.feedback.unhandledComments, 1);
 });
 
-test("buildPrAudit fails when retired automation cannot be deleted", async () => {
+void test("buildPrAudit fails when retired automation cannot be deleted", async () => {
   await CiResultAssertions.assertAsyncFailure(
     new PullRequestAuditClient(
       new PrAuditMockOctokit({
@@ -555,7 +566,7 @@ test("buildPrAudit fails when retired automation cannot be deleted", async () =>
   );
 });
 
-test("buildPrAudit keeps resolved old comments visible without blocking", async () => {
+void test("buildPrAudit keeps resolved old comments visible without blocking", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.Missing,
@@ -571,7 +582,7 @@ test("buildPrAudit keeps resolved old comments visible without blocking", async 
   assert.equal(audit.feedback.unhandledComments, 0);
 });
 
-test("buildPrAudit does not wait for a current-head Codex review", async () => {
+void test("buildPrAudit does not wait for a current-head Codex review", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ codexReview: MockCodexReview.Missing }).execute(),
   )
@@ -583,7 +594,7 @@ test("buildPrAudit does not wait for a current-head Codex review", async () => {
   assert.deepEqual(audit.reasons, []);
 });
 
-test("buildPrAudit accepts a Codex approval reaction on the exact-head request", async () => {
+void test("buildPrAudit accepts a Codex approval reaction on the exact-head request", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ codexReview: MockCodexReview.Reaction }).execute(),
   )
@@ -596,7 +607,7 @@ test("buildPrAudit accepts a Codex approval reaction on the exact-head request",
   assert.equal(audit.feedback.substantiveComments, 0);
 });
 
-test("buildPrAudit accepts a clean Codex issue comment for the exact head", async () => {
+void test("buildPrAudit accepts a clean Codex issue comment for the exact head", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.CleanComment,
@@ -611,7 +622,7 @@ test("buildPrAudit accepts a clean Codex issue comment for the exact head", asyn
   assert.equal(audit.feedback.substantiveComments, 0);
 });
 
-test("buildPrAudit keeps a stale clean Codex comment as non-actionable status", async () => {
+void test("buildPrAudit keeps a stale clean Codex comment as non-actionable status", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.StaleCleanComment,
@@ -626,7 +637,7 @@ test("buildPrAudit keeps a stale clean Codex comment as non-actionable status", 
   assert.equal(audit.feedback.substantiveComments, 0);
 });
 
-test("buildPrAudit rejects a lookalike clean Codex comment", async () => {
+void test("buildPrAudit rejects a lookalike clean Codex comment", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.ImpostorCleanComment,
@@ -641,7 +652,7 @@ test("buildPrAudit rejects a lookalike clean Codex comment", async () => {
   assert.equal(audit.feedback.substantiveComments, 1);
 });
 
-test("buildPrAudit checks every duplicate exact-head Codex request for approval", async () => {
+void test("buildPrAudit checks every duplicate exact-head Codex request for approval", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.DuplicateReaction,
@@ -655,7 +666,7 @@ test("buildPrAudit checks every duplicate exact-head Codex request for approval"
   assert.equal(audit.feedback.codexReview.settled, true);
 });
 
-test("buildPrAudit reports a dismissed exact-head Codex review without waiting", async () => {
+void test("buildPrAudit reports a dismissed exact-head Codex review without waiting", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.Dismissed,
@@ -669,7 +680,7 @@ test("buildPrAudit reports a dismissed exact-head Codex review without waiting",
   assert.deepEqual(audit.reasons, []);
 });
 
-test("buildPrAudit ignores the automated continuing-owner handoff", async () => {
+void test("buildPrAudit ignores the automated continuing-owner handoff", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokitWithAgentHandoff({}).execute(),
   )
@@ -680,7 +691,7 @@ test("buildPrAudit ignores the automated continuing-owner handoff", async () => 
   assert.equal(audit.feedback.substantiveComments, 0);
 });
 
-test("buildPrAudit blocks a lookalike Codex status review", async () => {
+void test("buildPrAudit blocks a lookalike Codex status review", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ codexReview: MockCodexReview.Impostor }).execute(),
   )
@@ -698,7 +709,7 @@ test("buildPrAudit blocks a lookalike Codex status review", async () => {
   );
 });
 
-test("buildPrAudit blocks actionable content in a Codex review body", async () => {
+void test("buildPrAudit blocks actionable content in a Codex review body", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.ReviewFinding,
@@ -717,7 +728,7 @@ test("buildPrAudit blocks actionable content in a Codex review body", async () =
   );
 });
 
-test("buildPrAudit blocks content injected into Codex about boilerplate", async () => {
+void test("buildPrAudit blocks content injected into Codex about boilerplate", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.ReviewDetailsFinding,
@@ -730,7 +741,7 @@ test("buildPrAudit blocks content injected into Codex about boilerplate", async 
   assert.equal(audit.feedback.substantiveReviews, 1);
 });
 
-test("buildPrAudit keeps handled submitted reviews visible without blocking", async () => {
+void test("buildPrAudit keeps handled submitted reviews visible without blocking", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.ReviewFinding,
@@ -746,7 +757,7 @@ test("buildPrAudit keeps handled submitted reviews visible without blocking", as
   assert.equal(audit.feedback.unresolvedThreads, 0);
 });
 
-test("buildPrAudit still blocks an unresolved thread from an old review", async () => {
+void test("buildPrAudit still blocks an unresolved thread from an old review", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       codexReview: MockCodexReview.ReviewFinding,
@@ -763,7 +774,7 @@ test("buildPrAudit still blocks an unresolved thread from an old review", async 
   assert.equal(audit.feedback.unresolvedThreads, 1);
 });
 
-test("buildPrAudit exposes stale-base status while reporting other blockers", async () => {
+void test("buildPrAudit exposes stale-base status while reporting other blockers", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       behindBy: 2,
@@ -788,7 +799,7 @@ test("buildPrAudit exposes stale-base status while reporting other blockers", as
   );
 });
 
-test("buildPrAudit counts unresolved threads from dismissed reviews", async () => {
+void test("buildPrAudit counts unresolved threads from dismissed reviews", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ dismissedThreads: 1 }).execute(),
   )
@@ -799,7 +810,7 @@ test("buildPrAudit counts unresolved threads from dismissed reviews", async () =
   assert.equal(audit.feedback.unresolvedThreads, 1);
 });
 
-test("buildPrAudit rejects green workflows with failed or skipped Native Rust", async () => {
+void test("buildPrAudit rejects green workflows with failed or skipped Native Rust", async () => {
   for (const nativeConclusion of [
     MockJobConclusion.Failure,
     MockJobConclusion.Skipped,
@@ -823,7 +834,7 @@ test("buildPrAudit rejects green workflows with failed or skipped Native Rust", 
   }
 });
 
-test("buildPrAudit rejects when a required PR job is missing from the latest run", async () => {
+void test("buildPrAudit rejects when a required PR job is missing from the latest run", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ omitNativeJob: true }).execute(),
   )
@@ -838,7 +849,7 @@ test("buildPrAudit rejects when a required PR job is missing from the latest run
   );
 });
 
-test("buildPrAudit stays ready after main advances with successful exact-head checks", async () => {
+void test("buildPrAudit stays ready after main advances with successful exact-head checks", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ behindBy: 2 }).execute(),
   )
@@ -850,7 +861,7 @@ test("buildPrAudit stays ready after main advances with successful exact-head ch
   assert.deepEqual(audit.reasons, []);
 });
 
-test("buildPrAudit blocks a stale-base PR with a merge conflict", async () => {
+void test("buildPrAudit blocks a stale-base PR with a merge conflict", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       behindBy: 2,
@@ -874,7 +885,7 @@ test("buildPrAudit blocks a stale-base PR with a merge conflict", async () => {
   );
 });
 
-test("buildPrAudit blocks stale-base PRs with unresolved or unhandled feedback", async () => {
+void test("buildPrAudit blocks stale-base PRs with unresolved or unhandled feedback", async () => {
   const unresolved = await new PullRequestAuditClient(
     new PrAuditMockOctokit({
       behindBy: 2,
@@ -910,7 +921,7 @@ test("buildPrAudit blocks stale-base PRs with unresolved or unhandled feedback",
   );
 });
 
-test("buildPrAudit accepts a same-branch run from a previous base revision", async () => {
+void test("buildPrAudit accepts a same-branch run from a previous base revision", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ behindBy: 2, staleBaseRun: true }).execute(),
   )
@@ -923,7 +934,7 @@ test("buildPrAudit accepts a same-branch run from a previous base revision", asy
   assert.deepEqual(audit.reasons, []);
 });
 
-test("buildPrAudit rejects an exact-head run from another base branch", async () => {
+void test("buildPrAudit rejects an exact-head run from another base branch", async () => {
   const audit = await new PullRequestAuditClient(
     new PrAuditMockOctokit({ workflowBaseBranch: "release" }).execute(),
   )

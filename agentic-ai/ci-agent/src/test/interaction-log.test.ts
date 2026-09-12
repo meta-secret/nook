@@ -37,7 +37,7 @@ function assertLogLines(
   }
 }
 
-test("AgentTextLog opens a block and streams agent text incrementally", () => {
+void test("AgentTextLog opens a block and streams agent text incrementally", () => {
   const { lines, streamed, writer } = captureLog();
   let log = new AgentTextLog(writer);
 
@@ -53,7 +53,7 @@ test("AgentTextLog opens a block and streams agent text incrementally", () => {
   );
 });
 
-test("AgentTextLog closes an in-progress line before the next block", () => {
+void test("AgentTextLog closes an in-progress line before the next block", () => {
   const { lines, streamed, writer } = captureLog();
   let log = new AgentTextLog(writer);
 
@@ -66,7 +66,7 @@ test("AgentTextLog closes an in-progress line before the next block", () => {
   assert.equal(streamed.text, "    partial\n    next message\n");
 });
 
-test("ShellStreamLog prefixes live shell output", () => {
+void test("ShellStreamLog prefixes live shell output", () => {
   const { lines, streamed, writer } = captureLog();
   let log = new ShellStreamLog(writer);
 
@@ -79,7 +79,7 @@ test("ShellStreamLog prefixes live shell output", () => {
   assert.equal(log.observation(), StreamEvidence.Seen);
 });
 
-test("ShellStreamLog streams partial shell output before newline", () => {
+void test("ShellStreamLog streams partial shell output before newline", () => {
   const { lines, streamed, writer } = captureLog();
   let log = new ShellStreamLog(writer);
 

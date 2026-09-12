@@ -23,15 +23,15 @@ afterEach(() => {
   }
 });
 
-describe("resolveMajorChangeAuthorization", () => {
-  it("defaults to not authorized", () => {
+void describe("resolveMajorChangeAuthorization", () => {
+  void it("defaults to not authorized", () => {
     assert.equal(
       new AgentPromptEnvironment(process.env).resolveMajorChangeAuthorization(),
       "not-authorized",
     );
   });
 
-  it("accepts only the exact trusted workflow value", () => {
+  void it("accepts only the exact trusted workflow value", () => {
     process.env.MAJOR_CHANGE_AUTHORIZED = "true";
     assert.equal(
       new AgentPromptEnvironment(process.env).resolveMajorChangeAuthorization(),
@@ -46,8 +46,8 @@ describe("resolveMajorChangeAuthorization", () => {
   });
 });
 
-describe("resolveAgentTask", () => {
-  it("prefers AGENT_PROMPT when set", () => {
+void describe("resolveAgentTask", () => {
+  void it("prefers AGENT_PROMPT when set", () => {
     process.env.AGENT_PROMPT = "  Ship the feature  ";
     assert.equal(
       CiResultAssertions.assertSuccess(new AgentPromptEnvironment(process.env).resolveAgentTask()),
@@ -55,7 +55,7 @@ describe("resolveAgentTask", () => {
     );
   });
 
-  it("throws when the explicit prompt is missing", () => {
+  void it("throws when the explicit prompt is missing", () => {
     CiResultAssertions.assertFailure(
       new AgentPromptEnvironment(process.env).resolveAgentTask(),
       /AGENT_PROMPT is required/,
@@ -63,8 +63,8 @@ describe("resolveAgentTask", () => {
   });
 });
 
-describe("loadPrompt", () => {
-  it("loads a legacy template without validated-plan metadata from the trusted tooling root", async () => {
+void describe("loadPrompt", () => {
+  void it("loads a legacy template without validated-plan metadata from the trusted tooling root", async () => {
     const parent = await mkdtemp(join(tmpdir(), "nook-ci-agent-prompt-"));
     const toolingRoot = join(parent, "tooling");
     const repoRoot = join(parent, "implementation");
@@ -104,7 +104,7 @@ describe("loadPrompt", () => {
     }
   });
 
-  it("embeds only the exact hash-bound validated plan", async () => {
+  void it("embeds only the exact hash-bound validated plan", async () => {
     const parent = await mkdtemp(join(tmpdir(), "nook-ci-agent-plan-"));
     const toolingRoot = join(parent, "tooling");
     const repoRoot = join(parent, "implementation");
@@ -155,7 +155,7 @@ describe("loadPrompt", () => {
     }
   });
 
-  it("embeds only a host-provided rust-deps-outdated.txt inventory", async () => {
+  void it("embeds only a host-provided rust-deps-outdated.txt inventory", async () => {
     const parent = await mkdtemp(join(tmpdir(), "nook-ci-agent-deps-"));
     const toolingRoot = join(parent, "tooling");
     const report = join(parent, "rust-deps-outdated.txt");

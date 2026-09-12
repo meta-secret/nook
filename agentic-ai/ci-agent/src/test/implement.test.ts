@@ -70,7 +70,7 @@ class ImplementDeliveryArgs {
   }
 }
 
-test("trusted budget rejection is exported for blocked worklog publication", () => {
+void test("trusted budget rejection is exported for blocked worklog publication", () => {
   const root = mkdtempSync(join(tmpdir(), "nook-budget-blocker-"));
   const output = join(root, "github-output");
   try {
@@ -85,9 +85,8 @@ test("trusted budget rejection is exported for blocked worklog publication", () 
         outputPath: output,
       }).execute(),
     );
-    const encoded = readFileSync(output, "utf8").trim().split("=")[1];
-    if (encoded === undefined)
-      throw new Error("Missing encoded budget failure");
+    const encoded = readFileSync(output, "utf8").trim().split("=").at(1);
+    if (!encoded) throw new Error("Missing encoded budget failure");
     assert.equal(
       Buffer.from(encoded, "base64").toString("utf8"),
       error.message,
@@ -97,7 +96,7 @@ test("trusted budget rejection is exported for blocked worklog publication", () 
   }
 });
 
-test("oversized implementation is rejected before push", async () => {
+void test("oversized implementation is rejected before push", async () => {
   const events: string[] = [];
   const args = new ImplementDeliveryArgs(events).execute();
   const budgetError = {
@@ -117,7 +116,7 @@ test("oversized implementation is rejected before push", async () => {
   assert.deepEqual(events, ["budget"]);
 });
 
-test("budget measurement errors abort before branch preservation", async () => {
+void test("budget measurement errors abort before branch preservation", async () => {
   const events: string[] = [];
   const args = new ImplementDeliveryArgs(events).execute();
   const measurementError: CiFailure = {
@@ -137,7 +136,7 @@ test("budget measurement errors abort before branch preservation", async () => {
   assert.deepEqual(events, ["budget"]);
 });
 
-test("bounded implementation keeps the normal push, budget, and PR creation path", async () => {
+void test("bounded implementation keeps the normal push, budget, and PR creation path", async () => {
   const events: string[] = [];
   assert.equal(
     await new AgentImplementationPreserveImplementedBranchBeforePrPreserve(
@@ -154,7 +153,7 @@ test("bounded implementation keeps the normal push, budget, and PR creation path
   );
 });
 
-test("legacy implement short-circuits an existing PR and otherwise delivers once", async () => {
+void test("legacy implement short-circuits an existing PR and otherwise delivers once", async () => {
   const existingEvents: string[] = [];
   await new AgentImplementationRunCiImplementationPhases({
     deliver: async () => {
@@ -210,8 +209,8 @@ test("legacy implement short-circuits an existing PR and otherwise delivers once
   assert.deepEqual(editOnlyEvents, ["edit"]);
 });
 
-describe("resolveImplementPrTarget", () => {
-  it("keeps standalone work based on main", () => {
+void describe("resolveImplementPrTarget", () => {
+  void it("keeps standalone work based on main", () => {
     assert.deepEqual(
       CiResultAssertions.assertSuccess(
         new AgentImplementationResolveImplementPrTarget({
@@ -229,7 +228,7 @@ describe("resolveImplementPrTarget", () => {
     );
   });
 
-  it("rejects stacked and malformed targets", () => {
+  void it("rejects stacked and malformed targets", () => {
     CiResultAssertions.assertFailure(
       new AgentImplementationResolveImplementPrTarget({
         branch: "codex/feature-successor",
@@ -249,7 +248,7 @@ describe("resolveImplementPrTarget", () => {
   });
 });
 
-test("a changed implementation consumes delivery before an asynchronous effect", async () => {
+void test("a changed implementation consumes delivery before an asynchronous effect", async () => {
   let deliveries = 0;
   const result = await new LegacyCiEdit({
     mode: CiImplementationMode.LegacyMonolithic,
@@ -270,7 +269,7 @@ test("a changed implementation consumes delivery before an asynchronous effect",
   await CiResultAssertions.assertAsyncFailure(alias.deliver(), /already been consumed/);
   assert.equal(deliveries, 1);
 });
-test("skipped edits never expose a delivery capability", async () => {
+void test("skipped edits never expose a delivery capability", async () => {
   const result = await new LegacyCiEdit({
     mode: CiImplementationMode.LegacyMonolithic,
     legacyPrExists: async () => ok(false),

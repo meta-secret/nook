@@ -2,7 +2,7 @@ import { CiResultAssertions } from "./result-assertions.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { Octokit } from "@octokit/rest";
+import { Octokit } from "@octokit/rest";
 
 import {
   GitHubClient,
@@ -12,7 +12,7 @@ import {
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
 
-test("requiredPrCheckNames maps changed paths to repository-owned gates", () => {
+void test("requiredPrCheckNames maps changed paths to repository-owned gates", () => {
   assert.deepEqual(
     new PullRequestCheckSelection([".cortex/AGENTS.md"]).names(),
     [],
@@ -87,7 +87,7 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
     ],
   );
 });
-test("central CI combines product and research jobs without requiring product for research alone", () => {
+void test("central CI combines product and research jobs without requiring product for research alone", () => {
   const research = "nook-app/nook-web/nook-web-research/src/main.ts";
   assert.deepEqual(
     new PullRequestWorkflowSelection([research]).names()[0]?.requiredJobs,
@@ -104,10 +104,10 @@ test("central CI combines product and research jobs without requiring product fo
   );
 });
 
-test("createFixPr leaves the PR body free of automatic merge control markers", async () => {
+void test("createFixPr leaves the PR body free of automatic merge control markers", async () => {
   let createdBody = "";
   let createdBase = "";
-  const octokit = {
+  const octokit = Object.assign(new Octokit(), {
     rest: {
       pulls: {
         create: async ({ base, body }: { base: string; body: string }) => {
@@ -117,7 +117,7 @@ test("createFixPr leaves the PR body free of automatic merge control markers", a
         },
       },
     },
-  } as unknown as Octokit;
+  });
 
   const priorBody = process.env.AGENT_PR_BODY;
   process.env.AGENT_PR_BODY = "## Summary\n\nOpen this PR for review.";

@@ -8,7 +8,7 @@ import {
   GitHubReviewIsTrustedExactHeadReviewRequest,
 } from "../main/github.js";
 
-test("countAutomatedFindingBatches groups root bot findings by review", () => {
+void test("countAutomatedFindingBatches groups root bot findings by review", () => {
   const batches = new AutomatedFindingHistory({
     comments: [
       {
@@ -68,7 +68,7 @@ test("countAutomatedFindingBatches groups root bot findings by review", () => {
   assert.equal(batches, 4);
 });
 
-test("countAutomatedFindingBatches excludes dismissed review comments", () => {
+void test("countAutomatedFindingBatches excludes dismissed review comments", () => {
   const batches = new AutomatedFindingHistory({
     comments: [
       {
@@ -101,7 +101,7 @@ test("countAutomatedFindingBatches excludes dismissed review comments", () => {
   assert.equal(batches, 1);
 });
 
-test("exact-head iteration markers require a trusted exact request", () => {
+void test("exact-head iteration markers require a trusted exact request", () => {
   const marker = "<!-- nook-codex-review:head-sha -->";
   assert.equal(
     new GitHubReviewIsTrustedExactHeadReviewRequest({
@@ -141,7 +141,7 @@ test("exact-head iteration markers require a trusted exact request", () => {
   );
 });
 
-test("only a trusted canonical request marker is repository status", () => {
+void test("only a trusted canonical request marker is repository status", () => {
   const marker = "<!-- nook-codex-review:head-sha -->";
   assert.equal(
     new GitHubIsRepositoryStatusComment({
@@ -185,7 +185,7 @@ test("only a trusted canonical request marker is repository status", () => {
   );
 });
 
-test("provider status text is authenticated before exclusion", () => {
+void test("provider status text is authenticated before exclusion", () => {
   const status =
     "You have reached your Codex usage limits for code reviews. Try later.";
   const base = {
@@ -210,7 +210,7 @@ test("provider status text is authenticated before exclusion", () => {
   );
 });
 
-test("Codex review summary status is authenticated by exact actor and marker", () => {
+void test("Codex review summary status is authenticated by exact actor and marker", () => {
   const base = {
     authorAssociation: "NONE",
     cursorMarker: "<!-- nook-cursor-review:head-sha -->",
@@ -264,7 +264,7 @@ test("Codex review summary status is authenticated by exact actor and marker", (
   );
 });
 
-test("workflow status markers are authenticated before exclusion", () => {
+void test("workflow status markers are authenticated before exclusion", () => {
   const base = {
     authorAssociation: "NONE",
     cursorMarker: "<!-- nook-cursor-review:head-sha -->",
@@ -295,7 +295,7 @@ test("workflow status markers are authenticated before exclusion", () => {
   }
 });
 
-test("common praise is non-actionable", () => {
+void test("common praise is non-actionable", () => {
   assert.equal(
     new ReviewBodyClassification("Looks good to me.").isNonActionable(),
     true,

@@ -37,7 +37,7 @@ const OTHER_SHA = "b".repeat(40);
 
 const execFileAsync = promisify(execFile);
 
-test("rust dependency update profile selects strict isolation", () => {
+void test("rust dependency update profile selects strict isolation", () => {
   const profile = CiResultAssertions.assertSuccess(
     new CiFixProfileName("rust-dependency-update").parse(),
   );
@@ -57,7 +57,7 @@ test("rust dependency update profile selects strict isolation", () => {
   );
 });
 
-test("validation isolates secrets, preserves wrapper vars, and denies network overrides", async () => {
+void test("validation isolates secrets, preserves wrapper vars, and denies network overrides", async () => {
   const root = await mkdtemp(join(tmpdir(), "nook-validation-test-"));
   const bin = join(root, "bin");
   const log = join(root, "docker.log");
@@ -94,9 +94,11 @@ test("validation isolates secrets, preserves wrapper vars, and denies network ov
         assert.notEqual(environment.HOME, trustedHome);
         assert.equal(environment.NOOK_ARC_HIVE, "1");
         assert.equal(environment.NOOK_BUILDKIT_REMOTE, "1");
+        const isolatedHome = environment.HOME;
+        assert.ok(isolatedHome);
         assert.equal(
           await readFile(
-            join(environment.HOME!, ".docker", "buildx", "instances", builder),
+            join(isolatedHome, ".docker", "buildx", "instances", builder),
             "utf8",
           ),
           "trusted-instance",
@@ -163,7 +165,7 @@ test("validation isolates secrets, preserves wrapper vars, and denies network ov
   }
 });
 
-test("validation rejection restores the host environment and removes isolation", async () => {
+void test("validation rejection restores the host environment and removes isolation", async () => {
   const root = await mkdtemp(join(tmpdir(), "nook-validation-test-"));
   const bin = join(root, "bin");
   await mkdir(bin);
@@ -181,7 +183,9 @@ test("validation rejection restores the host environment and removes isolation",
     const outcome = await new DependencyFixWithValidationEnvironment({
       environment: hostEnvironment,
       operation: async (environment) => {
-        isolatedHome = environment.HOME!;
+        const currentHome = environment.HOME;
+        assert.ok(currentHome);
+        isolatedHome = currentHome;
         throw new Error("runner rejected");
       },
     }).execute();
@@ -193,7 +197,7 @@ test("validation rejection restores the host environment and removes isolation",
   }
 });
 
-test("networked fetch steps materialize manifests before offline compilation", async () => {
+void test("networked fetch steps materialize manifests before offline compilation", async () => {
   const repo = resolve(import.meta.dirname, "../../../..");
   for (const path of [
     "nook-app/nook-platform/docker/rust/product.Dockerfile",
@@ -221,7 +225,7 @@ test("networked fetch steps materialize manifests before offline compilation", a
   }
 });
 
-test("baseline Git state mutations fail closed", () => {
+void test("baseline Git state mutations fail closed", () => {
   const baseline = { headSha: SHA, indexTreeSha: OTHER_SHA };
   for (const current of [
     { currentHeadSha: OTHER_SHA, currentIndexTreeSha: baseline.indexTreeSha },
@@ -256,7 +260,7 @@ test("baseline Git state mutations fail closed", () => {
     );
 });
 
-test("dependency update scope accepts only regular Rust mission files", async () => {
+void test("dependency update scope accepts only regular Rust mission files", async () => {
   const root = await mkdtemp(join(tmpdir(), "nook-fix-scope-"));
   try {
     const allowed = [
@@ -324,8 +328,10 @@ test("dependency update scope accepts only regular Rust mission files", async ()
     await rejects("nook-app/nook-platform/Cargo.toml", " M", /non-crates.io/);
 
     const symlinkPath = "preflight/src/linked.rs";
+    const allowedSource = allowed.at(2);
+    assert.ok(allowedSource);
     await mkdir(join(root, "preflight/src"), { recursive: true });
-    await symlink(join(root, allowed[2]!), join(root, symlinkPath));
+    await symlink(join(root, allowedSource), join(root, symlinkPath));
     await rejects(symlinkPath, " M", /symlink or special file/);
     await rejects(
       "preflight/src/deleted.rs",
@@ -338,7 +344,7 @@ test("dependency update scope accepts only regular Rust mission files", async ()
   }
 });
 
-test("persisted Git authentication config fails without exposing values", () => {
+void test("persisted Git authentication config fails without exposing values", () => {
   for (const entry of [
     {
       key: "http.https://github.com/.extraheader",
@@ -368,7 +374,7 @@ const PUBLISHED_IDENTITY = {
   expectedPrNumber: 1208,
 };
 
-test("publication outcomes and exact identity fail closed", async () => {
+void test("publication outcomes and exact identity fail closed", async () => {
   const published: CiFixOutcome = {
     headSha: SHA,
     kind: CiFixOutcomeKind.Published,

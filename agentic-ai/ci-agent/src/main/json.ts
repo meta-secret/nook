@@ -4,7 +4,11 @@ export class JsonDocument {
   constructor(private readonly request: unknown) {}
   format(): Result<string, CiFailure> {
     try {
-      const formatted = JSON.stringify(this.request, (_key, value) => value, 2);
+      const formatted = JSON.stringify(
+        this.request,
+        (_key: string, value: unknown): unknown => value,
+        2,
+      );
       return typeof formatted === "string"
         ? ok(formatted)
         : err({

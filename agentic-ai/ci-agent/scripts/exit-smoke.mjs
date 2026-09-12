@@ -1,5 +1,14 @@
 import { spawn } from 'node:child_process'
 
+/**
+ * @typedef {object} ExitSmokeResult
+ * @property {boolean} hung
+ * @property {number} code
+ * @property {string} signal
+ * @property {number} ms
+ * @property {string} out
+ */
+
 const script = `
 import { exitCiAgent } from './dist/main/exit.js'
 setInterval(() => {}, 1000)
@@ -22,10 +31,11 @@ child.stderr.on('data', (d) => {
 })
 
 const started = Date.now()
-const result = await new Promise((resolve) => {
+/** @type {Promise<ExitSmokeResult>} */
+const completion = new Promise((resolve) => {
   const timer = setTimeout(() => {
     child.kill('SIGKILL')
-    resolve({ hung: true, code: -1, ms: Date.now() - started, out })
+    resolve({ hung: true, code: -1, signal: '', ms: Date.now() - started, out })
   }, 5000)
   child.on('exit', (code, signal) => {
     clearTimeout(timer)
@@ -38,6 +48,7 @@ const result = await new Promise((resolve) => {
     })
   })
 })
+const result = await completion
 
 console.log(JSON.stringify(result, ['hung', 'code', 'signal', 'ms', 'out'], 2))
 if (result.hung || result.code !== 0) {

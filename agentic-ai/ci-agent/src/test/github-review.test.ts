@@ -2,7 +2,7 @@ import { CiResultAssertions } from "./result-assertions.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { Octokit } from "@octokit/rest";
+import { Octokit } from "@octokit/rest";
 
 import {
   ExactHeadReviewFallback,
@@ -48,7 +48,7 @@ class GithubReviewMockOctokit {
       }
     }
     let revisionReads = 0;
-    return {
+    return Object.assign(new Octokit(), {
       rest: {
         issues: {
           createComment: async ({ body }: { body: string }) => {
@@ -100,7 +100,7 @@ class GithubReviewMockOctokit {
         route: (args: unknown) => Promise<{ data: unknown[] }>,
         args: unknown,
       ) => (await route(args)).data,
-    } as unknown as Octokit;
+    });
   }
 }
 
@@ -123,7 +123,7 @@ type MockReview = {
   user: { login: string };
 };
 
-test("requestExactHeadReview posts one exact-head Codex marker", async () => {
+void test("requestExactHeadReview posts one exact-head Codex marker", async () => {
   const createdBodies: string[] = [];
   const octokit = new GithubReviewMockOctokit({ createdBodies }).execute();
 
@@ -159,7 +159,7 @@ test("requestExactHeadReview posts one exact-head Codex marker", async () => {
   ]);
 });
 
-test("requestExactHeadReview detects a revision change before Codex contact", async () => {
+void test("requestExactHeadReview detects a revision change before Codex contact", async () => {
   const createCalls = { count: 0 };
   const expected: PullRequestRevision = {
     baseRef: "main",
@@ -187,14 +187,14 @@ test("requestExactHeadReview detects a revision change before Codex contact", as
   assert.equal(createCalls.count, 0);
 });
 
-test("review request identity changes with the base revision", () => {
+void test("review request identity changes with the base revision", () => {
   assert.notEqual(
     new CodexReviewRevision({ headSha: headSha, baseSha: "base-one" }).marker(),
     new CodexReviewRevision({ headSha: headSha, baseSha: "base-two" }).marker(),
   );
 });
 
-test("an old same-head review cannot settle a new base-bound request", async () => {
+void test("an old same-head review cannot settle a new base-bound request", async () => {
   const createdBodies: string[] = [];
   const octokit = new GithubReviewMockOctokit({
     comments: [
@@ -227,7 +227,7 @@ test("an old same-head review cannot settle a new base-bound request", async () 
   ]);
 });
 
-test("requestExactHeadReview ignores an untrusted exact-head marker", async () => {
+void test("requestExactHeadReview ignores an untrusted exact-head marker", async () => {
   const createdBodies: string[] = [];
   const octokit = new GithubReviewMockOctokit({
     comments: [
@@ -254,7 +254,7 @@ test("requestExactHeadReview ignores an untrusted exact-head marker", async () =
   ]);
 });
 
-test("requestExactHeadReview keeps a workflow-token request idempotent", async () => {
+void test("requestExactHeadReview keeps a workflow-token request idempotent", async () => {
   const createdBodies: string[] = [];
   const octokit = new GithubReviewMockOctokit({
     comments: [
@@ -280,7 +280,7 @@ test("requestExactHeadReview keeps a workflow-token request idempotent", async (
   assert.deepEqual(createdBodies, []);
 });
 
-test("requestExactHeadReview reports an exact-head Codex approval reaction as settled", async () => {
+void test("requestExactHeadReview reports an exact-head Codex approval reaction as settled", async () => {
   const createCalls = { count: 0 };
   const octokit = new GithubReviewMockOctokit({
     comments: [
@@ -313,7 +313,7 @@ test("requestExactHeadReview reports an exact-head Codex approval reaction as se
   assert.equal(createCalls.count, 0);
 });
 
-test("requestExactHeadReview does not treat an eye reaction as settled", async () => {
+void test("requestExactHeadReview does not treat an eye reaction as settled", async () => {
   const createCalls = { count: 0 };
   const octokit = new GithubReviewMockOctokit({
     comments: [
@@ -341,7 +341,7 @@ test("requestExactHeadReview does not treat an eye reaction as settled", async (
   assert.equal(createCalls.count, 0);
 });
 
-test("requestExactHeadReview does not request a fallback after a Codex usage limit", async () => {
+void test("requestExactHeadReview does not request a fallback after a Codex usage limit", async () => {
   const createdBodies: string[] = [];
   const octokit = new GithubReviewMockOctokit({
     comments: [
@@ -383,7 +383,7 @@ test("requestExactHeadReview does not request a fallback after a Codex usage lim
   assert.deepEqual(createdBodies, []);
 });
 
-test("requestExactHeadReview recognizes a clean Codex comment for the exact head", async () => {
+void test("requestExactHeadReview recognizes a clean Codex comment for the exact head", async () => {
   const createCalls = { count: 0 };
   const octokit = new GithubReviewMockOctokit({
     comments: [
@@ -418,7 +418,7 @@ test("requestExactHeadReview recognizes a clean Codex comment for the exact head
   assert.equal(createCalls.count, 0);
 });
 
-test("requestExactHeadReview keeps a Codex usage limit non-blocking", async () => {
+void test("requestExactHeadReview keeps a Codex usage limit non-blocking", async () => {
   const createdBodies: string[] = [];
   const comments: MockComment[] = [];
   const octokit = new GithubReviewMockOctokit({
@@ -461,7 +461,7 @@ test("requestExactHeadReview keeps a Codex usage limit non-blocking", async () =
   ]);
 });
 
-test("requestExactHeadReview still prefers Codex on a new head after an older usage-limit comment", async () => {
+void test("requestExactHeadReview still prefers Codex on a new head after an older usage-limit comment", async () => {
   const createdBodies: string[] = [];
   const octokit = new GithubReviewMockOctokit({
     comments: [
@@ -498,7 +498,7 @@ test("requestExactHeadReview still prefers Codex on a new head after an older us
   ]);
 });
 
-test("requestExactHeadReview does not request Cursor while Codex is pending", async () => {
+void test("requestExactHeadReview does not request Cursor while Codex is pending", async () => {
   const createdBodies: string[] = [];
   const octokit = new GithubReviewMockOctokit({
     comments: [
@@ -528,7 +528,7 @@ test("requestExactHeadReview does not request Cursor while Codex is pending", as
   assert.deepEqual(createdBodies, []);
 });
 
-test("requestExactHeadReview ignores an inactive Cursor review fallback", async () => {
+void test("requestExactHeadReview ignores an inactive Cursor review fallback", async () => {
   const createCalls = { count: 0 };
   const octokit = new GithubReviewMockOctokit({
     comments: [

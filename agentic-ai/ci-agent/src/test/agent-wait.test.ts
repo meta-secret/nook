@@ -6,13 +6,13 @@ import test from "node:test";
 import { ElapsedDuration, AgentWait } from "../main/agent-wait.js";
 import { CiFailureKind } from "../main/failure.js";
 
-test("formatDuration renders human-readable durations", () => {
+void test("formatDuration renders human-readable durations", () => {
   assert.equal(new ElapsedDuration(45_000).format(), "45s");
   assert.equal(new ElapsedDuration(125_000).format(), "2m 5s");
   assert.equal(new ElapsedDuration(3_725_000).format(), "1h 2m 5s");
 });
 
-test("waitWithHeartbeat resolves when work completes", async () => {
+void test("waitWithHeartbeat resolves when work completes", async () => {
   const result = await new AgentWait({
     label: "Test",
     wait: async () => ok("done"),
@@ -23,7 +23,7 @@ test("waitWithHeartbeat resolves when work completes", async () => {
   assert.equal(result, "done");
 });
 
-test("waitWithHeartbeat rejects on timeout", async () => {
+void test("waitWithHeartbeat rejects on timeout", async () => {
   await CiResultAssertions.assertAsyncFailure(
     new AgentWait({
       label: "Test",
@@ -34,7 +34,7 @@ test("waitWithHeartbeat rejects on timeout", async () => {
   );
 });
 
-test("waitWithHeartbeat returns rejected work as a typed failure", async () => {
+void test("waitWithHeartbeat returns rejected work as a typed failure", async () => {
   await CiResultAssertions.assertAsyncFailure(
     new AgentWait({
       label: "Test",

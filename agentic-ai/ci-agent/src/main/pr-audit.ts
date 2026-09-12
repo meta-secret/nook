@@ -191,7 +191,9 @@ export class PullRequestAuditClient {
       requiredWorkflows.some((workflow) =>
         workflow.requiredJobs?.includes("PR validation / Verify and preview"),
       ) &&
-      exactHeadDeployment?.state !== "success"
+      (exactHeadDeployment.availability ===
+        ExactHeadDeploymentAvailability.Unavailable ||
+        exactHeadDeployment.state !== "success")
     ) {
       reasons = [
         ...reasons,
@@ -221,7 +223,7 @@ export class PullRequestAuditClient {
       base: { branch: pr.base.ref, sha: pr.base.sha },
       branchProtection,
       changedFiles,
-      ...(exactHeadDeployment === undefined ? {} : { exactHeadDeployment }),
+      exactHeadDeployment,
       externalReviewPolicy: "inspect-existing-feedback-without-waiting",
       feedback,
       head: { branch: pr.head.ref, sha: pr.head.sha },
@@ -343,13 +345,16 @@ export class PullRequestAuditClient {
       const latest = statuses[0];
       if (latest) {
         return ok({
+          availability: ExactHeadDeploymentAvailability.Found,
           environment: deployment.environment,
           state: latest.state,
           ...(latest.environment_url ? { url: latest.environment_url } : {}),
         });
       }
     }
-    return ok(void 0);
+    return ok({
+      availability: ExactHeadDeploymentAvailability.Unavailable,
+    });
   }
 }
 
@@ -573,11 +578,25 @@ export enum PullRequestMergeability {
   Unknown = "unknown",
 }
 
+export enum ExactHeadDeploymentAvailability {
+  Found = "found",
+  Unavailable = "unavailable",
+}
+
+export type ExactHeadDeployment =
+  | {
+      availability: ExactHeadDeploymentAvailability.Found;
+      environment: string;
+      state: string;
+      url?: string;
+    }
+  | { availability: ExactHeadDeploymentAvailability.Unavailable };
+
 export type PrAudit = {
   base: { branch: string; sha: string };
   branchProtection: BranchProtectionAudit;
   changedFiles: string[];
-  exactHeadDeployment?: { environment: string; state: string; url?: string };
+  exactHeadDeployment: ExactHeadDeployment;
   externalReviewPolicy: "inspect-existing-feedback-without-waiting";
   feedback: PrFeedbackSummary;
   head: { branch: string; sha: string };

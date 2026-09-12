@@ -9,7 +9,7 @@ import {
   StartedToolCall,
 } from "../main/tool-summary.js";
 
-test("formatToolStarted shortens CI workspace paths", () => {
+void test("formatToolStarted shortens CI workspace paths", () => {
   const toolCall = {
     type: "read",
     args: { path: "/home/runner/work/nook/nook/.cortex/AGENTS.md" },
@@ -21,7 +21,7 @@ test("formatToolStarted shortens CI workspace paths", () => {
   );
 });
 
-test("formatToolStarted summarizes shell commands", () => {
+void test("formatToolStarted summarizes shell commands", () => {
   const toolCall = {
     type: "shell",
     args: {
@@ -37,7 +37,7 @@ test("formatToolStarted summarizes shell commands", () => {
   );
 });
 
-test("formatToolCompleted includes shell stdout and stderr", () => {
+void test("formatToolCompleted includes shell stdout and stderr", () => {
   const toolCall = {
     type: "shell",
     args: { command: "task ci:main:parallel" },
@@ -63,7 +63,7 @@ test("formatToolCompleted includes shell stdout and stderr", () => {
   ]);
 });
 
-test("formatToolCompleted reports shell exit codes without empty output blocks", () => {
+void test("formatToolCompleted reports shell exit codes without empty output blocks", () => {
   const success = {
     type: "shell",
     args: { command: "true" },
@@ -84,7 +84,7 @@ test("formatToolCompleted reports shell exit codes without empty output blocks",
   ]);
 });
 
-test("formatToolCompleted can omit shell output blocks", () => {
+void test("formatToolCompleted can omit shell output blocks", () => {
   const toolCall = {
     type: "shell",
     args: { command: "task ci:main:parallel" },
@@ -109,7 +109,7 @@ test("formatToolCompleted can omit shell output blocks", () => {
   );
 });
 
-test("formatToolCompleted includes task result suffix", () => {
+void test("formatToolCompleted includes task result suffix", () => {
   const toolCall = {
     type: "task",
     args: { description: "run e2e", prompt: "run the failed test" },
@@ -132,7 +132,7 @@ test("formatToolCompleted includes task result suffix", () => {
   ]);
 });
 
-test("formatToolCompleted skips noisy read completions", () => {
+void test("formatToolCompleted skips noisy read completions", () => {
   const toolCall = {
     type: "read",
     args: { path: ".cortex/AGENTS.md" },
@@ -145,7 +145,7 @@ test("formatToolCompleted skips noisy read completions", () => {
   assert.deepEqual(new CompletedToolCall({ toolCall: toolCall }).format(), []);
 });
 
-test("formatToolCompleted surfaces tool errors", () => {
+void test("formatToolCompleted surfaces tool errors", () => {
   const toolCall = {
     type: "shell",
     args: { command: "missing-cmd" },
@@ -160,7 +160,7 @@ test("formatToolCompleted surfaces tool errors", () => {
   ]);
 });
 
-test("extractShellOutputChunk reads common event shapes", () => {
+void test("extractShellOutputChunk reads common event shapes", () => {
   assert.equal(new ShellOutputEvent({ text: "line 1\n" }).text(), "line 1\n");
   assert.equal(
     new ShellOutputEvent({

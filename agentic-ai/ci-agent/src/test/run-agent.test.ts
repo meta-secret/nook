@@ -6,7 +6,7 @@ import {
   AgentRuntimeSanitizeAgentEnvironment,
 } from "../main/run-agent.js";
 
-test("agent subprocess environment retains only non-credential execution settings", () => {
+void test("agent subprocess environment retains only non-credential execution settings", () => {
   const environment = {
     ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-secret",
     ACTIONS_RUNTIME_TOKEN: "runtime-secret",
@@ -26,7 +26,7 @@ test("agent subprocess environment retains only non-credential execution setting
   });
 });
 
-test("host environment is restored exactly after sandboxed execution", () => {
+void test("host environment is restored exactly after sandboxed execution", () => {
   const original = {
     AGENT_BRANCH: "codex/successor",
     HOME: "/trusted/home",

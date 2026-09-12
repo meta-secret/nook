@@ -32,6 +32,14 @@ export class CiInteractionLogger {
         }
         break;
       case "thinking-delta":
+      case "thinking-completed":
+      case "user-message-appended":
+      case "partial-tool-call":
+      case "token-delta":
+      case "summary":
+      case "summary-started":
+      case "summary-completed":
+      case "tool-call-delta":
         break;
       case "shell-output-delta": {
         const chunk = new ShellOutputEvent(update.event).text();
@@ -65,8 +73,6 @@ export class CiInteractionLogger {
         agentText = agentText.closeBlock();
         shellStream = shellStream.closeBlock();
         log.debug("turn ended");
-        break;
-      default:
         break;
     }
     return new CiInteractionLogger(agentText, shellStream);
