@@ -16,7 +16,7 @@ type VaultStateSlice =
   | VaultSyncState;
 
 type VaultStateDelegation<State extends VaultStateSlice> = {
-  readonly target: VaultStateSlicesBase;
+  readonly target: VaultStateSlicesImplementation;
   readonly state: State;
   readonly keys: readonly (keyof State)[];
 };
@@ -189,7 +189,19 @@ type VaultStateSliceFields = VaultRuntimeState &
   VaultSentinelState &
   VaultSyncState;
 
-class VaultStateSlicesBase {
+type VaultDelegatedValue = VaultStateSliceFields[keyof VaultStateSliceFields];
+type VaultDelegatedArguments = never[];
+type VaultDelegatedCallable = (
+  ...args: VaultDelegatedArguments
+) => VaultDelegatedValue;
+
+function isVaultDelegatedCallable(
+  value: VaultDelegatedValue,
+): value is VaultDelegatedCallable {
+  return typeof value === "function";
+}
+
+class VaultStateSlicesImplementation {
   private delegateState<State extends VaultStateSlice>({
     target,
     state,
@@ -199,8 +211,10 @@ class VaultStateSlicesBase {
       const definePropertyArgs: Parameters<typeof Object.defineProperty>[2] = {
         enumerable: true,
         get: () => {
-          const value = Reflect.get(state, key);
-          return typeof value === "function" ? value.bind(state) : value;
+          const value: VaultDelegatedValue = state[key];
+          if (!isVaultDelegatedCallable(value)) return value;
+          return (...args: VaultDelegatedArguments): VaultDelegatedValue =>
+            value.apply(state, args);
         },
         set: (value: State[keyof State]) => Reflect.set(state, key, value),
       };
@@ -257,8 +271,8 @@ class VaultStateSlicesBase {
 type VaultStateSlicesConstructor = {
   new (
     runtimeState: VaultRuntimeState,
-  ): VaultStateSlicesBase & VaultStateSliceFields;
+  ): VaultStateSlicesImplementation & VaultStateSliceFields;
 };
 
-export const VaultStateSlices =
-  VaultStateSlicesBase as VaultStateSlicesConstructor;
+export const VaultStateSlices: VaultStateSlicesConstructor =
+  VaultStateSlicesImplementation;

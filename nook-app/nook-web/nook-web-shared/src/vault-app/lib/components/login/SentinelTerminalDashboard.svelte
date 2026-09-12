@@ -157,7 +157,8 @@
       threshold,
     }).thresholdChoices;
     if (!choices.includes(threshold)) {
-      if (choices.length > 0) threshold = choices[choices.length - 1]!;
+      const lastChoice = choices[choices.length - 1];
+      if (lastChoice) threshold = lastChoice;
     }
     policyStep = SentinelTerminalPolicyStep.Threshold;
     void scrollOutput();

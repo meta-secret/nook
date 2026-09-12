@@ -14,8 +14,15 @@
   import { Button } from '$lib/components/ui/button'
   import * as multiDeviceActions from '$lib/vault/multi-device'
   import type { VaultState } from '$lib/vault.svelte'
+  import type { ProviderVaultIdentitySelection } from '$lib/vault/provider-vault-decision'
 
   let { vault }: { vault: VaultState } = $props()
+
+  function importRemoteVault(
+    selection: ProviderVaultIdentitySelection,
+  ): Promise<void> {
+    return vault.resolveSyncConflictImportRemote(selection)
+  }
 
   function shortId(id: string): string {
     return id.length > 18 ? `${id.slice(0, 18)}...` : id
@@ -51,8 +58,7 @@
     isBusy={vault.isVerifying}
     onKeepLocal={() => vault.resolveSyncConflictKeepLocal()}
     onKeepRemote={() => vault.resolveSyncConflictKeepRemote()}
-    onImportAsNewVault={(selection) =>
-      vault.resolveSyncConflictImportRemote(selection)}
+    onImportAsNewVault={importRemoteVault}
     onCancel={() => vault.clearPendingSyncConflict()}
   />
 {/if}

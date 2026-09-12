@@ -70,6 +70,10 @@ type SavedEnrollmentProviderApplication = {
   readonly selection: SavedEnrollmentProvider;
 };
 
+function isOAuthFilePreset(value: string): value is OAuthFilePreset {
+  return value === "google-drive" || value === "icloud";
+}
+
 export type EnrollmentCodeConnection = {
   readonly code: string;
   readonly password: string;
@@ -243,7 +247,12 @@ export class PasswordEnrollmentActions {
           } else if (
             payload.onboardingType === OnboardingType.SharedProviderGrant
           ) {
-            const preset = enrollmentProvider.oauthPreset as OAuthFilePreset;
+            const presetValue = enrollmentProvider.oauthPreset;
+            if (!isOAuthFilePreset(presetValue)) {
+              state.errorMsg = state.t(I18N_KEYS.ErrorsVaultSelectionFailed);
+              return;
+            }
+            const preset = presetValue;
             const storageTarget: SharedStorageTarget = {
               kind: SharedStorageTargetKind.Bound,
               storageTargetId: enrollmentProvider.sharedStorageTargetId,
@@ -479,10 +488,15 @@ export class PasswordEnrollmentActions {
             }
             enrollmentStorageArgs = state.providerWasmArgs(provider);
           } else if (enrollmentProvider.type === OAUTH_FILE_PROVIDER_TYPE) {
+            const presetValue = enrollmentProvider.oauthPreset;
+            if (!isOAuthFilePreset(presetValue)) {
+              state.errorMsg = state.t(I18N_KEYS.ErrorsVaultSelectionFailed);
+              return;
+            }
             const defaultOAuthFileConfigArgs: Parameters<
               typeof defaultOAuthFileConfig
             >[0] = {
-              preset: enrollmentProvider.oauthPreset as OAuthFilePreset,
+              preset: presetValue,
               fileName: DEFAULT_DRIVE_BACKUP_NAME,
             };
             const defaults = defaultOAuthFileConfig(defaultOAuthFileConfigArgs);

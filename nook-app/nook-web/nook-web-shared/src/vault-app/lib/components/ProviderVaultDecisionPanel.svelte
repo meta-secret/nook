@@ -60,6 +60,21 @@
         )
       : [],
   )
+  const projectionDecision = $derived(
+    evidence.kind === ProviderVaultEvidenceKind.Ready
+      ? evidence.projection.decision
+      : ProviderVaultDecision.PreserveBoth,
+  )
+  const projectionReason = $derived(
+    evidence.kind === ProviderVaultEvidenceKind.Ready
+      ? evidence.projection.reason
+      : ProviderVaultDecisionReason.CurrentVaultStateUnavailable,
+  )
+  const projectionIdentities = $derived(
+    evidence.kind === ProviderVaultEvidenceKind.Ready
+      ? evidence.identities
+      : [],
+  )
   const identitySelectionRequired = $derived(preparedIdentities.length > 1)
   const importIdentitySelection = $derived.by(
     (): ProviderVaultIdentitySelection => {
@@ -70,9 +85,11 @@
       ) {
         return identitySelection
       }
+      const [identity] = preparedIdentities
+      if (!identity) return identitySelection
       return {
         kind: ProviderVaultIdentitySelectionKind.Selected,
-        identityId: preparedIdentities[0]!.identityId,
+        identityId: identity.identityId,
       }
     },
   )
@@ -170,27 +187,27 @@
     </div>
   {:else}
     <div
-      class="rounded-md border p-3 {evidence.projection.decision ===
+      class="rounded-md border p-3 {projectionDecision ===
       ProviderVaultDecision.AdoptProviderVault
         ? 'border-primary/40 bg-primary/5'
         : 'border-border bg-muted/20'}"
       data-testid="provider-vault-recommendation"
     >
       <div class="flex items-start gap-2">
-        {#if evidence.projection.decision === ProviderVaultDecision.AdoptProviderVault}
+        {#if projectionDecision === ProviderVaultDecision.AdoptProviderVault}
           <CheckCircle2 class="mt-0.5 size-4 shrink-0 text-primary" />
         {:else}
           <CircleHelp class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         {/if}
         <div>
           <p class="text-sm font-semibold text-foreground">
-            {evidence.projection.decision ===
+            {projectionDecision ===
             ProviderVaultDecision.AdoptProviderVault
               ? vault.t(I18N_KEYS.AuthStorageProviderVaultUseRecommended)
               : vault.t(I18N_KEYS.AuthStorageProviderVaultKeepBothRecommended)}
           </p>
           <p class="mt-1 text-sm text-muted-foreground">
-            {vault.t(reasonKey(evidence.projection.reason))}
+            {vault.t(reasonKey(projectionReason))}
           </p>
         </div>
       </div>
@@ -209,9 +226,9 @@
           {vault.t(I18N_KEYS.AuthStorageProviderVaultIdentitiesTitle)}
         </h3>
       </div>
-      {#if evidence.identities.length > 0}
+      {#if projectionIdentities.length > 0}
         <ul class="space-y-2" data-testid="provider-vault-identities">
-          {#each evidence.identities as identity (identity.identityId)}
+          {#each projectionIdentities as identity (identity.identityId)}
             <li>
               <label
                 class="flex min-h-11 items-start gap-3 rounded-md border border-border px-3 py-2 {identity.eligibility ===
@@ -320,7 +337,7 @@
         <RefreshCw class="size-4 animate-spin" />
       {/if}
       {evidence.kind === ProviderVaultEvidenceKind.Ready &&
-      evidence.projection.decision === ProviderVaultDecision.AdoptProviderVault
+      projectionDecision === ProviderVaultDecision.AdoptProviderVault
         ? vault.t(I18N_KEYS.AuthStorageProviderVaultUseProvider)
         : vault.t(I18N_KEYS.AuthStorageSyncConflictImportNewVault)}
     </Button>

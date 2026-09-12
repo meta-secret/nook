@@ -74,7 +74,13 @@
   }
 
   function handleMobileToolsDocumentClick(event: MouseEvent): void {
-    if (!mobileToolsRoot?.contains(event.target as Node)) closeMobileTools()
+    const target = event.target
+    if (
+      !mobileToolsRoot ||
+      !(target instanceof Node) ||
+      !mobileToolsRoot.contains(target)
+    )
+      closeMobileTools()
   }
 
   function handleMobileToolsDocumentKeydown(event: KeyboardEvent): void {

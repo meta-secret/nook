@@ -31,9 +31,7 @@ export class VaultStartupShell {
 
   private startupLocale(): BootstrapLocale {
     const savedLocale = this.storedValue(LOCALE_STORAGE_KEY);
-    if (Object.hasOwn(BOOTSTRAP_MESSAGES, savedLocale)) {
-      return savedLocale as BootstrapLocale;
-    }
+    if (savedLocale === "en" || savedLocale === "ru") return savedLocale;
     const languageTags = navigator.languages.length
       ? navigator.languages
       : [navigator.language];

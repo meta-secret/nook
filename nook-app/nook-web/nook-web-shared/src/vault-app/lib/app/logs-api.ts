@@ -26,14 +26,6 @@ export type AppLogsResponse = {
   entries: LogEntry[];
 };
 
-const LOG_LEVELS: readonly LogLevel[] = [
-  LogLevel.Error,
-  LogLevel.Warn,
-  LogLevel.Info,
-  LogLevel.Debug,
-  LogLevel.Trace,
-];
-
 type LogLevelParseRequest = {
   readonly params: URLSearchParams;
   readonly name: string;
@@ -116,9 +108,18 @@ export class AppLogsQueryString {
   }: LogLevelParseRequest): LogLevel {
     const raw = params.get(name);
     const value = raw?.trim().toLowerCase();
-    return LOG_LEVELS.includes(value as LogLevel)
-      ? (value as LogLevel)
-      : fallback;
+    switch (value) {
+      case LogLevel.Error:
+      case LogLevel.Warn:
+      case LogLevel.Info:
+      case LogLevel.Debug:
+      case LogLevel.Trace:
+        return value;
+      case undefined:
+        return fallback;
+      default:
+        return fallback;
+    }
   }
   static parsePositiveInt({
     params,

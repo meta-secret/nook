@@ -10,6 +10,11 @@
     children: childrenProp,
     ...restProps
   }: Omit<WithoutChild<SelectPrimitive.ItemProps>, "ref"> = $props();
+
+  type SelectItemSnippetState = {
+    readonly selected: boolean;
+    readonly highlighted: boolean;
+  };
 </script>
 
 <SelectPrimitive.Item
@@ -21,7 +26,7 @@
   )}
   {...restProps}
 >
-  {#snippet children({ selected, highlighted })}
+  {#snippet children({ selected, highlighted }: SelectItemSnippetState)}
     <span class="absolute end-2 flex size-3.5 items-center justify-center">
       {#if selected}
         <CheckIcon class="cn-select-item-indicator-icon" />

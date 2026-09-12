@@ -262,6 +262,46 @@ declare global {
   }
 }
 
+function isCloudKitUserIdentity(value: unknown): value is CloudKitUserIdentity {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if ("userRecordName" in value && typeof value.userRecordName !== "string")
+    return false;
+  if ("nameComponents" in value) {
+    const nameComponents = value.nameComponents;
+    if (
+      !nameComponents ||
+      typeof nameComponents !== "object" ||
+      Array.isArray(nameComponents)
+    )
+      return false;
+    if (
+      "givenName" in nameComponents &&
+      typeof nameComponents.givenName !== "string"
+    )
+      return false;
+    if (
+      "familyName" in nameComponents &&
+      typeof nameComponents.familyName !== "string"
+    )
+      return false;
+  }
+  if ("lookupInfo" in value) {
+    const lookupInfo = value.lookupInfo;
+    if (
+      !lookupInfo ||
+      typeof lookupInfo !== "object" ||
+      Array.isArray(lookupInfo)
+    )
+      return false;
+    if (
+      "emailAddress" in lookupInfo &&
+      typeof lookupInfo.emailAddress !== "string"
+    )
+      return false;
+  }
+  return true;
+}
+
 /** Owns the browser runtime resources shared by these interactions. */
 class CloudKitRuntime {
   addTokenListener(
@@ -285,11 +325,8 @@ class CloudKitRuntime {
     (token: Result<string, OAuthFailure>) => void
   >();
   private cloudKitIdentityFromTransport(value: unknown): CloudKitIdentity {
-    return Boolean(value) && typeof value === "object"
-      ? {
-          kind: CloudKitIdentityKind.SignedIn,
-          identity: value as CloudKitUserIdentity,
-        }
+    return isCloudKitUserIdentity(value)
+      ? { kind: CloudKitIdentityKind.SignedIn, identity: value }
       : { kind: CloudKitIdentityKind.SignedOut };
   }
 
@@ -298,29 +335,19 @@ class CloudKitRuntime {
       return err(new OAuthFailure(OAuthFailureKind.CloudKitUnavailable));
     try {
       const external = window.CloudKit.getDefaultContainer();
-      const handler: ProxyHandler<ExternalCloudKitContainer> = {
-        // eslint-disable-next-line max-params -- Proxy owns this positional boundary callback.
-        get: (target, property, receiver) => {
-          if (property === "setUpAuth") {
-            return async (options: CloudKitAuthSetupOptions) =>
-              this.cloudKitIdentityFromTransport(
-                await target.setUpAuth(options),
-              );
-          }
-          if (property === "fetchCurrentUserIdentity") {
-            return async () => {
-              if (!target.fetchCurrentUserIdentity) {
-                return { kind: CloudKitIdentityKind.SignedOut };
-              }
-              return this.cloudKitIdentityFromTransport(
-                await target.fetchCurrentUserIdentity(),
-              );
-            };
-          }
-          return Reflect.get(target, property, receiver);
+      const container: CloudKitContainer = {
+        ...external,
+        setUpAuth: async (options: CloudKitAuthSetupOptions) =>
+          this.cloudKitIdentityFromTransport(await external.setUpAuth(options)),
+        fetchCurrentUserIdentity: async () => {
+          if (!external.fetchCurrentUserIdentity)
+            return { kind: CloudKitIdentityKind.SignedOut };
+          return this.cloudKitIdentityFromTransport(
+            await external.fetchCurrentUserIdentity(),
+          );
         },
       };
-      return ok(new Proxy(external, handler) as CloudKitContainer);
+      return ok(container);
     } catch {
       return err(new OAuthFailure(OAuthFailureKind.CloudKitUnavailable));
     }

@@ -111,7 +111,9 @@
     ((
       ...[
         v = isAuthenticatedVault
-          ? vault!.t(I18N_KEYS.StatusBarLocalVault)
+          ? vault
+            ? vault.t(I18N_KEYS.StatusBarLocalVault)
+            : label || 'Nook'
           : storageMode === 'github'
             ? githubRepo.trim() || 'GitHub'
             : storageMode === 'oauth-file'
@@ -230,7 +232,7 @@
             class="shrink-0 text-muted-foreground"
             data-testid="vault-last-sync"
           >
-            {vault!.t(I18N_KEYS.StatusBarSaved)}
+            {vault ? vault.t(I18N_KEYS.StatusBarSaved) : 'Saved'}
             {formatLastSync(lastSync)}
           </span>
           {#if syncDetail}
@@ -241,7 +243,7 @@
             <span
               class="shrink-0 text-muted-foreground"
               data-testid="vault-sync-out-status"
-              class:animate-pulse={vault!.isSyncActivityVisible}
+              class:animate-pulse={vault?.isSyncActivityVisible}
             >
               {syncDetail}
             </span>
@@ -277,7 +279,9 @@
             disabled={isSyncing || vault?.syncBlocked}
             data-testid="vault-sync-refresh-btn"
             aria-label={isAuthenticatedVault
-              ? vault!.t(I18N_KEYS.StatusBarSyncAllAria)
+              ? vault
+                ? vault.t(I18N_KEYS.StatusBarSyncAllAria)
+                : 'Synchronize vault'
               : storageMode === 'github'
                 ? vault
                   ? vault.t(I18N_KEYS.StatusBarSyncAriaGithub)
@@ -290,7 +294,9 @@
             <RefreshCw class="size-3.5 {isSyncing ? 'animate-spin' : ''}" />
             <span class="ml-1"
               >{isAuthenticatedVault
-                ? vault!.t(I18N_KEYS.StatusBarSyncAll)
+                ? vault
+                  ? vault.t(I18N_KEYS.StatusBarSyncAll)
+                  : 'Sync'
                 : storageMode === 'github'
                   ? vault
                     ? vault.t(I18N_KEYS.StatusBarSync)
@@ -305,7 +311,9 @@
             role="tooltip"
           >
             {isAuthenticatedVault
-              ? vault!.t(I18N_KEYS.StatusBarSyncAllTooltip)
+              ? vault
+                ? vault.t(I18N_KEYS.StatusBarSyncAllTooltip)
+                : 'Synchronize vault'
               : storageMode === 'github'
                 ? vault
                   ? vault.t(I18N_KEYS.StatusBarSyncTooltipGithub)

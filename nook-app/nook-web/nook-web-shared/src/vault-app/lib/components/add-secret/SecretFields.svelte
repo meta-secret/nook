@@ -39,7 +39,8 @@
   }
 
   async function handleFileSelected(event: Event) {
-    const input = event.currentTarget as HTMLInputElement
+    const input = event.currentTarget
+    if (!(input instanceof HTMLInputElement)) return
     const file = input.files?.[0]
     state.fileInputError = ''
     if (!file) return

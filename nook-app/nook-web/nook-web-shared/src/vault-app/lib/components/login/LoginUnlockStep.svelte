@@ -80,6 +80,10 @@
 
   const isBusy = $derived(isVerifying || isInitializing)
   let workflow = $state<LoginVaultWorkflow>(LoginVaultWorkflow.Open)
+
+  function selectWorkflow(selected: LoginVaultWorkflow): void {
+    workflow = selected
+  }
   const sentinelVisibility = $derived(
     new SentinelUnlockActions(vault).ceremonyVisibility(),
   )
@@ -172,7 +176,7 @@
   <LoginVaultWorkflowNav
     {vault}
     active={workflow}
-    onSelect={(selected) => (workflow = selected)}
+    onSelect={selectWorkflow}
   />
 
   {#if workflow === LoginVaultWorkflow.Open}

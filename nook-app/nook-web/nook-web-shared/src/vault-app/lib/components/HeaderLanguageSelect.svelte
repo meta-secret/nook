@@ -31,7 +31,8 @@
 
   function handleDocumentClick(event: MouseEvent) {
     if (!open || !root) return
-    if (!root.contains(event.target as Node)) open = false
+    const target = event.target
+    if (target instanceof Node && !root.contains(target)) open = false
   }
 
   function handleDocumentKeydown(event: KeyboardEvent) {

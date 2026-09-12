@@ -279,7 +279,9 @@
   }
 
   async function focusIdentityContextWhenAvailable(): Promise<void> {
-    await restoreIdentityContextFocus({
+    const focusIdentityContextArgs: Parameters<
+      typeof restoreIdentityContextFocus
+    >[0] = {
       waitForNextFrame: () =>
         new Promise<void>((resolve) =>
           requestAnimationFrame(() => resolve()),
@@ -294,7 +296,8 @@
         document.querySelector<HTMLButtonElement>(
           '[data-testid="login-review-identities"]',
         ) || false,
-    })
+    }
+    await restoreIdentityContextFocus(focusIdentityContextArgs)
   }
 
   async function openDevicesAccess(

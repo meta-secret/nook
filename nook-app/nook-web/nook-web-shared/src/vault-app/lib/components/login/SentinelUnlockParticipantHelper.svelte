@@ -36,6 +36,13 @@
   let copied = $state(false)
   let deliveryRefreshInFlight = false
 
+  function selectDelivery(value: string): void {
+    selectedDelivery =
+      value === GenesisDeliverySelectionKind.NotSelected
+        ? { kind: GenesisDeliverySelectionKind.NotSelected }
+        : { kind: GenesisDeliverySelectionKind.Selected, storeId: value }
+  }
+
   enum DeliveryRefreshOrigin {
     Automatic = 'automatic',
     Requested = 'requested',
@@ -219,15 +226,7 @@
               GenesisDeliverySelectionKind.Selected
                 ? selectedDelivery.storeId
                 : GenesisDeliverySelectionKind.NotSelected}
-              onValueChange={(value) => {
-                selectedDelivery =
-                  value === GenesisDeliverySelectionKind.NotSelected
-                    ? { kind: GenesisDeliverySelectionKind.NotSelected }
-                    : {
-                        kind: GenesisDeliverySelectionKind.Selected,
-                        storeId: value,
-                      }
-              }}
+              onValueChange={selectDelivery}
             >
               <Select.Trigger
                 id="sentinel-delivery-select"

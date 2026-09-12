@@ -396,6 +396,11 @@
     return ok();
   }
 
+  async function copySecretField(request: SecretFieldCopy): Promise<void> {
+    const copied = await copyToClipboard(request);
+    if (copied.isErr()) vault.errorMsg = vault.t(copied.error.translationKey);
+  }
+
   function secretReveal(itemId: string): SecretReveal {
     const record = decryptedSecrets[itemId];
     return record
@@ -739,11 +744,7 @@
                     onEditItem={openEditItem}
                     {editRestriction}
                     {onDeleteSecret}
-                    onCopyToClipboard={async (request) => {
-                      const copied = await copyToClipboard(request);
-                      if (copied.isErr())
-                        vault.errorMsg = vault.t(copied.error.translationKey);
-                    }}
+                    onCopyToClipboard={copySecretField}
                     onCopySecret={copySecret}
                     {vault}
                   />

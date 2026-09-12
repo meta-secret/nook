@@ -42,6 +42,24 @@
     [LogLevel.Trace, 'text-muted-foreground'],
   ])
 
+  type LogLevelParseRequest = {
+    readonly value: string
+    readonly fallback: LogLevel
+  }
+
+  function parseLogLevel({ value, fallback }: LogLevelParseRequest): LogLevel {
+    switch (value) {
+      case LogLevel.Error:
+      case LogLevel.Warn:
+      case LogLevel.Info:
+      case LogLevel.Debug:
+      case LogLevel.Trace:
+        return value
+      default:
+        return fallback
+    }
+  }
+
   async function load() {
     loading = true
     try {
@@ -58,13 +76,21 @@
   }
 
   function changeMinLevel(value: string) {
-    minLevel = ((...[v = LogLevel.Trace]) => v)(value as LogLevel)
+    const parseMinLevelArgs: LogLevelParseRequest = {
+      value,
+      fallback: LogLevel.Trace,
+    }
+    minLevel = parseLogLevel(parseMinLevelArgs)
     offset = 0
     void load()
   }
 
   function changeCaptureLevel(value: string) {
-    captureLevel = ((...[v = LogLevel.Info]) => v)(value as LogLevel)
+    const parseCaptureLevelArgs: LogLevelParseRequest = {
+      value,
+      fallback: LogLevel.Info,
+    }
+    captureLevel = parseLogLevel(parseCaptureLevelArgs)
     browserLogRuntime.setLogLevel(captureLevel)
   }
 

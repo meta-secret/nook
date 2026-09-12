@@ -48,11 +48,6 @@ type RuntimeFailureDetails = {
   readonly stack?: string;
 };
 
-type BrowserLogFetchProxyApply = NonNullable<
-  ProxyHandler<typeof globalThis.fetch>["apply"]
->;
-type BrowserLogFetchProxyArguments = Parameters<BrowserLogFetchProxyApply>;
-
 export class RuntimeFailure {
   readonly message: string;
   readonly stack?: string;
@@ -184,6 +179,8 @@ type StructuredLogPersistence = {
   readonly serializedContext: string;
 };
 
+type LogFetchRequest = [input: RequestInfo | URL, init?: RequestInit];
+
 /** `createLogger` path: gate, echo once via originals, then persist. */
 type LogRecordRequest = {
   readonly level: LogLevel;
@@ -296,9 +293,16 @@ class BrowserLogRuntime {
   private parseLevel(raw: string): LogLevelParse {
     if (typeof raw !== "string") return { kind: LogLevelParseKind.Invalid };
     const value = raw.trim().toLowerCase();
-    return LOG_LEVELS.includes(value as LogLevel)
-      ? { kind: LogLevelParseKind.Valid, level: value as LogLevel }
-      : { kind: LogLevelParseKind.Invalid };
+    switch (value) {
+      case LogLevel.Error:
+      case LogLevel.Warn:
+      case LogLevel.Info:
+      case LogLevel.Debug:
+      case LogLevel.Trace:
+        return { kind: LogLevelParseKind.Valid, level: value };
+      default:
+        return { kind: LogLevelParseKind.Invalid };
+    }
   }
 
   private initialLevel(): LogLevel {
@@ -520,20 +524,22 @@ class BrowserLogRuntime {
     });
 
     window.addEventListener("unhandledrejection", (event) => {
-      const reason = event.reason;
-      if (reason instanceof Error && this.isIgnoredErrorSource(reason.stack))
+      if (
+        event.reason instanceof Error &&
+        this.isIgnoredErrorSource(event.reason.stack)
+      )
         return;
       const message =
-        reason instanceof Error
-          ? `${reason.name}: ${reason.message}`
-          : this.stringifyArgs([reason]);
+        event.reason instanceof Error
+          ? `${event.reason.name}: ${event.reason.message}`
+          : this.stringifyArgs([event.reason]);
       if (this.isIgnoredErrorSource(message)) return;
       const captureDiagnosticArgs2: Parameters<
         typeof this.captureDiagnostic
       >[0] = {
         level: LogLevel.Error,
         scope: "unhandledrejection",
-        message: `${message}${reason instanceof Error && reason.stack ? ` stack=${reason.stack}` : " stack=unavailable"}`,
+        message: `${message}${event.reason instanceof Error && event.reason.stack ? ` stack=${event.reason.stack}` : " stack=unavailable"}`,
       };
       this.captureDiagnostic(captureDiagnosticArgs2);
     });
@@ -546,37 +552,25 @@ class BrowserLogRuntime {
     };
     if (globalThis.fetch === marker.__nookFetchOuter) return;
 
-    const fetchHandler: ProxyHandler<typeof globalThis.fetch> = {
-      apply: async (
-        ...[
-          target,
-          thisArgument,
-          browserLogFetchArguments,
-        ]: BrowserLogFetchProxyArguments
-      ) => {
-        const [input, init] = browserLogFetchArguments;
-        const response = await Reflect.apply(
-          target,
-          thisArgument,
-          browserLogFetchArguments,
-        );
-        if (!response.ok) {
-          const url = this.sanitizeLogUrl(this.resolveFetchUrl(input));
-          if (!this.isIgnoredErrorSource(url)) {
-            const captureDiagnosticArgs3: Parameters<
-              typeof this.captureDiagnostic
-            >[0] = {
-              level: LogLevel.Warn,
-              scope: "fetch",
-              message: `HTTP ${response.status} ${response.statusText} url=${url} method=${((...[v = "GET"]) => v)(init?.method)}`,
-            };
-            this.captureDiagnostic(captureDiagnosticArgs3);
-          }
+    const originalFetch = globalThis.fetch;
+    const wrapped = async (...fetchRequest: LogFetchRequest): Promise<Response> => {
+      const [input, init] = fetchRequest;
+      const response = await originalFetch(...fetchRequest);
+      if (!response.ok) {
+        const url = this.sanitizeLogUrl(this.resolveFetchUrl(input));
+        if (!this.isIgnoredErrorSource(url)) {
+          const captureDiagnosticArgs3: Parameters<
+            typeof this.captureDiagnostic
+          >[0] = {
+            level: LogLevel.Warn,
+            scope: "fetch",
+            message: `HTTP ${response.status} ${response.statusText} url=${url} method=${((...[v = "GET"]) => v)(init?.method)}`,
+          };
+          this.captureDiagnostic(captureDiagnosticArgs3);
         }
-        return response;
-      },
+      }
+      return response;
     };
-    const wrapped = new Proxy(globalThis.fetch, fetchHandler);
     marker.__nookFetchOuter = wrapped;
     globalThis.fetch = wrapped;
   }

@@ -331,9 +331,11 @@ export class VaultSyncActions {
       };
     }
     if (state.syncProviders.length > 0) {
+      const [syncProvider] = state.syncProviders;
+      if (!syncProvider) return { kind: EventOutboxTargetKind.Unavailable };
       return {
         kind: EventOutboxTargetKind.Remote,
-        args: state.providerWasmArgs(state.syncProviders[0]!),
+        args: state.providerWasmArgs(syncProvider),
       };
     }
     return state.hasRemoteCredentials()

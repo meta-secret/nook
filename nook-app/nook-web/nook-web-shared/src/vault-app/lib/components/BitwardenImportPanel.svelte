@@ -48,7 +48,9 @@
   const busy = $derived(isImporting || isSaving)
 
   function selectFile(event: Event) {
-    const file = (event.currentTarget as HTMLInputElement).files?.[0]
+    const input = event.currentTarget
+    if (!(input instanceof HTMLInputElement)) return
+    const file = input.files?.[0]
     selectedFile = file
       ? { kind: ImportFileSelectionKind.Selected, file }
       : { kind: ImportFileSelectionKind.NotSelected }

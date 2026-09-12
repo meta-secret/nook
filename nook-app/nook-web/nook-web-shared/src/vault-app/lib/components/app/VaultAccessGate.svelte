@@ -25,8 +25,18 @@
     WorkspacePath,
   } from '$lib/app/workspace-route'
   import type { VaultState } from '$lib/vault.svelte'
+  import type { ProviderSetupRequest } from '$lib/auth/providers'
 
   const APP_KIND = configured_vault_application()
+
+  function beginProviderSetup(request: ProviderSetupRequest): void {
+    vault.beginProviderSetup(request)
+  }
+
+  async function removeProvider(id: string): Promise<void> {
+    const removed = await vault.removeProvider(id)
+    if (removed.isErr()) vault.errorMsg = vault.t(removed.error.translationKey)
+  }
 
   let {
     vault,
@@ -119,7 +129,7 @@
         {onUnlock}
         onBeginAddProvider={() => vault.beginAddProvider()}
         onCancelAddProvider={() => vault.cancelAddProvider()}
-        onBeginSetup={(setupRequest) => vault.beginProviderSetup(setupRequest)}
+        onBeginSetup={beginProviderSetup}
         onCancelSetup={() => vault.cancelProviderSetup()}
         onOpenHelp={() => vault.openHelp()}
         {onUseEnrollmentCode}
@@ -137,11 +147,7 @@
         {onStartSentinelGenesis}
         onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelParticipantKey}
         onCreateSentinelGenesisParticipantResponse={onCreateSentinelParticipantResponse}
-        onRemoveProvider={async (id) => {
-          const removed = await vault.removeProvider(id)
-          if (removed.isErr())
-            vault.errorMsg = vault.t(removed.error.translationKey)
-        }}
+        onRemoveProvider={removeProvider}
       />
     {/if}
     <VaultStatusBar

@@ -34,7 +34,8 @@
   }
 
   function handleSectionJump(event: Event) {
-    const select = event.currentTarget as HTMLSelectElement
+    const select = event.currentTarget
+    if (!(select instanceof HTMLSelectElement)) return
     const id = select.value
     if (!id) return
     scrollToSection(id)

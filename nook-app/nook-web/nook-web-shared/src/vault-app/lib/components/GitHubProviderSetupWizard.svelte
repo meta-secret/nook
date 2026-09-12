@@ -2,7 +2,6 @@
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import type { Snippet } from 'svelte'
   import { Cloud, ExternalLink, RefreshCw, ShieldCheck } from '@lucide/svelte'
-  import { buttonVariants } from '$lib/components/ui/button/button.svelte'
   import { Button } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import { DEFAULT_GITHUB_REPO } from '$lib/auth/providers'
@@ -35,6 +34,13 @@
 
   const githubPatUrl =
     'https://github.com/settings/tokens/new?scopes=repo&description=nook'
+
+  const githubTokenButtonClass = cn(
+    'ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+    'bg-primary text-primary-foreground hover:bg-primary/90',
+    'h-9 rounded-md px-3',
+    'w-full sm:w-auto',
+  )
 
   const githubCredentialsReady = $derived(Boolean(githubPat.trim()))
 
@@ -82,10 +88,7 @@
         target="_blank"
         rel="noopener noreferrer"
         data-testid="github-new-token-btn"
-        class={cn(
-          (() => { const buttonVariantsArgs: Parameters<typeof buttonVariants>[0] = { variant: 'default', size: 'sm' }; return buttonVariants(buttonVariantsArgs); })(),
-          'w-full sm:w-auto',
-        )}
+        class={githubTokenButtonClass}
       >
         {vault.t(I18N_KEYS.ProviderSetupCreateTokenGithub)}
         <ExternalLink class="size-3.5" />

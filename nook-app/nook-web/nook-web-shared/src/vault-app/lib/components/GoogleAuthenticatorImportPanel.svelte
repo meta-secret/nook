@@ -110,7 +110,8 @@
   }
 
   async function scanImage(event: Event) {
-    const input = event.currentTarget as HTMLInputElement
+    const input = event.currentTarget
+    if (!(input instanceof HTMLInputElement)) return
     const file = input.files?.[0]
     input.value = ''
     if (!file) return

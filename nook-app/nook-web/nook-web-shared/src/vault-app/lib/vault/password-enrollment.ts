@@ -2,9 +2,7 @@ import {
   select_shared_grant_provider,
   should_flush_shared_storage_grant,
   type SharedStorageGrantCredential,
-  type SharedGrantProviderOutcome,
 } from "$app-wasm";
-export type { SharedGrantProviderOutcome } from "$app-wasm";
 import {
   oauth_access_token,
   unselectedVaultScope,
@@ -21,6 +19,10 @@ export enum SharedStorageTargetKind {
 export type SharedStorageTarget =
   | { kind: SharedStorageTargetKind.NotBound }
   | { kind: SharedStorageTargetKind.Bound; storageTargetId: string };
+
+export type SharedGrantProviderOutcome =
+  | { kind: "authorizationRequired" }
+  | { kind: "existing"; provider: StorageProvider };
 
 export type SharedGrantProviderSearch = {
   readonly providers: StorageProvider[];

@@ -71,6 +71,28 @@ type ExtensionMetadataParse =
       metadata: ExtensionDeploymentMetadata;
     };
 
+type ExtensionMetadataTransport = {
+  readonly channel?: unknown;
+  readonly version?: unknown;
+  readonly extension_id?: unknown;
+  readonly install_method?: unknown;
+  readonly install_url?: unknown;
+};
+
+function isExtensionMetadataTransport(
+  value: unknown,
+): value is ExtensionMetadataTransport {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return false;
+  return (
+    "channel" in value &&
+    "version" in value &&
+    "extension_id" in value &&
+    "install_method" in value &&
+    "install_url" in value
+  );
+}
+
 enum ExtensionMetadataFetchKind {
   Unavailable = "unavailable",
   Loaded = "loaded",
@@ -149,22 +171,21 @@ class ExtensionInstallationBrowser {
   }
 
   private parseExtensionMetadata(value: unknown): ExtensionMetadataParse {
-    if (!value || typeof value !== "object") {
+    if (!isExtensionMetadataTransport(value)) {
       return { kind: ExtensionMetadataParseKind.Invalid };
     }
-    const record = value as Record<string, unknown>;
-    const channel = typeof record.channel === "string" ? record.channel : "";
-    const version = typeof record.version === "string" ? record.version : "";
+    const channel = typeof value.channel === "string" ? value.channel : "";
+    const version = typeof value.version === "string" ? value.version : "";
     const extensionId =
-      typeof record.extension_id === "string" ? record.extension_id : "";
+      typeof value.extension_id === "string" ? value.extension_id : "";
     const installUrl =
-      typeof record.install_url === "string" ? record.install_url.trim() : "";
+      typeof value.install_url === "string" ? value.install_url.trim() : "";
     if (
       !channel ||
       !version ||
       !extensionId ||
       !installUrl ||
-      !this.isExtensionInstallMethod(record.install_method)
+      !this.isExtensionInstallMethod(value.install_method)
     ) {
       return { kind: ExtensionMetadataParseKind.Invalid };
     }
@@ -182,7 +203,7 @@ class ExtensionInstallationBrowser {
         channel,
         version,
         extension_id: extensionId,
-        install_method: record.install_method,
+        install_method: value.install_method,
         install_url: installUrl,
       },
     };

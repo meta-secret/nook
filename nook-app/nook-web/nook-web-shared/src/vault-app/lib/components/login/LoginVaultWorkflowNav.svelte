@@ -47,7 +47,9 @@
     if (!nextWorkflow) return
     onSelect(nextWorkflow.id)
     requestAnimationFrame(() => {
-      const tabs = (event.currentTarget as HTMLElement)
+      const currentTarget = event.currentTarget
+      if (!(currentTarget instanceof HTMLElement)) return
+      const tabs = currentTarget
         .closest('[role="tablist"]')
         ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
       tabs?.[nextIndex]?.focus()
@@ -74,6 +76,7 @@
       onclick={() => onSelect(workflow.id)}
       onkeydown={(event) =>
         (() => {
+          if (!(event instanceof KeyboardEvent)) return
           const handleTabKeydownArgs: Parameters<typeof handleTabKeydown>[0] = {
             event,
             index,

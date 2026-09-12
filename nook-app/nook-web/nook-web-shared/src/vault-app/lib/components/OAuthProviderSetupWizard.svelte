@@ -8,7 +8,6 @@
     ShieldCheck,
     Users,
   } from "@lucide/svelte";
-  import { buttonVariants } from "$lib/components/ui/button/button.svelte";
   import { Button } from "$lib/components/ui/button";
   import SetupWizardStep from "$lib/components/SetupWizardStep.svelte";
   import type {
@@ -129,6 +128,19 @@
   let collaboratorEmail = $state("");
   let sharedFolderRef = $state("");
   let sharedFolderBusy = $state(false);
+
+  const icloudSignInButtonClass = cn(
+    "ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+    "bg-primary text-primary-foreground hover:bg-primary/90",
+    "h-9 rounded-md px-3",
+    "absolute inset-0 w-full sm:w-auto",
+  );
+  const googleSignInButtonClass = cn(
+    "ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+    "bg-primary text-primary-foreground hover:bg-primary/90",
+    "h-9 rounded-md px-3",
+    "w-full sm:w-auto",
+  );
 
   function selectGoogleDriveMode(mode: GoogleDriveMode) {
     vault.selectGoogleDriveMode(mode);
@@ -493,18 +505,7 @@
           <div id="apple-sign-out-button" class="hidden"></div>
           {#if oauthBusy || icloudSignInPreparing}
             <div
-              class={cn(
-                (() => {
-                  const buttonVariantsArgs: Parameters<
-                    typeof buttonVariants
-                  >[0] = {
-                    variant: "default",
-                    size: "sm",
-                  };
-                  return buttonVariants(buttonVariantsArgs);
-                })(),
-                "absolute inset-0 w-full sm:w-auto",
-              )}
+              class={icloudSignInButtonClass}
             >
               {vault.t(I18N_KEYS.ProviderSetupIcloudSigningIn)}
             </div>
@@ -513,17 +514,7 @@
       {:else}
         <button
           type="button"
-          class={cn(
-            (() => {
-              const buttonVariantsArgs2: Parameters<typeof buttonVariants>[0] =
-                {
-                  variant: "default",
-                  size: "sm",
-                };
-              return buttonVariants(buttonVariantsArgs2);
-            })(),
-            "w-full sm:w-auto",
-          )}
+          class={googleSignInButtonClass}
           data-testid="google-sign-in-btn"
           disabled={oauthBusy || oauthOriginUnsupported}
           onclick={() =>

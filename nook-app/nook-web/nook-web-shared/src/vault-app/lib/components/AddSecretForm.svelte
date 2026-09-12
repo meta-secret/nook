@@ -199,16 +199,19 @@
         ? vault.t(I18N_KEYS.AddSecretSaveChanges)
         : vault.t(I18N_KEYS.CommonSave),
   )
+
+  function selectSecretType(type: SecretType): void {
+    selectedTypeState = {
+      kind: SecretTypeSelectionKind.EditingFields,
+      itemType: type,
+    }
+  }
 </script>
 
 {#if selectedTypeState.kind === SecretTypeSelectionKind.ChoosingType && !isEditMode}
   <SecretTypePicker
     {vault}
-    onSelect={(type) =>
-      (selectedTypeState = {
-        kind: SecretTypeSelectionKind.EditingFields,
-        itemType: type,
-      })}
+    onSelect={selectSecretType}
   />
 {:else if selectedTypeState.kind === SecretTypeSelectionKind.EditingFields && selectedTypeState.itemType === SecretType.Passkey && !isEditMode}
   <PasskeyCreationGuidance

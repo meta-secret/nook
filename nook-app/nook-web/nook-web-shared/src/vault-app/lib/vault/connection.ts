@@ -108,10 +108,12 @@ export class VaultConnectionActions {
       }
 
       if (!state.isAuthenticated && state.syncProviders.length > 0) {
+        const [syncProvider] = state.syncProviders;
+        if (!syncProvider) return;
         const syncProviderRequest: Parameters<
           typeof state.syncProviderById
         >[0] = {
-          providerId: state.syncProviders[0]!.id,
+          providerId: syncProvider.id,
           visibility: ProviderSyncVisibility.Quiet,
           failureHandling: ProviderSyncFailureHandling.Capture,
         };
@@ -147,7 +149,9 @@ export class VaultConnectionActions {
       if (
         probeDecision === VaultConnectProbeDecision.ReassessFirstSyncProvider
       ) {
-        const providerArgs = state.providerWasmArgs(state.syncProviders[0]!);
+        const [syncProvider] = state.syncProviders;
+        if (!syncProvider) return;
+        const providerArgs = state.providerWasmArgs(syncProvider);
         const remoteStatus = await state.assessVaultConnectStatus(providerArgs);
         log.debug("loadDb provider re-assess");
         if (remoteStatus.isErr()) {

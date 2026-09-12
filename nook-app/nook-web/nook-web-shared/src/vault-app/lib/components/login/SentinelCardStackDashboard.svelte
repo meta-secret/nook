@@ -96,11 +96,15 @@
       (vault.errorMsg = t(I18N_KEYS.LoginSentinelGenesisCopyFailed)),
   });
 
+  function setActionBusy(value: boolean): void {
+    actionBusy = value;
+  }
+
   const finalization = $derived<
     ConstructorParameters<typeof DashboardInteraction>[0]
   >({
     allowed: canFinalize && !isBusy && !actionBusy,
-    setBusy: (value) => (actionBusy = value),
+    setBusy: setActionBusy,
     action: async () => {
       const finalized = await onFinalize();
       if (finalized.isErr())

@@ -4,7 +4,11 @@
     VaultStorageFailure,
     VaultStorageFailureKind,
   } from "$lib/runtime/storage-failure";
-  import type { LoginCreateVaultChooserProps } from "./login-create-vault-chooser-contract";
+  import type {
+    LoginCreateVaultChooserProps,
+    SentinelGenesisParticipation,
+  } from "./login-create-vault-chooser-contract";
+import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { tick, type ComponentProps } from "svelte";
@@ -124,6 +128,36 @@
   let initiatorKeyLoading = $state(false);
   let initiatorPasskeyRequested = $state(false);
   let importedParticipantResponse = $state("");
+
+  type CardParticipantRequest = {
+    readonly payload: string;
+    readonly participantLabel: string;
+  };
+
+  function participantActionFailure(): SentinelActionResult<void> {
+    return err(
+      new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
+    );
+  }
+
+  function addCardParticipant(
+    request: CardParticipantRequest,
+  ): Promise<SentinelActionResult<void>> {
+    return onAddSentinelGenesisParticipantResponse
+      ? onAddSentinelGenesisParticipantResponse(request)
+      : Promise.resolve(participantActionFailure());
+  }
+
+  function addTerminalParticipant(
+    payload: string,
+  ): Promise<SentinelActionResult<void>> {
+    const terminalParticipantRequest: SentinelGenesisParticipation = {
+      payload,
+    };
+    return onAddSentinelGenesisParticipantResponse
+      ? onAddSentinelGenesisParticipantResponse(terminalParticipantRequest)
+      : Promise.resolve(participantActionFailure());
+  }
 
   $effect(() => {
     if (
@@ -444,20 +478,7 @@
       onPrepareInitiator={() => prepareInitiatorDeviceKeys()}
       onBack={goBack}
       onStart={() => startSentinelGenesis()}
-      onAddParticipant={({ payload, participantLabel }) => {
-        const participantRequest: Parameters<
-          NonNullable<typeof onAddSentinelGenesisParticipantResponse>
-        >[0] = { payload, participantLabel };
-        return onAddSentinelGenesisParticipantResponse
-          ? onAddSentinelGenesisParticipantResponse(participantRequest)
-          : Promise.resolve(
-              err(
-                new VaultStorageFailure(
-                  VaultStorageFailureKind.OperationFailed,
-                ),
-              ),
-            );
-      }}
+      onAddParticipant={addCardParticipant}
       onFinalize={() =>
         onFinalizeSentinelGenesis
           ? onFinalizeSentinelGenesis()
@@ -492,20 +513,7 @@
       isBusy={isBusy || sentinelActionBusy}
       onBack={goBack}
       onStart={() => startSentinelGenesis()}
-      onAddParticipant={(payload) => {
-        const participantRequest: Parameters<
-          NonNullable<typeof onAddSentinelGenesisParticipantResponse>
-        >[0] = { payload };
-        return onAddSentinelGenesisParticipantResponse
-          ? onAddSentinelGenesisParticipantResponse(participantRequest)
-          : Promise.resolve(
-              err(
-                new VaultStorageFailure(
-                  VaultStorageFailureKind.OperationFailed,
-                ),
-              ),
-            );
-      }}
+      onAddParticipant={addTerminalParticipant}
       onFinalize={() =>
         onFinalizeSentinelGenesis
           ? onFinalizeSentinelGenesis()

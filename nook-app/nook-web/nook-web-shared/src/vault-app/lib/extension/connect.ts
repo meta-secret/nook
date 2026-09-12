@@ -23,6 +23,20 @@ type IdentityEnvelopeRequest = {
   >;
   readonly message: ExtensionIdentityHandoffRequestMessage;
 };
+
+type ChromeRuntimeHost = {
+  // eslint-disable-next-line max-params -- Chrome owns this positional API.
+  sendMessage?: (
+    extensionId: string,
+    message: unknown,
+    callback: (response?: unknown) => void,
+  ) => void;
+  lastError?: { message?: string };
+};
+
+type ExtensionBrowserHost = typeof globalThis & {
+  chrome?: { runtime?: ChromeRuntimeHost };
+};
 import { ApplicationPath } from "$lib/runtime/routes";
 import {
   admit_companion_handoff_response,
@@ -188,12 +202,25 @@ export type ExtensionPairingDelivery =
       readonly reason?: ExtensionPairingRejectionReason;
     };
 
-type ExtensionIdentityHandoffResponse = {
-  ok?: boolean;
-  envelope?: unknown;
-  nextNonce?: unknown;
-  reason?: unknown;
-};
+function isAcceptedIdentityHandoffResponse(
+  value: unknown,
+): value is {
+  readonly ok: true;
+  readonly envelope: string;
+  readonly nextNonce: string;
+} {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return false;
+  return (
+    "ok" in value &&
+    value.ok === true &&
+    "envelope" in value &&
+    typeof value.envelope === "string" &&
+    "nextNonce" in value &&
+    typeof value.nextNonce === "string" &&
+    value.nextNonce.length > 0
+  );
+}
 
 enum ExtensionResponsePhase {
   Pending = "pending",
@@ -253,7 +280,7 @@ class PendingExtensionResponse {
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class ExtensionConnectionBrowser {
-  constructor(private readonly browser: typeof globalThis) {}
+  constructor(private readonly browser: ExtensionBrowserHost) {}
 
   isExtensionConnectPath(pathname: string): boolean {
     const normalized =
@@ -348,21 +375,7 @@ class ExtensionConnectionBrowser {
     responseWait,
   }: ExtensionMessageRequest): Promise<ExtensionMessageDelivery> {
     return new Promise((resolve) => {
-      const runtime = (
-        this.browser as typeof this.browser & {
-          chrome?: {
-            runtime?: {
-              // eslint-disable-next-line max-params -- Chrome owns this positional API.
-              sendMessage?: (
-                extensionId: string,
-                message: unknown,
-                callback: (response?: unknown) => void,
-              ) => void;
-              lastError?: { message?: string };
-            };
-          };
-        }
-      ).chrome?.runtime;
+      const runtime = this.browser.chrome?.runtime;
       const sendMessage = runtime?.sendMessage?.bind(runtime);
       if (!sendMessage) {
         const resolveArgs: Parameters<typeof resolve>[0] = {
@@ -672,21 +685,7 @@ class ExtensionConnectionBrowser {
   }: IdentityEnvelopeRequest): Promise<
     Result<{ envelope: string; nextNonce: string }, VaultStorageFailure>
   > {
-    const runtime = (
-      this.browser as typeof this.browser & {
-        chrome?: {
-          runtime?: {
-            // eslint-disable-next-line max-params -- Existing integration signature is preserved for this lint-only fix.
-            sendMessage?: (
-              extensionId: string,
-              message: unknown,
-              callback: (response?: ExtensionIdentityHandoffResponse) => void,
-            ) => void;
-            lastError?: { message?: string };
-          };
-        };
-      }
-    ).chrome?.runtime;
+    const runtime = this.browser.chrome?.runtime;
     if (!runtime?.sendMessage)
       return Promise.resolve(
         err(
@@ -711,12 +710,7 @@ class ExtensionConnectionBrowser {
               );
               return;
             }
-            if (
-              response?.ok === true &&
-              typeof response.envelope === "string" &&
-              typeof response.nextNonce === "string" &&
-              response.nextNonce.length > 0
-            ) {
+            if (isAcceptedIdentityHandoffResponse(response)) {
               resolve(
                 // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
                 ok({

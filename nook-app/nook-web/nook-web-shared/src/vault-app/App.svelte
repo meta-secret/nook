@@ -90,6 +90,21 @@
   const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
   const vault = new VaultState()
   const existingVaultImportLifecycle = new ExistingVaultImportLifecycle(vault)
+
+  type ExistingVaultPasswordUnlock = {
+    readonly entryId: string
+    readonly password: string
+  }
+
+  function unlockExistingVaultWithPassword(
+    request: ExistingVaultPasswordUnlock,
+  ): Promise<void> {
+    return existingVaultImportLifecycle.unlockWithPassword(request)
+  }
+
+  function setSecretsAddOpen(open: boolean): void {
+    secretsAddOpen = open
+  }
   const vaultSecurityRecommendations = $derived(
     assess_vault_security(
       vault.syncProviders.length,
@@ -939,8 +954,7 @@
     onUnlock: handleUnlock,
     onUseEnrollmentCode: handleUseEnrollmentCode,
     onAcceptSentinelOnboardingPackage: handleAcceptSentinelOnboarding,
-    onUnlockWithPassword: (unlockRequest) =>
-      existingVaultImportLifecycle.unlockWithPassword(unlockRequest),
+    onUnlockWithPassword: unlockExistingVaultWithPassword,
     onSwitchVault: () => existingVaultImportLifecycle.leave(),
     onSentinelUnlocked: () => {
       sentinelInvitationRequest = ''
@@ -976,9 +990,7 @@
     onExtensionInstall: () => void handleExtensionInstall(),
     onExtensionConnect: () => void handleExtensionConnect(),
     onSettingsReconnect: handleSettingsReconnect,
-    onEditorOpenChange: (open) => {
-      secretsAddOpen = open
-    },
+    onEditorOpenChange: setSecretsAddOpen,
   }}
   onNavigateHome={navigateHome}
   onToggleColorMode={toggleColorMode}
