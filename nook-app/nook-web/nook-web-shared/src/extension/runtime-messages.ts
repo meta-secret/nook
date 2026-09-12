@@ -29,6 +29,7 @@ import {
 import {
   RuntimeMessageEnvelope as RuntimeMessageEnvelopeSchema,
   BeginExtensionPairingMessage as BeginExtensionPairingMessageSchema,
+  ExtensionEventLogRecord as ExtensionEventLogRecordSchema,
   ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageSchema,
   OpenSimpleVaultMessage as OpenSimpleVaultMessageSchema,
 } from "./lifecycle-runtime-messages";
@@ -97,28 +98,40 @@ export class ExtensionPairingApprovedGrantAdmission {
   > {
     if (!value || typeof value !== "object")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.Payload);
-    const payload = value as Record<string, unknown>;
+    const payload = value;
+    if (!("vaultType" in payload))
+      return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType);
     if (payload.vaultType !== "simple")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultType);
-    if (typeof payload.deviceId !== "string")
+    if (!("deviceId" in payload) || typeof payload.deviceId !== "string")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.DeviceId);
-    if (typeof payload.devicePublicKey !== "string")
+    if (
+      !("devicePublicKey" in payload) ||
+      typeof payload.devicePublicKey !== "string"
+    )
       return err(
         ExtensionPairingApprovedMessageAdmissionFailure.DevicePublicKey,
       );
-    if (typeof payload.deviceSigningPublicKey !== "string")
+    if (
+      !("deviceSigningPublicKey" in payload) ||
+      typeof payload.deviceSigningPublicKey !== "string"
+    )
       return err(
         ExtensionPairingApprovedMessageAdmissionFailure.DeviceSigningPublicKey,
       );
-    if (typeof payload.deviceLabel !== "string")
+    if (!("deviceLabel" in payload) || typeof payload.deviceLabel !== "string")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.DeviceLabel);
-    if (typeof payload.vaultStoreId !== "string")
+    if (
+      !("vaultStoreId" in payload) ||
+      typeof payload.vaultStoreId !== "string"
+    )
       return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultStoreId);
-    if (typeof payload.vaultName !== "string")
+    if (!("vaultName" in payload) || typeof payload.vaultName !== "string")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.VaultName);
-    if (typeof payload.approvedAt !== "string")
+    if (!("approvedAt" in payload) || typeof payload.approvedAt !== "string")
       return err(ExtensionPairingApprovedMessageAdmissionFailure.ApprovedAt);
     if (
+      !("scopes" in payload) ||
       !Array.isArray(payload.scopes) ||
       !payload.scopes.every(
         ExtensionConnectScope.isExtensionConnectScopeValue.bind(
@@ -127,14 +140,30 @@ export class ExtensionPairingApprovedGrantAdmission {
       )
     )
       return err(ExtensionPairingApprovedMessageAdmissionFailure.Scopes);
-    if (
-      !Array.isArray(payload.providers) ||
-      !payload.providers.every((provider) =>
-        new ExtensionStorageProviderPayloadAdmission(provider).parse().isOk(),
-      )
-    )
+    if (!("providers" in payload) || !Array.isArray(payload.providers))
       return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
-    return ok(value as ExtensionPairingApprovedGrant);
+    const providers: ExtensionStorageProviderPayload[] = [];
+    for (const candidate of payload.providers) {
+      const provider = new ExtensionStorageProviderPayloadAdmission(
+        candidate,
+      ).parse();
+      if (provider.isErr())
+        return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
+      providers.push(provider.value);
+    }
+    const grant: ExtensionPairingApprovedGrant = {
+      vaultType: payload.vaultType,
+      deviceId: payload.deviceId,
+      devicePublicKey: payload.devicePublicKey,
+      deviceSigningPublicKey: payload.deviceSigningPublicKey,
+      deviceLabel: payload.deviceLabel,
+      vaultStoreId: payload.vaultStoreId,
+      vaultName: payload.vaultName,
+      approvedAt: payload.approvedAt,
+      scopes: payload.scopes,
+      providers,
+    };
+    return ok(grant);
   }
   static is(value: unknown): value is ExtensionPairingApprovedGrant {
     return ExtensionPairingApprovedGrantAdmission.parse(value).isOk();
@@ -162,8 +191,13 @@ export class ExtensionStorageProviderPayloadAdmission {
     const value = this.value;
     if (!value || typeof value !== "object")
       return err(ExtensionStorageProviderIdentityFailure.Invalid);
-    const provider = value as Record<string, unknown>;
-    if (typeof provider.id !== "string" || provider.id.length === 0)
+    const provider = value;
+    if (
+      !("id" in provider) ||
+      typeof provider.id !== "string" ||
+      provider.id.length === 0 ||
+      !("type" in provider)
+    )
       return err(ExtensionStorageProviderIdentityFailure.Invalid);
     switch (provider.type) {
       case ExtensionStorageProviderType.Local:
@@ -194,27 +228,38 @@ export class ExtensionPairingApprovedMessage {
       return err(
         ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEvent,
       );
-    const record = value as Record<string, unknown>;
-    if (typeof record.eventId !== "string" || record.eventId.length === 0)
+    if (
+      !("eventId" in value) ||
+      typeof value.eventId !== "string" ||
+      value.eventId.length === 0
+    )
       return err(
         ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEventId,
       );
-    if (typeof record.path !== "string" || record.path.length === 0)
+    if (
+      !("path" in value) ||
+      typeof value.path !== "string" ||
+      value.path.length === 0
+    )
       return err(
         ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordPath,
       );
-    if (!ExtensionPairingApprovedMessage.isExtensionEventObject(record.event))
+    if (
+      !("event" in value) ||
+      !ExtensionPairingApprovedMessage.isExtensionEventObject(value.event)
+    )
       return err(
         ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordEvent,
       );
     if (
-      !("schema_version" in record.event) ||
-      typeof record.event.schema_version !== "number"
+      !("schema_version" in value.event) ||
+      typeof value.event.schema_version !== "number" ||
+      !ExtensionEventLogRecordSchema.is(value)
     )
       return err(
         ExtensionPairingApprovedMessageAdmissionFailure.EventLogRecordSchemaVersion,
       );
-    return ok(value as ExtensionEventLogRecord);
+    return ok(value);
   }
   static isExtensionEventObject(
     value: unknown,
@@ -277,7 +322,12 @@ export class ExtensionPairingApprovedMessage {
         "eventLogRecords" in message ? message.eventLogRecords : false,
       );
     if (records.isErr()) return err(records.error);
-    return ok(message as ExtensionPairingApprovedMessage);
+    const admitted: ExtensionPairingApprovedMessage = {
+      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
+      payload: payload.value,
+      eventLogRecords: records.value,
+    };
+    return ok(admitted);
   }
   static is(message: unknown): message is ExtensionPairingApprovedMessage {
     return ExtensionPairingApprovedMessage.parse(message).isOk();
@@ -312,16 +362,21 @@ export class ExtensionIdentityHandoffRequestMessage {
     ) {
       return false;
     }
-    const payload = message.payload as Record<string, unknown>;
+    const { payload } = message;
     return (
+      "recipientPublicKey" in payload &&
       typeof payload.recipientPublicKey === "string" &&
       payload.recipientPublicKey.length > 0 &&
+      "nonce" in payload &&
       typeof payload.nonce === "string" &&
       payload.nonce.length > 0 &&
+      "expectedDeviceId" in payload &&
       typeof payload.expectedDeviceId === "string" &&
       payload.expectedDeviceId.length > 0 &&
+      "expectedDevicePublicKey" in payload &&
       typeof payload.expectedDevicePublicKey === "string" &&
       payload.expectedDevicePublicKey.length > 0 &&
+      "expectedDeviceSigningPublicKey" in payload &&
       typeof payload.expectedDeviceSigningPublicKey === "string" &&
       payload.expectedDeviceSigningPublicKey.length > 0
     );
@@ -371,10 +426,12 @@ export class ExtensionPairedVaultUnlockRequestMessage {
     ) {
       return false;
     }
-    const payload = message.payload as Record<string, unknown>;
+    const { payload } = message;
     return (
+      "requestId" in payload &&
       typeof payload.requestId === "string" &&
       payload.requestId.length > 0 &&
+      "vaultStoreId" in payload &&
       typeof payload.vaultStoreId === "string" &&
       payload.vaultStoreId.length > 0
     );

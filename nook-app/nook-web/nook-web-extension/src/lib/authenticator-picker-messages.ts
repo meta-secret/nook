@@ -38,7 +38,7 @@ export class AuthenticatorPickerQueryMessage {
     requestId: string
     query: string
   }
-  static isNonEmptyString(value: string): value is string {
+  static isNonEmptyString(value: unknown): value is string {
     return typeof value === 'string' && value.length > 0
   }
 
@@ -55,11 +55,12 @@ export class AuthenticatorPickerQueryMessage {
     ) {
       return false
     }
-    const payload =
-      message.payload as AuthenticatorPickerQueryMessage['payload']
+    const { payload } = message
 
     return (
+      'requestId' in payload &&
       AuthenticatorPickerQueryMessage.isNonEmptyString(payload.requestId) &&
+      'query' in payload &&
       typeof payload.query === 'string' &&
       payload.query.length <= MAX_AUTHENTICATOR_SEARCH_LENGTH
     )
@@ -92,12 +93,14 @@ export class AuthenticatorPickerSelectMessage {
     ) {
       return false
     }
-    const payload =
-      message.payload as AuthenticatorPickerSelectMessage['payload']
+    const { payload } = message
 
     return (
+      'requestId' in payload &&
       AuthenticatorPickerQueryMessage.isNonEmptyString(payload.requestId) &&
+      'vaultStoreId' in payload &&
       AuthenticatorPickerQueryMessage.isNonEmptyString(payload.vaultStoreId) &&
+      'secretId' in payload &&
       AuthenticatorPickerQueryMessage.isNonEmptyString(payload.secretId)
     )
   }
@@ -127,10 +130,12 @@ export class AuthenticatorPickerCancelMessage {
     ) {
       return false
     }
-    const payload =
-      message.payload as AuthenticatorPickerCancelMessage['payload']
+    const { payload } = message
 
-    return AuthenticatorPickerQueryMessage.isNonEmptyString(payload.requestId)
+    return (
+      'requestId' in payload &&
+      AuthenticatorPickerQueryMessage.isNonEmptyString(payload.requestId)
+    )
   }
 }
 
@@ -162,23 +167,27 @@ export class WebsiteAuthenticatorSelectedMessage {
     ) {
       return false
     }
-    const payload =
-      message.payload as WebsiteAuthenticatorSelectedMessage['payload']
+    const { payload } = message
 
     if (
+      !('origin' in payload) ||
       !AuthenticatorPickerQueryMessage.isNonEmptyString(payload.origin) ||
+      !('requestId' in payload) ||
       !AuthenticatorPickerQueryMessage.isNonEmptyString(payload.requestId) ||
+      !('account' in payload) ||
       !payload.account ||
       typeof payload.account !== 'object'
     ) {
       return false
     }
-    const account =
-      payload.account as WebsiteAuthenticatorSelectedMessage['payload']['account']
+    const { account } = payload
 
     return (
+      'vaultStoreId' in account &&
       AuthenticatorPickerQueryMessage.isNonEmptyString(account.vaultStoreId) &&
+      'secretId' in account &&
       AuthenticatorPickerQueryMessage.isNonEmptyString(account.secretId) &&
+      'authorizationGeneration' in account &&
       typeof account.authorizationGeneration === 'string' &&
       account.authorizationGeneration.length > 0
     )
@@ -199,12 +208,12 @@ export class WebsiteAuthenticatorCanceledMessage {
   }
   static is(message: unknown): message is WebsiteAuthenticatorCanceledMessage {
     if (!OriginRuntimeMessageSchema.is(message)) return false
-    const payload =
-      message.payload as WebsiteAuthenticatorCanceledMessage['payload']
+    const { payload } = message
 
     return (
       message.type ===
         WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled &&
+      'requestId' in payload &&
       AuthenticatorPickerQueryMessage.isNonEmptyString(payload.requestId)
     )
   }

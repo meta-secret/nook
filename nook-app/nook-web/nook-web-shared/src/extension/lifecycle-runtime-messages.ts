@@ -43,15 +43,18 @@ export class BeginExtensionPairingMessage {
     ) {
       return false;
     }
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-    const payload = message.payload as Record<string, unknown>;
+    const { payload } = message;
     return (
+      "deviceId" in payload &&
       typeof payload.deviceId === "string" &&
       payload.deviceId.length > 0 &&
+      "devicePublicKey" in payload &&
       typeof payload.devicePublicKey === "string" &&
       payload.devicePublicKey.length > 0 &&
+      "deviceSigningPublicKey" in payload &&
       typeof payload.deviceSigningPublicKey === "string" &&
       payload.deviceSigningPublicKey.length > 0 &&
+      "deviceLabel" in payload &&
       typeof payload.deviceLabel === "string" &&
       payload.deviceLabel.length > 0
     );
@@ -65,17 +68,18 @@ export class ExtensionEventLogRecordAdmission {
   // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
   static is(value: unknown): value is ExtensionEventLogRecord {
     if (!value || typeof value !== "object") return false;
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-    const record = value as Record<string, unknown>;
     return (
-      typeof record.eventId === "string" &&
-      record.eventId.length > 0 &&
-      typeof record.path === "string" &&
-      record.path.length > 0 &&
-      !!record.event &&
-      typeof record.event === "object" &&
-      "schema_version" in record.event &&
-      typeof record.event.schema_version === "number"
+      "eventId" in value &&
+      typeof value.eventId === "string" &&
+      value.eventId.length > 0 &&
+      "path" in value &&
+      typeof value.path === "string" &&
+      value.path.length > 0 &&
+      "event" in value &&
+      !!value.event &&
+      typeof value.event === "object" &&
+      "schema_version" in value.event &&
+      typeof value.event.schema_version === "number"
     );
   }
 }
@@ -104,11 +108,12 @@ export class ExtensionLocalEventLogUpdatedMessage {
     ) {
       return false;
     }
-    // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign browser data is narrowed at this adapter boundary.
-    const payload = message.payload as Record<string, unknown>;
+    const { payload } = message;
     return (
+      "vaultStoreId" in payload &&
       typeof payload.vaultStoreId === "string" &&
       payload.vaultStoreId.length > 0 &&
+      "eventLogRecords" in payload &&
       Array.isArray(payload.eventLogRecords) &&
       payload.eventLogRecords.length > 0 &&
       payload.eventLogRecords.every(ExtensionEventLogRecord.is)

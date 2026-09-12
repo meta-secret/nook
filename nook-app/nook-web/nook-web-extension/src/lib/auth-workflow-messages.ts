@@ -94,18 +94,4 @@ export class AuthenticationWorkflowSnapshotIngress {
   static is(value: unknown): value is AuthenticationWorkflowSnapshotMessage {
     return this.admit(value).kind === 'accepted'
   }
-
-  static isAuthenticationPageObservationView(
-    value: unknown,
-  ): value is AuthenticationPageObservationView {
-    try {
-      const observations: AuthenticationPageObservationFactsBatch = {
-        observations: [value as AuthenticationPageObservationView],
-      }
-      bind_authentication_page_observation_facts(observations)
-      return true
-    } catch {
-      return false
-    }
-  }
 }

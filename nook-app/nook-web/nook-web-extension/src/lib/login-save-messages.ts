@@ -44,11 +44,13 @@ export class WebsiteLoginSaveOfferMessage {
     ) {
       return false
     }
-    const payload = message.payload as WebsiteLoginSaveOfferMessage['payload']
+    const { payload } = message
 
     return (
+      'username' in payload &&
       typeof payload.username === 'string' &&
       payload.username.trim().length > 0 &&
+      'password' in payload &&
       typeof payload.password === 'string' &&
       payload.password.length > 0
     )
@@ -92,17 +94,23 @@ export class WebsiteLoginSaveCommitMessage {
     value: unknown,
   ): value is AuthenticationOutcomeObservationView {
     if (!value || typeof value !== 'object') return false
-    const view = value as AuthenticationOutcomeObservationView
     return (
-      typeof view.navigatedAwayFromAuthPath === 'boolean' &&
-      typeof view.authFieldsPresent === 'boolean' &&
-      typeof view.successMarkerPresent === 'boolean' &&
-      typeof view.errorMarkerPresent === 'boolean' &&
-      typeof view.sameDocumentMutation === 'boolean' &&
-      typeof view.inIframe === 'boolean' &&
-      typeof view.elapsedMs === 'number' &&
-      Number.isFinite(view.elapsedMs) &&
-      view.elapsedMs >= 0
+      'navigatedAwayFromAuthPath' in value &&
+      typeof value.navigatedAwayFromAuthPath === 'boolean' &&
+      'authFieldsPresent' in value &&
+      typeof value.authFieldsPresent === 'boolean' &&
+      'successMarkerPresent' in value &&
+      typeof value.successMarkerPresent === 'boolean' &&
+      'errorMarkerPresent' in value &&
+      typeof value.errorMarkerPresent === 'boolean' &&
+      'sameDocumentMutation' in value &&
+      typeof value.sameDocumentMutation === 'boolean' &&
+      'inIframe' in value &&
+      typeof value.inIframe === 'boolean' &&
+      'elapsedMs' in value &&
+      typeof value.elapsedMs === 'number' &&
+      Number.isFinite(value.elapsedMs) &&
+      value.elapsedMs >= 0
     )
   }
 
@@ -114,11 +122,13 @@ export class WebsiteLoginSaveCommitMessage {
     ) {
       return false
     }
-    const payload = message.payload as WebsiteLoginSaveCommitMessage['payload']
+    const { payload } = message
 
     return (
+      'offerId' in payload &&
       typeof payload.offerId === 'string' &&
       payload.offerId.length > 0 &&
+      'evidence' in payload &&
       WebsiteLoginSaveCommitMessage.isOutcomeObservation(payload.evidence)
     )
   }
@@ -144,8 +154,12 @@ export class WebsiteLoginSaveDismissMessage {
     ) {
       return false
     }
-    const payload = message.payload as WebsiteLoginSaveDismissMessage['payload']
+    const { payload } = message
 
-    return typeof payload.offerId === 'string' && payload.offerId.length > 0
+    return (
+      'offerId' in payload &&
+      typeof payload.offerId === 'string' &&
+      payload.offerId.length > 0
+    )
   }
 }

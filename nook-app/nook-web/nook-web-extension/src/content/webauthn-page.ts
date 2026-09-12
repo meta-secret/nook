@@ -102,6 +102,54 @@ type PublicCredentialArgs = {
   result: Record<string, unknown>
 }
 
+type NookPublicCredentialResponse = Record<
+  string,
+  ArrayBuffer | (() => string[]) | (() => number)
+>
+
+type NookPublicCredentialState = {
+  id: string
+  rawId: ArrayBuffer
+  response: NookPublicCredentialResponse
+}
+
+class NookPublicCredential implements Credential {
+  readonly type = 'public-key'
+  readonly authenticatorAttachment = 'cross-platform'
+
+  readonly id: string
+  readonly rawId: ArrayBuffer
+  readonly response: NookPublicCredentialResponse
+
+  constructor(state: NookPublicCredentialState) {
+    this.id = state.id
+    this.rawId = state.rawId
+    this.response = state.response
+  }
+
+  getClientExtensionResults(): AuthenticationExtensionsClientOutputs {
+    return {}
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      id: this.id,
+      rawId: this.id,
+      type: this.type,
+      authenticatorAttachment: this.authenticatorAttachment,
+      clientExtensionResults: {},
+      response: Object.fromEntries(
+        Object.entries(this.response)
+          .filter(
+            (entry): entry is [string, ArrayBuffer] =>
+              entry[1] instanceof ArrayBuffer,
+          )
+          .map(([key, value]) => [key, base64url(value)]),
+      ),
+    }
+  }
+}
+
 function publicCredential({
   ceremony,
   result,
@@ -128,26 +176,8 @@ function publicCredential({
           signature: bytes(result.signature),
           userHandle: bytes(result.userHandle),
         }
-  return {
-    id,
-    rawId,
-    type: 'public-key',
-    authenticatorAttachment: 'cross-platform',
-    response,
-    getClientExtensionResults: () => ({}),
-    toJSON: () => ({
-      id,
-      rawId: id,
-      type: 'public-key',
-      authenticatorAttachment: 'cross-platform',
-      clientExtensionResults: {},
-      response: Object.fromEntries(
-        Object.entries(response)
-          .filter(([, value]) => value instanceof ArrayBuffer)
-          .map(([key, value]) => [key, base64url(value as ArrayBuffer)]),
-      ),
-    }),
-  } as unknown as Credential
+  const credentialState: NookPublicCredentialState = { id, rawId, response }
+  return new NookPublicCredential(credentialState)
 }
 
 type ExtensionCeremonyArgs = {
@@ -165,14 +195,16 @@ async function extensionCeremony({
   if ('mediation' in options && options.mediation === 'conditional')
     return fallback()
   const id = requestId()
-  const request =
-    ceremony === WebsitePasskeyCeremony.Create
-      ? serializeCreation(
-          options.publicKey as PublicKeyCredentialCreationOptions,
-        )
-      : serializeAssertion(
-          options.publicKey as PublicKeyCredentialRequestOptions,
-        )
+  const request = (() => {
+    if (
+      ceremony === WebsitePasskeyCeremony.Create &&
+      'rp' in options.publicKey &&
+      'user' in options.publicKey
+    ) {
+      return serializeCreation(options.publicKey)
+    }
+    return serializeAssertion(options.publicKey)
+  })()
   const timeout = Math.min(
     Math.max(((...[v = 60_000]) => v)(options.publicKey.timeout), 1_000),
     120_000,
@@ -220,10 +252,11 @@ async function extensionCeremony({
           event.data.action === ExtensionResponseAction.Result &&
           event.data.result
         ) {
+          const { result } = event.data
           finish(() => {
             const credentialArgs: Parameters<typeof publicCredential>[0] = {
               ceremony,
-              result: event.data.result!,
+              result,
             }
             return resolve(publicCredential(credentialArgs))
           })
@@ -267,8 +300,7 @@ async function extensionCeremony({
   )
 }
 
-const credentials = navigator.credentials
-const prototype = Object.getPrototypeOf(credentials) as CredentialsContainer
+const prototype = navigator.credentials
 const nativeCreate = prototype.create
 const nativeGet = prototype.get
 

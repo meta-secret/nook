@@ -28,18 +28,14 @@ export class ExtensionPairingStateQueryMessage {
         type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
       }
       chrome.runtime.sendMessage(queryMessage, (runtimeResponse: unknown) => {
-        const response = runtimeResponse as Partial<{
-          ok: true
-          setup: ExtensionReadySetupState
-        }>
         if (
           chrome.runtime.lastError ||
-          !response ||
-          typeof response !== 'object' ||
-          !('ok' in response) ||
-          response.ok !== true ||
-          !('setup' in response) ||
-          !pairingPolicy.isExtensionReadySetupState(response.setup)
+          !runtimeResponse ||
+          typeof runtimeResponse !== 'object' ||
+          !('ok' in runtimeResponse) ||
+          runtimeResponse.ok !== true ||
+          !('setup' in runtimeResponse) ||
+          !pairingPolicy.isExtensionReadySetupState(runtimeResponse.setup)
         ) {
           const unavailable: ExtensionSetupLoad = {
             kind: ExtensionSetupLoadKind.Unavailable,
@@ -49,7 +45,7 @@ export class ExtensionPairingStateQueryMessage {
         }
         const ready: ExtensionSetupLoad = {
           kind: ExtensionSetupLoadKind.Ready,
-          setup: response.setup,
+          setup: runtimeResponse.setup,
         }
         resolve(ready)
       })

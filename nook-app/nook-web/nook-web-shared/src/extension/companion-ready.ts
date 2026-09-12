@@ -14,23 +14,14 @@ type ChromeRuntime = {
   runtime?: { getURL?: (path: string) => string };
 };
 
-type NodeFsReadFileSync = {
-  readFileSync: (path: string) => ArrayLike<number>;
-  existsSync: (path: string) => boolean;
-};
-
-type NodePathSegments = string[];
-
-type NodePathJoin = {
-  join: (...parts: NodePathSegments) => string;
-};
-
 type BunFileApi = {
   file: (path: string) => {
     exists: () => boolean | Promise<boolean>;
     arrayBuffer: () => Promise<ArrayBuffer>;
   };
 };
+
+type CompanionWasmPathSegments = string[];
 
 enum CompanionWasmBytesKind {
   Absent = "absent",
@@ -46,15 +37,18 @@ type CompanionWasmBytes =
  * Must stay free of `import.meta` so classic content-script bundles can parse.
  */
 declare const __NOOK_COMPANION_WASM_BYTES__: string;
+declare const Bun: BunFileApi;
+declare const process: {
+  versions?: { node?: string };
+  cwd?: () => string;
+  env?: Record<string, string>;
+};
 
 const SEALED_COMPANION_WASM_PATH =
   "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm";
 
 function runningUnderNode(): boolean {
-  const nodeProcess = (
-    globalThis as { process?: { versions?: { node?: string } } }
-  ).process;
-  return Boolean(nodeProcess?.versions?.node);
+  return typeof process === "object" && Boolean(process.versions?.node);
 }
 
 function toArrayBuffer(source: ArrayLike<number>): ArrayBuffer {
@@ -86,41 +80,16 @@ function embeddedCompanionWasmBytes(): CompanionWasmBytes {
   return { kind: CompanionWasmBytesKind.Present, bytes: bytes.buffer };
 }
 
-async function importNodeModule<TModule>(specifier: string): Promise<TModule> {
-  // Keep `import()` out of the classic content-script parse tree; Chrome rejects
-  // bare dynamic import syntax even when the Node branch never runs.
-  try {
-    const loader = new Function("specifier", "return import(specifier);") as (
-      specifier: string,
-    ) => Promise<TModule>;
-    return await loader(specifier);
-  } catch {
-    // vitest/vite-node can block Function-constructed import(); eval keeps the
-    // static source free of `import()` while still loading Node builtins.
-    return (await (0, eval)(
-      `import(${JSON.stringify(specifier)})`,
-    )) as Promise<TModule>;
-  }
-}
-
 async function companionWasmDiskCandidates(): Promise<string[]> {
-  const nodeProcess = (
-    globalThis as {
-      process?: { cwd?: () => string; env?: Record<string, string> };
-    }
-  ).process;
   const fromEnv = ((v) => (v ? v : ""))(
-    nodeProcess?.env?.NOOK_COMPANION_WASM_PATH?.trim(),
+    typeof process !== "object"
+      ? ""
+      : process.env?.NOOK_COMPANION_WASM_PATH?.trim(),
   );
-  const cwd = ((v) => (v ? v : ""))(nodeProcess?.cwd?.());
-  let join: NodePathJoin["join"] = (...parts: NodePathSegments) =>
-    parts.join("/");
-  try {
-    const nodePath = await importNodeModule<NodePathJoin>("node:path");
-    join = nodePath.join.bind(nodePath);
-  } catch {
-    // Path joins below still work with the POSIX fallback.
-  }
+  const cwd = ((v) => (v ? v : ""))(
+    typeof process !== "object" ? "" : process.cwd?.(),
+  );
+  const join = (...parts: CompanionWasmPathSegments) => parts.join("/");
   return [
     fromEnv,
     SEALED_COMPANION_WASM_PATH,
@@ -141,11 +110,10 @@ async function readCompanionWasmFromDisk(): Promise<CompanionWasmBytes> {
     return { kind: CompanionWasmBytesKind.Absent };
   }
   const candidates = await companionWasmDiskCandidates();
-  const bun = (globalThis as { Bun?: BunFileApi }).Bun;
-  if (bun) {
+  if (typeof Bun === "object") {
     for (const candidate of candidates) {
       try {
-        const file = bun.file(candidate);
+        const file = Bun.file(candidate);
         if (await file.exists()) {
           return {
             kind: CompanionWasmBytesKind.Present,
@@ -156,20 +124,6 @@ async function readCompanionWasmFromDisk(): Promise<CompanionWasmBytes> {
         // Try the next candidate / Node fs fallback.
       }
     }
-  }
-  try {
-    const nodeFs = await importNodeModule<NodeFsReadFileSync>("node:fs");
-    for (const candidate of candidates) {
-      if (!nodeFs.existsSync(candidate)) {
-        continue;
-      }
-      return {
-        kind: CompanionWasmBytesKind.Present,
-        bytes: toArrayBuffer(nodeFs.readFileSync(candidate)),
-      };
-    }
-  } catch {
-    return { kind: CompanionWasmBytesKind.Absent };
   }
   return { kind: CompanionWasmBytesKind.Absent };
 }

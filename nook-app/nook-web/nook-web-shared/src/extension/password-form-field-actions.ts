@@ -132,8 +132,10 @@ class PasswordFormCredentialInteraction {
   }
 
   setNativeInputValue({ input, value }: NativeInputValueMutation): void {
-    const prototype = Object.getPrototypeOf(input) as HTMLInputElement;
-    const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+    const descriptor = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    );
     if (descriptor?.set) {
       descriptor.set.call(input, value);
     } else {

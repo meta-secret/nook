@@ -53,35 +53,17 @@ class ExtensionConnectScopeCatalog {
       this.requireScopeRuntime().is_extension_connect_scope(value)
     );
   }
-  get VaultAccess(): Extract<ExtensionConnectScope, "vault-access"> {
-    return this.requireScopeRuntime().extension_vault_access_scope() as Extract<
-      ExtensionConnectScope,
-      "vault-access"
-    >;
+  get VaultAccess(): ExtensionConnectScope {
+    return this.requireScopeRuntime().extension_vault_access_scope();
   }
-  get PasswordFilling(): Extract<ExtensionConnectScope, "password-filling"> {
-    return this.requireScopeRuntime().extension_password_filling_scope() as Extract<
-      ExtensionConnectScope,
-      "password-filling"
-    >;
+  get PasswordFilling(): ExtensionConnectScope {
+    return this.requireScopeRuntime().extension_password_filling_scope();
   }
-  get PasskeyManagement(): Extract<
-    ExtensionConnectScope,
-    "passkey-management"
-  > {
-    return this.requireScopeRuntime().extension_passkey_management_scope() as Extract<
-      ExtensionConnectScope,
-      "passkey-management"
-    >;
+  get PasskeyManagement(): ExtensionConnectScope {
+    return this.requireScopeRuntime().extension_passkey_management_scope();
   }
-  get SyncProviderCredentials(): Extract<
-    ExtensionConnectScope,
-    "sync-provider-credentials"
-  > {
-    return this.requireScopeRuntime().extension_sync_provider_credentials_scope() as Extract<
-      ExtensionConnectScope,
-      "sync-provider-credentials"
-    >;
+  get SyncProviderCredentials(): ExtensionConnectScope {
+    return this.requireScopeRuntime().extension_sync_provider_credentials_scope();
   }
 }
 

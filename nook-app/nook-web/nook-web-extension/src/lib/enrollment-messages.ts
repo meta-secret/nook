@@ -26,11 +26,14 @@ export class WebsiteAuthenticatorEnrollPreviewMessage {
     ) {
       return false
     }
-    const payload =
-      message.payload as WebsiteAuthenticatorEnrollPreviewMessage['payload']
+    const { payload } = message
 
-    return WebsiteAuthenticatorEnrollPreviewMessage.isOtpauthTotpUri(
-      payload.otpauthUri,
+    return (
+      'otpauthUri' in payload &&
+      typeof payload.otpauthUri === 'string' &&
+      WebsiteAuthenticatorEnrollPreviewMessage.isOtpauthTotpUri(
+        payload.otpauthUri,
+      )
     )
   }
 }
@@ -58,12 +61,14 @@ export class WebsiteAuthenticatorEnrollStageMessage {
     ) {
       return false
     }
-    const payload =
-      message.payload as WebsiteAuthenticatorEnrollStageMessage['payload']
+    const { payload } = message
 
     return (
+      'vaultStoreId' in payload &&
       typeof payload.vaultStoreId === 'string' &&
       payload.vaultStoreId.length > 0 &&
+      'otpauthUri' in payload &&
+      typeof payload.otpauthUri === 'string' &&
       WebsiteAuthenticatorEnrollPreviewMessage.isOtpauthTotpUri(
         payload.otpauthUri,
       )
@@ -93,10 +98,13 @@ export class WebsiteAuthenticatorEnrollCodeMessage {
     ) {
       return false
     }
-    const payload =
-      message.payload as WebsiteAuthenticatorEnrollCodeMessage['payload']
+    const { payload } = message
 
-    return typeof payload.stageId === 'string' && payload.stageId.length > 0
+    return (
+      'stageId' in payload &&
+      typeof payload.stageId === 'string' &&
+      payload.stageId.length > 0
+    )
   }
 }
 
@@ -123,12 +131,13 @@ export class WebsiteAuthenticatorEnrollConfirmMessage {
     ) {
       return false
     }
-    const payload =
-      message.payload as WebsiteAuthenticatorEnrollConfirmMessage['payload']
+    const { payload } = message
 
     return (
+      'vaultStoreId' in payload &&
       typeof payload.vaultStoreId === 'string' &&
       payload.vaultStoreId.length > 0 &&
+      'stageId' in payload &&
       typeof payload.stageId === 'string' &&
       payload.stageId.length > 0
     )
@@ -157,10 +166,13 @@ export class WebsiteAuthenticatorEnrollDismissMessage {
     ) {
       return false
     }
-    const payload =
-      message.payload as WebsiteAuthenticatorEnrollDismissMessage['payload']
+    const { payload } = message
 
-    return typeof payload.stageId === 'string' && payload.stageId.length > 0
+    return (
+      'stageId' in payload &&
+      typeof payload.stageId === 'string' &&
+      payload.stageId.length > 0
+    )
   }
 }
 
@@ -218,16 +230,19 @@ export class WebsiteAuthenticatorBackupAttachMessage {
     ) {
       return false
     }
-    const payload =
-      message.payload as WebsiteAuthenticatorBackupAttachMessage['payload']
+    const { payload } = message
 
     return (
+      'vaultStoreId' in payload &&
       typeof payload.vaultStoreId === 'string' &&
       payload.vaultStoreId.length > 0 &&
+      'secretId' in payload &&
       typeof payload.secretId === 'string' &&
       payload.secretId.length > 0 &&
+      'codes' in payload &&
       Array.isArray(payload.codes) &&
       payload.codes.every((code) => typeof code === 'string') &&
+      'mode' in payload &&
       (payload.mode === WebsiteAuthenticatorBackupAttachMessageMode.Replace ||
         payload.mode === WebsiteAuthenticatorBackupAttachMessageMode.Merge)
     )

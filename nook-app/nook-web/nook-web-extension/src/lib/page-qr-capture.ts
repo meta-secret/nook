@@ -59,10 +59,10 @@ type DecodedOtpauthCandidates = DecodedOtpauthCandidate[]
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class PageQrCapture {
-  constructor(private readonly browser: typeof globalThis) {}
+  constructor(private readonly browser: BarcodeDetectorGlobal) {}
 
   private barcodeDetectorConstructor(): BarcodeDetectorAvailability {
-    const candidate = (this.browser as BarcodeDetectorGlobal).BarcodeDetector
+    const candidate = this.browser.BarcodeDetector
     return typeof candidate === 'function'
       ? { kind: BarcodeDetectorAvailabilityKind.Available, Detector: candidate }
       : { kind: BarcodeDetectorAvailabilityKind.Unsupported }
@@ -119,7 +119,9 @@ class PageQrCapture {
   pageHasQrEnrollmentHint(): boolean {
     const media = [
       ...this.browser.document.querySelectorAll('canvas, img, svg'),
-    ] as HTMLElement[]
+    ].filter(
+      (element): element is HTMLElement => element instanceof HTMLElement,
+    )
     return media.some(
       (element) =>
         this.isVisibleElement(element) && this.looksLikeQrMedia(element),
@@ -163,7 +165,9 @@ class PageQrCapture {
   private collectQrMedia(): HTMLElement[] {
     const media = [
       ...this.browser.document.querySelectorAll('canvas, img, svg'),
-    ] as HTMLElement[]
+    ].filter(
+      (element): element is HTMLElement => element instanceof HTMLElement,
+    )
     return media
       .filter(
         (element) =>
@@ -175,7 +179,9 @@ class PageQrCapture {
   private collectMarkedOtpauthCandidates(): DecodedOtpauthCandidate[] {
     const elements = [
       ...this.browser.document.querySelectorAll('[data-nook-otpauth-uri]'),
-    ] as HTMLElement[]
+    ].filter(
+      (element): element is HTMLElement => element instanceof HTMLElement,
+    )
     const candidates: DecodedOtpauthCandidate[] = []
     const seen = new Set<string>()
     let index = 0

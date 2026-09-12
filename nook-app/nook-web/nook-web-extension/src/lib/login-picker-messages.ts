@@ -36,7 +36,7 @@ export class LoginPickerQueryMessage {
     requestId: string
     query: string
   }
-  static isNonEmptyString(value: string): value is string {
+  static isNonEmptyString(value: unknown): value is string {
     return typeof value === 'string' && value.length > 0
   }
 
@@ -52,9 +52,11 @@ export class LoginPickerQueryMessage {
     ) {
       return false
     }
-    const payload = message.payload as LoginPickerQueryMessage['payload']
+    const { payload } = message
     return (
+      'requestId' in payload &&
       LoginPickerQueryMessage.isNonEmptyString(payload.requestId) &&
+      'query' in payload &&
       typeof payload.query === 'string' &&
       payload.query.length <= MAX_LOGIN_SEARCH_LENGTH
     )
@@ -86,11 +88,14 @@ export class LoginPickerSelectMessage {
     ) {
       return false
     }
-    const payload = message.payload as LoginPickerSelectMessage['payload']
+    const { payload } = message
 
     return (
+      'requestId' in payload &&
       LoginPickerQueryMessage.isNonEmptyString(payload.requestId) &&
+      'vaultStoreId' in payload &&
       LoginPickerQueryMessage.isNonEmptyString(payload.vaultStoreId) &&
+      'secretId' in payload &&
       LoginPickerQueryMessage.isNonEmptyString(payload.secretId)
     )
   }
@@ -119,9 +124,12 @@ export class LoginPickerCancelMessage {
     ) {
       return false
     }
-    const payload = message.payload as LoginPickerCancelMessage['payload']
+    const { payload } = message
 
-    return LoginPickerQueryMessage.isNonEmptyString(payload.requestId)
+    return (
+      'requestId' in payload &&
+      LoginPickerQueryMessage.isNonEmptyString(payload.requestId)
+    )
   }
 }
 
@@ -153,22 +161,27 @@ export class WebsiteLoginSelectedMessage {
     ) {
       return false
     }
-    const payload = message.payload as WebsiteLoginSelectedMessage['payload']
+    const { payload } = message
 
     if (
+      !('origin' in payload) ||
       !LoginPickerQueryMessage.isNonEmptyString(payload.origin) ||
+      !('requestId' in payload) ||
       !LoginPickerQueryMessage.isNonEmptyString(payload.requestId) ||
+      !('account' in payload) ||
       !payload.account ||
       typeof payload.account !== 'object'
     ) {
       return false
     }
-    const account =
-      payload.account as WebsiteLoginSelectedMessage['payload']['account']
+    const { account } = payload
 
     return (
+      'vaultStoreId' in account &&
       LoginPickerQueryMessage.isNonEmptyString(account.vaultStoreId) &&
+      'secretId' in account &&
       LoginPickerQueryMessage.isNonEmptyString(account.secretId) &&
+      'authorizationGeneration' in account &&
       typeof account.authorizationGeneration === 'string' &&
       account.authorizationGeneration.length > 0
     )
@@ -189,11 +202,12 @@ export class WebsiteLoginCanceledMessage {
   }
   static is(message: unknown): message is WebsiteLoginCanceledMessage {
     if (!OriginRuntimeMessageSchema.is(message)) return false
-    const payload = message.payload as WebsiteLoginCanceledMessage['payload']
+    const { payload } = message
 
     return (
       message.type ===
         WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled &&
+      'requestId' in payload &&
       LoginPickerQueryMessage.isNonEmptyString(payload.requestId)
     )
   }

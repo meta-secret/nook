@@ -43,22 +43,28 @@ export class AuthenticationOutcomeClassifyMessage {
     ) {
       return false
     }
-    const payload =
-      message.payload as AuthenticationOutcomeClassifyMessage['payload']
+    const { payload } = message
 
+    if (!('observation' in payload)) return false
     const observation = payload.observation
     if (!observation || typeof observation !== 'object') return false
-    const view = observation as AuthenticationOutcomeObservationView
     return (
-      typeof view.navigatedAwayFromAuthPath === 'boolean' &&
-      typeof view.authFieldsPresent === 'boolean' &&
-      typeof view.successMarkerPresent === 'boolean' &&
-      typeof view.errorMarkerPresent === 'boolean' &&
-      typeof view.sameDocumentMutation === 'boolean' &&
-      typeof view.inIframe === 'boolean' &&
-      typeof view.elapsedMs === 'number' &&
-      Number.isFinite(view.elapsedMs) &&
-      view.elapsedMs >= 0 &&
+      'navigatedAwayFromAuthPath' in observation &&
+      typeof observation.navigatedAwayFromAuthPath === 'boolean' &&
+      'authFieldsPresent' in observation &&
+      typeof observation.authFieldsPresent === 'boolean' &&
+      'successMarkerPresent' in observation &&
+      typeof observation.successMarkerPresent === 'boolean' &&
+      'errorMarkerPresent' in observation &&
+      typeof observation.errorMarkerPresent === 'boolean' &&
+      'sameDocumentMutation' in observation &&
+      typeof observation.sameDocumentMutation === 'boolean' &&
+      'inIframe' in observation &&
+      typeof observation.inIframe === 'boolean' &&
+      'elapsedMs' in observation &&
+      typeof observation.elapsedMs === 'number' &&
+      Number.isFinite(observation.elapsedMs) &&
+      observation.elapsedMs >= 0 &&
       'timeoutMs' in payload &&
       typeof payload.timeoutMs === 'number' &&
       Number.isFinite(payload.timeoutMs) &&

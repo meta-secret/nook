@@ -114,15 +114,21 @@ class WebAuthnRuntimeTransport<T> {
   }
 }
 
+function isPasskeyOption(value: unknown): value is PasskeyOption {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'vaultStoreId' in value &&
+    typeof value.vaultStoreId === 'string' &&
+    'vaultName' in value &&
+    typeof value.vaultName === 'string'
+  )
+}
+
 function validOptions(value: unknown): PasskeyOption[] {
   if (!Array.isArray(value)) return []
-  return value.filter((option): option is PasskeyOption => {
-    if (!option || typeof option !== 'object') return false
-    const row = option as Record<string, unknown>
-    return (
-      typeof row.vaultStoreId === 'string' && typeof row.vaultName === 'string'
-    )
-  })
+  const candidates: readonly unknown[] = value
+  return candidates.filter(isPasskeyOption)
 }
 
 function removePrompt(requestId: string): void {

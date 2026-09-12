@@ -27,16 +27,21 @@ export type AuthenticationSubmissionObservation = {
 
 const ISOLATED_BRIDGE_STATE = "__nookAuthenticationDirectSubmitBridgeV1";
 
+type AuthenticationSubmissionBridgeBrowser = typeof globalThis & {
+  __nookAuthenticationDirectSubmitBridgeV1?: AuthenticationDirectSubmitBridgeState;
+};
+
 /** Owns this browser host’s resources and interaction lifecycle. */
 const AuthenticationSubmissionBridge = class {
-  constructor(private readonly browser: typeof globalThis) {}
+  constructor(
+    private readonly browser: AuthenticationSubmissionBridgeBrowser,
+  ) {}
 
   private isolatedBridgeState(): AuthenticationDirectSubmitBridgeState {
-    const existing = Reflect.get(this.browser, ISOLATED_BRIDGE_STATE);
-    if (typeof existing === "object" && existing)
-      return existing as AuthenticationDirectSubmitBridgeState;
+    const existing = this.browser[ISOLATED_BRIDGE_STATE];
+    if (existing) return existing;
     const state: AuthenticationDirectSubmitBridgeState = {};
-    Reflect.set(this.browser, ISOLATED_BRIDGE_STATE, state);
+    this.browser[ISOLATED_BRIDGE_STATE] = state;
     return state;
   }
 

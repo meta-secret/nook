@@ -54,9 +54,13 @@ export class WebsiteLoginOptionsMessage {
     ) {
       return false
     }
-    const payload = message.payload as WebsiteLoginOptionsMessage['payload']
+    const { payload } = message
 
-    return typeof payload.origin === 'string' && payload.origin.length > 0
+    return (
+      'origin' in payload &&
+      typeof payload.origin === 'string' &&
+      payload.origin.length > 0
+    )
   }
 }
 
@@ -86,13 +90,16 @@ export class WebsiteLoginRevealMessage {
     ) {
       return false
     }
-    const payload = message.payload as WebsiteLoginRevealMessage['payload']
+    const { payload } = message
 
     return (
+      'origin' in payload &&
       typeof payload.origin === 'string' &&
       payload.origin.length > 0 &&
+      'vaultStoreId' in payload &&
       typeof payload.vaultStoreId === 'string' &&
       payload.vaultStoreId.length > 0 &&
+      'secretId' in payload &&
       typeof payload.secretId === 'string' &&
       payload.secretId.length > 0 &&
       (!('authorizationGeneration' in payload) ||
@@ -144,14 +151,16 @@ export class WebsiteAuthenticatorFillMessage {
     ) {
       return false
     }
-    const payload =
-      message.payload as WebsiteAuthenticatorFillMessage['payload']
+    const { payload } = message
 
     return (
+      'vaultStoreId' in payload &&
       typeof payload.vaultStoreId === 'string' &&
       payload.vaultStoreId.length > 0 &&
+      'secretId' in payload &&
       typeof payload.secretId === 'string' &&
       payload.secretId.length > 0 &&
+      'authorizationGeneration' in payload &&
       typeof payload.authorizationGeneration === 'string' &&
       payload.authorizationGeneration.length > 0
     )
