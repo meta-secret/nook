@@ -1,15 +1,15 @@
-import { err, ok, type Result } from "neverthrow";
+import { err, ok, type Result } from 'neverthrow';
 
-import { DevGitHubGateway } from "./dev-github.ts";
-import { DevGitRepository, DevelopmentWorktreeSelection } from "./dev-git.ts";
-import { DevLock, DevLockName, type DevLockLease } from "./dev-lock.ts";
+import { DevGitHubGateway } from './dev-github.ts';
+import { DevGitRepository, DevelopmentWorktreeSelection } from './dev-git.ts';
+import { DevLock, DevLockName, type DevLockLease } from './dev-lock.ts';
 import {
   DevFailureKind,
   type CommandRunner,
   type DevFailure,
   type WorktreeRecord,
   WorktreeState,
-} from "./dev-types.ts";
+} from './dev-types.ts';
 
 /** Owns the bounded dependency wiring shared by the three manual commands. */
 export class DevDeliveryWorkspace {

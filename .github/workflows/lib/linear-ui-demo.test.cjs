@@ -205,7 +205,7 @@ test('requires the requested workflow state type', () => {
 })
 
 test('keeps the Linear credential out of the untrusted pull request workflow', async () => {
-  const workflows = path.join(__dirname, '..', 'workflows')
+  const workflows = path.join(__dirname, '..')
   const [pullRequestWorkflow, trustedWorkflow] = await Promise.all([
     fs.readFile(path.join(workflows, 'pr.yml'), 'utf8'),
     fs.readFile(path.join(workflows, 'linear-ui-demo.yml'), 'utf8'),

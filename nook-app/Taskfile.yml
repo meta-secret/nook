@@ -175,7 +175,7 @@ tasks:
       Format all projects with one shared tool-only image. This task never
       compiles products, runs tests, or reads or publishes registry caches.
     cmds:
-      - bash "{{.REPO_ROOT}}/.github/scripts/format-host-apply.sh"
+      - bash "{{.REPO_ROOT}}/.github/formatting/format-host-apply.sh"
 
   format:check:
     desc: Check formatting for all projects in Docker.

@@ -103,7 +103,7 @@ export type AuditedRuntimeSourceRequest = {
 
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
-    '.github/scripts/dockerized-rust.test.ts',
+    'infra/contracts/dockerized-rust.test.ts',
     '6023a6f3261854070bdece7f6242555800d38906030e1c8a4887a6d7fb76a81f',
   ],
   [
@@ -111,7 +111,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     '4476880c01a245ebf6aa42b3e15a7a4f8dfa433c2d43f5bfb80265aa83fb6989',
   ],
   [
-    '.github/scripts/arc-hive-render-contract.ts',
+    'infra/contracts/arc-hive-render-contract.ts',
     '6e3f9ec99a5f65a720e8af6e9c9331d76750148c58d3cecdc9569352a9b93ad1',
   ],
   [
@@ -119,8 +119,8 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     '414fe9bbc3c8405974607ccd0ff34892084d1047322dbd26072b4b19cd2ec0f5',
   ],
   [
-    '.github/scripts/format-host-apply.test.sh',
-    '0195b80c094c72742e330829e5f818ae900d5f89130c6c4270fd0844f11de038',
+    '.github/formatting/format-host-apply.test.sh',
+    'e44aea2003c2c450684c4a1ab5ae85d76d2adeba855840e77c2a2b1fd83ff280',
   ],
   [
     'agentic-ai/ci-agent/scripts/exit-smoke.mjs',
@@ -135,15 +135,15 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     '1132f276fed615ce28a10a8a869c54d7b68c9174b2c2bb12865d9f5277042e38',
   ],
   [
-    '.github/scripts/services-network-repair-test.ts',
+    'infra/contracts/services-network-repair-test.ts',
     '5f31d641f1e009e7d018ebfbb9ebea63a165baad1a7bc288d96af457137daaa2',
   ],
   [
-    '.github/scripts/k0s-cni-migration-test.ts',
+    'infra/contracts/k0s-cni-migration-test.ts',
     '95a0b4d0988be5f2948a1bf8e7895c14d0bb7b405d30c619d93481f272baf0ba',
   ],
   [
-    '.github/scripts/k0s-firewall-rollback-test.ts',
+    'infra/contracts/k0s-firewall-rollback-test.ts',
     '29a99be57360e1471993627d63f0d4064ae0b76e11f0d8a9e6f540e71c3ba7b8',
   ],
   [

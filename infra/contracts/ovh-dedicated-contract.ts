@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { err, ok, type Result } from "neverthrow";
-import { OvhDocument } from "../../infra/providers/ovh-dedicated-document";
-import { ArcTier, EndpointMode, type DedicatedServerInventory } from "../../infra/providers/ovh-dedicated-contracts";
+import { OvhDocument } from "../providers/ovh-dedicated-document";
+import { ArcTier, EndpointMode, type DedicatedServerInventory } from "../providers/ovh-dedicated-contracts";
 
 enum OvhContractFailureKind { Source = "source", Schema = "schema", Missing = "missing", Forbidden = "forbidden", Inventory = "inventory" }
 interface OvhContractFailure { kind: OvhContractFailureKind; message: string }

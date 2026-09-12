@@ -319,7 +319,7 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let docker_tasks = root.read("nook-app/nook-platform/docker/Taskfile.yml");
     let verifier = root.read(".github/scripts/verify-wasm-gha-cache.sh");
-    let blob_verifier = root.read(".github/scripts/verify-registry-cache-blobs.ts");
+    let blob_verifier = root.read("infra/contracts/verify-registry-cache-blobs.ts");
     let core_bake = root.read("nook-app/nook-platform/nook-core/docker-bake.hcl");
     let product_dockerfile = root.read("nook-app/nook-platform/docker/rust/product.Dockerfile");
 

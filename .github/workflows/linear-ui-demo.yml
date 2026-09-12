@@ -109,7 +109,7 @@ jobs:
               })
             ).data
             const { syncUiDemoIssue } = require(
-              `${process.env.GITHUB_WORKSPACE}/.github/scripts/linear-ui-demo.cjs`,
+              `${process.env.GITHUB_WORKSPACE}/.github/workflows/lib/linear-ui-demo.cjs`,
             )
             const issue = await syncUiDemoIssue({
               apiKey: process.env.LINEAR_API_KEY,
@@ -177,7 +177,7 @@ jobs:
               transitionUiDemoIssue,
               UiDemoIssueTransitionKind,
             } = require(
-              `${process.env.GITHUB_WORKSPACE}/.github/scripts/linear-ui-demo.cjs`,
+              `${process.env.GITHUB_WORKSPACE}/.github/workflows/lib/linear-ui-demo.cjs`,
             )
             const result = await transitionUiDemoIssue({
               apiKey: process.env.LINEAR_API_KEY,

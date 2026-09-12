@@ -37,7 +37,7 @@ jobs:
         uses: ./.github/actions/nook-node-setup
 
       - name: Test base coverage artifact resolver
-        run: node --test .github/scripts/base-coverage-artifact.test.cjs
+        run: node --test .github/workflows/lib/base-coverage-artifact.test.cjs
 
       - name: Download Rust coverage handoff
         uses: actions/download-artifact@v8
@@ -79,7 +79,7 @@ jobs:
             const {
               BaseCoverageArtifactKind,
               findBaseCoverageArtifact,
-            } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/base-coverage-artifact.cjs`)
+            } = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/lib/base-coverage-artifact.cjs`)
             const result = await findBaseCoverageArtifact({
               github,
               owner: context.repo.owner,

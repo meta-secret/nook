@@ -58,7 +58,7 @@ jobs:
               incidentPathForRun,
               isStaleMainAttempt,
               retireSuccessfulMainIssue,
-            } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/main-failure-handoff.cjs`)
+            } = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/lib/main-failure-handoff.cjs`)
 
             const eventRun = context.payload.workflow_run
             const run = (

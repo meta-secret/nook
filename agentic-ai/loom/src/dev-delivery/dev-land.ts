@@ -1,6 +1,6 @@
-import { err, ok, type Result } from "neverthrow";
+import { err, ok, type Result } from 'neverthrow';
 
-import { DevDeliveryWorkspace, DevWorkspaceGuard } from "./dev-workspace.ts";
+import { DevDeliveryWorkspace, DevWorkspaceGuard } from './dev-workspace.ts';
 import {
   Ancestry,
   DevFailureKind,
@@ -9,11 +9,11 @@ import {
   type BranchName,
   type CommitSha,
   type DevFailure,
-} from "./dev-types.ts";
+} from './dev-types.ts';
 
 export enum DevLandMode {
-  Merged = "merged",
-  AlreadyPresent = "already-present",
+  Merged = 'merged',
+  AlreadyPresent = 'already-present',
 }
 
 export interface DevLandOutcome {
@@ -47,7 +47,7 @@ export class DevLandCommand {
       return err({
         kind: DevFailureKind.Race,
         message:
-          "The feature branch is not pushed at its exact current commit; push the feature branch before landing",
+          'The feature branch is not pushed at its exact current commit; push the feature branch before landing',
       });
     }
 
@@ -77,7 +77,7 @@ export class DevLandCommand {
     if (!currentFeature.value.equals(request.featureBranch)) {
       return err({
         kind: DevFailureKind.Race,
-        message: "The feature worktree branch changed while landing was queued",
+        message: 'The feature worktree branch changed while landing was queued',
       });
     }
     const currentSha = this.workspace.git.head();
@@ -85,14 +85,16 @@ export class DevLandCommand {
     if (!currentSha.value.equals(request.featureSha)) {
       return err({
         kind: DevFailureKind.Race,
-        message: "The feature worktree commit changed while landing was queued",
+        message: 'The feature worktree commit changed while landing was queued',
       });
     }
     const cleanFeature = new DevWorkspaceGuard(this.workspace).requireClean(
       this.workspace.root,
     );
     if (cleanFeature.isErr()) return err(cleanFeature.error);
-    const remoteFeature = this.workspace.git.remoteBranch(request.featureBranch);
+    const remoteFeature = this.workspace.git.remoteBranch(
+      request.featureBranch,
+    );
     if (remoteFeature.isErr()) return err(remoteFeature.error);
     if (
       remoteFeature.value.presence !== RemoteBranchPresence.Present ||
@@ -100,7 +102,7 @@ export class DevLandCommand {
     ) {
       return err({
         kind: DevFailureKind.Race,
-        message: "The pushed feature branch changed before its local landing",
+        message: 'The pushed feature branch changed before its local landing',
       });
     }
 
@@ -150,7 +152,8 @@ export class DevLandCommand {
     if (included.value !== Ancestry.Ancestor) {
       return err({
         kind: DevFailureKind.Conflict,
-        message: "The local dev merge completed without retaining the feature commit",
+        message:
+          'The local dev merge completed without retaining the feature commit',
       });
     }
     return ok({
@@ -168,7 +171,8 @@ export class DevLandCommand {
     ) {
       return err({
         kind: DevFailureKind.Configuration,
-        message: "dev:land requires a feature branch; managed main/dev branches are not callable features",
+        message:
+          'dev:land requires a feature branch; managed main/dev branches are not callable features',
       });
     }
     return ok();

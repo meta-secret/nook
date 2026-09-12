@@ -4,21 +4,21 @@ import {
   rmdirSync,
   unlinkSync,
   writeFileSync,
-} from "node:fs";
-import { randomUUID } from "node:crypto";
-import { join } from "node:path";
-import { err, ok, type Result } from "neverthrow";
+} from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
+import { err, ok, type Result } from 'neverthrow';
 
-import { DevFailureKind, type DevFailure } from "./dev-types.ts";
+import { DevFailureKind, type DevFailure } from './dev-types.ts';
 
 export enum DevLockName {
-  LocalLanding = "nook-dev-local-landing.lock",
-  Publication = "nook-dev-publication.lock",
+  LocalLanding = 'nook-dev-local-landing.lock',
+  Publication = 'nook-dev-publication.lock',
 }
 
 enum DevLockLeaseState {
-  Held = "held",
-  Released = "released",
+  Held = 'held',
+  Released = 'released',
 }
 
 /** Owns one atomic common-directory lock and releases only its own lease. */
@@ -42,9 +42,9 @@ export class DevLock {
     }
 
     const token = randomUUID();
-    const ownerPath = join(lockPath, "owner");
+    const ownerPath = join(lockPath, 'owner');
     try {
-      writeFileSync(ownerPath, token, { encoding: "utf8", flag: "wx" });
+      writeFileSync(ownerPath, token, { encoding: 'utf8', flag: 'wx' });
     } catch {
       try {
         rmdirSync(lockPath);
@@ -73,7 +73,7 @@ export class DevLockLease {
     if (this.state === DevLockLeaseState.Released) return ok();
     let owner: string;
     try {
-      owner = readFileSync(this.ownerPath, "utf8");
+      owner = readFileSync(this.ownerPath, 'utf8');
     } catch {
       return err({
         kind: DevFailureKind.Lock,

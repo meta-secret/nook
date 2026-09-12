@@ -1,19 +1,19 @@
-import { err, ok, type Result } from "neverthrow";
+import { err, ok, type Result } from 'neverthrow';
 
 export enum DevFailureKind {
-  Configuration = "configuration",
-  Command = "command",
-  Git = "git",
-  GitHub = "github",
-  Evidence = "evidence",
-  DirtyWorktree = "dirty-worktree",
-  Lock = "lock",
-  Conflict = "conflict",
-  Race = "race",
-  Checks = "checks",
-  Reviews = "reviews",
-  Deployment = "deployment",
-  Permission = "permission",
+  Configuration = 'configuration',
+  Command = 'command',
+  Git = 'git',
+  GitHub = 'github',
+  Evidence = 'evidence',
+  DirtyWorktree = 'dirty-worktree',
+  Lock = 'lock',
+  Conflict = 'conflict',
+  Race = 'race',
+  Checks = 'checks',
+  Reviews = 'reviews',
+  Deployment = 'deployment',
+  Permission = 'permission',
 }
 
 export interface DevFailure {
@@ -49,9 +49,9 @@ export class BranchName {
   static parse(input: string): Result<BranchName, DevFailure> {
     if (
       input.length === 0 ||
-      input.startsWith("-") ||
-      input.includes("..") ||
-      input.includes("@{") ||
+      input.startsWith('-') ||
+      input.includes('..') ||
+      input.includes('@{') ||
       !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/u.test(input)
     ) {
       return err({
@@ -72,13 +72,13 @@ export class BranchName {
 }
 
 export enum ManagedBranch {
-  Main = "main",
-  Dev = "dev",
+  Main = 'main',
+  Dev = 'dev',
 }
 
 export enum WorktreeBranchKind {
-  Branch = "branch",
-  Detached = "detached",
+  Branch = 'branch',
+  Detached = 'detached',
 }
 
 export type WorktreeBranch =
@@ -106,18 +106,18 @@ export class WorktreeRecord {
 }
 
 export enum WorktreeState {
-  Clean = "clean",
-  Dirty = "dirty",
+  Clean = 'clean',
+  Dirty = 'dirty',
 }
 
 export enum Ancestry {
-  Ancestor = "ancestor",
-  NotAncestor = "not-ancestor",
+  Ancestor = 'ancestor',
+  NotAncestor = 'not-ancestor',
 }
 
 export enum RemoteBranchPresence {
-  Present = "present",
-  Absent = "absent",
+  Present = 'present',
+  Absent = 'absent',
 }
 
 export type RemoteBranchSnapshot =
@@ -132,8 +132,8 @@ export type RemoteBranchSnapshot =
     };
 
 export enum CommandExecutable {
-  Git = "git",
-  GitHub = "gh",
+  Git = 'git',
+  GitHub = 'gh',
 }
 
 export interface CommandRequest {
@@ -216,7 +216,7 @@ export class RepositorySlug {
   ) {}
 
   static parse(input: string): Result<RepositorySlug, DevFailure> {
-    const parts = input.trim().split("/");
+    const parts = input.trim().split('/');
     const owner = parts[0];
     const repository = parts[1];
     if (
@@ -283,17 +283,17 @@ export interface ManagedRemoteSnapshot {
 }
 
 export enum PullRequestState {
-  Open = "OPEN",
-  Closed = "CLOSED",
-  Merged = "MERGED",
+  Open = 'OPEN',
+  Closed = 'CLOSED',
+  Merged = 'MERGED',
 }
 
 export enum PullRequestReviewDecision {
-  Approved = "APPROVED",
-  ChangesRequested = "CHANGES_REQUESTED",
-  ReviewRequired = "REVIEW_REQUIRED",
-  Empty = "EMPTY",
-  Unknown = "UNKNOWN",
+  Approved = 'APPROVED',
+  ChangesRequested = 'CHANGES_REQUESTED',
+  ReviewRequired = 'REVIEW_REQUIRED',
+  Empty = 'EMPTY',
+  Unknown = 'UNKNOWN',
 }
 
 export interface PullRequestStatus {

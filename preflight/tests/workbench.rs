@@ -975,7 +975,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     }
     let pre_push_task = RepositoryFixture::repository_root().read(".task/agentic-ai.yml");
     let budget_guard =
-        RepositoryFixture::repository_root().read(".github/scripts/pr-authored-budget.ts");
+        RepositoryFixture::repository_root().read("agentic-ai/loom/src/commands/pr-authored-budget.ts");
     assert!(
         workflow.contains("uses unsupported stacked-PR metadata")
             && !workflow.contains("core.setOutput('multi_pr', 'true')")
@@ -985,7 +985,7 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "implementation automation must reject legacy stack metadata and omit multi-PR materialization"
     );
     assert!(
-        pre_push_task.contains("bun .github/scripts/pr-authored-budget.ts \"{{.PR}}\"")
+        pre_push_task.contains("bun agentic-ai/loom/src/commands/pr-authored-budget.ts \"{{.PR}}\"")
             && budget_guard.contains("PR_ADDITION_LIMIT = 2_000")
             && budget_guard.contains("this.authoredLines += added")
             && !budget_guard.contains("REVIEW_GROWTH_STOP"),
