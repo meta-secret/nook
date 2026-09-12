@@ -63,7 +63,8 @@ class OvhDedicatedCommand {
       const admitted = await new OvhDedicatedGetServer({ credentials: credentials.value, definition }).execute();
       if (admitted.isErr()) return err(admitted.error);
       const server = admitted.value;
-      process.stdout.write(`${server.name}\t${server.ip}\t${server.commercialRange}\t${server.datacenter}\t${server.os}\t${server.state}\n`);
+      const observed = server.toJSON();
+      process.stdout.write(`${observed.name}\t${observed.ip}\t${observed.commercialRange}\t${observed.datacenter}\t${observed.os}\t${observed.state}\n`);
       return ok();
     }
     const context: ProvisionContext = { allowReinstall: args.allowReinstall,

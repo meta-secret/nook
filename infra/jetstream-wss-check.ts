@@ -173,7 +173,10 @@ class JetStreamWssCheck {
     if (this.args.length !== 4)
       return err({ kind: WssProbeFailureKind.Arguments, message: "usage: jetstream-wss-check.ts <endpoint> <work-directory>" });
     const endpoint = this.args[2];
-    const directory = new WssProbeDirectory(this.args[3]);
+    const workingDirectory = this.args[3];
+    if (!endpoint || !workingDirectory)
+      return err({ kind: WssProbeFailureKind.Arguments, message: "usage: jetstream-wss-check.ts <endpoint> <work-directory>" });
+    const directory = new WssProbeDirectory(workingDirectory);
     const credentials = directory.credentials();
     if (credentials.isErr()) return err(credentials.error);
     for (const rejected of [{ user: "", password: "" }, { user: "invalid", password: "invalid" }]) {

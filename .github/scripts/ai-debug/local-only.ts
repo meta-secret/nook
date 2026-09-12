@@ -1,3 +1,19 @@
+interface DebugRoute {
+  request(): { url(): string };
+  continue(): Promise<void>;
+  abort(reason: string): Promise<void>;
+}
+interface DebugWebSocket {
+  url(): string;
+  connectToServer(): void;
+  close(options: { code: number; reason: string }): Promise<void>;
+}
+interface DebugContext {
+  route(pattern: string, handler: (route: DebugRoute) => Promise<void>): Promise<void>;
+  routeWebSocket(pattern: RegExp, handler: (webSocket: DebugWebSocket) => Promise<void>): Promise<void>;
+}
+interface DebugPage { context(): DebugContext }
+
 enum DebugOriginAdmission {
   Allowed = "allowed",
   Blocked = "blocked",
@@ -38,7 +54,7 @@ const allowedOrigins = new Set([
   "wss://localhost:5175",
 ]);
 
-export default async ({ page }) => {
+export default async ({ page }: { page: DebugPage }) => {
   const context = page.context();
 
   await context.route("**/*", async (route) => {

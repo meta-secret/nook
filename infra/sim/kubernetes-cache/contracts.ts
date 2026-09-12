@@ -61,15 +61,18 @@ export class KubectlCommand {
   run(): Result<CommandOutcome, CacheFailure> {
     const request = this.request;
 
-    return new HostCommand({
+    const commandRequest: CommandRequest = {
       label: request.label,
       command: ["kubectl", ...request.command],
       cwd: REPOSITORY_ROOT,
-      input: request.input,
       environment: { ...process.env, KUBECONFIG: request.kubeconfigPath },
-      failurePolicy: request.failurePolicy,
-      output: request.output,
-    }).run();
+      ...(request.input === undefined ? {} : { input: request.input }),
+      ...(request.failurePolicy === undefined
+        ? {}
+        : { failurePolicy: request.failurePolicy }),
+      ...(request.output === undefined ? {} : { output: request.output }),
+    };
+    return new HostCommand(commandRequest).run();
   }
 }
 

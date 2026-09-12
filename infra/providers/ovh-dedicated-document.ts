@@ -134,7 +134,7 @@ export class OvhDocument {
   inventory(): Result<DedicatedServerInventory, OvhFailure> {
     const parsed = inventorySchema.safeParse(this.input);
     if (parsed.success) return ok(parsed.data);
-    const path = parsed.error.issues.length > 0 ? parsed.error.issues[0].path : [];
+    const path = parsed.error.issues[0]?.path ?? [];
     return err(
       this.failure(
         path.length < 2

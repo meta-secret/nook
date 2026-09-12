@@ -789,7 +789,6 @@ class ArcManifestContract {
     if (admittedContract52.isErr()) return err(admittedContract52.error);
     const admittedContract53 = remoteWorkflow.require(
       "inputs.dispatch_nonce || 'default'",
-      "remote dispatches must permit explicitly distinct concurrent cache proofs",
     );
     if (admittedContract53.isErr()) return err(admittedContract53.error);
     const worker = await new ArcWorkerRestoreContract(root).assert();

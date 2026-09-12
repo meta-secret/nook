@@ -92,7 +92,7 @@ class OperatorSshRun {
     } catch { return err({ kind: OperatorSshFailureKind.Command, message: `${input.command} could not start` }); }
     if (result.exitCode !== 0)
       return err({ kind: OperatorSshFailureKind.Command, message: `${input.command} failed with exit ${result.exitCode}` });
-    return ok(result.stdout.toString());
+    return ok(result.stdout?.toString() ?? "");
   }
 }
 

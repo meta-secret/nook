@@ -15,16 +15,26 @@ const SourceTaskFileKind = Object.freeze({
   Present: 'present',
 })
 
+/** @typedef {{ kind: 'missing' } | { kind: 'present', path: string }} SourceTaskFile */
+/** @typedef {{ kind: 'missing' } | { kind: 'present', sha: string }} WorkbenchRemoteFile */
+/** @typedef {{ kind: 'invalid', message: string } | { kind: 'valid', gizmoId: string, issuePath: string }} PlanFrontmatter */
+/** @typedef {{ kind: 'invalid' } | { kind: 'legacy' } | { kind: 'assigned', value: string }} RemoteAssignment */
+
 const gizmoIdPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const issuePathPattern = /^issues\/[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9._-]+)*\.md$/
 
+/** @param {string} content @param {string} field @returns {string[] | false} */
 function frontmatterValues(content, field) {
   const frontmatterMatch = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content)
   if (!frontmatterMatch) return false
   const pattern = new RegExp(`^${field}:\\s*(.*?)\\s*$`, 'gm')
-  return [...frontmatterMatch[1].matchAll(pattern)].map((match) => match[1].trim())
+  return [...frontmatterMatch[1].matchAll(pattern)]
+    .map((match) => match[1])
+    .filter((value) => typeof value === 'string')
+    .map((value) => value.trim())
 }
 
+/** @param {string} content @returns {PlanFrontmatter} */
 function parsePlanFrontmatter(content) {
   const issue = frontmatterValues(content, 'issue')
   const gizmoId = frontmatterValues(content, 'gizmo_id')
@@ -41,6 +51,7 @@ function parsePlanFrontmatter(content) {
   return { kind: 'valid', gizmoId: gizmoId[0], issuePath }
 }
 
+/** @param {string} issuePath @returns {RemoteAssignment} */
 function fetchRemoteIssueAssignment(issuePath) {
   try {
     const content = execFileSync(
@@ -71,6 +82,7 @@ const assignedIssuePath =
   process.env.NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH?.trim() || ''
 const assignedGizmoId =
   process.env.NOOK_WORKBENCH_ASSIGNED_GIZMO_ID?.trim() || ''
+/** @type {SourceTaskFile} */
 let sourceTaskFile = { kind: SourceTaskFileKind.Missing }
 if (typeof process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE === 'string') {
   const path = process.env.NOOK_WORKBENCH_SOURCE_TASK_FILE.trim()
@@ -170,6 +182,7 @@ if (remotePath.startsWith('plans/')) {
   }
 }
 const content = Buffer.from(localContent).toString('base64')
+/** @type {WorkbenchRemoteFile} */
 let remoteFile = { kind: WorkbenchRemoteFileKind.Missing }
 try {
   remoteFile = {

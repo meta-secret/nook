@@ -1,3 +1,9 @@
+/** @typedef {'plan' | 'worklog'} RecordKind */
+/** @typedef {{ kind: 'invalid' } | { kind: 'valid', value: string }} ParsedBudgetValue */
+/** @typedef {{ kind: 'invalid', message?: string } | { kind: 'valid', message: string }} ValidationResult */
+/** @typedef {{ valid: boolean, number: number, scope: string, gizmoId: string, gizmoName: string, predecessorGizmoId: string, estimate: number, evidence: string }} SliceContract */
+/** @typedef {{ kind: 'invalid' } | { kind: 'valid', missionController: string, currentGizmoId: string, owningBoundary: string, ownershipBody: string, estimate: number, currentPrEstimate: number, deliveryShape: string, sequenceMode: string, publicInterfaces: string, currentSlice: string, sequenceBody: string }} BudgetFields */
+
 const recordSections = {
   plan: [
     '## Interpreted request',
@@ -75,6 +81,7 @@ const placeholderPattern =
 const unresolvedPlaceholderPattern =
   /^(?:TBD|Unknown|Unspecified|Pending|To be determined)$/i
 
+/** @param {string} value */
 function isPlaceholder(value) {
   const normalized = value
     .trim()
@@ -83,6 +90,7 @@ function isPlaceholder(value) {
   return placeholderPattern.test(normalized)
 }
 
+/** @param {string} value */
 function isUnresolvedPlaceholder(value) {
   const normalized = value
     .trim()
@@ -91,10 +99,12 @@ function isUnresolvedPlaceholder(value) {
   return unresolvedPlaceholderPattern.test(normalized)
 }
 
+/** @param {string} value */
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/** @param {string} candidate @param {string} label */
 function countBudgetFieldLabels(candidate, label) {
   const fieldPattern = new RegExp(`^- ${escapeRegExp(label)}:`, 'gim')
   let count = 0
@@ -102,6 +112,7 @@ function countBudgetFieldLabels(candidate, label) {
   return count
 }
 
+/** @param {string} budgetSection @param {string} label @returns {ParsedBudgetValue} */
 function parseBudgetFieldValue(budgetSection, label) {
   const fieldPattern = new RegExp(
     `^- ${escapeRegExp(label)}:\\s*(.+?)\\s*$`,
@@ -119,6 +130,7 @@ const functionalOwnerPattern =
 const expertiseProviderPattern =
   'AI|Development core|Security|SRE|Web development'
 
+/** @param {string} value */
 function isExactRepositoryPathList(value) {
   if (value === 'None') return false
   return value.split(',').every((entry) => {
@@ -132,12 +144,14 @@ function isExactRepositoryPathList(value) {
   })
 }
 
+/** @param {string} left @param {string} right */
 function repositoryPathsOverlap(left, right) {
   return (
     left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
   )
 }
 
+/** @param {string} ownershipBody */
 function validateOwnershipUnits(ownershipBody) {
   const lines = ownershipBody
     .trim()
@@ -220,6 +234,7 @@ function validateOwnershipUnits(ownershipBody) {
   return ''
 }
 
+/** @param {string} budgetSection @returns {BudgetFields} */
 function parseBudgetFields(budgetSection) {
   const missionController = parseBudgetFieldValue(
     budgetSection,
@@ -291,6 +306,7 @@ function parseBudgetFields(budgetSection) {
   }
 }
 
+/** @param {string} value @param {boolean} numbered @returns {SliceContract} */
 function parseSliceContract(value, numbered) {
   const emptyContract = {
     valid: false,
@@ -354,10 +370,12 @@ function parseSliceContract(value, numbered) {
   }
 }
 
+/** @param {string} value */
 function normalizedContractValue(value) {
   return value.toLocaleLowerCase('en-US')
 }
 
+/** @param {string} ownershipBody @returns {string[]} */
 function ownershipGizmoIds(ownershipBody) {
   const ownershipGizmoIdPattern = new RegExp(
     `; Gizmo ID: (${gizmoIdGrammar});`,
@@ -369,6 +387,11 @@ function ownershipGizmoIds(ownershipBody) {
     .map((line) => ownershipGizmoIdPattern.exec(line)?.[1])
 }
 
+/**
+ * @param {{ ownershipBody: string }} budgetFields
+ * @param {SliceContract[]} slices
+ * @param {string} assignedGizmoId
+ */
 function validateTrustedGizmoAssignment(
   budgetFields,
   slices,
@@ -384,6 +407,7 @@ function validateTrustedGizmoAssignment(
   return ''
 }
 
+/** @param {{ currentGizmoId: string, ownershipBody: string }} budgetFields @param {SliceContract[]} slices */
 function validateGizmoMapping(budgetFields, slices) {
   const gizmoIds = slices.map((slice) => slice.gizmoId)
   const gizmoNames = slices.map((slice) => normalizedContractValue(slice.gizmoName))
@@ -422,6 +446,7 @@ function validateGizmoMapping(budgetFields, slices) {
   return ''
 }
 
+/** @param {string} candidate @param {string} budgetSection @returns {ValidationResult} */
 function validateBudgetFieldStructure(candidate, budgetSection) {
   for (const { label, pattern } of planBudgetFields) {
     const allMatchCount = countBudgetFieldLabels(candidate, label)
@@ -458,6 +483,7 @@ const planForbiddenPatterns = [
   /<(?:user|assistant|system)>/i,
 ]
 
+/** @param {string} value @returns {string[]} */
 function normalizedWords(value) {
   const [words = []] = [
     value.toLocaleLowerCase('en-US').match(/[\p{L}\p{N}]+/gu),
@@ -465,6 +491,7 @@ function normalizedWords(value) {
   return words
 }
 
+/** @param {string} candidate @param {string} sourceTask */
 function containsSourceTaskExcerpt(candidate, sourceTask) {
   if (!sourceTask) return false
 
@@ -498,6 +525,13 @@ function containsSourceTaskExcerpt(candidate, sourceTask) {
   return false
 }
 
+/**
+ * @param {string} candidate
+ * @param {RecordKind} kind
+ * @param {string[]} [secrets]
+ * @param {string} [sourceTask]
+ * @param {{ assignedGizmoId?: string }} [trustedContext]
+ */
 function validateAgentRecord(
   candidate,
   kind,

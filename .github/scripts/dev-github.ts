@@ -777,7 +777,7 @@ export class DevGitHubGateway {
     for (const deployment of candidates) {
       const statuses = this.deploymentStatuses({
         deployment,
-        repository,
+        repository: repository.value,
         workingDirectory: request.workingDirectory,
       });
       if (statuses.isErr()) return err(statuses.error);

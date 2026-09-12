@@ -2,15 +2,15 @@ import { z } from "zod";
 
 export interface ResourceEnvelope {
   requests?: {
-    cpu?: string;
-    memory?: string;
-    "ephemeral-storage"?: string;
-  };
+    cpu?: string | undefined;
+    memory?: string | undefined;
+    "ephemeral-storage"?: string | undefined;
+  } | undefined;
   limits?: {
-    cpu?: string;
-    memory?: string;
-    "ephemeral-storage"?: string;
-  };
+    cpu?: string | undefined;
+    memory?: string | undefined;
+    "ephemeral-storage"?: string | undefined;
+  } | undefined;
 }
 
 export type ArcEnvironmentVariable =
@@ -22,13 +22,13 @@ export type ArcEnvironmentVariable =
 
 export interface ArcContainer {
   name: string;
-  env?: ArcEnvironmentVariable[];
-  resources?: ResourceEnvelope;
+  env?: ArcEnvironmentVariable[] | undefined;
+  resources?: ResourceEnvelope | undefined;
 }
 
 export interface ArcVolume {
   name: string;
-  hostPath?: { path: string };
+  hostPath?: { path: string } | undefined;
 }
 
 export interface ArcValues {
@@ -37,7 +37,7 @@ export interface ArcValues {
   maxRunners: number;
   template: {
     spec: {
-      runtimeClassName?: string;
+      runtimeClassName?: string | undefined;
       automountServiceAccountToken: boolean;
       initContainers: ArcContainer[];
       containers: ArcContainer[];
@@ -55,14 +55,14 @@ export interface ArcContainerPodTemplate {
 }
 
 export interface WorkflowJob {
-  if?: string;
-  "runs-on"?: string;
-  steps?: Array<{ run?: string; uses?: string }>;
-  uses?: string;
+  if?: string | undefined;
+  "runs-on"?: string | undefined;
+  steps?: Array<{ run?: string | undefined; uses?: string | undefined }> | undefined;
+  uses?: string | undefined;
 }
 
 export interface WorkflowManifest {
-  jobs?: Record<string, WorkflowJob>;
+  jobs?: Record<string, WorkflowJob> | undefined;
 }
 
 const resourceFields = z.object({
@@ -135,6 +135,8 @@ export const workflowSchema: z.ZodType<WorkflowManifest> = z.object({
     .optional(),
 });
 
-export const arcCoordinatorSchema = z.object({
+export const arcCoordinatorSchema: z.ZodType<{
+  template: { spec: { containers: ArcContainer[] } };
+}> = z.object({
   template: z.object({ spec: z.object({ containers: z.array(container) }) }),
 });

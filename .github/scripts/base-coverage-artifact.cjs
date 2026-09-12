@@ -5,6 +5,7 @@ const BaseCoverageArtifactKind = Object.freeze({
   Unavailable: 'unavailable',
 })
 
+/** @param {string} baseSha */
 function coverageArtifactName(baseSha) {
   if (!/^[0-9a-f]{40}$/.test(baseSha)) {
     throw new Error('baseSha must be a full lowercase Git commit SHA')
@@ -12,6 +13,12 @@ function coverageArtifactName(baseSha) {
   return `nook-core-auth-coverage-${baseSha}`
 }
 
+/**
+ * @typedef {{ id: number, name: string, expired?: boolean, workflow_run?: { id?: number } }} Artifact
+ * @typedef {{ path?: string, name?: string, head_branch?: string, head_sha?: string, event?: string, id: number }} WorkflowRun
+ * @typedef {{ paginate: (request: unknown, options: { owner: string, repo: string, name: string, per_page: number }) => Promise<Artifact[]>, rest: { actions: { listArtifactsForRepo: unknown, getWorkflowRun: (options: { owner: string, repo: string, run_id: number }) => Promise<{ data: WorkflowRun }> } } }} GithubClient
+ * @param {{ github: GithubClient, owner: string, repo: string, baseSha: string, defaultBranch: string }} request
+ */
 async function findBaseCoverageArtifact({
   github,
   owner,

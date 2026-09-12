@@ -397,7 +397,7 @@ class ArcWorkloadDrainContract {
     const selectors = Array.from(
       source.matchAll(/active_workloads=.*?\| jq '([^']+)'/gs),
       (match) => match[1],
-    );
+    ).filter((selector): selector is string => typeof selector === "string");
     if (selectors.length !== 2) return { kind: SelectorDecodeKind.Missing };
     return { kind: SelectorDecodeKind.Found, selectors };
   }

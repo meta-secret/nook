@@ -9,7 +9,9 @@ if (import.meta.main) {
       ? CommitSha.parse(rawExpectedSha)
       : DevCli.missingEnvironment("EXPECTED_SHA");
   process.exitCode = expectedSha.isErr()
-    ? DevCli.report(expectedSha)
+    ? DevCli.report(
+        expectedSha.map(() => ({ message: "" })),
+      )
     : DevCli.report(
         new DevPromoteCommand({
           workspace: DevCli.workspace(),

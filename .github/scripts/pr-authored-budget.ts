@@ -92,7 +92,12 @@ export class AuthoredChangeSummary {
           summary.malformedRecords += 1;
           break;
         }
-        path = records[index + 1];
+        const renamedPath = records[index + 1];
+        if (!renamedPath) {
+          summary.malformedRecords += 1;
+          break;
+        }
+        path = renamedPath;
         renamed = true;
         index += 2;
       }

@@ -16,7 +16,7 @@ import {
   RemoteBranchPresence,
   WorktreeBranchKind,
   type WorktreeBranch,
-  type WorktreeRecord,
+  WorktreeRecord,
   WorktreeState,
 } from "./dev-types.ts";
 import { CommitSha as CommitShaValue } from "./dev-types.ts";
@@ -185,7 +185,7 @@ export class DevGitRepository {
       workingDirectory: this.request.root,
     });
     if (output.isErr()) return err(output.error);
-    const common = output.value.trim();
+    const common = output.value.stdout.trim();
     if (!common) {
       return err({
         kind: DevFailureKind.Git,
