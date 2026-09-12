@@ -1,6 +1,10 @@
 import { ProviderSyncFreshness } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
-import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
+import {
+  NativeVaultStorageFailure,
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from '$lib/runtime/storage-failure'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { err, ok } from 'neverthrow'
@@ -31,16 +35,26 @@ describe('joiner vault refresh', () => {
     expect(syncFromStorage).toHaveBeenCalledWith(ProviderSyncFreshness.Forced)
   })
 
-  test('fails promptly when the typed refresh is rejected', async () => {
+  test('does not abort login-gate polling when a provider read is unavailable', async () => {
     const syncFromStorage: VaultState['syncFromStorage'] = vi.fn(async () =>
       err(new NativeVaultStorageFailure(new Error('provider unavailable'))),
+    )
+    installVault(syncFromStorage)
+
+    await refreshJoinerVaultOnLoginGate(ProviderSyncFreshness.Forced)
+    expect(syncFromStorage).toHaveBeenCalledWith(ProviderSyncFreshness.Forced)
+  })
+
+  test('still reports non-provider refresh failures', async () => {
+    const syncFromStorage: VaultState['syncFromStorage'] = vi.fn(async () =>
+      err(new VaultStorageFailure(VaultStorageFailureKind.ManagerUnavailable)),
     )
     installVault(syncFromStorage)
 
     await expect(
       refreshJoinerVaultOnLoginGate(ProviderSyncFreshness.Forced),
     ).rejects.toThrow(
-      `joiner-vault-refresh-rejected:${I18N_KEYS.AuthStorageSyncFailed}`,
+      `joiner-vault-refresh-rejected:${I18N_KEYS.ErrorsEngineUnavailable}`,
     )
   })
 
