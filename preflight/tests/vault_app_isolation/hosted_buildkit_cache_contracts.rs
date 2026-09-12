@@ -1,12 +1,6 @@
 use super::*;
 use anyhow::Context;
 
-macro_rules! workflow_section {
-    ($source:expr, $range:expr, $context:literal) => {
-        $source.get($range).context($context)?
-    };
-}
-
 #[path = "hosted_buildkit_cache_contracts/pr_producer_cache_contract.rs"]
 mod pr_producer_cache_contract;
 use pr_producer_cache_contract::PrProducerCacheContract;
@@ -464,6 +458,39 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let ui_demo_step = ui_demo
         .find("- name: Headless UI demos")
         .context("Main UI demo job must declare its verification step")?;
+    let preflight_publish_step = preflight
+        .get(preflight_publish_id..preflight_publish)
+        .context("Main preflight publication-step section must have valid boundaries")?;
+    let preflight_publish_section = preflight
+        .get(preflight_publish..)
+        .context("Main preflight publication section must have a valid boundary")?;
+    let rust_verification_to_publish = rust
+        .get(rust_verify..rust_publish)
+        .context("Main Rust verification-to-publication section must have valid boundaries")?;
+    let rust_publish_step = rust
+        .get(rust_publish_id..rust_publish)
+        .context("Main Rust publication-step section must have valid boundaries")?;
+    let rust_publish_section = rust
+        .get(rust_publish..)
+        .context("Main Rust publication section must have a valid boundary")?;
+    let wasm_verification_to_publish = wasm
+        .get(wasm_verify..wasm_publish)
+        .context("Main WASM verification-to-publication section must have valid boundaries")?;
+    let wasm_publish_step = wasm
+        .get(wasm_publish_id..wasm_publish)
+        .context("Main WASM publication-step section must have valid boundaries")?;
+    let wasm_publish_section = wasm
+        .get(wasm_publish..)
+        .context("Main WASM publication section must have a valid boundary")?;
+    let web_verification_to_publish = web
+        .get(web_verify..web_publish)
+        .context("Main web verification-to-publication section must have valid boundaries")?;
+    let web_publish_section = web
+        .get(web_publish..)
+        .context("Main web publication section must have a valid boundary")?;
+    let ui_demo_verification = ui_demo
+        .get(ui_demo_step..)
+        .context("Main UI demo verification section must have a valid boundary")?;
     assert!(
         preflight.contains("task preflight")
             && preflight.contains("cache-selection: preflight")
@@ -472,18 +499,8 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && preflight.contains(
                 "cache_publication_outcome: ${{ steps.publish_preflight_cache.outcome }}"
             )
-            && workflow_section!(
-                preflight,
-                preflight_publish_id..preflight_publish,
-                "Main preflight publication-step section must have valid boundaries"
-            )
-            .contains("continue-on-error: true")
-            && workflow_section!(
-                preflight,
-                preflight_publish..,
-                "Main preflight publication section must have a valid boundary"
-            )
-            .contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && preflight_publish_step.contains("continue-on-error: true")
+            && preflight_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && preflight_cache_publish.contains("needs: [preflight]")
             && preflight_cache_publish.contains(
                 "CACHE_PUBLICATION_OUTCOME: ${{ needs.preflight.outputs.cache_publication_outcome }}"
@@ -497,26 +514,11 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && rust.contains("needs: [preflight]") && rust.contains("if: inputs.product_changed")
             && rust_verify < rust_publish_id
             && rust_publish_id < rust_publish
-            && workflow_section!(
-                rust,
-                rust_verify..rust_publish,
-                "Main Rust verification-to-publication section must have valid boundaries"
-            )
-            .contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && rust_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && rust
                 .contains("cache_publication_outcome: ${{ steps.publish_native_cache.outcome }}")
-            && workflow_section!(
-                rust,
-                rust_publish_id..rust_publish,
-                "Main Rust publication-step section must have valid boundaries"
-            )
-            .contains("continue-on-error: true")
-            && workflow_section!(
-                rust,
-                rust_publish..,
-                "Main Rust publication section must have a valid boundary"
-            )
-            .contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && rust_publish_step.contains("continue-on-error: true")
+            && rust_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && rust.contains("cache-selection: native")
             && rust.contains("monitor-buildkit-storage: \"true\"")
             && native_cache_publish.contains("needs: [rust]")
@@ -538,25 +540,10 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && wasm_verify < wasm_node
             && wasm_node < wasm_publish_id
             && wasm_publish_id < wasm_publish
-            && workflow_section!(
-                wasm,
-                wasm_verify..wasm_publish,
-                "Main WASM verification-to-publication section must have valid boundaries"
-            )
-            .contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && wasm_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && wasm.contains("cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}")
-            && workflow_section!(
-                wasm,
-                wasm_publish_id..wasm_publish,
-                "Main WASM publication-step section must have valid boundaries"
-            )
-            .contains("continue-on-error: true")
-            && workflow_section!(
-                wasm,
-                wasm_publish..,
-                "Main WASM publication section must have a valid boundary"
-            )
-            .contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && wasm_publish_step.contains("continue-on-error: true")
+            && wasm_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && wasm_cache_publish.contains("needs: [wasm]")
             && wasm_cache_publish.contains(
                 "CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}"
@@ -577,27 +564,12 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && web.contains("name: main-wasm-${{ github.run_id }}")
             && web_verify < web_publish
             && web_verify < web_browser_image
-            && workflow_section!(
-                web,
-                web_verify..web_publish,
-                "Main web verification-to-publication section must have valid boundaries"
-            )
-            .contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && workflow_section!(
-                web,
-                web_publish..,
-                "Main web publication section must have a valid boundary"
-            )
-            .contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && web_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && web_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && ui_demo.contains("needs: [web]")
             && ui_demo.contains("runs-on: nook-k0s-container")
             && ui_demo.contains("nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
-            && workflow_section!(
-                ui_demo,
-                ui_demo_step..,
-                "Main UI demo verification section must have a valid boundary"
-            )
-            .contains("task _web:test:ui-demo")
+            && ui_demo_verification.contains("task _web:test:ui-demo")
             && !ui_demo.contains("nook-docker-setup")
             && !ui_demo.contains("publish-web-e2e-cache")
             && !main.contains("\n  publish-cache:\n")
