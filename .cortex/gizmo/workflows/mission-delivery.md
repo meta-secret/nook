@@ -60,6 +60,8 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 5. **Compile and review.**
    - Push the coherent feature branch.
    - Authorize PR Steward to run remote build-only execution for that SHA.
+   - For web changes, use `task remote TASK_NAME=web:build` and
+     `task remote TASK_NAME=web:e2e` as applicable.
    - Fast agents review code and required security boundaries.
    - Route fixes to the responsible team and repeat compilation after each push.
 6. **Land the completed feature.**

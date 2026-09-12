@@ -452,8 +452,8 @@ team.
 Ordinary implementation agents return verified committed handoffs to Gizmo.
 Gizmo integrates them, runs **`task loom:pre-push`**, and pushes the exact
 branch head. Gizmo then runs focused builds/tests with
-**`task remote TASK_NAME=<name>`** or batches them with
-**`task remote TASK_NAMES=<name>,<name>`**. Single `preflight`, `rust:ci`, and
+**`task remote TASK_NAME=<name>`**, including **`task remote TASK_NAME=web:build`**
+and **`task remote TASK_NAME=web:e2e`**. Single `preflight`, `rust:ci`, and
 `arc:runtime` selections use disposable ARC runner Pods in k0s. Browser
 selectors execute separately in exact-image Kubernetes Pods; compatible
 build-only selectors may share one ARC batch. When the head is ready, Gizmo

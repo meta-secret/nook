@@ -23,6 +23,8 @@ explicit handoff. Related scope does not transfer ownership. Follow
 - **Evidence**
   - Run the full existing slow PR checks for each selected dev SHA.
   - Preserve applicable browser checks, security-required focused e2e, and opt-ins.
+  - Use `task remote TASK_NAME=web:build` and
+    `task remote TASK_NAME=web:e2e` for focused web build and browser evidence.
   - Bind source checkouts and artifacts to the captured dev head SHA.
   - Freeze origin/dev during validation and promotion.
   - Local dev may continue accepting completed features.
