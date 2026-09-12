@@ -1,34 +1,40 @@
 import { expect, test } from 'bun:test';
+import { z } from 'zod';
 import {
   CortexArticleContractKind,
   CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
   CORTEX_ARTICLE_RESULT_BYTE_LIMIT,
 } from '../src/domain.ts';
 
-type CortexArticleExecutableSkillDefinition = {
-  readonly executionKind: string;
-  readonly id: string;
-  readonly limits: {
-    readonly requestBytes: number;
-    readonly resultBytes: number;
-  };
-  readonly policyPaths: readonly string[];
-  readonly requestKind: string;
-  readonly resultKind: string;
-  readonly schemaVersion: number;
-};
+const CORTEX_ARTICLE_EXECUTABLE_SKILL_DEFINITION_SCHEMA = z
+  .object({
+    executionKind: z.string(),
+    id: z.string(),
+    limits: z
+      .object({ requestBytes: z.number(), resultBytes: z.number() })
+      .strict(),
+    policyPaths: z.array(z.string()),
+    requestKind: z.string(),
+    resultKind: z.string(),
+    schemaVersion: z.number(),
+  })
+  .strict();
 
-type ExecutableSkillPackage = {
-  readonly scripts: Readonly<Record<string, string>>;
-};
+const EXECUTABLE_SKILL_PACKAGE_SCHEMA = z.object({
+  scripts: z.record(z.string(), z.string()),
+});
+
+type CortexArticleExecutableSkillDefinition = z.output<
+  typeof CORTEX_ARTICLE_EXECUTABLE_SKILL_DEFINITION_SCHEMA
+>;
 
 test('keeps the application manifest aligned with the semantic contract', async () => {
   const definitionText = await Bun.file(
     `${import.meta.dir}/../executable-skill.json`,
   ).text();
-  const definition = JSON.parse(
-    definitionText,
-  ) as CortexArticleExecutableSkillDefinition;
+  const definition = CORTEX_ARTICLE_EXECUTABLE_SKILL_DEFINITION_SCHEMA.parse(
+    JSON.parse(definitionText),
+  );
   const expectedDefinition: CortexArticleExecutableSkillDefinition = {
     schemaVersion: 1,
     id: 'cortex-article-structure',
@@ -50,7 +56,9 @@ test('keeps the independent package commands development-only', async () => {
   const packageText = await Bun.file(
     `${import.meta.dir}/../package.json`,
   ).text();
-  const packageDocument = JSON.parse(packageText) as ExecutableSkillPackage;
+  const packageDocument = EXECUTABLE_SKILL_PACKAGE_SCHEMA.parse(
+    JSON.parse(packageText),
+  );
   const expectedScripts: Readonly<Record<string, string>> = {
     check: 'tsc --noEmit',
     lint: 'eslint .',

@@ -63,7 +63,10 @@ export class CortexArticleSchemaFailure {
     const missing = error.issues.find(
       (issue) => issue.path.length > 0 && issue.code === 'invalid_type',
     );
-    const issue = missing ? missing : error.issues[0]!;
+    const issue = missing ? missing : error.issues.at(0);
+    if (!issue) {
+      return new CortexArticleRequestDecodeError({ kind, path });
+    }
     const fieldPresent = issue.path.length > 0;
     const field = issue.path[0];
     const fieldPath = !fieldPresent
