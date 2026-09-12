@@ -69,8 +69,9 @@ Report the blocker instead of reporting an intermediate state as complete.
    - Gizmo creates a fresh PR Steward child with the fixed Luna profile for
      each check-observation iteration on one PR.
    - Wait for the child's result, NATS drain, and exit before the next iteration.
-   - Launch the subscriber as the documented direct Bun process in a foreground
-     PTY. For an explicit stop, send Ctrl-C there and require exit status zero.
+   - Have PR Steward launch the documented direct Bun subscriber in a foreground
+     PTY. For an explicit stop, direct PR Steward to send Ctrl-C there.
+     Require exit status zero.
    - Never stop or switch another Gizmo's independently active child.
    - Route compact review/comment hints by path and line; never transfer bodies through the reactive stream.
    - Treat each matching notification as a hint to issue a bounded PR Steward
@@ -146,4 +147,5 @@ Delivery is complete only when:
   including failed conclusions. The child drains and returns one result.
 - PR closure stops the child with a distinct outcome, not check completion.
 - Gizmo acts on the result before starting another iteration.
-- Gizmo retains final direct reconciliation and the mission completion verdict.
+- Gizmo reconciles final evidence returned by PR Steward.
+- Gizmo retains the mission completion verdict.

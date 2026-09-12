@@ -4,6 +4,10 @@ Gizmo Prime authorizes each PR Steward operation through an ephemeral active
 harness handoff. The handoff is not a scheduler, journal, retry queue, or
 second delivery state machine.
 
+Functional Team Agents send PR-information requests to Gizmo.
+Gizmo supplies the operation packet below and forwards returned evidence to
+the requester. A worker request alone does not authorize Steward execution.
+
 ## Required actions
 
 1. **Send one operation packet.** Gizmo names the repository, target, requested

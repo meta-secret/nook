@@ -42,6 +42,11 @@ the active harness.
 1. Identify the team that owns the requested change.
 2. Discover every Team Agent task and dependency currently known.
 3. Define each bounded task with explicit file scope and acceptance evidence.
+   - Include the [GitHub execution boundary](../../AGENTS.md#github-execution-boundary)
+     in every functional worker prompt.
+   - Tell the worker to request missing PR evidence from Gizmo.
+   - Explicitly prohibit direct `gh` queries, equivalent GitHub access, and
+     PR monitoring, including read-only `gh pr view`.
 4. Check that no other write-capable Team Agent is active.
 5. Start the Team Agent through the active harness in the current checkout.
 6. Let the Team Agent implement and run focused checks.
@@ -62,6 +67,19 @@ writer finishes or stops before another writer begins.
 
 Workers do not create other workers. They do not change task ownership or the
 delivery sequence.
+
+### PR information requests
+
+1. The worker reports the known PR or run target to Gizmo.
+   It names the missing evidence and dependent work.
+2. Gizmo supplies an explicit operation packet to PR Steward.
+   Only PR Steward queries GitHub or starts a monitoring subscription.
+3. PR Steward returns bounded evidence or a blocker to Gizmo.
+4. Gizmo forwards the result to the requesting worker.
+   The worker continues independent in-scope work while waiting when possible.
+
+Missing PR identity is part of the request, not permission for worker discovery.
+An unavailable Steward remains a blocker for the dependent work.
 
 ### Later discovery
 
@@ -89,6 +107,8 @@ Before accepting Team Agent work, verify:
 - only the declared files changed;
 - no other writer ran concurrently;
 - the shared branch contains the accepted result;
-- focused acceptance checks passed; and
+- focused acceptance checks passed;
+- workers requested missing PR evidence through Gizmo without direct GitHub
+  access or monitoring; and
 - Gizmo still owns every external delivery decision and authorization. Any PR
   Steward mutation stays inside the named packet.
