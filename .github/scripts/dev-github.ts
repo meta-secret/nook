@@ -13,6 +13,7 @@ import {
   type CiAttempt,
   CommitSha,
   type DevelopmentCiObservationRequest,
+  type DevelopmentCiAttemptPolicyRequest,
   type DevelopmentPullRequest,
   PullRequestNumber,
   PullRequestReviewDecision,
@@ -38,8 +39,20 @@ export const DevDeliveryContract = {
 
 /** Rejects every non-terminal prior CI attempt before a dev publication. */
 export class DevelopmentCiAttemptPolicy {
-  requireTerminal(attempts: readonly CiAttempt[]): Result<void, DevFailure> {
-    const active = attempts.find((attempt) => attempt.status !== "completed");
+  requireTerminal(
+    request: DevelopmentCiAttemptPolicyRequest,
+  ): Result<void, DevFailure> {
+    if (!request.replacement) return ok();
+    if (request.attempts.length === 0) {
+      return err({
+        kind: DevFailureKind.Checks,
+        message:
+          "No exact-head CI attempt is discoverable for the prior dev pull-request head; refusing to replace it",
+      });
+    }
+    const active = request.attempts.find(
+      (attempt) => attempt.status !== "completed",
+    );
     if (active) {
       return err({
         kind: DevFailureKind.Checks,
@@ -438,7 +451,10 @@ export class DevGitHubGateway {
       if (runId.isErr()) return err(runId.error);
       attempts.push({ runId: runId.value, status: run.status });
     }
-    return new DevelopmentCiAttemptPolicy().requireTerminal(attempts);
+    return new DevelopmentCiAttemptPolicy().requireTerminal({
+      attempts,
+      replacement: request.replacement,
+    });
   }
 
   requirePromotionEvidence(request: PromotionEvidenceRequest): Result<void, DevFailure> {

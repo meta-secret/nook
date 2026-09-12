@@ -103,11 +103,15 @@ export class DevPublishCommand {
             "The existing dev-to-main pull request head differs from origin/dev; refusing to change either snapshot",
         });
       }
-      const priorCi = this.workspace.github.requireDevelopmentCiTerminal({
-        sha: priorPullRequest.value.headSha,
-        workingDirectory: this.workspace.root,
-      });
-      if (priorCi.isErr()) return err(priorCi.error);
+      const replacement = !priorPullRequest.value.headSha.equals(request.devSha);
+      if (replacement) {
+        const priorCi = this.workspace.github.requireDevelopmentCiTerminal({
+          sha: priorPullRequest.value.headSha,
+          workingDirectory: this.workspace.root,
+          replacement,
+        });
+        if (priorCi.isErr()) return err(priorCi.error);
+      }
     }
     if (remote.value.presence === RemoteBranchPresence.Present) {
       const ancestry = this.workspace.git.ancestry({

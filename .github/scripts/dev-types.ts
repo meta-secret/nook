@@ -170,6 +170,7 @@ export interface BuildProofRequest {
 export interface DevelopmentCiObservationRequest {
   readonly sha: CommitSha;
   readonly workingDirectory: string;
+  readonly replacement: boolean;
 }
 
 export class WorkflowRunId {
@@ -246,6 +247,11 @@ export interface BuildProof {
 export interface CiAttempt {
   readonly runId: WorkflowRunId;
   readonly status: string;
+}
+
+export interface DevelopmentCiAttemptPolicyRequest {
+  readonly attempts: readonly CiAttempt[];
+  readonly replacement: boolean;
 }
 
 export interface DevelopmentPullRequest {

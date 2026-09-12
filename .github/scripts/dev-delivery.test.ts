@@ -102,9 +102,20 @@ test("publication CI policy rejects active attempts and permits terminal attempt
   expect(runId.isOk()).toBe(true);
   if (runId.isErr()) return;
   const policy = new DevelopmentCiAttemptPolicy();
-  expect(policy.requireTerminal([{ runId: runId.value, status: "queued" }]).isErr()).toBe(true);
-  expect(policy.requireTerminal([{ runId: runId.value, status: "in_progress" }]).isErr()).toBe(true);
-  expect(policy.requireTerminal([{ runId: runId.value, status: "completed" }]).isOk()).toBe(true);
+  expect(policy.requireTerminal({
+    attempts: [{ runId: runId.value, status: "queued" }],
+    replacement: true,
+  }).isErr()).toBe(true);
+  expect(policy.requireTerminal({
+    attempts: [{ runId: runId.value, status: "in_progress" }],
+    replacement: true,
+  }).isErr()).toBe(true);
+  expect(policy.requireTerminal({
+    attempts: [{ runId: runId.value, status: "completed" }],
+    replacement: true,
+  }).isOk()).toBe(true);
+  expect(policy.requireTerminal({ attempts: [], replacement: true }).isErr()).toBe(true);
+  expect(policy.requireTerminal({ attempts: [], replacement: false }).isOk()).toBe(true);
 });
 
 test("promotion contract keeps the stable aggregate readiness gate", () => {
