@@ -174,7 +174,7 @@ jobs:
   hive:
     name: Hive
     needs: scope
-    if: needs.scope.outputs.dev-pr == 'true' || needs.scope.outputs.hive == 'true'
+    if: needs.scope.outputs.hive == 'true'
     uses: ./.github/workflows/hive.yml
     secrets: inherit
     with:
