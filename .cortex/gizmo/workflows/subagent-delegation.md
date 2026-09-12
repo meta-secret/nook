@@ -23,8 +23,12 @@ the active harness.
 - Use the active harness for Team Agent communication.
 - Do not use another Codex task, thread, cloud task, or external agent as
   delegation transport.
-- Do not create a worktree for a Team Agent.
-- Write-capable Team Agents use the current checkout and current branch.
+- Create exactly one child worktree for each Team Agent from the parent feature
+  worktree's current committed frontier.
+- Bind the child path and branch to the task and attempt identity.
+- The child worktree must be disjoint from the parent and every other active
+  child worktree.
+- Workers must not create child worktrees or choose a different child path.
 - Run dependency-ready write-capable Team Agents in parallel when their
   explicit file scopes are disjoint.
 - Order writers whose scopes overlap or whose tasks have a dependency edge.
@@ -41,12 +45,13 @@ the active harness.
     head and runs serially.
 - Read-only Team Agents may run concurrently when they cannot interfere with a
   writer.
-- Only one Team Agent mutates the Git index or creates a commit at a time.
+- Each worker mutates only its own child worktree's Git index. Gizmo serializes
+  parent integration commits.
 - Every writer commits its complete scoped iteration during its Gizmo-granted
   commit turn.
-- Gizmo continues directly from those commits.
-- Do not cherry-pick, merge, copy, replay, or synthesize a worker commit into a
-  separate integration branch.
+- Gizmo verifies each child commit and integrates it into the parent feature
+  worktree through the guarded module integrator.
+- Do not copy, replay, or synthesize a worker commit into an unrelated branch.
 - Gizmo owns branch sequencing, PR authorization, technical review
   dispositions, readiness and merge verdicts. PR Steward performs only the
   explicitly authorized external pull-request mechanics described in the
@@ -73,24 +78,27 @@ the active harness.
    - Require concurrency-safe acceptance command scopes.
    - Treat shared generated and output paths as shared files.
    - Defer unsafe checks until the relevant changes are committed.
-7. Start that wave through the active harness in the current checkout.
-8. Let each Team Agent implement and run concurrency-safe focused checks.
-9. Grant one commit turn at a time as writers finish.
-   - The writer stages only its allowed files.
-   - The writer commits its complete iteration.
-   - Other writers do not stage or commit during that turn.
-   - The commit must not include an unrelated pre-existing hunk.
-10. Run deferred checks serially after the wave has a stable committed head.
+7. Create one child worktree per task from the parent feature worktree's current
+   commit.
+8. Start that wave through the active harness with each worker in its issued
+   child worktree.
+9. Let each Team Agent implement and run concurrency-safe focused checks.
+10. Require each worker to commit its complete iteration in its child worktree.
+    - The worker stages only its allowed files.
+    - The commit must be directly after the child baseline.
+11. Verify each child commit and integrate it into the parent feature worktree
+    in a serialized integration turn.
+12. Run deferred checks serially after the parent has a stable committed head.
     - Route any tracked output to its assigned owner.
     - Require that owner to commit the output as a complete new iteration.
-11. Request one terminal handoff from each writer.
+13. Request one terminal handoff from each writer.
     - Enumerate every committed iteration in order.
     - For each iteration, include its SHA, outcome, evidence, and unresolved
       blockers.
-12. Verify each commit stays inside its declared scope.
-13. Co-validate the combined branch after all tasks in the wave commit.
-14. Continue with the next dependency-ready wave.
-15. Route corrections to the team that owns the affected change.
+14. Verify each commit stays inside its declared scope.
+15. Co-validate the combined parent branch after all tasks in the wave commit.
+16. Continue with the next dependency-ready wave from the parent frontier.
+17. Route corrections to the team that owns the affected change.
 
 Before a later implementation or repair iteration, the Team Agent reads the
 last one or two commits relevant to its allowed files and named interfaces. It
@@ -152,8 +160,8 @@ only when a visualization is warranted. Never claim it was known earlier.
   a corrected task.
 - If a proposed scope overlaps pre-existing user or foreign changes without an
   exact handoff or same-task attribution, block that dispatch.
-- If the checkout contains edits outside the declared active scopes, stop the
-  affected dispatch and identify their owner.
+- If a child or parent worktree contains edits outside the declared active
+  scopes, stop the affected dispatch and identify their owner.
 - Do not add a lifecycle service or Git-state protocol to recover from a
   failure.
 
@@ -170,7 +178,11 @@ Before accepting Team Agent work, verify:
 - acceptance command read, write, and output scopes were concurrency-safe;
 - unsafe checks ran serially on a stable committed head;
 - only one writer mutated the Git index or committed at a time;
-- the shared branch contains the accepted result;
+- the parent feature worktree contains every accepted result;
+- every child worktree was created from the recorded parent frontier;
+- each child worktree was clean after its handoff and was cleaned up only after
+  integration;
+- parent integration was serialized;
 - every writer committed its complete scoped iteration;
 - each terminal handoff enumerated every iteration commit in order;
 - each iteration entry named its SHA, outcome, evidence, and unresolved

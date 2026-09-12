@@ -102,10 +102,11 @@ Workbench record, not another coordinator or worker. See the
     - authorized squash merge and remote merge verification.
   - PR Steward must never decide readiness or merge without Gizmo's explicit
     authorization packet.
-  - Team workers implement and test their assigned changes in the current
-    shared checkout.
-  - Gizmo Prime controls write waves and commit turns. PR Steward may mutate
-    external pull-request state only within the named packet.
+  - Team workers implement and test their assigned changes in an isolated child
+    worktree created from the parent feature worktree's current commit.
+  - Gizmo Prime controls child-worktree allocation, write waves, commit turns,
+    and parent integration. PR Steward may mutate external pull-request state
+    only within the named packet.
   - Write-capable Team Agents may run concurrently only when their explicit
     file scopes are disjoint and they have no unresolved dependency.
   - Tasks with overlapping scopes or provider-consumer dependencies run in
@@ -122,12 +123,16 @@ Workbench record, not another coordinator or worker. See the
   - Unsafe commands wait for a stable committed head and run serially.
   - Read-only Team Agents may run concurrently when their evidence scopes are
     safe to inspect while writers run.
-  - Only one Team Agent mutates the Git index or creates a commit at a time.
+  - Each child worktree has one task and attempt identity. Workers must not
+    create or select worktrees outside the identity issued by Gizmo.
+  - A worker mutates only its child worktree's Git index. Gizmo mutates only the
+    parent integration worktree's index. Parent integration is serialized.
   - Every write-capable Team Agent commits its complete scoped iteration during
     the commit turn granted by Gizmo.
   - Its terminal handoff enumerates every iteration commit in order.
     - Each entry names the SHA, outcome, evidence, and unresolved blockers.
-  - Gizmo continues directly from those commits on the shared branch.
+  - Gizmo verifies each child commit and integrates it into the parent feature
+    worktree before continuing.
   - A later worker iteration reads the last one or two relevant commits and
     diffs before changing its owned scope.
 - **Validation and delivery**

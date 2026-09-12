@@ -278,6 +278,7 @@ export class ModuleIntegrationCoordinator {
         taskId: expected.node.taskId,
         baselineCommit: expected.baselineCommit,
         commit: expected.submission.commit,
+        allowedWriteClaims: expected.node.resources.write,
       }),
     );
     const applyRequest: ApplyModuleWaveTreeRequest = {
@@ -285,13 +286,7 @@ export class ModuleIntegrationCoordinator {
       currentHead: application.state.headCommit,
       handoffs,
     };
-    const headCommit = ModuleWaveTree.apply(applyRequest);
-    ModuleIntegrationProvenanceRegistry.updateModuleIntegrationRef({
-      provenance: application.provenance,
-      nextCommit: headCommit,
-      rollback: false,
-    });
-    return headCommit;
+    return ModuleWaveTree.apply(applyRequest);
   }
 
   private static advancedIntegrationState(
@@ -433,7 +428,8 @@ export class ModuleIntegrationCoordinator {
       attempt: 1,
       baselineCommit: request.acceptedPlan.plan.sourceCommit,
     };
-    const workspace = ModuleWorktree.prepareModuleWorktree(prepareRequest);
+    const workspace =
+      ModuleWorktree.prepareSharedIntegrationWorkspace(prepareRequest);
     try {
       const cleanupHandleValue: ModuleIntegrationCleanupHandle = {
         sessionId: `${request.acceptedPlan.planDigest}:${randomUUID()}`,
@@ -490,7 +486,7 @@ export class ModuleIntegrationCoordinator {
       return immutable;
     } catch {
       const cleanupRequest: CleanupModuleWorktreeRequest = { workspace };
-      ModuleWorktree.cleanupModuleWorktree(cleanupRequest);
+      ModuleWorktree.cleanupSharedIntegrationWorkspace(cleanupRequest);
       throw new Error(
         'Module integration preparation failed and was cleaned up.',
       );
@@ -626,9 +622,15 @@ export class ModuleIntegrationCoordinator {
         expectedHandoffs: [expected],
         provenance,
       };
-      const headCommit =
-        ModuleIntegrationCoordinator.applyAndValidateWave(application);
+      let headCommit: string | undefined;
       try {
+        headCommit =
+          ModuleIntegrationCoordinator.applyAndValidateWave(application);
+        ModuleIntegrationProvenanceRegistry.updateModuleIntegrationRef({
+          provenance,
+          nextCommit: headCommit,
+          rollback: false,
+        });
         const provisionalState =
           ModuleIntegrationCoordinator.updatedIntegrationState([
             request.state,
@@ -700,7 +702,29 @@ export class ModuleIntegrationCoordinator {
         );
         return ModuleIntegrationCoordinator.advancedIntegrationState(advance);
       } catch {
-        throw new Error('Shared-branch handoff acceptance failed.');
+        if (!headCommit)
+          throw new Error(
+            'Child worktree handoff failed before a parent frontier was returned; parent rollback was not proven.',
+          );
+        try {
+          ModuleWaveTree.restore({
+            workspace: request.state.workspace,
+            originalHead: request.state.headCommit,
+            appliedHead: headCommit,
+          });
+          ModuleIntegrationProvenanceRegistry.updateModuleIntegrationRef({
+            provenance,
+            nextCommit: headCommit,
+            rollback: true,
+          });
+        } catch {
+          throw new Error(
+            'Child worktree handoff acceptance failed and parent rollback failed.',
+          );
+        }
+        throw new Error(
+          'Child worktree handoff acceptance failed and was rolled back.',
+        );
       }
     }
     const authorizedProviderEvidence = request.state.acceptedEvidence.filter(
@@ -836,22 +860,22 @@ export class ModuleIntegrationCoordinator {
     if (!allAccepted) {
       throw new Error('Final module join requires every accepted task result.');
     }
-    const handoffs: TreeHandoff[] = request.state.acceptedWrites.map(
-      (entry) => ({
-        taskId: entry.taskId,
-        baselineCommit: entry.startingFrontier,
-        commit: entry.handoff.commit,
+    ModuleWorktree.assertIntegrationWorkspaceIdentity(request.state.workspace);
+    ModuleWorktree.assertModuleWorktreeClean(request.state.workspace);
+    const parentHead = ModuleRepositoryGit.gitText(
+      ModuleRepositoryGit.runModuleDeliveryGit({
+        cwd: request.state.workspace.worktreePath,
+        args: ['rev-parse', '--verify', 'HEAD^{commit}'],
       }),
     );
-    const application: ApplyModuleWaveTreeRequest = {
-      workspace: request.state.workspace,
-      currentHead: request.state.sourceCommit,
-      handoffs,
-    };
-    const canonicalHead =
-      handoffs.length === 0
-        ? request.state.headCommit
-        : ModuleWaveTree.apply(application);
+    if (
+      !EXACT_GIT_COMMIT.test(request.state.headCommit) ||
+      parentHead !== request.state.headCommit
+    )
+      throw new Error(
+        'Final module join parent head does not match the integrated frontier.',
+      );
+    const canonicalHead = request.state.headCommit;
     const canonicalInspection: CanonicalModuleFinalizationInspection = {
       repositoryRoot: request.state.workspace.sourceRepositoryRoot,
       previousHeadCommit: request.state.headCommit,

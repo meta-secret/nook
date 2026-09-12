@@ -53,7 +53,7 @@ Gizmo does not:
 - redefine another team's technical contract;
 - replace an unavailable required Team Agent;
 - waive a blocking functional-owner or security verdict; or
-- create extra Git checkouts for Team Agent work.
+- create unmanaged checkouts or let a worker choose an unissued worktree.
 
 Gizmo does not allow PR Steward to edit functional code, adjudicate technical
 findings, sequence shared-branch writers, own Workbench outcomes, or decide
@@ -88,7 +88,7 @@ Each Team Agent task has exactly one team identity, bounded file scope, and name
 acceptance evidence.
 
 - Write-capable Team Agents with disjoint explicit file scopes may run in
-  parallel in the current checkout.
+  parallel in isolated child worktrees from the same parent frontier.
 - Overlapping scopes and unresolved dependencies require ordered execution.
 - Dirty paths and hunks must have an owner before dispatch.
 - Pre-existing user or foreign changes block an overlapping task unless those
@@ -103,7 +103,8 @@ acceptance evidence.
   - Each iteration entry names its SHA, outcome, evidence, and unresolved
     blockers.
 - A later iteration reads the last one or two relevant commits and diffs.
-- Gizmo continues directly from the worker commits.
+- Gizmo verifies each worker commit and integrates it into the parent feature
+  worktree.
 - Workers report cross-team dependencies to Gizmo.
 - Gizmo assigns each dependency to its owning team and preserves its order.
 - Gizmo co-validates provider and consumer results after their commits.
@@ -117,12 +118,13 @@ worker boundary.
 
 1. Define the requested outcome and terminal evidence.
 2. Assign bounded tasks to their functional owners.
-3. Dispatch each dependency-ready wave with disjoint write scopes.
-4. Serialize complete worker commits on the shared branch.
-5. Co-validate returned changes and interface evidence.
-6. Route corrections to the responsible team.
-7. Push the coherent branch and obtain exact-head validation.
-8. Complete the user-selected terminal state.
+3. Create one bounded child worktree for each dependency-ready task.
+4. Dispatch the wave with disjoint write scopes and immutable parent frontier.
+5. Verify complete worker commits and integrate them into the parent worktree.
+6. Co-validate returned changes and interface evidence.
+7. Route corrections to the responsible team.
+8. Push the coherent branch and obtain exact-head validation.
+9. Complete the user-selected terminal state.
 
 For a normal implementation mission, completion includes pull-request
 creation, exact-head validation, readiness, squash merge, remote verification,

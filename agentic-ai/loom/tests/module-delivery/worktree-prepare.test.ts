@@ -65,29 +65,40 @@ afterEach(() => {
 });
 
 describe('prepareModuleWorktree', () => {
-  test('identifies the current shared checkout at the exact baseline', () => {
+  test('prepares an isolated child at the exact baseline and leaves the parent unchanged', () => {
     const fixture =
       ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
     const marker =
       ModuleDeliveryWorktreeTestSupportScenario.installCheckoutHook(fixture);
     const request =
       ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture);
+    const parentGit =
+      ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture);
+    const parentBranch = parentGit(['symbolic-ref', '--quiet', 'HEAD']);
     const workspace = ModuleDeliveryWorktreePrepareScenario.prepared(request);
     const git =
       ModuleDeliveryWorktreeTestSupportScenario.worktreeGit(workspace);
 
     expect(workspace.baselineCommit).toBe(fixture.baselineCommit);
-    expect(workspace.worktreePath).toBe(fixture.sourceRoot);
-    expect(workspace.ownedWorkspaceRoot).toBe(fixture.sourceRoot);
-    expect(workspace.worktreeId).toBe('shared-checkout');
-    expect(workspace.branchName).toMatch(/^refs\/heads\/.+$/);
+    expect(workspace.role).toBe('child');
+    expect(workspace.worktreePath).toBe(
+      join(fixture.workspaceRoot, 'core-provider-attempt-1'),
+    );
+    expect(workspace.ownedWorkspaceRoot).toBe(fixture.workspaceRoot);
+    expect(workspace.worktreeId).toBe('core-provider-attempt-1');
+    expect(workspace.branchName).toBe(
+      `refs/heads/nook/module-delivery/${request.planDigest}/${workspace.worktreeId}`,
+    );
     expect(git(['rev-parse', 'HEAD'])).toBe(fixture.baselineCommit);
     expect(git(['status', '--porcelain=v1'])).toBe('');
-    expect(git(['rev-parse', '--abbrev-ref', 'HEAD'])).not.toBe('HEAD');
+    expect(git(['symbolic-ref', '--quiet', 'HEAD'])).toBe(workspace.branchName);
+    expect(parentGit(['rev-parse', 'HEAD'])).toBe(fixture.baselineCommit);
+    expect(parentGit(['symbolic-ref', '--quiet', 'HEAD'])).toBe(parentBranch);
+    expect(parentGit(['status', '--porcelain=v1'])).toBe('');
     expect(existsSync(marker)).toBe(false);
   });
 
-  test('reuses the shared checkout for retry attempts', () => {
+  test('uses distinct generated child worktrees and branches for retry attempts', () => {
     const fixture =
       ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
     const firstRequest =
@@ -99,9 +110,118 @@ describe('prepareModuleWorktree', () => {
     };
     const second =
       ModuleDeliveryWorktreePrepareScenario.prepared(secondRequest);
-    expect(second.worktreePath).toBe(first.worktreePath);
-    expect(second.worktreeId).toBe(first.worktreeId);
+    expect(second.worktreePath).not.toBe(first.worktreePath);
+    expect(second.worktreeId).not.toBe(first.worktreeId);
+    expect(second.branchName).not.toBe(first.branchName);
     expect(second.attempt).toBe(2);
+    expect(second.worktreePath).toBe(
+      join(fixture.workspaceRoot, 'core-provider-attempt-2'),
+    );
+  });
+
+  test('cleans only the owned child worktree and branch', () => {
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
+    const parentGit =
+      ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture);
+    const workspace = ModuleDeliveryWorktreePrepareScenario.prepared(
+      ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture),
+    );
+    expect(ModuleWorktree.cleanupModuleWorktree({ workspace }).removed).toBe(
+      true,
+    );
+    expect(existsSync(workspace.worktreePath)).toBe(false);
+    expect(
+      parentGit(['for-each-ref', '--format=%(refname)', workspace.branchName]),
+    ).toBe('');
+    expect(parentGit(['rev-parse', 'HEAD'])).toBe(fixture.baselineCommit);
+    expect(ModuleWorktree.cleanupModuleWorktree({ workspace }).removed).toBe(
+      false,
+    );
+  });
+
+  test('represents the integration parent without allowing parent removal', () => {
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
+    const workspace = ModuleWorktree.prepareSharedIntegrationWorkspace({
+      ...ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture),
+      taskId: 'module-delivery-integration',
+    });
+
+    expect(workspace.role).toBe('integration-parent');
+    expect(workspace.worktreePath).toBe(fixture.sourceRoot);
+    expect(workspace.ownedWorkspaceRoot).toBe(fixture.workspaceRoot);
+    expect(
+      ModuleWorktree.cleanupSharedIntegrationWorkspace({ workspace }).removed,
+    ).toBe(false);
+    expect(existsSync(workspace.worktreePath)).toBe(true);
+    expect(() => ModuleWorktree.cleanupModuleWorktree({ workspace })).toThrow(
+      'Only child',
+    );
+  });
+
+  test('preserves committed handoffs and refuses ignored files during cleanup', () => {
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
+    const sourceGit =
+      ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture);
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureFileWriter(fixture)([
+      '.gitignore',
+      'ignored/\n',
+    ]);
+    sourceGit(['add', '.gitignore']);
+    sourceGit(['commit', '--quiet', '-m', 'ignore generated files']);
+    const baselineCommit = sourceGit(['rev-parse', 'HEAD']);
+    const workspace = ModuleDeliveryWorktreePrepareScenario.prepared({
+      ...ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture),
+      baselineCommit,
+    });
+    const childGit =
+      ModuleDeliveryWorktreeTestSupportScenario.worktreeGit(workspace);
+    ModuleDeliveryWorktreeTestSupportScenario.worktreeFileWriter(workspace)([
+      'module/committed.ts',
+      'committed\n',
+    ]);
+    childGit(['add', '--all']);
+    childGit(['commit', '--quiet', '-m', 'committed handoff']);
+    expect(() => ModuleWorktree.cleanupModuleWorktree({ workspace })).toThrow(
+      'Committed child handoff',
+    );
+    expect(existsSync(workspace.worktreePath)).toBe(true);
+
+    childGit(['reset', '--hard', baselineCommit]);
+    ModuleDeliveryWorktreeTestSupportScenario.worktreeFileWriter(workspace)([
+      'ignored/generated.txt',
+      'generated\n',
+    ]);
+    expect(() => ModuleWorktree.cleanupModuleWorktree({ workspace })).toThrow(
+      'must be clean',
+    );
+    expect(existsSync(workspace.worktreePath)).toBe(true);
+    childGit(['clean', '-fdX']);
+    expect(ModuleWorktree.cleanupModuleWorktree({ workspace }).removed).toBe(
+      true,
+    );
+  });
+
+  test('refuses to force-remove a dirty child worktree', () => {
+    const fixture =
+      ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
+    const workspace = ModuleDeliveryWorktreePrepareScenario.prepared(
+      ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture),
+    );
+    ModuleDeliveryWorktreeTestSupportScenario.worktreeFileWriter(workspace)([
+      'module/uncommitted.ts',
+      'uncommitted\n',
+    ]);
+    expect(() => ModuleWorktree.cleanupModuleWorktree({ workspace })).toThrow(
+      'must be clean',
+    );
+    expect(existsSync(workspace.worktreePath)).toBe(true);
+    ModuleDeliveryWorktreeTestSupportScenario.worktreeGit(workspace)([
+      'clean',
+      '-fd',
+    ]);
   });
 
   test('rejects a dirty or stale shared checkout before dispatch', () => {
@@ -148,7 +268,7 @@ describe('prepareModuleWorktree', () => {
     ).toThrow();
   });
 
-  test('rejects nonexact commits and ignores obsolete workspace roots', () => {
+  test('rejects nonexact commits and overlapping workspace roots', () => {
     const fixture =
       ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
     const base =
@@ -175,12 +295,12 @@ describe('prepareModuleWorktree', () => {
       ...base,
       workspaceRoot: nestedRoot,
     };
-    expect(
-      ModuleWorktree.prepareModuleWorktree(nestedRequest).worktreePath,
-    ).toBe(fixture.sourceRoot);
+    expect(() => ModuleWorktree.prepareModuleWorktree(nestedRequest)).toThrow(
+      'disjoint',
+    );
   });
 
-  test('does not create a worktree registration', () => {
+  test('rejects symlink workspace roots before creating a worktree registration', () => {
     const fixture =
       ModuleDeliveryWorktreePrepareScenario.createTrackedFixture();
     const linkedRoot = join(fixture.root, 'linked-workspaces');
@@ -189,8 +309,8 @@ describe('prepareModuleWorktree', () => {
       ...ModuleDeliveryWorktreeTestSupportScenario.prepareRequest(fixture),
       workspaceRoot: linkedRoot,
     };
-    expect(ModuleWorktree.prepareModuleWorktree(request).worktreePath).toBe(
-      fixture.sourceRoot,
+    expect(() => ModuleWorktree.prepareModuleWorktree(request)).toThrow(
+      'real directory',
     );
     expect(
       ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([

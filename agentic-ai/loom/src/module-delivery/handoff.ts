@@ -195,7 +195,7 @@ export class ModuleCommitHandoff {
     );
     if (!EXACT_GIT_COMMIT.test(commit) || commit === request.baselineCommit) {
       throw new Error(
-        'Commit handoff requires a non-baseline shared-branch commit.',
+        'Commit handoff requires a non-baseline child worktree commit.',
       );
     }
     const parentInvocation: ModuleGitInvocation = {

@@ -40,6 +40,12 @@ export type {
 } from './integration-provenance.ts';
 export { ModuleWorktree } from './workspace.ts';
 export { ModuleCommitHandoff } from './handoff.ts';
+export { ModuleWaveTree } from './tree-integration.ts';
+export type {
+  ApplyModuleWaveTreeRequest,
+  RestoreModuleWaveTreeRequest,
+  TreeHandoff,
+} from './tree-integration.ts';
 export { ModuleIntegrationCoordinator } from './integration.ts';
 export { ModuleIntegrationEvidence } from './integration-evidence-replay.ts';
 export type { RestoreModuleDeliveryIntegrationEvidenceRequest } from './integration-evidence-replay.ts';
@@ -48,6 +54,7 @@ export type {
   CleanupModuleWorktreeRequest,
   CleanupModuleWorktreeResult,
   ModuleWorktreeHandle,
+  ModuleWorktreeRole,
   PrepareModuleWorktreeRequest,
 } from './workspace.ts';
 export type {

@@ -17,15 +17,15 @@ coordinates delivery but does not redefine a team's technical contract.
 - A team stops at another team's boundary and reports the dependency to Gizmo.
 - Gizmo assigns a separate task when another team's implementation is needed.
 - Security review does not transfer implementation ownership.
-- Team Agents may edit the current shared checkout concurrently when their
+- Team Agents may edit isolated child worktrees concurrently when their
   explicit file scopes are disjoint.
 - Overlapping scopes and unresolved dependencies require ordered execution.
 - Gizmo inventories dirty paths and hunks before dispatch.
 - Every pre-existing change has an attributed owner and task.
 - A scope overlap blocks dispatch unless the exact changes are handed off or
   attributed to the proposed task.
-- Gizmo owns write-wave coordination, serialized commit turns, external
-  delivery policy, and authorization.
+- Gizmo owns child-worktree allocation, write-wave coordination, parent
+  integration, external delivery policy, and authorization.
 - PR Steward performs only the explicitly authorized pull-request mechanics.
 
 ## Teams
@@ -121,8 +121,8 @@ registries, root routing documents, and shared command outputs.
 
 Gizmo assigns one writer for each shared-file change. Any task that needs the
 same shared file is ordered after that writer. The assigned Team Agent edits
-the file in the current checkout. No separate integration workspace is
-created.
+the file in an isolated child worktree. Gizmo verifies the child commit and
+integrates it into the parent feature worktree.
 
 ## Assignment procedure
 
@@ -136,11 +136,14 @@ created.
    attribution.
 8. Name each acceptance command's read, write, and output scopes.
 9. Group tasks only when file and command scopes are safe for concurrency.
-10. Run each group as a parallel write wave in the current checkout.
-11. Grant one commit turn at a time for each complete scoped iteration.
-12. Route cross-team dependencies back through Gizmo.
-13. Co-validate provider and consumer evidence on the combined branch.
-14. Route integration failures to the responsible owners.
+10. Create one child worktree for each task in the group from the parent
+    feature worktree's current commit.
+11. Run each task in its child worktree.
+12. Verify each complete scoped commit and integrate it into the parent
+    feature worktree.
+13. Route cross-team dependencies back through Gizmo.
+14. Co-validate provider and consumer evidence on the combined branch.
+15. Route integration failures to the responsible owners.
 
 ## Team responsibility
 
@@ -171,5 +174,7 @@ Verify:
   stable committed head;
 - only one writer mutated the Git index or committed at a time;
 - shared files had an explicitly assigned writer;
-- accepted worker commits are already on the shared branch; and
-- no worktree or external lifecycle system was introduced.
+- accepted worker commits are integrated into the parent feature worktree;
+- every child worktree was issued by Gizmo and stayed within its task scope;
+- parent integration was serialized; and
+- no external lifecycle system was introduced.
