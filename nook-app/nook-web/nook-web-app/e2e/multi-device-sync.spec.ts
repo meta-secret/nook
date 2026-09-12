@@ -41,6 +41,7 @@ import {
   type SyncE2eTarget,
 } from './sync-provider'
 import { refreshJoinerVaultOnLoginGate } from './helpers/joiner-vault-refresh'
+import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 
 const providerLabel = e2eSyncProviderDef(resolveE2eSyncProvider()).label
 
@@ -297,10 +298,10 @@ test.describe(`multi-device join background sync (${providerLabel})`, () => {
           if (await deviceA.getByTestId('pending-joins-banner').isVisible()) {
             return true
           }
-          await deviceA.evaluate(
-            refreshJoinerVaultOnLoginGate,
-            ProviderSyncFreshness.Forced,
-          )
+          await deviceA.evaluate(refreshJoinerVaultOnLoginGate, {
+            freshness: ProviderSyncFreshness.Forced,
+            authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
+          })
           await deviceA.evaluate(async () => {
             const vault = window.__nookVault
             await vault?.refreshPendingJoinsFromProviders?.()

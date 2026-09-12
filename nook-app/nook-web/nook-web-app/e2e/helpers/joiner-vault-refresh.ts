@@ -1,17 +1,21 @@
 import type { ProviderSyncFreshness } from '$app-wasm'
-import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
 import type { VaultDebugWindow } from '$lib/app/browser-lifecycle'
 
 /** Force the approved joiner's browser-owned vault to read its provider. */
+export type RefreshJoinerVaultOnLoginGateArgs = {
+  freshness: ProviderSyncFreshness
+  authStorageSyncFailedKey: string
+}
+
 export async function refreshJoinerVaultOnLoginGate(
-  freshness: ProviderSyncFreshness,
+  args: RefreshJoinerVaultOnLoginGateArgs,
 ): Promise<void> {
+  const { freshness, authStorageSyncFailedKey } = args
   const vault = (window as VaultDebugWindow).__nookVault
   if (!vault) throw new Error('joiner-vault-runtime-unavailable')
   const refreshed = await vault.syncFromStorage(freshness)
   if (refreshed.isErr()) {
-    if (refreshed.error.translationKey === I18N_KEYS.AuthStorageSyncFailed)
-      return
+    if (refreshed.error.translationKey === authStorageSyncFailedKey) return
     throw new Error(
       `joiner-vault-refresh-rejected:${refreshed.error.translationKey}`,
     )

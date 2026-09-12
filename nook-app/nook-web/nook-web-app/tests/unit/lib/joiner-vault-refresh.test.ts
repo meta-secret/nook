@@ -29,7 +29,10 @@ describe('joiner vault refresh', () => {
     )
     installVault(syncFromStorage)
 
-    await refreshJoinerVaultOnLoginGate(ProviderSyncFreshness.Forced)
+    await refreshJoinerVaultOnLoginGate({
+      freshness: ProviderSyncFreshness.Forced,
+      authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
+    })
 
     expect(syncFromStorage).toHaveBeenCalledOnce()
     expect(syncFromStorage).toHaveBeenCalledWith(ProviderSyncFreshness.Forced)
@@ -41,7 +44,10 @@ describe('joiner vault refresh', () => {
     )
     installVault(syncFromStorage)
 
-    await refreshJoinerVaultOnLoginGate(ProviderSyncFreshness.Forced)
+    await refreshJoinerVaultOnLoginGate({
+      freshness: ProviderSyncFreshness.Forced,
+      authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
+    })
     expect(syncFromStorage).toHaveBeenCalledWith(ProviderSyncFreshness.Forced)
   })
 
@@ -52,7 +58,10 @@ describe('joiner vault refresh', () => {
     installVault(syncFromStorage)
 
     await expect(
-      refreshJoinerVaultOnLoginGate(ProviderSyncFreshness.Forced),
+      refreshJoinerVaultOnLoginGate({
+        freshness: ProviderSyncFreshness.Forced,
+        authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
+      }),
     ).rejects.toThrow(
       `joiner-vault-refresh-rejected:${I18N_KEYS.ErrorsEngineUnavailable}`,
     )
@@ -60,7 +69,10 @@ describe('joiner vault refresh', () => {
 
   test('fails promptly when the browser vault runtime is unavailable', async () => {
     await expect(
-      refreshJoinerVaultOnLoginGate(ProviderSyncFreshness.Forced),
+      refreshJoinerVaultOnLoginGate({
+        freshness: ProviderSyncFreshness.Forced,
+        authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
+      }),
     ).rejects.toThrow('joiner-vault-runtime-unavailable')
   })
 })

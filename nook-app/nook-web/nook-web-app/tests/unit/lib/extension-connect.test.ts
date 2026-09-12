@@ -353,11 +353,50 @@ describe('extension pairing approved message', () => {
           vaultName: 'Personal',
           approvedAt: '2026-07-07T00:00:00.000Z',
           scopes: [ExtensionConnectScope.VaultAccess],
-          providers: [{ id: 'local-1', type: 'local' }],
+          providers: [],
         },
         eventLogRecords,
       }),
     ).toBe(true)
+  })
+
+  test('preserves complete provider payloads for extension import', () => {
+    const provider = {
+      id: 'github-1',
+      type: 'github',
+      label: 'Personal GitHub',
+      githubPat: { state: 'token', value: 'github_pat_secret' },
+      githubRepo: { state: 'defaultRepository' },
+      oauthFile: { state: 'notApplicable' },
+      localFolder: { state: 'notApplicable' },
+      storeId: { state: 'unscoped' },
+      syncCheckpoint: { state: 'neverSynced' },
+      createdAt: '2026-07-07T00:00:00.000Z',
+    }
+    const message = approvalDeliveryArgs().message
+    const admission = ExtensionPairingApprovedMessageSchema.parse({
+      ...message,
+      payload: { ...message.payload, providers: [provider] },
+    })
+
+    expect(admission.isOk()).toBe(true)
+    if (admission.isErr()) return
+    expect(admission.value.payload.providers).toEqual([provider])
+  })
+
+  test('rejects identity-only provider rows at pairing admission', () => {
+    const message = approvalDeliveryArgs().message
+    const admission = ExtensionPairingApprovedMessageSchema.parse({
+      ...message,
+      payload: {
+        ...message.payload,
+        providers: [{ id: 'github-1', type: 'github' }],
+      },
+    })
+
+    expect(admission.isErr() ? admission.error : 'admitted').toBe(
+      ExtensionPairingApprovedMessageAdmissionFailure.Providers,
+    )
   })
 
   test('classifies empty approved grant event records without payload values', () => {

@@ -67,6 +67,9 @@
   import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
+  import {
+    focusIdentityContextWhenAvailable as restoreIdentityContextFocus,
+  } from './login-gate-focus'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
@@ -276,32 +279,22 @@
   }
 
   async function focusIdentityContextWhenAvailable(): Promise<void> {
-    for (let frame = 0; frame < 30; frame += 1) {
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => resolve()),
-      )
-
-      const activeElement = document.activeElement
-      if (
-        activeElement !== document.body &&
-        activeElement !== document.documentElement
-      ) {
-        return
-      }
-
-      if (
-        document.querySelector('[data-testid="login-vault-identity-loading"]')
-      ) {
-        continue
-      }
-      const remountedButton = document.querySelector<HTMLButtonElement>(
-        '[data-testid="login-review-identities"]',
-      )
-      if (remountedButton) {
-        remountedButton.focus()
-        return
-      }
-    }
+    await restoreIdentityContextFocus({
+      waitForNextFrame: () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        ),
+      identityContextLoading: () =>
+        Boolean(
+          document.querySelector(
+            '[data-testid="login-vault-identity-loading"]',
+          ),
+        ),
+      reviewButton: () =>
+        document.querySelector<HTMLButtonElement>(
+          '[data-testid="login-review-identities"]',
+        ),
+    })
   }
 
   async function openDevicesAccess(

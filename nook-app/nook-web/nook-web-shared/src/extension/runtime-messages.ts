@@ -4,6 +4,7 @@ import type {
   ExtensionPairingGrantApproval,
   ExtensionStorageProviderType as RustExtensionStorageProviderType,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
+import type { StorageProvider } from "../vault-app/lib/nook-wasm/nook_wasm.js";
 import { ExtensionConnectScope } from "./extension-connect-scope";
 
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "./paired-vault-identity-status";
@@ -66,8 +67,9 @@ export type ExtensionPairingApprovedGrant = Omit<
   "syncProviderCount" | "vaultType"
 > & {
   vaultType: "simple";
-  providers: ExtensionStorageProviderPayload[];
+  providers: ExtensionPairingStorageProviderPayload[];
 };
+export type ExtensionPairingStorageProviderPayload = StorageProvider;
 export enum ExtensionPairingApprovedMessageAdmissionFailure {
   ApprovedAt = "invalid-pairing-grant-approved-at",
   DeviceId = "invalid-pairing-grant-device-id",
@@ -142,9 +144,9 @@ export class ExtensionPairingApprovedGrantAdmission {
       return err(ExtensionPairingApprovedMessageAdmissionFailure.Scopes);
     if (!("providers" in payload) || !Array.isArray(payload.providers))
       return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
-    const providers: ExtensionStorageProviderPayload[] = [];
+    const providers: ExtensionPairingStorageProviderPayload[] = [];
     for (const candidate of payload.providers) {
-      const provider = new ExtensionStorageProviderPayloadAdmission(
+      const provider = new ExtensionPairingStorageProviderPayloadAdmission(
         candidate,
       ).parse();
       if (provider.isErr())
@@ -209,6 +211,50 @@ export class ExtensionStorageProviderPayloadAdmission {
       default:
         return err(ExtensionStorageProviderIdentityFailure.Invalid);
     }
+  }
+}
+
+/**
+ * Pairing approvals carry sealed provider rows for the extension import.
+ * Validate the wire shape here, then leave field-level admission (including
+ * credential state) to the canonical Rust provider decoder after staging.
+ */
+export class ExtensionPairingStorageProviderPayloadAdmission {
+  constructor(private readonly value: unknown) {}
+  parse(): Result<
+    ExtensionPairingStorageProviderPayload,
+    ExtensionStorageProviderIdentityFailure
+  > {
+    const value = this.value;
+    if (
+      !value ||
+      typeof value !== "object" ||
+      Object.getPrototypeOf(value) !== Object.prototype
+    )
+      return err(ExtensionStorageProviderIdentityFailure.Invalid);
+    const provider = value;
+    const identity = new ExtensionStorageProviderPayloadAdmission(
+      provider,
+    ).parse();
+    if (identity.isErr()) return err(identity.error);
+    for (const key of [
+      "label",
+      "githubPat",
+      "githubRepo",
+      "oauthFile",
+      "localFolder",
+      "storeId",
+      "createdAt",
+    ]) {
+      if (!(key in provider))
+        return err(ExtensionStorageProviderIdentityFailure.Invalid);
+    }
+    try {
+      structuredClone(provider);
+    } catch {
+      return err(ExtensionStorageProviderIdentityFailure.Invalid);
+    }
+    return ok(provider as ExtensionPairingStorageProviderPayload);
   }
 }
 
