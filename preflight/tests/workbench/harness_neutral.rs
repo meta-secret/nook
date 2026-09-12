@@ -383,12 +383,12 @@ fn harness_neutral_authority_detector_rejects_negative_test_data() {
     for forbidden in FORBIDDEN_AUTHORITY_REFERENCES {
         assert!(violations.contains(&forbidden.to_owned()));
     }
-    assert!(
+    assert_eq!(
         violations
             .iter()
             .filter(|violation| violation.starts_with("native model override directive"))
-            .count()
-            == 2
+            .count(),
+        2
     );
 }
 
