@@ -981,7 +981,7 @@ if (MainBuildStatsCodec.isEntrypoint(import.meta.url, process.argv[1])) {
   const [command, path] = process.argv.slice(2);
   if (command !== "--validate" || !path) {
     console.error(
-      "usage: node .github/scripts/main-build-stats.mjs --validate <record.json>",
+      "usage: node .github/workflows/lib/main-build-stats.mjs --validate <record.json>",
     );
     process.exit(2);
   }

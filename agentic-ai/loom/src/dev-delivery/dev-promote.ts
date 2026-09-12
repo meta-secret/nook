@@ -1,6 +1,6 @@
-import { err, ok, type Result } from "neverthrow";
+import { err, ok, type Result } from 'neverthrow';
 
-import { DevDeliveryWorkspace } from "./dev-workspace.ts";
+import { DevDeliveryWorkspace } from './dev-workspace.ts';
 import {
   Ancestry,
   type CommitSha,
@@ -12,7 +12,7 @@ import {
   type DevFailure,
   type DevelopmentPullRequest,
   type ManagedRemoteSnapshot,
-} from "./dev-types.ts";
+} from './dev-types.ts';
 
 export interface DevPromoteOutcome {
   readonly expectedSha: CommitSha;
@@ -59,7 +59,7 @@ export class DevPromoteCommand {
       return err({
         kind: DevFailureKind.Conflict,
         message:
-          "origin/main is not an ancestor of the tested origin/dev commit; promotion would not be a fast-forward",
+          'origin/main is not an ancestor of the tested origin/dev commit; promotion would not be a fast-forward',
       });
     }
 
@@ -75,7 +75,8 @@ export class DevPromoteCommand {
     ) {
       return err({
         kind: DevFailureKind.Race,
-        message: "The live dev-to-main pull request does not describe the tested remote snapshots",
+        message:
+          'The live dev-to-main pull request does not describe the tested remote snapshots',
       });
     }
 
@@ -94,14 +95,17 @@ export class DevPromoteCommand {
     ) {
       return err({
         kind: DevFailureKind.Race,
-        message: "origin/main or origin/dev changed while promotion evidence was being collected",
+        message:
+          'origin/main or origin/dev changed while promotion evidence was being collected',
       });
     }
     const livePullRequest = workspace.github.readDevelopmentPullRequest({
       workingDirectory: workspace.root,
     });
     if (livePullRequest.isErr()) return err(livePullRequest.error);
-    const finalReview = this.requirePromotablePullRequest(livePullRequest.value);
+    const finalReview = this.requirePromotablePullRequest(
+      livePullRequest.value,
+    );
     if (finalReview.isErr()) return err(finalReview.error);
     if (
       !livePullRequest.value.headSha.equals(this.request.expectedSha) ||
@@ -109,7 +113,7 @@ export class DevPromoteCommand {
     ) {
       return err({
         kind: DevFailureKind.Race,
-        message: "The live dev-to-main pull request changed before promotion",
+        message: 'The live dev-to-main pull request changed before promotion',
       });
     }
 
@@ -123,7 +127,8 @@ export class DevPromoteCommand {
       if (finalAncestry.value !== Ancestry.Ancestor) {
         return err({
           kind: DevFailureKind.Conflict,
-          message: "origin/main changed to a non-ancestor; refusing to rewrite it",
+          message:
+            'origin/main changed to a non-ancestor; refusing to rewrite it',
         });
       }
       const pushed = workspace.git.pushExact({
@@ -139,7 +144,7 @@ export class DevPromoteCommand {
     if (!after.value.main.equals(this.request.expectedSha)) {
       return err({
         kind: DevFailureKind.Race,
-        message: "origin/main did not finish at the exact tested commit",
+        message: 'origin/main did not finish at the exact tested commit',
       });
     }
     const status = workspace.github.readPullRequestStatus({
@@ -150,10 +155,10 @@ export class DevPromoteCommand {
     if (!status.value.merged) {
       const detail =
         status.value.state === PullRequestState.Closed
-          ? "closed without being merged"
+          ? 'closed without being merged'
           : status.value.state === PullRequestState.Open
-            ? "still open"
-            : "did not report a merged status";
+            ? 'still open'
+            : 'did not report a merged status';
       return err({
         kind: DevFailureKind.GitHub,
         message: `origin/main is at ${this.request.expectedSha.value()}, but the dev-to-main pull request is ${detail}; promotion is not reported as merged`,
@@ -165,10 +170,7 @@ export class DevPromoteCommand {
     });
   }
 
-  private remoteManagedBranches(): Result<
-    ManagedRemoteSnapshot,
-    DevFailure
-  > {
+  private remoteManagedBranches(): Result<ManagedRemoteSnapshot, DevFailure> {
     const main = this.request.workspace.git.remoteBranch(ManagedBranch.Main);
     if (main.isErr()) return err(main.error);
     const dev = this.request.workspace.git.remoteBranch(ManagedBranch.Dev);
@@ -179,7 +181,7 @@ export class DevPromoteCommand {
     ) {
       return err({
         kind: DevFailureKind.Configuration,
-        message: "origin/main and origin/dev must both exist before promotion",
+        message: 'origin/main and origin/dev must both exist before promotion',
       });
     }
     return ok({ main: main.value.sha, dev: dev.value.sha });
@@ -191,7 +193,7 @@ export class DevPromoteCommand {
     if (pullRequest.isDraft) {
       return err({
         kind: DevFailureKind.Reviews,
-        message: "The dev-to-main pull request is still a draft",
+        message: 'The dev-to-main pull request is still a draft',
       });
     }
     if (pullRequest.reviewDecision !== PullRequestReviewDecision.Approved) {

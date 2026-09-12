@@ -287,7 +287,7 @@ test('reopens an incident retired by the former E2E suppression policy', () => {
 })
 
 test('workflow preserves the Main cache order and coalesces only pending runs', () => {
-  const root = path.join(__dirname, '..', '..')
+  const root = path.join(__dirname, '..', '..', '..')
   const main = fs.readFileSync(path.join(root, '.github/workflows/main.yml'), 'utf8')
   const ci = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8')
   const dockerTasks = fs.readFileSync(
@@ -342,7 +342,7 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
 })
 
 test('cache telemetry cannot hold a cancelled delivery lane indefinitely', () => {
-  const root = path.join(__dirname, '..', '..')
+  const root = path.join(__dirname, '..', '..', '..')
   const telemetry = fs.readFileSync(
     path.join(root, '.github/actions/nook-cache-telemetry/action.yml'),
     'utf8',
@@ -352,16 +352,16 @@ test('cache telemetry cannot hold a cancelled delivery lane indefinitely', () =>
     'utf8',
   )
 
-  assert.match(telemetry, /timeout 15s .*cache-telemetry\.cjs start/)
-  assert.match(telemetry, /timeout 30s .*cache-telemetry\.cjs collect/)
+  assert.match(telemetry, /timeout 15s .*cache-telemetry\.mjs start/)
+  assert.match(telemetry, /timeout 30s .*cache-telemetry\.mjs collect/)
   assert.match(
     dockerSetup,
-    /timeout 15s [^\n]*cache-telemetry\.cjs["']? start/,
+    /timeout 15s [^\n]*cache-telemetry\.mjs["']? start/,
   )
 })
 
 test('handoff workflow trusts default-branch code and writes only Workbench', () => {
-  const root = path.join(__dirname, '..', '..')
+  const root = path.join(__dirname, '..', '..', '..')
   const workflow = fs.readFileSync(
     path.join(root, '.github/workflows/main-failure-handoff.yml'),
     'utf8',

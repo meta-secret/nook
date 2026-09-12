@@ -1,7 +1,7 @@
-import { err, ok, type Result } from "neverthrow";
-import { z } from "zod";
+import { err, ok, type Result } from 'neverthrow';
+import { z } from 'zod';
 
-import { CommandFailureMessage } from "./dev-command.ts";
+import { CommandFailureMessage } from './dev-command.ts';
 import {
   CommandExecutable,
   type CommandOutput,
@@ -21,20 +21,21 @@ import {
   type PullRequestStatus,
   RepositorySlug,
   WorkflowRunId,
-} from "./dev-types.ts";
+} from './dev-types.ts';
 
 export const DevDeliveryContract = {
   remoteBuild: {
-    workflowName: "Remote task",
-    taskName: "build:compile",
-    jobName: "Remote / build:compile",
-    titlePattern: /^Remote \/ build:compile @ ([0-9a-f]{40}) \/ [A-Za-z0-9._-]+$/u,
+    workflowName: 'Remote task',
+    taskName: 'build:compile',
+    jobName: 'Remote / build:compile',
+    titlePattern:
+      /^Remote \/ build:compile @ ([0-9a-f]{40}) \/ [A-Za-z0-9._-]+$/u,
   },
   promotion: {
-    workflowName: "CI",
-    requiredJobs: ["Dev promotion readiness"],
+    workflowName: 'CI',
+    requiredJobs: ['Dev promotion readiness'],
   },
-  pagesEnvironment: "github-pages",
+  pagesEnvironment: 'github-pages',
 } as const;
 
 /** Rejects every non-terminal prior CI attempt before a dev publication. */
@@ -47,11 +48,11 @@ export class DevelopmentCiAttemptPolicy {
       return err({
         kind: DevFailureKind.Checks,
         message:
-          "No exact-head CI attempt is discoverable for the prior dev pull-request head; refusing to replace it",
+          'No exact-head CI attempt is discoverable for the prior dev pull-request head; refusing to replace it',
       });
     }
     const active = request.attempts.find(
-      (attempt) => attempt.status !== "completed",
+      (attempt) => attempt.status !== 'completed',
     );
     if (active) {
       return err({
@@ -175,8 +176,8 @@ interface PullRequestReadRequest {
 }
 
 export enum DevelopmentPullRequestLookupKind {
-  Found = "found",
-  Absent = "absent",
+  Found = 'found',
+  Absent = 'absent',
 }
 
 export type DevelopmentPullRequestLookup =
@@ -203,14 +204,14 @@ export class GitHubJsonDocument {
     } catch {
       return err({
         kind: DevFailureKind.GitHub,
-        message: "GitHub returned invalid JSON",
+        message: 'GitHub returned invalid JSON',
       });
     }
     const parsed = schema.safeParse(value);
     if (!parsed.success) {
       return err({
         kind: DevFailureKind.GitHub,
-        message: "GitHub returned an unexpected response shape",
+        message: 'GitHub returned an unexpected response shape',
       });
     }
     return ok(parsed.data);
@@ -229,20 +230,20 @@ export class DevGitHubGateway {
   buildProof(request: BuildProofRequest): Result<BuildProof, DevFailure> {
     const output = this.successful({
       args: [
-        "run",
-        "list",
-        "--workflow",
-        "remote.yml",
-        "--branch",
+        'run',
+        'list',
+        '--workflow',
+        'remote.yml',
+        '--branch',
         request.branch.value(),
-        "--commit",
+        '--commit',
         request.sha.value(),
-        "--event",
-        "workflow_dispatch",
-        "--limit",
-        "100",
-        "--json",
-        "databaseId,headBranch,headSha,status,conclusion,event,workflowName,displayTitle",
+        '--event',
+        'workflow_dispatch',
+        '--limit',
+        '100',
+        '--json',
+        'databaseId,headBranch,headSha,status,conclusion,event,workflowName,displayTitle',
       ],
       workingDirectory: this.request.workingDirectory,
     });
@@ -259,7 +260,7 @@ export class DevGitHubGateway {
       return err({
         kind: DevFailureKind.Evidence,
         message:
-          "No successful exact-source remote build proof was found; dispatch remote.yml build:compile for the current feature commit",
+          'No successful exact-source remote build proof was found; dispatch remote.yml build:compile for the current feature commit',
       });
     }
     const runId = WorkflowRunId.parse(run.databaseId);
@@ -276,8 +277,8 @@ export class DevGitHubGateway {
       });
     }
     if (
-      compileJob.status !== "completed" ||
-      compileJob.conclusion !== "success"
+      compileJob.status !== 'completed' ||
+      compileJob.conclusion !== 'success'
     ) {
       return err({
         kind: DevFailureKind.Evidence,
@@ -287,31 +288,30 @@ export class DevGitHubGateway {
     return ok({ sha: request.sha, runId: runId.value });
   }
 
-  ensureDevelopmentPullRequest(
-    request: {
-      readonly expectedSha: CommitSha;
-      readonly workingDirectory: string;
-    },
-  ): Result<DevelopmentPullRequest, DevFailure> {
+  ensureDevelopmentPullRequest(request: {
+    readonly expectedSha: CommitSha;
+    readonly workingDirectory: string;
+  }): Result<DevelopmentPullRequest, DevFailure> {
     const selection = this.openPullRequests(request.workingDirectory);
     if (selection.isErr()) return err(selection.error);
     const existing = selection.value[0];
     if (selection.value.length > 1) {
       return err({
         kind: DevFailureKind.GitHub,
-        message: "More than one open dev-to-main pull request exists; refusing to choose one",
+        message:
+          'More than one open dev-to-main pull request exists; refusing to choose one',
       });
     }
     if (existing) {
       const edited = this.successful({
         args: [
-          "pr",
-          "edit",
+          'pr',
+          'edit',
           String(existing.number.value()),
-          "--title",
-          "Promote development to main",
-          "--body",
-          "This pull request records the manager-controlled development promotion. The tested dev commit is promoted with an ordinary fast-forward push.",
+          '--title',
+          'Promote development to main',
+          '--body',
+          'This pull request records the manager-controlled development promotion. The tested dev commit is promoted with an ordinary fast-forward push.',
         ],
         workingDirectory: request.workingDirectory,
       });
@@ -319,16 +319,16 @@ export class DevGitHubGateway {
     } else {
       const created = this.successful({
         args: [
-          "pr",
-          "create",
-          "--base",
-          "main",
-          "--head",
-          "dev",
-          "--title",
-          "Promote development to main",
-          "--body",
-          "This pull request records the manager-controlled development promotion. The tested dev commit is promoted with an ordinary fast-forward push.",
+          'pr',
+          'create',
+          '--base',
+          'main',
+          '--head',
+          'dev',
+          '--title',
+          'Promote development to main',
+          '--body',
+          'This pull request records the manager-controlled development promotion. The tested dev commit is promoted with an ordinary fast-forward push.',
         ],
         workingDirectory: request.workingDirectory,
       });
@@ -341,7 +341,8 @@ export class DevGitHubGateway {
     if (!live.value.headSha.equals(request.expectedSha)) {
       return err({
         kind: DevFailureKind.Race,
-        message: "The dev-to-main pull request head changed while it was being published",
+        message:
+          'The dev-to-main pull request head changed while it was being published',
       });
     }
     return ok(live.value);
@@ -356,13 +357,14 @@ export class DevGitHubGateway {
     if (selection.value.length > 1) {
       return err({
         kind: DevFailureKind.GitHub,
-        message: "More than one open dev-to-main pull request exists; refusing to choose one",
+        message:
+          'More than one open dev-to-main pull request exists; refusing to choose one',
       });
     }
     if (!selected) {
       return err({
         kind: DevFailureKind.GitHub,
-        message: "No open same-repository dev-to-main pull request exists",
+        message: 'No open same-repository dev-to-main pull request exists',
       });
     }
     return this.readPullRequest({
@@ -379,7 +381,8 @@ export class DevGitHubGateway {
     if (selection.value.length > 1) {
       return err({
         kind: DevFailureKind.GitHub,
-        message: "More than one open dev-to-main pull request exists; refusing to choose one",
+        message:
+          'More than one open dev-to-main pull request exists; refusing to choose one',
       });
     }
     const selected = selection.value.at(0);
@@ -397,14 +400,16 @@ export class DevGitHubGateway {
     });
   }
 
-  readPullRequestStatus(request: PullRequestReadRequest): Result<PullRequestStatus, DevFailure> {
+  readPullRequestStatus(
+    request: PullRequestReadRequest,
+  ): Result<PullRequestStatus, DevFailure> {
     const output = this.successful({
       args: [
-        "pr",
-        "view",
+        'pr',
+        'view',
         String(request.number.value()),
-        "--json",
-        "state,mergedAt",
+        '--json',
+        'state,mergedAt',
       ],
       workingDirectory: request.workingDirectory,
     });
@@ -432,7 +437,9 @@ export class DevGitHubGateway {
     }
     return ok({
       state,
-      merged: state === PullRequestState.Merged && typeof decoded.value.mergedAt === "string",
+      merged:
+        state === PullRequestState.Merged &&
+        typeof decoded.value.mergedAt === 'string',
     });
   }
 
@@ -441,20 +448,20 @@ export class DevGitHubGateway {
   ): Result<void, DevFailure> {
     const output = this.successful({
       args: [
-        "run",
-        "list",
-        "--workflow",
-        "ci.yml",
-        "--branch",
-        "dev",
-        "--commit",
+        'run',
+        'list',
+        '--workflow',
+        'ci.yml',
+        '--branch',
+        'dev',
+        '--commit',
         request.sha.value(),
-        "--event",
-        "pull_request",
-        "--limit",
-        "100",
-        "--json",
-        "databaseId,headBranch,headSha,status,conclusion,event,workflowName",
+        '--event',
+        'pull_request',
+        '--limit',
+        '100',
+        '--json',
+        'databaseId,headBranch,headSha,status,conclusion,event,workflowName',
       ],
       workingDirectory: request.workingDirectory,
     });
@@ -476,7 +483,9 @@ export class DevGitHubGateway {
     });
   }
 
-  requirePromotionEvidence(request: PromotionEvidenceRequest): Result<void, DevFailure> {
+  requirePromotionEvidence(
+    request: PromotionEvidenceRequest,
+  ): Result<void, DevFailure> {
     const slowCi = this.requireSlowCi(request);
     if (slowCi.isErr()) return err(slowCi.error);
     const reviews = this.requireCleanReviews(request);
@@ -494,11 +503,11 @@ export class DevGitHubGateway {
     );
     return (
       run.workflowName === DevDeliveryContract.remoteBuild.workflowName &&
-      run.event === "workflow_dispatch" &&
+      run.event === 'workflow_dispatch' &&
       run.headBranch === request.request.branch.value() &&
       run.headSha === request.request.sha.value() &&
-      run.status === "completed" &&
-      run.conclusion === "success" &&
+      run.status === 'completed' &&
+      run.conclusion === 'success' &&
       titleMatch?.[1] === request.request.sha.value()
     );
   }
@@ -508,7 +517,7 @@ export class DevGitHubGateway {
     workingDirectory: string,
   ): Result<readonly RunJobRecord[], DevFailure> {
     const output = this.successful({
-      args: ["run", "view", String(runId.value()), "--json", "jobs"],
+      args: ['run', 'view', String(runId.value()), '--json', 'jobs'],
       workingDirectory,
     });
     if (output.isErr()) return err(output.error);
@@ -524,18 +533,18 @@ export class DevGitHubGateway {
   ): Result<readonly PullRequestSelection[], DevFailure> {
     const output = this.successful({
       args: [
-        "pr",
-        "list",
-        "--state",
-        "open",
-        "--head",
-        "dev",
-        "--base",
-        "main",
-        "--limit",
-        "10",
-        "--json",
-        "number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft",
+        'pr',
+        'list',
+        '--state',
+        'open',
+        '--head',
+        'dev',
+        '--base',
+        'main',
+        '--limit',
+        '10',
+        '--json',
+        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft',
       ],
       workingDirectory,
     });
@@ -558,11 +567,11 @@ export class DevGitHubGateway {
   ): Result<DevelopmentPullRequest, DevFailure> {
     const output = this.successful({
       args: [
-        "pr",
-        "view",
+        'pr',
+        'view',
         String(request.number.value()),
-        "--json",
-        "number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,state,headRepository,baseRepository,reviewDecision",
+        '--json',
+        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,state,headRepository,baseRepository,reviewDecision',
       ],
       workingDirectory: request.workingDirectory,
     });
@@ -571,7 +580,10 @@ export class DevGitHubGateway {
       pullRequestViewSchema,
     );
     if (decoded.isErr()) return err(decoded.error);
-    return this.admitDevelopmentPullRequest(decoded.value, request.workingDirectory);
+    return this.admitDevelopmentPullRequest(
+      decoded.value,
+      request.workingDirectory,
+    );
   }
 
   private admitDevelopmentPullRequest(
@@ -582,14 +594,15 @@ export class DevGitHubGateway {
     if (repository.isErr()) return err(repository.error);
     if (
       view.state !== PullRequestState.Open ||
-      view.headRefName !== "dev" ||
-      view.baseRefName !== "main" ||
+      view.headRefName !== 'dev' ||
+      view.baseRefName !== 'main' ||
       view.headRepository.nameWithOwner !== repository.value.value() ||
       view.baseRepository.nameWithOwner !== repository.value.value()
     ) {
       return err({
         kind: DevFailureKind.GitHub,
-        message: "The live pull request is not a same-repository open dev-to-main pull request",
+        message:
+          'The live pull request is not a same-repository open dev-to-main pull request',
       });
     }
     const headSha = CommitSha.parse(view.headRefOid);
@@ -608,23 +621,25 @@ export class DevGitHubGateway {
     });
   }
 
-  private requireSlowCi(request: PromotionEvidenceRequest): Result<void, DevFailure> {
+  private requireSlowCi(
+    request: PromotionEvidenceRequest,
+  ): Result<void, DevFailure> {
     const output = this.successful({
       args: [
-        "run",
-        "list",
-        "--workflow",
-        "ci.yml",
-        "--branch",
-        "dev",
-        "--commit",
+        'run',
+        'list',
+        '--workflow',
+        'ci.yml',
+        '--branch',
+        'dev',
+        '--commit',
         request.sha.value(),
-        "--event",
-        "pull_request",
-        "--limit",
-        "100",
-        "--json",
-        "databaseId,headBranch,headSha,status,conclusion,event,workflowName",
+        '--event',
+        'pull_request',
+        '--limit',
+        '100',
+        '--json',
+        'databaseId,headBranch,headSha,status,conclusion,event,workflowName',
       ],
       workingDirectory: request.workingDirectory,
     });
@@ -640,10 +655,11 @@ export class DevGitHubGateway {
     if (!run) {
       return err({
         kind: DevFailureKind.Checks,
-        message: "No exact-head CI workflow run exists for the dev-to-main pull request",
+        message:
+          'No exact-head CI workflow run exists for the dev-to-main pull request',
       });
     }
-    if (run.status !== "completed" || run.conclusion !== "success") {
+    if (run.status !== 'completed' || run.conclusion !== 'success') {
       return err({
         kind: DevFailureKind.Checks,
         message: `The latest exact-head CI workflow run ${run.databaseId} is not successful`,
@@ -661,7 +677,7 @@ export class DevGitHubGateway {
           message: `Exact-head CI run ${run.databaseId} has no '${name}' gate`,
         });
       }
-      if (job.status !== "completed" || job.conclusion !== "success") {
+      if (job.status !== 'completed' || job.conclusion !== 'success') {
         return err({
           kind: DevFailureKind.Checks,
           message: `Exact-head CI gate '${name}' did not succeed`,
@@ -674,20 +690,22 @@ export class DevGitHubGateway {
   private isExactCiRun(run: CiRunRecord, sha: CommitSha): boolean {
     return (
       run.workflowName === DevDeliveryContract.promotion.workflowName &&
-      run.event === "pull_request" &&
-      run.headBranch === "dev" &&
+      run.event === 'pull_request' &&
+      run.headBranch === 'dev' &&
       run.headSha === sha.value()
     );
   }
 
-  private requireCleanReviews(request: PromotionEvidenceRequest): Result<void, DevFailure> {
+  private requireCleanReviews(
+    request: PromotionEvidenceRequest,
+  ): Result<void, DevFailure> {
     const output = this.successful({
       args: [
-        "pr",
-        "view",
+        'pr',
+        'view',
         String(request.pullRequest.number.value()),
-        "--json",
-        "reviewDecision",
+        '--json',
+        'reviewDecision',
       ],
       workingDirectory: request.workingDirectory,
     });
@@ -709,23 +727,23 @@ export class DevGitHubGateway {
     const repository = this.repository(request.workingDirectory);
     if (repository.isErr()) return err(repository.error);
     const query = [
-      "query($owner:String!,$repo:String!,$number:Int!){",
-      "repository(owner:$owner,name:$repo){",
-      "pullRequest(number:$number){",
-      "reviewThreads(first:100){nodes{isResolved isOutdated}}",
-      "}}}}",
-    ].join("");
+      'query($owner:String!,$repo:String!,$number:Int!){',
+      'repository(owner:$owner,name:$repo){',
+      'pullRequest(number:$number){',
+      'reviewThreads(first:100){nodes{isResolved isOutdated}}',
+      '}}}}',
+    ].join('');
     const threads = this.successful({
       args: [
-        "api",
-        "graphql",
-        "-f",
+        'api',
+        'graphql',
+        '-f',
         `query=${query}`,
-        "-F",
+        '-F',
         `owner=${repository.value.owner}`,
-        "-F",
+        '-F',
         `repo=${repository.value.repository}`,
-        "-F",
+        '-F',
         `number=${request.pullRequest.number.value()}`,
       ],
       workingDirectory: request.workingDirectory,
@@ -742,18 +760,20 @@ export class DevGitHubGateway {
     ) {
       return err({
         kind: DevFailureKind.Reviews,
-        message: "The dev-to-main pull request has an unresolved review thread",
+        message: 'The dev-to-main pull request has an unresolved review thread',
       });
     }
     return ok();
   }
 
-  private requirePagesDeployment(request: PromotionEvidenceRequest): Result<void, DevFailure> {
+  private requirePagesDeployment(
+    request: PromotionEvidenceRequest,
+  ): Result<void, DevFailure> {
     const repository = this.repository(request.workingDirectory);
     if (repository.isErr()) return err(repository.error);
     const deployments = this.successful({
       args: [
-        "api",
+        'api',
         `repos/${repository.value.value()}/deployments?sha=${request.sha.value()}&environment=${DevDeliveryContract.pagesEnvironment}&per_page=100`,
       ],
       workingDirectory: request.workingDirectory,
@@ -771,7 +791,7 @@ export class DevGitHubGateway {
     if (candidates.length === 0) {
       return err({
         kind: DevFailureKind.Deployment,
-        message: "No exact-head github-pages deployment exists for promotion",
+        message: 'No exact-head github-pages deployment exists for promotion',
       });
     }
     for (const deployment of candidates) {
@@ -784,11 +804,12 @@ export class DevGitHubGateway {
       const latest = [...statuses.value].sort((left, right) =>
         right.created_at.localeCompare(left.created_at),
       )[0];
-      if (latest && latest.state === "success") return ok();
+      if (latest && latest.state === 'success') return ok();
     }
     return err({
       kind: DevFailureKind.Deployment,
-      message: "Every exact-head github-pages deployment is missing a latest successful status",
+      message:
+        'Every exact-head github-pages deployment is missing a latest successful status',
     });
   }
 
@@ -799,7 +820,7 @@ export class DevGitHubGateway {
   }): Result<readonly DeploymentStatusRecord[], DevFailure> {
     const output = this.successful({
       args: [
-        "api",
+        'api',
         `repos/${request.repository.value()}/deployments/${request.deployment.id}/statuses?per_page=100`,
       ],
       workingDirectory: request.workingDirectory,
@@ -812,9 +833,18 @@ export class DevGitHubGateway {
     return ok(decoded.value);
   }
 
-  private repository(workingDirectory: string): Result<RepositorySlug, DevFailure> {
+  private repository(
+    workingDirectory: string,
+  ): Result<RepositorySlug, DevFailure> {
     const output = this.successful({
-      args: ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+      args: [
+        'repo',
+        'view',
+        '--json',
+        'nameWithOwner',
+        '--jq',
+        '.nameWithOwner',
+      ],
       workingDirectory,
     });
     if (output.isErr()) return err(output.error);
@@ -822,7 +852,7 @@ export class DevGitHubGateway {
   }
 
   private static reviewDecision(input: unknown): PullRequestReviewDecision {
-    if (typeof input !== "string") return PullRequestReviewDecision.Empty;
+    if (typeof input !== 'string') return PullRequestReviewDecision.Empty;
     switch (input) {
       case PullRequestReviewDecision.Approved:
         return PullRequestReviewDecision.Approved;
@@ -837,7 +867,9 @@ export class DevGitHubGateway {
     }
   }
 
-  private execute(request: GitHubInvocation): Result<CommandOutput, DevFailure> {
+  private execute(
+    request: GitHubInvocation,
+  ): Result<CommandOutput, DevFailure> {
     return this.request.runner.run({
       executable: CommandExecutable.GitHub,
       args: request.args,
@@ -845,7 +877,9 @@ export class DevGitHubGateway {
     });
   }
 
-  private successful(request: GitHubInvocation): Result<CommandOutput, DevFailure> {
+  private successful(
+    request: GitHubInvocation,
+  ): Result<CommandOutput, DevFailure> {
     const output = this.execute(request);
     if (output.isErr()) return err(output.error);
     if (output.value.exitCode !== 0) {

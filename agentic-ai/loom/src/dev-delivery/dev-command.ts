@@ -1,5 +1,5 @@
-import { spawnSync } from "node:child_process";
-import { err, ok, type Result } from "neverthrow";
+import { spawnSync } from 'node:child_process';
+import { err, ok, type Result } from 'neverthrow';
 
 import {
   CommandExecutable,
@@ -8,7 +8,7 @@ import {
   type CommandRunner,
   DevFailureKind,
   type DevFailure,
-} from "./dev-types.ts";
+} from './dev-types.ts';
 
 /** Owns the bounded host-process boundary for the dev delivery commands. */
 export class ProcessCommandRunner implements CommandRunner {
@@ -18,34 +18,34 @@ export class ProcessCommandRunner implements CommandRunner {
     const args =
       request.executable === CommandExecutable.Git
         ? [
-            "-c",
-            "core.hooksPath=/dev/null",
-            "-c",
-            "core.fsmonitor=false",
-            "-c",
-            "core.untrackedCache=false",
-            "--literal-pathspecs",
+            '-c',
+            'core.hooksPath=/dev/null',
+            '-c',
+            'core.fsmonitor=false',
+            '-c',
+            'core.untrackedCache=false',
+            '--literal-pathspecs',
             ...request.args,
           ]
         : [...request.args];
     try {
       const execution = spawnSync(request.executable, args, {
         cwd: request.workingDirectory,
-        encoding: "utf8",
+        encoding: 'utf8',
         env: {
           ...process.env,
-          GIT_CONFIG_GLOBAL: "/dev/null",
-          GIT_CONFIG_NOSYSTEM: "1",
-          GIT_TERMINAL_PROMPT: "0",
-          LC_ALL: "C",
+          GIT_CONFIG_GLOBAL: '/dev/null',
+          GIT_CONFIG_NOSYSTEM: '1',
+          GIT_TERMINAL_PROMPT: '0',
+          LC_ALL: 'C',
         },
         maxBuffer: ProcessCommandRunner.maxOutputBytes,
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
       const stdout = ProcessCommandRunner.text(execution.stdout);
       const stderr = ProcessCommandRunner.text(execution.stderr);
       const exitCode =
-        typeof execution.status === "number" ? execution.status : 1;
+        typeof execution.status === 'number' ? execution.status : 1;
       if (execution.error) {
         return err({
           kind: DevFailureKind.Command,
@@ -62,11 +62,11 @@ export class ProcessCommandRunner implements CommandRunner {
   }
 
   private static text(value: unknown): string {
-    return typeof value === "string"
+    return typeof value === 'string'
       ? value
       : value instanceof Buffer
-        ? value.toString("utf8")
-        : "";
+        ? value.toString('utf8')
+        : '';
   }
 }
 

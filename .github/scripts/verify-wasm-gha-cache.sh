@@ -168,5 +168,5 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
 fi
 
 PATH="$caller_path" bun install --cwd "$repo_root" --frozen-lockfile --ignore-scripts
-PATH="$caller_path" bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts" "$cache_ref"
+PATH="$caller_path" bun "$repo_root/infra/contracts/verify-registry-cache-blobs.ts" "$cache_ref"
 echo "verified ARC-published WASM dependency cache blob integrity for $cache_scope"

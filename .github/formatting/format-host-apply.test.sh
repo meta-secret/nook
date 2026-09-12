@@ -4,7 +4,7 @@ set -euo pipefail
 
 scripts_dir="$(cd "$(dirname "$0")" && pwd)"
 script="$(cat "$scripts_dir/format-host-apply.sh")"
-formatter_dir="$scripts_dir/../formatting"
+formatter_dir="$scripts_dir"
 dockerfile="$(cat "$formatter_dir/Dockerfile")"
 formatter="$(cat "$formatter_dir/format.sh")"
 agentic_taskfile="$(cat "$scripts_dir/../../.task/agentic-ai.yml")"
@@ -108,7 +108,7 @@ for required in \
   printf '%s\n' "$guest_changed_formatter" | grep -Fq -- "$required" \
     || { echo "format-host-apply test: sealed guest misses shared formatter contract: $required" >&2; exit 1; }
 done
-printf '%s\n' "$guest_formatter" | grep -Fq 'bash .github/scripts/format-host-apply.sh' \
+printf '%s\n' "$guest_formatter" | grep -Fq 'bash .github/formatting/format-host-apply.sh' \
   || { echo 'format-host-apply test: sealed guest must delegate changed-file selection' >&2; exit 1; }
 for package in "$web_package" "$loom_package"; do
   printf '%s\n' "$package" | grep -Fq '"prettier": "3.9.6"' \
@@ -134,7 +134,7 @@ mkdir -p \
   "$fixture_root/.cortex/teams/ai/dynamic-skills/scripts/scripts/demo/src" \
   "$fixture_root/agentic-ai/minds/hive-console/src" \
   "$fixture_root/agentic-ai/minds/hive/src" \
-  "$fixture_root/.github/scripts" \
+  "$fixture_root/.github/formatting" \
   "$fixture_root/.github/formatting/node_modules/.bin" \
   "$fixture_root/.github/formatting/node_modules/prettier-plugin-svelte" \
   "$fixture_root/.task" \
@@ -147,7 +147,7 @@ mkdir -p \
   "$fixture_root/nook-app/nook-web/nook-vault-simple/src" \
   "$fixture_root/nook-app/nook-web/nook-vault-sentinel/src" \
   "$fixture_root/preflight/src"
-cp "$scripts_dir/format-host-apply.sh" "$fixture_root/.github/scripts/format-host-apply.sh"
+cp "$scripts_dir/format-host-apply.sh" "$fixture_root/.github/formatting/format-host-apply.sh"
 cp "$scripts_dir/../../.task/agentic-ai.yml" "$fixture_root/.task/agentic-ai.yml"
 cp "$formatter_dir/format.sh" "$fixture_root/.github/formatting/format.sh"
 cat >"$fixture_root/bin/task" <<'EOF'
@@ -247,7 +247,7 @@ printf 'baseline\n' >"$fixture_root/README.md"
   NOOK_FORMATTER_ROOT="$fixture_root/.github/formatting" \
   REPO_ROOT="$fixture_root" \
   PATH="$fixture_root/bin:$PATH" \
-    bash .github/scripts/format-host-apply.sh >/dev/null
+    bash .github/formatting/format-host-apply.sh >/dev/null
   test "$(git hash-object nook-app/nook-platform/src/child.rs)" = "$(git rev-parse HEAD:nook-app/nook-platform/src/child.rs)"
 )
 printf '%s\n' \
@@ -289,7 +289,7 @@ cmp -s "$fixture_root/expected-rust.log" "$fixture_root/actual-rust.log" \
   NOOK_FORMATTER_ROOT="$fixture_root/.github/formatting" \
   REPO_ROOT="$fixture_root" \
   PATH="$fixture_root/bin:$PATH" \
-    bash .github/scripts/format-host-apply.sh >/dev/null
+    bash .github/formatting/format-host-apply.sh >/dev/null
 )
 test ! -e "$fixture_root/format.log" \
   || { echo 'format-host-apply test: sealed guest no-op invoked Prettier' >&2; exit 1; }

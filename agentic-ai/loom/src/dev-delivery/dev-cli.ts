@@ -1,9 +1,9 @@
-import { resolve } from "node:path";
-import { err, type Result } from "neverthrow";
+import { resolve } from 'node:path';
+import { err, type Result } from 'neverthrow';
 
-import { ProcessCommandRunner } from "./dev-command.ts";
-import { DevDeliveryWorkspace } from "./dev-workspace.ts";
-import { DevFailureKind, type DevFailure } from "./dev-types.ts";
+import { ProcessCommandRunner } from './dev-command.ts';
+import { DevDeliveryWorkspace } from './dev-workspace.ts';
+import { DevFailureKind, type DevFailure } from './dev-types.ts';
 
 export interface DevCliMessage {
   readonly message: string;
@@ -13,7 +13,7 @@ export interface DevCliMessage {
 export class DevCli {
   static repositoryRoot(): string {
     const configured = process.env.REPO_ROOT;
-    return typeof configured === "string" && configured.length > 0
+    return typeof configured === 'string' && configured.length > 0
       ? resolve(configured)
       : resolve(process.cwd());
   }

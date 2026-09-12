@@ -7,13 +7,13 @@ tasks:
     desc: Validate Hive isolation and TLS invariants in repository manifests.
     cmds:
       - bun test infra/operator-ssh.test.ts
-      - bun .github/scripts/home-ssh-contract.ts
+      - bun infra/contracts/home-ssh-contract.ts
       - bun test infra/providers/ovh-dedicated.test.ts
-      - bun .github/scripts/ovh-dedicated-contract.ts
-      - ruby .github/scripts/hive-manifest-contract.rb
+      - bun infra/contracts/ovh-dedicated-contract.ts
+      - ruby infra/contracts/hive-manifest-contract.rb
       - bun test agentic-ai/minds/hive/controller/reaper.test.ts
-      - bun .github/scripts/k0s-firewall-rollback-test.ts
-      - bun .github/scripts/k0s-cni-migration-test.ts
-      - bun .github/scripts/services-network-repair-test.ts
-      - bun .github/scripts/zot-registry-public-contract-test.ts
-      - bun .github/scripts/arc-manifest-contract.ts
+      - bun infra/contracts/k0s-firewall-rollback-test.ts
+      - bun infra/contracts/k0s-cni-migration-test.ts
+      - bun infra/contracts/services-network-repair-test.ts
+      - bun infra/contracts/zot-registry-public-contract-test.ts
+      - bun infra/contracts/arc-manifest-contract.ts
