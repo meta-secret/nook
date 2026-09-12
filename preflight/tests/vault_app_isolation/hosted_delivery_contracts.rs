@@ -349,6 +349,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         ci.contains("name: Dev promotion readiness")
             && ci.contains("needs: [scope, policy, pr, hive, research]")
             && ci.contains("github.event.pull_request.head.ref == 'dev'")
+            && ci.contains(
+                "github.event.action == 'labeled' && github.event.label.name == 'ci:full-e2e'"
+            )
             && ci.contains("'dev-pr'")
             && ci.contains("cancel-in-progress: >-"),
         "dev promotion must expose one stable exact-head gate with serialized native concurrency"

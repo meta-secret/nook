@@ -20,7 +20,8 @@ concurrency:
     github.event.pull_request.head.ref == 'dev' &&
     github.event.pull_request.base.ref == 'main' &&
     (contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) ||
-    (github.event.action == 'edited' && github.event.changes.base.ref.from != '')) &&
+    (github.event.action == 'edited' && github.event.changes.base.ref.from != '') ||
+    (github.event.action == 'labeled' && github.event.label.name == 'ci:full-e2e')) &&
     'dev-pr' ||
     (github.event_name == 'pull_request' &&
     github.event.pull_request.head.repo.full_name == github.repository &&
@@ -51,7 +52,8 @@ jobs:
       github.event.pull_request.head.ref == 'dev' &&
       github.event.pull_request.base.ref == 'main' &&
       (contains(fromJSON('["opened","synchronize","reopened"]'), github.event.action) ||
-      (github.event.action == 'edited' && github.event.changes.base.ref.from != '')) ||
+      (github.event.action == 'edited' && github.event.changes.base.ref.from != '') ||
+      (github.event.action == 'labeled' && github.event.label.name == 'ci:full-e2e')) ||
       (!(github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.head.ref == 'dev' &&
       github.event.pull_request.base.ref == 'main') &&
