@@ -25,11 +25,15 @@ the active harness.
   delegation transport.
 - Do not create a worktree for a Team Agent.
 - Write-capable Team Agents use the current checkout and current branch.
-- Only one write-capable Team Agent runs at a time.
+- Run dependency-ready write-capable Team Agents in parallel when their
+  explicit file scopes are disjoint.
+- Order writers whose scopes overlap or whose tasks have a dependency edge.
 - Read-only Team Agents may run concurrently when they cannot interfere with a
   writer.
-- A Team Agent may commit its complete scoped change when Gizmo requests it.
-- Gizmo continues directly from that commit.
+- Only one Team Agent stages files or creates a commit at a time.
+- Every writer commits its complete scoped iteration during its Gizmo-granted
+  commit turn.
+- Gizmo continues directly from those commits.
 - Do not cherry-pick, merge, copy, replay, or synthesize a worker commit into a
   separate integration branch.
 - Gizmo owns branch sequencing, PR authorization, technical review
@@ -47,23 +51,48 @@ the active harness.
    - Tell the worker to request missing PR evidence from Gizmo.
    - Explicitly prohibit direct `gh` queries, equivalent GitHub access, and
      PR monitoring, including read-only `gh pr view`.
-4. Check that no other write-capable Team Agent is active.
-5. Start the Team Agent through the active harness in the current checkout.
-6. Let the Team Agent implement and run focused checks.
-7. Request one terminal handoff with changed outcomes, evidence references,
-   and unresolved blockers.
-8. Ask for a commit when useful for delivery.
-9. Verify that the result stays inside the declared scope.
-10. Continue from the resulting shared-branch state.
-11. Route corrections to the team that owns the affected change.
+4. Build the next dependency-ready wave from tasks with disjoint file scopes.
+5. Start that wave through the active harness in the current checkout.
+6. Let each Team Agent implement and run focused checks.
+7. Grant one commit turn at a time as writers finish.
+   - The writer stages only its allowed files.
+   - The writer commits its complete iteration.
+   - Other writers do not stage or commit during that turn.
+8. Request one terminal handoff from each writer.
+   - Include the commit SHA, changed outcomes, evidence, and blockers.
+9. Verify each commit stays inside its declared scope.
+10. Co-validate the combined branch after all tasks in the wave commit.
+11. Continue with the next dependency-ready wave.
+12. Route corrections to the team that owns the affected change.
+
+Before a later implementation or repair iteration, the Team Agent reads the
+last one or two commits relevant to its allowed files and named interfaces. It
+also inspects those diffs. This committed history supplements the task prompt.
+It does not replace the explicit scope or acceptance evidence.
 
 ## Dependencies
 
 A Team Agent stops at another team's boundary and reports the missing
 dependency to Gizmo.
 
-Gizmo then assigns a separate bounded task to the owning team. The current
-writer finishes or stops before another writer begins.
+Gizmo assigns a separate bounded task to the owning team. A dependent consumer
+waits for the provider commit. Independent work may remain in the active wave.
+
+For a cross-team provider-consumer boundary, Gizmo records:
+
+- the provider-owned interface and its observable acceptance evidence;
+- the consumer assumption and its observable acceptance evidence; and
+- the combined compilation, typecheck, or behavior evidence.
+
+Provider and consumer tasks may run in parallel when both can implement against
+an already agreed interface. If the consumer needs the provider's new output,
+the provider task is an explicit dependency.
+
+After both commits exist, Gizmo co-validates the combined branch. A failure is
+routed to the provider when the exported contract is wrong. It is routed to the
+consumer when the contract is used incorrectly. When both sides must change,
+Gizmo assigns both bounded repair tasks. Those repairs may run in parallel only
+when their scopes remain disjoint and neither repair depends on the other.
 
 Workers do not create other workers. They do not change task ownership or the
 delivery sequence.
@@ -94,10 +123,10 @@ only when a visualization is warranted. Never claim it was known earlier.
 - If a required Team Agent cannot start, report the blocker.
 - If a Team Agent produces out-of-scope changes, reject those changes and route
   a corrected task.
-- If the current checkout contains unexpected edits, stop before starting a
-  writer and identify their owner.
-- Do not add a parallel Team Agent lifecycle or Git-state protocol to recover
-  from a failure.
+- If the checkout contains edits outside the declared active scopes, stop the
+  affected dispatch and identify their owner.
+- Do not add a lifecycle service or Git-state protocol to recover from a
+  failure.
 
 ## Validation
 
@@ -105,8 +134,13 @@ Before accepting Team Agent work, verify:
 
 - the task used the correct team identity;
 - only the declared files changed;
-- no other writer ran concurrently;
+- concurrent writers had disjoint explicit file scopes;
+- dependency edges and overlapping scopes were ordered;
+- only one writer staged or committed at a time;
 - the shared branch contains the accepted result;
+- every writer committed its complete scoped iteration;
+- later iterations inspected the last one or two relevant commits and diffs;
+- provider-consumer evidence passed on the combined branch;
 - focused acceptance checks passed;
 - workers requested missing PR evidence through Gizmo without direct GitHub
   access or monitoring; and

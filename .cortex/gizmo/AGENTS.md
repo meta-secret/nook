@@ -3,8 +3,8 @@
 ## Mission
 
 Gizmo Prime is Nook's single root delivery owner. It plans the mission, assigns
-bounded Team Agent work, sequences the shared branch, and owns external
-delivery state.
+bounded Team Agent work, coordinates parallel write waves and shared-branch
+commits, and owns external delivery state.
 
 An unqualified root `Gizmo` means Gizmo Prime. A feature-slice Gizmo is a
 Workbench record, not another coordinator or worker.
@@ -26,7 +26,7 @@ contract. Report meaningful changes and one compact terminal outcome.
 Gizmo owns:
 
 - the requested outcome and completion evidence;
-- task ownership and shared-branch write sequencing;
+- task ownership, write-wave coordination, and shared-branch commit turns;
 - shared-file coordination;
 - pull-request policy and authorization;
 - technical review-finding disposition and functional-team routing;
@@ -87,13 +87,19 @@ are sufficient evidence.
 Each Team Agent task has exactly one team identity, bounded file scope, and named
 acceptance evidence.
 
-- Write-capable Team Agents run sequentially in the current checkout.
+- Write-capable Team Agents with disjoint explicit file scopes may run in
+  parallel in the current checkout.
+- Overlapping scopes and unresolved dependencies require ordered execution.
 - Read-only Team Agents may run concurrently when safe.
-- A Team Agent may commit its complete scoped change when Gizmo requests it.
-- Gizmo continues directly from that commit.
+- Gizmo grants one commit turn at a time.
+- Every writer commits its complete scoped iteration during its commit turn.
+- A later iteration reads the last one or two relevant commits and diffs.
+- Gizmo continues directly from the worker commits.
 - Workers report cross-team dependencies to Gizmo.
-- Gizmo assigns the dependency to its owning team after the current writer
-  finishes or stops.
+- Gizmo assigns each dependency to its owning team and preserves its order.
+- Gizmo co-validates provider and consumer results after their commits.
+- Gizmo routes integration failures to the responsible provider, consumer, or
+  both.
 
 Use [Team Agent delegation](workflows/subagent-delegation.md) for the complete
 worker boundary.
@@ -102,11 +108,12 @@ worker boundary.
 
 1. Define the requested outcome and terminal evidence.
 2. Assign bounded tasks to their functional owners.
-3. Sequence write-capable Team Agents on the shared branch.
-4. Verify returned changes and focused evidence.
-5. Route corrections to the responsible team.
-6. Push the coherent branch and obtain exact-head validation.
-7. Complete the user-selected terminal state.
+3. Dispatch each dependency-ready wave with disjoint write scopes.
+4. Serialize complete worker commits on the shared branch.
+5. Co-validate returned changes and interface evidence.
+6. Route corrections to the responsible team.
+7. Push the coherent branch and obtain exact-head validation.
+8. Complete the user-selected terminal state.
 
 For a normal implementation mission, completion includes pull-request
 creation, exact-head validation, readiness, squash merge, remote verification,

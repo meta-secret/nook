@@ -16,29 +16,39 @@ simple shared-branch sequence.
 
 ## Execution
 
-1. Confirm that no write-capable Team Agent is active.
-2. Start the next writer in the current checkout.
-3. Let the Team Agent implement and run focused checks.
-4. Ask for a complete scoped commit when a commit helps sequencing.
-5. Verify the changed paths and evidence.
-6. Continue directly from the resulting shared-branch state.
-7. Start the next dependent writer only after the current writer finishes.
+1. Group dependency-ready tasks with disjoint explicit file scopes.
+2. Start every task in the group in the current checkout.
+3. Let each Team Agent implement and run focused checks.
+4. Grant one commit turn at a time as writers finish.
+5. Require every writer to commit its complete scoped iteration.
+6. Verify each commit's changed paths and evidence.
+7. Co-validate the combined shared-branch state.
+8. Start dependent tasks only after their provider commits.
 
 Read-only Team Agents may run concurrently when their inspection cannot
-interfere with the writer.
+interfere with writers.
+
+A later implementation or repair iteration reads the last one or two commits
+relevant to its allowed files and named interfaces. It inspects those diffs
+before editing.
 
 ## Cross-team dependencies
 
 A Team Agent reports foreign-team work to Gizmo. It does not implement the
 foreign capability or create another worker.
 
-Gizmo assigns the dependency to its functional owner after the current writer
-finishes or stops.
+Gizmo assigns the dependency to its functional owner. A dependent consumer
+waits for its provider commit. Independent work may continue in parallel.
+
+Provider and consumer tasks define separate focused evidence and one combined
+interface check. Gizmo routes a combined compilation or typecheck failure to
+the provider, consumer, or both. Disjoint repair scopes may run in parallel
+when no dependency remains between them.
 
 ## Review and validation
 
 - Route every finding to the team that owns the affected change.
-- Keep fixes inside the same shared checkout and writer sequence.
+- Keep fixes inside the same shared checkout and commit-turn sequence.
 - Team Agents run focused implementation checks.
 - Gizmo runs or authorizes shared pre-push and exact-head validation.
 - Gizmo owns PR policy, review dispositions, readiness and merge verdicts.
@@ -50,7 +60,7 @@ finishes or stops.
 Do not create:
 
 - Team Agent worktrees;
-- parallel Team Agent lifecycle or Git-state machinery; or
+- a Team Agent lifecycle service, scheduler, or Git-state machinery; or
 - deletion-report schemas.
 
 ## Completion
@@ -58,7 +68,11 @@ Do not create:
 The technical result is ready when:
 
 - each change has one functional owner;
-- only one writer ran at a time;
+- concurrent writers had disjoint explicit file scopes;
+- dependency and overlapping-scope order was preserved;
+- only one writer staged or committed at a time;
+- every writer committed its complete scoped iteration;
+- combined provider-consumer evidence passed;
 - all accepted changes are already on the shared branch;
 - focused tests passed; and
 - the branch is ready for Gizmo's external delivery sequence.

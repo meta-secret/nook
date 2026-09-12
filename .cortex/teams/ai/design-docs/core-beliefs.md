@@ -87,26 +87,33 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - **Every implementation mission** follows
   [mission delivery](../../../gizmo/workflows/mission-delivery.md).
 - Responsible team agents own implementation and scoped fixes.
-- Gizmo owns delivery planning, Team Agent assignment, shared-branch
-  sequencing, review coordination, validation, readiness, and merge.
+- Gizmo owns delivery planning, Team Agent assignment, parallel write waves,
+  serialized shared-branch commits, review coordination, validation,
+  readiness, and merge.
 - The delivery pipeline has these ordered steps:
   1. Gizmo fetches the repository and plans from `origin/main`.
-  2. Gizmo assigns the bounded implementation task through the active harness.
-  3. Gizmo continues from the Team Agent's shared-branch result.
-  4. Gizmo runs Loom pre-push. Team-owned formatter mutations return to their
-     owners for a fresh committed handoff before Gizmo authorizes PR Steward to update the PR.
-  5. Gizmo authorizes PR Steward to dispatch hosted validation immediately.
+  2. Gizmo assigns dependency-ready tasks with disjoint file scopes through the
+     active harness.
+  3. Team Agents implement in parallel and commit complete iterations through
+     serialized commit turns.
+  4. Gizmo co-validates the combined shared-branch result.
+  5. Gizmo runs Loom pre-push.
+     - Team-owned formatter mutations return to their owners.
+     - Each owner returns a fresh committed handoff.
+     - Gizmo then authorizes PR Steward to update the PR.
+  6. Gizmo authorizes PR Steward to dispatch hosted validation immediately.
      Use a relevant focused task until the head is validation-ready.
      Dispatch complete validation when the head is ready.
-  6. Gizmo assigns each bounded correction task to its owning team.
-  7. Gizmo continues from verified fixes and runs Loom pre-push. Team-owned
+  7. Gizmo assigns each bounded correction task to its owning team.
+  8. Disjoint, dependency-ready corrections may run in parallel. Gizmo
+     continues from their committed fixes and runs Loom pre-push. Team-owned
      formatter mutations return to their owners for a fresh committed handoff
      before Gizmo pushes and obtains fresh exact-head validation.
-  8. Before final readiness, the AI team reviews self-improvement only when the
+  9. Before final readiness, the AI team reviews self-improvement only when the
      work revealed a durable lesson or Cortex defect.
-  9. When a candidate qualifies, Gizmo continues from its clean committed promotion
+  10. When a candidate qualifies, Gizmo continues from its clean committed promotion
      and runs Loom pre-push. It repeats hosted validation if the head changes.
-  10. Gizmo runs readiness and completes the squash merge.
+  11. Gizmo runs readiness and completes the squash merge.
 - **Do not stop at push or readiness.** Gizmo owns the PR through squash merge
   unless concretely blocked.
 - **Question-only turns** (no code changes) skip the pipeline.

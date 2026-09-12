@@ -104,14 +104,20 @@ Workbench record, not another coordinator or worker. See the
     authorization packet.
   - Team workers implement and test their assigned changes in the current
     shared checkout.
-  - Gizmo Prime controls write sequencing and authorization. PR Steward may
-    mutate external pull-request state only within the named packet.
-  - Only one write-capable Team Agent runs at a time.
+  - Gizmo Prime controls write waves and commit turns. PR Steward may mutate
+    external pull-request state only within the named packet.
+  - Write-capable Team Agents may run concurrently only when their explicit
+    file scopes are disjoint and they have no unresolved dependency.
+  - Tasks with overlapping scopes or provider-consumer dependencies run in
+    dependency order.
   - Read-only Team Agents may run concurrently when their evidence scopes are
-    safe to inspect while the writer runs.
-  - A write-capable Team Agent may commit its complete scoped change when Gizmo
-    requests a commit.
-  - Gizmo continues directly from that commit.
+    safe to inspect while writers run.
+  - Only one Team Agent uses the Git index or creates a commit at a time.
+  - Every write-capable Team Agent commits its complete scoped iteration during
+    the commit turn granted by Gizmo.
+  - Gizmo continues directly from those commits on the shared branch.
+  - A later worker iteration reads the last one or two relevant commits and
+    diffs before changing its owned scope.
 - **Validation and delivery**
   - Team workers run only fast focused local Loom tests, lint, or typechecks
     that provide direct implementation feedback.

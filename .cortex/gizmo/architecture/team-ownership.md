@@ -17,10 +17,12 @@ coordinates delivery but does not redefine a team's technical contract.
 - A team stops at another team's boundary and reports the dependency to Gizmo.
 - Gizmo assigns a separate task when another team's implementation is needed.
 - Security review does not transfer implementation ownership.
-- Team Agents edit the current shared checkout sequentially.
-- Gizmo owns shared-branch sequencing, external delivery policy, and
-  authorization. PR Steward performs only the explicitly authorized
-  pull-request mechanics.
+- Team Agents may edit the current shared checkout concurrently when their
+  explicit file scopes are disjoint.
+- Overlapping scopes and unresolved dependencies require ordered execution.
+- Gizmo owns write-wave coordination, serialized commit turns, external
+  delivery policy, and authorization.
+- PR Steward performs only the explicitly authorized pull-request mechanics.
 
 ## Teams
 
@@ -29,7 +31,7 @@ coordinates delivery but does not redefine a team's technical contract.
 Gizmo owns:
 
 - mission scope and task routing;
-- shared-branch write sequencing;
+- write-wave coordination and shared-branch commit turns;
 - shared-file coordination;
 - pull-request policy and authorization;
 - technical review-finding disposition;
@@ -113,8 +115,9 @@ Its normal scope includes:
 Shared files include root manifests, lockfiles, generated bindings, cross-team
 registries, and root routing documents.
 
-Gizmo assigns one writer for each shared-file change. The assigned Team Agent
-edits the file in the current checkout. No separate integration workspace is
+Gizmo assigns one writer for each shared-file change. Any task that needs the
+same shared file is ordered after that writer. The assigned Team Agent edits
+the file in the current checkout. No separate integration workspace is
 created.
 
 ## Assignment procedure
@@ -123,10 +126,12 @@ created.
 2. Identify the functional owner.
 3. Split only at real team or dependency boundaries.
 4. Give each task one team identity and bounded file scope.
-5. Sequence write-capable tasks on the shared branch.
-6. Let each team implement and test its own scope.
-7. Route cross-team dependencies back through Gizmo.
-8. Validate the completed shared-branch result.
+5. Group dependency-ready tasks whose explicit file scopes are disjoint.
+6. Run each group as a parallel write wave in the current checkout.
+7. Grant one commit turn at a time for each complete scoped iteration.
+8. Route cross-team dependencies back through Gizmo.
+9. Co-validate provider and consumer evidence on the combined branch.
+10. Route integration failures to the responsible owners.
 
 ## Team responsibility
 
@@ -149,7 +154,9 @@ Verify:
 - every changed behavior has one functional owner;
 - every Team Agent task has one team identity;
 - cross-team dependencies were routed to their owners;
-- only one writer changed the checkout at a time;
+- concurrent writers had disjoint explicit file scopes;
+- overlapping or dependent writers ran in order;
+- only one writer used the Git index or committed at a time;
 - shared files had an explicitly assigned writer;
 - accepted worker commits are already on the shared branch; and
-- no worktree or parallel Team Agent lifecycle was introduced.
+- no worktree or external lifecycle system was introduced.
