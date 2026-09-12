@@ -18,6 +18,7 @@ import {
   loadingExtensionMetadata,
   unavailableExtensionMetadata,
 } from './extension-metadata-state'
+import { localizeLandingStructuredData } from './structured-data'
 
 /** @typedef {'en' | 'ru'} LandingLocale */
 /** @typedef {'dark' | 'light'} LandingTheme */
@@ -396,17 +397,11 @@ function applyLandingLocale(locale, persist = false) {
   updateGitHubStars(locale)
 
   const structuredDataElement = LandingDocument.element('#structured-data')
-  /** @type {unknown} */
-  const structuredData = JSON.parse(structuredDataElement.textContent)
-  if (!structuredData || typeof structuredData !== 'object') {
-    throw new Error('Invalid landing structured data.')
-  }
-  if (!('description' in structuredData) || !('inLanguage' in structuredData)) {
-    throw new Error('Incomplete landing structured data.')
-  }
-  structuredData.description = messages[LANDING_MESSAGE_KEYS.MetaDescription]
-  structuredData.inLanguage = locale
-  structuredDataElement.textContent = JSON.stringify(structuredData)
+  structuredDataElement.textContent = localizeLandingStructuredData({
+    serialized: structuredDataElement.textContent,
+    description: messages[LANDING_MESSAGE_KEYS.MetaDescription],
+    locale,
+  })
 
   if (persist) {
     try {

@@ -8,6 +8,7 @@ export const typedApiSourceFiles = [
 
 export const untrustedInputAdapterFiles = [
   "nook-web-app/src/landing/github-stars-state.ts",
+  "nook-web-app/src/landing/structured-data.ts",
   "nook-web-extension/src/chrome.d.ts",
   "nook-web-extension/src/content/simple-vault-bridge.ts",
   "nook-web-extension/src/content/webauthn-content.ts",
