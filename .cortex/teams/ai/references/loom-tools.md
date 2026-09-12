@@ -10,6 +10,23 @@
 
 Full package docs: [`agentic-ai/loom/README.md`](../../../../agentic-ai/loom/README.md).
 
+## Module delivery boundary
+
+- **Read-only experts:** The expert runtime uses an immutable, catalog-scoped
+  snapshot of the exact source commit. That snapshot is not an implementation
+  workspace.
+- **Write-capable workers:** An implementation worker writes only in an
+  isolated child worktree based on the parent feature worktree's exact
+  accepted commit.
+- **Commit handoff:** The worker returns the exact commit for its iteration and
+  focused evidence. The parent verifies the commit and integrates it into the
+  parent worktree.
+- **History visibility:** A worker may inspect committed parent history and
+  integrated peer commits for context. This does not widen its write scope.
+
+The active harness owns worker coordination. Loom provides mechanical evidence
+and boundary checks; it does not add worker lifecycle or recovery machinery.
+
 ## Agent action references
 
 `.cortex/identifiers.json` assigns stable compact identifiers to Cortex

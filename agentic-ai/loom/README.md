@@ -157,6 +157,26 @@ behavior, security, and compatibility invariants, owning tests, focused
 validation, risks, unresolved decisions, and parent actions. Parent actions are
 evidence only and never schedule work.
 
+## Module delivery worktrees
+
+Module expert snapshots and implementation worktrees are different surfaces.
+
+- **Read-only expert:** The expert runtime receives an immutable, catalog-scoped
+  snapshot of the exact source commit. It is not a writable implementation
+  workspace.
+- **Write-capable worker:** The implementation worker receives an isolated child
+  worktree based on the parent feature worktree's exact accepted commit.
+- **Exact handoff:** The worker returns the exact commit for its iteration and
+  focused evidence. The parent verifies that commit and integrates it into the
+  parent worktree.
+- **History access:** The worker may inspect committed parent history and
+  integrated peer commits for context. Its write scope remains limited to its
+  child worktree and declared files.
+
+The active harness owns worker coordination. Loom documents and checks the
+mechanical boundary; it does not provide worker lifecycle or recovery
+machinery.
+
 ## Structural refactoring experts
 
 Structural refactoring roles use a sibling registry because their evidence
