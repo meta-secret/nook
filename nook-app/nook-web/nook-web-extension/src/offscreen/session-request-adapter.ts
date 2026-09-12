@@ -4,7 +4,6 @@ import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import {
   ExtensionSessionRequestValidation,
   type ExtensionSessionRequest as GeneratedExtensionSessionRequest,
-  type ExtensionSessionRequestWire,
   type PasskeyCeremonyQueueDisposition,
   type QueueDisposition,
   validate_extension_session_request,
@@ -497,7 +496,7 @@ export async function parseExtensionSessionRequest(
     if (readiness === CompanionWasmReadinessKind.Expired) {
       return { kind: ExtensionSessionRequestParseKind.Invalid }
     }
-    let validationRequest: ExtensionSessionRequestWire
+    let validationRequest
     if (request.type === ExtensionSessionMessageType.ImportVault) {
       const identities = new ProviderCredentialBuffer(
         request.payload.providers,
@@ -513,10 +512,8 @@ export async function parseExtensionSessionRequest(
     } else {
       validationRequest = request
     }
-    const requestWire: ExtensionSessionRequestWire =
-      validationRequest as ExtensionSessionRequestWire
     if (
-      validate_extension_session_request(requestWire) !==
+      validate_extension_session_request(validationRequest) !==
       ExtensionSessionRequestValidation.Accepted
     ) {
       clearExtensionSessionIngressRequest(request)

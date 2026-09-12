@@ -537,14 +537,14 @@ class ExtensionConnectionBrowser {
     }
     let admission: ReturnType<typeof admit_companion_identity_status>;
     try {
-      const admissionRequest = {
+      const admissionRequest: Parameters<
+        typeof admit_companion_identity_status
+      >[0] = {
         discovery: protocolDiscovery,
         status: response.status,
         observedAt: Date.now(),
       };
-      admission = Reflect.apply(admit_companion_identity_status, this.browser, [
-        admissionRequest,
-      ]);
+      admission = admit_companion_identity_status(admissionRequest);
     } catch {
       return { kind: ExtensionMessageDeliveryKind.Unavailable };
     }
@@ -800,10 +800,8 @@ class ExtensionConnectionBrowser {
           );
         let admission: ReturnType<typeof admit_companion_handoff_response>;
         try {
-          admission = Reflect.apply(
-            admit_companion_handoff_response,
-            this.browser,
-            [delivery.response.response],
+          admission = admit_companion_handoff_response(
+            delivery.response.response,
           );
         } catch (failure) {
           return err(new NativeVaultStorageFailure(failure));

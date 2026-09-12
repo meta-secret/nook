@@ -38,10 +38,8 @@ import {
   CompanionDiscoveryEndpointKind,
   type CompanionDiscoveryEndpoint,
 } from './session-vault-operations'
-import type {
-  CompanionExtensionPresence,
-  CompanionIdentityDiscoveryObservation,
-} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type { CompanionExtensionPresence } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { decode_companion_identity_discovery_observation } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { CompanionVaultDiscoveryArgs } from './session-vault-operations'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
@@ -264,11 +262,11 @@ async function handleCompanionIdentityHandoff(
     try {
       const activeManager = await getManager()
       consumed = true
-      const response: CompanionIdentityHandoffResponse = await Reflect.apply(
-        endpoint.authorize_and_seal,
-        endpoint,
-        [activeManager, message.payload.authorization],
-      )
+      const response: CompanionIdentityHandoffResponse =
+        await endpoint.authorize_and_seal(
+          activeManager,
+          message.payload.authorization,
+        )
       const renewal = sessionExpiryLifecycle.renew(generation)
       if (renewal.isErr())
         return err(
@@ -302,17 +300,18 @@ async function handleCompanionIdentityDiscovery(
           }
         : {
             kind: CompanionDiscoveryEndpointKind.Initial,
-            endpoint: Reflect.construct(NookCompanionExtensionEndpoint, [
+            endpoint: new NookCompanionExtensionEndpoint(
               message.payload.presence,
-            ]),
+            ),
           }
 
     try {
-      // Construction above is the Rust-owned validation boundary for this
-      // generated presence projection.
+      // The endpoint constructor owns presence admission. The typed projection
+      // remains necessary until that boundary returns its admitted presence.
       const presence = message.payload.presence as CompanionExtensionPresence
-      const discovery = message.payload
-        .discovery as CompanionIdentityDiscoveryObservation
+      const discovery = decode_companion_identity_discovery_observation(
+        message.payload.discovery,
+      )
       const companionDiscoveryArgs: CompanionVaultDiscoveryArgs = {
         activeManager,
         endpoint,
