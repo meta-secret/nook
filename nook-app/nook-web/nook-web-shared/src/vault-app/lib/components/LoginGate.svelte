@@ -27,6 +27,7 @@
   import { type StartSentinelGenesisArgs } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import type {
+    OAuthFilePreset,
     ProviderSetupRequest,
     StorageProvider,
     StorageProviderType,
@@ -62,6 +63,7 @@
     type LoginVaultEntry,
   } from '$lib/components/login/login-unlock-state'
   import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
+  import type { SentinelGenesisParticipation } from '$lib/components/login/login-create-vault-chooser-contract'
   import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
@@ -174,6 +176,12 @@
       'onAcceptSentinelOnboardingPackage' | 'onFinishSentinelInvitation'
     >
   >
+  type CreateVaultChooserProps = ComponentProps<typeof LoginCreateVaultChooser>
+  type EnrollmentQrOnboardCardProps = ComponentProps<
+    typeof EnrollmentQrOnboardCard
+  >
+  type LoginUnlockStepProps = ComponentProps<typeof LoginUnlockStep>
+  type LoginVaultPickerProps = ComponentProps<typeof LoginVaultPicker>
   type EnrollmentPanelOptionalProps = Partial<
     Pick<ComponentProps<typeof LoginEnrollmentPanel>, 'onUseEnrollmentCode'>
   >
@@ -489,7 +497,7 @@
       ? vault.recoveryDiscovery.summary.passwordEntries
       : [],
   )
-  const oauthPreset = $derived(
+  const oauthPreset = $derived<OAuthFilePreset>(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? vault.oauthFileDraft.config.preset
       : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
@@ -601,18 +609,21 @@
       </p>
     {/if}
 
-    {#if showQrOnboarding}
+    {#if showQrOnboarding && onUseEnrollmentCode}
       <EnrollmentQrOnboardCard
         {vault}
         code={prefillEnrollmentCode}
         passwordEntryId={peek_enrollment_entry_id(prefillEnrollmentCode)}
         passwordEntryLabel={prefillEnrollmentEntryLabel}
         {isVerifying}
-        onSubmit={(password) => {
-          const enrollmentRequest: Parameters<
-            NonNullable<typeof onUseEnrollmentCode>
-          >[0] = { code: prefillEnrollmentCode, password }
-          return onUseEnrollmentCode!(enrollmentRequest)
+        onSubmit={(
+          password: Parameters<EnrollmentQrOnboardCardProps['onSubmit']>[0],
+        ) => {
+          const enrollmentRequest: Parameters<typeof onUseEnrollmentCode>[0] = {
+            code: prefillEnrollmentCode,
+            password,
+          }
+          return onUseEnrollmentCode(enrollmentRequest)
         }}
       />
     {:else if showCreateVault || sentinelInvitationRequest.trim()}
@@ -627,12 +638,12 @@
         onAddSentinelGenesisParticipantResponse={({
           payload,
           participantLabel,
-        }) => {
+        }: SentinelGenesisParticipation) => {
           const participantRequest: Parameters<
             sentinelGenesisActions.SentinelGenesisActions['addParticipantResponse']
           >[0] = {
             payload,
-            participantLabel: ((v) => (v ? v : ''))(participantLabel),
+            participantLabel: participantLabel ? participantLabel : '',
           }
           return new sentinelGenesisActions.SentinelGenesisActions(
             vault,
@@ -661,7 +672,13 @@
               ).createPublicKeyAnnouncement(),
           ]
         ) => v)(onCreateSentinelGenesisPublicKeyAnnouncement)}
-        onRememberSentinelGenesisRequest={(payload) =>
+        onRememberSentinelGenesisRequest={(
+          payload: Parameters<
+            NonNullable<
+              CreateVaultChooserProps['onRememberSentinelGenesisRequest']
+            >
+          >[0],
+        ) =>
           (() => {
             const rememberRequestArgs: Parameters<
               sentinelGenesisActions.SentinelGenesisActions['rememberRequest']
@@ -670,7 +687,13 @@
               vault,
             ).rememberRequest(rememberRequestArgs)
           })()}
-        onReceiveSentinelGenesisShare={(payload) =>
+        onReceiveSentinelGenesisShare={(
+          payload: Parameters<
+            NonNullable<
+              CreateVaultChooserProps['onReceiveSentinelGenesisShare']
+            >
+          >[0],
+        ) =>
           (() => {
             const acceptShareDeliveryArgs: Parameters<
               sentinelGenesisActions.SentinelGenesisActions['acceptShareDelivery']
@@ -796,7 +819,9 @@
               vaults={vault.localVaults}
               {isVerifying}
               {isInitializing}
-              onChooseVault={(storeId) => vault.chooseLoginVault(storeId)}
+              onChooseVault={(
+                storeId: Parameters<LoginVaultPickerProps['onChooseVault']>[0],
+              ) => vault.chooseLoginVault(storeId)}
               onCreateVault={onCreateDeviceVault}
               onConnectStorage={() => {
                 vault.beginExistingVaultOpen()
@@ -812,7 +837,11 @@
                 ? vault.passwordEntries
                 : recoveryPasswordEntries}
               selectedPasswordEntry={vault.selectedPasswordEntry}
-              onSelectPasswordEntry={(selection) => {
+              onSelectPasswordEntry={(
+                selection: Parameters<
+                  LoginUnlockStepProps['onSelectPasswordEntry']
+                >[0],
+              ) => {
                 vault.selectedPasswordEntry = selection
               }}
               {isVerifying}

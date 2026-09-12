@@ -17,7 +17,8 @@ class TestNodeList implements NodeList {
   }
 
   item(index: number) {
-    return this.nodes.at(index) ?? document.querySelector('[data-absent-node]')
+    const node = this.nodes.at(index)
+    return node ? node : document.querySelector('[data-absent-node]')
   }
 
   forEach(
@@ -65,10 +66,12 @@ class TestMutationRecord implements MutationRecord {
   readonly type: MutationRecordType
 
   constructor(state: TestMutationRecordState) {
-    this.addedNodes = new TestNodeList(state.addedNodes ?? [])
+    this.addedNodes = new TestNodeList(state.addedNodes ? state.addedNodes : [])
     this.nextSibling = state.target.nextSibling
     this.previousSibling = state.target.previousSibling
-    this.removedNodes = new TestNodeList(state.removedNodes ?? [])
+    this.removedNodes = new TestNodeList(
+      state.removedNodes ? state.removedNodes : [],
+    )
     this.target = state.target
     this.type = state.type
   }

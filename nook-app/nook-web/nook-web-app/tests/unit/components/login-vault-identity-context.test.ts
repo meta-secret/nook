@@ -58,7 +58,7 @@ function managerWithContext({
     device_access: vi.fn(),
     free: vi.fn(),
     [Symbol.dispose]: vi.fn(),
-    selectedIdentityId: currentIdentity?.[0] ?? '',
+    selectedIdentityId: currentIdentity ? currentIdentity[0] : '',
     selectionKind: identities.length
       ? NookIdentityDirectorySelectionKind.Selected
       : NookIdentityDirectorySelectionKind.Empty,
