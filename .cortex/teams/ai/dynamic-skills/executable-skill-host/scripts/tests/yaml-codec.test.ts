@@ -1,4 +1,7 @@
-import { ExecutableSkillYamlEncoding } from '../src/skill-yaml-codec.ts';
+import {
+  ExecutableSkillYamlAdmission,
+  ExecutableSkillYamlEncoding,
+} from '../src/skill-yaml-codec.ts';
 import { expect, test } from 'bun:test';
 
 import {
@@ -196,6 +199,61 @@ test('enforces exact structural node and depth limits', () => {
       .execute()
       .isOk(),
   ).toBe(false);
+});
+
+test('admits only bounded YAML host values', () => {
+  const externalNullBoundaryValue = ''.match(/unmatched-boundary-value/u);
+  const omittedFieldBoundaryValue = new Map<string, string>().get('field');
+  expect(
+    ExecutableSkillYamlAdmission.from(
+      Bun.YAML.parse('nested: [safe, 1.5, true]\n'),
+    )
+      .execute()
+      .isOk(),
+  ).toBe(true);
+  expect(
+    ExecutableSkillYamlAdmission.from({
+      nested: ['safe', 1.5, true],
+    })
+      .execute()
+      .isOk(),
+  ).toBe(true);
+  for (const value of [
+    externalNullBoundaryValue,
+    omittedFieldBoundaryValue,
+    () => 'function',
+    Symbol('symbol'),
+    BigInt(1),
+    NaN,
+    Infinity,
+    2 ** 53,
+    { field: omittedFieldBoundaryValue },
+    'é'.repeat(SKILL_YAML_SCALAR_BYTE_LIMIT / 2 + 1),
+  ]) {
+    expect(ExecutableSkillYamlAdmission.from(value).execute().isErr()).toBe(
+      true,
+    );
+  }
+
+  const shared = ['shared'];
+  expect(
+    ExecutableSkillYamlAdmission.from([shared, shared]).execute().isErr(),
+  ).toBe(true);
+
+  let nested: UntrustedSkillYamlNode = true;
+  for (let depth = 0; depth <= SKILL_YAML_DEPTH_LIMIT; depth += 1) {
+    nested = [nested];
+  }
+  expect(ExecutableSkillYamlAdmission.from(nested).execute().isErr()).toBe(
+    true,
+  );
+  expect(
+    ExecutableSkillYamlAdmission.from(
+      new Array<boolean>(SKILL_YAML_NODE_LIMIT).fill(true),
+    )
+      .execute()
+      .isErr(),
+  ).toBe(true);
 });
 
 test('stringify preserves scalar trailing line breaks and spaces', () => {

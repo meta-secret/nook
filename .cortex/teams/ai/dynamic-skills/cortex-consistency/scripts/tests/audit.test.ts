@@ -16,9 +16,7 @@ import {
 export class CortexConsistencyAuditScenario {
   private constructor(private readonly request: readonly string[]) {}
 
-  static hasFinding(
-    ...[findings, expected]: FindingExpectation
-  ): boolean {
+  static hasFinding(...[findings, expected]: FindingExpectation): boolean {
     return findings.some(
       (finding) =>
         (!('code' in expected) || finding.code === expected.code) &&
@@ -261,10 +259,9 @@ test('requires an exact runtime command prefix boundary', () => {
 });
 
 test('rejects an imported policy without an authority reference', () => {
-  const findings =
-    CortexConsistencyContract.from(
-      CortexConsistencyAuditScenario.request([]),
-    ).execute();
+  const findings = CortexConsistencyContract.from(
+    CortexConsistencyAuditScenario.request([]),
+  ).execute();
   expect(
     CortexConsistencyAuditScenario.hasFinding(findings, {
       code: CortexContractFindingCode.MissingPolicyReference,
@@ -366,36 +363,34 @@ test('rejects uncovered foreign policy and invalid policy ownership', () => {
   const compileRequest = CortexConsistencyAuditScenario.request([]);
   const [context] = compileRequest.registry.contexts;
   if (!context) throw new Error('Expected context fixture');
-  const missingImportFindings =
-    CortexConsistencyContract.from({
-      ...compileRequest,
-      registry: {
-        ...compileRequest.registry,
-        contexts: [{ ...context, imports: [] }],
-      },
-    }).execute();
+  const missingImportFindings = CortexConsistencyContract.from({
+    ...compileRequest,
+    registry: {
+      ...compileRequest.registry,
+      contexts: [{ ...context, imports: [] }],
+    },
+  }).execute();
   expect(
     CortexConsistencyAuditScenario.hasFinding(missingImportFindings, {
       code: CortexContractFindingCode.MissingPolicyImport,
       file: AUTHORITY,
     }),
   ).toBe(true);
-  const invalidOwnerFindings =
-    CortexConsistencyContract.from({
-      registry: {
-        contexts: [],
-        policies: [
-          {
-            document: roguePolicy,
-            kind: CortexPolicyContractKind.General,
-            areas: [CortexPolicyArea.CortexAuthoring],
-            capabilities: [],
-          },
-        ],
-        runtimes: [],
-      },
-      documents: [{ relativePath: roguePolicy, references: [], commands: [] }],
-    }).execute();
+  const invalidOwnerFindings = CortexConsistencyContract.from({
+    registry: {
+      contexts: [],
+      policies: [
+        {
+          document: roguePolicy,
+          kind: CortexPolicyContractKind.General,
+          areas: [CortexPolicyArea.CortexAuthoring],
+          capabilities: [],
+        },
+      ],
+      runtimes: [],
+    },
+    documents: [{ relativePath: roguePolicy, references: [], commands: [] }],
+  }).execute();
   expect(
     CortexConsistencyAuditScenario.hasFinding(invalidOwnerFindings, {
       code: CortexContractFindingCode.InvalidPolicyOwner,

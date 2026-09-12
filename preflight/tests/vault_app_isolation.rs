@@ -7,6 +7,8 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+use anyhow::Context;
+
 struct RepositoryFixture {
     path: PathBuf,
 }
@@ -82,7 +84,12 @@ fn taskfile_task_body<'a>(tasks: &'a str, name: &str) -> anyhow::Result<&'a str>
         .ok_or_else(|| anyhow::anyhow!("missing Taskfile task {name}"))?;
     let mut end = rest.len();
     for (idx, _) in rest.match_indices('\n') {
-        let line = rest[idx + 1..].lines().next().unwrap_or("");
+        let line = rest
+            .get(idx + 1..)
+            .with_context(|| format!("Taskfile task {name} line must be valid UTF-8"))?
+            .split('\n')
+            .next()
+            .with_context(|| format!("Taskfile task {name} must expose its next line"))?;
         if line.starts_with("  ")
             && !line.starts_with("   ")
             && line.trim_end().ends_with(':')
@@ -92,7 +99,10 @@ fn taskfile_task_body<'a>(tasks: &'a str, name: &str) -> anyhow::Result<&'a str>
             break;
         }
     }
-    Ok(rest[..end].trim())
+    Ok(rest
+        .get(..end)
+        .with_context(|| format!("Taskfile task {name} boundary must be valid UTF-8"))?
+        .trim())
 }
 
 #[path = "vault_app_isolation/agent_and_local_workflow_contracts.rs"]

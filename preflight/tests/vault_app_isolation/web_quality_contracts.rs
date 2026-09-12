@@ -141,7 +141,10 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
     let Ok(typed_project_config) = serde_json::from_str::<serde_json::Value>(&typed_project) else {
         panic!("the typed lint project must remain valid JSON");
     };
-    let Some(typed_project_includes) = typed_project_config["include"].as_array() else {
+    let Some(typed_project_includes) = typed_project_config
+        .get("include")
+        .and_then(serde_json::Value::as_array)
+    else {
         panic!("the typed lint project must declare its authored source coverage");
     };
     for required in ["**/*.ts", "**/*.svelte"] {
@@ -152,7 +155,10 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
             "the typed lint project must retain authored sources matching `{required}`"
         );
     }
-    let Some(typed_project_excludes) = typed_project_config["exclude"].as_array() else {
+    let Some(typed_project_excludes) = typed_project_config
+        .get("exclude")
+        .and_then(serde_json::Value::as_array)
+    else {
         panic!("the typed lint project must declare its generated source exclusions");
     };
     for required in [

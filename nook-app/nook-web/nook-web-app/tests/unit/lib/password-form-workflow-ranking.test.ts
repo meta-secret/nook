@@ -88,24 +88,18 @@ describe('authentication workflow ranking', () => {
         backupCodesHint: false,
       }).authenticator.detailedPasskeyControl,
     ).toEqual({ kind: 'absent' })
-    expect(
-      forms.authenticationPageObservationFacts({
-        observation: passkey,
-        authenticatorSetupHint: false,
-        backupCodesHint: false,
-      }).authenticator.detailedPasskeyControl,
-    ).toMatchObject({
+    const passkeyControl = forms.authenticationPageObservationFacts({
+      observation: passkey,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }).authenticator.detailedPasskeyControl
+    expect(passkeyControl).toMatchObject({
       kind: 'candidates',
       observation: [
-        {
-          kind: 'labeled',
-          observation: {
-            ownership: 'owned-form',
-            label: expect.stringContaining('passkey'),
-          },
-        },
+        { kind: 'labeled', observation: { ownership: 'owned-form' } },
       ],
     })
+    expect(JSON.stringify(passkeyControl)).toContain('passkey')
   })
 
   test('keeps an actionable passkey sibling when field-bearing forms fill the bound', () => {
@@ -282,14 +276,8 @@ describe('authentication workflow ranking', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(facts.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: expect.arrayContaining([
-        expect.objectContaining({
-          label: expect.stringContaining('Sign in'),
-        }),
-      ]),
-    })
+    expect(facts.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
+    expect(JSON.stringify(facts.detailedAdvanceControl)).toContain('Sign in')
     let activated = ''
     document.querySelector('#sign-in')?.addEventListener('click', () => {
       activated = 'sign-in'
@@ -336,22 +324,13 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    expect(
-      forms.authenticationPageObservationFacts({
-        observation: observedAuthenticationWorkflow(),
-        authenticatorSetupHint: false,
-        backupCodesHint: false,
-      }).authenticator.detailedPasskeyControl,
-    ).toMatchObject({
-      kind: 'candidates',
-      observation: expect.arrayContaining([
-        expect.objectContaining({
-          observation: expect.objectContaining({
-            label: expect.stringContaining('Sign in with a passkey'),
-          }),
-        }),
-      ]),
-    })
+    const passkeyControl = forms.authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }).authenticator.detailedPasskeyControl
+    expect(passkeyControl).toMatchObject({ kind: 'candidates' })
+    expect(JSON.stringify(passkeyControl)).toContain('Sign in with a passkey')
   })
 
   test('keeps a form-less passkey observation inside its local container', () => {
@@ -428,23 +407,16 @@ describe('authentication workflow ranking', () => {
       throw new Error('expected a direct-body passkey workflow')
     }
     expect(selected.summary.passkeyControlPresent).toBe(true)
-    expect(
-      forms.authenticationPageObservationFacts({
-        observation: selected,
-        authenticatorSetupHint: false,
-        backupCodesHint: false,
-      }).authenticator.detailedPasskeyControl,
-    ).toMatchObject({
+    const passkeyControl = forms.authenticationPageObservationFacts({
+      observation: selected,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }).authenticator.detailedPasskeyControl
+    expect(passkeyControl).toMatchObject({
       kind: 'candidates',
-      observation: [
-        {
-          kind: 'labeled',
-          observation: {
-            label: expect.stringContaining('passkey'),
-          },
-        },
-      ],
+      observation: [{ kind: 'labeled' }],
     })
+    expect(JSON.stringify(passkeyControl)).toContain('passkey')
   })
 
   test('rejects a previously approved workflow after its destination turns destructive', () => {

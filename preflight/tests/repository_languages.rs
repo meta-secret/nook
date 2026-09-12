@@ -386,6 +386,10 @@ fn automation_symlinks_fail_closed() -> anyhow::Result<()> {
     unix_fs::symlink("target", fixture.path().join("linked-script"))?;
     let violations = repository_language_violations(fixture.path(), false)?;
     assert_eq!(violations.len(), 1);
-    assert!(violations[0].contains("symlinks are prohibited"));
+    assert!(
+        violations
+            .first()
+            .is_some_and(|violation| violation.contains("symlinks are prohibited"))
+    );
     Ok(())
 }

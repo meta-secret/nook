@@ -1,6 +1,10 @@
 use super::*;
 use anyhow::Context;
 
+#[path = "hosted_buildkit_cache_contracts/pr_producer_cache_contract.rs"]
+mod pr_producer_cache_contract;
+use pr_producer_cache_contract::PrProducerCacheContract;
+
 #[test]
 fn delivery_ci_scopes_buildkit_caches() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
@@ -378,82 +382,8 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "selected dependency and native-source cache publishers must be explicit cache-only Bake outputs"
     );
     assert_main_producer_owned_cache_publish(root)?;
-    assert_pr_producer_owned_cache_publish(root)?;
+    PrProducerCacheContract::new(root).assert_contract()?;
     assert_main_split_pipeline(root)?;
-    Ok(())
-}
-
-fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
-    let pr = (root).read(".github/workflows/pr.yml");
-    for marker in [
-        "Publish git-scoped native BuildKit cache",
-        "Publish git-scoped WASM BuildKit cache",
-        "Publish git-scoped web BuildKit cache",
-        "task ci:main:publish-native-cache",
-        "task ci:main:publish-wasm-cache",
-        "task ci:main:publish-web-cache",
-    ] {
-        assert!(
-            pr.contains(marker),
-            "PR producers must publish warm local layers after verify: missing {marker}"
-        );
-    }
-    let rust_verify = pr
-        .find("task ci:pr:rust")
-        .context("PR Rust job must verify")?;
-    let rust_publish = pr
-        .find("task ci:main:publish-native-cache")
-        .context("PR Rust job must publish its cache")?;
-    let wasm_verify = pr
-        .find("task ci:pr:wasm")
-        .context("PR WASM job must verify")?;
-    let wasm_publish = pr
-        .find("task ci:main:publish-wasm-cache")
-        .context("PR WASM job must publish its cache")?;
-    let web_verify = pr
-        .find("task ci:pr:web")
-        .context("PR web job must verify")?;
-    let web_publish = pr
-        .find("task ci:main:publish-web-cache")
-        .context("PR web job must publish its cache")?;
-    let ui_demo = section(&pr, "  ui-demo:\n", "\n  preview:\n");
-    let ui_demo_verify = ui_demo
-        .find("task _web:test:ui-demo")
-        .context("PR UI demo job must verify")?;
-    let full_e2e = section(&pr, "  full-e2e-shard:\n", "\n  full-e2e:\n");
-    let full_e2e_verify = full_e2e
-        .find("task _ci:main:web:e2e-only")
-        .context("each PR full-e2e shard must verify its browser half")?;
-    assert!(
-        rust_verify < rust_publish
-            && pr[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED=\"\"")
-            && pr[..rust_publish].contains(
-                "ARC keeps the verified native graph local; Main and sccache remain reusable"
-            )
-            && pr[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && wasm_verify < wasm_publish
-            && pr[wasm_verify..wasm_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && pr[..wasm_publish].contains(
-                "ARC keeps the verified WASM graph local; Main and sccache remain reusable"
-            )
-            && pr[wasm_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && web_verify < web_publish
-            && pr[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && pr[..web_publish]
-                .contains("ARC keeps the verified web graph local; Main remains reusable")
-            && pr[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && ui_demo.contains("runs-on: nook-k0s-container")
-            && ui_demo.contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
-            && ui_demo[..ui_demo_verify]
-                .contains("needs.verify.outputs.ui-demo-required == 'true'")
-            && !ui_demo.contains("nook-docker-setup")
-            && !ui_demo.contains("publish-web-e2e-cache")
-            && full_e2e[..full_e2e_verify].contains("runs-on: nook-k0s-container")
-            && full_e2e.contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
-            && full_e2e.contains("NOOK_E2E_SHARD: ${{ matrix.shard }}/2")
-            && !full_e2e.contains("task ci:main:publish-web-e2e-cache"),
-        "PR producers must verify read-only, keep ARC graphs local, and hand exact browser images to container ARC consumers"
-    );
     Ok(())
 }
 
@@ -528,6 +458,39 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let ui_demo_step = ui_demo
         .find("- name: Headless UI demos")
         .context("Main UI demo job must declare its verification step")?;
+    let preflight_publish_step = preflight
+        .get(preflight_publish_id..preflight_publish)
+        .context("Main preflight publication-step section must have valid boundaries")?;
+    let preflight_publish_section = preflight
+        .get(preflight_publish..)
+        .context("Main preflight publication section must have a valid boundary")?;
+    let rust_verification_to_publish = rust
+        .get(rust_verify..rust_publish)
+        .context("Main Rust verification-to-publication section must have valid boundaries")?;
+    let rust_publish_step = rust
+        .get(rust_publish_id..rust_publish)
+        .context("Main Rust publication-step section must have valid boundaries")?;
+    let rust_publish_section = rust
+        .get(rust_publish..)
+        .context("Main Rust publication section must have a valid boundary")?;
+    let wasm_verification_to_publish = wasm
+        .get(wasm_verify..wasm_publish)
+        .context("Main WASM verification-to-publication section must have valid boundaries")?;
+    let wasm_publish_step = wasm
+        .get(wasm_publish_id..wasm_publish)
+        .context("Main WASM publication-step section must have valid boundaries")?;
+    let wasm_publish_section = wasm
+        .get(wasm_publish..)
+        .context("Main WASM publication section must have a valid boundary")?;
+    let web_verification_to_publish = web
+        .get(web_verify..web_publish)
+        .context("Main web verification-to-publication section must have valid boundaries")?;
+    let web_publish_section = web
+        .get(web_publish..)
+        .context("Main web publication section must have a valid boundary")?;
+    let ui_demo_verification = ui_demo
+        .get(ui_demo_step..)
+        .context("Main UI demo verification section must have a valid boundary")?;
     assert!(
         preflight.contains("task preflight")
             && preflight.contains("cache-selection: preflight")
@@ -536,9 +499,8 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && preflight.contains(
                 "cache_publication_outcome: ${{ steps.publish_preflight_cache.outcome }}"
             )
-            && preflight[preflight_publish_id..preflight_publish]
-                .contains("continue-on-error: true")
-            && preflight[preflight_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && preflight_publish_step.contains("continue-on-error: true")
+            && preflight_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && preflight_cache_publish.contains("needs: [preflight]")
             && preflight_cache_publish.contains(
                 "CACHE_PUBLICATION_OUTCOME: ${{ needs.preflight.outputs.cache_publication_outcome }}"
@@ -552,11 +514,11 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && rust.contains("needs: [preflight]") && rust.contains("if: inputs.product_changed")
             && rust_verify < rust_publish_id
             && rust_publish_id < rust_publish
-            && rust[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && rust_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && rust
                 .contains("cache_publication_outcome: ${{ steps.publish_native_cache.outcome }}")
-            && rust[rust_publish_id..rust_publish].contains("continue-on-error: true")
-            && rust[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && rust_publish_step.contains("continue-on-error: true")
+            && rust_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && rust.contains("cache-selection: native")
             && rust.contains("monitor-buildkit-storage: \"true\"")
             && native_cache_publish.contains("needs: [rust]")
@@ -578,10 +540,10 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && wasm_verify < wasm_node
             && wasm_node < wasm_publish_id
             && wasm_publish_id < wasm_publish
-            && wasm[wasm_verify..wasm_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && wasm_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && wasm.contains("cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}")
-            && wasm[wasm_publish_id..wasm_publish].contains("continue-on-error: true")
-            && wasm[wasm_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && wasm_publish_step.contains("continue-on-error: true")
+            && wasm_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && wasm_cache_publish.contains("needs: [wasm]")
             && wasm_cache_publish.contains(
                 "CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}"
@@ -602,12 +564,12 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && web.contains("name: main-wasm-${{ github.run_id }}")
             && web_verify < web_publish
             && web_verify < web_browser_image
-            && web[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && web[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && web_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && web_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && ui_demo.contains("needs: [web]")
             && ui_demo.contains("runs-on: nook-k0s-container")
             && ui_demo.contains("nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
-            && ui_demo[ui_demo_step..].contains("task _web:test:ui-demo")
+            && ui_demo_verification.contains("task _web:test:ui-demo")
             && !ui_demo.contains("nook-docker-setup")
             && !ui_demo.contains("publish-web-e2e-cache")
             && !main.contains("\n  publish-cache:\n")

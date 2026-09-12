@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { ok } from 'neverthrow';
 import { EXECUTABLE_SKILL_CATALOG } from '../src/skill-action-registry.ts';
 import { ExecutableSkillResponse } from '../src/cli.ts';
-import { ExecutableSkillYamlEncoding } from '../src/skill-yaml-codec.ts';
+import {
+  ExecutableSkillYamlEncoding,
+  SkillYamlEncodingIssue,
+} from '../src/skill-yaml-codec.ts';
 import { ExecutableSkillRequest } from '../src/cli.ts';
 import { describe, expect, test } from 'bun:test';
 
@@ -13,10 +16,12 @@ import {
 
 import {
   CortexArticleContractKind,
+  CortexArticleFindingCode,
   CortexArticleSemanticKind,
   CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
   CORTEX_ARTICLE_PATH_LIMIT,
   type AuditCortexArticleStructureRequest,
+  type CortexArticleStructureResult,
 } from '../../../cortex-article-structure/scripts/src/domain.ts';
 
 import {
@@ -25,8 +30,8 @@ import {
 } from '../../../delegation-visualization/scripts/src/domain.ts';
 
 import {
-  type FinalSkillCliResponseRequest,
   type RunSkillCliRequest,
+  type SkillSuccessResponse,
   ExecutableSkillCli,
 } from '../src/cli.ts';
 
@@ -36,16 +41,24 @@ import {
 } from '../src/skill-action-registry.ts';
 
 import {
+  CortexArticleStructureOperation,
   SkillCommandIssue,
   SkillCommandPhase,
   SKILL_HOST_RESPONSE_BYTE_LIMIT,
   SkillRequestFamily,
+  type SkillCommandErrorResponse,
 } from '../src/skill-command-domain.ts';
 
 import {
   SKILL_YAML_DEPTH_LIMIT,
+  type UntrustedSkillYamlMap,
   type UntrustedSkillYamlNode,
+  ExecutableSkillYamlAdmission,
   ExecutableSkillYaml,
+  ExecutableSkillYamlProperty,
+  SkillYamlValue,
+  type SkillYamlProperty,
+  type SkillYamlPropertyRequest,
 } from '../src/skill-yaml-codec.ts';
 
 import {
@@ -57,7 +70,162 @@ export class ExecutableSkillHostCliScenario {
   private constructor(private readonly request: ArticleRequestInput) {}
 
   static parseResponse(yaml: string): CliResponse {
-    return Bun.YAML.parse(yaml) as CliResponse;
+    const parsed = ExecutableSkillYamlAdmission.from(
+      Bun.YAML.parse(yaml),
+    ).execute();
+    assert(parsed.isOk());
+    assert(this.isResponse(parsed.value));
+    return parsed.value;
+  }
+
+  private static isResponse(
+    value: UntrustedSkillYamlNode,
+  ): value is CliResponse {
+    const candidate = new SkillYamlValue(value);
+    if (!candidate.isMap() || typeof candidate.value.ok !== 'boolean') {
+      return false;
+    }
+    return (
+      this.optionalString({ key: 'family', map: candidate.value }) &&
+      this.optionalString({ key: 'operation', map: candidate.value }) &&
+      this.optionalString({ key: 'phase', map: candidate.value }) &&
+      this.optionalErrors(candidate.value) &&
+      this.optionalResult(candidate.value) &&
+      this.optionalRecovery(candidate.value)
+    );
+  }
+
+  private static optionalString(request: SkillYamlPropertyRequest): boolean {
+    const property = new ExecutableSkillYamlProperty(request).execute();
+    return !property.found || typeof property.value === 'string';
+  }
+
+  private static property(
+    request: SkillYamlPropertyRequest,
+  ): SkillYamlProperty {
+    return new ExecutableSkillYamlProperty(request).execute();
+  }
+
+  private static optionalErrors(map: UntrustedSkillYamlMap): boolean {
+    if (!Object.hasOwn(map, 'errors')) return true;
+    const property = this.property({ key: 'errors', map });
+    if (!property.found) return false;
+    const candidate = new SkillYamlValue(property.value);
+    return (
+      candidate.isList() &&
+      candidate.value.every((value) => {
+        const error = new SkillYamlValue(value);
+        return (
+          error.isMap() &&
+          typeof error.value.path === 'string' &&
+          typeof error.value.issue === 'string' &&
+          typeof error.value.message === 'string'
+        );
+      })
+    );
+  }
+
+  private static optionalResult(map: UntrustedSkillYamlMap): boolean {
+    if (!Object.hasOwn(map, 'result')) return true;
+    const property = this.property({ key: 'result', map });
+    if (!property.found) return false;
+    const candidate = new SkillYamlValue(property.value);
+    if (!candidate.isMap()) return false;
+    return (
+      this.optionalMapList({ key: 'findings', map: candidate.value }) &&
+      this.optionalActions(candidate.value) &&
+      this.optionalDocument(candidate.value)
+    );
+  }
+
+  private static optionalMapList(request: SkillYamlPropertyRequest): boolean {
+    if (!Object.hasOwn(request.map, request.key)) return true;
+    const property = this.property(request);
+    if (!property.found) return false;
+    const candidate = new SkillYamlValue(property.value);
+    return (
+      candidate.isList() &&
+      candidate.value.every((value) => new SkillYamlValue(value).isMap())
+    );
+  }
+
+  private static optionalActions(map: UntrustedSkillYamlMap): boolean {
+    if (!Object.hasOwn(map, 'actions')) return true;
+    const property = this.property({ key: 'actions', map });
+    if (!property.found) return false;
+    const candidate = new SkillYamlValue(property.value);
+    return (
+      candidate.isList() &&
+      candidate.value.every((value) => {
+        const action = new SkillYamlValue(value);
+        if (!action.isMap()) return false;
+        const schemaProperty = this.property({
+          key: 'inputSchema',
+          map: action.value,
+        });
+        if (!schemaProperty.found) return false;
+        const schema = new SkillYamlValue(schemaProperty.value);
+        return (
+          typeof action.value.description === 'string' &&
+          typeof action.value.exampleRequest === 'string' &&
+          typeof action.value.exampleYaml === 'string' &&
+          typeof action.value.resolvedExampleYaml === 'string' &&
+          schema.isMap() &&
+          typeof schema.value.type === 'string' &&
+          typeof schema.value.additionalProperties === 'boolean'
+        );
+      })
+    );
+  }
+
+  private static optionalDocument(map: UntrustedSkillYamlMap): boolean {
+    if (!Object.hasOwn(map, 'document')) return true;
+    const documentProperty = this.property({ key: 'document', map });
+    if (!documentProperty.found) return false;
+    const document = new SkillYamlValue(documentProperty.value);
+    if (!document.isMap()) return false;
+    const gizmoProperty = this.property({
+      key: 'gizmo',
+      map: document.value,
+    });
+    if (!gizmoProperty.found) return false;
+    const gizmo = new SkillYamlValue(gizmoProperty.value);
+    if (!gizmo.isMap()) return false;
+    const tasksProperty = this.property({ key: 'tasks', map: gizmo.value });
+    if (!tasksProperty.found) return false;
+    const tasks = new SkillYamlValue(tasksProperty.value);
+    return (
+      tasks.isList() &&
+      tasks.value.every((value) => {
+        const task = new SkillYamlValue(value);
+        if (!task.isMap()) return false;
+        const dependenciesProperty = this.property({
+          key: 'depends_on',
+          map: task.value,
+        });
+        if (!dependenciesProperty.found) return false;
+        const dependencies = new SkillYamlValue(dependenciesProperty.value);
+        return (
+          typeof task.value.id === 'string' &&
+          typeof task.value.team === 'string' &&
+          typeof task.value.description === 'string' &&
+          dependencies.isList() &&
+          dependencies.value.every(
+            (dependency) => typeof dependency === 'string',
+          )
+        );
+      })
+    );
+  }
+
+  private static optionalRecovery(map: UntrustedSkillYamlMap): boolean {
+    if (!Object.hasOwn(map, 'recover')) return true;
+    const recoveryProperty = this.property({ key: 'recover', map });
+    if (!recoveryProperty.found) return false;
+    const recovery = new SkillYamlValue(recoveryProperty.value);
+    return (
+      recovery.isMap() && typeof recovery.value.toolsListRequest === 'string'
+    );
   }
 
   static articleRequest(
@@ -100,45 +268,42 @@ export class ExecutableSkillHostCliScenario {
   }
 }
 
-type CliResponse = {
+type CliResponse = UntrustedSkillYamlMap & {
   readonly ok: boolean;
   readonly family?: string;
   readonly operation?: string;
   readonly phase?: string;
-  readonly errors?: readonly {
+  readonly errors?: readonly (UntrustedSkillYamlMap & {
     readonly path: string;
     readonly issue: string;
     readonly message: string;
-  }[];
-  readonly result?: {
-    readonly findings?: readonly {
-      readonly code: string;
-      readonly file: string;
-      readonly line: number;
-      readonly message: string;
-    }[];
-    readonly document?: {
-      readonly gizmo: {
-        readonly tasks: readonly {
+  })[];
+  readonly result?: UntrustedSkillYamlMap & {
+    readonly findings?: readonly UntrustedSkillYamlMap[];
+    readonly document?: UntrustedSkillYamlMap & {
+      readonly gizmo: UntrustedSkillYamlMap & {
+        readonly tasks: readonly (UntrustedSkillYamlMap & {
           readonly id: string;
           readonly team: string;
           readonly description: string;
           readonly depends_on: readonly string[];
-        }[];
+        })[];
       };
     };
-    readonly actions?: readonly {
+    readonly actions?: readonly (UntrustedSkillYamlMap & {
       readonly description: string;
       readonly exampleRequest: string;
       readonly exampleYaml: string;
       readonly resolvedExampleYaml: string;
-      readonly inputSchema: {
+      readonly inputSchema: UntrustedSkillYamlMap & {
         readonly type: string;
         readonly additionalProperties: boolean;
       };
-    }[];
+    })[];
   };
-  readonly recover?: { readonly toolsListRequest: string };
+  readonly recover?: UntrustedSkillYamlMap & {
+    readonly toolsListRequest: string;
+  };
 };
 
 type ArticleRequestInput = {
@@ -345,9 +510,7 @@ describe('provider-neutral executable skill YAML host', () => {
         },
       },
     };
-    const specialOutcomeResult = new ExecutableSkillYamlEncoding(
-      specialRequest as UntrustedSkillYamlNode,
-    )
+    const specialOutcomeResult = new ExecutableSkillYamlEncoding(specialRequest)
       .execute()
       .andThen((yaml) => new ExecutableSkillRequest(yaml).execute());
     assert(specialOutcomeResult.isOk());
@@ -380,9 +543,7 @@ describe('provider-neutral executable skill YAML host', () => {
         },
       },
     };
-    const outcomeResult = new ExecutableSkillYamlEncoding(
-      request as UntrustedSkillYamlNode,
-    )
+    const outcomeResult = new ExecutableSkillYamlEncoding(request)
       .execute()
       .andThen((yaml) => new ExecutableSkillRequest(yaml).execute());
     assert(outcomeResult.isOk());
@@ -580,51 +741,77 @@ describe('provider-neutral executable skill YAML host', () => {
         oversizedInput.yaml,
       ).errors?.at(0)?.issue,
     ).toBe(SkillCommandIssue.RequestTooLarge);
-    const oversizedScalar = new Array<string>(9).fill('x'.repeat(1_048_576));
+    const oversizedScalar = 'é'.repeat(524_288);
+    const oversizedFindings = new Array<number>(9).fill(0).map(() => ({
+      code: CortexArticleFindingCode.DenseArticle,
+      file: '.cortex/example.md',
+      line: 1,
+      message: oversizedScalar,
+    }));
+    const oversizedResult: CortexArticleStructureResult = {
+      kind: CortexArticleContractKind.Result,
+      findings: oversizedFindings,
+    };
+    const successResponse: SkillSuccessResponse = {
+      ok: true,
+      family: SkillRequestFamily.CortexArticleStructure,
+      operation: CortexArticleStructureOperation.Audit,
+      result: oversizedResult,
+    };
+    const errorResponse: SkillCommandErrorResponse = {
+      ok: false,
+      isError: true,
+      phase: SkillCommandPhase.Execute,
+      errors: new Array<number>(9).fill(0).map(() => ({
+        path: 'result',
+        issue: SkillCommandIssue.InvalidRequest,
+        message: oversizedScalar,
+      })),
+      recover: {
+        toolsListRequest: SKILL_TOOLS_LIST_INVOKE,
+        hint: 'Retry the request.',
+      },
+    };
     for (const [exitCode, response] of [
-      [0, { ok: true, result: oversizedScalar }],
-      [2, { ok: false, errors: oversizedScalar }],
+      [0, successResponse],
+      [2, errorResponse],
     ] as const) {
-      const request: FinalSkillCliResponseRequest = {
-        exitCode,
-        response: response as UntrustedSkillYamlNode,
-      };
+      const request = { exitCode, response };
       const outcomeResult = new ExecutableSkillResponse(request).execute();
-      assert(outcomeResult.isOk());
-      const outcome = outcomeResult.value;
-      expect(outcome.exitCode).toBe(1);
-      const expectedError = {
-        issue: SkillCommandIssue.ResponseTooLarge,
-      };
-      expect(
-        ExecutableSkillHostCliScenario.parseResponse(outcome.yaml).errors?.at(
-          0,
-        ),
-      ).toMatchObject(expectedError);
-      expect(
-        new TextEncoder().encode(outcome.yaml).byteLength,
-      ).toBeLessThanOrEqual(SKILL_HOST_RESPONSE_BYTE_LIMIT);
+      assert(outcomeResult.isErr());
+      expect(outcomeResult.error.kind).toBe(
+        SkillYamlEncodingIssue.ResponseCapacity,
+      );
     }
   });
-  test('returns typed bounded failures for non-finite action results', () => {
+  test('propagates invalid action result serialization without a fallback', () => {
     for (const value of [NaN, Infinity, 2 ** 53, 'é'.repeat(524_289)]) {
-      const request: FinalSkillCliResponseRequest = {
+      const result: CortexArticleStructureResult = {
+        kind: CortexArticleContractKind.Result,
+        findings: [
+          {
+            code: CortexArticleFindingCode.DenseArticle,
+            file: '.cortex/example.md',
+            line: typeof value === 'number' ? value : 1,
+            message: typeof value === 'string' ? value : 'invalid number',
+          },
+        ],
+      };
+      const response: SkillSuccessResponse = {
+        ok: true,
+        family: SkillRequestFamily.CortexArticleStructure,
+        operation: CortexArticleStructureOperation.Audit,
+        result,
+      };
+      const request = {
         exitCode: 0,
-        response: { ok: true, result: value },
+        response,
       };
       const outcomeResult = new ExecutableSkillResponse(request).execute();
-      assert(outcomeResult.isOk());
-      const outcome = outcomeResult.value;
-      expect(outcome.exitCode).toBe(1);
-      expect(
-        ExecutableSkillHostCliScenario.parseResponse(outcome.yaml).errors?.at(0)
-          ?.issue,
-      ).toBe(SkillCommandIssue.InvalidResponse);
-      expect(ExecutableSkillYaml.from(outcome.yaml).execute().isOk()).toBe(
-        true,
+      assert(outcomeResult.isErr());
+      expect(outcomeResult.error.kind).toBe(
+        SkillYamlEncodingIssue.InvalidValue,
       );
-      expect(outcome.yaml).not.toMatch(/\.nan|\.inf/iu);
-      expect(outcome.yaml.length).toBeLessThan(1_024 * 1_024);
     }
   });
   test('uses decode phase for malformed input', () => {
@@ -634,5 +821,18 @@ describe('provider-neutral executable skill YAML host', () => {
       outcome.value.yaml,
     );
     expect(response.phase).toBe(SkillCommandPhase.Decode);
+  });
+  test('rejects malformed decoded CLI response shapes', () => {
+    for (const yaml of [
+      '- invalid\n',
+      'ok: invalid\n',
+      'ok: false\nerrors: invalid\n',
+      'ok: false\nerrors:\n  - path: result\n    issue: 1\n    message: invalid\n',
+      'ok: true\nresult:\n  actions:\n    - description: invalid\n',
+    ]) {
+      expect(() =>
+        ExecutableSkillHostCliScenario.parseResponse(yaml),
+      ).toThrow();
+    }
   });
 });

@@ -161,14 +161,15 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
 }
 
 #[test]
-fn theorem_loom_release_dependencies_are_source_free_and_main_seeded() {
+fn theorem_loom_release_dependencies_are_source_free_and_main_seeded() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let product = root.read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     let dependency_boundary = product
         .find("FROM builder-core-deps AS rust-platform")
         .unwrap_or_else(|| panic!("rust-platform source boundary must exist"));
-    let dependency_graph = &product[..dependency_boundary];
-    let source_graph = &product[dependency_boundary..];
+    let (dependency_graph, source_graph) = product
+        .split_at_checked(dependency_boundary)
+        .context("rust-platform source boundary must be valid UTF-8")?;
 
     assert!(
         dependency_graph.contains("RUSTFLAGS='--cfg loom' cargo test --locked --release")
@@ -184,6 +185,7 @@ fn theorem_loom_release_dependencies_are_source_free_and_main_seeded() {
             ),
         "the deterministic source leaf must execute the real Loom test after restoring its dependency graph"
     );
+    Ok(())
 }
 
 #[test]

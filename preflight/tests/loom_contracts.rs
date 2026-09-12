@@ -42,18 +42,17 @@ fn task_body<'a>(taskfile: &'a str, task: &str, next_task: &str) -> &'a str {
     let start = taskfile
         .find(&start_marker)
         .unwrap_or_else(|| panic!("missing task {task}"));
-    let body = &taskfile[start..];
+    let body = taskfile
+        .get(start..)
+        .unwrap_or_else(|| panic!("task {task} begins outside a UTF-8 boundary"));
     let end = body
         .find(&end_marker)
         .unwrap_or_else(|| panic!("missing following task {next_task}"));
-    &body[..end]
+    body.get(..end)
+        .unwrap_or_else(|| panic!("task {task} ends outside a UTF-8 boundary"))
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one integration contract documents the complete Loom quality boundary"
-)]
 fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let root = RepositoryFixture::repository_root();
     let manifest = root.read("agentic-ai/loom/package.json");
