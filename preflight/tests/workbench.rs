@@ -328,8 +328,8 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 
     for required in [
         "Treat every other active task as read-only",
-        "current checkout and current branch",
-        "only one write-capable Team Agent at a time",
+        "current checkout and branch",
+        "Run those Team Agents in parallel in the current checkout and branch",
     ] {
         assert!(
             coding_workflow.contains(required),
@@ -424,7 +424,7 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
         "File location is evidence of ownership",
         "A team stops at another team's boundary",
         "Security review does not transfer implementation ownership",
-        "Team Agents edit the current shared checkout sequentially",
+        "Team Agents may edit the current shared checkout concurrently when their",
     ] {
         assert!(
             ownership.contains(required),
