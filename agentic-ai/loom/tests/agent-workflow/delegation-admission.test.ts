@@ -106,10 +106,12 @@ export class AgentWorkflowDelegationAdmissionScenario {
 }
 
 function requiredAttempt(
-  attempts: readonly DelegationAttemptDeclaration[],
-  index: number,
+  request: {
+    readonly attempts: readonly DelegationAttemptDeclaration[];
+    readonly index: number;
+  },
 ): DelegationAttemptDeclaration {
-  const attempt = attempts[index];
+  const attempt = request.attempts[request.index];
   if (!attempt) throw new Error('Attempt is missing.');
   return attempt;
 }
@@ -245,7 +247,7 @@ describe('ordinary delegation admission', () => {
     const expertInput: AdmitDelegationAttemptInput = {
       ...loadInput,
       request: AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        requiredAttempt(plan.attempts, 1),
+        requiredAttempt({ attempts: plan.attempts, index: 1 }),
       ),
     };
     await expect(
@@ -254,7 +256,7 @@ describe('ordinary delegation admission', () => {
 
     const wrongSourceRequest: DelegationAdmissionRequest = {
       ...AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        requiredAttempt(plan.attempts, 0),
+        requiredAttempt({ attempts: plan.attempts, index: 0 }),
       ),
       sourceCommit: 'b'.repeat(40),
     };
@@ -284,7 +286,7 @@ describe('ordinary delegation admission', () => {
     const rootInput: AdmitDelegationAttemptInput = {
       ...loadInput,
       request: AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        requiredAttempt(plan.attempts, 0),
+        requiredAttempt({ attempts: plan.attempts, index: 0 }),
       ),
     };
     await DelegationRunJournal.admitDelegationAttempt(rootInput);
@@ -299,7 +301,7 @@ describe('ordinary delegation admission', () => {
     const specialistInput: AdmitDelegationAttemptInput = {
       ...loadInput,
       request: AgentWorkflowDelegationAdmissionScenario.admissionRequest(
-        requiredAttempt(plan.attempts, 2),
+        requiredAttempt({ attempts: plan.attempts, index: 2 }),
       ),
     };
     await expect(
