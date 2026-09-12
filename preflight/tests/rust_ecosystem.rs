@@ -382,15 +382,19 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         .read("nook-app/nook-platform/docker/rust/nightly.Dockerfile")?;
     assert!(
         !nightly_dockerfile.contains("rust-platform-nightly")
-            && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-dylint")
+            && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-dylint-build")
+            && nightly_dockerfile.contains("FROM rust-dylint-build AS rust-dylint-self-test")
+            && nightly_dockerfile.contains("FROM rust-dylint-build AS rust-dylint-native")
+            && nightly_dockerfile.contains("FROM rust-dylint-build AS rust-dylint-wasm")
+            && nightly_dockerfile.contains("FROM rust-dylint-native AS rust-dylint")
             && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-fuzz-smoke")
             && nightly_dockerfile
                 .contains("--manifest-path dylint/nook-domain-api/Cargo.toml --locked")
             && nightly_dockerfile
                 .matches("COPY nook-app/nook-platform/ nook-app/nook-platform/")
                 .count()
-                == 2,
-        "one nightly Dockerfile must own the shared tools and both source leaves"
+                == 3,
+        "one nightly Dockerfile must own shared tools, split Dylint leaves, and fuzz"
     );
     assert!(
         rust_dockerfile.contains("--hide-inclusion-graph")

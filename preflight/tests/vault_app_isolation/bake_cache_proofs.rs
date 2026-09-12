@@ -321,7 +321,14 @@ fn theorem_nightly_leaves_publish_only_their_full_graphs() -> anyhow::Result<()>
         ("docker:ecosystem:dylint", "rust-dylint"),
         ("docker:ecosystem:fuzz", "rust-fuzz-smoke"),
     ] {
-        let body = taskfile_task_body(&docker_tasks, task)?;
+        let marker = format!("\n  {task}:\n");
+        let body = docker_tasks
+            .split_once(&marker)
+            .map(|(_, rest)| rest)
+            .with_context(|| format!("missing exact Taskfile task {task}"))?
+            .split("\n  docker:")
+            .next()
+            .context("ecosystem task body must be bounded by the next task")?;
         assert!(
             body.contains("task: docker:rust-base")
                 && body.matches(leaf).count() >= 2

@@ -7,13 +7,24 @@ tasks:
     cmds:
       - |
         failed=0
+        failed_installs="|"
         for directory in . agentic-ai/loom agentic-ai/ci-agent .cortex/teams/ai/dynamic-skills/*/scripts; do
           test -f "$directory/package.json" || continue
           if [ "$directory" = agentic-ai/ci-agent ]; then
-            npm ci --prefix "$directory" --ignore-scripts || { failed=1; continue; }
+            npm ci --prefix "$directory" --ignore-scripts || {
+              failed=1
+              failed_installs="${failed_installs}${directory}|"
+            }
           else
-            bun install --cwd "$directory" --frozen-lockfile --ignore-scripts || { failed=1; continue; }
+            bun install --cwd "$directory" --frozen-lockfile --ignore-scripts || {
+              failed=1
+              failed_installs="${failed_installs}${directory}|"
+            }
           fi
+        done
+        for directory in . agentic-ai/loom agentic-ai/ci-agent .cortex/teams/ai/dynamic-skills/*/scripts; do
+          test -f "$directory/package.json" || continue
+          case "$failed_installs" in *"|${directory}|"*) continue ;; esac
           bun run --cwd "$directory" lint || failed=1
           bun run --cwd "$directory" check || failed=1
         done

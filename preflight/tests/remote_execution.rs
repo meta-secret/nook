@@ -564,7 +564,8 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() -> Result<()> {
         .nth(1)
         .context("focused web setup task must exist")?;
     assert!(
-        focused_web_setup.contains("NOOK_EXTENSION_COMMIT: '{{.NOOK_EXTENSION_COMMIT}}'"),
+        focused_web_setup.contains("NOOK_EXTENSION_COMMIT: \"{{.NOOK_EXTENSION_COMMIT}}\"")
+            && web_app_bake.contains("NOOK_SOURCE_REVISION    = NOOK_EXTENSION_COMMIT"),
         "focused web setup must pass the exact commit to NOOK_SOURCE_REVISION through Bake"
     );
 
