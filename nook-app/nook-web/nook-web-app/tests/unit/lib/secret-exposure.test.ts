@@ -4,15 +4,52 @@ import {
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { describe, expect, test, vi } from 'vitest'
-import type { NookSecretRecord } from '$lib/nook'
+import { SecretType, type NookSecretRecord } from '$lib/nook'
 import { SecretExposure } from '$lib/vault/secret-exposure'
 import type { Result } from 'neverthrow'
 
 function fakeRecord(value: string) {
   return {
+    account: '',
+    algorithm: '',
+    backupCodes: [],
+    cardNumber: '',
+    cardholderName: '',
+    contentBase64: '',
+    cvv: '',
+    digits: 0,
+    displayTitle: '',
+    expirationMonth: '',
+    expirationYear: '',
+    expiresAt: '',
+    fileName: '',
+    groupKey: '',
+    id: 'secret-fixture',
+    issuer: '',
+    key: '',
+    last4: '',
+    mimeType: '',
+    name: '',
+    note: '',
+    notes: '',
+    passkeyUserDisplayName: '',
+    passkeyUserName: '',
+    password: '',
+    period: 0,
     primaryCredential: value,
+    rpId: '',
+    seed: '',
+    sizeBytes: 0,
+    summary: '',
+    title: '',
+    totpSecret: '',
+    type: SecretType.Login,
+    username: '',
+    websiteUrl: '',
+    matches_search: vi.fn(() => false),
     free: vi.fn(),
-  } as unknown as NookSecretRecord
+    [Symbol.dispose]: vi.fn(),
+  } satisfies NookSecretRecord
 }
 
 function deferred<T>() {

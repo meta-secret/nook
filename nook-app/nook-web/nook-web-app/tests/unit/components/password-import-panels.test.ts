@@ -8,7 +8,11 @@ import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import { NookImportResult } from '$app-wasm'
-import type { VaultState } from '$lib/vault.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import {
+  requireButtonElement,
+  requireInputElement,
+} from '../test-dom-helpers'
 import ApplePasswordsImportPanel from '$lib/components/ApplePasswordsImportPanel.svelte'
 import DashlaneImportPanel from '$lib/components/DashlaneImportPanel.svelte'
 import KeePassXcImportPanel from '$lib/components/KeePassXcImportPanel.svelte'
@@ -30,26 +34,23 @@ vi.mock('qr-scanner', () => ({
   },
 }))
 
-const vault = {
-  t(request: TranslationRequest): string {
-    const replacements = new TranslationMessage(
-      request,
-    ).translationReplacements()
-    const values = Object.values(replacements)
-    const key = new TranslationMessage(request).translationKey()
-    return values.length > 0 ? `${key} ${values.join(' ')}` : key
-  },
-} as unknown as VaultState
+const vault = VaultStateTestFixture.create()
+vi.spyOn(vault, 't').mockImplementation((request: TranslationRequest) => {
+  const message = new TranslationMessage(request)
+  const replacements = message.translationReplacements()
+  const values = Object.values(replacements)
+  const key = message.translationKey()
+  return values.length > 0 ? `${key} ${values.join(' ')}` : key
+})
 
 function importResult(): SecretOperationResult<NookImportResult> {
-  const result = Object.create(NookImportResult.prototype) as NookImportResult
-  const descriptors: PropertyDescriptorMap = {
-    imported: { value: 2 },
-    skippedUnsupported: { value: 1 },
-    skippedDuplicates: { value: 3 },
-    free: { value: vi.fn() },
-  }
-  Object.defineProperties(result, descriptors)
+  const result = {
+    imported: 2,
+    skippedUnsupported: 1,
+    skippedDuplicates: 3,
+    free: vi.fn(),
+    [Symbol.dispose]: vi.fn(),
+  } satisfies NookImportResult
   return ok(result)
 }
 
@@ -61,10 +62,10 @@ describe('KeePassXC import panel', () => {
       isSaving: false,
       onImport,
     })
-    const input = view.getByTestId('keepassxc-csv-file') as HTMLInputElement
-    const submit = view.getByTestId(
-      'keepassxc-import-submit',
-    ) as HTMLButtonElement
+    const input = requireInputElement(view.getByTestId('keepassxc-csv-file'))
+    const submit = requireButtonElement(
+      view.getByTestId('keepassxc-import-submit'),
+    )
 
     expect(submit.disabled).toBe(true)
     await fireEvent.change(input, {
@@ -108,10 +109,10 @@ describe('LastPass import panel', () => {
       isSaving: false,
       onImport,
     })
-    const input = view.getByTestId('lastpass-csv-file') as HTMLInputElement
-    const submit = view.getByTestId(
-      'lastpass-import-submit',
-    ) as HTMLButtonElement
+    const input = requireInputElement(view.getByTestId('lastpass-csv-file'))
+    const submit = requireButtonElement(
+      view.getByTestId('lastpass-import-submit'),
+    )
     await fireEvent.change(input, {
       target: {
         files: [new File(['url,username,password\n'], 'lastpass.csv')],
@@ -142,10 +143,10 @@ describe('LastPass import panel', () => {
       isSaving: false,
       onImport,
     })
-    const input = view.getByTestId('lastpass-csv-file') as HTMLInputElement
-    const submit = view.getByTestId(
-      'lastpass-import-submit',
-    ) as HTMLButtonElement
+    const input = requireInputElement(view.getByTestId('lastpass-csv-file'))
+    const submit = requireButtonElement(
+      view.getByTestId('lastpass-import-submit'),
+    )
 
     expect(submit.disabled).toBe(true)
     await fireEvent.change(input, {
@@ -176,10 +177,10 @@ describe('LastPass import panel', () => {
       isSaving: true,
       onImport,
     })
-    const input = view.getByTestId('lastpass-csv-file') as HTMLInputElement
-    const submit = view.getByTestId(
-      'lastpass-import-submit',
-    ) as HTMLButtonElement
+    const input = requireInputElement(view.getByTestId('lastpass-csv-file'))
+    const submit = requireButtonElement(
+      view.getByTestId('lastpass-import-submit'),
+    )
     await fireEvent.change(input, {
       target: { files: [new File(['invalid'], 'lastpass.csv')] },
     })
@@ -203,7 +204,7 @@ describe('LastPass import panel', () => {
       isSaving: false,
       onImport,
     })
-    const input = view.getByTestId('lastpass-csv-file') as HTMLInputElement
+    const input = requireInputElement(view.getByTestId('lastpass-csv-file'))
     await fireEvent.change(input, {
       target: { files: [new File(['invalid'], 'lastpass.csv')] },
     })
@@ -229,12 +230,12 @@ describe('Safari / Apple Passwords import panel', () => {
       isSaving: false,
       onImport,
     })
-    const input = view.getByTestId(
-      'apple-passwords-csv-file',
-    ) as HTMLInputElement
-    const submit = view.getByTestId(
-      'apple-passwords-import-submit',
-    ) as HTMLButtonElement
+    const input = requireInputElement(
+      view.getByTestId('apple-passwords-csv-file'),
+    )
+    const submit = requireButtonElement(
+      view.getByTestId('apple-passwords-import-submit'),
+    )
 
     expect(submit.disabled).toBe(true)
     await fireEvent.change(input, {
@@ -267,10 +268,10 @@ describe('Dashlane import panel', () => {
       isSaving: false,
       onImport,
     })
-    const input = view.getByTestId('dashlane-export-file') as HTMLInputElement
-    const submit = view.getByTestId(
-      'dashlane-import-submit',
-    ) as HTMLButtonElement
+    const input = requireInputElement(view.getByTestId('dashlane-export-file'))
+    const submit = requireButtonElement(
+      view.getByTestId('dashlane-import-submit'),
+    )
 
     expect(submit.disabled).toBe(true)
     await fireEvent.change(input, {
@@ -303,12 +304,12 @@ describe('Proton Pass import panel', () => {
       isSaving: false,
       onImport,
     })
-    const input = view.getByTestId(
-      'proton-pass-export-file',
-    ) as HTMLInputElement
-    const submit = view.getByTestId(
-      'proton-pass-import-submit',
-    ) as HTMLButtonElement
+    const input = requireInputElement(
+      view.getByTestId('proton-pass-export-file'),
+    )
+    const submit = requireButtonElement(
+      view.getByTestId('proton-pass-import-submit'),
+    )
 
     expect(submit.disabled).toBe(true)
     await fireEvent.change(input, {
@@ -339,9 +340,9 @@ describe('Proton Pass import panel', () => {
       isSaving: false,
       onImport,
     })
-    const input = view.getByTestId(
-      'proton-pass-export-file',
-    ) as HTMLInputElement
+    const input = requireInputElement(
+      view.getByTestId('proton-pass-export-file'),
+    )
     await fireEvent.change(input, {
       target: { files: [new File(['encrypted'], 'proton.zip')] },
     })
@@ -368,12 +369,12 @@ describe('Google Authenticator import panel', () => {
       isSaving: false,
       onImport,
     })
-    const input = view.getByTestId(
-      'google-authenticator-qr-image',
-    ) as HTMLInputElement
-    const submit = view.getByTestId(
-      'google-authenticator-import-submit',
-    ) as HTMLButtonElement
+    const input = requireInputElement(
+      view.getByTestId('google-authenticator-qr-image'),
+    )
+    const submit = requireButtonElement(
+      view.getByTestId('google-authenticator-import-submit'),
+    )
 
     expect(submit.disabled).toBe(true)
     await fireEvent.change(input, {
@@ -413,9 +414,9 @@ describe('Google Authenticator import panel', () => {
       isSaving: false,
       onImport: vi.fn(async () => importResult()),
     })
-    const input = view.getByTestId(
-      'google-authenticator-qr-image',
-    ) as HTMLInputElement
+    const input = requireInputElement(
+      view.getByTestId('google-authenticator-qr-image'),
+    )
 
     for (const name of ['first.png', 'duplicate.png']) {
       await fireEvent.change(input, {

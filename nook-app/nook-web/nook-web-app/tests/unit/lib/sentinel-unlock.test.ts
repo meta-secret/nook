@@ -1,7 +1,6 @@
-import type { NookVaultManager } from '$app-wasm'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
-import { ok, err } from 'neverthrow'
+import { err, ok, type Result } from 'neverthrow'
 import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test, vi } from 'vitest'
@@ -9,6 +8,7 @@ import { fireEvent, render } from '@testing-library/svelte'
 import { tick } from 'svelte'
 import {
   NookSentinelUnlockSessionStatus,
+  NookVaultManager,
   ProviderSyncFreshness,
   SentinelVaultUnlockState,
   SentinelGenesisPhase,
@@ -32,6 +32,8 @@ import {
 import type { NookSecretRecord } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import { requireButtonElement } from '../test-dom-helpers'
 
 enum LoginSurface {
   Gate = 'gate',
@@ -47,96 +49,136 @@ class SentinelFinalizationFixture {
   readonly storedDeliveriesRequest = {
     resolve: vi.fn(async () => []),
     free: vi.fn(),
+    [Symbol.dispose]: vi.fn(),
   }
-  readonly manager = {
-    vaultStoreId: '',
-    finalize_sentinel_unlock: vi.fn(
-      async (): Promise<NookSecretRecord[]> => [],
-    ),
-    sentinel_unlock_session_status: vi.fn(() => this.current),
-    sentinel_unlock_status: vi.fn(
-      () => SentinelVaultUnlockState.AwaitingShares,
-    ),
-    sentinel_unlock_request_json: vi.fn(() => 'new ceremony request'),
-    sentinel_stored_deliveries_request: vi.fn(
-      () => this.storedDeliveriesRequest,
-    ),
-    start_sentinel_unlock: vi.fn(),
-    connect: vi.fn(),
-  }
-  readonly state = {
-    hasManager: true,
-    isInitializing: false,
-    isVerifying: false,
-    isSyncActivityVisible: false,
-    isAuthenticated: false,
-    deviceProtectionReady: true,
-    errorMsg: '',
-    sentinelUnlockSession: this.previous,
-    sentinelUnlockRequest: 'current ceremony request',
-    sentinelUnlockStatus: SentinelVaultUnlockState.AwaitingShares,
-    sentinelCeremonyPrompt: true,
-    loginPasswordPrompt: false,
-    loginDeviceKeysCapable: true,
-    vaultArchitecture: { vault_type: VaultType.Sentinel },
-    localVaultPresent: true,
-    localVaults: [],
-    syncProviders: [],
-    passwordEntries: [],
-    sentinelStoredDeliveries: [],
-    sentinelGenesisPhase: SentinelGenesisPhase.Inactive,
-    selectedLoginVault: { kind: LoginVaultSelectionKind.NotSelected },
-    activeVault: { kind: ActiveVaultKind.Closed },
-    selectedPasswordEntry: { kind: PasswordEntrySelectionKind.NotSelected },
-    recoveryDiscovery: { kind: RecoveryDiscoveryKind.NotFound },
-    oauthFileDraft: { kind: OAuthFileDraftKind.NotConfigured },
-    oauthSetupSelection: { kind: OAuthSetupPresetKind.NotSelected },
-    prepareLocalLogin: vi.fn(),
-    refreshSentinelUnlockStatus: vi.fn(),
-    admitManager: () => ok(this.manager as unknown as NookVaultManager),
-    enqueueStorage: async <Value>(operation: () => Value | Promise<Value>) =>
-      operation(),
-    waitForStorageChain: vi.fn(async () => {}),
-    dismissSuccess: vi.fn(),
-    loadSecretPage: vi.fn<() => Promise<SentinelActionResult<void>>>(async () =>
-      ok(),
-    ),
-    ensureProviderSaved: vi.fn<() => Promise<SentinelActionResult<void>>>(
-      async () => ok(),
-    ),
-    loadProviders: vi.fn<() => Promise<SentinelActionResult<void>>>(async () =>
-      ok(),
-    ),
-    refreshPasswordEntriesList: vi.fn<
-      () => Promise<SentinelActionResult<void>>
-    >(async () => ok()),
-    hydrateMultiDeviceState: vi.fn(async () => ok()),
-    markVaultUnlocked: vi.fn(() => ok()),
-    showSuccess: vi.fn(),
-    startIdleSessionTracking: vi.fn(),
-    startVaultSync: vi.fn(),
-    initDeviceIdentity: vi.fn(async () => ok()),
-    syncFromStorage: vi.fn<VaultState['syncFromStorage']>(async () =>
-      ok(ProviderSyncOutcome.Synced),
-    ),
-    connectStorageArgs: vi.fn(),
-    refreshVaultArchitectureFromManager: vi.fn(() => ok()),
-    resolveErrorMessage: (message: string) => message,
-    t: (key: string) => key,
+  readonly manager = new NookVaultManager()
+  readonly state: VaultState = VaultStateTestFixture.create()
+  readonly finalizeSentinelUnlock = vi.fn(
+    async (): Promise<NookSecretRecord[]> => [],
+  )
+  readonly sentinelUnlockSessionStatus = vi.fn(() => this.current)
+  readonly sentinelUnlockStatus = vi.fn(
+    () => SentinelVaultUnlockState.AwaitingShares,
+  )
+  readonly startSentinelUnlock = vi.fn(
+    async (): Promise<NookSentinelUnlockSessionStatus> => this.current,
+  )
+  readonly waitForStorageChain = vi.fn(async () => {})
+  readonly syncFromStorage = vi.fn<VaultState['syncFromStorage']>(async () =>
+    ok(ProviderSyncOutcome.Synced),
+  )
+  readonly loadSecretPage = vi.fn<
+    () => Promise<SentinelActionResult<void>>
+  >(async () => ok())
+  readonly ensureProviderSaved = vi.fn<
+    () => Promise<SentinelActionResult<void>>
+  >(async () => ok())
+  readonly loadProviders = vi.fn<
+    () => Promise<SentinelActionResult<void>>
+  >(async () => ok())
+  readonly refreshPasswordEntriesList = vi.fn<
+    () => Promise<SentinelActionResult<void>>
+  >(async () => ok())
+  readonly hydrateMultiDeviceState = vi.fn(async () => ok())
+  readonly markVaultUnlocked = vi.fn(() => ok())
+  readonly showSuccess = vi.fn()
+  readonly startIdleSessionTracking = vi.fn()
+  readonly startVaultSync = vi.fn()
+  readonly failureOperations = {
+    loadSecretPage: this.loadSecretPage,
+    ensureProviderSaved: this.ensureProviderSaved,
+    loadProviders: this.loadProviders,
   }
 
   constructor() {
+    Object.defineProperty(this.manager, 'vaultStoreId', {
+      configurable: true,
+      value: '',
+      writable: true,
+    })
+    this.manager.finalize_sentinel_unlock = this.finalizeSentinelUnlock
+    this.manager.sentinel_unlock_session_status =
+      this.sentinelUnlockSessionStatus
+    this.manager.sentinel_unlock_status = this.sentinelUnlockStatus
+    this.manager.sentinel_unlock_request_json = vi.fn(
+      () => 'new ceremony request',
+    )
+    this.manager.sentinel_stored_deliveries_request = vi.fn(
+      () => this.storedDeliveriesRequest,
+    )
+    this.manager.start_sentinel_unlock = this.startSentinelUnlock
+    this.manager.connect = vi.fn()
+    this.state.isInitializing = false
+    this.state.isVerifying = false
+    this.state.isAuthenticated = false
+    this.state.deviceProtectionReady = true
+    this.state.errorMsg = ''
+    this.state.sentinelUnlockSession = this.previous
+    this.state.sentinelUnlockRequest = 'current ceremony request'
+    this.state.sentinelUnlockStatus = SentinelVaultUnlockState.AwaitingShares
+    this.state.sentinelCeremonyPrompt = true
+    this.state.loginPasswordPrompt = false
+    this.state.loginDeviceKeysCapable = true
+    this.state.vaultArchitecture = { vault_type: VaultType.Sentinel }
+    this.state.localVaultPresent = true
+    this.state.localVaults = []
+    this.state.syncProviders = []
+    this.state.passwordEntries = []
+    this.state.sentinelStoredDeliveries = []
+    this.state.sentinelGenesisPhase = SentinelGenesisPhase.Inactive
+    this.state.selectedLoginVault = { kind: LoginVaultSelectionKind.NotSelected }
+    this.state.activeVault = { kind: ActiveVaultKind.Closed }
+    this.state.selectedPasswordEntry = {
+      kind: PasswordEntrySelectionKind.NotSelected,
+    }
+    this.state.recoveryDiscovery = { kind: RecoveryDiscoveryKind.NotFound }
+    this.state.oauthFileDraft = { kind: OAuthFileDraftKind.NotConfigured }
+    this.state.oauthSetupSelection = {
+      kind: OAuthSetupPresetKind.NotSelected,
+    }
+    this.state.prepareLocalLogin = vi.fn()
+    this.state.refreshSentinelUnlockStatus = vi.fn()
+    this.state.openManager(this.manager)
+    const immediateStorage = async <Value, Failure = Error>(
+      operation: () => Result<Value, Failure> | Promise<Result<Value, Failure>>,
+    ): Promise<Result<Value, Failure>> => operation()
+    this.state.enqueueStorage = immediateStorage
+    this.state.waitForStorageChain = this.waitForStorageChain
+    this.state.dismissSuccess = vi.fn()
+    this.state.loadSecretPage = this.loadSecretPage
+    this.state.ensureProviderSaved = this.ensureProviderSaved
+    this.state.loadProviders = this.loadProviders
+    this.state.refreshPasswordEntriesList = this.refreshPasswordEntriesList
+    this.state.hydrateMultiDeviceState = this.hydrateMultiDeviceState
+    this.state.markVaultUnlocked = this.markVaultUnlocked
+    this.state.showSuccess = this.showSuccess
+    this.state.startIdleSessionTracking = this.startIdleSessionTracking
+    this.state.startVaultSync = this.startVaultSync
+    this.state.initDeviceIdentity = vi.fn(async () => ok())
+    this.state.syncFromStorage = this.syncFromStorage
+    this.state.connectStorageArgs = vi.fn()
+    this.state.refreshVaultArchitectureFromManager = vi.fn(() => ok())
+    this.state.resolveErrorMessage = (message: string) => message
+    this.state.t = (key: string) => key
     vi.spyOn(this.previous, 'active', 'get').mockReturnValue(true)
     vi.spyOn(this.previous, 'ready', 'get').mockReturnValue(true)
   }
 
+  setVaultStoreId(value: string): void {
+    Object.defineProperty(this.manager, 'vaultStoreId', {
+      configurable: true,
+      value,
+      writable: true,
+    })
+  }
+
   get vault(): VaultState {
-    return this.state as unknown as VaultState
+    return this.state
   }
 
   async finalize(): Promise<void> {
     const actions = new SentinelUnlockActions(
-      this.state as unknown as VaultState,
+      this.state,
     )
     const result = await actions.finalizeSentinelUnlock()
     if (result.isErr()) actions.presentFinalizationFailure(result.error)
@@ -280,7 +322,7 @@ describe('Sentinel quorum completion presentation', () => {
     const storageChainIdle = new Promise<void>((resolve) => {
       releaseStorageChain = resolve
     })
-    ready.state.waitForStorageChain.mockReturnValue(storageChainIdle)
+    ready.waitForStorageChain.mockReturnValue(storageChainIdle)
     const readyView = render(SentinelUnlockParticipantHelper, {
       vault: ready.vault,
       expanded: true,
@@ -387,7 +429,7 @@ describe('Sentinel quorum completion presentation', () => {
 
   test('clears stale readiness and request after terminal rejection without restarting', async () => {
     const fixture = new SentinelFinalizationFixture()
-    fixture.manager.finalize_sentinel_unlock.mockRejectedValue(
+    fixture.finalizeSentinelUnlock.mockRejectedValue(
       new Error('terminal reconstruction failed'),
     )
 
@@ -419,7 +461,7 @@ describe('Sentinel quorum completion presentation', () => {
         view.queryAllByTestId('login-unlock-method-password'),
       ).toHaveLength(0)
       expect(fixture.openVault).not.toHaveBeenCalled()
-      const open = view.getByTestId('unlock-vault-btn') as HTMLButtonElement
+      const open = requireButtonElement(view.getByTestId('unlock-vault-btn'))
       expect(open.disabled).toBe(false)
       await fireEvent.click(open)
       expect(fixture.openVault).toHaveBeenCalledOnce()
@@ -432,12 +474,12 @@ describe('Sentinel quorum completion presentation', () => {
 
   test('reflects the retained active ceremony after admission rejection without hydration', async () => {
     const fixture = new SentinelFinalizationFixture()
-    fixture.manager.vaultStoreId = 'loaded-sentinel-vault'
+    fixture.setVaultStoreId('loaded-sentinel-vault')
     vi.spyOn(fixture.current, 'active', 'get').mockReturnValue(true)
-    fixture.manager.sentinel_unlock_status.mockReturnValue(
+    fixture.sentinelUnlockStatus.mockReturnValue(
       SentinelVaultUnlockState.CeremonyRequired,
     )
-    fixture.manager.finalize_sentinel_unlock.mockRejectedValue(
+    fixture.finalizeSentinelUnlock.mockRejectedValue(
       new Error('SentinelCeremonyRequired'),
     )
 
@@ -473,16 +515,17 @@ describe('Sentinel quorum completion presentation', () => {
 
   test('keeps a loaded vault waiting for shares instead of reopening it', async () => {
     const fixture = new SentinelFinalizationFixture()
-    fixture.manager.vaultStoreId = 'loaded-sentinel-vault'
-    fixture.manager.finalize_sentinel_unlock.mockRejectedValue(
+    fixture.setVaultStoreId('loaded-sentinel-vault')
+    fixture.finalizeSentinelUnlock.mockRejectedValue(
       new Error('waiting for shares'),
     )
     await fixture.finalize()
     for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
       const view = fixture.renderLogin(surface)
       expect(
-        (view.getByTestId('sentinel-unlock-start-btn') as HTMLButtonElement)
-          .disabled,
+        requireButtonElement(
+          view.getByTestId('sentinel-unlock-start-btn'),
+        ).disabled,
       ).toBe(true)
       expect(view.queryAllByTestId('unlock-vault-btn')).toHaveLength(0)
       expect(fixture.openVault).not.toHaveBeenCalled()
@@ -499,11 +542,11 @@ describe('Sentinel quorum completion presentation', () => {
     'keeps Rust unlocked and the ceremony closed when %s rejects after finalization',
     async (operation) => {
       const fixture = new SentinelFinalizationFixture()
-      fixture.manager.vaultStoreId = 'loaded-sentinel-vault'
-      fixture.manager.sentinel_unlock_status.mockReturnValue(
+      fixture.setVaultStoreId('loaded-sentinel-vault')
+      fixture.sentinelUnlockStatus.mockReturnValue(
         SentinelVaultUnlockState.Unlocked,
       )
-      fixture.state[operation].mockResolvedValue(
+      fixture.failureOperations[operation].mockResolvedValue(
         err(
           new NativeVaultStorageFailure(new Error('SentinelCeremonyRequired')),
         ),
@@ -562,16 +605,16 @@ describe('Sentinel quorum completion presentation', () => {
     )
     expect(fixture.state.isVerifying).toBe(false)
     const steps = [
-      fixture.manager.finalize_sentinel_unlock,
-      fixture.state.loadSecretPage,
-      fixture.state.ensureProviderSaved,
-      fixture.state.loadProviders,
-      fixture.state.refreshPasswordEntriesList,
-      fixture.state.hydrateMultiDeviceState,
-      fixture.state.markVaultUnlocked,
-      fixture.state.showSuccess,
-      fixture.state.startIdleSessionTracking,
-      fixture.state.startVaultSync,
+      fixture.finalizeSentinelUnlock,
+      fixture.loadSecretPage,
+      fixture.ensureProviderSaved,
+      fixture.loadProviders,
+      fixture.refreshPasswordEntriesList,
+      fixture.hydrateMultiDeviceState,
+      fixture.markVaultUnlocked,
+      fixture.showSuccess,
+      fixture.startIdleSessionTracking,
+      fixture.startVaultSync,
     ]
     for (const step of steps) expect(step).toHaveBeenCalledOnce()
     const order = steps.flatMap((step) => step.mock.invocationCallOrder)
@@ -587,8 +630,8 @@ describe('Sentinel ceremony hydration', () => {
     const syncFailure = new NativeVaultStorageFailure(
       new Error('SentinelCeremonyRequired'),
     )
-    fixture.state.syncFromStorage.mockResolvedValue(err(syncFailure))
-    fixture.manager.start_sentinel_unlock.mockReturnValue(fixture.current)
+    fixture.syncFromStorage.mockResolvedValue(err(syncFailure))
+    fixture.startSentinelUnlock.mockResolvedValue(fixture.current)
 
     const actions = new SentinelUnlockActions(fixture.vault)
     const result = await actions.startSentinelUnlock()
@@ -612,7 +655,7 @@ describe('Sentinel ceremony hydration', () => {
     const syncFailure = new NativeVaultStorageFailure(
       new Error('provider unavailable'),
     )
-    fixture.state.syncFromStorage.mockResolvedValue(err(syncFailure))
+    fixture.syncFromStorage.mockResolvedValue(err(syncFailure))
 
     const actions = new SentinelUnlockActions(fixture.vault)
     const result = await actions.startSentinelUnlock()

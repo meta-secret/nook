@@ -1,11 +1,11 @@
-import type { NookVaultManager } from '$app-wasm'
-import { ok, err } from 'neverthrow'
+import { err, ok, type Result } from 'neverthrow'
 import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import {
   SentinelGenesisPhase,
+  NookVaultManager,
   type NookSentinelGenesisParticipantStatus,
   type NookSentinelGenesisStatus,
 } from '$app-wasm'
@@ -15,6 +15,8 @@ import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import SentinelCardStackDashboard from '$lib/components/login/SentinelCardStackDashboard.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { SentinelGenesisActions } from '$lib/vault/sentinel-genesis'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import { requireButtonElement } from '../test-dom-helpers'
 
 type GenesisDashboardProps = ComponentProps<typeof SentinelCardStackDashboard> &
   ComponentProps<typeof SentinelTerminalDashboard>
@@ -39,42 +41,47 @@ class GenesisFinalizationFixture {
     },
   } satisfies NookSentinelGenesisParticipantStatus
   readonly status = {
-    phase: SentinelGenesisPhase.Inactive as SentinelGenesisPhase,
-    participants: [] as NookSentinelGenesisParticipantStatus[],
+    phase: SentinelGenesisPhase.Inactive,
+    participants: [],
     free: vi.fn(),
     [Symbol.dispose]() {
       this.free()
     },
   } satisfies NookSentinelGenesisStatus
   readonly failure = new Error('genesis finalization rejected')
-  readonly manager = {
-    finalize_sentinel_genesis: vi.fn().mockRejectedValue(this.failure),
-    sentinel_genesis_status: vi.fn(
-      (): NookSentinelGenesisStatus => this.status,
-    ),
-    start_sentinel_genesis: vi.fn().mockRejectedValue(this.failure),
-  }
-  readonly state = {
-    deviceId: 'initiator',
-    hasManager: true,
-    isVerifying: false,
-    errorMsg: '',
-    sentinelGenesisDeliveries: [],
-    dismissSuccess: vi.fn(),
-    clearSentinelGenesisStore: vi.fn(),
-    initDeviceIdentity: vi.fn(async () => ok()),
-    sentinelGenesisPhase: SentinelGenesisPhase.ReadyToFinalize,
-    sentinelGenesisParticipantCount: 1,
-    sentinelGenesisParticipants: [this.previousParticipant],
-    admitManager: () => ok(this.manager as unknown as NookVaultManager),
-    enqueueStorage: async <Value>(operation: () => Value | Promise<Value>) =>
-      operation(),
-    t: (request: Parameters<VaultState['t']>[0]) =>
-      typeof request === 'string' ? request : request.key,
-  }
+  readonly manager = new NookVaultManager()
+  readonly state: VaultState = VaultStateTestFixture.create()
   readonly prepare = vi.fn()
   readonly start = vi.fn(async () => false)
   readonly finalizeAction = vi.fn(async () => ok())
+
+  constructor() {
+    vi.spyOn(this.manager, 'finalize_sentinel_genesis').mockRejectedValue(
+      this.failure,
+    )
+    vi.spyOn(this.manager, 'sentinel_genesis_status').mockImplementation(
+      () => this.status,
+    )
+    vi.spyOn(this.manager, 'start_sentinel_genesis').mockRejectedValue(
+      this.failure,
+    )
+    this.state.deviceId = 'initiator'
+    this.state.isVerifying = false
+    this.state.errorMsg = ''
+    this.state.dismissSuccess = vi.fn()
+    this.state.clearSentinelGenesisStore = vi.fn()
+    this.state.initDeviceIdentity = vi.fn(async () => ok())
+    this.state.sentinelGenesisPhase = SentinelGenesisPhase.ReadyToFinalize
+    this.state.sentinelGenesisParticipantCount = 1
+    this.state.sentinelGenesisParticipants = [this.previousParticipant]
+    this.state.openManager(this.manager)
+    const immediateStorage = async <Value, Failure = Error>(
+      operation: () => Result<Value, Failure> | Promise<Result<Value, Failure>>,
+    ): Promise<Result<Value, Failure>> => operation()
+    this.state.enqueueStorage = immediateStorage
+    this.state.t = (request: Parameters<VaultState['t']>[0]) =>
+      typeof request === 'string' ? request : request.key
+  }
 
   retain(phase: SentinelGenesisPhase): void {
     this.status.phase = phase
@@ -84,7 +91,7 @@ class GenesisFinalizationFixture {
   async reject(): Promise<void> {
     await expect(
       new SentinelGenesisActions(
-        this.state as unknown as VaultState,
+        this.state,
       ).finalize(),
     ).resolves.toEqual(err(new NativeVaultStorageFailure(this.failure)))
     expect(this.manager.sentinel_genesis_status).toHaveBeenCalledOnce()
@@ -106,7 +113,7 @@ class GenesisFinalizationFixture {
 
   dashboardProps(): GenesisDashboardProps {
     const props: GenesisDashboardProps = {
-      vault: this.state as unknown as VaultState,
+      vault: this.state,
       name: 'Genesis fixture',
       participantCount: 3,
       threshold: 2,
@@ -147,9 +154,9 @@ describe('Sentinel genesis finalization projection', () => {
     fixture.retain(SentinelGenesisPhase.CollectingParticipants)
     await fixture.reject()
     const view = fixture.renderDashboard(SentinelDashboard.CardStack)
-    const button = view.getByTestId(
-      'sentinel-genesis-finalize',
-    ) as HTMLButtonElement
+    const button = requireButtonElement(
+      view.getByTestId('sentinel-genesis-finalize'),
+    )
     expect(button.disabled).toBe(true)
     expect(view.getByTestId('sentinel-genesis-participant-fields')).toBeTruthy()
     fixture.expectNoAutomaticAction()
@@ -161,9 +168,9 @@ describe('Sentinel genesis finalization projection', () => {
     fixture.retain(SentinelGenesisPhase.ReadyToFinalize)
     await fixture.reject()
     const view = fixture.renderDashboard(SentinelDashboard.CardStack)
-    const button = view.getByTestId(
-      'sentinel-genesis-finalize',
-    ) as HTMLButtonElement
+    const button = requireButtonElement(
+      view.getByTestId('sentinel-genesis-finalize'),
+    )
     expect(button.disabled).toBe(false)
     fixture.expectNoAutomaticAction()
     await fireEvent.click(button)
@@ -201,9 +208,9 @@ describe('Sentinel genesis finalization projection', () => {
       fixture.status.phase = SentinelGenesisPhase.AwaitingCompletionCheck
       await fixture.reject()
       const view = fixture.renderDashboard(surface)
-      const button = view.getByTestId(
-        'sentinel-genesis-finalize',
-      ) as HTMLButtonElement
+      const button = requireButtonElement(
+        view.getByTestId('sentinel-genesis-finalize'),
+      )
       expect(button.disabled).toBe(false)
       expect(button.textContent).toContain(
         I18N_KEYS.LoginSentinelGenesisPhaseAwaitingCompletionCheck,
@@ -219,13 +226,14 @@ describe('Sentinel genesis finalization projection', () => {
       expect(fixture.finalizeAction).toHaveBeenCalledOnce()
       await expect(
         new SentinelGenesisActions(
-          fixture.state as unknown as VaultState,
+          fixture.state,
         ).finalize(),
       ).resolves.toEqual(err(new NativeVaultStorageFailure(fixture.failure)))
       await view.rerender(fixture.dashboardProps())
       expect(
-        (view.getByTestId('sentinel-genesis-finalize') as HTMLButtonElement)
-          .disabled,
+        requireButtonElement(
+          view.getByTestId('sentinel-genesis-finalize'),
+        ).disabled,
       ).toBe(false)
       expect(fixture.state.sentinelGenesisPhase).toBe(
         SentinelGenesisPhase.AwaitingCompletionCheck,
@@ -233,7 +241,7 @@ describe('Sentinel genesis finalization projection', () => {
       fixture.status.phase = SentinelGenesisPhase.Inactive
       await expect(
         new SentinelGenesisActions(
-          fixture.state as unknown as VaultState,
+          fixture.state,
         ).finalize(),
       ).resolves.toEqual(err(new NativeVaultStorageFailure(fixture.failure)))
       await view.rerender(fixture.dashboardProps())
@@ -261,7 +269,7 @@ describe('Sentinel genesis finalization projection', () => {
       }
       await expect(
         new SentinelGenesisActions(
-          fixture.state as unknown as VaultState,
+          fixture.state,
         ).start(request),
       ).resolves.toEqual(err(new NativeVaultStorageFailure(fixture.failure)))
       expect(fixture.manager.sentinel_genesis_status).toHaveBeenCalledOnce()
@@ -270,9 +278,9 @@ describe('Sentinel genesis finalization projection', () => {
       )
       expect(fixture.state.isVerifying).toBe(false)
       const view = fixture.renderDashboard(surface)
-      const button = view.getByTestId(
-        'sentinel-genesis-finalize',
-      ) as HTMLButtonElement
+      const button = requireButtonElement(
+        view.getByTestId('sentinel-genesis-finalize'),
+      )
       expect(button.disabled).toBe(false)
       fixture.expectNoAutomaticAction()
       expect(fixture.manager.finalize_sentinel_genesis).not.toHaveBeenCalled()

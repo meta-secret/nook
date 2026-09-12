@@ -1,4 +1,4 @@
-import { ok } from 'neverthrow'
+import { ok, type Result } from 'neverthrow'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
@@ -11,7 +11,9 @@ const wasmMocks = vi.hoisted(() => ({
   setLocalVaultLabel: vi.fn(),
   setVaultSessionLocked: vi.fn(),
 }))
-const unlockPresentationRefresh = vi.hoisted(() => vi.fn())
+const unlockPresentationRefresh = vi.hoisted(() =>
+  vi.fn<() => Promise<Result<void, never>>>(),
+)
 
 vi.mock('$app-wasm', () => ({
   get_active_vault_selection: wasmMocks.getActiveVaultSelection,
@@ -54,6 +56,8 @@ vi.mock('$lib/auth/providers', () => ({
 }))
 import { VaultLoginActions } from '$lib/vault/local-login'
 import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
+import { NookVaultManager } from '$app-wasm'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '$lib/vault.svelte'
 
 describe('renameLocalVaultLabel', () => {
@@ -67,21 +71,21 @@ describe('renameLocalVaultLabel', () => {
     wasmMocks.listLocalVaults.mockRejectedValue(
       new Error('catalog refresh failed'),
     )
-    const state = {
-      activeVault: {
-        kind: ActiveVaultKind.Open,
-        storeId: 'store-1',
-      },
-      localVaults: [{ storeId: 'store-1', label: 'Old name' }],
-      admitManager: () => ok({ set_vault_name: setVaultName }),
-      enqueueStorage: <T>(operation: () => T | Promise<T>) =>
-        Promise.resolve(operation()),
-      dismissSuccess: vi.fn(),
-      showSuccess: vi.fn(),
-      t: (key: string) => key,
-      errorMsg: '',
-      isVerifying: false,
-    } as unknown as VaultState
+    const state = VaultStateTestFixture.create()
+    state.activeVault = {
+      kind: ActiveVaultKind.Open,
+      storeId: 'store-1',
+    }
+    state.localVaults = [{ storeId: 'store-1', label: 'Old name' }]
+    const manager = new NookVaultManager()
+    manager.set_vault_name = setVaultName
+    state.openManager(manager)
+    state.dismissSuccess = vi.fn()
+    state.showSuccess = vi.fn()
+    state.t = (request: Parameters<VaultState['t']>[0]) =>
+      typeof request === 'string' ? request : request.key
+    state.errorMsg = ''
+    state.isVerifying = false
 
     await new VaultLoginActions(state).renameLocalVaultLabel({
       storeId: 'store-1',
@@ -111,18 +115,17 @@ describe('selectVaultForUnlock', () => {
   test('prepares the selected vault without protected provider or identity access', async () => {
     const syncActiveVaultStoreIdToAuth = vi.fn(async () => ok())
     const reloadProvidersForActiveVault = vi.fn(async () => ok())
-    const state = {
-      hasManager: false,
-      errorMsg: '',
-      isVerifying: false,
-      localLoginPreparation: 'idle',
-      localVaultPresent: true,
-      dismissSuccess: vi.fn(),
-      openActiveVault: vi.fn(),
-      refreshPasswordEntriesList: vi.fn(async () => ok()),
-      syncActiveVaultStoreIdToAuth,
-      reloadProvidersForActiveVault,
-    } as unknown as VaultState
+    const state = VaultStateTestFixture.create()
+    state.clearManager()
+    state.errorMsg = ''
+    state.isVerifying = false
+    state.localLoginPreparation = 'idle'
+    state.localVaultPresent = true
+    state.dismissSuccess = vi.fn()
+    state.openActiveVault = vi.fn()
+    state.refreshPasswordEntriesList = vi.fn(async () => ok())
+    state.syncActiveVaultStoreIdToAuth = syncActiveVaultStoreIdToAuth
+    state.reloadProvidersForActiveVault = reloadProvidersForActiveVault
 
     const selected = await new VaultLoginActions(state).selectVaultForUnlock({
       storeId: 'store-2',

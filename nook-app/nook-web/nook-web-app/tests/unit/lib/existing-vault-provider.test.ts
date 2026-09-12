@@ -11,6 +11,7 @@ import {
   storedLocalFolderDirectory,
   storedLocalFolderHandle,
 } from '$lib/auth/providers'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { ExistingVaultProviderDraft } from '$lib/vault/existing-vault-provider.svelte'
 import {
@@ -27,15 +28,18 @@ function providerState(): ProviderActionsContext {
     directoryName: storedLocalFolderDirectory('Vaults'),
     handleId: storedLocalFolderHandle('folder'),
   }
-  return {
-    githubPat: 'github-token',
-    githubRepo: 'vault-repository',
-    oauthFileDraft: { kind: OAuthFileDraftKind.Configured, config: oauthFile },
-    localFolderDraft: {
-      kind: LocalFolderDraftKind.Configured,
-      config: localFolder,
-    },
-  } as unknown as ProviderActionsContext
+  const state = VaultStateTestFixture.create()
+  state.githubPat = 'github-token'
+  state.githubRepo = 'vault-repository'
+  state.oauthFileDraft = {
+    kind: OAuthFileDraftKind.Configured,
+    config: oauthFile,
+  }
+  state.localFolderDraft = {
+    kind: LocalFolderDraftKind.Configured,
+    config: localFolder,
+  }
+  return state
 }
 
 describe('existing vault provider snapshot', () => {

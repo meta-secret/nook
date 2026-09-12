@@ -15,9 +15,11 @@ import {
   PasskeyKeeperKind,
   PasskeyObservedBrowser,
   PasskeyObservedPlatform,
+  NookSelectedVaultIdentityContextKind,
   NookVaultManager,
 } from '$app-wasm'
-import { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
 import DevicesAccessDashboard from '../../../../nook-web-shared/src/vault-app/lib/components/DevicesAccessDashboard.svelte'
 
 const identities = [
@@ -63,6 +65,10 @@ function unavailableTime() {
 
 function identitySnapshot(identity: (typeof identities)[number]) {
   return {
+    appId: identity.members[0]?.appId ?? 'browser-app',
+    appKeyCount: 1,
+    controlEpoch: 1n,
+    fingerprint: 'fingerprint-test',
     identityId: identity.identityId,
     label: identity.label,
     localAccess:
@@ -82,7 +88,10 @@ function identitySnapshot(identity: (typeof identities)[number]) {
         free,
       })),
     vaults: () => [],
+    vault_store_ids: () => [],
+    vaultCount: 0,
     free,
+    [Symbol.dispose]: free,
   }
 }
 
@@ -105,11 +114,14 @@ const accessSnapshot = {
   observedPlatform: PasskeyObservedPlatform.Unknown,
   vaults: () => [],
   free,
+  [Symbol.dispose]: free,
 }
 
 const directorySnapshot = {
+  current_browser_identity: () => identitySnapshot(identities[0]),
   length: identities.length,
   selectionKind: NookIdentityDirectorySelectionKind.Selected,
+  selectedVaultContextKind: NookSelectedVaultIdentityContextKind.Empty,
   selectedIdentityId: 'personal',
   identity: (index: number) =>
     index === 0
@@ -117,24 +129,22 @@ const directorySnapshot = {
       : identitySnapshot(identities[1]),
   device_access: () => accessSnapshot,
   free,
+  [Symbol.dispose]: free,
 }
 
-const managerMethods = {
-  device_access_snapshot_request: () => ({
-    resolve: async () => {
-      expect.fail('dashboard must use identity-bound access evidence')
-    },
-    free,
-  }),
-  identity_directory_snapshot_request: () => ({
-    resolve: async () => directorySnapshot,
-    free,
-  }),
-}
-const manager: NookVaultManager = Object.assign(
-  Object.create(NookVaultManager.prototype),
-  managerMethods,
-)
+const manager = new NookVaultManager()
+manager.device_access_snapshot_request = () => ({
+  resolve: async () => {
+    expect.fail('dashboard must use identity-bound access evidence')
+  },
+  free,
+  [Symbol.dispose]: free,
+})
+manager.identity_directory_snapshot_request = () => ({
+  resolve: async () => directorySnapshot,
+  free,
+  [Symbol.dispose]: free,
+})
 
 const vaultFields = {
   locale: 'en',
@@ -144,7 +154,10 @@ const vaultFields = {
   admitManager: () => ok(manager),
 }
 function createVault(): VaultState {
-  return Object.assign(Object.create(VaultState.prototype), vaultFields)
+  const vault = VaultStateTestFixture.create()
+  vault.deviceProtectionStatus = vaultFields.deviceProtectionStatus
+  vault.openManager(manager)
+  return vault
 }
 
 describe('identity directory selection', () => {

@@ -10,6 +10,16 @@ type FakeLocator = {
   isVisible: () => Promise<boolean>
 }
 
+function isEnrollmentPage(value: unknown): value is Page {
+  if (!(value instanceof Object)) return false
+  return (
+    'evaluate' in value &&
+    typeof value.evaluate === 'function' &&
+    'getByTestId' in value &&
+    typeof value.getByTestId === 'function'
+  )
+}
+
 function createPage() {
   const connectButton: FakeLocator = {
     click: vi.fn(async () => {}),
@@ -36,8 +46,11 @@ function createPage() {
     return true
   })
 
+  const pageCandidate = { evaluate, getByTestId }
+  if (!isEnrollmentPage(pageCandidate))
+    throw new TypeError('enrollment page adapter is incomplete')
   return {
-    page: { evaluate, getByTestId } as unknown as Page,
+    page: pageCandidate,
     connectButton,
     evaluate,
   }

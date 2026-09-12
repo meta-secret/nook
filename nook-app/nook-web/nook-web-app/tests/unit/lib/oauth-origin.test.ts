@@ -6,8 +6,21 @@ import {
   resolveOAuthOriginSupport,
 } from '$lib/auth/oauth-origin'
 
-function loc(origin: string, hostname: string) {
-  return { origin, hostname } as Location
+function isLocation(value: unknown): value is Location {
+  return (
+    value instanceof Object &&
+    'origin' in value &&
+    typeof value.origin === 'string' &&
+    'hostname' in value &&
+    typeof value.hostname === 'string'
+  )
+}
+
+function loc(origin: string, hostname: string): Location {
+  const candidate: unknown = { origin, hostname }
+  if (!isLocation(candidate))
+    throw new TypeError('location fixture must be an object')
+  return candidate
 }
 
 describe('oauth origin support', () => {

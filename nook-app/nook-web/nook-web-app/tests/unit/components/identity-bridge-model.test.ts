@@ -179,22 +179,21 @@ describe('identity bridge graph', () => {
       input(IdentityBridgePerspective.Identities),
     ).graph
 
-    expect(
-      graph.nodes.find((node) => node.id === 'protection-current')?.data,
-    ).toMatchObject({
-      kind: IdentityBridgeNodeKind.Protection,
-      label: 'Work laptop',
-      description: 'Passkey protected',
-      summary: {
-        kind: PasskeyCardSummaryKind.Present,
-        summary: {
-          facts: expect.arrayContaining([
-            expect.objectContaining({ value: 'passkey_1234' }),
-            expect.objectContaining({ value: 'Proton Pass' }),
-          ]),
-        },
-      },
-    })
+    const protection = graph.nodes.find(
+      (node) => node.id === 'protection-current',
+    )
+    if (!protection) expect.fail('protection node is required')
+    expect(protection.data.kind).toBe(IdentityBridgeNodeKind.Protection)
+    if (protection.data.kind === IdentityBridgeNodeKind.Protection) {
+      expect(protection.data.label).toBe('Work laptop')
+      expect(protection.data.description).toBe('Passkey protected')
+      expect(protection.data.summary.kind).toBe(PasskeyCardSummaryKind.Present)
+      if (protection.data.summary.kind === PasskeyCardSummaryKind.Present) {
+        expect(
+          protection.data.summary.summary.facts.map((fact) => fact.value),
+        ).toEqual(expect.arrayContaining(['passkey_1234', 'Proton Pass']))
+      }
+    }
     expect(
       graph.edges.find((edge) => edge.id === 'protection-to-device'),
     ).toMatchObject({

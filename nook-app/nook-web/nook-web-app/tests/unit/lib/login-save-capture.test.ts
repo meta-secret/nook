@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
 const saveMocks = vi.hoisted(() => ({
-  sendOffer: vi.fn(
-    async (_message: { payload: { username: string; password: string } }) => ({
-      kind: 'unavailable',
-    }),
-  ),
+  sendOffer: vi.fn(async () => ({
+    kind: 'unavailable',
+  })),
 }))
 
 vi.mock(

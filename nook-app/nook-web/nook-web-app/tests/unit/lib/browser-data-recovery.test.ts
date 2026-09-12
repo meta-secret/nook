@@ -10,6 +10,10 @@ import {
 } from '$lib/runtime/storage-failure'
 import { browserLogRuntime } from '$lib/runtime/log'
 
+function messageEvent(event: MessageEventInit): MessageEvent {
+  return new MessageEvent('message', event)
+}
+
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
@@ -49,16 +53,16 @@ describe('local data recovery support', () => {
         if (message.type !== 'request' || !message.requestId) return
         queueMicrotask(() => {
           for (const responderId of ['ready-peer', 'failed-peer']) {
-            this.onmessage?.({
+            this.onmessage?.(messageEvent({
               data: {
                 type: 'seen',
                 requestId: message.requestId,
                 senderId: message.senderId,
                 responderId,
               },
-            } as MessageEvent)
+            }))
           }
-          this.onmessage?.({
+          this.onmessage?.(messageEvent({
             data: {
               type: 'ready',
               requestId: message.requestId,
@@ -66,8 +70,8 @@ describe('local data recovery support', () => {
               responderId: 'ready-peer',
               readiness: { kind: 'ready' },
             },
-          } as MessageEvent)
-          this.onmessage?.({
+          }))
+          this.onmessage?.(messageEvent({
             data: {
               type: 'ready',
               requestId: message.requestId,
@@ -75,7 +79,7 @@ describe('local data recovery support', () => {
               responderId: 'failed-peer',
               readiness: { kind: 'failed', error: 'peer failed' },
             },
-          } as MessageEvent)
+          }))
         })
       }
 
@@ -113,15 +117,15 @@ describe('local data recovery support', () => {
       }): void {
         if (message.type !== 'request' || !message.requestId) return
         queueMicrotask(() => {
-          this.onmessage?.({
+          this.onmessage?.(messageEvent({
             data: {
               type: 'seen',
               requestId: message.requestId,
               senderId: message.senderId,
               responderId: 'failed-peer',
             },
-          } as MessageEvent)
-          this.onmessage?.({
+          }))
+          this.onmessage?.(messageEvent({
             data: {
               type: 'ready',
               requestId: message.requestId,
@@ -129,7 +133,7 @@ describe('local data recovery support', () => {
               responderId: 'failed-peer',
               readiness: { kind: 'failed', error: 'peer failed' },
             },
-          } as MessageEvent)
+          }))
         })
       }
 
@@ -169,13 +173,13 @@ describe('local data recovery support', () => {
         Promise.reject(new Error('peer cleanup rejected')),
       )
     expect(subscription.isOk()).toBe(true)
-    RecoveryChannel.instance.onmessage?.({
+    RecoveryChannel.instance.onmessage?.(messageEvent({
       data: {
         type: 'request',
         requestId: 'request-1',
         senderId: 'other-tab',
       },
-    } as MessageEvent)
+    }))
     await Promise.resolve()
     await Promise.resolve()
 

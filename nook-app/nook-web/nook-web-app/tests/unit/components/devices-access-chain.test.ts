@@ -12,17 +12,14 @@ import {
   KnownDashboardText,
   UnknownDashboardText,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
-import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 const known = (value: string): DashboardText => new KnownDashboardText(value)
 
 const unknown: DashboardText = new UnknownDashboardText()
 
 /** Translations are exercised by e2e; here the key and its data are the subject. */
-const vault = {
-  t: (key: string, replacements?: Record<string, string>) =>
-    replacements ? `${key}(${JSON.stringify(replacements)})` : key,
-} as unknown as VaultState
+const vault = VaultStateTestFixture.create()
 
 const vaultAccess = (label: string, verified: boolean) => ({
   storeId: `store-${label}`,

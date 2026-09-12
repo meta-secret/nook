@@ -20,6 +20,10 @@ import {
 const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 let manager: NookVaultManager
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value instanceof Object && !Array.isArray(value)
+}
+
 async function clearAuthProviderStore(): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const request = indexedDB.open('nook_auth', 1)
@@ -97,18 +101,18 @@ async function readRawAuthProvidersFromIdb(): Promise<unknown> {
 }
 
 function persistedProvider(rawSnapshot: unknown): Record<string, unknown> {
-  if (!(rawSnapshot instanceof Object) || !('providers' in rawSnapshot)) {
+  if (!isRecord(rawSnapshot) || !('providers' in rawSnapshot)) {
     throw new Error('expected a persisted auth-provider snapshot')
   }
-  const providers = (rawSnapshot as Record<string, unknown>).providers
+  const providers = rawSnapshot.providers
   if (!Array.isArray(providers) || providers.length === 0) {
     throw new Error('expected a persisted auth provider')
   }
-  const provider = providers[0]
-  if (!(provider instanceof Object)) {
+  const provider = providers.find(isRecord)
+  if (!provider) {
     throw new Error('expected the persisted provider to be an object')
   }
-  return provider as Record<string, unknown>
+  return provider
 }
 
 function persistedGithubPat(rawSnapshot: unknown): string {
@@ -124,10 +128,10 @@ function persistedOAuthCredentials(rawSnapshot: unknown): {
   refreshToken: string
 } {
   const oauthFile = persistedProvider(rawSnapshot).oauthFile
-  if (!(oauthFile instanceof Object)) {
+  if (!isRecord(oauthFile)) {
     throw new Error('expected persisted OAuth credentials')
   }
-  const credentialRecord = oauthFile as Record<string, unknown>
+  const credentialRecord = oauthFile
   if (
     typeof credentialRecord.accessToken !== 'string' ||
     typeof credentialRecord.refreshToken !== 'string'

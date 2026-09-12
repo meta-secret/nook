@@ -11,66 +11,53 @@ import {
   OAuthFileDraftKind,
   RecoveryDiscoveryKind,
 } from '$lib/vault/state/provider.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import type { VaultState } from '$lib/vault.svelte'
 
 function lifecycleHarness(authenticated = false) {
-  const state = {
-    loginSetup: {
-      kind: LoginSetupKind.Active,
-      providerType: LOCAL_PROVIDER_TYPE,
-    },
-    oauthFileDraft: { kind: OAuthFileDraftKind.NotConfigured },
-    localFolderDraft: { kind: LocalFolderDraftKind.NotConfigured },
-    githubPat: '',
-    githubRepo: '',
-    activeVault: { kind: ActiveVaultKind.Open, storeId: 'current-vault' },
-    localVaults: [{ storeId: 'incoming-vault' }],
-    isAuthenticated: authenticated,
-    errorMsg: '',
-    loginRequiresExistingVault: false,
-    storageMode: LOCAL_PROVIDER_TYPE,
-    recoveryDiscovery: { kind: RecoveryDiscoveryKind.NotFound },
-    loginPasswordPrompt: true,
-    joinEnrollmentPrompt: JoinEnrollmentState.None,
-    sentinelCeremonyPrompt: false,
-    t: (key: string) => key,
-    clearUnlockedSession: vi.fn(),
-    selectVaultForUnlock: vi.fn(async (storeId: string) => {
-      void storeId
-      return ok()
-    }),
-    prepareExistingVaultImportSlot: vi.fn(async () => ok()),
-    activateLoginSetup: vi.fn(),
-    configureOauthFile: vi.fn(),
-    clearOauthFile: vi.fn(),
-    configureLocalFolder: vi.fn(),
-    clearLocalFolder: vi.fn(),
-    connectStagedProvider: vi.fn(),
-    selectPasswordEntry: vi.fn(),
-    clearSelectedPasswordEntry: vi.fn(),
-    unlockWithPassword: vi.fn(),
-    activateConnectedExistingVault: vi.fn(async () => ok()),
-    clearExistingVaultRecoverySummary: vi.fn(),
-    beginLoginVaultPicker: vi.fn(),
+  const state = VaultStateTestFixture.create()
+  state.loginSetup = {
+    kind: LoginSetupKind.Active,
+    providerType: LOCAL_PROVIDER_TYPE,
   }
+  state.oauthFileDraft = { kind: OAuthFileDraftKind.NotConfigured }
+  state.localFolderDraft = { kind: LocalFolderDraftKind.NotConfigured }
+  state.githubPat = ''
+  state.githubRepo = ''
+  state.activeVault = { kind: ActiveVaultKind.Open, storeId: 'current-vault' }
+  state.localVaults = [{ storeId: 'incoming-vault' }]
+  state.isAuthenticated = authenticated
+  state.errorMsg = ''
+  state.loginRequiresExistingVault = false
+  state.storageMode = LOCAL_PROVIDER_TYPE
+  state.recoveryDiscovery = { kind: RecoveryDiscoveryKind.NotFound }
+  state.loginPasswordPrompt = true
+  state.joinEnrollmentPrompt = JoinEnrollmentState.None
+  state.sentinelCeremonyPrompt = false
+  state.t = (request: Parameters<VaultState['t']>[0]) =>
+    typeof request === 'string' ? request : request.key
+  const clearUnlockedSession = vi.spyOn(state, 'clearUnlockedSession')
+  const selectVaultForUnlock = vi.spyOn(state, 'selectVaultForUnlock')
+  const activateLoginSetup = vi.spyOn(state, 'activateLoginSetup')
+  const unlockWithPassword = vi.spyOn(state, 'unlockWithPassword')
 
-  state.clearUnlockedSession.mockImplementation(() => {
+  clearUnlockedSession.mockImplementation(() => {
     state.isAuthenticated = false
   })
-  state.selectVaultForUnlock.mockImplementation(async (storeId: string) => {
+  selectVaultForUnlock.mockImplementation(async (storeId: string) => {
     state.activeVault = { kind: ActiveVaultKind.Open, storeId }
     return ok()
   })
-  state.activateLoginSetup.mockImplementation((providerType) => {
+  activateLoginSetup.mockImplementation((providerType) => {
     state.loginSetup = { kind: LoginSetupKind.Active, providerType }
   })
-  state.unlockWithPassword.mockImplementation(async () => {
+  unlockWithPassword.mockImplementation(async () => {
     state.isAuthenticated = true
   })
 
   return {
     state,
-    lifecycle: new ExistingVaultImportLifecycle(state as unknown as VaultState),
+    lifecycle: new ExistingVaultImportLifecycle(state),
   }
 }
 

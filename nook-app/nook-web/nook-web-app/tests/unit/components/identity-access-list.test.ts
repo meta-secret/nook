@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { render } from '@testing-library/svelte'
 import {
   DeviceAccessIdentityState,
@@ -27,7 +27,7 @@ import {
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-key-inventory'
 import IdentityKeyInventoryComponent from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/IdentityKeyInventory.svelte'
 import { PasskeyCardSummaryKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/passkey-card'
-import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 const known = (value: string): DashboardText => new KnownDashboardText(value)
 
@@ -45,13 +45,12 @@ type TranslationRequest =
       readonly replacements: Readonly<Record<string, string>>
     }
 
-const vault = {
-  locale: 'en',
-  t: (request: TranslationRequest) =>
-    typeof request === 'string'
-      ? request
-      : `${request.key}(${JSON.stringify(request.replacements)})`,
-} as VaultState
+const vault = VaultStateTestFixture.create()
+vi.spyOn(vault, 't').mockImplementation((request: TranslationRequest) =>
+  typeof request === 'string'
+    ? request
+    : `${request.key}(${JSON.stringify(request.replacements)})`,
+)
 
 function passkeyView(): DashboardView {
   return {
@@ -150,15 +149,15 @@ describe('identity key inventory', () => {
     const addAppLabel = 'Add app'
     const addAppHelper =
       'Another Nook installation must request identity enrollment before it can be added.'
-    const renderedVault = {
-      ...vault,
-      t: (request: TranslationRequest) => {
+    const renderedVault = VaultStateTestFixture.create()
+    vi.spyOn(renderedVault, 't').mockImplementation(
+      (request: TranslationRequest) => {
         const key = typeof request === 'string' ? request : request.key
         if (key === 'devices_access.add_key') return addAppLabel
         if (key === 'devices_access.add_key_unavailable') return addAppHelper
         return vault.t(request)
       },
-    } as VaultState
+    )
     const identity: IdentityDirectoryEntry = {
       identityId: 'identity_personal',
       label: 'Personal',
@@ -222,25 +221,20 @@ describe('identity key inventory', () => {
       IdentityKeyInventoryRowKind.Protector,
       IdentityKeyInventoryRowKind.Apps,
     ])
-    expect(rows[0]).toMatchObject({
-      title: 'Work laptop',
-      passkeySummary: {
-        kind: PasskeyCardSummaryKind.Present,
-        summary: {
-          title: 'Work laptop',
-          facts: expect.arrayContaining([
-            expect.objectContaining({ value: 'passkey_1234' }),
-            expect.objectContaining({ value: 'Proton Pass' }),
-          ]),
-        },
-      },
-      apps: [
-        {
-          title: 'Nook on MacBook',
-          appId: 'device_5678',
-        },
-      ],
-    })
+    const protector = rows[0]
+    if (!protector) expect.fail('protector row is required')
+    expect(protector.title).toBe('Work laptop')
+    expect(protector.kind).toBe(IdentityKeyInventoryRowKind.Protector)
+    expect(protector.passkeySummary.kind).toBe(PasskeyCardSummaryKind.Present)
+    if (protector.passkeySummary.kind === PasskeyCardSummaryKind.Present) {
+      expect(protector.passkeySummary.summary.title).toBe('Work laptop')
+      expect(protector.passkeySummary.summary.facts.map((fact) => fact.value)).toEqual(
+        expect.arrayContaining(['passkey_1234', 'Proton Pass']),
+      )
+    }
+    expect(protector.apps).toEqual([
+      expect.objectContaining({ title: 'Nook on MacBook', appId: 'device_5678' }),
+    ])
     expect(rows[1]).toMatchObject({
       apps: [
         {
