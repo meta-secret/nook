@@ -1,0 +1,33 @@
+{
+  "extends": "./tsconfig.authored.json",
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "src/**/*.js",
+    "src/**/*.mjs",
+    "src/**/*.cjs",
+    "scripts/assemble-preview.ts",
+    "scripts/verify-app-isolation.ts",
+    "scripts/generate-i18n-keys.mjs",
+    "../nook-web-shared/src/vault-app/**/*.ts",
+    "../nook-web-shared/src/vault-app/**/*.svelte",
+    "../nook-web-shared/src/vault-app/**/*.js",
+    "../nook-web-shared/src/vault-app/**/*.mjs",
+    "../nook-web-shared/src/vault-app/**/*.cjs",
+    "../*.js",
+    "../*.mjs",
+    "../*.cjs",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "tests/**",
+    "e2e/**",
+    "src/lib",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm-*",
+    "../nook-web-shared/src/extension/nook-companion-wasm",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/dist-prod/**"
+  ]
+}

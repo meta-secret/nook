@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "../nook-web-shared/src/vault-app/**/*.ts",
+    "../nook-web-shared/src/vault-app/**/*.svelte",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "tests/**",
+    "e2e/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/dist-prod/**",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm*",
+    "../nook-web-shared/src/extension/nook-companion-wasm"
+  ]
+}

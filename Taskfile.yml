@@ -51,6 +51,10 @@ env:
       elif [ "${NOOK_REGISTRY_CACHE:-1}" != "0" ] && [ -r "${HOME}/.nook/cache/registry-remote-password" ]; then printf '1'; fi
 
 includes:
+  build:
+    taskfile: .task/build.yml
+  dev:
+    taskfile: .task/dev.yml
   static-checks:
     taskfile: .task/static-checks.yml
     flatten: true
