@@ -186,7 +186,7 @@ ${trigger}
     const processResult = new OperationalCommandProbe(processInput).execute();
     if (processResult.isErr()) return err(processResult.error);
     const result = processResult.value;
-    const expectedCode = exitMode === "error" ? 1 : 143;
+    const expectedCode = exitMode === RollbackExitMode.Error ? 1 : 143;
     if (result.exitCode !== expectedCode) {
       return err({
         kind: OperationalContractFailureKind.Requirement,

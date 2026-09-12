@@ -1,16 +1,18 @@
 import { z } from "zod";
 
+type Optional<T> = T | void;
+
 export interface ResourceEnvelope {
-  requests?: {
-    cpu?: string;
-    memory?: string;
-    "ephemeral-storage"?: string;
-  };
-  limits?: {
-    cpu?: string;
-    memory?: string;
-    "ephemeral-storage"?: string;
-  };
+  requests?: Optional<{
+    cpu?: Optional<string>;
+    memory?: Optional<string>;
+    "ephemeral-storage"?: Optional<string>;
+  }>;
+  limits?: Optional<{
+    cpu?: Optional<string>;
+    memory?: Optional<string>;
+    "ephemeral-storage"?: Optional<string>;
+  }>;
 }
 
 export type ArcEnvironmentVariable =
@@ -22,13 +24,13 @@ export type ArcEnvironmentVariable =
 
 export interface ArcContainer {
   name: string;
-  env?: ArcEnvironmentVariable[];
-  resources?: ResourceEnvelope;
+  env?: Optional<ArcEnvironmentVariable[]>;
+  resources?: Optional<ResourceEnvelope>;
 }
 
 export interface ArcVolume {
   name: string;
-  hostPath?: { path: string };
+  hostPath?: Optional<{ path: string }>;
 }
 
 export interface ArcValues {
@@ -37,7 +39,7 @@ export interface ArcValues {
   maxRunners: number;
   template: {
     spec: {
-      runtimeClassName?: string;
+      runtimeClassName?: Optional<string>;
       automountServiceAccountToken: boolean;
       initContainers: ArcContainer[];
       containers: ArcContainer[];
@@ -55,14 +57,14 @@ export interface ArcContainerPodTemplate {
 }
 
 export interface WorkflowJob {
-  if?: string;
-  "runs-on"?: string;
-  steps?: Array<{ run?: string; uses?: string }>;
-  uses?: string;
+  if?: Optional<string>;
+  "runs-on"?: Optional<string>;
+  steps?: Optional<Array<{ run?: Optional<string>; uses?: Optional<string> }>>;
+  uses?: Optional<string>;
 }
 
 export interface WorkflowManifest {
-  jobs?: Record<string, WorkflowJob>;
+  jobs?: Optional<Record<string, WorkflowJob>>;
 }
 
 const resourceFields = z.object({
@@ -86,7 +88,7 @@ const container = z.object({
   env: z.array(environment).optional(),
   resources: resources.optional(),
 });
-export const arcValuesSchema: z.ZodType<ArcValues> = z.object({
+export const arcValuesSchema = z.object({
   runnerScaleSetName: z.string(),
   minRunners: z.number(),
   maxRunners: z.number(),
@@ -105,16 +107,16 @@ export const arcValuesSchema: z.ZodType<ArcValues> = z.object({
     }),
   }),
 });
-export const arcHookSchema: z.ZodType<ArcContainerHook> = z.object({
+export const arcHookSchema = z.object({
   data: z.object({ "content.yaml": z.string() }),
 });
-export const arcPodSchema: z.ZodType<ArcContainerPodTemplate> = z.object({
+export const arcPodSchema = z.object({
   spec: z.object({
     initContainers: z.array(container),
     containers: z.array(container),
   }),
 });
-export const workflowSchema: z.ZodType<WorkflowManifest> = z.object({
+export const workflowSchema = z.object({
   jobs: z
     .record(
       z.string(),
@@ -135,8 +137,6 @@ export const workflowSchema: z.ZodType<WorkflowManifest> = z.object({
     .optional(),
 });
 
-export const arcCoordinatorSchema: z.ZodType<{
-  template: { spec: { containers: ArcContainer[] } };
-}> = z.object({
+export const arcCoordinatorSchema = z.object({
   template: z.object({ spec: z.object({ containers: z.array(container) }) }),
 });

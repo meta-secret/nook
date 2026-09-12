@@ -14,7 +14,9 @@ class OvhDedicatedArguments {
   constructor(private readonly paths: OvhPrivatePaths) {}
   parse(argv: string[]): Result<CliArguments, OvhFailure> {
     const [actionRaw = "", ...rest] = argv;
-    const action = Object.values(CliAction).find((value) => value === actionRaw);
+    const action = Object.values(CliAction).find(
+      (value) => String(value) === actionRaw,
+    );
     if (!action) return err(new OvhFailure(OvhFailureKind.Arguments, "unsupported OVH dedicated action"));
     const values = new Map<string, string>();
     for (let index = 0; index < rest.length; index += 2) {
@@ -28,7 +30,9 @@ class OvhDedicatedArguments {
     const [inventoryFile = resolve(import.meta.dir, "ovh-dedicated-servers.yaml")] = [values.get("inventory")];
     const node = nodeValue.trim();
     if (!node) return err(new OvhFailure(OvhFailureKind.Arguments, "node must not be empty"));
-    const field = Object.values(DedicatedServerField).find((value) => value === fieldRaw);
+    const field = Object.values(DedicatedServerField).find(
+      (value) => String(value) === fieldRaw,
+    );
     if (!field) return err(new OvhFailure(OvhFailureKind.Arguments, `unsupported field ${fieldRaw}`));
     return ok({ action, allowReinstall: values.get("allow-reinstall") === "true" ? ReinstallAuthorization.Replace : ReinstallAuthorization.Preserve,
       field, inventoryFile: this.paths.expand(inventoryFile), node });

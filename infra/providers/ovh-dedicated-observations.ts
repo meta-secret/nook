@@ -70,7 +70,7 @@ export class OvhServerObservation {
       this.server.ip !== expected.publicAddress ||
       this.server.commercialRange !== expected.expectedCommercialRange ||
       this.server.datacenter !== expected.expectedDatacenter ||
-      this.server.state !== OvhServerState.Ready
+      this.server.state !== `${OvhServerState.Ready}`
     ) {
       return { kind: ServerAdmissionKind.Incompatible };
     }

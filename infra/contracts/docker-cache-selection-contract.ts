@@ -91,7 +91,7 @@ export class DockerCacheSelectionContract {
   private assertClosedSet(
     source: string,
   ): Result<void, OperationalContractFailure> {
-    const values = Object.values(DockerCacheSelection);
+    const values = new Set<string>(Object.values(DockerCacheSelection));
     const contract = new TextContract({
       label: "Docker cache selection",
       source,
@@ -120,7 +120,7 @@ export class DockerCacheSelectionContract {
       if (probed.isErr()) return err(probed.error);
       const result = probed.value;
       const accepted = result.exitCode === 0;
-      if (accepted !== values.includes(value as DockerCacheSelection)) {
+      if (accepted !== values.has(value)) {
         return err({
           kind: OperationalContractFailureKind.Requirement,
           message: `Docker cache selection validation failed for ${value}`,
