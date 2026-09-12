@@ -1,7 +1,10 @@
 import { ProviderSyncFreshness } from '$app-wasm'
 import type { Page } from '@playwright/test'
 import { describe, expect, test, vi } from 'vitest'
-import { tryGithubVaultConnect } from '../../../e2e/helpers/device-enrollment'
+import {
+  isJoinerVaultReady,
+  tryGithubVaultConnect,
+} from '../../../e2e/helpers/device-enrollment'
 import { E2eSyncProviderId } from '../../../e2e/sync-provider'
 
 type FakeLocator = {
@@ -76,5 +79,23 @@ describe('device enrollment connect helpers', () => {
           argument.freshness === ProviderSyncFreshness.Forced,
       ),
     ).toHaveLength(0)
+  })
+
+  test('accepts the authenticated shell when the route-specific vault panel is absent', () => {
+    expect(
+      isJoinerVaultReady({
+        authenticatedShellVisible: true,
+        loginGateVisible: false,
+      }),
+    ).toBe(true)
+  })
+
+  test('rejects an authenticated shell while the login gate is visible', () => {
+    expect(
+      isJoinerVaultReady({
+        authenticatedShellVisible: true,
+        loginGateVisible: true,
+      }),
+    ).toBe(false)
   })
 })

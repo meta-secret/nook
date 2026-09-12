@@ -57,6 +57,11 @@ import {
   refreshJoinerVaultOnLoginGateIfIdle,
   RefreshJoinerVaultOnLoginGateOutcome,
 } from './joiner-vault-refresh'
+import {
+  AuthenticatedWorkspaceObservation,
+  AuthenticatedWorkspaceState,
+  type AuthenticatedWorkspaceVisibility,
+} from './authenticated-workspace'
 import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
 import {
   E2eSyncProviderId,
@@ -368,6 +373,15 @@ async function refreshGithubVaultOnLoginGate(page: Page) {
 
 export type JoinerVaultReadyTarget = SyncE2eTarget
 
+export function isJoinerVaultReady(
+  visibility: AuthenticatedWorkspaceVisibility,
+): boolean {
+  return (
+    new AuthenticatedWorkspaceObservation(visibility).state() ===
+    AuthenticatedWorkspaceState.Unlocked
+  )
+}
+
 export function isOauthFileJoinerTarget(target: JoinerVaultReadyTarget) {
   return (
     target.providerId === E2eSyncProviderId.File ||
@@ -483,17 +497,18 @@ export async function waitForJoinerVaultReady({
           await refreshGithubVaultOnLoginGate(page)
           await dismissSyncConflictIfVisible(page)
           await dismissJoinEnrollmentDialog(page)
-          if (
-            (await page.getByTestId('vault-panel').isVisible()) ||
-            (await page.getByTestId('secret-row').count()) > 0
-          ) {
-            return true
-          }
+          const isWorkspaceReady = async () =>
+            isJoinerVaultReady({
+              authenticatedShellVisible: await page
+                .getByTestId('authenticated-shell')
+                .isVisible(),
+              loginGateVisible: await page
+                .getByTestId('login-gate')
+                .isVisible(),
+            })
+          if (await isWorkspaceReady()) return true
           await tryJoinerVaultConnect(page, target)
-          return (
-            (await page.getByTestId('vault-panel').isVisible()) ||
-            (await page.getByTestId('secret-row').count()) > 0
-          )
+          return await isWorkspaceReady()
         },
         { timeout: GITHUB_CONNECT_TIMEOUT_MS },
       )
