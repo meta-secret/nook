@@ -276,6 +276,7 @@ pub(crate) use storage::auth_providers::{
     ProviderDbReadRawSnapshotFromStore,
 };
 
+pub use passkey_browser::{BrowserCredentialCreationOptions, BrowserCredentialRequestOptions};
 pub(crate) use passkey_browser::{
     BrowserPasskeyClient, BrowserPasskeyCreationOptions, BrowserPasskeyGetOptionalArray,
     BrowserPasskeyGetOptionalObject, BrowserPasskeyGetRequiredObject,

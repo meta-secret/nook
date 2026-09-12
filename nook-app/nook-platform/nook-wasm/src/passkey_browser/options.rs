@@ -27,10 +27,27 @@ use passkey_types::{
 use serde::Serialize;
 use serde_wasm_bindgen::{Error, Serializer};
 use std::collections::HashMap;
-use wasm_bindgen::{JsCast, JsError};
+use wasm_bindgen::{JsCast, JsError, prelude::wasm_bindgen};
 use web_sys::{CredentialCreationOptions, CredentialRequestOptions};
 
 const CHALLENGE_LEN: usize = 32;
+
+#[wasm_bindgen]
+extern "C" {
+    /// Browser-owned options passed unchanged to `navigator.credentials.create`.
+    #[wasm_bindgen(
+        extends = CredentialCreationOptions,
+        typescript_type = "CredentialCreationOptions"
+    )]
+    pub type BrowserCredentialCreationOptions;
+
+    /// Browser-owned options passed unchanged to `navigator.credentials.get`.
+    #[wasm_bindgen(
+        extends = CredentialRequestOptions,
+        typescript_type = "CredentialRequestOptions"
+    )]
+    pub type BrowserCredentialRequestOptions;
+}
 
 /// Named values required by `BrowserPasskeyClient::creation_options`.
 #[derive(Clone, Copy)]
@@ -106,7 +123,7 @@ pub(crate) struct BrowserPasskeyPrfExtension<'a> {
 impl BrowserPasskeyClient {
     pub(crate) fn creation_options(
         request: BrowserPasskeyCreationOptions<'_>,
-    ) -> Result<CredentialCreationOptions, JsError> {
+    ) -> Result<BrowserCredentialCreationOptions, JsError> {
         let BrowserPasskeyCreationOptions {
             rp_id,
             rp_name,
@@ -147,7 +164,7 @@ impl BrowserPasskeyClient {
 impl BrowserPasskeyClient {
     pub(crate) fn request_options(
         request: BrowserPasskeyRequestOptions<'_>,
-    ) -> Result<CredentialRequestOptions, JsError> {
+    ) -> Result<BrowserCredentialRequestOptions, JsError> {
         let BrowserPasskeyRequestOptions {
             rp_id,
             credential_id,
@@ -173,7 +190,9 @@ impl BrowserPasskeyClient {
 }
 
 impl BrowserPasskeyClient {
-    pub(crate) fn recovery_options(rp_id: &str) -> Result<CredentialRequestOptions, JsError> {
+    pub(crate) fn recovery_options(
+        rp_id: &str,
+    ) -> Result<BrowserCredentialRequestOptions, JsError> {
         let prf_input = WebAuthnPrfInput::deterministic();
         let options =
             BrowserPasskeyClient::recovery_options_struct(BrowserPasskeyRecoveryOptionsStruct {

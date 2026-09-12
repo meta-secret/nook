@@ -1,6 +1,7 @@
 use super::wasm_bindgen;
 use crate::BrowserPasskeyRequestOptions;
 use crate::passkey_browser;
+use crate::{BrowserCredentialCreationOptions, BrowserCredentialRequestOptions};
 use crate::{BrowserPasskeyClient, BrowserPasskeyCreationOptions};
 #[cfg(all(test, target_arch = "wasm32"))]
 use nook_core::MemberLabelState;
@@ -52,7 +53,7 @@ impl NookPasskeySetup {
         &self,
         rp_id: &str,
         rp_name: &str,
-    ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
+    ) -> Result<BrowserCredentialCreationOptions, wasm_bindgen::JsError> {
         BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
             rp_id,
             rp_name,
@@ -71,7 +72,7 @@ impl NookPasskeySetup {
         rp_id: &str,
         rp_name: &str,
         passkey_label: &str,
-    ) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
+    ) -> Result<BrowserCredentialCreationOptions, wasm_bindgen::JsError> {
         BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
             rp_id,
             rp_name,
@@ -131,7 +132,7 @@ impl NookPasskeyUnlockOptions {
     pub fn request_options(
         &self,
         rp_id: &str,
-    ) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
+    ) -> Result<BrowserCredentialRequestOptions, wasm_bindgen::JsError> {
         BrowserPasskeyClient::request_options(BrowserPasskeyRequestOptions {
             rp_id,
             credential_id: &self.credential_id,

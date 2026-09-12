@@ -575,6 +575,7 @@ impl BrowserPasskeyClient {
     }
 }
 
+pub use options::{BrowserCredentialCreationOptions, BrowserCredentialRequestOptions};
 pub(crate) use options::{BrowserPasskeyCreationOptions, BrowserPasskeyRequestOptions};
 
 #[cfg(test)]

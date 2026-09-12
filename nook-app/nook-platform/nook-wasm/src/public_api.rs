@@ -3,6 +3,7 @@ use crate::BrowserPasskeyRequestOptions;
 use crate::VaultSessionLock;
 use crate::storage::local_folder::LocalFolderHandles;
 use crate::types::{NookManagerStoreScope, NookProviderSyncRevision};
+use crate::{BrowserCredentialCreationOptions, BrowserCredentialRequestOptions};
 use crate::{BrowserPasskeyClient, BrowserPasskeyCreationOptions, NookTotpCode};
 use nook_core::{PasswordGenerationOptions, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret};
 use nook_core::{StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection};
@@ -86,7 +87,7 @@ pub use shared_storage_grant::*;
     rp_id: &str,
     credential_id: Vec<u8>,
     prf_input: Vec<u8>,
-) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
+) -> Result<BrowserCredentialRequestOptions, wasm_bindgen::JsError> {
     BrowserPasskeyClient::request_options(BrowserPasskeyRequestOptions {
         rp_id,
         credential_id: &credential_id,
@@ -109,7 +110,7 @@ pub use shared_storage_grant::*;
     passkey_label: &str,
     user_handle: Vec<u8>,
     prf_input: Vec<u8>,
-) -> Result<web_sys::CredentialCreationOptions, wasm_bindgen::JsError> {
+) -> Result<BrowserCredentialCreationOptions, wasm_bindgen::JsError> {
     BrowserPasskeyClient::creation_options(BrowserPasskeyCreationOptions {
         rp_id,
         rp_name,
@@ -122,7 +123,7 @@ pub use shared_storage_grant::*;
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn build_passkey_recovery_request_options(
     rp_id: &str,
-) -> Result<web_sys::CredentialRequestOptions, wasm_bindgen::JsError> {
+) -> Result<BrowserCredentialRequestOptions, wasm_bindgen::JsError> {
     BrowserPasskeyClient::recovery_options(rp_id)
 }
 
