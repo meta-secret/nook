@@ -480,6 +480,31 @@ export async function readRawAuthProvidersFromIdb(
             'githubPat',
           )?.value
           if (typeof githubPat === 'string') provider.githubPat = githubPat
+          const oauthFileValue: unknown = Object.getOwnPropertyDescriptor(
+            providerValue,
+            'oauthFile',
+          )?.value
+          if (
+            oauthFileValue instanceof Object &&
+            !Array.isArray(oauthFileValue)
+          ) {
+            const oauthFile: NonNullable<
+              RawAuthProvidersSnapshot['providers'][number]['oauthFile']
+            > = {}
+            const accessToken: unknown = Object.getOwnPropertyDescriptor(
+              oauthFileValue,
+              'accessToken',
+            )?.value
+            if (typeof accessToken === 'string')
+              oauthFile.accessToken = accessToken
+            const refreshToken: unknown = Object.getOwnPropertyDescriptor(
+              oauthFileValue,
+              'refreshToken',
+            )?.value
+            if (typeof refreshToken === 'string')
+              oauthFile.refreshToken = refreshToken
+            provider.oauthFile = oauthFile
+          }
           providers.push(provider)
         }
         resolve({ providers })
