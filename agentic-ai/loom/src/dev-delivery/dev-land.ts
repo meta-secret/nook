@@ -8,10 +8,10 @@ import {
 } from '../lib/base-evidence.ts';
 import {
   Ancestry,
+  BranchName,
   DevFailureKind,
   ManagedBranch,
   RemoteBranchPresence,
-  type BranchName,
   type CommitSha,
   type DevFailure,
   type DevLandRequest,

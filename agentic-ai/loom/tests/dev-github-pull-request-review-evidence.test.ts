@@ -244,7 +244,6 @@ class ReviewEvidenceRunner implements CommandRunner {
 
   private pullRequestView(headSha: string): PullRequestViewResponse {
     return {
-      number: 42,
       ...this.pullRequestIdentity(headSha),
       state: 'OPEN',
       reviewDecision: this.scenario.reviewDecision ?? 'APPROVED',

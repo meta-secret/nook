@@ -18,6 +18,7 @@ import {
   type CommandRunner,
   CommitSha,
   DevFailureKind,
+  ManagedBranch,
   type DevFailure,
 } from '../src/dev-delivery/dev-types.ts';
 
@@ -414,7 +415,7 @@ test('returns a typed publication handoff for unpublished local dev without publ
       executor: 'pr-lifecycle',
       repositoryRoot: harness.root,
       devPath: harness.devPath,
-      targetBranch: 'dev',
+      targetBranch: ManagedBranch.Dev,
       expectedSha: result.value.expectedSha,
       originMainSha: result.value.originMainSha,
       pinnedLocalDevSha: result.value.pinnedLocalDevSha,

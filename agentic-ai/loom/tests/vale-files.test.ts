@@ -29,6 +29,7 @@ import {
 import {
   CortexArticleFindingCode,
   CortexMarkdownArticle,
+  type CortexArticleFinding,
 } from '../src/lib/cortex-article-structure.ts';
 
 export class ValeFilesScenario {
@@ -266,7 +267,7 @@ test('pins Vale 3.19 structural boundaries for residual Markdown checks', () => 
   }).execute();
   assert(articleResult.isOk());
   expect(
-    articleResult.value.map((finding) => ({
+    articleResult.value.map((finding: CortexArticleFinding) => ({
       code: finding.code,
       line: finding.line,
     })),

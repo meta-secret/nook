@@ -166,8 +166,11 @@ describe('canonical Cortex team authority', () => {
     const internalAgent = TEAM_INTERNAL_AGENT_CATALOG.find(
       (candidate) => candidate.key === TeamInternalAgentKey.PrLifecycle,
     );
+    const deliveryPipelineAuthority = TEAM_AUTHORITY_CATALOG[5];
     if (!teamGizmo || !internalAgent)
       throw new Error('Delivery Pipeline profiles are incomplete.');
+    if (!deliveryPipelineAuthority)
+      throw new Error('Delivery Pipeline authority is incomplete.');
 
     expect(teamGizmo).toMatchObject({
       key: TeamGizmoKey.DeliveryPipeline,
@@ -199,7 +202,7 @@ describe('canonical Cortex team authority', () => {
     ).toEqual(internalAgent);
     expect(
       TeamAuthorityCatalog.teamAgentProfile(TeamKey.DeliveryPipeline),
-    ).toEqual(TEAM_AUTHORITY_CATALOG[5]);
+    ).toEqual(deliveryPipelineAuthority);
     expect(
       TeamAuthorityCatalog.teamAgentProfile(TeamGizmoKey.DeliveryPipeline),
     ).toEqual(teamGizmo);
