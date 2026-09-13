@@ -5,6 +5,7 @@
     VaultStorageFailureKind,
   } from "$lib/runtime/storage-failure";
   import type {
+    CardParticipantRequest,
     LoginCreateVaultChooserProps,
     SentinelGenesisParticipation,
   } from "./login-create-vault-chooser-contract";
@@ -128,11 +129,6 @@ import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
   let initiatorKeyLoading = $state(false);
   let initiatorPasskeyRequested = $state(false);
   let importedParticipantResponse = $state("");
-
-  type CardParticipantRequest = {
-    readonly payload: string;
-    readonly participantLabel: string;
-  };
 
   function participantActionFailure(): SentinelActionResult<void> {
     return err(
