@@ -4,6 +4,26 @@ This file is the repository entry point. It selects one owning context and
 states only boundaries that apply everywhere. Detailed delivery and delegation
 rules belong to Gizmo Prime's linked authorities.
 
+## Canonical Cortex tree
+
+The canonical routing tree is rooted at `.cortex/gizmo-prime`. It has exactly
+six top-level teams: `ai`, `dev-core`, `security`, `sre`, `web-dev`, and
+`delivery-pipeline`. Each team has exactly one `gizmo` at
+`teams/<team>/gizmo/`; every Team Gizmo reports to Gizmo Prime and uses
+`gpt-5.6-luna` with `xhigh` reasoning.
+
+Each Team Gizmo owns one team worktree for its packet. Gizmo Prime first
+reuses an existing compatible Team Agent; only when no compatible agent exists
+does it issue separate child worktrees for the required specialists. Team
+Gizmo integrates those specialist commits into its feature branch and reports
+the exact resulting SHA to Prime.
+
+The current specialist paths are SRE
+(`teams/sre/provisioning/`, `teams/sre/cloud-native/`), Development Core
+(`teams/dev-core/rust-core-developer/`, `teams/dev-core/rust-auth2-developer/`),
+and Delivery Pipeline (`teams/delivery-pipeline/gizmo/`,
+`teams/delivery-pipeline/dev-manager/`, `teams/delivery-pipeline/pr-lifecycle/`).
+
 ## Mandatory Gizmo Gate — fail closed
 
 Every implementation or delivery run must begin under Gizmo Prime. Gizmo Prime
@@ -21,8 +41,8 @@ for the run. Every team has a Team Gizmo that reports upward to Gizmo Prime.
   Team Gizmo reports exact-SHA evidence and blockers to Gizmo Prime for
   verification and serialized integration.
 - Gizmo Prime must route pull-request operations through Delivery Pipeline's
-  internal PR Steward or the dev-manager path. Feature Gizmos, Team Gizmos,
-  and Team Agents never create or update pull requests.
+  PR Lifecycle Agent or Dev Manager path. Internal agents never create or
+  update pull requests; only the Dev Manager invokes `dev:pr-manager`.
 
 ### Prohibited actions
 
@@ -58,8 +78,8 @@ It is the primary end-to-end explanation of the delivery system. Identify the
 current level, owning actor, incoming artifact, feedback path, and terminal
 handoff before taking action.
 
-This mandatory read applies to Feature Gizmos, Team Gizmos, Team Agents,
-reviewers, internal PR Steward, the Dev Manager, and repair Gizmos. After
+This mandatory read applies to Gizmo Prime, Team Gizmos, Team Agents,
+reviewers, the PR Lifecycle Agent, the Dev Manager, and repair Gizmos. After
 reading it, load only the
 detailed authority required for the selected stage. The
 [dev delivery contract](gizmo-prime/architecture/dev-delivery.md) supplies those
@@ -73,25 +93,12 @@ detailed authorization, evidence, and failure rules.
 - [Delivery Pipeline](teams/delivery-pipeline/AGENTS.md) owns authorized
   delivery mechanics across CI, pull-request lifecycle, dev publication,
   workflow execution, local landing, evidence, and guarded promotion. Its
-  [Team Gizmo](teams/delivery-pipeline/internal/gizmo/AGENTS.md) reports to
-  Gizmo Prime and dispatches its internal agents. The [internal PR Steward
-  contract](teams/delivery-pipeline/internal/pr-steward/AGENTS.md) owns only
-  packetized mechanical execution and returns evidence through Team Gizmo; it
-  is not a functional engineering authority.
-- [Dev manager](teams/dev-manager/AGENTS.md) owns manually operated dev
-  publication, dev PR creation/update, slow evidence, readiness, repair
-  delegation, and promotion. The manager invokes `dev:pr-manager`; Steward
-  observes the PR and executes only review, check, status, and promotion
-  mechanics under the manager's packet.
-- [Dev manager Gizmo](teams/dev-manager-gizmo/AGENTS.md) is the on-demand entry
-  and orchestration context for manually invoked dev-manager work.
-  - It must load the existing [Dev manager contract](teams/dev-manager/AGENTS.md),
-    which remains the canonical operational authority.
-  - It must load the [Delivery Pipeline team contract](teams/delivery-pipeline/AGENTS.md)
-    and [internal PR Steward contract](teams/delivery-pipeline/internal/pr-steward/AGENTS.md)
-    for authorized mechanics.
-  - It must remain behind the mandatory Gizmo gate and never bypass the GitHub
-    execution boundary.
+  [Team Gizmo](teams/delivery-pipeline/gizmo/AGENTS.md) reports to Gizmo Prime,
+  owns one team worktree, and dispatches the
+  [PR Lifecycle Agent](teams/delivery-pipeline/pr-lifecycle/AGENTS.md).
+  The [Dev Manager](teams/delivery-pipeline/dev-manager/AGENTS.md) owns
+  publication, invokes `dev:pr-manager`, and controls slow evidence,
+  readiness, and promotion.
 - [AI contract](teams/ai/AGENTS.md) and
   [graph](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, routing, and
   agent automation.
@@ -134,7 +141,7 @@ Every secret-bearing value follows the security-owned
 unowned lifetime, plaintext persistence, or sensitive log as a P1 finding.
 
 Each concurrent feature has its own Gizmo delivery owner and isolated team
-worktrees. The manually run [dev manager](teams/dev-manager/AGENTS.md) owns
+worktrees. The manually run [Dev Manager](teams/delivery-pipeline/dev-manager/AGENTS.md) owns
 publication and promotion. Start with the mandatory
 [multiagent delivery visual model](gizmo-prime/architecture/multiagent-delivery-diagrams.md),
 then follow the detailed
@@ -188,8 +195,8 @@ or relax any repository scope, ownership, or handoff rule.
     - functional-team routing and shared-branch ownership;
     - feature Workbench completion and the feature delivery verdict.
   - Dev PR creation/update, slow evidence, readiness, and promotion remain
-    under dev-manager control. Steward performs only manager-authorized mechanics.
-  - Delivery Pipeline's internal PR Steward owns only explicitly authorized
+    under Dev Manager control. The PR Lifecycle Agent performs only manager-authorized mechanics.
+  - Delivery Pipeline's PR Lifecycle Agent owns only explicitly authorized
     external mechanics:
     - repository discovery, authentication checks, and run-log queries;
     - exact parent-authored Workbench publication;
@@ -199,7 +206,7 @@ or relax any repository scope, ownership, or handoff rule.
     - exact-head validation retriggers and bounded waits;
     - readiness evidence collection; and
     - authorized fast-forward promotion and remote PR-state verification.
-  - PR Steward must never decide readiness or promotion itself.
+  - The PR Lifecycle Agent must never decide readiness or promotion itself.
   - It requires the owning Gizmo or dev manager's explicit operation packet.
   - Team workers implement changes and author tests in an isolated child
     worktree created from the parent feature worktree's current commit.
@@ -269,7 +276,7 @@ or relax any repository scope, ownership, or handoff rule.
     part of feature-agent publication and is not delegated to a Team Agent.
   - Gizmo owns feature review and acceptance for the returned head.
   - The dev manager owns subsequent dev PR readiness and promotion.
-  - Internal PR Steward performs only the owning controller's authorized
+  - The PR Lifecycle Agent performs only the owning controller's authorized
     mechanics.
 - **Repository constraints**
   - The source-size limit is a non-bypassable hard rule.
@@ -338,7 +345,7 @@ or relax any repository scope, ownership, or handoff rule.
 
 ### Required actions
 
-- Delivery Pipeline's internal PR Steward executes every live-agent GitHub
+- Delivery Pipeline's PR Lifecycle Agent executes every live-agent GitHub
   operation under the owning Gizmo or dev manager's packet, issued by Team
   Gizmo.
 - This includes all `gh` commands, including read-only queries, authentication
@@ -350,21 +357,21 @@ or relax any repository scope, ownership, or handoff rule.
   Steward's evidence collection through Team Gizmo. Gizmo may authorize
   feature compilation evidence and local landing requests. Return the evidence
   or blocker to the worker.
-- Only internal PR Steward monitors PR state, checks, reviews, and workflow
+- Only the PR Lifecycle Agent monitors PR state, checks, reviews, and workflow
   runs.
   This includes event subscriptions, bounded waits, and permitted polling.
 - The same boundary applies to Task, Loom, scripts, and other wrappers that
   invoke `gh` or perform GitHub API operations.
 - Gizmo owns decisions, local authoring, shared-branch sequencing, and ordinary
   `git` preparation, fetch, commit, and push.
-- PR Steward has one narrow local Git exception: mechanically invoke bounded
+- The PR Lifecycle Agent has one narrow local Git exception: mechanically invoke bounded
   local integration, snapshot publication, or fast-forward promotion under the owning controller's
   packet. Gizmo authorizes local integration; the dev manager authorizes publication
   and promotion. This grants no general shared-branch Git authority.
-- Functional teams diagnose evidence returned by PR Steward.
+- Functional teams diagnose evidence returned by the PR Lifecycle Agent.
 - Each controller authors its stage's Workbench records and decides outcomes.
   Steward publishes only the issuing controller's exact content and destination.
-- Use the [authorization handshake](teams/delivery-pipeline/internal/pr-steward/workflows/authorization-handshake.md)
+- Use the [authorization handshake](teams/delivery-pipeline/pr-lifecycle/workflows/authorization-handshake.md)
   for PR, repository, run, and Workbench operations.
 - This is an agent execution rule, not a credential sandbox. Shared tools and
   credentials do not enforce technical isolation.
@@ -376,13 +383,13 @@ or relax any repository scope, ownership, or handoff rule.
 - Gizmo, the dev manager, and functional Team Agents must not execute `gh`, even for read-only
   inspection, authentication, or version checks.
 - A read-only worker assignment does not authorize `gh pr view` or monitoring.
-- Functional Team Agents must not start or contact internal PR Steward
+- Functional Team Agents must not start or contact the PR Lifecycle Agent
   directly. Route requests through their Team Gizmo and Gizmo Prime even when
   the missing evidence blocks the task.
-- They must not bypass PR Steward through a wrapper, SDK, direct API request,
+- They must not bypass the PR Lifecycle Agent through a wrapper, SDK, direct API request,
   browser, or another GitHub connector.
-- PR Steward must not author Workbench content or decide its lifecycle state.
-- An unavailable Team Gizmo or internal PR Steward is a blocker, not permission
+- The PR Lifecycle Agent must not author Workbench content or decide its lifecycle state.
+- An unavailable Team Gizmo or PR Lifecycle Agent is a blocker, not permission
   for direct execution.
 
 ## Remote task execution
@@ -408,13 +415,13 @@ Run hosted validation from a clean, committed non-main branch:
 
 1. Push the branch and confirm that the remote branch is at the same commit as
    local `HEAD`.
-2. Have Delivery Pipeline Team Gizmo issue an internal PR Steward packet for
+2. Have Delivery Pipeline Team Gizmo issue a PR Lifecycle Agent packet for
    one remote task with `task remote TASK_NAME=<task>`, for example
    `task remote TASK_NAME=loom:verify`.
-3. Have Delivery Pipeline Team Gizmo issue one internal PR Steward packet for
+3. Have Delivery Pipeline Team Gizmo issue one PR Lifecycle Agent packet for
    compatible tasks together with
    `task remote TASK_NAMES=<task-a>,<task-b>` when one hosted job is preferred.
-4. Have internal PR Steward inspect the exact-head run and return its URL and
+4. Have the PR Lifecycle Agent inspect the exact-head run and return its URL and
    result through Team Gizmo to the owning controller.
 
 `task remote` rejects a dirty checkout, `main`, an unpushed branch, or a local
@@ -566,7 +573,7 @@ Feature delivery completes after reviewed, remotely compiled changes merge
 into local dev through local integration. The manually run dev manager owns the
 slow delivery stage through snapshot publication, full dev PR validation, and
 guarded fast-forward promotion. Delivery Pipeline Team Gizmo routes authorized
-mechanics to internal PR Steward for the owning controller. Promotion
+mechanics to the PR Lifecycle Agent for the owning controller. Promotion
 fast-forwards main to the tested dev SHA. A worker commit alone does not
 complete feature delivery. Every change passes through dev.
 
@@ -577,15 +584,16 @@ complete feature delivery. Every change passes through dev.
   for repository work.
 - Plan sequencing and host-bounded waits inside the active task.
   Use reactive event hints instead of routine GitHub polling.
-  PR Steward's five-minute-inactivity check is the narrow read-only exception.
+  The PR Lifecycle Agent's five-minute-inactivity check is the narrow read-only exception.
   Do not materialize this ephemeral plan as a Codex scheduled task.
 - Repository-owned GitHub Actions, Workbench automation fields, and Hive
   reconciliation are separate systems governed by their existing authorities.
 - A request to test, monitor, and merge a PR when ready remains one active
   delivery task. Have Delivery Pipeline Team Gizmo route bounded observation
-  to internal PR Steward.
-  The dev manager controls dev PR observation, readiness, and promotion in
-  that task. Steward executes each mechanical operation under a manager packet.
+  to the PR Lifecycle Agent.
+  The Dev Manager controls dev PR observation, readiness, and promotion in
+  that task. The PR Lifecycle Agent executes each mechanical operation under a
+  manager packet.
 - The target PR is the delivery scope. Consult `origin/main` only when the PR
   workflow requires base freshness. Do not monitor, diagnose, or repair the
   Main workflow or unrelated default-branch health unless the user explicitly

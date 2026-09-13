@@ -7,16 +7,35 @@ Use this file only to select one owning context. Do not preload linked graphs.
 - [Agent routing contract](AGENTS.md) defines universal loading, ownership,
   authoring, and delivery boundaries.
 
+## Canonical tree
+
+Gizmo Prime lives at `gizmo-prime/`. Its six and only six top-level teams are
+`teams/ai/`, `teams/dev-core/`, `teams/security/`, `teams/sre/`,
+`teams/web-dev/`, and `teams/delivery-pipeline/`. Each team has one `gizmo/`
+that reports to Prime and uses `gpt-5.6-luna` with `xhigh` reasoning. Each Team
+Gizmo owns one team worktree; Prime reuses a compatible existing Team Agent
+before spawning and otherwise issues separate child worktrees per specialist.
+Team Gizmo integrates specialist commits into its feature branch.
+
+Current specialist routing includes SRE (`teams/sre/provisioning/` and
+`teams/sre/cloud-native/`), Development Core
+(`teams/dev-core/rust-core-developer/` and
+`teams/dev-core/rust-auth2-developer/`), and Delivery Pipeline
+(`teams/delivery-pipeline/gizmo/`, `teams/delivery-pipeline/dev-manager/`, and
+`teams/delivery-pipeline/pr-lifecycle/`).
+
 ## Owning contexts
 
 - [Multiagent delivery architecture](gizmo-prime/architecture/multiagent-delivery-diagrams.md):
   mandatory primary explanation for the complete feature, check, local-dev,
   dev-validation, and promotion workflow.
-- [Dev manager](teams/dev-manager/knowledge-graph.md): manually operated dev
-  publication, dev PR creation/update, slow evidence, readiness, repair
-  delegation, and fast-forward promotion policy.
-- [Dev manager Gizmo](teams/dev-manager-gizmo/knowledge-graph.md): on-demand entry and
-  orchestration context for manually invoked dev-manager work.
+- [Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md): operational
+  delivery mechanics. Its Team Gizmo is
+  [here](teams/delivery-pipeline/gizmo/knowledge-graph.md); the
+  [Dev Manager](teams/delivery-pipeline/dev-manager/knowledge-graph.md) alone
+  invokes `dev:pr-manager`, and the
+  [PR Lifecycle Agent](teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md)
+  performs only authorized mechanics.
 - [Dev delivery architecture](gizmo-prime/architecture/dev-delivery.md): canonical
   feature compilation, local integration, and dev-to-main contract.
 - [Gizmo Prime](gizmo-prime/knowledge-graph.md): planning, delegation, integration,
