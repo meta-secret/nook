@@ -40,3 +40,9 @@ remote-execution action being performed.
 ## Toolchain product contract
 
 - [Monorepo and toolchain setup](product-specs/monorepo-setup.md)
+
+## Team topology
+
+- [SRE Team Gizmo](gizmo/knowledge-graph.md) coordinates bounded SRE-team mechanics.
+- [Provisioning specialist](provisioning/knowledge-graph.md) handles packeted provisioning work.
+- [Cloud-native specialist](cloud-native/knowledge-graph.md) handles packeted cloud-native work.
