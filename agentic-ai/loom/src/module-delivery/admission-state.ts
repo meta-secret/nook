@@ -14,7 +14,7 @@ import type { AcceptedModuleDeliveryEvidence } from './integration-provenance.ts
 import type {
   AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
   ModuleDeliveryIntegratedWriterFrontierCapability,
-} from './integration.ts';
+} from './integration-contracts.ts';
 import type { AssertModuleDeliveryCanonicalEvidenceTransitionRequest } from './integration-provenance.ts';
 import type { ValidatedModuleDeliveryPlan } from './domain.ts';
 

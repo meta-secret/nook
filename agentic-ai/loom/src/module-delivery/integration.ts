@@ -29,6 +29,11 @@ import {
 import { ModuleWaveTree } from './tree-integration.ts';
 import { ModuleWriterFrontierRegistry } from './integration-writer-frontiers.ts';
 import { ModuleIntegrationCapabilityRegistry } from './integration-capabilities.ts';
+import {
+  createModuleIntegrationCapabilityMintAuthority,
+  isModuleIntegrationCapabilityMintAuthority,
+} from './integration-capability-authority.ts';
+import type { ModuleIntegrationCapabilityMintAuthority } from './integration-capability-authority.ts';
 import { CanonicalWriterClosure } from './integration-finalization.ts';
 import type { CanonicalModuleFinalizationInspection } from './integration-finalization.ts';
 import { ModuleGenerationAuthority } from './admission.ts';
@@ -93,10 +98,6 @@ const PROHIBITED_MATERIALIZATION_FILES = new Set([
   '.gitmodules',
   '.lfsconfig',
 ]);
-const CAPABILITY_MINT_AUTHORITY_TOKEN = Symbol(
-  'module-integration-capability-mint-authority',
-);
-const CAPABILITY_MINT_AUTHORITIES = new WeakSet<object>();
 
 enum IntegrationHeadCommitKind {
   Pending = 'pending',
@@ -112,20 +113,17 @@ type IntegrationHeadCommit =
 
 /** Owns module integration lifecycle coordination and its public capability boundary. */
 export class ModuleIntegrationCoordinator {
-  static #capabilityMintAuthority = new ModuleIntegrationCoordinator(
-    CAPABILITY_MINT_AUTHORITY_TOKEN,
-  );
+  static #capabilityMintAuthority: ModuleIntegrationCapabilityMintAuthority =
+    createModuleIntegrationCapabilityMintAuthority();
 
-  private constructor(token?: symbol) {
-    if (token !== CAPABILITY_MINT_AUTHORITY_TOKEN)
-      throw new Error('ModuleIntegrationCoordinator is not constructible.');
-    CAPABILITY_MINT_AUTHORITIES.add(this);
+  private constructor() {
+    throw new Error('ModuleIntegrationCoordinator is not constructible.');
   }
 
   static isModuleIntegrationCapabilityMintAuthority(
-    authority: ModuleIntegrationCoordinator,
+    authority: object,
   ): boolean {
-    return CAPABILITY_MINT_AUTHORITIES.has(authority);
+    return isModuleIntegrationCapabilityMintAuthority(authority);
   }
 
   static #mintIntegratedWriterFrontier(

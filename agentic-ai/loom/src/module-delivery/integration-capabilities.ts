@@ -8,7 +8,10 @@ import type {
   CanonicalEvidenceTransitionProvenance,
   ModuleDeliveryCanonicalEvidenceTransition,
 } from './integration-provenance.ts';
-import { ModuleIntegrationCoordinator } from './integration.ts';
+import {
+  isModuleIntegrationCapabilityMintAuthority,
+} from './integration-capability-authority.ts';
+import type { ModuleIntegrationCapabilityMintAuthority } from './integration-capability-authority.ts';
 
 /** Owns the provenance-backed capabilities emitted by module integration. */
 export class ModuleIntegrationCapabilityRegistry {
@@ -84,25 +87,21 @@ export class ModuleIntegrationCapabilityRegistry {
   }
 
   private static assertMintAuthority(
-    authority: ModuleIntegrationCoordinator,
+    authority: ModuleIntegrationCapabilityMintAuthority,
   ): void {
-    if (
-      !ModuleIntegrationCoordinator.isModuleIntegrationCapabilityMintAuthority(
-        authority,
-      )
-    )
+    if (!isModuleIntegrationCapabilityMintAuthority(authority))
       throw new Error('Module integration capability mint authority is invalid.');
   }
 }
 
 type RegisterIntegratedWriterFrontierRequest = Readonly<{
-  authority: ModuleIntegrationCoordinator;
+  authority: ModuleIntegrationCapabilityMintAuthority;
   capability: ModuleDeliveryIntegratedWriterFrontierCapability;
   provenance: IntegratedWriterFrontierProvenance;
 }>;
 
 type RegisterCanonicalEvidenceTransitionRequest = Readonly<{
-  authority: ModuleIntegrationCoordinator;
+  authority: ModuleIntegrationCapabilityMintAuthority;
   transition: ModuleDeliveryCanonicalEvidenceTransition;
   provenance: CanonicalEvidenceTransitionProvenance;
 }>;
