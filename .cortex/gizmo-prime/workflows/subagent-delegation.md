@@ -34,17 +34,18 @@ Prime-to-Team-Gizmo dispatch chain.
   Delivery/Dev Manager synchronizes canonical local `main` to the fetched
   `origin/main`, then brings canonical local `dev` onto or including that main
   baseline under the dev-delivery workflow; stale local dev fails closed.
-  Prime records `originMainSha` for the exact freshly fetched main,
-  `pinnedLocalDevSha` for the exact synchronized local-dev SHA, and
-  `featureHeadSha` for the exact canonical feature frontier. The packet proves
-  `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`.
-  The initial feature head may equal the pinned base; descendant heads are
-valid for reruns. Prime creates every new feature branch and worktree strictly
-from the exact `pinnedLocalDevSha`; no alternate base is permitted. The
-existing canonical feature ref and detached implementation HEAD
-  must equal `featureHeadSha` exactly. Team Gizmos and leaves consume all three
-  pinned identities. Missing, stale, mismatched, or unprovable evidence fails
-  closed.
+  Prime records `originMainSha` for the exact freshly fetched main and
+  `pinnedLocalDevSha` for the exact synchronized local-dev SHA. An observed
+  `featureHeadSha` is run association only, not branch authority. Require
+  `originMainSha` to be an ancestor of `pinnedLocalDevSha`; preserve that
+  bootstrap/base evidence. Prime creates every new feature branch and worktree
+  strictly from the exact `pinnedLocalDevSha`; no alternate base is permitted.
+  The canonical branch name is the workflow authority. Before remote dispatch,
+  review, or landing, PR Lifecycle re-fetches and resolves the latest committed
+  branch head; a branch advance follows the latest head and reruns affected
+  evidence. Team Gizmos and leaves consume the branch name and bootstrap
+  evidence, not a pinned feature head. Missing or unprovable branch/bootstrap
+  evidence fails closed.
 - Apply the [branch naming contract](../dynamic-skills/branch-naming.md) to
   every new Prime, Team Gizmo, and leaf branch.
 - Author tests without executing them in the feature stage.
@@ -67,10 +68,13 @@ existing canonical feature ref and detached implementation HEAD
   delegation transport.
 - Create exactly one child worktree for each Team Agent from the parent feature
   worktree's current committed frontier.
-- Pass all three Prime-pinned identities through every child packet and handoff:
-  `originMainSha`, `pinnedLocalDevSha`, and `featureHeadSha`.
-- Preserve the ordered ancestry chain and exact canonical feature-ref equality
-  in every child handoff. Do not resolve any identity independently.
+- Pass the Prime-authorized canonical branch name and bootstrap evidence through
+  every child packet and handoff: `originMainSha` and `pinnedLocalDevSha`.
+  An observed feature-head SHA may accompany a handoff as run evidence only.
+- Preserve the ordered bootstrap ancestry and branch authority in every child
+  handoff. Before each remote, review, or landing operation, re-resolve the
+  latest committed head; do not promote an observed SHA to authority or resolve
+  a base independently.
 - Bind the child path and branch to the task and attempt identity.
 - The child worktree must be disjoint from the parent and every other active
   child worktree.
@@ -262,7 +266,7 @@ Before accepting Team Agent work, verify:
   blockers;
 - later iterations inspected the last one or two relevant commits and diffs;
 - provider-consumer evidence passed on the combined branch;
-- remote build-only acceptance passed for the feature SHA;
+- remote build-only acceptance passed for the current canonical branch head;
 - workers requested missing PR evidence through Gizmo without direct GitHub
   access or monitoring; and
 - Gizmo owns feature-stage decisions and landing authorization.

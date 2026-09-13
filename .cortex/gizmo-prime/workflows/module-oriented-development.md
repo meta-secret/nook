@@ -6,8 +6,8 @@ Module-oriented delivery follows real provider and consumer boundaries without
 creating a separate Git integration system.
 Gizmo Prime is the mission/root coordinator. Each team reports through a Team
 Gizmo; Team Gizmo decomposes only that team's mechanics, dispatches internal
-Team Agents through the active harness, and reports exact-SHA evidence or
-blockers back to Prime. It is not a second Prime and does not decide functional
+Team Agents through the active harness, and reports branch and observed-head
+evidence or blockers back to Prime. It is not a second Prime and does not decide functional
 ownership, readiness, promotion, or final delivery.
 
 ## Rules
@@ -47,16 +47,17 @@ to the fetched `origin/main` and brings canonical local `dev` onto or including
 that main baseline under the dev-delivery workflow. If local dev is not current
 with main, the run fails closed. Prime records `originMainSha` for the exact
 fetched `origin/main` and `pinnedLocalDevSha` for the exact synchronized
-local-dev SHA, and `featureHeadSha` for the exact canonical feature frontier.
-Prime proves `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of
-`featureHeadSha`, then pins all three identities in the mission packet and
-every child handoff. The initial feature head may equal the pinned base;
-descendant feature heads are valid for reruns. Prime creates every new feature
-branch and worktree strictly from the exact `pinnedLocalDevSha`; no alternate
-base is permitted. The existing canonical feature ref and detached
-implementation HEAD must equal `featureHeadSha` exactly. Team Gizmos and
-leaves consume all three pinned identities. Missing, stale, mismatched, or
-unprovable evidence fails closed.
+local-dev SHA. Prime may record an observed `featureHeadSha` as run association
+only; it is not branch authority. Require `originMainSha` to be an ancestor of
+`pinnedLocalDevSha`, and preserve that bootstrap/base evidence. Prime creates
+every new feature branch and worktree strictly from the exact
+`pinnedLocalDevSha`; no alternate base is permitted. The canonical feature
+branch name is the workflow authority. Before remote dispatch, review, or
+landing, PR Lifecycle re-fetches and resolves the latest committed branch
+head; a branch advance follows the latest head and reruns affected evidence.
+Team Gizmos and leaves consume the branch name and bootstrap evidence, not a
+pinned feature head. Missing or unprovable branch/bootstrap evidence fails
+closed.
 
 1. Identify the modules and their provider-consumer order.
 2. Assign each implementation task to its functional owner.
@@ -66,11 +67,13 @@ unprovable evidence fails closed.
 5. Use only the permitted lightweight local diagnostics during the wave.
 6. Verify each completed child commit and integrate it into the parent worktree.
 7. Push the feature branch and have Delivery Pipeline Team Gizmo route a
-   remote build-only compilation packet for its exact committed head; do not
-   run feature tests or slow PR checks.
+   remote build-only compilation packet for the latest committed canonical
+   branch head; PR Lifecycle re-fetches and resolves that head before dispatch.
+   Do not run feature tests or slow PR checks.
 8. Review authored focused tests and scoped changes without executing tests.
 9. Start dependent consumers from the integrated provider commit.
-10. Obtain remote compilation and type evidence on the combined feature head.
+10. Obtain remote compilation and type evidence on the combined canonical
+    branch head; record its observed SHA as run evidence only.
     Gizmo Prime authorizes Delivery Pipeline Team Gizmo's bounded `dev:land`
     packet for serialized local dev integration; Gizmo does not publish dev.
 11. Route failures to the responsible provider, consumer, or both.
@@ -97,7 +100,7 @@ Verify:
 - only one writer mutated the Git index or committed at a time;
 - every writer committed its complete scoped iteration;
 - meaningful module tests were authored for the slow stage;
-- exact-head remote build-only provider-consumer evidence passed;
+- current-branch-head remote build-only provider-consumer evidence passed;
 - the parent feature worktree contains the complete result; and
   - Gizmo Prime owns feature push sequencing, review, acceptance, and local
     landing requests. Delivery Pipeline Team Gizmo routes PR Lifecycle Agent

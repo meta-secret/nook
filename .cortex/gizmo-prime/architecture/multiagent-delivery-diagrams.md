@@ -81,8 +81,8 @@ sequenceDiagram
             Prime->>Feature: Create or read the canonical feature ref by name
             Feature-->>Prime: Latest committed branch head
             Prime->>Prime: Record base and head SHAs as observations only
-            Prime->>Team: Issue packet with all three recorded SHAs
-            Team->>Leaf: Forward all three pinned identities
+            Prime->>Team: Issue packet with canonical branch name and bootstrap evidence
+            Team->>Leaf: Forward branch name and bootstrap evidence
             Team->>Feature: Keep temporary child branches private
         end
     end
@@ -93,7 +93,7 @@ sequenceDiagram
 Gizmo Prime is the mission/root coordinator. Every team has one Team Gizmo
 that reports upward to Prime. A Team Gizmo receives a high-level packet,
 decomposes only its team's mechanics, dispatches internal Team Agents through
-the active harness, synthesizes exact-SHA evidence and blockers, and reports a
+the active harness, synthesizes branch and observed-head evidence and blockers, and reports a
 high-level result to Prime. Team Gizmo is not a second Prime and never decides
 functional ownership, readiness, promotion, or final delivery.
 
@@ -102,7 +102,7 @@ flowchart LR
     Prime["Gizmo Prime<br/>mission/root coordinator"]
     Team["Team Gizmo<br/>team-scoped orchestrator"]
     Agents["Internal Team Agents<br/>bounded mechanics"]
-    Synthesis["Team Gizmo<br/>synthesizes exact-SHA evidence"]
+    Synthesis["Team Gizmo<br/>synthesizes branch and observed-head evidence"]
 
     Prime -->|high-level packet| Team
     Team -->|active harness dispatch| Agents
@@ -139,7 +139,7 @@ Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning. It requests
 Fast mode with `service_tier: fast`, which resolves as `priority`. Each leaf
 receives a separate issued child worktree. Disjoint specialists may run in parallel. The
 Team Gizmo integrates their committed results into its team feature branch and
-reports one synthesized exact-SHA result or blocker to Gizmo Prime. The Delivery Pipeline Team Gizmo handles
+reports one synthesized branch-head result or blocker to Gizmo Prime. The Delivery Pipeline Team Gizmo handles
 Level 1 delivery-pipeline orchestration, commit handoffs, and remote
 build-only task packets. Its `pr-lifecycle` agent handles only packetized
 external GitHub, PR, check, review, status, and bounded dev mechanics.
@@ -255,8 +255,8 @@ sequenceDiagram
         participant Checks as external:feature-checks
     end
 
-    Prime->>Prime: Bootstrap and record originMainSha, pinnedLocalDevSha, and featureHeadSha
-    Prime->>Feature: Create from pinnedLocalDevSha or verify existing ref at featureHeadSha
+    Prime->>Prime: Bootstrap and record originMainSha and pinnedLocalDevSha; observe feature head
+    Prime->>Feature: Create from pinnedLocalDevSha or resolve latest committed head by branch name
     Prime->>Gizmo: Issue feature ownership packet
     Gizmo->>Gizmo: Plan complete feature
     Gizmo->>Code: Assign Rust and domain work
@@ -350,7 +350,7 @@ sequenceDiagram
         participant Delivery as feature:verified
     end
 
-    Prime->>Feature: Route mission with all three pinned identities
+    Prime->>Feature: Route mission with canonical branch name and bootstrap evidence
     Feature->>Review: Review latest committed branch head
     Review-->>Feature: Accepted head observation or findings
     Feature->>Prime: Accepted branch state
@@ -364,7 +364,7 @@ sequenceDiagram
     Prime-->>Feature: Green evidence or feedback
     Feature->>Delivery: Deliver green branch head
 
-    Note over Prime,Steward: Prime authorizes the canonical ref and SHA; PR Lifecycle executes the push and dispatch
+    Note over Prime,Steward: Prime authorizes the canonical branch name; PR Lifecycle resolves the latest head before push and dispatch
     Note over Feature,Build: Any failure returns to Level 1
 ```
 
@@ -372,9 +372,10 @@ sequenceDiagram
 
 Every feature has an independent Feature Gizmo, feature branch, worktree, Team
 Agents, and external-check loop. Gizmo Prime routes each feature and its team
-packets. Each feature starts from its Prime-issued `pinnedLocalDevSha` and
-keeps its canonical feature ref exactly at `featureHeadSha`. No feature PR or
-global feature scheduler coordinates them.
+packets. Each feature starts from its Prime-issued `pinnedLocalDevSha` and uses
+the Prime-authorized canonical branch name as workflow authority. Observed
+feature-head SHAs associate individual runs only; they do not pin the branch.
+No feature PR or global feature scheduler coordinates them.
 
 ### Flow
 
@@ -419,22 +420,22 @@ sequenceDiagram
 
     par Feature A
         Users->>Prime: Request feature A
-        Prime->>A: Issue feature-A packet with all three pinned identities
+        Prime->>A: Issue feature-A packet with branch name and bootstrap evidence
         A->>A: Complete Levels 1 and 2
-        A-->>Prime: Green SHA A and landing request
-        Prime-->>Landing: Authorize dev:land for green SHA A
+        A-->>Prime: Green observed branch-head evidence A and landing request
+        Prime-->>Landing: Authorize dev:land for canonical feature branch A
     and Feature B
         Users->>Prime: Request feature B
-        Prime->>B: Issue feature-B packet with all three pinned identities
+        Prime->>B: Issue feature-B packet with branch name and bootstrap evidence
         B->>B: Complete Levels 1 and 2
-        B-->>Prime: Green SHA B and landing request
-        Prime-->>Landing: Authorize dev:land for green SHA B
+        B-->>Prime: Green observed branch-head evidence B and landing request
+        Prime-->>Landing: Authorize dev:land for canonical feature branch B
     and Feature C
         Users->>Prime: Request feature C
-        Prime->>C: Issue feature-C packet with all three pinned identities
+        Prime->>C: Issue feature-C packet with branch name and bootstrap evidence
         C->>C: Complete Levels 1 and 2
-        C-->>Prime: Green SHA C and landing request
-        Prime-->>Landing: Authorize dev:land for green SHA C
+        C-->>Prime: Green observed branch-head evidence C and landing request
+        Prime-->>Landing: Authorize dev:land for canonical feature branch C
     end
 ```
 
@@ -446,15 +447,17 @@ Pipeline Team Gizmo routes the bounded `dev:land` packet to its `pr-lifecycle`
 agent, which executes the ordinary merge under the serialized local
 integration task. There is no feature PR and no publication of `dev` here.
 
-The landing request names the exact `featureHeadSha` already accepted by
-Prime. It also carries `originMainSha` and `pinnedLocalDevSha`; landing must
-not replace or infer any of these identities.
+The landing request names the Prime-authorized canonical feature branch and
+retains `originMainSha` and `pinnedLocalDevSha` as bootstrap/base evidence.
+Any observed feature-head SHA is run association only. Before landing, PR
+Lifecycle re-fetches and resolves the latest committed branch head; a branch
+advance follows the latest head and reruns affected evidence.
 
 ### Flow
 
 ```mermaid
 flowchart LR
-    Gizmo["Feature Gizmo:<br/>verified SHA"]
+    Gizmo["Feature Gizmo:<br/>verified branch head"]
     Pipeline["Delivery Pipeline Team Gizmo:<br/>routes dev:land"]
     Landing["PR Lifecycle Agent:<br/>runs dev:land"]
     Result{"Git result"}
@@ -497,25 +500,25 @@ sequenceDiagram
     end
 
     par Independent landing requests
-        A-->>Prime: Request landing for exact green featureHeadSha A
+        A-->>Prime: Request landing for canonical feature branch A
     and
-        B-->>Prime: Request landing for exact green featureHeadSha B
+        B-->>Prime: Request landing for canonical feature branch B
     end
 
-    Prime->>Pipeline: Authorize dev:land for green SHA A
+    Prime->>Pipeline: Authorize dev:land for canonical feature branch A
     Pipeline->>Steward: Dispatch bounded dev:land packet
-    Steward->>Git: Merge SHA A under integration lock
+    Steward->>Git: Resolve and merge latest branch head under integration lock
     Git->>Dev: Advance local dev
-    Git-->>Steward: Feature SHA and resulting dev SHA
+    Git-->>Steward: Observed feature commit and resulting dev SHA
     Steward-->>Pipeline: Landing evidence
     Pipeline-->>Prime: Synthesized landing evidence
     Prime-->>A: Landing result
 
-    Prime->>Pipeline: Authorize dev:land for green SHA B
+    Prime->>Pipeline: Authorize dev:land for canonical feature branch B
     Pipeline->>Steward: Dispatch bounded dev:land packet
-    Steward->>Git: Merge SHA B under integration lock
+    Steward->>Git: Resolve and merge latest branch head under integration lock
     Git->>Dev: Advance local dev
-    Git-->>Steward: Feature SHA and resulting dev SHA
+    Git-->>Steward: Observed feature commit and resulting dev SHA
     Steward-->>Pipeline: Landing evidence
     Pipeline-->>Prime: Synthesized landing evidence
     Prime-->>B: Landing result
@@ -638,14 +641,16 @@ sequenceDiagram
 - Gizmo Prime is the mission/root coordinator. Every team reports through its
   Team Gizmo, which decomposes only team mechanics and returns exact-SHA
   evidence or blockers to Prime.
-- Every feature packet carries `originMainSha`, `pinnedLocalDevSha`, and
-  `featureHeadSha`. The chain is `originMainSha` ancestor of
-  `pinnedLocalDevSha` ancestor/equal to `featureHeadSha`.
+- Every feature packet names the canonical feature branch and may carry
+  bootstrap `originMainSha` and `pinnedLocalDevSha`; require
+  `originMainSha` to be an ancestor of `pinnedLocalDevSha`. An observed
+  `featureHeadSha` is run association only, not branch authority.
 - Prime creates every feature branch and worktree strictly from the exact
-  `pinnedLocalDevSha`; no alternate base is permitted.
-  Existing canonical feature refs and detached implementation heads must equal
-  `featureHeadSha` exactly. Initial equality and descendant reruns are valid.
-  Missing, stale, mismatched, or unprovable evidence fails closed.
+  `pinnedLocalDevSha`; no alternate base is permitted. The branch name is the
+  workflow authority. Before remote dispatch, review, or landing, delivery
+  re-fetches and resolves the latest committed branch head; a branch advance
+  follows the latest head and reruns affected evidence. Missing or unprovable
+  branch/bootstrap evidence fails closed.
 - Delivery Pipeline is the operational team for CI, PR lifecycle, dev
   publication, workflow execution, local landing, evidence, and guarded
   promotion. Its Team Gizmo routes `pr-lifecycle` packets.
@@ -653,7 +658,8 @@ sequenceDiagram
   functional ownership, readiness, promotion, or final delivery, or replace
   the active harness.
 - A Feature Gizmo exits Level 1 only with resolved required review findings and
-  green remote compilation evidence for the exact final feature SHA.
+  green remote compilation evidence for the current canonical branch head;
+  the observed SHA is associated with that run only.
 - Feature-stage remote execution is build-only. Full tests belong only to the
   Dev Manager's dev-to-main PR.
 - Team Agents mutate isolated child worktrees and return committed iterations.

@@ -8,8 +8,8 @@ separate Gizmos and worktrees. The
 [dev delivery contract](../architecture/dev-delivery.md) owns stage boundaries.
 Gizmo Prime is the mission/root coordinator. Each team reports through a Team
 Gizmo, which decomposes only team mechanics, dispatches internal Team Agents
-through the active harness, and returns synthesized exact-SHA evidence or
-blockers to Prime.
+through the active harness, and returns synthesized branch and observed-head
+evidence or blockers to Prime.
 
 ## Planning
 
@@ -19,16 +19,17 @@ then synchronizes canonical local `main` to the fetched `origin/main` and
 brings canonical local `dev` onto or including that main baseline under the
 dev-delivery workflow. If local dev is not current with main, the run fails
 closed. Prime records `originMainSha` for the exact freshly fetched
-`origin/main`, `pinnedLocalDevSha` for the exact synchronized local-dev SHA,
-and `featureHeadSha` for the exact canonical feature frontier in the mission
-packet and every child handoff. Require the chain `originMainSha` ancestor of
-`pinnedLocalDevSha` ancestor of `featureHeadSha`. The initial frontier may
-equal the pinned local-dev SHA. Prime creates every new feature branch and
-worktree strictly from the exact `pinnedLocalDevSha`; no alternate base is
-permitted. The existing canonical feature ref and detached
-implementation HEAD must equal `featureHeadSha` exactly. Descendant frontiers
-are valid for reruns. Team Gizmos and leaves consume all three pinned
-identities. Missing, stale, mismatched, or unprovable evidence fails closed.
+`origin/main`, and `pinnedLocalDevSha` for the exact synchronized local-dev
+SHA. An observed `featureHeadSha` may be recorded for run association only;
+the canonical branch name is the workflow authority. Require `originMainSha`
+to be an ancestor of `pinnedLocalDevSha` and preserve that bootstrap/base
+evidence. Prime creates every new feature branch and worktree strictly from
+the exact `pinnedLocalDevSha`; no alternate base is permitted. Before remote
+dispatch, review, or landing, PR Lifecycle re-fetches and resolves the latest
+committed branch head; a branch advance follows the latest head and reruns
+affected evidence. Team Gizmos and leaves consume the branch name and
+bootstrap evidence, not a pinned feature head. Missing or unprovable
+branch/bootstrap evidence fails closed.
 
 1. Define the requested outcome.
 2. Identify the team that owns each required change.
@@ -52,8 +53,9 @@ identities. Missing, stale, mismatched, or unprovable evidence fails closed.
    - Permit only scoped rustfmt and bounded inexpensive TS diagnostics locally.
 5. Require every writer to commit its complete scoped iteration.
 6. Verify each child commit and integrate it into the parent feature worktree.
-7. Push the stable feature head and have Delivery Pipeline Team Gizmo route
-   the remote build-only packet to PR Lifecycle Agent.
+7. Have Delivery Pipeline Team Gizmo route the canonical branch's remote
+   build-only packet to PR Lifecycle Agent. PR Lifecycle re-fetches and
+   resolves the latest committed head before dispatch.
 8. Require each terminal handoff to enumerate all iteration commits.
    - Each entry names its SHA, outcome, evidence, and unresolved blockers.
 9. Verify each commit's changed paths and evidence.
@@ -120,5 +122,5 @@ The technical result is ready when:
   unresolved blockers;
 - combined provider-consumer evidence passed;
 - all accepted changes are already on the shared branch;
-- remote compilation passed for the feature SHA; and
+- remote compilation passed for the current canonical branch head; and
 - the branch is ready for Gizmo's external delivery sequence.

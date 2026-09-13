@@ -34,14 +34,17 @@ functional ownership, readiness, promotion, or final delivery.
   - Use `task remote TASK_NAME=web:build` and
     `task remote TASK_NAME=web:e2e` for focused web build and browser evidence.
   - Bind source checkouts and artifacts to the captured dev head SHA.
-  - Feature packets carry `originMainSha`, `pinnedLocalDevSha`, and
-    `featureHeadSha`. Require `originMainSha` ancestor of
-    `pinnedLocalDevSha` ancestor/equal to `featureHeadSha`.
+  - Feature packets name the Prime-authorized canonical branch and may carry
+    bootstrap `originMainSha` and `pinnedLocalDevSha`; require
+    `originMainSha` to be an ancestor of `pinnedLocalDevSha`.
   - Prime creates every feature branch and worktree strictly from the exact
-    `pinnedLocalDevSha`; no alternate base is permitted. Existing canonical
-    feature refs and detached implementation heads equal `featureHeadSha`
-    exactly. Initial equality and descendant reruns are valid.
-  - Missing, stale, mismatched, or unprovable feature evidence fails closed.
+    `pinnedLocalDevSha`; no alternate base is permitted, and that base is
+    preserved. Any `featureHeadSha` is observational run association only.
+    Before remote dispatch, review, or landing, PR Lifecycle re-fetches and
+    resolves the latest committed branch head; a branch advance follows the
+    latest head and reruns affected evidence.
+  - Missing or unprovable branch/bootstrap evidence fails closed; stale head
+    observations trigger re-resolution rather than an authority failure.
   - Freeze origin/dev during validation and promotion.
   - Local dev may continue accepting completed features.
   - Preserve complete review and security acceptance for the promoted SHA.
@@ -66,8 +69,9 @@ functional ownership, readiness, promotion, or final delivery.
 - Do not create stacked branches or pull requests. When a feature genuinely
   requires multiple slices, use one strictly sequential sequence from the
   exact Prime-pinned local-dev feature base recorded for each slice and
-  complete this procedure for every slice. Each slice records its exact
-  `featureHeadSha`; a later slice must be a descendant of the prior head.
+  complete this procedure for every slice. Each slice may record its observed
+  `featureHeadSha` for run association; the canonical branch name remains the
+  authority and later work follows its latest committed head.
   The fetched `origin/main` SHA is ancestry evidence, not the feature base.
 
 ## PR title and description
