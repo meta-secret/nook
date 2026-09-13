@@ -66,6 +66,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     let plan_script = RepositoryFixture::repository_root().read(".github/scripts/ci-agent-plan.sh");
     let record_validator =
         RepositoryFixture::repository_root().read(".github/scripts/workbench-records.cjs");
+    let normalized_workflow = workflow
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
 
     for required in [
         "WORKBENCH_REPOSITORY: meta-secret/nook-workbench",
@@ -162,6 +166,29 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
             "Workbench agent workflow is missing: {required}"
         );
     }
+
+    for required in [
+        "feature_branch",
+        "refs/heads/${FEATURE_BRANCH}:refs/remotes/origin/${FEATURE_BRANCH}",
+        "remote_feature_sha",
+        "if [ \"$remote_feature_sha\" != \"$PINNED_LOCAL_DEV_SHA\" ]",
+        "worktree add --detach \"$implementation_root\" \"$pinned_local_dev_sha\"",
+        "origin_main_sha",
+        "merge-base --is-ancestor \"$origin_main_sha\" \"$pinned_local_dev_sha\"",
+    ] {
+        assert!(
+            normalized_workflow.contains(required),
+            "agent implementation bootstrap is missing its pinned canonical feature-ref contract: {required}"
+        );
+    }
+    assert!(
+        !workflow.contains("checkout_ref=\"main\"")
+            && !workflow.contains("branch=\"agent/")
+            && !normalized_workflow.contains("worktree add -b")
+            && !normalized_workflow.contains("git checkout -b")
+            && !normalized_workflow.contains("git switch -c"),
+        "agent implementation must not create feature work from origin/main, origin/dev, or a legacy agent branch"
+    );
     assert!(
         workflow
             .matches("ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}")
@@ -334,13 +361,23 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
         "Preserve dependency order",
         "Grant one commit turn at a time",
         "Team Agent lifecycle service, scheduler, or Git-state machinery",
-        "persistent PR Steward service, scheduler, or notification journal",
+        "Delivery Pipeline Team Gizmo's bounded local-integration packet",
+        "PR Lifecycle Agent",
     ] {
         assert!(
             normalized_coding_workflow.contains(required),
             "coding workflow is missing ownership guard: {required}"
         );
     }
+
+    assert!(
+        pull_request_workflow.contains(
+            "The dev manager invokes the manager-only `dev:pr-manager` path for PR"
+        ) && pull_request_workflow.contains(
+            "Delivery Pipeline Team Gizmo routes PR Lifecycle Agent"
+        ),
+        "delivery policy must preserve Team Gizmo routing, PR Lifecycle mechanics, and Dev Manager-only PR authority"
+    );
 
     assert!(
         issue_workflow.contains("Related scope does not transfer ownership")
@@ -738,6 +775,11 @@ fn workbench_plans_preserve_assignment_and_pinned_local_dev_bootstrap() {
             && normalized_pull_requests.contains("origin/main")
             && normalized_pull_requests.contains("ancestry evidence"),
         "planning policy must preserve bounded assignment while bootstrapping feature work from pinned local dev"
+    );
+    assert!(
+        !normalized_prompt
+            .contains("State that the next branch starts from current `origin/main`."),
+        "planning policy must reject the stale instruction to branch from origin/main"
     );
     assert!(
         normalized_pull_requests.contains(
