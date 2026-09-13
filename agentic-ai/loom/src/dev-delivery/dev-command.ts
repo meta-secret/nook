@@ -705,12 +705,23 @@ export class ProcessCommandRunner implements CommandRunner {
         join(metadata.commonDirectory, 'refs'),
         true,
       );
-      for (const name of ['index', 'MERGE_HEAD', 'MERGE_MSG', 'ORIG_HEAD', 'SQUASH_MSG', 'MERGE_RR']) {
+      ProcessCommandRunner.linkMetadata(
+        join(path, 'index'),
+        join(metadata.workingGitDirectory, 'index'),
+        false,
+        true,
+      );
+      for (const name of [
+        'MERGE_HEAD',
+        'MERGE_MSG',
+        'ORIG_HEAD',
+        'SQUASH_MSG',
+        'MERGE_RR',
+      ]) {
         ProcessCommandRunner.linkMetadata(
           join(path, name),
           join(metadata.workingGitDirectory, name),
           false,
-          true,
         );
       }
       for (const name of ['logs', 'packed-refs', 'shallow']) {

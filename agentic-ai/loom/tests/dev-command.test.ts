@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -234,6 +235,31 @@ cp "$2" "$1"
     });
     expect(merge.isOk()).toBe(true);
     expect(existsSync(marker)).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('does not treat absent merge metadata as an in-progress merge', () => {
+  const root = realpathSync(
+    mkdtempSync(join(tmpdir(), 'nook-dev-command-merge-state-')),
+  );
+  try {
+    GitFixture.initialize(root);
+    execFileSync('git', ['-C', root, 'branch', '-M', 'dev']);
+    GitFixture.commit(root, 'file.txt', 'base', 'base');
+    execFileSync('git', ['-C', root, 'switch', '-qc', 'feature']);
+    GitFixture.commit(root, 'file.txt', 'feature', 'feature');
+    execFileSync('git', ['-C', root, 'switch', '-q', 'dev']);
+
+    const result = new ProcessCommandRunner({ repositoryRoot: root }).run({
+      executable: CommandExecutable.Git,
+      args: ['merge', '--ff-only', 'feature'],
+      workingDirectory: root,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(readFileSync(join(root, 'file.txt'), 'utf8')).toBe('feature');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
