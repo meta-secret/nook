@@ -64,6 +64,9 @@ jobs:
       FEATURE_BRANCH: ${{ inputs.feature_branch }}
       ORIGIN_MAIN_SHA: ${{ inputs.origin_main_sha }}
       PINNED_LOCAL_DEV_SHA: ${{ inputs.pinned_local_dev_sha }}
+      GIT_NO_REPLACE_OBJECTS: "1"
+      GIT_CONFIG_NOSYSTEM: "1"
+      GIT_CONFIG_GLOBAL: /dev/null
     steps:
       - name: Validate dispatch inputs
         env:
@@ -121,6 +124,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ github.workflow_sha }}
+          set-safe-directory: false
           token: ${{ secrets.NOOK_GITHUB_PAT }}
 
       - name: Claim ready Workbench issue
