@@ -166,10 +166,12 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         loom_verify.contains("task: skills:verify") && loom_verify.contains("task: loom:test"),
         "loom:verify must include executable applications and Loom"
     );
+    let pre_push = task_body(&taskfile, "loom:pre-push", "loom:cortex-audit");
     assert!(
-        taskfile.contains("FAMILY=toolsList|cortexAudit|cortexSessionClean|dependencyPopularity")
-            && !taskfile.contains("loom:pre-push:"),
-        "legacy local pre-push must remain retired while defaultable Loom families stay available"
+        pre_push.contains("deps: [loom:install, tooling:install]")
+            && pre_push.contains("task loom:default FAMILY=prePush")
+            && !pre_push.contains("skills:"),
+        "loom:pre-push must retain Loom setup without a harness skill workspace"
     );
 
     let preflight = root.read("preflight/Taskfile.yml");
