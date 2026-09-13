@@ -73,37 +73,52 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 
 # Copy in dependency order so an edit in a leaf package reuses earlier native
 # compile layers on the persistent ARC BuildKit worker.
+# The manifest stages create placeholder sources. Docker normalizes COPY mtimes,
+# so refresh real sources before each build or Cargo can reuse a placeholder
+# artifact instead of compiling the checked-out implementation.
 FROM compile-native-dependencies AS compile-native-source
 
 COPY nook-app/nook-platform/nook-app-common nook-app-common
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-app-common -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked -p nook-app-common
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked -p nook-authenticator-domain -p nook-auth2
 
 COPY nook-app/nook-platform/nook-replication nook-replication
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-replication -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked -p nook-replication
 
 COPY nook-app/nook-platform/nook-event-log nook-event-log
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-event-log -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked -p nook-event-log
 
 COPY nook-app/nook-platform/nook-companion-core nook-companion-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-companion-core -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked -p nook-companion-core
 
 COPY nook-app/nook-platform/nook-core nook-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-core -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked -p nook-core \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-native-passed
@@ -115,6 +130,8 @@ ARG WASM_BUILD_MODE=dev
 COPY nook-app/nook-platform/nook-app-common nook-app-common
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-app-common -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
@@ -122,42 +139,56 @@ COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-replication nook-replication
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-replication -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-event-log nook-event-log
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-event-log -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-companion-core nook-companion-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-companion-core -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-core nook-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-core -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-companion-wasm -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-wasm nook-wasm
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-wasm -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm \
     && mkdir -p /opt/nook/wasm-handoff \
@@ -200,6 +231,8 @@ FROM compile-minds-dependencies AS compile-minds-source
 COPY agentic-ai/minds/hive/src hive/src
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find hive/src -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release -p hive \
       --features observer-contract-export --bins \
     && mkdir -p /opt/nook/hive-observer-contract \
