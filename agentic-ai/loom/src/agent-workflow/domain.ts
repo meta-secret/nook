@@ -227,6 +227,11 @@ export enum AgentReasoningEffort {
   Low = 'low',
   Medium = 'medium',
   High = 'high',
+  XHigh = 'xhigh',
+}
+
+export enum AgentServiceTier {
+  Fast = 'fast',
 }
 
 export enum TaskTerminalKind {
@@ -276,6 +281,8 @@ export type AgentProfile<TAgent extends string> = {
   readonly instructionPrefix: string;
   readonly workspacePolicy: AgentWorkspacePolicy;
   readonly reasoningEffort: AgentReasoningEffort;
+  readonly model?: string;
+  readonly serviceTier?: AgentServiceTier;
 };
 
 export type AgentTaskExecution<TAgent extends string> = {

@@ -79,8 +79,9 @@ The canonical teams and internal agents are:
 
 Gizmo Prime creates or reuses a compatible Team Gizmo before dispatch. Every
 Team Gizmo uses `gpt-5.6-sol` with `low` reasoning and owns one team worktree.
-Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning and receives a
-separate issued child worktree. Disjoint specialists may run in parallel. The
+Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning. It requests
+Fast mode with `service_tier: fast`, which resolves as `priority`. Each leaf
+receives a separate issued child worktree. Disjoint specialists may run in parallel. The
 Team Gizmo integrates their committed results into its team feature branch and
 reports one synthesized exact-SHA result or blocker to Gizmo Prime. The Delivery Pipeline Team Gizmo handles
 Level 1 delivery-pipeline orchestration, commit handoffs, and remote

@@ -51,8 +51,9 @@ coordinates delivery but does not redefine a team's technical contract.
 
 Gizmo Prime creates or reuses exactly one Team Gizmo per team with model
 `gpt-5.6-sol` and `low` reasoning. Each Team Gizmo owns one team worktree.
-Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning and receives a
-separate issued child worktree. A Team Gizmo may dispatch disjoint specialists
+Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning. It requests Fast
+mode with `service_tier: fast`, which resolves as `priority`. Each leaf receives
+a separate issued child worktree. A Team Gizmo may dispatch disjoint specialists
 in parallel, integrates their committed results into its feature branch, and
 reports high-level evidence or blockers to Prime.
 

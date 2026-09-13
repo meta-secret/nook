@@ -131,6 +131,7 @@ export type TeamInternalAgentProfile = {
   readonly description: string;
   readonly model: 'gpt-5.6-luna';
   readonly reasoningEffort: 'xhigh';
+  readonly serviceTier: 'fast';
   readonly contextPaths: readonly string[];
   readonly parent: TeamGizmoKey;
   readonly reportingBoundary: string;
@@ -330,6 +331,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Maintains Loom typed workflows, team-agent catalogs, context resolution, and deterministic AI tooling.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/ai/loom-specialist/AGENTS.md',
         '.cortex/teams/ai/loom-specialist/knowledge-graph.md',
@@ -347,6 +349,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Maintains Cortex routing, knowledge-graph consistency, context contracts, and agent-authority semantics.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/ai/cortex-specialist/AGENTS.md',
         '.cortex/teams/ai/cortex-specialist/knowledge-graph.md',
@@ -364,6 +367,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Implements bounded portable Rust core behavior and its behavior-focused tests under Development Core ownership.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/dev-core/rust-core-developer/AGENTS.md',
         '.cortex/teams/dev-core/rust-core-developer/knowledge-graph.md',
@@ -381,6 +385,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Implements bounded Rust auth2 behavior and its behavior-focused tests under Development Core ownership.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/dev-core/rust-auth2-developer/AGENTS.md',
         '.cortex/teams/dev-core/rust-auth2-developer/knowledge-graph.md',
@@ -398,6 +403,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Reviews cryptographic invariants, secret-handling boundaries, and security evidence within the assigned scope.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/security/cryptography-specialist/AGENTS.md',
         '.cortex/teams/security/cryptography-specialist/knowledge-graph.md',
@@ -415,6 +421,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Performs bounded security review of trust boundaries, authorization, and release-impacting changes.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/security/security-review-specialist/AGENTS.md',
         '.cortex/teams/security/security-review-specialist/knowledge-graph.md',
@@ -432,6 +439,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Maintains bounded infrastructure provisioning mechanics, manifests, and operational evidence under SRE ownership.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/sre/provisioning/AGENTS.md',
         '.cortex/teams/sre/provisioning/knowledge-graph.md',
@@ -449,6 +457,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Maintains bounded cloud-native deployment, container, cluster, and runner mechanics under SRE ownership.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/sre/cloud-native/AGENTS.md',
         '.cortex/teams/sre/cloud-native/knowledge-graph.md',
@@ -466,6 +475,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Implements bounded TypeScript state, typed projections, and focused web behavior under Web Development ownership.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/web-dev/typescript-specialist/AGENTS.md',
         '.cortex/teams/web-dev/typescript-specialist/knowledge-graph.md',
@@ -483,6 +493,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Implements bounded Svelte presentation, browser interaction, and focused web-flow tests under Web Development ownership.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/web-dev/svelte-specialist/AGENTS.md',
         '.cortex/teams/web-dev/svelte-specialist/knowledge-graph.md',
@@ -500,6 +511,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Executes bounded development-manager snapshot, validation-evidence, readiness, and promotion mechanics under Delivery Pipeline ownership.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/delivery-pipeline/dev-manager/AGENTS.md',
         '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md',
@@ -517,6 +529,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Executes explicitly authorized pull-request observation, check, review, status, publication, promotion, and bounded local-dev mechanics for Delivery Pipeline.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/delivery-pipeline/pr-lifecycle/AGENTS.md',
         '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',

@@ -11,11 +11,16 @@ import { tmpdir } from 'node:os';
 
 import { join, resolve } from 'node:path';
 
-import type { McpToolCallItem, ThreadEvent } from '@openai/codex-sdk';
+import type {
+  CodexOptions,
+  McpToolCallItem,
+  ThreadEvent,
+} from '@openai/codex-sdk';
 
 import { describe, expect, test } from 'bun:test';
 
 import {
+  AgentCodexOptions,
   AgentSourceStabilityPhase,
   AgentSourceSnapshot,
   CodexTurn,
@@ -33,6 +38,7 @@ import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts
 
 import {
   AgentAttemptParentKind,
+  AgentServiceTier,
   DelegatedAgentWorkflowName,
   TaskTerminalKind,
   WorkflowResultKind,
@@ -222,6 +228,21 @@ const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
 const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
+
+describe('Team Agent Codex settings', () => {
+  test('maps the profile service tier through the SDK config boundary', () => {
+    const codexOptions: CodexOptions = {
+      config: { existing_override: true },
+    };
+    const configured = AgentCodexOptions.forProfile({
+      codexOptions,
+      agentProfile: { serviceTier: AgentServiceTier.Fast },
+    });
+
+    expect(configured.config?.service_tier).toBe('fast');
+    expect(codexOptions.config?.service_tier).toBeUndefined();
+  });
+});
 
 describe('Codex agent source stability', () => {
   test('fails closed for commit or worktree drift', async () => {

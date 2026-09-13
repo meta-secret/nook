@@ -6,6 +6,7 @@ import {
 export { AgentExecutionFailureKind as CodexExecutionFailureKind } from './runtime.ts';
 import { Codex } from '@openai/codex-sdk';
 import type {
+  CodexOptions,
   McpToolCallItem,
   ModelReasoningEffort,
   ThreadEvent,
@@ -13,7 +14,7 @@ import type {
   TurnOptions,
 } from '@openai/codex-sdk';
 import { AgentReasoningEffort, AgentWorkspacePolicy } from './domain.ts';
-import type { WorkflowResultKind } from './domain.ts';
+import type { AgentProfile, WorkflowResultKind } from './domain.ts';
 import type {
   AgentExecutionCompletion,
   AgentExecutionInvocation,
@@ -55,6 +56,28 @@ export class CodexExecutionFailure {
   constructor(request: CodexExecutionFailureRequest) {
     this.message = request.message;
     this.kind = request.kind;
+  }
+}
+
+export type AgentCodexOptionsRequest = {
+  readonly codexOptions: CodexOptions;
+  readonly agentProfile: Pick<AgentProfile<string>, 'serviceTier'>;
+};
+
+/** Owns the typed mapping from an agent profile to Codex CLI configuration. */
+export class AgentCodexOptions {
+  private constructor() {}
+
+  static forProfile(request: AgentCodexOptionsRequest): CodexOptions {
+    const serviceTier = request.agentProfile.serviceTier;
+    if (!serviceTier) return request.codexOptions;
+    return {
+      ...request.codexOptions,
+      config: {
+        ...request.codexOptions.config,
+        service_tier: serviceTier,
+      },
+    };
   }
 }
 export type RunIsolatedModuleExpertCodexArgs<
@@ -101,7 +124,12 @@ export class ModuleExpertCodexSdkAgentRuntime<
       isolationRequest,
       run: async (isolation) => {
         const execution: GuardedAgentExecution<TTask, TAgent> = {
-          codex: new Codex(isolation.codexOptions),
+          codex: new Codex(
+            AgentCodexOptions.forProfile({
+              codexOptions: isolation.codexOptions,
+              agentProfile: invocation.agentProfile,
+            }),
+          ),
           invocation,
           threadOptions: isolation.threadOptions,
         };
@@ -137,7 +165,12 @@ export class ReadOnlyExpertCodexRuntime<
     if (isolation.isErr()) return err(isolation.error);
     try {
       const execution: GuardedAgentExecution<TTask, TAgent> = {
-        codex: new Codex(isolation.value.codexOptions),
+        codex: new Codex(
+          AgentCodexOptions.forProfile({
+            codexOptions: isolation.value.codexOptions,
+            agentProfile: request.invocation.agentProfile,
+          }),
+        ),
         invocation: request.invocation,
         threadOptions: isolation.value.threadOptions,
       };
@@ -207,6 +240,9 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
     ] = [execution.threadOptions];
     const threadOptions: ThreadOptions = {
       ...baseThreadOptions,
+      ...(execution.invocation.agentProfile.model
+        ? { model: execution.invocation.agentProfile.model }
+        : {}),
       modelReasoningEffort: this.reasoningEffort(
         execution.invocation.agentProfile.reasoningEffort,
       ),
@@ -265,6 +301,9 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
     }
     if (effort === AgentReasoningEffort.Medium) {
       return 'medium';
+    }
+    if (effort === AgentReasoningEffort.XHigh) {
+      return 'xhigh';
     }
     return 'high';
   }

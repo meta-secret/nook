@@ -132,6 +132,7 @@ export class TeamAgentContract {
         agent.description !== expected.description ||
         agent.model !== expected.model ||
         agent.reasoningEffort !== expected.reasoningEffort ||
+        agent.serviceTier !== expected.serviceTier ||
         agent.parent !== expected.parent ||
         agent.reportingBoundary !== expected.reportingBoundary ||
         agent.capabilityBoundary !== expected.capabilityBoundary ||

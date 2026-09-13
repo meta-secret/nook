@@ -12,8 +12,9 @@ six top-level teams: `ai`, `dev-core`, `security`, `sre`, `web-dev`, and
 `teams/<team>/gizmo/`; every Team Gizmo reports to Gizmo Prime and uses
 `gpt-5.6-sol` with `low` reasoning.
 
-Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning and receives a
-separate issued child worktree.
+Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning.
+It requests Fast mode with `service_tier: fast`, which resolves as `priority`.
+Each leaf receives a separate issued child worktree.
 
 Each Team Gizmo owns one team worktree for its packet. Gizmo Prime first
 reuses an existing compatible Team Agent; only when no compatible agent exists

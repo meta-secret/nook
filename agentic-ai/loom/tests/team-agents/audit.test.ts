@@ -155,6 +155,7 @@ describe('canonical Cortex team authority', () => {
     for (const agent of TEAM_INTERNAL_AGENT_CATALOG) {
       expect(agent.model).toBe('gpt-5.6-luna');
       expect(agent.reasoningEffort).toBe('xhigh');
+      expect(agent.serviceTier).toBe('fast');
       expect(teamGizmoByTeam.get(agent.team)).toBe(agent.parent);
     }
 
