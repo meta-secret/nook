@@ -101,6 +101,11 @@ impl WorkbenchCompletionCheck<'_> {
                 "Hive repair delivery is incomplete: dev:promote testedDevSha {tested_dev_sha} does not equal dev:land localDevSha {local_dev_sha}"
             )));
         }
+        if main_sha != tested_dev_sha {
+            return Err(crate::HiveError::message(format!(
+                "Hive repair delivery is incomplete: promoted mainSha {main_sha} does not equal exact testedDevSha {tested_dev_sha}"
+            )));
+        }
         let successful_main_sha = Self::parse_main_success_line(incident)?;
         if successful_main_sha != main_sha {
             return Err(crate::HiveError::message(format!(
@@ -348,14 +353,14 @@ mod tests {
     fn obsolete_retirement_uses_exact_promotion_and_main_sha_evidence() -> crate::HiveResult<()> {
         let check = check()?;
         let incident = format!(
-            "originMainSha: {ORIGIN}\npinnedLocalDevSha: {PINNED}\nfeatureHeadSha: {FEATURE}\ndev:land: already-present featureHeadSha={FEATURE} localDevSha={LOCAL_DEV}\ndev:promote: fast-forward testedDevSha={LOCAL_DEV} mainSha={MAIN}\nmain: success headSha={MAIN}\n"
+            "originMainSha: {ORIGIN}\npinnedLocalDevSha: {PINNED}\nfeatureHeadSha: {FEATURE}\ndev:land: already-present featureHeadSha={FEATURE} localDevSha={LOCAL_DEV}\ndev:promote: fast-forward testedDevSha={LOCAL_DEV} mainSha={LOCAL_DEV}\nmain: success headSha={LOCAL_DEV}\n"
         );
         let evidence = check.parse_main_promotion_incident(&incident)?;
         assert_eq!(
             evidence,
             WorkbenchMainPromotionEvidence {
                 local_dev_sha: GitSha::try_from(LOCAL_DEV)?,
-                main_sha: GitSha::try_from(MAIN)?,
+                main_sha: GitSha::try_from(LOCAL_DEV)?,
             }
         );
         Ok(())

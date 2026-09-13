@@ -41,7 +41,11 @@ impl PromotionEvidence<'_> {
             return Err(crate::HiveError::message(format!("obsolete blocker retirement requires remote Main to equal tested SHA {sha}, observed {main}")));
         }
         let dev = DeliveryCommand::git_output(self.repository, &["rev-parse", "refs/remotes/origin/dev"]).await?;
-        DeliveryCommand::run_git_status(self.repository, &["merge-base", "--is-ancestor", sha, dev.as_str()], "verify remote dev preserves the promoted SHA").await?;
+        if dev != sha {
+            return Err(crate::HiveError::message(format!(
+                "obsolete blocker retirement requires remote dev to equal tested SHA {sha}, observed {dev}"
+            )));
+        }
         self.validate_pull_request(sha).await?;
         self.validate_main_run(sha).await
     }
