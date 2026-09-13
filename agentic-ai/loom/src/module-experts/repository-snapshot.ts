@@ -1,13 +1,26 @@
 import { spawnSync } from 'node:child_process';
 import type { SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
 import {
+  closeSync,
+  constants,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
 import { err, ok, type Result } from 'neverthrow';
 import {
   ExpertIsolationFailureKind,
@@ -334,6 +347,9 @@ export class SnapshotContextFiles {
         kind: ExpertIsolationFailureKind.ContextFiles,
         message: 'Read-only expert context files exceed their bounds.',
       });
+    if (this.request.contextFiles.length === 0) return ok();
+    const root = this.canonicalSnapshotRoot();
+    if (root.isErr()) return err(root.error);
     for (const file of this.request.contextFiles) {
       if (
         file.path === '' ||
@@ -347,10 +363,25 @@ export class SnapshotContextFiles {
           kind: ExpertIsolationFailureKind.ContextFiles,
           message: 'Read-only expert context file is unsafe.',
         });
-      const target = join(this.request.repositorySnapshot, file.path);
+      const target = this.safeTarget(root.value, file.path);
+      if (target.isErr()) return err(target.error);
       try {
-        mkdirSync(join(target, '..'), { recursive: true });
-        writeFileSync(target, file.content, { encoding: 'utf8', flag: 'wx' });
+        let descriptor: number | undefined;
+        try {
+          descriptor = openSync(
+            target.value,
+            constants.O_WRONLY |
+              constants.O_CREAT |
+              constants.O_EXCL |
+              constants.O_NOFOLLOW,
+            0o600,
+          );
+          writeFileSync(descriptor, file.content, {
+            encoding: 'utf8',
+          });
+        } finally {
+          if (descriptor !== undefined) closeSync(descriptor);
+        }
       } catch {
         return err({
           kind: ExpertIsolationFailureKind.Storage,
@@ -359,5 +390,153 @@ export class SnapshotContextFiles {
       }
     }
     return ok();
+  }
+
+  private canonicalSnapshotRoot(): Result<string, ExpertIsolationFailure> {
+    const root = resolve(this.request.repositorySnapshot);
+    try {
+      const metadata = lstatSync(root);
+      if (metadata.isSymbolicLink() || !metadata.isDirectory())
+        return err({
+          kind: ExpertIsolationFailureKind.ContextFiles,
+          message: 'Read-only expert snapshot root is unsafe.',
+        });
+      const canonical = realpathSync(root);
+      const canonicalMetadata = lstatSync(canonical);
+      if (canonicalMetadata.isSymbolicLink() || !canonicalMetadata.isDirectory())
+        return err({
+          kind: ExpertIsolationFailureKind.ContextFiles,
+          message: 'Read-only expert snapshot root is unsafe.',
+        });
+      return ok(canonical);
+    } catch {
+      return err({
+        kind: ExpertIsolationFailureKind.Storage,
+        message: 'Read-only expert snapshot root could not be inspected.',
+      });
+    }
+  }
+
+  private safeTarget(
+    canonicalRoot: string,
+    path: string,
+  ): Result<string, ExpertIsolationFailure> {
+    const root = resolve(this.request.repositorySnapshot);
+    const target = resolve(root, path);
+    const targetRelative = relative(root, target);
+    if (
+      targetRelative === '' ||
+      isAbsolute(targetRelative) ||
+      targetRelative === '..' ||
+      targetRelative.startsWith(`..${sep}`)
+    )
+      return err({
+        kind: ExpertIsolationFailureKind.ContextFiles,
+        message: 'Read-only expert context file is unsafe.',
+      });
+    const parent = this.safeParent(root, canonicalRoot, dirname(target));
+    if (parent.isErr()) return err(parent.error);
+    try {
+      const metadata = lstatSync(target, { throwIfNoEntry: false });
+      if (metadata?.isSymbolicLink())
+        return err({
+          kind: ExpertIsolationFailureKind.ContextFiles,
+          message: 'Read-only expert context file is unsafe.',
+        });
+      if (metadata !== undefined) {
+        const existingCanonical = realpathSync(target);
+        const existingRelative = relative(canonicalRoot, existingCanonical);
+        if (
+          existingRelative === '' ||
+          isAbsolute(existingRelative) ||
+          existingRelative === '..' ||
+          existingRelative.startsWith(`..${sep}`)
+        )
+          return err({
+            kind: ExpertIsolationFailureKind.ContextFiles,
+            message: 'Read-only expert context file is unsafe.',
+          });
+      }
+      const canonicalTarget = join(parent.value, basename(target));
+      const canonicalTargetRelative = relative(canonicalRoot, canonicalTarget);
+      if (
+        canonicalTargetRelative === '' ||
+        isAbsolute(canonicalTargetRelative) ||
+        canonicalTargetRelative === '..' ||
+        canonicalTargetRelative.startsWith(`..${sep}`)
+      )
+        return err({
+          kind: ExpertIsolationFailureKind.ContextFiles,
+          message: 'Read-only expert context file is unsafe.',
+        });
+      return ok(canonicalTarget);
+    } catch {
+      return err({
+        kind: ExpertIsolationFailureKind.Storage,
+        message: 'Read-only expert context file could not be inspected.',
+      });
+    }
+  }
+
+  private safeParent(
+    root: string,
+    canonicalRoot: string,
+    parent: string,
+  ): Result<string, ExpertIsolationFailure> {
+    const parentRelative = relative(root, parent);
+    if (
+      isAbsolute(parentRelative) ||
+      parentRelative === '..' ||
+      parentRelative.startsWith(`..${sep}`)
+    )
+      return err({
+        kind: ExpertIsolationFailureKind.ContextFiles,
+        message: 'Read-only expert context file is unsafe.',
+      });
+    try {
+      let current = root;
+      for (const component of parentRelative.split(sep).filter(Boolean)) {
+        const candidate = join(current, component);
+        let metadata = lstatSync(candidate, { throwIfNoEntry: false });
+        if (metadata === undefined) {
+          mkdirSync(candidate);
+          metadata = lstatSync(candidate);
+        }
+        if (metadata.isSymbolicLink() || !metadata.isDirectory())
+          return err({
+            kind: ExpertIsolationFailureKind.ContextFiles,
+            message: 'Read-only expert context file is unsafe.',
+          });
+        const canonical = realpathSync(candidate);
+        const canonicalRelative = relative(canonicalRoot, canonical);
+        if (
+          isAbsolute(canonicalRelative) ||
+          canonicalRelative === '..' ||
+          canonicalRelative.startsWith(`..${sep}`)
+        )
+          return err({
+            kind: ExpertIsolationFailureKind.ContextFiles,
+            message: 'Read-only expert context file is unsafe.',
+          });
+        current = candidate;
+      }
+      const canonicalParent = realpathSync(parent);
+      const canonicalParentRelative = relative(canonicalRoot, canonicalParent);
+      if (
+        isAbsolute(canonicalParentRelative) ||
+        canonicalParentRelative === '..' ||
+        canonicalParentRelative.startsWith(`..${sep}`)
+      )
+        return err({
+          kind: ExpertIsolationFailureKind.ContextFiles,
+          message: 'Read-only expert context file is unsafe.',
+        });
+      return ok(canonicalParent);
+    } catch {
+      return err({
+        kind: ExpertIsolationFailureKind.Storage,
+        message: 'Read-only expert context directory could not be created.',
+      });
+    }
   }
 }

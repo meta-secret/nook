@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,7 +13,11 @@ import { join } from 'node:path';
 
 import { describe, expect, test } from 'bun:test';
 
-import { RepositorySnapshot } from '../../src/module-experts/repository-snapshot.ts';
+import { ExpertIsolationFailureKind } from '../../src/module-experts/isolation-failure.ts';
+import {
+  RepositorySnapshot,
+  SnapshotContextFiles,
+} from '../../src/module-experts/repository-snapshot.ts';
 
 class RepositorySnapshotFixture {
   static runGit(workingDirectory: string, args: readonly string[]): string {
@@ -211,4 +216,53 @@ describe('repository snapshot Git isolation', () => {
       }
     },
   );
+
+  test('rejects context writes through an archived symlink ancestor', () => {
+    const fixtureRoot = mkdtempSync(
+      join(tmpdir(), 'loom-repository-context-symlink-'),
+    );
+    const snapshot = join(fixtureRoot, 'snapshot');
+    const outside = join(fixtureRoot, 'outside');
+    const outsideTarget = join(outside, 'context.md');
+    mkdirSync(snapshot);
+    mkdirSync(outside);
+    symlinkSync(outside, join(snapshot, 'archived-link'), 'dir');
+    try {
+      const result = new SnapshotContextFiles({
+        contextFiles: [{ path: 'archived-link/context.md', content: 'blocked' }],
+        repositorySnapshot: snapshot,
+      }).materialize();
+      expect(result.isErr()).toBe(true);
+      if (result.isOk()) return;
+      expect(result.error.kind).toBe(ExpertIsolationFailureKind.ContextFiles);
+      expect(() => readFileSync(outsideTarget)).toThrow();
+    } finally {
+      rmSync(fixtureRoot, { force: true, recursive: true });
+    }
+  });
+
+  test('rejects context writes to an archived symlink target', () => {
+    const fixtureRoot = mkdtempSync(
+      join(tmpdir(), 'loom-repository-context-target-'),
+    );
+    const snapshot = join(fixtureRoot, 'snapshot');
+    const outside = join(fixtureRoot, 'outside');
+    const outsideTarget = join(outside, 'context.md');
+    mkdirSync(snapshot);
+    mkdirSync(outside);
+    writeFileSync(outsideTarget, 'outside\n', 'utf8');
+    symlinkSync(outsideTarget, join(snapshot, 'context.md'));
+    try {
+      const result = new SnapshotContextFiles({
+        contextFiles: [{ path: 'context.md', content: 'blocked' }],
+        repositorySnapshot: snapshot,
+      }).materialize();
+      expect(result.isErr()).toBe(true);
+      if (result.isOk()) return;
+      expect(result.error.kind).toBe(ExpertIsolationFailureKind.ContextFiles);
+      expect(readFileSync(outsideTarget, 'utf8')).toBe('outside\n');
+    } finally {
+      rmSync(fixtureRoot, { force: true, recursive: true });
+    }
+  });
 });
