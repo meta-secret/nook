@@ -300,32 +300,32 @@ Use this file only to select one owning context. Do not preload linked graphs.
 
 ## Canonical tree
 
-Gizmo Prime lives at `gizmo-prime/`. Its six and only six top-level teams are
-`teams/ai/`, `teams/dev-core/`, `teams/security/`, `teams/sre/`,
-`teams/web-dev/`, and `teams/delivery-pipeline/`. Each team has one `gizmo/`
-that reports to Prime. Every Team Gizmo uses `gpt-5.6-sol` with `low` reasoning.
-Each Team Gizmo requests Fast mode with `service_tier: fast`, which resolves as
-`priority`. Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning. It
-requests Fast mode with `service_tier: fast`, which resolves as `priority`. Each
+Gizmo Prime lives at \`gizmo-prime/\`. Its six and only six top-level teams are
+\`teams/ai/\`, \`teams/dev-core/\`, \`teams/security/\`, \`teams/sre/\`,
+\`teams/web-dev/\`, and \`teams/delivery-pipeline/\`. Each team has one \`gizmo/\`
+that reports to Prime. Every Team Gizmo uses \`gpt-5.6-sol\` with \`low\` reasoning.
+Each Team Gizmo requests Fast mode with \`service_tier: fast\`, which resolves as
+\`priority\`. Each leaf Team Agent uses \`gpt-5.6-luna\` with \`xhigh\` reasoning. It
+requests Fast mode with \`service_tier: fast\`, which resolves as \`priority\`. Each
 leaf receives a separate issued child worktree. Each Team Gizmo owns one team
 worktree. Prime reuses a compatible existing Team Agent before spawning.
 Otherwise it issues separate child worktrees for required specialists. Team
 Gizmo integrates specialist commits into its feature branch.
 
 Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
-`git fetch --prune origin`; a fetch failure fails closed. Delivery/Dev Manager
-then synchronizes canonical local `main` to the fetched `origin/main` and
-brings canonical local `dev` onto or including that main baseline under the
+\`git fetch --prune origin\`; a fetch failure fails closed. Delivery/Dev Manager
+then synchronizes canonical local \`main\` to the fetched \`origin/main\` and
+brings canonical local \`dev\` onto or including that main baseline under the
 dev-delivery workflow. If local dev is not current with main, the run fails
-closed. Prime records `originMainSha` for the exact freshly fetched
-`origin/main`, `pinnedLocalDevSha` for the exact synchronized local-dev
-commit, and `featureHeadSha` for the exact canonical feature frontier in the
-mission packet and every child handoff. Require the chain `originMainSha`
-ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`; equality between
+closed. Prime records \`originMainSha\` for the exact freshly fetched
+\`origin/main\`, \`pinnedLocalDevSha\` for the exact synchronized local-dev
+commit, and \`featureHeadSha\` for the exact canonical feature frontier in the
+mission packet and every child handoff. Require the chain \`originMainSha\`
+ancestor of \`pinnedLocalDevSha\` ancestor of \`featureHeadSha\`; equality between
 the latter two is valid for the initial frontier. Prime creates every new
-feature branch and worktree strictly from the exact `pinnedLocalDevSha`; no
+feature branch and worktree strictly from the exact \`pinnedLocalDevSha\`; no
 alternate base is permitted. The existing canonical feature ref and
-detached implementation HEAD must equal `featureHeadSha` exactly. Descendant
+detached implementation HEAD must equal \`featureHeadSha\` exactly. Descendant
 frontiers are valid for reruns. Team Gizmos and leaves consume all three pinned
 identities. Missing, stale, mismatched, or unprovable evidence fails closed.
 
@@ -337,12 +337,12 @@ architecture or product limit. A dispatch wave is not pre-checked or budgeted
 against a numeric limit. Cortex and Loom never encode, infer, or repeat a fixed
 numeric agent or subagent concurrency cap.
 
-Current specialist routing includes SRE (`teams/sre/provisioning/` and
-`teams/sre/cloud-native/`), Development Core
-(`teams/dev-core/rust-core-developer/` and
-`teams/dev-core/rust-auth2-developer/`), and Delivery Pipeline
-(`teams/delivery-pipeline/gizmo/`, `teams/delivery-pipeline/dev-manager/`, and
-`teams/delivery-pipeline/pr-lifecycle/`).
+Current specialist routing includes SRE (\`teams/sre/provisioning/\` and
+\`teams/sre/cloud-native/\`), Development Core
+(\`teams/dev-core/rust-core-developer/\` and
+\`teams/dev-core/rust-auth2-developer/\`), and Delivery Pipeline
+(\`teams/delivery-pipeline/gizmo/\`, \`teams/delivery-pipeline/dev-manager/\`, and
+\`teams/delivery-pipeline/pr-lifecycle/\`).
 
 ## Owning contexts
 
@@ -353,7 +353,7 @@ Current specialist routing includes SRE (`teams/sre/provisioning/` and
   delivery mechanics. Its Team Gizmo is
   [here](teams/delivery-pipeline/gizmo/knowledge-graph.md); the
   [Dev Manager](teams/delivery-pipeline/dev-manager/knowledge-graph.md) alone
-  invokes `dev:pr-manager`, and the
+  invokes \`dev:pr-manager\`, and the
   [PR Lifecycle Agent](teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md)
   performs only authorized mechanics.
 - [Dev delivery architecture](gizmo-prime/architecture/dev-delivery.md): canonical
