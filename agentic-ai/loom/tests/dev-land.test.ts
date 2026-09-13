@@ -5,7 +5,10 @@ import { expect, test } from 'bun:test';
 import { ok, type Result } from 'neverthrow';
 
 import { DevGitRepository } from '../src/dev-delivery/dev-git.ts';
-import { DevLandCommand } from '../src/dev-delivery/dev-land.ts';
+import {
+  BranchAdvanced,
+  isBranchAdvancedFailure,
+} from '../src/dev-delivery/dev-land.ts';
 import { DevDeliveryWorkspace } from '../src/dev-delivery/dev-workspace.ts';
 import {
   BranchName,
@@ -20,59 +23,26 @@ import {
 const SHA_A = '1111111111111111111111111111111111111111';
 const SHA_B = '2222222222222222222222222222222222222222';
 
-class RecordingRunner implements CommandRunner {
-  readonly requests: CommandRequest[] = [];
+test('dev:land exposes branch advancement as a typed runtime failure', () => {
+  const featureBranch = BranchName.parseFeature('codex/agent-branching');
+  const currentHead = CommitSha.parse(SHA_B);
+  expect(featureBranch.isOk()).toBe(true);
+  expect(currentHead.isOk()).toBe(true);
+  if (featureBranch.isErr() || currentHead.isErr()) return;
 
-  run(request: CommandRequest): Result<CommandOutput, never> {
-    this.requests.push(request);
-    return ok({ exitCode: 0, stdout: '', stderr: '' });
+  const failure = {
+    kind: DevFailureKind.Race,
+    code: BranchAdvanced,
+    branch: featureBranch.value,
+    currentHead: currentHead.value,
+    message: 'branch advanced',
+  };
+  expect(isBranchAdvancedFailure(failure)).toBe(true);
+  if (isBranchAdvancedFailure(failure)) {
+    expect(failure.branch.value()).toBe('codex/agent-branching');
+    expect(failure.currentHead.value()).toBe(SHA_B);
   }
-}
-
-test(
-  'dev:land rejects a canonical feature frontier that differs from its published head',
-  () => {
-    const originMainSha = CommitSha.parse(SHA_A);
-    const pinnedLocalDevSha = CommitSha.parse(SHA_A);
-    const featureHeadSha = CommitSha.parse(SHA_A);
-    const expectedFeatureSha = CommitSha.parse(SHA_B);
-    const featureBranch = BranchName.parse('feature/land');
-    expect(originMainSha.isOk()).toBe(true);
-    expect(pinnedLocalDevSha.isOk()).toBe(true);
-    expect(featureHeadSha.isOk()).toBe(true);
-    expect(expectedFeatureSha.isOk()).toBe(true);
-    expect(featureBranch.isOk()).toBe(true);
-    if (
-      originMainSha.isErr() ||
-      pinnedLocalDevSha.isErr() ||
-      featureHeadSha.isErr() ||
-      expectedFeatureSha.isErr() ||
-      featureBranch.isErr()
-    )
-      return;
-
-    const runner = new RecordingRunner();
-    const result = new DevLandCommand(
-      new DevDeliveryWorkspace({ root: '/tmp/nook-dev-land', runner }),
-    ).execute({
-      originMainSha: originMainSha.value,
-      pinnedLocalDevSha: pinnedLocalDevSha.value,
-      featureBranch: featureBranch.value,
-      featureHeadSha: featureHeadSha.value,
-      expectedFeatureSha: expectedFeatureSha.value,
-      devPath: '/tmp/nook-dev-land/dev',
-    });
-
-    expect(result.isErr()).toBe(true);
-    if (result.isErr())
-      expect(result.error.kind).toBe(DevFailureKind.Configuration);
-    expect(
-      runner.requests.some(
-        ({ executable }) => executable === CommandExecutable.Git,
-      ),
-    ).toBe(false);
-  },
-);
+});
 
 class DetachedMergeRunner implements CommandRunner {
   readonly requests: CommandRequest[] = [];
@@ -109,7 +79,7 @@ test(
     const devPath = join(root, 'dev');
     const expectedDevHead = CommitSha.parse(SHA_A);
     const featureHead = CommitSha.parse(SHA_B);
-    const featureBranch = BranchName.parse('feature/land');
+    const featureBranch = BranchName.parse('codex/agent-branching');
     const originMainSha = CommitSha.parse(SHA_A);
     if (
       expectedDevHead.isErr() ||

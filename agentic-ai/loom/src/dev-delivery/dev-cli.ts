@@ -124,12 +124,6 @@ export class DevCli {
           `The feature worktree branch ${featureBranch.value.value()} does not match the authorized FEATURE_BRANCH ${packet.featureBranch.value()}`,
       });
     }
-    const featureSha = workspace.git.head();
-    if (featureSha.isErr()) return err(featureSha.error);
-    return ok({
-      ...packet,
-      featureHeadSha: featureSha.value,
-      expectedFeatureSha: featureSha.value,
-    });
+    return ok(packet);
   }
 }

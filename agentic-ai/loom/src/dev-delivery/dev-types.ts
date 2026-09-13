@@ -1,5 +1,7 @@
 import { err, ok, type Result } from 'neverthrow';
 
+import { CanonicalFeatureBranchContract } from '../lib/base-evidence.ts';
+
 export enum DevFailureKind {
   Configuration = 'configuration',
   Command = 'command',
@@ -63,29 +65,18 @@ export class BranchName {
   }
 
   static parseFeature(input: string): Result<BranchName, DevFailure> {
-    const branch = BranchName.parse(input);
-    if (branch.isErr()) return err(branch.error);
-    const value = branch.value.value();
-    const components = value.split('/');
-    if (
-      value === '@' ||
-      value === ManagedBranch.Main ||
-      value === ManagedBranch.Dev ||
-      value.endsWith('/') ||
-      components.some(
-        (component) =>
-          component.length === 0 ||
-          component.startsWith('.') ||
-          component.endsWith('.') ||
-          component.endsWith('.lock'),
-      )
-    ) {
+    try {
+      CanonicalFeatureBranchContract.parse(input);
+    } catch (error) {
       return err({
         kind: DevFailureKind.Configuration,
-        message: `Invalid Git feature branch name: ${input}`,
+        message:
+          error instanceof Error
+            ? error.message
+            : `Invalid canonical feature branch: ${input}`,
       });
     }
-    return branch;
+    return ok(new BranchName(input));
   }
 
   value(): string {
@@ -325,10 +316,6 @@ export interface DevLandRequest {
   readonly originMainSha: CommitSha;
   /** Exact synchronized local-dev baseline selected for this feature. */
   readonly pinnedLocalDevSha: CommitSha;
-  /** Feature worktree HEAD observed internally immediately before landing. */
-  readonly featureHeadSha: CommitSha;
-  /** Feature worktree HEAD observed internally for the runtime merge boundary. */
-  readonly expectedFeatureSha: CommitSha;
 }
 
 export interface DevPublishRequest {
