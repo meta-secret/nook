@@ -59,3 +59,9 @@ Use these workflows for AI-owned skills and cross-package changes.
 ## Loom reference
 
 - [Loom tools](references/loom-tools.md)
+
+## Team topology
+
+- [AI Team Gizmo](gizmo/knowledge-graph.md) coordinates bounded AI-team mechanics.
+- [Loom specialist](loom-specialist/knowledge-graph.md) handles packeted AI-owned Loom work.
+- [Cortex specialist](cortex-specialist/knowledge-graph.md) handles packeted AI-owned Cortex work.
