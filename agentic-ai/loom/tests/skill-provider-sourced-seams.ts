@@ -103,6 +103,18 @@ export type AuditedRuntimeSourceRequest = {
 
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
+    '.github/actions/nook-cache-connect/main.js',
+    'dcfea6914dcbaacf66bf1782dd23c63a5314deb9072cb4d2b504502ba534a187',
+  ],
+  [
+    '.github/scripts/workbench-publish.cjs',
+    '13ea52eb03efd9af5133fc810aeb67a85176d1dd30bb7f884a159d05be3280f1',
+  ],
+  [
+    'agentic-ai/loom/src/dev-delivery/dev-command.ts',
+    '220e7aa593817fbc849cee1025b2d05ae608f9cfd2735d3f499e4cc020898324',
+  ],
+  [
     'infra/contracts/dockerized-rust.test.ts',
     '6023a6f3261854070bdece7f6242555800d38906030e1c8a4887a6d7fb76a81f',
   ],
@@ -160,7 +172,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
-    'ac0f840ec6a1694fe1660686435116b94590a618bdeaf2c958730107983c4955',
+    '64551645ae8b751d33bee882b8f742227799013ab071d76b4594091d21d2f6e7',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
@@ -176,7 +188,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/test-hosted-smoke.sh',
-    '8d10b7f14d6bc03ded1128899a018d213b92a1864c45266c9dc4382bfd6842a2',
+    'e75257d97999373062da11a90e9d22d5b68d7266de868f4a3e972c2f1b8309c4',
   ],
 ]);
 
@@ -228,7 +240,7 @@ export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
       'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',
   },
   {
-    digest: '8d10b7f14d6bc03ded1128899a018d213b92a1864c45266c9dc4382bfd6842a2',
+    digest: 'e75257d97999373062da11a90e9d22d5b68d7266de868f4a3e972c2f1b8309c4',
     marker: '$SCRIPT_DIR/test-hosted-smoke.sh',
     sourcePath:
       'nook-app/nook-web/nook-web-extension/scripts/test-hosted-smoke.test.sh',
