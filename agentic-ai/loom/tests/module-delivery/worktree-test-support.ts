@@ -159,6 +159,7 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
     git(['add', '--all']);
     git(['commit', '--quiet', '-m', 'baseline']);
     const originMainSha = git(['rev-parse', 'HEAD']);
+    git(['update-ref', 'refs/remotes/origin/main', originMainSha]);
     ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile({
       fixture: provisional,
       relativePath: '.nook-test/bootstrap/pinned-local-dev.txt',
