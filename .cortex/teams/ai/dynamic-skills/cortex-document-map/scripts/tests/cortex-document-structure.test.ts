@@ -84,6 +84,7 @@ export class CortexDocumentMapCortexDocumentStructureScenario {
 - [AI](teams/ai/knowledge-graph.md)
 - [Development core](teams/dev-core/knowledge-graph.md)
 - [Dev manager](teams/dev-manager/knowledge-graph.md)
+- [Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)
 - [Security](teams/security/knowledge-graph.md)
 - [SRE](teams/sre/knowledge-graph.md)
 - [Web development](teams/web-dev/knowledge-graph.md)
@@ -134,6 +135,10 @@ ${args.rootExtra}`,
       CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
         path: '.cortex/teams/dev-manager/knowledge-graph.md',
         content: '# Dev Manager Knowledge Graph\n',
+      }),
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+        path: '.cortex/teams/delivery-pipeline/knowledge-graph.md',
+        content: '# Delivery Pipeline Knowledge Graph\n',
       }),
       CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
         aiGraphArgs,
@@ -294,6 +299,56 @@ test('indexes dev-manager documents only through their owning graph', () => {
       ? {
           ...document,
           content: `${document.content}\n- [Dev policy](../teams/dev-manager/policy.md)\n`,
+        }
+      : document,
+  );
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(foreignIndex),
+  ).toContainEqual({
+    code: CortexStructureFindingCode.InvalidIndexEntry,
+    file: '.cortex/gizmo/knowledge-graph.md',
+    line: 1,
+    message: `Owning knowledge graph cannot index another context's document: ${policyPath}`,
+  });
+});
+
+test('indexes Delivery Pipeline documents only through their owning graph', () => {
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments({
+      rootExtra: '',
+      devTarget: 'policy.md',
+      gizmoTarget: 'policy.md',
+    });
+  const pipelineGraphPath =
+    '.cortex/teams/delivery-pipeline/knowledge-graph.md';
+  const policyPath = '.cortex/teams/delivery-pipeline/policy.md';
+  documents.push(
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+      path: policyPath,
+      content: '# Delivery Pipeline Policy\n',
+    }),
+  );
+  const findings =
+    CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
+  expect(findings).toContainEqual({
+    code: CortexStructureFindingCode.MissingFromIndex,
+    file: pipelineGraphPath,
+    line: 1,
+    message: `Document is not indexed in its owning knowledge graph ${pipelineGraphPath}: ${policyPath}`,
+  });
+  const indexedDocuments = documents.map((document) =>
+    document.relativePath === pipelineGraphPath
+      ? { ...document, content: `${document.content}\n- [Policy](policy.md)\n` }
+      : document,
+  );
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(indexedDocuments),
+  ).toEqual([]);
+  const foreignIndex = indexedDocuments.map((document) =>
+    document.relativePath === '.cortex/gizmo/knowledge-graph.md'
+      ? {
+          ...document,
+          content: `${document.content}\n- [Delivery Pipeline policy](../teams/delivery-pipeline/policy.md)\n`,
         }
       : document,
   );

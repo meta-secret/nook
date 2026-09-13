@@ -58,6 +58,7 @@ export class CortexDocumentStructure {
         '.cortex/teams/ai/knowledge-graph.md',
         '.cortex/teams/dev-core/knowledge-graph.md',
         '.cortex/teams/dev-manager/knowledge-graph.md',
+        '.cortex/teams/delivery-pipeline/knowledge-graph.md',
         '.cortex/teams/security/knowledge-graph.md',
         '.cortex/teams/sre/knowledge-graph.md',
         '.cortex/teams/web-dev/knowledge-graph.md',
@@ -363,7 +364,7 @@ export class CortexDocumentStructure {
       filePath === 'k-graph.md' ||
       filePath === '.cortex/INDEX.md' ||
       filePath === 'INDEX.md' ||
-      /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|dev-manager|security|sre|web-dev)|shared)\/knowledge-graph\.md$/.test(
+      /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|dev-manager|delivery-pipeline|security|sre|web-dev)|shared)\/knowledge-graph\.md$/.test(
         filePath,
       )
     );
@@ -377,6 +378,7 @@ export class CortexDocumentStructure {
       CortexGraphOwner.Ai,
       CortexGraphOwner.DevCore,
       CortexGraphOwner.DevManager,
+      CortexGraphOwner.DeliveryPipeline,
       CortexGraphOwner.Security,
       CortexGraphOwner.Sre,
       CortexGraphOwner.WebDev,
@@ -395,7 +397,7 @@ export class CortexDocumentStructure {
     if (filePath.startsWith('.cortex/gizmo/')) return CortexGraphOwner.Gizmo;
     if (filePath.startsWith('.cortex/shared/')) return CortexGraphOwner.Shared;
     const match =
-      /^\.cortex\/teams\/(ai|dev-core|dev-manager|security|sre|web-dev)\//.exec(
+      /^\.cortex\/teams\/(ai|dev-core|dev-manager|delivery-pipeline|security|sre|web-dev)\//.exec(
         filePath,
       );
     const owner = match?.[1];
@@ -403,6 +405,7 @@ export class CortexDocumentStructure {
       owner === CortexGraphOwner.Ai ||
       owner === CortexGraphOwner.DevCore ||
       owner === CortexGraphOwner.DevManager ||
+      owner === CortexGraphOwner.DeliveryPipeline ||
       owner === CortexGraphOwner.Security ||
       owner === CortexGraphOwner.Sre ||
       owner === CortexGraphOwner.WebDev
@@ -470,6 +473,7 @@ enum CortexGraphOwner {
   Ai = 'ai',
   DevCore = 'dev-core',
   DevManager = 'dev-manager',
+  DeliveryPipeline = 'delivery-pipeline',
   Gizmo = 'gizmo',
   Security = 'security',
   Sre = 'sre',

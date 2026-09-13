@@ -78,6 +78,7 @@ test('acceptance verifies dev-manager graph ownership and rejects omitted eviden
     'teams/ai',
     'teams/dev-core',
     'teams/dev-manager',
+    'teams/delivery-pipeline',
     'teams/security',
     'teams/sre',
     'teams/web-dev',
