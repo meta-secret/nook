@@ -5,7 +5,7 @@ use tokio::fs as async_fs;
 
 use super::TaskWorkspace;
 use crate::HiveContext;
-use crate::model::BootstrapEvidence;
+use crate::model::{BootstrapEvidence, GitSha};
 
 #[derive(Debug)]
 pub(super) enum WorkspaceOrigin<'a> {
@@ -19,7 +19,7 @@ impl TaskWorkspace<'_> {
         repository_url: &str,
         source_commit: &str,
         resume_branch: &WorkspaceOrigin<'_>,
-    ) -> crate::HiveResult<(PathBuf, bool)> {
+    ) -> crate::HiveResult<(PathBuf, bool, Option<GitSha>)> {
         let repository = workspace.join("repository");
         if repository.join(".git").is_dir() {
             return Err(crate::HiveError::message(
@@ -93,7 +93,7 @@ impl TaskWorkspace<'_> {
             )
             .await?;
         }
-        Ok((repository, did_resume))
+        Ok((repository, did_resume, None))
     }
 
     pub(super) async fn prepare_pinned_repository(
@@ -101,7 +101,7 @@ impl TaskWorkspace<'_> {
         repository_url: &str,
         evidence: &BootstrapEvidence,
         resume_branch: &WorkspaceOrigin<'_>,
-    ) -> crate::HiveResult<(PathBuf, bool)> {
+    ) -> crate::HiveResult<(PathBuf, bool, Option<GitSha>)> {
         let repository = workspace.join("repository");
         if repository.join(".git").is_dir() {
             return Err(crate::HiveError::message(
@@ -137,9 +137,13 @@ impl TaskWorkspace<'_> {
                 "origin",
                 evidence.origin_main_sha.as_str(),
                 evidence.pinned_local_dev_sha.as_str(),
-                evidence.feature_head_sha.as_str(),
+                &format!(
+                    "refs/heads/{}:refs/remotes/origin/{}",
+                    evidence.feature_branch.as_str(),
+                    evidence.feature_branch.as_str()
+                ),
             ],
-            "fetch the pinned bootstrap commits",
+            "fetch the bootstrap commits and canonical feature branch",
         )
         .await?;
         TaskWorkspace::run_git_status(
@@ -153,53 +157,46 @@ impl TaskWorkspace<'_> {
             "verify originMainSha ancestry",
         )
         .await?;
+        let observed_feature_head = TaskWorkspace::git_output(
+            &repository,
+            &[
+                "rev-parse",
+                &format!("refs/remotes/origin/{}", evidence.feature_branch.as_str()),
+            ],
+        )
+        .await?;
+        let observed_feature_head_sha = GitSha::try_from(observed_feature_head.as_str())?;
         TaskWorkspace::run_git_status(
             &repository,
             &[
                 "merge-base",
                 "--is-ancestor",
                 evidence.pinned_local_dev_sha.as_str(),
-                evidence.feature_head_sha.as_str(),
+                observed_feature_head_sha.as_str(),
             ],
-            "verify featureHeadSha ancestry",
+            "verify canonical feature branch descends from pinned local-dev base",
         )
         .await?;
         let mut did_resume = false;
         if let WorkspaceOrigin::ResumeBranch(branch) = resume_branch {
-            let resumed = TaskWorkspace::git_command()
-                .args([
-                    "fetch",
-                    "--no-tags",
-                    "--depth=100",
-                    "origin",
-                    &format!("refs/heads/{branch}"),
-                ])
-                .current_dir(&repository)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .await?;
-            if resumed.success() {
-                TaskWorkspace::run_git_status(
-                    &repository,
-                    &["checkout", "--quiet", "-B", branch, "FETCH_HEAD"],
-                    "resume the durable Hive repair branch",
-                )
-                .await?;
-                TaskWorkspace::run_git_status(
-                    &repository,
-                    &[
-                        "merge-base",
-                        "--is-ancestor",
-                        evidence.feature_head_sha.as_str(),
-                        "HEAD",
-                    ],
-                    "verify the resumed branch descends from featureHeadSha",
-                )
-                .await?;
-                did_resume = true;
+            if branch != evidence.feature_branch.as_str() {
+                return Err(crate::HiveError::message(
+                    "resume branch does not match the canonical feature branch",
+                ));
             }
+            TaskWorkspace::run_git_status(
+                &repository,
+                &[
+                    "checkout",
+                    "--quiet",
+                    "-B",
+                    branch,
+                    &format!("refs/remotes/origin/{branch}"),
+                ],
+                "resume the canonical Hive repair branch",
+            )
+            .await?;
+            did_resume = true;
         }
         if !did_resume {
             TaskWorkspace::run_git_status(
@@ -208,19 +205,19 @@ impl TaskWorkspace<'_> {
                     "checkout",
                     "--quiet",
                     "--detach",
-                    evidence.feature_head_sha.as_str(),
+                    observed_feature_head_sha.as_str(),
                 ],
-                "check out the exact canonical feature frontier",
+                "check out the observed canonical feature branch head",
             )
             .await?;
             let checked_out =
                 TaskWorkspace::git_output(&repository, &["rev-parse", "HEAD"]).await?;
-            if checked_out != evidence.feature_head_sha.as_str() {
+            if checked_out != observed_feature_head_sha.as_str() {
                 return Err(crate::HiveError::message(
-                    "detached workspace HEAD does not equal featureHeadSha",
+                    "detached workspace HEAD does not equal the observed canonical feature branch head",
                 ));
             }
         }
-        Ok((repository, did_resume))
+        Ok((repository, did_resume, Some(observed_feature_head_sha)))
     }
 }

@@ -306,16 +306,16 @@ impl Neo4jTaskStore {
     pub(super) fn bootstrap_evidence(row: &Row) -> crate::HiveResult<Option<BootstrapEvidence>> {
         let origin_main_sha = row.get::<String>("origin_main_sha")?;
         let pinned_local_dev_sha = row.get::<String>("pinned_local_dev_sha")?;
-        let feature_head_sha = row.get::<String>("feature_head_sha")?;
+        let feature_branch = row.get::<String>("feature_branch")?;
         if origin_main_sha.is_empty()
             && pinned_local_dev_sha.is_empty()
-            && feature_head_sha.is_empty()
+            && feature_branch.is_empty()
         {
             return Ok(None);
         }
         if origin_main_sha.is_empty()
             || pinned_local_dev_sha.is_empty()
-            || feature_head_sha.is_empty()
+            || feature_branch.is_empty()
         {
             return Err(crate::HiveError::message(
                 "task has incomplete bootstrap evidence",
@@ -324,7 +324,7 @@ impl Neo4jTaskStore {
         Ok(Some(BootstrapEvidence {
             origin_main_sha: GitSha::try_from(origin_main_sha)?,
             pinned_local_dev_sha: GitSha::try_from(pinned_local_dev_sha)?,
-            feature_head_sha: GitSha::try_from(feature_head_sha)?,
+            feature_branch: crate::model::FeatureBranch::try_from(feature_branch)?,
         }))
     }
 }

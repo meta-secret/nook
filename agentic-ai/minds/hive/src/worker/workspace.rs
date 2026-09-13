@@ -42,7 +42,7 @@ impl TaskWorkspace<'_> {
         async_fs::create_dir_all(workspace.join("task")).await?;
         async_fs::create_dir_all(workspace.join("output")).await?;
         async_fs::create_dir_all(workspace.join("temporary")).await?;
-        let (repository, did_resume) = match bootstrap_evidence {
+        let (repository, did_resume, observed_feature_head_sha) = match bootstrap_evidence {
             Some(evidence) => {
                 TaskWorkspace::prepare_pinned_repository(
                     workspace,
@@ -114,6 +114,7 @@ impl TaskWorkspace<'_> {
                 return Ok(WorkspacePreparation::Conflicted(ConflictedWorkspace {
                     repository,
                     resumed: did_resume,
+                    observed_feature_head_sha,
                 }));
             }
             applied_dependency = true;
@@ -124,6 +125,7 @@ impl TaskWorkspace<'_> {
                 repository,
                 baseline,
                 resumed: did_resume,
+                observed_feature_head_sha,
             }));
         }
         let baseline = TaskWorkspace::git_output(&repository, &["rev-parse", "HEAD"]).await?;
@@ -131,6 +133,7 @@ impl TaskWorkspace<'_> {
             repository,
             baseline,
             resumed: did_resume,
+            observed_feature_head_sha,
         }))
     }
 
@@ -226,6 +229,7 @@ pub(super) enum WorkspacePreparation {
 pub(super) struct ConflictedWorkspace {
     repository: PathBuf,
     resumed: bool,
+    observed_feature_head_sha: Option<GitSha>,
 }
 
 /// A checkout whose dependency baseline was established by preparation.
@@ -235,6 +239,7 @@ pub(super) struct PreparedWorkspace {
     repository: PathBuf,
     baseline: String,
     resumed: bool,
+    observed_feature_head_sha: Option<GitSha>,
 }
 
 impl ConflictedWorkspace {
@@ -245,6 +250,7 @@ impl ConflictedWorkspace {
             repository: self.repository,
             baseline,
             resumed: self.resumed,
+            observed_feature_head_sha: self.observed_feature_head_sha,
         })
     }
 }
@@ -252,6 +258,10 @@ impl ConflictedWorkspace {
 impl PreparedWorkspace {
     pub(super) fn repository(&self) -> &Path {
         &self.repository
+    }
+
+    pub(super) fn observed_feature_head_sha(&self) -> Option<&GitSha> {
+        self.observed_feature_head_sha.as_ref()
     }
 }
 
@@ -629,6 +639,7 @@ mod tests {
             repository: repository.path().to_owned(),
             baseline: baseline.to_owned(),
             resumed: false,
+            observed_feature_head_sha: None,
         }
         .persistable_patch(&task, &result)
         .await?;
@@ -786,7 +797,8 @@ mod tests {
             PreparedWorkspace {
                 repository: repository.path().to_owned(),
                 baseline: baseline.trim().to_owned(),
-                resumed: true
+                resumed: true,
+                observed_feature_head_sha: None,
             }
             .persistable_patch(&task, &result)
             .await?,
@@ -810,6 +822,7 @@ mod tests {
         let conflicted = ConflictedWorkspace {
             repository: repository.path().to_owned(),
             resumed: false,
+            observed_feature_head_sha: None,
         };
         let error = conflicted
             .finish_dependency_resolution()

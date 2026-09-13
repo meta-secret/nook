@@ -90,9 +90,13 @@ Hive atomically creates a higher-priority task, adds a `DEPENDS_ON` edge, and
 releases the original attempt without consuming its retry budget. Completing
 the blocker promotes the original task back to `READY`.
 
-The prototype fetches the task's typed `originMainSha`, `pinnedLocalDevSha`,
-and `featureHeadSha` over HTTPS into a disposable `emptyDir`; every task in one
-dependency DAG must target that same evidence chain. Before marking an
+The prototype fetches the task's typed `originMainSha` and `pinnedLocalDevSha`
+plus the canonical `featureBranch` over HTTPS into a disposable `emptyDir`;
+every task in one dependency DAG must target that same creation evidence.
+At the start of each task attempt Hive resolves the latest committed head of
+that branch and records it as the observed run head for exact checkout and
+build-only evidence. A rerun therefore follows an advanced canonical branch
+instead of rejecting the earlier observed head. Before marking an
 implementation task complete, Hive collects a
 bounded binary Git patch, stores its digest and content as an `Artifact` node
 linked to the attempt, and commits that artifact in the same Neo4j transaction
@@ -171,12 +175,15 @@ artifacts, including when a completed blocker is reused by a future consumer.
 Scheduling and rearm traversal ignore the lineage.
 
 Version 10 adds the task properties `origin_main_sha`,
-`pinned_local_dev_sha`, and `feature_head_sha`. The migration backfills each
+`pinned_local_dev_sha`, and the legacy `feature_head_sha` field. Version 11 adds
+the canonical `feature_branch` identity. The migration backfills each new
 property to the empty string for existing tasks, preserving the distinction
 between legacy non-repair tasks and a malformed main-repair task. New
-main-repair enqueue and claim paths require all three full Git object IDs;
-active-delivery lookup and duplicate enqueue reconciliation include the complete
-three-SHA tuple as part of task identity and fail closed when it changes.
+main-repair enqueue and claim paths require both creation-base SHAs and a
+canonical feature branch; active-delivery lookup and duplicate enqueue
+reconciliation include that branch identity as part of task identity. The
+feature branch's current head is observed per worker run and is not caller
+evidence.
 
 To roll version 10 back to a version-9 binary, first stop every Hive worker,
 coordinator, observer, and dispatcher and back up the Neo4j data volume. Delete

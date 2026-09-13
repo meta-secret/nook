@@ -8,7 +8,7 @@ use crate::model::GitSha;
 pub(super) struct RemoteCompileEvidence<'a> {
     pub(super) repository: &'a Path,
     pub(super) branch: &'a str,
-    pub(super) feature_sha: &'a GitSha,
+    pub(super) observed_feature_head_sha: &'a GitSha,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -53,7 +53,7 @@ impl RemoteCompileEvidence<'_> {
         let Self {
             repository,
             branch,
-            feature_sha,
+            observed_feature_head_sha,
         } = self;
         let output = (DeliveryCommand {
             repository,
@@ -80,7 +80,11 @@ impl RemoteCompileEvidence<'_> {
                 ))
             })?;
         runs.sort_by(|left, right| right.created_at.cmp(&left.created_at));
-        let run = Self::latest_exact_compile_run(&runs, branch, feature_sha.as_str())?;
+        let run = Self::latest_exact_compile_run(
+            &runs,
+            branch,
+            observed_feature_head_sha.as_str(),
+        )?;
         if run.status != "completed" {
             return Err(crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: exact-head remote build:compile run {} is still {}",

@@ -302,9 +302,13 @@ impl<S: TaskStore> Worker<S> {
                 "main-repair execution requires complete bootstrap evidence",
             ));
         }
-        let repair_branch = task.id.repair_branch_name();
+        let repair_branch = task
+            .bootstrap_evidence
+            .as_ref()
+            .map(|evidence| evidence.feature_branch.as_str())
+            .unwrap_or("");
         let origin = if task.kind.is_main_repair() {
-            workspace::WorkspaceOrigin::ResumeBranch(&repair_branch)
+            workspace::WorkspaceOrigin::ResumeBranch(repair_branch)
         } else {
             workspace::WorkspaceOrigin::Fresh
         };
@@ -374,17 +378,25 @@ impl<S: TaskStore> Worker<S> {
             result: &result,
         }
         .admit()?;
-        plan.verify_owner_deliveries(&repository, task.bootstrap_evidence.as_ref())
+        plan.verify_owner_deliveries(
+            &repository,
+            task.bootstrap_evidence.as_ref(),
+            prepared.observed_feature_head_sha(),
+        )
             .await?;
         if task.kind.is_main_repair() {
             let bootstrap_evidence = task
                 .bootstrap_evidence
                 .as_ref()
                 .ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
+            let observed_feature_head_sha = prepared
+                .observed_feature_head_sha()
+                .ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
             (MainRepairDelivery {
                 repository: &repository,
-                branch: &task.id.repair_branch_name(),
+                branch: bootstrap_evidence.feature_branch.as_str(),
                 evidence: bootstrap_evidence,
+                observed_feature_head_sha,
             })
             .verify_main_repair_delivery(task.id.as_str())
             .await?;
@@ -850,7 +862,8 @@ mod tests {
         assert!(prompt.contains("Main verification"));
         assert!(prompt.contains("`originMainSha`"));
         assert!(prompt.contains("`pinnedLocalDevSha`"));
-        assert!(prompt.contains("`featureHeadSha`"));
+        assert!(prompt.contains("`featureBranch`"));
+        assert!(prompt.contains("observed run head"));
         assert!(prompt.contains("strictly from the exact `pinnedLocalDevSha`"));
         assert!(prompt.contains("`origin/main` is ancestry evidence only"));
         assert!(prompt.contains("Gizmo Prime authorize `dev:land`"));

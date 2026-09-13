@@ -84,7 +84,7 @@ MATCH (task:Task {id: $id})
         task.source_commit AS source_commit,
         coalesce(task.origin_main_sha, '') AS origin_main_sha,
         coalesce(task.pinned_local_dev_sha, '') AS pinned_local_dev_sha,
-        coalesce(task.feature_head_sha, '') AS feature_head_sha,
+        coalesce(task.feature_branch, '') AS feature_branch,
         attempt.number AS attempt_number,
         owning_repair_ids,
         dependency_ids,

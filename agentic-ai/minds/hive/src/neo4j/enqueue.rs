@@ -9,14 +9,14 @@ use super::Neo4jTaskStore;
 impl Neo4jTaskStore {
     pub(super) async fn enqueue_task(&self, task: &EnqueueTask) -> crate::HiveResult<()> {
         task.validate()?;
-        let (origin_main_sha, pinned_local_dev_sha, feature_head_sha) = task
+        let (origin_main_sha, pinned_local_dev_sha, feature_branch) = task
             .bootstrap_evidence
             .as_ref()
             .map_or(("", "", ""), |evidence| {
                 (
                     evidence.origin_main_sha.as_str(),
                     evidence.pinned_local_dev_sha.as_str(),
-                    evidence.feature_head_sha.as_str(),
+                    evidence.feature_branch.as_str(),
                 )
             });
         let mut transaction = self.graph.start_txn().await?;
@@ -37,7 +37,7 @@ impl Neo4jTaskStore {
                                    task.source_commit = $source_commit,
                                    task.origin_main_sha = $origin_main_sha,
                                    task.pinned_local_dev_sha = $pinned_local_dev_sha,
-                                   task.feature_head_sha = $feature_head_sha,
+                                   task.feature_branch = $feature_branch,
                                    task.priority = $priority,
                                    task.max_attempts = $max_attempts,
                                    task.status = 'BLOCKED',
@@ -46,7 +46,7 @@ impl Neo4jTaskStore {
                             task.source_commit AS existing_source_commit,
                             coalesce(task.origin_main_sha, '') AS origin_main_sha,
                             coalesce(task.pinned_local_dev_sha, '') AS pinned_local_dev_sha,
-                            coalesce(task.feature_head_sha, '') AS feature_head_sha",
+                            coalesce(task.feature_branch, '') AS feature_branch",
                 )
                 .param("id", task.id.as_str())
                 .param("enqueue_token", enqueue_token.as_str())
@@ -56,7 +56,7 @@ impl Neo4jTaskStore {
                 .param("source_commit", task.source_commit.as_str())
                 .param("origin_main_sha", origin_main_sha)
                 .param("pinned_local_dev_sha", pinned_local_dev_sha)
-                .param("feature_head_sha", feature_head_sha)
+                .param("feature_branch", feature_branch)
                 .param("priority", task.priority)
                 .param("max_attempts", task.max_attempts),
             )
@@ -91,7 +91,7 @@ impl Neo4jTaskStore {
                          WHERE dependency.source_commit = task.source_commit
                            AND coalesce(dependency.origin_main_sha, '') = task.origin_main_sha
                            AND coalesce(dependency.pinned_local_dev_sha, '') = task.pinned_local_dev_sha
-                           AND coalesce(dependency.feature_head_sha, '') = task.feature_head_sha
+                           AND coalesce(dependency.feature_branch, '') = task.feature_branch
                          MERGE (task)-[:DEPENDS_ON]->(dependency)
                          SET dependency.version = coalesce(dependency.version, 0) + 1
                          RETURN dependency.id AS id",
@@ -145,12 +145,12 @@ impl Neo4jTaskStore {
             kind,
             bootstrap_evidence,
         } = request;
-        let (origin_main_sha, pinned_local_dev_sha, feature_head_sha) = bootstrap_evidence
+        let (origin_main_sha, pinned_local_dev_sha, feature_branch) = bootstrap_evidence
             .map_or(("", "", ""), |evidence| {
                 (
                     evidence.origin_main_sha.as_str(),
                     evidence.pinned_local_dev_sha.as_str(),
-                    evidence.feature_head_sha.as_str(),
+                    evidence.feature_branch.as_str(),
                 )
             });
         let mut rows = self
@@ -160,7 +160,7 @@ impl Neo4jTaskStore {
                     "MATCH (root:Task {source_commit: $source_commit, kind: $kind})
                      WHERE coalesce(root.origin_main_sha, '') = $origin_main_sha
                        AND coalesce(root.pinned_local_dev_sha, '') = $pinned_local_dev_sha
-                       AND coalesce(root.feature_head_sha, '') = $feature_head_sha
+                       AND coalesce(root.feature_branch, '') = $feature_branch
                        AND (
                          root.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
                          OR EXISTS {
@@ -176,7 +176,7 @@ impl Neo4jTaskStore {
                 .param("kind", kind.as_str())
                 .param("origin_main_sha", origin_main_sha)
                 .param("pinned_local_dev_sha", pinned_local_dev_sha)
-                .param("feature_head_sha", feature_head_sha),
+                .param("feature_branch", feature_branch),
             )
             .await?;
         match rows.next().await? {

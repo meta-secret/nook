@@ -1,5 +1,6 @@
 use crate::model::{
-    BootstrapEvidence, ClaimedTask, CompletionArtifact, CompletionRelevance, TaskId, TerminalResult,
+    BootstrapEvidence, ClaimedTask, CompletionArtifact, CompletionRelevance, GitSha, TaskId,
+    TerminalResult,
 };
 use std::path::Path;
 
@@ -71,15 +72,19 @@ impl CompletionPlan<'_> {
         &self,
         repository: &Path,
         evidence: Option<&BootstrapEvidence>,
+        observed_feature_head_sha: Option<&GitSha>,
     ) -> crate::HiveResult<()> {
         use crate::HiveContext;
         if let Self::ObsoleteRetirement { owning_repairs } = self {
             let evidence = evidence.ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
+            let observed_feature_head_sha = observed_feature_head_sha
+                .ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
             for owner in *owning_repairs {
                 crate::delivery::MainRepairDelivery {
                     repository,
-                    branch: &owner.repair_branch_name(),
+                    branch: evidence.feature_branch.as_str(),
                     evidence,
+                    observed_feature_head_sha,
                 }
                 .verify_main_repair_promotion_and_main(owner.as_str())
                 .await

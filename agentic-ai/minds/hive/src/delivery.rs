@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::model::BootstrapEvidence;
+use crate::model::{BootstrapEvidence, GitSha};
 
 use self::local_dev::LocalDevEvidence;
 use self::promotion::PromotionEvidence;
@@ -23,6 +23,7 @@ pub(crate) struct MainRepairDelivery<'a> {
     pub(crate) repository: &'a Path,
     pub(crate) branch: &'a str,
     pub(crate) evidence: &'a BootstrapEvidence,
+    pub(crate) observed_feature_head_sha: &'a GitSha,
 }
 
 impl MainRepairDelivery<'_> {
@@ -30,11 +31,11 @@ impl MainRepairDelivery<'_> {
         &self,
         task_id: &str,
     ) -> crate::HiveResult<()> {
-        let feature_sha = &self.evidence.feature_head_sha;
+        let feature_sha = self.observed_feature_head_sha;
         (RemoteCompileEvidence {
             repository: self.repository,
             branch: self.branch,
-            feature_sha,
+            observed_feature_head_sha: feature_sha,
         })
         .validate()
         .await?;
@@ -49,7 +50,7 @@ impl MainRepairDelivery<'_> {
             repository: self.repository,
             origin_main_sha: &self.evidence.origin_main_sha,
             pinned_local_dev_sha: &self.evidence.pinned_local_dev_sha,
-            feature_sha,
+            observed_feature_head_sha: feature_sha,
             local_dev_sha: &workbench.local_dev_sha,
         })
         .validate()
@@ -65,11 +66,11 @@ impl MainRepairDelivery<'_> {
         &self,
         task_id: &str,
     ) -> crate::HiveResult<()> {
-        let feature_sha = &self.evidence.feature_head_sha;
+        let feature_sha = self.observed_feature_head_sha;
         (RemoteCompileEvidence {
             repository: self.repository,
             branch: self.branch,
-            feature_sha,
+            observed_feature_head_sha: feature_sha,
         })
         .validate()
         .await?;
@@ -84,7 +85,7 @@ impl MainRepairDelivery<'_> {
             repository: self.repository,
             origin_main_sha: &self.evidence.origin_main_sha,
             pinned_local_dev_sha: &self.evidence.pinned_local_dev_sha,
-            feature_sha,
+            observed_feature_head_sha: feature_sha,
             local_dev_sha: &workbench.local_dev_sha,
         })
         .validate()

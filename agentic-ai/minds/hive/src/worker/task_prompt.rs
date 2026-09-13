@@ -5,6 +5,10 @@ use crate::model::{ClaimedTask, TaskId};
 impl ClaimedTask {
     pub(super) fn task_prompt(&self) -> String {
         let task = self;
+        let feature_branch = task
+            .bootstrap_evidence
+            .as_ref()
+            .map_or("(not applicable)", |evidence| evidence.feature_branch.as_str());
         let owning_repairs = if task.owning_repairs.is_empty() {
             "No active owning Main repairs.".to_owned()
         } else {
@@ -12,9 +16,9 @@ impl ClaimedTask {
                 .iter()
                 .map(|owner| {
                     format!(
-                        "- {} (delivery branch `{}`)",
+                        "- {} (canonical delivery branch `{}`)",
                         owner,
-                        (owner).repair_branch_name()
+                        feature_branch
                     )
                 })
                 .collect::<Vec<_>>()
@@ -76,10 +80,11 @@ impl model::TaskKind {
          direct GitHub access through `GH_TOKEN`; use standard `git`, `gh`, and repository Taskfile \
          commands only within the role authorization below. Route implementation through Gizmo Prime and the owning Team \
          Gizmos. Consume the caller-recorded `originMainSha`, `pinnedLocalDevSha`, and \
-         `featureHeadSha`; require `originMainSha` to be an ancestor of `pinnedLocalDevSha` and \
-         `pinnedLocalDevSha` to be an ancestor of or equal to `featureHeadSha`. Gizmo Prime creates \
-         every new canonical feature branch and worktree strictly from the exact \
-         `pinnedLocalDevSha`. Never use a remote-tracking ref as that base; freshly fetched \
+         the canonical `featureBranch`; require `originMainSha` to be an ancestor of \
+         `pinnedLocalDevSha`. Resolve the current head of that canonical branch at the start of \
+         every attempt and use that observed run head for checkout and exact-head evidence. Gizmo \
+         Prime creates every new canonical feature branch and worktree strictly from the exact \
+         `pinnedLocalDevSha`. Never use a remote-tracking ref as the creation base; freshly fetched \
          `origin/main` is ancestry evidence only. Obtain exact-head remote build-only evidence and \
          required review, then have Gizmo Prime authorize `dev:land` through Delivery Pipeline's \
          Team Gizmo and PR Lifecycle Agent. The manually run Dev Manager alone selects and \

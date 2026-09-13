@@ -15,7 +15,9 @@ pub enum ModelError {
     InvalidSourceCommit,
     #[error("Git bootstrap evidence must use full 40-character hexadecimal object ids")]
     InvalidGitSha,
-    #[error("main-repair tasks require originMainSha, pinnedLocalDevSha, and featureHeadSha")]
+    #[error("feature branch must be a canonical codex ref")]
+    InvalidFeatureBranch,
+    #[error("main-repair tasks require originMainSha, pinnedLocalDevSha, and featureBranch")]
     MissingBootstrapEvidence,
     #[error("max_attempts must be at least one")]
     InvalidMaxAttempts,
@@ -48,7 +50,7 @@ pub enum ModelError {
 }
 
 mod identity;
-pub use identity::{AgentId, AttemptId, GitSha, LeaseToken, TaskId};
+pub use identity::{AgentId, AttemptId, FeatureBranch, GitSha, LeaseToken, TaskId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -113,7 +115,7 @@ pub enum CompletionArtifact {
 pub struct BootstrapEvidence {
     pub origin_main_sha: GitSha,
     pub pinned_local_dev_sha: GitSha,
-    pub feature_head_sha: GitSha,
+    pub feature_branch: FeatureBranch,
 }
 
 impl BootstrapEvidence {
@@ -467,7 +469,7 @@ mod tests {
         let evidence = BootstrapEvidence {
             origin_main_sha: GitSha::try_from("0123456789abcdef0123456789abcdef01234567")?,
             pinned_local_dev_sha: GitSha::try_from("123456789abcdef0123456789abcdef012345678")?,
-            feature_head_sha: GitSha::try_from("23456789abcdef0123456789abcdef0123456789")?,
+            feature_branch: super::FeatureBranch::try_from("codex/repair-cache")?,
         };
         let wire = serde_json::to_value(evidence)?;
         assert_eq!(
@@ -475,7 +477,7 @@ mod tests {
             serde_json::json!({
                 "originMainSha": "0123456789abcdef0123456789abcdef01234567",
                 "pinnedLocalDevSha": "123456789abcdef0123456789abcdef012345678",
-                "featureHeadSha": "23456789abcdef0123456789abcdef0123456789"
+                "featureBranch": "codex/repair-cache"
             })
         );
         Ok(())

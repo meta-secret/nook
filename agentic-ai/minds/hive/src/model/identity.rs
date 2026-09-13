@@ -192,9 +192,65 @@ impl fmt::Display for GitSha {
     }
 }
 
+/// The canonical feature branch selected by Gizmo Prime.
+///
+/// Hive may observe the branch's current head, but it never accepts a caller
+/// supplied commit as the branch identity. Keeping the branch name typed also
+/// prevents delivery helpers from accidentally using a temporary Hive branch.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct FeatureBranch(String);
+
+impl TryFrom<String> for FeatureBranch {
+    type Error = ModelError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let valid = value.starts_with("codex/")
+            && value.len() > "codex/".len()
+            && !value.contains("..")
+            && !value.ends_with('/')
+            && value.bytes().all(|byte| {
+                byte.is_ascii_lowercase()
+                    || byte.is_ascii_digit()
+                    || matches!(byte, b'/' | b'-' | b'_')
+            });
+        if !valid {
+            return Err(ModelError::InvalidFeatureBranch);
+        }
+        Ok(Self(value))
+    }
+}
+
+impl TryFrom<&str> for FeatureBranch {
+    type Error = ModelError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::try_from(value.to_owned())
+    }
+}
+
+impl From<FeatureBranch> for String {
+    fn from(value: FeatureBranch) -> Self {
+        value.0
+    }
+}
+
+impl FeatureBranch {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for FeatureBranch {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{AgentId, AttemptId, GitSha, LeaseToken, TaskId};
+    use super::{AgentId, AttemptId, FeatureBranch, GitSha, LeaseToken, TaskId};
     #[test]
     fn decoding_rejects_empty_identifiers() {
         for encoded in [r#""""#, r#""   ""#] {
@@ -219,6 +275,16 @@ mod tests {
         let sha = GitSha::try_from("ABCDEF0123456789ABCDEF0123456789ABCDEF01")?;
         assert_eq!(sha.as_str(), "abcdef0123456789abcdef0123456789abcdef01");
         assert_eq!(String::from(sha), "abcdef0123456789abcdef0123456789abcdef01");
+        Ok(())
+    }
+
+    #[test]
+    fn feature_branch_requires_a_canonical_codex_ref() -> crate::HiveResult<()> {
+        let branch = FeatureBranch::try_from("codex/repair-cache")?;
+        assert_eq!(branch.as_str(), "codex/repair-cache");
+        for invalid in ["main", "codex/", "codex/../main", "codex/Repair"] {
+            assert!(FeatureBranch::try_from(invalid).is_err());
+        }
         Ok(())
     }
 }

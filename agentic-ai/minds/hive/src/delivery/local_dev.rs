@@ -7,7 +7,7 @@ pub(super) struct LocalDevEvidence<'a> {
     pub(super) repository: &'a Path,
     pub(super) origin_main_sha: &'a GitSha,
     pub(super) pinned_local_dev_sha: &'a GitSha,
-    pub(super) feature_sha: &'a GitSha,
+    pub(super) observed_feature_head_sha: &'a GitSha,
     pub(super) local_dev_sha: &'a GitSha,
 }
 
@@ -17,12 +17,12 @@ impl LocalDevEvidence<'_> {
             repository,
             origin_main_sha,
             pinned_local_dev_sha,
-            feature_sha,
+            observed_feature_head_sha,
             local_dev_sha,
         } = self;
         let origin_main_sha = origin_main_sha.as_str();
         let pinned_local_dev_sha = pinned_local_dev_sha.as_str();
-        let feature_sha = feature_sha.as_str();
+        let observed_feature_head_sha = observed_feature_head_sha.as_str();
         let local_dev_sha = local_dev_sha.as_str();
         DeliveryCommand::run_git_status(
             repository,
@@ -37,24 +37,34 @@ impl LocalDevEvidence<'_> {
         })?;
         DeliveryCommand::run_git_status(
             repository,
-            &["merge-base", "--is-ancestor", pinned_local_dev_sha, feature_sha],
-            "verify the exact feature head descends from the pinned local-dev base",
+            &[
+                "merge-base",
+                "--is-ancestor",
+                pinned_local_dev_sha,
+                observed_feature_head_sha,
+            ],
+            "verify the observed feature branch head descends from the pinned local-dev base",
         )
         .await
         .map_err(|error| {
             crate::HiveError::message(format!(
-                "Hive repair delivery is incomplete: feature head {feature_sha} is not a fast-forward descendant of pinnedLocalDevSha {pinned_local_dev_sha}: {error}"
+                "Hive repair delivery is incomplete: observed feature branch head {observed_feature_head_sha} is not a fast-forward descendant of pinnedLocalDevSha {pinned_local_dev_sha}: {error}"
             ))
         })?;
         DeliveryCommand::run_git_status(
             repository,
-            &["merge-base", "--is-ancestor", feature_sha, local_dev_sha],
-            "verify serialized local-dev landing contains the exact feature head",
+            &[
+                "merge-base",
+                "--is-ancestor",
+                observed_feature_head_sha,
+                local_dev_sha,
+            ],
+            "verify serialized local-dev landing contains the observed feature branch head",
         )
         .await
         .map_err(|error| {
             crate::HiveError::message(format!(
-                "Hive repair delivery is incomplete: serialized local-dev head {local_dev_sha} does not contain exact feature head {feature_sha}: {error}"
+                "Hive repair delivery is incomplete: serialized local-dev head {local_dev_sha} does not contain observed feature branch head {observed_feature_head_sha}: {error}"
             ))
         })
     }
@@ -139,7 +149,7 @@ mod tests {
             repository: fixture.path(),
             origin_main_sha: &origin_main_sha,
             pinned_local_dev_sha: &pinned_local_dev_sha,
-            feature_sha: &feature_sha,
+            observed_feature_head_sha: &feature_sha,
             local_dev_sha: &local_dev_sha,
         }
         .validate()
@@ -169,7 +179,7 @@ mod tests {
             repository: fixture.path(),
             origin_main_sha: &origin_main_sha,
             pinned_local_dev_sha: &pinned_local_dev_sha,
-            feature_sha: &feature_sha,
+            observed_feature_head_sha: &feature_sha,
             local_dev_sha: &local_dev_sha,
         }
         .validate()
@@ -200,7 +210,7 @@ mod tests {
             repository: fixture.path(),
             origin_main_sha: &origin_main_sha,
             pinned_local_dev_sha: &pinned_local_dev_sha,
-            feature_sha: &feature_sha,
+            observed_feature_head_sha: &feature_sha,
             local_dev_sha: &local_dev_sha,
         }
         .validate()

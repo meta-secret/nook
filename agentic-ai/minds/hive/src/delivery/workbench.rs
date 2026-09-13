@@ -6,7 +6,8 @@ use crate::model::{BootstrapEvidence, GitSha};
 /// The exact structured lines written to a Workbench incident are the only
 /// accepted completion evidence. Human prose and substring markers are not
 /// evidence. The packet supplied by the coordinator remains authoritative for
-/// the three bootstrap SHAs; Workbench may only repeat them exactly.
+/// the creation-base SHAs and canonical feature branch; Workbench may only
+/// repeat those identities exactly.
 pub(super) struct WorkbenchCompletionCheck<'a> {
     pub(super) repository: &'a Path,
     pub(super) task_id: &'a str,
@@ -79,12 +80,12 @@ impl WorkbenchCompletionCheck<'_> {
                 "Hive repair delivery is incomplete: Workbench status must be exactly `done`, got `{status}`"
             )));
         }
-        let review_sha = Self::parse_review_line(incident)?;
-        self.require_feature_sha("review", &review_sha)?;
-        let worklog_sha = Self::parse_worklog_line(incident)?;
-        self.require_feature_sha("worklog", &worklog_sha)?;
-        let (landed_feature_sha, local_dev_sha) = Self::parse_dev_land_line(incident)?;
-        self.require_feature_sha("dev:land", &landed_feature_sha)?;
+        let review_branch = Self::parse_review_line(incident)?;
+        self.require_feature_branch("review", &review_branch)?;
+        let worklog_branch = Self::parse_worklog_line(incident)?;
+        self.require_feature_branch("worklog", &worklog_branch)?;
+        let (landed_feature_branch, local_dev_sha) = Self::parse_dev_land_line(incident)?;
+        self.require_feature_branch("dev:land", &landed_feature_branch)?;
         Ok(WorkbenchLocalDevEvidence { local_dev_sha })
     }
 
@@ -93,8 +94,8 @@ impl WorkbenchCompletionCheck<'_> {
         incident: &str,
     ) -> crate::HiveResult<WorkbenchMainPromotionEvidence> {
         self.parse_packet(incident)?;
-        let (landed_feature_sha, local_dev_sha) = Self::parse_dev_land_line(incident)?;
-        self.require_feature_sha("dev:land", &landed_feature_sha)?;
+        let (landed_feature_branch, local_dev_sha) = Self::parse_dev_land_line(incident)?;
+        self.require_feature_branch("dev:land", &landed_feature_branch)?;
         let (tested_dev_sha, main_sha) = Self::parse_promotion_line(incident)?;
         if tested_dev_sha != local_dev_sha {
             return Err(crate::HiveError::message(format!(
@@ -127,12 +128,8 @@ impl WorkbenchCompletionCheck<'_> {
             &pinned_local_dev_sha,
             &self.evidence.pinned_local_dev_sha,
         )?;
-        let feature_head_sha = Self::parse_sha_field(incident, "featureHeadSha")?;
-        self.require_packet_sha(
-            "featureHeadSha",
-            &feature_head_sha,
-            &self.evidence.feature_head_sha,
-        )
+        let feature_branch = Self::parse_branch_field(incident, "featureBranch")?;
+        self.require_feature_branch("packet", &feature_branch)
     }
 
     fn require_packet_sha(
@@ -149,10 +146,14 @@ impl WorkbenchCompletionCheck<'_> {
         Ok(())
     }
 
-    fn require_feature_sha(&self, evidence: &str, actual: &GitSha) -> crate::HiveResult<()> {
-        if actual != &self.evidence.feature_head_sha {
+    fn require_feature_branch(
+        &self,
+        evidence: &str,
+        actual: &crate::model::FeatureBranch,
+    ) -> crate::HiveResult<()> {
+        if actual != &self.evidence.feature_branch {
             return Err(crate::HiveError::message(format!(
-                "Hive repair delivery is incomplete: Workbench {evidence} evidence is bound to a stale feature head"
+                "Hive repair delivery is incomplete: Workbench {evidence} evidence is bound to a different feature branch"
             )));
         }
         Ok(())
@@ -210,36 +211,58 @@ impl WorkbenchCompletionCheck<'_> {
         Self::parse_sha(value, field)
     }
 
-    fn parse_review_line(incident: &str) -> crate::HiveResult<GitSha> {
+    fn parse_branch_field(
+        incident: &str,
+        field: &str,
+    ) -> crate::HiveResult<crate::model::FeatureBranch> {
+        let value = Self::exact_field(incident, field)?;
+        crate::model::FeatureBranch::try_from(value).map_err(|error| {
+            crate::HiveError::message(format!(
+                "Hive repair delivery is incomplete: Workbench {field} is not a canonical feature branch: {error}"
+            ))
+        })
+    }
+
+    fn parse_review_line(incident: &str) -> crate::HiveResult<crate::model::FeatureBranch> {
         let line = Self::exact_operation_line(incident, "review:")?;
-        let value = line.strip_prefix("review: approved featureHeadSha=").ok_or_else(|| {
+        let value = line.strip_prefix("review: approved featureBranch=").ok_or_else(|| {
             crate::HiveError::message(
-                "Hive repair delivery is incomplete: Workbench review evidence must be exactly `review: approved featureHeadSha=<sha>`",
+                "Hive repair delivery is incomplete: Workbench review evidence must be exactly `review: approved featureBranch=<branch>`",
             )
         })?;
-        Self::parse_sha(value, "review featureHeadSha")
+        crate::model::FeatureBranch::try_from(value).map_err(|error| {
+            crate::HiveError::message(format!(
+                "Hive repair delivery is incomplete: Workbench review featureBranch is invalid: {error}"
+            ))
+        })
     }
 
-    fn parse_worklog_line(incident: &str) -> crate::HiveResult<GitSha> {
+    fn parse_worklog_line(incident: &str) -> crate::HiveResult<crate::model::FeatureBranch> {
         let line = Self::exact_operation_line(incident, "worklog:")?;
-        let value = line.strip_prefix("worklog: linked featureHeadSha=").ok_or_else(|| {
+        let value = line.strip_prefix("worklog: linked featureBranch=").ok_or_else(|| {
             crate::HiveError::message(
-                "Hive repair delivery is incomplete: Workbench worklog evidence must be exactly `worklog: linked featureHeadSha=<sha>`",
+                "Hive repair delivery is incomplete: Workbench worklog evidence must be exactly `worklog: linked featureBranch=<branch>`",
             )
         })?;
-        Self::parse_sha(value, "worklog featureHeadSha")
+        crate::model::FeatureBranch::try_from(value).map_err(|error| {
+            crate::HiveError::message(format!(
+                "Hive repair delivery is incomplete: Workbench worklog featureBranch is invalid: {error}"
+            ))
+        })
     }
 
-    fn parse_dev_land_line(incident: &str) -> crate::HiveResult<(GitSha, GitSha)> {
+    fn parse_dev_land_line(
+        incident: &str,
+    ) -> crate::HiveResult<(crate::model::FeatureBranch, GitSha)> {
         let line = Self::exact_operation_line(incident, "dev:land:")?;
         let value = line.strip_prefix("dev:land: ").ok_or_else(|| {
             crate::HiveError::message(
                 "Hive repair delivery is incomplete: Workbench dev:land evidence has an invalid shape",
             )
         })?;
-        let (outcome, value) = value.split_once(" featureHeadSha=").ok_or_else(|| {
+        let (outcome, value) = value.split_once(" featureBranch=").ok_or_else(|| {
             crate::HiveError::message(
-                "Hive repair delivery is incomplete: Workbench dev:land evidence must bind featureHeadSha and localDevSha",
+                "Hive repair delivery is incomplete: Workbench dev:land evidence must bind featureBranch and localDevSha",
             )
         })?;
         if !matches!(outcome, "landed" | "already-present") {
@@ -247,13 +270,17 @@ impl WorkbenchCompletionCheck<'_> {
                 "Hive repair delivery is incomplete: Workbench dev:land outcome is not an accepted exact landing result",
             ));
         }
-        let (feature_sha, local_dev_sha) = value.split_once(" localDevSha=").ok_or_else(|| {
+        let (feature_branch, local_dev_sha) = value.split_once(" localDevSha=").ok_or_else(|| {
             crate::HiveError::message(
-                "Hive repair delivery is incomplete: Workbench dev:land evidence must bind localDevSha",
+                "Hive repair delivery is incomplete: Workbench dev:land evidence must bind featureBranch and localDevSha",
             )
         })?;
         Ok((
-            Self::parse_sha(feature_sha, "dev:land featureHeadSha")?,
+            crate::model::FeatureBranch::try_from(feature_branch).map_err(|error| {
+                crate::HiveError::message(format!(
+                    "Hive repair delivery is incomplete: Workbench dev:land featureBranch is invalid: {error}"
+                ))
+            })?,
             Self::parse_sha(local_dev_sha, "dev:land localDevSha")?,
         ))
     }
@@ -295,7 +322,7 @@ mod tests {
 
     const ORIGIN: &str = "0000000000000000000000000000000000000001";
     const PINNED: &str = "0000000000000000000000000000000000000002";
-    const FEATURE: &str = "0000000000000000000000000000000000000003";
+    const FEATURE_BRANCH: &str = "codex/repair-cache";
     const LOCAL_DEV: &str = "0000000000000000000000000000000000000004";
     const MAIN: &str = "0000000000000000000000000000000000000005";
 
@@ -303,7 +330,7 @@ mod tests {
         let evidence = Box::leak(Box::new(BootstrapEvidence {
             origin_main_sha: GitSha::try_from(ORIGIN)?,
             pinned_local_dev_sha: GitSha::try_from(PINNED)?,
-            feature_head_sha: GitSha::try_from(FEATURE)?,
+            feature_branch: crate::model::FeatureBranch::try_from(FEATURE_BRANCH)?,
         }));
         Ok(WorkbenchCompletionCheck {
             repository: Path::new("."),
@@ -314,7 +341,7 @@ mod tests {
 
     fn complete_incident() -> String {
         format!(
-            "status: done\noriginMainSha: {ORIGIN}\npinnedLocalDevSha: {PINNED}\nfeatureHeadSha: {FEATURE}\nreview: approved featureHeadSha={FEATURE}\nworklog: linked featureHeadSha={FEATURE}\ndev:land: landed featureHeadSha={FEATURE} localDevSha={LOCAL_DEV}\n"
+            "status: done\noriginMainSha: {ORIGIN}\npinnedLocalDevSha: {PINNED}\nfeatureBranch: {FEATURE_BRANCH}\nreview: approved featureBranch={FEATURE_BRANCH}\nworklog: linked featureBranch={FEATURE_BRANCH}\ndev:land: landed featureBranch={FEATURE_BRANCH} localDevSha={LOCAL_DEV}\n"
         )
     }
 
@@ -331,16 +358,16 @@ mod tests {
         for incident in [
             complete_incident().replace("status: done", "status: not done"),
             complete_incident().replace(
-                &format!("review: approved featureHeadSha={FEATURE}"),
-                &format!("review: not approved featureHeadSha={FEATURE}"),
+                &format!("review: approved featureBranch={FEATURE_BRANCH}"),
+                &format!("review: not approved featureBranch={FEATURE_BRANCH}"),
             ),
             complete_incident().replace(
-                &format!("dev:land: landed featureHeadSha={FEATURE}"),
-                &format!("dev:land: failed featureHeadSha={FEATURE}"),
+                &format!("dev:land: landed featureBranch={FEATURE_BRANCH}"),
+                &format!("dev:land: failed featureBranch={FEATURE_BRANCH}"),
             ),
             complete_incident().replace(
-                &format!("worklog: linked featureHeadSha={FEATURE}"),
-                &format!("worklog: linked featureHeadSha={ORIGIN}"),
+                &format!("worklog: linked featureBranch={FEATURE_BRANCH}"),
+                &format!("worklog: linked featureBranch=codex/other-branch"),
             ),
             complete_incident().replace("status: done", "status: done-ish"),
         ] {
@@ -353,7 +380,7 @@ mod tests {
     fn obsolete_retirement_uses_exact_promotion_and_main_sha_evidence() -> crate::HiveResult<()> {
         let check = check()?;
         let incident = format!(
-            "originMainSha: {ORIGIN}\npinnedLocalDevSha: {PINNED}\nfeatureHeadSha: {FEATURE}\ndev:land: already-present featureHeadSha={FEATURE} localDevSha={LOCAL_DEV}\ndev:promote: fast-forward testedDevSha={LOCAL_DEV} mainSha={LOCAL_DEV}\nmain: success headSha={LOCAL_DEV}\n"
+            "originMainSha: {ORIGIN}\npinnedLocalDevSha: {PINNED}\nfeatureBranch: {FEATURE_BRANCH}\ndev:land: already-present featureBranch={FEATURE_BRANCH} localDevSha={LOCAL_DEV}\ndev:promote: fast-forward testedDevSha={LOCAL_DEV} mainSha={LOCAL_DEV}\nmain: success headSha={LOCAL_DEV}\n"
         );
         let evidence = check.parse_main_promotion_incident(&incident)?;
         assert_eq!(
@@ -370,7 +397,7 @@ mod tests {
     fn promotion_rejects_a_different_tested_or_main_sha() -> crate::HiveResult<()> {
         let check = check()?;
         let incident = format!(
-            "originMainSha: {ORIGIN}\npinnedLocalDevSha: {PINNED}\nfeatureHeadSha: {FEATURE}\ndev:land: landed featureHeadSha={FEATURE} localDevSha={LOCAL_DEV}\ndev:promote: fast-forward testedDevSha={FEATURE} mainSha={MAIN}\nmain: success headSha={MAIN}\n"
+            "originMainSha: {ORIGIN}\npinnedLocalDevSha: {PINNED}\nfeatureBranch: {FEATURE_BRANCH}\ndev:land: landed featureBranch={FEATURE_BRANCH} localDevSha={LOCAL_DEV}\ndev:promote: fast-forward testedDevSha={MAIN} mainSha={MAIN}\nmain: success headSha={MAIN}\n"
         );
         assert!(check.parse_main_promotion_incident(&incident).is_err());
         Ok(())

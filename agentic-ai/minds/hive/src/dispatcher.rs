@@ -40,8 +40,8 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
 use crate::model::{
-    ActiveDelivery, ActiveDeliveryQuery, BootstrapEvidence, EnqueueTask, GitSha, TaskId, TaskKind,
-    TaskTrigger,
+    ActiveDelivery, ActiveDeliveryQuery, BootstrapEvidence, EnqueueTask, FeatureBranch, GitSha,
+    TaskId, TaskKind, TaskTrigger,
 };
 use crate::store::TaskStore;
 
@@ -443,8 +443,27 @@ impl WorkbenchIncidentText<'_> {
         Ok(BootstrapEvidence {
             origin_main_sha: parse("originMainSha")?,
             pinned_local_dev_sha: parse("pinnedLocalDevSha")?,
-            feature_head_sha: parse("featureHeadSha")?,
+            feature_branch: self.feature_branch()?,
         })
+    }
+
+    fn feature_branch(&self) -> crate::HiveResult<FeatureBranch> {
+        let mut values = self.value.lines().filter_map(|line| {
+            let line = line.trim().strip_prefix("- ").unwrap_or_else(|| line.trim());
+            ["featureBranch:", "feature_branch:", "branch:"]
+                .into_iter()
+                .find_map(|prefix| line.strip_prefix(prefix).map(str::trim))
+                .filter(|value| !value.is_empty())
+        });
+        let value = values
+            .next()
+            .ok_or_else(|| crate::HiveError::message("incident is missing featureBranch"))?;
+        if values.next().is_some() {
+            return Err(crate::HiveError::message(
+                "incident declares featureBranch more than once",
+            ));
+        }
+        Ok(FeatureBranch::try_from(value)?)
     }
 }
 
@@ -507,7 +526,8 @@ mod tests {
 
     use crate::model::{
         ActiveDelivery, ActiveDeliveryQuery, AgentId, CancellationTarget, ClaimOutcome,
-        BootstrapEvidence, ClaimedTask, Completion, EnqueueTask, GitSha, LeaseToken, TaskId,
+        BootstrapEvidence, ClaimedTask, Completion, EnqueueTask, FeatureBranch, GitSha, LeaseToken,
+        TaskId,
     };
     use crate::store::TaskStore;
 
@@ -522,8 +542,8 @@ mod tests {
                 .expect("fixture SHA is valid"),
             pinned_local_dev_sha: GitSha::try_from("123456789abcdef0123456789abcdef012345678")
                 .expect("fixture SHA is valid"),
-            feature_head_sha: GitSha::try_from("23456789abcdef0123456789abcdef0123456789")
-                .expect("fixture SHA is valid"),
+            feature_branch: FeatureBranch::try_from("codex/repair-cache")
+                .expect("fixture branch is valid"),
         }
     }
 
@@ -689,7 +709,7 @@ mod tests {
         let evidence_text = WorkbenchIncidentText {
             value: "originMainSha: 0123456789abcdef0123456789abcdef01234567\n\
                      pinnedLocalDevSha: 123456789abcdef0123456789abcdef012345678\n\
-                     featureHeadSha: 23456789abcdef0123456789abcdef0123456789",
+                     featureBranch: codex/repair-cache",
         };
         assert_eq!(evidence_text.bootstrap_evidence()?, bootstrap_evidence());
         assert!(WorkbenchIncidentText { value: "issue" }
