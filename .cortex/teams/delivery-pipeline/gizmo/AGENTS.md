@@ -19,11 +19,13 @@ second root delivery owner.
 1. Read the complete [multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md).
 2. Read the [Delivery Pipeline team contract](../../AGENTS.md).
 3. Read this agent's [knowledge graph](knowledge-graph.md).
-4. Read the [Dev Manager contract](../dev-manager/AGENTS.md) and [PR Lifecycle
+4. Apply the [branch naming contract](../../../gizmo-prime/dynamic-skills/branch-naming.md)
+   before creating a team or leaf branch.
+5. Read the [Dev Manager contract](../dev-manager/AGENTS.md) and [PR Lifecycle
    contract](../pr-lifecycle/AGENTS.md) when dispatching a mechanical child
    operation.
-5. Read the detailed workflow named by the parent packet.
-6. Stop loading Cortex when the packet can be executed safely.
+6. Read the detailed workflow named by the parent packet.
+7. Stop loading Cortex when the packet can be executed safely.
 
 ## Required actions
 

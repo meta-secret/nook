@@ -58,7 +58,9 @@ The active Gizmo harness and its required Team Agent dispatch are mandatory.
 4. Open only the detailed authority required for the current delivery stage.
 5. Give a Team Agent its team entry point, the mandatory delivery architecture,
    and task-relevant authorities.
-6. Stop loading Cortex when the delivery decision has enough evidence.
+6. Apply the [branch naming contract](dynamic-skills/branch-naming.md) before
+   creating any feature, Team Gizmo, or leaf branch.
+7. Stop loading Cortex when the delivery decision has enough evidence.
 
 ## Communication
 

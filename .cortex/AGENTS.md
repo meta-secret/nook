@@ -93,6 +93,8 @@ detailed authorization, evidence, and failure rules.
 - [Gizmo Prime](gizmo-prime/AGENTS.md) owns mission planning, delegation,
   feature-branch sequencing, feature review and acceptance, local landing
   requests, and feature Workbench state.
+  - New Prime, Team Gizmo, and leaf branches follow the [branch naming
+    contract](gizmo-prime/dynamic-skills/branch-naming.md).
 - [Delivery Pipeline](teams/delivery-pipeline/AGENTS.md) owns authorized
   delivery mechanics across CI, pull-request lifecycle, dev publication,
   workflow execution, local landing, evidence, and guarded promotion. Its

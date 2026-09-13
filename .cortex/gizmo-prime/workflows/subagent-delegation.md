@@ -28,6 +28,8 @@ Prime-to-Team-Gizmo dispatch chain.
 ## Rules
 
 - Follow [dev delivery](../architecture/dev-delivery.md) for stage boundaries.
+- Apply the [branch naming contract](../dynamic-skills/branch-naming.md) to
+  every new Prime, Team Gizmo, and leaf branch.
 - Author tests without executing them in the feature stage.
 - Local feedback is limited to scoped rustfmt and bounded TS diagnostics.
 - Delivery Pipeline Team Gizmo requests remote build-only execution through
@@ -72,8 +74,14 @@ Prime-to-Team-Gizmo dispatch chain.
   parent integration commits.
 - Every writer commits its complete scoped iteration during its Gizmo-granted
   commit turn.
+- Team Gizmo verifies that each child delta is non-empty before integration.
+- A no-op child returns evidence and is cleaned up without a commit.
 - Gizmo verifies each child commit and integrates it into the parent feature
   worktree through the guarded module integrator.
+- Prefer `git merge --ff-only` when the feature frontier has not moved.
+- Otherwise cherry-pick only non-empty leaf commits without merge commits.
+- After verified integration, remove the child worktree and delete its local
+  child branch.
 - Do not copy, replay, or synthesize a worker commit into an unrelated branch.
 - Gizmo Prime owns feature sequencing, review, acceptance, and landing
   requests. Team Gizmo owns only its team's mechanics and evidence synthesis.

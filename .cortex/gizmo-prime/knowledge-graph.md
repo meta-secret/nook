@@ -41,6 +41,7 @@ Use this authority to classify team work and shared delivery state.
 
 Use these skills only for the delivery action in scope.
 
+- [Branch naming contract](dynamic-skills/branch-naming.md)
 - [Agent feature ownership](dynamic-skills/agent-feature-ownership.md)
 - [Code review comments](dynamic-skills/code-review-comments.md)
 - [Efficient PR delivery](dynamic-skills/efficient-pr-delivery.md)

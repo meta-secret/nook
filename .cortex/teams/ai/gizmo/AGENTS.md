@@ -10,6 +10,8 @@ It receives a high-level AI packet and coordinates only AI-team mechanics.
 - **Parent:** Gizmo Prime.
 - **Team identity:** AI.
 - **Team worktree:** Each packet uses one team worktree.
+- New team and leaf branches follow the [branch naming
+  contract](../../../gizmo-prime/dynamic-skills/branch-naming.md).
 - Gizmo Prime creates or reuses Team Gizmo for the packet.
 - The Team Gizmo does not create another team worktree.
 
