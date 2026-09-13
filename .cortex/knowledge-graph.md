@@ -21,6 +21,14 @@ worktree. Prime reuses a compatible existing Team Agent before spawning.
 Otherwise it issues separate child worktrees for required specialists. Team
 Gizmo integrates specialist commits into its feature branch.
 
+Active harness admission is dynamic. Gizmo immediately attempts every
+dependency-ready Team Gizmo with a disjoint scope concurrently and uses the
+actual admission result. A temporary admission refusal queues work for retry when capacity
+releases. A host or session allocation is current availability, not an
+architecture or product limit. A dispatch wave is not pre-checked or budgeted
+against a numeric limit. Cortex and Loom never encode, infer, or repeat a fixed
+numeric agent or subagent concurrency cap.
+
 Current specialist routing includes SRE (`teams/sre/provisioning/` and
 `teams/sre/cloud-native/`), Development Core
 (`teams/dev-core/rust-core-developer/` and

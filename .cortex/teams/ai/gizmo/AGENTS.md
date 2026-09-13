@@ -21,7 +21,10 @@ It receives a high-level AI packet and coordinates only AI-team mechanics.
 - Preserve the packet's controller, bounded scope, branch, source state, and acceptance evidence.
 - Dispatch the Loom and Cortex specialists through the active harness.
 - Give each specialist a separate issued child worktree.
-- Run disjoint specialists in parallel when they have no unresolved dependency.
+- Immediately attempt every dependency-ready specialist with a disjoint scope
+  concurrently and use the active harness's actual admission result.
+- Queue temporary admission refusals as backpressure and retry when capacity
+  releases.
 - Run overlapping or dependent specialists in the required order.
 - Verify each specialist's complete commit.
 - Integrate specialist commits into the feature branch.
@@ -32,6 +35,10 @@ It receives a high-level AI packet and coordinates only AI-team mechanics.
 ## Prohibited actions
 
 - Do not expand the packet beyond AI-team mechanics.
+- Never encode, infer, or repeat a fixed numeric agent or subagent concurrency
+  cap. Do not pre-check or budget a dispatch wave against a numeric limit. A
+  host or session allocation is current availability, not an architecture or
+  product limit.
 - Do not replace the active harness with an ordinary task, thread, or external agent.
 - Team Gizmo never creates or updates pull requests.
 - Team Gizmo never decides readiness, promotion, or final delivery.

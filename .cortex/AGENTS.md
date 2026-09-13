@@ -175,6 +175,22 @@ serialized-integration rules remain in force. The session-level generic safety
 guard is not repository policy; it does not alter this required subagent model
 or relax any repository scope, ownership, or handoff rule.
 
+The active harness owns dynamic admission capacity and actual spawn results.
+
+- Gizmo immediately attempts every dependency-ready Team Gizmo with a
+  disjoint scope concurrently. It uses the active harness's current admission
+  result.
+- A Team Gizmo immediately attempts every dependency-ready Team Agent with a
+  disjoint scope concurrently. It uses the active harness's current admission
+  result.
+- A temporary admission refusal queues the task as backpressure. Gizmo retries
+  it when the harness reports released capacity.
+- A host or session allocation describes current availability. It is not an
+  architecture or product limit.
+- Gizmo does not pre-check or budget a dispatch wave against a numeric limit.
+- Cortex never encodes, infers, or repeats a fixed numeric agent or subagent
+  concurrency cap.
+
 ### Required actions
 
 - **Delegation boundary**

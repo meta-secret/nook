@@ -125,6 +125,14 @@ SHA evidence and blockers, and reports the high-level result to Prime. It does
 not make functional ownership, readiness, promotion, or final delivery
 decisions.
 
+The active harness owns admission and actual spawn results. Prime immediately
+attempts every dependency-ready Team Gizmo with a disjoint scope concurrently. A temporary
+admission refusal queues the work for retry when capacity releases. Host or
+session allocation is current availability, not an architecture or product
+limit. Prime does not pre-check or budget a dispatch wave against a numeric
+limit. Prime and its Team Gizmos never encode, infer, or repeat a fixed numeric
+agent or subagent concurrency cap.
+
 Each Team Agent task has exactly one team identity, bounded file scope, and named
 acceptance evidence.
 

@@ -55,6 +55,15 @@ This card is the single canonical generic Cortex writing policy.
 - A separate AI task is required only when AI-owned routing, tooling, or Cortex
   governance must change.
 
+Capacity language follows the active harness.
+
+- Never encode, infer, or repeat a fixed numeric agent or subagent concurrency
+  cap in Cortex authoring.
+- Refer to capacity reported by the active harness.
+- Do not pre-check or budget a dispatch wave against a numeric limit.
+- Treat host or session allocation as current availability, not an architecture
+  or product limit.
+
 ## Problem Pattern
 
 A writer packs many constraints, identities, failure modes, and commands into

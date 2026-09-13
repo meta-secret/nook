@@ -20,6 +20,14 @@ The root [team worker contract](../../AGENTS.md#team-worker-contract) supplies
 universal requirements. This entry point adds only AI ownership and context
 selection.
 
+AI dispatch follows active-harness admission. Immediately attempt every
+dependency-ready specialist with a disjoint scope and use the actual admission
+result concurrently. Queue temporary refusals for retry when capacity releases. A host or
+session allocation is current availability, not an architecture or product
+limit. Do not pre-check or budget a wave against a numeric limit. Cortex and
+Loom never encode, infer, or repeat a fixed numeric agent or subagent
+concurrency cap.
+
 An exact AI authority may require a foreign-team engineering skill. Load that
 skill read-only. An expertise provider is required only when the foreign team
 will implement named files.

@@ -60,7 +60,13 @@ Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning. It requests Fas
 mode with `service_tier: fast`, which resolves as `priority`. Each leaf receives
 a separate issued child worktree. A Team Gizmo may dispatch disjoint specialists
 in parallel, integrates their committed results into its feature branch, and
-reports high-level evidence or blockers to Prime.
+reports high-level evidence or blockers to Prime. Prime immediately attempts
+every dependency-ready Team Gizmo with a disjoint scope concurrently and uses the active
+harness's actual admission result. A temporary admission refusal queues the
+work for retry when capacity releases. A host or session allocation is current
+availability, not an architecture or product limit. No dispatch wave is
+pre-checked or budgeted against a numeric limit. No fixed numeric agent or
+subagent concurrency cap is encoded, inferred, or repeated.
 
 - **AI**
   - Team Gizmo: `teams/ai/gizmo`

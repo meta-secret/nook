@@ -90,6 +90,30 @@ Level 1 delivery-pipeline orchestration, commit handoffs, and remote
 build-only task packets. Its `pr-lifecycle` agent handles only packetized
 external GitHub, PR, check, review, status, and bounded dev mechanics.
 
+## Dynamic harness capacity
+
+The active harness owns admission capacity for Team Gizmo and Team Agent
+dispatch.
+
+### Required actions
+
+- Immediately attempt every dependency-ready Team Gizmo with a disjoint scope
+  concurrently. Use the active harness's current capacity and actual admission
+  result.
+- Within each Team Gizmo, immediately attempt every dependency-ready Team Agent
+  with a disjoint scope concurrently. Use the active harness's current
+  capacity and actual admission result.
+- Treat a temporary admission refusal as backpressure. Queue the task and
+  retry it when the harness reports released capacity.
+- Treat a host or session allocation as current availability. It is not an
+  architecture or product limit.
+- Do not pre-check or budget a dispatch wave against a numeric limit.
+
+### Prohibited actions
+
+- Never encode, infer, or repeat a fixed numeric agent or subagent concurrency
+  cap in Cortex, Loom, or delivery policy.
+
 ## Delivery overview
 
 ```mermaid

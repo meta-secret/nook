@@ -65,3 +65,11 @@ Use these workflows for AI-owned skills and cross-package changes.
 - [AI Team Gizmo](gizmo/knowledge-graph.md) coordinates bounded AI-team mechanics.
 - [Loom specialist](loom-specialist/knowledge-graph.md) handles packeted AI-owned Loom work.
 - [Cortex specialist](cortex-specialist/knowledge-graph.md) handles packeted AI-owned Cortex work.
+
+AI dispatch uses actual admission results from the active harness. Every
+dependency-ready disjoint specialist is attempted immediately and concurrently. Temporary
+admission refusals queue for retry when capacity releases. Host or session
+allocation is current availability, not an architecture or product limit. A
+dispatch wave is not pre-checked or budgeted against a numeric limit. Fixed
+numeric agent or subagent concurrency caps are never encoded, inferred, or
+repeated.

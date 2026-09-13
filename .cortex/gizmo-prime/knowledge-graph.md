@@ -15,11 +15,15 @@ Prime creates or reuses each compatible Team Gizmo, gives it one team worktree,
 and receives its high-level evidence or blockers. Each leaf Team Agent uses
 `gpt-5.6-luna` with `xhigh` reasoning. It requests Fast mode with
 `service_tier: fast`, which resolves as `priority`. Each leaf receives a separate
-issued child worktree. Gizmo Prime dispatches all dependency-ready Team Gizmos with disjoint
-scopes in parallel, subject only to dependency edges and active harness
-capacity. A Team Gizmo may run disjoint specialists in parallel, integrates
-their committed results into the feature branch, and never creates or updates
-pull requests.
+issued child worktree. Gizmo Prime immediately attempts every dependency-ready
+Team Gizmo with a disjoint scope and uses the active harness's actual admission
+result. A temporary admission refusal queues work for retry when capacity
+releases. A host or session allocation is current availability, not an
+architecture or product limit. This graph and its linked authorities never
+pre-check or budget a wave against a numeric limit, or encode, infer, or repeat
+a fixed numeric agent or subagent concurrency cap. A Team Gizmo may run
+disjoint specialists concurrently, integrates their committed results into the
+feature branch, and never creates or updates pull requests.
 
 - [AI Team Gizmo](../teams/ai/gizmo/knowledge-graph.md)
 - [Development Core Team Gizmo](../teams/dev-core/gizmo/knowledge-graph.md)

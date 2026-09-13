@@ -56,6 +56,15 @@ Prime-to-Team-Gizmo dispatch chain.
 - Workers must not create child worktrees or choose a different child path.
 - Run dependency-ready write-capable Team Agents in parallel when their
   explicit file scopes are disjoint.
+- Immediately attempt every dependency-ready Team Gizmo with a disjoint scope
+  concurrently and use the active harness's actual admission result.
+- If admission is temporarily refused, queue the task as backpressure and retry
+  it when capacity releases.
+- Treat host or session allocation as current availability, not an architecture
+  or product limit.
+- Do not pre-check or budget a dispatch wave against a numeric limit.
+- Never encode, infer, or repeat a fixed numeric agent or subagent concurrency
+  cap.
 - Order writers whose scopes overlap or whose tasks have a dependency edge.
 - Inventory and attribute dirty paths and hunks before dispatch.
 - Block a proposed scope that overlaps pre-existing user or foreign changes.

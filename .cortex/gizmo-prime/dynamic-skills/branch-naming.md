@@ -83,12 +83,18 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 
 ## Dispatch and follow-up
 
-- Prime dispatches dependency-ready Team Gizmos with disjoint scopes in parallel,
-  subject to harness capacity.
+- Prime dispatches every dependency-ready Team Gizmo with a disjoint scope
+  concurrently and uses the active harness's actual admission result.
+- A temporary admission refusal queues the task for retry when capacity releases.
+- A host or session allocation is current availability, not an architecture or
+  product limit.
+- Do not pre-check or budget a dispatch wave against a numeric limit.
+- Never encode, infer, or repeat a fixed numeric agent or subagent concurrency
+  cap.
 - A follow-up user message does not stop Team Gizmos or leaf agents that are
   already delegated.
-- Prime routes additions concurrently, subject to dependencies and harness
-  capacity.
+- Prime routes additions concurrently when dependencies are ready and scopes are
+  disjoint.
 - Prime remains the user-facing mission coordinator and root, not a subagent.
 
 Follow [Team Agent Delegation](../workflows/subagent-delegation.md) for packet,
