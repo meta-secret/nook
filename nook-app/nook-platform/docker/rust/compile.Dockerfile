@@ -223,7 +223,7 @@ RUN --network=default cargo fetch --locked
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo build --locked --release -p hive \
-      --features observer-contract-export --bins \
+      --features observer-contract-export --lib \
     && nook-sccache-report compile-hive-dependencies
 
 FROM compile-minds-dependencies AS compile-minds-source
@@ -296,8 +296,8 @@ COPY --from=compile-wasm-source /opt/nook/wasm-handoff /tmp/nook-wasm-handoff
 RUN mkdir -p \
       nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
       nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm \
-    && find /tmp/nook-wasm-handoff -mindepth 1 -maxdepth 1 ! -name nook-companion-wasm \
-      -exec cp -a {} nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/ \; \
+    && cp -a /tmp/nook-wasm-handoff/nook-wasm/. \
+      nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/ \
     && cp -a /tmp/nook-wasm-handoff/nook-companion-wasm/. \
       nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/ \
     && rm -rf /tmp/nook-wasm-handoff
