@@ -100,9 +100,7 @@ export class PrStewardChecksReader implements PrStewardCompletionReader {
     )
       throw new PrStewardGithubUnavailableError({ cause: false });
     try {
-      const parsed = UntrustedYamlBoundary.fromHost(
-        JSON.parse(result.stdout) as UntrustedYamlNode,
-      );
+      const parsed = UntrustedYamlBoundary.fromHost(JSON.parse(result.stdout));
       const envelope = this.#object(parsed);
       const errors = UntrustedYamlBoundary.property({
         record: envelope,
@@ -133,10 +131,13 @@ export class PrStewardChecksReader implements PrStewardCompletionReader {
       const headSha = PrStewardNdjsonCodec.headSha(head);
       const commits = this.#object(this.#field({ record: pr, key: 'commits' }));
       const nodes = this.#field({ record: commits, key: 'nodes' });
-      if (!Array.isArray(nodes) || nodes.length !== 1)
+      if (!UntrustedYamlBoundary.isList(nodes) || nodes.length !== 1)
+        throw new PrStewardGithubUnavailableError({ cause: false });
+      const firstNode = nodes[0];
+      if (!firstNode)
         throw new PrStewardGithubUnavailableError({ cause: false });
       const commit = this.#object(
-        this.#field({ record: this.#object(nodes[0]!), key: 'commit' }),
+        this.#field({ record: this.#object(firstNode), key: 'commit' }),
       );
       if (this.#field({ record: commit, key: 'oid' }) !== headSha)
         throw new PrStewardGithubUnavailableError({ cause: false });
@@ -217,7 +218,7 @@ export class PrStewardChecksReader implements PrStewardCompletionReader {
       typeof expected !== 'number' ||
       !Number.isSafeInteger(expected) ||
       expected < 0 ||
-      !Array.isArray(groups)
+      !UntrustedYamlBoundary.isList(groups)
     )
       throw new PrStewardGithubUnavailableError({ cause: false });
     let total = 0;

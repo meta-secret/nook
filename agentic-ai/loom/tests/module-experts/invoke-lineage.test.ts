@@ -14,6 +14,8 @@ import { expect, test } from 'bun:test';
 
 import { AgentAttemptEventKind } from '../../src/agent-workflow/agent-events.ts';
 
+import { AgentAttemptTransport } from '../../src/agent-workflow/attempt-codec.ts';
+
 import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
@@ -298,9 +300,11 @@ export class ModuleExpertsInvokeLineageScenario {
     const eventsPath = join(attemptDirectory, 'events.jsonl');
     const resultPath = join(attemptDirectory, 'result.json');
     const viewPath = join(attemptDirectory, 'view.md');
-    const originalTerminal = JSON.parse(
+    const originalTerminal = AgentAttemptTransport.decodeTerminal(
       await readFile(resultPath, 'utf8'),
-    ) as CompletedTaskTerminal<string>;
+    );
+    if (originalTerminal.kind !== TaskTerminalKind.Completed)
+      throw new Error('Expected a completed parent terminal.');
     const output: ModuleDevelopmentPlanTaskOutput = {
       ...ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput([
         ModuleExpertsInvokeLineageScenario.authorization(args.request),
@@ -319,7 +323,7 @@ export class ModuleExpertsInvokeLineageScenario {
     const events = (await readFile(eventsPath, 'utf8'))
       .trim()
       .split('\n')
-      .map((line) => JSON.parse(line) as AgentAttemptEvent);
+      .map((line) => AgentAttemptTransport.decodeEvent(line));
     const rewrittenEvents = events.map((event): AgentAttemptEvent => {
       if (event.kind === AgentAttemptEventKind.ResultProjected) {
         return { ...event, result: { ...event.result, sha256: resultHash } };
@@ -917,7 +921,7 @@ test('rejects depth-three evidence whose event provenance was downgraded', async
     const events = (await readFile(eventsPath, 'utf8'))
       .trim()
       .split('\n')
-      .map((line) => JSON.parse(line) as AgentAttemptEvent);
+      .map((line) => AgentAttemptTransport.decodeEvent(line));
     const downgradedEvents = events.map((event) => ({
       ...event,
       adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,

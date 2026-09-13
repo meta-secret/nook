@@ -85,8 +85,8 @@ export class StructuralResultCodec {
   static decode<T>(request: ParseStructuralRequest<T>): T {
     const result = request.schema.safeParse(request.input);
     if (result.success) return result.data;
-    throw new Error(
-      `Invalid workflow structured result: ${result.error.issues.length > 0 ? result.error.issues[0]!.message : missingFields}.`,
-    );
+    for (const issue of result.error.issues)
+      throw new Error(`Invalid workflow structured result: ${issue.message}.`);
+    throw new Error(`Invalid workflow structured result: ${missingFields}.`);
   }
 }

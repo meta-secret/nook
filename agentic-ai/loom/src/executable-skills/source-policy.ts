@@ -521,7 +521,7 @@ export class ExecutableSkillSource {
     }
     const symbol = request.checker.getSymbolAtLocation(node);
     return !symbol?.declarations?.some(
-      (declaration) => declaration === (node.parent as ts.Declaration),
+      (declaration) => declaration === node.parent,
     );
   }
 

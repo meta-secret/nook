@@ -20,6 +20,10 @@ const oldEndpoint = "10.244.0.7/32";
 const newEndpoint = "10.244.0.9/32";
 const serviceCidr = "10.96.87.23/32";
 
+function assertValue<T>(value: T, label: string): asserts value is NonNullable<T> {
+  if (!value) throw new Error(`${label} is missing`);
+}
+
 function policy(): NetworkPolicy {
   return {
     metadata: { resourceVersion: "10" },
@@ -52,35 +56,39 @@ class MockApi implements KubernetesApi {
   readyEndpoint = true;
   conflictOnce = true;
 
-  async json<T>(input: ApiJsonRequest<T>): Promise<T> {
+  json<T>(input: ApiJsonRequest<T>): Promise<T> {
     if (input.path.endsWith("/services/hive-neo4j")) {
-      return input.decode(
+      return Promise.resolve(input.decode(
         JSON.stringify({ spec: { clusterIP: serviceCidr.replace("/32", "") } }),
-      );
+      ));
     }
     if (input.path.endsWith("/endpoints/hive-neo4j")) {
       const addresses = this.readyEndpoint
         ? [{ ip: newEndpoint.replace("/32", "") }]
         : [];
-      return input.decode(JSON.stringify({ subsets: [{ addresses }] }));
+      return Promise.resolve(input.decode(JSON.stringify({ subsets: [{ addresses }] })));
     }
     const [policyName = ""] = [input.path.split("/").at(-1)];
     this.policyReads += 1;
     if (!this.policies.has(policyName)) {
       throw new Error(`unexpected API path: ${input.path}`);
     }
-    const stored = structuredClone(this.policies.get(policyName)!);
+    const existing = this.policies.get(policyName);
+    assertValue(existing, `policy ${policyName}`);
+    const stored = structuredClone(existing);
     if (this.policyReads === 2) {
       stored.metadata.resourceVersion = "11";
-      stored.spec.egress[0].to = [
+      const [firstEgress] = stored.spec.egress;
+      assertValue(firstEgress, "first egress rule");
+      firstEgress.to = [
         { namespaceSelector: { matchLabels: { role: "updated-data" } } },
       ];
       this.policies.set(policyName, structuredClone(stored));
     }
-    return input.decode(JSON.stringify(stored));
+    return Promise.resolve(input.decode(JSON.stringify(stored)));
   }
 
-  async request(input: ApiRequest): Promise<string> {
+  request(input: ApiRequest): Promise<string> {
     this.patches.push(structuredClone(input));
     if (
       this.conflictOnce &&
@@ -89,7 +97,7 @@ class MockApi implements KubernetesApi {
       this.conflictOnce = false;
       throw new KubernetesApiError(409);
     }
-    return "{}";
+    return Promise.resolve("{}");
   }
 }
 
@@ -113,27 +121,47 @@ test("reconciles service and endpoint CIDRs without losing concurrent policy edi
   await controller.reconcileNeo4jPolicy();
 
   expect(api.patches).toHaveLength(4);
-  const worker = api.patches[1].payload!;
-  expect(api.patches[0].payload?.metadata.resourceVersion).toBe("10");
+  const workerPatch = api.patches[1];
+  assertValue(workerPatch, "worker patch");
+  const worker = workerPatch.payload;
+  assertValue(worker, "worker payload");
+  const initialPatch = api.patches[0];
+  assertValue(initialPatch, "initial patch");
+  const initialPayload = initialPatch.payload;
+  assertValue(initialPayload, "initial payload");
+  expect(initialPayload.metadata.resourceVersion).toBe("10");
   expect(worker.metadata.resourceVersion).toBe("11");
-  expect(worker.spec.egress[0].to).toEqual([
+  const workerEgress = worker.spec.egress[0];
+  assertValue(workerEgress, "worker egress rule");
+  expect(workerEgress.to).toEqual([
     { namespaceSelector: { matchLabels: { role: "updated-data" } } },
   ]);
   expect(cidrs(worker)).toEqual([serviceCidr, newEndpoint]);
-  expect(api.patches[2].path).toEndWith(
+  const dispatcherPatch = api.patches[2];
+  assertValue(dispatcherPatch, "dispatcher patch");
+  const dispatcherPayload = dispatcherPatch.payload;
+  assertValue(dispatcherPayload, "dispatcher payload");
+  expect(dispatcherPatch.path).toEndWith(
     "/networkpolicies/hive-dispatcher-reaper",
   );
-  expect(cidrs(api.patches[2].payload!)).toEqual([serviceCidr, newEndpoint]);
-  expect(api.patches[3].path).toEndWith(
+  expect(cidrs(dispatcherPayload)).toEqual([serviceCidr, newEndpoint]);
+  const observerPatch = api.patches[3];
+  assertValue(observerPatch, "observer patch");
+  const observerPayload = observerPatch.payload;
+  assertValue(observerPayload, "observer payload");
+  expect(observerPatch.path).toEndWith(
     "/networkpolicies/hive-observer-egress",
   );
-  expect(cidrs(api.patches[3].payload!)).toEqual([serviceCidr, newEndpoint]);
+  expect(cidrs(observerPayload)).toEqual([serviceCidr, newEndpoint]);
 
   for (const request of api.patches.slice(1)) {
-    const name = request.path.split("/").at(-1)!;
+    const [name] = request.path.split("/").slice(-1);
+    assertValue(name, "policy name");
+    const requestPayload = request.payload;
+    assertValue(requestPayload, "request payload");
     const stored: NetworkPolicy = {
       metadata: { resourceVersion: "12" },
-      spec: structuredClone(request.payload!.spec),
+      spec: structuredClone(requestPayload.spec),
     };
     api.policies.set(name, stored);
   }
@@ -142,7 +170,11 @@ test("reconciles service and endpoint CIDRs without losing concurrent policy edi
   api.patches.length = 0;
   await controller.reconcileNeo4jPolicy();
   expect(api.patches).toHaveLength(3);
-  expect(cidrs(api.patches[0].payload!)).toEqual([serviceCidr]);
+  const finalPatch = api.patches[0];
+  assertValue(finalPatch, "final patch");
+  const finalPayload = finalPatch.payload;
+  assertValue(finalPayload, "final payload");
+  expect(cidrs(finalPayload)).toEqual([serviceCidr]);
 });
 
 enum ReapReadResult {
@@ -174,7 +206,7 @@ class ReapApi implements KubernetesApi {
     this.initialRead = input.initialRead;
   }
 
-  async json<T>(input: ApiJsonRequest<T>): Promise<T> {
+  json<T>(input: ApiJsonRequest<T>): Promise<T> {
     const { decode, ...request } = input;
     this.requests.push(structuredClone(request));
     if (this.initialRead === ReapReadResult.Missing) {
@@ -184,17 +216,17 @@ class ReapApi implements KubernetesApi {
       throw new KubernetesApiError(500);
     }
     const name = this.initialRead === ReapReadResult.Hive ? "hive" : "not-hive";
-    return decode(
+    return Promise.resolve(decode(
       JSON.stringify({
         metadata: { labels: { "app.kubernetes.io/name": name } },
       }),
-    );
+    ));
   }
 
   async request(input: ApiRequest): Promise<string> {
     this.requests.push(structuredClone(input));
     if (input.method === ApiMethod.Delete) {
-      return "{}";
+      return Promise.resolve("{}");
     }
     this.pollCount += 1;
     if (this.deletionResult === DeletionResult.Missing) {
@@ -203,7 +235,7 @@ class ReapApi implements KubernetesApi {
     if (this.deletionResult === DeletionResult.Error) {
       throw new KubernetesApiError(500);
     }
-    return "{}";
+    return Promise.resolve("{}");
   }
 }
 
@@ -217,8 +249,9 @@ function reaperController(input: {
   const options: ReaperControllerOptions = {
     api: input.api,
     pollAttempts,
-    sleep: async (milliseconds) => {
+    sleep: (milliseconds) => {
       sleeps.push(milliseconds);
+      return Promise.resolve();
     },
   };
   return new ReaperController(options);
@@ -231,7 +264,7 @@ function reaperHandler(input: {
   const [expectedToken = "secret-token"] = [input.expectedToken];
   const options: ReaperRequestHandlerOptions = {
     controller: input.controller,
-    readExpectedToken: async () => expectedToken,
+    readExpectedToken: () => Promise.resolve(expectedToken),
   };
   return createReaperRequestHandler(options);
 }
@@ -344,7 +377,13 @@ test("a prepared policy patch cannot be applied twice through an alias", async (
   if (preparation.kind !== Neo4jPolicyPreparationKind.Prepared) return;
   const alias = preparation.patch;
   await preparation.patch.apply();
-  await expect(alias.apply()).rejects.toBeInstanceOf(ConsumedNeo4jPolicyPatch);
+  let aliasError: unknown;
+  try {
+    await alias.apply();
+  } catch (error) {
+    aliasError = error;
+  }
+  expect(aliasError).toBeInstanceOf(ConsumedNeo4jPolicyPatch);
   expect(api.patches).toHaveLength(1);
 });
 
@@ -363,10 +402,18 @@ test("policy admission retains its resource version and isolates caller mutation
   expect(preparation.kind).toBe(Neo4jPolicyPreparationKind.Prepared);
   if (preparation.kind !== Neo4jPolicyPreparationKind.Prepared) return;
   observed.metadata.resourceVersion = "changed-after-admission";
-  destinations[0].ipBlock.cidr = "changed-after-admission";
+  const [destination] = destinations;
+  assertValue(destination, "destination");
+  destination.ipBlock.cidr = "changed-after-admission";
   await preparation.patch.apply();
-  expect(api.patches[0].payload?.metadata.resourceVersion).toBe("10");
-  expect(api.patches[0].payload?.spec.egress[1].to).toEqual([
+  const admittedPatch = api.patches[0];
+  assertValue(admittedPatch, "admitted patch");
+  const admittedPayload = admittedPatch.payload;
+  assertValue(admittedPayload, "admitted payload");
+  expect(admittedPayload.metadata.resourceVersion).toBe("10");
+  const [secondEgress] = admittedPayload.spec.egress.slice(1);
+  assertValue(secondEgress, "second egress rule");
+  expect(secondEgress.to).toEqual([
     { ipBlock: { cidr: newEndpoint } },
   ]);
 });

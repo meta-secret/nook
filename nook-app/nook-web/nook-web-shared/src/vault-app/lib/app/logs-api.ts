@@ -115,8 +115,6 @@ export class AppLogsQueryString {
       case LogLevel.Debug:
       case LogLevel.Trace:
         return value;
-      case undefined:
-        return fallback;
       default:
         return fallback;
     }

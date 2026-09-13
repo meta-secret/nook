@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    Arc, AsyncBufReadExt, AsyncWriteExt, BufReader, Duration, FilePath, HiveContext, Mutex,
+    ObservedTask, ObserverSnapshot, UnixStream, async_trait,
+};
 use serde::{Deserialize, Serialize};
 use std::io;
 use tokio::time as async_time;
@@ -61,60 +64,67 @@ pub struct ObserverCopy {
 impl ObserverCopy {
     pub(super) fn for_locale(locale: &str) -> Self {
         if locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-") {
-            return Self {
-                product_name: "Центр управления Hive".to_owned(),
-                product_description: "Задачи агентов, исполнители и история работы в одном месте"
-                    .to_owned(),
-                overview: "Обзор".to_owned(),
-                workers: "Исполнители".to_owned(),
-                queue: "Очередь".to_owned(),
-                needs_attention: "Требует внимания".to_owned(),
-                recent_activity: "Последние действия".to_owned(),
-                all_tasks: "Все задачи".to_owned(),
-                search_tasks: "Поиск задач".to_owned(),
-                no_tasks: "Задач пока нет".to_owned(),
-                no_tasks_description: "Новые задачи появятся здесь после запуска Hive.".to_owned(),
-                no_search_results: "Ничего не найдено".to_owned(),
-                no_search_results_description: "Измените запрос, чтобы увидеть другие задачи."
-                    .to_owned(),
-                no_attention: "Вмешательство не требуется".to_owned(),
-                no_attention_description: "Заблокированных, устаревших или неудачных задач нет."
-                    .to_owned(),
-                task_details: "Сведения о задаче".to_owned(),
-                trigger: "Источник".to_owned(),
-                source_revision: "Исходная ревизия".to_owned(),
-                current_attempt: "Текущая попытка".to_owned(),
-                dependencies: "Зависимости".to_owned(),
-                timeline: "Ход работы".to_owned(),
-                no_activity: "Агент ещё не записал действий.".to_owned(),
-                no_dependencies: "У этой задачи нет зависимостей.".to_owned(),
-                attempt: "Попытка".to_owned(),
-                last_seen: "Последняя активность".to_owned(),
-                updated: "Обновлено".to_owned(),
-                stale: "Нет связи".to_owned(),
-                healthy: "На связи".to_owned(),
-                idle: "Ожидает".to_owned(),
-                running: "Выполняется".to_owned(),
-                ready: "Готова".to_owned(),
-                blocked: "Заблокирована".to_owned(),
-                failed: "Ошибка".to_owned(),
-                critical: "Критично".to_owned(),
-                warning: "Предупреждение".to_owned(),
-                alert_task_failed: "Все разрешённые попытки завершились ошибкой".to_owned(),
-                alert_dependency_failed: "Задача не запустилась из-за ошибки зависимости"
-                    .to_owned(),
-                alert_dependency_blocked: "Задача ожидает завершения зависимости".to_owned(),
-                alert_activity_stale: "Агент давно не записывал действий".to_owned(),
-                alert_cancellation_stuck: "Отмена не была подтверждена вовремя".to_owned(),
-                cancelling: "Отменяется".to_owned(),
-                cancelled: "Отменена".to_owned(),
-                completed: "Завершена".to_owned(),
-                unavailable: "Hive сейчас недоступен".to_owned(),
-                unavailable_description: "Не удалось получить состояние наблюдателя.".to_owned(),
-                retry_connection: "Повторить".to_owned(),
-                close_details: "Закрыть сведения".to_owned(),
-            };
+            return Self::russian();
         }
+        Self::english()
+    }
+
+    fn russian() -> Self {
+        Self {
+            product_name: "Центр управления Hive".to_owned(),
+            product_description: "Задачи агентов, исполнители и история работы в одном месте"
+                .to_owned(),
+            overview: "Обзор".to_owned(),
+            workers: "Исполнители".to_owned(),
+            queue: "Очередь".to_owned(),
+            needs_attention: "Требует внимания".to_owned(),
+            recent_activity: "Последние действия".to_owned(),
+            all_tasks: "Все задачи".to_owned(),
+            search_tasks: "Поиск задач".to_owned(),
+            no_tasks: "Задач пока нет".to_owned(),
+            no_tasks_description: "Новые задачи появятся здесь после запуска Hive.".to_owned(),
+            no_search_results: "Ничего не найдено".to_owned(),
+            no_search_results_description: "Измените запрос, чтобы увидеть другие задачи."
+                .to_owned(),
+            no_attention: "Вмешательство не требуется".to_owned(),
+            no_attention_description: "Заблокированных, устаревших или неудачных задач нет."
+                .to_owned(),
+            task_details: "Сведения о задаче".to_owned(),
+            trigger: "Источник".to_owned(),
+            source_revision: "Исходная ревизия".to_owned(),
+            current_attempt: "Текущая попытка".to_owned(),
+            dependencies: "Зависимости".to_owned(),
+            timeline: "Ход работы".to_owned(),
+            no_activity: "Агент ещё не записал действий.".to_owned(),
+            no_dependencies: "У этой задачи нет зависимостей.".to_owned(),
+            attempt: "Попытка".to_owned(),
+            last_seen: "Последняя активность".to_owned(),
+            updated: "Обновлено".to_owned(),
+            stale: "Нет связи".to_owned(),
+            healthy: "На связи".to_owned(),
+            idle: "Ожидает".to_owned(),
+            running: "Выполняется".to_owned(),
+            ready: "Готова".to_owned(),
+            blocked: "Заблокирована".to_owned(),
+            failed: "Ошибка".to_owned(),
+            critical: "Критично".to_owned(),
+            warning: "Предупреждение".to_owned(),
+            alert_task_failed: "Все разрешённые попытки завершились ошибкой".to_owned(),
+            alert_dependency_failed: "Задача не запустилась из-за ошибки зависимости".to_owned(),
+            alert_dependency_blocked: "Задача ожидает завершения зависимости".to_owned(),
+            alert_activity_stale: "Агент давно не записывал действий".to_owned(),
+            alert_cancellation_stuck: "Отмена не была подтверждена вовремя".to_owned(),
+            cancelling: "Отменяется".to_owned(),
+            cancelled: "Отменена".to_owned(),
+            completed: "Завершена".to_owned(),
+            unavailable: "Hive сейчас недоступен".to_owned(),
+            unavailable_description: "Не удалось получить состояние наблюдателя.".to_owned(),
+            retry_connection: "Повторить".to_owned(),
+            close_details: "Закрыть сведения".to_owned(),
+        }
+    }
+
+    fn english() -> Self {
         Self {
             product_name: "Hive Control Center".to_owned(),
             product_description: "Agent tasks, workers, and execution history in one place"
@@ -220,6 +230,11 @@ pub struct ObserverCoordinatorStore {
 }
 
 impl ObserverCoordinatorStore {
+    /// Connects to the Hive observer coordinator Unix socket.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the socket cannot be reached or the connection fails.
     pub async fn connect(path: &FilePath) -> crate::HiveResult<Self> {
         let stream = loop {
             match UnixStream::connect(path).await {

@@ -84,10 +84,11 @@ export class ModulePlanFields {
   stringList(key: string): readonly string[] {
     const value = this.value(key);
     if (
-      !Array.isArray(value) ||
+      !UntrustedYamlBoundary.isList(value) ||
       value.length > MAX_MODULE_DELIVERY_STRING_LIST_ENTRIES
     )
       this.fail(`.${key}: expected a bounded string array.`);
+    const strings: string[] = [];
     for (const entry of value) {
       if (
         typeof entry !== 'string' ||
@@ -96,8 +97,9 @@ export class ModulePlanFields {
         ModulePlanFields.hasControlCharacter(entry)
       )
         this.fail(`.${key}: expected bounded non-empty entries.`);
+      strings.push(entry);
     }
-    return value;
+    return strings;
   }
 
   recordField(key: string): UntrustedYamlMap {
@@ -109,14 +111,15 @@ export class ModulePlanFields {
 
   nodeList(key: string): ModulePlanTransportList {
     const value = this.value(key);
-    if (!Array.isArray(value) || value.length === 0)
+    if (!UntrustedYamlBoundary.isList(value) || value.length === 0)
       this.fail(`.${key}: expected a non-empty array.`);
     return value;
   }
 
   list(key: string): ModulePlanTransportList {
     const value = this.value(key);
-    if (!Array.isArray(value)) this.fail(`.${key}: expected an array.`);
+    if (!UntrustedYamlBoundary.isList(value))
+      this.fail(`.${key}: expected an array.`);
     return value;
   }
 

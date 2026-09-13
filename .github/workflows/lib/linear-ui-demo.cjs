@@ -1,6 +1,6 @@
-const crypto = require('node:crypto')
-const fs = require('node:fs/promises')
-const path = require('node:path')
+const crypto = process.getBuiltinModule('node:crypto')
+const fs = process.getBuiltinModule('node:fs/promises')
+const path = process.getBuiltinModule('node:path')
 
 /** @typedef {{ id: string, type: string }} LinearWorkflowState */
 /** @typedef {{ id: string, body: string }} LinearComment */
@@ -30,6 +30,12 @@ const UiDemoIssueTransitionKind = Object.freeze({
 const LINEAR_GRAPHQL_URL = 'https://api.linear.app/graphql'
 const VIDEO_CONTENT_TYPE = 'video/webm'
 
+/** @param {Response} response @returns {Promise<unknown>} */
+async function readJson(response) {
+  const json = /** @type {() => Promise<unknown>} */ (response.json.bind(response))
+  return json()
+}
+
 /** @param {string} repository @param {number} prNumber @returns {string} */
 const issueMarker = (repository, prNumber) =>
   `<!-- nook-ui-demo-pr:${repository}#${prNumber} -->`
@@ -45,13 +51,10 @@ function deterministicIssueId(repository, prNumber) {
     .digest()
     .subarray(0, 16)
 
-  const versionByte = bytes[6]
-  const variantByte = bytes[8]
-  if (versionByte === undefined || variantByte === undefined) {
-    throw new Error('deterministic issue ID digest is too short')
-  }
-  bytes[6] = (versionByte & 0x0f) | 0x40
-  bytes[8] = (variantByte & 0x3f) | 0x80
+  const versionByte = bytes.readUInt8(6)
+  const variantByte = bytes.readUInt8(8)
+  bytes.writeUInt8((versionByte & 0x0f) | 0x40, 6)
+  bytes.writeUInt8((variantByte & 0x3f) | 0x80, 8)
 
   const hex = bytes.toString('hex')
   return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join(
@@ -121,7 +124,7 @@ class LinearApi {
       body: JSON.stringify({ query, variables }),
     })
     /** @type {LinearGraphqlPayload} */
-    const payload = await response.json()
+    const payload = /** @type {LinearGraphqlPayload} */ (await readJson(response))
 
     if (!response.ok || payload.errors?.length) {
       const details = payload.errors?.map(({ message }) => message).join('; ') || response.statusText

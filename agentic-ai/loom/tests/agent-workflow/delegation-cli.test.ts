@@ -167,7 +167,9 @@ describe('delegated agent journal CLI', () => {
       expect(await startProcess.exited).toBe(0);
       const startStdout = await new Response(startProcess.stdout).text();
       const startStderr = await new Response(startProcess.stderr).text();
-      expect(() => JSON.parse(startStdout)).not.toThrow();
+      expect(() => {
+        JSON.parse(startStdout);
+      }).not.toThrow();
       expect(startStdout).not.toContain('gizmo');
       expect(startStderr).toBe(
         ['gizmo', '└─ contract-auditor', '  └─ inspect contract', ''].join(

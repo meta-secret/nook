@@ -18,6 +18,7 @@ import {
   type CortexContractDocument,
   CortexContractDocuments,
 } from '../src/lib/cortex-contracts.ts';
+import type { CortexContractFinding } from '../src/lib/cortex-contracts.ts';
 
 export class CortexContractsScenario {
   private constructor(private readonly request: readonly string[]) {}
@@ -48,7 +49,7 @@ export class CortexContractsScenario {
     };
   }
 
-  static compile(content: string) {
+  static compile(content: string): readonly CortexContractFinding[] {
     const documents: readonly CortexContractDocument[] = [
       { relativePath: AUTHORITY, content },
       { relativePath: POLICY, content: '# Policy\n' },
@@ -91,13 +92,12 @@ test('accepts the reviewed repository contract registry', () => {
 
 test('requires the importing authority to reference the policy document', () => {
   expect(
-    CortexContractsScenario.compile('# SRE\n\nNo policy link.\n'),
-  ).toContainEqual(
-    expect.objectContaining({
-      code: CortexContractFindingCode.MissingPolicyReference,
-      file: AUTHORITY,
-    }),
-  );
+    CortexContractsScenario.compile('# SRE\n\nNo policy link.\n').some(
+      (finding) =>
+        finding.code === CortexContractFindingCode.MissingPolicyReference &&
+        finding.file === AUTHORITY,
+    ),
+  ).toBe(true);
 });
 
 const validReferences = [
@@ -120,12 +120,13 @@ for (const reference of validReferences) {
 test('uses the first duplicate Markdown reference definition', () => {
   const content =
     '# SRE\n\n[policy][rule]\n\n[rule]: unrelated.md\n[rule]: ../web-dev/dynamic-skills/typescript-enums-over-booleans.md\n';
-  expect(CortexContractsScenario.compile(content)).toContainEqual(
-    expect.objectContaining({
-      code: CortexContractFindingCode.MissingPolicyReference,
-      file: AUTHORITY,
-    }),
-  );
+  expect(
+    CortexContractsScenario.compile(content).some(
+      (finding) =>
+        finding.code === CortexContractFindingCode.MissingPolicyReference &&
+        finding.file === AUTHORITY,
+    ),
+  ).toBe(true);
 });
 
 test('adapts inline and fenced runtime commands without prose inference', () => {

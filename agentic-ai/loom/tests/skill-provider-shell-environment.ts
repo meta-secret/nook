@@ -1,5 +1,7 @@
 import { posix } from 'node:path';
 
+import { shellWordAt } from './skill-provider-command-types.ts';
+
 import type {
   ShellEnvironment,
   ShellWord,
@@ -94,7 +96,7 @@ export class SkillProviderShellEnvironmentScenario {
   ]): number {
     let index = start;
     for (; index < words.length; index += 1) {
-      const request = { word: words[index] as ShellWord, environment };
+      const request = { word: shellWordAt([words, index]), environment };
       const assignment =
         SkillProviderShellEnvironmentScenario.assignmentWord(request);
       if (assignment === false) break;

@@ -137,7 +137,7 @@ export class ModuleTaskOwnership {
   private static ordinaryTaskDirectoryRoot(path: string): boolean {
     for (const roots of Object.values(ORDINARY_TASK_WRITE_ROOTS))
       if (
-        roots.includes(path as never) &&
+        roots.some((root) => root === path) &&
         !ModuleTaskOwnership.ORDINARY_TASK_FILE_ROOTS.has(path)
       )
         return true;

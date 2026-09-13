@@ -14,6 +14,23 @@ use super::*;
 use tokio::fs as async_fs;
 use tokio::time as async_time;
 
+const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
+
+fn append_hex_byte(encoded: &mut String, byte: u8) {
+    encoded.push(char::from(
+        HEX_DIGITS
+            .get(usize::from(byte >> 4))
+            .copied()
+            .unwrap_or(b'0'),
+    ));
+    encoded.push(char::from(
+        HEX_DIGITS
+            .get(usize::from(byte & 0x0f))
+            .copied()
+            .unwrap_or(b'0'),
+    ));
+}
+
 impl TaskWorkspace<'_> {
     pub(super) async fn heartbeat_loop<S: TaskStore>(
         store: S,
@@ -68,6 +85,87 @@ impl TaskWorkspace<'_> {
         async_fs::create_dir_all(workspace.join("task")).await?;
         async_fs::create_dir_all(workspace.join("output")).await?;
         async_fs::create_dir_all(workspace.join("temporary")).await?;
+        let (repository, did_resume) =
+            Self::prepare_repository(workspace, repository_url, source_commit, &resume_branch)
+                .await?;
+        TaskWorkspace::validate_dependency_artifacts(dependency_artifacts)?;
+        let mut applied_dependency = false;
+        for (index, artifact) in dependency_artifacts.iter().enumerate() {
+            if did_resume && TaskWorkspace::patch_is_already_applied(&repository, artifact).await? {
+                continue;
+            }
+            let mut child = Command::new("git")
+                .args(["apply", "--3way", "--index", "--binary", "-"])
+                .current_dir(&repository)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::inherit())
+                .spawn()
+                .hive_context("failed to apply a dependency artifact")?;
+            child
+                .stdin
+                .take()
+                .ok_or_else(|| crate::HiveError::message("dependency patch stdin was unavailable"))?
+                .write_all(artifact.content.as_bytes())
+                .await
+                .hive_context("failed to stream a dependency patch")?;
+            let status = child
+                .wait()
+                .await
+                .hive_context("dependency patch process failed")?;
+            if !status.success() {
+                let unmerged = TaskWorkspace::git_output(
+                    &repository,
+                    &["diff", "--name-only", "--diff-filter=U"],
+                )
+                .await
+                .hive_context("inspect dependency conflicts")?;
+                if unmerged.trim().is_empty() {
+                    return Err(crate::HiveError::message(format!(
+                        "dependency artifact {} failed to apply with status {status}",
+                        artifact.id
+                    )));
+                }
+                let pending = repository.join(".hive-pending");
+                async_fs::create_dir(&pending).await?;
+                for (pending_index, pending_artifact) in
+                    dependency_artifacts.iter().enumerate().skip(index + 1)
+                {
+                    async_fs::write(
+                        pending.join(format!("{pending_index:04}.patch")),
+                        pending_artifact.content.as_bytes(),
+                    )
+                    .await?;
+                }
+                return Ok(WorkspacePreparation::Conflicted(ConflictedWorkspace {
+                    repository,
+                    resumed: did_resume,
+                }));
+            }
+            applied_dependency = true;
+        }
+        if applied_dependency {
+            let baseline = TaskWorkspace::commit_dependency_baseline(&repository).await?;
+            return Ok(WorkspacePreparation::Prepared(PreparedWorkspace {
+                repository,
+                baseline,
+                resumed: did_resume,
+            }));
+        }
+        let baseline = TaskWorkspace::git_output(&repository, &["rev-parse", "HEAD"]).await?;
+        Ok(WorkspacePreparation::Prepared(PreparedWorkspace {
+            repository,
+            baseline,
+            resumed: did_resume,
+        }))
+    }
+
+    async fn prepare_repository(
+        workspace: &Path,
+        repository_url: &str,
+        source_commit: &str,
+        resume_branch: &WorkspaceOrigin<'_>,
+    ) -> crate::HiveResult<(PathBuf, bool)> {
         let repository = workspace.join("repository");
         if repository.join(".git").is_dir() {
             return Err(crate::HiveError::message(
@@ -141,76 +239,7 @@ impl TaskWorkspace<'_> {
             )
             .await?;
         }
-        TaskWorkspace::validate_dependency_artifacts(dependency_artifacts)?;
-        let mut applied_dependency = false;
-        for (index, artifact) in dependency_artifacts.iter().enumerate() {
-            if did_resume && TaskWorkspace::patch_is_already_applied(&repository, artifact).await? {
-                continue;
-            }
-            let mut child = Command::new("git")
-                .args(["apply", "--3way", "--index", "--binary", "-"])
-                .current_dir(&repository)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::null())
-                .stderr(Stdio::inherit())
-                .spawn()
-                .hive_context("failed to apply a dependency artifact")?;
-            child
-                .stdin
-                .take()
-                .ok_or_else(|| crate::HiveError::message("dependency patch stdin was unavailable"))?
-                .write_all(artifact.content.as_bytes())
-                .await
-                .hive_context("failed to stream a dependency patch")?;
-            let status = child
-                .wait()
-                .await
-                .hive_context("dependency patch process failed")?;
-            if !status.success() {
-                let unmerged = TaskWorkspace::git_output(
-                    &repository,
-                    &["diff", "--name-only", "--diff-filter=U"],
-                )
-                .await
-                .hive_context("inspect dependency conflicts")?;
-                if unmerged.trim().is_empty() {
-                    return Err(crate::HiveError::message(format!(
-                        "dependency artifact {} failed to apply with status {status}",
-                        artifact.id
-                    )));
-                }
-                let pending = repository.join(".hive-pending");
-                async_fs::create_dir(&pending).await?;
-                for (pending_index, pending_artifact) in
-                    dependency_artifacts.iter().enumerate().skip(index + 1)
-                {
-                    async_fs::write(
-                        pending.join(format!("{pending_index:04}.patch")),
-                        pending_artifact.content.as_bytes(),
-                    )
-                    .await?;
-                }
-                return Ok(WorkspacePreparation::Conflicted(ConflictedWorkspace {
-                    repository,
-                    resumed: did_resume,
-                }));
-            }
-            applied_dependency = true;
-        }
-        if applied_dependency {
-            let baseline = TaskWorkspace::commit_dependency_baseline(&repository).await?;
-            return Ok(WorkspacePreparation::Prepared(PreparedWorkspace {
-                repository,
-                baseline,
-                resumed: did_resume,
-            }));
-        }
-        let baseline = TaskWorkspace::git_output(&repository, &["rev-parse", "HEAD"]).await?;
-        Ok(WorkspacePreparation::Prepared(PreparedWorkspace {
-            repository,
-            baseline,
-            resumed: did_resume,
-        }))
+        Ok((repository, did_resume))
     }
 }
 
@@ -231,7 +260,7 @@ impl TaskWorkspace<'_> {
                 digest.iter().fold(
                     String::with_capacity(digest.len() * 2),
                     |mut encoded, byte| {
-                        let _ = write!(encoded, "{byte:02x}");
+                        append_hex_byte(&mut encoded, *byte);
                         encoded
                     },
                 )
@@ -454,8 +483,7 @@ impl PreparedWorkspace {
         }
         if output.stdout.len() > MAX_PERSISTED_PATCH_BYTES {
             return Err(crate::HiveError::message(format!(
-                "task patch exceeds the {} byte prototype limit",
-                MAX_PERSISTED_PATCH_BYTES
+                "task patch exceeds the {MAX_PERSISTED_PATCH_BYTES} byte prototype limit"
             )));
         }
         if output.stdout.is_empty() {
@@ -472,7 +500,7 @@ impl PreparedWorkspace {
         let digest = digest.iter().fold(
             String::with_capacity(digest.len() * 2),
             |mut encoded, byte| {
-                let _ = write!(encoded, "{byte:02x}");
+                append_hex_byte(&mut encoded, *byte);
                 encoded
             },
         );
@@ -489,7 +517,6 @@ impl PreparedWorkspace {
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Write as _;
     use std::fs;
     use std::io;
     use std::process;
@@ -501,6 +528,85 @@ mod tests {
     };
     use sha2::{Digest, Sha256};
 
+    struct DependencyPatchFixture {
+        source: tempfile::TempDir,
+        source_commit: String,
+        dependency: Artifact,
+        resume_branch: &'static str,
+    }
+
+    impl DependencyPatchFixture {
+        fn new() -> crate::HiveResult<Self> {
+            let source = tempfile::tempdir()?;
+            let run_git = |arguments: &[&str]| -> io::Result<Vec<u8>> {
+                let output = process::Command::new("git")
+                    .args(arguments)
+                    .current_dir(source.path())
+                    .output()?;
+                assert!(
+                    output.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                Ok(output.stdout)
+            };
+            run_git(&["init", "--quiet"])?;
+            fs::write(source.path().join("dependency.txt"), "before\n")?;
+            run_git(&["add", "dependency.txt"])?;
+            run_git(&[
+                "-c",
+                "user.name=Hive Test",
+                "-c",
+                "user.email=hive@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "fixture",
+            ])?;
+            let source_commit = String::from_utf8(run_git(&["rev-parse", "HEAD"])?)?
+                .trim()
+                .to_owned();
+            fs::write(source.path().join("dependency.txt"), "from dependency\n")?;
+            let patch = String::from_utf8(run_git(&["diff", "--binary"])?)?;
+            fs::write(source.path().join("dependency.txt"), "before\n")?;
+            let digest = Sha256::digest(patch.as_bytes());
+            let digest = digest.iter().fold(
+                String::with_capacity(digest.len() * 2),
+                |mut encoded, byte| {
+                    super::append_hex_byte(&mut encoded, *byte);
+                    encoded
+                },
+            );
+            let dependency = Artifact {
+                id: "dependency:git-patch".to_owned(),
+                kind: "git-patch".to_owned(),
+                uri: "hive://artifact/dependency:git-patch".to_owned(),
+                digest: format!("sha256:{digest}"),
+                content: patch,
+            };
+            let resume_branch = "codex/hive-resume-test";
+            run_git(&["checkout", "--quiet", "-b", resume_branch, &source_commit])?;
+            fs::write(source.path().join("resumed.txt"), "durable branch\n")?;
+            run_git(&["add", "resumed.txt"])?;
+            run_git(&[
+                "-c",
+                "user.name=Hive Test",
+                "-c",
+                "user.email=hive@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "durable branch",
+            ])?;
+            Ok(Self {
+                source,
+                source_commit,
+                dependency,
+                resume_branch,
+            })
+        }
+    }
+
     #[test]
     fn every_dependency_artifact_is_verified_before_application() -> anyhow::Result<()> {
         let valid_content = "valid patch";
@@ -508,7 +614,7 @@ mod tests {
         let valid_digest = valid_digest.iter().fold(
             String::with_capacity(valid_digest.len() * 2),
             |mut encoded, byte| {
-                let _ = write!(encoded, "{byte:02x}");
+                super::append_hex_byte(&mut encoded, *byte);
                 encoded
             },
         );
@@ -631,67 +737,11 @@ mod tests {
     #[tokio::test]
     async fn completed_dependency_patch_becomes_the_task_baseline() -> crate::HiveResult<()> {
         let _git_process_guard = crate::GIT_PROCESS_TEST_LOCK.lock().await;
-        let source = tempfile::tempdir()?;
-        let run_git = |arguments: &[&str]| -> io::Result<Vec<u8>> {
-            let output = process::Command::new("git")
-                .args(arguments)
-                .current_dir(source.path())
-                .output()?;
-            assert!(
-                output.status.success(),
-                "{}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            Ok(output.stdout)
-        };
-        run_git(&["init", "--quiet"])?;
-        fs::write(source.path().join("dependency.txt"), "before\n")?;
-        run_git(&["add", "dependency.txt"])?;
-        run_git(&[
-            "-c",
-            "user.name=Hive Test",
-            "-c",
-            "user.email=hive@example.invalid",
-            "commit",
-            "--quiet",
-            "-m",
-            "fixture",
-        ])?;
-        let source_commit = String::from_utf8(run_git(&["rev-parse", "HEAD"])?)?
-            .trim()
-            .to_owned();
-        fs::write(source.path().join("dependency.txt"), "from dependency\n")?;
-        let patch = String::from_utf8(run_git(&["diff", "--binary"])?)?;
-        fs::write(source.path().join("dependency.txt"), "before\n")?;
-        let digest = Sha256::digest(patch.as_bytes());
-        let digest = digest.iter().fold(
-            String::with_capacity(digest.len() * 2),
-            |mut encoded, byte| {
-                let _ = write!(encoded, "{byte:02x}");
-                encoded
-            },
-        );
-        let dependency = Artifact {
-            id: "dependency:git-patch".to_owned(),
-            kind: "git-patch".to_owned(),
-            uri: "hive://artifact/dependency:git-patch".to_owned(),
-            digest: format!("sha256:{digest}"),
-            content: patch,
-        };
-        let resume_branch = "codex/hive-resume-test";
-        run_git(&["checkout", "--quiet", "-b", resume_branch, &source_commit])?;
-        fs::write(source.path().join("resumed.txt"), "durable branch\n")?;
-        run_git(&["add", "resumed.txt"])?;
-        run_git(&[
-            "-c",
-            "user.name=Hive Test",
-            "-c",
-            "user.email=hive@example.invalid",
-            "commit",
-            "--quiet",
-            "-m",
-            "durable branch",
-        ])?;
+        let fixture = DependencyPatchFixture::new()?;
+        let source = fixture.source;
+        let source_commit = fixture.source_commit;
+        let dependency = fixture.dependency;
+        let resume_branch = fixture.resume_branch;
         let workspace = tempfile::tempdir()?;
         let preparation = (TaskWorkspace {
             workspace: workspace.path(),

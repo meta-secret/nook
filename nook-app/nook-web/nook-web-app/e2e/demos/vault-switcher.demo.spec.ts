@@ -146,7 +146,9 @@ test('list every local vault and pair the open vault with the companion', async 
             'data-demo-extension-message-types',
           )?.value
         const parsedRoutedTypes: unknown = JSON.parse(
-          routedTypesAttribute ?? '[]',
+          typeof routedTypesAttribute === 'string'
+            ? routedTypesAttribute
+            : '[]',
         )
         if (!Array.isArray(parsedRoutedTypes)) {
           throw new Error('Routed message types were not an array.')

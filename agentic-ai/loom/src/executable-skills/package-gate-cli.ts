@@ -4,23 +4,20 @@ import {
   ExecutableSkillPackageGate,
 } from './package-gate.ts';
 
-const action = process.argv.at(2);
+const actionArgument = process.argv.at(2);
 const repoRoot = process.argv.at(3);
+const action = EXECUTABLE_SKILL_GATE_ACTIONS.find(
+  (candidate) => candidate === actionArgument,
+);
 
-if (
-  typeof action !== 'string' ||
-  !EXECUTABLE_SKILL_GATE_ACTIONS.includes(
-    action as ExecutableSkillGateAction,
-  ) ||
-  typeof repoRoot !== 'string'
-) {
+if (!action || typeof repoRoot !== 'string') {
   process.stderr.write(
     `Usage: package-gate-cli.ts <${EXECUTABLE_SKILL_GATE_ACTIONS.join('|')}> <repository-root>\n`,
   );
   process.exitCode = 1;
 } else {
   const execution = new ExecutableSkillPackageGate({
-    action: action as ExecutableSkillGateAction,
+    action: action satisfies ExecutableSkillGateAction,
     repoRoot,
   }).execute();
   if (execution.isErr()) {

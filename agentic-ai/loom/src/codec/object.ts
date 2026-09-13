@@ -257,10 +257,10 @@ export class YamlOperationSelection<T extends string> {
     const args = this.request;
     const keys = Object.keys(args.record);
     const operationKeys = keys.filter((key) =>
-      args.operations.includes(key as T),
+      args.operations.some((operation) => operation === key),
     );
     const unknownKeys = keys.filter(
-      (key) => !args.operations.includes(key as T),
+      (key) => !args.operations.some((operation) => operation === key),
     );
     const errors: FieldError[] = unknownKeys.map((key) => {
       const joinPathArgs2: JoinPathArgs = { base: args.path, key };
@@ -284,7 +284,12 @@ export class YamlOperationSelection<T extends string> {
     if (errors.length > 0) {
       return FailedFieldDecode.create(errors);
     }
-    const operation = operationKeys[0] as T;
+    const operation = args.operations.find(
+      (candidate) => candidate === operationKeys[0],
+    );
+    if (!operation) {
+      return FailedFieldDecode.create(errors);
+    }
     const propertyArgs: UntrustedYamlPropertyArgs = {
       record: args.record,
       key: operation,

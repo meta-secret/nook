@@ -33,24 +33,7 @@ impl Neo4jTaskStore {
             )));
         }
         if installed_version == 1 {
-            let mut rows = graph
-                .execute(query(
-                    "MATCH (task:Task)
-                     WHERE task.source_commit IS NULL
-                     RETURN count(task) AS legacy_tasks",
-                ))
-                .await?;
-            let legacy_tasks = rows
-                .next()
-                .await?
-                .and_then(|row| row.get::<i64>("legacy_tasks").ok())
-                .unwrap_or(0);
-            if legacy_tasks > 0 {
-                return Err(crate::HiveError::message(format!(
-                    "Hive schema 1 contains {legacy_tasks} task(s) without source_commit; \
-                     drain or remove those legacy tasks before upgrading to schema 2"
-                )));
-            }
+            Self::validate_legacy_schema_one(graph).await?;
         }
         if installed_version < 3 {
             graph
@@ -104,9 +87,52 @@ impl Neo4jTaskStore {
                 .hive_context("failed to backfill schema-8 attempt retirement state")?;
         }
         if installed_version < 9 {
+            Self::migrate_blocker_dependencies(graph).await?;
+        }
+        for statement in CONSTRAINTS {
             graph
-                .run(query(
-                    "MATCH (blocker:Task {kind: 'blocker'})-[edge:DEPENDS_ON]->(dependency:Task)
+                .run(query(statement))
+                .await
+                .with_hive_context(|| format!("failed to apply graph migration: {statement}"))?;
+        }
+        graph
+            .run(
+                query(
+                    "MERGE (migration:HiveSchemaMigration {version: $version})
+                     ON CREATE SET migration.applied_at = timestamp()",
+                )
+                .param("version", LATEST_SCHEMA_VERSION),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn validate_legacy_schema_one(graph: &neo4rs::Graph) -> crate::HiveResult<()> {
+        let mut rows = graph
+            .execute(query(
+                "MATCH (task:Task)
+                 WHERE task.source_commit IS NULL
+                 RETURN count(task) AS legacy_tasks",
+            ))
+            .await?;
+        let legacy_tasks = rows
+            .next()
+            .await?
+            .and_then(|row| row.get::<i64>("legacy_tasks").ok())
+            .unwrap_or(0);
+        if legacy_tasks > 0 {
+            return Err(crate::HiveError::message(format!(
+                "Hive schema 1 contains {legacy_tasks} task(s) without source_commit; \
+                 drain or remove those legacy tasks before upgrading to schema 2"
+            )));
+        }
+        Ok(())
+    }
+
+    async fn migrate_blocker_dependencies(graph: &neo4rs::Graph) -> crate::HiveResult<()> {
+        graph
+            .run(query(
+                "MATCH (blocker:Task {kind: 'blocker'})-[edge:DEPENDS_ON]->(dependency:Task)
                      WHERE dependency.status = 'COMPLETED'
                      WITH blocker, dependency, edge,
                           blocker.status AS prior_status
@@ -131,25 +157,8 @@ impl Neo4jTaskStore {
                          END,
                          blocker.updated_at = timestamp(),
                          blocker.version = coalesce(blocker.version, 0) + 1",
-                ))
-                .await
-                .hive_context("failed to preserve and detach schema-9 blocker dependencies")?;
-        }
-        for statement in CONSTRAINTS {
-            graph
-                .run(query(statement))
-                .await
-                .with_hive_context(|| format!("failed to apply graph migration: {statement}"))?;
-        }
-        graph
-            .run(
-                query(
-                    "MERGE (migration:HiveSchemaMigration {version: $version})
-                     ON CREATE SET migration.applied_at = timestamp()",
-                )
-                .param("version", LATEST_SCHEMA_VERSION),
-            )
-            .await?;
-        Ok(())
+            ))
+            .await
+            .hive_context("failed to preserve and detach schema-9 blocker dependencies")
     }
 }

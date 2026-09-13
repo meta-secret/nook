@@ -75,7 +75,10 @@ function unavailableTime() {
 
 function identitySnapshot(identity: (typeof identities)[number]) {
   return {
-    appId: identity.members[0]?.appId ?? 'browser-app',
+    appId:
+      typeof identity.members[0]?.appId === 'string'
+        ? identity.members[0].appId
+        : 'browser-app',
     appKeyCount: 1,
     controlEpoch: 1n,
     fingerprint: 'fingerprint-test',

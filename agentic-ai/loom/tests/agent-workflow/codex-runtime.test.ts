@@ -27,6 +27,7 @@ import type {
 } from '../../src/agent-workflow/codex-runtime.ts';
 
 import { AgentAttemptReplay } from '../../src/agent-workflow/agent-replay.ts';
+import { AgentAttemptTransport } from '../../src/agent-workflow/attempt-codec.ts';
 
 import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts';
 
@@ -212,7 +213,7 @@ export class AgentWorkflowCodexRuntimeScenario {
     return serialized
       .trim()
       .split('\n')
-      .map((line) => JSON.parse(line) as AgentAttemptEvent);
+      .map((line) => AgentAttemptTransport.decodeEvent(line));
   }
 }
 

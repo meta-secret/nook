@@ -82,16 +82,17 @@ describe('agent stats manual E2E evidence', () => {
     expect(source).not.toContain("'run',\n      'list'");
   });
 
-  test('retains the exact source head in durable workflow metadata', () => {
+  test('resolves the exact source head on the server before checkout', () => {
     const workflow = readFileSync(
       new URL('../../../.github/workflows/e2e-pr.yml', import.meta.url),
       'utf8',
     );
 
-    expect(workflow).toContain('source_head_sha:');
+    expect(workflow).toContain("core.setOutput('ref', pr.head.sha)");
     expect(workflow).toContain(
-      'E2E PR #${{ inputs.pr_number }} @ ${{ inputs.source_head_sha }}',
+      'core.info(`PR #${prNumber}: ${pr.head.ref} @ ${pr.head.sha}`)',
     );
+    expect(workflow).not.toContain('source_head_sha:');
     expect(workflow).not.toContain('retention-days:');
   });
 

@@ -11,6 +11,7 @@ import { LoomRequestDispatch } from '../src/tools/dispatch.ts';
 import type { FieldErrorArgs } from '../src/codec/field-error.ts';
 import type { DecodeErrorResponseArgs } from '../src/codec/response.ts';
 import type { ExplainSyntaxFailureArgs } from '../src/codec/blueprint-diff.ts';
+import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
 describe('blueprint explanation', () => {
   test('emits a unified diff from the diff package', () => {
     const explanationArgs4 = {
@@ -62,12 +63,21 @@ describe('decode error encoding', () => {
     if (outcome.body.ok || !('explanation' in outcome.body)) {
       return;
     }
+    if (typeof outcome.body.explanation.unifiedDiff !== 'string') return;
     expect(outcome.body.explanation.unifiedDiff).toContain('fetchOriginMain');
-    const encoded = LoomResponseEncoder.encodeResponse(outcome.body) as {
-      explanation: { unifiedDiff: string; kind: string };
-    };
-    expect(encoded.explanation.unifiedDiff).toContain('+++ received.yaml');
-    expect(encoded.explanation.kind).toBe(BlueprintExplanationKind.Structural);
+    const encoded = LoomResponseEncoder.encodeResponse(outcome.body);
+    if (!UntrustedYamlBoundary.isRecord(encoded))
+      throw new Error('Invalid response.');
+    if (!('explanation' in encoded)) throw new Error('Invalid explanation.');
+    const explanation = encoded.explanation;
+    if (!UntrustedYamlBoundary.isRecord(explanation))
+      throw new Error('Invalid explanation.');
+    if (!('unifiedDiff' in explanation))
+      throw new Error('Missing unified diff.');
+    if (typeof explanation.unifiedDiff !== 'string')
+      throw new Error('Missing unified diff.');
+    expect(explanation.unifiedDiff).toContain('+++ received.yaml');
+    expect(explanation.kind).toBe(BlueprintExplanationKind.Structural);
   });
 
   test('encodeResponse includes issue codes and explanation', () => {
@@ -87,14 +97,26 @@ describe('decode error encoding', () => {
     };
     const encoded = LoomResponseEncoder.encodeResponse(
       LoomResponseEncoder.decodeErrorResponse(decodeErrorResponseArgs),
-    ) as {
-      errors: readonly { issue: FieldIssue; message: string }[];
-      explanation: { unifiedDiff: string };
-    };
-    for (const error of encoded.errors) {
+    );
+    if (!UntrustedYamlBoundary.isRecord(encoded))
+      throw new Error('Invalid response.');
+    const errors = encoded.errors;
+    if (!errors || !UntrustedYamlBoundary.isList(errors))
+      throw new Error('Invalid errors.');
+    for (const error of errors) {
+      if (!UntrustedYamlBoundary.isRecord(error))
+        throw new Error('Invalid error.');
       expect(error.issue).toBe(FieldIssue.MissingRequiredField);
       expect(error.message).toBe('missing required field');
     }
-    expect(encoded.explanation.unifiedDiff.length).toBeGreaterThan(0);
+    if (!('explanation' in encoded)) throw new Error('Invalid explanation.');
+    const encodedExplanation = encoded.explanation;
+    if (!UntrustedYamlBoundary.isRecord(encodedExplanation))
+      throw new Error('Invalid explanation.');
+    if (!('unifiedDiff' in encodedExplanation))
+      throw new Error('Missing unified diff.');
+    if (typeof encodedExplanation.unifiedDiff !== 'string')
+      throw new Error('Missing unified diff.');
+    expect(encodedExplanation.unifiedDiff.length).toBeGreaterThan(0);
   });
 });

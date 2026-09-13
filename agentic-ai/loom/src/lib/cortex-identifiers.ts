@@ -41,7 +41,7 @@ export class CortexIdentifierCatalog {
     let value: UntrustedYamlNode;
     try {
       value = UntrustedYamlBoundary.fromHost(
-        JSON.parse(readFileSync(registryPath, 'utf8')) as UntrustedYamlNode,
+        JSON.parse(readFileSync(registryPath, 'utf8')),
       );
     } catch {
       findings.push(
@@ -51,11 +51,16 @@ export class CortexIdentifierCatalog {
       );
       return { registry: false, findings };
     }
-    if (
-      !UntrustedYamlBoundary.isRecord(value) ||
-      value.schemaVersion !== 1 ||
-      !Array.isArray(value.entries)
-    ) {
+    if (!UntrustedYamlBoundary.isRecord(value) || value.schemaVersion !== 1) {
+      findings.push(
+        CortexIdentifierCatalog.finding(
+          'Cortex identifier registry schema is invalid.',
+        ),
+      );
+      return { registry: false, findings };
+    }
+    const entriesNode = value.entries;
+    if (!entriesNode || !UntrustedYamlBoundary.isList(entriesNode)) {
       findings.push(
         CortexIdentifierCatalog.finding(
           'Cortex identifier registry schema is invalid.',
@@ -65,7 +70,7 @@ export class CortexIdentifierCatalog {
     }
 
     const entries: CortexIdentifierEntry[] = [];
-    for (const [index, candidate] of value.entries.entries()) {
+    for (const [index, candidate] of entriesNode.entries()) {
       const decoded = CortexIdentifierCatalog.decodeEntry(candidate);
       if (!decoded) {
         findings.push(
@@ -97,20 +102,20 @@ export class CortexIdentifierCatalog {
   ): CortexIdentifierRegistry | false {
     let value: UntrustedYamlNode;
     try {
-      value = UntrustedYamlBoundary.fromHost(
-        JSON.parse(serialized) as UntrustedYamlNode,
-      );
+      value = UntrustedYamlBoundary.fromHost(JSON.parse(serialized));
     } catch {
       return false;
     }
     if (
       !UntrustedYamlBoundary.isRecord(value) ||
-      value.schemaVersion !== CORTEX_IDENTIFIER_SCHEMA_VERSION ||
-      !Array.isArray(value.entries)
+      value.schemaVersion !== CORTEX_IDENTIFIER_SCHEMA_VERSION
     ) {
       return false;
     }
-    const entries = value.entries.map(CortexIdentifierCatalog.decodeEntry);
+    const entriesNode = value.entries;
+    if (!entriesNode || !UntrustedYamlBoundary.isList(entriesNode))
+      return false;
+    const entries = entriesNode.map(CortexIdentifierCatalog.decodeEntry);
     if (entries.some((entry) => entry === false)) return false;
     return {
       schemaVersion: CORTEX_IDENTIFIER_SCHEMA_VERSION,
@@ -228,14 +233,12 @@ export class CortexIdentifierCatalog {
   ): CortexIdentifierEntry | false {
     if (!UntrustedYamlBoundary.isRecord(value)) return false;
     const kind = value.kind;
-    if (
-      !Object.values(CortexIdentifierKind).includes(
-        kind as CortexIdentifierKind,
-      )
-    ) {
+    const decodedKind = Object.values(CortexIdentifierKind).find(
+      (candidate) => candidate === kind,
+    );
+    if (!decodedKind) {
       return false;
     }
-    const decodedKind = kind as CortexIdentifierKind;
     if (
       typeof value.id !== 'string' ||
       typeof value.authority !== 'string' ||

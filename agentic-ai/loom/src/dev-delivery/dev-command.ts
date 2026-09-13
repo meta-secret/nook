@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
@@ -61,7 +61,9 @@ export class ProcessCommandRunner implements CommandRunner {
     }
   }
 
-  private static text(value: unknown): string {
+  private static text(
+    value: SpawnSyncReturns<string | Buffer>['stdout'],
+  ): string {
     return typeof value === 'string'
       ? value
       : value instanceof Buffer

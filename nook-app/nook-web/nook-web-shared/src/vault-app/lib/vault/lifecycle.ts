@@ -68,6 +68,20 @@ type ExternalDeviceIdentityAuthorization = {
   readonly mode: ExternalDeviceIdentityAuthorizationMode;
 };
 
+export type E2eAutoAuthorizationPolicy = {
+  readonly e2eExposeVault: boolean;
+  readonly manualPasskey: boolean;
+  readonly sessionLocked: boolean;
+};
+
+export function shouldAutoAuthorizeE2e(
+  policy: E2eAutoAuthorizationPolicy,
+): boolean {
+  return (
+    policy.e2eExposeVault && !policy.manualPasskey && !policy.sessionLocked
+  );
+}
+
 /** Owns browser orchestration for one lifecycle context. */
 export class VaultInitializationActions {
   constructor(private readonly state: VaultState) {}
@@ -179,9 +193,17 @@ export class VaultInitializationActions {
         state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey;
       }
 
-      const autoAuthorizeE2e =
-        state.runtimeConfig.e2eExposeVault &&
-        localStorage.getItem("nook_e2e_manual_passkey") !== "true";
+      const autoAuthorizeE2ePolicy: E2eAutoAuthorizationPolicy = {
+        e2eExposeVault: state.runtimeConfig.e2eExposeVault,
+        manualPasskey:
+          localStorage.getItem("nook_e2e_manual_passkey") === "true",
+        sessionLocked:
+          typeof window === "object" &&
+          (window.sessionStorage.getItem("nook_vault_session_locked") === "1" ||
+            window.sessionStorage.getItem("nook_vault_session_locked") ===
+              "true"),
+      };
+      const autoAuthorizeE2e = shouldAutoAuthorizeE2e(autoAuthorizeE2ePolicy);
       if (!state.deviceProtectionReady && autoAuthorizeE2e) {
         if (state.deviceProtectionStatus === DeviceProtectionStatus.Passkey) {
           const authorization = await state.enqueueStorage(

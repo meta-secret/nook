@@ -157,6 +157,9 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
     let workflow_directory = RepositoryFixture::repository_root().join(".github/workflows");
     for entry in fs::read_dir(workflow_directory)? {
         let path = entry?.path();
+        if !path.is_file() {
+            continue;
+        }
         let workflow = fs::read_to_string(&path)?;
         for (index, job) in cluster_job_blocks(&workflow).iter().enumerate() {
             assert_no_nested_runtime(&format!("{} cluster job {index}", path.display()), job);

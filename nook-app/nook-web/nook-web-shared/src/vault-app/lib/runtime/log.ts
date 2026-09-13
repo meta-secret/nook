@@ -188,7 +188,7 @@ type FetchPreconnect = typeof globalThis.fetch extends {
   : never;
 
 type FetchWithOptionalPreconnect = typeof globalThis.fetch & {
-  readonly preconnect?: FetchPreconnect | undefined;
+  readonly preconnect?: FetchPreconnect;
 };
 
 /** `createLogger` path: gate, echo once via originals, then persist. */
@@ -563,9 +563,10 @@ class BrowserLogRuntime {
     if (globalThis.fetch === marker.__nookFetchOuter) return;
 
     const originalFetch = globalThis.fetch as FetchWithOptionalPreconnect;
-    const fetchProperties: Pick<FetchWithOptionalPreconnect, "preconnect"> = {
-      preconnect: originalFetch.preconnect,
-    };
+    const fetchProperties: Pick<FetchWithOptionalPreconnect, "preconnect"> =
+      "preconnect" in originalFetch
+        ? { preconnect: originalFetch.preconnect }
+        : {};
     const wrapped = Object.assign(
       async (...fetchRequest: LogFetchRequest): Promise<Response> => {
         const [input, init] = fetchRequest;

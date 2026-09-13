@@ -206,18 +206,18 @@ describe('Cortex identifiers', () => {
       await writeFile(registryPath, JSON.stringify(invalidRegistry), 'utf8');
       const audit =
         CortexIdentifierCatalog.auditCortexIdentifierRegistry(repoRoot);
-      expect(audit.findings.map((finding) => finding.message)).toEqual(
-        expect.arrayContaining([
-          'Cortex locator .cortex/policy.md#missing-item has no matching heading.',
-          'Cortex locator .cortex/policy.md is duplicated.',
-          'Cortex authority document is duplicated.',
-          'Cortex locator .cortex/nested/../policy.md is not canonical.',
-          'Cortex locator .cortex/linked-policy.md does not name a regular Cortex document.',
-          'Cortex locator .cortex/external/policy.md escapes the Cortex root.',
-          'Cortex identifier CX-AI-5V9X2 has an invalid category.',
-          'Cortex locator .cortex/scripts/README.md is invalid.',
-        ]),
-      );
+      const findingMessages = audit.findings.map((finding) => finding.message);
+      for (const expected of [
+        'Cortex locator .cortex/policy.md#missing-item has no matching heading.',
+        'Cortex locator .cortex/policy.md is duplicated.',
+        'Cortex authority document is duplicated.',
+        'Cortex locator .cortex/nested/../policy.md is not canonical.',
+        'Cortex locator .cortex/linked-policy.md does not name a regular Cortex document.',
+        'Cortex locator .cortex/external/policy.md escapes the Cortex root.',
+        'Cortex identifier CX-AI-5V9X2 has an invalid category.',
+        'Cortex locator .cortex/scripts/README.md is invalid.',
+      ])
+        expect(findingMessages).toContain(expected);
       const unknownReferenceArgs = {
         references: [
           {
@@ -239,7 +239,7 @@ describe('Cortex identifiers', () => {
           },
         ],
         knownIdentifiers: new Set(['CX-AI']),
-      } as never;
+      };
       expect(() =>
         CortexIdentifierSyntax.assertCortexReferences(extraFieldArgs),
       ).toThrow('invalid Cortex reference');
@@ -296,9 +296,14 @@ describe('Cortex identifiers', () => {
         'utf8',
       );
       const registryPath = join(repoRoot, '.cortex', 'identifiers.json');
-      const registry = JSON.parse(await readFile(registryPath, 'utf8')) as {
-        schemaVersion: 1;
-        entries: Record<string, string>[];
+      const decodedRegistry =
+        CortexIdentifierCatalog.decodeCortexIdentifierRegistry(
+          await readFile(registryPath, 'utf8'),
+        );
+      if (decodedRegistry === false) throw new Error('Registry is invalid.');
+      const registry = {
+        ...decodedRegistry,
+        entries: [...decodedRegistry.entries],
       };
       registry.entries.push({
         id: 'CX-AI-8M4P6',
@@ -350,16 +355,16 @@ describe('Cortex identifiers', () => {
             : entry,
         ),
       };
-      expect(
+      const stabilityMessages =
         CortexIdentifierCatalog.auditCortexIdentifierStability({
           current: reassigned,
           published,
-        }).map((finding) => finding.message),
-      ).toEqual(
-        expect.arrayContaining([
-          'Published Cortex identifier CX-AI-4D7NQ was reassigned to a different authority.',
-          'Published Cortex identifier CX-AI-8M4P6 was removed; retain its assignment or an explicit tombstone.',
-        ]),
+        }).map((finding) => finding.message);
+      expect(stabilityMessages).toContain(
+        'Published Cortex identifier CX-AI-4D7NQ was reassigned to a different authority.',
+      );
+      expect(stabilityMessages).toContain(
+        'Published Cortex identifier CX-AI-8M4P6 was removed; retain its assignment or an explicit tombstone.',
       );
     } finally {
       await rm(repoRoot, CortexIdentifiersFixture.REMOVE_OPTIONS);

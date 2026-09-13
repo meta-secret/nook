@@ -86,12 +86,13 @@ async function readRecoveryStorage(
             const keyringValue: unknown =
               typeof identityKeyring.result === 'string'
                 ? JSON.parse(identityKeyring.result)
-                : undefined
+                : {}
             const entriesValue: unknown =
-              typeof keyringValue === 'object' && keyringValue !== null
+              typeof keyringValue === 'object' &&
+              Object(keyringValue) === keyringValue
                 ? Object.getOwnPropertyDescriptor(keyringValue, 'entries')
                     ?.value
-                : undefined
+                : {}
             const entryCount = Array.isArray(entriesValue)
               ? entriesValue.length
               : 0
@@ -150,7 +151,7 @@ test('waits for peer storage work before destructive identity recovery', async (
   await expect
     .poll(() =>
       peer.evaluate(() => {
-        return window.__nookVault?.localDataDeletionStarted ?? false
+        return window.__nookVault?.localDataDeletionStarted === true
       }),
     )
     .toBe(true)
@@ -169,7 +170,7 @@ test('waits for peer storage work before destructive identity recovery', async (
   await expect
     .poll(() =>
       peer.evaluate(() => {
-        return window.__nookVault?.localDataDeletionStarted ?? true
+        return window.__nookVault?.localDataDeletionStarted !== false
       }),
     )
     .toBe(false)

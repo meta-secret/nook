@@ -381,7 +381,9 @@ describe('exact-head routing observations', () => {
     async ({ event, source, body }) => {
       const lines = await write([cloudEvent({ event, body })]);
       expect(lines).toHaveLength(1);
-      const hint = PrStewardNdjsonCodec.decode(lines[0]!).record;
+      const firstLine = lines[0];
+      if (!firstLine) throw new Error('Expected an event line.');
+      const hint = PrStewardNdjsonCodec.decode(firstLine).record;
       expect(hint).toMatchObject({
         kind: PrStewardRecordKind.Routing,
         repository: PR_STEWARD_REPOSITORY,
@@ -521,11 +523,15 @@ describe('exact-head routing observations', () => {
       valid,
     ]);
     expect(lines).toHaveLength(2);
-    expect(PrStewardNdjsonCodec.decode(lines[0]!).record).toMatchObject({
+    const firstLine = lines[0];
+    if (!firstLine) throw new Error('Expected an event line.');
+    expect(PrStewardNdjsonCodec.decode(firstLine).record).toMatchObject({
       kind: PrStewardRecordKind.Blocker,
       pullRequest: 1560,
     });
-    const parsed = PrStewardNdjsonCodec.decode(lines[1]!).record;
+    const secondLine = lines[1];
+    if (!secondLine) throw new Error('Expected an event line.');
+    const parsed = PrStewardNdjsonCodec.decode(secondLine).record;
     expect(parsed).toMatchObject({
       kind: PrStewardRecordKind.Routing,
       path: false,
@@ -533,7 +539,7 @@ describe('exact-head routing observations', () => {
       url: false,
       author: false,
     });
-    expect(lines[1]!.length).toBeLessThan(2_048);
+    expect(secondLine.length).toBeLessThan(2_048);
     expect(lines.join('')).not.toContain('RAW_PAYLOAD_SECRET');
     expect(lines.join('')).not.toContain('RAW_UNATTRIBUTED_SECRET');
     const failure = new Error('operational failure');
@@ -572,7 +578,9 @@ describe('exact-head routing observations', () => {
       reader: new UnavailablePrReader(),
     });
     expect(lines).toHaveLength(1);
-    expect(PrStewardNdjsonCodec.decode(lines[0]!).record).toMatchObject({
+    const firstLine = lines[0];
+    if (!firstLine) throw new Error('Expected an event line.');
+    expect(PrStewardNdjsonCodec.decode(firstLine).record).toMatchObject({
       kind: PrStewardRecordKind.Blocker,
       eventId: 'event-pull_request',
       headSha: HEAD,

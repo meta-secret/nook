@@ -61,18 +61,18 @@ test('selection refuses competing usable dev worktrees', () => {
   expect(headB.isOk()).toBe(true);
   if (main.isErr() || headA.isErr() || headB.isErr()) return;
   const records = [
-    new WorktreeRecord(
-      '/tmp/a',
-      headA.value,
-      { kind: WorktreeBranchKind.Branch, name: main.value },
-      false,
-    ),
-    new WorktreeRecord(
-      '/tmp/b',
-      headB.value,
-      { kind: WorktreeBranchKind.Branch, name: main.value },
-      false,
-    ),
+    new WorktreeRecord({
+      path: '/tmp/a',
+      head: headA.value,
+      branch: { kind: WorktreeBranchKind.Branch, name: main.value },
+      prunable: false,
+    }),
+    new WorktreeRecord({
+      path: '/tmp/b',
+      head: headB.value,
+      branch: { kind: WorktreeBranchKind.Branch, name: main.value },
+      prunable: false,
+    }),
   ];
   const selected = new DevelopmentWorktreeSelection().select(records);
   expect(selected.isErr()).toBe(true);

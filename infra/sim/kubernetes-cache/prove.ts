@@ -360,7 +360,7 @@ class CacheRuntimeProof {
     if (new Set(buildkitNodes).size !== 3)
       return err({
         kind: CacheFailureKind.Identity,
-        message: `BuildKit anti-affinity: expected 3 nodes, got ${buildkitNodes}`,
+        message: `BuildKit anti-affinity: expected 3 nodes, got ${buildkitNodes.join(",")}`,
       });
     const [firstNode] = buildkitNodes;
     if (typeof firstNode !== "string")

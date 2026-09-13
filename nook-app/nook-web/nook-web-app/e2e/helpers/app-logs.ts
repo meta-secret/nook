@@ -31,10 +31,9 @@ function buildAppLogsUrl(options?: {
   return query ? `/app-logs?${query}` : '/app-logs'
 }
 
-function parseLogLevel(value: string | undefined): LogLevel {
-  switch (value?.trim().toLowerCase()) {
-    case undefined:
-      return LogLevel.Trace
+function parseLogLevel(value?: string): LogLevel {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  switch (normalized) {
     case LogLevel.Error:
       return LogLevel.Error
     case LogLevel.Warn:
@@ -163,17 +162,16 @@ export async function fetchAppLogs(
   const entries: NookLogEntry[] = []
   for (const entryValue of entriesValue) {
     const entry = requireRecord(entryValue, 'app log entry')
-    const data = entry.data
-    if (data !== undefined && typeof data !== 'string') {
-      throw new Error('Unexpected app log data payload')
-    }
-    entries.push({
+    const parsedEntry: NookLogEntry = {
       ts: readStringProperty(entry, 'ts', 'app log entry'),
       level: readStringProperty(entry, 'level', 'app log entry'),
       scope: readStringProperty(entry, 'scope', 'app log entry'),
       message: readStringProperty(entry, 'message', 'app log entry'),
-      ...(data === undefined ? {} : { data }),
-    })
+    }
+    if (Object.prototype.hasOwnProperty.call(entry, 'data')) {
+      parsedEntry.data = readStringProperty(entry, 'data', 'app log entry')
+    }
+    entries.push(parsedEntry)
   }
   const readNumberProperty = (key: string): number => {
     const value = metaRecord[key]
@@ -482,7 +480,7 @@ export async function attachNookLogsForTest(
         payload.entries.slice(-APP_LOGS_FAILURE_PRINT_LIMIT),
       )
     }
-    const body = JSON.stringify(payload, null, 2)
+    const body = JSON.stringify(payload, (_key, value) => value, 2)
     const attachmentName =
       options && options.attachmentName
         ? options.attachmentName

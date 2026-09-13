@@ -117,7 +117,8 @@ describe('assigned PR GitHub reader', () => {
     expect(failure === false ? false : failure.cause).toBe(cause);
     await expect(
       reader.read({
-        repository: 'attacker/nook' as typeof PR_STEWARD_REPOSITORY,
+        // @ts-expect-error foreign repository is intentionally rejected
+        repository: 'attacker/nook',
         pullRequest: PULL_REQUEST,
       }),
     ).rejects.toThrow('Assigned pull request observation is unavailable.');

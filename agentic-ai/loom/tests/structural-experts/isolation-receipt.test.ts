@@ -207,9 +207,10 @@ test('rejects a structurally forged structural isolation receipt', () => {
     StructuralExpertsIsolationReceiptFixture.structuralInvocation();
   const isolationRequest =
     StructuralExpertsIsolationReceiptFixture.structuralIsolationRequest();
-  const receipt = {
+  const receipt: StructuralExpertIsolationReceipt = {
+    // @ts-expect-error forged discriminator intentionally has the wrong kind
     kind: 'structural-expert-isolation-receipt',
-  } as StructuralExpertIsolationReceipt;
+  };
   const execution: IsolatedStructuralExpertExecution = {
     completion: {
       threadId: 'forged-thread',

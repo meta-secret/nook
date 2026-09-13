@@ -18,7 +18,7 @@ fn task(id: String, dependencies: Vec<TaskId>) -> anyhow::Result<EnqueueTask> {
     })
 }
 
-impl<'a> FixtureCompletion<'a> {
+impl FixtureCompletion<'_> {
     async fn complete(self) -> anyhow::Result<()> {
         let Self {
             store,
@@ -159,7 +159,7 @@ pub async fn verify_block_serializes_with_retirement(
     let blocking_agent = agent.clone();
     let blocking_task = owner_claim.clone();
     let blocking_definition = blocker.clone();
-    let blocked = tokio::spawn(async move {
+    let blocked_handle = tokio::spawn(async move {
         blocking_store
             .block(
                 &blocking_task,
@@ -172,7 +172,7 @@ pub async fn verify_block_serializes_with_retirement(
     sleep(Duration::from_millis(100)).await;
     retirement.commit().await?;
     assert!(
-        timeout(Duration::from_secs(5), blocked)
+        timeout(Duration::from_secs(5), blocked_handle)
             .await
             .map_err(|_| anyhow::anyhow!(
                 "blocker attachment remained locked after retirement"
@@ -209,6 +209,47 @@ pub async fn verify_release_retry(
     agent: &AgentId,
     suffix: &str,
 ) -> anyhow::Result<()> {
+    let fixture = prepare_release_retry(store, agent, suffix).await?;
+    retry_release_after_retirement(store, graph, agent, &fixture).await?;
+    let rearmed_blocker = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
+    assert_eq!(
+        rearmed_blocker.id, fixture.blocker.id,
+        "release-scoped retry must rearm an obsolete dependency before its owner"
+    );
+    assert_eq!(rearmed_blocker.attempt_number, 2);
+    FixtureCompletion {
+        store,
+        task: &rearmed_blocker,
+        agent,
+        obsolete: hive::model::CompletionRelevance::Current,
+        summary: "retired prerequisite repaired for retry",
+    }
+    .complete()
+    .await?;
+    let resumed_owner = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
+    assert_eq!(resumed_owner.id, fixture.owner.id);
+    FixtureCompletion {
+        store,
+        task: &resumed_owner,
+        agent,
+        obsolete: hive::model::CompletionRelevance::Current,
+        summary: "release-scoped retry completed",
+    }
+    .complete()
+    .await
+}
+
+struct ReleaseRetryFixture {
+    blocker: EnqueueTask,
+    owner: EnqueueTask,
+    owner_claim: ClaimedTask,
+}
+
+async fn prepare_release_retry(
+    store: &Neo4jTaskStore,
+    agent: &AgentId,
+    suffix: &str,
+) -> anyhow::Result<ReleaseRetryFixture> {
     let mut blocker = task(format!("retry-obsolete-blocker-{suffix}"), Vec::new())?;
     blocker.kind = "blocker".into();
     let mut owner = task(
@@ -232,9 +273,26 @@ pub async fn verify_release_retry(
     .await?;
     let owner_claim = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(owner_claim.id, owner.id);
+    Ok(ReleaseRetryFixture {
+        blocker,
+        owner,
+        owner_claim,
+    })
+}
+
+async fn retry_release_after_retirement(
+    store: &Neo4jTaskStore,
+    graph: &Graph,
+    agent: &AgentId,
+    fixture: &ReleaseRetryFixture,
+) -> anyhow::Result<()> {
     assert!(
         store
-            .fail(&owner_claim, agent, "delivery failed after retirement")
+            .fail(
+                &fixture.owner_claim,
+                agent,
+                "delivery failed after retirement"
+            )
             .await?
     );
     let mut retirement = graph.start_txn().await?;
@@ -246,11 +304,11 @@ pub async fn verify_release_retry(
                      blocker.max_attempts = 9,
                      blocker.version = blocker.version + 1",
             )
-            .param("blocker_id", blocker.id.as_str()),
+            .param("blocker_id", fixture.blocker.id.as_str()),
         )
         .await?;
     let retry_store = store.clone();
-    let retry_owner = owner.id.clone();
+    let retry_owner = fixture.owner.id.clone();
     let retried = tokio::spawn(async move {
         retry_store
             .retry_failed_main_task(
@@ -272,7 +330,7 @@ pub async fn verify_release_retry(
                 "MATCH (blocker:Task {id: $blocker_id})
                  RETURN blocker.max_attempts AS max_attempts",
             )
-            .param("blocker_id", blocker.id.as_str()),
+            .param("blocker_id", fixture.blocker.id.as_str()),
         )
         .await?;
     assert_eq!(
@@ -284,32 +342,7 @@ pub async fn verify_release_retry(
         9,
         "obsolete rearming must preserve a larger operator-granted budget"
     );
-    let rearmed_blocker = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
-    assert_eq!(
-        rearmed_blocker.id, blocker.id,
-        "release-scoped retry must rearm an obsolete dependency before its owner"
-    );
-    assert_eq!(rearmed_blocker.attempt_number, 2);
-    FixtureCompletion {
-        store,
-        task: &rearmed_blocker,
-        agent,
-        obsolete: hive::model::CompletionRelevance::Current,
-        summary: "retired prerequisite repaired for retry",
-    }
-    .complete()
-    .await?;
-    let resumed_owner = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
-    assert_eq!(resumed_owner.id, owner.id);
-    FixtureCompletion {
-        store,
-        task: &resumed_owner,
-        agent,
-        obsolete: hive::model::CompletionRelevance::Current,
-        summary: "release-scoped retry completed",
-    }
-    .complete()
-    .await
+    Ok(())
 }
 
 pub async fn verify_blocked_release_retry(
@@ -318,6 +351,23 @@ pub async fn verify_blocked_release_retry(
     agent: &AgentId,
     suffix: &str,
 ) -> anyhow::Result<()> {
+    let fixture = prepare_blocked_release_retry(store, graph, suffix).await?;
+    let revived_leaf = inspect_blocked_release_retry(store, graph, agent, &fixture).await?;
+    complete_blocked_release_retry(store, agent, &fixture, &revived_leaf).await
+}
+
+struct BlockedReleaseRetryFixture {
+    leaf: EnqueueTask,
+    ready: EnqueueTask,
+    parent: EnqueueTask,
+    repair: EnqueueTask,
+}
+
+async fn prepare_blocked_release_retry(
+    store: &Neo4jTaskStore,
+    graph: &Graph,
+    suffix: &str,
+) -> anyhow::Result<BlockedReleaseRetryFixture> {
     let leaf = task(format!("stalled-leaf-{suffix}"), Vec::new())?;
     let ready = task(format!("stalled-ready-{suffix}"), Vec::new())?;
     let parent = task(format!("stalled-parent-{suffix}"), vec![leaf.id.clone()])?;
@@ -360,10 +410,24 @@ pub async fn verify_blocked_release_retry(
             .param("attempt_id", format!("stale-parent-attempt-{suffix}")),
         )
         .await?;
+    Ok(BlockedReleaseRetryFixture {
+        leaf,
+        ready,
+        parent,
+        repair,
+    })
+}
+
+async fn inspect_blocked_release_retry(
+    store: &Neo4jTaskStore,
+    graph: &Graph,
+    agent: &AgentId,
+    fixture: &BlockedReleaseRetryFixture,
+) -> anyhow::Result<ClaimedTask> {
     assert!(
         store
             .retry_failed_main_task(
-                &repair.id,
+                &fixture.repair.id,
                 "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
             )
             .await?,
@@ -380,9 +444,9 @@ pub async fn verify_blocked_release_retry(
                         parent.status AS parent_status,
                         parent.blocked_reason AS parent_blocked_reason",
             )
-            .param("leaf_id", leaf.id.as_str())
-            .param("ready_id", ready.id.as_str())
-            .param("parent_id", parent.id.as_str()),
+            .param("leaf_id", fixture.leaf.id.as_str())
+            .param("ready_id", fixture.ready.id.as_str())
+            .param("parent_id", fixture.parent.id.as_str()),
         )
         .await?;
     let retry_row = retry_rows
@@ -400,7 +464,10 @@ pub async fn verify_blocked_release_retry(
         !retry_row.get::<String>("parent_blocked_reason")?.is_empty(),
         "a member that remains blocked must retain an operator-visible reason"
     );
-    let observed_parent = match store.observer_task_view(parent.id.as_str(), "en").await? {
+    let observed_parent = match store
+        .observer_task_view(fixture.parent.id.as_str(), "en")
+        .await?
+    {
         hive::observer::TaskObservation::Observed(task) => task,
         hive::observer::TaskObservation::Missing => {
             anyhow::bail!("retried blocked parent must be visible to the observer")
@@ -411,11 +478,11 @@ pub async fn verify_blocked_release_retry(
         "Control Center must prefer the current blocked reason over a stale attempt error"
     );
     let revived_leaf = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
-    assert_eq!(revived_leaf.id, leaf.id);
+    assert_eq!(revived_leaf.id, fixture.leaf.id);
     assert!(
         !store
             .retry_failed_main_task(
-                &repair.id,
+                &fixture.repair.id,
                 "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
             )
             .await?,
@@ -427,7 +494,7 @@ pub async fn verify_blocked_release_retry(
                 "MATCH (repair:Task {id: $repair_id})
                  RETURN repair.last_retry_release AS last_retry_release",
             )
-            .param("repair_id", repair.id.as_str()),
+            .param("repair_id", fixture.repair.id.as_str()),
         )
         .await?;
     assert_eq!(
@@ -439,9 +506,18 @@ pub async fn verify_blocked_release_retry(
         "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         "refusing an active graph must not consume the new release"
     );
+    Ok(revived_leaf)
+}
+
+async fn complete_blocked_release_retry(
+    store: &Neo4jTaskStore,
+    agent: &AgentId,
+    fixture: &BlockedReleaseRetryFixture,
+    revived_leaf: &ClaimedTask,
+) -> anyhow::Result<()> {
     FixtureCompletion {
         store,
-        task: &revived_leaf,
+        task: revived_leaf,
         agent,
         obsolete: hive::model::CompletionRelevance::Current,
         summary: "historical prerequisite is obsolete",
@@ -449,7 +525,7 @@ pub async fn verify_blocked_release_retry(
     .complete()
     .await?;
     let revived_ready = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
-    assert_eq!(revived_ready.id, ready.id);
+    assert_eq!(revived_ready.id, fixture.ready.id);
     assert_eq!(revived_ready.attempt_number, 3);
     FixtureCompletion {
         store,
@@ -461,7 +537,7 @@ pub async fn verify_blocked_release_retry(
     .complete()
     .await?;
     let revived_parent = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
-    assert_eq!(revived_parent.id, parent.id);
+    assert_eq!(revived_parent.id, fixture.parent.id);
     FixtureCompletion {
         store,
         task: &revived_parent,
@@ -472,7 +548,7 @@ pub async fn verify_blocked_release_retry(
     .complete()
     .await?;
     let revived_repair = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
-    assert_eq!(revived_repair.id, repair.id);
+    assert_eq!(revived_repair.id, fixture.repair.id);
     FixtureCompletion {
         store,
         task: &revived_repair,

@@ -95,7 +95,14 @@ class NatsWebSocketSession {
   private captureMessage(event: MessageEvent): void {
     if (this.received.kind === NatsReceiveKind.Failed) return;
     try {
-      const text = typeof event.data === "string" ? event.data : this.decoder.decode(event.data);
+      const text =
+        typeof event.data === "string"
+          ? event.data
+          : event.data instanceof ArrayBuffer || ArrayBuffer.isView(event.data)
+            ? this.decoder.decode(event.data)
+            : (() => {
+                throw new TypeError("Unsupported WSS message data");
+              })();
       this.received = { kind: NatsReceiveKind.Listening, text: this.received.text + text };
     } catch { this.captureFailure(); }
   }

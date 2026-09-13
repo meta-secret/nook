@@ -226,9 +226,10 @@ test('binds structural journal and completion authorities exactly once', async (
         sessionRequest,
       );
     const reboundIdentity = { ...created.identity, task: 'rebound-task' };
-    const forgedJournal = {
+    const forgedJournal: StructuralJournalAuthority = {
+      // @ts-expect-error forged discriminator intentionally has the wrong kind
       kind: 'structural-expert-journal-authority',
-    } as StructuralJournalAuthority;
+    };
     const forgedJournalRequest: ConsumeStructuralJournalAuthorityRequest = {
       authority: forgedJournal,
       identity: created.identity,
@@ -280,9 +281,10 @@ test('binds structural journal and completion authorities exactly once', async (
     const executionResult = await executionPromise;
     assert(executionResult.isOk());
     const execution = executionResult.value;
-    const forgedAuthority = {
+    const forgedAuthority: StructuralCompletionAuthority = {
+      // @ts-expect-error forged discriminator intentionally has the wrong kind
       kind: 'structural-expert-completion-authority',
-    } as StructuralCompletionAuthority;
+    };
     const forgedExecution: TrustedStructuralExecution = {
       completion: execution.completion,
       authority: forgedAuthority,

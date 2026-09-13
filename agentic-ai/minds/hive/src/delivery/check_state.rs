@@ -31,7 +31,7 @@ impl From<CheckExecution> for String {
     fn from(value: CheckExecution) -> Self {
         match value {
             CheckExecution::Other(value) => value,
-            value => value.as_str().to_owned(),
+            value @ CheckExecution::Completed => value.as_str().to_owned(),
         }
     }
 }
@@ -131,7 +131,7 @@ impl From<RunExecution> for String {
     fn from(value: RunExecution) -> Self {
         match value {
             RunExecution::Other(value) => value,
-            value => value.as_str().to_owned(),
+            value @ RunExecution::Completed => value.as_str().to_owned(),
         }
     }
 }

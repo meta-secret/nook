@@ -396,7 +396,7 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('login-gate').getByTestId('devices-access-dashboard'),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     const dashboardVaultIsAuthenticated = () =>
-      page.evaluate(() => window.__nookVault?.isAuthenticated ?? false)
+      page.evaluate(() => window.__nookVault?.isAuthenticated === true)
     expect(await dashboardVaultIsAuthenticated()).toBe(false)
     await workIdentity.click()
     await expect(workIdentity).toHaveAttribute('data-selected', 'true')
@@ -893,7 +893,7 @@ test.describe('devices and access dashboard', () => {
                 return
               }
               const keyring: unknown = JSON.parse(keyringRaw)
-              if (typeof keyring !== 'object' || keyring === null) {
+              if (typeof keyring !== 'object' || Object(keyring) !== keyring) {
                 reject(new Error('Local identity keyring was not an object'))
                 return
               }
@@ -906,7 +906,10 @@ test.describe('devices and access dashboard', () => {
                 return
               }
               const firstEntry: unknown = entriesValue[0]
-              if (typeof firstEntry !== 'object' || firstEntry === null) {
+              if (
+                typeof firstEntry !== 'object' ||
+                Object(firstEntry) !== firstEntry
+              ) {
                 reject(new Error('Local identity keyring has no app key'))
                 return
               }
@@ -928,7 +931,10 @@ test.describe('devices and access dashboard', () => {
                   return
                 }
                 const profile: unknown = JSON.parse(raw)
-                if (typeof profile !== 'object' || profile === null) {
+                if (
+                  typeof profile !== 'object' ||
+                  Object(profile) !== profile
+                ) {
                   reject(new Error('Device access profile was not an object'))
                   return
                 }

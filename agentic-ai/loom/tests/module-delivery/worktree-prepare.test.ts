@@ -12,6 +12,8 @@ import { join } from 'node:path';
 
 import { ModuleWorktree } from '../../src/module-delivery/index.ts';
 
+import { ModuleWorktreeRole } from '../../src/module-delivery/workspace.ts';
+
 import { ModuleRepositoryGit } from '../../src/module-delivery/git-command.ts';
 
 import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-support.ts';
@@ -80,7 +82,7 @@ describe('prepareModuleWorktree', () => {
       ModuleDeliveryWorktreeTestSupportScenario.worktreeGit(workspace);
 
     expect(workspace.baselineCommit).toBe(fixture.baselineCommit);
-    expect(workspace.role).toBe('child');
+    expect(workspace.role).toBe(ModuleWorktreeRole.Child);
     expect(workspace.worktreePath).toBe(
       join(fixture.workspaceRoot, 'core-provider-attempt-1'),
     );
@@ -148,7 +150,7 @@ describe('prepareModuleWorktree', () => {
       taskId: 'module-delivery-integration',
     });
 
-    expect(workspace.role).toBe('integration-parent');
+    expect(workspace.role).toBe(ModuleWorktreeRole.IntegrationParent);
     expect(workspace.worktreePath).toBe(fixture.sourceRoot);
     expect(workspace.ownedWorkspaceRoot).toBe(fixture.workspaceRoot);
     expect(

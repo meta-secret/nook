@@ -1,12 +1,34 @@
-const assert = require('node:assert/strict')
-const test = require('node:test')
+/** @type {(moduleName: string) => unknown} */
+const loadBuiltin = /** @type {(moduleName: string) => unknown} */ (process.getBuiltinModule.bind(process))
+/** @type {typeof import('node:assert/strict')} */
+const assert = /** @type {typeof import('node:assert/strict')} */ (loadBuiltin('node:assert/strict'))
+/** @type {typeof import('node:test')} */
+const test = /** @type {typeof import('node:test')} */ (loadBuiltin('node:test'))
 
-const { validateAgentRecord } = require('./workbench-records.cjs')
+/**
+ * @template T
+ * @param {string} modulePath
+ * @returns {T}
+ */
+function loadModule(modulePath) {
+  const loaded = /** @type {unknown} */ (module.require(modulePath))
+  if (!loaded || typeof loaded !== 'object') {
+    throw new Error('module has an invalid contract')
+  }
+  return /** @type {T} */ (loaded)
+}
 
+/** @typedef {(candidate: string, kind: string, issues?: string[], sourceTask?: string, metadata?: { assignedGizmoId?: string }) => string} ValidateAgentRecord */
+/** @type {{ validateAgentRecord: ValidateAgentRecord }} */
+const recordsModule = loadModule('./workbench-records.cjs')
+const validateAgentRecord = recordsModule.validateAgentRecord
+
+/** @param {number} number @param {string} gizmoId @param {string} [capability] */
 function ownershipUnit(number, gizmoId, capability = 'Plan validation') {
   return `${number}. Capability: ${capability}; Gizmo ID: ${gizmoId}; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Contract tests pass`
 }
 
+/** @param {number} number @param {string} gizmoId @param {string} [predecessor] @param {string} [scope] @param {number} [estimate] @param {string} [evidence] */
 function slice(number, gizmoId, predecessor = 'None', scope = 'Validator', estimate = 200, evidence = 'Contract tests pass') {
   return `${number}. Gizmo ID: ${gizmoId}; Gizmo name: Validator ${number}; Predecessor Gizmo ID: ${predecessor}; ${scope}; Estimated authored changed lines: ${estimate}; Acceptance evidence: ${evidence}`
 }
@@ -64,11 +86,12 @@ ${slices.join('\n')}
 `
 }
 
+/** @param {string} candidate @param {string} [assignedGizmoId] */
 function validate(candidate, assignedGizmoId = '') {
   return validateAgentRecord(candidate, 'plan', [], '', { assignedGizmoId })
 }
 
-test('accepts multiple ownership units mapped to the sole Gizmo', () => {
+void test('accepts multiple ownership units mapped to the sole Gizmo', () => {
   const candidate = plan({
     ownershipUnits: [
       ownershipUnit(1, 'gizmo-1'),
@@ -78,7 +101,7 @@ test('accepts multiple ownership units mapped to the sole Gizmo', () => {
   assert.equal(validate(candidate, 'gizmo-1'), '')
 })
 
-test('accepts a canonical Gizmo ID that starts with a digit', () => {
+void test('accepts a canonical Gizmo ID that starts with a digit', () => {
   const candidate = plan({
     currentGizmoId: '2fa-slice',
     ownershipUnits: [ownershipUnit(1, '2fa-slice')],
@@ -87,7 +110,7 @@ test('accepts a canonical Gizmo ID that starts with a digit', () => {
   assert.equal(validate(candidate, '2fa-slice'), '')
 })
 
-test('accepts a strictly sequential multi-PR feature plan', () => {
+void test('accepts a strictly sequential multi-PR feature plan', () => {
   const candidate = plan({
     currentGizmoId: 'gizmo-1',
     ownershipUnits: [
@@ -106,7 +129,7 @@ test('accepts a strictly sequential multi-PR feature plan', () => {
   assert.equal(validate(candidate, 'gizmo-1'), '')
 })
 
-test('rejects a predecessor on the sole PR row', () => {
+void test('rejects a predecessor on the sole PR row', () => {
   assert.match(
     validate(plan({ slices: [slice(1, 'gizmo-1', 'gizmo-0')] })),
     /must not declare a predecessor/,
@@ -117,12 +140,12 @@ for (const [shape, mode] of [
   ['Multiple PRs', 'Independent PRs'],
   ['Multiple PRs', 'Stacked PRs'],
 ]) {
-  test(`rejects ${mode}`, () => {
+void   test(`rejects ${mode}`, () => {
     assert.notEqual(validate(plan({ shape, mode })), '')
   })
 }
 
-test('rejects a sequential slice whose predecessor is not the prior slice', () => {
+void test('rejects a sequential slice whose predecessor is not the prior slice', () => {
   const candidate = plan({
     ownershipUnits: [
       ownershipUnit(1, 'gizmo-1'),
@@ -140,7 +163,7 @@ test('rejects a sequential slice whose predecessor is not the prior slice', () =
   assert.match(validate(candidate), /immediately preceding Gizmo ID/)
 })
 
-test('rejects sequential delivery when the complete feature fits one PR', () => {
+void test('rejects sequential delivery when the complete feature fits one PR', () => {
   const candidate = plan({
     ownershipUnits: [
       ownershipUnit(1, 'gizmo-1'),
@@ -158,7 +181,7 @@ test('rejects sequential delivery when the complete feature fits one PR', () => 
   assert.match(validate(candidate), /necessary feature estimate above 2,000/)
 })
 
-test('rejects sequential slices with duplicate observable functionality', () => {
+void test('rejects sequential slices with duplicate observable functionality', () => {
   const candidate = plan({
     ownershipUnits: [
       ownershipUnit(1, 'gizmo-1'),
@@ -176,7 +199,7 @@ test('rejects sequential slices with duplicate observable functionality', () => 
   assert.match(validate(candidate), /distinct observable functionality/)
 })
 
-test('rejects sequential slices with duplicate acceptance evidence', () => {
+void test('rejects sequential slices with duplicate acceptance evidence', () => {
   const candidate = plan({
     ownershipUnits: [
       ownershipUnit(1, 'gizmo-1'),
@@ -194,14 +217,14 @@ test('rejects sequential slices with duplicate acceptance evidence', () => {
   assert.match(validate(candidate), /distinct acceptance evidence/)
 })
 
-test('rejects an ownership unit mapped to an undeclared Gizmo', () => {
+void test('rejects an ownership unit mapped to an undeclared Gizmo', () => {
   assert.match(
     validate(plan({ ownershipUnits: [ownershipUnit(1, 'gizmo-missing')] })),
     /every ownership unit must reference/,
   )
 })
 
-test('rejects a current Gizmo that differs from the sole row', () => {
+void test('rejects a current Gizmo that differs from the sole row', () => {
   assert.match(
     validate(plan({ currentGizmoId: 'gizmo-2' })),
     /current Gizmo ID must match/,
@@ -209,17 +232,17 @@ test('rejects a current Gizmo that differs from the sole row', () => {
 })
 
 for (const invalidId of ['slice--one', 'slice-']) {
-  test(`rejects noncanonical Gizmo ID ${invalidId}`, () => {
+void   test(`rejects noncanonical Gizmo ID ${invalidId}`, () => {
     assert.match(validate(plan(), invalidId), /trusted assigned Gizmo ID is invalid/)
   })
 }
 
-test('rejects a different plan ID for a trusted focused issue', () => {
+void test('rejects a different plan ID for a trusted focused issue', () => {
   assert.match(validate(plan(), 'gizmo-2'), /trusted focused-issue Gizmo ID/)
 })
 
 for (const forbiddenField of ['Parent Gizmo ID', 'Child Gizmo', 'Nested Gizmo ID']) {
-  test(`rejects ${forbiddenField} fields`, () => {
+void   test(`rejects ${forbiddenField} fields`, () => {
     const candidate = plan().replace(
       '- Current Gizmo ID: gizmo-1',
       `- Current Gizmo ID: gizmo-1\n- ${forbiddenField}: gizmo-2`,

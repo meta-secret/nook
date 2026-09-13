@@ -62,10 +62,11 @@ pub(crate) mod tests {
             let task = tasks
                 .get_mut(task_id.as_str())
                 .ok_or_else(|| crate::HiveError::message("task to expire must exist"))?;
-            task.lease = task
-                .lease
-                .clone()
-                .renew(Instant::now() - Duration::from_secs(1));
+            task.lease = task.lease.clone().renew(
+                Instant::now()
+                    .checked_sub(Duration::from_secs(1))
+                    .unwrap_or_else(Instant::now),
+            );
             Ok(())
         }
 
@@ -198,8 +199,9 @@ pub(crate) mod tests {
                         && &task.definition.kind == kind
                         && matches!(task.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
                 })
-                .map(|task| ActiveDelivery::Active(task.definition.id.clone()))
-                .unwrap_or(ActiveDelivery::Idle))
+                .map_or(ActiveDelivery::Idle, |task| {
+                    ActiveDelivery::Active(task.definition.id.clone())
+                }))
         }
 
         async fn cancel(&self, task_id: &TaskId, _reason: &str) -> crate::HiveResult<bool> {
@@ -612,7 +614,7 @@ pub(crate) mod tests {
             _ => Vec::new(),
         };
         assert_eq!(claims.len(), 1);
-        assert_eq!(claims[0].attempt_number, 1);
+        assert_eq!(claims.first().map(|claim| claim.attempt_number), Some(1));
         Ok(())
     }
 

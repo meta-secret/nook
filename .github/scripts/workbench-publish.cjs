@@ -1,9 +1,18 @@
 #!/usr/bin/env node
 
-const { execFileSync } = require('node:child_process')
-const { readFileSync, realpathSync } = require('node:fs')
-const { isAbsolute, relative, resolve, sep } = require('node:path')
-const { validateAgentRecord } = require('./workbench-records.cjs')
+const { execFileSync } = process.getBuiltinModule('node:child_process')
+const { readFileSync, realpathSync } = process.getBuiltinModule('node:fs')
+const { isAbsolute, relative, resolve, sep } = process.getBuiltinModule('node:path')
+/** @template T @param {string} modulePath @returns {T} */
+function loadModule(modulePath) {
+  const loaded = /** @type {unknown} */ (module.require(modulePath))
+  return /** @type {T} */ (loaded)
+}
+
+/** @typedef {(candidate: string, kind: 'plan' | 'worklog', issues?: string[], sourceTask?: string, metadata?: { assignedGizmoId?: string }) => string} ValidateAgentRecord */
+/** @type {{ validateAgentRecord: ValidateAgentRecord }} */
+const records = loadModule('./workbench-records.cjs')
+const { validateAgentRecord } = records
 
 const WorkbenchRemoteFileKind = Object.freeze({
   Missing: 'missing',
@@ -83,6 +92,22 @@ function fetchRemoteIssueAssignment(issuePath) {
       : { kind: 'invalid' }
   } catch {
     return { kind: 'invalid' }
+  }
+}
+
+/** @returns {WorkbenchRemoteFile} */
+function readRemoteFile() {
+  try {
+    return {
+      kind: WorkbenchRemoteFileKind.Present,
+      sha: execFileSync(
+        'gh',
+        ['api', `repos/${repository}/contents/${remotePath}`, '--jq', '.sha'],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+      ).trim(),
+    }
+  } catch {
+    return { kind: WorkbenchRemoteFileKind.Missing }
   }
 }
 
@@ -194,20 +219,7 @@ if (remotePath.startsWith('plans/')) {
   }
 }
 const content = Buffer.from(localContent).toString('base64')
-/** @type {WorkbenchRemoteFile} */
-let remoteFile = { kind: WorkbenchRemoteFileKind.Missing }
-try {
-  remoteFile = {
-    kind: WorkbenchRemoteFileKind.Present,
-    sha: execFileSync(
-      'gh',
-      ['api', `repos/${repository}/contents/${remotePath}`, '--jq', '.sha'],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-    ).trim(),
-  }
-} catch {
-  remoteFile = { kind: WorkbenchRemoteFileKind.Missing }
-}
+const remoteFile = readRemoteFile()
 
 if (
   remoteFile.kind === WorkbenchRemoteFileKind.Present &&

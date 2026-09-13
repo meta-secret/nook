@@ -109,8 +109,9 @@ export class OperationalCommandProbe {
       this.request.stdin instanceof Blob
         ? this.request.stdin
         : OperationalProbeStream.Ignore;
-    switch (this.request.cmd[0]) {
-      case OperationalProbeExecutable.Awk:
+    const [command = ""] = this.request.cmd;
+    switch (command) {
+      case String(OperationalProbeExecutable.Awk): {
         const [, program = ""] = this.request.cmd;
         return Bun.spawnSync({
           cmd: ["awk", program],
@@ -118,14 +119,16 @@ export class OperationalCommandProbe {
           stdout: this.request.stdout,
           stderr: this.request.stderr,
         });
-      case OperationalProbeExecutable.Bash:
+      }
+      case String(OperationalProbeExecutable.Bash): {
         return Bun.spawnSync({
           cmd: ["bash"],
           stdin,
           stdout: this.request.stdout,
           stderr: this.request.stderr,
         });
-      case OperationalProbeExecutable.Jq:
+      }
+      case String(OperationalProbeExecutable.Jq): {
         if (this.request.cmd.length === 7) {
           const [
             ,
@@ -165,7 +168,8 @@ export class OperationalCommandProbe {
           stdout: this.request.stdout,
           stderr: this.request.stderr,
         });
-      default:
+      }
+      default: {
         const [script = "", firstArgument = "", secondArgument = ""] =
           this.request.cmd;
         return script.endsWith(".rb")
@@ -179,8 +183,9 @@ export class OperationalCommandProbe {
               cmd: ["bash", script],
               stdin,
               stdout: this.request.stdout,
-              stderr: this.request.stderr,
-            });
+            stderr: this.request.stderr,
+          });
+      }
     }
   }
   execute(): Result<OperationalProbeOutcome, OperationalContractFailure> {

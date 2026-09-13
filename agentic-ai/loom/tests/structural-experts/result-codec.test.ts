@@ -49,16 +49,16 @@ export class StructuralExpertsResultCodecScenario {
       input.output,
     );
     const continuation = StructuralExpertsResultCodecScenario.requiredTestMap(
-      output.continuation as UntrustedYamlNode,
+      UntrustedYamlBoundary.fromHost(output.continuation),
     );
     const assessment = StructuralExpertsResultCodecScenario.requiredTestMap(
-      continuation[input.field] as UntrustedYamlNode,
+      UntrustedYamlBoundary.fromHost(continuation[input.field]),
     );
     const findings = StructuralExpertsResultCodecScenario.requiredTestSequence(
-      assessment.findings as UntrustedYamlNode,
+      UntrustedYamlBoundary.fromHost(assessment.findings),
     );
     const first = StructuralExpertsResultCodecScenario.requiredTestMap(
-      findings[0] as UntrustedYamlNode,
+      UntrustedYamlBoundary.fromHost(findings[0]),
     );
     const replacement = {
       ...first,
@@ -84,7 +84,7 @@ export class StructuralExpertsResultCodecScenario {
       input.output,
     );
     const continuation = StructuralExpertsResultCodecScenario.requiredTestMap(
-      output.continuation as UntrustedYamlNode,
+      UntrustedYamlBoundary.fromHost(output.continuation),
     );
     return {
       ...output,
@@ -95,7 +95,9 @@ export class StructuralExpertsResultCodecScenario {
   static transportMap(
     value: CodeRefactoringTaskOutput | CortexRefactoringTaskOutput,
   ): UntrustedYamlMap {
-    const node = JSON.parse(JSON.stringify(value)) as UntrustedYamlNode;
+    const node = UntrustedYamlBoundary.fromJson(
+      JSON.parse(JSON.stringify(value)),
+    );
     return StructuralExpertsResultCodecScenario.requiredTestMap(node);
   }
 
@@ -109,7 +111,8 @@ export class StructuralExpertsResultCodecScenario {
   static requiredTestSequence(
     node: UntrustedYamlNode,
   ): readonly UntrustedYamlNode[] {
-    if (!Array.isArray(node)) throw new Error('Test fixture array is missing.');
+    if (!UntrustedYamlBoundary.isList(node))
+      throw new Error('Test fixture array is missing.');
     return node;
   }
 
@@ -415,10 +418,10 @@ test('rejects incomplete evidence and depth-three structural authority', () => {
   ).toThrow('missing or extra fields');
 
   const plan = StructuralExpertsResultCodecScenario.structuralPlan();
-  const depthThree: StructuralExpertPlanTaskOutput = {
+  const depthThree = {
     ...plan,
     structuralExpertAuthorizations: plan.structuralExpertAuthorizations.map(
-      (authorization) => ({ ...authorization, depth: 3 as 2 }),
+      (authorization) => ({ ...authorization, depth: 3 }),
     ),
   };
   expect(() =>
@@ -433,7 +436,7 @@ test('rejects malformed, duplicate, extra, and unbounded typed structural record
   )('malformed-finding');
   const invalidSeverity = {
     ...finding,
-    severity: 'urgent' as StructuralFindingSeverity,
+    severity: 'urgent',
   };
   const extraFinding = { ...finding, extraAuthority: true };
   const malformedOutputs = [
@@ -443,6 +446,7 @@ test('rejects malformed, duplicate, extra, and unbounded typed structural record
         ...code.continuation,
         architectureFindings:
           StructuralExpertsResultCodecScenario.findingsAssessment([
+            // @ts-expect-error malformed severity is intentional
             invalidSeverity,
           ]),
       },

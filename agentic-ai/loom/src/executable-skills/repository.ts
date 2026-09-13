@@ -504,9 +504,7 @@ export class ExecutableSkillRepository {
     try {
       skillName =
         typeof frontmatter === 'string'
-          ? UntrustedYamlBoundary.fromHost(
-              Bun.YAML.parse(frontmatter) as UntrustedYamlNode,
-            )
+          ? UntrustedYamlBoundary.fromHost(Bun.YAML.parse(frontmatter))
           : false;
     } catch {
       skillName = false;
@@ -619,9 +617,7 @@ export class ExecutableSkillRepository {
     try {
       const source = readFileSync(path.join(repoRoot, relativePath), 'utf8');
       const parsed = UntrustedYamlBoundary.fromHost(
-        (json5
-          ? Bun.JSON5.parse(source)
-          : JSON.parse(source)) as UntrustedYamlNode,
+        json5 ? Bun.JSON5.parse(source) : JSON.parse(source),
       );
       if (UntrustedYamlBoundary.isRecord(parsed)) return parsed;
     } catch {

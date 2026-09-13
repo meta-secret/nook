@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { GITHUB_EVENT_LOG_PATH } from '../../../e2e/github-api'
-import { waitForVaultYaml } from '../../../e2e/helpers'
+import {
+  GITHUB_EVENT_LOG_PATH,
+  GITHUB_VAULT_PATH,
+} from '../../../e2e/github-api'
+import {
+  waitForGithubVaultProjectionState,
+  waitForVaultYaml,
+} from '../../../e2e/helpers'
 
 const eventDigest = 'A'.repeat(43)
 const eventPath = `${GITHUB_EVENT_LOG_PATH}/${eventDigest}.yaml`
@@ -66,5 +72,42 @@ describe('waitForVaultYaml GitHub observer', () => {
     expect(requests).not.toContain(
       'https://api.github.com/repos/owner/observer-test/contents/nook-events',
     )
+  })
+
+  test('waits for a stale projection to catch up before taking a deletion baseline', async () => {
+    const projectionYamls: [string, string] = [
+      'secrets: []',
+      `secrets:
+  - id: existing-secret
+    type: login
+    data: encrypted-value`,
+    ]
+    let projectionReads = 0
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url === 'https://api.github.com/user') {
+        return response({ login: 'owner' })
+      }
+      if (
+        url ===
+        `https://api.github.com/repos/owner/projection-test/contents/${GITHUB_VAULT_PATH}`
+      ) {
+        const yaml =
+          projectionReads++ === 0 ? projectionYamls[0] : projectionYamls[1]
+        return response({ content: Buffer.from(yaml).toString('base64') })
+      }
+      throw new Error(`unexpected GitHub request: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const snapshot = await waitForGithubVaultProjectionState(
+      'test-pat',
+      'projection-test',
+      (candidate) => candidate.secretIds.length > 0,
+      { timeoutMs: 1_000, intervalMs: 1 },
+    )
+
+    expect(snapshot.secretIds).toEqual(['existing-secret'])
+    expect(projectionReads).toBe(2)
   })
 })

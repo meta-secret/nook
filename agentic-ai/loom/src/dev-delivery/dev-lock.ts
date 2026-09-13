@@ -56,18 +56,26 @@ export class DevLock {
         message: `Unable to record ownership for ${this.request.name}: ${lockPath}`,
       });
     }
-    return ok(new DevLockLease(lockPath, ownerPath, token));
+    return ok(new DevLockLease({ lockPath, ownerPath, token }));
   }
 }
 
 export class DevLockLease {
   private state = DevLockLeaseState.Held;
 
-  constructor(
-    private readonly lockPath: string,
-    private readonly ownerPath: string,
-    private readonly token: string,
-  ) {}
+  private readonly lockPath: string;
+  private readonly ownerPath: string;
+  private readonly token: string;
+
+  constructor(request: {
+    readonly lockPath: string;
+    readonly ownerPath: string;
+    readonly token: string;
+  }) {
+    this.lockPath = request.lockPath;
+    this.ownerPath = request.ownerPath;
+    this.token = request.token;
+  }
 
   release(): Result<void, DevFailure> {
     if (this.state === DevLockLeaseState.Released) return ok();

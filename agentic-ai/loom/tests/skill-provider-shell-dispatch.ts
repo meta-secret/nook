@@ -1,5 +1,7 @@
 import { SkillProviderShellEnvironmentScenario } from './skill-provider-shell-environment.ts';
 
+import { shellWordAt } from './skill-provider-command-types.ts';
+
 import type {
   ShellEnvironment,
   ShellWord,
@@ -161,7 +163,7 @@ export class SkillProviderShellDispatchScenario {
     for (; index < request.words.length; index += 1) {
       const assignmentRequest = {
         environment: request.environment,
-        word: request.words[index] as ShellWord,
+        word: shellWordAt([request.words, index]),
       };
       const assignment =
         SkillProviderShellEnvironmentScenario.assignmentWord(assignmentRequest);

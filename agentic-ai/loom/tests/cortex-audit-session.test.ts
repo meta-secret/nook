@@ -573,6 +573,20 @@ ${gizmoIndexRows}
           message:
             'Authored HTML is prohibited in Cortex Markdown. Use Markdown syntax, escaped text, or inline or block code.',
         },
+        {
+          code: CortexStructureFindingCode.MissingIndex,
+          file: '.cortex/teams/dev-manager/knowledge-graph.md',
+          line: 1,
+          message:
+            'Required owner knowledge graph is missing: .cortex/teams/dev-manager/knowledge-graph.md',
+        },
+        {
+          code: CortexStructureFindingCode.MissingFromIndex,
+          file: '.cortex/knowledge-graph.md',
+          line: 1,
+          message:
+            'Root knowledge graph must link the owner graph: .cortex/teams/dev-manager/knowledge-graph.md',
+        },
       ],
       articleStructureFindings: [],
       identifierFindings: [

@@ -143,7 +143,7 @@ export class HeadActionTotalsSchema {
     const cyclesProperty = UntrustedYamlBoundary.property(cyclesArgs);
     const cycles =
       cyclesProperty.presence === UntrustedYamlPropertyPresence.Present &&
-      Array.isArray(cyclesProperty.value)
+      UntrustedYamlBoundary.isList(cyclesProperty.value)
         ? cyclesProperty.value
         : [];
     const expectedAttempts = new Set(

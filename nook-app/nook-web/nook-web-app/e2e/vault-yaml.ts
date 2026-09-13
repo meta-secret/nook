@@ -87,7 +87,11 @@ type VaultEventYaml = {
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return (
+    typeof value === 'object' &&
+    Object(value) === value &&
+    !Array.isArray(value)
+  )
 }
 
 function isStoredVaultYaml(value: unknown): value is StoredVaultYaml {
@@ -102,7 +106,7 @@ function isStoredVaultYaml(value: unknown): value is StoredVaultYaml {
     'sentinel_shares',
   ]) {
     const field = value[key]
-    if (field !== undefined && field !== null && typeof field !== 'object') {
+    if (key in value && typeof field !== 'object') {
       return false
     }
   }
@@ -113,7 +117,7 @@ function isVaultEventYaml(value: unknown): value is VaultEventYaml {
   if (!isObjectRecord(value)) return false
   const operations = value.operations
   return (
-    operations === undefined ||
+    !('operations' in value) ||
     (Array.isArray(operations) && operations.every(isObjectRecord))
   )
 }

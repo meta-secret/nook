@@ -32,8 +32,14 @@ interface IpBlock {
 }
 
 interface SelectorTarget {
-  namespaceSelector?: { matchLabels?: Record<string, string> };
-  podSelector?: { matchLabels?: Record<string, string> };
+  namespaceSelector?: {
+    matchLabels?: Record<string, string>;
+    matchExpressions?: Array<{ key: string; operator: string }>;
+  };
+  podSelector?: {
+    matchLabels?: Record<string, string>;
+    matchExpressions?: Array<{ key: string; operator: string }>;
+  };
 }
 
 type NetworkTarget = IpBlock | SelectorTarget;
@@ -185,7 +191,10 @@ export class PreparedNeo4jPolicyPatch {
       }),
     };
   }
-  private static isNeo4jIpRule(rule: EgressRule): boolean {
+  private static isNeo4jIpRule(
+    this: void,
+    rule: EgressRule,
+  ): boolean {
     const { ports = [], to = [] } = rule;
     return (
       ports.some((port) => port.protocol === "TCP" && port.port === 7687) &&
@@ -205,7 +214,7 @@ export class PreparedNeo4jPolicyPatch {
 export interface ReaperControllerOptions {
   api: KubernetesApi;
   pollAttempts: number;
-  sleep(milliseconds: number): Promise<void>;
+  sleep(this: void, milliseconds: number): Promise<void>;
 }
 
 export class ReaperController {
@@ -385,7 +394,7 @@ export function createReaperRequestHandler(
   };
 }
 
-export async function serve(): Promise<void> {
+export function serve(): Promise<void> {
   const controllerOptions: ReaperControllerOptions = {
     api: new LiveKubernetesApi(),
     pollAttempts: reapPollAttempts,
@@ -402,6 +411,7 @@ export async function serve(): Promise<void> {
     port: 8080,
     fetch: createReaperRequestHandler(handlerOptions),
   });
+  return Promise.resolve();
 }
 
 if (import.meta.main) {
@@ -409,5 +419,5 @@ if (import.meta.main) {
 }
 
 export interface ApiJsonRequest<T> extends ApiRequest {
-  decode(text: string): T;
+  decode(this: void, text: string): T;
 }

@@ -182,9 +182,10 @@ test('rejects malformed direct session requests before parent or runtime authori
     unsafeRunId,
     extended,
   ];
-  const forgedAuthorization = {
+  const forgedAuthorization: VerifiedModuleExpertParentAuthorization = {
+    // @ts-expect-error forged discriminator intentionally has the wrong kind
     kind: 'verified-module-expert-parent-authorization',
-  } as VerifiedModuleExpertParentAuthorization;
+  };
 
   for (const request of invalidRequests) {
     const createArgs: CreateModuleExpertRuntimeSessionArgs = {
@@ -201,9 +202,10 @@ test('rejects malformed direct session requests before parent or runtime authori
       ModuleExpertsTrustedRuntimeScenario.processingRunDirectory(valid.runId),
     ),
   ).toBe(false);
-  const forgedSession = {
+  const forgedSession: ModuleExpertRuntimeSession = {
+    // @ts-expect-error forged discriminator intentionally has the wrong kind
     kind: 'module-expert-runtime-session',
-  } as ModuleExpertRuntimeSession;
+  };
   const controller = new AbortController();
   const executeArgs: ExecuteModuleExpertAgentArgs = {
     session: forgedSession,
@@ -237,9 +239,10 @@ test('binds parent, session, journal, and completion authority exactly once', as
     await ModuleExpertsInvokeParentFixtureScenario.createAuthorizedDirectParent(
       request,
     );
-    const forgedParentAuthorization = {
+    const forgedParentAuthorization: VerifiedModuleExpertParentAuthorization = {
+      // @ts-expect-error forged discriminator intentionally has the wrong kind
       kind: 'verified-module-expert-parent-authorization',
-    } as VerifiedModuleExpertParentAuthorization;
+    };
     const forgedParentArgs: CreateModuleExpertRuntimeSessionArgs = {
       repoRoot: REPO_ROOT,
       request,
@@ -288,9 +291,10 @@ test('binds parent, session, journal, and completion authority exactly once', as
       ...created.identity,
       task: 'rebound-child',
     };
-    const forgedJournalAuthority = {
+    const forgedJournalAuthority: ModuleExpertJournalAuthority = {
+      // @ts-expect-error forged discriminator intentionally has the wrong kind
       kind: 'module-expert-journal-authority',
-    } as ModuleExpertJournalAuthority;
+    };
     const forgedJournalArgs: ConsumeModuleExpertJournalAuthorityArgs = {
       authority: forgedJournalAuthority,
       identity: created.identity,
@@ -323,9 +327,10 @@ test('binds parent, session, journal, and completion authority exactly once', as
       ),
     ).toThrow('journal authority is invalid');
 
-    const forgedCompletionAuthority = {
+    const forgedCompletionAuthority: ModuleExpertCompletionAuthority = {
+      // @ts-expect-error forged discriminator intentionally has the wrong kind
       kind: 'module-expert-completion-authority',
-    } as ModuleExpertCompletionAuthority;
+    };
     const forgedExecution: TrustedModuleExpertExecution = {
       completion: {
         threadId: 'forged-thread',

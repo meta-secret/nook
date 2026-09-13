@@ -37,11 +37,7 @@ export class RegistryJson {
 
   async decode(): Promise<Result<UntrustedYamlNode, RegistryFailure>> {
     try {
-      return ok(
-        UntrustedYamlBoundary.fromHost(
-          (await this.response.json()) as UntrustedYamlNode,
-        ),
-      );
+      return ok(UntrustedYamlBoundary.fromHost(await this.response.json()));
     } catch {
       return err({
         kind: RegistryFailureKind.Json,

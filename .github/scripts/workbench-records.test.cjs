@@ -1,9 +1,21 @@
-const assert = require('node:assert/strict')
-const test = require('node:test')
+/** @type {(moduleName: string) => unknown} */
+const loadBuiltin = /** @type {(moduleName: string) => unknown} */ (process.getBuiltinModule.bind(process))
+/** @type {typeof import('node:assert/strict')} */
+const assert = /** @type {typeof import('node:assert/strict')} */ (loadBuiltin('node:assert/strict'))
+/** @type {typeof import('node:test')} */
+const test = /** @type {typeof import('node:test')} */ (loadBuiltin('node:test'))
 
-const { validateAgentRecord } = require('./workbench-records.cjs')
-require('./workbench-gizmo-mapping.test.cjs')
-require('./workbench-publish.test.cjs')
+/** @template T @param {string} modulePath @returns {T} */
+function loadModule(modulePath) {
+  const loaded = /** @type {unknown} */ (module.require(modulePath))
+  return /** @type {T} */ (loaded)
+}
+
+/** @type {typeof import('./workbench-records.cjs')} */
+const records = loadModule('./workbench-records.cjs')
+const { validateAgentRecord } = records
+module.require('./workbench-gizmo-mapping.test.cjs')
+module.require('./workbench-publish.test.cjs')
 
 const baseOwnershipUnit =
   '1. Capability: Workbench agent record validation; Gizmo ID: gizmo-1; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Contract tests pass'
@@ -17,10 +29,12 @@ const gizmoOwnershipUnit =
 const secondGizmoOwnershipUnit =
   '2. Capability: Publisher adoption; Gizmo ID: gizmo-2; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Integration checks pass'
 
+/** @param {number} number @param {string} id @param {string} name @param {string} predecessor @param {string} scope @param {number|string} estimate @param {string} evidence */
 function sliceContract(number, id, name, predecessor, scope, estimate, evidence) {
   return `${number}. Gizmo ID: ${id}; Gizmo name: ${name}; Predecessor Gizmo ID: ${predecessor}; ${scope}; Estimated authored changed lines: ${estimate}; Acceptance evidence: ${evidence}`
 }
 
+/** @param {...string} slices */
 function sequenceField(...slices) {
   return `- PR slices, estimates, and acceptance evidence:\n${slices.join('\n')}`
 }
@@ -124,11 +138,11 @@ function validTwoGizmoSequentialPlan() {
     )
 }
 
-test('accepts a synthesized task plan', () => {
+void test('accepts a synthesized task plan', () => {
   assert.equal(validateAgentRecord(validPlan, 'plan'), '')
 })
 
-test('rejects transcript-shaped task plans', () => {
+void test('rejects transcript-shaped task plans', () => {
   const transcript = validPlan.replace(
     'Deliver a durable two-phase agent context record.',
     'User: copy this source request',
@@ -136,7 +150,7 @@ test('rejects transcript-shaped task plans', () => {
   assert.match(validateAgentRecord(transcript, 'plan'), /resembles a transcript/)
 })
 
-test('rejects punctuation-wrapped slice placeholders', () => {
+void test('rejects punctuation-wrapped slice placeholders', () => {
   const invalid = validPlan
     .replace(
       'Validator change; Acceptance evidence: Contract tests pass',
@@ -152,7 +166,7 @@ test('rejects punctuation-wrapped slice placeholders', () => {
   )
 })
 
-test('rejects an unlabeled verbatim excerpt from the source task', () => {
+void test('rejects an unlabeled verbatim excerpt from the source task', () => {
   const sourceTask =
     'Please preserve all important requirements by publishing this exact ordinary prose before the implementation phase begins.'
   const copied = validPlan.replace(
@@ -165,7 +179,7 @@ test('rejects an unlabeled verbatim excerpt from the source task', () => {
   )
 })
 
-test('rejects a source-task excerpt from a blocker worklog', () => {
+void test('rejects a source-task excerpt from a blocker worklog', () => {
   const sourceTask =
     'Please expose confidential deployment planning details before the implementation phase begins.'
   const copied = validWorklog.replace(
@@ -178,7 +192,7 @@ test('rejects a source-task excerpt from a blocker worklog', () => {
   )
 })
 
-test('rejects a complete short source task copied verbatim', () => {
+void test('rejects a complete short source task copied verbatim', () => {
   const sourceTask = 'Keep pull requests module local'
   const copied = validPlan.replace(
     'Deliver a durable two-phase agent context record.',
@@ -190,7 +204,7 @@ test('rejects a complete short source task copied verbatim', () => {
   )
 })
 
-test('rejects a shorter copied sentence from a long source task', () => {
+void test('rejects a shorter copied sentence from a long source task', () => {
   const copiedSentence =
     'Keep every focused pull request inside one clear architectural module boundary'
   const sourceTask = `${copiedSentence}. Then continue with independently mergeable slices until the entire feature is complete.`
@@ -204,7 +218,7 @@ test('rejects a shorter copied sentence from a long source task', () => {
   )
 })
 
-test('rejects a copied seven-word fragment from a long source task', () => {
+void test('rejects a copied seven-word fragment from a long source task', () => {
   const copiedFragment = 'publish internal customer codename before starting implementation'
   const sourceTask = `Please ${copiedFragment} and then prepare the independently mergeable delivery slices.`
   const copied = validPlan.replace(
@@ -217,13 +231,13 @@ test('rejects a copied seven-word fragment from a long source task', () => {
   )
 })
 
-test('accepts an independently synthesized representation of the source task', () => {
+void test('accepts an independently synthesized representation of the source task', () => {
   const sourceTask =
     'Please preserve all important requirements by publishing this exact ordinary prose before the implementation phase begins.'
   assert.equal(validateAgentRecord(validPlan, 'plan', [], sourceTask), '')
 })
 
-test('rejects an unresolved public-interface placeholder', () => {
+void test('rejects an unresolved public-interface placeholder', () => {
   const invalid = validPlan.replace(
     'Public or cross-module interfaces: Plan validation contract',
     'Public or cross-module interfaces: **TBD.**',
@@ -234,7 +248,7 @@ test('rejects an unresolved public-interface placeholder', () => {
   )
 })
 
-test('accepts a plan with no public interface changes', () => {
+void test('accepts a plan with no public interface changes', () => {
   const noInterfaces = validPlan.replace(
     'Public or cross-module interfaces: Plan validation contract',
     'Public or cross-module interfaces: None',
@@ -242,7 +256,7 @@ test('accepts a plan with no public interface changes', () => {
   assert.equal(validateAgentRecord(noInterfaces, 'plan'), '')
 })
 
-test('rejects empty required sections', () => {
+void test('rejects empty required sections', () => {
   const empty = validPlan.replace(
     '1. Add and validate the lifecycle.',
     '',
@@ -263,7 +277,7 @@ for (const field of [
   'Current PR slice and acceptance evidence',
   'PR slices, estimates, and acceptance evidence',
 ]) {
-  test(`rejects a plan without ${field}`, () => {
+void   test(`rejects a plan without ${field}`, () => {
     const missing = validPlan.replace(
       new RegExp(`^- ${field}:.*\\n`, 'm'),
       '',
@@ -275,7 +289,7 @@ for (const field of [
   })
 }
 
-test('accepts a complete cross-team expertise contract', () => {
+void test('accepts a complete cross-team expertise contract', () => {
   const expertisePlan = validPlan.replace(
     baseOwnershipUnit,
     expertiseOwnershipUnit,
@@ -283,7 +297,7 @@ test('accepts a complete cross-team expertise contract', () => {
   assert.equal(validateAgentRecord(expertisePlan, 'plan'), '')
 })
 
-test('accepts security as a functional owner', () => {
+void test('accepts security as a functional owner', () => {
   const securityPlan = validPlan.replace(
     baseOwnershipUnit,
     securityOwnershipUnit,
@@ -291,7 +305,7 @@ test('accepts security as a functional owner', () => {
   assert.equal(validateAgentRecord(securityPlan, 'plan'), '')
 })
 
-test('accepts security as an expertise provider', () => {
+void test('accepts security as an expertise provider', () => {
   const securityExpertiseUnit = expertiseOwnershipUnit.replace(
     'Expertise provider: Web development',
     'Expertise provider: Security',
@@ -303,12 +317,12 @@ test('accepts security as an expertise provider', () => {
   assert.equal(validateAgentRecord(securityExpertisePlan, 'plan'), '')
 })
 
-test('accepts Gizmo Prime as a functional owner', () => {
+void test('accepts Gizmo Prime as a functional owner', () => {
   const gizmoPlan = validPlan.replace(baseOwnershipUnit, gizmoOwnershipUnit)
   assert.equal(validateAgentRecord(gizmoPlan, 'plan'), '')
 })
 
-test('accepts legacy Gizmo as the Gizmo Prime functional owner', () => {
+void test('accepts legacy Gizmo as the Gizmo Prime functional owner', () => {
   const legacyGizmoPlan = validPlan.replace(
     baseOwnershipUnit,
     gizmoOwnershipUnit.replace('Functional owner: Gizmo Prime', 'Functional owner: Gizmo'),
@@ -316,7 +330,7 @@ test('accepts legacy Gizmo as the Gizmo Prime functional owner', () => {
   assert.equal(validateAgentRecord(legacyGizmoPlan, 'plan'), '')
 })
 
-test('rejects Gizmo as an expertise provider', () => {
+void test('rejects Gizmo as an expertise provider', () => {
   const gizmoExpertiseUnit = expertiseOwnershipUnit.replace(
     'Expertise provider: Web development',
     'Expertise provider: Gizmo',
@@ -331,7 +345,7 @@ test('rejects Gizmo as an expertise provider', () => {
   )
 })
 
-test('rejects an expertise provider without a complete contract', () => {
+void test('rejects an expertise provider without a complete contract', () => {
   const invalid = validPlan.replace(
     baseOwnershipUnit,
     baseOwnershipUnit.replace(
@@ -345,7 +359,7 @@ test('rejects an expertise provider without a complete contract', () => {
   )
 })
 
-test('rejects expertise fields without an expertise provider', () => {
+void test('rejects expertise fields without an expertise provider', () => {
   const invalid = validPlan.replace(
     baseOwnershipUnit,
     baseOwnershipUnit.replace(
@@ -359,7 +373,7 @@ test('rejects expertise fields without an expertise provider', () => {
   )
 })
 
-test('rejects the functional owner as its own expertise provider', () => {
+void test('rejects the functional owner as its own expertise provider', () => {
   const invalid = validPlan.replace(
     baseOwnershipUnit,
     expertiseOwnershipUnit.replace('Web development', 'AI'),
@@ -370,7 +384,7 @@ test('rejects the functional owner as its own expertise provider', () => {
   )
 })
 
-test('accepts multiple independently owned capability units', () => {
+void test('accepts multiple independently owned capability units', () => {
   const secondUnit =
     '2. Capability: Deployment validation; Gizmo ID: gizmo-1; Functional owner: SRE; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Hosted deployment checks pass'
   const multiTeamPlan = validPlan.replace(
@@ -380,7 +394,7 @@ test('accepts multiple independently owned capability units', () => {
   assert.equal(validateAgentRecord(multiTeamPlan, 'plan'), '')
 })
 
-test('accepts a 200-line one-Gizmo plan with multiple ownership units', () => {
+void test('accepts a 200-line one-Gizmo plan with multiple ownership units', () => {
   const secondUnit =
     '2. Capability: Plan publication; Gizmo ID: gizmo-1; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Publication checks pass'
   const plan = validPlan
@@ -389,7 +403,7 @@ test('accepts a 200-line one-Gizmo plan with multiple ownership units', () => {
   assert.equal(validateAgentRecord(plan, 'plan'), '')
 })
 
-test('rejects broad prose instead of exact expertise paths', () => {
+void test('rejects broad prose instead of exact expertise paths', () => {
   const invalidUnit = expertiseOwnershipUnit.replace(
     '.github/scripts/workbench-records.cjs',
     'all TypeScript files',
@@ -401,7 +415,7 @@ test('rejects broad prose instead of exact expertise paths', () => {
   )
 })
 
-test('rejects expertise paths that are both allowed and forbidden', () => {
+void test('rejects expertise paths that are both allowed and forbidden', () => {
   const invalidUnit = expertiseOwnershipUnit.replace(
     '.cortex/teams/ai,.cortex/shared',
     '.github/scripts/workbench-records.cjs,.cortex/shared',
@@ -417,7 +431,7 @@ for (const forbiddenPath of [
   '.github',
   '.github/scripts/workbench-records.cjs/generated',
 ]) {
-  test(`rejects nested expertise path overlap: ${forbiddenPath}`, () => {
+void   test(`rejects nested expertise path overlap: ${forbiddenPath}`, () => {
     const invalidUnit = expertiseOwnershipUnit.replace(
       '.cortex/teams/ai,.cortex/shared',
       `${forbiddenPath},.cortex/shared`,
@@ -430,7 +444,7 @@ for (const forbiddenPath of [
   })
 }
 
-test('rejects a nonnumeric authored-line estimate', () => {
+void test('rejects a nonnumeric authored-line estimate', () => {
   const invalid = validPlan.replace(
     'Estimated authored changed lines: 240',
     'Estimated authored changed lines: small',
@@ -442,7 +456,7 @@ test('rejects a nonnumeric authored-line estimate', () => {
 })
 
 for (const malformedEstimate of ['5,00', '1,,,,']) {
-  test(`rejects malformed estimate grouping: ${malformedEstimate}`, () => {
+void   test(`rejects malformed estimate grouping: ${malformedEstimate}`, () => {
     const invalid = validPlan.replace(
       'Estimated authored changed lines: 240',
       `Estimated authored changed lines: ${malformedEstimate}`,
@@ -454,7 +468,7 @@ for (const malformedEstimate of ['5,00', '1,,,,']) {
   })
 }
 
-test('rejects an over-budget one-PR plan', () => {
+void test('rejects an over-budget one-PR plan', () => {
   const invalid = validPlan
     .replace(
       'Estimated authored changed lines: 240',
@@ -470,7 +484,7 @@ test('rejects an over-budget one-PR plan', () => {
   )
 })
 
-test('rejects a one-PR shape for an over-budget feature', () => {
+void test('rejects a one-PR shape for an over-budget feature', () => {
   const invalid = validPlan.replace(
     'Estimated authored changed lines: 240',
     'Estimated authored changed lines: 6,000',
@@ -481,7 +495,7 @@ test('rejects a one-PR shape for an over-budget feature', () => {
   )
 })
 
-test('accepts a one-PR plan at the 2,000-line ceiling', () => {
+void test('accepts a one-PR plan at the 2,000-line ceiling', () => {
   const atCeiling = validPlan
     .replace(
       'Estimated authored changed lines: 240',
@@ -498,7 +512,7 @@ test('accepts a one-PR plan at the 2,000-line ceiling', () => {
   assert.equal(validateAgentRecord(atCeiling, 'plan'), '')
 })
 
-test('rejects independent PR delivery', () => {
+void test('rejects independent PR delivery', () => {
   const independent = validPlan
     .replace(
       'Estimated authored changed lines: 240',
@@ -519,7 +533,7 @@ test('rejects independent PR delivery', () => {
   )
 })
 
-test('rejects stacked PR delivery', () => {
+void test('rejects stacked PR delivery', () => {
   const invalid = validPlan.replace(
     'PR sequence mode: One PR',
     'PR sequence mode: Stacked PRs',
@@ -530,7 +544,7 @@ test('rejects stacked PR delivery', () => {
   )
 })
 
-test('rejects a feature estimate below its current PR estimate', () => {
+void test('rejects a feature estimate below its current PR estimate', () => {
   const invalid = validPlan
     .replace(
       'Estimated authored changed lines: 240',
@@ -546,7 +560,7 @@ test('rejects a feature estimate below its current PR estimate', () => {
   )
 })
 
-test('rejects different feature and current PR estimates for one PR', () => {
+void test('rejects different feature and current PR estimates for one PR', () => {
   const invalid = validPlan.replace(
     'Estimated authored changed lines: 240',
     'Estimated authored changed lines: 300',
@@ -557,11 +571,11 @@ test('rejects different feature and current PR estimates for one PR', () => {
   )
 })
 
-test('accepts a bounded current slice for a necessary sequential feature', () => {
+void test('accepts a bounded current slice for a necessary sequential feature', () => {
   assert.equal(validateAgentRecord(validTwoGizmoSequentialPlan(), 'plan'), '')
 })
 
-test('rejects a multi-PR slice without an authored-line estimate', () => {
+void test('rejects a multi-PR slice without an authored-line estimate', () => {
   const invalid = validPlan
     .replace(
       'Estimated authored changed lines: 240',
@@ -583,7 +597,7 @@ test('rejects a multi-PR slice without an authored-line estimate', () => {
   )
 })
 
-test('rejects undersized slice coverage for a 12,000-line feature', () => {
+void test('rejects undersized slice coverage for a 12,000-line feature', () => {
   const invalid = validPlan
     .replace(
       'Estimated authored changed lines: 240',
@@ -608,7 +622,7 @@ test('rejects undersized slice coverage for a 12,000-line feature', () => {
   )
 })
 
-test('rejects an individual PR slice above 2,000 lines', () => {
+void test('rejects an individual PR slice above 2,000 lines', () => {
   const invalid = validPlan
     .replace(
       'Estimated authored changed lines: 240',
@@ -629,7 +643,7 @@ test('rejects an individual PR slice above 2,000 lines', () => {
   )
 })
 
-test('rejects a zero-line PR slice estimate', () => {
+void test('rejects a zero-line PR slice estimate', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
     .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
@@ -646,7 +660,7 @@ test('rejects a zero-line PR slice estimate', () => {
   )
 })
 
-test('rejects a multi-PR current slice omitted from its ordered sequence', () => {
+void test('rejects a multi-PR current slice omitted from its ordered sequence', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
     .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
@@ -663,7 +677,7 @@ test('rejects a multi-PR current slice omitted from its ordered sequence', () =>
   )
 })
 
-test('rejects a first slice estimate that differs from the current PR estimate', () => {
+void test('rejects a first slice estimate that differs from the current PR estimate', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
     .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
@@ -680,7 +694,7 @@ test('rejects a first slice estimate that differs from the current PR estimate',
   )
 })
 
-test('rejects a multi-PR plan without an ordered sequence', () => {
+void test('rejects a multi-PR plan without an ordered sequence', () => {
   const invalid = validPlan
     .replace(
       'Estimated authored changed lines: 240',
@@ -701,7 +715,7 @@ test('rejects a multi-PR plan without an ordered sequence', () => {
   )
 })
 
-test('rejects multi-PR slices without acceptance evidence', () => {
+void test('rejects multi-PR slices without acceptance evidence', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
     .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
@@ -719,7 +733,7 @@ for (const sequence of [
   `${sliceContract(1, 'gizmo-1', 'Storage', 'None', 'Storage', '120', 'Contract tests pass.')}\n${sliceContract(1, 'gizmo-2', 'UI', 'None', 'UI', '120', 'Integration checks pass.')}`,
   `${sliceContract(1, 'gizmo-1', 'Storage', 'None', 'Storage', '120', 'Contract tests pass.')}\n${sliceContract(3, 'gizmo-2', 'UI', 'None', 'UI', '120', 'Integration checks pass.')}`,
 ]) {
-  test(`rejects nonconsecutive multi-PR sequence: ${sequence.split('\n')[1]}`, () => {
+void   test(`rejects nonconsecutive multi-PR sequence: ${sequence.split('\n')[1]}`, () => {
     const invalid = validPlan
       .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
       .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
@@ -735,7 +749,7 @@ for (const sequence of [
 }
 
 for (const placeholder of ['None', 'N/A', 'TBD', 'Unknown']) {
-  test(`rejects ${placeholder} as the owning boundary`, () => {
+void   test(`rejects ${placeholder} as the owning boundary`, () => {
     const invalid = validPlan.replace(
       'Owning modules, packages, or layers: Workbench agent records',
       `Owning modules, packages, or layers: ${placeholder}`,
@@ -746,7 +760,7 @@ for (const placeholder of ['None', 'N/A', 'TBD', 'Unknown']) {
     )
   })
 
-  test(`rejects ${placeholder} as the current PR slice`, () => {
+void   test(`rejects ${placeholder} as the current PR slice`, () => {
     const invalid = validPlan.replace(
       'Current PR slice and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
       `Current PR slice and acceptance evidence: ${placeholder}`,
@@ -757,7 +771,7 @@ for (const placeholder of ['None', 'N/A', 'TBD', 'Unknown']) {
     )
   })
 
-  test(`rejects ${placeholder} as current PR acceptance evidence`, () => {
+void   test(`rejects ${placeholder} as current PR acceptance evidence`, () => {
     const invalid = validPlan.replace(
       'Acceptance evidence: Contract tests pass',
       `Acceptance evidence: ${placeholder}`,
@@ -769,7 +783,7 @@ for (const placeholder of ['None', 'N/A', 'TBD', 'Unknown']) {
   })
 }
 
-test('rejects an ambiguous delivery shape', () => {
+void test('rejects an ambiguous delivery shape', () => {
   const invalid = validPlan.replace(
     'Delivery shape: One PR',
     'Delivery shape: One PR cannot complete the feature; Multiple PRs are required',
@@ -780,12 +794,12 @@ test('rejects an ambiguous delivery shape', () => {
   )
 })
 
-test('accepts a normalized delivery shape with trailing spaces', () => {
+void test('accepts a normalized delivery shape with trailing spaces', () => {
   const plan = validPlan.replace('Delivery shape: One PR', 'Delivery shape: One PR   ')
   assert.equal(validateAgentRecord(plan, 'plan'), '')
 })
 
-test('rejects a placeholder current slice with concrete evidence', () => {
+void test('rejects a placeholder current slice with concrete evidence', () => {
   const invalid = validPlan.replace(
     'Current PR slice and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
     'Current PR slice and acceptance evidence: None; Acceptance evidence: Contract tests pass',
@@ -796,7 +810,7 @@ test('rejects a placeholder current slice with concrete evidence', () => {
   )
 })
 
-test('rejects multiple slices declared as one PR', () => {
+void test('rejects multiple slices declared as one PR', () => {
   const invalid = validPlan.replace(
     validSequenceField,
     sequenceField(
@@ -810,7 +824,7 @@ test('rejects multiple slices declared as one PR', () => {
   )
 })
 
-test('rejects a placeholder scope in a multi-PR slice', () => {
+void test('rejects a placeholder scope in a multi-PR slice', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
     .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
@@ -827,7 +841,7 @@ test('rejects a placeholder scope in a multi-PR slice', () => {
   )
 })
 
-test('rejects a one-PR sequence that contradicts the current slice', () => {
+void test('rejects a one-PR sequence that contradicts the current slice', () => {
   const invalid = validPlan.replace(
     validSequenceField,
     sequenceField(
@@ -840,7 +854,7 @@ test('rejects a one-PR sequence that contradicts the current slice', () => {
   )
 })
 
-test('accepts a zero-addition one-PR plan', () => {
+void test('accepts a zero-addition one-PR plan', () => {
   const deletionOnly = validPlan
     .replace('Estimated authored changed lines: 240', 'Estimated authored changed lines: 0')
     .replace(
@@ -857,7 +871,7 @@ test('accepts a zero-addition one-PR plan', () => {
   )
 })
 
-test('rejects budget fields duplicated outside their owning section', () => {
+void test('rejects budget fields duplicated outside their owning section', () => {
   const invalid = validPlan.replace(
     '- Publish the synthesized plan before implementation.',
     '- Publish the synthesized plan before implementation.\n- Delivery shape: One PR',
@@ -868,7 +882,7 @@ test('rejects budget fields duplicated outside their owning section', () => {
   )
 })
 
-test('rejects case-variant budget fields outside their owning section', () => {
+void test('rejects case-variant budget fields outside their owning section', () => {
   const invalid = validPlan.replace(
     '- Publish the synthesized plan before implementation.',
     '- Publish the synthesized plan before implementation.\n- delivery shape: Multiple PRs',
@@ -879,7 +893,7 @@ test('rejects case-variant budget fields outside their owning section', () => {
   )
 })
 
-test('does not use a valid field outside the budget section', () => {
+void test('does not use a valid field outside the budget section', () => {
   const invalid = validPlan
     .replace(
       '- Publish the synthesized plan before implementation.',
@@ -892,7 +906,7 @@ test('does not use a valid field outside the budget section', () => {
   )
 })
 
-test('rejects concrete workflow credentials', () => {
+void test('rejects concrete workflow credentials', () => {
   const leaked = validPlan.replace(
     'Deliver a durable two-phase agent context record.',
     'Deliver workflow-value safely.',

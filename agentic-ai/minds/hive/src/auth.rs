@@ -59,6 +59,11 @@ pub struct BrokerExternalAuth {
 }
 
 impl BrokerExternalAuth {
+    /// Connects to the private Hive authentication broker socket.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the broker cannot be reached after the bounded retry window.
     pub async fn connect(socket_path: &Path) -> crate::HiveResult<Arc<Self>> {
         for attempt in 0..AUTH_CONNECT_ATTEMPTS {
             match UnixStream::connect(socket_path).await {
@@ -103,10 +108,20 @@ impl BrokerExternalAuth {
         CodexAuth::from_external_chatgpt_tokens(&response.access_token, &response.account_id, None)
     }
 
+    /// Validates the credentials currently provided by the broker.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the broker request or credential decoding fails.
     pub async fn validate(&self) -> io::Result<()> {
         self.request(BrokerAuthOperation::Resolve).await.map(drop)
     }
 
+    /// Refreshes and validates the credentials provided by the broker.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the broker request or credential decoding fails.
     pub async fn refresh_and_validate(&self) -> io::Result<()> {
         self.request(BrokerAuthOperation::Refresh).await.map(drop)
     }
@@ -138,57 +153,20 @@ impl AuthBroker {
 }
 
 impl AuthBroker {
+    /// Runs the broker that projects refreshed credentials into its private auth home.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when credential projection, refresh, or persistence fails.
     pub async fn run_auth_broker(self) -> crate::HiveResult<()> {
         let Self {
             socket_path,
             auth_source,
             auth_home,
         } = self;
-        async_fs::create_dir_all(&auth_home).await?;
         let private_auth = auth_home.join("auth.json");
-        async_fs::copy(&auth_source, &private_auth)
-            .await
-            .hive_context("failed to stage Codex authentication inside the broker container")?;
-        let mut permissions = async_fs::metadata(&private_auth).await?.permissions();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            permissions.set_mode(0o600);
-        }
-        async_fs::set_permissions(&private_auth, permissions).await?;
-
-        let mut auth_manager = AuthManager::shared(
-            auth_home.clone(),
-            false,
-            AuthCredentialsStoreMode::File,
-            None,
-            None,
-            AuthKeyringBackendKind::default(),
-            AuthBroker::auth_route_config(),
-        )
-        .await;
-        if auth_manager.auth_cached().is_none() {
-            return Err(crate::HiveError::message(
-                "Codex authentication is unavailable to the broker",
-            ));
-        }
-
-        if let Some(parent) = socket_path.parent() {
-            async_fs::create_dir_all(parent).await?;
-        }
-        match async_fs::remove_file(&socket_path).await {
-            Ok(()) => {}
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error.into()),
-        }
-        let listener = UnixListener::bind(&socket_path)?;
-        let (stream, _) = listener.accept().await?;
-        drop(listener);
-        async_fs::remove_file(&socket_path)
-            .await
-            .hive_context("failed to unlink the accepted auth broker socket")?;
-
-        let mut channel = BufReader::new(stream);
+        let mut auth_manager = Self::stage_auth(&auth_source, &auth_home, &private_auth).await?;
+        let mut channel = Self::accept_channel(&socket_path).await?;
         loop {
             let mut request = String::new();
             if channel.read_line(&mut request).await? == 0 {
@@ -197,63 +175,13 @@ impl AuthBroker {
             let request: BrokerRequest =
                 serde_json::from_str(&request).hive_context("invalid auth broker request")?;
             if request.refresh {
-                let projected_auth = async_fs::read(&auth_source)
-                    .await
-                    .hive_context("failed to reload projected Codex authentication")?;
-                let private_auth_bytes = async_fs::read(&private_auth).await?;
-                if projected_auth != private_auth_bytes {
-                    async_fs::write(&private_auth, projected_auth).await?;
-                    auth_manager = AuthManager::shared(
-                        auth_home.clone(),
-                        false,
-                        AuthCredentialsStoreMode::File,
-                        None,
-                        None,
-                        AuthKeyringBackendKind::default(),
-                        AuthBroker::auth_route_config(),
-                    )
-                    .await;
-                } else {
-                    match auth_manager.refresh_token_from_authority().await {
-                        Ok(()) => AuthBroker::persist_rotated_auth(&private_auth, &auth_home).await,
-                        Err(refresh_error) => {
-                            // Another warm broker may have won a rotating refresh-token race.
-                            // Wait for its Secret update to reach this projected volume and retry
-                            // from the durable replacement instead of failing the active task.
-                            let mut replacement = ProjectedCredentialReplacement::Unchanged;
-                            for _ in 0..AUTH_CONNECT_ATTEMPTS {
-                                async_time::sleep(AUTH_CONNECT_DELAY).await;
-                                let candidate = async_fs::read(&auth_source).await.hive_context(
-                                    "failed to reload projected Codex authentication",
-                                )?;
-                                if candidate != private_auth_bytes {
-                                    replacement =
-                                        ProjectedCredentialReplacement::Replaced(candidate);
-                                    break;
-                                }
-                            }
-                            let replacement = match replacement {
-                                ProjectedCredentialReplacement::Replaced(bytes) => bytes,
-                                ProjectedCredentialReplacement::Unchanged => {
-                                    return Err(crate::HiveError::message(format!(
-                                        "Codex authentication refresh failed: {refresh_error}"
-                                    )));
-                                }
-                            };
-                            async_fs::write(&private_auth, replacement).await?;
-                            auth_manager = AuthManager::shared(
-                                auth_home.clone(),
-                                false,
-                                AuthCredentialsStoreMode::File,
-                                None,
-                                None,
-                                AuthKeyringBackendKind::default(),
-                                AuthBroker::auth_route_config(),
-                            )
-                            .await;
-                        }
-                    }
-                }
+                auth_manager = Self::refresh_auth_if_requested(
+                    &auth_source,
+                    &private_auth,
+                    &auth_home,
+                    auth_manager,
+                )
+                .await?;
             }
             let auth = auth_manager.auth_cached().ok_or_else(|| {
                 crate::HiveError::message("Codex authentication disappeared from the broker")
@@ -268,6 +196,110 @@ impl AuthBroker {
             channel.get_mut().write_all(&response).await?;
             channel.get_mut().write_all(b"\n").await?;
             channel.get_mut().flush().await?;
+        }
+    }
+}
+
+impl AuthBroker {
+    async fn stage_auth(
+        auth_source: &Path,
+        auth_home: &Path,
+        private_auth: &Path,
+    ) -> crate::HiveResult<Arc<AuthManager>> {
+        async_fs::create_dir_all(auth_home).await?;
+        async_fs::copy(auth_source, private_auth)
+            .await
+            .hive_context("failed to stage Codex authentication inside the broker container")?;
+        let mut permissions = async_fs::metadata(private_auth).await?.permissions();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            permissions.set_mode(0o600);
+        }
+        async_fs::set_permissions(private_auth, permissions).await?;
+        let auth_manager = Self::new_auth_manager(auth_home).await;
+        if auth_manager.auth_cached().is_none() {
+            return Err(crate::HiveError::message(
+                "Codex authentication is unavailable to the broker",
+            ));
+        }
+        Ok(auth_manager)
+    }
+
+    async fn accept_channel(socket_path: &Path) -> crate::HiveResult<BufReader<UnixStream>> {
+        if let Some(parent) = socket_path.parent() {
+            async_fs::create_dir_all(parent).await?;
+        }
+        match async_fs::remove_file(socket_path).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        let listener = UnixListener::bind(socket_path)?;
+        let (stream, _) = listener.accept().await?;
+        drop(listener);
+        async_fs::remove_file(socket_path)
+            .await
+            .hive_context("failed to unlink the accepted auth broker socket")?;
+        Ok(BufReader::new(stream))
+    }
+
+    async fn new_auth_manager(auth_home: &Path) -> Arc<AuthManager> {
+        AuthManager::shared(
+            auth_home.to_owned(),
+            false,
+            AuthCredentialsStoreMode::File,
+            None,
+            None,
+            AuthKeyringBackendKind::default(),
+            AuthBroker::auth_route_config(),
+        )
+        .await
+    }
+
+    async fn refresh_auth_if_requested(
+        auth_source: &Path,
+        private_auth: &Path,
+        auth_home: &Path,
+        mut auth_manager: Arc<AuthManager>,
+    ) -> crate::HiveResult<Arc<AuthManager>> {
+        let projected_auth = async_fs::read(auth_source)
+            .await
+            .hive_context("failed to reload projected Codex authentication")?;
+        let private_auth_bytes = async_fs::read(private_auth).await?;
+        if projected_auth != private_auth_bytes {
+            async_fs::write(private_auth, projected_auth).await?;
+            return Ok(Self::new_auth_manager(auth_home).await);
+        }
+        match auth_manager.refresh_token_from_authority().await {
+            Ok(()) => {
+                Self::persist_rotated_auth(private_auth, auth_home).await;
+                Ok(auth_manager)
+            }
+            Err(refresh_error) => {
+                let mut replacement = ProjectedCredentialReplacement::Unchanged;
+                for _ in 0..AUTH_CONNECT_ATTEMPTS {
+                    async_time::sleep(AUTH_CONNECT_DELAY).await;
+                    let candidate = async_fs::read(auth_source)
+                        .await
+                        .hive_context("failed to reload projected Codex authentication")?;
+                    if candidate != private_auth_bytes {
+                        replacement = ProjectedCredentialReplacement::Replaced(candidate);
+                        break;
+                    }
+                }
+                let replacement = match replacement {
+                    ProjectedCredentialReplacement::Replaced(bytes) => bytes,
+                    ProjectedCredentialReplacement::Unchanged => {
+                        return Err(crate::HiveError::message(format!(
+                            "Codex authentication refresh failed: {refresh_error}"
+                        )));
+                    }
+                };
+                async_fs::write(private_auth, replacement).await?;
+                auth_manager = Self::new_auth_manager(auth_home).await;
+                Ok(auth_manager)
+            }
         }
     }
 }
@@ -352,8 +384,8 @@ impl AuthBroker {
             .stdin(Stdio::null())
             .status()
             .await;
-        let _ = async_fs::remove_file(&patch_path).await;
-        let _ = async_fs::remove_file(&header_path).await;
+        drop(async_fs::remove_file(&patch_path).await);
+        drop(async_fs::remove_file(&header_path).await);
         let status =
             status.hive_context("failed to start the Kubernetes credential persistence request")?;
         if !status.success() {

@@ -13,17 +13,22 @@ import {
 
 /** Owns the bounded dependency wiring shared by the three manual commands. */
 export class DevDeliveryWorkspace {
+  readonly root: string;
   readonly git: DevGitRepository;
   readonly github: DevGitHubGateway;
 
-  constructor(
-    readonly root: string,
-    runner: CommandRunner,
-  ) {
-    this.git = new DevGitRepository({ root, runner });
+  constructor(request: {
+    readonly root: string;
+    readonly runner: CommandRunner;
+  }) {
+    this.root = request.root;
+    this.git = new DevGitRepository({
+      root: request.root,
+      runner: request.runner,
+    });
     this.github = new DevGitHubGateway({
-      runner,
-      workingDirectory: root,
+      runner: request.runner,
+      workingDirectory: request.root,
     });
   }
 

@@ -1,4 +1,4 @@
-use neo4rs::query;
+use neo4rs::{Txn, query};
 
 use crate::model::{AgentId, ClaimedTask, EnqueueTask};
 
@@ -68,6 +68,31 @@ impl Neo4jTaskStore {
 
         let blocker_was_obsolete =
             Self::rearm_obsolete_subtree(&mut transaction, &blocker.id).await?;
+        let accepted = Self::apply_block_state(
+            &mut transaction,
+            task,
+            agent_id,
+            blocker,
+            reason,
+            blocker_was_obsolete,
+        )
+        .await?;
+        if accepted {
+            transaction.commit().await?;
+        } else {
+            transaction.rollback().await?;
+        }
+        Ok(accepted)
+    }
+
+    async fn apply_block_state(
+        transaction: &mut Txn,
+        task: &ClaimedTask,
+        agent_id: &AgentId,
+        blocker: &EnqueueTask,
+        reason: &str,
+        blocker_was_obsolete: bool,
+    ) -> crate::HiveResult<bool> {
         let mut rows = transaction
             .execute(
                 query(
@@ -133,11 +158,6 @@ impl Neo4jTaskStore {
             .await?;
         let accepted = rows.next(transaction.handle()).await?.is_some();
         drop(rows);
-        if accepted {
-            transaction.commit().await?;
-        } else {
-            transaction.rollback().await?;
-        }
         Ok(accepted)
     }
 }

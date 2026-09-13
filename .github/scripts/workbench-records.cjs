@@ -111,7 +111,9 @@ function escapeRegExp(value) {
 function countBudgetFieldLabels(candidate, label) {
   const fieldPattern = new RegExp(`^- ${escapeRegExp(label)}:`, 'gim')
   let count = 0
-  for (const _match of candidate.matchAll(fieldPattern)) count += 1
+  for (const match of candidate.matchAll(fieldPattern)) {
+    if (match[0]) count += 1
+  }
   return count
 }
 

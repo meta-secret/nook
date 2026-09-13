@@ -58,7 +58,7 @@ export function createLocalE2eICloudVaultStub(
 
       await page.route('https://api.apple-cloudkit.com/**', async (route) => {
         const request = route.request()
-        const url = request.url().split('?')[0] ?? ''
+        const [url = ''] = [request.url().split('?')[0]]
         const method = request.method()
 
         if (url.endsWith('/users/current') && method === 'GET') {
@@ -80,12 +80,13 @@ export function createLocalE2eICloudVaultStub(
           const recordsValue = body.records
           const firstRecord: unknown = Array.isArray(recordsValue)
             ? recordsValue[0]
-            : undefined
+            : {}
           const firstRecordValue: unknown =
-            typeof firstRecord === 'object' && firstRecord !== null
+            typeof firstRecord === 'object' &&
+            Object(firstRecord) === firstRecord
               ? Object.getOwnPropertyDescriptor(firstRecord, 'recordName')
                   ?.value
-              : undefined
+              : {}
           const requested =
             typeof firstRecordValue === 'string' ? firstRecordValue : fileName
           const event = eventRecord(requested)
@@ -132,29 +133,33 @@ export function createLocalE2eICloudVaultStub(
           const operations = body.operations
           const operation: unknown = Array.isArray(operations)
             ? operations[0]
-            : undefined
+            : {}
           const operationRecord: unknown =
-            typeof operation === 'object' && operation !== null
+            typeof operation === 'object' && Object(operation) === operation
               ? Object.getOwnPropertyDescriptor(operation, 'record')?.value
-              : undefined
+              : {}
           const record =
-            typeof operationRecord === 'object' && operationRecord !== null
+            typeof operationRecord === 'object' &&
+            Object(operationRecord) === operationRecord
               ? requireRecord(operationRecord, 'CloudKit record')
               : {}
           const recordType = record.recordType
           const fields =
-            typeof record.fields === 'object' && record.fields !== null
+            typeof record.fields === 'object' &&
+            Object(record.fields) === record.fields
               ? requireRecord(record.fields, 'CloudKit fields')
               : {}
           const contentField =
-            typeof fields.content === 'object' && fields.content !== null
+            typeof fields.content === 'object' &&
+            Object(fields.content) === fields.content
               ? requireRecord(fields.content, 'CloudKit content field')
               : {}
           const content =
             typeof contentField.value === 'string' ? contentField.value : ''
           if (recordType === 'NookVaultEvent') {
             const eventIdField =
-              typeof fields.event_id === 'object' && fields.event_id !== null
+              typeof fields.event_id === 'object' &&
+              Object(fields.event_id) === fields.event_id
                 ? requireRecord(fields.event_id, 'CloudKit event id field')
                 : {}
             const eventId =

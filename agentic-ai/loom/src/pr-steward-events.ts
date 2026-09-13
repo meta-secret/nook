@@ -128,7 +128,8 @@ export class WebhookHeader {
       key: args.name,
     });
     if (typeof value === 'string') return value;
-    if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+    if (UntrustedYamlBoundary.isList(value) && typeof value[0] === 'string')
+      return value[0];
     return false;
   }
 }
@@ -155,7 +156,7 @@ export class PrStewardCredentialFile {
       if ((stat.mode & 0o777) !== 0o600)
         throw new Error('credential mode must be 0600');
       const parsed = UntrustedYamlBoundary.fromHost(
-        Bun.YAML.parse(readFileSync(descriptor, 'utf8')) as UntrustedYamlNode,
+        Bun.YAML.parse(readFileSync(descriptor, 'utf8')),
       );
       if (
         !UntrustedYamlBoundary.isRecord(parsed) ||
@@ -412,17 +413,15 @@ export class PrStewardWebhookDecoder {
       record: object,
       key: 'pull_requests',
     });
-    if (
-      !Array.isArray(candidates) ||
-      candidates.length !== 1 ||
-      !UntrustedYamlBoundary.isRecord(candidates[0])
-    )
+    if (!UntrustedYamlBoundary.isList(candidates) || candidates.length !== 1)
       return false;
+    const candidate = candidates[0];
+    if (!candidate || !UntrustedYamlBoundary.isRecord(candidate)) return false;
     const pullRequest = WebhookOptionalInteger.read(
-      WebhookProperty.read({ record: candidates[0], key: 'number' }),
+      WebhookProperty.read({ record: candidate, key: 'number' }),
     );
     const associatedHead = WebhookOptionalText.read(
-      WebhookObjectPath.read({ record: candidates[0], path: ['head', 'sha'] }),
+      WebhookObjectPath.read({ record: candidate, path: ['head', 'sha'] }),
     );
     const eventHead = WebhookOptionalText.read(
       WebhookProperty.read({ record: object, key: 'head_sha' }),
@@ -602,9 +601,7 @@ export class PrStewardWebhookDecoder {
     let parsed: UntrustedYamlNode;
     try {
       parsed = UntrustedYamlBoundary.fromHost(
-        JSON.parse(
-          new TextDecoder('utf-8', { fatal: true }).decode(data),
-        ) as UntrustedYamlNode,
+        JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data)),
       );
     } catch {
       throw new EventDecodeError({
@@ -636,9 +633,7 @@ export class PrStewardWebhookDecoder {
       const decoded = new TextDecoder('utf-8', { fatal: true }).decode(
         Buffer.from(encodedData, 'base64'),
       );
-      eventData = UntrustedYamlBoundary.fromHost(
-        JSON.parse(decoded) as UntrustedYamlNode,
-      );
+      eventData = UntrustedYamlBoundary.fromHost(JSON.parse(decoded));
     } catch {
       throw new EventDecodeError({
         code: PrStewardWebhookDecodeCode.Data,

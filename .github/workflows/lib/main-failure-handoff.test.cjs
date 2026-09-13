@@ -1,16 +1,30 @@
-const assert = require('node:assert/strict')
-const fs = require('node:fs')
-const path = require('node:path')
-const test = require('node:test')
+/** @type {(moduleName: string) => unknown} */
+const loadBuiltin = /** @type {(moduleName: string) => unknown} */ (process.getBuiltinModule.bind(process))
+/** @type {typeof import('node:assert/strict')} */
+const assert = /** @type {typeof import('node:assert/strict')} */ (loadBuiltin('node:assert/strict'))
+/** @type {typeof import('node:fs')} */
+const fs = /** @type {typeof import('node:fs')} */ (loadBuiltin('node:fs'))
+/** @type {typeof import('node:path')} */
+const path = /** @type {typeof import('node:path')} */ (loadBuiltin('node:path'))
+/** @type {typeof import('node:test')} */
+const test = /** @type {typeof import('node:test')} */ (loadBuiltin('node:test'))
+/** @typedef {{ id: number, run_attempt: number, name: 'CI', event: string, head_branch: string, head_sha: string, conclusion: 'action_required' | 'failure' | 'startup_failure' | 'timed_out' | 'cancelled' | 'success' | 'skipped', html_url: string }} MainRun */
+/** @template T @param {string} modulePath @returns {T} */
+function loadModule(modulePath) {
+  const loaded = /** @type {unknown} */ (module.require(modulePath))
+  return /** @type {T} */ (loaded)
+}
+/** @type {typeof import('./main-failure-handoff.cjs')} */
+const handoff = loadModule('./main-failure-handoff.cjs')
 const {
   buildMainFailureIssue,
-  failedJobNames,
   incidentPathForRun,
   isStaleMainAttempt,
   retireSuccessfulMainIssue,
   requireMainFailure,
-} = require('./main-failure-handoff.cjs')
+} = handoff
 
+/** @param {Partial<MainRun>} [overrides] @returns {MainRun} */
 function run(overrides = {}) {
   return {
     id: 30190000000,
@@ -25,7 +39,21 @@ function run(overrides = {}) {
   }
 }
 
-test('creates one ready automated incident per failed Main revision', () => {
+/** @param {string} value @param {string} marker @returns {string} */
+function sectionAfter(value, marker) {
+  const section = value.split(marker).at(1)
+  if (typeof section !== 'string') throw new Error(`missing expected section ${marker}`)
+  return section
+}
+
+/** @param {string} value @param {string} marker @returns {string} */
+function sectionBefore(value, marker) {
+  const section = value.split(marker).at(0)
+  if (typeof section !== 'string') throw new Error(`missing expected section ${marker}`)
+  return section
+}
+
+void test('creates one ready automated incident per failed Main revision', () => {
   const source = run()
   const issue = buildMainFailureIssue({
     run: source,
@@ -46,7 +74,7 @@ test('creates one ready automated incident per failed Main revision', () => {
   assert.doesNotMatch(issue.body, /raw log contents/)
 })
 
-test('deduplicates attempts and supersedes an active claim for a new rerun', () => {
+void test('deduplicates attempts and supersedes an active claim for a new rerun', () => {
   const source = run()
   const initial = buildMainFailureIssue({
     run: source,
@@ -82,7 +110,7 @@ test('deduplicates attempts and supersedes an active claim for a new rerun', () 
   )
 })
 
-test('rejects stale rerun delivery before changing incident policy', () => {
+void test('rejects stale rerun delivery before changing incident policy', () => {
   const current = buildMainFailureIssue({
     run: run({ run_attempt: 3 }),
     jobs: [{ name: 'Native Rust verification', conclusion: 'failure' }],
@@ -102,7 +130,7 @@ test('rejects stale rerun delivery before changing incident policy', () => {
   )
 })
 
-test('retires an existing incident after a successful rerun', () => {
+void test('retires an existing incident after a successful rerun', () => {
   const initial = buildMainFailureIssue({
     run: run(),
     jobs: [{ name: 'Web e2e', conclusion: 'failure' }],
@@ -120,7 +148,7 @@ test('retires an existing incident after a successful rerun', () => {
   assert.match(retired, /<!-- hive-retired:successful-rerun -->/)
 })
 
-test('records a successful tombstone before any delayed failure handoff', () => {
+void test('records a successful tombstone before any delayed failure handoff', () => {
   const successful = run({ id: 30190000001, conclusion: 'success' })
   const tombstone = retireSuccessfulMainIssue({
     run: successful,
@@ -132,7 +160,7 @@ test('records a successful tombstone before any delayed failure handoff', () => 
   assert.equal(isStaleMainAttempt(tombstone, run({ id: 30190000000 })), true)
 })
 
-test('reopens after repeated successful reruns without stale retirement markers', () => {
+void test('reopens after repeated successful reruns without stale retirement markers', () => {
   const initial = buildMainFailureIssue({
     run: run(),
     jobs: [{ name: 'Web e2e', conclusion: 'failure' }],
@@ -159,7 +187,7 @@ test('reopens after repeated successful reruns without stale retirement markers'
   assert.doesNotMatch(reopened.body, /<!-- hive-retired:successful-rerun -->/)
 })
 
-test('successful rerun preserves completed delivery evidence', () => {
+void test('successful rerun preserves completed delivery evidence', () => {
   const initial = buildMainFailureIssue({
     run: run(),
     jobs: [{ name: 'Web e2e', conclusion: 'failure' }],
@@ -179,7 +207,7 @@ test('successful rerun preserves completed delivery evidence', () => {
   assert.match(retired, /- \[x\] The failure is explained/)
 })
 
-test('reopens a completed incident for a later failed rerun', () => {
+void test('reopens a completed incident for a later failed rerun', () => {
   const source = run()
   const initial = buildMainFailureIssue({
     run: source,
@@ -201,7 +229,7 @@ test('reopens a completed incident for a later failed rerun', () => {
   assert.match(updated.body, /<!-- main-run:30190000000:attempt:2 -->/)
 })
 
-test('rejects untrusted or non-failing workflow shapes', () => {
+void test('rejects untrusted or non-failing workflow shapes', () => {
   assert.equal(
     requireMainFailure(run({ conclusion: 'timed_out' })),
     'abcdef0123456789abcdef0123456789abcdef01',
@@ -220,7 +248,7 @@ test('rejects untrusted or non-failing workflow shapes', () => {
   )
 })
 
-test('queues failures confined to browser and UI-demo jobs', () => {
+void test('queues failures confined to browser and UI-demo jobs', () => {
   const source = run()
   const issue = buildMainFailureIssue({
     run: source,
@@ -240,7 +268,7 @@ test('queues failures confined to browser and UI-demo jobs', () => {
   assert.deepEqual(issue.failedJobs, ['Extension e2e', 'UI demos', 'Web e2e'])
 })
 
-test('records cancelled jobs as repair evidence', () => {
+void test('records cancelled jobs as repair evidence', () => {
   const issue = buildMainFailureIssue({
     run: run(),
     jobs: [
@@ -254,7 +282,7 @@ test('records cancelled jobs as repair evidence', () => {
   assert.match(issue.body, /Failed jobs: Native Rust verification, Web e2e\./)
 })
 
-test('reopens an incident retired by the former E2E suppression policy', () => {
+void test('reopens an incident retired by the former E2E suppression policy', () => {
   const initial = buildMainFailureIssue({
     run: run(),
     jobs: [{ name: 'Native Rust verification', conclusion: 'failure' }],
@@ -286,7 +314,7 @@ test('reopens an incident retired by the former E2E suppression policy', () => {
   assert.match(reopened.body, /<!-- main-run:30190000000:attempt:2 -->/)
 })
 
-test('workflow preserves the Main cache order and coalesces only pending runs', () => {
+void test('workflow preserves the Main cache order and coalesces only pending runs', () => {
   const root = path.join(__dirname, '..', '..', '..')
   const main = fs.readFileSync(path.join(root, '.github/workflows/main.yml'), 'utf8')
   const ci = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8')
@@ -294,11 +322,9 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
     path.join(root, 'nook-app/nook-platform/docker/Taskfile.yml'),
     'utf8',
   )
-  const wasmJob = main.split('\n  wasm:\n')[1].split('\n  wasm-cache-publish:\n')[0]
-  const wasmCacheGate = main
-    .split('\n  wasm-cache-publish:\n')[1]
-    .split('\n  wasm-cache-proof:\n')[0]
-  const webJob = main.split('\n  web:\n')[1].split('\n  web-e2e:\n')[0]
+  const wasmJob = sectionBefore(sectionAfter(main, '\n  wasm:\n'), '\n  wasm-cache-publish:\n')
+  const wasmCacheGate = sectionBefore(sectionAfter(main, '\n  wasm-cache-publish:\n'), '\n  wasm-cache-proof:\n')
+  const webJob = sectionBefore(sectionAfter(main, '\n  web:\n'), '\n  web-e2e:\n')
   assert.match(
     ci,
     /github\.event_name == 'push' && 'main'/,
@@ -341,7 +367,7 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
   )
 })
 
-test('cache telemetry cannot hold a cancelled delivery lane indefinitely', () => {
+void test('cache telemetry cannot hold a cancelled delivery lane indefinitely', () => {
   const root = path.join(__dirname, '..', '..', '..')
   const telemetry = fs.readFileSync(
     path.join(root, '.github/actions/nook-cache-telemetry/action.yml'),
@@ -352,15 +378,15 @@ test('cache telemetry cannot hold a cancelled delivery lane indefinitely', () =>
     'utf8',
   )
 
-  assert.match(telemetry, /timeout 15s .*cache-telemetry\.mjs start/)
-  assert.match(telemetry, /timeout 30s .*cache-telemetry\.mjs collect/)
+  assert.match(telemetry, /timeout 15s .*cache-telemetry\.mjs"? start/)
+  assert.match(telemetry, /timeout 30s .*cache-telemetry\.mjs"? collect/)
   assert.match(
     dockerSetup,
     /timeout 15s [^\n]*cache-telemetry\.mjs["']? start/,
   )
 })
 
-test('handoff workflow trusts default-branch code and writes only Workbench', () => {
+void test('handoff workflow trusts default-branch code and writes only Workbench', () => {
   const root = path.join(__dirname, '..', '..', '..')
   const workflow = fs.readFileSync(
     path.join(root, '.github/workflows/main-failure-handoff.yml'),

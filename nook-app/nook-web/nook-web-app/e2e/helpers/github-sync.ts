@@ -3,6 +3,7 @@ import {
   GITHUB_VAULT_PATH,
   fetchGithubEventLog,
   fetchGithubVaultYaml,
+  GithubVaultYamlFetchKind,
   GithubEventLogFetchKind,
   githubApiFetch,
   githubApiHeaders,
@@ -12,6 +13,7 @@ import {
 import {
   assertGenesisVaultYaml,
   parseVaultEventLogSnapshot,
+  parseVaultYamlSnapshot,
   waitForVaultEventLogSnapshot,
   type VaultYamlSnapshot,
 } from '../vault-yaml'
@@ -172,6 +174,33 @@ export async function waitForVaultYaml(
   }
 
   throw new Error(`Timed out waiting for vault YAML: ${lastError}`)
+}
+
+/** Wait until the mutable GitHub projection reflects the expected vault state. */
+export async function waitForGithubVaultProjectionState(
+  pat: string,
+  repoName: string,
+  predicate: (snapshot: VaultYamlSnapshot) => boolean,
+  options?: { timeoutMs?: number; intervalMs?: number },
+): Promise<VaultYamlSnapshot> {
+  const [timeoutMs = GITHUB_SYNC_TIMEOUT_MS] = [options?.timeoutMs]
+  const [intervalMs = GITHUB_SYNC_INTERVAL_MS] = [options?.intervalMs]
+  const deadline = Date.now() + timeoutMs
+  let lastError = 'vault file missing'
+
+  while (Date.now() < deadline) {
+    const result = await fetchGithubVaultYaml(pat, repoName)
+    if (result.kind === GithubVaultYamlFetchKind.Available) {
+      const snapshot = parseVaultYamlSnapshot(result.yaml)
+      if (predicate(snapshot)) {
+        return snapshot
+      }
+      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
+    }
+    await sleep(intervalMs)
+  }
+
+  throw new Error(`Timed out waiting for GitHub vault projection: ${lastError}`)
 }
 
 export async function assertNoVaultErrors(

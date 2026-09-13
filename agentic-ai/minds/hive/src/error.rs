@@ -134,6 +134,7 @@ impl HiveError {
         }
     }
 
+    #[must_use]
     pub fn msg(message: String) -> Self {
         Self::message(message)
     }
@@ -144,6 +145,28 @@ impl HiveError {
                 message: format!("{operation}: {message}"),
             },
             Self::Io(source) => Self::IoOperation { operation, source },
+            Self::Json(source) => Self::JsonOperation { operation, source },
+            Self::Neo4j(source) => Self::Neo4jOperation { operation, source },
+            Self::Neo4jDecode(source) => Self::Neo4jDecodeOperation { operation, source },
+            Self::Model(source) => Self::ModelOperation { operation, source },
+            Self::Codex(source) => Self::CodexOperation { operation, source },
+            Self::Utf8(source) => Self::Utf8Operation { operation, source },
+            Self::IntegerConversion(source) => {
+                Self::IntegerConversionOperation { operation, source }
+            }
+            Self::IntegerParse(source) => Self::IntegerParseOperation { operation, source },
+            Self::EnvironmentVariable(source) => {
+                Self::EnvironmentVariableOperation { operation, source }
+            }
+            Self::WatchReceive(source) => Self::WatchReceiveOperation { operation, source },
+            Self::TaskJoin(source) => Self::TaskJoinOperation { operation, source },
+            Self::TimeFormat(source) => Self::TimeFormatOperation { operation, source },
+            nested => Self::at_nested_operation(nested, &operation),
+        }
+    }
+
+    fn at_nested_operation(self, operation: &str) -> Self {
+        match self {
             Self::IoOperation {
                 operation: previous,
                 source,
@@ -151,7 +174,6 @@ impl HiveError {
                 operation: format!("{operation}: {previous}"),
                 source,
             },
-            Self::Json(source) => Self::JsonOperation { operation, source },
             Self::JsonOperation {
                 operation: previous,
                 source,
@@ -159,7 +181,6 @@ impl HiveError {
                 operation: format!("{operation}: {previous}"),
                 source,
             },
-            Self::Neo4j(source) => Self::Neo4jOperation { operation, source },
             Self::Neo4jOperation {
                 operation: previous,
                 source,
@@ -167,7 +188,6 @@ impl HiveError {
                 operation: format!("{operation}: {previous}"),
                 source,
             },
-            Self::Neo4jDecode(source) => Self::Neo4jDecodeOperation { operation, source },
             Self::Neo4jDecodeOperation {
                 operation: previous,
                 source,
@@ -175,7 +195,6 @@ impl HiveError {
                 operation: format!("{operation}: {previous}"),
                 source,
             },
-            Self::Model(source) => Self::ModelOperation { operation, source },
             Self::ModelOperation {
                 operation: previous,
                 source,
@@ -183,7 +202,6 @@ impl HiveError {
                 operation: format!("{operation}: {previous}"),
                 source,
             },
-            Self::Codex(source) => Self::CodexOperation { operation, source },
             Self::CodexOperation {
                 operation: previous,
                 source,
@@ -191,7 +209,6 @@ impl HiveError {
                 operation: format!("{operation}: {previous}"),
                 source,
             },
-            Self::Utf8(source) => Self::Utf8Operation { operation, source },
             Self::Utf8Operation {
                 operation: previous,
                 source,
@@ -199,9 +216,6 @@ impl HiveError {
                 operation: format!("{operation}: {previous}"),
                 source,
             },
-            Self::IntegerConversion(source) => {
-                Self::IntegerConversionOperation { operation, source }
-            }
             Self::IntegerConversionOperation {
                 operation: previous,
                 source,
@@ -209,7 +223,6 @@ impl HiveError {
                 operation: format!("{operation}: {previous}"),
                 source,
             },
-            Self::IntegerParse(source) => Self::IntegerParseOperation { operation, source },
             Self::IntegerParseOperation {
                 operation: previous,
                 source,
@@ -217,9 +230,6 @@ impl HiveError {
                 operation: format!("{operation}: {previous}"),
                 source,
             },
-            Self::EnvironmentVariable(source) => {
-                Self::EnvironmentVariableOperation { operation, source }
-            }
             Self::EnvironmentVariableOperation {
                 operation: previous,
                 source,
@@ -227,7 +237,6 @@ impl HiveError {
                 operation: format!("{operation}: {previous}"),
                 source,
             },
-            Self::WatchReceive(source) => Self::WatchReceiveOperation { operation, source },
             Self::WatchReceiveOperation {
                 operation: previous,
                 source,
@@ -235,7 +244,6 @@ impl HiveError {
                 operation: format!("{operation}: {previous}"),
                 source,
             },
-            Self::TaskJoin(source) => Self::TaskJoinOperation { operation, source },
             Self::TaskJoinOperation {
                 operation: previous,
                 source,
@@ -243,7 +251,6 @@ impl HiveError {
                 operation: format!("{operation}: {previous}"),
                 source,
             },
-            Self::TimeFormat(source) => Self::TimeFormatOperation { operation, source },
             Self::TimeFormatOperation {
                 operation: previous,
                 source,
@@ -257,8 +264,18 @@ impl HiveError {
 }
 
 pub trait HiveContext<T> {
+    /// Adds operation context to a fallible result.
+    ///
+    /// # Errors
+    ///
+    /// Returns the source error converted to [`HiveError`] with operation context.
     fn hive_context(self, context: impl Into<String>) -> HiveResult<T>;
 
+    /// Lazily adds operation context to a fallible result.
+    ///
+    /// # Errors
+    ///
+    /// Returns the source error converted to [`HiveError`] with operation context.
     fn with_hive_context<F>(self, context: F) -> HiveResult<T>
     where
         F: FnOnce() -> String;
