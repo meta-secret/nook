@@ -631,6 +631,7 @@ impl CliInvocation {
                 trigger: TaskTrigger::ManualCli,
                 prompt,
                 source_commit,
+                bootstrap_evidence: None,
                 priority,
                 max_attempts,
                 dependencies,

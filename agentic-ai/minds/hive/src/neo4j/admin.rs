@@ -303,7 +303,7 @@ impl Neo4jTaskStore {
         })
     }
 
-    fn bootstrap_evidence(row: &Row) -> crate::HiveResult<Option<BootstrapEvidence>> {
+    pub(super) fn bootstrap_evidence(row: &Row) -> crate::HiveResult<Option<BootstrapEvidence>> {
         let origin_main_sha = row.get::<String>("origin_main_sha")?;
         let pinned_local_dev_sha = row.get::<String>("pinned_local_dev_sha")?;
         let feature_head_sha = row.get::<String>("feature_head_sha")?;

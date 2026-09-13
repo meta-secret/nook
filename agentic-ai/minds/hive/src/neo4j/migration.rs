@@ -19,14 +19,23 @@ impl Neo4jTaskStore {
         let mut rows = graph
             .execute(query(
                 "MATCH (migration:HiveSchemaMigration)
-                 RETURN max(migration.version) AS version",
+                 RETURN migration.version AS version",
             ))
             .await?;
-        let installed_version = rows
-            .next()
-            .await?
-            .and_then(|row| row.get::<i64>("version").ok())
-            .unwrap_or(0);
+        let mut installed_version = 0_i64;
+        while let Some(row) = rows.next().await? {
+            let version = row.get::<i64>("version").map_err(|error| {
+                crate::HiveError::message(format!(
+                    "Hive schema migration marker has a malformed version: {error}"
+                ))
+            })?;
+            if version < 0 {
+                return Err(crate::HiveError::message(format!(
+                    "Hive schema migration marker has an invalid negative version {version}"
+                )));
+            }
+            installed_version = installed_version.max(version);
+        }
         if installed_version > LATEST_SCHEMA_VERSION {
             return Err(crate::HiveError::message(format!(
                 "Hive graph schema {installed_version} is newer than supported version {LATEST_SCHEMA_VERSION}"

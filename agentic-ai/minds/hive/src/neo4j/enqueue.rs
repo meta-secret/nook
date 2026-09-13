@@ -42,7 +42,11 @@ impl Neo4jTaskStore {
                                    task.max_attempts = $max_attempts,
                                    task.status = 'BLOCKED',
                                    task.updated_at = timestamp()
-                     RETURN task.enqueue_token = $enqueue_token AS created",
+                     RETURN task.enqueue_token = $enqueue_token AS created,
+                            task.source_commit AS existing_source_commit,
+                            coalesce(task.origin_main_sha, '') AS origin_main_sha,
+                            coalesce(task.pinned_local_dev_sha, '') AS pinned_local_dev_sha,
+                            coalesce(task.feature_head_sha, '') AS feature_head_sha",
                 )
                 .param("id", task.id.as_str())
                 .param("enqueue_token", enqueue_token.as_str())
@@ -57,16 +61,26 @@ impl Neo4jTaskStore {
                 .param("max_attempts", task.max_attempts),
             )
             .await?;
-        let created = rows
+        let row = rows
             .next(transaction.handle())
             .await?
-            .is_some_and(|row| row.get::<bool>("created").unwrap_or(false));
+            .ok_or_else(|| crate::HiveError::message("task enqueue returned no row"))?;
+        let created = row.get::<bool>("created")?;
         if !created {
+            let existing_source_commit = row.get::<String>("existing_source_commit")?;
+            let existing_bootstrap_evidence = Self::bootstrap_evidence(&row)?;
+            let evidence_matches = task.bootstrap_evidence.as_ref().map_or(
+                existing_bootstrap_evidence.is_none(),
+                |evidence| evidence.matches(existing_bootstrap_evidence.as_ref()),
+            );
             transaction.rollback().await?;
-            return Err(crate::HiveError::message(format!(
-                "task {} already exists",
-                task.id
-            )));
+            if existing_source_commit != task.source_commit || !evidence_matches {
+                return Err(crate::HiveError::message(format!(
+                    "task {} already exists with different source commit or bootstrap evidence",
+                    task.id
+                )));
+            }
+            return Ok(());
         }
 
         for dependency in &task.dependencies {
@@ -129,23 +143,40 @@ impl Neo4jTaskStore {
         let ActiveDeliveryQuery {
             source_commit,
             kind,
+            bootstrap_evidence,
         } = request;
+        let (origin_main_sha, pinned_local_dev_sha, feature_head_sha) = bootstrap_evidence
+            .map_or(("", "", ""), |evidence| {
+                (
+                    evidence.origin_main_sha.as_str(),
+                    evidence.pinned_local_dev_sha.as_str(),
+                    evidence.feature_head_sha.as_str(),
+                )
+            });
         let mut rows = self
             .graph
             .execute(
                 query(
                     "MATCH (root:Task {source_commit: $source_commit, kind: $kind})
-                     WHERE root.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
-                        OR EXISTS {
-                          MATCH (root)-[:DEPENDS_ON*1..]->(descendant:Task)
-                          WHERE descendant.status = 'CANCELLING'
-                        }
+                     WHERE coalesce(root.origin_main_sha, '') = $origin_main_sha
+                       AND coalesce(root.pinned_local_dev_sha, '') = $pinned_local_dev_sha
+                       AND coalesce(root.feature_head_sha, '') = $feature_head_sha
+                       AND (
+                         root.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
+                         OR EXISTS {
+                           MATCH (root)-[:DEPENDS_ON*1..]->(descendant:Task)
+                           WHERE descendant.status = 'CANCELLING'
+                         }
+                       )
                      RETURN root.id AS id
                      ORDER BY root.created_at
                      LIMIT 1",
                 )
                 .param("source_commit", source_commit)
-                .param("kind", kind.as_str()),
+                .param("kind", kind.as_str())
+                .param("origin_main_sha", origin_main_sha)
+                .param("pinned_local_dev_sha", pinned_local_dev_sha)
+                .param("feature_head_sha", feature_head_sha),
             )
             .await?;
         match rows.next().await? {

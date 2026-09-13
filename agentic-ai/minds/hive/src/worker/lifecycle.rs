@@ -367,6 +367,7 @@ mod tests {
             let ActiveDeliveryQuery {
                 source_commit: _source_commit,
                 kind: _kind,
+                bootstrap_evidence: _bootstrap_evidence,
             } = request;
             unreachable!("not used by claim lifecycle test")
         }

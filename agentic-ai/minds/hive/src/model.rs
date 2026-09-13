@@ -820,6 +820,7 @@ pub use task_kind::TaskKind;
 pub struct ActiveDeliveryQuery<'a> {
     pub source_commit: &'a str,
     pub kind: &'a TaskKind,
+    pub bootstrap_evidence: Option<&'a BootstrapEvidence>,
 }
 
 enum AbsentBlockerContext {

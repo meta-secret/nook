@@ -136,14 +136,16 @@ view, while `task infra:hive:diagnose` includes bounded observer logs.
 
 ## Graph schema
 
-Hive graph schema version `9` retains unique constraints for `Task`, `Agent`,
+Hive graph schema version `10` retains unique constraints for `Task`, `Agent`,
 `Attempt`, and `Artifact`, adds `TaskActivity` identity and timeline indexes,
 and retains the task-claim index. Migration records are
 stored as `(:HiveSchemaMigration {version, applied_at})`. A worker refuses to
 run when the stored version is newer than the binary supports. Because Neo4j
 does not allow schema and data writes in one transaction, Hive applies the
 idempotent `IF NOT EXISTS` schema statements first and records the version only
-after every statement succeeds.
+after every statement succeeds. Every migration marker must contain a
+non-negative integer version; a malformed marker fails migration closed rather
+than being treated as schema version zero.
 
 Version 2 adds the pinned `source_commit` task property. Version 3 initializes
 the original one-time retry marker. Version 4 replaces that marker with
@@ -162,6 +164,21 @@ policy prevents retained chains from growing while they drain. Claims traverse
 the non-scheduling lineage in depth order so child artifacts apply before parent
 artifacts, including when a completed blocker is reused by a future consumer.
 Scheduling and rearm traversal ignore the lineage.
+
+Version 10 adds the task properties `origin_main_sha`,
+`pinned_local_dev_sha`, and `feature_head_sha`. The migration backfills each
+property to the empty string for existing tasks, preserving the distinction
+between legacy non-repair tasks and a malformed main-repair task. New
+main-repair enqueue and claim paths require all three full Git object IDs;
+active-delivery lookup and duplicate enqueue reconciliation include the complete
+three-SHA tuple as part of task identity and fail closed when it changes.
+
+To roll version 10 back to a version-9 binary, first stop every Hive worker,
+coordinator, observer, and dispatcher and back up the Neo4j data volume. Delete
+only the version-10 `HiveSchemaMigration` marker and remove the three
+bootstrap-evidence properties from `Task` nodes, then retain the version-9
+marker. Do not perform this rollback while a main-repair task is relying on the
+properties; restore from a compatible pre-version-10 backup instead.
 
 To roll version 9 back to a version-8 binary, first stop every Hive worker,
 coordinator, observer, and dispatcher. Restore the pre-version-9 Neo4j data

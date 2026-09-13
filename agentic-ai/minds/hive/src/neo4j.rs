@@ -165,10 +165,12 @@ impl TaskStore for Neo4jTaskStore {
         let ActiveDeliveryQuery {
             source_commit,
             kind,
+            bootstrap_evidence,
         } = request;
         self.active_delivery_task(ActiveDeliveryQuery {
             source_commit,
             kind,
+            bootstrap_evidence,
         })
         .await
     }

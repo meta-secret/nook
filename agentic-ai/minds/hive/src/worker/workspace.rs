@@ -46,7 +46,13 @@ impl TaskWorkspace<'_> {
         async_fs::create_dir_all(workspace.join("temporary")).await?;
         let (repository, did_resume) = match bootstrap_evidence {
             Some(evidence) => {
-                Self::prepare_pinned_repository(workspace, repository_url, evidence).await?
+                Self::prepare_pinned_repository(
+                    workspace,
+                    repository_url,
+                    evidence,
+                    &resume_branch,
+                )
+                .await?
             }
             None => {
                 Self::prepare_repository(workspace, repository_url, source_commit, &resume_branch)
@@ -211,6 +217,7 @@ impl TaskWorkspace<'_> {
         workspace: &Path,
         repository_url: &str,
         evidence: &BootstrapEvidence,
+        resume_branch: &WorkspaceOrigin<'_>,
     ) -> crate::HiveResult<(PathBuf, bool)> {
         let repository = workspace.join("repository");
         if repository.join(".git").is_dir() {
@@ -274,24 +281,63 @@ impl TaskWorkspace<'_> {
             "verify featureHeadSha ancestry",
         )
         .await?;
-        Self::run_git_status(
-            &repository,
-            &[
-                "checkout",
-                "--quiet",
-                "--detach",
-                evidence.feature_head_sha.as_str(),
-            ],
-            "check out the exact canonical feature frontier",
-        )
-        .await?;
-        let checked_out = Self::git_output(&repository, &["rev-parse", "HEAD"]).await?;
-        if checked_out != evidence.feature_head_sha.as_str() {
-            return Err(crate::HiveError::message(
-                "detached workspace HEAD does not equal featureHeadSha",
-            ));
+        let mut did_resume = false;
+        if let WorkspaceOrigin::ResumeBranch(branch) = resume_branch {
+            let resumed = Self::git_command()
+                .args([
+                    "fetch",
+                    "--no-tags",
+                    "--depth=100",
+                    "origin",
+                    &format!("refs/heads/{branch}"),
+                ])
+                .current_dir(&repository)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .await?;
+            if resumed.success() {
+                Self::run_git_status(
+                    &repository,
+                    &["checkout", "--quiet", "-B", branch, "FETCH_HEAD"],
+                    "resume the durable Hive repair branch",
+                )
+                .await?;
+                Self::run_git_status(
+                    &repository,
+                    &[
+                        "merge-base",
+                        "--is-ancestor",
+                        evidence.feature_head_sha.as_str(),
+                        "HEAD",
+                    ],
+                    "verify the resumed branch descends from featureHeadSha",
+                )
+                .await?;
+                did_resume = true;
+            }
         }
-        Ok((repository, false))
+        if !did_resume {
+            Self::run_git_status(
+                &repository,
+                &[
+                    "checkout",
+                    "--quiet",
+                    "--detach",
+                    evidence.feature_head_sha.as_str(),
+                ],
+                "check out the exact canonical feature frontier",
+            )
+            .await?;
+            let checked_out = Self::git_output(&repository, &["rev-parse", "HEAD"]).await?;
+            if checked_out != evidence.feature_head_sha.as_str() {
+                return Err(crate::HiveError::message(
+                    "detached workspace HEAD does not equal featureHeadSha",
+                ));
+            }
+        }
+        Ok((repository, did_resume))
     }
 }
 

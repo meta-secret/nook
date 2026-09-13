@@ -175,10 +175,13 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             }
             let task_base = name.trim_end_matches(MAIN_FAILURE_SUFFIX);
             if body.contains(SUCCESSFUL_RERUN_RETIREMENT_MARKER) {
+                let bootstrap_evidence = (WorkbenchIncidentText { value: &body })
+                    .bootstrap_evidence()?;
                 if let ActiveDelivery::Active(task_id) = store
                     .active_delivery(ActiveDeliveryQuery {
                         source_commit: &source_commit,
                         kind: &TaskKind::from("main-repair"),
+                        bootstrap_evidence: Some(&bootstrap_evidence),
                     })
                     .await?
                 {
@@ -253,6 +256,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             .active_delivery(ActiveDeliveryQuery {
                 source_commit,
                 kind: &TaskKind::from("main-repair"),
+                bootstrap_evidence: Some(bootstrap_evidence),
             })
             .await?
         {
@@ -282,11 +286,10 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             max_attempts: 3,
             dependencies: Vec::new(),
         };
-        if let Err(error) = store.enqueue(&task).await
-            && !format!("{error:#}").contains("already exists")
-        {
-            return Err(error).with_hive_context(|| format!("enqueue {}", task.id));
-        }
+        store
+            .enqueue(&task)
+            .await
+            .with_hive_context(|| format!("enqueue {}", task.id))?;
         Ok(())
     }
 }
@@ -553,6 +556,7 @@ mod tests {
             let ActiveDeliveryQuery {
                 source_commit: _,
                 kind: _,
+                bootstrap_evidence: _,
             } = request;
             Ok(self
                 .active
