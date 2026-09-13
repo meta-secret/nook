@@ -28,13 +28,13 @@ import type { DelegationLifecycleLockInput } from '../../src/agent-workflow/dele
 
 import {
   AgentWorkflowDelegationAggregationScenario,
+  CrashBoundary,
   REMOVE_OPTIONS,
   RECURSIVE_DIRECTORY_OPTIONS,
 } from './delegation-aggregation-fixtures.ts';
 
 import type {
   AdmissionForInput,
-  CrashBoundary,
   FixtureInput,
   KillCrashHolderInput,
 } from './delegation-aggregation-fixtures.ts';

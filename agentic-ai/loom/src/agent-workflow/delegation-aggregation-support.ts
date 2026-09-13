@@ -26,6 +26,8 @@ import type {
 export type DelegationFinalizationRequest = PinnedDevBaseEvidence & {
   readonly runId: string;
   readonly sourceCommit: string;
+  /** Observed attempt frontier retained for journal-artifact verification only. */
+  readonly featureHeadSha: string;
   readonly barrierEvidence: readonly DelegationBarrierEvidence[];
 };
 
@@ -59,6 +61,8 @@ export type DelegationRunResult = PinnedDevBaseEvidence & {
   readonly schemaVersion: typeof DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION;
   readonly runId: string;
   readonly sourceCommit: string;
+  /** Observed attempt frontier; the canonical feature branch remains authoritative. */
+  readonly featureHeadSha: string;
   readonly planSha256: string;
   readonly rootMaterializer: DelegationAttemptIdentity;
   readonly attempts: readonly DelegationFinalizedAttempt[];
@@ -90,6 +94,7 @@ export type DelegationFinalizationReceipt = {
 
 export type FinalizeWhileLockedInput = {
   readonly loaded: LoadedDelegationRunState;
+  readonly featureHeadSha: string;
   readonly barrierEvidence: readonly DelegationBarrierEvidence[];
 };
 

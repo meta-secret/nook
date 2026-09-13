@@ -74,13 +74,11 @@ class BaseEvidenceGitFixture {
   request(
     originMainSha: string,
     pinnedLocalDevSha: string,
-    featureHeadSha: string,
     sourceCommit: string,
   ): PinnedDevBaseAncestryRequest {
     return {
       originMainSha,
       pinnedLocalDevSha,
-      featureHeadSha,
       sourceCommit,
       workingDirectory: this.root,
     };
@@ -117,7 +115,6 @@ describe('pinned dev base Git identity', () => {
               originMainSha,
               pinnedLocalDevSha,
               sourceCommit,
-              sourceCommit,
             ),
           ),
         /pinnedLocalDevSha must include/u,
@@ -145,7 +142,6 @@ describe('pinned dev base Git identity', () => {
             fixture.request(
               recordedOriginMainSha,
               pinnedLocalDevSha,
-              sourceCommit,
               sourceCommit,
             ),
           ),

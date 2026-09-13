@@ -59,6 +59,8 @@ import type {
   StartDelegationRunInput,
 } from '../../src/agent-workflow/delegation-run-journal.ts';
 
+import { CanonicalFeatureBranchContract } from '../../src/lib/base-evidence.ts';
+
 export const REMOVE_OPTIONS: RmOptions = { recursive: true, force: true };
 
 export const RECURSIVE_DIRECTORY_OPTIONS: { readonly recursive: true } = {
@@ -66,6 +68,8 @@ export const RECURSIVE_DIRECTORY_OPTIONS: { readonly recursive: true } = {
 };
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+
+const FEATURE_BRANCH = 'codex/hive-delegation-aggregation-tests';
 
 export class AgentWorkflowDelegationAggregationScenario {
   private constructor(private readonly request: FixtureInput) {}
@@ -386,7 +390,7 @@ export class AgentWorkflowDelegationAggregationScenario {
         sourceCommit: input.plan.sourceCommit,
         originMainSha: input.plan.originMainSha,
         pinnedLocalDevSha: input.plan.pinnedLocalDevSha,
-        featureHeadSha: input.plan.pinnedLocalDevSha,
+        featureBranch: input.plan.featureBranch,
         identity: input.declaration.identity,
         depth: input.declaration.depth,
         parent: input.declaration.parent,
@@ -528,7 +532,7 @@ export class AgentWorkflowDelegationAggregationScenario {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
-      featureHeadSha: SOURCE_COMMIT,
+      featureBranch: CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
       rootMaterializer: rootIdentity,
       attempts: [root, expert, leaf],
     };

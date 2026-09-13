@@ -48,6 +48,8 @@ import type {
   StartDelegationRunInput,
 } from '../../src/agent-workflow/delegation-run-journal.ts';
 
+import { CanonicalFeatureBranchContract } from '../../src/lib/base-evidence.ts';
+
 export class AgentWorkflowDelegationAdmissionScenario {
   private constructor(private readonly request: DelegationAttemptDeclaration) {}
 
@@ -86,7 +88,7 @@ export class AgentWorkflowDelegationAdmissionScenario {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
-      featureHeadSha: SOURCE_COMMIT,
+      featureBranch: CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
       rootMaterializer: ROOT,
       attempts: [root, expert, specialist],
     };
@@ -105,7 +107,7 @@ export class AgentWorkflowDelegationAdmissionScenario {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
-      featureHeadSha: SOURCE_COMMIT,
+      featureBranch: CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
       identity: declaration.identity,
       depth: declaration.depth,
       parent: declaration.parent,
@@ -131,6 +133,8 @@ const REMOVE_DIRECTORY_OPTIONS: {
 };
 
 const SOURCE_COMMIT = 'a'.repeat(40);
+
+const FEATURE_BRANCH = 'codex/hive-delegation-admission-tests';
 
 const RUN_ID = 'ordinary-delegation-test';
 
@@ -172,7 +176,7 @@ describe('ordinary delegation admission', () => {
 
   test('decodes and migrates the historical v1 plan without mutating it', () => {
     const current = AgentWorkflowDelegationAdmissionScenario.validPlan();
-    const { featureHeadSha: _featureHeadSha, ...withoutFeature } = current;
+    const { featureBranch: _featureBranch, ...withoutFeature } = current;
     const historical: DelegationPlanV1 = {
       ...withoutFeature,
       schemaVersion: LEGACY_DELEGATION_PLAN_SCHEMA_VERSION,
@@ -188,13 +192,15 @@ describe('ordinary delegation admission', () => {
     ).toThrow('schema version is unsupported');
     const migrated = DelegationJournalSchema.migrateDelegationPlan(
       historical,
-      'b'.repeat(40),
+      FEATURE_BRANCH,
     );
     expect(historical).toEqual(before);
     expect(migrated.schemaVersion).toBe(DELEGATION_PLAN_SCHEMA_VERSION);
     expect(migrated.originMainSha).toBe(historical.originMainSha);
     expect(migrated.pinnedLocalDevSha).toBe(historical.pinnedLocalDevSha);
-    expect(migrated.featureHeadSha).toBe('b'.repeat(40));
+    expect(migrated.featureBranch).toBe(
+      CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
+    );
   });
 
   test('rejects a barrier that omits a declared direct child', () => {
@@ -306,7 +312,7 @@ describe('ordinary delegation admission', () => {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
-      featureHeadSha: SOURCE_COMMIT,
+      featureBranch: CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
       identity: ROOT,
       depth: 2,
       parent: { kind: AgentAttemptParentKind.WorkflowRoot },
@@ -352,6 +358,9 @@ describe('ordinary delegation admission', () => {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sourceCommit: plan.sourceCommit,
+      originMainSha: plan.originMainSha,
+      pinnedLocalDevSha: plan.pinnedLocalDevSha,
+      featureHeadSha: SOURCE_COMMIT,
       task: expertDeclaration.identity.task,
       agent: expertDeclaration.identity.agent,
       attempt: expertDeclaration.identity.attempt,

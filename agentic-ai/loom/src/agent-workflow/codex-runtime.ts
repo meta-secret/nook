@@ -730,7 +730,6 @@ export class AgentSourceSnapshot {
       PinnedDevBaseEvidenceContract.assertAncestry({
         originMainSha: check.originMainSha,
         pinnedLocalDevSha: check.pinnedLocalDevSha,
-        featureHeadSha: check.featureHeadSha,
         sourceCommit: check.sourceCommit,
         workingDirectory: check.workingDirectory,
       });

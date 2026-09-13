@@ -414,10 +414,10 @@ export class DelegationRunFinalization {
     );
     DelegationRunFinalization.assertExactAdmissions(input.loaded);
     const verifiedAttempts =
-      await DelegationRunFinalization.verifyEveryAttempt({
-        loaded: input.loaded,
-        featureHeadSha: input.featureHeadSha,
-      });
+      await DelegationRunFinalization.verifyEveryAttempt(
+        input.loaded,
+        input.featureHeadSha,
+      );
     await DelegationRunFinalization.assertExactAttemptStorage(input.loaded);
     const recursiveInput: RecursiveBarrierInput = {
       plan: input.loaded.plan,
@@ -522,9 +522,9 @@ export class DelegationRunFinalization {
   }
 
   private static async verifyEveryAttempt(
-    input: FinalizeWhileLockedInput,
+    loaded: LoadedDelegationRunState,
+    featureHeadSha: string,
   ): Promise<ReadonlyMap<string, VerifiedPlannedAttempt>> {
-    const { loaded } = input;
     const attempts = new Map<string, VerifiedPlannedAttempt>();
     for (const declaration of loaded.plan.attempts) {
       const verification: ReadParentAttemptArgs = {
@@ -534,7 +534,7 @@ export class DelegationRunFinalization {
         sourceCommit: loaded.plan.sourceCommit,
         originMainSha: loaded.plan.originMainSha,
         pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
-        featureHeadSha: input.featureHeadSha,
+        featureHeadSha,
         identity: { ...declaration.identity, depth: declaration.depth },
       };
       const verified =

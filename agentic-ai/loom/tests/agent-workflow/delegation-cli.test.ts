@@ -38,6 +38,8 @@ import { VerifiedAttemptArtifacts } from '../../src/agent-workflow/attempt-verif
 
 import type { ReadParentAttemptArgs } from '../../src/agent-workflow/attempt-verification.ts';
 
+import { CanonicalFeatureBranchContract } from '../../src/lib/base-evidence.ts';
+
 export class AgentWorkflowDelegationCliScenario {
   private constructor(private readonly request: string) {}
 
@@ -62,6 +64,8 @@ export class AgentWorkflowDelegationCliScenario {
 }
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+
+const FEATURE_BRANCH = 'codex/hive-delegation-cli-tests';
 
 describe('delegated agent journal CLI', () => {
   test('records an ordinary delegated attempt with its semantic view', async () => {
@@ -100,6 +104,7 @@ describe('delegated agent journal CLI', () => {
         sourceCommit,
         originMainSha: sourceCommit,
         pinnedLocalDevSha: sourceCommit,
+        featureBranch: FEATURE_BRANCH,
         featureHeadSha: sourceCommit,
         task: 'inspect-contract',
         agent: 'contract-auditor',
@@ -129,7 +134,7 @@ describe('delegated agent journal CLI', () => {
         sourceCommit: request.sourceCommit,
         originMainSha: sourceCommit,
         pinnedLocalDevSha: sourceCommit,
-        featureHeadSha: sourceCommit,
+        featureBranch: FEATURE_BRANCH,
         rootMaterializer: {
           task: request.task,
           agent: request.agent,
@@ -188,7 +193,7 @@ describe('delegated agent journal CLI', () => {
         sourceCommit: request.sourceCommit,
         originMainSha: sourceCommit,
         pinnedLocalDevSha: sourceCommit,
-        featureHeadSha: sourceCommit,
+        featureBranch: FEATURE_BRANCH,
         identity: {
           task: request.task,
           agent: request.agent,
@@ -517,7 +522,7 @@ describe('delegated agent journal CLI', () => {
           sourceCommit: SOURCE_COMMIT,
           originMainSha: SOURCE_COMMIT,
           pinnedLocalDevSha: SOURCE_COMMIT,
-          featureHeadSha: SOURCE_COMMIT,
+          featureBranch: CanonicalFeatureBranchContract.parse(FEATURE_BRANCH),
           rootMaterializer: identity,
           attempts: [
             {
@@ -552,6 +557,7 @@ describe('delegated agent journal CLI', () => {
           sourceCommit: SOURCE_COMMIT,
           originMainSha: SOURCE_COMMIT,
           pinnedLocalDevSha: SOURCE_COMMIT,
+          featureBranch: FEATURE_BRANCH,
           featureHeadSha: SOURCE_COMMIT,
           ...identity,
           depth: 1,
