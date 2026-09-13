@@ -37,6 +37,14 @@ variable "GHA_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
+// The remote build:compile handoff defaults to publication so ordinary feature
+// invocations retain their existing semantics. Delivery may explicitly select
+// read-only for a warm verification; that mode must not create any registry
+// exporter, regardless of the generic cache-write flag.
+variable "NOOK_COMPILE_CACHE_MODE" {
+  default = "publish"
+}
+
 // Main and hosted publishers retain complete mode=max graphs. ARC jobs already
 // keep the full writable graph in their private local state, so their exact-SHA
 // registry handoff may use mode=min to preserve retries without re-exporting

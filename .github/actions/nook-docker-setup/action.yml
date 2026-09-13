@@ -26,10 +26,18 @@ inputs:
       Allow hosted runners to publish only an isolated remote-buildcache ref keyed by
       git commit SHA (-git-<sha>) while using Main when that exact ref is absent. ARC
       keeps ordinary large graphs in its node-local persistent shard; only the
-      authorized remote build:compile handoff may publish its stable cache ref.
+      authorized remote build:compile publication handoff may publish its stable cache
+      ref. A read-only build:compile verification never exports a registry cache.
       Other jobs never write Main's protected refs.
     required: false
     default: "false"
+  publish-compile-cache:
+    description: >-
+      Build-only compile cache contract: true publishes the stable mode=max cache;
+      false imports that cache without exporting it. This input is valid only for
+      the remote build:compile task.
+    required: false
+    default: "true"
   require-e2e-cache:
     description: Require the browser-image cache lineage for this job.
     required: false
@@ -182,13 +190,34 @@ runs:
           fi
         fi
         isolated_cache_write="${{ inputs.isolated-cache-write }}"
+        publish_compile_cache="${{ inputs.publish-compile-cache }}"
+        case "$publish_compile_cache" in
+          true|false) ;;
+          *)
+            echo "publish-compile-cache must be true or false (got: ${publish_compile_cache:-empty})" >&2
+            exit 1
+            ;;
+        esac
         remote_compile_cache_write=""
         if [ "$event_name" = "workflow_dispatch" ] \
           && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
           # The feature build has one stable BuildKit cache ref. Do not derive
           # another key from its source branch or commit SHA.
           isolated_cache_write=false
-          remote_compile_cache_write=1
+          if [ "$publish_compile_cache" = "true" ]; then
+            remote_compile_cache_write=1
+            echo "build:compile publication mode enables the stable mode=max cache export"
+          else
+            echo "build:compile read-only verification imports the stable cache without registry export"
+          fi
+        elif [ "$publish_compile_cache" != "true" ]; then
+          echo "publish-compile-cache=false requires the remote build:compile task" >&2
+          exit 1
+        fi
+        if [ "$publish_compile_cache" = "true" ]; then
+          echo "NOOK_COMPILE_CACHE_MODE=publish" >> "$GITHUB_ENV"
+        else
+          echo "NOOK_COMPILE_CACHE_MODE=read-only" >> "$GITHUB_ENV"
         fi
         if [ "$isolated_cache_write" = "true" ]; then
           if [ "${{ inputs.main-cache-only }}" != "true" ] \
@@ -442,6 +471,13 @@ runs:
           cache_write_enabled=1
         elif [ -z "$read_only" ] && [ "${{ inputs.cache-write }}" = "true" ]; then
           cache_write_enabled=1
+        fi
+        # The Delivery-owned read-only compile handoff is an explicit no-op for
+        # registry publication. Keep this guard next to the generic cache flag
+        # so a future cache-write path cannot accidentally re-enable export.
+        if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ] \
+          && [ "$publish_compile_cache" = "false" ]; then
+          cache_write_enabled=""
         fi
         echo "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled" >> "$GITHUB_ENV"
 

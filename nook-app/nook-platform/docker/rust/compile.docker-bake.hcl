@@ -17,7 +17,7 @@ compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
   "type=registry,ref=${compile_cache_ref},ignore-error=true",
 ]
 
-compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" ? [
   "type=registry,ref=${compile_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m",
 ] : []
 

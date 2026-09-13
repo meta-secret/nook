@@ -254,6 +254,14 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
     assert!(workflow.contains("name: Validate exact remote source"));
     assert!(workflow.contains("name: Confirm prepared build-only environment"));
     assert!(
+        workflow.contains("publish_compile_cache")
+            && workflow.contains("type: boolean")
+            && workflow.contains("default: true")
+            && workflow.contains("publish-compile-cache: ${{ inputs.publish_compile_cache }}")
+            && workflow.contains("NOOK_COMPILE_CACHE_MODE"),
+        "build:compile dispatch must explicitly select and report cache publication mode"
+    );
+    assert!(
         workflow
             .contains("build:compile is allowed only from a feature branch, never main or dev.")
     );

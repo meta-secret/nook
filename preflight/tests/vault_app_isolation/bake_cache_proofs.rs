@@ -651,6 +651,7 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
 #[test]
 fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
+    let app_bake = root.read("nook-app/docker-bake.hcl");
     let compile_bake = root.read("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl");
     let rust_bake = root.read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let web_bake = root.read("nook-app/nook-web/docker/web.docker-bake.hcl");
@@ -665,6 +666,12 @@ fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Resul
         compile_ref_assignment,
         format!("\"{compile_ref}\""),
         "build:compile must name its stable remote registry scope explicitly"
+    );
+    assert!(
+        app_bake.contains("variable \"NOOK_COMPILE_CACHE_MODE\"")
+            && compile_bake.contains("NOOK_COMPILE_CACHE_MODE == \"publish\"")
+            && app_bake.contains("default = \"publish\""),
+        "build:compile must expose an explicit publication/read-only cache mode"
     );
     assert_eq!(
         compile_from.matches("type=registry,ref=").count(),
