@@ -150,6 +150,8 @@ export interface CommandRequest {
   readonly executable: CommandExecutable;
   readonly args: readonly string[];
   readonly workingDirectory: string;
+  /** The canonical repository root that owns a Git operation, when known. */
+  readonly repositoryRoot?: string;
 }
 
 export interface CommandOutput {

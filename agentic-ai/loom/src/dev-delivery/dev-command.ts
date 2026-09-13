@@ -1,4 +1,18 @@
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
@@ -10,14 +24,37 @@ import {
   type DevFailure,
 } from './dev-types.ts';
 
+type RepositoryMetadata = {
+  readonly root: string;
+  readonly commonDirectory: string;
+  readonly gitDirectory: string;
+  readonly workingGitDirectory: string;
+};
+
+type IsolatedGitDirectory = {
+  readonly path: string;
+  readonly cleanup: () => void;
+};
+
+type RemoteIdentityConfig = {
+  readonly identities: readonly string[];
+  readonly hasOriginUrl: boolean;
+};
+
 /** Owns the bounded host-process boundary for the dev delivery commands. */
 export class ProcessCommandRunner implements CommandRunner {
+  private readonly repositoryRoot?: string;
+
   private static readonly maxOutputBytes = 16 * 1024 * 1024;
 
   private static readonly canonicalRemoteUrl =
     'https://github.com/meta-secret/nook.git';
 
+  private static readonly canonicalRemoteIdentity = 'meta-secret/nook';
+
   private static readonly gitOptions = [
+    '-c',
+    'commit.gpgSign=false',
     '-c',
     'core.attributesFile=/dev/null',
     '-c',
@@ -34,6 +71,8 @@ export class ProcessCommandRunner implements CommandRunner {
     'core.sshCommand=',
     '-c',
     'core.untrackedCache=false',
+    '-c',
+    'tag.gpgSign=false',
     '-c',
     'credential.helper=',
     '-c',
@@ -52,6 +91,33 @@ export class ProcessCommandRunner implements CommandRunner {
     'https.proxy=',
     '-c',
     'https.noProxy=',
+    '--no-pager',
+    '--no-replace-objects',
+    '--literal-pathspecs',
+  ] as const;
+
+  private static readonly remoteGitOptions = [
+    ...ProcessCommandRunner.gitOptions,
+    '-c',
+    'credential.helper=',
+    '-c',
+    'http.cookieFile=',
+    '-c',
+    'http.saveCookies=false',
+    '-c',
+    'http.sslVerify=true',
+    '-c',
+    'http.sslCAInfo=',
+    '-c',
+    'http.sslCAPath=',
+    '-c',
+    'http.sslCert=',
+    '-c',
+    'http.sslKey=',
+    '-c',
+    'http.proxy=',
+    '-c',
+    'https.proxy=',
     '-c',
     'protocol.allow=never',
     '-c',
@@ -70,32 +136,57 @@ export class ProcessCommandRunner implements CommandRunner {
     'protocol.ssh.allow=never',
     '-c',
     'protocol.https.allow=always',
-    '--no-pager',
-    '--no-replace-objects',
-    '--literal-pathspecs',
   ] as const;
+
+  constructor(request: { readonly repositoryRoot?: string } = {}) {
+    this.repositoryRoot = request.repositoryRoot;
+  }
 
   run(request: CommandRequest): Result<CommandOutput, DevFailure> {
     const git = request.executable === CommandExecutable.Git;
     const remoteOperation =
       git && ProcessCommandRunner.isRemoteOperation(request.args);
+    const isolatedOperation =
+      git &&
+      (remoteOperation ||
+        ProcessCommandRunner.requiresIsolatedRepository(request.args));
+    const repository = remoteOperation
+      ? this.bindRepository(request)
+      : isolatedOperation
+        ? ProcessCommandRunner.inspectRepository(request.workingDirectory)
+        : ok<RepositoryMetadata | undefined, DevFailure>(undefined);
+    if (repository.isErr()) return err(repository.error);
     const argsResult = git
       ? ProcessCommandRunner.gitArguments(request.args, remoteOperation)
       : ok<readonly string[], DevFailure>([...request.args]);
     if (argsResult.isErr()) return err(argsResult.error);
     const args = argsResult.value;
-    if (remoteOperation) {
-      const localConfig = ProcessCommandRunner.requireSafeLocalConfig(
-        request.workingDirectory,
-      );
-      if (localConfig.isErr()) return err(localConfig.error);
-    }
+    let isolatedGitDirectory: IsolatedGitDirectory | undefined;
     try {
+      if (isolatedOperation) {
+        const metadata = repository.value;
+        if (metadata === undefined)
+          return err({
+            kind: DevFailureKind.Configuration,
+            message: 'Git delivery could not bind its repository metadata',
+          });
+        const isolated = ProcessCommandRunner.createIsolatedGitDirectory(
+          metadata,
+          request.workingDirectory,
+          remoteOperation,
+        );
+        if (isolated.isErr()) return err(isolated.error);
+        isolatedGitDirectory = isolated.value;
+      }
       const execution = spawnSync(request.executable, args, {
         cwd: request.workingDirectory,
         encoding: 'utf8',
         env: git
-          ? ProcessCommandRunner.gitEnvironment(remoteOperation)
+          ? ProcessCommandRunner.gitEnvironment(
+              remoteOperation,
+              request.workingDirectory,
+              isolatedGitDirectory?.path,
+            )
           : {
               ...process.env,
               GIT_TERMINAL_PROMPT: '0',
@@ -118,8 +209,10 @@ export class ProcessCommandRunner implements CommandRunner {
     } catch {
       return err({
         kind: DevFailureKind.Command,
-        message: `${request.executable} command invocation failed`,
+          message: `${request.executable} command invocation failed`,
       });
+    } finally {
+      isolatedGitDirectory?.cleanup();
     }
   }
 
@@ -135,13 +228,15 @@ export class ProcessCommandRunner implements CommandRunner {
     if (!remoteOperation)
       return ok([...ProcessCommandRunner.gitOptions, ...requestArgs]);
     const args = [...requestArgs];
-    const remoteIndex = args.findIndex(
-      (argument, index) =>
-        index > 0 &&
-        (argument === 'origin' ||
-          argument === ProcessCommandRunner.canonicalRemoteUrl),
+    const remoteIndices = args.flatMap((argument, index) =>
+      index > 0 &&
+      (argument === 'origin' ||
+        argument === ProcessCommandRunner.canonicalRemoteUrl)
+        ? [index]
+        : [],
     );
-    if (remoteIndex < 0)
+    const remoteIndex = remoteIndices.at(0);
+    if (remoteIndex === undefined || remoteIndices.length !== 1)
       return err({
         kind: DevFailureKind.Configuration,
         message: 'Git delivery requires the admitted canonical origin remote',
@@ -163,13 +258,17 @@ export class ProcessCommandRunner implements CommandRunner {
         ? ['--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER']
         : [];
     return ok([
-      ...ProcessCommandRunner.gitOptions,
+      ...ProcessCommandRunner.remoteGitOptions,
       ...credentialOption,
       ...args,
     ]);
   }
 
-  private static gitEnvironment(remoteOperation: boolean): NodeJS.ProcessEnv {
+  private static gitEnvironment(
+    remoteOperation: boolean,
+    workingDirectory: string,
+    isolatedGitDirectory?: string,
+  ): NodeJS.ProcessEnv {
     const nullDevice = process.platform === 'win32' ? 'NUL' : '/dev/null';
     const environment: NodeJS.ProcessEnv = {
       COMSPEC: process.env.COMSPEC,
@@ -194,6 +293,10 @@ export class ProcessCommandRunner implements CommandRunner {
       GIT_TERMINAL_PROMPT: '0',
       LC_ALL: 'C',
     };
+    if (isolatedGitDirectory) {
+      environment.GIT_DIR = isolatedGitDirectory;
+      environment.GIT_WORK_TREE = workingDirectory;
+    }
     if (remoteOperation) {
       const credential = process.env.NOOK_GITHUB_PAT?.trim();
       if (credential && !/[\u0000\r\n]/u.test(credential))
@@ -202,83 +305,460 @@ export class ProcessCommandRunner implements CommandRunner {
     return environment;
   }
 
-  private static requireSafeLocalConfig(
-    workingDirectory: string,
-  ): Result<void, DevFailure> {
-    let inspection: SpawnSyncReturns<string | Buffer>;
-    try {
-      inspection = spawnSync(
-        'git',
-        [
-          '-C',
-          workingDirectory,
-          'config',
-          '--local',
-          '--no-includes',
-          '--name-only',
-          '--get-regexp',
-          '.*',
-        ],
-        {
-          cwd: workingDirectory,
-          encoding: 'utf8',
-          env: ProcessCommandRunner.localConfigEnvironment(),
-          maxBuffer: ProcessCommandRunner.maxOutputBytes,
-          stdio: ['ignore', 'pipe', 'pipe'],
-        },
-      );
-    } catch {
+  private bindRepository(
+    request: CommandRequest,
+  ): Result<RepositoryMetadata, DevFailure> {
+    const configured =
+      request.repositoryRoot ?? this.repositoryRoot ?? process.env.REPO_ROOT;
+    const root = configured ?? request.workingDirectory;
+    const canonicalRoot = ProcessCommandRunner.canonicalPath(
+      root,
+      'REPO_ROOT',
+    );
+    if (canonicalRoot.isErr()) return err(canonicalRoot.error);
+    if (configured !== undefined && !isAbsolute(configured)) {
       return err({
-        kind: DevFailureKind.Command,
-        message: 'Git local configuration inspection failed',
+        kind: DevFailureKind.Configuration,
+        message: 'REPO_ROOT must be an absolute canonical path',
       });
     }
-    if (inspection.error)
-      return err({
-        kind: DevFailureKind.Command,
-        message: 'Git local configuration inspection failed',
-      });
-    if (typeof inspection.status !== 'number' || inspection.status > 1)
+    for (const candidate of [
+      request.repositoryRoot,
+      this.repositoryRoot,
+      process.env.REPO_ROOT,
+    ]) {
+      if (candidate === undefined) continue;
+      const canonicalCandidate = ProcessCommandRunner.canonicalPath(
+        candidate,
+        'REPO_ROOT',
+      );
+      if (canonicalCandidate.isErr()) return err(canonicalCandidate.error);
+      if (canonicalCandidate.value !== canonicalRoot.value) {
+        return err({
+          kind: DevFailureKind.Race,
+          message: 'Git delivery received conflicting repository-root identities',
+        });
+      }
+    }
+    const metadata = ProcessCommandRunner.inspectRepository(
+      request.workingDirectory,
+      canonicalRoot.value,
+    );
+    if (metadata.isErr()) return err(metadata.error);
+    if (metadata.value.root !== canonicalRoot.value) {
       return err({
         kind: DevFailureKind.Configuration,
-        message: 'Git local configuration could not be safely inspected',
+        message: `REPO_ROOT is not the Git top-level repository: ${canonicalRoot.value}`,
       });
-    const text = ProcessCommandRunner.text(inspection.stdout);
+    }
+    const identity = ProcessCommandRunner.repositoryIdentity(metadata.value);
+    if (identity.isErr()) return err(identity.error);
+    return ok(metadata.value);
+  }
+
+  private static requiresIsolatedRepository(
+    args: readonly string[],
+  ): boolean {
+    return new Set([
+      'checkout',
+      'cherry-pick',
+      'commit',
+      'merge',
+      'merge-tree',
+      'rebase',
+      'reset',
+      'revert',
+      'symbolic-ref',
+      'tag',
+      'update-index',
+      'update-ref',
+    ]).has(args.at(0) ?? '');
+  }
+
+  private static inspectRepository(
+    workingDirectory: string,
+    expectedRoot?: string,
+  ): Result<RepositoryMetadata, DevFailure> {
+    const canonicalWorkingDirectory = ProcessCommandRunner.canonicalPath(
+      workingDirectory,
+      'Git working directory',
+    );
+    if (canonicalWorkingDirectory.isErr())
+      return err(canonicalWorkingDirectory.error);
+    const working = ProcessCommandRunner.findRepository(
+      canonicalWorkingDirectory.value,
+    );
+    if (working.isErr()) return err(working.error);
+    if (expectedRoot !== undefined) {
+      const expected = ProcessCommandRunner.findRepository(expectedRoot);
+      if (expected.isErr()) return err(expected.error);
+      if (expected.value.root !== expectedRoot) {
+        return err({
+          kind: DevFailureKind.Configuration,
+          message: `REPO_ROOT is not the Git top-level repository: ${expectedRoot}`,
+        });
+      }
+      if (expected.value.commonDirectory !== working.value.commonDirectory) {
+        return err({
+          kind: DevFailureKind.Race,
+          message:
+            'Git working directory and REPO_ROOT belong to different repositories',
+        });
+      }
+      return ok({
+        ...expected.value,
+        workingGitDirectory: working.value.gitDirectory,
+      });
+    }
+    return ok({
+      ...working.value,
+      workingGitDirectory: working.value.gitDirectory,
+    });
+  }
+
+  private static findRepository(
+    startingDirectory: string,
+  ): Result<RepositoryMetadata, DevFailure> {
+    let root = startingDirectory;
+    while (true) {
+      const gitEntry = join(root, '.git');
+      if (existsSync(gitEntry)) {
+        const entry = ProcessCommandRunner.gitDirectory(gitEntry);
+        if (entry.isErr()) return err(entry.error);
+        const commonDirectory = ProcessCommandRunner.commonDirectory(
+          entry.value,
+        );
+        if (commonDirectory.isErr()) return err(commonDirectory.error);
+        return ok({
+          root,
+          commonDirectory: commonDirectory.value,
+          gitDirectory: entry.value,
+          workingGitDirectory: entry.value,
+        });
+      }
+      const parent = dirname(root);
+      if (parent === root) break;
+      root = parent;
+    }
+    return err({
+      kind: DevFailureKind.Configuration,
+      message: `Git working directory is not inside a repository: ${startingDirectory}`,
+    });
+  }
+
+  private static gitDirectory(
+    gitEntry: string,
+  ): Result<string, DevFailure> {
+    let stats: ReturnType<typeof lstatSync>;
+    try {
+      stats = lstatSync(gitEntry);
+    } catch {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Git metadata is unavailable: ${gitEntry}`,
+      });
+    }
+    if (stats.isSymbolicLink()) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Git metadata path must not be a symlink: ${gitEntry}`,
+      });
+    }
+    if (stats.isDirectory()) {
+      const canonical = ProcessCommandRunner.canonicalPath(
+        gitEntry,
+        'Git metadata directory',
+      );
+      return canonical.isErr() ? err(canonical.error) : ok(canonical.value);
+    }
+    if (!stats.isFile())
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Git metadata path is not a directory or gitfile: ${gitEntry}`,
+      });
+    let text: string;
+    try {
+      text = readFileSync(gitEntry, 'utf8');
+    } catch {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Git worktree metadata could not be read: ${gitEntry}`,
+      });
+    }
+    const match = /^gitdir:\s*(.+)\s*$/im.exec(text);
+    if (!match?.[1])
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Git worktree metadata is malformed: ${gitEntry}`,
+      });
+    const target = isAbsolute(match[1])
+      ? match[1]
+      : resolve(dirname(gitEntry), match[1]);
+    const canonical = ProcessCommandRunner.canonicalPath(
+      target,
+      'Git worktree metadata directory',
+    );
+    return canonical.isErr() ? err(canonical.error) : ok(canonical.value);
+  }
+
+  private static commonDirectory(
+    gitDirectory: string,
+  ): Result<string, DevFailure> {
+    const commonFile = join(gitDirectory, 'commondir');
+    if (!existsSync(commonFile)) return ok(gitDirectory);
+    let text: string;
+    try {
+      text = readFileSync(commonFile, 'utf8').trim();
+    } catch {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Git common-directory metadata could not be read: ${commonFile}`,
+      });
+    }
+    if (!text || text.includes('\0'))
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Git common-directory metadata is malformed: ${commonFile}`,
+      });
+    const candidate = isAbsolute(text)
+      ? text
+      : resolve(gitDirectory, text);
+    const canonical = ProcessCommandRunner.canonicalPath(
+      candidate,
+      'Git common directory',
+    );
+    return canonical.isErr() ? err(canonical.error) : ok(canonical.value);
+  }
+
+  private static canonicalPath(
+    path: string,
+    label: string,
+  ): Result<string, DevFailure> {
+    if (!isAbsolute(path) || path.includes('\0'))
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `${label} must be an absolute path: ${path}`,
+      });
+    const normalized = resolve(path);
+    let canonical: string;
+    try {
+      canonical = realpathSync(normalized);
+    } catch {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `${label} must resolve to an existing path: ${path}`,
+      });
+    }
+    if (canonical !== normalized)
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `${label} must already be canonical: ${path}`,
+      });
+    return ok(canonical);
+  }
+
+  private static repositoryIdentity(
+    metadata: RepositoryMetadata,
+  ): Result<void, DevFailure> {
+    const identities: string[] = [];
+    let hasOriginUrl = false;
+    for (const configFile of ProcessCommandRunner.configFiles(metadata)) {
+      if (!existsSync(configFile)) continue;
+      const parsed = ProcessCommandRunner.parseRemoteConfig(configFile);
+      if (parsed.isErr()) return err(parsed.error);
+      identities.push(...parsed.value.identities);
+      hasOriginUrl ||= parsed.value.hasOriginUrl;
+    }
     if (
-      text
-        .split(/\r?\n/u)
-        .some((key) => ProcessCommandRunner.isUnsafeConfigKey(key))
-    )
+      !hasOriginUrl ||
+      identities.length === 0 ||
+      identities.some(
+        (identity) =>
+          ProcessCommandRunner.remoteIdentity(identity) !==
+          ProcessCommandRunner.canonicalRemoteIdentity,
+      )
+    ) {
       return err({
         kind: DevFailureKind.Configuration,
-        message: 'Git delivery refused unsafe repository-local configuration',
+        message:
+          'REPO_ROOT origin must identify the canonical meta-secret/nook repository',
       });
+    }
     return ok();
   }
 
-  private static localConfigEnvironment(): NodeJS.ProcessEnv {
-    const environment = ProcessCommandRunner.gitEnvironment(false);
-    delete environment.GIT_CONFIG;
-    return environment;
+  private static parseRemoteConfig(
+    configFile: string,
+  ): Result<RemoteIdentityConfig, DevFailure> {
+    let text: string;
+    try {
+      text = readFileSync(configFile, 'utf8');
+    } catch {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Git repository configuration could not be read: ${configFile}`,
+      });
+    }
+    let section = '';
+    const identities: string[] = [];
+    let hasOriginUrl = false;
+    for (const rawLine of text.replace(/^\uFEFF/u, '').split(/\r?\n/u)) {
+      const line = rawLine.trim();
+      const sectionMatch = /^\[remote\s+"([^"]+)"\]$/iu.exec(line);
+      if (sectionMatch) {
+        section = sectionMatch[1]?.toLowerCase() ?? '';
+        continue;
+      }
+      if (line.startsWith('[')) {
+        section = '';
+        continue;
+      }
+      if (section !== 'origin') continue;
+      const valueMatch = /^(url|pushurl)\s*=\s*(.*)$/iu.exec(line);
+      if (!valueMatch?.[2]) continue;
+      const value = valueMatch[2].trim();
+      if (!value || value.includes('\0'))
+        return err({
+          kind: DevFailureKind.Configuration,
+          message: `Git origin identity is malformed in ${configFile}`,
+        });
+      identities.push(value);
+      hasOriginUrl ||= valueMatch[1]?.toLowerCase() === 'url';
+    }
+    return ok({ identities, hasOriginUrl });
   }
 
-  private static isUnsafeConfigKey(key: string): boolean {
-    const normalized = key.trim().toLowerCase();
-    return (
-      /^include(?:if\..+)?\.path$/u.test(normalized) ||
-      /^url\..+\.(?:insteadof|pushinsteadof|instead-of)$/u.test(normalized) ||
-      /^https?\..*(?:proxy|extraheader|ssl|cookie)$/u.test(
-        normalized,
-      ) ||
-      /^credential(?:\..*)?\.helper$/u.test(normalized) ||
-      /^core\.(?:askpass|gitproxy|sshcommand)$/u.test(normalized) ||
-      /^filter\..+\.(?:clean|process|required|smudge)$/u.test(normalized) ||
-      /^protocol\..+$/u.test(normalized) ||
-      /^remote\..+\.(?:pushurl|proxy|receivepack|uploadpack)$/u.test(
-        normalized,
-      ) ||
-      /^pager\..*$/u.test(normalized)
-    );
+  private static configFiles(metadata: RepositoryMetadata): string[] {
+    const files = [join(metadata.commonDirectory, 'config')];
+    const worktreeConfig = join(metadata.gitDirectory, 'config.worktree');
+    if (worktreeConfig !== files[0]) files.push(worktreeConfig);
+    return files;
+  }
+
+  private static safeUserConfig(metadata: RepositoryMetadata): string {
+    const values = new Map<string, string>();
+    for (const configFile of ProcessCommandRunner.configFiles(metadata)) {
+      if (!existsSync(configFile)) continue;
+      let text: string;
+      try {
+        text = readFileSync(configFile, 'utf8');
+      } catch {
+        continue;
+      }
+      let section = '';
+      for (const rawLine of text.split(/\r?\n/u)) {
+        const line = rawLine.trim();
+        const sectionMatch = /^\[([^\]]+)\]$/u.exec(line);
+        if (sectionMatch) {
+          section = sectionMatch[1]?.toLowerCase() ?? '';
+          continue;
+        }
+        const value = /^(name|email)\s*=\s*(.*)$/iu.exec(line);
+        if (section !== 'user' || !value?.[2]) continue;
+        const key = value[1]?.toLowerCase();
+        if (key) values.set(key, value[2].trim());
+      }
+    }
+    const name = values.get('name');
+    const email = values.get('email');
+    if (!name || !email || /[\u0000\r\n]/u.test(name + email)) return '';
+    const quote = (value: string) =>
+      `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
+    return `[user]\n\tname = ${quote(name)}\n\temail = ${quote(email)}\n`;
+  }
+
+  private static remoteIdentity(value: string): string {
+    const normalized = value.trim().replace(/\.git$/iu, '');
+    if (normalized === 'https://github.com/meta-secret/nook')
+      return ProcessCommandRunner.canonicalRemoteIdentity;
+    if (normalized === 'ssh://git@github.com/meta-secret/nook')
+      return ProcessCommandRunner.canonicalRemoteIdentity;
+    if (normalized === 'git@github.com:meta-secret/nook')
+      return ProcessCommandRunner.canonicalRemoteIdentity;
+    return '';
+  }
+
+  private static createIsolatedGitDirectory(
+    metadata: RepositoryMetadata,
+    workingDirectory: string,
+    requireCanonicalIdentity = false,
+  ): Result<IsolatedGitDirectory, DevFailure> {
+    const refreshed = ProcessCommandRunner.inspectRepository(workingDirectory);
+    if (refreshed.isErr()) return err(refreshed.error);
+    if (
+      refreshed.value.commonDirectory !== metadata.commonDirectory ||
+      refreshed.value.gitDirectory !== metadata.workingGitDirectory
+    ) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'Git repository metadata changed before the isolated operation began',
+      });
+    }
+    if (requireCanonicalIdentity) {
+      const identity = ProcessCommandRunner.repositoryIdentity(metadata);
+      if (identity.isErr()) return err(identity.error);
+    }
+    let path: string | undefined;
+    try {
+      path = mkdtempSync(join(tmpdir(), 'nook-dev-git-'));
+      writeFileSync(
+        join(path, 'config'),
+        `[core]\n\trepositoryformatversion = 0\n\tbare = false\n\tlogallrefupdates = true\n${ProcessCommandRunner.safeUserConfig(metadata)}`,
+        'utf8',
+      );
+      const head = join(metadata.workingGitDirectory, 'HEAD');
+      copyFileSync(head, join(path, 'HEAD'));
+      ProcessCommandRunner.linkMetadata(
+        join(path, 'objects'),
+        join(metadata.commonDirectory, 'objects'),
+        true,
+      );
+      ProcessCommandRunner.linkMetadata(
+        join(path, 'refs'),
+        join(metadata.commonDirectory, 'refs'),
+        true,
+      );
+      for (const name of ['index', 'MERGE_HEAD', 'MERGE_MSG', 'ORIG_HEAD', 'SQUASH_MSG', 'MERGE_RR']) {
+        ProcessCommandRunner.linkMetadata(
+          join(path, name),
+          join(metadata.workingGitDirectory, name),
+          false,
+          true,
+        );
+      }
+      for (const name of ['logs', 'packed-refs', 'shallow']) {
+        ProcessCommandRunner.linkMetadata(
+          join(path, name),
+          join(metadata.commonDirectory, name),
+          false,
+        );
+      }
+      mkdirSync(join(path, 'hooks'));
+      return ok({
+        path,
+        cleanup: () => rmSync(path as string, { force: true, recursive: true }),
+      });
+    } catch {
+      if (path) rmSync(path, { force: true, recursive: true });
+      return err({
+        kind: DevFailureKind.Command,
+        message: 'Git could not create an isolated repository configuration',
+      });
+    }
+  }
+
+  private static linkMetadata(
+    destination: string,
+    source: string,
+    required: boolean,
+    createIfMissing = false,
+  ): void {
+    if (!existsSync(source)) {
+      if (required) throw new Error(`Missing Git metadata: ${source}`);
+      if (!createIfMissing) return;
+    }
+    symlinkSync(source, destination);
   }
 
   private static text(

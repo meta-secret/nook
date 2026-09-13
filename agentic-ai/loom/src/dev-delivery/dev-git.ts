@@ -734,6 +734,7 @@ export class DevGitRepository {
       executable: CommandExecutable.Git,
       args: request.args,
       workingDirectory: request.workingDirectory,
+      repositoryRoot: this.request.root,
     });
   }
 

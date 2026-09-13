@@ -42,7 +42,9 @@ export class DevCli {
   static workspace(): DevDeliveryWorkspace {
     return new DevDeliveryWorkspace({
       root: DevCli.repositoryRoot(),
-      runner: new ProcessCommandRunner(),
+      runner: new ProcessCommandRunner({
+        repositoryRoot: DevCli.repositoryRoot(),
+      }),
     });
   }
 
