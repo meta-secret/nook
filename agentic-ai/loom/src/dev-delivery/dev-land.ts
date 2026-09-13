@@ -11,6 +11,7 @@ import {
   type DevFailure,
   type DevLandRequest,
   type RemoteBranchSnapshot,
+  WorktreeState,
 } from './dev-types.ts';
 
 export enum DevLandMode {
@@ -62,6 +63,19 @@ export class DevLandCommand {
       });
     }
 
+    const development = this.workspace.git.managedWorktreeAt(
+      request.devPath,
+      ManagedBranch.Dev,
+    );
+    if (development.isErr()) return err(development.error);
+    if (development.value.path !== request.devPath) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message:
+          `The landing packet must name the canonical managed dev worktree path; received ${request.devPath}`,
+      });
+    }
+
     const proof = this.workspace.github.buildProof({
       branch: featureBranch.value,
       sha: request.expectedFeatureSha,
@@ -74,6 +88,7 @@ export class DevLandCommand {
       ...request,
       featureBranch: featureBranch.value,
       initialRemoteFeature: remoteFeature.value,
+      devPath: development.value.path,
     });
     const released = lease.value.release();
     if (released.isErr()) return err(released.error);
@@ -87,6 +102,7 @@ export class DevLandCommand {
     readonly featureBranch: BranchName;
     readonly expectedFeatureSha: CommitSha;
     readonly initialRemoteFeature: RemoteBranchSnapshot;
+    readonly devPath: string;
   }): Result<DevLandOutcome, DevFailure> {
     const refreshed = this.workspace.git.refreshManagedRefs({ prune: true });
     if (refreshed.isErr()) return err(refreshed.error);
@@ -130,21 +146,31 @@ export class DevLandCommand {
       });
     }
 
-    const development = this.workspace.developmentWorktree();
+    const development = this.workspace.git.managedWorktreeAt(
+      request.devPath,
+      ManagedBranch.Dev,
+    );
     if (development.isErr()) return err(development.error);
+    if (development.value.path !== request.devPath) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The assigned canonical development worktree changed while landing was queued',
+      });
+    }
     const guard = new DevWorkspaceGuard(this.workspace).requireClean(
-      development.value.path,
+      request.devPath,
     );
     if (guard.isErr()) return err(guard.error);
-    const branch = this.workspace.git.branchAt(development.value.path);
+    const branch = this.workspace.git.branchAt(request.devPath);
     if (branch.isErr()) return err(branch.error);
     if (branch.value.value() !== ManagedBranch.Dev) {
       return err({
         kind: DevFailureKind.Configuration,
-        message: `Selected development worktree is not on dev: ${development.value.path}`,
+        message: `Selected development worktree is not on dev: ${request.devPath}`,
       });
     }
-    const developmentHead = this.workspace.git.headAt(development.value.path);
+    const developmentHead = this.workspace.git.headAt(request.devPath);
     if (developmentHead.isErr()) return err(developmentHead.error);
     const main = this.workspace.git.remoteBranch(ManagedBranch.Main);
     if (main.isErr()) return err(main.error);
@@ -164,7 +190,7 @@ export class DevLandCommand {
     const pinnedFromMain = this.workspace.git.ancestry({
       ancestor: request.originMainSha,
       descendant: request.pinnedLocalDevSha,
-      workingDirectory: development.value.path,
+      workingDirectory: request.devPath,
     });
     if (pinnedFromMain.isErr()) return err(pinnedFromMain.error);
     if (pinnedFromMain.value !== Ancestry.Ancestor) {
@@ -177,7 +203,7 @@ export class DevLandCommand {
     const featureFromPinned = this.workspace.git.ancestry({
       ancestor: request.pinnedLocalDevSha,
       descendant: request.featureHeadSha,
-      workingDirectory: development.value.path,
+      workingDirectory: request.devPath,
     });
     if (featureFromPinned.isErr()) return err(featureFromPinned.error);
     if (featureFromPinned.value !== Ancestry.Ancestor) {
@@ -190,7 +216,7 @@ export class DevLandCommand {
     const devFromPinned = this.workspace.git.ancestry({
       ancestor: request.pinnedLocalDevSha,
       descendant: developmentHead.value,
-      workingDirectory: development.value.path,
+      workingDirectory: request.devPath,
     });
     if (devFromPinned.isErr()) return err(devFromPinned.error);
     if (devFromPinned.value !== Ancestry.Ancestor) {
@@ -203,7 +229,7 @@ export class DevLandCommand {
     const mainAncestry = this.workspace.git.ancestry({
       ancestor: main.value.sha,
       descendant: developmentHead.value,
-      workingDirectory: development.value.path,
+      workingDirectory: request.devPath,
     });
     if (mainAncestry.isErr()) return err(mainAncestry.error);
     if (mainAncestry.value !== Ancestry.Ancestor) {
@@ -216,7 +242,7 @@ export class DevLandCommand {
     const ancestry = this.workspace.git.ancestry({
       ancestor: request.expectedFeatureSha,
       descendant: developmentHead.value,
-      workingDirectory: development.value.path,
+      workingDirectory: request.devPath,
     });
     if (ancestry.isErr()) return err(ancestry.error);
     if (ancestry.value === Ancestry.Ancestor) {
@@ -269,9 +295,17 @@ export class DevLandCommand {
         message: 'The pushed feature branch changed before its local landing',
       });
     }
-    const beforeMergeDevelopment = this.workspace.developmentWorktree();
-    if (beforeMergeDevelopment.isErr())
-      return err(beforeMergeDevelopment.error);
+    const beforeMergeDevelopment = this.workspace.git.managedWorktreeAt(
+      request.devPath,
+      ManagedBranch.Dev,
+    );
+    if (beforeMergeDevelopment.isErr()) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `The assigned canonical development worktree changed before its feature merge could begin: ${request.devPath}`,
+      });
+    }
     if (beforeMergeDevelopment.value.path !== development.value.path) {
       return err({
         kind: DevFailureKind.Race,
@@ -280,10 +314,15 @@ export class DevLandCommand {
       });
     }
     const beforeMergeDevelopmentBranch = this.workspace.git.branchAt(
-      development.value.path,
+      request.devPath,
     );
-    if (beforeMergeDevelopmentBranch.isErr())
-      return err(beforeMergeDevelopmentBranch.error);
+    if (beforeMergeDevelopmentBranch.isErr()) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `The assigned development worktree became detached before its feature merge could begin: ${request.devPath}`,
+      });
+    }
     if (beforeMergeDevelopmentBranch.value.value() !== ManagedBranch.Dev) {
       return err({
         kind: DevFailureKind.Race,
@@ -291,8 +330,20 @@ export class DevLandCommand {
           'The selected development worktree branch changed before its local landing',
       });
     }
+    const beforeMergeDevelopmentState = this.workspace.git.stateAt(
+      request.devPath,
+    );
+    if (beforeMergeDevelopmentState.isErr())
+      return err(beforeMergeDevelopmentState.error);
+    if (beforeMergeDevelopmentState.value !== WorktreeState.Clean) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The selected development worktree became dirty before its local landing',
+      });
+    }
     const beforeMergeDevelopmentHead = this.workspace.git.headAt(
-      development.value.path,
+      request.devPath,
     );
     if (beforeMergeDevelopmentHead.isErr())
       return err(beforeMergeDevelopmentHead.error);
@@ -320,7 +371,7 @@ export class DevLandCommand {
     const finalPinnedFromMain = this.workspace.git.ancestry({
       ancestor: request.originMainSha,
       descendant: request.pinnedLocalDevSha,
-      workingDirectory: development.value.path,
+      workingDirectory: request.devPath,
     });
     if (finalPinnedFromMain.isErr()) return err(finalPinnedFromMain.error);
     if (finalPinnedFromMain.value !== Ancestry.Ancestor) {
@@ -333,7 +384,7 @@ export class DevLandCommand {
     const finalFeatureFromPinned = this.workspace.git.ancestry({
       ancestor: request.pinnedLocalDevSha,
       descendant: request.featureHeadSha,
-      workingDirectory: development.value.path,
+      workingDirectory: request.devPath,
     });
     if (finalFeatureFromPinned.isErr())
       return err(finalFeatureFromPinned.error);
@@ -347,7 +398,7 @@ export class DevLandCommand {
     const finalDevFromPinned = this.workspace.git.ancestry({
       ancestor: request.pinnedLocalDevSha,
       descendant: beforeMergeDevelopmentHead.value,
-      workingDirectory: development.value.path,
+      workingDirectory: request.devPath,
     });
     if (finalDevFromPinned.isErr()) return err(finalDevFromPinned.error);
     if (finalDevFromPinned.value !== Ancestry.Ancestor) {
@@ -359,15 +410,17 @@ export class DevLandCommand {
     }
 
     const merged = this.workspace.git.mergeInto({
-      devPath: development.value.path,
+      devPath: request.devPath,
       expectedDevHead: developmentHead.value,
       featureHead: request.expectedFeatureSha,
+      featureBranch: request.featureBranch,
+      originMainSha: request.originMainSha,
     });
     if (merged.isErr()) return err(merged.error);
     const included = this.workspace.git.ancestry({
       ancestor: request.expectedFeatureSha,
       descendant: merged.value,
-      workingDirectory: development.value.path,
+      workingDirectory: request.devPath,
     });
     if (included.isErr()) return err(included.error);
     if (included.value !== Ancestry.Ancestor) {
@@ -377,11 +430,51 @@ export class DevLandCommand {
           'The local dev merge completed without retaining the feature commit',
       });
     }
+    if (merged.value.equals(developmentHead.value)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The local dev ref did not advance after merging the expected feature',
+      });
+    }
+    const resultingBranch = this.workspace.git.branchAt(request.devPath);
+    if (resultingBranch.isErr()) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `The assigned development worktree became detached after its feature merge: ${request.devPath}`,
+      });
+    }
+    if (resultingBranch.value.value() !== ManagedBranch.Dev) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `The assigned development worktree changed from dev after its feature merge: ${request.devPath}`,
+      });
+    }
+    const resultingState = this.workspace.git.stateAt(request.devPath);
+    if (resultingState.isErr()) return err(resultingState.error);
+    if (resultingState.value !== WorktreeState.Clean) {
+      return err({
+        kind: DevFailureKind.DirtyWorktree,
+        message:
+          `The local merge left the assigned dev worktree dirty; no cleanup was attempted: ${request.devPath}`,
+      });
+    }
+    const resultingHead = this.workspace.git.headAt(request.devPath);
+    if (resultingHead.isErr()) return err(resultingHead.error);
+    if (!resultingHead.value.equals(merged.value)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `The local dev ref changed after the feature merge: expected ${merged.value.value()}, found ${resultingHead.value.value()}`,
+      });
+    }
     return ok({
       mode: DevLandMode.Merged,
       featureSha: request.expectedFeatureSha,
-      devSha: merged.value,
-      message: `Landed ${request.expectedFeatureSha.value()} into local dev at ${merged.value.value()}`,
+      devSha: resultingHead.value,
+      message: `Landed ${request.expectedFeatureSha.value()} into local dev at ${resultingHead.value.value()}`,
     });
   }
 
@@ -405,12 +498,14 @@ export class DevLandCommand {
       typeof request.originMainSha?.equals !== 'function' ||
       typeof request.pinnedLocalDevSha?.equals !== 'function' ||
       typeof request.featureHeadSha?.equals !== 'function' ||
-      typeof request.expectedFeatureSha?.equals !== 'function'
+      typeof request.expectedFeatureSha?.equals !== 'function' ||
+      typeof request.devPath !== 'string' ||
+      request.devPath.length === 0
     ) {
       return err({
         kind: DevFailureKind.Configuration,
         message:
-          'The landing packet must include originMainSha, pinnedLocalDevSha, featureHeadSha, and expectedFeatureSha',
+          'The landing packet must include originMainSha, pinnedLocalDevSha, featureHeadSha, expectedFeatureSha, and devPath',
       });
     }
     if (!request.featureHeadSha.equals(request.expectedFeatureSha)) {

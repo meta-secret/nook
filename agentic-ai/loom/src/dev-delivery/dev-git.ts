@@ -37,6 +37,8 @@ interface MergeRequest {
   readonly devPath: string;
   readonly expectedDevHead: CommitSha;
   readonly featureHead: CommitSha;
+  readonly featureBranch: BranchName;
+  readonly originMainSha: CommitSha;
 }
 
 interface FastForwardRequest {
@@ -248,6 +250,64 @@ export class DevGitRepository {
 
   commonDirectory(): Result<string, DevFailure> {
     return this.commonDirectoryAt(this.request.root);
+  }
+
+  /**
+   * Requires an exact, canonical worktree registered in this repository for a
+   * managed branch. The caller must provide the packet-assigned path; this
+   * method never discovers a replacement worktree.
+   */
+  managedWorktreeAt(
+    path: string,
+    branch: ManagedBranch,
+  ): Result<WorktreeRecord, DevFailure> {
+    const canonicalPath = this.canonicalWorktreePath(
+      path,
+      `Canonical ${branch} worktree path`,
+      true,
+    );
+    if (canonicalPath.isErr()) return err(canonicalPath.error);
+
+    const repository = this.repositoryIdentityAt(canonicalPath.value);
+    if (repository.isErr()) return err(repository.error);
+    const featureRepository = this.repositoryIdentityAt(this.request.root);
+    if (featureRepository.isErr()) return err(featureRepository.error);
+    if (repository.value !== featureRepository.value) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Assigned ${branch} worktree belongs to a different repository: ${path}`,
+      });
+    }
+
+    const records = this.worktrees();
+    if (records.isErr()) return err(records.error);
+    const matches = records.value.filter(
+      (record) => record.path === canonicalPath.value,
+    );
+    if (matches.length !== 1) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Assigned ${branch} worktree is not uniquely registered at its canonical path: ${path}`,
+      });
+    }
+    const record = matches[0];
+    if (!record) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Assigned ${branch} worktree selection was empty: ${path}`,
+      });
+    }
+    if (
+      record.prunable ||
+      record.branch.kind !== WorktreeBranchKind.Branch ||
+      record.branch.name.value() !== branch
+    ) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Assigned worktree is not a usable ${branch} worktree: ${path}`,
+      });
+    }
+    return ok(record);
   }
 
   worktrees(): Result<readonly WorktreeRecord[], DevFailure> {
@@ -477,6 +537,89 @@ export class DevGitRepository {
   }
 
   mergeInto(request: MergeRequest): Result<CommitSha, DevFailure> {
+    const repository = this.repositoryIdentityAt(request.devPath);
+    if (repository.isErr()) return err(repository.error);
+    const featureRepository = this.repositoryIdentityAt(this.request.root);
+    if (featureRepository.isErr()) return err(featureRepository.error);
+    if (repository.value !== featureRepository.value) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development worktree changed repositories before its feature merge: ${request.devPath}`,
+      });
+    }
+    const branch = this.branchAt(request.devPath);
+    if (branch.isErr()) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development worktree became detached before its feature merge: ${request.devPath}`,
+      });
+    }
+    if (branch.value.value() !== ManagedBranch.Dev) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development worktree changed from dev before its feature merge: ${request.devPath}`,
+      });
+    }
+    const featureBranch = this.currentBranch();
+    if (featureBranch.isErr()) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The feature worktree became detached before its feature merge could begin',
+      });
+    }
+    if (!featureBranch.value.equals(request.featureBranch)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The feature worktree branch changed before its feature merge could begin',
+      });
+    }
+    const featureState = this.stateAt(this.request.root);
+    if (featureState.isErr()) return err(featureState.error);
+    if (featureState.value !== WorktreeState.Clean) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The feature worktree became dirty before its feature merge could begin',
+      });
+    }
+    const featureHead = this.head();
+    if (featureHead.isErr()) return err(featureHead.error);
+    if (!featureHead.value.equals(request.featureHead)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `The feature worktree commit changed before its feature merge could begin: expected ${request.featureHead.value()}, found ${featureHead.value.value()}`,
+      });
+    }
+    const remoteFeature = this.remoteBranch(request.featureBranch);
+    if (remoteFeature.isErr()) return err(remoteFeature.error);
+    if (
+      remoteFeature.value.presence !== RemoteBranchPresence.Present ||
+      !remoteFeature.value.sha.equals(request.featureHead)
+    ) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The pushed feature branch changed before its feature merge could begin',
+      });
+    }
+    const originMain = this.remoteBranch(ManagedBranch.Main);
+    if (originMain.isErr()) return err(originMain.error);
+    if (
+      originMain.value.presence !== RemoteBranchPresence.Present ||
+      !originMain.value.sha.equals(request.originMainSha)
+    ) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'origin/main changed before the feature could land in local dev',
+      });
+    }
     const current = this.headAt(request.devPath);
     if (current.isErr()) return err(current.error);
     if (!current.value.equals(request.expectedDevHead)) {
@@ -511,6 +654,112 @@ export class DevGitRepository {
       });
     }
 
+    // The merge preview is read-only but can give an external actor time to
+    // move either checkout or ref. Re-run every guard immediately before the
+    // mutating git merge.
+    const finalRepository = this.repositoryIdentityAt(request.devPath);
+    if (finalRepository.isErr()) return err(finalRepository.error);
+    const finalFeatureRepository = this.repositoryIdentityAt(this.request.root);
+    if (finalFeatureRepository.isErr())
+      return err(finalFeatureRepository.error);
+    if (finalRepository.value !== finalFeatureRepository.value) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development worktree changed repositories before its feature merge: ${request.devPath}`,
+      });
+    }
+    const finalDevBranch = this.branchAt(request.devPath);
+    if (finalDevBranch.isErr()) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development worktree became detached before its feature merge: ${request.devPath}`,
+      });
+    }
+    if (finalDevBranch.value.value() !== ManagedBranch.Dev) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development worktree changed from dev before its feature merge: ${request.devPath}`,
+      });
+    }
+    const finalFeatureBranch = this.currentBranch();
+    if (finalFeatureBranch.isErr()) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The feature worktree became detached before its feature merge could begin',
+      });
+    }
+    if (!finalFeatureBranch.value.equals(request.featureBranch)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The feature worktree branch changed before its feature merge could begin',
+      });
+    }
+    const finalFeatureState = this.stateAt(this.request.root);
+    if (finalFeatureState.isErr()) return err(finalFeatureState.error);
+    if (finalFeatureState.value !== WorktreeState.Clean) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The feature worktree became dirty before its feature merge could begin',
+      });
+    }
+    const finalFeatureHead = this.head();
+    if (finalFeatureHead.isErr()) return err(finalFeatureHead.error);
+    if (!finalFeatureHead.value.equals(request.featureHead)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `The feature worktree commit changed before its feature merge could begin: expected ${request.featureHead.value()}, found ${finalFeatureHead.value.value()}`,
+      });
+    }
+    const finalRemoteFeature = this.remoteBranch(request.featureBranch);
+    if (finalRemoteFeature.isErr()) return err(finalRemoteFeature.error);
+    if (
+      finalRemoteFeature.value.presence !== RemoteBranchPresence.Present ||
+      !finalRemoteFeature.value.sha.equals(request.featureHead)
+    ) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The pushed feature branch changed before its feature merge could begin',
+      });
+    }
+    const finalOriginMain = this.remoteBranch(ManagedBranch.Main);
+    if (finalOriginMain.isErr()) return err(finalOriginMain.error);
+    if (
+      finalOriginMain.value.presence !== RemoteBranchPresence.Present ||
+      !finalOriginMain.value.sha.equals(request.originMainSha)
+    ) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'origin/main changed before the feature could land in local dev',
+      });
+    }
+    const finalDevHead = this.headAt(request.devPath);
+    if (finalDevHead.isErr()) return err(finalDevHead.error);
+    if (!finalDevHead.value.equals(request.expectedDevHead)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Local dev changed while landing was being prepared: expected ${request.expectedDevHead.value()}, found ${finalDevHead.value.value()}`,
+      });
+    }
+    const finalDevState = this.stateAt(request.devPath);
+    if (finalDevState.isErr()) return err(finalDevState.error);
+    if (finalDevState.value !== WorktreeState.Clean) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Local dev became dirty before its feature merge: ${request.devPath}`,
+      });
+    }
+
     const merge = this.execute({
       args: ['merge', '--no-edit', request.featureHead.value()],
       workingDirectory: request.devPath,
@@ -539,7 +788,44 @@ export class DevGitRepository {
           'The local merge left dev dirty; no cleanup was attempted so foreign changes remain intact',
       });
     }
-    return this.headAt(request.devPath);
+    const afterBranch = this.branchAt(request.devPath);
+    if (afterBranch.isErr()) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development worktree became detached after its feature merge: ${request.devPath}`,
+      });
+    }
+    if (afterBranch.value.value() !== ManagedBranch.Dev) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development worktree changed from dev after its feature merge: ${request.devPath}`,
+      });
+    }
+    const afterHead = this.headAt(request.devPath);
+    if (afterHead.isErr()) return err(afterHead.error);
+    if (afterHead.value.equals(request.expectedDevHead)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Local dev did not advance after merging ${request.featureHead.value()}: ${request.devPath}`,
+      });
+    }
+    const included = this.ancestry({
+      ancestor: request.featureHead,
+      descendant: afterHead.value,
+      workingDirectory: request.devPath,
+    });
+    if (included.isErr()) return err(included.error);
+    if (included.value !== Ancestry.Ancestor) {
+      return err({
+        kind: DevFailureKind.Conflict,
+        message:
+          'The local dev merge completed without retaining the expected feature commit',
+      });
+    }
+    return ok(afterHead.value);
   }
 
   /** Fast-forwards local dev to a promoted snapshot without rewriting newer work. */
