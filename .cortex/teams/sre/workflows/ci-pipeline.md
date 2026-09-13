@@ -393,8 +393,8 @@ calls, so default sync tests exercise local file-backed replication without
 external API quota.
 
 **Manual (`sync-live`):** dispatch `e2e-pr.yml` with the `sync-live` suite.
-The workflow defaults `NOOK_E2E_SYNC_PROVIDER` to `github`; local runs may
-select another configured provider explicitly.
+The workflow defaults `NOOK_E2E_SYNC_PROVIDER` to `github`; an authorized
+hosted manual dispatch may select another configured provider explicitly.
 
 Live credentials per provider:
 
@@ -654,14 +654,12 @@ publisher is not an ordinary Team Agent: its isolated editor updates every
 outdated direct dependency and necessary compatibility code without Git,
 validation, credentials, or publication authority.
 
-Before any push, trusted workflow tooling runs the required broad validation
-remotely against that isolated update:
-
-```bash
-WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
-task docker:ecosystem:fuzz FUZZ_SECONDS=20
-task hive:verify
-```
+The trusted publisher may publish only the exact feature SHA for remote
+`build:compile` execution. That feature-stage graph is build-only: tests,
+coverage, e2e, and preflight must not execute transitively, including through
+Docker stages. No local tests, checks, preflight, or Docker work may precede
+publication. Full slow validation runs later only in the Dev
+Manager-controlled dev-to-main GitHub PR cycle.
 
 The trusted host fails closed unless:
 
@@ -684,12 +682,15 @@ The trusted host fails closed unless:
   remote head SHA to Gizmo after commit and push. No PR is created by this
   workflow; the later dev manager flow owns the single dev-to-main PR.
 
-That handoff resumes the ordinary delivery boundary. Gizmo owns continuing
-hosted review, replacement exact-head validation, readiness, and merge. The
-publisher's pre-push security validation remains required but does not replace
-those exact-head gates.
+That handoff resumes the ordinary delivery boundary. The publisher returns the
+verified remote feature head and owns neither readiness, merge, nor pull-request
+operations. Gizmo Prime owns feature review and acceptance for the returned
+exact SHA. The Dev Manager alone owns the later dev-to-main PR, full slow
+validation, readiness, and promotion.
 
-`ci:pr:e2e` validates the product path:
+The following `ci:pr:e2e` graph is a non-authorizing runtime description of the
+slow product checks. It runs only in the Dev Manager-controlled dev-to-main
+GitHub PR cycle:
 
 - repository preflight;
 - Rust coverage and unit tests;
@@ -714,7 +715,8 @@ those exact-head gates.
 - Local e2e sync uses `page.route()` with a unique remote id per suite — no shared remote state.
 - The Nook server is stateless; vault data never lives on the server in e2e.
 
-Do **not** spin up multiple Nook servers for parallel e2e unless debugging port conflicts locally with `reuseExistingServer`.
+The hosted e2e graph uses one Nook server per Playwright process; extra local
+servers are not part of the authorized delivery path.
 
 ## PR UI demo videos
 
@@ -737,8 +739,9 @@ UI demo rules:
   - They run serially with one worker.
   - PR CI avoids the cost of the full browser suite.
 
-**After integration, Gizmo runs the contract on the host before the first
-push** (and after any later UI edit) so Verify does not discover a missing demo:
+The UI demo contract executes remotely only in the Dev Manager-controlled slow
+PR stage. Neither Gizmo nor the publisher runs it locally before publication.
+These commands are a non-authorizing description of that hosted contract:
 
 ```bash
 git fetch origin main
@@ -796,10 +799,13 @@ results and traces, and must not receive real vault secrets.
 The Playwright project catalog and command grouping live in
 [Browser Validation](browser-validation.md).
 
-## Task commands
+## Task command catalog (non-authorizing)
 
 Product checks run remotely in the dev manager's slow PR cycle. Feature
-feedback requires a separate build-only capability. The root
+feedback requires a separate exact-SHA build-only capability. The commands
+below describe runtime entry points; they do not authorize local execution.
+Feature agents and delivery actors do not run local tests, checks, preflight,
+or Docker work. The root
 `Taskfile.yml` is the repo entrypoint; app commands are included through
 `nook-app/Taskfile.yml`, with
 cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
@@ -810,20 +816,20 @@ cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
 ```bash
 # Feature-local feedback: scoped rustfmt and bounded TS diagnostics only
 
-# Optional local mirrors (humans / deep debug — not agent merge gates)
+# Slow-stage runtime entry points (reference only; not local permissions)
 task check                          # format, clippy, unit tests, wasm-bindgen tests, web build (dev/no-opt wasm)
 WASM_BUILD_MODE=dev task ci:pr       # prepare → no-opt WASM → verify ‖ build (no browser e2e)
 task ci:pr:e2e                       # full local-provider web e2e + extension e2e
 
 # E2e projects
-task web:test:e2e                   # full local-provider e2e (main gate; optional local debug)
-task web:test:e2e:pr                # fast e2e-pr subset (manual/debug only)
+task web:test:e2e                   # full local-provider e2e (slow-stage reference)
+task web:test:e2e:pr                # fast e2e-pr subset (runtime reference)
 
 # WASM tests
 task wasm:test                      # wasm-bindgen smoke tests in Node (PR/main gate)
-task wasm:test:browser              # browser-only wasm tests (manual/debug)
+task wasm:test:browser              # browser-only wasm tests (runtime reference)
 
-# Single spec — preferred during optional fix/debug (E2E_SPEC paths relative to nook-app/nook-web/)
+# Single-spec runtime entry point (E2E_SPEC paths relative to nook-app/nook-web/)
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 
 # Main CI equivalent
@@ -1074,7 +1080,8 @@ authenticator-domain to 90 percent.
 - Main and release jobs import neither candidate nor stable formatter tags.
 - Hosted promotion independently fingerprints the exact committed source SHA.
 - Gizmo still dispatches build, test, proof, and validation tasks remotely.
-  Local execution remains available only for explicit rare-case debugging.
+  This cache description grants no local test, check, preflight, or Docker
+  execution permission.
 - Commit-scoped local publish requires a clean worktree. Dirty builds remain
   local and cannot poison the committed PR scope.
 - The formatter dependency candidate is the exception because its targets
