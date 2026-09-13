@@ -320,44 +320,16 @@ Use this workflow for quality, CI, and deployment changes.
     verify its size and SHA-256. Static preflight contracts require all three
     expensive dependency vertices in the published target. The separate
     Bake+Zot simulation owns clean-builder import proof.
-    Runtime Bake+Zot parent/leaf proof is `task infra:bake-cache:prove`.
-    That sim complements the static `bake_cache_proofs.rs` theorems.
-    It reproduces the rejected three-linked-target nightly miss.
-    It then proves one-Dockerfile tool and leaf stages on a fresh builder.
-    It also proves Main vs parallel PR git-scope isolation on ephemeral Zot:
-    PR writes stay under `nook/remote-buildcache/**-git-<sha>`, do not overlap,
-    and do not replace Main `nook/buildcache/**`.
-    Scenario P proves a hosted-verified local candidate and a fresh PR runner
-    share the same source-free dependency graph without sharing a commit SHA.
-    Scenario Q proves a generic standalone exact-scope verification restores
-    Main, publishes only its isolated PR leaf, and replays that leaf on a fresh
-    runner. General trusted ARC verification reuses its private local BuildKit
-    state and publishes only a minimal per-PR retry handoff. Hive ARC keeps its
-    separate exact-head registry contract.
-    Scenario R proves exact-only selection replays the leaf across both a bare
-    Bake-linked parent and the production internal-stage architecture on fresh
-    builders.
-    Scenario S applies the same cold-Main then exact-replay contract to the
-    full-graph Kani model, where compiler-object sccache is unavailable.
-    Scenario T proves an unverified local candidate is invisible to PR restore.
-    Scenario V proves a changed PR source restores a cfg-specific dependency
-    stage from Main and then replays its exact source leaf on a fresh builder.
-    Scenario W proves the separate WASM Node consumer owns a non-overlapping
-    full-graph scope. Main seeds it, a changed PR publishes only its exact-head
-    scope after tests pass, and a fresh retry restores every stage as CACHED.
-    Scenario X proves sequential crate COPY+RUN layers.
-    Main seeds crate-a and crate-b in one Dockerfile leaf.
-    A PR that edits only crate-b restores crate-a as CACHED.
-    It compiles crate-b and the leaf, then replays the exact graph.
-    Scenario Y mirrors Hive's Cargo dependency graph.
-    Main publishes the manifest, vendor, fetch, test-dependency, and
-    Clippy-dependency lineage to Zot.
-    Two concurrent PR sources restore those source-free stages on independent
-    ARC-shaped builders and publish separate exact-head v2 graphs.
-    Fresh builders replay each PR graph without executing the cargo-fetch
-    analogue, and neither PR can consume or overwrite the other's source graph.
-    Scenario Z keeps one ARC-shaped BuildKit container and local state across a
-    daemon restart. The exact parent and leaf steps remain CACHED afterward.
+    Runtime plain BuildKit+Zot proof is `task infra:bake-cache:prove`.
+    It runs the existing Hive-shaped Rust simulator against one stable
+    `nook/buildcache/nook-bake-sim-rust-deps-v1:buildcache` ref with `mode=max`.
+    The cold builder executes six vertices: the toolchain, Cargo fetch,
+    test/clippy dependency branches, and two source vertices. A fresh builder
+    after changing only `inputs/leaf.txt` reuses the four toolchain/dependency
+    vertices and executes only the two source vertices. A third fresh builder
+    with no further input change reuses all six. The proof relies on native
+    BuildKit instruction and input digests, with no manually generated cache
+    key or source-scope matrix.
 
     `task infra:kubernetes-cache:prove` is the Kubernetes integration proof.
     It derives an ephemeral three-agent k3d cluster from the production Zot,
