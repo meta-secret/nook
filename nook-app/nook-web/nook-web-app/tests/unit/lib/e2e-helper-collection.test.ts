@@ -67,9 +67,32 @@ describe('Playwright collection imports', () => {
         pickerVisible: false,
         lockedAccessVisible: false,
         authorizeReady: true,
+        vaultAuthenticated: false,
         workspaceUnlocked: false,
       }),
     ).toBe(DeviceProtectionAuthorizationGateState.Authorize)
+  })
+
+  test('recognizes the authenticated workspace after passkey unlock starts loadDb', () => {
+    const passkeyUnlocking = {
+      overlayVisible: true,
+      unlockVisible: false,
+      pickerVisible: false,
+      lockedAccessVisible: false,
+      authorizeReady: false,
+      vaultAuthenticated: false,
+      workspaceUnlocked: false,
+    }
+    expect(deviceProtectionAuthorizationGateState(passkeyUnlocking)).toBe(
+      DeviceProtectionAuthorizationGateState.Overlay,
+    )
+
+    expect(
+      deviceProtectionAuthorizationGateState({
+        ...passkeyUnlocking,
+        vaultAuthenticated: true,
+      }),
+    ).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
   })
 
   test('shares the canonical trace transport without loading WASM', () => {

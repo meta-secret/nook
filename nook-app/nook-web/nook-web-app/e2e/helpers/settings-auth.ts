@@ -32,6 +32,7 @@ export type DeviceProtectionAuthorizationObservation = {
   readonly pickerVisible: boolean
   readonly lockedAccessVisible: boolean
   readonly authorizeReady: boolean
+  readonly vaultAuthenticated: boolean
   readonly workspaceUnlocked: boolean
 }
 
@@ -51,16 +52,17 @@ export function deviceProtectionAuthorizationGateState({
   pickerVisible,
   lockedAccessVisible,
   authorizeReady,
+  vaultAuthenticated,
   workspaceUnlocked,
 }: DeviceProtectionAuthorizationObservation): DeviceProtectionAuthorizationGateState {
+  if (vaultAuthenticated || workspaceUnlocked) {
+    return DeviceProtectionAuthorizationGateState.Unlocked
+  }
   if (overlayVisible) return DeviceProtectionAuthorizationGateState.Overlay
   if (unlockVisible) return DeviceProtectionAuthorizationGateState.Unlock
   if (pickerVisible) return DeviceProtectionAuthorizationGateState.Picker
   if (lockedAccessVisible) {
     return DeviceProtectionAuthorizationGateState.LockedAccess
-  }
-  if (workspaceUnlocked) {
-    return DeviceProtectionAuthorizationGateState.Unlocked
   }
   if (authorizeReady) return DeviceProtectionAuthorizationGateState.Authorize
   return DeviceProtectionAuthorizationGateState.Waiting
@@ -462,6 +464,8 @@ export async function authorizeDeviceProtection(
   )
   const authenticatedShell = page.getByTestId('authenticated-shell')
   const button = page.getByTestId('device-protection-unlock-btn')
+  const isVaultAuthenticated = async () =>
+    page.evaluate(() => Boolean(window.__nookVault?.isAuthenticated))
 
   const isAuthenticatedWorkspace = async () => {
     // Read both surfaces in one browser turn. Separate locator calls can
@@ -504,6 +508,7 @@ export async function authorizeDeviceProtection(
       pickerVisible: await vaultPicker.isVisible(),
       lockedAccessVisible: await lockedAccessDashboard.isVisible(),
       authorizeReady: await authorizeButtonReady(),
+      vaultAuthenticated: false,
       workspaceUnlocked: await isAuthenticatedWorkspace(),
     }
     return deviceProtectionAuthorizationGateState(observation)
@@ -599,15 +604,23 @@ export async function authorizeDeviceProtection(
   await expect
     .poll(
       async () => {
-        if (await isAuthenticatedWorkspace()) return 'unlocked'
-        if (await authorizeButtonReady()) return 'authorize'
-        return 'waiting'
+        return deviceProtectionAuthorizationGateState({
+          overlayVisible: false,
+          unlockVisible: false,
+          pickerVisible: false,
+          lockedAccessVisible: false,
+          authorizeReady: await authorizeButtonReady(),
+          vaultAuthenticated: await isVaultAuthenticated(),
+          workspaceUnlocked: await isAuthenticatedWorkspace(),
+        })
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .not.toBe('waiting')
   if (!(await isAuthenticatedWorkspace())) {
-    await button.click()
+    if (!(await isVaultAuthenticated())) {
+      await button.click()
+    }
     await expect(loginGate).toBeHidden({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
