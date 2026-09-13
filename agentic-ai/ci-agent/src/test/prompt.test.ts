@@ -12,6 +12,8 @@ import { AgentPrompt, AgentPromptEnvironment } from "../main/prompt.js";
 const ENV_KEYS = [
   "AGENT_PROMPT",
   "MAJOR_CHANGE_AUTHORIZED",
+  "ORIGIN_MAIN_SHA",
+  "PINNED_LOCAL_DEV_SHA",
   "RUST_DEPS_OUTDATED_REPORT",
   "VALIDATED_PLAN_SHA256",
   "WORKBENCH_PLAN_FILE",
@@ -50,7 +52,9 @@ void describe("resolveAgentTask", () => {
   void it("prefers AGENT_PROMPT when set", () => {
     process.env.AGENT_PROMPT = "  Ship the feature  ";
     assert.equal(
-      CiResultAssertions.assertSuccess(new AgentPromptEnvironment(process.env).resolveAgentTask()),
+      CiResultAssertions.assertSuccess(
+        new AgentPromptEnvironment(process.env).resolveAgentTask(),
+      ),
       "Ship the feature",
     );
   });
@@ -59,6 +63,28 @@ void describe("resolveAgentTask", () => {
     CiResultAssertions.assertFailure(
       new AgentPromptEnvironment(process.env).resolveAgentTask(),
       /AGENT_PROMPT is required/,
+    );
+  });
+});
+
+void describe("resolveBootstrapEvidence", () => {
+  void it("requires both exact commit identities", () => {
+    process.env.ORIGIN_MAIN_SHA = "b".repeat(40);
+    process.env.PINNED_LOCAL_DEV_SHA = "c".repeat(40);
+    assert.deepEqual(
+      CiResultAssertions.assertSuccess(
+        new AgentPromptEnvironment(process.env).resolveBootstrapEvidence(),
+      ),
+      {
+        originMainSha: "b".repeat(40),
+        pinnedLocalDevSha: "c".repeat(40),
+      },
+    );
+
+    delete process.env.PINNED_LOCAL_DEV_SHA;
+    CiResultAssertions.assertFailure(
+      new AgentPromptEnvironment(process.env).resolveBootstrapEvidence(),
+      /ORIGIN_MAIN_SHA and PINNED_LOCAL_DEV_SHA/u,
     );
   });
 });
@@ -96,8 +122,48 @@ void describe("loadPrompt", () => {
     process.env.AGENT_PROMPT = "bounded task";
     try {
       assert.equal(
-        await new AgentPrompt(config).load().then(CiResultAssertions.assertSuccess),
+        await new AgentPrompt(config)
+          .load()
+          .then(CiResultAssertions.assertSuccess),
         "Trusted: bounded task",
+      );
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  void it("embeds only the recorded bootstrap commit identities", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "nook-ci-agent-bootstrap-"));
+    const toolingRoot = join(parent, "tooling");
+    await mkdir(join(toolingRoot, ".github", "prompts"), { recursive: true });
+    await writeFile(
+      join(toolingRoot, ".github", "prompts", "agent.md"),
+      "main=${ORIGIN_MAIN_SHA}\ndev=${PINNED_LOCAL_DEV_SHA}\n",
+    );
+    const config: CiAgentConfig = {
+      repoRoot: parent,
+      toolingRoot,
+      cursorApiKey: "test-key",
+      githubRepository: "meta-secret/nook",
+      githubRunId: "42",
+      fixBranch: "codex/successor",
+      fixLabel: "focused issue",
+      promptFile: ".github/prompts/agent.md",
+      modelId: "test-model",
+    };
+    process.env.ORIGIN_MAIN_SHA = "b".repeat(40);
+    process.env.PINNED_LOCAL_DEV_SHA = "c".repeat(40);
+    try {
+      assert.equal(
+        await new AgentPrompt(config)
+          .load()
+          .then(CiResultAssertions.assertSuccess),
+        `main=${"b".repeat(40)}\ndev=${"c".repeat(40)}\n`,
+      );
+      delete process.env.PINNED_LOCAL_DEV_SHA;
+      await CiResultAssertions.assertAsyncFailure(
+        new AgentPrompt(config).load(),
+        /ORIGIN_MAIN_SHA and PINNED_LOCAL_DEV_SHA/u,
       );
     } finally {
       await rm(parent, { recursive: true, force: true });
@@ -142,7 +208,9 @@ void describe("loadPrompt", () => {
       .digest("hex");
     try {
       assert.equal(
-        await new AgentPrompt(config).load().then(CiResultAssertions.assertSuccess),
+        await new AgentPrompt(config)
+          .load()
+          .then(CiResultAssertions.assertSuccess),
         `Trusted plan:\n${plan}`,
       );
       await writeFile(join(repoRoot, ".nook-workbench-plan.md"), "changed");

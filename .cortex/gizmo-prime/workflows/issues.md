@@ -189,9 +189,9 @@ overwriting it. New plans, worklogs, and statistics use unique paths and do not
 need an expected SHA; existing statistics are immutable and cannot be replaced.
 
 For coordinated multi-file restructuring, use a focused Workbench branch and
-PR. Route its packetized branch, review, and status mechanics through Delivery
+delivery record. Route its packetized branch, review, and status mechanics through Delivery
 Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent. Never mix
-Workbench files into a Nook implementation PR.
+Workbench files into a Nook feature delivery.
 
 ## Team safety
 
@@ -332,7 +332,7 @@ status. A concrete external blocker moves the owning record to `blocked`.
 ## Required handoff
 
 Link one canonical completion record from the final handoff. That record links
-the feature, focused issue, task-start plan, worklog, and implementation PR.
+the feature, focused issue, task-start plan, worklog, and feature delivery.
 State what remains only when work is incomplete.
 
 Route the readback through Delivery Pipeline Team Gizmo -> active harness ->

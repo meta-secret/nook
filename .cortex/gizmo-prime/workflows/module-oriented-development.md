@@ -45,12 +45,13 @@ Before this procedure, Gizmo Prime runs `git fetch --prune origin`; a fetch
 failure fails closed. Delivery/Dev Manager synchronizes canonical local `main`
 to the fetched `origin/main` and brings canonical local `dev` onto or including
 that main baseline under the dev-delivery workflow. If local dev is not current
-with main, the run fails closed. Prime records both the exact fetched `origin/main`
-SHA and exact synchronized local-dev SHA, pins the local-dev SHA in the mission
-packet and every child handoff, and uses it for new feature work unless the
-user explicitly selects another base and Prime records that choice. Team Gizmos
-and leaves consume the pinned local-dev SHA; they must not use stale local refs
-or resolve or guess a base independently.
+with main, the run fails closed. Prime records `originMainSha` for the exact
+fetched `origin/main` and `pinnedLocalDevSha` for the exact synchronized
+local-dev SHA, pins that local-dev SHA in the mission packet and every child
+handoff, and uses it for new feature work unless the user explicitly selects
+another base and Prime records that choice. Team Gizmos and leaves consume
+`pinnedLocalDevSha`; they must not use stale local refs or resolve or guess a
+base independently.
 
 1. Identify the modules and their provider-consumer order.
 2. Assign each implementation task to its functional owner.

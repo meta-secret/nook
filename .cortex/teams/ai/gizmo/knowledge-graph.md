@@ -19,3 +19,8 @@ Load only the authority needed to orchestrate the current AI packet.
 
 - [Multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)
 - [Dev delivery](../../../gizmo-prime/architecture/dev-delivery.md)
+
+Every AI packet carries `originMainSha` for the fetched main ancestry and
+`pinnedLocalDevSha` for the synchronized local-dev source. The Team Gizmo and
+both specialists use only `pinnedLocalDevSha` as their feature base. Missing,
+mismatched, or stale bootstrap evidence fails closed.

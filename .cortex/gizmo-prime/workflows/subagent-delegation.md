@@ -33,12 +33,13 @@ Prime-to-Team-Gizmo dispatch chain.
   fail closed on failure.
   Delivery/Dev Manager synchronizes canonical local `main` to the fetched
   `origin/main`, then brings canonical local `dev` onto or including that main
-  baseline under the dev-delivery workflow; stale local dev fails closed. Prime
-  records both the exact fetched `origin/main` SHA and exact synchronized local-dev
-  SHA, pins the local-dev SHA in the mission packet, and starts new feature
-  work from it unless the user explicitly selects another base and Prime
-  records that choice. Team Gizmos and leaves consume the pinned local-dev SHA
-  and never use stale local refs or resolve or guess a base independently.
+  baseline under the dev-delivery workflow; stale local dev fails closed.
+  Prime records `originMainSha` for the exact fetched main and
+  `pinnedLocalDevSha` for the exact synchronized local-dev SHA, pins that
+  local-dev SHA in the mission packet, and starts new feature work from it
+  unless the user explicitly selects another base and Prime records that
+  choice. Team Gizmos and leaves consume `pinnedLocalDevSha` and never use
+  stale local refs or resolve or guess a base independently.
 - Apply the [branch naming contract](../dynamic-skills/branch-naming.md) to
   every new Prime, Team Gizmo, and leaf branch.
 - Author tests without executing them in the feature stage.

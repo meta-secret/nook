@@ -41,12 +41,12 @@ Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
 Delivery/Dev Manager then synchronizes canonical local `main` to the fetched
 `origin/main` and brings canonical local `dev` onto or including that main
 baseline under the dev-delivery workflow. If local dev is not current with
-main, the run fails closed. Prime records both the exact fetched `origin/main` SHA
-and the exact synchronized local-dev SHA in the mission packet and every child
-handoff. New feature work starts from that pinned local-dev SHA unless the user
-explicitly selects another base and Prime records that choice. Team Gizmos and
-leaves consume the pinned local-dev SHA; they must not use stale local refs or
-resolve or guess a base independently.
+main, the run fails closed. Prime records `originMainSha` for the exact fetched
+`origin/main` and `pinnedLocalDevSha` for the exact synchronized local-dev SHA
+in the mission packet and every child handoff. New feature work starts from
+`pinnedLocalDevSha` unless the user explicitly selects another base and Prime
+records that choice. Team Gizmos and leaves consume `pinnedLocalDevSha`; they
+must not use stale local refs or resolve or guess a base independently.
 
 ```mermaid
 sequenceDiagram
@@ -75,9 +75,9 @@ sequenceDiagram
             Prime-->>User: Fail closed; no planning or edits
         else Local dev is current with main
             Dev-->>Prime: Exact local-dev SHA
-            Prime->>Prime: Record origin/main SHA and pin local-dev SHA
-            Prime->>Team: Issue packet with pinned local-dev SHA
-            Team->>Leaf: Forward the same pinned local-dev SHA
+            Prime->>Prime: Record originMainSha and pinnedLocalDevSha
+            Prime->>Team: Issue packet with both recorded SHAs
+            Team->>Leaf: Forward the same pinnedLocalDevSha
         end
     end
 ```
@@ -193,6 +193,15 @@ boundary.
 
 ### Flow
 
+The implementation packet carries the recorded JSON fields `originMainSha`
+and `pinnedLocalDevSha`. The feature worktree and branch are created from
+`pinnedLocalDevSha`. The implementation worker consumes that existing feature
+frontier and verifies that the pinned local-dev commit is an ancestor of its
+head. It also verifies that `originMainSha` still names the fetched main and is
+an ancestor of the pinned local-dev commit. Missing, mismatched, or stale
+evidence fails closed. No implementation worker creates work from
+`origin/main` or `origin/dev`.
+
 ```mermaid
 flowchart LR
     Request([Feature requested])
@@ -225,7 +234,7 @@ sequenceDiagram
 
     box Feature worktree
         participant Gizmo as gizmo:feature-a-owner
-        participant Code as team:code-dev
+        participant Code as team:dev-core
         participant Web as team:web-dev
     end
 
@@ -238,7 +247,7 @@ sequenceDiagram
         participant Checks as external:feature-checks
     end
 
-    Prime->>Prime: Bootstrap and record the pinned local-dev SHA
+    Prime->>Prime: Bootstrap and record originMainSha plus pinnedLocalDevSha
     Prime->>Gizmo: Issue feature ownership packet
     Gizmo->>Gizmo: Plan complete feature
     Gizmo->>Code: Assign Rust and domain work

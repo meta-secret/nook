@@ -42,12 +42,13 @@ for the run. Every team has a Team Gizmo that reports upward to Gizmo Prime.
   Delivery/Dev Manager then synchronizes canonical local `main` to the fetched
   `origin/main` and brings canonical local `dev` onto or including that main
   baseline under the dev-delivery workflow. If local dev is not current with
-  main, the run fails closed. Prime records both the exact fetched `origin/main` SHA
-  and the exact synchronized local-dev SHA in the mission packet and every
-  child handoff. New feature work starts from that pinned local-dev SHA unless
-  the user explicitly selects another base and Prime records that choice. Team
-  Gizmos and leaves consume the pinned local-dev SHA; they must not use stale
-  local refs or resolve or guess a base independently.
+  main, the run fails closed. Prime records `originMainSha` for the exact
+  fetched `origin/main` and `pinnedLocalDevSha` for the exact synchronized
+  local-dev SHA in the mission packet and every child handoff. New feature work
+  starts from `pinnedLocalDevSha` unless the user explicitly selects another
+  base and Prime records that choice. Team Gizmos and leaves consume
+  `pinnedLocalDevSha`; they must not use stale local refs or resolve or guess a
+  base independently.
 - Gizmo Prime must issue each team's high-level packet through the active Gizmo
   harness. The receiving Team Gizmo decomposes only its team's mechanics and
   dispatches bounded internal Team Agents through that harness.
@@ -465,8 +466,9 @@ runner. Runtime-backed selectors and `arc:runtime` should be dispatched alone
 so their Task implementations receive the correct runner image.
 When a task requires a current base:
 
-- It verifies that the branch contains the current `origin/main` before
-  dispatch.
+- It verifies that the packet's `originMainSha` and `pinnedLocalDevSha` are
+  recorded, that the branch contains the pinned local-dev commit before
+  dispatch, and that fetched-main ancestry evidence is still valid.
 - A later push invalidates the earlier run as delivery evidence.
 - A later advance of `main` does not invalidate successful exact-head PR
   evidence by itself.

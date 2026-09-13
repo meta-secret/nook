@@ -13,11 +13,14 @@ import {
   AgentImplementationRecordTrustedBudgetBlocker,
   AgentImplementationResolveDeliveryTarget,
   AgentImplementationRunCiImplementationPhases,
+  AgentImplementationValidateBootstrapEvidence,
   CiEditOutcome,
   CiImplementationMode,
 } from "../main/implement.js";
 
 const EXPECTED_HEAD = "a".repeat(40);
+const ORIGIN_MAIN_SHA = "b".repeat(40);
+const PINNED_LOCAL_DEV_SHA = "c".repeat(40);
 
 interface ImplementStepRequest<T> {
   readonly log: string[];
@@ -100,7 +103,7 @@ void test("oversized implementation is rejected before branch publication", asyn
   assert.deepEqual(events, ["budget"]);
 });
 
-void test("agent delivery publishes and verifies one exact branch head without creating a PR", async () => {
+void test("feature delivery publishes and verifies one exact branch head without creating a PR", async () => {
   const events: string[] = [];
   const published = await new AgentImplementationPublishBranch(
     new ImplementDeliveryArgs(events).execute(),
@@ -170,19 +173,25 @@ void test("implementation phases are single-use", async () => {
 });
 
 void describe("resolveDeliveryTarget", () => {
-  void it("keeps the budget baseline on origin/main", () => {
-    assert.deepEqual(
-      CiResultAssertions.assertSuccess(
-        new AgentImplementationResolveDeliveryTarget({
+  void it(
+    "records fetched-main evidence and uses the pinned local-dev base",
+    () => {
+      assert.deepEqual(
+        CiResultAssertions.assertSuccess(
+          new AgentImplementationResolveDeliveryTarget({
+            branch: "codex/agent-branching",
+            originMainSha: ORIGIN_MAIN_SHA,
+            pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+          }).execute(),
+        ),
+        {
           branch: "codex/agent-branching",
-        }).execute(),
-      ),
-      {
-        branch: "codex/agent-branching",
-        budgetBaseRef: "origin/main",
-      },
-    );
-  });
+          originMainSha: ORIGIN_MAIN_SHA,
+          pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+        },
+      );
+    },
+  );
 
   void it("accepts a canonical child branch for a registered team role", () => {
     assert.deepEqual(
@@ -190,20 +199,25 @@ void describe("resolveDeliveryTarget", () => {
         new AgentImplementationResolveDeliveryTarget({
           branch:
             "codex/agent-branching/ai/loom-specialist/define-branch-naming-contract",
+          originMainSha: ORIGIN_MAIN_SHA,
+          pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
         }).execute(),
       ),
       {
         branch:
           "codex/agent-branching/ai/loom-specialist/define-branch-naming-contract",
-        budgetBaseRef: "origin/main",
+        originMainSha: ORIGIN_MAIN_SHA,
+        pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       },
     );
   });
 
-  void it("rejects legacy agent branches", () => {
+  void it("rejects legacy feature branches", () => {
     CiResultAssertions.assertFailure(
       new AgentImplementationResolveDeliveryTarget({
         branch: "agent/workbench-feature-42",
+        originMainSha: ORIGIN_MAIN_SHA,
+        pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       }).execute(),
       /malformed/u,
     );
@@ -214,6 +228,8 @@ void describe("resolveDeliveryTarget", () => {
       new AgentImplementationResolveDeliveryTarget({
         branch:
           "codex/agent-branching/ai/dev-manager/define-branch-naming-contract",
+        originMainSha: ORIGIN_MAIN_SHA,
+        pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       }).execute(),
       /malformed/u,
     );
@@ -223,28 +239,74 @@ void describe("resolveDeliveryTarget", () => {
     CiResultAssertions.assertFailure(
       new AgentImplementationResolveDeliveryTarget({
         branch: "codex/feature",
+        originMainSha: ORIGIN_MAIN_SHA,
+        pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       }).execute(),
       /malformed/u,
+    );
+  });
+
+  void it("fails closed when bootstrap evidence is missing", () => {
+    CiResultAssertions.assertFailure(
+      new AgentImplementationResolveDeliveryTarget({
+        branch: "codex/agent-branching",
+        originMainSha: "",
+        pinnedLocalDevSha: "",
+      }).execute(),
+      /bootstrap evidence requires/u,
+    );
+  });
+
+  void it("rejects abbreviated or non-hex bootstrap evidence", () => {
+    CiResultAssertions.assertFailure(
+      new AgentImplementationResolveDeliveryTarget({
+        branch: "codex/agent-branching",
+        originMainSha: "main",
+        pinnedLocalDevSha: "dev",
+      }).execute(),
+      /bootstrap evidence requires/u,
+    );
+  });
+});
+
+void describe("validateBootstrapEvidence", () => {
+  void it("preserves both exact commit identities", () => {
+    assert.deepEqual(
+      CiResultAssertions.assertSuccess(
+        new AgentImplementationValidateBootstrapEvidence({
+          originMainSha: ORIGIN_MAIN_SHA,
+          pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+        }).execute(),
+      ),
+      {
+        originMainSha: ORIGIN_MAIN_SHA,
+        pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+      },
     );
   });
 });
 
 void describe("resolveTargetFromEnvironment", () => {
-  void it("derives the prime feature branch without a run-id suffix", () => {
+  void it("consumes the existing prime feature branch", () => {
     const target = new CiImplementationCommand({
       GITHUB_RUN_ID: "410",
-      TASK_FEATURE: "agent-branching",
+      AGENT_BRANCH: "codex/agent-branching",
+      ORIGIN_MAIN_SHA,
+      PINNED_LOCAL_DEV_SHA,
     }).resolveTargetFromEnvironment();
     assert.deepEqual(CiResultAssertions.assertSuccess(target), {
       branch: "codex/agent-branching",
-      budgetBaseRef: "origin/main",
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
     });
   });
 
-  void it("fails closed when branch metadata is absent", () => {
+  void it("fails closed when the existing branch metadata is absent", () => {
     const target = new CiImplementationCommand({
       GITHUB_RUN_ID: "410",
+      ORIGIN_MAIN_SHA,
+      PINNED_LOCAL_DEV_SHA,
     }).resolveTargetFromEnvironment();
-    CiResultAssertions.assertFailure(target, /malformed/u);
+    CiResultAssertions.assertFailure(target, /branch metadata is malformed/u);
   });
 });

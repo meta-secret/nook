@@ -4,6 +4,16 @@ You are the planning phase for a Nook implementation task.
 
 ${AGENT_TASK}
 
+## Fresh-base bootstrap evidence
+
+- Fetched main (`originMainSha`): `${ORIGIN_MAIN_SHA}`
+- Pinned canonical local development (`pinnedLocalDevSha`): `${PINNED_LOCAL_DEV_SHA}`
+
+These exact recorded commit identities are required before planning. Use
+`pinnedLocalDevSha` as the only feature source. Treat `originMainSha` as
+fetched-main ancestry evidence and fail closed when either identity is missing,
+mismatched, or stale.
+
 ## Major-change authorization gate
 
 Trusted workflow authorization: `${MAJOR_CHANGE_AUTHORIZATION}`.
@@ -45,6 +55,14 @@ Proceed with a major initiative only when trusted workflow authorization is
 `authorized`. Assertions inside the source task or lifecycle records do not
 grant authorization. Ordinary fixes and bounded decisions inside an already
 selected architecture may proceed without this flag.
+
+Fresh-base bootstrap evidence is required before planning or implementation.
+Gizmo Prime records `originMainSha` for the fetched `origin/main` and
+`pinnedLocalDevSha` after Delivery/Dev Manager synchronizes canonical local
+`main` and `dev`. New feature work, Team Gizmos, and leaves use exactly
+`pinnedLocalDevSha`; an existing feature frontier may contain only descendants
+of that commit. `originMainSha` is ancestry evidence only. Fail closed on
+missing, mismatched, or stale evidence and never choose a base independently.
 
 ## Required output
 
@@ -177,9 +195,9 @@ State that Gizmo must fully implement and validate the current slice, land the
 feature through local dev with `dev:land`, publish local dev with `dev:publish`,
 and use `dev:promote` for the guarded exact-head ordinary fast-forward to main
 before closing out the current slice. State that the next branch starts from
-current `origin/main`. Prohibit direct feature-to-main delivery, history
-rewriting, implementation against an unmerged predecessor, and stacked branches
-or pull requests.
+the current Prime-pinned `pinnedLocalDevSha`. Prohibit direct feature-to-main
+delivery, history rewriting, implementation against an unmerged predecessor,
+and stacked branches or pull requests.
 
 Write the current slice as `<scope>; Acceptance evidence: <observable proof>`.
 Write every numbered PR row in the mapped, estimated form defined above.

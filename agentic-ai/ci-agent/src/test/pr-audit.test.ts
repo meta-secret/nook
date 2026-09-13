@@ -255,7 +255,7 @@ class PrAuditCreateMockOctokit {
           ...(options.agentHandoff === MockAgentHandoff.Included
             ? [
                 {
-                  body: `@octocat this workflow published agent branch agent/prompt-410 at ${headSha}. Continue only this branch's recorded scope through feature remote build-only compilation and local dev integration.`,
+                  body: `@octocat this workflow published feature branch codex/agent-branching at ${headSha}. Continue only this branch's recorded scope through feature remote build-only compilation and local dev integration.`,
                 },
               ]
             : []),

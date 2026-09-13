@@ -17,8 +17,10 @@ packet.
 
 - Accept the packet from AI Team Gizmo through the active harness.
 - Read only the parent authorities and task-specific evidence needed for the packet.
-- Consume the local-dev base SHA pinned by Gizmo Prime; do not use stale local
-  refs or resolve or guess a base independently.
+- Consume the Prime-issued `pinnedLocalDevSha`; carry `originMainSha` only as
+  fetched-main ancestry evidence. Do not use stale local refs or resolve or
+  guess a base independently. Missing, mismatched, or stale evidence fails
+  closed.
 - Write only the assigned AI-owned Cortex scope.
 - Commit the complete scoped iteration during the granted commit turn.
 - Report the commit SHA, acceptance evidence, and unresolved blockers to Team Gizmo.

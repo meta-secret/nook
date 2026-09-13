@@ -164,7 +164,9 @@ The changed-file density gate has bounded scope. Its implementation semantics
 are described below. Execute documentation audits in the manager's slow PR
 stage; this description grants no local pre-push permission.
 
-- It compares the working branch with its merge base against `origin/main`.
+- It compares the working branch with its merge base against the recorded
+  `pinnedLocalDevSha`; `originMainSha` proves fetched-main ancestry only and
+  is not the feature source.
 - A pure rename within persistent Cortex keeps its source ancestry.
 - A rename from outside persistent Cortex checks the full destination.
 - A Git type change into regular Cortex Markdown checks the full file.

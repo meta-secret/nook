@@ -886,4 +886,4 @@ type AutomatedFindingBatchRequest = {
 };
 
 const AGENT_IMPLEMENTATION_HANDOFF_COMMENT =
-  /^@[a-z0-9-]+ this workflow published agent branch [^ ]+ at [0-9a-f]{40}\. Continue only this branch's recorded scope through feature remote build-only compilation and local dev integration\.$/;
+  /^@[a-z0-9-]+ this workflow published feature branch [^ ]+ at [0-9a-f]{40}\. Continue only this branch's recorded scope through feature remote build-only compilation and local dev integration\.$/;

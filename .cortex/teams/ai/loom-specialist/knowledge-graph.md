@@ -20,3 +20,7 @@ Load only the authority needed for the assigned Loom packet.
 
 - [Multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)
 - [Dev delivery](../../../gizmo-prime/architecture/dev-delivery.md)
+
+The packet must include `originMainSha` and `pinnedLocalDevSha`. Use only the
+pinned local-dev SHA as the feature source. Reject missing, mismatched, or
+stale bootstrap evidence.

@@ -24,12 +24,12 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
   Delivery/Dev Manager synchronizes canonical local `main` to the fetched
   `origin/main` and brings canonical local `dev` onto or including that main
   baseline under the dev-delivery workflow. If local dev is not current with
-  main, the run fails closed. Prime records both the exact fetched `origin/main` SHA
-  and the exact synchronized local-dev SHA in the mission packet and every
-  child handoff. New feature work starts from that pinned local-dev SHA unless
-  the user explicitly selected another base and Prime records the choice. Team
-  Gizmos and leaves consume the pinned local-dev SHA and never use stale local
-  refs or independently resolve or guess a base.
+  main, the run fails closed. Prime records `originMainSha` for the exact
+  fetched `origin/main` and `pinnedLocalDevSha` for the exact synchronized
+  local-dev SHA in the mission packet and every child handoff. New feature work
+  starts from `pinnedLocalDevSha` unless the user explicitly selected another
+  base and Prime records the choice. Team Gizmos and leaves consume that pinned
+  SHA and never use stale local refs or independently resolve or guess a base.
 - Preserve functional ownership and required security verdicts.
 - Use the active harness for Team Gizmo and internal Team Agent communication.
 - Keep every writer within its issued child worktree and explicit file scope.
@@ -59,11 +59,12 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
      fetched `origin/main`, then bring canonical local `dev` onto or including
      that main baseline under the dev-delivery workflow. Stop closed if local
      dev is not current with main.
-   - Resolve and record the exact fetched `origin/main` commit SHA and exact
-     synchronized local-dev commit SHA.
-   - Pin the local-dev SHA for the mission unless the user explicitly selected
-     another base, and record the explicit selection.
-   - Start the feature branch and worktree from the pinned local-dev SHA.
+   - Resolve and record `originMainSha` for the exact fetched `origin/main`
+     commit and `pinnedLocalDevSha` for the exact synchronized local-dev
+     commit.
+   - Pin `pinnedLocalDevSha` for the mission unless the user explicitly
+     selected another base, and record the explicit selection.
+   - Start the feature branch and worktree from `pinnedLocalDevSha`.
 2. **Interpret and scope the feature.**
    - Identify functional owners and required acceptance evidence.
    - Treat every other active task as read-only.
@@ -124,8 +125,8 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 ## Completion evidence
 
 - Every worker used its issued child worktree and bounded scope.
-- The handoff records the successful fetch, fetched `origin/main` SHA, pinned
-  local-dev SHA, and any explicit user-selected base.
+- The handoff records the successful fetch, `originMainSha`,
+  `pinnedLocalDevSha`, and any explicit user-selected base.
 - Dirty changes remained attributed and unrelated changes were preserved.
 - Parent integration and shared local dev integration were serialized.
 - The feature's final SHA has passing remote build-only evidence.

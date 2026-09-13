@@ -15,7 +15,18 @@ ${VALIDATED_PLAN}
 
 - Repository: ${GITHUB_REPOSITORY}
 - Workflow run id: ${GITHUB_RUN_ID}
-- Implementation branch (harness commits here — do not git): `${AGENT_BRANCH}`
+- Existing canonical feature branch (harness commits here — do not git): `${AGENT_BRANCH}`
+- Fetched main evidence (`originMainSha`): `${ORIGIN_MAIN_SHA}`
+- Prime-pinned local development base (`pinnedLocalDevSha`): `${PINNED_LOCAL_DEV_SHA}`
+
+The two recorded commit SHAs above are mandatory bootstrap evidence. Delivery
+and the Dev Manager fetched `origin/main`, synchronized canonical local `main`,
+and brought canonical local `dev` onto or including that main before this
+worktree was issued. Prime creates the feature branch and worktree from
+`${PINNED_LOCAL_DEV_SHA}`; an existing feature frontier may add only descendants
+of that commit. `originMainSha` proves fetched-main ancestry only; it is never
+a feature base. Stop closed if either value is missing, does not match the
+checked-out refs, or is stale.
 - The planning phase has already published the task-start record and left its
   validated body in `.nook-workbench-plan.md`.
 
@@ -114,8 +125,8 @@ a container runtime.
   parent through the harness commit handoff.
 - Follow `.cortex/gizmo-prime/workflows/pull-requests.md` for current review and
   authorization policy, and use the dev-manager flow for feature-to-local-dev-
-  to-origin/dev-to-origin/main delivery. Do not merge a feature directly to
-  main or rewrite history. Also follow
+  through the manager-owned local-dev publication and promotion path. Do not
+  merge a feature directly to main or rewrite history. Also follow
   `.cortex/teams/sre/workflows/ci-operations.md` (this Kubernetes-native worker
   must not invoke a container runtime).
 - Follow `.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md`:

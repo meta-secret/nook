@@ -28,12 +28,12 @@ limit. Do not pre-check or budget a wave against a numeric limit. Cortex and
 Loom never encode, infer, or repeat a fixed numeric agent or subagent
 concurrency cap.
 
-AI Team Gizmo and its leaves consume the local-dev base SHA pinned by Gizmo
-Prime. They must not use stale local refs or independently resolve or guess a
-base. Prime's fresh-base bootstrap runs before planning, delegation, worktree
-creation, or edits, records the exact fetched `origin/main` SHA and exact local-dev
-SHA in each child packet, and fails closed if fetched main and local dev are
-not current.
+AI Team Gizmo and its leaves consume the `pinnedLocalDevSha` issued by Gizmo
+Prime. Prime's fresh-base bootstrap runs before planning, delegation, worktree
+creation, or edits. It records `originMainSha` for the fetched `origin/main`
+and `pinnedLocalDevSha` after canonical local `main` and `dev` are synchronized.
+The AI team fails closed on missing, mismatched, or stale evidence and never
+resolves or guesses a base independently.
 
 An exact AI authority may require a foreign-team engineering skill. Load that
 skill read-only. An expertise provider is required only when the foreign team

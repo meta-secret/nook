@@ -73,8 +73,10 @@ Model text.
     '`git fetch --prune origin`; a fetch failure fails closed.',
   );
   expect(markdown).toContain(
-    'Team Gizmos and leaves consume the pinned local-dev SHA and must not use',
+    '`pinnedLocalDevSha` unless the user explicitly selects another base',
   );
+  expect(markdown).toContain('`originMainSha`');
+  expect(markdown).toContain('`pinnedLocalDevSha`');
   expect(markdown).not.toContain('rules.md');
   expect(markdown).not.toContain('#overview');
 });

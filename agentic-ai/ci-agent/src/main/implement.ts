@@ -11,7 +11,11 @@ import {
 } from "./github.js";
 import { AuthoredChangeBudget, CiRepository } from "./git.js";
 import { Logger } from "./logger.js";
-import { AgentPrompt, AgentPromptEnvironment } from "./prompt.js";
+import {
+  AgentPrompt,
+  AgentPromptEnvironment,
+  type AgentBootstrapEvidence,
+} from "./prompt.js";
 import { AgentIsolation, ConfiguredAgentRuntime } from "./run-agent.js";
 export class CiImplementationCommand {
   constructor(private readonly environment: NodeJS.ProcessEnv) {}
@@ -19,9 +23,11 @@ export class CiImplementationCommand {
     const configuredBranch =
       this.environment.AGENT_BRANCH?.trim() ||
       this.environment.FIX_BRANCH?.trim();
-    const feature = this.environment.TASK_FEATURE?.trim() || "";
     return new AgentImplementationResolveDeliveryTarget({
-      branch: configuredBranch || (feature ? `codex/${feature}` : ""),
+      branch: configuredBranch || "",
+      originMainSha: this.environment.ORIGIN_MAIN_SHA?.trim() || "",
+      pinnedLocalDevSha:
+        this.environment.PINNED_LOCAL_DEV_SHA?.trim() || "",
     }).execute();
   }
   async runCiEdit(): Promise<Result<CiEditOutcome, CiFailure>> {
@@ -41,6 +47,11 @@ export class CiImplementationCommand {
     if (entered.isErr()) return err(entered.error);
     const configured = await new CiRepository(repoRoot).configureGitForCi();
     if (configured.isErr()) return err(configured.error);
+    const bootstrapped = await new AgentImplementationVerifyBootstrap({
+      repoRoot,
+      evidence: target.value,
+    }).execute();
+    if (bootstrapped.isErr()) return err(bootstrapped.error);
     const loaded = new CiAgentEnvironment(process.env).loadConfig();
     if (loaded.kind === CiAgentConfigLoadKind.MissingApiKey) {
       console.log(
@@ -98,6 +109,11 @@ export class CiImplementationCommand {
       octokit,
     });
     if (configured.isErr()) return err(configured.error);
+    const bootstrapped = await new AgentImplementationVerifyBootstrap({
+      repoRoot,
+      evidence: target.value,
+    }).execute();
+    if (bootstrapped.isErr()) return err(bootstrapped.error);
     const changed = await new CiRepository(repoRoot).hasWorkingTreeChanges();
     if (changed.isErr()) return err(changed.error);
     if (!changed.value)
@@ -117,14 +133,14 @@ export class CiImplementationCommand {
       assertBudget: () =>
         new AuthoredChangeBudget({
           repoRoot,
-          baseRef: selected.budgetBaseRef,
+          baseRef: selected.pinnedLocalDevSha,
           maximumLines: 2_000,
         }).enforce(),
-        pushBranch: () =>
-          new CiRepository(repoRoot).pushFixBranch({
-            fixBranch: selected.branch,
-            runId,
-          }),
+      pushBranch: () =>
+        new CiRepository(repoRoot).pushFixBranch({
+          fixBranch: selected.branch,
+          runId,
+        }),
       readPublishedHead: () =>
         new GitHubClient(octokit).readBranchHeadOnOrigin({
           subject1: repoRef,
@@ -185,6 +201,77 @@ export class AgentImplementationRecordTrustedBudgetBlocker {
         message: "Unable to record trusted budget blocker",
       });
     }
+  }
+}
+
+interface VerifyBootstrapRequest {
+  readonly repoRoot: string;
+  readonly evidence: AgentImplementationBootstrapEvidence;
+}
+
+export class AgentImplementationVerifyBootstrap {
+  constructor(private readonly request: VerifyBootstrapRequest) {}
+
+  async execute(): Promise<Result<void, CiFailure>> {
+    const { repoRoot } = this.request;
+    const validated = new AgentImplementationValidateBootstrapEvidence(
+      this.request.evidence,
+    ).execute();
+    if (validated.isErr()) return err(validated.error);
+    const evidence = validated.value;
+    const repository = new CiRepository(repoRoot);
+    const head = await repository.revParse({ ref: "HEAD" });
+    if (head.isErr()) return err(head.error);
+    const featureBase = await repository.trustedGit({
+      args: [
+        "merge-base",
+        "--is-ancestor",
+        evidence.pinnedLocalDevSha,
+        head.value,
+      ],
+    });
+    if (featureBase.isErr()) {
+      if (featureBase.error.code === 1) {
+        return err({
+          kind: CiFailureKind.Baseline,
+          message:
+            "Implementation worktree is not based on the Prime-pinned local-dev SHA",
+        });
+      }
+      return err(featureBase.error);
+    }
+
+    const originMain = await repository.revParse({
+      ref: "refs/remotes/origin/main",
+    });
+    if (originMain.isErr()) return err(originMain.error);
+    if (originMain.value !== evidence.originMainSha) {
+      return err({
+        kind: CiFailureKind.Baseline,
+        message:
+          "Fetched origin/main changed after bootstrap; recorded originMainSha is stale",
+      });
+    }
+
+    const ancestry = await repository.trustedGit({
+      args: [
+        "merge-base",
+        "--is-ancestor",
+        evidence.originMainSha,
+        evidence.pinnedLocalDevSha,
+      ],
+    });
+    if (ancestry.isErr()) {
+      if (ancestry.error.code === 1) {
+        return err({
+          kind: CiFailureKind.Baseline,
+          message:
+            "Recorded pinnedLocalDevSha is not based on the fetched originMainSha",
+        });
+      }
+      return err(ancestry.error);
+    }
+    return ok();
   }
 }
 
@@ -322,10 +409,37 @@ export class AgentImplementationResolveDeliveryTarget {
         message: "Implement delivery branch metadata is malformed",
       });
     }
+    const evidence = new AgentImplementationValidateBootstrapEvidence({
+      originMainSha: input.originMainSha,
+      pinnedLocalDevSha: input.pinnedLocalDevSha,
+    }).execute();
+    if (evidence.isErr()) return err(evidence.error);
     return ok({
       branch: input.branch,
-      budgetBaseRef: "origin/main",
+      originMainSha: evidence.value.originMainSha,
+      pinnedLocalDevSha: evidence.value.pinnedLocalDevSha,
     });
+  }
+}
+
+export type AgentImplementationBootstrapEvidence = AgentBootstrapEvidence;
+
+export class AgentImplementationValidateBootstrapEvidence {
+  constructor(private readonly request: AgentImplementationBootstrapEvidence) {}
+
+  execute(): Result<AgentImplementationBootstrapEvidence, CiFailure> {
+    const { originMainSha, pinnedLocalDevSha } = this.request;
+    if (
+      !FULL_COMMIT_SHA.test(originMainSha) ||
+      !FULL_COMMIT_SHA.test(pinnedLocalDevSha)
+    ) {
+      return err({
+        kind: CiFailureKind.Configuration,
+        message:
+          "Recorded bootstrap evidence requires originMainSha and pinnedLocalDevSha",
+      });
+    }
+    return ok({ originMainSha, pinnedLocalDevSha });
   }
 }
 
@@ -374,11 +488,14 @@ type PublishBranchArgs = {
 
 export interface ImplementDeliveryTarget {
   readonly branch: string;
-  readonly budgetBaseRef: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
 }
 
 type ImplementDeliveryTargetInput = {
   branch: string;
+  originMainSha: string;
+  pinnedLocalDevSha: string;
 };
 
 export enum CiEditOutcome {
@@ -403,3 +520,5 @@ interface PublishBranchCiImplementation {
 type CiImplementationPhases =
   | EditOnlyCiImplementation
   | PublishBranchCiImplementation;
+
+const FULL_COMMIT_SHA = /^[0-9a-f]{40}$/u;
