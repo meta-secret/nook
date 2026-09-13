@@ -18,7 +18,7 @@ Harness profile directories must not mirror or redefine these cards.
 - **[Dev promotion](../../dev-manager/dynamic-skills/dev-promote.md)**
   - Purpose: Fast-forward main to the tested dev SHA with verified remote state.
 - **[team-oriented-development.md](../../../gizmo/dynamic-skills/team-oriented-development.md)**
-  - Purpose: Route capabilities through all five implementation teams with optional bounded expertise providers and Gizmo-owned cross-team joins
+  - Purpose: Route capabilities across the root/controller graphs plus six engineering/operational owner graphs, including Delivery Pipeline and its nested internal graphs, with optional bounded expertise providers and Gizmo-owned cross-team joins
 - **[typescript-rust-automation-only.md](../../../shared/dynamic-skills/typescript-rust-automation-only.md)**
   - Purpose: **P1 hard rule:** prohibit repository-authored Python and use Bun/TypeScript, Rust, and Taskfiles for automation
 - **[source-file-size.md](../../../shared/dynamic-skills/source-file-size.md)**

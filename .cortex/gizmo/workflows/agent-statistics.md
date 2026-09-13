@@ -45,18 +45,23 @@ It is not a free-form task diary.
    mechanically publish the exact approved YAML to Workbench `main` with Loom.
 7. Feature Gizmo records an actionable build-performance improvement and routes
    implementation to the responsible team through the normal delivery path;
-   no Gizmo, Team Gizmo, or PR Steward creates or updates a PR.
+   Feature Gizmo, Delivery Pipeline Team Gizmo, and internal PR Steward do not
+   create or update pull requests. The manager-only `dev:pr-manager` path
+   remains the sole PR creation/update path for the manager-stage dev cycle.
 
 ## Mechanical entrypoint — Loom
 
 - Keep judgment in this document.
 - Feature Gizmo authors the Loom YAML requests, exact Workbench record content,
   and lifecycle decisions and owns their interpretation.
-- Gizmo Prime routes each authorized packet through Delivery Pipeline Team
-  Gizmo. Team Gizmo dispatches internal PR Steward through the active harness to
-  mechanically run GitHub-backed assemble and publish requests.
+- Gizmo Prime routes each feature-authorized packet through Delivery Pipeline
+  Team Gizmo. For manager-stage publication, validation, and promotion, the
+  dev manager authorizes the Delivery Pipeline packet. Team Gizmo dispatches
+  internal PR Steward through the active harness to mechanically run the
+  packetized GitHub-backed operations.
 - Team Gizmo and internal PR Steward must not create or update PRs, author
-  Workbench content, or decide policy or Workbench state.
+  Workbench content, or decide policy, readiness, promotion, or Workbench
+  state.
 - Local validation without GitHub access remains with the responsible owner.
 - Scratch JSON must include:
   - `started_at`;
@@ -221,8 +226,9 @@ concrete change.
 
 Feature Gizmo records the actionable improvement and routes implementation to
 the responsible team. The resulting feature branch follows the normal remote
-compilation and manager-controlled dev delivery path; Gizmo does not open or
-update a pull request.
+compilation and manager-controlled dev delivery path. Feature Gizmo and Gizmo
+Prime do not open or update pull requests; the manager-only `dev:pr-manager`
+path owns that operation.
 
 ## Workbench publication contract
 

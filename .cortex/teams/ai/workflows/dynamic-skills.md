@@ -49,6 +49,26 @@ Use <skill-name> and refactor <scope>
 Read the named skill card, read any linked skill, inspect the target
 scope, and apply the pattern with normal coding workflow and validation.
 
+## Delivery and Workbench routing
+
+AI owns dynamic-skill semantics and Loom tooling. The owning Feature Gizmo
+authors any Workbench record or request content and decides its Workbench
+state. For feature build or check mechanics, the owning Feature Gizmo submits
+the exact head to Gizmo Prime. Gizmo Prime authorizes Delivery Pipeline Team
+Gizmo, which dispatches internal PR Steward through the active harness and
+returns the evidence. The dev manager authorizes manager-stage publication,
+slow checks, and promotion through the same Delivery Pipeline Team Gizmo to
+internal PR Steward route.
+
+For Workbench publication, Feature Gizmo approves the exact record and state.
+Gizmo Prime routes the approved packet through Delivery Pipeline Team Gizmo,
+which dispatches internal PR Steward through the active harness to publish
+only that controller-authored content.
+
+Team Gizmo and internal PR Steward perform only packetized mechanics. They do
+not create or update pull requests, author Workbench content, or decide policy,
+readiness, promotion, or Workbench state.
+
 ## Intake Workflow
 
 1. Read [`.cortex/AGENTS.md`](../../../../AGENTS.md) first.
@@ -131,11 +151,11 @@ When applying a skill to code:
 5. Add or update tests when the refactor changes behavior or protects a durable
    invariant.
 6. Run the focused worker proof and required formatters. Commit every resulting
-   mutation in the allowed paths and return the exact handoff to Gizmo. If
-   integrated pre-push hygiene mutates AI-owned content, the AI team returns a
-   fresh formatted commit. Gizmo continues from it, reruns hygiene, and pushes.
-   Gizmo authorizes Delivery Pipeline Team Gizmo for the packet. Delivery
-   Pipeline Team Gizmo uses the active harness to dispatch it to the internal
-   PR Steward, which dispatches hosted validation.
-   Use focused remote evidence until the head is ready.
-   Dispatch complete exact-head validation immediately when it is ready.
+   mutation in the allowed paths and return the exact handoff to the owning
+   Feature Gizmo. If integrated pre-push hygiene mutates AI-owned content, the
+   AI team returns a fresh formatted commit. The Feature Gizmo continues from
+   it, reruns hygiene, and pushes. For applicable feature build or check
+   mechanics, Gizmo Prime authorizes the Delivery Pipeline Team Gizmo packet;
+   Team Gizmo dispatches internal PR Steward through the active harness. Use
+   focused remote evidence until the head is ready. Dispatch complete
+   exact-head validation immediately when it is ready through that same route.
