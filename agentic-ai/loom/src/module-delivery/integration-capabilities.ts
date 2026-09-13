@@ -1,58 +1,42 @@
 import type {
   AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
   IntegratedWriterFrontierProvenance,
-  ModuleDeliveryIntegratedWriterFrontierCapability,
 } from './integration-contracts.ts';
 import type {
   AssertModuleDeliveryCanonicalEvidenceTransitionRequest,
-  CanonicalEvidenceTransitionProvenance,
-  ModuleDeliveryCanonicalEvidenceTransition,
 } from './integration-provenance.ts';
-import {
-  isModuleIntegrationCapabilityMintAuthority,
-} from './integration-capability-authority.ts';
-import type { ModuleIntegrationCapabilityMintAuthority } from './integration-capability-authority.ts';
 
-/** Owns the provenance-backed capabilities emitted by module integration. */
+/**
+ * Owns verification for the provenance-backed capabilities emitted by module
+ * integration. Minting stays in the coordinator's lexical closure: this
+ * module intentionally has no factory or registration operation.
+ */
 export class ModuleIntegrationCapabilityRegistry {
   private constructor() {}
-
-  private static readonly WRITER_FRONTIER_PROVENANCE = new WeakMap<
-    ModuleDeliveryIntegratedWriterFrontierCapability,
-    IntegratedWriterFrontierProvenance
-  >();
-
-  private static readonly CANONICAL_EVIDENCE_TRANSITIONS = new WeakMap<
-    ModuleDeliveryCanonicalEvidenceTransition,
-    CanonicalEvidenceTransitionProvenance
-  >();
-
-  static registerIntegratedWriterFrontier(
-    request: RegisterIntegratedWriterFrontierRequest,
-  ): void {
-    ModuleIntegrationCapabilityRegistry.assertMintAuthority(request.authority);
-    ModuleIntegrationCapabilityRegistry.WRITER_FRONTIER_PROVENANCE.set(
-      request.capability,
-      Object.freeze(request.provenance),
-    );
-  }
 
   static assertModuleDeliveryIntegratedWriterFrontierCapability(
     request: AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
   ): void {
-    const provenance =
-      ModuleIntegrationCapabilityRegistry.WRITER_FRONTIER_PROVENANCE.get(
-        request.capability,
-      );
+    const provenance: IntegratedWriterFrontierProvenance = {
+      authority: request.authority,
+      taskId: request.taskId,
+      attempt: request.attempt,
+      generation: request.generation,
+      planDigest: request.planDigest,
+      headCommit: request.headCommit,
+      integratedTaskIds: request.integratedTaskIds,
+    };
     if (
-      !provenance ||
-      provenance.authority !== request.authority ||
-      provenance.taskId !== request.taskId ||
-      provenance.attempt !== request.attempt ||
-      provenance.generation !== request.generation ||
-      provenance.planDigest !== request.planDigest ||
-      provenance.headCommit !== request.headCommit ||
-      JSON.stringify(provenance.integratedTaskIds) !==
+      !ModuleIntegrationCapabilityRegistry.#hasAuthorityProof(
+        request.capability,
+        request.authority,
+      ) ||
+      request.capability.taskId !== provenance.taskId ||
+      request.capability.attempt !== provenance.attempt ||
+      request.capability.generation !== provenance.generation ||
+      request.capability.planDigest !== provenance.planDigest ||
+      request.capability.headCommit !== provenance.headCommit ||
+      JSON.stringify(request.capability.integratedTaskIds) !==
         JSON.stringify(request.integratedTaskIds)
     )
       throw new Error('Integrated writer frontier capability is invalid.');
@@ -61,47 +45,35 @@ export class ModuleIntegrationCapabilityRegistry {
   static assertModuleDeliveryCanonicalEvidenceTransition(
     request: AssertModuleDeliveryCanonicalEvidenceTransitionRequest,
   ): void {
-    const provenance =
-      ModuleIntegrationCapabilityRegistry.CANONICAL_EVIDENCE_TRANSITIONS.get(
-        request.transition,
-      );
     if (
-      !provenance ||
-      provenance.authority !== request.authority ||
-      provenance.previousHeadCommit !== request.previousHeadCommit ||
-      provenance.canonicalHeadCommit !== request.canonicalHeadCommit ||
-      JSON.stringify(provenance.integratedTaskIds) !==
+      !ModuleIntegrationCapabilityRegistry.#hasAuthorityProof(
+        request.transition,
+        request.authority,
+      ) ||
+      request.transition.previousHeadCommit !== request.previousHeadCommit ||
+      request.transition.canonicalHeadCommit !== request.canonicalHeadCommit ||
+      JSON.stringify(request.transition.integratedTaskIds) !==
         JSON.stringify(request.integratedTaskIds)
     )
       throw new Error('Canonical evidence transition is invalid.');
   }
 
-  static registerCanonicalEvidenceTransition(
-    request: RegisterCanonicalEvidenceTransitionRequest,
-  ): void {
-    ModuleIntegrationCapabilityRegistry.assertMintAuthority(request.authority);
-    ModuleIntegrationCapabilityRegistry.CANONICAL_EVIDENCE_TRANSITIONS.set(
-      request.transition,
-      Object.freeze(request.provenance),
+  static #hasAuthorityProof(value: object, authority: object): boolean {
+    const authoritySymbols = Object.getOwnPropertySymbols(authority);
+    if (
+      !authoritySymbols.some(
+        (symbol) => (authority as Record<symbol, unknown>)[symbol] === true,
+      )
+    )
+      return false;
+    const proof = authoritySymbols
+      .map((symbol) => (authority as Record<symbol, unknown>)[symbol])
+      .find((candidate): candidate is object =>
+        typeof candidate === 'object' && candidate !== null,
+      );
+    if (!proof) return false;
+    return Object.getOwnPropertySymbols(value).some(
+      (symbol) => (value as Record<symbol, unknown>)[symbol] === proof,
     );
   }
-
-  private static assertMintAuthority(
-    authority: ModuleIntegrationCapabilityMintAuthority,
-  ): void {
-    if (!isModuleIntegrationCapabilityMintAuthority(authority))
-      throw new Error('Module integration capability mint authority is invalid.');
-  }
 }
-
-type RegisterIntegratedWriterFrontierRequest = Readonly<{
-  authority: ModuleIntegrationCapabilityMintAuthority;
-  capability: ModuleDeliveryIntegratedWriterFrontierCapability;
-  provenance: IntegratedWriterFrontierProvenance;
-}>;
-
-type RegisterCanonicalEvidenceTransitionRequest = Readonly<{
-  authority: ModuleIntegrationCapabilityMintAuthority;
-  transition: ModuleDeliveryCanonicalEvidenceTransition;
-  provenance: CanonicalEvidenceTransitionProvenance;
-}>;

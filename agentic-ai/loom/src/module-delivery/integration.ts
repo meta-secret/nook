@@ -29,11 +29,6 @@ import {
 import { ModuleWaveTree } from './tree-integration.ts';
 import { ModuleWriterFrontierRegistry } from './integration-writer-frontiers.ts';
 import { ModuleIntegrationCapabilityRegistry } from './integration-capabilities.ts';
-import {
-  createModuleIntegrationCapabilityMintAuthority,
-  isModuleIntegrationCapabilityMintAuthority,
-} from './integration-capability-authority.ts';
-import type { ModuleIntegrationCapabilityMintAuthority } from './integration-capability-authority.ts';
 import { CanonicalWriterClosure } from './integration-finalization.ts';
 import type { CanonicalModuleFinalizationInspection } from './integration-finalization.ts';
 import { ModuleGenerationAuthority } from './admission.ts';
@@ -98,6 +93,9 @@ const PROHIBITED_MATERIALIZATION_FILES = new Set([
   '.gitmodules',
   '.lfsconfig',
 ]);
+const CAPABILITY_AUTHORITY_PROOF = Symbol(
+  'module-integration-capability-authority-proof',
+);
 
 enum IntegrationHeadCommitKind {
   Pending = 'pending',
@@ -113,17 +111,21 @@ type IntegrationHeadCommit =
 
 /** Owns module integration lifecycle coordination and its public capability boundary. */
 export class ModuleIntegrationCoordinator {
-  static #capabilityMintAuthority: ModuleIntegrationCapabilityMintAuthority =
-    createModuleIntegrationCapabilityMintAuthority();
-
   private constructor() {
     throw new Error('ModuleIntegrationCoordinator is not constructible.');
   }
 
-  static isModuleIntegrationCapabilityMintAuthority(
-    authority: object,
-  ): boolean {
-    return isModuleIntegrationCapabilityMintAuthority(authority);
+  static #capabilityAuthorityProof(authority: object): object {
+    const proof = Object.getOwnPropertySymbols(authority)
+      .map((symbol) => (authority as Record<symbol, unknown>)[symbol])
+      .find(
+        (value): value is object => typeof value === 'object' && value !== null,
+      );
+    if (!proof)
+      throw new Error(
+        'Module delivery capability authority proof is unavailable.',
+      );
+    return proof;
   }
 
   static #mintIntegratedWriterFrontier(
@@ -137,12 +139,9 @@ export class ModuleIntegrationCoordinator {
       planDigest: request.planDigest,
       headCommit: request.headCommit,
       integratedTaskIds,
-    });
-    const provenance = Object.assign({}, request, { integratedTaskIds });
-    ModuleIntegrationCapabilityRegistry.registerIntegratedWriterFrontier({
-      authority: ModuleIntegrationCoordinator.#capabilityMintAuthority,
-      capability,
-      provenance,
+      [CAPABILITY_AUTHORITY_PROOF]: ModuleIntegrationCoordinator.#capabilityAuthorityProof(
+        request.authority,
+      ),
     });
     return capability;
   }
@@ -171,12 +170,9 @@ export class ModuleIntegrationCoordinator {
       previousHeadCommit: request.previousHeadCommit,
       canonicalHeadCommit: request.canonicalHeadCommit,
       integratedTaskIds,
-    });
-    const provenance = Object.assign({}, request, { integratedTaskIds });
-    ModuleIntegrationCapabilityRegistry.registerCanonicalEvidenceTransition({
-      authority: ModuleIntegrationCoordinator.#capabilityMintAuthority,
-      transition,
-      provenance,
+      [CAPABILITY_AUTHORITY_PROOF]: ModuleIntegrationCoordinator.#capabilityAuthorityProof(
+        request.authority,
+      ),
     });
     return transition;
   }
