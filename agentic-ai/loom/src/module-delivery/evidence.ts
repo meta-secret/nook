@@ -136,7 +136,6 @@ type EvidenceSourceProvenanceContent = Readonly<{
   sourceCommit: string;
   originMainSha: string;
   pinnedLocalDevSha: string;
-  featureHeadSha: string;
   generation: number;
   planDigest: string;
   taskId: string;
@@ -323,7 +322,6 @@ export class ModuleEvidenceBoundary {
       submission.sourceCommit !== lease.startingFrontier ||
       submission.originMainSha !== lease.originMainSha ||
       submission.pinnedLocalDevSha !== lease.pinnedLocalDevSha ||
-      submission.featureHeadSha !== lease.featureHeadSha ||
       submission.producerTeam !== lease.team ||
       submission.functionalOwner !== lease.functionalOwner ||
       submission.acceptanceOwner !== lease.acceptanceOwner ||
@@ -440,7 +438,6 @@ export class ModuleEvidenceBoundary {
         sourceCommit: receipt.sourceCommit,
         originMainSha: receipt.originMainSha,
         pinnedLocalDevSha: receipt.pinnedLocalDevSha,
-        featureHeadSha: receipt.featureHeadSha,
         verifiedHeadCommit: receipt.verifiedHeadCommit,
         artifactIdentity: receipt.artifactIdentity,
         artifactDigest: receipt.artifactDigest,
@@ -466,7 +463,6 @@ export class ModuleEvidenceBoundary {
       receipt.sourceCommit !== request.lease.startingFrontier ||
       receipt.originMainSha !== request.lease.originMainSha ||
       receipt.pinnedLocalDevSha !== request.lease.pinnedLocalDevSha ||
-      receipt.featureHeadSha !== request.lease.featureHeadSha ||
       receipt.verifiedHeadCommit !== request.state.headCommit ||
       !ModuleEvidenceBoundary.validIdentity(receipt.artifactIdentity) ||
       !ModuleEvidenceBoundary.DIGEST.test(receipt.artifactDigest) ||
@@ -514,7 +510,6 @@ export class ModuleEvidenceBoundary {
       sourceCommit: submission.sourceCommit,
       originMainSha: submission.originMainSha,
       pinnedLocalDevSha: submission.pinnedLocalDevSha,
-      featureHeadSha: submission.featureHeadSha,
       generation: submission.generation,
       planDigest: submission.planDigest,
       taskId: submission.taskId,

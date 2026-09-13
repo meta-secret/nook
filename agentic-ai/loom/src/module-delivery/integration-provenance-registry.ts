@@ -132,7 +132,6 @@ export type AcceptedModuleDeliveryWrite = Readonly<{
   startingFrontier: string;
   originMainSha: string;
   pinnedLocalDevSha: string;
-  featureHeadSha: string;
   integrationCommit: string;
   acceptedByTeam: ModuleDeliveryOwnerIdentity;
   handoff: ModuleDeliveryHandoffSubmission;
