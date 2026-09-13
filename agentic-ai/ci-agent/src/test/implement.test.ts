@@ -115,6 +115,7 @@ class ImplementDeliveryArgs {
   constructor(private readonly request: string[]) {}
   execute(): ConstructorParameters<typeof AgentImplementationPublishBranch>[0] {
     const log = this.request;
+    let remoteReads = 0;
     return {
       agentBranch: "codex/agent-branching",
       featureHeadSha: FEATURE_HEAD_SHA,
@@ -122,15 +123,16 @@ class ImplementDeliveryArgs {
         log.push("budget");
         return ok();
       },
-      pushBranch: async (expectedRemoteHeadSha) => {
-        log.push(`push:${expectedRemoteHeadSha}`);
+      pushBranch: async () => {
+        log.push("push");
         return ok(PUBLISHED_FEATURE_SHA);
       },
       readPublishedHead: () =>
         new ImplementStep({
           log,
           name: "read-origin-head",
-          value: PUBLISHED_FEATURE_SHA,
+          value:
+            remoteReads++ === 0 ? FEATURE_HEAD_SHA : PUBLISHED_FEATURE_SHA,
         }).execute(),
     };
   }
@@ -191,14 +193,28 @@ void test("feature delivery publishes and verifies one exact branch head without
   });
   assert.deepEqual(events, [
     "budget",
-    `push:${FEATURE_HEAD_SHA}`,
+    "read-origin-head",
+    "push",
     "read-origin-head",
   ]);
 });
 
-void test("agent delivery rejects a branch whose remote head changed during publication", async () => {
+void test("agent delivery rejects a branch whose remote lease changed before publication", async () => {
   const args = new ImplementDeliveryArgs([]).execute();
   args.readPublishedHead = async () => ok("f".repeat(40));
+  await CiResultAssertions.assertAsyncFailure(
+    new AgentImplementationPublishBranch(args).execute(),
+    /changed from featureHeadSha .* before publication/u,
+  );
+});
+
+void test("agent delivery rejects a remote head that changes after publication", async () => {
+  const args = new ImplementDeliveryArgs([]).execute();
+  let reads = 0;
+  args.readPublishedHead = async () => {
+    reads += 1;
+    return ok(reads === 1 ? FEATURE_HEAD_SHA : "f".repeat(40));
+  };
   await CiResultAssertions.assertAsyncFailure(
     new AgentImplementationPublishBranch(args).execute(),
     /published at .* expected publishedFeatureSha/u,

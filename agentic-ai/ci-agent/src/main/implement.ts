@@ -136,11 +136,10 @@ export class CiImplementationCommand {
           baseRef: selected.budgetBaseRef,
           maximumLines: 2_000,
         }).enforce(),
-      pushBranch: (expectedRemoteHeadSha) =>
+      pushBranch: () =>
         repositoryInstance.pushFixBranch({
           fixBranch: selected.branch,
           runId,
-          expectedRemoteHeadSha,
         }),
       readPublishedHead: () =>
         new GitHubClient(octokit).readBranchHeadOnOrigin({
@@ -353,7 +352,22 @@ export class AgentImplementationPublishBranch {
     }
     const budget = await args.assertBudget();
     if (budget.isErr()) return err(budget.error);
-    const committed = await args.pushBranch(args.featureHeadSha);
+    const remoteBefore = await args.readPublishedHead();
+    if (remoteBefore.isErr()) return err(remoteBefore.error);
+    if (!FULL_COMMIT_SHA.test(remoteBefore.value)) {
+      return err({
+        kind: CiFailureKind.Github,
+        message:
+          "Canonical remote feature ref returned a non-canonical featureHeadSha",
+      });
+    }
+    if (remoteBefore.value !== args.featureHeadSha) {
+      return err({
+        kind: CiFailureKind.Github,
+        message: `Canonical remote feature ref changed from featureHeadSha ${args.featureHeadSha} to ${remoteBefore.value} before publication`,
+      });
+    }
+    const committed = await args.pushBranch();
     if (committed.isErr()) return err(committed.error);
     if (!FULL_COMMIT_SHA.test(committed.value)) {
       return err({
@@ -586,9 +600,7 @@ type PublishBranchArgs = {
   agentBranch: string;
   featureHeadSha: string;
   assertBudget: () => Promise<Result<void, CiFailure>>;
-  pushBranch: (
-    expectedRemoteHeadSha: string,
-  ) => Promise<Result<string, CiFailure>>;
+  pushBranch: () => Promise<Result<string, CiFailure>>;
   readPublishedHead: () => Promise<Result<string, CiFailure>>;
 };
 

@@ -153,12 +153,6 @@ export interface CiRepositoryPushFixBranchRequest {
   readonly fixBranch: string;
   readonly runId: string;
   /**
-   * When present, the remote branch must still point at this commit. The
-   * publication path uses this as its expected remote lease so an unrelated
-   * update cannot be overwritten.
-   */
-  readonly expectedRemoteHeadSha?: string;
-  /**
    * Optional caller-supplied values are checked against the canonical
    * workflow target before they can reach Git. They are not remote aliases.
    */
@@ -273,7 +267,6 @@ export class CiRepository {
   }
   private async pushAuthenticatedBranch(
     target: CiRepositoryPushTarget,
-    expectedRemoteHeadSha?: string,
   ): Promise<void> {
     const repoRoot = this.value;
 
@@ -379,9 +372,6 @@ export class CiRepository {
         "push",
         "--no-verify",
         "-u",
-        ...(expectedRemoteHeadSha === undefined
-          ? []
-          : [`--force-with-lease=${target.remoteRef}:${expectedRemoteHeadSha}`]),
         target.remoteUrl,
         `HEAD:${target.remoteRef}`,
       ],
@@ -393,23 +383,12 @@ export class CiRepository {
   async pushFixBranch({
     fixBranch,
     runId,
-    expectedRemoteHeadSha,
     remoteRef,
     remoteUrl,
   }: CiRepositoryPushFixBranchRequest): Promise<Result<string, CiFailure>> {
     log.info(`Pushing fix branch ${fixBranch}`);
     const target = this.resolvePushTarget({ fixBranch, remoteRef, remoteUrl });
     if (target.isErr()) return err(target.error);
-    if (
-      expectedRemoteHeadSha !== undefined &&
-      !FULL_COMMIT_SHA.test(expectedRemoteHeadSha)
-    ) {
-      return err({
-        kind: CiFailureKind.Configuration,
-        message:
-          "expectedRemoteHeadSha must be an exact lowercase 40-hex commit SHA",
-      });
-    }
     const checkout = await this.trustedGit({
       args: ["checkout", "-B", fixBranch],
     });
@@ -441,7 +420,7 @@ export class CiRepository {
     const committedHead = await this.revParseImmutable({ ref: "HEAD" });
     if (committedHead.isErr()) return err(committedHead.error);
     const pushed = await ResultAsync.fromPromise(
-      this.pushAuthenticatedBranch(target.value, expectedRemoteHeadSha),
+      this.pushAuthenticatedBranch(target.value),
       (cause): CiFailure => {
         const code =
           cause instanceof Error &&

@@ -124,31 +124,6 @@ void describe("implementation working tree", () => {
     }
   });
 
-  void it("rejects a malformed remote lease before invoking Git", async () => {
-    const previousServerUrl = process.env.GITHUB_SERVER_URL;
-    const previousRepository = process.env.GITHUB_REPOSITORY;
-    process.env.GITHUB_SERVER_URL = "https://github.com";
-    process.env.GITHUB_REPOSITORY = "meta-secret/nook";
-    try {
-      await new CiRepository("/not-a-repository")
-        .pushFixBranch({
-          fixBranch: "fix/dependency-update",
-          expectedRemoteHeadSha: "not-a-commit",
-          runId: "42",
-        })
-        .then((result) =>
-          CiResultAssertions.assertFailure(result, /expectedRemoteHeadSha/u),
-        );
-    } finally {
-      if (typeof previousServerUrl === "string")
-        process.env.GITHUB_SERVER_URL = previousServerUrl;
-      else delete process.env.GITHUB_SERVER_URL;
-      if (typeof previousRepository === "string")
-        process.env.GITHUB_REPOSITORY = previousRepository;
-      else delete process.env.GITHUB_REPOSITORY;
-    }
-  });
-
   void it("marks the worktree safe before inspecting its state", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "nook-ci-agent-safe-"));
     const repoRoot = join(tempRoot, "repo");
@@ -214,9 +189,6 @@ void describe("implementation working tree", () => {
       await git("commit", "-m", "base");
       await git("remote", "add", "origin", remoteRoot);
       await git("push", "origin", "HEAD");
-      const oldRemoteHead = (
-        await git("rev-parse", "HEAD")
-      ).stdout.trim();
 
       await mkdir(hooksRoot);
       const hook = join(hooksRoot, "capture-token");
@@ -290,7 +262,6 @@ process.exit(result.status ?? 1);
         .pushFixBranch({
           fixBranch: "fix/dependency-update",
           runId: "42",
-          expectedRemoteHeadSha: oldRemoteHead,
         })
         .then(CiResultAssertions.assertSuccess);
 
@@ -319,11 +290,8 @@ process.exit(result.status ?? 1);
           "--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER",
         ),
       );
-      assert.ok(!publication.args.includes("--force"));
       assert.ok(
-        publication.args.includes(
-          `--force-with-lease=refs/heads/fix/dependency-update:${oldRemoteHead}`,
-        ),
+        publication.args.every((argument) => !argument.startsWith("--force")),
       );
       assert.ok(
         publication.args.every(
