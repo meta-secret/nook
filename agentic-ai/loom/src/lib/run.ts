@@ -15,7 +15,12 @@ export class RepositoryCommand {
 
   execute(): Result<CommandOutput, RepositoryCommandFailure> {
     const request = this.request;
-    const { command, rootDirectory, workingDirectory, outputPolicy } = request;
+    const {
+      command,
+      rootDirectory,
+      workingDirectory,
+      outputPolicy,
+    } = request;
     const resolvedRoot = path.resolve(rootDirectory);
     const resolvedWorkingDirectory = path.resolve(workingDirectory);
     const relativeWorkingDirectory = path.relative(
@@ -40,6 +45,12 @@ export class RepositoryCommand {
           ? githubApiOutputBytes
           : defaultOutputBytes,
     };
+    if (
+      request.command === RepositoryCommandExecutable.Git &&
+      request.gitSecurity === RepositoryGitSecurityPolicy.ImmutableObjects
+    ) {
+      options.env = isolatedGitEnvironment();
+    }
     let result;
     try {
       switch (command) {
@@ -192,8 +203,15 @@ type RepositoryHostCommandRequest = RepositoryCommandLocation & {
     | RepositoryCommandExecutable.Bun
     | RepositoryCommandExecutable.Bunx
     | RepositoryCommandExecutable.Node
+    | RepositoryCommandExecutable.Git
   >;
   readonly args: readonly string[];
+};
+
+type RepositoryGitCommandRequest = RepositoryCommandLocation & {
+  readonly command: RepositoryCommandExecutable.Git;
+  readonly args: readonly string[];
+  readonly gitSecurity?: RepositoryGitSecurityPolicy;
 };
 
 export type RepositoryCommandRequest =
@@ -201,7 +219,8 @@ export type RepositoryCommandRequest =
   | RepositoryBunCommandRequest
   | RepositoryBunxCommandRequest
   | RepositoryNodeCommandRequest
-  | RepositoryHostCommandRequest;
+  | RepositoryHostCommandRequest
+  | RepositoryGitCommandRequest;
 
 export enum RepositoryBashScript {
   UiDemoContract = 'uiDemoContract',
@@ -233,9 +252,42 @@ export enum RepositoryCommandExecutable {
   Vale = 'vale',
 }
 
+/** Restricts Git's object identity checks to the repository's actual objects. */
+export enum RepositoryGitSecurityPolicy {
+  ImmutableObjects = 'immutableObjects',
+}
+
 export type RepositoryCommandFailure = {
   readonly code: LoomFailureCode.CommandFailedToStart;
   readonly message: string;
 };
 
 export type HostCommandFailure = RepositoryCommandFailure;
+
+function isolatedGitEnvironment(): NodeJS.ProcessEnv {
+  const environment = { ...process.env };
+  for (const name of Object.keys(environment)) {
+    if (
+      name === 'GIT_CONFIG' ||
+      name === 'GIT_CONFIG_COUNT' ||
+      name === 'GIT_CONFIG_PARAMETERS' ||
+      /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/u.test(name) ||
+      name === 'GIT_DIR' ||
+      name === 'GIT_WORK_TREE' ||
+      name === 'GIT_COMMON_DIR' ||
+      name === 'GIT_INDEX_FILE' ||
+      name === 'GIT_OBJECT_DIRECTORY' ||
+      name === 'GIT_ALTERNATE_OBJECT_DIRECTORIES' ||
+      name === 'GIT_NAMESPACE'
+    ) {
+      delete environment[name];
+    }
+  }
+  return {
+    ...environment,
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_SYSTEM: '/dev/null',
+    GIT_NO_REPLACE_OBJECTS: '1',
+  };
+}

@@ -2,6 +2,7 @@ import type { GitCommit } from '../agent-workflow/domain.ts';
 import {
   RepositoryCommand,
   RepositoryCommandExecutable,
+  RepositoryGitSecurityPolicy,
 } from './run.ts';
 
 /** The fetched main reference is evidence; the pinned local-dev commit is the feature base. */
@@ -51,6 +52,7 @@ export class PinnedDevBaseEvidenceContract {
         request.sourceCommit,
       );
     }
+    PinnedDevBaseEvidenceContract.assertOriginMainRef(request);
     PinnedDevBaseEvidenceContract.assertAncestor({
       ancestor: request.originMainSha,
       descendant: request.pinnedLocalDevSha,
@@ -79,11 +81,37 @@ export class PinnedDevBaseEvidenceContract {
     const result = new RepositoryCommand({
       command: RepositoryCommandExecutable.Git,
       args: ['merge-base', '--is-ancestor', request.ancestor, request.descendant],
+      gitSecurity: RepositoryGitSecurityPolicy.ImmutableObjects,
       rootDirectory: request.workingDirectory,
       workingDirectory: request.workingDirectory,
     }).execute();
     if (result.isErr() || result.value.exitCode !== 0) {
       throw new Error(request.message);
+    }
+  }
+
+  private static assertOriginMainRef(
+    request: PinnedDevBaseAncestryRequest,
+  ): void {
+    const result = new RepositoryCommand({
+      command: RepositoryCommandExecutable.Git,
+      args: [
+        'rev-parse',
+        '--verify',
+        'refs/remotes/origin/main^{commit}',
+      ],
+      gitSecurity: RepositoryGitSecurityPolicy.ImmutableObjects,
+      rootDirectory: request.workingDirectory,
+      workingDirectory: request.workingDirectory,
+    }).execute();
+    if (
+      result.isErr() ||
+      result.value.exitCode !== 0 ||
+      result.value.stdout.trim() !== request.originMainSha
+    ) {
+      throw new Error(
+        'originMainSha must match the exact fetched refs/remotes/origin/main commit.',
+      );
     }
   }
 }

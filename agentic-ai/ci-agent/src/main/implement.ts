@@ -125,7 +125,7 @@ export class CiImplementationCommand {
     if (repositoryName.isErr()) return err(repositoryName.error);
     const repoRef = repositoryName.value,
       selected = target.value,
-      head = await new CiRepository(repoRoot).revParse({ ref: "HEAD" });
+      head = await new CiRepository(repoRoot).revParseImmutable({ ref: "HEAD" });
     if (head.isErr()) return err(head.error);
     const preserved = await new AgentImplementationPublishBranch({
       agentBranch: selected.branch,
@@ -220,9 +220,9 @@ export class AgentImplementationVerifyBootstrap {
     if (validated.isErr()) return err(validated.error);
     const evidence = validated.value;
     const repository = new CiRepository(repoRoot);
-    const head = await repository.revParse({ ref: "HEAD" });
+    const head = await repository.revParseImmutable({ ref: "HEAD" });
     if (head.isErr()) return err(head.error);
-    const featureBase = await repository.trustedGit({
+    const featureBase = await repository.immutableGit({
       args: [
         "merge-base",
         "--is-ancestor",
@@ -241,7 +241,7 @@ export class AgentImplementationVerifyBootstrap {
       return err(featureBase.error);
     }
 
-    const originMain = await repository.revParse({
+    const originMain = await repository.revParseImmutable({
       ref: "refs/remotes/origin/main",
     });
     if (originMain.isErr()) return err(originMain.error);
@@ -253,7 +253,7 @@ export class AgentImplementationVerifyBootstrap {
       });
     }
 
-    const ancestry = await repository.trustedGit({
+    const ancestry = await repository.immutableGit({
       args: [
         "merge-base",
         "--is-ancestor",

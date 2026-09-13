@@ -1,6 +1,9 @@
 import { err, ok, ResultAsync, type Result } from "neverthrow";
 import { CiFailureKind, type CiFailure } from "./failure.js";
-import { CiProcess } from "./process.js";
+import {
+  CiProcess,
+  CiProcessGitSecurityPolicy,
+} from "./process.js";
 import { access } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
@@ -138,6 +141,10 @@ export interface CiRepositoryTrustedGitRequest {
   readonly args: readonly string[];
 }
 
+export interface CiRepositoryImmutableGitRequest {
+  readonly args: readonly string[];
+}
+
 export interface CiRepositoryConfigureGitForCiRequest {
   readonly octokit?: Octokit;
 }
@@ -158,6 +165,11 @@ export class CiRepository {
   }
   trustedGit({ args }: CiRepositoryTrustedGitRequest) {
     return new CiProcess(this.trustedGitArgs({ args })).execute();
+  }
+  immutableGit({ args }: CiRepositoryImmutableGitRequest) {
+    return new CiProcess(this.trustedGitArgs({ args }), {
+      gitSecurity: CiProcessGitSecurityPolicy.ImmutableObjects,
+    }).execute();
   }
   excludeAgentRuntimeArtifacts() {
     return this.trustedGit({
@@ -191,7 +203,7 @@ export class CiRepository {
       }),
     );
     if (present.isErr()) return err(present.error);
-    return this.trustedGit({ args: ["rev-parse", "--git-dir"] }).map(
+    return this.immutableGit({ args: ["rev-parse", "--git-dir"] }).map(
       () => {},
     );
   }
@@ -323,6 +335,21 @@ export class CiRepository {
   revParse({ ref }: CiRepositoryRevParseRequest) {
     return this.trustedGit({ args: ["rev-parse", ref] }).map(({ stdout }) =>
       stdout.trim(),
+    );
+  }
+  revParseImmutable({ ref }: CiRepositoryRevParseRequest) {
+    return this.immutableGit({
+      args: ["rev-parse", "--verify", `${ref}^{commit}`],
+    }).andThen(
+      ({ stdout }) => {
+        const commit = stdout.trim();
+        return FULL_COMMIT_SHA.test(commit)
+          ? ok(commit)
+          : err({
+              kind: CiFailureKind.Git,
+              message: "git returned a non-canonical commit identity",
+            });
+      },
     );
   }
   async hasStagedChanges(): Promise<Result<boolean, CiFailure>> {
@@ -465,6 +492,7 @@ export class AuthoredChangeBudget {
 
 const log = new Logger("git");
 const PR_ADDITION_WARNING = 1_500;
+const FULL_COMMIT_SHA = /^[0-9a-f]{40}$/u;
 
 const ACTIONS_BOT = {
   email: "41898282+github-actions[bot]@users.noreply.github.com",

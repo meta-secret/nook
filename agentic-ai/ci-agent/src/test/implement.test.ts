@@ -2,7 +2,13 @@ import { CiResultAssertions } from "./result-assertions.js";
 import { err, ok, type Result } from "neverthrow";
 import { CiFailureKind, type CiFailure } from "../main/failure.js";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { describe, it } from "node:test";
@@ -13,6 +19,7 @@ import {
   AgentImplementationRecordTrustedBudgetBlocker,
   AgentImplementationResolveDeliveryTarget,
   AgentImplementationRunCiImplementationPhases,
+  AgentImplementationVerifyBootstrap,
   AgentImplementationValidateBootstrapEvidence,
   CiEditOutcome,
   CiImplementationMode,
@@ -21,6 +28,71 @@ import {
 const EXPECTED_HEAD = "a".repeat(40);
 const ORIGIN_MAIN_SHA = "b".repeat(40);
 const PINNED_LOCAL_DEV_SHA = "c".repeat(40);
+
+class BootstrapReplacementFixture {
+  private constructor(readonly root: string) {}
+
+  static create(): BootstrapReplacementFixture {
+    const root = mkdtempSync(join(tmpdir(), "nook-bootstrap-replacement-"));
+    const fixture = new BootstrapReplacementFixture(root);
+    fixture.git("init");
+    return fixture;
+  }
+
+  git(...args: string[]): string {
+    const environment = { ...process.env };
+    delete environment.GIT_NO_REPLACE_OBJECTS;
+    return execFileSync("git", ["-C", this.root, ...args], {
+      encoding: "utf8",
+      env: environment,
+    }).trim();
+  }
+
+  gitWithInput(input: string, ...args: string[]): string {
+    const environment = { ...process.env };
+    delete environment.GIT_NO_REPLACE_OBJECTS;
+    return execFileSync("git", ["-C", this.root, ...args], {
+      encoding: "utf8",
+      env: environment,
+      input,
+    }).trim();
+  }
+
+  commit(message: string, parent?: string): string {
+    const file = join(this.root, "fixture.txt");
+    writeFileSync(file, `${message}\n`);
+    const blob = this.git("hash-object", "-w", file);
+    const tree = this.gitWithInput(
+      `100644 blob ${blob}\tfixture.txt\n`,
+      "mktree",
+    );
+    const commitArgs = [
+      "-c",
+      "user.name=CI Fixture",
+      "-c",
+      "user.email=ci-fixture@example.test",
+      "commit-tree",
+      tree,
+    ];
+    if (parent) commitArgs.push("-p", parent);
+    commitArgs.push("-m", message);
+    return this.git(...commitArgs);
+  }
+
+  replaceCommit(target: string, parent: string): void {
+    const replacement = this.commit("replacement", parent);
+    this.git("replace", target, replacement);
+  }
+
+  head(commit: string): void {
+    this.git("update-ref", "refs/heads/fixture", commit);
+    this.git("symbolic-ref", "HEAD", "refs/heads/fixture");
+  }
+
+  dispose(): void {
+    rmSync(this.root, { recursive: true, force: true });
+  }
+}
 
 interface ImplementStepRequest<T> {
   readonly log: string[];
@@ -312,4 +384,26 @@ void describe("resolveTargetFromEnvironment", () => {
     }).resolveTargetFromEnvironment();
     CiResultAssertions.assertFailure(target, /branch metadata is malformed/u);
   });
+});
+
+void test("bootstrap verification rejects replacement-ref ancestry bypasses", async () => {
+  const fixture = BootstrapReplacementFixture.create();
+  try {
+    const originMainSha = fixture.commit("origin main");
+    const pinnedLocalDevSha = fixture.commit("pinned local dev");
+    fixture.git("update-ref", "refs/remotes/origin/main", originMainSha);
+    fixture.head(pinnedLocalDevSha);
+    fixture.replaceCommit(pinnedLocalDevSha, originMainSha);
+
+    const result = await new AgentImplementationVerifyBootstrap({
+      repoRoot: fixture.root,
+      evidence: { originMainSha, pinnedLocalDevSha },
+    }).execute();
+    CiResultAssertions.assertFailure(
+      result,
+      /not based on the Prime-pinned local-dev SHA/u,
+    );
+  } finally {
+    fixture.dispose();
+  }
 });
