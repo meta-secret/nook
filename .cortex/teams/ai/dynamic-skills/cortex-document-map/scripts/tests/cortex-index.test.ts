@@ -53,6 +53,10 @@ Model text.
   expect(markdown).toContain(
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
   );
+  expect(markdown).toContain(
+    '[Dev manager Gizmo](teams/dev-manager-gizmo/knowledge-graph.md)',
+  );
+  expect(markdown).not.toContain('teams/dev-manager-gizmo/AGENTS.md');
   expect(markdown).not.toContain(
     'teams/delivery-pipeline/internal/',
   );
@@ -83,6 +87,7 @@ test('renders the complete canonical Cortex context router', () => {
 
   const teamOwnershipContracts = [
     '[Dev manager](teams/dev-manager/knowledge-graph.md): manually operated dev',
+    '[Dev manager Gizmo](teams/dev-manager-gizmo/knowledge-graph.md): on-demand entry',
     'publication, dev PR creation/update, slow evidence, readiness, repair',
     'feature review, feature acceptance, local landing requests, and Workbench.',
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md): operational',

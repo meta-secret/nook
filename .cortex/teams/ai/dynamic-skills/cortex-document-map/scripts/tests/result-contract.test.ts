@@ -78,6 +78,7 @@ test('acceptance verifies dev-manager graph ownership and rejects omitted eviden
     'teams/ai',
     'teams/dev-core',
     'teams/dev-manager',
+    'teams/dev-manager-gizmo',
     'teams/delivery-pipeline',
     'teams/security',
     'teams/sre',
@@ -100,6 +101,10 @@ test('acceptance verifies dev-manager graph ownership and rejects omitted eviden
         relativePath: '.cortex/teams/dev-manager/policy.md',
         content: '# Dev Publication Policy\n',
       },
+      {
+        relativePath: '.cortex/teams/dev-manager-gizmo/policy.md',
+        content: '# Dev Manager Gizmo Policy\n',
+      },
     ],
   };
   const result = {
@@ -111,6 +116,13 @@ test('acceptance verifies dev-manager graph ownership and rejects omitted eviden
         line: 1,
         message:
           'Document is not indexed in its owning knowledge graph .cortex/teams/dev-manager/knowledge-graph.md: .cortex/teams/dev-manager/policy.md',
+      },
+      {
+        code: CortexStructureFindingCode.MissingFromIndex,
+        file: '.cortex/teams/dev-manager-gizmo/knowledge-graph.md',
+        line: 1,
+        message:
+          'Document is not indexed in its owning knowledge graph .cortex/teams/dev-manager-gizmo/knowledge-graph.md: .cortex/teams/dev-manager-gizmo/policy.md',
       },
     ],
   } as const;
@@ -133,6 +145,12 @@ test('acceptance verifies dev-manager graph ownership and rejects omitted eviden
     documents: auditRequest.documents.map((document) =>
       document.relativePath === '.cortex/teams/dev-manager/knowledge-graph.md'
         ? { ...document, content: '# Owner Graph\n\n- [Policy](policy.md)\n' }
+        : document.relativePath ===
+            '.cortex/teams/dev-manager-gizmo/knowledge-graph.md'
+          ? {
+              ...document,
+              content: '# Owner Graph\n\n- [Policy](policy.md)\n',
+            }
         : document,
     ),
   };

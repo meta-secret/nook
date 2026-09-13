@@ -15,7 +15,7 @@ Use this file only to select one owning context. Do not preload linked graphs.
 - [Dev manager](teams/dev-manager/knowledge-graph.md): manually operated dev
   publication, dev PR creation/update, slow evidence, readiness, repair
   delegation, and fast-forward promotion policy.
-- [Dev manager Gizmo](teams/dev-manager-gizmo/AGENTS.md): on-demand entry and
+- [Dev manager Gizmo](teams/dev-manager-gizmo/knowledge-graph.md): on-demand entry and
   orchestration context for manually invoked dev-manager work.
 - [Dev delivery architecture](gizmo/architecture/dev-delivery.md): canonical
   feature compilation, local integration, and dev-to-main contract.

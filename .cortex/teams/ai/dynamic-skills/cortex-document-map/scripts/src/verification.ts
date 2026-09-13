@@ -394,7 +394,7 @@ export class CortexDocumentMapVerifier {
       /^\.cortex\/teams\/delivery-pipeline\/internal\/(?:gizmo|pr-steward)\/knowledge-graph\.md$/u.test(
         value,
       ) ||
-      /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|dev-manager|delivery-pipeline|security|sre|web-dev)|shared)\/knowledge-graph\.md$/u.test(
+      /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|dev-manager|dev-manager-gizmo|delivery-pipeline|security|sre|web-dev)|shared)\/knowledge-graph\.md$/u.test(
         value,
       )
     );
@@ -429,7 +429,7 @@ export class CortexDocumentMapVerifier {
       return '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md';
     }
     const match =
-      /^(\.cortex\/(?:gizmo|shared|teams\/(?:ai|dev-core|dev-manager|delivery-pipeline|security|sre|web-dev)))\//u.exec(
+      /^(\.cortex\/(?:gizmo|shared|teams\/(?:ai|dev-core|dev-manager|dev-manager-gizmo|delivery-pipeline|security|sre|web-dev)))\//u.exec(
         value,
       );
     return match
@@ -439,7 +439,7 @@ export class CortexDocumentMapVerifier {
 
   private owner(value: string): string | false {
     const match =
-      /^\.cortex\/(gizmo|shared|teams\/(?:ai|dev-core|dev-manager|delivery-pipeline|security|sre|web-dev))\//u.exec(
+      /^\.cortex\/(gizmo|shared|teams\/(?:ai|dev-core|dev-manager|dev-manager-gizmo|delivery-pipeline|security|sre|web-dev))\//u.exec(
         value,
       );
     if (!match) return false;
@@ -520,6 +520,7 @@ const OWNER_GRAPHS = [
   '.cortex/teams/ai/knowledge-graph.md',
   '.cortex/teams/dev-core/knowledge-graph.md',
   '.cortex/teams/dev-manager/knowledge-graph.md',
+  '.cortex/teams/dev-manager-gizmo/knowledge-graph.md',
   '.cortex/teams/delivery-pipeline/knowledge-graph.md',
   '.cortex/teams/security/knowledge-graph.md',
   '.cortex/teams/sre/knowledge-graph.md',
