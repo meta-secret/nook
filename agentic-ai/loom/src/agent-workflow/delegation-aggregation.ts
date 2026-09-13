@@ -269,7 +269,8 @@ export class DelegationRunFinalization {
     const featureHeadSha = reader.string('featureHeadSha');
     if (
       !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(runId) ||
-      !/^[0-9a-f]{40}$/.test(sourceCommit)
+      !/^[0-9a-f]{40}$/.test(sourceCommit) ||
+      !/^[0-9a-f]{40}$/.test(featureHeadSha)
     ) {
       throw new Error('Delegation finalization request identity is invalid.');
     }
@@ -374,8 +375,7 @@ export class DelegationRunFinalization {
     if (
       loaded.plan.sourceCommit !== input.request.sourceCommit ||
       loaded.plan.originMainSha !== input.request.originMainSha ||
-      loaded.plan.pinnedLocalDevSha !== input.request.pinnedLocalDevSha ||
-      loaded.plan.featureHeadSha !== input.request.featureHeadSha
+      loaded.plan.pinnedLocalDevSha !== input.request.pinnedLocalDevSha
     ) {
       throw new Error('Delegation finalization source identity is invalid.');
     }
@@ -391,13 +391,13 @@ export class DelegationRunFinalization {
       if (
         reloaded.plan.sourceCommit !== input.request.sourceCommit ||
         reloaded.plan.originMainSha !== input.request.originMainSha ||
-        reloaded.plan.pinnedLocalDevSha !== input.request.pinnedLocalDevSha ||
-        reloaded.plan.featureHeadSha !== input.request.featureHeadSha
+        reloaded.plan.pinnedLocalDevSha !== input.request.pinnedLocalDevSha
       ) {
         throw new Error('Delegation finalization source identity is invalid.');
       }
       const lockedInput: FinalizeWhileLockedInput = {
         loaded: reloaded,
+        featureHeadSha: input.request.featureHeadSha,
         barrierEvidence: input.request.barrierEvidence,
       };
       return await DelegationRunFinalization.finalizeWhileLocked(lockedInput);
@@ -413,9 +413,11 @@ export class DelegationRunFinalization {
       input.loaded.runDirectory,
     );
     DelegationRunFinalization.assertExactAdmissions(input.loaded);
-    const verifiedAttempts = await DelegationRunFinalization.verifyEveryAttempt(
-      input.loaded,
-    );
+    const verifiedAttempts =
+      await DelegationRunFinalization.verifyEveryAttempt({
+        loaded: input.loaded,
+        featureHeadSha: input.featureHeadSha,
+      });
     await DelegationRunFinalization.assertExactAttemptStorage(input.loaded);
     const recursiveInput: RecursiveBarrierInput = {
       plan: input.loaded.plan,
@@ -449,7 +451,7 @@ export class DelegationRunFinalization {
       sourceCommit: input.loaded.plan.sourceCommit,
       originMainSha: input.loaded.plan.originMainSha,
       pinnedLocalDevSha: input.loaded.plan.pinnedLocalDevSha,
-      featureHeadSha: input.loaded.plan.featureHeadSha,
+      featureHeadSha: input.featureHeadSha,
       planSha256: input.loaded.planSha256,
       rootMaterializer: input.loaded.plan.rootMaterializer,
       attempts: input.loaded.plan.attempts.map((declaration) => {
@@ -520,8 +522,9 @@ export class DelegationRunFinalization {
   }
 
   private static async verifyEveryAttempt(
-    loaded: LoadedDelegationRunState,
+    input: FinalizeWhileLockedInput,
   ): Promise<ReadonlyMap<string, VerifiedPlannedAttempt>> {
+    const { loaded } = input;
     const attempts = new Map<string, VerifiedPlannedAttempt>();
     for (const declaration of loaded.plan.attempts) {
       const verification: ReadParentAttemptArgs = {
@@ -531,7 +534,7 @@ export class DelegationRunFinalization {
         sourceCommit: loaded.plan.sourceCommit,
         originMainSha: loaded.plan.originMainSha,
         pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
-        featureHeadSha: loaded.plan.featureHeadSha,
+        featureHeadSha: input.featureHeadSha,
         identity: { ...declaration.identity, depth: declaration.depth },
       };
       const verified =

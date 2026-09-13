@@ -35,6 +35,10 @@ import { DelegationRunFinalization } from './delegation-aggregation.ts';
 import type { FinalizeDelegationRunInput } from './delegation-aggregation.ts';
 import { DelegationPlanTree } from './delegation-plan-tree.ts';
 import {
+  CanonicalFeatureBranchContract,
+  type CanonicalFeatureBranch,
+} from '../lib/base-evidence.ts';
+import {
   UntrustedYamlBoundary,
   type UntrustedYamlMap,
   type UntrustedYamlNode,
@@ -107,6 +111,7 @@ type DelegationRecordRequest = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureBranch: CanonicalFeatureBranch;
   readonly featureHeadSha: string;
   readonly task: string;
   readonly agent: string;
@@ -121,6 +126,7 @@ enum DelegationRecordRequestField {
   SourceCommit = 'sourceCommit',
   OriginMainSha = 'originMainSha',
   PinnedLocalDevSha = 'pinnedLocalDevSha',
+  FeatureBranch = 'featureBranch',
   FeatureHeadSha = 'featureHeadSha',
   Task = 'task',
   Agent = 'agent',
@@ -185,7 +191,7 @@ export class DelegationJournalCli {
       sourceCommit: plan.sourceCommit,
       originMainSha: plan.originMainSha,
       pinnedLocalDevSha: plan.pinnedLocalDevSha,
-      featureHeadSha: plan.featureHeadSha,
+      featureBranch: plan.featureBranch,
       declaration: root,
     };
     const admissionInput: AdmitDelegationAttemptInput = {
@@ -254,7 +260,7 @@ export class DelegationJournalCli {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
-      featureHeadSha: request.featureHeadSha,
+      featureBranch: request.featureBranch,
       identity: {
         task: request.task,
         agent: request.agent,
@@ -325,7 +331,7 @@ export class DelegationJournalCli {
       sourceCommit: input.sourceCommit,
       originMainSha: input.originMainSha,
       pinnedLocalDevSha: input.pinnedLocalDevSha,
-      featureHeadSha: input.featureHeadSha,
+      featureBranch: input.featureBranch,
       identity: input.declaration.identity,
       depth: input.declaration.depth,
       parent: input.declaration.parent,
@@ -409,6 +415,7 @@ export class DelegationJournalCli {
       typeof value.sourceCommit !== 'string' ||
       typeof value.originMainSha !== 'string' ||
       typeof value.pinnedLocalDevSha !== 'string' ||
+      typeof value.featureBranch !== 'string' ||
       typeof value.featureHeadSha !== 'string' ||
       typeof value.task !== 'string' ||
       typeof value.agent !== 'string' ||
@@ -425,6 +432,7 @@ export class DelegationJournalCli {
       sourceCommit: value.sourceCommit,
       originMainSha: value.originMainSha,
       pinnedLocalDevSha: value.pinnedLocalDevSha,
+      featureBranch: CanonicalFeatureBranchContract.parse(value.featureBranch),
       featureHeadSha: value.featureHeadSha,
       task: value.task,
       agent: value.agent,
@@ -549,7 +557,7 @@ type AdmissionRequestForDeclarationInput = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
-  readonly featureHeadSha: string;
+  readonly featureBranch: CanonicalFeatureBranch;
   readonly declaration: DelegationAttemptDeclaration;
 };
 
