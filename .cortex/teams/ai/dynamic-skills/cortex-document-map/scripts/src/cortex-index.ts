@@ -310,12 +310,12 @@ Use this file only to select one owning context. Do not preload linked graphs.
   feature compilation, local integration, and dev-to-main contract.
 - [Gizmo Prime](gizmo/knowledge-graph.md): planning, delegation, integration,
   feature review, feature acceptance, local landing requests, and Workbench.
-- [PR Steward](teams/pr-steward/knowledge-graph.md): authorized review and
+- [PR Steward](teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md): authorized review and
   check observation, exact-head evidence, PR status verification, and promotion
   mechanics under the dev manager's packet. It does not create pull requests.
-  - [PR Steward contract](teams/pr-steward/AGENTS.md)
-  - [Pull-request lifecycle](teams/pr-steward/workflows/pull-request-lifecycle.md)
-  - [Authorization handshake](teams/pr-steward/workflows/authorization-handshake.md)
+  - [PR Steward contract](teams/delivery-pipeline/internal/pr-steward/AGENTS.md)
+  - [Pull-request lifecycle](teams/delivery-pipeline/internal/pr-steward/workflows/pull-request-lifecycle.md)
+  - [Authorization handshake](teams/delivery-pipeline/internal/pr-steward/workflows/authorization-handshake.md)
 - [AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,
   routing, and AI automation.
 - [Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault

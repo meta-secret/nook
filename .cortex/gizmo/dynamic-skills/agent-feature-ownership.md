@@ -89,7 +89,7 @@ Applies to:
 - interactive agents, scheduled agents, and recovery agents;
 - issue, branch, pull-request, review, check, and merge operations. The
   PR Steward exception is governed by
-  [the PR Steward contract](../../teams/pr-steward/AGENTS.md).
+  [the PR Steward contract](../../teams/delivery-pipeline/internal/pr-steward/AGENTS.md).
 
 Does not apply to:
 
