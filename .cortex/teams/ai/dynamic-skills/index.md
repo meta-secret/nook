@@ -130,7 +130,7 @@ Harness profile directories must not mirror or redefine these cards.
 - **[web-unused-code.md](../../web-dev/dynamic-skills/web-unused-code.md)**
   - Purpose: Enable class-member analysis in every web Knip graph and remove every valid unused-code finding
 - **[cortex-document-map](cortex-document-map/SKILL.md)**
-  - Purpose: Centralize Cortex navigation in the root router, one Gizmo graph, five team graphs, and one shared graph
+  - Purpose: Centralize Cortex navigation across root/controller graphs, six engineering/operational owner graphs including Delivery Pipeline, shared knowledge, and nested Delivery Pipeline internals
 - **[testing-pyramid-and-regression.md](../../../shared/dynamic-skills/testing-pyramid-and-regression.md)**
   - Purpose: Enforce ~99% domain coverage in Rust, mandatory regression tests for bug fixes, and 90% Rust line coverage floor
 - **[docker-container-harness.md](../../sre/dynamic-skills/docker-container-harness.md)**

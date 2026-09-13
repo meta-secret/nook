@@ -134,6 +134,8 @@ When applying a skill to code:
    mutation in the allowed paths and return the exact handoff to Gizmo. If
    integrated pre-push hygiene mutates AI-owned content, the AI team returns a
    fresh formatted commit. Gizmo continues from it, reruns hygiene, and pushes.
-   Gizmo authorizes PR Steward to dispatch hosted validation.
+   Gizmo authorizes Delivery Pipeline Team Gizmo for the packet. Delivery
+   Pipeline Team Gizmo uses the active harness to dispatch it to the internal
+   PR Steward, which dispatches hosted validation.
    Use focused remote evidence until the head is ready.
    Dispatch complete exact-head validation immediately when it is ready.
