@@ -58,6 +58,12 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         format!("{sim}/inputs/crate-b.txt"),
         format!("{sim}/inputs/leaf.txt"),
         format!("{sim}/inputs/consumer.txt"),
+        format!("{sim}/research.Dockerfile"),
+        format!("{sim}/inputs/app-package.txt"),
+        format!("{sim}/inputs/app-lock.txt"),
+        format!("{sim}/inputs/research-package.txt"),
+        format!("{sim}/inputs/research-lock.txt"),
+        format!("{sim}/inputs/research-source.txt"),
     ] {
         assert!(
             RepositoryFixture::repository_root().join(&path).is_file(),
@@ -94,7 +100,9 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("target \"hive\"")
             && bake.contains("target \"leaf\"")
             && bake.contains("target \"leaf-short-chain\"")
-            && bake.contains("target \"parent-pr-cold\""),
+            && bake.contains("target \"parent-pr-cold\"")
+            && bake.contains("target \"web-app-deps\"")
+            && bake.contains("target \"web-research-deps\""),
         "sim Bake must expose restore/publish plus broken and fixed nested leaf topologies"
     );
     assert!(
@@ -186,6 +194,17 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("Scenario X: later crate edit keeps earlier crate CACHED")
             && tasks.contains("Scenario Y: concurrent Hive ARC jobs replay isolated Zot graphs",)
             && tasks.contains("Scenario Z: persistent ARC-shaped shard survives daemon restart")
+            && tasks.contains("Scenario AA: split web Bun dependency scopes are stable and source-sensitive")
+            && tasks.contains("web-app-deps web-research-deps")
+            && tasks.contains("bake-sim-web-app-bun-deps-expensive")
+            && tasks.contains("bake-sim-research-bun-deps-expensive")
+            && tasks.contains("bake-sim-research-source-expensive")
+            && tasks.contains("BAKE_SIM_WEB_APP_EXACT_AVAILABLE=1")
+            && tasks.contains("BAKE_SIM_WEB_RESEARCH_EXACT_AVAILABLE=1")
+            && bake.contains("WEB_APP_EXACT_AVAILABLE")
+            && bake.contains("WEB_RESEARCH_EXACT_AVAILABLE")
+            && bake.contains("nook-bake-sim-web-app-deps-v1")
+            && bake.contains("nook-bake-sim-web-research-deps-v1")
             && tasks.contains("buildx inspect \"$builder\" --bootstrap")
             && tasks.contains("bake-sim-crate-a-expensive")
             && tasks.contains("bake-sim-crate-b-expensive")

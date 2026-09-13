@@ -205,7 +205,8 @@ tasks:
             NESTED_LEAF_EXACT_AVAILABLE="${BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE:-}" \
             CONSUMER_EXACT_AVAILABLE="${BAKE_SIM_CONSUMER_EXACT_AVAILABLE:-}" \
             HIVE_EXACT_AVAILABLE="${BAKE_SIM_HIVE_EXACT_AVAILABLE:-}" \
-            RESEARCH_EXACT_AVAILABLE="${BAKE_SIM_RESEARCH_EXACT_AVAILABLE:-}" \
+            WEB_APP_EXACT_AVAILABLE="${BAKE_SIM_WEB_APP_EXACT_AVAILABLE:-}" \
+            WEB_RESEARCH_EXACT_AVAILABLE="${BAKE_SIM_WEB_RESEARCH_EXACT_AVAILABLE:-}" \
             NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
             "$docker_cli" buildx bake \
             --progress=plain \
@@ -999,28 +1000,33 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario Z ok"
 
-        echo "== Scenario AA: research Bun dependencies are stable and source-sensitive =="
-        # The research app owns package.json and bun.lock in its subdirectory;
-        # there is intentionally no top-level web manifest. Main's stable scope
-        # must warm both the Bun dependency layer and source leaf. A PR source
-        # edit must restore only the dependency layer from Main, publish an
-        # isolated exact git scope, and replay both layers on a fresh builder.
+        echo "== Scenario AA: split web Bun dependency scopes are stable and source-sensitive =="
+        # The app and research apps own independent package.json/bun.lock
+        # files in their subdirectories; there is intentionally no top-level
+        # web manifest. Main's stable scopes must warm both child dependency
+        # lineages. A PR source edit must restore both child dependency scopes
+        # from Main, publish isolated exact git scopes, and replay both on a
+        # fresh builder.
         printf '%s\n' "$research_source_input_orig" >"$research_source_input"
         research_pr_suffix="-git-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         BAKE_SIM_CACHE_ENABLED=1
         BAKE_SIM_CACHE_WRITE_ENABLED=1
         BAKE_SIM_CACHE_FALLBACK_ENABLED=
         BAKE_SIM_CACHE_SCOPE_SUFFIX=
-        BAKE_SIM_RESEARCH_EXACT_AVAILABLE=
+        BAKE_SIM_WEB_APP_EXACT_AVAILABLE=
+        BAKE_SIM_WEB_RESEARCH_EXACT_AVAILABLE=
         create_builder "nook-bake-sim-aa-main-${suffix}"
-        bake_plain "$proof_log" research
+        bake_plain "$proof_log" web-app-deps web-research-deps
+        require_uncached_step "$proof_log" "bake-sim-web-app-bun-deps-expensive"
         require_uncached_step "$proof_log" "bake-sim-research-bun-deps-expensive"
         require_uncached_step "$proof_log" "bake-sim-research-source-expensive"
-        require_registry_ref "nook/buildcache/nook-bake-sim-research-v1"
+        require_registry_ref "nook/buildcache/nook-bake-sim-web-app-deps-v1"
+        require_registry_ref "nook/buildcache/nook-bake-sim-web-research-deps-v1"
 
         BAKE_SIM_CACHE_WRITE_ENABLED=
         create_builder "nook-bake-sim-aa-main-warm-${suffix}"
-        bake_plain "$proof_log" research
+        bake_plain "$proof_log" web-app-deps web-research-deps
+        require_cached_step "$proof_log" "bake-sim-web-app-bun-deps-expensive"
         require_cached_step "$proof_log" "bake-sim-research-bun-deps-expensive"
         require_cached_step "$proof_log" "bake-sim-research-source-expensive"
 
@@ -1028,19 +1034,26 @@ tasks:
         BAKE_SIM_CACHE_WRITE_ENABLED=1
         BAKE_SIM_CACHE_FALLBACK_ENABLED=1
         BAKE_SIM_CACHE_SCOPE_SUFFIX="$research_pr_suffix"
-        BAKE_SIM_RESEARCH_EXACT_AVAILABLE=
+        BAKE_SIM_WEB_APP_EXACT_AVAILABLE=
+        BAKE_SIM_WEB_RESEARCH_EXACT_AVAILABLE=
         create_builder "nook-bake-sim-aa-pr-${suffix}"
-        require_no_registry_ref "nook/remote-buildcache/nook-bake-sim-research-v1${research_pr_suffix}"
-        bake_plain "$proof_log" research
+        require_no_registry_ref "nook/remote-buildcache/nook-bake-sim-web-app-deps-v1${research_pr_suffix}"
+        require_no_registry_ref "nook/remote-buildcache/nook-bake-sim-web-research-deps-v1${research_pr_suffix}"
+        bake_plain "$proof_log" web-app-deps web-research-deps
+        require_cached_step "$proof_log" "bake-sim-web-app-bun-deps-expensive"
         require_cached_step "$proof_log" "bake-sim-research-bun-deps-expensive"
         require_uncached_step "$proof_log" "bake-sim-research-source-expensive"
-        require_registry_ref "nook/buildcache/nook-bake-sim-research-v1"
-        require_registry_ref "nook/remote-buildcache/nook-bake-sim-research-v1${research_pr_suffix}"
+        require_registry_ref "nook/buildcache/nook-bake-sim-web-app-deps-v1"
+        require_registry_ref "nook/buildcache/nook-bake-sim-web-research-deps-v1"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-web-app-deps-v1${research_pr_suffix}"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-web-research-deps-v1${research_pr_suffix}"
 
         BAKE_SIM_CACHE_WRITE_ENABLED=
-        BAKE_SIM_RESEARCH_EXACT_AVAILABLE=1
+        BAKE_SIM_WEB_APP_EXACT_AVAILABLE=1
+        BAKE_SIM_WEB_RESEARCH_EXACT_AVAILABLE=1
         create_builder "nook-bake-sim-aa-pr-retry-${suffix}"
-        bake_plain "$proof_log" research
+        bake_plain "$proof_log" web-app-deps web-research-deps
+        require_cached_step "$proof_log" "bake-sim-web-app-bun-deps-expensive"
         require_cached_step "$proof_log" "bake-sim-research-bun-deps-expensive"
         require_cached_step "$proof_log" "bake-sim-research-source-expensive"
         echo "scenario AA ok"

@@ -114,6 +114,11 @@ impl WorkflowRuntimeContract<'_> {
             .split("      - name: Publish verified research web dependency cache\n")
             .nth(1)
             .unwrap_or("");
+        let research_image = research
+            .split("  image:\n")
+            .nth(1)
+            .and_then(|section| section.split("\n  deploy:\n").next())
+            .unwrap_or("");
         assert!(
             research.contains("registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}")
                 && research.contains("registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}")
@@ -130,6 +135,10 @@ impl WorkflowRuntimeContract<'_> {
                     .contains("github.event.pull_request.user.login != 'dependabot[bot]'")
                 && research_publish.contains("NOOK_ARC_RUNNER")
                 && research_publish.contains("ARC keeps the verified research web graph local")
+                && research_image.contains(
+                    "ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}",
+                )
+                && research_image.contains("fetch-depth: 0")
                 && research.contains("same-repository PRs retain the remote identity")
                 && !research.contains("registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}")
                 && !research.contains("registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}"),
