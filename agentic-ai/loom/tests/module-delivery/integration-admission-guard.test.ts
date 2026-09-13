@@ -135,7 +135,6 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
       version: 2,
       generation: 1,
       sourceCommit: fixture.sourceCommit,
-      maxConcurrency: 3,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -174,7 +173,6 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
     return {
       version: 1,
       sourceCommit: SOURCE_COMMIT,
-      maxConcurrency: 1,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

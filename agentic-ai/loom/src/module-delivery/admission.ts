@@ -509,8 +509,6 @@ export class ModuleGenerationAuthority {
     );
     const blockedTaskIds =
       ModuleGenerationAuthority.terminallyBlockedTaskIds(authority);
-    const available =
-      authority.acceptedPlan.plan.maxConcurrency - authority.activeLeases.size;
     const admissions: ModuleDeliveryAdmission[] = [];
     const pendingTaskIds: string[] = [];
     for (const taskId of authority.acceptedPlan.topologicalOrder) {
@@ -542,11 +540,6 @@ export class ModuleGenerationAuthority {
         ...admissions,
       ];
       if (
-        admissions.length >= Math.max(available, 0) ||
-        (node.kind === ModuleDeliveryTaskKind.Write &&
-          activeAdmissions.some(
-            (active) => active.resources.write.length > 0,
-          )) ||
         activeAdmissions.some((active) => {
           const conflictRequest: ResourceConflictRequest = {
             first: resources,
@@ -645,11 +638,7 @@ export class ModuleGenerationAuthority {
     const authority = ModuleGenerationAuthority.requiredAuthority(
       request.authority,
     );
-    if (
-      request.admissions.length === 0 ||
-      authority.activeLeases.size + request.admissions.length >
-        authority.acceptedPlan.plan.maxConcurrency
-    )
+    if (request.admissions.length === 0)
       throw new Error('Module delivery admission capability is invalid.');
     const seenTasks = new Set(
       [...authority.activeLeases.values()].map(({ taskId }) => taskId),

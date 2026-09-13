@@ -425,7 +425,6 @@ export const PLAN: ModuleDeliveryPlanV2 = {
   version: 2,
   generation: 1,
   sourceCommit: SOURCE,
-  maxConcurrency: 2,
   maxAgentDepth: 3,
   maxAttempts: 2,
   parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

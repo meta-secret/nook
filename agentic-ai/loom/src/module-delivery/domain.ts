@@ -6,7 +6,6 @@ export const MODULE_DELIVERY_PLAN_VERSION = 2;
 export type ModuleDeliveryPlanInputVersion =
   1 | typeof MODULE_DELIVERY_PLAN_VERSION;
 export const MAX_MODULE_DELIVERY_NODES = 64;
-export const MAX_MODULE_DELIVERY_CONCURRENCY = 16;
 export const MAX_MODULE_DELIVERY_AGENT_DEPTH = 3;
 export const MAX_MODULE_DELIVERY_ATTEMPTS = 5;
 export const CORTEX_TEAM_WRITER_EXPERT = 'cortex_team_writer';
@@ -361,7 +360,6 @@ export type ModuleDeliveryPlanV2 = {
   readonly version: typeof MODULE_DELIVERY_PLAN_VERSION;
   readonly generation: number;
   readonly sourceCommit: string;
-  readonly maxConcurrency: number;
   readonly maxAgentDepth: number;
   readonly maxAttempts: number;
   readonly parentOwnedResources: readonly string[];
@@ -412,7 +410,6 @@ export type LegacyModuleDeliveryNode =
 export type LegacyModuleDeliveryPlan = {
   readonly version: 1;
   readonly sourceCommit: string;
-  readonly maxConcurrency: number;
   readonly maxAgentDepth: number;
   readonly maxAttempts: number;
   readonly parentOwnedResources: readonly string[];

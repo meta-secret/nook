@@ -75,7 +75,6 @@ export class ModuleDeliveryAdmissionSourceScenario {
       version: MODULE_DELIVERY_PLAN_VERSION,
       generation: request.generation,
       sourceCommit: request.sourceCommit,
-      maxConcurrency: 1,
       maxAgentDepth: 1,
       maxAttempts: 1,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

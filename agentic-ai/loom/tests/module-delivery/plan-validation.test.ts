@@ -452,7 +452,6 @@ describe('reviewed module delivery plan', () => {
     const invalidPlan: ModuleDeliveryPlanV2 = {
       ...validPlan,
       sourceCommit: 'main',
-      maxConcurrency: 17,
       maxAgentDepth: 4,
       maxAttempts: 6,
     };
@@ -462,6 +461,19 @@ describe('reviewed module delivery plan', () => {
     );
     expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
       ModuleDeliveryIssueCode.LimitExceeded,
+    );
+  });
+
+  test('rejects numeric capacity from the plan boundary', () => {
+    const fixture: PlanFixture = {
+      nodes: DEFAULT_NODES,
+      edgeContracts: DEFAULT_EDGES,
+    };
+    const validPlan = ModuleDeliveryPlanValidationScenario.plan(fixture);
+    const capacityPlan = Object.assign(validPlan, { maxConcurrency: 17 });
+    const result = ModuleDeliveryPlanValidationScenario.validate(capacityPlan);
+    expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
     );
   });
 });

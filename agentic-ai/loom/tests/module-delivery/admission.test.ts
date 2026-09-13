@@ -101,16 +101,18 @@ const FOREIGN_SOURCE = ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(
   foreignFixture,
 )(['rev-parse', 'HEAD']);
 
-type PlanConcurrencyUpdate = { readonly maxConcurrency: number };
-
 describe('module delivery admission authority', () => {
-  test('serializes writers and rejects unproven writer frontiers', () => {
+  test('admits disjoint writers and rejects unproven writer frontiers', () => {
     const active = ModuleDeliveryAdmissionScenario.runtime(
       ModuleDeliveryAdmissionScenario.validate(PLAN),
     );
     const first = ModuleDeliveryAdmissionScenario.select(active);
-    expect(first.admissions.map(({ taskId }) => taskId)).toEqual(['alpha']);
-    expect(first.pendingTaskIds).toContain('beta');
+    expect(first.admissions.map(({ taskId }) => taskId)).toEqual([
+      'alpha',
+      'beta',
+      'gamma',
+    ]);
+    expect(first.pendingTaskIds).toEqual([]);
     const forgedFrontier: CreateModuleDeliveryAdmissionStateRequest['integratedWriterFrontiers'][number] =
       {
         taskId: 'alpha',
@@ -284,10 +286,7 @@ describe('module delivery admission authority', () => {
   });
 
   test('retains lease history through disposition and reports exhausted closure', () => {
-    const exhaustionPlan: ModuleDeliveryPlanV2 = {
-      ...PLAN,
-      maxConcurrency: 1,
-    };
+    const exhaustionPlan: ModuleDeliveryPlanV2 = { ...PLAN };
     const active = ModuleDeliveryAdmissionScenario.runtime(
       ModuleDeliveryAdmissionScenario.validate(exhaustionPlan),
     );
@@ -336,6 +335,10 @@ describe('module delivery admission authority', () => {
     const selected = ModuleDeliveryAdmissionSelectionStatus.Selected;
     expect(exhaustedSelection.status).toBe(selected);
     expect(exhaustedSelection.blockedTaskIds).toEqual(['alpha', 'consumer']);
+    expect(exhaustedSelection.admissions.map(({ taskId }) => taskId)).toEqual([
+      'beta',
+      'gamma',
+    ]);
     const betaLeaseRequest: LeaseRequest = {
       runtime: exhaustedRuntime,
       taskId: 'beta',
@@ -344,8 +347,10 @@ describe('module delivery admission authority', () => {
     const ongoingSelection =
       ModuleDeliveryAdmissionScenario.select(exhaustedRuntime);
     expect(ongoingSelection.status).toBe(selected);
-    expect(ongoingSelection.admissions).toEqual([]);
-    expect(ongoingSelection.pendingTaskIds).toEqual(['gamma']);
+    expect(ongoingSelection.admissions.map(({ taskId }) => taskId)).toEqual([
+      'gamma',
+    ]);
+    expect(ongoingSelection.pendingTaskIds).toEqual([]);
   });
 
   test('rejects replacement failures transactionally and keeps the prior generation usable', () => {
@@ -510,7 +515,6 @@ describe('module delivery admission authority', () => {
     const replacementPlan = ModuleDeliveryAdmissionScenario.generationPlan(
       replacementPlanRequest,
     );
-    Object.assign(replacementPlan, { maxConcurrency: 3 });
     const raisedAttemptLimit = ModuleDeliveryAdmissionScenario.validate({
       ...replacementPlan,
       maxAttempts: 3,
@@ -721,8 +725,6 @@ describe('module delivery admission authority', () => {
     };
     const firstPlan =
       ModuleDeliveryAdmissionScenario.generationPlan(firstPlanRequest);
-    const concurrencyUpdate: PlanConcurrencyUpdate = { maxConcurrency: 1 };
-    Object.assign(firstPlan, concurrencyUpdate);
     const active = ModuleDeliveryAdmissionScenario.runtime(
       ModuleDeliveryAdmissionScenario.validate(firstPlan),
     );
@@ -772,8 +774,11 @@ describe('module delivery admission authority', () => {
         taskId,
         attempt,
       })),
-    ).toEqual([{ taskId: beta.taskId, attempt: 1 }]);
-    expect(selection.pendingTaskIds).toContain(gamma.taskId);
+    ).toEqual([
+      { taskId: beta.taskId, attempt: 1 },
+      { taskId: gamma.taskId, attempt: 1 },
+    ]);
+    expect(selection.pendingTaskIds).toEqual([]);
   });
 });
 

@@ -89,7 +89,6 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       version: 2,
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
-      maxConcurrency: 2,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

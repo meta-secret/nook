@@ -71,7 +71,6 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
       version: MODULE_DELIVERY_PLAN_VERSION,
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
-      maxConcurrency: 1,
       maxAgentDepth: 1,
       maxAttempts: 1,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

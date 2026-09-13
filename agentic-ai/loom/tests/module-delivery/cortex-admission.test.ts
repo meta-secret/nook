@@ -60,7 +60,6 @@ export class ModuleDeliveryCortexAdmissionScenario {
       version: 2,
       generation: 7,
       sourceCommit,
-      maxConcurrency: 1,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

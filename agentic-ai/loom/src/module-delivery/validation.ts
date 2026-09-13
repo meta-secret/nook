@@ -40,7 +40,6 @@ import {
   MODULE_DELIVERY_PLAN_VERSION,
   MAX_MODULE_DELIVERY_AGENT_DEPTH,
   MAX_MODULE_DELIVERY_ATTEMPTS,
-  MAX_MODULE_DELIVERY_CONCURRENCY,
   MAX_MODULE_DELIVERY_NODES,
   REQUIRED_PARENT_OWNED_RESOURCES,
   CORTEX_TEAM_WRITER_EXPERT,
@@ -128,11 +127,6 @@ export class ModuleDeliveryPlanDecoder {
         path: '$.nodes',
         actual: state.plan.nodes.length,
         maximum: MAX_MODULE_DELIVERY_NODES,
-      },
-      {
-        path: '$.maxConcurrency',
-        actual: state.plan.maxConcurrency,
-        maximum: MAX_MODULE_DELIVERY_CONCURRENCY,
       },
       {
         path: '$.maxAgentDepth',
