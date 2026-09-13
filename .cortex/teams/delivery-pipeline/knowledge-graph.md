@@ -1,0 +1,40 @@
+# Delivery Pipeline Knowledge Graph
+
+Load only the authority required by the current delivery-pipeline operation.
+
+The Delivery Pipeline team reports to Gizmo Prime. It is an operational
+delivery team, not a functional product-engineering team.
+
+## Team contract
+
+- [Delivery Pipeline contract](AGENTS.md) defines the team boundary,
+  responsibility split, packets, handoffs, and delivery invariants.
+
+## Internal agents
+
+- [Delivery Pipeline Team Gizmo](internal/gizmo/AGENTS.md) owns high-level
+  orchestration, packet decomposition, internal dispatch, and evidence
+  synthesis.
+- [Team Gizmo knowledge graph](internal/gizmo/knowledge-graph.md) indexes its
+  internal authorities and escalation paths.
+- [Internal PR Steward](internal/pr-steward/AGENTS.md) owns bounded mechanical
+  execution under an explicit packet.
+- [PR Steward knowledge graph](internal/pr-steward/knowledge-graph.md) indexes
+  its authorization and lifecycle workflows.
+
+## Internal workflows
+
+- [Authorization handshake](internal/pr-steward/workflows/authorization-handshake.md)
+  defines packet identity, exact-head checks, and bounded authority.
+- [Pull-request lifecycle](internal/pr-steward/workflows/pull-request-lifecycle.md)
+  defines review, validation, evidence, waiting, and promotion mechanics.
+
+## Parent and policy authorities
+
+- [Gizmo Prime](../../gizmo/AGENTS.md) is the parent delivery owner.
+- [Multiagent delivery architecture](../../gizmo/architecture/multiagent-delivery-diagrams.md)
+  defines levels, ownership, and exact-SHA handoffs.
+- [Dev delivery](../../gizmo/architecture/dev-delivery.md) defines detailed
+  authorization and promotion rules.
+- [Dev Manager](../dev-manager/AGENTS.md) owns dev validation, readiness,
+  promotion, and `dev:pr-manager`.

@@ -2,11 +2,12 @@
 
 ## Authority
 
-PR Steward executes one bounded operation under a feature Gizmo or dev-manager
-packet. The controller owns policy and verdicts. The active harness carries
-the packet. It creates no persistent scheduler, journal, or retry service.
+Delivery Pipeline Team Gizmo dispatches PR Steward for one bounded operation
+under a feature Gizmo or dev-manager packet. The controller owns policy and
+verdicts. The active harness carries the packet. It creates no persistent
+scheduler, journal, or retry service.
 
-Follow [dev delivery](../../../gizmo/architecture/dev-delivery.md).
+Follow [dev delivery](../../../../../gizmo/architecture/dev-delivery.md).
 
 ## Required actions
 
@@ -16,6 +17,11 @@ Follow [dev delivery](../../../gizmo/architecture/dev-delivery.md).
   - PR operations name the base, head branch, PR number, and expected head.
   - Run operations name the run and attempt.
   - Workbench publication names exact content, destination, and expected blob SHA.
+- **Parent and controller**
+  - Delivery Pipeline Team Gizmo is the execution parent.
+  - The feature Gizmo or Dev Manager remains the policy controller named in
+    the packet.
+  - Team Gizmo may translate packet shape but may not add authority.
 - **Allowed task authority**
   - A feature Gizmo authorizes remote build-only execution and bounded local integration.
   - A dev manager authorizes snapshot publication, slow PR checks, and fast-forward promotion.
@@ -37,8 +43,9 @@ Follow [dev delivery](../../../gizmo/architecture/dev-delivery.md).
 2. Invoke only the named task or GitHub operation.
    - Shared-branch mutation is limited to the three bounded dev tasks.
    - Tooling enforces locks and revision guards.
-3. Return observed SHAs, run identifiers, result URLs, and blockers.
-4. Let the controller decide whether a fresh operation is authorized.
+3. Return observed SHAs, run identifiers, result URLs, and blockers to Team
+   Gizmo in one terminal handoff.
+4. Let the policy controller decide whether a fresh operation is authorized.
 5. For promotion, verify remote main equals the tested SHA.
 6. Read actual GitHub PR status and return it separately from the ref update.
 
@@ -56,4 +63,5 @@ Follow [dev delivery](../../../gizmo/architecture/dev-delivery.md).
 
 The packet and result must identify the same target. Report protection
 rejections visibly. A successful push alone does not establish GitHub PR
-completion. The controller owns the final verdict.
+completion. Team Gizmo forwards the evidence. The controller owns the final
+verdict.

@@ -1,0 +1,132 @@
+# Delivery Pipeline Team Contract
+
+## Mission
+
+The Delivery Pipeline team owns delivery mechanics across CI, pull-request
+lifecycle, development-branch publication, workflow execution, validation
+evidence, local landing, and guarded promotion.
+
+This boundary is more precise than CI alone. CI describes automated checks.
+The Delivery Pipeline team also handles pull-request state and review
+mechanics, exact-SHA handoffs, development-branch publication, local
+integration, and promotion guardrails. It does not own functional product
+implementation or policy verdicts.
+
+## Authority and reporting
+
+The Delivery Pipeline team reports to Gizmo Prime.
+
+- Team Gizmo is the team's high-level internal orchestrator.
+- Internal PR Steward is the team's bounded mechanical execution agent.
+- Gizmo Prime remains the parent for mission control, functional ownership,
+  feature acceptance, and feature-level delivery decisions.
+- The Dev Manager remains the policy owner for dev validation, readiness,
+  promotion, and pull-request creation through `dev:pr-manager`.
+- A Feature Gizmo owns feature review, acceptance, and authorization for its
+  bounded local landing request.
+
+The team executes authorized delivery mechanics. It does not create a second
+policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
+
+## Required actions
+
+- Begin every delivery operation under the mandatory Gizmo harness and the
+  complete multiagent delivery architecture.
+- Accept a high-level packet only from Gizmo Prime through the active harness.
+- Require each packet to name the operation, repository, bounded scope,
+  controller, expected source SHA, target identity, and acceptance evidence.
+- Use Team Gizmo for Level 1 delivery-pipeline orchestration, commit-level
+  handoffs, and remote-task packets.
+- Require Team Gizmo to dispatch internal execution through the active harness.
+- Route packetized GitHub, pull-request, check, review, status, publication,
+  promotion, and bounded local-dev mechanics to internal PR Steward.
+- Preserve the Feature Gizmo or Dev Manager as the policy controller in every
+  child packet.
+- Require PR Steward to verify the live target and expected SHA before acting.
+- Keep feature-stage remote execution build-only. Tests, coverage, e2e, and
+  preflight remain outside that stage.
+- Keep `dev:land` serialized and limited to the named local development
+  checkout and feature SHA.
+- Keep `dev:publish` limited to the Dev Manager's selected committed snapshot.
+- Keep `dev:promote` limited to the Dev Manager's separately authorized,
+  fully validated, frozen SHA.
+- Return operation evidence and blockers through the parent-child reporting
+  chain.
+- Start a fresh child operation only after the controller issues a fresh
+  packet.
+
+## Prohibited actions
+
+- Do not bypass Gizmo Prime or the active Gizmo harness.
+- Do not replace Gizmo Prime as the root delivery owner.
+- Do not choose functional ownership or adjudicate functional findings.
+- Do not directly implement or repair product code, tests, or functional
+  Cortex content.
+- Do not create or update pull requests from Team Gizmo or PR Steward.
+- Do not decide readiness, dev-validation success, or promotion success.
+- Do not invoke `dev:pr-manager`; the Dev Manager owns that path.
+- Do not treat a successful push as proof of pull-request completion.
+- Do not use squash, rebase, force-push, a stock pull-request merge, or a
+  promotion merge commit.
+- Do not close a pull request manually as a substitute for merged status.
+- Do not infer authority for a different SHA, branch, repository, or target.
+- Do not create a scheduler, daemon, retry queue, journal, lease, or durable
+  lifecycle service.
+- Do not use administrator capability to skip required checks or verdicts.
+
+## Responsibility split
+
+- **Team Gizmo:** receives high-level packets from Gizmo Prime. It decomposes
+  delivery-pipeline work, dispatches internal agents, coordinates commit-level
+  and remote-task packets, synthesizes evidence, and reports a high-level
+  summary or blocker to Gizmo Prime. It does not write implementation code.
+- **Internal PR Steward:** executes packetized external GitHub, pull-request,
+  check, review, status, publication, and promotion mechanics. It also runs
+  the three bounded local-dev tasks: `dev:land`, `dev:publish`, and
+  `dev:promote`. It returns evidence and never supplies a policy verdict.
+- **Dev Manager:** selects the dev snapshot, owns slow validation, owns
+  readiness and promotion policy, and invokes `dev:pr-manager` for the single
+  dev-to-main pull request.
+- **Gizmo Prime:** owns the mission, functional-team routing, feature
+  acceptance, and the final feature delivery decision.
+
+## Packet and handoff procedure
+
+1. Gizmo Prime sends Team Gizmo a high-level delivery-pipeline packet.
+   - The packet includes the exact committed source SHA when the operation is
+     revision-dependent.
+   - A manager-owned packet retains the Dev Manager as policy owner.
+2. Team Gizmo validates the packet and decomposes only the delivery mechanics
+   within this team's boundary.
+   - Ambiguous functional ownership returns to Gizmo Prime.
+   - A missing or unavailable harness fails the operation closed.
+3. Team Gizmo sends PR Steward one bounded child packet per mechanical
+   operation.
+   - The child packet carries the original controller, target, expected SHA,
+     required evidence, and bounded write scope.
+   - Team Gizmo may not add authority while translating the packet.
+4. PR Steward performs the named operation and returns one terminal handoff.
+   - The handoff names the operation, source SHA, observed target, run or PR
+     identifiers, result, evidence, and unresolved blocker.
+5. Team Gizmo checks that the result still applies to the packet's exact
+   target. It synthesizes the child evidence and reports it to Gizmo Prime.
+   - Manager-owned evidence also returns to the Dev Manager.
+   - Team Gizmo does not convert evidence into a readiness or promotion
+     verdict.
+6. A changed head, target mismatch, missing evidence, protection rejection,
+   or failed child task becomes a blocker.
+   - The controller decides whether to issue a fresh packet.
+   - The team does not retry under stale authority or substitute another
+     operation.
+
+## Exact-SHA delivery invariants
+
+- Evidence is valid only for the exact source SHA and target named in its
+  packet.
+- A changed head invalidates prior review, check, and readiness evidence.
+- Local landing reports both the feature SHA and resulting local-dev SHA.
+- Publication freezes the selected remote-dev SHA for its validation cycle.
+- Promotion requires the unchanged fully validated dev SHA and remote-main
+  equality after the guarded operation.
+- A promotion result is incomplete until the actual pull-request state is
+  observed separately from the ref update.

@@ -3,13 +3,15 @@
 ## Authority
 
 PR Steward performs bounded mechanics under the
-[authorization handshake](authorization-handshake.md). Feature Gizmos own
+[authorization handshake](authorization-handshake.md) after Delivery Pipeline
+Team Gizmo dispatches the child packet. Feature Gizmos own
 feature compilation and local integration decisions. The manually run dev
 manager owns publication, slow PR validation, and promotion.
 
 ## Required actions
 
 - Execute only the packet's repository, revision, task, and target.
+- Return the terminal operation handoff to Delivery Pipeline Team Gizmo.
 - Invoke local integration only under the feature Gizmo's packet.
 - Invoke snapshot publication and fast-forward promotion only under a dev-manager packet.
 - Let the task enforce shared-checkout locking and revision guards.
@@ -20,6 +22,7 @@ manager owns publication, slow PR validation, and promotion.
 ## Prohibited actions
 
 - Do not decide readiness, feature scope, or promotion policy.
+- Do not create or update pull requests.
 - Do not author functional fixes or create workers.
 - Do not squash, rebase, force-push, or create a promotion merge commit.
 - Do not use a stock PR merge method in place of fast-forward promotion.
@@ -36,7 +39,7 @@ manager owns publication, slow PR validation, and promotion.
    - Manager publication uses snapshot publication.
 3. The dev manager invokes `dev:pr-manager` to create or update one open
    dev-to-main PR. PR Steward only observes the resulting exact PR identity.
-   - Use [PR metadata](../../../gizmo/workflows/pull-requests.md#pr-title-and-description).
+   - Use [PR metadata](../../../../../gizmo/workflows/pull-requests.md#pr-title-and-description).
    - A merged PR is never reused for a later cycle.
 4. Request the full existing slow PR checks under the manager packet.
    - Preserve e2e opt-ins and security-required focused checks.
@@ -66,7 +69,8 @@ manager owns publication, slow PR validation, and promotion.
 
 ## Reactive observation
 
-The controller starts a fresh PR Steward child for each check-observation iteration.
+Delivery Pipeline Team Gizmo starts a fresh PR Steward child for each
+check-observation iteration.
 Each child subscribes before reading its initial GitHub snapshot. That snapshot
 freezes the iteration head. A changed head is a blocker, never a new assignment.
 
