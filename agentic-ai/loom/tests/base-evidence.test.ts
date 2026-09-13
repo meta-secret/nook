@@ -6,7 +6,9 @@ import { join } from 'node:path';
 import { describe, test } from 'bun:test';
 
 import {
+  CanonicalFeatureBranchContract,
   PinnedDevBaseEvidenceContract,
+  type CanonicalFeatureBranch,
   type PinnedDevBaseAncestryRequest,
 } from '../src/lib/base-evidence.ts';
 
@@ -151,6 +153,43 @@ describe('pinned dev base Git identity', () => {
       );
     } finally {
       fixture.dispose();
+    }
+  });
+});
+
+describe('canonical feature branch identity', () => {
+  test('accepts the Hive-compatible Prime, child, and machine forms', () => {
+    const validBranches: readonly string[] = [
+      'codex/repair-cache',
+      'codex/abcdefghij',
+      'codex/agent-branching/sre/provisioning/fix-hive-branch-compile',
+      'codex/hive-main-failure-abc-run-42-attempt-1',
+    ];
+
+    for (const branch of validBranches) {
+      const parsed: CanonicalFeatureBranch =
+        CanonicalFeatureBranchContract.parse(branch);
+      assert.equal(parsed, branch);
+    }
+  });
+
+  test('rejects Hive-invalid short, repeated-hyphen, and unregistered forms', () => {
+    const invalidBranches: readonly string[] = [
+      'main',
+      'codex/',
+      'codex/repair',
+      'codex/agent--branching',
+      'codex/agent-branching/sre/provisioning/fix--hive-branch-compile',
+      'codex/hive-main--failure',
+      'codex/Repair-cache',
+      'codex/agent-branching/sre/provisioning/short',
+      'codex/agent-branching/web-dev/provisioning/fix-hive-branch-compile',
+      'codex/agent-branching/sre/provisioning/fix-hive-branch-compile/extra',
+      'codex/hive-',
+    ];
+
+    for (const branch of invalidBranches) {
+      assert.throws(() => CanonicalFeatureBranchContract.parse(branch));
     }
   });
 });

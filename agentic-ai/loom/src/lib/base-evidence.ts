@@ -43,12 +43,110 @@ export class CanonicalFeatureBranchContract {
       throw new Error('Canonical feature branch is malformed.');
     const components = branch.split('/');
     if (
-      components.length < 2 ||
       components[0] !== 'codex' ||
       components.some((component) => component.length === 0)
     )
       throw new Error('Canonical feature branch must be a codex branch.');
+
+    const segments = components.slice(1);
+    const valid =
+      (segments.length === 1 &&
+        (CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 20) ||
+          CanonicalFeatureBranchContract.isCanonicalMachineBranch(segments))) ||
+      (segments.length === 4 &&
+        CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 20) &&
+        CanonicalFeatureBranchContract.isCanonicalTeam(segments[1]) &&
+        CanonicalFeatureBranchContract.isCanonicalRole(
+          segments[1],
+          segments[2],
+        ) &&
+        CanonicalFeatureBranchContract.isKebabSegment(segments[3], 20, 50) &&
+        segments[3] !== 'cleanup');
+    if (!valid)
+      throw new Error('Canonical feature branch must be a codex branch.');
     return branch as CanonicalFeatureBranch;
+  }
+
+  private static isKebabSegment(
+    segment: string | undefined,
+    minimum: number,
+    maximum: number,
+  ): boolean {
+    return (
+      segment !== undefined &&
+      segment.length >= minimum &&
+      segment.length <= maximum &&
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(segment)
+    );
+  }
+
+  private static isCanonicalTeam(team: string | undefined): boolean {
+    return (
+      team === 'ai' ||
+      team === 'dev-core' ||
+      team === 'security' ||
+      team === 'sre' ||
+      team === 'web-dev' ||
+      team === 'delivery-pipeline'
+    );
+  }
+
+  private static isCanonicalRole(
+    team: string | undefined,
+    role: string | undefined,
+  ): boolean {
+    switch (team) {
+      case 'ai':
+        return (
+          role === 'gizmo' ||
+          role === 'loom-specialist' ||
+          role === 'cortex-specialist'
+        );
+      case 'dev-core':
+        return (
+          role === 'gizmo' ||
+          role === 'rust-core-developer' ||
+          role === 'rust-auth2-developer'
+        );
+      case 'security':
+        return (
+          role === 'gizmo' ||
+          role === 'cryptography-specialist' ||
+          role === 'security-review-specialist'
+        );
+      case 'sre':
+        return (
+          role === 'gizmo' || role === 'provisioning' || role === 'cloud-native'
+        );
+      case 'web-dev':
+        return (
+          role === 'gizmo' ||
+          role === 'typescript-specialist' ||
+          role === 'svelte-specialist'
+        );
+      case 'delivery-pipeline':
+        return (
+          role === 'gizmo' || role === 'dev-manager' || role === 'pr-lifecycle'
+        );
+      default:
+        return false;
+    }
+  }
+
+  private static isCanonicalMachineBranch(
+    segments: readonly string[],
+  ): boolean {
+    if (segments.length !== 1) return false;
+    const segment = segments[0];
+    if (segment === undefined || !segment.startsWith('hive-')) return false;
+    const suffix = segment.slice('hive-'.length);
+    return (
+      suffix.length > 0 &&
+      !suffix.startsWith('-') &&
+      !suffix.endsWith('-') &&
+      !suffix.includes('--') &&
+      /^[a-z0-9-]+$/u.test(suffix)
+    );
   }
 }
 
