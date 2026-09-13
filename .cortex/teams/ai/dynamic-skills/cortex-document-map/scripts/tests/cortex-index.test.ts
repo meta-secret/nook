@@ -50,6 +50,24 @@ Model text.
   expect(markdown).not.toContain(
     '[Gizmo Prime](teams/gizmo/knowledge-graph.md)',
   );
+  expect(markdown).toContain(
+    '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
+  );
+  expect(markdown).toContain(
+    '  - [Team Gizmo](teams/delivery-pipeline/internal/gizmo/knowledge-graph.md):',
+  );
+  expect(markdown).toContain(
+    '  - [Internal PR Steward](teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md):',
+  );
+  expect(markdown).not.toContain(
+    '\n- [PR Steward](teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md)',
+  );
+  expect(markdown).not.toContain(
+    '\n- [Team Gizmo](teams/delivery-pipeline/internal/gizmo/knowledge-graph.md)',
+  );
+  expect(markdown).not.toContain(
+    '\n- [Internal PR Steward](teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md)',
+  );
   expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
   expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');
@@ -79,8 +97,9 @@ test('renders the complete canonical Cortex context router', () => {
     '[Dev manager](teams/dev-manager/knowledge-graph.md): manually operated dev',
     'publication, dev PR creation/update, slow evidence, readiness, repair',
     'feature review, feature acceptance, local landing requests, and Workbench.',
-    "and promotion mechanics under the dev manager's packet.",
-    '[PR Steward](teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md): authorized review and',
+    '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md): operational',
+    '  - [Team Gizmo](teams/delivery-pipeline/internal/gizmo/knowledge-graph.md):',
+    '  - [Internal PR Steward](teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md):',
     '[AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,',
     '[Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault',
     '[Security](teams/security/knowledge-graph.md): security architecture,',

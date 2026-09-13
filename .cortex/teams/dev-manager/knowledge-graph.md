@@ -10,4 +10,4 @@
 - [Publish and validate](dynamic-skills/dev-publish.md), including the
   manager-only `dev:pr-manager` operation
 - [Promote tested dev](dynamic-skills/dev-promote.md)
-- [PR Steward authorization](../pr-steward/workflows/authorization-handshake.md)
+- [PR Steward authorization](../delivery-pipeline/internal/pr-steward/workflows/authorization-handshake.md)
