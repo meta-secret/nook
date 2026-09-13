@@ -470,11 +470,57 @@ test('migrates the historical v1 evidence handoff without mutating it', () => {
       lease,
       acceptedProviderEvidence: [],
     });
+    const nestedArtifactIdentity = 'evidence/nested-provider.json';
+    const nestedCurrent: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
+      schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+      generation: current.generation,
+      planDigest: current.planDigest,
+      taskId: 'nested-provider',
+      attempt: current.attempt,
+      producerTeam: current.producerTeam,
+      functionalOwner: current.functionalOwner,
+      acceptanceOwner: current.acceptanceOwner,
+      sourceCommit: current.sourceCommit,
+      originMainSha: current.originMainSha,
+      pinnedLocalDevSha: current.pinnedLocalDevSha,
+      featureHeadSha: current.featureHeadSha,
+      verifiedHeadCommit: current.sourceCommit,
+      artifactIdentity: nestedArtifactIdentity,
+      artifactDigest:
+        ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
+          artifactIdentity: nestedArtifactIdentity,
+          evidence: ['Nested provider evidence.'],
+          acceptanceRequirements: current.acceptanceRequirements,
+          acceptedProviderEvidence: [],
+        }),
+      sourceProvenanceDigest: 'a'.repeat(64),
+      verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
+      claimIdentities: [],
+      acceptanceRequirements: current.acceptanceRequirements,
+      acceptedProviderEvidence: [],
+    };
+    const {
+      featureHeadSha: _nestedFeatureHeadSha,
+      ...nestedWithoutFeature
+    } = nestedCurrent;
+    const historicalNested: ModuleDeliveryAcceptedProviderEvidenceIdentityV1 = {
+      ...nestedWithoutFeature,
+      schemaVersion: LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+    };
     const { featureHeadSha: _featureHeadSha, ...withoutFeature } = current;
     const historical: ModuleDeliveryReadOnlyEvidenceSubmissionV1 = {
       ...withoutFeature,
       schemaVersion: LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
-      acceptedProviderEvidence: [],
+      acceptedProviderEvidence: [historicalNested],
+      artifactDigest:
+        ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
+          artifactIdentity: current.artifactIdentity,
+          evidence: current.evidence,
+          acceptanceRequirements: current.acceptanceRequirements,
+          acceptedProviderEvidence: [
+            historicalNested as unknown as ModuleDeliveryAcceptedProviderEvidenceIdentity,
+          ],
+        }),
     };
     const before = structuredClone(historical);
     const decoded =
@@ -493,6 +539,33 @@ test('migrates the historical v1 evidence handoff without mutating it', () => {
     expect(migrated.originMainSha).toBe(historical.originMainSha);
     expect(migrated.pinnedLocalDevSha).toBe(historical.pinnedLocalDevSha);
     expect(migrated.featureHeadSha).toBe('f'.repeat(40));
+    const migratedNested = migrated.acceptedProviderEvidence[0];
+    if (!migratedNested) throw new Error('Nested migration fixture is missing.');
+    expect(migratedNested.schemaVersion).toBe(
+      MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+    );
+    expect(migratedNested.featureHeadSha).toBe('f'.repeat(40));
+    expect(migratedNested.artifactDigest).toBe(nestedCurrent.artifactDigest);
+    expect(migrated.artifactDigest).toBe(
+      ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
+        artifactIdentity: migrated.artifactIdentity,
+        evidence: migrated.evidence,
+        acceptanceRequirements: migrated.acceptanceRequirements,
+        acceptedProviderEvidence: migrated.acceptedProviderEvidence,
+      }),
+    );
+    const tamperedNested: ModuleDeliveryReadOnlyEvidenceSubmissionV1 = {
+      ...historical,
+      acceptedProviderEvidence: [
+        { ...historicalNested, artifactDigest: 'f'.repeat(64) },
+      ],
+    };
+    expect(() =>
+      ModuleDeliveryEvidenceSchema.migrateReadOnlyEvidenceSubmission(
+        tamperedNested,
+        'f'.repeat(40),
+      ),
+    ).toThrow('Historical evidence artifact digest is invalid.');
   } finally {
     ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(active.fixture);
   }

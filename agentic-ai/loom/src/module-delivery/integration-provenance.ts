@@ -16,6 +16,7 @@ import type {
   ModuleDeliveryAttemptLease,
   ModuleDeliveryGenerationAuthority,
 } from './admission.ts';
+import { ModuleEvidenceBoundary } from './evidence.ts';
 import type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryAcceptedProviderEvidenceIdentityV1,
@@ -290,22 +291,60 @@ export class ModuleDeliveryEvidenceSchema {
       LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION
     )
       throw new Error('Only evidence handoff schema 1 can be migrated.');
+    const legacyArtifactDigest =
+      ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
+        artifactIdentity: submission.artifactIdentity,
+        evidence: submission.evidence,
+        acceptanceRequirements: submission.acceptanceRequirements,
+        acceptedProviderEvidence:
+          submission.acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
+      });
+    if (legacyArtifactDigest !== submission.artifactDigest)
+      throw new Error('Historical evidence artifact digest is invalid.');
     const migrateIdentity = (
       identity: ModuleDeliveryAcceptedProviderEvidenceIdentityV1,
-    ): ModuleDeliveryAcceptedProviderEvidenceIdentity => ({
-      ...identity,
-      schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
-      featureHeadSha,
-      acceptedProviderEvidence: identity.acceptedProviderEvidence.map(
+    ): ModuleDeliveryAcceptedProviderEvidenceIdentity => {
+      const acceptedProviderEvidence = identity.acceptedProviderEvidence.map(
         migrateIdentity,
-      ),
-    });
+      );
+      return {
+        schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+        generation: identity.generation,
+        planDigest: identity.planDigest,
+        taskId: identity.taskId,
+        attempt: identity.attempt,
+        producerTeam: identity.producerTeam,
+        functionalOwner: identity.functionalOwner,
+        acceptanceOwner: identity.acceptanceOwner,
+        sourceCommit: identity.sourceCommit,
+        originMainSha: identity.originMainSha,
+        pinnedLocalDevSha: identity.pinnedLocalDevSha,
+        featureHeadSha,
+        verifiedHeadCommit: identity.verifiedHeadCommit,
+        artifactIdentity: identity.artifactIdentity,
+        artifactDigest: identity.artifactDigest,
+        sourceProvenanceDigest: identity.sourceProvenanceDigest,
+        verdict: identity.verdict,
+        claimIdentities: identity.claimIdentities,
+        acceptanceRequirements: identity.acceptanceRequirements,
+        acceptedProviderEvidence,
+      };
+    };
+    const acceptedProviderEvidence = submission.acceptedProviderEvidence.map(
+      migrateIdentity,
+    );
     const migrated: ModuleDeliveryReadOnlyEvidenceSubmission = {
       ...submission,
       schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
       featureHeadSha,
-      acceptedProviderEvidence: submission.acceptedProviderEvidence.map(
-        migrateIdentity,
+      acceptedProviderEvidence,
+      artifactDigest: ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest(
+        {
+          artifactIdentity: submission.artifactIdentity,
+          evidence: submission.evidence,
+          acceptanceRequirements: submission.acceptanceRequirements,
+          acceptedProviderEvidence,
+        },
       ),
     };
     PinnedDevBaseEvidenceContract.assertShape({
