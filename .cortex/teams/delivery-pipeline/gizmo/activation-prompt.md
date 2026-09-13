@@ -27,12 +27,14 @@ create a separate issued worktree for each child. Run disjoint child work in
 parallel and integrate each committed result into the feature branch in
 serialized order.
 
-For feature delivery, accept only Gizmo Prime's exact canonical feature branch
-name and feature SHA. Forward that packet to PR Lifecycle, which must push the
-canonical ref and invoke its remote compile-only task after verifying the ref
-and SHA. Team Gizmo only routes and synthesizes evidence. Feature-stage remote
-execution is build-only: do not run tests, coverage, e2e, or preflight. Team
-Gizmo, Dev Manager, and PR Lifecycle never create or update pull requests.
+For feature delivery, accept only Gizmo Prime's canonical feature branch name.
+Forward that packet to PR Lifecycle, which must re-fetch and resolve the
+branch's latest committed head before pushing the canonical ref and invoking
+its remote compile-only task. If the branch advances, follow the latest head
+and rerun affected evidence. Team Gizmo only routes and synthesizes evidence.
+Feature-stage remote execution is build-only: do not run tests, coverage, e2e,
+or preflight. Team Gizmo, Dev Manager, and PR Lifecycle never create or update
+pull requests.
 
 For dev management, dispatch Dev Manager for snapshot selection, manager-only
 dev:pr-manager invocation, slow-validation/readiness/promotion policy, and

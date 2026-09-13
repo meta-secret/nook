@@ -21,10 +21,11 @@ Load only the authority needed for the assigned Loom packet.
 - [Multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)
 - [Dev delivery](../../../gizmo-prime/architecture/dev-delivery.md)
 
-The packet must include `originMainSha`, `pinnedLocalDevSha`, and
-`featureHeadSha`. Require `originMainSha` ancestor of `pinnedLocalDevSha`
-ancestor of `featureHeadSha`. Use only the Prime-pinned local-dev SHA as the
-feature source. The existing canonical feature ref and detached implementation
-HEAD must equal `featureHeadSha` exactly. Initial equality and descendant
-frontiers for reruns are valid. Reject missing, mismatched, stale, or
-unprovable bootstrap evidence.
+The packet names the canonical feature branch and may carry bootstrap evidence:
+`originMainSha` for the freshly fetched `origin/main` and `pinnedLocalDevSha`
+for the synchronized local-dev feature base. Require the former to be an
+ancestor of the latter. Use the current parent frontier for the specialist
+worktree. Resolve the latest committed branch head before each stage; a branch
+advance follows the latest head and reruns affected evidence. SHAs observed in
+packets or results are run evidence only, not feature authority. Reject missing
+or unprovable bootstrap/branch evidence.

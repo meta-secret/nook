@@ -20,13 +20,13 @@ Load only the authority needed to orchestrate the current AI packet.
 - [Multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)
 - [Dev delivery](../../../gizmo-prime/architecture/dev-delivery.md)
 
-Every AI packet carries `originMainSha` for the exact freshly fetched main,
-`pinnedLocalDevSha` for the synchronized local-dev source, and `featureHeadSha`
-for the exact canonical feature frontier. Require `originMainSha` ancestor of
-`pinnedLocalDevSha` ancestor of `featureHeadSha`. Prime creates every feature
-branch and worktree strictly from the exact `pinnedLocalDevSha`; no alternate
-base is permitted. The existing canonical feature ref and detached
-implementation HEAD must equal `featureHeadSha` exactly. Initial equality and
-descendant reruns are valid. The Team Gizmo and both specialists consume all
-three identities. Missing, mismatched, stale, or unprovable evidence fails
-closed.
+Every AI packet names the canonical feature branch and may carry bootstrap
+evidence: `originMainSha` for the exact freshly fetched main and
+`pinnedLocalDevSha` for the synchronized local-dev feature base. Require
+`originMainSha` to be an ancestor of `pinnedLocalDevSha`. Prime creates the
+feature branch and worktree from that current committed base and preserves it.
+Resolve the latest committed branch head before each stage. If the branch
+advances, follow the latest head and rerun affected evidence. Team Gizmo and
+the specialists use the current parent frontier for child worktrees. SHAs in
+packets or results are observational run evidence only. Missing or unprovable
+bootstrap/branch evidence fails closed.

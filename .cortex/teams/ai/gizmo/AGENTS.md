@@ -19,15 +19,17 @@ It receives a high-level AI packet and coordinates only AI-team mechanics.
 
 - Accept high-level packets from Gizmo Prime through the active harness.
 - Preserve the packet's controller, bounded scope, branch, source state, and acceptance evidence.
-- Consume all three identities issued by Gizmo Prime for the team worktree and
-  every leaf: `originMainSha`, `pinnedLocalDevSha`, and `featureHeadSha`.
-  Require `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of
-  `featureHeadSha`. Prime creates every feature branch and worktree strictly
-  from the exact `pinnedLocalDevSha`; no alternate base is permitted. The
-  existing canonical feature ref and detached implementation HEAD must
-  equal `featureHeadSha` exactly. Initial equality and descendant reruns are
-  valid. Never use stale local refs or resolve or guess a base independently.
-  Missing, mismatched, stale, or unprovable evidence fails closed.
+- Consume the canonical feature branch name and bootstrap evidence issued by
+  Gizmo Prime for the team worktree and every leaf. `originMainSha` identifies
+  the freshly fetched `origin/main`; `pinnedLocalDevSha` identifies the
+  synchronized local-dev feature base, and `originMainSha` must be its
+  ancestor. Prime creates the feature branch and worktree from that current
+  committed base and preserves it. The branch name is the workflow authority.
+  Resolve the latest committed branch head before each stage. If the branch
+  advances, follow the latest head and rerun affected evidence. Child worktrees
+  start from the current parent frontier. Never use stale local refs or resolve
+  or guess a base independently. Observed SHAs are run evidence only. Missing
+  or unprovable bootstrap/branch evidence fails closed.
 - Dispatch the Loom and Cortex specialists through the active harness.
 - Give each specialist a separate issued child worktree.
 - Immediately attempt every dependency-ready specialist with a disjoint scope

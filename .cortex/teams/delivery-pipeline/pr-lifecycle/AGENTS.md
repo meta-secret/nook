@@ -4,8 +4,10 @@
 
 For the current flow, follow
 [dev delivery](../../../gizmo-prime/architecture/dev-delivery.md). Gizmo Prime
-authorizes the exact canonical feature branch name and `featureHeadSha` for
-feature compilation. The manually run dev manager authorizes
+authorizes the canonical feature branch name for feature compilation. PR
+Lifecycle re-fetches and resolves its latest committed head before each
+feature-stage operation; a branch advance follows the latest head and reruns
+affected evidence. The manually run dev manager authorizes
 dev PR validation and guarded fast-forward promotion. The manager retains the slow-stage
 verdict. The PR Lifecycle Agent verifies actual PR status after fast-forward publication.
 It never substitutes squash, rebase, a merge commit, or manual PR closure.
@@ -51,9 +53,11 @@ selection, slow validation, and promotion. Each retains its own verdict.
 - Confirm the packet's repository and applicable target identity before acting.
 - Execute `gh` commands and equivalent GitHub wrappers only within that packet.
 - Execute `dev:land` under the feature Gizmo's packet.
-- For feature compilation, require the Prime-authored canonical branch and
-  exact `featureHeadSha` packet. Verify that ref before pushing it and invoking
-  its remote task.
+- For feature compilation, require the Prime-authored canonical branch packet.
+  Re-fetch and resolve its latest committed head before pushing it and
+  invoking the remote task. Treat the observed commit SHA as run evidence,
+  not cross-stage authority; if the branch advances, follow it and rerun
+  affected evidence.
 - Execute `dev:publish` and `dev:promote` under the Dev Manager's packet.
 - Observe the manager-owned `dev:pr-manager` result and report exact PR state
   under the dev manager's packet; do not invoke the PR manager.

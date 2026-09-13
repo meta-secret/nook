@@ -28,19 +28,19 @@ limit. Do not pre-check or budget a wave against a numeric limit. Cortex and
 Loom never encode, infer, or repeat a fixed numeric agent or subagent
 concurrency cap.
 
-AI Team Gizmo and its leaves consume all three identities issued by Gizmo
-Prime: `originMainSha`, `pinnedLocalDevSha`, and `featureHeadSha`. Prime's
-fresh-base bootstrap runs before planning, delegation, worktree creation, or
-edits. It records `originMainSha` for the exact freshly fetched `origin/main`,
-`pinnedLocalDevSha` after canonical local `main` and `dev` are synchronized,
-and `featureHeadSha` for the exact canonical feature frontier. Require
-`originMainSha` ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`.
-Prime creates every feature branch and worktree strictly from the exact
-`pinnedLocalDevSha`; no alternate base is permitted. An existing canonical
-feature ref and detached implementation HEAD must equal `featureHeadSha`
-exactly. Initial equality and descendant reruns are valid. The AI team fails
-closed on missing, mismatched, stale, or unprovable evidence and never
-resolves or guesses a base independently.
+AI Team Gizmo and its leaves consume the canonical feature branch name and the
+bootstrap evidence issued by Gizmo Prime. Prime's fresh-base bootstrap runs
+before planning, delegation, worktree creation, or edits. It records
+`originMainSha` for the exact freshly fetched `origin/main` and
+`pinnedLocalDevSha` after canonical local `main` and `dev` are synchronized;
+`originMainSha` must be an ancestor of `pinnedLocalDevSha`. Prime creates the
+feature branch and worktree from that current committed local-dev feature base
+and preserves it. The branch name is the workflow authority. Before each
+stage, delivery resolves the latest committed branch head. A branch advance
+follows the latest head and reruns affected evidence. SHAs observed during the
+run are evidence, not cross-stage authority. The AI team fails closed on
+missing or unprovable bootstrap/branch evidence and never resolves or guesses
+a base independently.
 
 An exact AI authority may require a foreign-team engineering skill. Load that
 skill read-only. An expertise provider is required only when the foreign team

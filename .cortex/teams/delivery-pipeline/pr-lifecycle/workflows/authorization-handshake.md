@@ -13,8 +13,10 @@ Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
 
 - **Packet identity**
   - Name the controller, repository, operation, and required evidence.
-  - Revision-dependent operations name the expected source SHA.
-  - PR operations name the base, head branch, PR number, and expected head.
+  - Revision-dependent operations name the expected source SHA when a manager
+    packet freezes a validation or promotion snapshot.
+  - PR operations name the base, head branch, and PR number; the current head
+    is re-resolved before each operation and recorded as evidence.
   - Run operations name the run and attempt.
   - Workbench publication names exact content, destination, and expected blob SHA.
 - **Parent and controller**
@@ -23,14 +25,17 @@ Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
     the packet.
   - Team Gizmo may translate packet shape but may not add authority.
 - **Allowed task authority**
-  - Gizmo Prime authorizes the canonical feature branch name and exact
-    `featureHeadSha`; Delivery Pipeline routes that packet to PR Lifecycle for
-    the required branch push and remote build-only execution.
+  - Gizmo Prime authorizes the canonical feature branch name; Delivery
+    Pipeline routes that packet to PR Lifecycle, which re-fetches and resolves
+    the latest committed head for the required branch push and remote
+    build-only execution.
   - A Feature Gizmo authorizes bounded local integration after it receives the
     resulting evidence.
   - A dev manager authorizes snapshot publication, slow PR checks, and fast-forward promotion.
-  - A landing packet names the feature SHA and assigned local dev checkout.
-  - The landing tool verifies positive build evidence and serializes integration.
+  - A landing packet names the canonical feature branch and assigned local dev
+    checkout. Its evidence records the observed feature commit.
+  - The landing tool verifies positive build evidence for the current branch
+    head and serializes integration.
   - A publication packet names the selected committed local dev snapshot.
   - A promotion packet names the frozen tested SHA and complete slow evidence.
   - Promotion also requires review/security verdicts and remote main ancestry.
@@ -42,8 +47,9 @@ Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
 
 ## Procedure
 
-1. Confirm the live repository, revision, and applicable target against the packet.
-   - Any mismatch stops the operation.
+1. Confirm the live repository, branch or frozen revision, and applicable target
+   against the packet. A feature branch advance is followed by re-resolving its
+   latest committed head; another repository or target stops the operation.
 2. Invoke only the named task or GitHub operation.
    - Shared-branch mutation is limited to the three bounded dev tasks.
    - Tooling enforces locks and revision guards.
@@ -55,7 +61,8 @@ Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
 
 ## Prohibited actions
 
-- Do not infer authority for another SHA, branch, repository, or operation.
+- Do not infer authority for another branch, repository, or operation. Feature
+  SHAs are observations unless a manager packet explicitly freezes a snapshot.
 - Do not push a temporary leaf or Team Gizmo branch. Do not invoke `task
   remote` or `workflow_dispatch` while checked out on a temporary branch.
 - Do not grant PR Lifecycle Agent general shared-branch Git authority.

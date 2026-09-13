@@ -164,15 +164,15 @@ The changed-file density gate has bounded scope. Its implementation semantics
 are described below. Execute documentation audits in the manager's slow PR
 stage; this description grants no local pre-push permission.
 
-- It compares the working branch with its merge base against the recorded
-  `featureHeadSha`; the packet must prove `originMainSha` ancestor of
-  `pinnedLocalDevSha` ancestor/equal to `featureHeadSha`.
-- Prime creates every feature branch and worktree strictly from the exact
-  `pinnedLocalDevSha`; no alternate base is permitted. `originMainSha` proves
-  freshly fetched-main ancestry only and is not the feature source. Existing
-  canonical feature refs must equal `featureHeadSha` exactly. Initial equality
-  and descendant reruns are valid. Missing, stale, mismatched, or unprovable
-  evidence fails closed.
+- It compares the working branch with the merge base of the canonical feature
+  branch resolved at audit time. The packet may carry `originMainSha` and
+  `pinnedLocalDevSha` as bootstrap evidence; require the former to be an
+  ancestor of the latter. Prime creates every feature branch and worktree from
+  the current committed local-dev feature base and preserves it. The branch
+  name is the workflow authority. Resolve its latest committed head before the
+  audit. If the branch advances, follow the latest head and rerun the audit.
+  Missing or unprovable bootstrap/branch evidence fails closed; observed SHAs
+  remain run evidence only.
 - A pure rename within persistent Cortex keeps its source ancestry.
 - A rename from outside persistent Cortex checks the full destination.
 - A Git type change into regular Cortex Markdown checks the full file.

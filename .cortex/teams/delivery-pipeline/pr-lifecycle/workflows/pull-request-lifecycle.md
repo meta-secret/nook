@@ -10,7 +10,8 @@ manager owns publication, slow PR validation, and promotion.
 
 ## Required actions
 
-- Execute only the packet's repository, revision, task, and target.
+- Execute only the packet's repository, branch or frozen revision, task, and
+  target.
 - Return the terminal operation handoff to Delivery Pipeline Team Gizmo.
 - Invoke local integration only under the feature Gizmo's packet.
 - Invoke snapshot publication and fast-forward promotion only under a dev-manager packet.
@@ -32,21 +33,23 @@ manager owns publication, slow PR validation, and promotion.
 
 ## Procedure
 
-1. Confirm the packet's live target and expected SHA.
+1. Confirm the packet's live target and canonical branch or explicitly frozen
+   revision.
 2. Execute the named operation.
-   - Feature compilation first verifies the Prime-authorized canonical branch
-     and exact SHA, then pushes that ref and invokes the remote build-only task.
-     Temporary leaf and Team Gizmo branches are never pushed or used as the
-     workflow ref.
+   - Feature compilation first re-fetches and resolves the latest committed
+     head of the Prime-authorized canonical branch, then pushes that ref and
+     invokes the remote build-only task. A branch advance follows the latest
+     head and reruns affected evidence. Temporary leaf and Team Gizmo branches
+     are never pushed or used as the workflow ref.
    - Local landing uses local integration with positive feature build evidence.
    - Manager publication uses snapshot publication.
 3. The dev manager invokes `dev:pr-manager` to create or update one open
-   dev-to-main PR. PR Lifecycle Agent only observes the resulting exact PR identity.
+   dev-to-main PR. PR Lifecycle Agent only observes the resulting PR identity.
    - Use [PR metadata](../../../../gizmo-prime/workflows/pull-requests.md#pr-title-and-description).
    - A merged PR is never reused for a later cycle.
 4. Request the full existing slow PR checks under the manager packet.
    - Preserve e2e opt-ins and security-required focused checks.
-   - Freeze the captured dev SHA.
+   - Freeze the captured dev SHA for this manager validation cycle.
    - Return failed, running, and successful results without hiding any gate.
 5. Collect review and security evidence for the manager's verdict.
 6. Execute fast-forward promotion only under a separate promotion packet.
@@ -68,14 +71,18 @@ manager owns publication, slow PR validation, and promotion.
   underlying cause and route the repair to its owning boundary. Before fixing,
   the repair must write a focused unit test at that boundary. Direct e2e-test
   edits are allowed only when a unit test is infeasible (rare).
-- Do not mutate scope or automatically retry publication under stale authority.
+- Do not mutate scope or automatically retry publication under a changed
+  repository, target, or frozen manager revision. A feature-branch advance is
+  followed by re-resolving the latest head and rerunning affected evidence.
 
 ## Reactive observation
 
 Delivery Pipeline Team Gizmo starts a fresh PR Lifecycle Agent child for each
 check-observation iteration.
 Each child subscribes before reading its initial GitHub snapshot. That snapshot
-freezes the iteration head. A changed head is a blocker, never a new assignment.
+records the iteration head for its evidence. If the canonical branch advances,
+the controller follows the latest head and starts a fresh observation iteration;
+the old result is not reused.
 
 ### Required actions
 

@@ -15,15 +15,15 @@ It handles only AI-owned Loom work named in the packet.
 ## Required actions
 
 - Accept the packet from AI Team Gizmo through the active harness.
-- Consume the Prime-issued `originMainSha`, `pinnedLocalDevSha`, and
-  `featureHeadSha`. Require `originMainSha` ancestor of `pinnedLocalDevSha`
-  ancestor of `featureHeadSha`. Prime creates every feature branch and worktree
-  strictly from the exact `pinnedLocalDevSha`; no alternate base is permitted.
-  The existing canonical feature ref and detached
-  implementation HEAD must equal `featureHeadSha` exactly. Initial equality
-  and descendant reruns are valid. Do not use stale local refs or resolve or
-  guess a base independently. Missing, mismatched, stale, or unprovable
-  evidence fails closed.
+- Consume the Prime-issued canonical feature branch name and bootstrap
+  evidence. `originMainSha` identifies the freshly fetched `origin/main` and
+  `pinnedLocalDevSha` identifies the synchronized local-dev feature base;
+  `originMainSha` must be its ancestor. The branch name is the workflow
+  authority. Resolve its latest committed head before this stage and start
+  from the current parent frontier. If the branch advances, follow the latest
+  head and rerun affected evidence. Do not use stale local refs or resolve or
+  guess a base independently. Observed SHAs are run evidence only. Missing or
+  unprovable bootstrap/branch evidence fails closed.
 - Read only the parent authorities and task-specific evidence needed for the packet.
 - Write only the assigned AI-owned Loom scope.
 - Commit the complete scoped iteration during the granted commit turn.

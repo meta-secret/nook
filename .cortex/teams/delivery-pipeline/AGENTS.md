@@ -40,7 +40,8 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
   complete multiagent delivery architecture.
 - Accept a high-level packet only from Gizmo Prime through the active harness.
 - Require each packet to name the operation, repository, bounded scope,
-  controller, expected source SHA, target identity, and acceptance evidence.
+  controller, canonical branch or explicitly frozen source SHA, target
+  identity, and acceptance evidence.
 - Use Team Gizmo's one team worktree for Level 1 delivery-pipeline
   orchestration, commit-level handoffs, and remote-task packets.
 - Require Team Gizmo to dispatch internal execution through the active harness.
@@ -49,17 +50,19 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
   scopes and shared mutations.
 - Route packetized GitHub, pull-request, check, review, status, publication,
   promotion, and bounded local-dev mechanics to the PR Lifecycle Agent.
-- For feature delivery, forward Gizmo Prime's exact canonical feature branch
-  name and `featureHeadSha` unchanged. PR Lifecycle must push that ref and
-  invoke its remote task after verifying the ref and SHA.
+- For feature delivery, forward Gizmo Prime's canonical feature branch name
+  unchanged. PR Lifecycle must re-fetch and resolve that branch's latest
+  committed head before pushing or invoking its remote task. A branch advance
+  follows the latest head and reruns affected evidence.
 - Preserve the Feature Gizmo or Dev Manager as the policy controller in every
   child packet.
-- Require the PR Lifecycle Agent to verify the live target and expected SHA
-  before acting.
+- Require the PR Lifecycle Agent to verify the live target and current branch
+  head before acting. An observed SHA identifies run evidence; it is not
+  cross-stage feature authority.
 - Keep feature-stage remote execution build-only. Tests, coverage, e2e, and
   preflight remain outside that stage.
 - Keep `dev:land` serialized and limited to the named local development
-  checkout and feature SHA.
+  checkout and current canonical feature branch state.
 - Keep `dev:publish` limited to the Dev Manager's selected committed snapshot.
 - Keep `dev:promote` limited to the Dev Manager's separately authorized,
   fully validated, frozen SHA.
@@ -86,7 +89,9 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
 - Do not use squash, rebase, force-push, a stock pull-request merge, or a
   promotion merge commit.
 - Do not close a pull request manually as a substitute for merged status.
-- Do not infer authority for a different SHA, branch, repository, or target.
+- Do not infer authority for a different branch, repository, or target. A
+  feature commit SHA is observational evidence unless a manager packet
+  explicitly freezes a dev snapshot for validation or promotion.
 - Do not create a scheduler, daemon, retry queue, journal, lease, or durable
   lifecycle service.
 - Do not use administrator capability to skip required checks or verdicts.
@@ -101,8 +106,9 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
   decisions.
 - **PR Lifecycle Agent:** executes packetized external GitHub, pull-request,
   check, review, status, publication, and promotion mechanics. Under a
-  Prime-authorized feature packet, it pushes the exact canonical feature ref
-  and invokes the remote task for that SHA. It also runs
+  Prime-authorized feature packet, it re-fetches the canonical feature ref,
+  resolves its latest committed head, pushes that ref, and invokes the remote
+  task for that head. It also runs
   the three bounded local-dev tasks: `dev:land`, `dev:publish`, and
   `dev:promote`. It returns evidence and never supplies a policy verdict.
 - **Dev Manager:** selects the dev snapshot, owns slow validation, owns
@@ -114,8 +120,10 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
 ## Packet and handoff procedure
 
 1. Gizmo Prime sends Team Gizmo a high-level delivery-pipeline packet.
-   - The packet includes the exact committed source SHA when the operation is
-     revision-dependent.
+   - The packet includes an exact committed source SHA only when the operation
+     is revision-dependent, such as a frozen manager validation or promotion
+     snapshot. Feature delivery names the canonical branch and resolves its
+     latest head at execution time.
    - A manager-owned packet retains the Dev Manager as policy owner.
 2. Team Gizmo validates the packet and decomposes only the delivery mechanics
    within this team's boundary.
@@ -123,31 +131,33 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
    - A missing or unavailable harness fails the operation closed.
 3. Team Gizmo sends the PR Lifecycle Agent one bounded child packet per mechanical
    operation.
-   - The child packet carries the original controller, target, expected SHA,
-     required evidence, and bounded write scope.
+   - The child packet carries the original controller, target, branch or
+     explicitly frozen snapshot, required evidence, and bounded write scope.
    - Team Gizmo may not add authority while translating the packet.
 4. The PR Lifecycle Agent performs the named operation and returns one terminal
    handoff.
    - The handoff names the operation, source SHA, observed target, run or PR
      identifiers, result, evidence, and unresolved blocker.
-5. Team Gizmo checks that the result still applies to the packet's exact
-   target. It synthesizes only high-level child evidence and reports it to
+5. Team Gizmo checks that the result still applies to the packet's current
+     target and branch head. It synthesizes only high-level child evidence and reports it to
    Gizmo Prime.
    - Manager-owned evidence also returns to the Dev Manager.
    - Team Gizmo does not convert evidence into a readiness or promotion
      verdict.
-6. A changed head, target mismatch, missing evidence, protection rejection,
-   or failed child task becomes a blocker.
-   - The controller decides whether to issue a fresh packet.
-   - The team does not retry under stale authority or substitute another
-     operation.
+6. A target mismatch, missing evidence, protection rejection, or failed child
+   task becomes a blocker. A feature-branch advance is not stale authority:
+   re-resolve the latest committed head and rerun affected evidence.
+   - The controller decides whether to issue a fresh packet for a new
+     operation or frozen manager snapshot.
+   - The team never substitutes another branch, repository, or operation.
 
-## Exact-SHA delivery invariants
+## Delivery evidence invariants
 
-- Evidence is valid only for the exact source SHA and target named in its
-  packet.
-- A changed head invalidates prior review, check, and readiness evidence.
-- Local landing reports both the feature SHA and resulting local-dev SHA.
+- Feature evidence identifies the branch and the observed committed head at
+  the time of the operation. A branch advance invalidates affected review or
+  build evidence and triggers a rerun against the latest head.
+- Local landing reports the observed feature commit and resulting local-dev
+  SHA.
 - Publication freezes the selected remote-dev SHA for its validation cycle.
 - Promotion requires the unchanged fully validated dev SHA and remote-main
   equality after the guarded operation.
