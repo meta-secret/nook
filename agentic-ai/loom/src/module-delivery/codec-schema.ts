@@ -50,6 +50,7 @@ export type ModulePlanNodeListRequest = {
 
 export type RejectedModulePlanRequest = {
   readonly code: ModuleDeliveryIssueCode;
+  readonly path?: string;
   readonly message: string;
 };
 

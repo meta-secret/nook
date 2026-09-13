@@ -25,6 +25,9 @@ import {
   ModuleDeliveryValidationStatus,
   ModuleDeliveryPlanDecoder,
   ModuleDeliveryPlanSchema,
+  MAX_MODULE_DELIVERY_EDGE_CONTRACTS,
+  MAX_MODULE_DELIVERY_EXPECTED_PRODUCERS,
+  MAX_MODULE_DELIVERY_NODES,
 } from '../../src/module-delivery/index.ts';
 
 import type {
@@ -40,6 +43,7 @@ import type {
 } from '../../src/module-delivery/index.ts';
 
 import { TeamKey } from '../../src/team-agents/catalog.ts';
+import { MAX_MODULE_DELIVERY_STRING_LIST_ENTRIES } from '../../src/module-delivery/evidence-limits.ts';
 
 type LegacySynthesisNode = Omit<LegacyModuleDeliveryNode, 'kind'> & {
   readonly kind: ModuleDeliveryTaskKind.EvidenceSynthesis;
@@ -542,6 +546,90 @@ describe('reviewed module delivery plan', () => {
     expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
       ModuleDeliveryIssueCode.InvalidField,
     );
+  });
+});
+
+describe('bounded module delivery plan transport collections', () => {
+  const basePlan = ModuleDeliveryPlanValidationScenario.plan({
+    nodes: [CORE_NODE],
+    edgeContracts: [],
+  });
+
+  const expectLimitRejection = (request: {
+    readonly serialized: string;
+    readonly path: string;
+  }): void => {
+    const result =
+      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
+        request.serialized,
+      );
+    expect(result.status).toBe(ModuleDeliveryCompatibilityStatus.Rejected);
+    if (result.status !== ModuleDeliveryCompatibilityStatus.Rejected) return;
+    expect(result.issues[0]?.code).toBe(ModuleDeliveryIssueCode.LimitExceeded);
+    expect(result.issues[0]?.path).toBe(request.path);
+  };
+
+  test('rejects an oversized root node list before node decoding', () => {
+    const serialized = JSON.stringify({
+      ...basePlan,
+      nodes: Array.from(
+        { length: MAX_MODULE_DELIVERY_NODES + 1 },
+        () => CORE_NODE,
+      ),
+    });
+    expectLimitRejection({ serialized, path: '$.nodes' });
+  });
+
+  test('rejects an oversized edge contract list before edge decoding', () => {
+    const serialized = JSON.stringify({
+      ...basePlan,
+      edgeContracts: Array.from(
+        { length: MAX_MODULE_DELIVERY_EDGE_CONTRACTS + 1 },
+        () => ({}),
+      ),
+    });
+    expectLimitRejection({ serialized, path: '$.edgeContracts' });
+  });
+
+  test('rejects oversized expected producers before producer decoding', () => {
+    const { workspace: _workspace, ...synthesisBase } = CORE_NODE;
+    const serialized = JSON.stringify({
+      ...basePlan,
+      nodes: [
+        {
+          ...synthesisBase,
+          kind: ModuleDeliveryTaskKind.EvidenceSynthesis,
+          resources: { read: [], write: [], evidenceSurface: [] },
+          evidenceInput: {
+            schema: ModuleDeliveryEvidenceInputSchema.AcceptedProviderEvidenceV1,
+            expectedProducers: Array.from(
+              { length: MAX_MODULE_DELIVERY_EXPECTED_PRODUCERS + 1 },
+              () => ({}),
+            ),
+          },
+        },
+      ],
+    });
+    expectLimitRejection({
+      serialized,
+      path: '$.nodes[0].evidenceInput.expectedProducers',
+    });
+  });
+
+  test('rejects oversized nested string arrays before entry decoding', () => {
+    const serialized = JSON.stringify({
+      ...basePlan,
+      parentJoin: {
+        ...basePlan.parentJoin,
+        validationCommands: Array.from({
+          length: MAX_MODULE_DELIVERY_STRING_LIST_ENTRIES + 1,
+        }).fill('task validation'),
+      },
+    });
+    expectLimitRejection({
+      serialized,
+      path: '$.parentJoin.validationCommands',
+    });
   });
 });
 

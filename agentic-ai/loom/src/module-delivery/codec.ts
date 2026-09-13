@@ -15,6 +15,8 @@ import type {
   RejectedModulePlanRequest,
 } from './codec-schema.ts';
 import {
+  MAX_MODULE_DELIVERY_EDGE_CONTRACTS,
+  MAX_MODULE_DELIVERY_NODES,
   MODULE_DELIVERY_PLAN_VERSION,
   ModuleDeliveryCompatibilityStatus,
   ModuleDeliveryIssueCode,
@@ -62,7 +64,8 @@ export class ModuleDeliveryPlanSchema {
     } catch (error) {
       if (error instanceof ModulePlanDecodeFailure) {
         const request: RejectedModulePlanRequest = {
-          code: ModuleDeliveryIssueCode.InvalidField,
+          code: error.code,
+          path: error.path,
           message: error.message,
         };
         return ModuleDeliveryPlanSchema.rejected(request);
@@ -121,7 +124,7 @@ export class ModuleDeliveryPlanSchema {
       path: '$.parentJoin',
     };
     const nodeListRequest: ModulePlanNodeListRequest = {
-      values: fields.nodeList('nodes'),
+      values: fields.nodeList('nodes', MAX_MODULE_DELIVERY_NODES),
       legacy,
     };
     const generation = legacy ? 1 : fields.positiveInteger('generation');
@@ -136,7 +139,7 @@ export class ModuleDeliveryPlanSchema {
     );
     const nodes = ModuleDeliveryPlanNodeCodec.decodeNodes(nodeListRequest);
     const edgeContracts = ModuleDeliveryPlanNodeCodec.decodeEdgeContracts(
-      fields.list('edgeContracts'),
+      fields.list('edgeContracts', MAX_MODULE_DELIVERY_EDGE_CONTRACTS),
     );
     const common = {
       generation,
@@ -219,7 +222,7 @@ export class ModuleDeliveryPlanSchema {
   ): RejectedCompatibleModuleDeliveryPlan {
     const issue: ModuleDeliveryIssue = {
       code: request.code,
-      path: '$',
+      path: request.path ?? '$',
       message: request.message,
     };
     return {
@@ -229,6 +232,6 @@ export class ModuleDeliveryPlanSchema {
   }
 
   private static fail(message: string): never {
-    throw new ModulePlanDecodeFailure(message);
+    throw new ModulePlanDecodeFailure({ message });
   }
 }

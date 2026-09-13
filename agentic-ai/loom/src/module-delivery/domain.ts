@@ -7,6 +7,12 @@ export const MODULE_DELIVERY_PLAN_VERSION = 4;
 export type ModuleDeliveryPlanInputVersion =
   1 | 2 | 3 | typeof MODULE_DELIVERY_PLAN_VERSION;
 export const MAX_MODULE_DELIVERY_NODES = 64;
+/** A plan can describe every directed edge between distinct task nodes. */
+export const MAX_MODULE_DELIVERY_EDGE_CONTRACTS =
+  MAX_MODULE_DELIVERY_NODES * (MAX_MODULE_DELIVERY_NODES - 1);
+/** Evidence synthesis may name each task node at most once. */
+export const MAX_MODULE_DELIVERY_EXPECTED_PRODUCERS =
+  MAX_MODULE_DELIVERY_NODES;
 export const MAX_MODULE_DELIVERY_AGENT_DEPTH = 3;
 export const MAX_MODULE_DELIVERY_ATTEMPTS = 5;
 export const CORTEX_TEAM_WRITER_EXPERT = 'cortex_team_writer';

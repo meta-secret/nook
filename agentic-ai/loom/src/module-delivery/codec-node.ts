@@ -4,6 +4,9 @@ import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
 import { TeamKey, TeamAuthorityCatalog } from '../team-agents/catalog.ts';
 import {
   CORTEX_TEAM_WRITER_EXPERT,
+  MAX_MODULE_DELIVERY_EDGE_CONTRACTS,
+  MAX_MODULE_DELIVERY_EXPECTED_PRODUCERS,
+  MAX_MODULE_DELIVERY_NODES,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryEvidenceInputSchema,
   ModuleDeliveryJoinKind,
@@ -11,6 +14,7 @@ import {
   ModuleDeliveryTaskKind,
   ModuleDeliveryWorkspaceKind,
   ModuleTaskOwnership,
+  ModuleDeliveryIssueCode,
 } from './domain.ts';
 import type {
   ModuleDeliveryBaseline,
@@ -91,6 +95,13 @@ export class ModuleDeliveryPlanNodeCodec {
   static decodeNodes(
     request: ModulePlanNodeListRequest,
   ): readonly ModuleDeliveryNodeV2[] {
+    ModuleDeliveryPlanNodeCodec.assertCollectionLimit(
+      {
+        values: request.values,
+        path: '$.nodes',
+        maximum: MAX_MODULE_DELIVERY_NODES,
+      },
+    );
     const nodes: ModuleDeliveryNodeV2[] = [];
     for (const [index, value] of request.values.entries()) {
       const nodeRequest: ModulePlanIndexedNodeRequest = {
@@ -432,7 +443,10 @@ export class ModuleDeliveryPlanNodeCodec {
         `${request.path}.schema: unsupported evidence input schema.`,
       );
     }
-    const values = fields.nodeList('expectedProducers');
+    const values = fields.nodeList(
+      'expectedProducers',
+      MAX_MODULE_DELIVERY_EXPECTED_PRODUCERS,
+    );
     const expectedProducers: ModuleDeliveryExpectedProducerIdentity[] = [];
     for (const [index, value] of values.entries()) {
       const producerRequest: ModulePlanIndexedProducerRequest = {
@@ -505,6 +519,13 @@ export class ModuleDeliveryPlanNodeCodec {
   static decodeEdgeContracts(
     values: ModulePlanTransportList,
   ): readonly ModuleDeliveryEdgeContract[] {
+    ModuleDeliveryPlanNodeCodec.assertCollectionLimit(
+      {
+        values,
+        path: '$.edgeContracts',
+        maximum: MAX_MODULE_DELIVERY_EDGE_CONTRACTS,
+      },
+    );
     const contracts: ModuleDeliveryEdgeContract[] = [];
     for (const [index, value] of values.entries()) {
       const path = `$.edgeContracts[${index}]`;
@@ -539,6 +560,31 @@ export class ModuleDeliveryPlanNodeCodec {
   }
 
   private static fail(message: string): never {
-    throw new ModulePlanDecodeFailure(message);
+    throw new ModulePlanDecodeFailure({ message });
+  }
+
+  private static assertCollectionLimit(request: {
+    readonly values: ModulePlanTransportList;
+    readonly path: string;
+    readonly maximum: number;
+  }): void {
+    if (request.values.length > request.maximum)
+      ModuleDeliveryPlanNodeCodec.failLimit({
+        path: request.path,
+        observed: request.values.length,
+        maximum: request.maximum,
+      });
+  }
+
+  private static failLimit(request: {
+    readonly path: string;
+    readonly observed: number;
+    readonly maximum: number;
+  }): never {
+    throw new ModulePlanDecodeFailure({
+      message: `${request.path}: array contains ${request.observed} entries; maximum is ${request.maximum}.`,
+      code: ModuleDeliveryIssueCode.LimitExceeded,
+      path: request.path,
+    });
   }
 }
