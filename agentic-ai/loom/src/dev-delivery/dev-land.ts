@@ -10,6 +10,7 @@ import {
   type CommitSha,
   type DevFailure,
   type DevLandRequest,
+  type RemoteBranchSnapshot,
 } from './dev-types.ts';
 
 export enum DevLandMode {
@@ -29,6 +30,8 @@ export class DevLandCommand {
   constructor(private readonly workspace: DevDeliveryWorkspace) {}
 
   execute(request: DevLandRequest): Result<DevLandOutcome, DevFailure> {
+    const packet = this.validatePacket(request);
+    if (packet.isErr()) return err(packet.error);
     const featureBranch = this.workspace.git.currentBranch();
     if (featureBranch.isErr()) return err(featureBranch.error);
     const branchGuard = this.requireFeatureBranch(featureBranch.value);
@@ -68,8 +71,9 @@ export class DevLandCommand {
     const lease = this.workspace.localLock();
     if (lease.isErr()) return err(lease.error);
     const result = this.landInsideLock({
+      ...request,
       featureBranch: featureBranch.value,
-      expectedFeatureSha: request.expectedFeatureSha,
+      initialRemoteFeature: remoteFeature.value,
     });
     const released = lease.value.release();
     if (released.isErr()) return err(released.error);
@@ -77,9 +81,16 @@ export class DevLandCommand {
   }
 
   private landInsideLock(request: {
+    readonly originMainSha: CommitSha;
+    readonly pinnedLocalDevSha: CommitSha;
+    readonly featureHeadSha: CommitSha;
     readonly featureBranch: BranchName;
     readonly expectedFeatureSha: CommitSha;
+    readonly initialRemoteFeature: RemoteBranchSnapshot;
   }): Result<DevLandOutcome, DevFailure> {
+    const refreshed = this.workspace.git.refreshManagedRefs({ prune: true });
+    if (refreshed.isErr()) return err(refreshed.error);
+
     const currentFeature = this.workspace.git.currentBranch();
     if (currentFeature.isErr()) return err(currentFeature.error);
     if (!currentFeature.value.equals(request.featureBranch)) {
@@ -107,7 +118,11 @@ export class DevLandCommand {
     if (remoteFeature.isErr()) return err(remoteFeature.error);
     if (
       remoteFeature.value.presence !== RemoteBranchPresence.Present ||
-      !remoteFeature.value.sha.equals(request.expectedFeatureSha)
+      !remoteFeature.value.sha.equals(request.expectedFeatureSha) ||
+      !this.sameRemoteSnapshot(
+        remoteFeature.value,
+        request.initialRemoteFeature,
+      )
     ) {
       return err({
         kind: DevFailureKind.Race,
@@ -137,6 +152,52 @@ export class DevLandCommand {
       return err({
         kind: DevFailureKind.Configuration,
         message: 'origin/main must exist before landing a feature into dev',
+      });
+    }
+    if (!main.value.sha.equals(request.originMainSha)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Live origin/main is at ${main.value.sha.value()}, but the landing packet requires ${request.originMainSha.value()}`,
+      });
+    }
+    const pinnedFromMain = this.workspace.git.ancestry({
+      ancestor: request.originMainSha,
+      descendant: request.pinnedLocalDevSha,
+      workingDirectory: development.value.path,
+    });
+    if (pinnedFromMain.isErr()) return err(pinnedFromMain.error);
+    if (pinnedFromMain.value !== Ancestry.Ancestor) {
+      return err({
+        kind: DevFailureKind.Conflict,
+        message:
+          'The pinned local-dev baseline is not descended from the packet origin/main SHA',
+      });
+    }
+    const featureFromPinned = this.workspace.git.ancestry({
+      ancestor: request.pinnedLocalDevSha,
+      descendant: request.featureHeadSha,
+      workingDirectory: development.value.path,
+    });
+    if (featureFromPinned.isErr()) return err(featureFromPinned.error);
+    if (featureFromPinned.value !== Ancestry.Ancestor) {
+      return err({
+        kind: DevFailureKind.Conflict,
+        message:
+          'The canonical feature head is not descended from the pinned local-dev baseline',
+      });
+    }
+    const devFromPinned = this.workspace.git.ancestry({
+      ancestor: request.pinnedLocalDevSha,
+      descendant: developmentHead.value,
+      workingDirectory: development.value.path,
+    });
+    if (devFromPinned.isErr()) return err(devFromPinned.error);
+    if (devFromPinned.value !== Ancestry.Ancestor) {
+      return err({
+        kind: DevFailureKind.Conflict,
+        message:
+          'Canonical local dev does not start from or contain the pinned local-dev baseline',
       });
     }
     const mainAncestry = this.workspace.git.ancestry({
@@ -196,11 +257,26 @@ export class DevLandCommand {
     if (
       beforeMergeRemoteFeature.value.presence !==
         RemoteBranchPresence.Present ||
-      !beforeMergeRemoteFeature.value.sha.equals(request.expectedFeatureSha)
+      !beforeMergeRemoteFeature.value.sha.equals(request.expectedFeatureSha) ||
+      !beforeMergeRemoteFeature.value.sha.equals(request.featureHeadSha) ||
+      !this.sameRemoteSnapshot(
+        beforeMergeRemoteFeature.value,
+        request.initialRemoteFeature,
+      )
     ) {
       return err({
         kind: DevFailureKind.Race,
         message: 'The pushed feature branch changed before its local landing',
+      });
+    }
+    const beforeMergeDevelopment = this.workspace.developmentWorktree();
+    if (beforeMergeDevelopment.isErr())
+      return err(beforeMergeDevelopment.error);
+    if (beforeMergeDevelopment.value.path !== development.value.path) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The canonical development worktree changed before its feature merge could begin',
       });
     }
     const beforeMergeDevelopmentBranch = this.workspace.git.branchAt(
@@ -232,12 +308,53 @@ export class DevLandCommand {
     if (beforeMergeMain.isErr()) return err(beforeMergeMain.error);
     if (
       beforeMergeMain.value.presence !== RemoteBranchPresence.Present ||
-      !beforeMergeMain.value.sha.equals(main.value.sha)
+      !beforeMergeMain.value.sha.equals(request.originMainSha)
     ) {
       return err({
         kind: DevFailureKind.Race,
         message:
           'origin/main changed before the feature could land in local dev',
+      });
+    }
+
+    const finalPinnedFromMain = this.workspace.git.ancestry({
+      ancestor: request.originMainSha,
+      descendant: request.pinnedLocalDevSha,
+      workingDirectory: development.value.path,
+    });
+    if (finalPinnedFromMain.isErr()) return err(finalPinnedFromMain.error);
+    if (finalPinnedFromMain.value !== Ancestry.Ancestor) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The pinned local-dev baseline no longer descends from live origin/main',
+      });
+    }
+    const finalFeatureFromPinned = this.workspace.git.ancestry({
+      ancestor: request.pinnedLocalDevSha,
+      descendant: request.featureHeadSha,
+      workingDirectory: development.value.path,
+    });
+    if (finalFeatureFromPinned.isErr())
+      return err(finalFeatureFromPinned.error);
+    if (finalFeatureFromPinned.value !== Ancestry.Ancestor) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The feature head changed its provenance from the pinned local-dev baseline',
+      });
+    }
+    const finalDevFromPinned = this.workspace.git.ancestry({
+      ancestor: request.pinnedLocalDevSha,
+      descendant: beforeMergeDevelopmentHead.value,
+      workingDirectory: development.value.path,
+    });
+    if (finalDevFromPinned.isErr()) return err(finalDevFromPinned.error);
+    if (finalDevFromPinned.value !== Ancestry.Ancestor) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'Canonical local dev changed to a head outside the pinned local-dev baseline',
       });
     }
 
@@ -280,5 +397,39 @@ export class DevLandCommand {
       });
     }
     return ok();
+  }
+
+  private validatePacket(request: DevLandRequest): Result<void, DevFailure> {
+    if (
+      !request ||
+      typeof request.originMainSha?.equals !== 'function' ||
+      typeof request.pinnedLocalDevSha?.equals !== 'function' ||
+      typeof request.featureHeadSha?.equals !== 'function' ||
+      typeof request.expectedFeatureSha?.equals !== 'function'
+    ) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message:
+          'The landing packet must include originMainSha, pinnedLocalDevSha, featureHeadSha, and expectedFeatureSha',
+      });
+    }
+    if (!request.featureHeadSha.equals(request.expectedFeatureSha)) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message:
+          `The landing packet featureHeadSha ${request.featureHeadSha.value()} does not match its published expectedFeatureSha ${request.expectedFeatureSha.value()}`,
+      });
+    }
+    return ok();
+  }
+
+  private sameRemoteSnapshot(
+    left: RemoteBranchSnapshot,
+    right: RemoteBranchSnapshot,
+  ): boolean {
+    if (left.presence !== right.presence) return false;
+    if (left.presence === RemoteBranchPresence.Absent) return true;
+    if (right.presence !== RemoteBranchPresence.Present) return false;
+    return left.sha.equals(right.sha);
   }
 }

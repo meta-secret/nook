@@ -289,6 +289,13 @@ export interface DevSnapshot {
 }
 
 export interface DevLandRequest {
+  /** Exact freshly fetched origin/main identity recorded by Gizmo Prime. */
+  readonly originMainSha: CommitSha;
+  /** Exact synchronized local-dev baseline selected for this feature. */
+  readonly pinnedLocalDevSha: CommitSha;
+  /** Exact canonical feature frontier accepted for local integration. */
+  readonly featureHeadSha: CommitSha;
+  /** Exact published feature head that the landing operation will merge. */
   readonly expectedFeatureSha: CommitSha;
 }
 
