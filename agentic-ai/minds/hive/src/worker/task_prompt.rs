@@ -29,7 +29,7 @@ impl ClaimedTask {
                 .collect::<Vec<_>>()
                 .join("\n")
         };
-        let delivery = task.kind.delivery_instructions(&task.id);
+        let delivery = task.kind.delivery_instructions();
         let terminal_contract = task.kind.terminal_contract();
         format!(
             "You are Hive worker attempt {} for task {}.\n\
@@ -69,45 +69,45 @@ impl TaskId {
 }
 
 impl model::TaskKind {
-    fn delivery_instructions(&self, task_id: &TaskId) -> String {
+    fn delivery_instructions(&self) -> String {
         if self.is_main_repair() {
-            let branch = task_id.repair_branch_name();
-            format!(
-                "\n\nThis is an end-to-end Main repair. You own it until delivery is complete. \
-         You are a trusted operator with direct GitHub access through `GH_TOKEN`. Use standard \
-         `git`, `gh`, and repository Taskfile commands; run `gh auth setup-git` before the first \
-         authenticated Git push. Reuse or create the deterministic branch \
-         `{branch}` (or the next `-gN` generation after a closed or red-Main delivery), publish \
-         the repair PR with a `[Hive]` title and both the `hive` and \
-         `ci:full-e2e` labels, traverse all \
-         checks and review feedback, fix and reply \
-         to every actionable item, run `task hive:guest:pr:ready PR=<number>` for the exact-head \
-         readiness audit, squash-merge, verify the \
-         resulting Main workflow is green, and publish the required Workbench completion records \
-         and statistics. Inspect GitHub first because a replacement Pod may be resuming a branch, \
-         PR, merge, or Main verification completed by an earlier attempt. A merged generation is \
-         not finished when it has unresolved actionable review: create the next `-gN` delivery \
-         branch from current `origin/main`, implement the follow-up there, open and own a new \
-         marked Hive PR, then reply to the original review threads with the follow-up link. Keep \
-         those original threads unresolved until the follow-up is successfully merged, then resolve \
-         them before reporting completion. Do not repeatedly audit an immutable merged branch. Do not report completed \
-         before the squash merge and green Main verification. If blocked by another change, report \
+            "\n\nThis is an end-to-end Main repair. Track the durable incident until the \
+         authorized delivery owners return completion evidence. You are a trusted operator with \
+         direct GitHub access through `GH_TOKEN`; use standard `git`, `gh`, and repository Taskfile \
+         commands only within the role authorization below. Route implementation through Gizmo Prime and the owning Team \
+         Gizmos. Consume the caller-recorded `originMainSha`, `pinnedLocalDevSha`, and \
+         `featureHeadSha`; require `originMainSha` to be an ancestor of `pinnedLocalDevSha` and \
+         `pinnedLocalDevSha` to be an ancestor of or equal to `featureHeadSha`. Gizmo Prime creates \
+         every new canonical feature branch and worktree strictly from the exact \
+         `pinnedLocalDevSha`. Never use a remote-tracking ref as that base; freshly fetched \
+         `origin/main` is ancestry evidence only. Obtain exact-head remote build-only evidence and \
+         required review, then have Gizmo Prime authorize `dev:land` through Delivery Pipeline's \
+         Team Gizmo and PR Lifecycle Agent. The manually run Dev Manager alone selects and \
+         publishes a dev snapshot, invokes `dev:pr-manager`, owns the full slow checks and \
+         readiness verdict, and authorizes guarded fast-forward promotion through Delivery \
+         Pipeline. Inspect GitHub first because a replacement Pod may be resuming durable feature, \
+         dev-validation, promotion, or Main-verification state completed by an earlier attempt. \
+         Route every actionable follow-up through the same feature and local-dev delivery path. \
+         Do not create or update a pull request, squash, rebase, force-push, or use a PR merge method. \
+         Verify the resulting Main workflow is green and publish the required Workbench completion \
+         records and statistics before reporting completion. If blocked by another change, report \
          structured blocked status and identify the blocker precisely."
-            )
+                .to_owned()
         } else if self.is_blocker() {
             "\n\nThis is a prerequisite-ownership task, not a passive wait instruction. Resolve the \
          prerequisite yourself using the available repository and GitHub access. When the task \
          names a GitHub Actions run, inspect its current terminal state and failed logs; if it \
-         belongs to an open repair PR, check out that existing PR branch, fix it there, push a \
-         replacement exact-head run, and follow it to a terminal result. Before concluding the \
+         belongs to an active repair, route the correction through the owning feature Gizmo and \
+         canonical local-dev delivery path, then follow the replacement exact-head evidence to a \
+         terminal result. Never create or update a pull request. Before concluding the \
          prerequisite cannot be completed, inspect every active owning Main repair listed below. Only when \
-         every listed repair has already been merged and has a successful Main run containing its \
-         merge is this prerequisite obsolete: report completed with `obsolete` set to true, no \
+         every listed repair has already been promoted and has a successful Main run containing its \
+         promoted commit is this prerequisite obsolete: report completed with `obsolete` set to true, no \
          changes, and explain that it no longer blocks delivery, even when the requested capability \
          remains unavailable. For every genuine prerequisite completion and every non-blocker task, \
          set `obsolete` to false. When no owning repair is listed, or any listed repair is still \
          live, do not use this obsolescence rule. This task is a dependency leaf. Never request \
-         another blocker and never create a duplicate repair PR. If the prerequisite cannot be \
+         another blocker and never start a parallel delivery. If the prerequisite cannot be \
          completed with the authority and tools already supplied, report failed with a precise \
          explanation, `obsolete` set to false, and `blocker.present` set to false with empty \
          blocker details. Hive records that as a bounded failed attempt without creating a child \

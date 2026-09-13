@@ -760,7 +760,7 @@ mod tests {
     }
 
     #[test]
-    fn blocker_prompt_requires_active_pr_ownership() -> anyhow::Result<()> {
+    fn blocker_prompt_routes_active_repairs_through_the_feature_owner() -> anyhow::Result<()> {
         let task = ClaimedTask {
             id: TaskId::try_from("github-actions-pr-42")?,
             kind: "blocker".into(),
@@ -776,7 +776,9 @@ mod tests {
 
         let prompt = task.task_prompt();
         assert!(prompt.contains("prerequisite-ownership task"));
-        assert!(prompt.contains("check out that existing PR branch"));
+        assert!(prompt.contains("route the correction through the owning feature Gizmo"));
+        assert!(prompt.contains("canonical local-dev delivery path"));
+        assert!(prompt.contains("Never create or update a pull request"));
         assert!(prompt.contains("This task is a dependency leaf"));
         assert!(prompt.contains("this prerequisite obsolete"));
         assert!(prompt.contains("Never request another blocker"));
@@ -821,16 +823,20 @@ mod tests {
         let prompt = task.task_prompt();
 
         assert!(prompt.contains("GH_TOKEN"));
-        assert!(prompt.contains("codex/hive-main-failure-recovery"));
         assert!(prompt.contains("replacement Pod"));
         assert!(prompt.contains("Main verification"));
-        assert!(prompt.contains("[Hive]"));
-        assert!(prompt.contains("`hive`"));
-        assert!(prompt.contains("ci:full-e2e"));
-        assert!(prompt.contains("task hive:guest:pr:ready PR=<number>"));
-        assert!(prompt.contains("unresolved actionable review"));
-        assert!(prompt.contains("next `-gN` delivery branch"));
-        assert!(prompt.contains("Do not repeatedly audit an immutable merged branch"));
+        assert!(prompt.contains("`originMainSha`"));
+        assert!(prompt.contains("`pinnedLocalDevSha`"));
+        assert!(prompt.contains("`featureHeadSha`"));
+        assert!(prompt.contains("strictly from the exact `pinnedLocalDevSha`"));
+        assert!(prompt.contains("`origin/main` is ancestry evidence only"));
+        assert!(prompt.contains("Gizmo Prime authorize `dev:land`"));
+        assert!(prompt.contains("Dev Manager alone"));
+        assert!(prompt.contains("invokes `dev:pr-manager`"));
+        assert!(prompt.contains("Do not create or update a pull request"));
+        assert!(prompt.contains("guarded fast-forward promotion"));
+        assert!(!prompt.contains("squash-merge"));
+        assert!(!prompt.contains("branch from current `origin/main`"));
         assert!(prompt.contains("Never return the failed status"));
         assert!(prompt.contains("exactly one prerequisite request"));
         Ok(())
