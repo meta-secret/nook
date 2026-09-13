@@ -75,6 +75,14 @@ detailed authorization, evidence, and failure rules.
   delegation, and promotion. The manager invokes `dev:pr-manager`; Steward
   observes the PR and executes only review, check, status, and promotion
   mechanics under the manager's packet.
+- [Dev manager Gizmo](teams/dev-manager-gizmo/AGENTS.md) is the on-demand entry
+  and orchestration context for manually invoked dev-manager work.
+  - It must load the existing [Dev manager contract](teams/dev-manager/AGENTS.md),
+    which remains the canonical operational authority.
+  - It must load the [PR Steward contract](teams/pr-steward/AGENTS.md) for
+    authorized mechanics.
+  - It must remain behind the mandatory Gizmo gate and never bypass the GitHub
+    execution boundary.
 - [AI contract](teams/ai/AGENTS.md) and
   [graph](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, routing, and
   agent automation.

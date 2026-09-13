@@ -15,6 +15,15 @@ Use this file only to select one owning context. Do not preload linked graphs.
 - [Dev manager](teams/dev-manager/knowledge-graph.md): manually operated dev
   publication, dev PR creation/update, slow evidence, readiness, repair
   delegation, and fast-forward promotion policy.
+- [Dev manager Gizmo](teams/dev-manager-gizmo/AGENTS.md): on-demand entry and
+  orchestration context for manually invoked dev-manager work.
+  - Load the existing [Dev manager contract](teams/dev-manager/AGENTS.md) and
+    [knowledge graph](teams/dev-manager/knowledge-graph.md).
+  - Load the [PR Steward contract](teams/pr-steward/AGENTS.md) and
+    [knowledge graph](teams/pr-steward/knowledge-graph.md).
+  - Preserve the existing dev-manager contract as the canonical operational
+    authority. Never bypass the mandatory Gizmo gate or GitHub execution
+    boundary.
 - [Dev delivery architecture](gizmo/architecture/dev-delivery.md): canonical
   feature compilation, local integration, and dev-to-main contract.
 - [Gizmo Prime](gizmo/knowledge-graph.md): planning, delegation, integration,
