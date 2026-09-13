@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -71,6 +72,13 @@ interface SynchronizeWorktreeRequest {
   readonly target: CommitSha;
   readonly branch: ManagedBranch;
   readonly requireEquality: boolean;
+}
+
+interface BootstrapWorktreePathRequest {
+  readonly branch: ManagedBranch;
+  readonly requestedPath: string | undefined;
+  readonly records: readonly WorktreeRecord[];
+  readonly repositoryIdentity: string;
 }
 
 interface MutableWorktreeBlock {
@@ -239,19 +247,7 @@ export class DevGitRepository {
   }
 
   commonDirectory(): Result<string, DevFailure> {
-    const output = this.successful({
-      args: ['rev-parse', '--git-common-dir'],
-      workingDirectory: this.request.root,
-    });
-    if (output.isErr()) return err(output.error);
-    const common = output.value.stdout.trim();
-    if (!common) {
-      return err({
-        kind: DevFailureKind.Git,
-        message: 'Git did not return a common directory',
-      });
-    }
-    return ok(resolve(this.request.root, common));
+    return this.commonDirectoryAt(this.request.root);
   }
 
   worktrees(): Result<readonly WorktreeRecord[], DevFailure> {
@@ -409,15 +405,23 @@ export class DevGitRepository {
 
     const originMain = this.originMainSha();
     if (originMain.isErr()) return err(originMain.error);
-    const mainPath = this.bootstrapWorktreePath(
-      ManagedBranch.Main,
-      request.mainPath,
-    );
+    const records = this.worktrees();
+    if (records.isErr()) return err(records.error);
+    const repositoryIdentity = this.repositoryIdentityAt(this.request.root);
+    if (repositoryIdentity.isErr()) return err(repositoryIdentity.error);
+    const mainPath = this.bootstrapWorktreePath({
+      branch: ManagedBranch.Main,
+      requestedPath: request.mainPath,
+      records: records.value,
+      repositoryIdentity: repositoryIdentity.value,
+    });
     if (mainPath.isErr()) return err(mainPath.error);
-    const devPath = this.bootstrapWorktreePath(
-      ManagedBranch.Dev,
-      request.devPath,
-    );
+    const devPath = this.bootstrapWorktreePath({
+      branch: ManagedBranch.Dev,
+      requestedPath: request.devPath,
+      records: records.value,
+      repositoryIdentity: repositoryIdentity.value,
+    });
     if (devPath.isErr()) return err(devPath.error);
 
     const main = this.synchronizeWorktree({
@@ -626,29 +630,120 @@ export class DevGitRepository {
   }
 
   private bootstrapWorktreePath(
-    branch: ManagedBranch,
-    requestedPath: string | undefined,
+    request: BootstrapWorktreePathRequest,
   ): Result<string, DevFailure> {
-    if (requestedPath !== undefined) {
-      const path = resolve(requestedPath);
-      const currentBranch = this.branchAt(path);
-      if (currentBranch.isErr()) return err(currentBranch.error);
-      if (currentBranch.value.value() !== branch) {
+    const candidates = request.records.filter(
+      (record) =>
+        !record.prunable &&
+        record.branch.kind === WorktreeBranchKind.Branch &&
+        record.branch.name.value() === request.branch,
+    );
+    let path: string;
+    if (request.requestedPath !== undefined) {
+      const requestedPath = this.canonicalWorktreePath(
+        request.requestedPath,
+        `Canonical ${request.branch} worktree path`,
+        true,
+      );
+      if (requestedPath.isErr()) return err(requestedPath.error);
+      const matching = [] as string[];
+      for (const candidate of candidates) {
+        const candidatePath = this.canonicalWorktreePath(
+          candidate.path,
+          `Git ${request.branch} worktree path`,
+        );
+        if (candidatePath.isErr()) return err(candidatePath.error);
+        if (candidatePath.value === requestedPath.value)
+          matching.push(candidatePath.value);
+      }
+      if (matching.length !== 1) {
         return err({
           kind: DevFailureKind.Configuration,
-          message: `Canonical ${branch} worktree is not on ${branch}: ${path}`,
+          message: `Requested ${request.branch} worktree is not a unique managed worktree in this repository: ${request.requestedPath}`,
         });
       }
-      return ok(path);
+      const selectedPath = matching[0];
+      if (!selectedPath) {
+        return err({
+          kind: DevFailureKind.Configuration,
+          message: `Requested ${request.branch} worktree selection was empty`,
+        });
+      }
+      path = selectedPath;
+    } else {
+      const selected = new ManagedWorktreeSelection().select(
+        request.records,
+        request.branch,
+      );
+      if (selected.isErr()) return err(selected.error);
+      const selectedPath = this.canonicalWorktreePath(
+        selected.value.path,
+        `Git ${request.branch} worktree path`,
+      );
+      if (selectedPath.isErr()) return err(selectedPath.error);
+      path = selectedPath.value;
     }
-    const records = this.worktrees();
-    if (records.isErr()) return err(records.error);
-    const selected = new ManagedWorktreeSelection().select(
-      records.value,
-      branch,
-    );
-    if (selected.isErr()) return err(selected.error);
-    return ok(selected.value.path);
+    const identity = this.repositoryIdentityAt(path);
+    if (identity.isErr()) return err(identity.error);
+    if (identity.value !== request.repositoryIdentity) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Requested ${request.branch} worktree belongs to a different repository: ${path}`,
+      });
+    }
+    return ok(path);
+  }
+
+  private commonDirectoryAt(path: string): Result<string, DevFailure> {
+    const output = this.successful({
+      args: ['rev-parse', '--git-common-dir'],
+      workingDirectory: path,
+    });
+    if (output.isErr()) return err(output.error);
+    const common = output.value.stdout.trim();
+    if (!common) {
+      return err({
+        kind: DevFailureKind.Git,
+        message: 'Git did not return a common directory',
+      });
+    }
+    return ok(resolve(path, common));
+  }
+
+  private repositoryIdentityAt(path: string): Result<string, DevFailure> {
+    const common = this.commonDirectoryAt(path);
+    if (common.isErr()) return err(common.error);
+    return this.canonicalWorktreePath(common.value, 'Git common directory');
+  }
+
+  private canonicalWorktreePath(
+    path: string,
+    label: string,
+    requireCanonicalInput = false,
+  ): Result<string, DevFailure> {
+    const normalized = resolve(path);
+    if (requireCanonicalInput && path !== normalized) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `${label} must already be normalized and absolute: ${path}`,
+      });
+    }
+    let real: string;
+    try {
+      real = realpathSync(normalized);
+    } catch {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `${label} must resolve to an existing canonical path: ${path}`,
+      });
+    }
+    if (real !== normalized) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `${label} must not be a symlink or path alias: ${path}`,
+      });
+    }
+    return ok(real);
   }
 
   private synchronizeWorktree(
