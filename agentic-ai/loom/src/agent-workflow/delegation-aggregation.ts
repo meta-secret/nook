@@ -5,7 +5,6 @@ import { VerifiedAttemptArtifacts } from './attempt-verification.ts';
 import type {
   ReadParentAttemptArgs,
   ReadVerifiedProjectionArgs,
-  VerifiedBarrierAttempt,
 } from './attempt-verification.ts';
 import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from './agent-attempt-version.ts';
 import {
@@ -24,30 +23,50 @@ import {
   DelegationRunEventKind,
   DelegationPlanContract,
 } from './delegation-domain.ts';
-import type {
-  DelegationAttemptDeclaration,
-  DelegationAttemptIdentity,
-  DelegationPlan,
-} from './delegation-domain.ts';
+import type { DelegationAttemptIdentity } from './delegation-domain.ts';
 import { DelegationRunJournal } from './delegation-run-journal.ts';
 import type {
   DelegationLifecycleLockInput,
   LoadDelegationPlanInput,
   LoadedDelegationRunState,
 } from './delegation-run-journal.ts';
-import {
-  UntrustedYamlPropertyPresence,
-  UntrustedYamlBoundary,
-} from '../lib/guards.ts';
+import { UntrustedYamlBoundary } from '../lib/guards.ts';
 import type {
   UntrustedYamlMap,
   UntrustedYamlNode,
-  UntrustedYamlPropertyArgs,
 } from '../lib/guards.ts';
-import {
-  PinnedDevBaseEvidenceContract,
-  type PinnedDevBaseEvidence,
-} from '../lib/base-evidence.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
+import { DelegationFinalizationRecordReader } from './delegation-aggregation-support.ts';
+import type {
+  DelegationBarrierEvidence,
+  DelegationChildTerminalEvidence,
+  DelegationFinalizationReceipt,
+  DelegationFinalizationRequest,
+  DelegationFinalizedAttempt,
+  DelegationRunResult,
+  DelegationRunResultV1,
+  ExactBarrierEvidenceInput,
+  FinalizationPaths,
+  FinalizedAttemptInput,
+  FinalizeWhileLockedInput,
+  RecursiveBarrierInput,
+  VerifiedPlannedAttempt,
+  VisitBarrierInput,
+  WriteOrVerifyFinalizationInput,
+  WriteOrVerifyProjectionInput,
+  FinalizeDelegationRunInput,
+} from './delegation-aggregation-support.ts';
+
+export type {
+  DelegationBarrierEvidence,
+  DelegationChildTerminalEvidence,
+  DelegationFinalizationReceipt,
+  DelegationFinalizationRequest,
+  DelegationFinalizedAttempt,
+  DelegationRunResult,
+  DelegationRunResultV1,
+  FinalizeDelegationRunInput,
+} from './delegation-aggregation-support.ts';
 
 /** Owns the delegation run finalization registry and its capability transitions. */
 export class DelegationRunFinalization {
@@ -134,7 +153,7 @@ export class DelegationRunFinalization {
     const transport = UntrustedYamlBoundary.parseJson(serialized);
     if (!UntrustedYamlBoundary.isRecord(transport))
       throw new Error('Delegation run result must be an object.');
-    const reader = new RecordReader(transport);
+    const reader = new DelegationFinalizationRecordReader(transport);
     const schemaVersion = reader.string('schemaVersion');
     const legacy =
       schemaVersion ===
@@ -241,7 +260,7 @@ export class DelegationRunFinalization {
     if (!UntrustedYamlBoundary.isRecord(transport)) {
       throw new Error('Delegation finalization request must be an object.');
     }
-    const reader = new RecordReader(transport);
+    const reader = new DelegationFinalizationRecordReader(transport);
     DelegationRunFinalization.assertExactKeys(reader.record)(
       DelegationRunFinalization.FINALIZATION_REQUEST_FIELDS,
     );
@@ -276,7 +295,7 @@ export class DelegationRunFinalization {
   private static decodeBarrierEvidence(
     node: UntrustedYamlNode,
   ): DelegationBarrierEvidence {
-    const reader = new RecordReader(
+    const reader = new DelegationFinalizationRecordReader(
       DelegationRunFinalization.requireRecord(node),
     );
     DelegationRunFinalization.assertExactKeys(reader.record)(
@@ -293,7 +312,7 @@ export class DelegationRunFinalization {
   private static decodeChildEvidence(
     node: UntrustedYamlNode,
   ): DelegationChildTerminalEvidence {
-    const reader = new RecordReader(
+    const reader = new DelegationFinalizationRecordReader(
       DelegationRunFinalization.requireRecord(node),
     );
     DelegationRunFinalization.assertExactKeys(reader.record)(
@@ -333,7 +352,7 @@ export class DelegationRunFinalization {
   private static decodeIdentity(
     node: UntrustedYamlNode,
   ): DelegationAttemptIdentity {
-    const reader = new RecordReader(
+    const reader = new DelegationFinalizationRecordReader(
       DelegationRunFinalization.requireRecord(node),
     );
     DelegationRunFinalization.assertExactKeys(reader.record)(
@@ -662,7 +681,7 @@ export class DelegationRunFinalization {
   private static decodeFinalizedAttempt(
     node: UntrustedYamlNode,
   ): DelegationFinalizedAttempt {
-    const reader = new RecordReader(
+    const reader = new DelegationFinalizationRecordReader(
       DelegationRunFinalization.requireRecord(node),
     );
     DelegationRunFinalization.assertExactKeys(reader.record)([
@@ -692,7 +711,7 @@ export class DelegationRunFinalization {
   private static decodeProjection(
     node: UntrustedYamlNode,
   ): ProjectionReference {
-    const reader = new RecordReader(
+    const reader = new DelegationFinalizationRecordReader(
       DelegationRunFinalization.requireRecord(node),
     );
     DelegationRunFinalization.assertExactKeys(reader.record)([
@@ -705,7 +724,7 @@ export class DelegationRunFinalization {
   private static decodeView(
     node: UntrustedYamlNode,
   ): MaterializedViewReference {
-    const reader = new RecordReader(
+    const reader = new DelegationFinalizationRecordReader(
       DelegationRunFinalization.requireRecord(node),
     );
     const presence = reader.string('presence');
@@ -739,7 +758,7 @@ export class DelegationRunFinalization {
   }
 
   private static decodeParent(node: UntrustedYamlNode): AgentAttemptParent {
-    const reader = new RecordReader(
+    const reader = new DelegationFinalizationRecordReader(
       DelegationRunFinalization.requireRecord(node),
     );
     const kind = reader.string('kind');
@@ -942,170 +961,5 @@ export class DelegationRunFinalization {
 
   private static sha256(value: string): string {
     return createHash('sha256').update(value).digest('hex');
-  }
-}
-
-export type DelegationFinalizationRequest = PinnedDevBaseEvidence & {
-  readonly runId: string;
-  readonly sourceCommit: string;
-  readonly barrierEvidence: readonly DelegationBarrierEvidence[];
-};
-
-export type DelegationChildTerminalEvidence = {
-  readonly identity: DelegationAttemptIdentity;
-  readonly terminalKind: TaskTerminalKind;
-  readonly resultSha256: string;
-  readonly viewSha256: string;
-};
-
-export type DelegationBarrierEvidence = {
-  readonly parent: DelegationAttemptIdentity;
-  readonly children: readonly DelegationChildTerminalEvidence[];
-};
-
-export type FinalizeDelegationRunInput = {
-  readonly workingDirectory: string;
-  readonly request: DelegationFinalizationRequest;
-};
-
-export type DelegationFinalizedAttempt = {
-  readonly identity: DelegationAttemptIdentity;
-  readonly depth: number;
-  readonly parent: AgentAttemptParent;
-  readonly terminalKind: TaskTerminalKind;
-  readonly result: ProjectionReference;
-  readonly view: MaterializedViewReference;
-};
-
-export type DelegationRunResult = PinnedDevBaseEvidence & {
-  readonly schemaVersion: typeof DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION;
-  readonly runId: string;
-  readonly sourceCommit: string;
-  readonly planSha256: string;
-  readonly rootMaterializer: DelegationAttemptIdentity;
-  readonly attempts: readonly DelegationFinalizedAttempt[];
-  readonly barrierEvidence: readonly DelegationBarrierEvidence[];
-  readonly materializedView: ProjectionReference;
-};
-
-export type DelegationRunResultV1 = {
-  readonly schemaVersion: typeof DelegationRunFinalization.LEGACY_DELEGATION_RUN_RESULT_SCHEMA_VERSION;
-  readonly runId: string;
-  readonly sourceCommit: string;
-  readonly originMainSha: string;
-  readonly pinnedLocalDevSha: string;
-  readonly planSha256: string;
-  readonly rootMaterializer: DelegationAttemptIdentity;
-  readonly attempts: readonly DelegationFinalizedAttempt[];
-  readonly barrierEvidence: readonly DelegationBarrierEvidence[];
-  readonly materializedView: ProjectionReference;
-};
-
-export type DelegationFinalizationReceipt = {
-  readonly runDirectory: string;
-  readonly resultPath: string;
-  readonly viewPath: string;
-  readonly resultSha256: string;
-  readonly viewSha256: string;
-  readonly result: DelegationRunResult;
-};
-
-type FinalizeWhileLockedInput = {
-  readonly loaded: LoadedDelegationRunState;
-  readonly barrierEvidence: readonly DelegationBarrierEvidence[];
-};
-
-type VerifiedPlannedAttempt = {
-  readonly declaration: DelegationAttemptDeclaration;
-  readonly verified: VerifiedBarrierAttempt;
-};
-
-type RecursiveBarrierInput = {
-  readonly plan: DelegationPlan;
-  readonly verifiedAttempts: ReadonlyMap<string, VerifiedPlannedAttempt>;
-};
-
-type ExactBarrierEvidenceInput = RecursiveBarrierInput & {
-  readonly barrierEvidence: readonly DelegationBarrierEvidence[];
-};
-
-type VisitBarrierInput = {
-  readonly identity: DelegationAttemptIdentity;
-  readonly declarations: ReadonlyMap<string, DelegationAttemptDeclaration>;
-  readonly verifiedAttempts: ReadonlyMap<string, VerifiedPlannedAttempt>;
-  readonly visited: Set<string>;
-};
-
-type FinalizedAttemptInput = {
-  readonly declaration: DelegationAttemptDeclaration;
-  readonly verified: VerifiedBarrierAttempt;
-};
-
-type FinalizationPaths = {
-  readonly resultPath: string;
-  readonly viewPath: string;
-};
-
-type WriteOrVerifyFinalizationInput = {
-  readonly paths: FinalizationPaths;
-  readonly resultSerialized: string;
-  readonly viewSerialized: string;
-};
-
-type WriteOrVerifyProjectionInput = {
-  readonly path: string;
-  readonly expected: string;
-  readonly maxBytes: number;
-};
-
-class RecordReader {
-  readonly record: UntrustedYamlMap;
-
-  constructor(record: UntrustedYamlMap) {
-    this.record = record;
-  }
-
-  node(key: string): UntrustedYamlNode {
-    const propertyInput: UntrustedYamlPropertyArgs = {
-      record: this.record,
-      key,
-    };
-    const property = UntrustedYamlBoundary.property(propertyInput);
-    if (property.presence === UntrustedYamlPropertyPresence.Absent) {
-      throw new Error(`Delegation finalization field is missing: ${key}`);
-    }
-    return property.value;
-  }
-
-  string(key: string): string {
-    const value = this.node(key);
-    if (typeof value !== 'string') {
-      throw new Error(`Delegation finalization field must be a string: ${key}`);
-    }
-    return value;
-  }
-
-  sha256(key: string): string {
-    const value = this.string(key);
-    if (!/^[0-9a-f]{64}$/.test(value)) {
-      throw new Error(`Delegation finalization digest is invalid: ${key}`);
-    }
-    return value;
-  }
-
-  number(key: string): number {
-    const value = this.node(key);
-    if (typeof value !== 'number') {
-      throw new Error(`Delegation finalization field must be a number: ${key}`);
-    }
-    return value;
-  }
-
-  array(key: string): readonly UntrustedYamlNode[] {
-    const value = this.node(key);
-    if (!UntrustedYamlBoundary.isList(value)) {
-      throw new Error(`Delegation finalization field must be an array: ${key}`);
-    }
-    return value;
   }
 }
