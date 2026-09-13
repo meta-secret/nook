@@ -140,9 +140,6 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "steps.rerun.outputs.terminal != 'true'",
         "Feature branch delivery is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun.",
         "Feature branch delivery is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete.",
-        "Delivery Pipeline Team Gizmo",
-        "PR Lifecycle Agent",
-        "Dev Manager",
         "Materialize validated implementation plan",
         "VALIDATED_PLAN_SHA256=$EXPECTED_PLAN_SHA256",
         "sha256sum \"$implementation_plan\"",
@@ -741,6 +738,16 @@ fn workbench_plans_preserve_assignment_and_pinned_local_dev_bootstrap() {
             && normalized_pull_requests.contains("origin/main")
             && normalized_pull_requests.contains("ancestry evidence"),
         "planning policy must preserve bounded assignment while bootstrapping feature work from pinned local dev"
+    );
+    assert!(
+        normalized_pull_requests.contains(
+            "Delivery Pipeline Team Gizmo receives Prime's high-level delivery packet and routes PR Lifecycle Agent's bounded mechanics"
+        ) && normalized_pull_requests.contains(
+            "The dev manager invokes the manager-only `dev:pr-manager` path for PR creation/update"
+        ) && normalized_pull_requests.contains(
+            "Delivery Pipeline Team Gizmo routes PR Lifecycle Agent, which executes only review, check, status, and promotion mechanics under explicit packets"
+        ),
+        "pull-request policy must preserve canonical Delivery roles and Dev Manager-only PR authority"
     );
 }
 
