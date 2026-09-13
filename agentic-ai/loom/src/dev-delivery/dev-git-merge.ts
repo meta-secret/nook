@@ -118,11 +118,35 @@ export class DevGitMergeBoundary {
           `Assigned development worktree was replaced after its feature merge: ${request.devPath}`,
       });
     }
+    const afterBranch = repository.branchAt(request.devPath);
+    if (afterBranch.isErr()) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development worktree became detached after its feature merge: ${request.devPath}`,
+      });
+    }
+    if (afterBranch.value.value() !== ManagedBranch.Dev) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development worktree changed from dev after its feature merge: ${request.devPath}`,
+      });
+    }
+    const afterHead = repository.headAt(request.devPath);
+    if (afterHead.isErr()) return err(afterHead.error);
     const afterDevRef = this.dependencies.branchHeadAt(
       request.devPath,
       ManagedBranch.Dev,
     );
     if (afterDevRef.isErr()) return err(afterDevRef.error);
+    if (!afterHead.value.equals(afterDevRef.value)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development checkout and refs/heads/dev disagree after the feature merge: checkout ${afterHead.value.value()}, ref ${afterDevRef.value.value()}`,
+      });
+    }
     if (afterDevRef.value.equals(beforeDevRef.value)) {
       return err({
         kind: DevFailureKind.Race,
@@ -156,7 +180,7 @@ export class DevGitMergeBoundary {
           'The local dev merge completed without retaining the expected feature commit',
       });
     }
-    return ok(afterDevRef.value);
+    return ok(afterHead.value);
   }
 
   /** Revalidates mutable packet identities before any local-dev mutation. */
@@ -233,8 +257,35 @@ export class DevGitMergeBoundary {
           'origin/main changed before the feature could land in local dev',
       });
     }
+    const devBranch = repository.branchAt(request.devPath);
+    if (devBranch.isErr()) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development worktree became detached while landing was being prepared: ${request.devPath}`,
+      });
+    }
+    if (devBranch.value.value() !== ManagedBranch.Dev) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development worktree changed from dev while landing was being prepared: ${request.devPath}`,
+      });
+    }
     const devHead = repository.headAt(request.devPath);
     if (devHead.isErr()) return err(devHead.error);
+    const devRef = this.dependencies.branchHeadAt(
+      request.devPath,
+      ManagedBranch.Dev,
+    );
+    if (devRef.isErr()) return err(devRef.error);
+    if (!devHead.value.equals(devRef.value)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Assigned development checkout and refs/heads/dev disagree while landing was being prepared: checkout ${devHead.value.value()}, ref ${devRef.value.value()}`,
+      });
+    }
     if (!devHead.value.equals(request.expectedDevHead)) {
       return err({
         kind: DevFailureKind.Race,
@@ -242,11 +293,6 @@ export class DevGitMergeBoundary {
           `Local dev changed while landing was being prepared: expected ${request.expectedDevHead.value()}, found ${devHead.value.value()}`,
       });
     }
-    const devRef = this.dependencies.branchHeadAt(
-      request.devPath,
-      ManagedBranch.Dev,
-    );
-    if (devRef.isErr()) return err(devRef.error);
     if (!devRef.value.equals(request.expectedDevHead)) {
       return err({
         kind: DevFailureKind.Race,
