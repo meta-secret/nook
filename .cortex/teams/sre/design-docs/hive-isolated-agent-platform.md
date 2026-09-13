@@ -509,13 +509,16 @@ the responsibilities in [dev delivery](../../../gizmo-prime/architecture/dev-del
 1. Diagnose from retained workflow evidence.
 2. Route implementation and authored tests through the feature Gizmo's teams.
 3. Obtain remote build-only evidence and required feature review.
-4. Have Gizmo authorize Steward's serialized local dev landing.
-5. Have the manually run dev manager select and publish a dev snapshot.
+4. Have Gizmo Prime authorize `dev:land`; Delivery Pipeline Team Gizmo routes
+   the bounded serialized local-dev landing mechanics to the PR Lifecycle Agent.
+5. Have the manually run Dev Manager select and publish a dev snapshot; only
+   the Dev Manager invokes `dev:pr-manager`.
 6. Have the manager authorize slow dev PR checks and review collection.
    - Preserve existing e2e opt-ins and security-required focused checks.
    - Route accepted fixes through the same feature path.
 7. Require origin/dev to equal the frozen tested SHA and main to be its ancestor.
-8. Have the manager authorize Steward's guarded fast-forward promotion.
+8. Have the Dev Manager authorize `dev:promote`; Delivery Pipeline Team Gizmo
+   routes the bounded guarded fast-forward mechanics to the PR Lifecycle Agent.
 9. Verify remote main equality, actual PR state, and required Main-run evidence.
 10. Complete the Workbench incident, linked plan, and worklog.
 
