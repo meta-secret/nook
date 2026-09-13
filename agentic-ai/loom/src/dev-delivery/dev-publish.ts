@@ -1,12 +1,16 @@
 import { err, ok, type Result } from 'neverthrow';
 
-import { DevelopmentPullRequestLookupKind } from './dev-github.ts';
+import {
+  DevelopmentPullRequestLookupKind,
+  type DevelopmentPullRequestLookup,
+} from './dev-github.ts';
 import { DevDeliveryWorkspace, DevWorkspaceGuard } from './dev-workspace.ts';
 import {
   Ancestry,
   DevFailureKind,
   ManagedBranch,
   RemoteBranchPresence,
+  type DevelopmentPullRequest,
   type CommitSha,
   type DevFailure,
   type DevPublishRequest,
@@ -202,6 +206,35 @@ export class DevPublishCommand {
       });
     }
 
+    const beforePushPullRequest =
+      this.workspace.github.findDevelopmentPullRequest({
+        workingDirectory: this.workspace.root,
+      });
+    if (beforePushPullRequest.isErr()) return err(beforePushPullRequest.error);
+    if (
+      !this.samePullRequest(
+        priorPullRequest.value,
+        beforePushPullRequest.value,
+      )
+    ) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The dev-to-main pull request appeared or changed while the manager snapshot was being prepared for publication',
+      });
+    }
+    if (
+      priorPullRequest.value.kind === DevelopmentPullRequestLookupKind.Found &&
+      !priorPullRequest.value.pullRequest.headSha.equals(request.expectedSha)
+    ) {
+      const beforePushCi = this.workspace.github.requireDevelopmentCiTerminal({
+        sha: priorPullRequest.value.pullRequest.headSha,
+        workingDirectory: this.workspace.root,
+        replacement: true,
+      });
+      if (beforePushCi.isErr()) return err(beforePushCi.error);
+    }
+
     const pushed = this.workspace.git.pushExact({
       target: ManagedBranch.Dev,
       sha: request.expectedSha,
@@ -234,6 +267,29 @@ export class DevPublishCommand {
     return (
       right.presence === RemoteBranchPresence.Present &&
       left.sha.equals(right.sha)
+    );
+  }
+
+  private samePullRequest(
+    left: DevelopmentPullRequestLookup,
+    right: DevelopmentPullRequestLookup,
+  ): boolean {
+    if (left.kind !== right.kind) return false;
+    if (left.kind === DevelopmentPullRequestLookupKind.Absent) return true;
+    return this.samePullRequestDetails(left.pullRequest, right.pullRequest);
+  }
+
+  private samePullRequestDetails(
+    left: DevelopmentPullRequest,
+    right: DevelopmentPullRequest,
+  ): boolean {
+    return (
+      left.number.value() === right.number.value() &&
+      left.headSha.equals(right.headSha) &&
+      left.baseSha.equals(right.baseSha) &&
+      left.url === right.url &&
+      left.isDraft === right.isDraft &&
+      left.reviewDecision === right.reviewDecision
     );
   }
 }
