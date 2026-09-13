@@ -66,11 +66,18 @@ export class ModuleDeliveryPlanTransportLimit extends ModulePlanDecodeFailure {
     readonly limit: number;
     readonly path?: string;
   }) {
-    super({
-      code: ModuleDeliveryIssueCode.LimitExceeded,
-      path: request.path,
-      message: `Plan transport ${request.code} exceeded its bound (${request.observed} > ${request.limit}).`,
-    });
+    super(
+      request.path === undefined
+        ? {
+            code: ModuleDeliveryIssueCode.LimitExceeded,
+            message: `Plan transport ${request.code} exceeded its bound (${request.observed} > ${request.limit}).`,
+          }
+        : {
+            code: ModuleDeliveryIssueCode.LimitExceeded,
+            path: request.path,
+            message: `Plan transport ${request.code} exceeded its bound (${request.observed} > ${request.limit}).`,
+          },
+    );
     this.name = 'ModuleDeliveryPlanTransportLimit';
     this.limitCode = request.code;
     this.observed = request.observed;

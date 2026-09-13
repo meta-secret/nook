@@ -15,7 +15,6 @@ import {
   ModulePlanV4RootField,
 } from './codec-schema.ts';
 import type {
-  ModulePlanNodeListRequest,
   RejectedModulePlanRequest,
 } from './codec-schema.ts';
 import {
@@ -255,10 +254,7 @@ export class ModuleDeliveryPlanSchema {
       record: fields.recordField('parentJoin'),
       path: '$.parentJoin',
     };
-    const nodeListRequest: ModulePlanNodeListRequest = {
-      values: fields.nodeList('nodes', MAX_MODULE_DELIVERY_NODES),
-      legacy,
-    };
+    const nodeValues = fields.nodeList('nodes', MAX_MODULE_DELIVERY_NODES);
     const generation = legacy ? 1 : fields.positiveInteger('generation');
     const sourceCommit = fields.string('sourceCommit');
     const maxAgentDepth = fields.positiveInteger('maxAgentDepth');
@@ -269,21 +265,14 @@ export class ModuleDeliveryPlanSchema {
     const parentJoin = ModuleDeliveryPlanNodeCodec.decodeParentJoin(
       parentJoinRequest,
     );
-    const nodes = ModuleDeliveryPlanNodeCodec.decodeNodes(nodeListRequest);
-    const edgeContracts = ModuleDeliveryPlanNodeCodec.decodeEdgeContracts(
-      fields.list('edgeContracts', MAX_MODULE_DELIVERY_EDGE_CONTRACTS),
-    );
-    const common = {
-      generation,
-      sourceCommit,
-      maxAgentDepth,
-      maxAttempts,
-      parentOwnedResources,
-      parentJoin,
-      nodes,
-      edgeContracts,
-    };
     if (version === 1) {
+      const nodes = ModuleDeliveryPlanNodeCodec.decodeNodes({
+        values: nodeValues,
+        legacy: true,
+      });
+      const edgeContracts = ModuleDeliveryPlanNodeCodec.decodeEdgeContracts(
+        fields.list('edgeContracts', MAX_MODULE_DELIVERY_EDGE_CONTRACTS),
+      );
       const plan: LegacyModuleDeliveryPlan = {
         version: 1,
         sourceCommit,
@@ -300,6 +289,23 @@ export class ModuleDeliveryPlanSchema {
         plan,
       };
     }
+    const nodes = ModuleDeliveryPlanNodeCodec.decodeNodes({
+      values: nodeValues,
+      legacy: false,
+    });
+    const edgeContracts = ModuleDeliveryPlanNodeCodec.decodeEdgeContracts(
+      fields.list('edgeContracts', MAX_MODULE_DELIVERY_EDGE_CONTRACTS),
+    );
+    const common = {
+      generation,
+      sourceCommit,
+      maxAgentDepth,
+      maxAttempts,
+      parentOwnedResources,
+      parentJoin,
+      nodes,
+      edgeContracts,
+    };
     if (version === 2) {
       const plan: ModuleDeliveryPlanV2 = { version: 2, ...common };
       return {

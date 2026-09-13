@@ -24,6 +24,7 @@ import type {
   ModuleDeliveryExpectedProducerIdentity,
   ModuleDeliveryNodeV2,
   ModuleDeliveryParentJoin,
+  LegacyModuleDeliveryNode,
 } from './domain.ts';
 import {
   LegacyModulePlanAcceptanceField,
@@ -93,8 +94,14 @@ export class ModuleDeliveryPlanNodeCodec {
   }
 
   static decodeNodes(
+    request: ModulePlanNodeListRequest & { readonly legacy: true },
+  ): readonly LegacyModuleDeliveryNode[];
+  static decodeNodes(
+    request: ModulePlanNodeListRequest & { readonly legacy: false },
+  ): readonly ModuleDeliveryNodeV2[];
+  static decodeNodes(
     request: ModulePlanNodeListRequest,
-  ): readonly ModuleDeliveryNodeV2[] {
+  ): readonly (LegacyModuleDeliveryNode | ModuleDeliveryNodeV2)[] {
     ModuleDeliveryPlanNodeCodec.assertCollectionLimit(
       {
         values: request.values,
@@ -102,12 +109,28 @@ export class ModuleDeliveryPlanNodeCodec {
         maximum: MAX_MODULE_DELIVERY_NODES,
       },
     );
+    if (request.legacy) {
+      const nodes: LegacyModuleDeliveryNode[] = [];
+      for (const [index, value] of request.values.entries()) {
+        const nodeRequest: ModulePlanIndexedNodeRequest & {
+          readonly legacy: true;
+        } = {
+          value,
+          index,
+          legacy: true,
+        };
+        nodes.push(ModuleDeliveryPlanNodeCodec.decodeNode(nodeRequest));
+      }
+      return nodes;
+    }
     const nodes: ModuleDeliveryNodeV2[] = [];
     for (const [index, value] of request.values.entries()) {
-      const nodeRequest: ModulePlanIndexedNodeRequest = {
+      const nodeRequest: ModulePlanIndexedNodeRequest & {
+        readonly legacy: false;
+      } = {
         value,
         index,
-        legacy: request.legacy,
+        legacy: false,
       };
       nodes.push(ModuleDeliveryPlanNodeCodec.decodeNode(nodeRequest));
     }
@@ -115,8 +138,14 @@ export class ModuleDeliveryPlanNodeCodec {
   }
 
   private static decodeNode(
+    request: ModulePlanIndexedNodeRequest & { readonly legacy: true },
+  ): LegacyModuleDeliveryNode;
+  private static decodeNode(
+    request: ModulePlanIndexedNodeRequest & { readonly legacy: false },
+  ): ModuleDeliveryNodeV2;
+  private static decodeNode(
     request: ModulePlanIndexedNodeRequest,
-  ): ModuleDeliveryNodeV2 {
+  ): LegacyModuleDeliveryNode | ModuleDeliveryNodeV2 {
     const path = `$.nodes[${request.index}]`;
     if (!UntrustedYamlBoundary.isRecord(request.value))
       ModuleDeliveryPlanNodeCodec.fail(`${path}: node must be an object.`);
