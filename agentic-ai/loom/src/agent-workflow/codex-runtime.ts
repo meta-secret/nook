@@ -185,10 +185,14 @@ export class TeamAgentRuntimeProfile {
     const isGizmo = profile.parent === 'Gizmo Prime';
     const expectedModel = isGizmo ? 'gpt-5.6-sol' : 'gpt-5.6-luna';
     const expectedReasoningEffort = isGizmo ? 'low' : 'xhigh';
-    const teamGizmo = TeamAuthorityCatalog.teamGizmoProfile(profile.team);
-    const hierarchyMatches = isGizmo
-      ? teamGizmo?.key === profile.key
-      : teamGizmo?.key === profile.parent;
+    const teamGizmoKey =
+      profile.parent === 'Gizmo Prime' ? profile.key : profile.parent;
+    const teamGizmo =
+      TeamAuthorityCatalog.teamGizmoProfile(teamGizmoKey);
+    const hierarchyMatches =
+      teamGizmo !== false &&
+      teamGizmo.team === profile.team &&
+      teamGizmo.key === teamGizmoKey;
     if (
       !hierarchyMatches ||
       profile.model !== expectedModel ||
