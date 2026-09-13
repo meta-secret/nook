@@ -30,7 +30,7 @@ import type {
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryWriteNodeV2,
   RecordModuleDeliveryAttemptDispositionRequest,
@@ -88,11 +88,11 @@ export class ModuleDeliveryAdmissionScenario {
     };
   }
 
-  static planAt(sourceCommit: string): ModuleDeliveryPlanV2 {
+  static planAt(sourceCommit: string): ModuleDeliveryPlanV3 {
     return new ModuleDeliveryAdmissionScenario(sourceCommit).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV2 {
+  private execute(): ModuleDeliveryPlanV3 {
     const sourceCommit = this.request;
     const plan = structuredClone(PLAN);
     const source = {
@@ -107,7 +107,7 @@ export class ModuleDeliveryAdmissionScenario {
     return plan;
   }
 
-  static generationPlan(request: GenerationPlanRequest): ModuleDeliveryPlanV2 {
+  static generationPlan(request: GenerationPlanRequest): ModuleDeliveryPlanV3 {
     const plan = structuredClone(
       ModuleDeliveryAdmissionScenario.planAt(request.sourceCommit),
     );
@@ -122,7 +122,7 @@ export class ModuleDeliveryAdmissionScenario {
     return plan;
   }
 
-  static validate(plan: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
+  static validate(plan: ModuleDeliveryPlanV3): ValidatedModuleDeliveryPlan {
     const result = ModuleDeliveryPlanDecoder.decodeAndValidate(
       JSON.stringify(plan),
     );
@@ -368,7 +368,7 @@ export type GenerationRestartRequest = {
 
 export type GenerationPlanUpdate = {
   readonly generation: number;
-  readonly nodes: ModuleDeliveryPlanV2['nodes'];
+  readonly nodes: ModuleDeliveryPlanV3['nodes'];
 };
 
 export type EvidenceSubmissionRequest = {
@@ -427,8 +427,8 @@ export const edge: ModuleDeliveryEdgeContract = {
   owningTests: ['alpha contract test'],
 };
 
-export const PLAN: ModuleDeliveryPlanV2 = {
-  version: 2,
+export const PLAN: ModuleDeliveryPlanV3 = {
+  version: 3,
   generation: 1,
   sourceCommit: SOURCE,
   originMainSha: SOURCE,

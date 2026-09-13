@@ -42,7 +42,7 @@ import type {
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
   ModuleDeliveryAdmissionState,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
   ModuleDeliveryReadOnlyNodeV2,
   RecordModuleDeliveryAttemptDispositionRequest,
   RecordModuleDeliveryAttemptLeasesRequest,
@@ -286,7 +286,7 @@ describe('module delivery admission authority', () => {
   });
 
   test('retains lease history through disposition and reports exhausted closure', () => {
-    const exhaustionPlan: ModuleDeliveryPlanV2 = { ...PLAN };
+    const exhaustionPlan: ModuleDeliveryPlanV3 = { ...PLAN };
     const active = ModuleDeliveryAdmissionScenario.runtime(
       ModuleDeliveryAdmissionScenario.validate(exhaustionPlan),
     );
@@ -608,7 +608,7 @@ describe('module delivery admission authority', () => {
       parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
       acceptance: alpha.acceptance,
     };
-    const firstPlan: ModuleDeliveryPlanV2 = {
+    const firstPlan: ModuleDeliveryPlanV3 = {
       ...PLAN,
       nodes: [provider],
       edgeContracts: [],

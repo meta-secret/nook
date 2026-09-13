@@ -37,7 +37,7 @@ import type {
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryGenerationAuthority,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -169,8 +169,8 @@ export class ModuleDeliveryEvidenceScenario {
       providerTaskId: providerB.taskId,
       consumerTaskId: synthesis.taskId,
     };
-    const plan: ModuleDeliveryPlanV2 = {
-      version: 2,
+    const plan: ModuleDeliveryPlanV3 = {
+      version: 3,
       generation: 1,
       sourceCommit: fixture.baselineCommit,
       originMainSha: fixture.baselineCommit,
@@ -260,8 +260,8 @@ export class ModuleDeliveryEvidenceScenario {
         expectedCommitHandoff: true,
       },
     };
-    const plan: ModuleDeliveryPlanV2 = {
-      version: 2,
+    const plan: ModuleDeliveryPlanV3 = {
+      version: 3,
       generation: 1,
       sourceCommit: fixture.baselineCommit,
       originMainSha: fixture.baselineCommit,

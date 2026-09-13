@@ -56,7 +56,7 @@ import {
 import type {
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryExecutionPrecedence,
   RejectedModuleDeliveryPlan,
@@ -80,11 +80,14 @@ export class ModuleDeliveryPlanDecoder {
       };
       return rejection;
     }
-    if (decoded.inputVersion !== MODULE_DELIVERY_PLAN_VERSION) {
+    if (
+      decoded.inputVersion !== MODULE_DELIVERY_PLAN_VERSION ||
+      decoded.plan.version !== MODULE_DELIVERY_PLAN_VERSION
+    ) {
       const issue: ModuleDeliveryIssue = {
         code: ModuleDeliveryIssueCode.InvalidField,
         path: '$.version',
-        message: 'Canonical validation requires authored plan version 2.',
+        message: 'Canonical validation requires authored plan version 3.',
       };
       const rejection: RejectedModuleDeliveryPlan = {
         status: ModuleDeliveryValidationStatus.Rejected,
@@ -96,7 +99,7 @@ export class ModuleDeliveryPlanDecoder {
   }
 
   private validateDecodedModuleDeliveryPlan(
-    plan: ModuleDeliveryPlanV2,
+    plan: ModuleDeliveryPlanV3,
   ): ModuleDeliveryPlanValidation {
     const issues: ModuleDeliveryIssue[] = [];
     const nodesById = new Map<string, ModuleDeliveryNodeV2>();

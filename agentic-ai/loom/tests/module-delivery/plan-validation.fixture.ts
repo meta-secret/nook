@@ -17,6 +17,7 @@ import type {
   ModuleDeliveryBaseline,
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -123,14 +124,29 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
+  static plan(fixture: PlanFixture): ModuleDeliveryPlanV3 {
     return new ModuleDeliveryPlanValidationScenario(fixture).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV2 {
-    const fixture = this.request;
+  static historicalV2Plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
+    const plan = ModuleDeliveryPlanValidationScenario.plan(fixture);
     return {
       version: 2,
+      generation: plan.generation,
+      sourceCommit: plan.sourceCommit,
+      maxAgentDepth: plan.maxAgentDepth,
+      maxAttempts: plan.maxAttempts,
+      parentOwnedResources: plan.parentOwnedResources,
+      parentJoin: plan.parentJoin,
+      nodes: plan.nodes,
+      edgeContracts: plan.edgeContracts,
+    };
+  }
+
+  private execute(): ModuleDeliveryPlanV3 {
+    const fixture = this.request;
+    return {
+      version: 3,
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
@@ -148,7 +164,7 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static validate(value: ModuleDeliveryPlanV2): ModuleDeliveryPlanValidation {
+  static validate(value: ModuleDeliveryPlanV3): ModuleDeliveryPlanValidation {
     return ModuleDeliveryPlanDecoder.decodeAndValidate(JSON.stringify(value));
   }
 

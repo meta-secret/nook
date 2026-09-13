@@ -22,8 +22,10 @@ import {
   ModuleDeliveryExecutionPrecedenceReason,
   ModuleDeliveryTaskKind,
   ModuleDeliveryTaskProfile,
+  ModuleDeliveryCompatibilityStatus,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryPlanDecoder,
+  ModuleDeliveryPlanSchema,
 } from '../../src/module-delivery/index.ts';
 
 import type {
@@ -34,7 +36,7 @@ import type {
   ModuleDeliveryExecutionPrecedence,
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlan,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
@@ -229,6 +231,36 @@ describe('reviewed module delivery plan', () => {
     }
   });
 
+  test('decodes the historical v2 root without upgrading it to v3', () => {
+    const historical =
+      ModuleDeliveryPlanValidationScenario.historicalV2Plan({
+        nodes: [CORE_NODE],
+        edgeContracts: [],
+      });
+    const compatibility =
+      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
+        JSON.stringify(historical),
+      );
+    expect(compatibility.status).toBe(
+      ModuleDeliveryCompatibilityStatus.Decoded,
+    );
+    if (compatibility.status === ModuleDeliveryCompatibilityStatus.Decoded) {
+      expect(compatibility.inputVersion).toBe(2);
+      expect(compatibility.plan).toEqual(historical);
+      expect(Object.hasOwn(compatibility.plan, 'originMainSha')).toBe(false);
+      expect(Object.hasOwn(compatibility.plan, 'pinnedLocalDevSha')).toBe(
+        false,
+      );
+    }
+    const canonical = ModuleDeliveryPlanDecoder.decodeAndValidate(
+      JSON.stringify(historical),
+    );
+    expect(canonical.status).toBe(ModuleDeliveryValidationStatus.Rejected);
+    expect(ModuleDeliveryPlanValidationScenario.codes(canonical)).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
+    );
+  });
+
   test('freezes owner acceptance and typed synthesis producer identities', () => {
     const providerFixture: ReadOnlyNodeFixture = {
       taskId: 'provider-audit',
@@ -379,7 +411,7 @@ describe('reviewed module delivery plan', () => {
         commands: ['task core:second', 'task core:first'],
       },
     };
-    const reversedNodePlan: ModuleDeliveryPlanV2 = {
+    const reversedNodePlan: ModuleDeliveryPlanV3 = {
       ...orderedPlan,
       nodes: [reversedNode],
     };
@@ -449,7 +481,7 @@ describe('reviewed module delivery plan', () => {
       edgeContracts: DEFAULT_EDGES,
     };
     const validPlan = ModuleDeliveryPlanValidationScenario.plan(fixture);
-    const invalidPlan: ModuleDeliveryPlanV2 = {
+    const invalidPlan: ModuleDeliveryPlanV3 = {
       ...validPlan,
       sourceCommit: 'main',
       maxAgentDepth: 4,

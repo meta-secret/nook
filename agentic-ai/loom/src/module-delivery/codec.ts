@@ -35,6 +35,7 @@ import type {
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
   ModuleDeliveryParentJoin,
+  ModuleDeliveryPlanV3,
   ModuleDeliveryPlanV2,
   ModuleDeliveryExpectedProducerIdentity,
   ModuleDeliveryEvidenceInputContract,
@@ -94,11 +95,18 @@ export class ModuleDeliveryPlanSchema {
     };
     const fields = new ModulePlanFields(fieldRequest);
     const version = fields.positiveInteger('version');
-    if (version !== 1 && version !== MODULE_DELIVERY_PLAN_VERSION)
-      ModuleDeliveryPlanSchema.fail('$.version: plan version must be 1 or 2.');
+    if (
+      version !== 1 &&
+      version !== 2 &&
+      version !== MODULE_DELIVERY_PLAN_VERSION
+    )
+      ModuleDeliveryPlanSchema.fail(
+        '$.version: plan version must be 1, 2, or 3.',
+      );
     const legacy = version === 1;
     if (legacy) fields.requireExactKeys(LegacyModulePlanRootField);
-    else fields.requireExactKeys(ModulePlanRootField);
+    else if (version === 2) fields.requireExactKeys(ModulePlanRootField);
+    else fields.requireExactKeys(ModulePlanV3RootField);
     const parentJoinRequest: ModulePlanObjectDecodeRequest = {
       record: fields.recordField('parentJoin'),
       path: '$.parentJoin',
@@ -107,21 +115,46 @@ export class ModuleDeliveryPlanSchema {
       values: fields.nodeList('nodes'),
       legacy,
     };
-    const plan: ModuleDeliveryPlanV2 = {
-      version: MODULE_DELIVERY_PLAN_VERSION,
-      generation: legacy ? 1 : fields.positiveInteger('generation'),
-      sourceCommit: fields.string('sourceCommit'),
-      originMainSha: legacy ? '' : fields.string('originMainSha'),
-      pinnedLocalDevSha: legacy ? '' : fields.string('pinnedLocalDevSha'),
-      maxAgentDepth: fields.positiveInteger('maxAgentDepth'),
-      maxAttempts: fields.positiveInteger('maxAttempts'),
-      parentOwnedResources: fields.nonEmptyStringList('parentOwnedResources'),
-      parentJoin: ModuleDeliveryPlanSchema.decodeParentJoin(parentJoinRequest),
-      nodes: ModuleDeliveryPlanSchema.decodeNodes(nodeListRequest),
-      edgeContracts: ModuleDeliveryPlanSchema.decodeEdgeContracts(
-        fields.list('edgeContracts'),
-      ),
+    const generation = legacy ? 1 : fields.positiveInteger('generation');
+    const sourceCommit = fields.string('sourceCommit');
+    const maxAgentDepth = fields.positiveInteger('maxAgentDepth');
+    const maxAttempts = fields.positiveInteger('maxAttempts');
+    const parentOwnedResources = fields.nonEmptyStringList(
+      'parentOwnedResources',
+    );
+    const parentJoin = ModuleDeliveryPlanSchema.decodeParentJoin(
+      parentJoinRequest,
+    );
+    const nodes = ModuleDeliveryPlanSchema.decodeNodes(nodeListRequest);
+    const edgeContracts = ModuleDeliveryPlanSchema.decodeEdgeContracts(
+      fields.list('edgeContracts'),
+    );
+    const common = {
+      generation,
+      sourceCommit,
+      maxAgentDepth,
+      maxAttempts,
+      parentOwnedResources,
+      parentJoin,
+      nodes,
+      edgeContracts,
     };
+    const plan: ModuleDeliveryPlanV2 | ModuleDeliveryPlanV3 =
+      version === MODULE_DELIVERY_PLAN_VERSION
+        ? {
+            version: MODULE_DELIVERY_PLAN_VERSION,
+            generation,
+            sourceCommit,
+            originMainSha: fields.string('originMainSha'),
+            pinnedLocalDevSha: fields.string('pinnedLocalDevSha'),
+            maxAgentDepth,
+            maxAttempts,
+            parentOwnedResources,
+            parentJoin,
+            nodes,
+            edgeContracts,
+          }
+        : { version: 2, ...common };
     return {
       status: ModuleDeliveryCompatibilityStatus.Decoded,
       inputVersion: version,
@@ -622,7 +655,7 @@ export class ModuleDeliveryPlanSchema {
     };
   }
 
-  static moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV2): string {
+  static moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV3): string {
     const nodes = plan.nodes
       .map(({ taskId }) => taskId)
       .sort()
@@ -762,15 +795,26 @@ type LegacyTaskTeamRequest = {
   readonly moduleRoot: string;
 };
 type ModulePlanDigestNodeLookup = {
-  readonly plan: ModuleDeliveryPlanV2;
+  readonly plan: ModuleDeliveryPlanV3;
   readonly taskId: string;
 };
 type ModulePlanDigestContractLookup = {
-  readonly plan: ModuleDeliveryPlanV2;
+  readonly plan: ModuleDeliveryPlanV3;
   readonly key: string;
 };
 
 enum ModulePlanRootField {
+  EdgeContracts = 'edgeContracts',
+  Generation = 'generation',
+  MaxAgentDepth = 'maxAgentDepth',
+  MaxAttempts = 'maxAttempts',
+  Nodes = 'nodes',
+  ParentJoin = 'parentJoin',
+  ParentOwnedResources = 'parentOwnedResources',
+  SourceCommit = 'sourceCommit',
+  Version = 'version',
+}
+enum ModulePlanV3RootField {
   EdgeContracts = 'edgeContracts',
   Generation = 'generation',
   MaxAgentDepth = 'maxAgentDepth',

@@ -17,7 +17,7 @@ import {
 } from '../../src/module-delivery/index.ts';
 
 import type {
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV3,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
 
@@ -67,7 +67,7 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
   }
 
   static accepted(node: ModuleDeliveryWriteNodeV2): boolean {
-    const plan: ModuleDeliveryPlanV2 = {
+    const plan: ModuleDeliveryPlanV3 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
