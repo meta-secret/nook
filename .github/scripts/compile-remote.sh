@@ -37,6 +37,14 @@ registry_host="${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}"
 export NOOK_REGISTRY_CACHE_HOST="$registry_host"
 wasm_build_mode="${WASM_BUILD_MODE:-dev}"
 extension_commit="${NOOK_EXTENSION_COMMIT:-${GIT_COMMIT_ID:-${GITHUB_SHA:-}}}"
+case "${REQUEST_INCLUDES_HIVE:-false}" in
+  true|1) compile_hive=1 ;;
+  false|0|"") compile_hive=0 ;;
+  *)
+    echo "build:compile received an invalid REQUEST_INCLUDES_HIVE value" >&2
+    exit 2
+    ;;
+esac
 
 bake_args=(
   --allow="fs.read=${repo_root}"
@@ -49,6 +57,7 @@ bake_args=(
   -f "${repo_root}/nook-app/nook-web/nook-web-app/docker-bake.hcl"
   -f "${repo_root}/nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"
   --set "*.context=${repo_root}"
+  --set "build-compile.args.NOOK_COMPILE_HIVE=${compile_hive}"
   --set "build-compile.args.SCCACHE_S3_MODE=${SCCACHE_S3_MODE:-external}"
   --set "build-compile.args.SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
   --set "build-compile.args.SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
