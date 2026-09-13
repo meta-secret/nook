@@ -6,7 +6,9 @@ import {
 import type { AgentAttemptParent } from './domain.ts';
 import {
   PinnedDevBaseEvidenceContract,
+  CanonicalFeatureBranchContract,
   type PinnedDevBaseEvidence,
+  type CanonicalFeatureBranch,
 } from '../lib/base-evidence.ts';
 
 export class DelegationPlanContract {
@@ -82,6 +84,7 @@ export class DelegationPlanContract {
       pinnedLocalDevSha: plan.pinnedLocalDevSha,
     };
     PinnedDevBaseEvidenceContract.assertShape(evidence);
+    CanonicalFeatureBranchContract.parse(plan.featureBranch);
     DelegationPlanContract.assertAttemptIdentity(plan.rootMaterializer);
   }
 
@@ -263,9 +266,12 @@ export class DelegationPlanContract {
   }
 }
 
-export const DELEGATION_PLAN_SCHEMA_VERSION = '2.0.0';
+export const DELEGATION_PLAN_SCHEMA_VERSION = '3.0.0';
 
 export const LEGACY_DELEGATION_PLAN_SCHEMA_VERSION = '1.0.0';
+
+/** Historical plan version that pinned a feature head instead of a branch. */
+export const FEATURE_HEAD_DELEGATION_PLAN_SCHEMA_VERSION = '2.0.0';
 
 export const MAX_DELEGATION_ATTEMPTS = 16;
 
@@ -301,6 +307,17 @@ export type DelegationAttemptDeclaration = {
 export type DelegationAdmissionRequest = PinnedDevBaseEvidence & {
   readonly runId: string;
   readonly sourceCommit: string;
+  readonly featureBranch: CanonicalFeatureBranch;
+  readonly identity: DelegationAttemptIdentity;
+  readonly depth: number;
+  readonly parent: AgentAttemptParent;
+};
+
+/** Historical admission wire shape; accepted only for explicit migration. */
+export type DelegationAdmissionRequestV2 = PinnedDevBaseEvidence & {
+  readonly runId: string;
+  readonly sourceCommit: string;
+  readonly featureHeadSha: string;
   readonly identity: DelegationAttemptIdentity;
   readonly depth: number;
   readonly parent: AgentAttemptParent;
@@ -318,20 +335,42 @@ export type DelegationPlanV1 = {
 };
 
 export type DelegationPlanV2 = PinnedDevBaseEvidence & {
-  readonly schemaVersion: typeof DELEGATION_PLAN_SCHEMA_VERSION;
+  readonly schemaVersion: typeof FEATURE_HEAD_DELEGATION_PLAN_SCHEMA_VERSION;
   readonly workflow: DelegatedAgentWorkflowName.AgentWork;
   readonly runId: string;
   readonly sourceCommit: string;
+  readonly featureHeadSha: string;
   readonly rootMaterializer: DelegationAttemptIdentity;
   readonly attempts: readonly DelegationAttemptDeclaration[];
 };
 
-/** Canonical delegation plans always carry the feature-head provenance chain. */
-export type DelegationPlan = DelegationPlanV2;
+/** Current delegation authority names the moving canonical feature branch. */
+export type DelegationPlanV3 = PinnedDevBaseEvidence & {
+  readonly schemaVersion: typeof DELEGATION_PLAN_SCHEMA_VERSION;
+  readonly workflow: DelegatedAgentWorkflowName.AgentWork;
+  readonly runId: string;
+  readonly sourceCommit: string;
+  readonly featureBranch: CanonicalFeatureBranch;
+  readonly rootMaterializer: DelegationAttemptIdentity;
+  readonly attempts: readonly DelegationAttemptDeclaration[];
+};
+
+export type DelegationPlan = DelegationPlanV3;
 
 export type DelegationRunEventMetadata = PinnedDevBaseEvidence & {
   readonly runId: string;
   readonly sourceCommit: string;
+  readonly planSha256: string;
+  readonly sequence: number;
+  readonly occurredAt: string;
+  readonly featureBranch: CanonicalFeatureBranch;
+};
+
+/** Historical event metadata retained for replay/migration of V2 runs. */
+export type DelegationRunEventMetadataV2 = PinnedDevBaseEvidence & {
+  readonly runId: string;
+  readonly sourceCommit: string;
+  readonly featureHeadSha: string;
   readonly planSha256: string;
   readonly sequence: number;
   readonly occurredAt: string;

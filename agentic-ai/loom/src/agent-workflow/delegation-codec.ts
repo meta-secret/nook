@@ -12,6 +12,7 @@ import {
   DelegationBarrierPolicy,
   DelegationRunEventKind,
   DelegationPlanContract,
+  FEATURE_HEAD_DELEGATION_PLAN_SCHEMA_VERSION,
   LEGACY_DELEGATION_PLAN_SCHEMA_VERSION,
 } from './delegation-domain.ts';
 import type {
@@ -20,6 +21,8 @@ import type {
   DelegationAttemptIdentity,
   DelegationPlan,
   DelegationPlanV1,
+  DelegationPlanV2,
+  DelegationPlanV3,
   DelegationRunEvent,
   DelegationRunEventMetadata,
   DelegationTerminalBarrier,
@@ -33,12 +36,27 @@ import type {
   UntrustedYamlNode,
   UntrustedYamlPropertyArgs,
 } from '../lib/guards.ts';
-import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
+import {
+  CanonicalFeatureBranchContract,
+  PinnedDevBaseEvidenceContract,
+} from '../lib/base-evidence.ts';
 
 /** Owns the delegation journal schema registry and its capability transitions. */
 export class DelegationJournalSchema {
   private constructor() {}
-  private static readonly PLAN_FIELDS = [
+  private static readonly CURRENT_PLAN_FIELDS = [
+    'schemaVersion',
+    'workflow',
+    'runId',
+    'sourceCommit',
+    'originMainSha',
+    'pinnedLocalDevSha',
+    'featureBranch',
+    'rootMaterializer',
+    'attempts',
+  ] as const;
+
+  private static readonly HISTORICAL_PLAN_FIELDS = [
     'schemaVersion',
     'workflow',
     'runId',
@@ -91,7 +109,7 @@ export class DelegationJournalSchema {
     'sourceCommit',
     'originMainSha',
     'pinnedLocalDevSha',
-    'featureHeadSha',
+    'featureBranch',
     'planSha256',
     'sequence',
     'occurredAt',
@@ -105,7 +123,7 @@ export class DelegationJournalSchema {
     'sourceCommit',
     'originMainSha',
     'pinnedLocalDevSha',
-    'featureHeadSha',
+    'featureBranch',
     'planSha256',
     'sequence',
     'occurredAt',
@@ -117,7 +135,7 @@ export class DelegationJournalSchema {
     'sourceCommit',
     'originMainSha',
     'pinnedLocalDevSha',
-    'featureHeadSha',
+    'featureBranch',
     'identity',
     'depth',
     'parent',
@@ -135,7 +153,7 @@ export class DelegationJournalSchema {
   /** Decodes historical plans without rewriting their wire shape. */
   static decodeCompatibleDelegationPlan(
     serialized: string,
-  ): DelegationPlan | DelegationPlanV1 {
+  ): DelegationPlan | DelegationPlanV2 | DelegationPlanV1 {
     const transport = UntrustedYamlBoundary.parseJson(serialized);
     const reader = new RecordReader(
       DelegationJournalSchema.requireRecord(transport),
@@ -146,13 +164,15 @@ export class DelegationJournalSchema {
       DelegationJournalSchema.assertExactKeys(reader.record)(
         DelegationJournalSchema.LEGACY_PLAN_FIELDS,
       );
-    else {
+    else if (schemaVersion === FEATURE_HEAD_DELEGATION_PLAN_SCHEMA_VERSION) {
       DelegationJournalSchema.assertExactKeys(reader.record)(
-        DelegationJournalSchema.PLAN_FIELDS,
+        DelegationJournalSchema.HISTORICAL_PLAN_FIELDS,
       );
-      if (schemaVersion !== DELEGATION_PLAN_SCHEMA_VERSION)
-        throw new Error('Delegation plan schema version is unsupported.');
-    }
+    } else if (schemaVersion === DELEGATION_PLAN_SCHEMA_VERSION) {
+      DelegationJournalSchema.assertExactKeys(reader.record)(
+        DelegationJournalSchema.CURRENT_PLAN_FIELDS,
+      );
+    } else throw new Error('Delegation plan schema version is unsupported.');
     if (reader.string('workflow') !== DelegatedAgentWorkflowName.AgentWork)
       throw new Error('Delegation plan workflow is unsupported.');
     const common = {
@@ -175,10 +195,20 @@ export class DelegationJournalSchema {
       };
       return plan;
     }
-    const plan: DelegationPlan = {
+    if (schemaVersion === FEATURE_HEAD_DELEGATION_PLAN_SCHEMA_VERSION) {
+      const plan: DelegationPlanV2 = {
+        schemaVersion: FEATURE_HEAD_DELEGATION_PLAN_SCHEMA_VERSION,
+        ...common,
+        featureHeadSha: reader.string('featureHeadSha'),
+      };
+      return plan;
+    }
+    const plan: DelegationPlanV3 = {
       schemaVersion: DELEGATION_PLAN_SCHEMA_VERSION,
       ...common,
-      featureHeadSha: reader.string('featureHeadSha'),
+      featureBranch: CanonicalFeatureBranchContract.parse(
+        reader.string('featureBranch'),
+      ),
     };
     DelegationPlanContract.validateDelegationPlan(plan);
     return plan;
@@ -186,19 +216,30 @@ export class DelegationJournalSchema {
 
   /** Creates a new current plan while leaving the historical value untouched. */
   static migrateDelegationPlan(
-    plan: DelegationPlanV1,
-    featureHeadSha: string,
+    plan: DelegationPlanV1 | DelegationPlanV2,
+    featureBranch: string,
   ): DelegationPlan {
-    if (plan.schemaVersion !== LEGACY_DELEGATION_PLAN_SCHEMA_VERSION)
-      throw new Error('Only delegation plan schema 1.0.0 can be migrated.');
+    if (
+      plan.schemaVersion !== LEGACY_DELEGATION_PLAN_SCHEMA_VERSION &&
+      plan.schemaVersion !== FEATURE_HEAD_DELEGATION_PLAN_SCHEMA_VERSION
+    )
+      throw new Error('Only historical delegation plans can be migrated.');
+    const branch = CanonicalFeatureBranchContract.parse(featureBranch);
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: plan.originMainSha,
       pinnedLocalDevSha: plan.pinnedLocalDevSha,
     });
+    const withoutFeatureHead =
+      plan.schemaVersion === FEATURE_HEAD_DELEGATION_PLAN_SCHEMA_VERSION
+        ? (() => {
+            const { featureHeadSha: _observedFeatureHeadSha, ...rest } = plan;
+            return rest;
+          })()
+        : plan;
     const migrated: DelegationPlan = {
-      ...plan,
+      ...withoutFeatureHead,
       schemaVersion: DELEGATION_PLAN_SCHEMA_VERSION,
-      featureHeadSha,
+      featureBranch: branch,
     };
     DelegationPlanContract.validateDelegationPlan(migrated);
     return migrated;
@@ -217,7 +258,9 @@ export class DelegationJournalSchema {
     const evidence = {
       originMainSha: reader.string('originMainSha'),
       pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
-      featureHeadSha: reader.string('featureHeadSha'),
+      featureBranch: CanonicalFeatureBranchContract.parse(
+        reader.string('featureBranch'),
+      ),
     };
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: evidence.originMainSha,
@@ -274,7 +317,9 @@ export class DelegationJournalSchema {
     const evidence = {
       originMainSha: reader.string('originMainSha'),
       pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
-      featureHeadSha: reader.string('featureHeadSha'),
+      featureBranch: CanonicalFeatureBranchContract.parse(
+        reader.string('featureBranch'),
+      ),
     };
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: evidence.originMainSha,
