@@ -329,7 +329,11 @@ void test('workflow preserves the Main cache order and coalesces only pending ru
     ci,
     /github\.event_name == 'push' && 'main'/,
   )
-  assert.match(ci, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/)
+  assert.match(ci, /cancel-in-progress: false/)
+  assert.match(
+    ci,
+    /dev-promotion-readiness:\n\s+name: Dev promotion readiness\n\s+concurrency:\n\s+group: dev-promotion-readiness\n\s+cancel-in-progress: false/,
+  )
   assert.doesNotMatch(ci, /^\s+queue:/m)
   assert.match(main, /wasm:\n\s+name: WASM verification and artifact[\s\S]*needs: \[rust, preflight\]/)
   assert.match(
