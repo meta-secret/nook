@@ -7,6 +7,7 @@ import { ok, type Result } from 'neverthrow';
 import { DevGitRepository } from '../src/dev-delivery/dev-git.ts';
 import {
   BranchAdvanced,
+  DevLandCommand,
   isBranchAdvancedFailure,
 } from '../src/dev-delivery/dev-land.ts';
 import { DevDeliveryWorkspace } from '../src/dev-delivery/dev-workspace.ts';
@@ -18,6 +19,7 @@ import {
   type CommandRunner,
   CommitSha,
   DevFailureKind,
+  type DevLandRequest,
 } from '../src/dev-delivery/dev-types.ts';
 
 const SHA_A = '1111111111111111111111111111111111111111';
@@ -71,6 +73,45 @@ class DetachedMergeRunner implements CommandRunner {
     return ok({ exitCode: 0, stdout: '', stderr: '' });
   }
 }
+
+test('dev:land rejects a non-canonical feature branch before reading Git', () => {
+  const root = mkdtempSync(join(tmpdir(), 'nook-dev-land-branch-boundary-'));
+  const devPath = join(root, 'dev');
+  const originMainSha = CommitSha.parse(SHA_A);
+  const pinnedLocalDevSha = CommitSha.parse(SHA_B);
+  expect(originMainSha.isOk()).toBe(true);
+  expect(pinnedLocalDevSha.isOk()).toBe(true);
+  if (originMainSha.isErr() || pinnedLocalDevSha.isErr()) {
+    rmSync(root, { recursive: true, force: true });
+    return;
+  }
+
+  const runner = new DetachedMergeRunner(root, devPath);
+  try {
+    for (const branch of ['feature/foo', 'child/temp']) {
+      const result = new DevLandCommand(
+        new DevDeliveryWorkspace({ root, runner }),
+      ).execute({
+        devPath,
+        featureBranch: {
+          equals: () => true,
+          value: () => branch,
+        },
+        originMainSha: originMainSha.value,
+        pinnedLocalDevSha: pinnedLocalDevSha.value,
+      } as unknown as DevLandRequest);
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.kind).toBe(DevFailureKind.Configuration);
+        expect(result.error.message).toContain('codex branch');
+      }
+    }
+    expect(runner.requests).toHaveLength(0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test(
   'merge boundary rejects a detached assigned dev worktree before mutation',

@@ -3,6 +3,10 @@ import { err, ok, type Result } from 'neverthrow';
 import { DevDeliveryWorkspace } from './dev-workspace.ts';
 import { branchAdvancedFailure } from './dev-git-merge.ts';
 import {
+  CanonicalFeatureBranchContract,
+  type CanonicalFeatureBranch,
+} from '../lib/base-evidence.ts';
+import {
   Ancestry,
   DevFailureKind,
   ManagedBranch,
@@ -319,12 +323,42 @@ export class DevLandCommand {
           'The landing packet must include featureBranch, originMainSha, pinnedLocalDevSha, and devPath',
       });
     }
-    const parsedBranch = featureBranch as BranchName;
-    const branchGuard = this.requireFeatureBranch(parsedBranch);
+    let branchValue: unknown;
+    try {
+      branchValue = (
+        featureBranch as { readonly value: () => unknown }
+      ).value();
+    } catch {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: 'The landing packet must include a canonical feature branch',
+      });
+    }
+    if (typeof branchValue !== 'string') {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: 'The landing packet must include a canonical feature branch',
+      });
+    }
+    let canonicalBranch: CanonicalFeatureBranch;
+    try {
+      canonicalBranch = CanonicalFeatureBranchContract.parse(branchValue);
+    } catch (error) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'The landing packet must include a canonical feature branch',
+      });
+    }
+    const parsedBranch = BranchName.parseFeature(canonicalBranch);
+    if (parsedBranch.isErr()) return err(parsedBranch.error);
+    const branchGuard = this.requireFeatureBranch(parsedBranch.value);
     if (branchGuard.isErr()) return err(branchGuard.error);
     return ok({
       devPath: request.devPath,
-      featureBranch: parsedBranch,
+      featureBranch: parsedBranch.value,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
     });
