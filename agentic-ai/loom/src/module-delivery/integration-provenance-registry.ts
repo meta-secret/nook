@@ -427,6 +427,14 @@ export class ModuleIntegrationProvenanceRegistry {
       throw new Error(
         'Module integration session is stale or already cleaned.',
       );
+    const expectedSnapshot =
+      state.headCommit === provenance.sourceSnapshot.headCommit
+        ? provenance.sourceSnapshot
+        : provenance.workspaceSnapshot;
+    ModuleIntegrationProvenanceRegistry.assertSourceSnapshot({
+      repositoryRoot: state.workspace.sourceRepositoryRoot,
+      expected: expectedSnapshot,
+    });
   }
 
   static recordIntegratedLeaseAcceptance(

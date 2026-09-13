@@ -275,7 +275,10 @@ export class ModuleIntegrationCoordinator {
       authority: request.provenance.authority,
       state: immutable,
       sourceSnapshot: request.provenance.sourceSnapshot,
-      workspaceSnapshot: request.provenance.workspaceSnapshot,
+      workspaceSnapshot:
+        ModuleIntegrationProvenanceRegistry.captureSourceSnapshot(
+          immutable.workspace.worktreePath,
+        ),
       session: request.provenance.session,
     };
     ModuleIntegrationProvenanceRegistry.registerIntegrationState(registration);
@@ -608,6 +611,9 @@ export class ModuleIntegrationCoordinator {
         expectedHandoffs: [expected],
         provenance,
       };
+      ModuleIntegrationProvenanceRegistry.assertFreshModuleIntegrationState(
+        freshInspection,
+      );
       let headCommit: IntegrationHeadCommit = {
         kind: IntegrationHeadCommitKind.Pending,
       };
@@ -790,6 +796,10 @@ export class ModuleIntegrationCoordinator {
       provenance,
       writerFrontiers: capabilities,
     };
+    ModuleIntegrationProvenanceRegistry.assertFreshModuleIntegrationState({
+      state: request.state,
+      provenance,
+    });
     const integrated =
       ModuleIntegrationCoordinator.advancedIntegrationState(advance);
     const disposition: RecordIntegratedLeaseAcceptanceRequest = {

@@ -336,13 +336,14 @@ export class ModuleDeliverySourceRepositorySnapshot {
   static assertSourceSnapshot(expectation: SourceSnapshotExpectation): void {
     const request: RepositorySnapshotRequest = {
       repositoryRoot: expectation.repositoryRoot,
-      includeContent: false,
+      includeContent: true,
     };
     const current =
       ModuleDeliverySourceRepositorySnapshot.captureRepositorySnapshot(request);
     if (
       current.headCommit !== expectation.expected.headCommit ||
       current.symbolicHead !== expectation.expected.symbolicHead ||
+      current.contentDigest !== expectation.expected.contentDigest ||
       current.metadataDigest !== expectation.expected.metadataDigest ||
       current.indexDigest !== expectation.expected.indexDigest ||
       current.refsDigest !== expectation.expected.refsDigest ||

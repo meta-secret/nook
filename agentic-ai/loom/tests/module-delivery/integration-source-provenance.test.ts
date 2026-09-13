@@ -95,6 +95,61 @@ describe('module delivery source provenance', () => {
     ).toThrow('Source repository changed');
   });
 
+  test('rejects tracked content drift', () => {
+    const fixture =
+      ModuleDeliveryIntegrationSourceProvenanceScenario.trackedFixture();
+    const expectation =
+      ModuleDeliveryIntegrationSourceProvenanceScenario.sourceExpectation(
+        fixture,
+      );
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureFileWriter(fixture)([
+      'module/seed.txt',
+      'forged content\n',
+    ]);
+
+    expect(() =>
+      ModuleIntegrationProvenanceRegistry.assertSourceSnapshot(expectation),
+    ).toThrow('Source repository changed');
+  });
+
+  test('rejects local config drift', () => {
+    const fixture =
+      ModuleDeliveryIntegrationSourceProvenanceScenario.trackedFixture();
+    const expectation =
+      ModuleDeliveryIntegrationSourceProvenanceScenario.sourceExpectation(
+        fixture,
+      );
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
+      'config',
+      '--local',
+      'nook.snapshot.drift',
+      'forged',
+    ]);
+
+    expect(() =>
+      ModuleIntegrationProvenanceRegistry.assertSourceSnapshot(expectation),
+    ).toThrow('Source repository changed');
+  });
+
+  test('rejects index flag drift', () => {
+    const fixture =
+      ModuleDeliveryIntegrationSourceProvenanceScenario.trackedFixture();
+    const expectation =
+      ModuleDeliveryIntegrationSourceProvenanceScenario.sourceExpectation(
+        fixture,
+      );
+    ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture)([
+      'update-index',
+      '--assume-unchanged',
+      '--',
+      'module/seed.txt',
+    ]);
+
+    expect(() =>
+      ModuleIntegrationProvenanceRegistry.assertSourceSnapshot(expectation),
+    ).toThrow('Source repository changed');
+  });
+
   test('rejects source mode drift at a metadata-only checkpoint', () => {
     const fixture =
       ModuleDeliveryIntegrationSourceProvenanceScenario.trackedFixture();
