@@ -268,8 +268,9 @@ export class SkillProviderBoundaryScenario {
   static ambientLoaderRootName(
     inspection: BoundaryNodeInspection,
   ): AmbientModuleLoaderRoot | false {
+    if (!ts.isExpression(inspection.node)) return false;
     const root = SkillProviderBoundaryScenario.unwrapTransparentExpression(
-      inspection.node as ts.Expression,
+      inspection.node,
     );
     if (SkillProviderBoundaryScenario.isAmbientGlobalRoot(inspection))
       return AmbientModuleLoaderRoot.GlobalThis;
@@ -302,8 +303,9 @@ export class SkillProviderBoundaryScenario {
   }
 
   static isAmbientProcessRoot(inspection: BoundaryNodeInspection): boolean {
+    if (!ts.isExpression(inspection.node)) return false;
     const root = SkillProviderBoundaryScenario.unwrapTransparentExpression(
-      inspection.node as ts.Expression,
+      inspection.node,
     );
     if (ts.isIdentifier(root)) {
       const identifierInspection: AmbientIdentifierInspection = {
@@ -327,8 +329,9 @@ export class SkillProviderBoundaryScenario {
   }
 
   static isAmbientGlobalRoot(inspection: BoundaryNodeInspection): boolean {
+    if (!ts.isExpression(inspection.node)) return false;
     const root = SkillProviderBoundaryScenario.unwrapTransparentExpression(
-      inspection.node as ts.Expression,
+      inspection.node,
     );
     if (ts.isIdentifier(root)) {
       const identifierInspection: AmbientIdentifierInspection = {

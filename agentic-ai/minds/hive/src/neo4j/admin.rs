@@ -1,6 +1,16 @@
-use super::*;
+use neo4rs::Txn;
+
+use super::{
+    Artifact, AttemptId, ClaimedTask, ConfigBuilder, DependencyResult, Graph, HIVE_TLS_PROVIDER,
+    HiveContext, LeaseToken, Neo4jTaskStore, QueueTaskStatus, Row, TaskId, query,
+};
 
 impl Neo4jTaskStore {
+    /// Connects to a Neo4j database using the configured TLS provider.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when TLS, configuration, or the Neo4j connection fails.
     pub async fn connect(uri: &str, username: &str, password: &str) -> crate::HiveResult<Self> {
         HIVE_TLS_PROVIDER.install()?;
         let config = ConfigBuilder::default()
@@ -16,6 +26,11 @@ impl Neo4jTaskStore {
         Ok(Self { graph })
     }
 
+    /// Returns the most recent queued task statuses.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the limit is invalid or the Neo4j query fails.
     pub async fn queue_status(&self, limit: i64) -> crate::HiveResult<Vec<QueueTaskStatus>> {
         if !(1..=200).contains(&limit) {
             return Err(crate::HiveError::message(
@@ -74,6 +89,11 @@ impl Neo4jTaskStore {
         Ok(tasks)
     }
 
+    /// Retries a failed main task against a validated release digest.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the release id is invalid or the Neo4j transaction fails.
     pub async fn retry_failed_main_task(
         &self,
         task_id: &TaskId,
@@ -87,47 +107,7 @@ impl Neo4jTaskStore {
             .ok_or_else(|| crate::HiveError::message("release id must be a sha256 digest"))?;
         let release_id = format!("sha256:{digest}");
         let mut transaction = self.graph.start_txn().await?;
-        let mut lock_rows = transaction
-            .execute(
-                query(
-                    "MATCH (root:Task {id: $id})-[:DEPENDS_ON*0..]->(member:Task)
-                     WITH DISTINCT member
-                     ORDER BY member.id
-                     SET member.version = coalesce(member.version, 0) + 1
-                     RETURN count(member) AS locked",
-                )
-                .param("id", task_id.as_str()),
-            )
-            .await?;
-        let locked = match lock_rows.next(transaction.handle()).await? {
-            Some(row) => row.get::<i64>("locked")? > 0,
-            None => false,
-        };
-        drop(lock_rows);
-        if !locked {
-            transaction.rollback().await?;
-            return Ok(false);
-        }
-        let mut eligible_rows = transaction
-            .execute(
-                query(
-                    "MATCH (root:Task {id: $id})
-                     WHERE root.kind = 'main-repair'
-                       AND root.status IN ['FAILED', 'BLOCKED']
-                       AND coalesce(root.last_retry_release, '') <> $release_id
-                       AND NOT EXISTS {
-                         MATCH (root)-[:DEPENDS_ON*0..]->(running:Task)
-                               <-[:FOR_TASK]-(:Attempt {status: 'RUNNING'})
-                       }
-                     RETURN root.id AS id",
-                )
-                .param("id", task_id.as_str())
-                .param("release_id", release_id.as_str()),
-            )
-            .await?;
-        let eligible = eligible_rows.next(transaction.handle()).await?.is_some();
-        drop(eligible_rows);
-        if !eligible {
+        if !Self::retry_is_eligible(&mut transaction, task_id, &release_id).await? {
             transaction.rollback().await?;
             return Ok(false);
         }
@@ -209,8 +189,55 @@ impl Neo4jTaskStore {
         Ok(retried)
     }
 
+    async fn retry_is_eligible(
+        transaction: &mut Txn,
+        task_id: &TaskId,
+        release_id: &str,
+    ) -> crate::HiveResult<bool> {
+        let mut lock_rows = transaction
+            .execute(
+                query(
+                    "MATCH (root:Task {id: $id})-[:DEPENDS_ON*0..]->(member:Task)
+                     WITH DISTINCT member
+                     ORDER BY member.id
+                     SET member.version = coalesce(member.version, 0) + 1
+                     RETURN count(member) AS locked",
+                )
+                .param("id", task_id.as_str()),
+            )
+            .await?;
+        let locked = match lock_rows.next(transaction.handle()).await? {
+            Some(row) => row.get::<i64>("locked")? > 0,
+            None => false,
+        };
+        drop(lock_rows);
+        if !locked {
+            return Ok(false);
+        }
+        let mut eligible_rows = transaction
+            .execute(
+                query(
+                    "MATCH (root:Task {id: $id})
+                     WHERE root.kind = 'main-repair'
+                       AND root.status IN ['FAILED', 'BLOCKED']
+                       AND coalesce(root.last_retry_release, '') <> $release_id
+                       AND NOT EXISTS {
+                         MATCH (root)-[:DEPENDS_ON*0..]->(running:Task)
+                               <-[:FOR_TASK]-(:Attempt {status: 'RUNNING'})
+                       }
+                     RETURN root.id AS id",
+                )
+                .param("id", task_id.as_str())
+                .param("release_id", release_id),
+            )
+            .await?;
+        let eligible = eligible_rows.next(transaction.handle()).await?.is_some();
+        drop(eligible_rows);
+        Ok(eligible)
+    }
+
     pub(super) fn claimed_task(
-        row: Row,
+        row: &Row,
         attempt_id: AttemptId,
         lease_token: LeaseToken,
     ) -> crate::HiveResult<ClaimedTask> {

@@ -42,7 +42,8 @@ class RegistryManifest {
     }
     const parsed = manifestSchema.safeParse(value);
     if (!parsed.success) {
-      const path = parsed.error.issues[0]?.path ?? [];
+      const firstIssue = parsed.error.issues[0];
+      const path = firstIssue ? firstIssue.path : [];
       const subject =
         path.length === 0
           ? "manifest"

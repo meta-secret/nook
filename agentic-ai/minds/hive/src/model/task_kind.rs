@@ -22,6 +22,7 @@ impl From<&str> for TaskKind {
     }
 }
 impl TaskKind {
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             Self::MainRepair => "main-repair",
@@ -45,27 +46,33 @@ impl Display for TaskKind {
 }
 
 impl TaskKind {
+    #[must_use]
     pub fn is_main_repair(&self) -> bool {
         matches!(self, Self::MainRepair)
     }
+    #[must_use]
     pub fn is_blocker(&self) -> bool {
         matches!(self, Self::Blocker)
     }
+    #[must_use]
     pub fn allows_prerequisite(&self) -> bool {
         !self.is_blocker()
     }
+    #[must_use]
     pub fn prerequisite_priority(&self) -> i64 {
         match self {
             Self::MainRepair => 200,
             Self::Blocker | Self::Other(_) => 10,
         }
     }
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.as_str().trim().is_empty()
     }
 }
 
 impl TaskKind {
+    #[must_use]
     pub fn completion_relevance(
         &self,
         reported: super::CompletionRelevance,

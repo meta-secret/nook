@@ -21,6 +21,7 @@ import {
   type RuntimeExecutableRequest,
   type ShellCommandRequest,
   type ShellWord,
+  shellWordAt,
   type WordEnvironmentRequest,
   type WordsEnvironmentRequest,
 } from './skill-provider-command-types.ts';
@@ -46,7 +47,7 @@ export class ShellRuntimeInvocation {
     let options = true;
     while (index < request.words.length) {
       const assignmentRequest: WordEnvironmentRequest = {
-        word: request.words[index] as ShellWord,
+        word: shellWordAt([request.words, index]),
         environment: request.environment,
       };
       const assignment =
@@ -59,7 +60,7 @@ export class ShellRuntimeInvocation {
         continue;
       }
       let wordRequest: WordEnvironmentRequest = {
-        word: request.words[index] as ShellWord,
+        word: shellWordAt([request.words, index]),
         environment: request.environment,
       };
       const word =
@@ -79,7 +80,7 @@ export class ShellRuntimeInvocation {
         if (!request.words[index + 1])
           throw new Error('Missing env option value.');
         wordRequest = {
-          word: request.words[index + 1] as ShellWord,
+          word: shellWordAt([request.words, index + 1]),
           environment: request.environment,
         };
         const value =
@@ -233,7 +234,7 @@ export class ShellRuntimeInvocation {
     let index = 0;
     let commandString = false;
     while (index < request.words.length) {
-      const word = request.words[index] as ShellWord;
+      const word = shellWordAt([request.words, index]);
       if (word.dynamic) {
         SkillProviderShellCommandScenario.assertNoDynamicShellRuntimeScript([
           request.words,
@@ -308,7 +309,7 @@ export class ShellRuntimeInvocation {
     let index = 0;
     let terminated = false;
     while (index < request.words.length) {
-      const word = request.words[index] as ShellWord;
+      const word = shellWordAt([request.words, index]);
       if (word.value === '--') {
         terminated = true;
         index += 1;
@@ -366,7 +367,7 @@ export class ShellRuntimeInvocation {
       index += 1;
     }
     if (index === request.words.length) return false;
-    const executable = request.words[index] as ShellWord;
+    const executable = shellWordAt([request.words, index]);
     if (!ShellRuntimeInvocation.executableIsStatic(executable)) {
       if (
         SkillProviderTaskBoundaryScenario.isQuotedDynamicTaskName({

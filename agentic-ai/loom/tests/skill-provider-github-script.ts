@@ -6,9 +6,11 @@ import { SkillProviderCommandBoundaryScenario } from './skill-provider-command-b
 
 import type { ShellLaunchArgument } from './skill-provider-command-types.ts';
 
-import type { ConfigurationNode } from './skill-provider-command-types.ts';
+import { configurationNodeFromHost } from './skill-provider-command-types.ts';
 
 import type { ConfigurationReference } from './skill-provider-config-types.ts';
+
+import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
 
 import { SkillProviderTypescriptSubprocessScenario } from './skill-provider-typescript-subprocess.ts';
 
@@ -30,7 +32,9 @@ export class SkillProviderGithubScriptScenario {
       )
     )
       return [];
-    const document = Bun.YAML.parse(request.source) as ConfigurationNode;
+    const document = configurationNodeFromHost(
+      UntrustedYamlBoundary.fromHost(Bun.YAML.parse(request.source)),
+    );
     const sourceRequest = {
       action: /(^|\/)action\.ya?ml$/u.test(request.importer),
       document,

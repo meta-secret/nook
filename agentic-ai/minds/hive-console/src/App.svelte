@@ -244,7 +244,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       if (!controller.signal.aborted) {
         pollSchedule = {
           kind: PollScheduleKind.Scheduled,
-          timer: setTimeout(poll, 15_000),
+          timer: setTimeout(() => void poll(), 15_000),
         };
       }
     };
@@ -267,7 +267,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   $effect(() => {
     const taskId = search.trim();
     const controller = new AbortController();
-    const timer = setTimeout(async () => {
+    const lookup = async () => {
       if (taskId.length === 0) {
         durableMatchState = { kind: DurableTaskLookupKind.NotFound };
         return;
@@ -291,7 +291,8 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           kind: TaskSelectionKind.Selected,
           taskId: result.value.task.id,
         };
-    }, 250);
+    };
+    const timer = setTimeout(() => void lookup(), 250);
 
     return () => {
       controller.abort();
@@ -442,7 +443,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     <div class="loading-grid">
       <div class="skeleton loading-rail"></div>
       <div class="loading-list">
-        {#each Array(7) as _, index (index)}
+        {#each Array(7) as index (index)}
           <div class="skeleton loading-row"></div>
         {/each}
       </div>

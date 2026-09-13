@@ -148,7 +148,8 @@ export async function verifySharedVaultFolder(
   const id = typeof meta.id === 'string' ? meta.id.trim() : ''
   const name = typeof meta.name === 'string' ? meta.name.trim() : ''
   const capabilities =
-    typeof meta.capabilities === 'object' && meta.capabilities !== null
+    typeof meta.capabilities === 'object' &&
+    Object(meta.capabilities) === meta.capabilities
       ? requireRecord(meta.capabilities, 'Drive folder capabilities')
       : {}
   return {

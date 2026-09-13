@@ -28,7 +28,7 @@ export class KubernetesDocument {
       throw new KubernetesDocumentError("JSON document");
     }
   }
-  static service(text: string): Service {
+  static service(this: void, text: string): Service {
     const value = KubernetesDocument.parse(text);
     if (
       !KubernetesDocument.record(value) ||
@@ -38,10 +38,14 @@ export class KubernetesDocument {
       throw new KubernetesDocumentError("service");
     return { spec: { clusterIP: value.spec.clusterIP } };
   }
-  private static address(value: unknown): value is { ip: string } {
+  private static address(
+    this: void,
+    value: unknown,
+  ): value is { ip: string } {
     return KubernetesDocument.record(value) && typeof value.ip === "string";
   }
   private static subset(
+    this: void,
     value: unknown,
   ): value is { addresses?: { ip: string }[] } {
     return (
@@ -51,7 +55,7 @@ export class KubernetesDocument {
           value.addresses.every(KubernetesDocument.address)))
     );
   }
-  static endpoints(text: string): Endpoints {
+  static endpoints(this: void, text: string): Endpoints {
     const value = KubernetesDocument.parse(text);
     if (!KubernetesDocument.record(value))
       throw new KubernetesDocumentError("endpoints");
@@ -69,7 +73,7 @@ export class KubernetesDocument {
       Object.values(value).every((label) => typeof label === "string")
     );
   }
-  static pod(text: string): Pod {
+  static pod(this: void, text: string): Pod {
     const value = KubernetesDocument.parse(text);
     if (!KubernetesDocument.record(value))
       throw new KubernetesDocumentError("pod");
@@ -88,7 +92,7 @@ export class KubernetesDocument {
         KubernetesDocument.labels(value.matchLabels))
     );
   }
-  private static target(value: unknown): boolean {
+  private static target(this: void, value: unknown): boolean {
     if (!KubernetesDocument.record(value)) return false;
     if ("ipBlock" in value)
       return (
@@ -102,7 +106,7 @@ export class KubernetesDocument {
         KubernetesDocument.selector(value.podSelector))
     );
   }
-  private static port(value: unknown): boolean {
+  private static port(this: void, value: unknown): boolean {
     return (
       KubernetesDocument.record(value) &&
       (!("protocol" in value) || typeof value.protocol === "string") &&
@@ -111,7 +115,7 @@ export class KubernetesDocument {
         (typeof value.port === "number" && Number.isInteger(value.port)))
     );
   }
-  private static rule(value: unknown): value is EgressRule {
+  private static rule(this: void, value: unknown): value is EgressRule {
     return (
       KubernetesDocument.record(value) &&
       (!("to" in value) ||
@@ -122,7 +126,7 @@ export class KubernetesDocument {
           value.ports.every(KubernetesDocument.port)))
     );
   }
-  static networkPolicy(text: string): NetworkPolicy {
+  static networkPolicy(this: void, text: string): NetworkPolicy {
     const value = KubernetesDocument.parse(text);
     if (
       !KubernetesDocument.record(value) ||

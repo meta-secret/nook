@@ -33,8 +33,8 @@ async function listLocalVaultEntries(page: import('@playwright/test').Page) {
           try {
             const raw: unknown = getReq.result
             const parsed: unknown =
-              typeof raw === 'string' ? JSON.parse(raw) : undefined
-            if (typeof parsed !== 'object' || parsed === null) {
+              typeof raw === 'string' ? JSON.parse(raw) : {}
+            if (typeof parsed !== 'object' || Object(parsed) !== parsed) {
               resolve([])
               return
             }
@@ -48,7 +48,7 @@ async function listLocalVaultEntries(page: import('@playwright/test').Page) {
             }
             const entries: LocalVaultRegistryEntry[] = []
             for (const value of vaultsValue) {
-              if (typeof value !== 'object' || value === null) continue
+              if (typeof value !== 'object' || Object(value) !== value) continue
               const storeId: unknown = Object.getOwnPropertyDescriptor(
                 value,
                 'store_id',

@@ -11,6 +11,7 @@ import {
   assertNoVaultError,
   triggerVaultSyncRefresh,
   type GithubE2eTarget,
+  waitForGithubVaultProjectionState,
   waitForGithubVaultState,
 } from './github-sync'
 import {
@@ -196,8 +197,16 @@ export async function deleteSecret(
   key: string,
   github?: GithubE2eTarget,
 ) {
-  const beforeCount = github ? await syncSecretCount(github) : 0
   await waitForSecretOnDevice(page, key, github)
+  const beforeCount = github
+    ? (
+        await waitForGithubVaultProjectionState(
+          github.pat,
+          github.repoName,
+          (yaml) => yaml.secretIds.length > 0,
+        )
+      ).secretIds.length
+    : 0
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
   const deleteBtn = row.getByTestId('delete-secret-btn')

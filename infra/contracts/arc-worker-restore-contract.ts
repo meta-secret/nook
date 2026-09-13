@@ -403,7 +403,6 @@ class ArcWorkloadDrainContract {
   }
 
   assert(): Result<void, OperationalContractFailure> {
-    const source = this.source;
     const outcome = this.decode();
     if (outcome.kind === SelectorDecodeKind.Missing) {
       return err({

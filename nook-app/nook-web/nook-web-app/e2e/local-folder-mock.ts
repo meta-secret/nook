@@ -28,12 +28,14 @@ export async function installLocalFolderPickerMock(page: Page) {
     const storageKey = '__nookE2eLocalFolderFiles'
     const readSnapshot = () => {
       try {
-        const encodedFiles = sessionStorage.getItem(storageKey) ?? '[]'
+        const storedFiles = sessionStorage.getItem(storageKey)
+        const encodedFiles =
+          typeof storedFiles === 'string' ? storedFiles : '[]'
         const parsed: unknown = JSON.parse(encodedFiles)
         if (!Array.isArray(parsed)) return []
         const records: Array<{ path: string; content: string }> = []
         for (const entry of parsed) {
-          if (typeof entry !== 'object' || entry === null) continue
+          if (typeof entry !== 'object' || Object(entry) !== entry) continue
           const path: unknown = Object.getOwnPropertyDescriptor(
             entry,
             'path',

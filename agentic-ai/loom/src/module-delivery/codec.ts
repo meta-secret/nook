@@ -61,7 +61,7 @@ export class ModuleDeliveryPlanSchema {
     }
     let node: UntrustedYamlNode;
     try {
-      node = JSON.parse(serialized) as UntrustedYamlNode;
+      node = UntrustedYamlBoundary.fromHost(JSON.parse(serialized));
     } catch {
       const request: RejectedModulePlanRequest = {
         code: ModuleDeliveryIssueCode.MalformedTransport,
@@ -417,12 +417,13 @@ export class ModuleDeliveryPlanSchema {
 
   private static decodeTeam(request: ModuleDeliveryTeamDecodeRequest): TeamKey {
     const teams = Object.values(TeamKey);
-    if (!teams.includes(request.value as TeamKey)) {
+    const team = teams.find((candidate) => candidate === request.value);
+    if (!team) {
       ModuleDeliveryPlanSchema.fail(
         `${request.path}.team: unsupported team identity.`,
       );
     }
-    return request.value as TeamKey;
+    return team;
   }
 
   private static decodeOwner(request: ModuleDeliveryOwnerDecodeRequest) {

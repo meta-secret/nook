@@ -111,20 +111,17 @@ export class SkillTaskLoopScenario {
       const request: WritePackageRequest = { ...fixture, repoRoot };
       packageRoots.push(await SkillTaskLoopScenario.writePackage(request));
     }
-    const workspaces = Object.fromEntries([
-      ['', { name: WORKSPACE_PACKAGE.name }],
-      ...FIXTURE_PACKAGES.map((fixture) => {
-        const workspacePath = `${fixture.ownerRoot.slice('.cortex/'.length)}/dynamic-skills/${fixture.slug}/scripts`;
-        return [
-          workspacePath,
-          {
-            name: `@nook/${fixture.slug}-skill`,
-            version: '0.1.0',
-            devDependencies: { typescript: '6.0.3' },
-          },
-        ];
-      }),
-    ]);
+    const workspaces: Record<string, WorkspacePackage> = {
+      '': { name: WORKSPACE_PACKAGE.name },
+    };
+    for (const fixture of FIXTURE_PACKAGES) {
+      const workspacePath = `${fixture.ownerRoot.slice('.cortex/'.length)}/dynamic-skills/${fixture.slug}/scripts`;
+      workspaces[workspacePath] = {
+        name: `@nook/${fixture.slug}-skill`,
+        version: '0.1.0',
+        devDependencies: { typescript: '6.0.3' },
+      };
+    }
     const lock = {
       lockfileVersion: 1,
       configVersion: 1,
@@ -169,6 +166,12 @@ const REMOVE_OPTIONS = { recursive: true, force: true } as const;
 type FixturePackage = {
   readonly ownerRoot: string;
   readonly slug: string;
+};
+
+type WorkspacePackage = {
+  readonly devDependencies?: Readonly<Record<string, string>>;
+  readonly name: string;
+  readonly version?: string;
 };
 
 type WritePackageRequest = FixturePackage & {

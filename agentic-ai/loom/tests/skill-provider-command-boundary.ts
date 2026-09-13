@@ -38,6 +38,7 @@ import {
   type ShellParseState,
   type ShellScriptLaunch,
   type ShellWord,
+  shellWordAt,
   type WordEnvironmentRequest,
   type WordsEnvironmentRequest,
 } from './skill-provider-command-types.ts';
@@ -133,11 +134,8 @@ export class SkillProviderCommandBoundaryScenario {
         command = [];
         continue;
       }
-      if (
-        typeof token !== 'string' ||
-        !Object.values(ShellSeparator).includes(token as ShellSeparator)
-      ) {
-        command.push(token as ShellWord);
+      if (typeof token !== 'string') {
+        command.push(token);
         continue;
       }
       if (command.length > 0) {
@@ -291,7 +289,7 @@ export class SkillProviderCommandBoundaryScenario {
     const start = resolved.start;
     let index = start;
     let wordRequest: WordEnvironmentRequest = {
-      word: words[index] as ShellWord,
+      word: shellWordAt([words, index]),
       environment: request.state.environment,
     };
     let command =
@@ -304,7 +302,7 @@ export class SkillProviderCommandBoundaryScenario {
       index += 1;
       if (index === words.length) return;
       wordRequest = {
-        word: words[index] as ShellWord,
+        word: shellWordAt([words, index]),
         environment: request.state.environment,
       };
       command = SkillProviderShellEnvironmentScenario.resolveWord(wordRequest);
@@ -346,7 +344,7 @@ export class SkillProviderCommandBoundaryScenario {
     ]);
     if (index === words.length) return;
     wordRequest = {
-      word: words[index] as ShellWord,
+      word: shellWordAt([words, index]),
       environment: request.state.environment,
     };
     command = SkillProviderShellEnvironmentScenario.resolveWord(wordRequest);
@@ -441,12 +439,12 @@ export class SkillProviderCommandBoundaryScenario {
       return;
     }
     if (command.value === 'shift') {
-      wordRequest = {
-        word: words[index] as ShellWord,
-        environment: request.state.environment,
-      };
-      const amountWord = words[index]
-        ? SkillProviderShellEnvironmentScenario.resolveWord(wordRequest)
+      const shiftWord = words[index];
+      const amountWord = shiftWord
+        ? SkillProviderShellEnvironmentScenario.resolveWord({
+            word: shiftWord,
+            environment: request.state.environment,
+          })
         : SkillProviderShellEnvironmentScenario.staticWord('1');
       const amount = Number.parseInt(amountWord.value, 10);
       if (amountWord.dynamic || !Number.isSafeInteger(amount) || amount < 0)
@@ -511,7 +509,7 @@ export class SkillProviderCommandBoundaryScenario {
         index = ShellRuntimeInvocation.consumeEnvPrefix(envRequest);
         if (index === words.length) return;
         wordRequest = {
-          word: words[index] as ShellWord,
+          word: shellWordAt([words, index]),
           environment: dispatchEnvironment,
         };
         command =

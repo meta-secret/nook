@@ -33,7 +33,7 @@ export class StructuralExpertRequestDecoder {
     }
     let node: UntrustedYamlNode;
     try {
-      node = JSON.parse(serialized) as UntrustedYamlNode;
+      node = UntrustedYamlBoundary.fromHost(JSON.parse(serialized));
     } catch {
       StructuralExpertRequestDecoder.invalidRequest();
     }
@@ -190,7 +190,11 @@ export class StructuralExpertRequestDecoder {
   ): readonly StructuralChildProjection[] {
     const reader = new StructuralRequestReader(node);
     const value = reader.value('childProjections');
-    if (!Array.isArray(value) || value.length < 2 || value.length > 16) {
+    if (
+      !UntrustedYamlBoundary.isList(value) ||
+      value.length < 2 ||
+      value.length > 16
+    ) {
       StructuralExpertRequestDecoder.invalidRequest();
     }
     const projections = value.map((entry) =>

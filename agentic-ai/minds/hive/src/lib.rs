@@ -33,6 +33,11 @@ pub static HIVE_TLS_PROVIDER: HiveTlsProvider = HiveTlsProvider {
 pub(crate) static GIT_PROCESS_TEST_LOCK: async_sync::Mutex<()> = async_sync::Mutex::const_new(());
 
 impl HiveTlsProvider {
+    /// Installs the process-wide AWS-LC rustls provider once.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when AWS-LC rejects installation.
     pub fn install(&self) -> HiveResult<()> {
         match self.installation.get_or_init(|| {
             aws_lc_rs::default_provider()

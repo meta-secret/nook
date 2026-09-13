@@ -69,18 +69,14 @@ export class StructuralEvidenceCodec {
           {
             kind: z.literal(StructuralAssessmentKind.Findings),
             findings: z
-              .array(
-                finding,
+              .tuple(
+                [finding],
                 structuralError('structural result array is invalid'),
               )
-              .min(1, 'structural result array is invalid')
-              .max(100, 'structural result array is invalid')
-              .transform(
-                (values) =>
-                  values as [
-                    z.infer<typeof finding>,
-                    ...z.infer<typeof finding>[],
-                  ],
+              .rest(finding)
+              .refine(
+                (values) => values.length <= 100,
+                'structural result array is invalid',
               ),
           },
           structuralObjectError,

@@ -207,7 +207,12 @@ impl LocalExecutionRecord {
             let Some(index) = lower.find(&format!("{tool} ")) else {
                 continue;
             };
-            let public = joined[index..]
+            let public = joined
+                .char_indices()
+                .skip_while(|(character_index, _)| *character_index < index)
+                .map(|(_, character)| character)
+                .collect::<String>();
+            let public = public
                 .split_whitespace()
                 .take(2)
                 .map(|part| {

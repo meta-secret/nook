@@ -115,10 +115,11 @@ export class LoomRequestSchema {
     }
     const keys = Object.keys(object.value);
     const domainKeys = keys.filter((key) =>
-      LoomRequestSchema.ROOT_FAMILIES.includes(key as RequestFamily),
+      LoomRequestSchema.ROOT_FAMILIES.some((family) => family === key),
     );
     const unknownKeys = keys.filter(
-      (key) => !LoomRequestSchema.ROOT_FAMILIES.includes(key as RequestFamily),
+      (key) =>
+        !LoomRequestSchema.ROOT_FAMILIES.some((family) => family === key),
     );
     const errors = unknownKeys.map((key) => {
       const joinPathArgs5: JoinPathArgs = { base: path, key };
@@ -142,7 +143,12 @@ export class LoomRequestSchema {
     if (errors.length > 0) {
       return FailedFieldDecode.create(errors);
     }
-    const family = domainKeys[0] as RequestFamily;
+    const family = LoomRequestSchema.ROOT_FAMILIES.find(
+      (candidate) => candidate === domainKeys[0],
+    );
+    if (!family) {
+      return FailedFieldDecode.create(errors);
+    }
     if (family === RequestFamily.ToolsCall && !allowToolsCall) {
       const joinPathArgs4: JoinPathArgs = { base: path, key: family };
       const fieldErrorArgs3: FieldErrorArgs = {

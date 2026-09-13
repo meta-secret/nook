@@ -68,6 +68,12 @@ import type {
   StartDelegationRunInput,
 } from '../../src/agent-workflow/delegation-run-journal.ts';
 
+function itemAt<T>([items, index]: readonly [readonly T[], number]): T {
+  const item = items[index];
+  if (!item) throw new Error(`Missing fixture item at index ${index}.`);
+  return item;
+}
+
 export class AgentWorkflowDelegationAggregationScenario {
   private constructor(private readonly request: FixtureInput) {}
 
@@ -275,7 +281,7 @@ export class AgentWorkflowDelegationAggregationScenario {
     const expertRecord: RecordDeclarationInput = {
       runDirectory,
       plan,
-      declaration: plan.attempts[1]!,
+      declaration: itemAt([plan.attempts, 1]),
       terminalKind: TaskTerminalKind.Completed,
       recorded,
     };
@@ -292,7 +298,7 @@ export class AgentWorkflowDelegationAggregationScenario {
     const leafRecord: RecordDeclarationInput = {
       runDirectory,
       plan,
-      declaration: plan.attempts[2]!,
+      declaration: itemAt([plan.attempts, 2]),
       terminalKind: input.leafKind,
       recorded,
     };
@@ -302,7 +308,7 @@ export class AgentWorkflowDelegationAggregationScenario {
     const rootRecord: RecordDeclarationInput = {
       runDirectory,
       plan,
-      declaration: plan.attempts[0]!,
+      declaration: itemAt([plan.attempts, 0]),
       terminalKind: TaskTerminalKind.Completed,
       recorded,
     };
@@ -553,7 +559,8 @@ describe('ordinary delegation run aggregation', () => {
           fixture.finalizationInput,
         ),
       ]);
-      const first = concurrent[0]!;
+      const first = concurrent[0];
+      if (!first) throw new Error('Finalization result is missing.');
       expect(concurrent[1]).toEqual(first);
       const firstResult = await readFile(first.resultPath, 'utf8');
       const firstView = await readFile(first.viewPath, 'utf8');
@@ -582,7 +589,7 @@ describe('ordinary delegation run aggregation', () => {
       const admissionFixture: AdmissionForInput = {
         workingDirectory,
         plan: fixture.plan,
-        declaration: fixture.plan.attempts[0]!,
+        declaration: itemAt([fixture.plan.attempts, 0]),
       };
       const admissionInput =
         AgentWorkflowDelegationAggregationScenario.admissionFor(
@@ -650,7 +657,7 @@ describe('ordinary delegation run aggregation', () => {
       const expertRecord: RecordDeclarationInput = {
         runDirectory,
         plan,
-        declaration: plan.attempts[1]!,
+        declaration: itemAt([plan.attempts, 1]),
         terminalKind: TaskTerminalKind.Completed,
         recorded,
       };
@@ -663,7 +670,7 @@ describe('ordinary delegation run aggregation', () => {
       const rootRecord: RecordDeclarationInput = {
         runDirectory,
         plan,
-        declaration: plan.attempts[0]!,
+        declaration: itemAt([plan.attempts, 0]),
         terminalKind: TaskTerminalKind.Completed,
         recorded,
       };
@@ -698,7 +705,11 @@ describe('ordinary delegation run aggregation', () => {
       };
       const forgedRequest: DelegationFinalizationRequest = {
         ...fixture.finalizationInput.request,
-        barrierEvidence: [barriers[0]!, forgedBarrier, barriers[2]!],
+        barrierEvidence: [
+          itemAt([barriers, 0]),
+          forgedBarrier,
+          itemAt([barriers, 2]),
+        ],
       };
       const forgedInput: FinalizeDelegationRunInput = {
         workingDirectory,
@@ -827,7 +838,7 @@ describe('ordinary delegation run aggregation', () => {
           const admissionFixture: AdmissionForInput = {
             workingDirectory,
             plan: fixture.plan,
-            declaration: fixture.plan.attempts[0]!,
+            declaration: itemAt([fixture.plan.attempts, 0]),
           };
           await DelegationRunJournal.admitDelegationAttempt(
             AgentWorkflowDelegationAggregationScenario.admissionFor(

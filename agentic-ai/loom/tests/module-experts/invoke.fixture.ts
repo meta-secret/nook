@@ -6,6 +6,8 @@ import { join, resolve } from 'node:path';
 
 import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts';
 
+import { AgentAttemptTransport } from '../../src/agent-workflow/attempt-codec.ts';
+
 import type { ModuleExpertContinuation } from '../../src/agent-workflow/domain.ts';
 
 import {
@@ -85,7 +87,7 @@ export class ModuleExpertsInvokeScenario {
     return serialized
       .trim()
       .split('\n')
-      .map((line) => JSON.parse(line) as AgentAttemptEvent);
+      .map((line) => AgentAttemptTransport.decodeEvent(line));
   }
 
   static sha256(serialized: string): string {

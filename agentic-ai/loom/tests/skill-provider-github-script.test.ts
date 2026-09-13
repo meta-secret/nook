@@ -2,14 +2,16 @@ import { expect, test } from 'bun:test';
 
 import { SkillProviderGithubScriptScenario } from './skill-provider-github-script.ts';
 
+import type { ConfigurationReference } from './skill-provider-config-types.ts';
+
 export class SkillProviderGithubScriptFixture {
   private constructor(private readonly request: string) {}
 
-  static references(script: string) {
+  static references(script: string): readonly ConfigurationReference[] {
     return new SkillProviderGithubScriptFixture(script).execute();
   }
 
-  private execute() {
+  private execute(): readonly ConfigurationReference[] {
     const script = this.request;
     const request = {
       importer: '.github/workflows/audit.yml',
@@ -25,16 +27,17 @@ export class SkillProviderGithubScriptFixture {
 
 test('github-script injected exec successors are audited', () => {
   const expectedReference = { specifier: 'scripts/facade.ts' };
-  const partialReference = expect.objectContaining(expectedReference);
   for (const script of [
     "await exec.exec('bun', ['scripts/facade.ts'])",
     "await exec['exec']('bun', ['scripts/facade.ts'])",
     "await exec.getExecOutput('bun scripts/facade.ts')",
   ])
     expect(
-      SkillProviderGithubScriptFixture.references(script),
+      SkillProviderGithubScriptFixture.references(script).some(
+        ({ specifier }) => specifier === expectedReference.specifier,
+      ),
       script,
-    ).toContainEqual(partialReference);
+    ).toBe(true);
 });
 
 test('github-script injected exec preserves exact cwd outside argv', () => {
@@ -45,9 +48,15 @@ test('github-script injected exec preserves exact cwd outside argv', () => {
     specifier: 'nested/scripts/facade.ts',
     workingDirectory: 'nested',
   };
-  expect(SkillProviderGithubScriptFixture.references(script)).toContainEqual(
-    expect.objectContaining(expectedReference),
-  );
+  expect(
+    SkillProviderGithubScriptFixture.references(script).some(
+      (reference) =>
+        reference.positionalArguments !== false &&
+        reference.positionalArguments.length === 0 &&
+        reference.specifier === expectedReference.specifier &&
+        reference.workingDirectory === expectedReference.workingDirectory,
+    ),
+  ).toBe(true);
 });
 
 test('github-script injected exec dynamic forms fail closed', () => {
@@ -83,14 +92,15 @@ test('github-script injected exec cwd stays repository-relative', () => {
 
 test('github-script local exec shadows the injected client', () => {
   const expectedReference = { specifier: 'scripts/facade.ts' };
-  const partialReference = expect.objectContaining(expectedReference);
   const script = "const exec={exec(){}}; exec.exec('bun', ['ignored.ts'])";
   expect(SkillProviderGithubScriptFixture.references(script)).toEqual([]);
   const scoped =
     "{ const exec={exec(){}}; exec.exec('bun', ['ignored.ts']) } await exec.exec('bun', ['scripts/facade.ts'])";
-  expect(SkillProviderGithubScriptFixture.references(scoped)).toContainEqual(
-    partialReference,
-  );
+  expect(
+    SkillProviderGithubScriptFixture.references(scoped).some(
+      ({ specifier }) => specifier === expectedReference.specifier,
+    ),
+  ).toBe(true);
 });
 
 test('github-script rejects unresolved Actions expressions', () => {
@@ -111,9 +121,11 @@ test('github-script injected require aliases remain module loaders', () => {
   ]) {
     const expected = { specifier: './scripts/facade.cjs' };
     expect(
-      SkillProviderGithubScriptFixture.references(script),
+      SkillProviderGithubScriptFixture.references(script).some(
+        ({ specifier }) => specifier === expected.specifier,
+      ),
       script,
-    ).toContainEqual(expect.objectContaining(expected));
+    ).toBe(true);
   }
 });
 
@@ -141,9 +153,11 @@ test('github-script local require shadows the injected loader', () => {
   const nested =
     "{ const require=(value)=>value; const load=require; load(modulePath) } const load=require; load('./scripts/facade.cjs')";
   const expected = { specifier: './scripts/facade.cjs' };
-  expect(SkillProviderGithubScriptFixture.references(nested)).toContainEqual(
-    expect.objectContaining(expected),
-  );
+  expect(
+    SkillProviderGithubScriptFixture.references(nested).some(
+      ({ specifier }) => specifier === expected.specifier,
+    ),
+  ).toBe(true);
 });
 
 test('github-script local original require shadows the injected loader', () => {
@@ -153,7 +167,9 @@ test('github-script local original require shadows the injected loader', () => {
   const nested =
     "{ const __original_require__=(value)=>value; const load=__original_require__; load(modulePath) } const load=__original_require__; load('./scripts/facade.cjs')";
   const expected = { specifier: './scripts/facade.cjs' };
-  expect(SkillProviderGithubScriptFixture.references(nested)).toContainEqual(
-    expect.objectContaining(expected),
-  );
+  expect(
+    SkillProviderGithubScriptFixture.references(nested).some(
+      ({ specifier }) => specifier === expected.specifier,
+    ),
+  ).toBe(true);
 });

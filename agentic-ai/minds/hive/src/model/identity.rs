@@ -27,6 +27,7 @@ impl From<TaskId> for String {
     }
 }
 impl TaskId {
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -63,6 +64,7 @@ impl From<AgentId> for String {
     }
 }
 impl AgentId {
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -99,6 +101,7 @@ impl From<AttemptId> for String {
     }
 }
 impl AttemptId {
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -135,6 +138,7 @@ impl From<LeaseToken> for String {
     }
 }
 impl LeaseToken {
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }

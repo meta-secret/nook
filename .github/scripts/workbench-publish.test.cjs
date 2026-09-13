@@ -1,13 +1,27 @@
-const assert = require('node:assert/strict')
-const { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs')
-const { tmpdir } = require('node:os')
-const { delimiter, join, resolve } = require('node:path')
-const { spawnSync } = require('node:child_process')
-const test = require('node:test')
+/** @type {(moduleName: string) => unknown} */
+const loadBuiltin = /** @type {(moduleName: string) => unknown} */ (process.getBuiltinModule.bind(process))
+/** @type {typeof import('node:assert/strict')} */
+const assert = /** @type {typeof import('node:assert/strict')} */ (loadBuiltin('node:assert/strict'))
+/** @type {typeof import('node:fs')} */
+const fs = /** @type {typeof import('node:fs')} */ (loadBuiltin('node:fs'))
+/** @type {typeof import('node:os')} */
+const os = /** @type {typeof import('node:os')} */ (loadBuiltin('node:os'))
+/** @type {typeof import('node:path')} */
+const path = /** @type {typeof import('node:path')} */ (loadBuiltin('node:path'))
+/** @type {typeof import('node:child_process')} */
+const childProcess = /** @type {typeof import('node:child_process')} */ (loadBuiltin('node:child_process'))
+/** @type {typeof import('node:test')} */
+const test = /** @type {typeof import('node:test')} */ (loadBuiltin('node:test'))
+
+const { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = fs
+const { tmpdir } = os
+const { delimiter, join, resolve } = path
+const { spawnSync } = childProcess
 
 const repositoryRoot = resolve(__dirname, '../..')
 const publisherPath = join(__dirname, 'workbench-publish.cjs')
 
+/** @param {string} gizmoId @param {string} [frontmatterGizmoId] @param {string} [issuePath] */
 function plan(gizmoId, frontmatterGizmoId = gizmoId, issuePath = 'null') {
   return `---
 issue: ${issuePath}
@@ -58,19 +72,24 @@ Validate interactive plan publication.
 `
 }
 
+/** @param {string} gizmoId */
 function issue(gizmoId) {
   const field = gizmoId === '' ? '' : `gizmo_id: ${gizmoId}\n`
   return `---\ntitle: Focused issue\n${field}---\n\n# Focused issue\n`
 }
 
+/** @typedef {{ assignedGizmoId?: string, assignedIssuePath?: string, remoteIssue?: string }} PublishOptions */
+/** @param {string} candidate @param {PublishOptions} [options] */
 function publish(candidate, { assignedGizmoId = '', assignedIssuePath = '', remoteIssue = '' } = {}) {
-  const { NOOK_WORKBENCH_ASSIGNED_GIZMO_ID: _gizmo, NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH: _issue, ...inheritedEnv } = process.env
+  const inheritedEnv = { ...process.env }
+  delete inheritedEnv.NOOK_WORKBENCH_ASSIGNED_GIZMO_ID
+  delete inheritedEnv.NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH
   const scratch = mkdtempSync(join(tmpdir(), 'nook-workbench-publish-'))
   const binDirectory = join(scratch, 'bin')
   const localPlan = join(scratch, 'plan.md')
   const sourceTask = join(scratch, 'source-task.md')
   const ghCalls = join(scratch, 'gh-calls.jsonl')
-  require('node:fs').mkdirSync(binDirectory)
+  fs.mkdirSync(binDirectory)
   const ghPath = join(binDirectory, 'gh')
   writeFileSync(
     ghPath,
@@ -114,7 +133,8 @@ process.exit(1)
 }
 
 const focusedIssue = 'issues/focused.md'
-for (const [name, candidate, options, status, rejection] of [
+/** @type {Array<[string, string, PublishOptions, number, RegExp?]>} */
+const cases = [
   ['publishes a direct self-contained plan', plan('2fa-slice'), {}, 0],
   ['binds an issue-backed plan to trusted caller metadata', plan('focused-slice', 'focused-slice', focusedIssue), { assignedGizmoId: 'focused-slice', assignedIssuePath: focusedIssue, remoteIssue: issue('focused-slice') }, 0],
   ['rejects a candidate-selected issue path', plan('focused-slice', 'focused-slice', 'issues/spoofed.md'), { assignedGizmoId: 'focused-slice', assignedIssuePath: focusedIssue }, 7],
@@ -124,8 +144,9 @@ for (const [name, candidate, options, status, rejection] of [
   ['accepts a legacy issue with null ID', plan('legacy-slice', 'legacy-slice', focusedIssue), { assignedIssuePath: focusedIssue, remoteIssue: issue('null') }, 0],
   ['rejects body and frontmatter mismatch', plan('body-slice', 'other-slice'), {}, 7, /gizmo_id must match/],
   ['rejects null plan Gizmo ID', plan('body-slice', 'null'), {}, 7, /gizmo_id is invalid/],
-]) {
-  test(name, () => {
+]
+for (const [name, candidate, options, status, rejection] of cases) {
+  void test(name, () => {
     const { result, calls } = publish(candidate, options)
     assert.equal(result.status, status, result.stderr)
     if (rejection) assert.match(result.stderr, rejection)

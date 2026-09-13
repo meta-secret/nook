@@ -32,7 +32,7 @@ export class ModuleExpertRequestDecoder {
     }
     let node: UntrustedYamlNode;
     try {
-      node = JSON.parse(serialized) as UntrustedYamlNode;
+      node = UntrustedYamlBoundary.fromHost(JSON.parse(serialized));
     } catch {
       ModuleExpertRequestDecoder.invalidRequest();
     }
@@ -211,7 +211,7 @@ export class ModuleExpertRequestDecoder {
     const value = UntrustedYamlBoundary.property(propertyArgs);
     if (
       value.presence !== UntrustedYamlPropertyPresence.Absent &&
-      (!Array.isArray(value.value) ||
+      (!UntrustedYamlBoundary.isList(value.value) ||
         value.value.some((entry) => typeof entry !== 'string'))
     ) {
       ModuleExpertRequestDecoder.invalidRequest();
@@ -219,9 +219,13 @@ export class ModuleExpertRequestDecoder {
     if (value.presence === UntrustedYamlPropertyPresence.Absent) {
       return { presence: OptionalStringListPresence.Absent };
     }
+    if (!UntrustedYamlBoundary.isList(value.value))
+      ModuleExpertRequestDecoder.invalidRequest();
     return {
       presence: OptionalStringListPresence.Present,
-      value: value.value as readonly string[],
+      value: value.value.filter(
+        (entry): entry is string => typeof entry === 'string',
+      ),
     };
   }
 

@@ -60,6 +60,7 @@ pub enum ActivityKind {
 }
 
 impl ActivityKind {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Started => "started",
@@ -174,6 +175,7 @@ pub enum TaskTrigger {
 }
 
 impl TaskTrigger {
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::AgentDependency => "agent-dependency",
@@ -196,6 +198,11 @@ pub struct EnqueueTask {
 }
 
 impl EnqueueTask {
+    /// Validates the task's required fields and domain constraints.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ModelError`] when any required task field is invalid.
     pub fn validate(&self) -> Result<(), ModelError> {
         if self.kind.is_empty() {
             return Err(ModelError::EmptyTaskKind);
@@ -309,7 +316,7 @@ impl TryFrom<WireTerminalResult> for TerminalResult {
         } = wire;
         match status {
             WireTerminalStatus::Completed => {
-                blocker.require_absent(AbsentBlockerContext::Completed)?;
+                blocker.require_absent(&AbsentBlockerContext::Completed)?;
                 Ok(Self::Completed {
                     summary,
                     changed_files,
@@ -332,7 +339,7 @@ impl TryFrom<WireTerminalResult> for TerminalResult {
                 if obsolete {
                     return Err(ModelError::FailedObsolete);
                 }
-                blocker.require_absent(AbsentBlockerContext::Failed)?;
+                blocker.require_absent(&AbsentBlockerContext::Failed)?;
                 Ok(Self::Failed {
                     summary,
                     changed_files,
@@ -344,6 +351,7 @@ impl TryFrom<WireTerminalResult> for TerminalResult {
 }
 
 impl TerminalResult {
+    #[must_use]
     pub fn summary(&self) -> &str {
         match self {
             Self::Completed { summary, .. }
@@ -352,6 +360,7 @@ impl TerminalResult {
         }
     }
 
+    #[must_use]
     pub fn changed_files(&self) -> &[String] {
         match self {
             Self::Completed { changed_files, .. }
@@ -360,6 +369,7 @@ impl TerminalResult {
         }
     }
 
+    #[must_use]
     pub fn tests(&self) -> &[String] {
         match self {
             Self::Completed { tests, .. }
@@ -474,13 +484,10 @@ mod tests {
                 "prompt": "Restore the cache invariant"
             }
         });
-        let error = match serde_json::from_value::<TerminalResult>(completed_with_blocker) {
-            Ok(_) => {
-                return Err(crate::HiveError::message(
-                    "completed result with a blocker was accepted",
-                ));
-            }
-            Err(error) => error,
+        let Err(error) = serde_json::from_value::<TerminalResult>(completed_with_blocker) else {
+            return Err(crate::HiveError::message(
+                "completed result with a blocker was accepted",
+            ));
         };
         assert!(error.to_string().contains("must not report a blocker"));
 
@@ -497,13 +504,10 @@ mod tests {
                 "prompt": ""
             }
         });
-        let error = match serde_json::from_value::<TerminalResult>(blocked_without_blocker) {
-            Ok(_) => {
-                return Err(crate::HiveError::message(
-                    "blocked result without a blocker was accepted",
-                ));
-            }
-            Err(error) => error,
+        let Err(error) = serde_json::from_value::<TerminalResult>(blocked_without_blocker) else {
+            return Err(crate::HiveError::message(
+                "blocked result without a blocker was accepted",
+            ));
         };
         assert!(error.to_string().contains("must report a blocker"));
 
@@ -520,13 +524,10 @@ mod tests {
                 "prompt": "Restore the cache invariant"
             }
         });
-        let error = match serde_json::from_value::<TerminalResult>(blocked_obsolete) {
-            Ok(_) => {
-                return Err(crate::HiveError::message(
-                    "blocked obsolete result was accepted",
-                ));
-            }
-            Err(error) => error,
+        let Err(error) = serde_json::from_value::<TerminalResult>(blocked_obsolete) else {
+            return Err(crate::HiveError::message(
+                "blocked obsolete result was accepted",
+            ));
         };
         assert!(error.to_string().contains("cannot retire"));
 
@@ -549,13 +550,10 @@ mod tests {
             }
         });
 
-        let error = match serde_json::from_value::<TerminalResult>(terminal_result) {
-            Ok(_) => {
-                return Err(crate::HiveError::message(
-                    "empty terminal content was accepted",
-                ));
-            }
-            Err(error) => error,
+        let Err(error) = serde_json::from_value::<TerminalResult>(terminal_result) else {
+            return Err(crate::HiveError::message(
+                "empty terminal content was accepted",
+            ));
         };
         assert!(error.to_string().contains("summary must not be empty"));
         Ok(())
@@ -624,7 +622,7 @@ mod tests {
             (
                 {
                     let mut task = valid.clone();
-                    task.prompt = "".into();
+                    task.prompt = String::new();
                     task
                 },
                 ModelError::EmptyTaskPrompt,
@@ -774,7 +772,7 @@ enum AbsentBlockerContext {
     Failed,
 }
 impl WireBlockerResult {
-    fn require_absent(self, context: AbsentBlockerContext) -> Result<(), ModelError> {
+    fn require_absent(&self, context: &AbsentBlockerContext) -> Result<(), ModelError> {
         if self.present {
             return Err(match context {
                 AbsentBlockerContext::Completed => ModelError::CompletedWithBlocker,

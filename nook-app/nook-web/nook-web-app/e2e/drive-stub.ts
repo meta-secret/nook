@@ -174,7 +174,7 @@ export function createLocalE2eGoogleDriveVaultStub(
         }
 
         const request = route.request()
-        const url = request.url().split('?')[0] ?? ''
+        const [url = ''] = [request.url().split('?')[0]]
         const method = request.method()
         const fullUrl = request.url()
         const bodyText = ((v) => (v ? v : ''))(request.postData())

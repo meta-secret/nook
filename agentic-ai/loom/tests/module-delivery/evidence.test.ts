@@ -481,7 +481,8 @@ test('rejects forged evidence and restores a canonical redacted receipt after re
       { ...exact, acceptanceOwner: TeamKey.DevelopmentCore },
       { ...exact, sourceCommit: 'f'.repeat(40) },
       { ...exact, artifactDigest: 'f'.repeat(64) },
-      { ...exact, verdict: 'forged-success' as ModuleDeliveryEvidenceVerdict },
+      // @ts-expect-error forged verdict intentionally violates the contract
+      { ...exact, verdict: 'forged-success' },
       { ...exact, acceptanceRequirements: ['forged acceptance'] },
       {
         ...exact,
@@ -617,8 +618,8 @@ test('canonical redacted receipt replay rejects inconsistent lifecycle fields wi
             state: replay.state,
             lease: replayLease,
             acceptedEvidence: [],
-            receipt:
-              candidate as ModuleDeliveryAcceptedProviderEvidenceIdentity,
+            // @ts-expect-error each candidate is deliberately malformed
+            receipt: candidate,
           },
         ),
       ).toThrow();
@@ -856,9 +857,15 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     expect(() =>
       ModuleDeliveryEvidenceScenario.verify(reversedVerificationRequest),
     ).toThrow('synthesis inputs');
-    const mutableIdentities = structuredClone(
-      exact.acceptedProviderEvidence,
-    ) as MutableProviderEvidenceIdentity[];
+    const mutableIdentity = (
+      identity: ModuleDeliveryAcceptedProviderEvidenceIdentity,
+    ): MutableProviderEvidenceIdentity => ({
+      ...identity,
+      acceptedProviderEvidence:
+        identity.acceptedProviderEvidence.map(mutableIdentity),
+    });
+    const mutableIdentities =
+      exact.acceptedProviderEvidence.map(mutableIdentity);
     const mutableExact: ModuleDeliveryReadOnlyEvidenceSubmission = {
       ...exact,
       acceptedProviderEvidence: mutableIdentities,
@@ -884,9 +891,9 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     const digest = ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest;
     expect(() => digest(artifact)).toThrow('ancestry is too large');
     const aggregateRoot = structuredClone(retained);
-    aggregateRoot.acceptedProviderEvidence = Array(127)
-      .fill(nested)
-      .map((identity) => structuredClone(identity));
+    aggregateRoot.acceptedProviderEvidence = Array.from({ length: 127 }, () =>
+      mutableIdentity(nested),
+    );
     artifact.acceptedProviderEvidence = [aggregateRoot, nested];
     expect(() => digest(artifact)).toThrow('ancestry is too large');
     retained.acceptedProviderEvidence = [retained];

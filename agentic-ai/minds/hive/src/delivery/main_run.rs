@@ -5,22 +5,20 @@ impl<'a> MainRunSelection<'a> {
         let MainRunSelection { runs, merge_commit } = self;
         for run in runs {
             match run.outcome() {
-                RunOutcome::Pending | RunOutcome::Superseded => continue,
+                RunOutcome::Pending | RunOutcome::Superseded => {}
                 RunOutcome::Successful { head_sha } => return Ok(head_sha),
                 RunOutcome::Failed {
                     head_sha,
                     conclusion,
                 } => {
                     return Err(crate::HiveError::message(format!(
-                        "Hive repair delivery failed on Main: run at {} concluded {}",
-                        head_sha, conclusion
+                        "Hive repair delivery failed on Main: run at {head_sha} concluded {conclusion}"
                     )));
                 }
             }
         }
         Err(crate::HiveError::message(format!(
-            "Hive repair delivery is incomplete: no successful Main workflow contains merge {}",
-            merge_commit
+            "Hive repair delivery is incomplete: no successful Main workflow contains merge {merge_commit}"
         )))
     }
 }

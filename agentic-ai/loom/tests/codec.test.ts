@@ -10,6 +10,11 @@ import { YamlDocument } from '../src/codec/yaml.ts';
 import { LoomRequestDispatch } from '../src/tools/dispatch.ts';
 import { AgentStatsAssemblePayload } from '../src/codec/args/agent-stats.ts';
 import { PrePushRequestDecoder } from '../src/codec/args/pre-push.ts';
+import {
+  UntrustedYamlBoundary,
+  type UntrustedYamlNode,
+} from '../src/lib/guards.ts';
+import type { DiscoverableRequest } from '../src/tools/registry.ts';
 
 import type { DecodeAgentStatsAssemblePayloadArgs } from '../src/codec/args/agent-stats.ts';
 describe('loom domain request codec', () => {
@@ -119,23 +124,22 @@ describe('loom dispatch protocol', () => {
     expect(outcome.exitCode).toBe(0);
     expect(outcome.body.ok).toBe(true);
     if (outcome.body.ok) {
-      const result = outcome.body.result as {
-        requests: readonly {
-          family: RequestFamily;
-          exampleRequest: string;
-          exampleYaml: string;
-          resolvedExampleYaml: string;
-        }[];
-      };
+      const resultNode = UntrustedYamlBoundary.fromHost(outcome.body.result);
+      if (!UntrustedYamlBoundary.isRecord(resultNode))
+        throw new Error('Expected toolsList result.');
+      if (!('requests' in resultNode))
+        throw new Error('Expected toolsList requests.');
+      const requests = resultNode.requests;
+      if (!UntrustedYamlBoundary.isList(requests))
+        throw new Error('Expected toolsList requests.');
+      const result = requests.map(discoverableRequestView);
       expect(
-        result.requests.some((entry) => entry.family === RequestFamily.PrePush),
+        result.some((entry) => entry.family === RequestFamily.PrePush),
       ).toBe(true);
       expect(
-        result.requests.some(
-          (entry) => entry.family === RequestFamily.ToolsCall,
-        ),
+        result.some((entry) => entry.family === RequestFamily.ToolsCall),
       ).toBe(false);
-      for (const entry of result.requests) {
+      for (const entry of result) {
         expect(entry.exampleRequest.startsWith('task loom:')).toBe(true);
         const parsed = YamlDocument.parse(entry.exampleYaml);
         expect(parsed.status).toBe(DecodeStatus.Ok);
@@ -189,6 +193,34 @@ describe('loom dispatch protocol', () => {
     }
   });
 });
+
+type DiscoverableRequestView = Pick<
+  DiscoverableRequest,
+  'family' | 'exampleRequest' | 'exampleYaml' | 'resolvedExampleYaml'
+>;
+
+function discoverableRequestView(
+  value: UntrustedYamlNode,
+): DiscoverableRequestView {
+  if (!UntrustedYamlBoundary.isRecord(value))
+    throw new Error('Expected toolsList request.');
+  const family = Object.values(RequestFamily).find(
+    (candidate) => candidate === value.family,
+  );
+  if (
+    !family ||
+    typeof value.exampleRequest !== 'string' ||
+    typeof value.exampleYaml !== 'string' ||
+    typeof value.resolvedExampleYaml !== 'string'
+  )
+    throw new Error('Expected toolsList request.');
+  return {
+    family,
+    exampleRequest: value.exampleRequest,
+    exampleYaml: value.exampleYaml,
+    resolvedExampleYaml: value.resolvedExampleYaml,
+  };
+}
 
 describe('typed example documents', () => {
   test('every catalog example decodes as a domain request', () => {

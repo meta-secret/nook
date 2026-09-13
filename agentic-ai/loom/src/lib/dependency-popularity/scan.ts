@@ -152,7 +152,7 @@ export class RepositoryDependencyInventory {
       UntrustedYamlBoundary.property(packagesPropertyArgs);
     if (
       packagesProperty.presence === UntrustedYamlPropertyPresence.Absent ||
-      !Array.isArray(packagesProperty.value)
+      !UntrustedYamlBoundary.isList(packagesProperty.value)
     ) {
       const loomFailureDetailArgs2: LoomFailureDetailArgs = {
         code: LoomFailureCode.ValidationFailed,
@@ -173,7 +173,7 @@ export class RepositoryDependencyInventory {
     if (
       workspaceMembersProperty.presence ===
         UntrustedYamlPropertyPresence.Absent ||
-      !Array.isArray(workspaceMembersProperty.value)
+      !UntrustedYamlBoundary.isList(workspaceMembersProperty.value)
     ) {
       const loomFailureDetailArgs: LoomFailureDetailArgs = {
         code: LoomFailureCode.ValidationFailed,
@@ -218,7 +218,7 @@ export class RepositoryDependencyInventory {
       if (
         dependenciesProperty.presence ===
           UntrustedYamlPropertyPresence.Absent ||
-        !Array.isArray(dependenciesProperty.value)
+        !UntrustedYamlBoundary.isList(dependenciesProperty.value)
       ) {
         continue;
       }
@@ -280,11 +280,7 @@ class ManifestJson {
   constructor(private readonly text: string) {}
   decode(): Result<UntrustedYamlNode, ManifestFailure> {
     try {
-      return ok(
-        UntrustedYamlBoundary.fromHost(
-          JSON.parse(this.text) as UntrustedYamlNode,
-        ),
-      );
+      return ok(UntrustedYamlBoundary.fromHost(JSON.parse(this.text)));
     } catch {
       return err({
         code: LoomFailureCode.ValidationFailed,

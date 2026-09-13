@@ -462,9 +462,8 @@ mod tests {
         Ok(String::from_utf8(output.stdout)?.trim().to_owned())
     }
 
-    #[tokio::test]
-    async fn delivery_metadata_history_and_repository_checks_enforce_completion_contracts()
-    -> crate::HiveResult<()> {
+    #[test]
+    fn delivery_metadata_requires_hive_marker_and_label() -> crate::HiveResult<()> {
         let mut marked = DeliveryPullRequest::fixture(
             42,
             "repair",
@@ -487,7 +486,12 @@ mod tests {
             .err()
             .ok_or_else(|| crate::HiveError::message("unlabelled Hive delivery was accepted"))?;
         assert!(label_error.to_string().contains("lacks the `hive` label"));
+        Ok(())
+    }
 
+    #[tokio::test]
+    async fn delivery_squash_merge_history_enforces_completion_contracts() -> crate::HiveResult<()>
+    {
         let repository = tempfile::tempdir()?;
         let missing_commit =
             DeliveryPullRequest::fixture(42, "repair", "MERGED", super::DeliveryMerge::Unmerged);
@@ -566,13 +570,17 @@ mod tests {
                 crate::HiveError::message("squash commit without its PR suffix was accepted")
             })?;
         assert!(subject_error.to_string().contains("lacks PR suffix (#42)"));
+        Ok(())
+    }
 
+    #[test]
+    fn delivery_repository_checks_enforce_completion_contracts() -> crate::HiveResult<()> {
         let mut checks = DeliveryPullRequest::fixture(
             42,
             "repair",
             "MERGED",
             super::DeliveryMerge::Merged(DeliveryCommit {
-                oid: valid_commit.clone(),
+                oid: "valid".to_owned(),
             }),
         );
         checks.status_check_rollup.push(DeliveryCheck {
@@ -646,12 +654,13 @@ mod tests {
                 }]
             }"#,
         )?;
-        assert_eq!(with_context.status_check_rollup[0].name, "CodeRabbit");
-        assert_eq!(
-            with_context.status_check_rollup[0].conclusion,
-            CheckConclusion::Success
-        );
-        assert!(with_context.status_check_rollup[0].workflow_name.is_empty());
+        let check = with_context
+            .status_check_rollup
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("status context fixture is empty"))?;
+        assert_eq!(check.name, "CodeRabbit");
+        assert_eq!(check.conclusion, CheckConclusion::Success);
+        assert!(check.workflow_name.is_empty());
 
         let without_checks: DeliveryPullRequest = serde_json::from_str(
             r#"{
@@ -820,8 +829,16 @@ mod tests {
                 oid: "abc123".to_owned(),
             }),
         );
-        pull_request.status_check_rollup[0].conclusion = "FAILURE".into();
-        pull_request.status_check_rollup[1].conclusion = "CANCELLED".into();
+        pull_request
+            .status_check_rollup
+            .get_mut(0)
+            .ok_or_else(|| crate::HiveError::message("failure check fixture is empty"))?
+            .conclusion = "FAILURE".into();
+        pull_request
+            .status_check_rollup
+            .get_mut(1)
+            .ok_or_else(|| crate::HiveError::message("cancelled check fixture is incomplete"))?
+            .conclusion = "CANCELLED".into();
 
         let error = pull_request
             .validate_full_e2e_checks(MainMergeEvidence::SuccessfulDescendant)

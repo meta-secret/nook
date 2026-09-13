@@ -489,6 +489,13 @@ temporary notes optional and requires cleanup before readiness.
 
 ## Delivery and validation
 
+An implementation request defaults to complete delivery. Complete delivery
+passes through reviewed, remotely compiled changes merging into local dev,
+followed by the dev manager's slow validation and promotion process. Only an
+explicit user instruction such as `stop at PR` selects an intermediate
+handoff. Silence about
+merge is not an intermediate selection.
+
 Feature delivery completes after reviewed, remotely compiled changes merge
 into local dev through local integration. The manually run dev manager owns the slow
 delivery stage through snapshot publication, full dev PR validation, and guarded

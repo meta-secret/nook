@@ -66,11 +66,11 @@ export class KubectlCommand {
       command: ["kubectl", ...request.command],
       cwd: REPOSITORY_ROOT,
       environment: { ...process.env, KUBECONFIG: request.kubeconfigPath },
-      ...(request.input === undefined ? {} : { input: request.input }),
-      ...(request.failurePolicy === undefined
-        ? {}
-        : { failurePolicy: request.failurePolicy }),
-      ...(request.output === undefined ? {} : { output: request.output }),
+      ...("input" in request ? { input: request.input } : {}),
+      ...("failurePolicy" in request
+        ? { failurePolicy: request.failurePolicy }
+        : {}),
+      ...("output" in request ? { output: request.output } : {}),
     };
     return new HostCommand(commandRequest).run();
   }

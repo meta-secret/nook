@@ -1,9 +1,5 @@
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
-import {
-  UntrustedYamlBoundary,
-  type UntrustedYamlMap,
-  type UntrustedYamlNode,
-} from '../lib/guards.ts';
+import { UntrustedYamlBoundary } from '../lib/guards.ts';
 
 export class CargoWorkspaceDiscovery {
   private constructor(private readonly request: DiscoverCargoWorkspaceArgs) {}
@@ -63,16 +59,21 @@ export class CargoWorkspaceMetadata {
   }
   private static parse(source: string): CargoMetadata {
     const node = UntrustedYamlBoundary.fromJson(JSON.parse(source));
+    if (!UntrustedYamlBoundary.isRecord(node))
+      throw new Error('Invalid Cargo metadata.');
+    const packagesNode = node.packages;
+    const workspaceMembersNode = node.workspace_members;
     if (
-      !CargoWorkspaceMetadata.isRecord(node) ||
-      !Array.isArray(node.packages) ||
-      !Array.isArray(node.workspace_members)
+      !packagesNode ||
+      !workspaceMembersNode ||
+      !UntrustedYamlBoundary.isList(packagesNode) ||
+      !UntrustedYamlBoundary.isList(workspaceMembersNode)
     )
       throw new Error('Invalid Cargo metadata.');
     const packages: CargoMetadataPackage[] = [];
-    for (const candidate of node.packages) {
+    for (const candidate of packagesNode) {
       if (
-        !CargoWorkspaceMetadata.isRecord(candidate) ||
+        !UntrustedYamlBoundary.isRecord(candidate) ||
         typeof candidate.id !== 'string' ||
         typeof candidate.manifest_path !== 'string'
       )
@@ -83,15 +84,12 @@ export class CargoWorkspaceMetadata {
       });
     }
     const workspace_members: string[] = [];
-    for (const member of node.workspace_members) {
+    for (const member of workspaceMembersNode) {
       if (typeof member !== 'string')
         throw new Error('Invalid Cargo workspace member.');
       workspace_members.push(member);
     }
     return { packages, workspace_members };
-  }
-  private static isRecord(value: UntrustedYamlNode): value is UntrustedYamlMap {
-    return typeof value === 'object' && Boolean(value) && !Array.isArray(value);
   }
   private execute(): CargoWorkspaceInventory {
     const args = this.request;
@@ -103,17 +101,6 @@ export class CargoWorkspaceMetadata {
         kind: CargoWorkspaceInventoryKind.Failed,
         code: 'invalid-cargo-metadata',
         message: 'Cargo returned malformed workspace metadata.',
-      };
-    }
-    if (
-      !Array.isArray(metadata.packages) ||
-      !Array.isArray(metadata.workspace_members) ||
-      !metadata.workspace_members.every((member) => typeof member === 'string')
-    ) {
-      return {
-        kind: CargoWorkspaceInventoryKind.Failed,
-        code: 'invalid-cargo-metadata',
-        message: 'Cargo returned incomplete workspace metadata.',
       };
     }
     const packagesById = new Map<string, CargoMetadataPackage>();

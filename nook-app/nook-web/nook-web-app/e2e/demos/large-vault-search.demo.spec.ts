@@ -62,7 +62,7 @@ test('search a paginated vault through encrypted metadata', async ({
           registry.onerror = () => reject(registry.error)
           registry.onsuccess = () => {
             const parsed: unknown = JSON.parse(String(registry.result))
-            if (typeof parsed !== 'object' || parsed === null) {
+            if (typeof parsed !== 'object' || Object(parsed) !== parsed) {
               reject(new Error('Vault registry was not an object'))
               return
             }
@@ -75,7 +75,10 @@ test('search a paginated vault through encrypted metadata', async ({
               return
             }
             const firstVault: unknown = vaultsValue[0]
-            if (typeof firstVault !== 'object' || firstVault === null) {
+            if (
+              typeof firstVault !== 'object' ||
+              Object(firstVault) !== firstVault
+            ) {
               reject(new Error('Vault registry did not contain a store id'))
               return
             }

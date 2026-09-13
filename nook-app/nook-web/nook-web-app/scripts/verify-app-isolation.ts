@@ -116,8 +116,7 @@ type PagesRoutes = {
 
 function isPagesRoutes(value: unknown): value is PagesRoutes {
   return (
-    typeof value === 'object' &&
-    value !== null &&
+    value instanceof Object &&
     !Array.isArray(value) &&
     (!('version' in value) || typeof value.version === 'number') &&
     (!('include' in value) ||
@@ -135,13 +134,17 @@ type PagesWorkerModule = {
 
 const requireFromApp = createRequire(import.meta.url)
 
+type ConcreteObject = Record<string, unknown>
+
+function isConcreteObject(value: unknown): value is ConcreteObject {
+  return Boolean(value) && typeof value === 'object'
+}
+
 function isPagesWorkerModule(value: unknown): value is PagesWorkerModule {
   if (
-    typeof value !== 'object' ||
-    value === null ||
+    !isConcreteObject(value) ||
     !('default' in value) ||
-    typeof value.default !== 'object' ||
-    value.default === null ||
+    !isConcreteObject(value.default) ||
     !('fetch' in value.default)
   ) {
     return false

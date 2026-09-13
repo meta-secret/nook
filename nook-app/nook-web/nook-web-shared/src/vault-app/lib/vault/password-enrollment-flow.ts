@@ -9,6 +9,7 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp } from "$lib/nook";
 import {
+  SharedGrantProviderOutcomeKind,
   findSharedGrantProvider,
   SharedStorageTargetKind,
   type SharedStorageTarget,
@@ -281,7 +282,8 @@ export class PasswordEnrollmentActions {
             let sharedProvider = providerSelection;
             let sharedProviderNeedsSave = false;
             if (
-              sharedProvider.kind === "authorizationRequired" &&
+              sharedProvider.kind ===
+                SharedGrantProviderOutcomeKind.AuthorizationRequired &&
               preset === "google-drive"
             ) {
               if (!googleOAuthSession.isGoogleOAuthConfigured()) {
@@ -327,7 +329,7 @@ export class PasswordEnrollmentActions {
                 return;
               }
               sharedProvider = {
-                kind: "existing",
+                kind: SharedGrantProviderOutcomeKind.Existing,
                 provider: {
                   ...providerPersistenceDefaults(),
                   id: "enrollment-shared-oauth",
@@ -342,7 +344,7 @@ export class PasswordEnrollmentActions {
             if (preset === "icloud") {
               const existingProvider = sharedProvider;
               const existingConfiguration =
-                existingProvider.kind === "existing"
+                existingProvider.kind === SharedGrantProviderOutcomeKind.Existing
                   ? existingProvider.provider.oauthFile
                   : oauthConfigurationNotApplicable();
               const existingConfig = isConfiguredOAuthFile(
@@ -420,28 +422,31 @@ export class PasswordEnrollmentActions {
               const provider: StorageProvider = {
                 ...providerPersistenceDefaults(),
                 id:
-                  existingProvider.kind === "existing"
+                  existingProvider.kind === SharedGrantProviderOutcomeKind.Existing
                     ? existingProvider.provider.id
                     : "enrollment-shared-icloud",
                 type: OAUTH_FILE_PROVIDER_TYPE,
                 label:
-                  existingProvider.kind === "existing"
+                  existingProvider.kind === SharedGrantProviderOutcomeKind.Existing
                     ? existingProvider.provider.label
                     : state.t(I18N_KEYS.ProviderPickerIcloud),
                 oauthFile: configuredOAuthFile(configured.value),
                 createdAt:
-                  existingProvider.kind === "existing"
+                  existingProvider.kind === SharedGrantProviderOutcomeKind.Existing
                     ? existingProvider.provider.createdAt
                     : isoTimestamp(),
               };
               sharedProvider = {
-                kind: "existing",
+                kind: SharedGrantProviderOutcomeKind.Existing,
                 provider,
               };
               sharedProviderNeedsSave =
                 provider.id === "enrollment-shared-icloud";
             }
-            if (sharedProvider.kind === "authorizationRequired") {
+            if (
+              sharedProvider.kind ===
+              SharedGrantProviderOutcomeKind.AuthorizationRequired
+            ) {
               state.errorMsg = state.t(
                 I18N_KEYS.ErrorsSharedProviderAccessRequired,
               );

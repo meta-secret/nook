@@ -563,7 +563,10 @@ export class SkillProviderFiniteNodeLoaderScenario {
           safe = false;
           return;
         }
-        modules.add(argument.text as AllowedNodeModule);
+        const module = Object.values(AllowedNodeModule).find(
+          (candidate) => candidate === argument.text,
+        );
+        if (module) modules.add(module);
       }
       ts.forEachChild(node, visit);
     };

@@ -89,12 +89,22 @@ export type WorktreeBranch =
   | { readonly kind: WorktreeBranchKind.Detached };
 
 export class WorktreeRecord {
-  constructor(
-    readonly path: string,
-    readonly head: CommitSha,
-    readonly branch: WorktreeBranch,
-    readonly prunable: boolean,
-  ) {}
+  readonly path: string;
+  readonly head: CommitSha;
+  readonly branch: WorktreeBranch;
+  readonly prunable: boolean;
+
+  constructor(request: {
+    readonly path: string;
+    readonly head: CommitSha;
+    readonly branch: WorktreeBranch;
+    readonly prunable: boolean;
+  }) {
+    this.path = request.path;
+    this.head = request.head;
+    this.branch = request.branch;
+    this.prunable = request.prunable;
+  }
 
   isManagedDevelopmentWorktree(): boolean {
     return (
@@ -210,10 +220,16 @@ export class PullRequestNumber {
 }
 
 export class RepositorySlug {
-  private constructor(
-    readonly owner: string,
-    readonly repository: string,
-  ) {}
+  readonly owner: string;
+  readonly repository: string;
+
+  private constructor(request: {
+    readonly owner: string;
+    readonly repository: string;
+  }) {
+    this.owner = request.owner;
+    this.repository = request.repository;
+  }
 
   static parse(input: string): Result<RepositorySlug, DevFailure> {
     const parts = input.trim().split('/');
@@ -231,7 +247,7 @@ export class RepositorySlug {
         message: `GitHub returned an invalid repository name: ${input}`,
       });
     }
-    return ok(new RepositorySlug(owner, repository));
+    return ok(new RepositorySlug({ owner, repository }));
   }
 
   value(): string {

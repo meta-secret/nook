@@ -16,13 +16,23 @@ export enum SharedStorageTargetKind {
   Bound = "bound",
 }
 
+export enum SharedGrantProviderOutcomeKind {
+  AuthorizationRequired = "authorizationRequired",
+  Existing = "existing",
+}
+
 export type SharedStorageTarget =
   | { kind: SharedStorageTargetKind.NotBound }
   | { kind: SharedStorageTargetKind.Bound; storageTargetId: string };
 
 export type SharedGrantProviderOutcome =
-  | { kind: "authorizationRequired" }
-  | { kind: "existing"; provider: StorageProvider };
+  | {
+      kind: `${SharedGrantProviderOutcomeKind.AuthorizationRequired}`;
+    }
+  | {
+      kind: `${SharedGrantProviderOutcomeKind.Existing}`;
+      provider: StorageProvider;
+    };
 
 export type SharedGrantProviderSearch = {
   readonly providers: StorageProvider[];

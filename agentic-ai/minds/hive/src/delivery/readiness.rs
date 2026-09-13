@@ -36,7 +36,21 @@ impl DeliveryReadiness<'_> {
             repository,
             pull_request,
         } = self;
-        let number = pull_request.number.to_string();
+        let unresolved = Self::unresolved_review_threads(repository, pull_request.number).await?;
+        if unresolved > 0 {
+            return Err(crate::HiveError::message(format!(
+                "Hive repair delivery is incomplete: PR #{} has {} unresolved review thread(s)",
+                pull_request.number, unresolved
+            )));
+        }
+        Self::validate_non_thread_feedback(repository, pull_request.number).await?;
+        Self::validate_deployment(repository, pull_request).await
+    }
+}
+
+impl DeliveryReadiness<'_> {
+    async fn unresolved_review_threads(repository: &Path, number: u64) -> crate::HiveResult<usize> {
+        let number = number.to_string();
         let repository_state: GithubRepositoryIdentity = serde_json::from_str(
             &(DeliveryCommand {
                 repository,
@@ -93,14 +107,15 @@ impl DeliveryReadiness<'_> {
                 ));
             }
         }
-        if unresolved > 0 {
-            return Err(crate::HiveError::message(format!(
-                "Hive repair delivery is incomplete: PR #{} has {} unresolved review thread(s)",
-                pull_request.number, unresolved
-            )));
-        }
-        DeliveryReadiness::validate_non_thread_feedback(repository, pull_request.number).await?;
+        Ok(unresolved)
+    }
+}
 
+impl DeliveryReadiness<'_> {
+    async fn validate_deployment(
+        repository: &Path,
+        pull_request: &DeliveryPullRequest,
+    ) -> crate::HiveResult<()> {
         let deployments: Vec<GithubDeployment> = serde_json::from_str(
             &(DeliveryCommand {
                 repository,
@@ -214,7 +229,7 @@ mod tests {
     use super::DeliveryReadiness;
 
     #[test]
-    fn paginated_feedback_bodies_preserve_actionable_markers() -> anyhow::Result<()> {
+    fn paginated_feedback_bodies_preserve_actionable_markers() {
         let arguments =
             DeliveryReadiness::feedback_api_arguments("repos/{owner}/{repo}/issues/42/comments");
         let bodies =
@@ -235,7 +250,6 @@ mod tests {
         assert!(!DeliveryReadiness::is_actionable_feedback(
             "Automated summary: checks passed.\nThis report is informational."
         ));
-        Ok(())
     }
 }
 

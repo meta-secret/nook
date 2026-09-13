@@ -141,9 +141,7 @@ export class PrStewardGithubPrReader implements PrStewardAssignedPrReader {
       });
     let parsed: UntrustedYamlNode;
     try {
-      parsed = UntrustedYamlBoundary.fromHost(
-        JSON.parse(result.stdout) as UntrustedYamlNode,
-      );
+      parsed = UntrustedYamlBoundary.fromHost(JSON.parse(result.stdout));
     } catch {
       throw new PrStewardGithubUnavailableError({ cause: false });
     }

@@ -135,9 +135,11 @@ describe('canonical Cortex team authority', () => {
           'PR Steward never edits functional code, adjudicates technical findings, sequences shared-branch writers, owns Workbench outcomes, or issues the final delivery verdict.',
       },
     ]);
+    const firstAgent = GIZMO_OWNED_AGENT_CATALOG[0];
+    if (!firstAgent) throw new Error('Gizmo agent catalog is empty.');
     expect(
       TeamAuthorityCatalog.gizmoOwnedAgentProfile(GizmoOwnedAgentKey.PrSteward),
-    ).toEqual(GIZMO_OWNED_AGENT_CATALOG[0]!);
+    ).toEqual(firstAgent);
   });
 
   test('rejects stable-key, identity, context, and capability drift', () => {

@@ -57,15 +57,22 @@ type SiteShellRef = {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return (
+    typeof value === 'object' &&
+    Object(value) === value &&
+    !Array.isArray(value)
+  )
 }
 
 function isString(value: unknown): value is string {
   return typeof value === 'string'
 }
 
-function isOptionalString(value: unknown): boolean {
-  return value === undefined || isString(value)
+function isOptionalString(
+  record: Record<string, unknown>,
+  key: string,
+): boolean {
+  return !(key in record) || isString(record[key])
 }
 
 function isRecordOf<T>(
@@ -87,16 +94,16 @@ function isSiteShellRef(value: unknown): value is SiteShellRef {
 function isSiteFixtureField(value: unknown): value is SiteFixtureField {
   return (
     isRecord(value) &&
-    isOptionalString(value.name) &&
-    isOptionalString(value.type) &&
-    isOptionalString(value.id) &&
-    isOptionalString(value.autocomplete) &&
-    isOptionalString(value.inputmode) &&
-    isOptionalString(value.label) &&
-    isOptionalString(value.placeholder) &&
-    isOptionalString(value['aria-label']) &&
-    isOptionalString(value['data-qa']) &&
-    isOptionalString(value['data-testid'])
+    isOptionalString(value, 'name') &&
+    isOptionalString(value, 'type') &&
+    isOptionalString(value, 'id') &&
+    isOptionalString(value, 'autocomplete') &&
+    isOptionalString(value, 'inputmode') &&
+    isOptionalString(value, 'label') &&
+    isOptionalString(value, 'placeholder') &&
+    isOptionalString(value, 'aria-label') &&
+    isOptionalString(value, 'data-qa') &&
+    isOptionalString(value, 'data-testid')
   )
 }
 
@@ -120,9 +127,9 @@ function isShellTemplate(value: unknown): value is ShellTemplate {
     return (
       step.fields.every(isSiteFixtureField) &&
       isString(step.submit.label) &&
-      isOptionalString(step.submit.type) &&
-      isOptionalString(step.submit.name) &&
-      isOptionalString(step.submit.id)
+      isOptionalString(step.submit, 'type') &&
+      isOptionalString(step.submit, 'name') &&
+      isOptionalString(step.submit, 'id')
     )
   })
 }

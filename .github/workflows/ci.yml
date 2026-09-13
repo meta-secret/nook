@@ -118,7 +118,7 @@ jobs:
               *) product=true ;;
             esac
             case "$path" in agentic-ai/minds/*) minds=true ;; esac
-            case "$path" in .github/workflows/hive.yml | .github/actions/nook-cache-connect/* | .github/actions/nook-docker-setup/* | .github/scripts/rust-deps-cache-fingerprint.sh | .github/formatting/* | infra/contracts/* | agentic-ai/minds/hive/controller/reaper.ts | agentic-ai/minds/hive/controller/reaper.test.ts | .github/scripts/wait-hive-neo4j.sh | .task/agentic-ai.yml | .task/ci-workflows.yml | .github/scripts/infra-surface-check.sh | Taskfile.yml | agentic-ai/minds/* | nook-app/nook-platform/nook-core/coverage-floor.json | infra/compose.yaml | infra/k0s/* | infra/providers/* | infra/tasks/* | infra/Taskfile.yml) hive=true ;; esac
+            case "$path" in .github/workflows/hive.yml | .github/actions/nook-cache-connect/* | .github/actions/nook-docker-setup/* | .github/scripts/rust-deps-cache-fingerprint.sh | .github/formatting/* | infra/contracts/* | infra/contracts/k0s-firewall-rollback-test.ts | agentic-ai/minds/hive/controller/reaper.ts | agentic-ai/minds/hive/controller/reaper.test.ts | .github/scripts/wait-hive-neo4j.sh | .task/agentic-ai.yml | .task/ci-workflows.yml | .github/scripts/infra-surface-check.sh | Taskfile.yml | agentic-ai/minds/* | nook-app/nook-platform/nook-core/coverage-floor.json | infra/compose.yaml | infra/k0s/* | infra/providers/* | infra/tasks/* | infra/Taskfile.yml) hive=true ;; esac
             case "$path" in .github/workflows/web-research.yml | .github/scripts/web-research-deploy.sh | .github/scripts/web-research-verify-live.sh | .task/ci-workflows.yml | nook-app/nook-web/nook-web-research/*) research=true ;; esac
           done < "$changed_paths"
           if [ "$DEV_PR" = "true" ]; then
@@ -224,7 +224,7 @@ jobs:
       needs.scope.outputs.dev-pr == 'true'
     permissions:
       contents: read
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 2
     steps:
       - name: Require successful exact-head dev gates

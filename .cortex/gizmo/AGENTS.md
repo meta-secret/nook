@@ -9,6 +9,8 @@ Concurrent features have independent Gizmos. Read the complete
 before planning or acting, then follow
 [dev delivery](architecture/dev-delivery.md) for the authoritative stage rules.
 
+Within each feature mission, its Gizmo Prime is the single root delivery owner.
+
 Gizmo publishes only its feature branch and requests remote `build:compile`.
 It authorizes PR Steward to land the completed feature through `dev:land`.
 The manually run dev manager owns remote dev publication and main promotion.
@@ -127,6 +129,7 @@ The manager separately owns full slow validation and fast-forward promotion.
 
 ## Verdict
 
+The final verdict is bound to the exact pull-request head.
 The feature verdict is bound to the exact feature head. A head change
 invalidates evidence that is not head-stable.
 

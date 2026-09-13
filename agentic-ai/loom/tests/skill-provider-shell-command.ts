@@ -2,6 +2,8 @@ import { posix } from 'node:path';
 
 import { SkillProviderShellEnvironmentScenario } from './skill-provider-shell-environment.ts';
 
+import { shellWordAt } from './skill-provider-command-types.ts';
+
 import type {
   RuntimeCommandRequest,
   ShellEnvironment,
@@ -73,7 +75,7 @@ export class SkillProviderShellCommandScenario {
 
   static hasLeadingStdinRedirection(words: readonly ShellWord[]): boolean {
     for (let index = 0; index < words.length;) {
-      const word = words[index] as ShellWord;
+      const word = shellWordAt([words, index]);
       if (ASSIGNMENT.test(word.value)) {
         index += 1;
         continue;
@@ -309,7 +311,7 @@ export class SkillProviderShellCommandScenario {
     for (; index < words.length; index += 1) {
       const wordRequest: WordEnvironmentRequest = {
         environment,
-        word: words[index] as ShellWord,
+        word: shellWordAt([words, index]),
       };
       const word =
         SkillProviderShellEnvironmentScenario.resolveWord(wordRequest);
@@ -335,7 +337,7 @@ export class SkillProviderShellCommandScenario {
     if (operandIndex === false) return;
     const request: WordEnvironmentRequest = {
       environment: state.environment,
-      word: words[operandIndex] as ShellWord,
+      word: shellWordAt([words, operandIndex]),
     };
     const directory =
       SkillProviderShellEnvironmentScenario.resolveWord(request);

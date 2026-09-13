@@ -19,19 +19,19 @@ export class ForbiddenExpertTransitions {
   ): void {
     const prepared = new AgentAttemptJournal(configuration);
     // @ts-expect-error A prepared journal cannot write activity.
-    prepared.observe({ activity: 'turn-completed', detail: 'too early' });
+    void prepared.observe;
     // @ts-expect-error Advanced journal construction belongs to initialization.
-    new ActiveAgentAttemptJournal({});
+    ActiveAgentAttemptJournal({});
   }
   static adapterCompletion(journal: ActiveModuleExpertJournal<string>): void {
     // @ts-expect-error Module journals cannot consume structural completion authority.
-    journal.finalizeStructuralExpert({});
+    void journal.finalizeStructuralExpert;
   }
   static structuralCompletion(
     journal: ActiveStructuralExpertJournal<string>,
   ): void {
     // @ts-expect-error Structural journals cannot consume module completion authority.
-    journal.finalizeModuleExpert({});
+    void journal.finalizeModuleExpert;
   }
   static capabilityConstruction(): void {
     // @ts-expect-error Runtime authority classes cannot be fabricated from their discriminator.

@@ -19,10 +19,10 @@ export class DevCli {
   }
 
   static workspace(): DevDeliveryWorkspace {
-    return new DevDeliveryWorkspace(
-      DevCli.repositoryRoot(),
-      new ProcessCommandRunner(),
-    );
+    return new DevDeliveryWorkspace({
+      root: DevCli.repositoryRoot(),
+      runner: new ProcessCommandRunner(),
+    });
   }
 
   static report(result: Result<DevCliMessage, DevFailure>): number {

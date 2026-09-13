@@ -162,7 +162,12 @@ export class OvhCredentialStore {
     if (source.isErr()) return err(source.error);
     const parsed = new OvhDocument(source.value).credentials();
     if (parsed.isErr()) return err(parsed.error);
-    const requiredCredentials = Object.entries(parsed.value);
+    const requiredCredentials = [
+      ["applicationKey", parsed.value.applicationKey],
+      ["applicationSecret", parsed.value.applicationSecret],
+      ["consumerKey", parsed.value.consumerKey],
+      ["endpoint", parsed.value.endpoint],
+    ] as const;
     for (const [label, value] of requiredCredentials)
       if (value.trim().length === 0) return err(new OvhFailure(OvhFailureKind.Schema, `OVH ${label} must not be empty`));
     return parsed;

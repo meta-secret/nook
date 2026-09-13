@@ -17,7 +17,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
-use neo4rs::query;
+use neo4rs::{Row, query};
 use time::OffsetDateTime;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
@@ -29,7 +29,9 @@ use crate::neo4j::Neo4jTaskStore;
 use crate::store::TaskStore;
 
 const TASK_LIMIT: i64 = 200;
+const TASK_LIMIT_USIZE: usize = 200;
 const ALERT_LIMIT: usize = 100;
+const ALERT_QUERY_LIMIT: i64 = 101;
 const AGENT_PRESENCE_WINDOW_MS: i64 = 120_000;
 const STALE_ACTIVITY_MS: i64 = 5 * 60_000;
 const STUCK_CANCELLATION_MS: i64 = 5 * 60_000;
@@ -52,6 +54,11 @@ pub struct ObserverServer<S> {
     pub dashboard: PathBuf,
 }
 impl<S: ObserverStore> ObserverServer<S> {
+    /// Runs the HTTP observer server.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the listener cannot bind or the server exits with an error.
     pub async fn run_observer(self) -> crate::HiveResult<()> {
         let Self {
             store,
@@ -77,6 +84,11 @@ struct BoundObserverServer<S> {
     dashboard: PathBuf,
 }
 impl<S: ObserverStore> BoundObserverServer<S> {
+    /// Serves the observer dashboard and JSON API on an already-bound listener.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the HTTP server exits with an error.
     pub async fn run_observer_on_listener(self) -> crate::HiveResult<()> {
         let Self {
             store,
@@ -102,6 +114,11 @@ pub struct ObserverCoordinator {
     pub store: Neo4jTaskStore,
 }
 impl ObserverCoordinator {
+    /// Serves one observer coordinator connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the socket or observer request cannot be processed.
     pub async fn run_observer_coordinator(self) -> crate::HiveResult<()> {
         let Self { socket, store } = self;
         store.migrate().await?;
@@ -229,6 +246,11 @@ impl IntoResponse for ObserverError {
 }
 
 impl Neo4jTaskStore {
+    /// Builds the observer dashboard snapshot for a locale.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the observer queries or related task enrichment cannot be completed.
     pub async fn observer_snapshot(&self, locale: &str) -> crate::HiveResult<ObserverSnapshot> {
         let overview_tasks = self
             .observer_tasks(ObserverTaskQuery {
@@ -241,7 +263,7 @@ impl Neo4jTaskStore {
         let mut attention_tasks = self
             .observer_tasks(ObserverTaskQuery {
                 task_id: "",
-                limit: ALERT_LIMIT as i64 + 1,
+                limit: ALERT_QUERY_LIMIT,
                 locale,
                 selection: ObserverTaskSelection::Attention,
             })
@@ -252,7 +274,7 @@ impl Neo4jTaskStore {
         let alerts = ObservedAlert::derive_alerts(&attention_tasks, generated_at, locale);
         let mut tasks = attention_tasks;
         for task in overview_tasks {
-            if tasks.len() >= TASK_LIMIT as usize {
+            if tasks.len() >= TASK_LIMIT_USIZE {
                 break;
             }
             if !tasks.iter().any(|candidate| candidate.id == task.id) {
@@ -260,7 +282,7 @@ impl Neo4jTaskStore {
             }
         }
         self.attach_dependencies(&mut tasks).await?;
-        self.attach_triggers(&mut tasks, locale).await?;
+        Self::attach_triggers(&mut tasks, locale);
         self.attach_activity(&mut tasks, locale).await?;
         Ok(ObserverSnapshot {
             generated_at,
@@ -287,7 +309,7 @@ impl Neo4jTaskStore {
             })
             .await?;
         self.attach_dependencies(&mut tasks).await?;
-        self.attach_triggers(&mut tasks, locale).await?;
+        Self::attach_triggers(&mut tasks, locale);
         self.attach_activity(&mut tasks, locale).await?;
         Ok(match tasks.pop() {
             Some(task) => TaskObservation::Observed(Box::new(task)),
@@ -355,152 +377,50 @@ impl Neo4jTaskStore {
         let mut rows = self
             .graph
             .execute(
-                query(
-                    "MATCH (task:Task)
-                     WHERE ($attention_only = false AND ($task_id = '' OR task.id = $task_id))
-                        OR ($attention_only = true
-                          AND task.status IN ['FAILED', 'BLOCKED', 'RUNNING', 'CANCELLING'])
-                     OPTIONAL MATCH (task)<-[:FOR_TASK]-(attempt:Attempt)
-                     OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
-                     WITH task, attempt, agent
-                     ORDER BY attempt.started_at DESC
-                     WITH task, collect({attempt: attempt, agent: agent})[0] AS latest
-                     WITH task, latest,
-                       CASE
-                         WHEN coalesce(task.latest_activity_at, 0)
-                           >= coalesce(latest.attempt.started_at, 0)
-                         THEN coalesce(task.latest_activity_at, 0)
-                         ELSE coalesce(latest.attempt.started_at, task.created_at, 0)
-                       END AS latest_progress_at
-                     WHERE $attention_only = false
-                        OR (
-                          task.status IN ['FAILED', 'BLOCKED']
-                          OR (
-                            task.status = 'RUNNING'
-                            AND latest_progress_at < timestamp() - $attention_age
-                          )
-                          OR (
-                            task.status = 'CANCELLING'
-                            AND coalesce(task.updated_at, task.created_at, 0)
-                              < timestamp() - $attention_age
-                          )
-                        )
-                     RETURN task.id AS id,
-                            coalesce(task.kind, '') AS kind,
-                            coalesce(task.trigger_kind, 'legacy-unknown') AS trigger_kind,
-                            task.status AS status,
-                            coalesce(task.source_commit, '') AS source_commit,
-                            coalesce(task.priority, 0) AS priority,
-                            coalesce(task.attempt_count, 0) AS attempt_count,
-                            coalesce(task.max_attempts, 0) AS max_attempts,
-                            coalesce(task.created_at, 0) AS created_at,
-                            coalesce(task.updated_at, task.created_at, 0) AS updated_at,
-                            coalesce(task.lease_until, 0) AS lease_until,
-                            coalesce(latest.agent.id, '') AS agent_id,
-                            coalesce(latest.agent.pod_name, '') AS pod_name,
-                            coalesce(latest.attempt.status, '') AS latest_attempt_status,
-                            coalesce(latest.attempt.started_at, 0) AS latest_attempt_started_at,
-                            coalesce(latest.attempt.completed_at, 0) AS latest_attempt_completed_at,
-                            coalesce(task.latest_activity_at, 0) AS latest_activity_at,
-                            substring(replace(CASE
-                              WHEN task.status = 'BLOCKED' THEN coalesce(
-                                task.blocked_reason,
-                                latest.attempt.error,
-                                task.failure_reason,
-                                ''
-                              )
-                              ELSE coalesce(
-                                latest.attempt.error,
-                                task.failure_reason,
-                                task.blocked_reason,
-                                ''
-                              )
-                            END, '\n', ' '), 0, 600)
-                              AS latest_error,
-                            substring(replace(coalesce(latest.attempt.summary, ''), '\n', ' '), 0, 1200)
-                              AS latest_summary,
-                            coalesce(task.blocked_reason, '') STARTS WITH 'dependency '
-                              OR coalesce(task.blocked_reason, '') STARTS WITH 'upstream dependency '
-                              OR coalesce(task.failure_reason, '') =
-                                'discovered blocker has already exhausted its retry budget'
-                              OR coalesce(task.failure_reason, '') =
-                                'upstream task reused an exhausted blocker'
-                              OR coalesce(task.failure_reason, '') =
-                                'dependency failed before task enqueue'
-                              AS dependency_failure
-                     ORDER BY
-                       CASE WHEN $attention_only = true THEN
-                         CASE task.status
-                           WHEN 'FAILED' THEN 0
-                           ELSE 1
-                         END
-                       ELSE
-                         CASE task.status
-                           WHEN 'RUNNING' THEN 0
-                           WHEN 'READY' THEN 1
-                           WHEN 'BLOCKED' THEN 2
-                           WHEN 'CANCELLING' THEN 3
-                           ELSE 4
-                         END
-                       END,
-                       CASE WHEN task.status = 'READY' THEN task.priority ELSE 0 END DESC,
-                       CASE WHEN task.status = 'READY' THEN task.created_at ELSE 0 END ASC,
-                       CASE WHEN task.status = 'READY' THEN task.id ELSE '' END ASC,
-                       CASE
-                         WHEN $attention_only = true
-                           AND task.status = 'FAILED'
-                           AND dependency_failure
-                           THEN coalesce(task.updated_at, task.created_at, 0)
-                         WHEN $attention_only = true AND task.status = 'FAILED'
-                           THEN coalesce(latest.attempt.completed_at, task.updated_at, task.created_at, 0)
-                         WHEN $attention_only = true AND task.status = 'RUNNING'
-                           THEN latest_progress_at + $attention_age
-                         WHEN $attention_only = true AND task.status = 'CANCELLING'
-                           THEN coalesce(task.updated_at, task.created_at, 0) + $attention_age
-                         WHEN $attention_only = true
-                           THEN coalesce(task.updated_at, task.created_at, 0)
-                         ELSE 0
-                       END ASC,
-                       updated_at DESC,
-                       created_at DESC
-                     LIMIT $limit",
-                )
-                .param("task_id", task_id)
-                .param("limit", limit)
-                .param("attention_only", matches!(selection, ObserverTaskSelection::Attention))
-                .param("attention_age", STALE_ACTIVITY_MS),
+                query(include_str!("observer_tasks.cypher"))
+                    .param("task_id", task_id)
+                    .param("limit", limit)
+                    .param(
+                        "attention_only",
+                        matches!(selection, ObserverTaskSelection::Attention),
+                    )
+                    .param("attention_age", STALE_ACTIVITY_MS),
             )
             .await?;
         let mut tasks = Vec::new();
         while let Some(row) = rows.next().await? {
-            tasks.push(ObservedTask {
-                id: row.get("id")?,
-                kind: row.get::<String>("kind")?.into(),
-                kind_label: TaskKind::from(row.get::<String>("kind")?).localized_label(locale),
-                trigger_kind: row.get::<String>("trigger_kind")?.into(),
-                trigger: String::new(),
-                status: row.get("status")?,
-                source_commit: row.get("source_commit")?,
-                priority: row.get("priority")?,
-                attempt_count: row.get("attempt_count")?,
-                max_attempts: row.get("max_attempts")?,
-                created_at: row.get("created_at")?,
-                updated_at: row.get("updated_at")?,
-                lease_until: row.get("lease_until")?,
-                agent_id: row.get("agent_id")?,
-                pod_name: row.get("pod_name")?,
-                latest_attempt_status: row.get("latest_attempt_status")?,
-                latest_attempt_started_at: row.get("latest_attempt_started_at")?,
-                latest_attempt_completed_at: row.get("latest_attempt_completed_at")?,
-                latest_activity_at: row.get("latest_activity_at")?,
-                latest_error: row.get("latest_error")?,
-                latest_summary: row.get("latest_summary")?,
-                dependency_failure: row.get("dependency_failure")?,
-                dependencies: Vec::new(),
-                activity: Vec::new(),
-            });
+            tasks.push(Self::decode_observer_task(&row, locale)?);
         }
         Ok(tasks)
+    }
+
+    fn decode_observer_task(row: &Row, locale: &str) -> crate::HiveResult<ObservedTask> {
+        Ok(ObservedTask {
+            id: row.get("id")?,
+            kind: row.get::<String>("kind")?.into(),
+            kind_label: TaskKind::from(row.get::<String>("kind")?).localized_label(locale),
+            trigger_kind: row.get::<String>("trigger_kind")?.into(),
+            trigger: String::new(),
+            status: row.get("status")?,
+            source_commit: row.get("source_commit")?,
+            priority: row.get("priority")?,
+            attempt_count: row.get("attempt_count")?,
+            max_attempts: row.get("max_attempts")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            lease_until: row.get("lease_until")?,
+            agent_id: row.get("agent_id")?,
+            pod_name: row.get("pod_name")?,
+            latest_attempt_status: row.get("latest_attempt_status")?,
+            latest_attempt_started_at: row.get("latest_attempt_started_at")?,
+            latest_attempt_completed_at: row.get("latest_attempt_completed_at")?,
+            latest_activity_at: row.get("latest_activity_at")?,
+            latest_error: row.get("latest_error")?,
+            latest_summary: row.get("latest_summary")?,
+            dependency_failure: row.get("dependency_failure")?,
+            dependencies: Vec::new(),
+            activity: Vec::new(),
+        })
     }
 
     async fn attach_dependencies(&self, tasks: &mut [ObservedTask]) -> crate::HiveResult<()> {
@@ -530,7 +450,10 @@ impl Neo4jTaskStore {
         while let Some(row) = rows.next().await? {
             let task_id: String = row.get("task_id")?;
             if let Some(index) = by_id.remove(&task_id) {
-                tasks[index].dependencies.push(ObservedDependency {
+                let task = tasks
+                    .get_mut(index)
+                    .ok_or_else(|| crate::HiveError::message("observer task index is missing"))?;
+                task.dependencies.push(ObservedDependency {
                     id: row.get("dependency_id")?,
                     status: row.get("dependency_status")?,
                 });
@@ -540,11 +463,7 @@ impl Neo4jTaskStore {
         Ok(())
     }
 
-    async fn attach_triggers(
-        &self,
-        tasks: &mut [ObservedTask],
-        locale: &str,
-    ) -> crate::HiveResult<()> {
+    fn attach_triggers(tasks: &mut [ObservedTask], locale: &str) {
         let russian =
             locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
         for task in tasks {
@@ -567,7 +486,6 @@ impl Neo4jTaskStore {
                 (_, false) => "Source not recorded".to_owned(),
             };
         }
-        Ok(())
     }
 
     async fn attach_activity(
@@ -617,7 +535,10 @@ impl Neo4jTaskStore {
                 continue;
             };
             let message: String = row.get("message")?;
-            tasks[index].activity.push(ObservedActivity {
+            let task = tasks
+                .get_mut(index)
+                .ok_or_else(|| crate::HiveError::message("observer task index is missing"))?;
+            task.activity.push(ObservedActivity {
                 id: row.get("id")?,
                 kind: row.get("kind")?,
                 message: (presentation::ActivityLocalization {

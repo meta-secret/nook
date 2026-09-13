@@ -15,6 +15,12 @@ import { PRODUCTION_SOURCE_EXTENSIONS } from './skill-provider-type-context.ts';
 
 import { CortexArticleAdapterBoundaryScenario } from './cortex-article-adapter-boundary.ts';
 
+import { SkillProviderSourcedSeamsScenario } from './skill-provider-sourced-seams.ts';
+
+import { stringMapFromHost } from './skill-provider-command-types.ts';
+
+import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
+
 export class SkillProviderReachabilityScenario {
   private constructor(private readonly request: string) {}
 
@@ -90,12 +96,18 @@ export class SkillProviderReachabilityScenario {
         sources: inspection.sources,
       };
       const adapterInspection = { path, source: sourceBody };
+      const auditedRuntimeSource =
+        SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource({
+          path,
+          source,
+        });
       if (
         (path === LOOM_ARTICLE_ADAPTER || path === LOOM_CONSISTENCY_ADAPTER
           ? CortexArticleAdapterBoundaryScenario.cortexArticleAdapterViolatesBoundary(
               adapterInspection,
             )
-          : path !== EXECUTABLE_SKILL_PACKAGE_GATE &&
+          : !auditedRuntimeSource &&
+            path !== EXECUTABLE_SKILL_PACKAGE_GATE &&
             SkillProviderExecutableScriptScenario.executableScriptViolatesBoundary(
               boundaryInspection,
             )) ||
@@ -107,6 +119,7 @@ export class SkillProviderReachabilityScenario {
         violations.push(path);
         continue;
       }
+      if (auditedRuntimeSource) continue;
       const importedModules =
         EXECUTABLE_SOURCE_EXTENSION.test(path) || extensionless
           ? RUNTIME_IMPORT_SCANNER.scanImports(sourceBody)
@@ -280,7 +293,27 @@ export class SkillProviderReachabilityScenario {
       if (!path.endsWith('package.json') || source.length === 0) continue;
       let document: RepositoryPackageDocument;
       try {
-        document = JSON.parse(source) as RepositoryPackageDocument;
+        const parsed = UntrustedYamlBoundary.fromJson(JSON.parse(source));
+        if (!UntrustedYamlBoundary.isRecord(parsed)) continue;
+        const candidate: RepositoryPackageDocument = {};
+        if ('name' in parsed && typeof parsed.name === 'string')
+          candidate.name = parsed.name;
+        for (const key of [
+          'dependencies',
+          'devDependencies',
+          'optionalDependencies',
+        ]) {
+          if (!(key in parsed)) continue;
+          const entry = parsed[key];
+          if (!entry) continue;
+          const values = stringMapFromHost(entry);
+          if (values === false) continue;
+          if (key === 'dependencies') candidate.dependencies = values;
+          if (key === 'devDependencies') candidate.devDependencies = values;
+          if (key === 'optionalDependencies')
+            candidate.optionalDependencies = values;
+        }
+        document = candidate;
       } catch {
         continue;
       }
@@ -369,10 +402,10 @@ type TrackedRepositoryInventory = {
 };
 
 type RepositoryPackageDocument = {
-  readonly dependencies?: Readonly<Record<string, string>>;
-  readonly devDependencies?: Readonly<Record<string, string>>;
-  readonly name?: string;
-  readonly optionalDependencies?: Readonly<Record<string, string>>;
+  dependencies?: Readonly<Record<string, string>>;
+  devDependencies?: Readonly<Record<string, string>>;
+  name?: string;
+  optionalDependencies?: Readonly<Record<string, string>>;
 };
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');

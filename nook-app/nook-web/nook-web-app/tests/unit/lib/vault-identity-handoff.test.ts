@@ -18,7 +18,11 @@ import {
   type NookCommittedExtensionIdentityHandoff,
 } from '$app-wasm'
 import { VaultState } from '$lib/vault.svelte'
-import { VaultInitializationActions } from '$lib/vault/lifecycle'
+import {
+  VaultInitializationActions,
+  shouldAutoAuthorizeE2e,
+  type E2eAutoAuthorizationPolicy,
+} from '$lib/vault/lifecycle'
 import { BrowserIdentityHandoffKind } from '$lib/vault/identity-handoff'
 import {
   NativeVaultStorageFailure,
@@ -131,7 +135,10 @@ class IdentityHandoffFixture {
   }
 }
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  sessionStorage.removeItem('nook_vault_session_locked')
+  vi.restoreAllMocks()
+})
 
 describe('external browser identity handoff commit ownership', () => {
   test('defers device synchronization until pending enrollment is admitted', async () => {
@@ -208,6 +215,7 @@ describe('external browser identity handoff commit ownership', () => {
         true,
       )
       localStorage.removeItem('nook_e2e_manual_passkey')
+      sessionStorage.removeItem('nook_vault_session_locked')
       vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
         ok(fixture.manager),
       )
@@ -245,6 +253,21 @@ describe('external browser identity handoff commit ownership', () => {
     } finally {
       fixture.dispose()
     }
+  })
+
+  test('does not auto-authorize after an idle session lock', () => {
+    const lockedPolicy: E2eAutoAuthorizationPolicy = {
+      e2eExposeVault: true,
+      manualPasskey: false,
+      sessionLocked: true,
+    }
+    expect(shouldAutoAuthorizeE2e(lockedPolicy)).toBe(false)
+
+    const unlockedPolicy: E2eAutoAuthorizationPolicy = {
+      ...lockedPolicy,
+      sessionLocked: false,
+    }
+    expect(shouldAutoAuthorizeE2e(unlockedPolicy)).toBe(true)
   })
 
   test.each([

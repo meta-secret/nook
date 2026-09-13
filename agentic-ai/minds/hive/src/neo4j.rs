@@ -39,6 +39,98 @@ pub struct QueueTaskStatus {
     pub last_retry_release: String,
 }
 
+impl Neo4jTaskStore {
+    async fn claim_once(
+        &self,
+        agent_id: &AgentId,
+        lease_seconds: i64,
+    ) -> crate::HiveResult<ClaimOutcome> {
+        let attempt_id = AttemptId::try_from(Uuid::new_v4().to_string())?;
+        let lease_token = LeaseToken::try_from(Uuid::new_v4().to_string())?;
+        let mut transaction = self.graph.start_txn().await?;
+
+        transaction
+            .run(query(
+                "MATCH (task:Task)<-[:FOR_TASK]-(attempt:Attempt {status: 'RUNNING'})
+             WHERE task.status = 'RUNNING'
+               AND task.lease_until <= timestamp()
+               AND task.attempt_count >= task.max_attempts
+             OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
+             SET task.status = 'FAILED',
+                 task.updated_at = timestamp(),
+                 task.failure_reason = 'lease expired after final attempt',
+                 task.lease_owner = null,
+                 task.lease_token = null,
+                 task.lease_until = null,
+                 attempt.status = 'EXPIRED',
+                 attempt.error = 'lease expired after final attempt',
+                 attempt.completed_at = timestamp(),
+                 agent.status = 'IDLE',
+                 agent.last_seen_at = timestamp()",
+            ))
+            .await?;
+
+        transaction
+            .run(query(
+                "MATCH (failed:Task {
+                       status: 'FAILED',
+                       failure_reason: 'lease expired after final attempt'
+                     })
+                     MATCH (dependent:Task)-[:DEPENDS_ON*1..]->(failed)
+                     WHERE dependent.status IN ['READY', 'BLOCKED']
+                     SET dependent.status = 'FAILED',
+                         dependent.blocked_reason =
+                           'upstream dependency failed after its final lease expired',
+                         dependent.updated_at = timestamp(),
+                         dependent.version = dependent.version + 1",
+            ))
+            .await?;
+
+        let mut candidates = transaction
+            .execute(query(
+                "MATCH (task:Task)
+             WHERE (
+               task.status = 'READY'
+               OR (task.status = 'RUNNING' AND task.lease_until <= timestamp())
+             )
+               AND task.attempt_count < task.max_attempts
+               AND NOT EXISTS {
+                 MATCH (task)-[:DEPENDS_ON]->(dependency:Task)
+                 WHERE dependency.status <> 'COMPLETED'
+               }
+             WITH task
+             ORDER BY task.priority DESC, task.created_at ASC, task.id ASC
+             LIMIT 1
+             SET task.claim_lock = coalesce(task.claim_lock, 0) + 1
+             RETURN task.id AS id",
+            ))
+            .await?;
+        let Some(candidate) = candidates.next(transaction.handle()).await? else {
+            transaction.commit().await?;
+            return Ok(ClaimOutcome::NoTask);
+        };
+        let task_id: String = candidate.get("id")?;
+
+        let mut rows = transaction
+            .execute(
+                query(include_str!("claim_task.cypher"))
+                    .param("id", task_id)
+                    .param("agent_id", agent_id.as_str())
+                    .param("lease_token", lease_token.as_str())
+                    .param("lease_seconds", lease_seconds)
+                    .param("attempt_id", attempt_id.as_str()),
+            )
+            .await?;
+        let Some(row) = rows.next(transaction.handle()).await? else {
+            transaction.rollback().await?;
+            return Ok(ClaimOutcome::NoTask);
+        };
+        let claimed = Self::claimed_task(&row, attempt_id, lease_token)?;
+        transaction.commit().await?;
+        Ok(ClaimOutcome::Claimed(Box::new(claimed)))
+    }
+}
+
 #[async_trait]
 impl TaskStore for Neo4jTaskStore {
     async fn migrate(&self) -> crate::HiveResult<()> {
@@ -236,188 +328,7 @@ impl TaskStore for Neo4jTaskStore {
         lease_seconds: i64,
     ) -> crate::HiveResult<ClaimOutcome> {
         for retry in 0..CLAIM_RETRY_LIMIT {
-            let result = async {
-                let attempt_id =
-                    AttemptId::try_from(Uuid::new_v4().to_string())?;
-                let lease_token =
-                    LeaseToken::try_from(Uuid::new_v4().to_string())?;
-                let mut transaction = self.graph.start_txn().await?;
-
-                transaction
-                    .run(query(
-                "MATCH (task:Task)<-[:FOR_TASK]-(attempt:Attempt {status: 'RUNNING'})
-                 WHERE task.status = 'RUNNING'
-                   AND task.lease_until <= timestamp()
-                   AND task.attempt_count >= task.max_attempts
-                 OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
-                 SET task.status = 'FAILED',
-                     task.updated_at = timestamp(),
-                     task.failure_reason = 'lease expired after final attempt',
-                     task.lease_owner = null,
-                     task.lease_token = null,
-                     task.lease_until = null,
-                     attempt.status = 'EXPIRED',
-                     attempt.error = 'lease expired after final attempt',
-                     attempt.completed_at = timestamp(),
-                     agent.status = 'IDLE',
-                     agent.last_seen_at = timestamp()",
-                    ))
-                    .await?;
-
-                transaction
-                    .run(query(
-                        "MATCH (failed:Task {
-                           status: 'FAILED',
-                           failure_reason: 'lease expired after final attempt'
-                         })
-                         MATCH (dependent:Task)-[:DEPENDS_ON*1..]->(failed)
-                         WHERE dependent.status IN ['READY', 'BLOCKED']
-                         SET dependent.status = 'FAILED',
-                             dependent.blocked_reason =
-                               'upstream dependency failed after its final lease expired',
-                             dependent.updated_at = timestamp(),
-                             dependent.version = dependent.version + 1",
-                    ))
-                    .await?;
-
-                let mut candidates = transaction
-                    .execute(query(
-                "MATCH (task:Task)
-                 WHERE (
-                   task.status = 'READY'
-                   OR (task.status = 'RUNNING' AND task.lease_until <= timestamp())
-                 )
-                   AND task.attempt_count < task.max_attempts
-                   AND NOT EXISTS {
-                     MATCH (task)-[:DEPENDS_ON]->(dependency:Task)
-                     WHERE dependency.status <> 'COMPLETED'
-                   }
-                 WITH task
-                 ORDER BY task.priority DESC, task.created_at ASC, task.id ASC
-                 LIMIT 1
-                 SET task.claim_lock = coalesce(task.claim_lock, 0) + 1
-                 RETURN task.id AS id",
-                    ))
-                    .await?;
-                let Some(candidate) = candidates.next(transaction.handle()).await? else {
-                    transaction.commit().await?;
-                    return Ok(ClaimOutcome::NoTask);
-                };
-                let task_id: String = candidate.get("id")?;
-
-                let mut rows = transaction
-                    .execute(
-                        query(
-                    "MATCH (task:Task {id: $id})
-                     WHERE (
-                       task.status = 'READY'
-                       OR (task.status = 'RUNNING' AND task.lease_until <= timestamp())
-                     )
-                       AND task.attempt_count < task.max_attempts
-                       AND NOT EXISTS {
-                         MATCH (task)-[:DEPENDS_ON]->(dependency:Task)
-                         WHERE dependency.status <> 'COMPLETED'
-                       }
-                     OPTIONAL MATCH
-                       (task)-[:DEPENDS_ON|INCLUDES_ARTIFACT_FROM]->(dependency:Task)
-                     WITH task,
-                          [value IN collect(dependency.id) WHERE value IS NOT NULL] AS dependency_ids,
-                          [value IN collect(coalesce(dependency.result_summary, '')) WHERE value IS NOT NULL] AS dependency_summaries
-                     OPTIONAL MATCH dependency_path =
-                       (task)-[:DEPENDS_ON|INCLUDES_ARTIFACT_FROM*1..]->(artifact_task:Task)
-                     OPTIONAL MATCH (artifact_task)
-                       <-[:FOR_TASK]-(dependency_attempt:Attempt {status: 'COMPLETED'})
-                       -[:PRODUCED]->(dependency_artifact:Artifact {kind: 'git-patch'})
-                     WITH task, dependency_ids, dependency_summaries,
-                          dependency_artifact,
-                          max(length(dependency_path)) AS dependency_depth
-                     ORDER BY dependency_depth DESC, dependency_artifact.id ASC
-                     WITH task, dependency_ids, dependency_summaries,
-                          [value IN collect(dependency_artifact.id) WHERE value IS NOT NULL] AS artifact_ids,
-                          [value IN collect(dependency_artifact.kind) WHERE value IS NOT NULL] AS artifact_kinds,
-                          [value IN collect(dependency_artifact.uri) WHERE value IS NOT NULL] AS artifact_uris,
-                          [value IN collect(dependency_artifact.digest) WHERE value IS NOT NULL] AS artifact_digests,
-                          [value IN collect(dependency_artifact.content) WHERE value IS NOT NULL] AS artifact_contents
-                     OPTIONAL MATCH (active_owner:Task)-[:DEPENDS_ON*1..]->(task)
-                     WHERE active_owner.kind <> 'blocker'
-                       AND active_owner.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
-                     WITH DISTINCT task, dependency_ids, dependency_summaries,
-                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
-                          artifact_contents, active_owner
-                     ORDER BY active_owner.id
-                     WITH task, dependency_ids, dependency_summaries,
-                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
-                          artifact_contents,
-                          collect(active_owner) AS active_owners
-                     WITH task, dependency_ids, dependency_summaries,
-                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
-                          artifact_contents,
-                          CASE
-                            WHEN size(active_owners) > 0
-                              AND all(owner IN active_owners WHERE owner.kind = 'main-repair')
-                            THEN [owner IN active_owners | owner.id]
-                            ELSE []
-                          END AS owning_repair_ids
-                     OPTIONAL MATCH (task)<-[:FOR_TASK]-(expired_attempt:Attempt {status: 'RUNNING'})
-                     WHERE expired_attempt.lease_token = task.lease_token
-                     OPTIONAL MATCH (expired_agent:Agent)-[:EXECUTED]->(expired_attempt)
-                     SET task.status = 'RUNNING',
-                         task.lease_owner = $agent_id,
-                         task.lease_token = $lease_token,
-                         task.lease_until = timestamp() + ($lease_seconds * 1000),
-                         task.attempt_count = task.attempt_count + 1,
-                         task.version = task.version + 1,
-                         task.updated_at = timestamp(),
-                         expired_attempt.status = 'EXPIRED',
-                         expired_attempt.error = 'lease expired and task was reclaimed',
-                         expired_attempt.completed_at = timestamp(),
-                         expired_agent.status = 'IDLE',
-                         expired_agent.last_seen_at = timestamp()
-                     CREATE (attempt:Attempt {
-                       id: $attempt_id,
-                       number: task.attempt_count,
-                       status: 'RUNNING',
-                       obsolete: false,
-                       started_at: timestamp(),
-                       lease_token: $lease_token
-                     })
-                     WITH task, attempt, dependency_ids, dependency_summaries,
-                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
-                          artifact_contents, owning_repair_ids
-                     MATCH (agent:Agent {id: $agent_id})
-                     MERGE (agent)-[:EXECUTED]->(attempt)
-                     MERGE (attempt)-[:FOR_TASK]->(task)
-                     SET agent.status = 'RUNNING', agent.last_seen_at = timestamp()
-                     RETURN task.id AS id,
-                            task.kind AS kind,
-                            task.prompt AS prompt,
-                            task.source_commit AS source_commit,
-                            attempt.number AS attempt_number,
-                            owning_repair_ids,
-                            dependency_ids,
-                            dependency_summaries,
-                            artifact_ids,
-                            artifact_kinds,
-                            artifact_uris,
-                            artifact_digests,
-                            artifact_contents",
-                        )
-                        .param("id", task_id)
-                        .param("agent_id", agent_id.as_str())
-                        .param("lease_token", lease_token.as_str())
-                        .param("lease_seconds", lease_seconds)
-                        .param("attempt_id", attempt_id.as_str()),
-                    )
-                    .await?;
-                let Some(row) = rows.next(transaction.handle()).await? else {
-                    transaction.rollback().await?;
-                    return Ok(ClaimOutcome::NoTask);
-                };
-                let claimed = Self::claimed_task(row, attempt_id, lease_token)?;
-                transaction.commit().await?;
-                Ok(ClaimOutcome::Claimed(Box::new(claimed)))
-            }
-            .await;
+            let result = self.claim_once(agent_id, lease_seconds).await;
 
             match result {
                 Ok(claimed) => return Ok(claimed),
@@ -556,56 +467,23 @@ impl TaskStore for Neo4jTaskStore {
         let mut transaction = self.graph.start_txn().await?;
         let mut rows = transaction
             .execute(
-                query(
-                    "MATCH (task:Task {id: $task_id})<-[:FOR_TASK]-(attempt:Attempt {id: $attempt_id})
-                     WHERE task.status = 'RUNNING'
-                       AND task.lease_owner = $agent_id
-                       AND task.lease_token = $lease_token
-                       AND task.lease_until > timestamp()
-                       AND attempt.lease_token = $lease_token
-                     OPTIONAL MATCH (active_owner:Task)-[:DEPENDS_ON*1..]->(task)
-                     WHERE active_owner.kind <> 'blocker'
-                       AND active_owner.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
-                     WITH task, attempt, collect(DISTINCT active_owner) AS active_owners
-                     WHERE NOT $obsolete
-                        OR (
-                          size($owning_repair_ids) > 0
-                          AND size(active_owners) = size($owning_repair_ids)
-                          AND all(
-                            owner IN active_owners
-                            WHERE owner.kind = 'main-repair'
-                              AND owner.id IN $owning_repair_ids
-                          )
-                        )
-                     SET task.status = 'COMPLETED',
-                         task.obsolete = $obsolete,
-                         task.result_summary = $summary,
-                         task.updated_at = timestamp(),
-                         task.lease_owner = null,
-                         task.lease_token = null,
-                         task.lease_until = null,
-                         attempt.status = 'COMPLETED',
-                         attempt.obsolete = $obsolete,
-                         attempt.summary = $summary,
-                         attempt.completed_at = timestamp()
-                     WITH task
-                     MATCH (agent:Agent {id: $agent_id})
-                     SET agent.status = 'IDLE', agent.last_seen_at = timestamp()
-                     RETURN task.id AS id",
-                )
-                .param("task_id", task.id.as_str())
-                .param("attempt_id", task.attempt_id.as_str())
-                .param("agent_id", agent_id.as_str())
-                .param("lease_token", task.lease_token.as_str())
-            .param("obsolete", matches!(relevance, CompletionRelevance::Obsolete))
-                .param(
-                    "owning_repair_ids",
-                    task.owning_repairs
-                        .iter()
-                        .map(|owner| owner.as_str())
-                        .collect::<Vec<_>>(),
-                )
-                .param("summary", summary),
+                query(include_str!("complete_task.cypher"))
+                    .param("task_id", task.id.as_str())
+                    .param("attempt_id", task.attempt_id.as_str())
+                    .param("agent_id", agent_id.as_str())
+                    .param("lease_token", task.lease_token.as_str())
+                    .param(
+                        "obsolete",
+                        matches!(relevance, CompletionRelevance::Obsolete),
+                    )
+                    .param(
+                        "owning_repair_ids",
+                        task.owning_repairs
+                            .iter()
+                            .map(TaskId::as_str)
+                            .collect::<Vec<_>>(),
+                    )
+                    .param("summary", summary),
             )
             .await?;
         let accepted = rows.next(transaction.handle()).await?.is_some();

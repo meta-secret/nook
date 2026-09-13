@@ -65,6 +65,11 @@ pub struct WorkbenchDispatcher<'a, S> {
     pub poll_seconds: u64,
 }
 impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
+    /// Runs the Workbench dispatcher loop.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when dispatcher setup, polling, or task processing fails.
     pub async fn run_workbench_dispatcher(self) -> crate::HiveResult<()> {
         let Self {
             store,
@@ -161,7 +166,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             if !(IncidentHistory {
                 snapshots: reconciled_incidents,
             })
-            .incident_needs_reconciliation(IncidentRevision {
+            .incident_needs_reconciliation(&IncidentRevision {
                 name: &name,
                 body: &body,
             }) {
@@ -179,10 +184,9 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
                     let cancelled = store
                         .cancel(&task_id, "Main rerun succeeded")
                         .await
-                        .with_hive_context(|| format!("cancel {}", task_id))?;
+                        .with_hive_context(|| format!("cancel {task_id}"))?;
                     eprintln!(
-                        "Hive Workbench successful rerun task={} cancelled={cancelled}",
-                        task_id
+                        "Hive Workbench successful rerun task={task_id} cancelled={cancelled}"
                     );
                     WorkbenchDispatcher::terminate_cancelled_workers(store, &task_id).await?;
                 }
@@ -196,11 +200,8 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
                     let cancelled = store
                         .cancel(&task_id, "Main rerun failed only deferred E2E jobs")
                         .await
-                        .with_hive_context(|| format!("cancel {}", task_id))?;
-                    eprintln!(
-                        "Hive Workbench retirement task={} cancelled={cancelled}",
-                        task_id
-                    );
+                        .with_hive_context(|| format!("cancel {task_id}"))?;
+                    eprintln!("Hive Workbench retirement task={task_id} cancelled={cancelled}");
                     WorkbenchDispatcher::terminate_cancelled_workers(store, &task_id).await?;
                 }
                 reconciled_incidents.insert(name, body);
@@ -252,15 +253,14 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
         {
             if active_id == task_id {
                 eprintln!(
-                    "Hive Workbench delivery already current task={} source_commit={source_commit}",
-                    active_id,
+                    "Hive Workbench delivery already current task={active_id} source_commit={source_commit}",
                 );
                 return Ok(());
             }
             let cancelled = store
                 .cancel(&active_id, "Superseded by a newer failed Main attempt")
                 .await
-                .with_hive_context(|| format!("cancel superseded delivery {}", active_id))?;
+                .with_hive_context(|| format!("cancel superseded delivery {active_id}"))?;
             WorkbenchDispatcher::terminate_cancelled_workers(store, &active_id).await?;
             return Err(crate::HiveError::message(format!(
                 "superseded Hive delivery {active_id} cancellation_requested={cancelled}; retry after the worker acknowledges termination"
@@ -380,9 +380,9 @@ struct IncidentRevision<'a> {
     body: &'a str,
 }
 impl IncidentHistory<'_> {
-    fn incident_needs_reconciliation(&self, revision: IncidentRevision<'_>) -> bool {
+    fn incident_needs_reconciliation(&self, revision: &IncidentRevision<'_>) -> bool {
         let IncidentRevision { name, body } = revision;
-        self.snapshots.get(name).map(String::as_str) != Some(body)
+        self.snapshots.get(*name).map(String::as_str) != Some(*body)
     }
 }
 
@@ -616,7 +616,7 @@ mod tests {
             })
             .main_failure_run(),
             super::MainFailureRun::Run {
-                id: 789012,
+                id: 789_012,
                 attempt: 3
             }
         );
@@ -634,7 +634,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            TaskId::main_failure_task_id("main-failure-abcdef", 123456, 2)?.as_str(),
+            TaskId::main_failure_task_id("main-failure-abcdef", 123_456, 2)?.as_str(),
             "main-failure-abcdef-run-123456-attempt-2"
         );
         Ok(())
@@ -652,7 +652,7 @@ mod tests {
             !(IncidentHistory {
                 snapshots: &reconciled
             })
-            .incident_needs_reconciliation(IncidentRevision {
+            .incident_needs_reconciliation(&IncidentRevision {
                 name: "main-failure-deadbeef.md",
                 body: "attempt: 1"
             })
@@ -661,7 +661,7 @@ mod tests {
             (IncidentHistory {
                 snapshots: &reconciled
             })
-            .incident_needs_reconciliation(IncidentRevision {
+            .incident_needs_reconciliation(&IncidentRevision {
                 name: "main-failure-deadbeef.md",
                 body: "attempt: 2"
             })
@@ -676,7 +676,7 @@ mod tests {
             (IncidentHistory {
                 snapshots: &reconciled
             })
-            .incident_needs_reconciliation(IncidentRevision {
+            .incident_needs_reconciliation(&IncidentRevision {
                 name: "main-failure-deadbeef.md",
                 body: "attempt: 2"
             })
@@ -685,7 +685,7 @@ mod tests {
             (IncidentHistory {
                 snapshots: &reconciled
             })
-            .incident_needs_reconciliation(IncidentRevision {
+            .incident_needs_reconciliation(&IncidentRevision {
                 name: "main-failure-deadbeef.md",
                 body: "attempt: 2"
             })

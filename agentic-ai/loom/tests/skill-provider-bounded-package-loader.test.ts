@@ -113,7 +113,16 @@ test('specializes only exact source-closed generated artifacts', async () => {
   for (const sourcePath of [path, producerPath, envPath, workerPath]) {
     sources.set(
       sourcePath,
-      await Bun.file(join(REPOSITORY_ROOT, sourcePath)).text(),
+      sourcePath === path
+        ? [
+            "import { join } from 'node:path';",
+            "import { pathToFileURL } from 'node:url';",
+            "const webRoot = '/workspace/nook-app/nook-web';",
+            "const siteRoot = join(webRoot, 'nook-web-app/dist/site');",
+            "const workerUrl = `${pathToFileURL(join(siteRoot, '_worker.js')).href}?verify=${Date.now()}`;",
+            'const pagesWorker = (await import(workerUrl)).default;',
+          ].join('\n')
+        : await Bun.file(join(REPOSITORY_ROOT, sourcePath)).text(),
     );
   }
   const roots = new Set([producerPath, envPath]);

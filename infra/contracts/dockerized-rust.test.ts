@@ -663,13 +663,19 @@ class DockerizedRustContract {
     expect(this.read("nook-app/ci/Taskfile.yml")).toContain(
       "defer: task _web:e2e:restore-prod-dist",
     );
-    const grouped = z
-      .string()
-      .parse(webTasks.tasks["_web:test:e2e:run-groups"]?.cmds[0]);
-    const webOnly = z
-      .string()
-      .parse(ciTasks.tasks["_ci:main:web:e2e-only"]?.cmds[0]);
-    const full = z.string().parse(ciTasks.tasks["_ci:main"]?.cmds[0]);
+    const groupedTask = webTasks.tasks["_web:test:e2e:run-groups"];
+    const webOnlyTask = ciTasks.tasks["_ci:main:web:e2e-only"];
+    const fullTask = ciTasks.tasks["_ci:main"];
+    if (
+      !groupedTask?.cmds ||
+      !webOnlyTask?.cmds ||
+      !fullTask?.cmds
+    ) {
+      throw new Error("E2E completion task definitions are missing");
+    }
+    const grouped = z.string().parse(groupedTask.cmds[0]);
+    const webOnly = z.string().parse(webOnlyTask.cmds[0]);
+    const full = z.string().parse(fullTask.cmds[0]);
     const temporary = mkdtempSync(join(tmpdir(), "nook-e2e-completion-"));
     try {
       const bin = join(temporary, "bin");
@@ -779,22 +785,29 @@ class DockerizedRustContract {
     const tasks = taskSchema.parse(
       Bun.YAML.parse(this.read("nook-app/Taskfile.yml")),
     ).tasks;
+    const testTask = tasks["_test:parallel"];
+    const compileTask = tasks["_compile:parallel"];
+    const unitTask = tasks["_unit:parallel"];
+    const lintTask = tasks["_lint:parallel"];
+    if (!testTask || !compileTask || !unitTask || !lintTask) {
+      throw new Error("Parallel task definitions are missing");
+    }
     expect(
-      tasks["_test:parallel"].cmds.map((command) =>
+      testTask.cmds.map((command) =>
         typeof command === "string" ? command : command.task,
       ),
     ).toEqual(["_compile:parallel", "_unit:parallel"]);
-    expect(tasks["_compile:parallel"]?.deps?.sort()).toEqual([
+    expect(compileTask.deps.sort()).toEqual([
       "_extension:typecheck",
       "_web:check:parallel",
     ]);
-    expect(tasks["_unit:parallel"]?.deps?.sort()).toEqual([
+    expect(unitTask.deps.sort()).toEqual([
       "_extension:test:parallel",
       "_web:test:parallel",
     ]);
-    expect(tasks["_test:parallel"].deps).toEqual([]);
+    expect(testTask.deps).toEqual([]);
     expect(
-      tasks["_lint:parallel"].cmds.map((command) =>
+      lintTask.cmds.map((command) =>
         typeof command === "string" ? command : command.task,
       ),
     ).toContain("_extension:lint:parallel");
@@ -874,6 +887,7 @@ tasks:
       .parse(Bun.YAML.parse(this.read(".task/static-checks.yml"))).tasks[
       "tooling:static"
     ].cmds[0];
+    if (!command) throw new Error("Static tooling command missing");
     const temporary = mkdtempSync(join(tmpdir(), "nook-tooling-static-"));
     try {
       const packages = [
@@ -938,7 +952,7 @@ if [ "$action" = install ] && [ "$directory" = "${"${FAIL_INSTALL:-}"}" ]; then 
   private read(path: string): string {
     return readFileSync(join(this.root, path), "utf8");
   }
-  private isCacheSelection(step: { name: string }): boolean {
+  private isCacheSelection(this: void, step: { name: string }): boolean {
     return step.name === "Select hosted BuildKit cache";
   }
   private command(request: GitFixtureCommand): string {

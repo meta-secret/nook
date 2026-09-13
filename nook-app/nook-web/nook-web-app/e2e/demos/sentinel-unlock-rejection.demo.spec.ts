@@ -79,8 +79,7 @@ test('a reset Sentinel ceremony replaces stale readiness after a rejected unlock
       await deliveryOutput.first().inputValue(),
     )
     if (
-      typeof deliveryPayload !== 'object' ||
-      deliveryPayload === null ||
+      !(deliveryPayload instanceof Object) ||
       !('storeId' in deliveryPayload) ||
       typeof deliveryPayload.storeId !== 'string'
     ) {

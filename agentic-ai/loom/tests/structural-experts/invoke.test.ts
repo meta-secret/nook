@@ -46,6 +46,8 @@ import { WorkflowRuntimeActivityKind } from '../../src/agent-workflow/events.ts'
 
 import { StructuralExpertInvocation } from '../../src/structural-experts/invoke.ts';
 
+import { AgentAttemptTransport } from '../../src/agent-workflow/attempt-codec.ts';
+
 import type { InvokeStructuralExpertRequest } from '../../src/structural-experts/invoke.ts';
 
 import { StructuralExpertKind } from '../../src/structural-experts/catalog.ts';
@@ -229,7 +231,7 @@ export class StructuralExpertsInvokeScenario {
     return (await readFile(path, 'utf8'))
       .trim()
       .split('\n')
-      .map((line) => JSON.parse(line) as AgentAttemptEvent);
+      .map((line) => AgentAttemptTransport.decodeEvent(line));
   }
 
   static processingRunDirectory(runId: string): string {

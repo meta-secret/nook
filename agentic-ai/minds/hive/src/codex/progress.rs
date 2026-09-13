@@ -1,8 +1,12 @@
+const TASK_PROGRESS_LABEL_WIDTH: usize = 30;
+const TASK_PROGRESS_COLORS: [&str; 4] = ["36", "35", "34", "33"];
+
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum InspectionHints {
     NoHints,
     Files(String),
 }
+#[derive(Clone, Copy)]
 pub(super) enum ProgressDetail<'a> {
     #[expect(
         dead_code,
@@ -12,7 +16,7 @@ pub(super) enum ProgressDetail<'a> {
     Detail(&'a str),
 }
 use super::progress_output::ProgressPlan;
-use super::*;
+use super::{EventMsg, Write, io};
 
 pub(super) struct TaskProgressLabel<'a> {
     pub(super) task_id: &'a str,
@@ -240,7 +244,7 @@ impl<W: Write> ProgressReporter<W> {
             EventMsg::TurnStarted(_) => plan.phase(
                 "●",
                 "Planning started",
-                ProgressDetail::Detail("Loading repository instructions and project context"),
+                &ProgressDetail::Detail("Loading repository instructions and project context"),
             ),
             EventMsg::ReasoningContentDelta(event) => plan.reasoning_delta(&event.delta),
             EventMsg::AgentReasoning(event)
@@ -263,12 +267,12 @@ impl<W: Write> ProgressReporter<W> {
             EventMsg::ModelReroute(event) => plan.phase(
                 "↪",
                 "Model rerouted",
-                ProgressDetail::Detail(&format!("{} → {}", event.from_model, event.to_model)),
+                &ProgressDetail::Detail(&format!("{} → {}", event.from_model, event.to_model)),
             ),
             EventMsg::TurnComplete(_) => plan.phase(
                 "✓",
                 "Plan ready",
-                ProgressDetail::Detail("Validating tasks and DAG dependencies"),
+                &ProgressDetail::Detail("Validating tasks and DAG dependencies"),
             ),
             _ => plan,
         };
@@ -301,7 +305,7 @@ impl<W: Write> ProgressReporter<W> {
         title: &str,
         detail: ProgressDetail<'_>,
     ) -> (Self, io::Result<()>) {
-        let plan = ProgressPlan::new(self.state).phase(symbol, title, detail);
+        let plan = ProgressPlan::new(self.state).phase(symbol, title, &detail);
         self.output(plan)
     }
     #[cfg(test)]
@@ -378,7 +382,7 @@ impl ProgressPlan<PlanningProgressState> {
         self.checkpoint(state).phase(
             "◆",
             "Building feature plan",
-            ProgressDetail::Detail("Writing structured tasks and dependencies"),
+            &ProgressDetail::Detail("Writing structured tasks and dependencies"),
         )
     }
     fn inspection(self, command: &[String]) -> Self {
@@ -412,7 +416,7 @@ impl ProgressPlan<PlanningProgressState> {
             .write(format!("{command}\n"))
             .flush()
     }
-    fn phase(self, symbol: &str, title: &str, detail: ProgressDetail<'_>) -> Self {
+    fn phase(self, symbol: &str, title: &str, detail: &ProgressDetail<'_>) -> Self {
         let plan = self.finish_reasoning();
         let decoration = plan.state.decorate;
         let symbol = decoration.paint(if symbol == "✓" { "32" } else { "36" }, symbol);
@@ -460,11 +464,13 @@ impl ProgressDecoration {
 impl TaskProgressLabel<'_> {
     pub(super) fn compact_task_id(&self) -> String {
         let task_id = self.task_id;
-        const WIDTH: usize = 30;
-        if task_id.chars().count() <= WIDTH {
+        if task_id.chars().count() <= TASK_PROGRESS_LABEL_WIDTH {
             return task_id.to_owned();
         }
-        let prefix = task_id.chars().take(WIDTH - 1).collect::<String>();
+        let prefix = task_id
+            .chars()
+            .take(TASK_PROGRESS_LABEL_WIDTH - 1)
+            .collect::<String>();
         format!("{prefix}…")
     }
 }
@@ -472,12 +478,11 @@ impl TaskProgressLabel<'_> {
 impl TaskProgressLabel<'_> {
     pub(super) fn agent_color(&self) -> &'static str {
         let task_id = self.task_id;
-        const COLORS: [&str; 4] = ["36", "35", "34", "33"];
         let index = task_id
             .bytes()
             .fold(0usize, |hash, byte| hash.wrapping_mul(31) + byte as usize)
-            % COLORS.len();
-        COLORS[index]
+            % TASK_PROGRESS_COLORS.len();
+        TASK_PROGRESS_COLORS.get(index).copied().unwrap_or("36")
     }
 }
 

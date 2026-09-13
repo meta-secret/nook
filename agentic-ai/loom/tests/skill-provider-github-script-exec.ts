@@ -81,16 +81,14 @@ export class SkillProviderGithubScriptExecScenario {
         `Ambiguous github-script ${request.member} arguments are forbidden.`,
       );
     const command = request.call.arguments[0];
-    if (
-      !command ||
-      SkillProviderGithubScriptExecScenario.staticText(command) === false
-    )
+    const commandText = command
+      ? SkillProviderGithubScriptExecScenario.staticText(command)
+      : false;
+    if (commandText === false)
       throw new Error(
         `Dynamic github-script ${request.member} command is forbidden.`,
       );
-    const parts = [
-      SkillProviderGithubScriptExecScenario.staticText(command) as string,
-    ];
+    const parts = [commandText];
     const args = request.call.arguments[1];
     if (args) {
       if (!ts.isArrayLiteralExpression(args))
@@ -98,19 +96,15 @@ export class SkillProviderGithubScriptExecScenario {
           `Dynamic github-script ${request.member} arguments are forbidden.`,
         );
       for (const argument of args.elements) {
-        if (
-          ts.isSpreadElement(argument) ||
-          SkillProviderGithubScriptExecScenario.staticText(argument) === false
-        )
+        const argumentText = ts.isSpreadElement(argument)
+          ? false
+          : SkillProviderGithubScriptExecScenario.staticText(argument);
+        if (argumentText === false)
           throw new Error(
             `Dynamic github-script ${request.member} arguments are forbidden.`,
           );
         parts.push(
-          SkillProviderGithubScriptExecScenario.shellQuote(
-            SkillProviderGithubScriptExecScenario.staticText(
-              argument,
-            ) as string,
-          ),
+          SkillProviderGithubScriptExecScenario.shellQuote(argumentText),
         );
       }
     }

@@ -26,11 +26,16 @@ export class TeamAuthorityCatalog {
     agentKey: TeamAgentKey,
   ): TeamAuthority | GizmoOwnedAgentProfile | false {
     if (Object.values(TeamKey).some((key) => key === agentKey)) {
-      return TeamAuthorityCatalog.teamAuthority(agentKey as TeamKey);
+      const teamKey = Object.values(TeamKey).find((key) => key === agentKey);
+      if (!teamKey) return false;
+      return TeamAuthorityCatalog.teamAuthority(teamKey);
     }
-    return TeamAuthorityCatalog.gizmoOwnedAgentProfile(
-      agentKey as GizmoOwnedAgentKey,
+    const gizmoKey = Object.values(GizmoOwnedAgentKey).find(
+      (key) => key === agentKey,
     );
+    return gizmoKey
+      ? TeamAuthorityCatalog.gizmoOwnedAgentProfile(gizmoKey)
+      : false;
   }
 
   static teamCortexRoot(teamKey: TeamKey): string {

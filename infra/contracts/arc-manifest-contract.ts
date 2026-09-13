@@ -8,7 +8,6 @@ import { ArcHiveRenderContract } from "./arc-hive-render-contract";
 import { ArcWorkerRestoreContract } from "./arc-worker-restore-contract";
 import { DockerfileFrontendContract } from "./dockerfile-frontend-contract";
 import { DockerCacheSelectionContract } from "./docker-cache-selection-contract";
-import { TextContract } from "./text-contract";
 
 import { resolve } from "node:path";
 import {

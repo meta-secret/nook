@@ -208,7 +208,7 @@ mod tests {
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let claim = tokio::spawn(ClaimWindow::finish(ClaimCompletion {
             claim: async move {
-                let _ = started_tx.send(());
+                let _started_failed = started_tx.send(()).is_err();
                 claim_rx.await
             },
             shutdown: shutdown_rx,
@@ -254,8 +254,7 @@ mod tests {
         let marker = workspace.path().join(".hive-task-finished");
         let store = RecordingStore::new(marker.clone())?;
         let agent = AgentId::try_from("agent-a")?;
-        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
-        let shutdown_tx = _shutdown_tx;
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let claim_store = store.clone();
         let claim_agent = agent.clone();
         let claim_marker = marker.clone();

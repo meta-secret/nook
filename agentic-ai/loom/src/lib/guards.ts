@@ -54,6 +54,11 @@ export class UntrustedYamlBoundary {
   static fromHost(value: unknown): UntrustedYamlNode {
     return UntrustedYamlBoundary.fromJson(value);
   }
+  static byteChunk(value: unknown): Uint8Array {
+    if (!(value instanceof Uint8Array))
+      throw new Error('Expected a byte-stream chunk.');
+    return value;
+  }
   static seal(builder: UntrustedYamlMapBuilder): UntrustedYamlMap {
     return builder;
   }

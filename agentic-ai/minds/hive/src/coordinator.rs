@@ -85,6 +85,11 @@ pub struct CoordinatorTaskStore {
 }
 
 impl CoordinatorTaskStore {
+    /// Connects to the Hive coordinator Unix socket.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the socket cannot be reached or the connection fails.
     pub async fn connect(path: &Path) -> crate::HiveResult<Self> {
         let stream = loop {
             match UnixStream::connect(path).await {
@@ -337,6 +342,11 @@ pub struct CoordinatorServer<S> {
     pub store: S,
 }
 impl<S: TaskStore> CoordinatorServer<S> {
+    /// Serves one coordinator connection until the client closes it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the socket cannot be prepared or a request cannot be processed.
     pub async fn run_coordinator(self) -> crate::HiveResult<()> {
         let Self { socket, store } = self;
         if let Some(parent) = socket.parent() {
@@ -586,12 +596,17 @@ mod tests {
         assert!(client.fail(&failed, &agent, "expected failure").await?);
 
         backing.enqueue(&task("block-me", Vec::new())?).await?;
-        let blocked = ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
-        let mut blocker = task("prerequisite", Vec::new())?;
-        blocker.kind = "blocker".into();
+        let blocked_task = ClaimedTask::try_from(client.claim(&agent, 300).await?)?;
+        let mut prerequisite = task("prerequisite", Vec::new())?;
+        prerequisite.kind = "blocker".into();
         assert!(
             client
-                .block(&blocked, &agent, &blocker, "requires prerequisite")
+                .block(
+                    &blocked_task,
+                    &agent,
+                    &prerequisite,
+                    "requires prerequisite"
+                )
                 .await?
         );
 
@@ -604,9 +619,15 @@ mod tests {
                 })
                 .await
                 .map(drop),
-            client.cancel(&blocked.id, "denied").await.map(drop),
-            client.cancellation_targets(&blocked.id).await.map(drop),
-            client.finalize_cancellation(&blocked.id).await.map(drop),
+            client.cancel(&blocked_task.id, "denied").await.map(drop),
+            client
+                .cancellation_targets(&blocked_task.id)
+                .await
+                .map(drop),
+            client
+                .finalize_cancellation(&blocked_task.id)
+                .await
+                .map(drop),
         ] {
             assert!(denied.is_err());
         }

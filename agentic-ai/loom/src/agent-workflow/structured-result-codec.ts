@@ -242,10 +242,15 @@ export class WorkflowResultSchema {
   static workflowTaskOutputSchema(
     resultKind: WorkflowResultKind,
   ): UntrustedYamlMap {
-    return z.toJSONSchema(RESULT_SCHEMAS[resultKind], {
+    const schema = z.toJSONSchema(RESULT_SCHEMAS[resultKind], {
       io: 'input',
       target: 'draft-7',
-    }) as UntrustedYamlMap;
+    });
+    const node = UntrustedYamlBoundary.fromHost(schema);
+    if (!UntrustedYamlBoundary.isRecord(node)) {
+      throw new Error('workflow result schema must be an object');
+    }
+    return node;
   }
   static decodeWorkflowTaskOutput(
     serialized: string,
@@ -274,12 +279,10 @@ export class WorkflowResultSchema {
         { error: 'workflow output must be an object' },
       )
       .safeParse(input);
-    if (!envelope.success)
-      throw new Error(
-        envelope.error.issues.length > 0
-          ? envelope.error.issues[0]!.message
-          : 'workflow resultKind is invalid',
-      );
+    if (!envelope.success) {
+      for (const issue of envelope.error.issues) throw new Error(issue.message);
+      throw new Error('workflow resultKind is invalid');
+    }
     const kind = envelope.data.resultKind;
     const schema = RESULT_SCHEMAS[kind];
     if (kind in STRUCTURAL_RESULT_SCHEMAS)
@@ -288,12 +291,10 @@ export class WorkflowResultSchema {
         input,
       });
     const decoded = schema.safeParse(input);
-    if (!decoded.success)
-      throw new Error(
-        decoded.error.issues.length > 0
-          ? decoded.error.issues[0]!.message
-          : MISSING_FIELDS,
-      );
+    if (!decoded.success) {
+      for (const issue of decoded.error.issues) throw new Error(issue.message);
+      throw new Error(MISSING_FIELDS);
+    }
     return decoded.data;
   }
 }

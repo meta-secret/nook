@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { SkillProviderCommandBoundaryScenario } from './skill-provider-command-boundary.ts';
 import type { ConfigurationNode } from './skill-provider-command-types.ts';
+import { itemAt } from './skill-provider-command-types.ts';
 import { SkillProviderWorkflowCommandsScenario } from './skill-provider-workflow-commands.ts';
 
 test('preserves dynamic execution environment for fail-closed auditing', () => {
@@ -24,7 +25,7 @@ test('preserves dynamic execution environment for fail-closed auditing', () => {
   expect(commands[0]).not.toContain('SAFE_LABEL=');
   const inspection = {
     positionalArguments: false as const,
-    source: commands[0] as string,
+    source: itemAt([commands, 0]),
     sourcePath: '.github/workflows/audit.yml',
   };
   expect(() =>
