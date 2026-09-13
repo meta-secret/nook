@@ -32,6 +32,7 @@ export class ModuleDeliveryAdmissionSourceScenario {
       readonly sourceCommit: string;
       readonly originMainSha: string;
       readonly pinnedLocalDevSha: string;
+      readonly featureHeadSha: string;
       readonly generation: number;
       readonly moduleRoot: string;
       readonly write: string;
@@ -42,6 +43,7 @@ export class ModuleDeliveryAdmissionSourceScenario {
     readonly sourceCommit: string;
     readonly originMainSha: string;
     readonly pinnedLocalDevSha: string;
+    readonly featureHeadSha: string;
     readonly generation: number;
     readonly moduleRoot: string;
     readonly write: string;
@@ -81,7 +83,7 @@ export class ModuleDeliveryAdmissionSourceScenario {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
-      featureHeadSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       maxAgentDepth: 1,
       maxAttempts: 1,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -146,6 +148,7 @@ test('classifies exact writes against the frozen source tree', () => {
         originMainSha: fixture.originMainSha,
         pinnedLocalDevSha: fixture.pinnedLocalDevSha,
         generation: 2,
+        featureHeadSha: fixture.pinnedLocalDevSha,
         moduleRoot: 'infra/k0s',
         write: 'infra/k0s/scripts',
       });
@@ -162,6 +165,7 @@ test('classifies exact writes against the frozen source tree', () => {
         originMainSha: fixture.originMainSha,
         pinnedLocalDevSha: fixture.pinnedLocalDevSha,
         generation: 3,
+        featureHeadSha: fixture.pinnedLocalDevSha,
         moduleRoot: 'infra/k0s/scripts',
         write: `${exactPath}/child.md`,
       });

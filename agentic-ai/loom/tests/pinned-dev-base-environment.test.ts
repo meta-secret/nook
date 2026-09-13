@@ -157,7 +157,7 @@ describe('pinned local-dev comparison evidence', () => {
         repoRoot: fixture.root,
       });
       assert(rejected.isErr());
-      assert.match(rejected.error.message, /sourceCommit|pinnedLocalDevSha/u);
+      assert.match(rejected.error.message, /featureHeadSha|pinnedLocalDevSha/u);
       assert.notEqual(otherBase, pinnedLocalDevSha);
     } finally {
       fixture.dispose();
