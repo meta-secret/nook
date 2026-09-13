@@ -91,7 +91,8 @@ and manual ecosystem execution in one Actions run named `CI`.
   - GitHub PAT: Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`)
 - **[`agent-implement.yml`](../../../../.github/workflows/agent-implement.yml)**
   - Trigger: Explicit issue-path or prompt dispatch
-  - Purpose: Claim Workbench issue or run prompt → implement → PR
+  - Purpose: Claim Workbench issue or run prompt → bounded edit → publish
+    exact feature branch → remote build handoff
   - GitHub PAT: Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`)
 - **[`ci-agent-smoke.yml`](../../../../.github/workflows/ci-agent-smoke.yml)**
   - Trigger: Manual
@@ -227,9 +228,11 @@ and manual ecosystem execution in one Actions run named `CI`.
 
 - Audits every direct dependency in each Rust root.
 - The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
-- When an update exists, an AI agent updates all outdated Rust dependencies.
-- Runs the full deterministic suite and publishes an exact fix branch for the
-  manager-controlled delivery flow; the agent does not create a PR.
+- When an update exists, an AI agent makes the bounded dependency edits and a
+  trusted publisher publishes the exact feature SHA.
+- The feature gate runs only `build:compile` for that exact SHA. The full slow
+  suite runs later only in the Dev Manager-controlled dev-to-main PR cycle;
+  the dependency agent does not create a PR or decide readiness.
 
 **`agent-implement.yml`**
 
@@ -279,7 +282,7 @@ flowchart LR
   release_yml --> simple_cf[Cloudflare Simple Vault]
   release_yml --> sentinel_cf[Cloudflare Sentinel Vault]
 
-  manual_e2e[Manual PR e2e] --> e2e_live[sync-live e2e]
+  manager_live_opt_in[Dev Manager hosted slow opt-in] --> e2e_live[sync-live e2e]
 
 ```
 
@@ -392,9 +395,10 @@ event files in a real temp directory while Playwright serves the oauth-file HTTP
 calls, so default sync tests exercise local file-backed replication without
 external API quota.
 
-**Manual (`sync-live`):** dispatch `e2e-pr.yml` with the `sync-live` suite.
-The workflow defaults `NOOK_E2E_SYNC_PROVIDER` to `github`; an authorized
-hosted manual dispatch may select another configured provider explicitly.
+**Dev Manager slow-stage opt-in (`sync-live`):** dispatch `e2e-pr.yml` with
+the `sync-live` suite. The workflow defaults `NOOK_E2E_SYNC_PROVIDER` to
+`github`; the Dev Manager-authorized hosted dispatch may select another
+configured provider explicitly.
 
 Live credentials per provider:
 
@@ -613,7 +617,8 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
   - Purpose: Background implementation and bounded smoke work
 - **`e2e-pr.yml`, `web-research.yml`**
   - Runner: general ARC plus container ARC for Playwright
-  - Purpose: Manual and research work scales independently
+  - Purpose: Dev Manager-selected hosted slow validation and research work
+    scale independently
 
 ## Why local-provider e2e vs sync-live
 
@@ -622,7 +627,7 @@ Real provider API calls are slow and brittle at CI scale. Nook therefore:
 1. **`e2e` project** — IndexedDB flows plus sync-provider specs through isolated e2e remotes. One Playwright process, fully parallel, one preview server.
 2. **`stable` project** — IndexedDB-only specs for fast manual/debug runs. It starts at 3 workers.
 3. **`unstable` project** — local provider/sync specs. It runs separately at 2 workers so their shared preview-server and WASM pressure stays bounded.
-4. **`sync-live` project** — Specs under `e2e/live/` hit the **real provider API** using `NOOK_GITHUB_PAT`. Minimal smoke; explicit manual runs only.
+4. **`sync-live` project** — Specs under `e2e/live/` hit the **real provider API** using `NOOK_GITHUB_PAT`. Minimal smoke; only explicit Dev Manager-controlled hosted slow-stage opt-ins run it.
 
 When adding Google Drive or other sync providers, add local e2e remote specs to
 the `e2e` list and thin live smoke specs to `e2e/live/`.
@@ -701,8 +706,9 @@ GitHub PR cycle:
 
 - The additional targets validate the separate fuzz workspace.
   - They also compile, lint, and test Hive in the Minds workspace.
-- Credentialed real-provider `sync-live` e2e remains a separate manual
-  validation.
+- Credentialed real-provider `sync-live` e2e is an explicit hosted slow-stage
+  opt-in selected and controlled by the Dev Manager; it is not a separate
+  human validation authority.
   - It creates disposable external-provider state.
   - It requires provider secrets.
 - No workflow merges the harness-owned PR from a check event.
@@ -979,18 +985,20 @@ authenticator-domain to 90 percent.
 
 **Gizmo remote commands:**
 
-- Ordinary Team Agents format every changed file in their allowed scope and
-  return coherent exact committed handoffs. They do not push, dispatch remote
-  work, or operate external PR/check state.
-- Feature Gizmos request repeatable remote build-only evidence.
+- Ordinary Team Agents may use only scoped `rustfmt` and bounded inexpensive
+  TypeScript diagnostics or formatting in their allowed scope, then return
+  coherent exact committed handoffs. They do not push, dispatch remote work,
+  or operate external PR/check state.
+- Feature Gizmos request only repeatable `build:compile` evidence bound to the
+  exact `featureHeadSha`.
 - The build-only command contract must be integrated before feature acceptance.
 - Only the dev manager's dev-to-main cycle uses the full slow PR workflow.
-- Preserve the existing e2e opt-ins and security-required focused checks.
-- A final coherent head may add `CODEX_REVIEW=1` to request one idempotent
-  exact-head Codex review without waiting.
+- Existing e2e opt-ins and security-required focused checks remain confined to
+  the Dev Manager-controlled slow stage.
+- Separately authorized code review may add `CODEX_REVIEW=1` to request one
+  idempotent exact-head Codex review without waiting.
 - A requested review runs concurrently with hosted checks.
-- Focused tasks are optional for that head and never replace complete
-  validation.
+- No other focused task may execute for the feature head.
 - When review is requested, its current findings and failed checks form one
   coherent repair batch after both settle.
 - Three finding batches open a circuit breaker and require comprehensive
