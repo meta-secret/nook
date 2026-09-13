@@ -13,6 +13,21 @@ export interface DevCliMessage {
   readonly message: string;
 }
 
+/**
+ * Prime-issued provenance carried by the serialized dev:land task.
+ *
+ * The request deliberately retains both feature-head fields: `featureHeadSha`
+ * is the provenance identity from the delivery packet, while
+ * `expectedFeatureSha` is the exact branch head the landing operation must
+ * observe. The downstream DevLandRequest owns the final relationship check.
+ */
+export interface DevLandProvenancePacket {
+  readonly originMainSha: CommitSha;
+  readonly pinnedLocalDevSha: CommitSha;
+  readonly featureHeadSha: CommitSha;
+  readonly expectedFeatureSha: CommitSha;
+}
+
 /** Provides the manual task boundary and a single human-readable failure format. */
 export class DevCli {
   static repositoryRoot(): string {
@@ -50,5 +65,26 @@ export class DevCli {
     return typeof raw === 'string'
       ? CommitSha.parse(raw)
       : DevCli.missingEnvironment(name);
+  }
+
+  /** Resolves every exact identity required by the dev:land packet. */
+  static requiredDevLandPacket(): Result<
+    DevLandProvenancePacket,
+    DevFailure
+  > {
+    const originMainSha = DevCli.requiredCommitSha('ORIGIN_MAIN_SHA');
+    if (originMainSha.isErr()) return err(originMainSha.error);
+    const pinnedLocalDevSha = DevCli.requiredCommitSha('PINNED_LOCAL_DEV_SHA');
+    if (pinnedLocalDevSha.isErr()) return err(pinnedLocalDevSha.error);
+    const featureHeadSha = DevCli.requiredCommitSha('FEATURE_HEAD_SHA');
+    if (featureHeadSha.isErr()) return err(featureHeadSha.error);
+    const expectedFeatureSha = DevCli.requiredCommitSha('EXPECTED_FEATURE_SHA');
+    if (expectedFeatureSha.isErr()) return err(expectedFeatureSha.error);
+    return ok({
+      originMainSha: originMainSha.value,
+      pinnedLocalDevSha: pinnedLocalDevSha.value,
+      featureHeadSha: featureHeadSha.value,
+      expectedFeatureSha: expectedFeatureSha.value,
+    });
   }
 }
