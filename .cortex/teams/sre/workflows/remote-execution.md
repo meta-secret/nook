@@ -24,8 +24,10 @@ machines use only the lightweight feedback allowed by the dev contract.
 
 ## Feature compilation
 
-Gizmo publishes its feature branch and authorizes PR Steward to dispatch
-the required remote build-only capability for that exact SHA.
+Gizmo publishes its feature branch. Gizmo Prime authorizes the exact-SHA
+delivery packet, and Delivery Pipeline Team Gizmo dispatches internal PR
+Steward through the active harness to run the required remote build-only
+capability.
 
 - Compile and type-check without tests, coverage, e2e, or preflight.
 - Preserve that boundary through every transitive Task and Docker stage.
@@ -34,8 +36,14 @@ the required remote build-only capability for that exact SHA.
 
 ## Slow dev PR validation
 
-The manually started dev manager authorizes Steward to publish the selected
-snapshot and run the full existing PR checks. Follow
+The manually started dev manager authorizes publication of the selected
+snapshot and the full existing PR checks. Gizmo Prime routes that
+manager-authorized packet to Delivery Pipeline Team Gizmo, which dispatches
+internal PR Steward through the active harness to publish the snapshot and run
+the full existing PR checks. The dev manager retains policy authority, and
+manager-only `dev:pr-manager` remains the sole path for pull-request
+creation/update; Team Gizmo and internal PR Steward do not create or update
+pull requests. Follow
 [dev delivery](../../../gizmo/architecture/dev-delivery.md).
 
 - Freeze origin/dev during validation and promotion.
@@ -52,6 +60,12 @@ The testing selectors below belong to slow validation or separately authorized
 operations. Their existence never permits feature-stage test execution.
 
 Routing rules:
+
+All remote task and PR-check invocations below follow the same route: Gizmo
+Prime authorizes the operation, Delivery Pipeline Team Gizmo dispatches the
+packet through the active harness to internal PR Steward, and internal PR
+Steward returns exact-SHA evidence. This route does not grant Team Gizmo or
+internal PR Steward pull-request creation/update or policy authority.
 
 - Invoke Rust validation remotely with `task remote TASK_NAME=rust:ci`.
 - Invoke Loom verification remotely with `task remote TASK_NAME=loom:verify`.

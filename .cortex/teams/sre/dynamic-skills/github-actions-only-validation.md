@@ -9,14 +9,22 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
 ## Required actions
 
 - **Feature compilation**
-  - Publish the feature branch and request remote build-only execution.
+  - Publish the feature branch.
+  - Gizmo Prime authorizes the exact feature SHA request; Delivery Pipeline
+    Team Gizmo dispatches internal PR Steward through the active harness for
+    remote build-only execution.
   - Execute build-only and type-compilation work for the exact feature SHA.
   - Keep tests, coverage, e2e, and preflight outside its transitive task graph.
   - Author meaningful tests for later execution.
   - Require code review and security acceptance before local dev landing.
 - **Slow dev PR checks**
   - The manually run dev manager selects the published dev snapshot.
-  - PR Steward executes the manager's publication and validation packets.
+  - Gizmo Prime routes the manager-authorized publication and validation packet
+    to Delivery Pipeline Team Gizmo, which dispatches internal PR Steward
+    through the active harness for bounded execution.
+  - The dev manager retains manager-stage policy authority, and
+    `dev:pr-manager` remains the sole pull-request creation/update path; Team
+    Gizmo and internal PR Steward do not create or update pull requests.
   - Run the full existing slow PR checks on the captured dev head SHA.
   - Preserve e2e opt-ins and security-required focused browser checks.
   - Freeze remote dev during checking and promotion.
