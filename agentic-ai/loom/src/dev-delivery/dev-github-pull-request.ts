@@ -51,19 +51,64 @@ const pullRequestStatusSchema = z.object({
   mergedAt: z.string().nullable(),
 });
 
-const reviewThreadsSchema = z.object({
-  data: z.object({
-    repository: z.object({
-      pullRequest: z.object({
-        reviewThreads: z.object({
-          nodes: z.array(
-            z.object({ isResolved: z.boolean(), isOutdated: z.boolean() }),
-          ),
+const pageInfoSchema = z.object({
+  hasNextPage: z.boolean(),
+  endCursor: z.string().nullable(),
+});
+
+const reviewRecordSchema = z.object({
+  state: z.string(),
+  body: z.string().nullable(),
+  submittedAt: z.string().nullable(),
+  commit: z.object({ oid: z.string() }).nullable(),
+});
+
+const pullRequestReviewIdentitySchema = z.object({
+  number: z.number().int().positive(),
+  url: z.string(),
+  headRefName: z.string(),
+  baseRefName: z.string(),
+  headRefOid: z.string(),
+  baseRefOid: z.string(),
+  headRepository: repositoryReferenceSchema,
+  baseRepository: repositoryReferenceSchema,
+});
+
+const reviewPagesSchema = z.array(
+  z.object({
+    data: z.object({
+      repository: z.object({
+        nameWithOwner: z.string(),
+        pullRequest: pullRequestReviewIdentitySchema.extend({
+          reviews: z.object({
+            pageInfo: pageInfoSchema,
+            nodes: z.array(reviewRecordSchema),
+          }),
         }),
       }),
     }),
-  }),
-});
+  }).strict(),
+);
+type ReviewPage = z.infer<typeof reviewPagesSchema>[number];
+
+const reviewThreadsPagesSchema = z.array(
+  z.object({
+    data: z.object({
+      repository: z.object({
+        nameWithOwner: z.string(),
+        pullRequest: pullRequestReviewIdentitySchema.extend({
+          reviewThreads: z.object({
+            pageInfo: pageInfoSchema,
+            nodes: z.array(
+              z.object({ isResolved: z.boolean(), isOutdated: z.boolean() }),
+            ),
+          }),
+        }),
+      }),
+    }),
+  }).strict(),
+);
+type ReviewThreadsPage = z.infer<typeof reviewThreadsPagesSchema>[number];
 
 interface GitHubInvocation {
   readonly args: readonly string[];
@@ -106,7 +151,7 @@ export interface DevelopmentPullRequestMutationRequest {
 }
 
 export interface PullRequestReviewEvidenceRequest {
-  readonly pullRequest: DevelopmentPullRequest;
+  readonly pullRequest: AdmittedDevelopmentPullRequest;
   readonly workingDirectory: string;
 }
 
@@ -198,7 +243,7 @@ export class DevelopmentPullRequestGateway {
 
   readDevelopmentPullRequest(request: {
     readonly workingDirectory: string;
-  }): Result<DevelopmentPullRequest, DevFailure> {
+  }): Result<AdmittedDevelopmentPullRequest, DevFailure> {
     const selection = this.openPullRequests(request.workingDirectory);
     if (selection.isErr()) return err(selection.error);
     const selected = selection.value[0];
@@ -294,69 +339,350 @@ export class DevelopmentPullRequestGateway {
   requireCleanReviews(
     request: PullRequestReviewEvidenceRequest,
   ): Result<void, DevFailure> {
-    const output = this.successful({
-      args: [
-        'pr',
-        'view',
-        String(request.pullRequest.number.value()),
-        '--json',
-        'reviewDecision',
-      ],
+    const admitted = this.readPullRequest({
+      number: request.pullRequest.number,
       workingDirectory: request.workingDirectory,
     });
-    if (output.isErr()) return err(output.error);
-    const decoded = new GitHubJsonDocument(output.value.stdout).decode(
-      z.object({ reviewDecision: z.string().nullable() }),
-    );
-    if (decoded.isErr()) return err(decoded.error);
-    const reviewDecision = this.reviewDecision(decoded.value.reviewDecision);
-    if (reviewDecision !== PullRequestReviewDecision.Approved) {
+    if (admitted.isErr()) return err(admitted.error);
+    if (!this.samePullRequest(admitted.value, request.pullRequest)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The admitted dev-to-main pull request changed identity, repository, or head before review collection',
+      });
+    }
+    if (admitted.value.reviewDecision !== PullRequestReviewDecision.Approved) {
       return err({
         kind: DevFailureKind.Reviews,
-        message: `The current dev-to-main review decision is ${reviewDecision}; promotion requires APPROVED`,
+        message: `The current dev-to-main review decision is ${admitted.value.reviewDecision}; promotion requires APPROVED`,
       });
     }
 
-    const repository = this.repository(request.workingDirectory);
-    if (repository.isErr()) return err(repository.error);
+    const reviews = this.readReviewPages({
+      pullRequest: admitted.value,
+      workingDirectory: request.workingDirectory,
+    });
+    if (reviews.isErr()) return err(reviews.error);
+    let approvedReviewCount = 0;
+    for (const page of reviews.value) {
+      const reviewIdentity = this.reviewPageIdentity({
+        page,
+        pullRequest: admitted.value,
+      });
+      if (reviewIdentity.isErr()) return err(reviewIdentity.error);
+      for (const review of page.data.repository.pullRequest.reviews.nodes) {
+        const checked = this.checkReview({
+          review,
+          pullRequest: admitted.value,
+        });
+        if (checked.isErr()) return err(checked.error);
+        if (checked.value) approvedReviewCount += 1;
+      }
+    }
+    if (approvedReviewCount === 0) {
+      return err({
+        kind: DevFailureKind.Reviews,
+        message:
+          'No submitted APPROVED review is bound to the current dev-to-main pull-request head',
+      });
+    }
+
+    const threads = this.readReviewThreadPages({
+      pullRequest: admitted.value,
+      workingDirectory: request.workingDirectory,
+    });
+    if (threads.isErr()) return err(threads.error);
+    for (const page of threads.value) {
+      const threadIdentity = this.reviewPageIdentity({
+        page,
+        pullRequest: admitted.value,
+      });
+      if (threadIdentity.isErr()) return err(threadIdentity.error);
+      if (
+        page.data.repository.pullRequest.reviewThreads.nodes.some(
+          (thread) => !thread.isResolved,
+        )
+      ) {
+        return err({
+          kind: DevFailureKind.Reviews,
+          message: 'The dev-to-main pull request has an unresolved review thread',
+        });
+      }
+    }
+
+    const final = this.readPullRequest({
+      number: request.pullRequest.number,
+      workingDirectory: request.workingDirectory,
+    });
+    if (final.isErr()) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The admitted dev-to-main pull request became unavailable after review collection',
+      });
+    }
+    if (!this.samePullRequest(final.value, request.pullRequest)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The dev-to-main pull request head, repository, or identity changed after review collection',
+      });
+    }
+    if (final.value.reviewDecision !== PullRequestReviewDecision.Approved) {
+      return err({
+        kind: DevFailureKind.Reviews,
+        message: `The current dev-to-main review decision changed to ${final.value.reviewDecision} during review collection`,
+      });
+    }
+    return ok();
+  }
+
+  private readReviewPages(request: {
+    readonly pullRequest: AdmittedDevelopmentPullRequest;
+    readonly workingDirectory: string;
+  }): Result<readonly ReviewPage[], DevFailure> {
     const query = [
-      'query($owner:String!,$repo:String!,$number:Int!){',
+      'query($owner:String!,$repo:String!,$number:Int!,$endCursor:String){',
       'repository(owner:$owner,name:$repo){',
+      'nameWithOwner',
       'pullRequest(number:$number){',
-      'reviewThreads(first:100){nodes{isResolved isOutdated}}',
+      'number url headRefName baseRefName headRefOid baseRefOid',
+      'headRepository{nameWithOwner} baseRepository{nameWithOwner}',
+      'reviews(first:100,after:$endCursor){',
+      'pageInfo{hasNextPage endCursor}',
+      'nodes{state body submittedAt commit{oid}}',
       '}}}}',
     ].join('');
-    const threads = this.successful({
+    const output = this.successful({
       args: [
         'api',
         'graphql',
+        '--paginate',
+        '--slurp',
         '-f',
         `query=${query}`,
         '-F',
-        `owner=${repository.value.owner}`,
+        `owner=${request.pullRequest.repository.owner}`,
         '-F',
-        `repo=${repository.value.repository}`,
+        `repo=${request.pullRequest.repository.repository}`,
         '-F',
         `number=${request.pullRequest.number.value()}`,
       ],
       workingDirectory: request.workingDirectory,
     });
-    if (threads.isErr()) return err(threads.error);
-    const decodedThreads = new GitHubJsonDocument(threads.value.stdout).decode(
-      reviewThreadsSchema,
+    if (output.isErr()) return err(output.error);
+    const decoded = new GitHubJsonDocument(output.value.stdout).decode(
+      reviewPagesSchema,
     );
-    if (decodedThreads.isErr()) return err(decodedThreads.error);
-    if (
-      decodedThreads.value.data.repository.pullRequest.reviewThreads.nodes.some(
-        (thread) => !thread.isResolved,
-      )
-    ) {
+    if (decoded.isErr()) return err(decoded.error);
+    const pagination = this.requireCompletePagination({
+      pageInfos: decoded.value.map(
+        (page) => page.data.repository.pullRequest.reviews.pageInfo,
+      ),
+      evidence: 'submitted reviews',
+    });
+    if (pagination.isErr()) return err(pagination.error);
+    return ok(decoded.value);
+  }
+
+  private readReviewThreadPages(request: {
+    readonly pullRequest: AdmittedDevelopmentPullRequest;
+    readonly workingDirectory: string;
+  }): Result<readonly ReviewThreadsPage[], DevFailure> {
+    const query = [
+      'query($owner:String!,$repo:String!,$number:Int!,$endCursor:String){',
+      'repository(owner:$owner,name:$repo){',
+      'nameWithOwner',
+      'pullRequest(number:$number){',
+      'number url headRefName baseRefName headRefOid baseRefOid',
+      'headRepository{nameWithOwner} baseRepository{nameWithOwner}',
+      'reviewThreads(first:100,after:$endCursor){',
+      'pageInfo{hasNextPage endCursor}',
+      'nodes{isResolved isOutdated}',
+      '}}}}',
+    ].join('');
+    const output = this.successful({
+      args: [
+        'api',
+        'graphql',
+        '--paginate',
+        '--slurp',
+        '-f',
+        `query=${query}`,
+        '-F',
+        `owner=${request.pullRequest.repository.owner}`,
+        '-F',
+        `repo=${request.pullRequest.repository.repository}`,
+        '-F',
+        `number=${request.pullRequest.number.value()}`,
+      ],
+      workingDirectory: request.workingDirectory,
+    });
+    if (output.isErr()) return err(output.error);
+    const decoded = new GitHubJsonDocument(output.value.stdout).decode(
+      reviewThreadsPagesSchema,
+    );
+    if (decoded.isErr()) return err(decoded.error);
+    const pagination = this.requireCompletePagination({
+      pageInfos: decoded.value.map(
+        (page) => page.data.repository.pullRequest.reviewThreads.pageInfo,
+      ),
+      evidence: 'review threads',
+    });
+    if (pagination.isErr()) return err(pagination.error);
+    return ok(decoded.value);
+  }
+
+  private requireCompletePagination(request: {
+    readonly pageInfos: readonly {
+      readonly hasNextPage: boolean;
+      readonly endCursor: string | null;
+    }[];
+    readonly evidence: string;
+  }): Result<void, DevFailure> {
+    if (request.pageInfos.length === 0) {
       return err({
         kind: DevFailureKind.Reviews,
-        message: 'The dev-to-main pull request has an unresolved review thread',
+        message: `GitHub returned no pagination pages for ${request.evidence}`,
+      });
+    }
+    const seenCursors = new Set<string>();
+    for (const [index, pageInfo] of request.pageInfos.entries()) {
+      if (pageInfo.hasNextPage) {
+        if (!pageInfo.endCursor || seenCursors.has(pageInfo.endCursor)) {
+          return err({
+            kind: DevFailureKind.Reviews,
+            message: `GitHub returned incomplete or repeated pagination for ${request.evidence}`,
+          });
+        }
+        seenCursors.add(pageInfo.endCursor);
+        if (index === request.pageInfos.length - 1) {
+          return err({
+            kind: DevFailureKind.Reviews,
+            message: `GitHub returned incomplete pagination for ${request.evidence}`,
+          });
+        }
+        continue;
+      }
+      if (pageInfo.endCursor === '') {
+        return err({
+          kind: DevFailureKind.Reviews,
+          message: `GitHub returned unknown terminal pagination for ${request.evidence}`,
+        });
+      }
+      if (index !== request.pageInfos.length - 1) {
+        return err({
+          kind: DevFailureKind.Reviews,
+          message: `GitHub returned pages after the terminal pagination page for ${request.evidence}`,
+        });
+      }
+    }
+    return ok();
+  }
+
+  private reviewPageIdentity(request: {
+    readonly page: ReviewPage | ReviewThreadsPage;
+    readonly pullRequest: AdmittedDevelopmentPullRequest;
+  }): Result<void, DevFailure> {
+    const repository = request.page.data.repository;
+    const pullRequest = repository.pullRequest;
+    if (
+      repository.nameWithOwner !== request.pullRequest.repository.value() ||
+      pullRequest.number !== request.pullRequest.number.value() ||
+      pullRequest.url !== request.pullRequest.url ||
+      pullRequest.headRefName !== 'dev' ||
+      pullRequest.baseRefName !== 'main' ||
+      pullRequest.headRefOid !== request.pullRequest.headSha.value() ||
+      pullRequest.baseRefOid !== request.pullRequest.baseSha.value() ||
+      pullRequest.headRepository.nameWithOwner !==
+        request.pullRequest.repository.value() ||
+      pullRequest.baseRepository.nameWithOwner !==
+        request.pullRequest.repository.value()
+    ) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'GitHub review evidence does not describe the admitted pull request, repository, or exact head',
       });
     }
     return ok();
+  }
+
+  private checkReview(request: {
+    readonly review: z.infer<typeof reviewRecordSchema>;
+    readonly pullRequest: AdmittedDevelopmentPullRequest;
+  }): Result<boolean, DevFailure> {
+    const { review, pullRequest } = request;
+    if (
+      review.submittedAt === null ||
+      review.submittedAt.length === 0 ||
+      review.body === null ||
+      review.commit === null
+    ) {
+      return err({
+        kind: DevFailureKind.Reviews,
+        message:
+          'GitHub returned a submitted review without complete body, submission, or commit evidence',
+      });
+    }
+    const commit = CommitSha.parse(review.commit.oid);
+    if (commit.isErr()) {
+      return err({
+        kind: DevFailureKind.Reviews,
+        message: 'GitHub returned an invalid review commit binding',
+      });
+    }
+    switch (review.state) {
+      case PullRequestReviewDecision.Approved:
+        if (!commit.value.equals(pullRequest.headSha)) {
+          return err({
+            kind: DevFailureKind.Race,
+            message:
+              'An APPROVED review is bound to a stale pull-request head; refusing promotion evidence',
+          });
+        }
+        return ok(true);
+      case PullRequestReviewDecision.ChangesRequested:
+        return err({
+          kind: DevFailureKind.Reviews,
+          message:
+            'The pull request has a submitted CHANGES_REQUESTED review; promotion evidence is incomplete',
+        });
+      case 'DISMISSED':
+        return err({
+          kind: DevFailureKind.Reviews,
+          message:
+            'The pull request has a dismissed submitted review; promotion evidence is incomplete',
+        });
+      case 'COMMENTED':
+        return ok(false);
+      case 'PENDING':
+        return err({
+          kind: DevFailureKind.Reviews,
+          message:
+            'The pull request has an unsubmitted pending review; promotion evidence is incomplete',
+        });
+      default:
+        return err({
+          kind: DevFailureKind.Reviews,
+          message: `GitHub returned an unknown submitted review state: ${review.state}`,
+        });
+    }
+  }
+
+  private samePullRequest(
+    left: AdmittedDevelopmentPullRequest,
+    right: AdmittedDevelopmentPullRequest,
+  ): boolean {
+    return (
+      left.number.value() === right.number.value() &&
+      left.url === right.url &&
+      left.repository.value() === right.repository.value() &&
+      left.headSha.equals(right.headSha) &&
+      left.baseSha.equals(right.baseSha) &&
+      left.isDraft === right.isDraft &&
+      left.reviewDecision === right.reviewDecision
+    );
   }
 
   private revalidateDevelopmentPullRequest(

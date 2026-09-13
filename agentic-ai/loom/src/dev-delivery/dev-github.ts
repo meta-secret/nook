@@ -5,6 +5,7 @@ import { CommandFailureMessage } from './dev-command.ts';
 import { GitHubJsonDocument } from './dev-github-json.ts';
 import {
   DevelopmentPullRequestGateway,
+  type AdmittedDevelopmentPullRequest,
   type DevelopmentPullRequestLookup,
   type DevelopmentPullRequestMutationRequest,
 } from './dev-github-pull-request.ts';
@@ -133,7 +134,7 @@ interface GitHubInvocation {
 
 interface PromotionEvidenceRequest {
   readonly sha: CommitSha;
-  readonly pullRequest: DevelopmentPullRequest;
+  readonly pullRequest: AdmittedDevelopmentPullRequest;
   readonly workingDirectory: string;
 }
 
@@ -227,7 +228,7 @@ export class DevGitHubGateway {
 
   readDevelopmentPullRequest(request: {
     readonly workingDirectory: string;
-  }): Result<DevelopmentPullRequest, DevFailure> {
+  }): Result<AdmittedDevelopmentPullRequest, DevFailure> {
     return this.pullRequests.readDevelopmentPullRequest(request);
   }
 
