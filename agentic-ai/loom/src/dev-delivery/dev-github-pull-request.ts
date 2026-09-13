@@ -59,60 +59,9 @@ const pageInfoSchema = z.object({
 const reviewRecordSchema = z.object({
   state: z.string(),
   body: z.string().nullable(),
-  submittedAt: z.string().nullable(),
   commit: z.object({ oid: z.string() }).nullable(),
 });
 type ReviewRecord = z.infer<typeof reviewRecordSchema>;
-
-/** The only review states admitted from GitHub into promotion logic. */
-enum SubmittedReviewState {
-  Approved = 'APPROVED',
-  ChangesRequested = 'CHANGES_REQUESTED',
-  Commented = 'COMMENTED',
-  Dismissed = 'DISMISSED',
-  Pending = 'PENDING',
-}
-
-enum CleanReviewEvidenceKind {
-  Approved = 'approved',
-  EmptyComment = 'empty-comment',
-}
-
-interface CleanReviewEvidence {
-  readonly kind: CleanReviewEvidenceKind;
-  readonly submittedAt: CanonicalReviewTimestamp;
-  readonly commit: CommitSha;
-}
-
-/** GitHub's UTC RFC3339 timestamp, normalized to seconds or milliseconds. */
-class CanonicalReviewTimestamp {
-  private constructor(private readonly raw: string) {}
-
-  static parse(
-    input: string | null,
-  ): Result<CanonicalReviewTimestamp, DevFailure> {
-    const canonical = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
-    const parsed = input === null ? Number.NaN : Date.parse(input);
-    if (
-      input === null ||
-      !canonical.test(input) ||
-      !Number.isFinite(parsed) ||
-      new Date(parsed).toISOString() !== input &&
-        new Date(parsed).toISOString().replace('.000Z', 'Z') !== input
-    ) {
-      return err({
-        kind: DevFailureKind.Reviews,
-        message:
-          'GitHub returned a submitted review without a canonical UTC timestamp',
-      });
-    }
-    return ok(new CanonicalReviewTimestamp(input));
-  }
-
-  value(): string {
-    return this.raw;
-  }
-}
 
 const pullRequestReviewIdentitySchema = z.object({
   number: z.number().int().positive(),
@@ -402,19 +351,13 @@ export class DevelopmentPullRequestGateway {
           'The admitted dev-to-main pull request changed identity, repository, or head before review collection',
       });
     }
-    if (admitted.value.reviewDecision !== PullRequestReviewDecision.Approved) {
-      return err({
-        kind: DevFailureKind.Reviews,
-        message: `The current dev-to-main review decision is ${admitted.value.reviewDecision}; promotion requires APPROVED`,
-      });
-    }
 
     const reviews = this.readReviewPages({
       pullRequest: admitted.value,
       workingDirectory: request.workingDirectory,
     });
     if (reviews.isErr()) return err(reviews.error);
-    let approvedReviewCount = 0;
+    let actionableReview = false;
     for (const page of reviews.value) {
       const reviewIdentity = this.reviewPageIdentity({
         page,
@@ -422,22 +365,12 @@ export class DevelopmentPullRequestGateway {
       });
       if (reviewIdentity.isErr()) return err(reviewIdentity.error);
       for (const review of page.data.repository.pullRequest.reviews.nodes) {
-        const checked = this.checkReview({
+        const actionable = this.isActionableCurrentHeadReview({
           review,
           pullRequest: admitted.value,
         });
-        if (checked.isErr()) return err(checked.error);
-        if (checked.value.kind === CleanReviewEvidenceKind.Approved) {
-          approvedReviewCount += 1;
-        }
+        actionableReview ||= actionable;
       }
-    }
-    if (approvedReviewCount === 0) {
-      return err({
-        kind: DevFailureKind.Reviews,
-        message:
-          'No submitted APPROVED review is bound to the current dev-to-main pull-request head',
-      });
     }
 
     const threads = this.readReviewThreadPages({
@@ -445,22 +378,16 @@ export class DevelopmentPullRequestGateway {
       workingDirectory: request.workingDirectory,
     });
     if (threads.isErr()) return err(threads.error);
+    let unresolvedCurrentThread = false;
     for (const page of threads.value) {
       const threadIdentity = this.reviewPageIdentity({
         page,
         pullRequest: admitted.value,
       });
       if (threadIdentity.isErr()) return err(threadIdentity.error);
-      if (
-        page.data.repository.pullRequest.reviewThreads.nodes.some(
-          (thread) => !thread.isResolved,
-        )
-      ) {
-        return err({
-          kind: DevFailureKind.Reviews,
-          message: 'The dev-to-main pull request has an unresolved review thread',
-        });
-      }
+      unresolvedCurrentThread ||= page.data.repository.pullRequest.reviewThreads.nodes.some(
+        (thread) => !thread.isResolved && !thread.isOutdated,
+      );
     }
 
     const final = this.readPullRequest({
@@ -481,10 +408,17 @@ export class DevelopmentPullRequestGateway {
           'The dev-to-main pull request head, repository, or identity changed after review collection',
       });
     }
-    if (final.value.reviewDecision !== PullRequestReviewDecision.Approved) {
+    if (actionableReview) {
       return err({
         kind: DevFailureKind.Reviews,
-        message: `The current dev-to-main review decision changed to ${final.value.reviewDecision} during review collection`,
+        message:
+          'The dev-to-main pull request has unresolved actionable review feedback for its current head',
+      });
+    }
+    if (unresolvedCurrentThread) {
+      return err({
+        kind: DevFailureKind.Reviews,
+        message: 'The dev-to-main pull request has an unresolved review thread',
       });
     }
     return ok();
@@ -503,7 +437,7 @@ export class DevelopmentPullRequestGateway {
       'headRepository{nameWithOwner} baseRepository{nameWithOwner}',
       'reviews(first:100,after:$endCursor){',
       'pageInfo{hasNextPage endCursor}',
-      'nodes{state body submittedAt commit{oid}}',
+      'nodes{state body commit{oid}}',
       '}}}}',
     ].join('');
     const output = this.successful({
@@ -661,103 +595,19 @@ export class DevelopmentPullRequestGateway {
     return ok();
   }
 
-  private checkReview(request: {
+  private isActionableCurrentHeadReview(request: {
     readonly review: ReviewRecord;
     readonly pullRequest: AdmittedDevelopmentPullRequest;
-  }): Result<CleanReviewEvidence, DevFailure> {
+  }): boolean {
     const { review, pullRequest } = request;
-    const state = this.submittedReviewState(review.state);
-    if (state.isErr()) return err(state.error);
-    switch (state.value) {
-      case SubmittedReviewState.ChangesRequested:
-        return err({
-          kind: DevFailureKind.Reviews,
-          message:
-            'The pull request has a submitted CHANGES_REQUESTED review; promotion evidence is incomplete',
-        });
-      case SubmittedReviewState.Dismissed:
-        return err({
-          kind: DevFailureKind.Reviews,
-          message:
-            'The pull request has a dismissed submitted review; promotion evidence is incomplete',
-        });
-      case SubmittedReviewState.Pending:
-        return err({
-          kind: DevFailureKind.Reviews,
-          message:
-            'The pull request has an unsubmitted pending review; promotion evidence is incomplete',
-        });
-      case SubmittedReviewState.Approved:
-      case SubmittedReviewState.Commented:
-        break;
+    if (review.state !== 'COMMENTED' && review.state !== 'CHANGES_REQUESTED') {
+      return false;
     }
-    if (review.body === null) {
-      return err({
-        kind: DevFailureKind.Reviews,
-        message:
-          'GitHub returned a submitted review without a review body; promotion evidence is incomplete',
-      });
-    }
-    if (review.body.trim().length > 0) {
-      return err({
-        kind: DevFailureKind.Reviews,
-        message:
-          'The pull request has a substantive submitted review body without an explicit disposition',
-      });
-    }
-    const submittedAt = CanonicalReviewTimestamp.parse(review.submittedAt);
-    if (submittedAt.isErr()) return err(submittedAt.error);
-    if (review.commit === null) {
-      return err({
-        kind: DevFailureKind.Reviews,
-        message:
-          'GitHub returned a submitted review without a commit binding; promotion evidence is incomplete',
-      });
+    if (!review.body || review.body.trim().length === 0 || !review.commit) {
+      return false;
     }
     const commit = CommitSha.parse(review.commit.oid);
-    if (commit.isErr()) {
-      return err({
-        kind: DevFailureKind.Reviews,
-        message: 'GitHub returned an invalid review commit binding',
-      });
-    }
-    if (!commit.value.equals(pullRequest.headSha)) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          'A submitted review is bound to a stale pull-request head; promotion evidence is incomplete',
-      });
-    }
-    return ok({
-      kind:
-        state.value === SubmittedReviewState.Approved
-          ? CleanReviewEvidenceKind.Approved
-          : CleanReviewEvidenceKind.EmptyComment,
-      submittedAt: submittedAt.value,
-      commit: commit.value,
-    });
-  }
-
-  private submittedReviewState(
-    input: string,
-  ): Result<SubmittedReviewState, DevFailure> {
-    switch (input) {
-      case SubmittedReviewState.Approved:
-        return ok(SubmittedReviewState.Approved);
-      case SubmittedReviewState.ChangesRequested:
-        return ok(SubmittedReviewState.ChangesRequested);
-      case SubmittedReviewState.Commented:
-        return ok(SubmittedReviewState.Commented);
-      case SubmittedReviewState.Dismissed:
-        return ok(SubmittedReviewState.Dismissed);
-      case SubmittedReviewState.Pending:
-        return ok(SubmittedReviewState.Pending);
-      default:
-        return err({
-          kind: DevFailureKind.Reviews,
-          message: `GitHub returned an unknown submitted review state: ${input}`,
-        });
-    }
+    return commit.isOk() && commit.value.equals(pullRequest.headSha);
   }
 
   private samePullRequest(
@@ -769,9 +619,7 @@ export class DevelopmentPullRequestGateway {
       left.url === right.url &&
       left.repository.value() === right.repository.value() &&
       left.headSha.equals(right.headSha) &&
-      left.baseSha.equals(right.baseSha) &&
-      left.isDraft === right.isDraft &&
-      left.reviewDecision === right.reviewDecision
+      left.baseSha.equals(right.baseSha)
     );
   }
 

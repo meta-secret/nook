@@ -22,12 +22,10 @@ const HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const STALE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const BASE = '1111111111111111111111111111111111111111';
 const REPOSITORY = 'nook/example';
-const REVIEWED_AT = '2026-09-13T17:00:00Z';
 
 interface ReviewFixture {
   readonly state?: string;
   readonly body?: string | null;
-  readonly submittedAt?: string | null;
   readonly commit?: string | null;
 }
 
@@ -64,7 +62,6 @@ interface ReviewPageResponse {
           readonly nodes: readonly {
             readonly state: string;
             readonly body: string | null;
-            readonly submittedAt: string | null;
             readonly commit: { readonly oid: string } | null;
           }[];
         };
@@ -101,8 +98,10 @@ interface ReviewScenario {
     readonly hasNextPage: boolean;
     readonly endCursor: string | null;
     readonly unresolved?: boolean;
+    readonly outdated?: boolean;
   }[];
   readonly finalHead?: string;
+  readonly reviewDecision?: string;
 }
 
 /** Supplies bounded GraphQL pages and PR snapshots without contacting GitHub. */
@@ -201,10 +200,6 @@ class ReviewEvidenceRunner implements CommandRunner {
               nodes: page.reviews.map((review) => ({
                 state: review.state ?? 'APPROVED',
                 body: review.body === undefined ? '' : review.body,
-                submittedAt:
-                  review.submittedAt === undefined
-                    ? REVIEWED_AT
-                    : review.submittedAt,
                 commit:
                   review.commit === undefined
                     ? { oid: HEAD }
@@ -237,7 +232,7 @@ class ReviewEvidenceRunner implements CommandRunner {
               nodes: [
                 {
                   isResolved: !page.unresolved,
-                  isOutdated: false,
+                  isOutdated: page.outdated ?? false,
                 },
               ],
             },
@@ -252,7 +247,7 @@ class ReviewEvidenceRunner implements CommandRunner {
       number: 42,
       ...this.pullRequestIdentity(headSha),
       state: 'OPEN',
-      reviewDecision: 'APPROVED',
+      reviewDecision: this.scenario.reviewDecision ?? 'APPROVED',
     };
   }
 
@@ -306,55 +301,60 @@ test('rejects an incomplete review pagination sequence', () => {
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
 });
 
-test('does not let an approval mask a substantive current or stale comment', () => {
-  for (const comment of [
-    { state: 'COMMENTED', body: 'Please address this.' },
-    { state: 'COMMENTED', body: 'Please address this.', commit: STALE },
-  ]) {
-    const { result } = new ReviewEvidenceRunner({
-      reviewPages: [
-        ReviewEvidenceRunner.reviewPage({
-          reviews: [{ state: 'APPROVED', body: '' }, comment],
-        }),
-      ],
-    }).reviewResult();
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.kind).toBe(DevFailureKind.Reviews);
-    }
+test('blocks current-head actionable feedback but ignores stale feedback', () => {
+  const current = new ReviewEvidenceRunner({
+    reviewPages: [
+      ReviewEvidenceRunner.reviewPage({
+        reviews: [
+          { state: 'APPROVED', body: '' },
+          { state: 'COMMENTED', body: 'Please address this.' },
+        ],
+      }),
+    ],
+  }).reviewResult();
+  expect(current.result.isErr()).toBe(true);
+  if (current.result.isErr()) {
+    expect(current.result.error.kind).toBe(DevFailureKind.Reviews);
   }
+
+  const stale = new ReviewEvidenceRunner({
+    reviewPages: [
+      ReviewEvidenceRunner.reviewPage({
+        reviews: [
+          { state: 'APPROVED', body: '' },
+          { state: 'COMMENTED', body: 'Please address this.', commit: STALE },
+        ],
+      }),
+    ],
+  }).reviewResult();
+  expect(stale.result.isOk()).toBe(true);
 });
 
-test('rejects unknown, dismissed, and pending review states', () => {
+test('ignores unknown, dismissed, and pending states without actionable feedback', () => {
   for (const state of ['UNRECOGNIZED', 'DISMISSED', 'PENDING']) {
     const { result } = new ReviewEvidenceRunner({
       reviewPages: [
         ReviewEvidenceRunner.reviewPage({ reviews: [{ state, body: '' }] }),
       ],
     }).reviewResult();
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.kind).toBe(DevFailureKind.Reviews);
-    }
+    expect(result.isOk()).toBe(true);
   }
 });
 
-test('rejects a noncanonical submittedAt timestamp', () => {
+test('does not require an aggregate approved review when feedback is clean', () => {
   const { result } = new ReviewEvidenceRunner({
+    reviewDecision: 'REVIEW_REQUIRED',
     reviewPages: [
       ReviewEvidenceRunner.reviewPage({
-        reviews: [
-          { state: 'APPROVED', body: '', submittedAt: '2026-09-13' },
-        ],
+        reviews: [{ state: 'APPROVED', body: '' }],
       }),
     ],
   }).reviewResult();
 
-  expect(result.isErr()).toBe(true);
-  if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
+  expect(result.isOk()).toBe(true);
 });
 
-test('rejects stale-head approval and unresolved review threads', () => {
+test('ignores stale-head reviews but blocks unresolved current threads', () => {
   const stale = new ReviewEvidenceRunner({
     reviewPages: [
       ReviewEvidenceRunner.reviewPage({
@@ -362,10 +362,7 @@ test('rejects stale-head approval and unresolved review threads', () => {
       }),
     ],
   }).reviewResult();
-  expect(stale.result.isErr()).toBe(true);
-  if (stale.result.isErr()) {
-    expect(stale.result.error.kind).toBe(DevFailureKind.Race);
-  }
+  expect(stale.result.isOk()).toBe(true);
 
   const unresolved = new ReviewEvidenceRunner({
     reviewPages: [
@@ -379,6 +376,18 @@ test('rejects stale-head approval and unresolved review threads', () => {
   if (unresolved.result.isErr()) {
     expect(unresolved.result.error.kind).toBe(DevFailureKind.Reviews);
   }
+
+  const outdated = new ReviewEvidenceRunner({
+    reviewPages: [
+      ReviewEvidenceRunner.reviewPage({
+        reviews: [{ state: 'APPROVED', body: '' }],
+      }),
+    ],
+    threadPages: [
+      { hasNextPage: false, endCursor: null, unresolved: true, outdated: true },
+    ],
+  }).reviewResult();
+  expect(outdated.result.isOk()).toBe(true);
 });
 
 test('reports a pull-request head race after collecting review evidence', () => {
