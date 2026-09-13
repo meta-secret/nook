@@ -51,9 +51,9 @@ local-dev SHA, and `featureHeadSha` for the exact canonical feature frontier.
 Prime proves `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of
 `featureHeadSha`, then pins all three identities in the mission packet and
 every child handoff. The initial feature head may equal the pinned base;
-descendant feature heads are valid for reruns. Prime creates new feature work
-from `pinnedLocalDevSha` unless the user explicitly selects another base and
-Prime records that choice. The existing canonical feature ref and detached
+descendant feature heads are valid for reruns. Prime creates every new feature
+branch and worktree strictly from the exact `pinnedLocalDevSha`; no alternate
+base is permitted. The existing canonical feature ref and detached
 implementation HEAD must equal `featureHeadSha` exactly. Team Gizmos and
 leaves consume all three pinned identities. Missing, stale, mismatched, or
 unprovable evidence fails closed.

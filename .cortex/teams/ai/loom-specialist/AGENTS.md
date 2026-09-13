@@ -17,8 +17,9 @@ It handles only AI-owned Loom work named in the packet.
 - Accept the packet from AI Team Gizmo through the active harness.
 - Consume the Prime-issued `originMainSha`, `pinnedLocalDevSha`, and
   `featureHeadSha`. Require `originMainSha` ancestor of `pinnedLocalDevSha`
-  ancestor of `featureHeadSha`. Prime creates new feature work from
-  `pinnedLocalDevSha`; the existing canonical feature ref and detached
+  ancestor of `featureHeadSha`. Prime creates every feature branch and worktree
+  strictly from the exact `pinnedLocalDevSha`; no alternate base is permitted.
+  The existing canonical feature ref and detached
   implementation HEAD must equal `featureHeadSha` exactly. Initial equality
   and descendant reruns are valid. Do not use stale local refs or resolve or
   guess a base independently. Missing, mismatched, stale, or unprovable

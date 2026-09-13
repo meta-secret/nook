@@ -30,8 +30,8 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
   in the mission packet and every child handoff. Require the chain
   `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`.
   The initial frontier may equal the pinned local-dev SHA. Prime creates new
-  feature work from `pinnedLocalDevSha` unless the user explicitly selected
-  another base and Prime records the choice. An existing canonical feature ref
+  feature branch and worktree strictly from the exact `pinnedLocalDevSha`; no
+  alternate base is permitted. An existing canonical feature ref
   and detached implementation HEAD must equal `featureHeadSha` exactly.
   Descendant frontiers are valid for reruns. Team Gizmos and leaves consume all
   three pinned identities. Missing, stale, mismatched, or unprovable evidence
@@ -74,9 +74,9 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
      `featureHeadSha`. Allow equality only between the pinned local-dev and
      initial feature head; allow later feature heads only as descendants for
      reruns.
-   - Pin `pinnedLocalDevSha` for the mission unless the user explicitly
-     selected another base, and record the explicit selection.
-   - Start the feature branch and worktree from `pinnedLocalDevSha`.
+   - Pin `pinnedLocalDevSha` as the mission's sole feature-work source.
+   - Start every feature branch and worktree strictly from the exact
+     `pinnedLocalDevSha`; no alternate base is permitted.
    - Require the existing canonical feature ref and detached implementation
      HEAD to equal `featureHeadSha` exactly. Stop closed on missing, stale,
      mismatched, or unprovable evidence.
@@ -141,7 +141,7 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 
 - Every worker used its issued child worktree and bounded scope.
 - The handoff records the successful fetch, `originMainSha`,
-  `pinnedLocalDevSha`, `featureHeadSha`, and any explicit user-selected base.
+  `pinnedLocalDevSha`, and `featureHeadSha` for the exact feature source.
 - The handoff proves the ordered ancestry chain and exact canonical feature-ref
   equality. Initial equality and descendant reruns are recorded explicitly.
 - Dirty changes remained attributed and unrelated changes were preserved.

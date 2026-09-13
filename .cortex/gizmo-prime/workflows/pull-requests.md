@@ -37,7 +37,8 @@ functional ownership, readiness, promotion, or final delivery.
   - Feature packets carry `originMainSha`, `pinnedLocalDevSha`, and
     `featureHeadSha`. Require `originMainSha` ancestor of
     `pinnedLocalDevSha` ancestor/equal to `featureHeadSha`.
-  - Prime creates feature work from `pinnedLocalDevSha`. Existing canonical
+  - Prime creates every feature branch and worktree strictly from the exact
+    `pinnedLocalDevSha`; no alternate base is permitted. Existing canonical
     feature refs and detached implementation heads equal `featureHeadSha`
     exactly. Initial equality and descendant reruns are valid.
   - Missing, stale, mismatched, or unprovable feature evidence fails closed.

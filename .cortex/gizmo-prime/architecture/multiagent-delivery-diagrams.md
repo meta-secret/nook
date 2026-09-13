@@ -46,9 +46,9 @@ fetched `origin/main`, `pinnedLocalDevSha` for the exact synchronized
 local-dev SHA, and `featureHeadSha` for the exact canonical feature frontier in
 the mission packet and every child handoff. Require the chain `originMainSha`
 ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`. The initial
-frontier may equal the pinned local-dev SHA. Prime creates new feature work
-from `pinnedLocalDevSha` unless the user explicitly selects another base and
-Prime records that choice. The existing canonical feature ref and detached
+frontier may equal the pinned local-dev SHA. Prime creates every new feature
+branch and worktree strictly from the exact `pinnedLocalDevSha`; no alternate
+base is permitted. The existing canonical feature ref and detached
 implementation HEAD must equal `featureHeadSha` exactly. Descendant frontiers
 are valid for reruns. Team Gizmos and leaves consume all three pinned
 identities. Missing, stale, mismatched, or unprovable evidence fails closed.
@@ -203,8 +203,9 @@ boundary.
 ### Flow
 
 The implementation packet carries the recorded JSON fields `originMainSha`,
-`pinnedLocalDevSha`, and `featureHeadSha`. Prime creates the feature worktree
-and branch from `pinnedLocalDevSha`. The implementation worker consumes the
+`pinnedLocalDevSha`, and `featureHeadSha`. Prime creates every feature branch
+and worktree strictly from the exact `pinnedLocalDevSha`; no alternate base is
+permitted. The implementation worker consumes the
 existing canonical feature frontier and verifies the chain `originMainSha`
 ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`. The canonical
 feature ref and detached implementation HEAD must equal `featureHeadSha`
@@ -644,7 +645,8 @@ sequenceDiagram
 - Every feature packet carries `originMainSha`, `pinnedLocalDevSha`, and
   `featureHeadSha`. The chain is `originMainSha` ancestor of
   `pinnedLocalDevSha` ancestor/equal to `featureHeadSha`.
-- Prime creates the feature branch and worktree from `pinnedLocalDevSha`.
+- Prime creates every feature branch and worktree strictly from the exact
+  `pinnedLocalDevSha`; no alternate base is permitted.
   Existing canonical feature refs and detached implementation heads must equal
   `featureHeadSha` exactly. Initial equality and descendant reruns are valid.
   Missing, stale, mismatched, or unprovable evidence fails closed.

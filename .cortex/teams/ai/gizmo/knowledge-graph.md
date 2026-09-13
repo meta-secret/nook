@@ -23,8 +23,9 @@ Load only the authority needed to orchestrate the current AI packet.
 Every AI packet carries `originMainSha` for the exact freshly fetched main,
 `pinnedLocalDevSha` for the synchronized local-dev source, and `featureHeadSha`
 for the exact canonical feature frontier. Require `originMainSha` ancestor of
-`pinnedLocalDevSha` ancestor of `featureHeadSha`. Prime creates new feature
-work from `pinnedLocalDevSha`. The existing canonical feature ref and detached
+`pinnedLocalDevSha` ancestor of `featureHeadSha`. Prime creates every feature
+branch and worktree strictly from the exact `pinnedLocalDevSha`; no alternate
+base is permitted. The existing canonical feature ref and detached
 implementation HEAD must equal `featureHeadSha` exactly. Initial equality and
 descendant reruns are valid. The Team Gizmo and both specialists consume all
 three identities. Missing, mismatched, stale, or unprovable evidence fails

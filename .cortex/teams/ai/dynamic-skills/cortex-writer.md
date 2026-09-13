@@ -167,7 +167,8 @@ stage; this description grants no local pre-push permission.
 - It compares the working branch with its merge base against the recorded
   `featureHeadSha`; the packet must prove `originMainSha` ancestor of
   `pinnedLocalDevSha` ancestor/equal to `featureHeadSha`.
-- Prime creates feature work from `pinnedLocalDevSha`; `originMainSha` proves
+- Prime creates every feature branch and worktree strictly from the exact
+  `pinnedLocalDevSha`; no alternate base is permitted. `originMainSha` proves
   freshly fetched-main ancestry only and is not the feature source. Existing
   canonical feature refs must equal `featureHeadSha` exactly. Initial equality
   and descendant reruns are valid. Missing, stale, mismatched, or unprovable

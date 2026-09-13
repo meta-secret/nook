@@ -23,8 +23,9 @@ ${VALIDATED_PLAN}
 The three recorded commit SHAs above are mandatory bootstrap evidence. Delivery
 and the Dev Manager fetched `origin/main`, synchronized canonical local `main`,
 and brought canonical local `dev` onto or including that main before this
-worktree was issued. Prime creates the feature branch and worktree from
-`${PINNED_LOCAL_DEV_SHA}`; an existing feature frontier may add only descendants
+worktree was issued. Prime creates every feature branch and worktree strictly
+from the exact `${PINNED_LOCAL_DEV_SHA}`; no alternate base is permitted. An
+existing feature frontier may add only descendants
 of that commit. The validated chain is `originMainSha` ancestor of
 `pinnedLocalDevSha` ancestor of `featureHeadSha`; the canonical remote feature
 ref and detached implementation HEAD must equal `featureHeadSha` exactly.

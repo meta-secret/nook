@@ -73,7 +73,10 @@ Model text.
     '`git fetch --prune origin`; a fetch failure fails closed.',
   );
   expect(markdown).toContain(
-    '`pinnedLocalDevSha` unless the user explicitly selects another base',
+    'strictly from the exact `pinnedLocalDevSha`',
+  );
+  expect(markdown).not.toContain(
+    ['unless the user explicitly selects', 'another base'].join(' '),
   );
   expect(markdown).toContain('`originMainSha`');
   expect(markdown).toContain('`pinnedLocalDevSha`');
@@ -133,7 +136,7 @@ test('renders the complete canonical Cortex context router', () => {
   expect(markdown).toContain(
     'ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`',
   );
-  expect(markdown).toContain('Prime creates new feature');
+  expect(markdown).toContain('Prime creates every new feature');
   expect(markdown).toContain('foreign-team write requirement to Gizmo Prime');
   expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
 });

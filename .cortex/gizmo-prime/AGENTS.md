@@ -74,9 +74,9 @@ freshly fetched `origin/main`, a `pinnedLocalDevSha` for the exact synchronized
 local-dev commit, and a `featureHeadSha` for the exact canonical feature
 frontier in the mission packet and every child handoff. Require the chain
 `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`.
-The initial frontier may equal the pinned local-dev SHA. Prime creates new
-feature work from `pinnedLocalDevSha` unless the user explicitly selects
-another base and Prime records that choice. The existing canonical feature ref
+The initial frontier may equal the pinned local-dev SHA. Prime creates every
+new feature branch and worktree strictly from the exact `pinnedLocalDevSha`;
+no alternate base is permitted. The existing canonical feature ref
 and detached implementation HEAD must equal `featureHeadSha` exactly.
 Descendant frontiers are valid for reruns. Team Gizmos and leaves consume all
 three pinned identities. Missing, stale, mismatched, or unprovable evidence

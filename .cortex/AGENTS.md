@@ -48,8 +48,8 @@ for the run. Every team has a Team Gizmo that reports upward to Gizmo Prime.
   in the mission packet and every child handoff. The evidence chain is
   `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of
   `featureHeadSha`; equality between the latter two is valid for an initial
-  frontier. Prime creates new feature work from `pinnedLocalDevSha` unless the
-  user explicitly selects another base and Prime records that choice. An
+  frontier. Prime creates every new feature branch and worktree strictly from
+  the exact `pinnedLocalDevSha`; no alternate base is permitted. An
   existing canonical feature ref and the detached implementation HEAD must
   equal `featureHeadSha` exactly. Descendant feature frontiers are valid for
   reruns. Team Gizmos and leaves consume all three pinned identities; they must

@@ -35,7 +35,8 @@ edits. It records `originMainSha` for the exact freshly fetched `origin/main`,
 `pinnedLocalDevSha` after canonical local `main` and `dev` are synchronized,
 and `featureHeadSha` for the exact canonical feature frontier. Require
 `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`.
-Prime creates new feature work from `pinnedLocalDevSha`; an existing canonical
+Prime creates every feature branch and worktree strictly from the exact
+`pinnedLocalDevSha`; no alternate base is permitted. An existing canonical
 feature ref and detached implementation HEAD must equal `featureHeadSha`
 exactly. Initial equality and descendant reruns are valid. The AI team fails
 closed on missing, mismatched, stale, or unprovable evidence and never

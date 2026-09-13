@@ -52,8 +52,9 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
   - The packet carries `originMainSha`, `pinnedLocalDevSha`, and
     `featureHeadSha`. Require `originMainSha` ancestor of
     `pinnedLocalDevSha` ancestor/equal to `featureHeadSha`.
-  - Prime creates the feature branch from `pinnedLocalDevSha`. The existing
-    canonical feature ref and detached implementation HEAD must equal
+  - Prime creates every feature branch and worktree strictly from the exact
+    `pinnedLocalDevSha`; no alternate base is permitted. The existing canonical
+    feature ref and detached implementation HEAD must equal
     `featureHeadSha` exactly. Initial equality and descendant reruns are valid.
   - Missing, stale, mismatched, or unprovable evidence fails closed.
   - No tests, coverage, e2e, or preflight may execute transitively.

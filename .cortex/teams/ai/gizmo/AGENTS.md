@@ -22,8 +22,9 @@ It receives a high-level AI packet and coordinates only AI-team mechanics.
 - Consume all three identities issued by Gizmo Prime for the team worktree and
   every leaf: `originMainSha`, `pinnedLocalDevSha`, and `featureHeadSha`.
   Require `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of
-  `featureHeadSha`. Prime creates new feature work from `pinnedLocalDevSha`.
-  The existing canonical feature ref and detached implementation HEAD must
+  `featureHeadSha`. Prime creates every feature branch and worktree strictly
+  from the exact `pinnedLocalDevSha`; no alternate base is permitted. The
+  existing canonical feature ref and detached implementation HEAD must
   equal `featureHeadSha` exactly. Initial equality and descendant reruns are
   valid. Never use stale local refs or resolve or guess a base independently.
   Missing, mismatched, stale, or unprovable evidence fails closed.
