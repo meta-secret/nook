@@ -443,10 +443,20 @@ jobs:
           GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
           GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
           git -C "$implementation_root" fetch --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
             "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH"
+          implementation_origin_main_sha="$(git -C "$implementation_root" rev-parse refs/remotes/origin/main^{commit})"
+          if [ "$implementation_origin_main_sha" != "$ORIGIN_MAIN_SHA" ]; then
+            echo "::error::Isolated implementation repository origin/main does not match the caller-pinned SHA."
+            exit 1
+          fi
           implementation_head="$(git -C "$implementation_root" rev-parse "refs/remotes/origin/$FEATURE_BRANCH^{commit}")"
           if [ "$implementation_head" != "$PINNED_LOCAL_DEV_SHA" ]; then
             echo "::error::Isolated implementation repository does not match pinned_local_dev_sha."
+            exit 1
+          fi
+          if ! git -C "$implementation_root" merge-base --is-ancestor "$implementation_origin_main_sha" "$implementation_head"; then
+            echo "::error::Pinned local dev is not descended from origin/main in the isolated implementation repository."
             exit 1
           fi
           git -C "$implementation_root" checkout --detach "$implementation_head"
