@@ -31,7 +31,7 @@ type ChromeRuntimeHost = {
     message: unknown,
     callback: (response?: unknown) => void,
   ) => void;
-  lastError?: typeof globalThis.chrome.runtime.lastError;
+  lastError?: { readonly message?: string };
 };
 
 type ExtensionBrowserHost = typeof globalThis & {
