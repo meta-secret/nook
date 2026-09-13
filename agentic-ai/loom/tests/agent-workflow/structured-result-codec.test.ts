@@ -204,6 +204,7 @@ test('rejects missing, duplicate, or invalid module expert authorizations', () =
   for (const [key, entry] of Object.entries(authorizationNodeValue))
     authorization[key] = entry;
   authorization.depth = 4;
+  invalidDepth.moduleExpertAuthorizations = [authorization];
 
   expect(() =>
     WorkflowResultSchema.decodeWorkflowTaskOutput(
@@ -366,6 +367,7 @@ test('rejects every missing or extra continuation field', () => {
     const continuation =
       AgentWorkflowStructuredResultCodecScenario.continuationMap(malformed);
     delete continuation[field];
+    malformed.continuation = continuation;
     expect(() =>
       WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(malformed)),
     ).toThrow('missing or extra fields');
@@ -375,6 +377,7 @@ test('rejects every missing or extra continuation field', () => {
   const continuation =
     AgentWorkflowStructuredResultCodecScenario.continuationMap(malformed);
   continuation.implementationPlan = ['Not a registered continuation field.'];
+  malformed.continuation = continuation;
   expect(() =>
     WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(malformed)),
   ).toThrow('missing or extra fields');
@@ -402,6 +405,7 @@ test('rejects malformed, duplicate, controlled, and unbounded continuation entri
     const continuation =
       AgentWorkflowStructuredResultCodecScenario.continuationMap(malformed);
     continuation.externalApi = invalidValue;
+    malformed.continuation = continuation;
     expect(() =>
       WorkflowResultSchema.decodeWorkflowTaskOutput(JSON.stringify(malformed)),
     ).toThrow();
