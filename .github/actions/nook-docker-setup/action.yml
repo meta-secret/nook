@@ -339,6 +339,11 @@ runs:
           fi
           echo "NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint" >> "$GITHUB_ENV"
           echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint" >> "$GITHUB_ENV"
+          # The compile-only dependency target contains no authored source. Its
+          # portable identity must therefore follow the dependency inputs, not
+          # the feature commit that requested this handoff.
+          compile_deps_scope="nook-rust-compile-deps-v1-$rust_deps_fingerprint"
+          echo "GHA_RUST_COMPILE_DEPS_SCOPE=$compile_deps_scope" >> "$GITHUB_ENV"
           ;;
         esac
 
@@ -350,7 +355,7 @@ runs:
             # source-free dependency scope and complete source graph so the
             # Bake target never merges exact and Main importers.
             if [ -n "$scope_suffix" ]; then
-              publish_exact_availability GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE "nook-rust-compile-deps-v1$scope_suffix"
+              publish_exact_availability GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE "$compile_deps_scope"
               publish_exact_availability GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE "nook-build-compile-v1$scope_suffix"
             fi
             publish_main_availability GHA_CACHE_MAIN_RUST_COMPILE_DEPS_AVAILABLE "nook-rust-compile-deps-v1"

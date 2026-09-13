@@ -155,6 +155,29 @@ jobs:
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}
+      - name: Report remote cache transport
+        if: always() && (inputs.tasks || inputs.task) == 'build:compile'
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_scope="${GHA_CACHE_SCOPE_SUFFIX:-main}"
+          dependency_scope="${GHA_RUST_COMPILE_DEPS_SCOPE:-unknown}"
+          fallback="${GHA_CACHE_FALLBACK_ENABLED:+enabled}"
+          writes="${GHA_CACHE_WRITE_ENABLED:+enabled}"
+          backend="${NOOK_SCCACHE_BACKEND:-direct_compile}"
+          reason="${NOOK_SCCACHE_BACKEND_REASON:-credentials_unavailable}"
+          printf 'Remote cache transport: BuildKit source-scope=%s dependency-scope=%s fallback=%s writes=%s sccache=%s (%s)\n' \
+            "$source_scope" "$dependency_scope" "${fallback:-disabled}" "${writes:-disabled}" "$backend" "$reason"
+          {
+            echo "### Remote cache transport"
+            echo
+            echo "- BuildKit source registry scope: \`$source_scope\`"
+            echo "- BuildKit dependency scope: \`$dependency_scope\`"
+            echo "- BuildKit fallback: \`${fallback:-disabled}\`"
+            echo "- BuildKit writes: \`${writes:-disabled}\`"
+            echo "- Compiler cache backend: \`$backend\` (\`$reason\`)"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Confirm prepared build-only environment
         if: (inputs.tasks || inputs.task) == 'build:compile'
         run: |
@@ -163,7 +186,9 @@ jobs:
           : "${NOOK_PR_BUILDX_BUILDER:?Buildx builder was not prepared}"
           : "${NOOK_REGISTRY_CACHE_HOST:?Registry cache environment was not prepared}"
           : "${GHA_CACHE_ENABLED:?Cache environment was not prepared}"
-          echo "Build-only route prepared Buildx=$NOOK_PR_BUILDX_BUILDER registry=$NOOK_REGISTRY_CACHE_HOST"
+          : "${GHA_CACHE_SCOPE_SUFFIX:?Isolated BuildKit cache scope was not prepared}"
+          : "${GHA_CACHE_WRITE_ENABLED:?Isolated BuildKit cache export was not enabled}"
+          echo "Build-only route prepared Buildx=$NOOK_PR_BUILDX_BUILDER registry=$NOOK_REGISTRY_CACHE_HOST scope=$GHA_CACHE_SCOPE_SUFFIX"
       - name: Wait for private Neo4j sidecar
         if: ${{ env.REQUEST_INCLUDES_HIVE == 'true' }}
         run: .github/scripts/wait-hive-neo4j.sh
