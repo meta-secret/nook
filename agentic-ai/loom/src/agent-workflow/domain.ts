@@ -285,6 +285,12 @@ export type AgentProfile<TAgent extends string> = {
   readonly serviceTier?: AgentServiceTier;
 };
 
+export type ResolvedAgentProfile<TAgent extends string> =
+  AgentProfile<TAgent> & {
+    readonly model: string;
+    readonly serviceTier: AgentServiceTier;
+  };
+
 export type AgentTaskExecution<TAgent extends string> = {
   readonly kind: WorkflowExecutorKind.Agent;
   readonly agent: TAgent;

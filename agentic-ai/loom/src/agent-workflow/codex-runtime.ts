@@ -13,9 +13,21 @@ import type {
   ThreadOptions,
   TurnOptions,
 } from '@openai/codex-sdk';
-import { AgentReasoningEffort, AgentWorkspacePolicy } from './domain.ts';
-import type { AgentProfile, WorkflowResultKind } from './domain.ts';
-import type { TeamGizmoProfile } from '../team-agents/catalog.ts';
+import {
+  AgentReasoningEffort,
+  AgentServiceTier,
+  AgentWorkspacePolicy,
+} from './domain.ts';
+import type {
+  AgentProfile,
+  ResolvedAgentProfile,
+  WorkflowResultKind,
+} from './domain.ts';
+import { TeamAuthorityCatalog } from '../team-agents/catalog.ts';
+import type {
+  TeamAgentKey,
+  TeamRuntimeProfile,
+} from '../team-agents/catalog.ts';
 import type {
   AgentExecutionCompletion,
   AgentExecutionInvocation,
@@ -62,24 +74,179 @@ export class CodexExecutionFailure {
 
 export type AgentCodexOptionsRequest = {
   readonly codexOptions: CodexOptions;
-  readonly agentProfile:
-    | Pick<AgentProfile<string>, 'serviceTier'>
-    | Pick<TeamGizmoProfile, 'serviceTier'>;
+  readonly agentProfile: ResolvedAgentProfile<string>;
 };
 
-/** Owns the typed mapping from a catalog profile to Codex CLI configuration. */
+export type ExpertCodexOptionsRequest = {
+  readonly codexOptions: CodexOptions;
+};
+
+export type AgentCodexInvocationRequest = {
+  readonly codexOptions: CodexOptions;
+  readonly agentProfile: AgentProfile<string>;
+};
+
+export type AgentCodexExecutionConfiguration = {
+  readonly codexOptions: CodexOptions;
+  readonly agentProfile: AgentProfile<string>;
+};
+
+export type ResolveTeamAgentProfileRequest = {
+  readonly agent: TeamAgentKey;
+  readonly instructionPrefix: string;
+};
+
+export type ResolveTeamAgentInvocationProfileRequest = {
+  readonly profile: AgentProfile<string>;
+};
+
+type TeamAgentRuntimeProfileCatalogRequest = {
+  readonly profile: TeamRuntimeProfile;
+  readonly instructionPrefix: string;
+};
+
+/** Owns canonical Team Agent profile resolution at the Codex runtime boundary. */
+export class TeamAgentRuntimeProfile {
+  private constructor() {}
+
+  static resolve(
+    request: ResolveTeamAgentProfileRequest,
+  ): ResolvedAgentProfile<string> {
+    const profile = TeamAuthorityCatalog.teamRuntimeProfile(request.agent);
+    if (!profile) {
+      throw new Error(`Unknown Team Agent runtime profile: ${request.agent}`);
+    }
+    TeamAgentRuntimeProfile.assertCanonicalProfile(profile);
+    return TeamAgentRuntimeProfile.fromCatalog({
+      profile,
+      instructionPrefix: request.instructionPrefix,
+    });
+  }
+
+  static fromInvocation(
+    request: ResolveTeamAgentInvocationProfileRequest,
+  ): ResolvedAgentProfile<string> | false {
+    const profile = TeamAuthorityCatalog.teamRuntimeProfileByName(
+      request.profile.name,
+    );
+    if (!profile) return false;
+    TeamAgentRuntimeProfile.assertCanonicalProfile(profile);
+    const canonicalReasoningEffort =
+      TeamAgentRuntimeProfile.reasoningEffort(profile);
+    if (
+      request.profile.reasoningEffort !== canonicalReasoningEffort ||
+      (request.profile.model !== undefined &&
+        request.profile.model !== profile.model) ||
+      (request.profile.serviceTier !== undefined &&
+        request.profile.serviceTier !== AgentServiceTier.Fast)
+    ) {
+      throw new Error(
+        `Team Agent runtime profile drifted: ${request.profile.name}`,
+      );
+    }
+    return TeamAgentRuntimeProfile.fromCatalog({
+      profile,
+      instructionPrefix: request.profile.instructionPrefix,
+    });
+  }
+
+  private static fromCatalog(
+    request: TeamAgentRuntimeProfileCatalogRequest,
+  ): ResolvedAgentProfile<string> {
+    return Object.freeze({
+      name: request.profile.key,
+      instructionPrefix: request.instructionPrefix,
+      workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+      reasoningEffort: TeamAgentRuntimeProfile.reasoningEffort(
+        request.profile,
+      ),
+      model: request.profile.model,
+      serviceTier: AgentServiceTier.Fast,
+    });
+  }
+
+  private static reasoningEffort(
+    profile: TeamRuntimeProfile,
+  ): AgentReasoningEffort {
+    return profile.reasoningEffort === 'low'
+      ? AgentReasoningEffort.Low
+      : AgentReasoningEffort.XHigh;
+  }
+
+  private static assertCanonicalProfile(profile: TeamRuntimeProfile): void {
+    const isGizmo = profile.parent === 'Gizmo Prime';
+    const expectedModel = isGizmo ? 'gpt-5.6-sol' : 'gpt-5.6-luna';
+    const expectedReasoningEffort = isGizmo ? 'low' : 'xhigh';
+    const teamGizmo = TeamAuthorityCatalog.teamGizmoProfile(profile.team);
+    const hierarchyMatches = isGizmo
+      ? teamGizmo?.key === profile.key
+      : teamGizmo?.key === profile.parent;
+    if (
+      !hierarchyMatches ||
+      profile.model !== expectedModel ||
+      profile.reasoningEffort !== expectedReasoningEffort ||
+      profile.serviceTier !== 'fast'
+    ) {
+      throw new Error(
+        `Team Agent catalog profile is not canonical: ${profile.key}`,
+      );
+    }
+  }
+}
+
+/** Owns the typed mapping from a resolved profile to Codex CLI configuration. */
 export class AgentCodexOptions {
   private constructor() {}
 
   static forProfile(request: AgentCodexOptionsRequest): CodexOptions {
-    const serviceTier = request.agentProfile.serviceTier;
-    if (!serviceTier) return request.codexOptions;
+    const profile = TeamAgentRuntimeProfile.fromInvocation({
+      profile: request.agentProfile,
+    });
+    if (!profile) {
+      throw new Error('A resolved Team Agent profile is required.');
+    }
+    const model = profile.model.trim();
+    if (model.length === 0) {
+      throw new Error('A resolved Team Agent profile requires a model.');
+    }
+    if (profile.serviceTier !== AgentServiceTier.Fast) {
+      throw new Error('A resolved Team Agent profile requires Fast mode.');
+    }
     return {
       ...request.codexOptions,
       config: {
         ...request.codexOptions.config,
-        service_tier: serviceTier,
+        service_tier: profile.serviceTier,
       },
+    };
+  }
+
+  static forExpertProfile(
+    request: ExpertCodexOptionsRequest,
+  ): CodexOptions {
+    return request.codexOptions;
+  }
+
+  static forInvocation(
+    request: AgentCodexInvocationRequest,
+  ): AgentCodexExecutionConfiguration {
+    const teamProfile = TeamAgentRuntimeProfile.fromInvocation({
+      profile: request.agentProfile,
+    });
+    if (!teamProfile) {
+      return {
+        codexOptions: AgentCodexOptions.forExpertProfile({
+          codexOptions: request.codexOptions,
+        }),
+        agentProfile: request.agentProfile,
+      };
+    }
+    return {
+      codexOptions: AgentCodexOptions.forProfile({
+        codexOptions: request.codexOptions,
+        agentProfile: teamProfile,
+      }),
+      agentProfile: teamProfile,
     };
   }
 }
@@ -126,14 +293,14 @@ export class ModuleExpertCodexSdkAgentRuntime<
     > = {
       isolationRequest,
       run: async (isolation) => {
+        const configured = AgentCodexOptions.forInvocation({
+          codexOptions: isolation.codexOptions,
+          agentProfile: invocation.agentProfile,
+        });
         const execution: GuardedAgentExecution<TTask, TAgent> = {
-          codex: new Codex(
-            AgentCodexOptions.forProfile({
-              codexOptions: isolation.codexOptions,
-              agentProfile: invocation.agentProfile,
-            }),
-          ),
+          codex: new Codex(configured.codexOptions),
           invocation,
+          agentProfile: configured.agentProfile,
           threadOptions: isolation.threadOptions,
         };
         return new GuardedCodexExecution(execution).execute();
@@ -167,14 +334,14 @@ export class ReadOnlyExpertCodexRuntime<
       );
     if (isolation.isErr()) return err(isolation.error);
     try {
+      const configured = AgentCodexOptions.forInvocation({
+        codexOptions: isolation.value.codexOptions,
+        agentProfile: request.invocation.agentProfile,
+      });
       const execution: GuardedAgentExecution<TTask, TAgent> = {
-        codex: new Codex(
-          AgentCodexOptions.forProfile({
-            codexOptions: isolation.value.codexOptions,
-            agentProfile: request.invocation.agentProfile,
-          }),
-        ),
+        codex: new Codex(configured.codexOptions),
         invocation: request.invocation,
+        agentProfile: configured.agentProfile,
         threadOptions: isolation.value.threadOptions,
       };
       return await new GuardedCodexExecution(execution).execute();
@@ -186,6 +353,7 @@ export class ReadOnlyExpertCodexRuntime<
 type GuardedAgentExecution<TTask extends string, TAgent extends string> = {
   readonly codex: Codex;
   readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
+  readonly agentProfile: AgentProfile<string>;
   readonly threadOptions?: ThreadOptions;
 };
 class GuardedCodexExecution<TTask extends string, TAgent extends string> {
@@ -197,8 +365,7 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
   > {
     const execution = this.execution;
     if (
-      execution.invocation.agentProfile.workspacePolicy !==
-      AgentWorkspacePolicy.ReadOnly
+      execution.agentProfile.workspacePolicy !== AgentWorkspacePolicy.ReadOnly
     ) {
       return err(
         new CodexExecutionFailure({
@@ -243,11 +410,11 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
     ] = [execution.threadOptions];
     const threadOptions: ThreadOptions = {
       ...baseThreadOptions,
-      ...(execution.invocation.agentProfile.model
-        ? { model: execution.invocation.agentProfile.model }
+      ...(execution.agentProfile.model
+        ? { model: execution.agentProfile.model }
         : {}),
       modelReasoningEffort: this.reasoningEffort(
-        execution.invocation.agentProfile.reasoningEffort,
+        execution.agentProfile.reasoningEffort,
       ),
     };
     let thread;

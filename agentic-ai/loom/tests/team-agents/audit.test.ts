@@ -255,6 +255,31 @@ describe('canonical Cortex team authority', () => {
     );
   });
 
+  test('rejects production catalog model drift against independent expectations', () => {
+    const teamGizmo = TEAM_GIZMO_CATALOG[0];
+    if (!teamGizmo) throw new Error('AI Team Gizmo profile is incomplete.');
+    const originalModel = teamGizmo.model;
+    Object.defineProperty(teamGizmo, 'model', {
+      configurable: true,
+      value: 'gpt-5.5',
+    });
+    try {
+      const report = TeamAgentContract.auditTeamGizmos({
+        repoRoot: REPO_ROOT,
+        gizmos: TEAM_GIZMO_CATALOG,
+      });
+      expect(report.auditOk).toBe(false);
+      expect(report.findings.map((finding) => finding.code)).toContain(
+        'invalid-team-gizmo-contract',
+      );
+    } finally {
+      Object.defineProperty(teamGizmo, 'model', {
+        configurable: true,
+        value: originalModel,
+      });
+    }
+  });
+
   test('rejects directories and symlinks as Team Gizmo context paths', async () => {
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-context-node-'));
     const contextFile = join(fixtureRoot, 'context.md');

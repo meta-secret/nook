@@ -31,6 +31,38 @@ export class TeamAuthorityCatalog {
     return profile;
   }
 
+  static teamRuntimeProfile(
+    agentKey: TeamAgentKey,
+  ): TeamRuntimeProfile | false {
+    const directProfile =
+      TEAM_GIZMO_CATALOG.find((candidate) => candidate.key === agentKey) ??
+      TEAM_INTERNAL_AGENT_CATALOG.find(
+        (candidate) => candidate.key === agentKey,
+      );
+    if (directProfile) return directProfile;
+    const teamAuthority = TEAM_AUTHORITY_CATALOG.find(
+      (candidate) => candidate.key === agentKey,
+    );
+    if (!teamAuthority) return false;
+    const [teamGizmo = false] = [
+      TEAM_GIZMO_CATALOG.find(
+        (candidate) => candidate.team === teamAuthority.key,
+      ),
+    ];
+    return teamGizmo;
+  }
+
+  static teamRuntimeProfileByName(
+    agentName: string,
+  ): TeamRuntimeProfile | false {
+    const profile =
+      TEAM_GIZMO_CATALOG.find((candidate) => candidate.key === agentName) ??
+      TEAM_INTERNAL_AGENT_CATALOG.find(
+        (candidate) => candidate.key === agentName,
+      );
+    return profile ?? false;
+  }
+
   static teamAgentProfile(
     agentKey: TeamAgentKey,
   ): TeamAuthority | TeamGizmoProfile | TeamInternalAgentProfile | false {
@@ -138,6 +170,10 @@ export type TeamInternalAgentProfile = {
   readonly reportingBoundary: string;
   readonly capabilityBoundary: string;
 };
+
+export type TeamRuntimeProfile =
+  | TeamGizmoProfile
+  | TeamInternalAgentProfile;
 
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';

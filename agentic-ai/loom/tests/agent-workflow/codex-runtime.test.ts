@@ -24,6 +24,7 @@ import {
   AgentSourceStabilityPhase,
   AgentSourceSnapshot,
   CodexTurn,
+  TeamAgentRuntimeProfile,
 } from '../../src/agent-workflow/codex-runtime.ts';
 
 import type {
@@ -38,12 +39,19 @@ import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts
 
 import {
   AgentAttemptParentKind,
+  AgentReasoningEffort,
   AgentServiceTier,
+  AgentWorkspacePolicy,
   DelegatedAgentWorkflowName,
   TaskTerminalKind,
   WorkflowResultKind,
 } from '../../src/agent-workflow/domain.ts';
-import { TEAM_GIZMO_CATALOG } from '../../src/team-agents/catalog.ts';
+import {
+  TEAM_GIZMO_CATALOG,
+  TeamGizmoKey,
+  TeamInternalAgentKey,
+  TeamKey,
+} from '../../src/team-agents/catalog.ts';
 
 import type { WorkflowTaskOutput } from '../../src/agent-workflow/domain.ts';
 
@@ -235,29 +243,127 @@ describe('Team Agent Codex settings', () => {
     const codexOptions: CodexOptions = {
       config: { existing_override: true },
     };
+    const agentProfile = TeamAgentRuntimeProfile.resolve({
+      agent: TeamGizmoKey.Ai,
+      instructionPrefix: 'Inspect only.',
+    });
     const configured = AgentCodexOptions.forProfile({
       codexOptions,
-      agentProfile: { serviceTier: AgentServiceTier.Fast },
+      agentProfile,
     });
 
     expect(configured.config?.service_tier).toBe('fast');
     expect(codexOptions.config?.service_tier).toBeUndefined();
   });
 
+  test('resolves canonical Team Gizmo and leaf runtime profiles', () => {
+    const profiles = [
+      TeamAgentRuntimeProfile.resolve({
+        agent: TeamKey.Ai,
+        instructionPrefix: 'Coordinate only.',
+      }),
+      TeamAgentRuntimeProfile.resolve({
+        agent: TeamInternalAgentKey.LoomSpecialist,
+        instructionPrefix: 'Inspect only.',
+      }),
+    ];
+
+    expect(profiles).toMatchObject([
+      {
+        name: TeamGizmoKey.Ai,
+        model: 'gpt-5.6-sol',
+        reasoningEffort: AgentReasoningEffort.Low,
+        serviceTier: AgentServiceTier.Fast,
+        workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+      },
+      {
+        name: TeamInternalAgentKey.LoomSpecialist,
+        model: 'gpt-5.6-luna',
+        reasoningEffort: AgentReasoningEffort.XHigh,
+        serviceTier: AgentServiceTier.Fast,
+        workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+      },
+    ]);
+  });
+
+  test('resolves catalog profiles at the runtime invocation boundary', () => {
+    const codexOptions: CodexOptions = {
+      config: { existing_override: true },
+    };
+    const configured = AgentCodexOptions.forInvocation({
+      codexOptions,
+      agentProfile: {
+        name: TeamInternalAgentKey.LoomSpecialist,
+        instructionPrefix: 'Inspect only.',
+        workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+        reasoningEffort: AgentReasoningEffort.XHigh,
+      },
+    });
+
+    expect(configured.agentProfile).toMatchObject({
+      name: TeamInternalAgentKey.LoomSpecialist,
+      model: 'gpt-5.6-luna',
+      reasoningEffort: AgentReasoningEffort.XHigh,
+      serviceTier: AgentServiceTier.Fast,
+    });
+    expect(configured.codexOptions.config?.service_tier).toBe('fast');
+    expect(codexOptions.config?.service_tier).toBeUndefined();
+  });
+
+  test('rejects drifted canonical runtime profiles', () => {
+    expect(() =>
+      AgentCodexOptions.forInvocation({
+        codexOptions: {},
+        agentProfile: {
+          name: TeamGizmoKey.Ai,
+          instructionPrefix: 'Coordinate only.',
+          workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+          reasoningEffort: AgentReasoningEffort.High,
+          model: 'gpt-5.6-sol',
+          serviceTier: AgentServiceTier.Fast,
+        },
+      }),
+    ).toThrow('Team Agent runtime profile drifted');
+  });
+
   test('maps every catalog Team Gizmo service tier through the SDK config boundary', () => {
     for (const teamGizmo of TEAM_GIZMO_CATALOG) {
-      const codexOptions: CodexOptions = {
-        config: { existing_override: true },
-      };
       const configured = AgentCodexOptions.forProfile({
-        codexOptions,
-        agentProfile: teamGizmo,
+        codexOptions: { config: { existing_override: true } },
+        agentProfile: TeamAgentRuntimeProfile.resolve({
+          agent: teamGizmo.key,
+          instructionPrefix: 'Coordinate only.',
+        }),
       });
 
       expect(configured.config?.service_tier).toBe('fast');
       expect(configured.config?.existing_override).toBe(true);
-      expect(codexOptions.config?.service_tier).toBeUndefined();
     }
+  });
+
+  test('requires canonical model and Fast tier for direct runtime options', () => {
+    expect(() =>
+      AgentCodexOptions.forProfile({
+        codexOptions: {},
+        agentProfile: {
+          name: TeamGizmoKey.Ai,
+          instructionPrefix: 'Coordinate only.',
+          workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+          reasoningEffort: AgentReasoningEffort.Low,
+          model: '',
+          serviceTier: AgentServiceTier.Fast,
+        },
+      }),
+    ).toThrow('Team Agent runtime profile drifted');
+  });
+
+  test('leaves module expert options unchanged at the expert boundary', () => {
+    const codexOptions: CodexOptions = {
+      config: { existing_override: true },
+    };
+    const configured = AgentCodexOptions.forExpertProfile({ codexOptions });
+
+    expect(configured).toEqual(codexOptions);
   });
 });
 
