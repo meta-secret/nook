@@ -16,6 +16,21 @@ Flowcharts show lifecycle and retry behavior. Sequence diagrams show component
 communication without duplicating every retry. At each higher level, the
 previous level becomes one component.
 
+## Mandatory Gizmo invocation gate
+
+Every implementation or delivery run must begin with an invocation of Gizmo
+Prime. Gizmo Prime must dispatch the required bounded Team Agents through the
+active Gizmo harness before any worker-executable implementation, repair,
+review, validation, external check, GitHub operation, local landing, dev
+validation, or main-promotion work proceeds. Delegation is mandatory even when
+the work appears small or its file scopes are disjoint.
+
+If Gizmo Prime or the Team Agent harness is missing or unavailable, the run is
+failed closed. Stop all implementation, validation, GitHub, and landing work
+and report the blocker. Direct execution by a non-Gizmo root, including an
+ordinary Codex task, thread, cloud task, or external agent, is not a fallback
+and cannot substitute for Gizmo dispatch.
+
 ## Delivery overview
 
 ```mermaid

@@ -7,6 +7,20 @@ Gizmo assigns bounded work to Team Agents and owns the delivery sequence.
 Delegation must stay simple. It must not create a second workflow engine around
 the active harness.
 
+## Mandatory fail-closed invocation gate
+
+Every implementation or delivery run must start through Gizmo Prime. Gizmo
+Prime must invoke the active Gizmo harness and dispatch bounded Team Agents
+before any implementation, repair, review, validation, GitHub, landing, dev
+validation, or promotion work begins. This dispatch requirement is mandatory;
+disjoint scopes or a small task never authorize direct execution by the root.
+
+If Gizmo Prime or the Team Agent harness cannot be invoked or started, the run
+is failed and stops immediately. No implementation, validation, GitHub, or
+landing work may continue. A non-Gizmo root must not execute the work directly,
+and another Codex task, thread, cloud task, or external agent is not a fallback
+or a substitute for Gizmo dispatch.
+
 ## Rules
 
 - Follow [dev delivery](../architecture/dev-delivery.md) for stage boundaries.
