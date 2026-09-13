@@ -276,6 +276,7 @@ export class DevPublishCommand {
   ): boolean {
     if (left.kind !== right.kind) return false;
     if (left.kind === DevelopmentPullRequestLookupKind.Absent) return true;
+    if (right.kind === DevelopmentPullRequestLookupKind.Absent) return true;
     return this.samePullRequestDetails(left.pullRequest, right.pullRequest);
   }
 
