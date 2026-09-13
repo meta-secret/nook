@@ -150,6 +150,14 @@ pub(crate) mod tests {
                 .lock()
                 .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))?;
             for dependency in &task.dependencies {
+                if let Some(existing) = tasks.get(dependency.as_str())
+                    && (existing.definition.source_commit != task.source_commit
+                        || existing.definition.bootstrap_evidence != task.bootstrap_evidence)
+                {
+                    return Err(crate::HiveError::message(format!(
+                        "dependency {dependency} does not match the task's pinned revision"
+                    )));
+                }
                 Self::rearm_obsolete(&mut tasks, dependency)?;
             }
             let failed = task.dependencies.iter().any(|dependency| {
@@ -367,6 +375,7 @@ pub(crate) mod tests {
                 kind: task.definition.kind.clone(),
                 prompt: task.definition.prompt.clone(),
                 source_commit: task.definition.source_commit.clone(),
+                bootstrap_evidence: task.definition.bootstrap_evidence.clone(),
                 attempt_id: AttemptId::try_from(Uuid::new_v4().to_string())?,
                 attempt_number: task.attempt_count,
                 lease_token,
@@ -593,6 +602,7 @@ pub(crate) mod tests {
             trigger: TaskTrigger::ManualCli,
             prompt: "Implement it".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             priority: 0,
             max_attempts: 3,
             dependencies,

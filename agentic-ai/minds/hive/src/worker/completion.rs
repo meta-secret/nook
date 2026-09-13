@@ -1,4 +1,6 @@
-use crate::model::{ClaimedTask, CompletionArtifact, CompletionRelevance, TaskId, TerminalResult};
+use crate::model::{
+    BootstrapEvidence, ClaimedTask, CompletionArtifact, CompletionRelevance, TaskId, TerminalResult,
+};
 use std::path::Path;
 
 pub(super) struct TaskCompletionProposal<'a> {
@@ -65,12 +67,24 @@ impl CompletionPlan<'_> {
 }
 
 impl CompletionPlan<'_> {
-    pub(super) async fn verify_owner_deliveries(&self, repository: &Path) -> crate::HiveResult<()> {
+    pub(super) async fn verify_owner_deliveries(
+        &self,
+        repository: &Path,
+        evidence: &BootstrapEvidence,
+    ) -> crate::HiveResult<()> {
         use crate::HiveContext;
         if let Self::ObsoleteRetirement { owning_repairs } = self {
             for owner in *owning_repairs {
-                crate::delivery::MainRepairDelivery { repository, branch: &owner.repair_branch_name() }
- .verify_main_repair_merge_and_main().await.hive_context(format!("obsolete blocker retirement requires a merged repair and green Main for owner {owner}"))?;
+                crate::delivery::MainRepairDelivery {
+                    repository,
+                    branch: &owner.repair_branch_name(),
+                    evidence,
+                }
+                .verify_main_repair_merge_and_main()
+                .await
+                .hive_context(format!(
+                    "obsolete blocker retirement requires a merged repair and green Main for owner {owner}"
+                ))?;
             }
         }
         Ok(())

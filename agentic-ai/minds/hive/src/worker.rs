@@ -20,8 +20,8 @@ use crate::auth::{AuthBroker, BrokerExternalAuth};
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::delivery::MainRepairDelivery;
 use crate::model::{
-    ActivityLease, AgentId, Artifact, BlockerRequest, ClaimedTask, Completion, CompletionArtifact,
-    CompletionRelevance, EnqueueTask, TaskActivity, TaskTrigger, TerminalResult,
+    ActivityLease, AgentId, Artifact, BlockerRequest, BootstrapEvidence, ClaimedTask, Completion,
+    CompletionArtifact, CompletionRelevance, EnqueueTask, TaskActivity, TaskTrigger, TerminalResult,
 };
 use crate::store::TaskStore;
 
@@ -293,16 +293,17 @@ impl<S: TaskStore> Worker<S> {
         external_auth: sync::Arc<BrokerExternalAuth>,
         activity_tx: mpsc::UnboundedSender<TaskActivity>,
     ) -> crate::HiveResult<TaskDisposition> {
-        let repair_branch = task.id.repair_branch_name();
-        let origin = if task.kind.is_main_repair() {
-            workspace::WorkspaceOrigin::ResumeBranch(&repair_branch)
-        } else {
-            workspace::WorkspaceOrigin::Fresh
-        };
+        if task.kind.is_main_repair() && task.bootstrap_evidence.is_none() {
+            return Err(crate::HiveError::message(
+                "main-repair execution requires complete bootstrap evidence",
+            ));
+        }
+        let origin = workspace::WorkspaceOrigin::Fresh;
         let preparation = (TaskWorkspace {
             workspace: &self.config.workspace,
             repository_url: &self.config.repository_url,
             source_commit: &task.source_commit,
+            bootstrap_evidence: task.bootstrap_evidence.as_ref(),
             resume_branch: origin,
             dependency_artifacts: &task.dependency_artifacts,
         })
@@ -364,11 +365,17 @@ impl<S: TaskStore> Worker<S> {
             result: &result,
         }
         .admit()?;
-        plan.verify_owner_deliveries(&repository).await?;
+        let bootstrap_evidence = task
+            .bootstrap_evidence
+            .as_ref()
+            .ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
+        plan.verify_owner_deliveries(&repository, bootstrap_evidence)
+            .await?;
         if task.kind.is_main_repair() {
             (MainRepairDelivery {
                 repository: &repository,
                 branch: &task.id.repair_branch_name(),
+                evidence: bootstrap_evidence,
             })
             .verify_main_repair_delivery(task.id.as_str())
             .await?;
@@ -547,6 +554,7 @@ impl TaskDisposition {
                 trigger: TaskTrigger::AgentDependency,
                 prompt: format!("{}\n\n{}", blocker.title, blocker.prompt),
                 source_commit: task.source_commit.clone(),
+                bootstrap_evidence: task.bootstrap_evidence.clone(),
                 priority: task.kind.prerequisite_priority(),
                 max_attempts: 3,
                 dependencies: Vec::new(),
@@ -645,6 +653,7 @@ mod tests {
             kind: "main-repair".into(),
             prompt: "verify the delivered repair".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::try_from("lease-1")?,
@@ -680,6 +689,7 @@ mod tests {
             kind: "main-repair".into(),
             prompt: "Wait for the exact-head workflow".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::try_from("lease-1")?,
@@ -707,6 +717,7 @@ mod tests {
             kind: "blocker".into(),
             prompt: "Resolve failed workflow 42".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::try_from("lease-1")?,
@@ -736,6 +747,7 @@ mod tests {
             kind: "main-repair".into(),
             prompt: "restore Main".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::try_from("lease-1")?,
@@ -766,6 +778,7 @@ mod tests {
             kind: "blocker".into(),
             prompt: "Resolve failed workflow 42".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::try_from("lease-1")?,
@@ -813,6 +826,7 @@ mod tests {
             kind: "main-repair".into(),
             prompt: "restore Main".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-recovery")?,
             attempt_number: 2,
             lease_token: LeaseToken::try_from("lease-recovery")?,

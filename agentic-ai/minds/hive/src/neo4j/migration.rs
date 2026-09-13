@@ -11,7 +11,7 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
     "CREATE INDEX hive_activity_timeline IF NOT EXISTS FOR (node:TaskActivity) ON (node.created_at)",
 ];
-const LATEST_SCHEMA_VERSION: i64 = 9;
+const LATEST_SCHEMA_VERSION: i64 = 10;
 
 impl Neo4jTaskStore {
     pub(super) async fn migrate_schema(&self) -> crate::HiveResult<()> {
@@ -88,6 +88,17 @@ impl Neo4jTaskStore {
         }
         if installed_version < 9 {
             Self::migrate_blocker_dependencies(graph).await?;
+        }
+        if installed_version < 10 {
+            graph
+                .run(query(
+                    "MATCH (task:Task)
+                     SET task.origin_main_sha = coalesce(task.origin_main_sha, ''),
+                         task.pinned_local_dev_sha = coalesce(task.pinned_local_dev_sha, ''),
+                         task.feature_head_sha = coalesce(task.feature_head_sha, '')",
+                ))
+                .await
+                .hive_context("failed to initialize schema-10 bootstrap evidence")?;
         }
         for statement in CONSTRAINTS {
             graph

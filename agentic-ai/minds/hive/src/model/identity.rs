@@ -150,9 +150,51 @@ impl fmt::Display for LeaseToken {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct GitSha(String);
+
+impl TryFrom<String> for GitSha {
+    type Error = ModelError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if value.len() != 40 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(ModelError::InvalidGitSha);
+        }
+        Ok(Self(value.to_ascii_lowercase()))
+    }
+}
+
+impl TryFrom<&str> for GitSha {
+    type Error = ModelError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::try_from(value.to_owned())
+    }
+}
+
+impl From<GitSha> for String {
+    fn from(value: GitSha) -> Self {
+        value.0
+    }
+}
+
+impl GitSha {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for GitSha {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{AgentId, AttemptId, LeaseToken, TaskId};
+    use super::{AgentId, AttemptId, GitSha, LeaseToken, TaskId};
     #[test]
     fn decoding_rejects_empty_identifiers() {
         for encoded in [r#""""#, r#""   ""#] {
@@ -168,6 +210,15 @@ mod tests {
         assert_eq!(id.as_str(), " task-1 ");
         assert_eq!(serde_json::to_string(&id)?, r#"" task-1 ""#);
         assert_eq!(String::from(id), " task-1 ");
+        Ok(())
+    }
+
+    #[test]
+    fn git_sha_requires_a_full_hex_object_id() -> crate::HiveResult<()> {
+        assert!(GitSha::try_from("not-a-sha").is_err());
+        let sha = GitSha::try_from("ABCDEF0123456789ABCDEF0123456789ABCDEF01")?;
+        assert_eq!(sha.as_str(), "abcdef0123456789abcdef0123456789abcdef01");
+        assert_eq!(String::from(sha), "abcdef0123456789abcdef0123456789abcdef01");
         Ok(())
     }
 }

@@ -9,6 +9,16 @@ use super::Neo4jTaskStore;
 impl Neo4jTaskStore {
     pub(super) async fn enqueue_task(&self, task: &EnqueueTask) -> crate::HiveResult<()> {
         task.validate()?;
+        let (origin_main_sha, pinned_local_dev_sha, feature_head_sha) = task
+            .bootstrap_evidence
+            .as_ref()
+            .map_or(("", "", ""), |evidence| {
+                (
+                    evidence.origin_main_sha.as_str(),
+                    evidence.pinned_local_dev_sha.as_str(),
+                    evidence.feature_head_sha.as_str(),
+                )
+            });
         let mut transaction = self.graph.start_txn().await?;
         let enqueue_token = Uuid::new_v4().to_string();
         let mut rows = transaction
@@ -25,6 +35,9 @@ impl Neo4jTaskStore {
                                    task.trigger_kind = $trigger_kind,
                                    task.prompt = $prompt,
                                    task.source_commit = $source_commit,
+                                   task.origin_main_sha = $origin_main_sha,
+                                   task.pinned_local_dev_sha = $pinned_local_dev_sha,
+                                   task.feature_head_sha = $feature_head_sha,
                                    task.priority = $priority,
                                    task.max_attempts = $max_attempts,
                                    task.status = 'BLOCKED',
@@ -37,6 +50,9 @@ impl Neo4jTaskStore {
                 .param("trigger_kind", task.trigger.as_str())
                 .param("prompt", task.prompt.as_str())
                 .param("source_commit", task.source_commit.as_str())
+                .param("origin_main_sha", origin_main_sha)
+                .param("pinned_local_dev_sha", pinned_local_dev_sha)
+                .param("feature_head_sha", feature_head_sha)
                 .param("priority", task.priority)
                 .param("max_attempts", task.max_attempts),
             )
@@ -59,6 +75,9 @@ impl Neo4jTaskStore {
                     query(
                         "MATCH (task:Task {id: $id}), (dependency:Task {id: $dependency})
                          WHERE dependency.source_commit = task.source_commit
+                           AND coalesce(dependency.origin_main_sha, '') = task.origin_main_sha
+                           AND coalesce(dependency.pinned_local_dev_sha, '') = task.pinned_local_dev_sha
+                           AND coalesce(dependency.feature_head_sha, '') = task.feature_head_sha
                          MERGE (task)-[:DEPENDS_ON]->(dependency)
                          SET dependency.version = coalesce(dependency.version, 0) + 1
                          RETURN dependency.id AS id",

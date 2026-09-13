@@ -371,6 +371,7 @@ impl From<Command> for CliCommand {
                 kind,
                 prompt,
                 source_commit,
+                bootstrap_evidence: None,
                 priority,
                 max_attempts,
                 depends_on,

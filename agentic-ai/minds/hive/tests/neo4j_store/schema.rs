@@ -60,7 +60,10 @@ const SCHEMA_NINE_FIXTURE: &str = r"CREATE (:HiveSchemaMigration {version: 3})
                id: 'schema-8-active-consumer',
                kind: 'main-repair',
                status: 'BLOCKED',
-               source_commit: '0123456789abcdef0123456789abcdef01234567'
+               source_commit: '0123456789abcdef0123456789abcdef01234567',
+               origin_main_sha: '0123456789abcdef0123456789abcdef01234567',
+               pinned_local_dev_sha: '123456789abcdef0123456789abcdef012345678',
+               feature_head_sha: '23456789abcdef0123456789abcdef0123456789'
              })
              CREATE (active_consumer)-[:DEPENDS_ON]->(blocker_parent)
              CREATE (blocker_parent)-[:DEPENDS_ON]->(blocker_child)
@@ -80,12 +83,15 @@ const SCHEMA_NINE_FIXTURE: &str = r"CREATE (:HiveSchemaMigration {version: 3})
                id: 'schema-8-historical-consumer',
                kind: 'main-repair',
                status: 'READY',
-               source_commit: '0123456789abcdef0123456789abcdef01234567'
+               source_commit: '0123456789abcdef0123456789abcdef01234567',
+               origin_main_sha: '0123456789abcdef0123456789abcdef01234567',
+               pinned_local_dev_sha: '123456789abcdef0123456789abcdef012345678',
+               feature_head_sha: '23456789abcdef0123456789abcdef0123456789'
              })
              CREATE (historical_consumer)-[:DEPENDS_ON]->(completed_parent)
              CREATE (completed_parent)-[:DEPENDS_ON]->(completed_child)";
 
-const SCHEMA_NINE_MIGRATION_QUERY: &str = r"MATCH (task:Task {id: 'schema-3-task'})
+const SCHEMA_TEN_MIGRATION_QUERY: &str = r"MATCH (task:Task {id: 'schema-3-task'})
              MATCH (activity_task:Task {id: 'schema-6-activity-task'})
              MATCH (attempt:Attempt {id: 'schema-7-attempt'})
              MATCH (retired:Task {id: 'schema-7-retired-task'})
@@ -96,7 +102,7 @@ const SCHEMA_NINE_MIGRATION_QUERY: &str = r"MATCH (task:Task {id: 'schema-3-task
              MATCH (completed_parent:Task {id: 'schema-8-completed-blocker-parent'})
              MATCH (completed_child:Task {id: 'schema-8-completed-blocker-child'})
              MATCH (historical_consumer:Task {id: 'schema-8-historical-consumer'})
-             MATCH (migration:HiveSchemaMigration {version: 9})
+             MATCH (migration:HiveSchemaMigration {version: 10})
              OPTIONAL MATCH (blocker_parent)-[nested:DEPENDS_ON]->(:Task)
              OPTIONAL MATCH (completed_parent)-[history:DEPENDS_ON]->(:Task)
              OPTIONAL MATCH
@@ -104,6 +110,9 @@ const SCHEMA_NINE_MIGRATION_QUERY: &str = r"MATCH (task:Task {id: 'schema-3-task
              OPTIONAL MATCH
                (completed_parent)-[history_lineage:INCLUDES_ARTIFACT_FROM]->(completed_child)
              RETURN task.last_retry_release AS last_retry_release,
+                    task.origin_main_sha AS origin_main_sha,
+                    task.pinned_local_dev_sha AS pinned_local_dev_sha,
+                    task.feature_head_sha AS feature_head_sha,
                     task.manual_retry_used IS NULL AS removed_legacy_marker,
                     activity_task.latest_activity_at AS latest_activity_at,
                     task.obsolete AS task_obsolete,
@@ -126,6 +135,9 @@ const ARTIFACT_LINEAGE_FIXTURE: &str = r"CREATE (:HiveSchemaMigration {version: 
                status: 'READY',
                prompt: 'Apply migrated dependency artifacts',
                source_commit: '0123456789abcdef0123456789abcdef01234567',
+               origin_main_sha: '0123456789abcdef0123456789abcdef01234567',
+               pinned_local_dev_sha: '123456789abcdef0123456789abcdef012345678',
+               feature_head_sha: '23456789abcdef0123456789abcdef0123456789',
                priority: 1,
                created_at: 1,
                attempt_count: 0,
@@ -174,6 +186,9 @@ const ACTIVE_CHILD_FIXTURE: &str = r"CREATE (:HiveSchemaMigration {version: 8})
                status: 'BLOCKED',
                prompt: 'Finish after the active child',
                source_commit: '0123456789abcdef0123456789abcdef01234567',
+               origin_main_sha: '0123456789abcdef0123456789abcdef01234567',
+               pinned_local_dev_sha: '123456789abcdef0123456789abcdef012345678',
+               feature_head_sha: '23456789abcdef0123456789abcdef0123456789',
                priority: 1,
                created_at: 2,
                attempt_count: 0,
@@ -239,12 +254,15 @@ async fn verify_schema_nine_migration(store: &Neo4jTaskStore, graph: &Graph) -> 
         .await
         .context("create schema-3 fixture")?;
     store.migrate().await?;
-    let mut rows = graph.execute(query(SCHEMA_NINE_MIGRATION_QUERY)).await?;
+    let mut rows = graph.execute(query(SCHEMA_TEN_MIGRATION_QUERY)).await?;
     let migrated = rows
         .next()
         .await?
-        .ok_or_else(|| anyhow::anyhow!("schema-9 migration row was missing"))?;
+        .ok_or_else(|| anyhow::anyhow!("schema-10 migration row was missing"))?;
     assert_eq!(migrated.get::<String>("last_retry_release")?, "");
+    assert_eq!(migrated.get::<String>("origin_main_sha")?, "");
+    assert_eq!(migrated.get::<String>("pinned_local_dev_sha")?, "");
+    assert_eq!(migrated.get::<String>("feature_head_sha")?, "");
     assert!(migrated.get::<bool>("removed_legacy_marker")?);
     assert_eq!(migrated.get::<i64>("latest_activity_at")?, 123_456);
     assert!(!migrated.get::<bool>("task_obsolete")?);
@@ -258,7 +276,7 @@ async fn verify_schema_nine_migration(store: &Neo4jTaskStore, graph: &Graph) -> 
     assert_eq!(migrated.get::<i64>("historical_dependencies")?, 0);
     assert_eq!(migrated.get::<i64>("active_lineage_count")?, 0);
     assert_eq!(migrated.get::<i64>("history_lineage_count")?, 1);
-    assert_eq!(migrated.get::<i64>("version")?, 9);
+    assert_eq!(migrated.get::<i64>("version")?, 10);
     verify_schema_four_rollback(graph).await
 }
 

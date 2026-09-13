@@ -40,7 +40,8 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
 use crate::model::{
-    ActiveDelivery, ActiveDeliveryQuery, EnqueueTask, TaskId, TaskKind, TaskTrigger,
+    ActiveDelivery, ActiveDeliveryQuery, BootstrapEvidence, EnqueueTask, GitSha, TaskId, TaskKind,
+    TaskTrigger,
 };
 use crate::store::TaskStore;
 
@@ -219,6 +220,8 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
                 reconciled_incidents.insert(name, body);
                 continue;
             }
+            let bootstrap_evidence = (WorkbenchIncidentText { value: &body })
+                .bootstrap_evidence()?;
             WorkbenchDispatcher::reconcile_delivery(
                 store,
                 &source_commit,
@@ -226,6 +229,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
                 &body,
                 run_id,
                 run_attempt,
+                &bootstrap_evidence,
             )
             .await?;
             reconciled_incidents.insert(name, body);
@@ -242,6 +246,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
         body: &str,
         run_id: u64,
         run_attempt: u64,
+        bootstrap_evidence: &BootstrapEvidence,
     ) -> crate::HiveResult<()> {
         let task_id = TaskId::main_failure_task_id(task_base, run_id, run_attempt)?;
         if let ActiveDelivery::Active(active_id) = store
@@ -272,6 +277,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             trigger: TaskTrigger::GitHubMainFailure,
             prompt: body.to_owned(),
             source_commit: source_commit.to_owned(),
+            bootstrap_evidence: Some(bootstrap_evidence.clone()),
             priority: 100,
             max_attempts: 3,
             dependencies: Vec::new(),
@@ -412,6 +418,34 @@ impl WorkbenchIncidentText<'_> {
 }
 
 impl WorkbenchIncidentText<'_> {
+    fn bootstrap_evidence(&self) -> crate::HiveResult<BootstrapEvidence> {
+        let parse = |field: &str| -> crate::HiveResult<GitSha> {
+            let prefix = format!("{field}:");
+            let mut values = self.value.lines().filter_map(|line| {
+                let line = line.trim().strip_prefix("- ").unwrap_or_else(|| line.trim());
+                let value = line.strip_prefix(&prefix)?.trim().trim_matches('`');
+                (!value.is_empty()).then_some(value)
+            });
+            let value = values
+                .next()
+                .ok_or_else(|| crate::HiveError::message(format!("incident is missing {field}")))?;
+            if values.next().is_some() {
+                return Err(crate::HiveError::message(format!(
+                    "incident declares {field} more than once"
+                )));
+            }
+            Ok(GitSha::try_from(value)?)
+        };
+
+        Ok(BootstrapEvidence {
+            origin_main_sha: parse("originMainSha")?,
+            pinned_local_dev_sha: parse("pinnedLocalDevSha")?,
+            feature_head_sha: parse("featureHeadSha")?,
+        })
+    }
+}
+
+impl WorkbenchIncidentText<'_> {
     fn main_failure_runs(&self) -> Vec<(u64, u64)> {
         let body = self.value;
         body.split("<!-- main-run:")
@@ -470,7 +504,7 @@ mod tests {
 
     use crate::model::{
         ActiveDelivery, ActiveDeliveryQuery, AgentId, CancellationTarget, ClaimOutcome,
-        ClaimedTask, Completion, EnqueueTask, LeaseToken, TaskId,
+        BootstrapEvidence, ClaimedTask, Completion, EnqueueTask, GitSha, LeaseToken, TaskId,
     };
     use crate::store::TaskStore;
 
@@ -478,6 +512,17 @@ mod tests {
         DEFERRED_E2E_RETIREMENT_MARKER, IncidentHistory, IncidentRevision, WorkbenchDispatcher,
         WorkbenchIncidentText,
     };
+
+    fn bootstrap_evidence() -> BootstrapEvidence {
+        BootstrapEvidence {
+            origin_main_sha: GitSha::try_from("0123456789abcdef0123456789abcdef01234567")
+                .expect("fixture SHA is valid"),
+            pinned_local_dev_sha: GitSha::try_from("123456789abcdef0123456789abcdef012345678")
+                .expect("fixture SHA is valid"),
+            feature_head_sha: GitSha::try_from("23456789abcdef0123456789abcdef0123456789")
+                .expect("fixture SHA is valid"),
+        }
+    }
 
     #[derive(Clone, Default)]
     struct RecordingStore {
@@ -637,6 +682,15 @@ mod tests {
             TaskId::main_failure_task_id("main-failure-abcdef", 123_456, 2)?.as_str(),
             "main-failure-abcdef-run-123456-attempt-2"
         );
+        let evidence_text = WorkbenchIncidentText {
+            value: "originMainSha: 0123456789abcdef0123456789abcdef01234567\n\
+                     pinnedLocalDevSha: 123456789abcdef0123456789abcdef012345678\n\
+                     featureHeadSha: 23456789abcdef0123456789abcdef0123456789",
+        };
+        assert_eq!(evidence_text.bootstrap_evidence()?, bootstrap_evidence());
+        assert!(WorkbenchIncidentText { value: "issue" }
+            .bootstrap_evidence()
+            .is_err());
         Ok(())
     }
 
@@ -709,6 +763,7 @@ mod tests {
             "issue",
             123,
             2,
+            &bootstrap_evidence(),
         )
         .await?;
 
@@ -769,7 +824,8 @@ mod tests {
                 "main-failure-abcdef",
                 "issue",
                 123,
-                2
+                2,
+                &bootstrap_evidence(),
             )
             .await
             .is_err()
@@ -802,6 +858,7 @@ mod tests {
             "issue",
             123,
             2,
+            &bootstrap_evidence(),
         )
         .await?;
         assert_eq!(
