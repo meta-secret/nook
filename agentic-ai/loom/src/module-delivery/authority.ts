@@ -280,22 +280,26 @@ export class ModuleSourceAuthority {
         ({ taskId }) => !closure.includes(taskId),
       );
       const claims: ResourceClaimPair = {
-        first: request.identity.claimIdentities.map(({ claim }) => claim),
+        first: request.identity.claimIdentities.map(
+          ({ claim }: ModuleDeliveryEvidenceClaimIdentity) => claim,
+        ),
         second: laterWrites.flatMap(({ claims }) => claims),
       };
       return (
         (request.identity.verifiedHeadCommit === request.headCommit ||
           (laterWrites.length > 0 &&
             !ModuleSourceAuthority.claimsOverlap(claims))) &&
-        request.identity.acceptedProviderEvidence.every((identity) => {
-          const nestedRequest: EvidenceFreshnessRequest = {
-            authority: request.authority,
-            identity,
-            headCommit: request.headCommit,
-            integratedWrites: request.integratedWrites,
-          };
-          return evidenceFreshAtHead(nestedRequest);
-        })
+        request.identity.acceptedProviderEvidence.every(
+          (identity: ModuleDeliveryAcceptedProviderEvidenceIdentity) => {
+            const nestedRequest: EvidenceFreshnessRequest = {
+              authority: request.authority,
+              identity,
+              headCommit: request.headCommit,
+              integratedWrites: request.integratedWrites,
+            };
+            return evidenceFreshAtHead(nestedRequest);
+          },
+        )
       );
     };
     const assert = (

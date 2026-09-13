@@ -28,7 +28,10 @@ import type {
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
 import type { GitCommandRequest } from './git-command.ts';
-import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
+import {
+  PinnedDevBaseEvidenceContract,
+  type PinnedDevBaseEvidence,
+} from '../lib/base-evidence.ts';
 import type {
   AcceptedModuleDeliveryEvidence,
   ModuleDeliveryReadOnlyEvidenceSubmission,
@@ -470,10 +473,13 @@ export class ModuleEvidenceBoundary {
       !ModuleEvidenceBoundary.DIGEST.test(receipt.artifactDigest) ||
       !ModuleEvidenceBoundary.DIGEST.test(receipt.sourceProvenanceDigest) ||
       receipt.verdict !== ModuleDeliveryEvidenceVerdict.TerminalSuccess ||
-      JSON.stringify(receipt.claimIdentities.map(({ claim }) => claim)) !==
-        JSON.stringify(expectedClaims) ||
+      JSON.stringify(
+        receipt.claimIdentities.map(
+          ({ claim }: ModuleDeliveryEvidenceClaimIdentity) => claim,
+        ),
+      ) !== JSON.stringify(expectedClaims) ||
       receipt.claimIdentities.some(
-        ({ contentDigest }) =>
+        ({ contentDigest }: ModuleDeliveryEvidenceClaimIdentity) =>
           !ModuleEvidenceBoundary.DIGEST.test(contentDigest),
       ) ||
       JSON.stringify(receipt.acceptanceRequirements) !==
