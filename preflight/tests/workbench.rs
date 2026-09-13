@@ -68,6 +68,8 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     let plan_script = RepositoryFixture::repository_root().read(".github/scripts/ci-agent-plan.sh");
     let record_validator =
         RepositoryFixture::repository_root().read(".github/scripts/workbench-records.cjs");
+    let workbench_publisher = RepositoryFixture::repository_root()
+        .read(".github/scripts/agent-implement-publish-workbench.cjs");
     let normalized_workflow = workflow
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -101,7 +103,6 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}",
         "node \"$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js\" edit",
         "node \"$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js\" deliver",
-        "Rejected unsafe implementation worklog artifact.",
         "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",
         "assignedGizmoId: process.env.ASSIGNED_GIZMO_ID",
         "const currentGizmoIdMatch = /^- Current Gizmo ID:\\s*([a-z0-9]+(?:-[a-z0-9]+)*)\\s*$/m",
@@ -160,15 +161,33 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "steps.plan.outputs.planning_blocked != 'true'",
         "Rejected planning blocker",
         "validateAgentRecord(blocker, 'worklog', secrets, process.env.AGENT_PROMPT)",
-        "validateAgentRecord(candidate, 'worklog', secrets, process.env.AGENT_PROMPT)",
-        "`plan: ${process.env.PLAN_PATH || 'null'}`",
-        "publishing trusted fallback metadata",
-        "## Decisions",
-        "worklogs/${feature}/",
+        "const AgentImplementWorkbenchPublisher = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/agent-implement-publish-workbench.cjs`)",
+        "await new AgentImplementWorkbenchPublisher({",
+        "}).publish()",
     ] {
         assert!(
             workflow.contains(required),
             "Workbench agent workflow is missing: {required}"
+        );
+    }
+
+    for required in [
+        "class AgentImplementWorkbenchPublisher",
+        "async publish()",
+        "Rejected unsafe implementation worklog artifact.",
+        "fs.lstatSync(implementationSummaryPath)",
+        "artifact.isSymbolicLink()",
+        "const rejection = validateAgentRecord(candidate, 'worklog', secrets, env.AGENT_PROMPT)",
+        "publishing trusted fallback metadata",
+        "`plan: ${env.PLAN_PATH || 'null'}`",
+        "## Decisions",
+        "worklogs/${feature}/",
+        "createOrUpdateFileContents",
+        "NOOK_SECRET",
+    ] {
+        assert!(
+            workbench_publisher.contains(required),
+            "extracted Workbench publisher is missing: {required}"
         );
     }
 

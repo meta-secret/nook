@@ -833,11 +833,12 @@ jobs:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
           script: |
-            await require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/agent-implement-publish-workbench.cjs`)({
+            const AgentImplementWorkbenchPublisher = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/agent-implement-publish-workbench.cjs`)
+            await new AgentImplementWorkbenchPublisher({
               github,
               context,
               core,
-            })
+            }).publish()
 
       - name: Remove isolated Git configuration
         if: always()

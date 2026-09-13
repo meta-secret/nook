@@ -4,15 +4,29 @@ const fs = require('node:fs')
 const { validateAgentRecord } = require('./workbench-records.cjs')
 
 /**
- * Publish the trusted Workbench worklog and, for issue-backed runs, progress
- * the claimed issue. The GitHub Script runtime supplies the authenticated API
+ * Owns publication of the trusted Workbench result and progress of its
+ * claimed issue. The GitHub Script runtime supplies the authenticated API
  * client and execution context; all other inputs remain workflow environment.
- *
- * @param {{ github: object, context: object, core: object }} runtime
- * @returns {Promise<void>}
  */
-module.exports = async function publishWorkbenchResult({ github, context, core }) {
-  const env = process.env
+class AgentImplementWorkbenchPublisher {
+  /**
+   * @param {{ github: object, context: object, core: object }} runtime
+   */
+  constructor({ github, context, core }) {
+    this.github = github
+    this.context = context
+    this.core = core
+    this.environment = process.env
+  }
+
+  /**
+   * Publish the trusted Workbench worklog and, for issue-backed runs, progress
+   * the claimed issue.
+   *
+   * @returns {Promise<void>}
+   */
+  async publish() {
+    const { github, context, core, environment: env } = this
   const [owner, repo] = env.WORKBENCH_REPOSITORY.split('/')
   const issuePath = env.ISSUE_PATH.trim()
   const feature = issuePath ? issuePath.split('/')[1] : 'unplanned'
@@ -164,4 +178,7 @@ module.exports = async function publishWorkbenchResult({ github, context, core }
     message: `${success ? 'progress' : 'block'}: ${issuePath}`,
     content: Buffer.from(body).toString('base64'),
   })
+  }
 }
+
+module.exports = AgentImplementWorkbenchPublisher
