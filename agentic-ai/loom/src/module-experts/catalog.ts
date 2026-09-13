@@ -254,6 +254,7 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/devices-access/IdentityBridgeGraph.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/devices-access/IdentityBridgeNode.svelte',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/devices-access/SelectedIdentityProjection.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/devices-access/access-chain.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/devices-access/identity-access-list.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/devices-access/identity-bridge-elements.ts',

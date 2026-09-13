@@ -834,7 +834,7 @@ function capturedCodexTurnMetadataFromHost(
     )
       throw new Error('Expected Codex tool names.');
     const name: { name: string; namespace?: string } = { name: entry.name };
-    if ('namespace' in entry) {
+    if ('namespace' in entry && entry.namespace !== null) {
       if (typeof entry.namespace !== 'string')
         throw new Error('Expected Codex tool namespace.');
       name.namespace = entry.namespace;
