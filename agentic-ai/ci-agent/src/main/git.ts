@@ -299,17 +299,13 @@ export class CiRepository {
       }
     }
     delete authEnv.NOOK_GITHUB_PAT;
+    delete authEnv.NOOK_GIT_EXTRAHEADER;
     authEnv.GIT_CONFIG_GLOBAL = "/dev/null";
     authEnv.GIT_CONFIG_SYSTEM = "/dev/null";
     authEnv.GIT_CONFIG_NOSYSTEM = "1";
     authEnv.GIT_NO_REPLACE_OBJECTS = "1";
     authEnv.GIT_TERMINAL_PROMPT = "0";
     authEnv.GIT_ALLOW_PROTOCOL = "https";
-    if (token) {
-      authEnv.GIT_CONFIG_COUNT = "1";
-      authEnv.GIT_CONFIG_KEY_0 = "http.https://github.com/.extraheader";
-      authEnv.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`;
-    }
 
     let localConfig: { stdout: string };
     try {
@@ -338,11 +334,12 @@ export class CiRepository {
       if (code !== 1) throw cause;
       localConfig = { stdout: "" };
     }
-    const rewrittenKeys = localConfig.stdout
+    const unsafeKeys = localConfig.stdout
       .split("\n")
       .map((key) => key.trim().toLowerCase())
       .filter(
         (key) =>
+          /^include(?:if\..+)?\.path$/u.test(key) ||
           /^url\..+\.(?:insteadof|pushinsteadof)$/u.test(key) ||
           /^url\..+\.instead-of$/u.test(key) ||
           /^http\..*(?:proxy|extraheader)$/u.test(key) ||
@@ -351,17 +348,27 @@ export class CiRepository {
           /^protocol\..+$/u.test(key) ||
           /^remote\..+\.pushurl$/u.test(key),
       );
-    if (rewrittenKeys.length > 0) {
+    if (unsafeKeys.length > 0) {
       throw new Error(
-        "Refusing Git publication because local URL rewrite configuration is present",
+        "Refusing Git publication because local includes or unsafe publication configuration is present",
       );
+    }
+    authEnv.GIT_CONFIG = "/dev/null";
+    const publicationGitOptions = token
+      ? [
+          ...TRUSTED_PUBLICATION_GIT_OPTIONS,
+          "--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER",
+        ]
+      : TRUSTED_PUBLICATION_GIT_OPTIONS;
+    if (token) {
+      authEnv.NOOK_GIT_EXTRAHEADER = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`;
     }
     await execFileAsync(
       "git",
       [
         "-C",
         repoRoot,
-        ...TRUSTED_PUBLICATION_GIT_OPTIONS,
+        ...publicationGitOptions,
         "push",
         "--no-verify",
         "-u",

