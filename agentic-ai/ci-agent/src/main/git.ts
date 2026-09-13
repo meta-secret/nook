@@ -387,7 +387,11 @@ export class CiRepository {
     remoteUrl,
   }: CiRepositoryPushFixBranchRequest): Promise<Result<string, CiFailure>> {
     log.info(`Pushing fix branch ${fixBranch}`);
-    const target = this.resolvePushTarget({ fixBranch, remoteRef, remoteUrl });
+    const target = this.resolvePushTarget({
+      fixBranch,
+      ...(remoteRef === undefined ? {} : { remoteRef }),
+      ...(remoteUrl === undefined ? {} : { remoteUrl }),
+    });
     if (target.isErr()) return err(target.error);
     const checkout = await this.trustedGit({
       args: ["checkout", "-B", fixBranch],
@@ -485,18 +489,20 @@ export class CiRepository {
       stdout.trim(),
     );
   }
-  revParseImmutable({ ref }: CiRepositoryRevParseRequest) {
+  revParseImmutable({
+    ref,
+  }: CiRepositoryRevParseRequest): ResultAsync<string, CiFailure> {
     return this.immutableGit({
       args: ["rev-parse", "--verify", `${ref}^{commit}`],
     }).andThen(
       ({ stdout }) => {
         const commit = stdout.trim();
         return FULL_COMMIT_SHA.test(commit)
-          ? ok(commit)
-          : err({
+          ? ok<string, CiFailure>(commit)
+          : err<string, CiFailure>({
               kind: CiFailureKind.Git,
               message: "git returned a non-canonical commit identity",
-            });
+            } satisfies CiFailure);
       },
     );
   }

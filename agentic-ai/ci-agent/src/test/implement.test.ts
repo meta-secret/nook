@@ -255,7 +255,11 @@ void test("publication output records the pinned and published identities as JSO
     );
     assert.equal(lines.feature_head_sha, FEATURE_HEAD_SHA);
     assert.equal(lines.published_feature_sha, PUBLISHED_FEATURE_SHA);
-    assert.deepEqual(JSON.parse(lines.publication_json), {
+    const publicationJson = lines.publication_json;
+    if (publicationJson === undefined) {
+      throw new Error("Missing publication JSON");
+    }
+    assert.deepEqual(JSON.parse(publicationJson), {
       branch: "codex/agent-branching",
       featureHeadSha: FEATURE_HEAD_SHA,
       publishedFeatureSha: PUBLISHED_FEATURE_SHA,
