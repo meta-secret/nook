@@ -257,15 +257,27 @@ test('admits only bounded YAML host values', () => {
 });
 
 test('preserves YAML prototype keys without mutating the result prototype', () => {
-  const source = JSON.parse(
-    '{"__proto__":{"polluted":true},"safe":"value"}',
-  ) as unknown;
+  const source = { safe: 'value' };
+  Object.defineProperty(source, '__proto__', {
+    configurable: true,
+    enumerable: true,
+    value: { polluted: true },
+    writable: true,
+  });
   const outcome = ExecutableSkillYamlAdmission.from(source).execute();
   expect(outcome.isOk()).toBe(true);
   if (outcome.isErr()) return;
+  if (
+    typeof outcome.value !== 'object' ||
+    outcome.value === null ||
+    Array.isArray(outcome.value)
+  )
+    return;
   expect(Object.hasOwn(outcome.value, '__proto__')).toBe(true);
   expect(Object.getPrototypeOf(outcome.value)).toBe(Object.prototype);
-  expect((outcome.value as { readonly safe: string }).safe).toBe('value');
+  expect(Object.getOwnPropertyDescriptor(outcome.value, 'safe')?.value).toBe(
+    'value',
+  );
 });
 
 test('stringify preserves scalar trailing line breaks and spaces', () => {
