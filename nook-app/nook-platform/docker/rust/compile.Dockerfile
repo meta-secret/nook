@@ -326,6 +326,10 @@ FROM web-base AS compile-loom
 WORKDIR /meta-secret/nook/agentic-ai/loom
 COPY agentic-ai/loom/package.json agentic-ai/loom/bun.lock agentic-ai/loom/tsconfig.json agentic-ai/loom/tsconfig.compile.json ./
 COPY agentic-ai/loom/src src
+# Loom's production modules import the tracked Cortex implementation contracts.
+# Keep those sources in the compile-only container without copying any nested
+# skill dependencies or running their test/verification scripts.
+COPY .cortex /meta-secret/nook/.cortex
 RUN bun install --frozen-lockfile --ignore-scripts \
     && node_modules/.bin/tsc --noEmit -p tsconfig.compile.json \
     && mkdir -p /opt/nook \
