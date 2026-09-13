@@ -42,10 +42,6 @@ on:
         description: Required prepublished canonical Prime feature branch
         required: true
         type: string
-      feature_head_sha:
-        description: Required exact head SHA of the prepublished feature branch
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -66,7 +62,6 @@ jobs:
       WORKBENCH_PLAN_FILE: .nook-workbench-plan.md
       WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md
       FEATURE_BRANCH: ${{ inputs.feature_branch }}
-      FEATURE_HEAD_SHA: ${{ inputs.feature_head_sha }}
       ORIGIN_MAIN_SHA: ${{ inputs.origin_main_sha }}
       PINNED_LOCAL_DEV_SHA: ${{ inputs.pinned_local_dev_sha }}
       GIT_NO_REPLACE_OBJECTS: "1"
@@ -122,7 +117,6 @@ jobs:
           PROMPT: ${{ inputs.prompt }}
           TASK_TITLE: ${{ inputs.task_title }}
           FEATURE_BRANCH: ${{ inputs.feature_branch }}
-          FEATURE_HEAD_SHA: ${{ inputs.feature_head_sha }}
           ORIGIN_MAIN_SHA: ${{ inputs.origin_main_sha }}
           PINNED_LOCAL_DEV_SHA: ${{ inputs.pinned_local_dev_sha }}
         run: |
@@ -154,10 +148,6 @@ jobs:
           fi
           if ! printf '%s' "$ORIGIN_MAIN_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
             echo "::error::origin_main_sha must be an exact 40-character lowercase commit SHA."
-            exit 1
-          fi
-          if ! printf '%s' "$FEATURE_HEAD_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
-            echo "::error::feature_head_sha must be an exact 40-character lowercase commit SHA."
             exit 1
           fi
           if [ "${#FEATURE_BRANCH}" -gt 120 ] || ! printf '%s' "$FEATURE_BRANCH" | grep -Eq '^codex/[a-z0-9]+(-[a-z0-9]+)*$'; then
@@ -381,7 +371,6 @@ jobs:
         uses: actions/github-script@v9
         env:
           AGENT_BRANCH: ${{ env.AGENT_BRANCH }}
-          FEATURE_HEAD_SHA: ${{ env.FEATURE_HEAD_SHA }}
         with:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
@@ -395,10 +384,6 @@ jobs:
             } catch (error) {
               if (error.status !== 404) throw error
               core.setFailed(`Required prepublished feature branch ${process.env.AGENT_BRANCH} does not exist`)
-              return
-            }
-            if (branch.commit.sha !== process.env.FEATURE_HEAD_SHA) {
-              core.setFailed(`Prepublished feature branch ${process.env.AGENT_BRANCH} does not match feature_head_sha`)
               return
             }
             core.setOutput('terminal', 'false')
@@ -434,10 +419,11 @@ jobs:
             exit 1
           fi
           feature_head_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse "refs/remotes/origin/$FEATURE_BRANCH^{commit}")"
-          if [ "$feature_head_sha" != "$FEATURE_HEAD_SHA" ]; then
-            echo "::error::Freshly fetched feature branch does not match feature_head_sha."
+          if ! printf '%s' "$feature_head_sha" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::Freshly fetched feature branch did not resolve to an exact commit SHA."
             exit 1
           fi
+          FEATURE_HEAD_SHA="$feature_head_sha"
           if ! git -C "$GITHUB_WORKSPACE" cat-file -e "$PINNED_LOCAL_DEV_SHA^{commit}"; then
             echo "::error::Pinned local dev commit is missing from the freshly fetched feature history."
             exit 1
@@ -466,7 +452,7 @@ jobs:
           fi
           implementation_head="$(git -C "$implementation_root" rev-parse "refs/remotes/origin/$FEATURE_BRANCH^{commit}")"
           if [ "$implementation_head" != "$FEATURE_HEAD_SHA" ]; then
-            echo "::error::Isolated implementation repository does not match feature_head_sha."
+            echo "::error::Isolated implementation repository does not match the run-start feature head."
             exit 1
           fi
           if ! git -C "$implementation_root" cat-file -e "$PINNED_LOCAL_DEV_SHA^{commit}"; then

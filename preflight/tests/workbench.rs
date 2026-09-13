@@ -145,7 +145,6 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "Verify prepublished feature branch",
         "github.rest.repos.getBranch",
         "Required prepublished feature branch ${process.env.AGENT_BRANCH} does not exist",
-        "Prepublished feature branch ${process.env.AGENT_BRANCH} does not match feature_head_sha",
         "error.status !== 404",
         "steps.rerun.outputs.terminal != 'true'",
         "Feature branch delivery is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun.",
@@ -193,16 +192,13 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
 
     for required in [
         "feature_branch:",
-        "feature_head_sha:",
-        "FEATURE_HEAD_SHA: ${{ inputs.feature_head_sha }}",
-        "feature_head_sha must be an exact 40-character lowercase commit SHA.",
         "Required prepublished feature branch",
-        "branch.commit.sha !== process.env.FEATURE_HEAD_SHA",
         "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH",
         "fetched_origin_main_sha=\"$(git -C \"$GITHUB_WORKSPACE\" rev-parse refs/remotes/origin/main^{commit})\"",
         "if [ \"$fetched_origin_main_sha\" != \"$ORIGIN_MAIN_SHA\" ]",
         "feature_head_sha=\"$(git -C \"$GITHUB_WORKSPACE\" rev-parse \"refs/remotes/origin/$FEATURE_BRANCH^{commit}\")\"",
-        "if [ \"$feature_head_sha\" != \"$FEATURE_HEAD_SHA\" ]",
+        "Freshly fetched feature branch did not resolve to an exact commit SHA.",
+        "FEATURE_HEAD_SHA=\"$feature_head_sha\"",
         "merge-base --is-ancestor \"$ORIGIN_MAIN_SHA\" \"$PINNED_LOCAL_DEV_SHA\"",
         "merge-base --is-ancestor \"$PINNED_LOCAL_DEV_SHA\" \"$feature_head_sha\"",
         "git init \"$implementation_root\"",
@@ -212,6 +208,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "if [ \"$implementation_origin_main_sha\" != \"$ORIGIN_MAIN_SHA\" ]",
         "implementation_head=\"$(git -C \"$implementation_root\" rev-parse \"refs/remotes/origin/$FEATURE_BRANCH^{commit}\")\"",
         "if [ \"$implementation_head\" != \"$FEATURE_HEAD_SHA\" ]",
+        "run-start feature head",
         "git -C \"$implementation_root\" merge-base --is-ancestor \"$implementation_origin_main_sha\" \"$PINNED_LOCAL_DEV_SHA\"",
         "git -C \"$implementation_root\" merge-base --is-ancestor \"$PINNED_LOCAL_DEV_SHA\" \"$implementation_head\"",
         "git -C \"$implementation_root\" checkout --detach \"$implementation_head\"",
@@ -241,6 +238,15 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     assert!(
         !valid_feature_chain(reversed_ancestry),
         "a feature head must not be accepted by reversing pinned-dev ancestry"
+    );
+    assert!(
+        !workflow.contains("feature_head_sha:")
+            && !workflow.contains("inputs.feature_head_sha")
+            && !workflow.contains("FEATURE_HEAD_SHA: ${{ inputs.feature_head_sha }}")
+            && !normalized_workflow.contains(
+                "if [ \"$feature_head_sha\" != \"$FEATURE_HEAD_SHA\" ]"
+            ),
+        "feature_head_sha must be observed from the canonical branch at run start, not supplied by dispatch"
     );
     assert!(
         !normalized_workflow.contains("branch.commit.sha !== process.env.PINNED_LOCAL_DEV_SHA")
