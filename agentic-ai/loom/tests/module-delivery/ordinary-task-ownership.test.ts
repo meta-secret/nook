@@ -17,7 +17,7 @@ import {
 } from '../../src/module-delivery/index.ts';
 
 import type {
-  ModuleDeliveryPlanV4,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
 
@@ -67,13 +67,13 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
   }
 
   static accepted(node: ModuleDeliveryWriteNodeV2): boolean {
-    const plan: ModuleDeliveryPlanV4 = {
+    const plan: ModuleDeliveryPlanV5 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
+      featureBranch: 'codex/module-delivery-test',
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
       originMainSha: ORIGIN_MAIN_SHA,
       pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
-      featureHeadSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 1,
       maxAttempts: 1,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

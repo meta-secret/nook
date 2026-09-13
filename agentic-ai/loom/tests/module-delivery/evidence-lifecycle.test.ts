@@ -234,7 +234,6 @@ test('canonical receipt replay rejects write leases before consuming state', () 
       sourceCommit: lease.startingFrontier,
       originMainSha: lease.originMainSha,
       pinnedLocalDevSha: lease.pinnedLocalDevSha,
-      featureHeadSha: lease.pinnedLocalDevSha,
       verifiedHeadCommit: active.state.headCommit,
       artifactIdentity: 'evidence/core-writer.json',
       artifactDigest: 'a'.repeat(64),

@@ -19,7 +19,7 @@ import {
 
 import type {
   LegacyModuleDeliveryPlan,
-  ModuleDeliveryPlanV4,
+  ModuleDeliveryPlanV5,
 } from '../../src/module-delivery/index.ts';
 
 import { TeamKey } from '../../src/team-agents/catalog.ts';
@@ -27,14 +27,14 @@ import { TeamKey } from '../../src/team-agents/catalog.ts';
 export class ModuleDeliveryCliScenario {
   private constructor(private readonly request: string) {}
 
-  static cliPlan(): ModuleDeliveryPlanV4 {
+  static cliPlan(): ModuleDeliveryPlanV5 {
     return {
-      version: 4,
+      version: 5,
+      featureBranch: 'codex/module-delivery-test',
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
       originMainSha: ORIGIN_MAIN_SHA,
       pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
-      featureHeadSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],

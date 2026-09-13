@@ -28,7 +28,8 @@ import type {
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryGenerationAuthority,
-  ModuleDeliveryPlanV4,
+  ModuleDeliveryPlanV5,
+  ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -156,13 +157,13 @@ export class ModuleDeliveryEvidenceScenario {
       providerTaskId: providerB.taskId,
       consumerTaskId: synthesis.taskId,
     };
-    const plan: ModuleDeliveryPlanV4 = {
-      version: 4,
+    const plan: ModuleDeliveryPlanV5 = {
+      version: 5,
+      featureBranch: 'codex/module-delivery-test',
       generation: 1,
       sourceCommit: fixture.sourceCommit,
       originMainSha: fixture.originMainSha,
       pinnedLocalDevSha: fixture.pinnedLocalDevSha,
-      featureHeadSha: fixture.pinnedLocalDevSha,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -248,13 +249,13 @@ export class ModuleDeliveryEvidenceScenario {
         expectedCommitHandoff: true,
       },
     };
-    const plan: ModuleDeliveryPlanV4 = {
-      version: 4,
+    const plan: ModuleDeliveryPlanV5 = {
+      version: 5,
+      featureBranch: 'codex/module-delivery-test',
       generation: 1,
       sourceCommit: fixture.sourceCommit,
       originMainSha: fixture.originMainSha,
       pinnedLocalDevSha: fixture.pinnedLocalDevSha,
-      featureHeadSha: fixture.pinnedLocalDevSha,
       maxAgentDepth: 1,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -363,7 +364,6 @@ export class ModuleDeliveryEvidenceScenario {
       sourceCommit: lease.startingFrontier,
       originMainSha: lease.originMainSha,
       pinnedLocalDevSha: lease.pinnedLocalDevSha,
-      featureHeadSha: lease.pinnedLocalDevSha,
       producerTeam: lease.team,
       functionalOwner: lease.functionalOwner,
       acceptanceOwner: lease.acceptanceOwner,
@@ -410,7 +410,10 @@ export type Runtime = {
   readonly synthesis: ModuleDeliveryEvidenceSynthesisNodeV2;
 };
 
-export type AdmissionRuntime = Pick<Runtime, 'accepted' | 'authority' | 'state'>;
+export type AdmissionRuntime = Pick<
+  Runtime,
+  'accepted' | 'authority' | 'state'
+>;
 
 export type WriteRuntime = AdmissionRuntime & {
   readonly writer: ModuleDeliveryWriteNodeV2;

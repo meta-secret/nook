@@ -23,7 +23,7 @@ import type {
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
   ModuleDeliveryExpectedLineage,
-  ModuleDeliveryPlanV4,
+  ModuleDeliveryPlanV5,
   RecordModuleDeliveryAttemptLeasesRequest,
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
@@ -50,19 +50,19 @@ export class ModuleDeliveryCortexAdmissionScenario {
     ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile(fileWrite);
   }
 
-  static plan(request: BootstrapCommitFixture): ModuleDeliveryPlanV4 {
+  static plan(request: BootstrapCommitFixture): ModuleDeliveryPlanV5 {
     return new ModuleDeliveryCortexAdmissionScenario(request).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV4 {
+  private execute(): ModuleDeliveryPlanV5 {
     const request = this.request;
     return {
-      version: 4,
+      version: 5,
+      featureBranch: 'codex/module-delivery-test',
       generation: 7,
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
-      featureHeadSha: request.pinnedLocalDevSha,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -116,7 +116,7 @@ export class ModuleDeliveryCortexAdmissionScenario {
     };
   }
 
-  static validate(value: ModuleDeliveryPlanV4): ValidatedModuleDeliveryPlan {
+  static validate(value: ModuleDeliveryPlanV5): ValidatedModuleDeliveryPlan {
     const result = ModuleDeliveryPlanDecoder.decodeAndValidate(
       JSON.stringify(value),
     );

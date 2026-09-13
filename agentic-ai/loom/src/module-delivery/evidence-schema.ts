@@ -96,7 +96,6 @@ export type ModuleDeliveryEvidenceMigrationPayload = Readonly<{
 
 export type ModuleDeliveryEvidenceMigrationRequest = Readonly<{
   submission: ModuleDeliveryReadOnlyEvidenceSubmissionV1;
-  featureHeadSha: string;
   migrationEvidence?: readonly ModuleDeliveryEvidenceMigrationPayload[];
 }>;
 
@@ -168,7 +167,6 @@ export class ModuleDeliveryEvidenceSchema {
     'sourceCommit',
     'originMainSha',
     'pinnedLocalDevSha',
-    'featureHeadSha',
     'producerTeam',
     'functionalOwner',
     'acceptanceOwner',
@@ -225,11 +223,8 @@ export class ModuleDeliveryEvidenceSchema {
     'acceptedProviderEvidence',
   ] as const;
 
-  private static readonly CURRENT_IDENTITY_FIELDS = [
-    ...ModuleDeliveryEvidenceSchema.IDENTITY_FIELDS.slice(0, 10),
-    'featureHeadSha',
-    ...ModuleDeliveryEvidenceSchema.IDENTITY_FIELDS.slice(10),
-  ] as const;
+  private static readonly CURRENT_IDENTITY_FIELDS =
+    ModuleDeliveryEvidenceSchema.IDENTITY_FIELDS;
 
   static decodeReadOnlyEvidenceSubmission(
     serialized: string,
@@ -238,9 +233,7 @@ export class ModuleDeliveryEvidenceSchema {
       ModuleDeliveryEvidenceSchema.decodeCompatibleReadOnlyEvidenceSubmission(
         serialized,
       );
-    if (
-      decoded.schemaVersion !== MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION
-    )
+    if (decoded.schemaVersion !== MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION)
       throw new Error('Evidence handoff schema version is unsupported.');
     return decoded;
   }
@@ -267,10 +260,7 @@ export class ModuleDeliveryEvidenceSchema {
     const schemaVersion = reader.integer('schemaVersion');
     const legacy =
       schemaVersion === LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION;
-    if (
-      !legacy &&
-      schemaVersion !== MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION
-    )
+    if (!legacy && schemaVersion !== MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION)
       throw new Error('Evidence handoff schema version is unsupported.');
     reader.exactKeys(
       legacy
@@ -294,21 +284,17 @@ export class ModuleDeliveryEvidenceSchema {
     const acceptanceOwner = reader.string(
       'acceptanceOwner',
     ) as ModuleDeliveryOwnerIdentity;
-    const acceptanceRequirements = reader.stringList(
-      'acceptanceRequirements',
-    );
-    const claimIdentities = reader.array('claimIdentities').map(
-      ModuleDeliveryEvidenceSchema.decodeClaimIdentity,
-    );
+    const acceptanceRequirements = reader.stringList('acceptanceRequirements');
+    const claimIdentities = reader
+      .array('claimIdentities')
+      .map(ModuleDeliveryEvidenceSchema.decodeClaimIdentity);
     const artifactIdentity = reader.string('artifactIdentity');
     const artifactDigest = reader.sha256('artifactDigest');
     const verdict = reader.verdict('verdict');
     const evidence = reader.stringList('evidence');
     const acceptedProviderEvidence = reader
       .array('acceptedProviderEvidence')
-      .map((node) =>
-        ModuleDeliveryEvidenceSchema.decodeIdentity(node, legacy),
-      );
+      .map((node) => ModuleDeliveryEvidenceSchema.decodeIdentity(node, legacy));
     if (legacy) {
       const submission: ModuleDeliveryReadOnlyEvidenceSubmissionV1 = {
         kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
@@ -334,7 +320,6 @@ export class ModuleDeliveryEvidenceSchema {
       };
       return submission;
     }
-    const featureHeadSha = reader.commit('featureHeadSha');
     const submission: ModuleDeliveryReadOnlyEvidenceSubmission = {
       kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
       schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
@@ -345,7 +330,6 @@ export class ModuleDeliveryEvidenceSchema {
       sourceCommit,
       originMainSha,
       pinnedLocalDevSha,
-      featureHeadSha,
       producerTeam,
       functionalOwner,
       acceptanceOwner,
@@ -368,7 +352,7 @@ export class ModuleDeliveryEvidenceSchema {
   static migrateReadOnlyEvidenceSubmission(
     request: ModuleDeliveryEvidenceMigrationRequest,
   ): ModuleDeliveryReadOnlyEvidenceSubmission {
-    const { submission, featureHeadSha, migrationEvidence } = request;
+    const { submission, migrationEvidence } = request;
     if (
       submission.schemaVersion !==
       LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION
@@ -402,12 +386,11 @@ export class ModuleDeliveryEvidenceSchema {
         identity.schemaVersion !==
         LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION
       )
-        throw new Error('Historical nested evidence schema version is invalid.');
+        throw new Error(
+          'Historical nested evidence schema version is invalid.',
+        );
       const payload = evidenceByTaskId.get(identity.taskId);
-      if (
-        !payload ||
-        payload.artifactIdentity !== identity.artifactIdentity
-      )
+      if (!payload || payload.artifactIdentity !== identity.artifactIdentity)
         throw new MigrationEvidenceRequired({
           taskId: identity.taskId,
           artifactIdentity: identity.artifactIdentity,
@@ -421,9 +404,8 @@ export class ModuleDeliveryEvidenceSchema {
       });
       if (legacyDigest !== identity.artifactDigest)
         throw new Error('Historical evidence artifact digest is invalid.');
-      const acceptedProviderEvidence = identity.acceptedProviderEvidence.map(
-        migrateIdentity,
-      );
+      const acceptedProviderEvidence =
+        identity.acceptedProviderEvidence.map(migrateIdentity);
       const migrated: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
         schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
         generation: identity.generation,
@@ -436,7 +418,6 @@ export class ModuleDeliveryEvidenceSchema {
         sourceCommit: identity.sourceCommit,
         originMainSha: identity.originMainSha,
         pinnedLocalDevSha: identity.pinnedLocalDevSha,
-        featureHeadSha,
         verifiedHeadCommit: identity.verifiedHeadCommit,
         artifactIdentity: identity.artifactIdentity,
         artifactDigest: identity.artifactDigest,
@@ -456,9 +437,8 @@ export class ModuleDeliveryEvidenceSchema {
         }),
       };
     };
-    const acceptedProviderEvidence = submission.acceptedProviderEvidence.map(
-      migrateIdentity,
-    );
+    const acceptedProviderEvidence =
+      submission.acceptedProviderEvidence.map(migrateIdentity);
     const migrated: ModuleDeliveryReadOnlyEvidenceSubmission = {
       kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
       schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
@@ -469,7 +449,6 @@ export class ModuleDeliveryEvidenceSchema {
       sourceCommit: submission.sourceCommit,
       originMainSha: submission.originMainSha,
       pinnedLocalDevSha: submission.pinnedLocalDevSha,
-      featureHeadSha,
       producerTeam: submission.producerTeam,
       functionalOwner: submission.functionalOwner,
       acceptanceOwner: submission.acceptanceOwner,
@@ -534,24 +513,24 @@ export class ModuleDeliveryEvidenceSchema {
     const sourceCommit = reader.commit('sourceCommit');
     const originMainSha = reader.commit('originMainSha');
     const pinnedLocalDevSha = reader.commit('pinnedLocalDevSha');
-    const featureHeadSha = legacy ? undefined : reader.commit('featureHeadSha');
     const verifiedHeadCommit = reader.commit('verifiedHeadCommit');
     const artifactIdentity = reader.string('artifactIdentity');
     const artifactDigest = reader.sha256('artifactDigest');
     const sourceProvenanceDigest = reader.sha256('sourceProvenanceDigest');
     const verdict = reader.verdict('verdict');
-    const claimIdentities = reader.array('claimIdentities').map(
-      ModuleDeliveryEvidenceSchema.decodeClaimIdentity,
-    );
+    const claimIdentities = reader
+      .array('claimIdentities')
+      .map(ModuleDeliveryEvidenceSchema.decodeClaimIdentity);
     const acceptanceRequirements = reader.stringList('acceptanceRequirements');
     const acceptedProviderEvidence = reader
       .array('acceptedProviderEvidence')
-      .map((child) => ModuleDeliveryEvidenceSchema.decodeIdentity(child, legacy));
-    if (featureHeadSha !== undefined)
-      PinnedDevBaseEvidenceContract.assertShape({
-        originMainSha,
-        pinnedLocalDevSha,
-      });
+      .map((child) =>
+        ModuleDeliveryEvidenceSchema.decodeIdentity(child, legacy),
+      );
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha,
+      pinnedLocalDevSha,
+    });
     if (legacy) {
       return {
         schemaVersion: LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
@@ -576,9 +555,6 @@ export class ModuleDeliveryEvidenceSchema {
           acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentityV1[],
       };
     }
-    const currentFeatureHeadSha = featureHeadSha;
-    if (currentFeatureHeadSha === undefined)
-      throw new Error('Evidence handoff feature head is missing.');
     return {
       schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
       generation,
@@ -591,7 +567,6 @@ export class ModuleDeliveryEvidenceSchema {
       sourceCommit,
       originMainSha,
       pinnedLocalDevSha,
-      featureHeadSha: currentFeatureHeadSha,
       verifiedHeadCommit,
       artifactIdentity,
       artifactDigest,
@@ -682,9 +657,7 @@ export class ModuleDeliveryEvidenceSchema {
       )
         continue;
       if (Array.isArray(current.node)) {
-        if (
-          current.node.length > MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES
-        )
+        if (current.node.length > MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES)
           ModuleDeliveryEvidenceSchema.throwDecodeLimit(
             ModuleDeliveryEvidenceDecodeErrorCode.ArraySizeLimit,
             current.node.length,
@@ -752,7 +725,6 @@ type EvidenceTransportFrame = {
   readonly isIdentityArray: boolean;
 };
 
-
 class EvidenceRecordReader {
   readonly record: UntrustedYamlMap;
 
@@ -808,8 +780,10 @@ class EvidenceRecordReader {
 
   stringList(key: string): readonly string[] {
     const value = this.node(key);
-    if (!UntrustedYamlBoundary.isList(value) ||
-        value.some((entry) => typeof entry !== 'string'))
+    if (
+      !UntrustedYamlBoundary.isList(value) ||
+      value.some((entry) => typeof entry !== 'string')
+    )
       throw new Error(`Evidence handoff field must be a string list: ${key}`);
     return value as readonly string[];
   }

@@ -38,6 +38,7 @@ import type {
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlan,
   ModuleDeliveryPlanV4,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
@@ -155,10 +156,9 @@ class ModuleDeliveryPlanTransportCollectionScenario {
   private constructor() {}
 
   static expectLimitRejection(request: LimitRejectionRequest): void {
-    const result =
-      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
-        request.serialized,
-      );
+    const result = ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
+      request.serialized,
+    );
     expect(result.status).toBe(ModuleDeliveryCompatibilityStatus.Rejected);
     if (result.status !== ModuleDeliveryCompatibilityStatus.Rejected) return;
     expect(result.issues[0]?.code).toBe(ModuleDeliveryIssueCode.LimitExceeded);
@@ -254,11 +254,10 @@ describe('reviewed module delivery plan', () => {
   });
 
   test('decodes the historical v2 root without upgrading it to v4', () => {
-    const historical =
-      ModuleDeliveryPlanValidationScenario.historicalV2Plan({
-        nodes: [CORE_NODE],
-        edgeContracts: [],
-      });
+    const historical = ModuleDeliveryPlanValidationScenario.historicalV2Plan({
+      nodes: [CORE_NODE],
+      edgeContracts: [],
+    });
     const compatibility =
       ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
         JSON.stringify(historical),
@@ -284,11 +283,10 @@ describe('reviewed module delivery plan', () => {
   });
 
   test('decodes and migrates the historical v3 root without mutating it', () => {
-    const historical =
-      ModuleDeliveryPlanValidationScenario.historicalV3Plan({
-        nodes: [CORE_NODE],
-        edgeContracts: [],
-      });
+    const historical = ModuleDeliveryPlanValidationScenario.historicalV3Plan({
+      nodes: [CORE_NODE],
+      edgeContracts: [],
+    });
     const before = structuredClone(historical);
     const compatibility =
       ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
@@ -302,15 +300,21 @@ describe('reviewed module delivery plan', () => {
       expect(compatibility.plan).toEqual(historical);
       expect(Object.hasOwn(compatibility.plan, 'featureHeadSha')).toBe(false);
     }
+    const historicalV4: ModuleDeliveryPlanV4 = {
+      ...historical,
+      version: 4,
+      featureHeadSha: '4'.repeat(40),
+    };
+    const historicalV4Before = structuredClone(historicalV4);
     const migrated = ModuleDeliveryPlanSchema.migrateModuleDeliveryPlan(
-      historical,
-      '4'.repeat(40),
+      historicalV4,
+      'codex/module-delivery-test',
     );
     expect(historical).toEqual(before);
-    expect(migrated.version).toBe(4);
-    expect(migrated.originMainSha).toBe(historical.originMainSha);
-    expect(migrated.pinnedLocalDevSha).toBe(historical.pinnedLocalDevSha);
-    expect(migrated.featureHeadSha).toBe('4'.repeat(40));
+    expect(historicalV4).toEqual(historicalV4Before);
+    expect(migrated.version).toBe(5);
+    expect(migrated.featureBranch).toBe('codex/module-delivery-test');
+    expect(Object.hasOwn(migrated, 'featureHeadSha')).toBe(false);
     const canonical = ModuleDeliveryPlanDecoder.decodeAndValidate(
       JSON.stringify(historical),
     );
@@ -470,7 +474,7 @@ describe('reviewed module delivery plan', () => {
         commands: ['task core:second', 'task core:first'],
       },
     };
-    const reversedNodePlan: ModuleDeliveryPlanV4 = {
+    const reversedNodePlan: ModuleDeliveryPlanV5 = {
       ...orderedPlan,
       nodes: [reversedNode],
     };
@@ -540,7 +544,7 @@ describe('reviewed module delivery plan', () => {
       edgeContracts: DEFAULT_EDGES,
     };
     const validPlan = ModuleDeliveryPlanValidationScenario.plan(fixture);
-    const invalidPlan: ModuleDeliveryPlanV4 = {
+    const invalidPlan: ModuleDeliveryPlanV5 = {
       ...validPlan,
       sourceCommit: 'main',
       maxAgentDepth: 4,
@@ -613,7 +617,8 @@ describe('bounded module delivery plan transport collections', () => {
           kind: ModuleDeliveryTaskKind.EvidenceSynthesis,
           resources: { read: [], write: [], evidenceSurface: [] },
           evidenceInput: {
-            schema: ModuleDeliveryEvidenceInputSchema.AcceptedProviderEvidenceV1,
+            schema:
+              ModuleDeliveryEvidenceInputSchema.AcceptedProviderEvidenceV1,
             expectedProducers: Array.from(
               { length: MAX_MODULE_DELIVERY_EXPECTED_PRODUCERS + 1 },
               () => ({}),

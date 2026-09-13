@@ -21,7 +21,7 @@ import { ModuleAdmissionSource } from '../../src/module-delivery/admission-sourc
 import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-support.ts';
 
 import type {
-  ModuleDeliveryPlanV4,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryWriteNodeV2,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
@@ -32,7 +32,6 @@ export class ModuleDeliveryAdmissionSourceScenario {
       readonly sourceCommit: string;
       readonly originMainSha: string;
       readonly pinnedLocalDevSha: string;
-      readonly featureHeadSha: string;
       readonly generation: number;
       readonly moduleRoot: string;
       readonly write: string;
@@ -43,7 +42,6 @@ export class ModuleDeliveryAdmissionSourceScenario {
     readonly sourceCommit: string;
     readonly originMainSha: string;
     readonly pinnedLocalDevSha: string;
-    readonly featureHeadSha: string;
     readonly generation: number;
     readonly moduleRoot: string;
     readonly write: string;
@@ -77,13 +75,13 @@ export class ModuleDeliveryAdmissionSourceScenario {
         expectedCommitHandoff: true,
       },
     };
-    const plan: ModuleDeliveryPlanV4 = {
+    const plan: ModuleDeliveryPlanV5 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
+      featureBranch: 'codex/module-delivery-test',
       generation: request.generation,
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
-      featureHeadSha: request.featureHeadSha,
       maxAgentDepth: 1,
       maxAttempts: 1,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -130,7 +128,6 @@ test('classifies exact writes against the frozen source tree', () => {
       sourceCommit,
       originMainSha: fixture.originMainSha,
       pinnedLocalDevSha: fixture.pinnedLocalDevSha,
-      featureHeadSha: fixture.pinnedLocalDevSha,
       generation: 1,
       moduleRoot: 'infra/k0s/scripts',
       write: exactPath,
@@ -148,7 +145,6 @@ test('classifies exact writes against the frozen source tree', () => {
         originMainSha: fixture.originMainSha,
         pinnedLocalDevSha: fixture.pinnedLocalDevSha,
         generation: 2,
-        featureHeadSha: fixture.pinnedLocalDevSha,
         moduleRoot: 'infra/k0s',
         write: 'infra/k0s/scripts',
       });
@@ -165,7 +161,6 @@ test('classifies exact writes against the frozen source tree', () => {
         originMainSha: fixture.originMainSha,
         pinnedLocalDevSha: fixture.pinnedLocalDevSha,
         generation: 3,
-        featureHeadSha: fixture.pinnedLocalDevSha,
         moduleRoot: 'infra/k0s/scripts',
         write: `${exactPath}/child.md`,
       });

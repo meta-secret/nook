@@ -31,7 +31,7 @@ import type {
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,
-  ModuleDeliveryPlanV4,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryWriteNodeV2,
   RecordModuleDeliveryAttemptDispositionRequest,
@@ -89,18 +89,17 @@ export class ModuleDeliveryAdmissionScenario {
     };
   }
 
-  static planAt(sourceCommit: string): ModuleDeliveryPlanV4 {
+  static planAt(sourceCommit: string): ModuleDeliveryPlanV5 {
     return new ModuleDeliveryAdmissionScenario(sourceCommit).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV4 {
+  private execute(): ModuleDeliveryPlanV5 {
     const sourceCommit = this.request;
     const plan = structuredClone(PLAN);
     Object.assign(plan, {
       sourceCommit,
       originMainSha: ORIGIN_MAIN_SHA,
       pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
-      featureHeadSha: PINNED_LOCAL_DEV_SHA,
     });
     for (const node of plan.nodes)
       if (node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit)
@@ -110,7 +109,7 @@ export class ModuleDeliveryAdmissionScenario {
     return plan;
   }
 
-  static generationPlan(request: GenerationPlanRequest): ModuleDeliveryPlanV4 {
+  static generationPlan(request: GenerationPlanRequest): ModuleDeliveryPlanV5 {
     const plan = structuredClone(
       ModuleDeliveryAdmissionScenario.planAt(request.sourceCommit),
     );
@@ -125,7 +124,7 @@ export class ModuleDeliveryAdmissionScenario {
     return plan;
   }
 
-  static validate(plan: ModuleDeliveryPlanV4): ValidatedModuleDeliveryPlan {
+  static validate(plan: ModuleDeliveryPlanV5): ValidatedModuleDeliveryPlan {
     const result = ModuleDeliveryPlanDecoder.decodeAndValidate(
       JSON.stringify(plan),
     );
@@ -161,7 +160,7 @@ export class ModuleDeliveryAdmissionScenario {
     const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority,
       acceptedPlan: plan,
-      headCommit: plan.sourceCommit,
+      headCommit: plan.plan.sourceCommit,
       integratedWriterFrontiers: [],
       acceptedEvidence: [],
     };
@@ -268,7 +267,6 @@ export class ModuleDeliveryAdmissionScenario {
       sourceCommit: request.lease.startingFrontier,
       originMainSha: request.lease.originMainSha,
       pinnedLocalDevSha: request.lease.pinnedLocalDevSha,
-      featureHeadSha: request.lease.pinnedLocalDevSha,
       producerTeam: request.lease.team,
       functionalOwner: request.lease.functionalOwner,
       acceptanceOwner: request.lease.acceptanceOwner,
@@ -376,7 +374,7 @@ export type GenerationRestartRequest = {
 
 export type GenerationPlanUpdate = {
   readonly generation: number;
-      readonly nodes: ModuleDeliveryPlanV4['nodes'];
+  readonly nodes: ModuleDeliveryPlanV5['nodes'];
 };
 
 export type EvidenceSubmissionRequest = {
@@ -435,13 +433,13 @@ export const edge: ModuleDeliveryEdgeContract = {
   owningTests: ['alpha contract test'],
 };
 
-export const PLAN: ModuleDeliveryPlanV4 = {
-  version: 4,
+export const PLAN: ModuleDeliveryPlanV5 = {
+  version: 5,
+  featureBranch: 'codex/module-delivery-test',
   generation: 1,
   sourceCommit: SOURCE,
   originMainSha: ORIGIN_MAIN_SHA,
   pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
-  featureHeadSha: PINNED_LOCAL_DEV_SHA,
   maxAgentDepth: 3,
   maxAttempts: 2,
   parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

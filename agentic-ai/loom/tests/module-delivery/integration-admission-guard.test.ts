@@ -24,7 +24,7 @@ import type {
   LegacyModuleDeliveryPlan,
   ModuleDeliveryEdgeContract,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV4,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -123,21 +123,21 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
     return value;
   }
 
-  static plan(fixture: PlanFixture): ModuleDeliveryPlanV4 {
+  static plan(fixture: PlanFixture): ModuleDeliveryPlanV5 {
     return new ModuleDeliveryIntegrationAdmissionGuardScenario(
       fixture,
     ).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV4 {
+  private execute(): ModuleDeliveryPlanV5 {
     const fixture = this.request;
     return {
-      version: 4,
+      version: 5,
+      featureBranch: 'codex/module-delivery-test',
       generation: 1,
       sourceCommit: fixture.sourceCommit,
       originMainSha: ORIGIN_MAIN_SHA,
       pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
-      featureHeadSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -151,11 +151,11 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
     };
   }
 
-  static validate(value: ModuleDeliveryPlanV4): ModuleDeliveryPlanValidation {
+  static validate(value: ModuleDeliveryPlanV5): ModuleDeliveryPlanValidation {
     return ModuleDeliveryPlanDecoder.decodeAndValidate(JSON.stringify(value));
   }
 
-  static validated(value: ModuleDeliveryPlanV4): ValidatedModuleDeliveryPlan {
+  static validated(value: ModuleDeliveryPlanV5): ValidatedModuleDeliveryPlan {
     const result =
       ModuleDeliveryIntegrationAdmissionGuardScenario.validate(value);
     if (result.status !== ModuleDeliveryValidationStatus.Accepted) {

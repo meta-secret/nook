@@ -18,7 +18,7 @@ import type {
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlanV2,
   ModuleDeliveryPlanV3,
-  ModuleDeliveryPlanV4,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -125,7 +125,7 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static plan(fixture: PlanFixture): ModuleDeliveryPlanV4 {
+  static plan(fixture: PlanFixture): ModuleDeliveryPlanV5 {
     return new ModuleDeliveryPlanValidationScenario(fixture).execute();
   }
 
@@ -161,15 +161,15 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  private execute(): ModuleDeliveryPlanV4 {
+  private execute(): ModuleDeliveryPlanV5 {
     const fixture = this.request;
     return {
-      version: 4,
+      version: 5,
+      featureBranch: 'codex/module-delivery-test',
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
       originMainSha: ORIGIN_MAIN_SHA,
       pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
-      featureHeadSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: PARENT_OWNED_RESOURCES,
@@ -183,7 +183,7 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static validate(value: ModuleDeliveryPlanV4): ModuleDeliveryPlanValidation {
+  static validate(value: ModuleDeliveryPlanV5): ModuleDeliveryPlanValidation {
     return ModuleDeliveryPlanDecoder.decodeAndValidate(JSON.stringify(value));
   }
 

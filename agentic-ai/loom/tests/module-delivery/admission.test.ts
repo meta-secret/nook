@@ -44,7 +44,7 @@ import type {
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
   ModuleDeliveryAdmissionState,
-  ModuleDeliveryPlanV4,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryReadOnlyNodeV2,
   RecordModuleDeliveryAttemptDispositionRequest,
   RecordModuleDeliveryAttemptLeasesRequest,
@@ -104,13 +104,13 @@ const FOREIGN_SOURCE = ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(
 )(['rev-parse', 'HEAD']);
 
 describe('module delivery admission authority', () => {
-  test('records the feature frontier and rejects reversed ancestry', () => {
+  test('records the branch authority and rejects reversed ancestry', () => {
     expect(new Set([ORIGIN_MAIN_SHA, PINNED_LOCAL_DEV_SHA, SOURCE]).size).toBe(
       3,
     );
     expect(PLAN.originMainSha).toBe(ORIGIN_MAIN_SHA);
     expect(PLAN.pinnedLocalDevSha).toBe(PINNED_LOCAL_DEV_SHA);
-    expect(PLAN.featureHeadSha).toBe(PINNED_LOCAL_DEV_SHA);
+    expect(PLAN.featureBranch).toBe('codex/module-delivery-test');
     expect(PLAN.sourceCommit).toBe(SOURCE);
     expect(
       PLAN.nodes
@@ -145,7 +145,6 @@ describe('module delivery admission authority', () => {
       ...PLAN,
       originMainSha: PINNED_LOCAL_DEV_SHA,
       pinnedLocalDevSha: ORIGIN_MAIN_SHA,
-      featureHeadSha: ORIGIN_MAIN_SHA,
       nodes: PLAN.nodes.map((node) =>
         node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit
           ? {
@@ -167,7 +166,6 @@ describe('module delivery admission authority', () => {
     const reversedSource = ModuleDeliveryAdmissionScenario.validate({
       ...PLAN,
       pinnedLocalDevSha: SOURCE,
-      featureHeadSha: SOURCE,
       sourceCommit: PINNED_LOCAL_DEV_SHA,
       nodes: PLAN.nodes.map((node) =>
         node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit
@@ -372,7 +370,7 @@ describe('module delivery admission authority', () => {
   });
 
   test('retains lease history through disposition and reports exhausted closure', () => {
-    const exhaustionPlan: ModuleDeliveryPlanV4 = { ...PLAN };
+    const exhaustionPlan: ModuleDeliveryPlanV5 = { ...PLAN };
     const active = ModuleDeliveryAdmissionScenario.runtime(
       ModuleDeliveryAdmissionScenario.validate(exhaustionPlan),
     );
@@ -627,7 +625,6 @@ describe('module delivery admission authority', () => {
       headCommit: REPLACEMENT_SOURCE,
       originMainSha: replacement.plan.originMainSha,
       pinnedLocalDevSha: replacement.plan.pinnedLocalDevSha,
-      featureHeadSha: replacement.plan.pinnedLocalDevSha,
       integratedWriterFrontiers: [],
       acceptedProviderEvidence: [],
     };
@@ -695,7 +692,7 @@ describe('module delivery admission authority', () => {
       parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
       acceptance: alpha.acceptance,
     };
-    const firstPlan: ModuleDeliveryPlanV4 = {
+    const firstPlan: ModuleDeliveryPlanV5 = {
       ...PLAN,
       nodes: [provider],
       edgeContracts: [],
