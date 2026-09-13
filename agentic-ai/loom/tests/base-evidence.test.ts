@@ -158,6 +158,7 @@ describe('canonical feature branch identity', () => {
     const validBranches: readonly string[] = [
       'codex/repair-cache',
       'codex/abcdefghij',
+      'codex/agentic-pipeline-delivery',
       'codex/agent-branching/sre/provisioning/fix-hive-branch-compile',
       'codex/hive-main-failure-abc-run-42-attempt-1',
     ];
@@ -182,6 +183,8 @@ describe('canonical feature branch identity', () => {
       'codex/agent-branching/web-dev/provisioning/fix-hive-branch-compile',
       'codex/agent-branching/sre/provisioning/fix-hive-branch-compile/extra',
       'codex/hive-',
+      'codex/agentic-pipeline-delivery/tmp',
+      'codex/agentic-pipeline-delivery/delivery-pipeline/pr-lifecycle/short',
     ];
 
     for (const branch of invalidBranches) {

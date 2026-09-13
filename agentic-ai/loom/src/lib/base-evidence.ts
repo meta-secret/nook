@@ -51,7 +51,7 @@ export class CanonicalFeatureBranchContract {
     const segments = components.slice(1);
     const valid =
       (segments.length === 1 &&
-        (CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 20) ||
+        (CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 50) ||
           CanonicalFeatureBranchContract.isCanonicalMachineBranch(segments))) ||
       (segments.length === 4 &&
         CanonicalFeatureBranchContract.isKebabSegment(segments[0], 10, 20) &&
