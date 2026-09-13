@@ -76,7 +76,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Team Agents own scoped implementation and authored tests.
 - Gizmo owns feature compilation, review, and local dev integration decisions.
 - A manually run dev manager owns publication, slow PR validation, and promotion.
-- PR Steward executes bounded operations under the owning controller's packets.
+- PR Lifecycle Agent executes bounded operations under the owning controller's packets.
 - Promotion fast-forwards main to the tested dev SHA.
 - Preserve dev and all feature history.
 - Do not rebase, squash, or create a promotion merge commit.

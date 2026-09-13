@@ -8,11 +8,14 @@ Load only the category required for the current delivery stage.
 
 ## Team reporting
 
-Every team has exactly one Team Gizmo. Prime creates or reuses each compatible
-Team Gizmo with `gpt-5.6-sol` and `low` reasoning, gives it one team worktree,
-and receives its high-level evidence or blockers. Each leaf Team Agent uses
+Every team has exactly one Team Gizmo. Gizmo Prime and every Team Gizmo use
+`gpt-5.6-sol` with `low` reasoning. Prime creates or reuses each compatible
+Team Gizmo, gives it one team worktree, and receives its high-level evidence or
+blockers. Each leaf Team Agent uses
 `gpt-5.6-luna` with `xhigh` reasoning and receives a separate issued child
-worktree. A Team Gizmo may run disjoint specialists in parallel, integrates
+worktree. Gizmo Prime dispatches all dependency-ready Team Gizmos with disjoint
+scopes in parallel, subject only to dependency edges and active harness
+capacity. A Team Gizmo may run disjoint specialists in parallel, integrates
 their committed results into the feature branch, and never creates or updates
 pull requests.
 
