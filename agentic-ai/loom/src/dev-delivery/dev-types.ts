@@ -288,9 +288,12 @@ export interface DevSnapshot {
   readonly devSha: CommitSha;
 }
 
+export interface DevLandRequest {
+  readonly expectedFeatureSha: CommitSha;
+}
+
 export interface DevPublishRequest {
-  readonly devPath: string;
-  readonly devSha: CommitSha;
+  readonly expectedSha: CommitSha;
 }
 
 export interface ManagedRemoteSnapshot {

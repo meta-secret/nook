@@ -3,7 +3,11 @@ import { err, type Result } from 'neverthrow';
 
 import { ProcessCommandRunner } from './dev-command.ts';
 import { DevDeliveryWorkspace } from './dev-workspace.ts';
-import { DevFailureKind, type DevFailure } from './dev-types.ts';
+import {
+  CommitSha,
+  DevFailureKind,
+  type DevFailure,
+} from './dev-types.ts';
 
 export interface DevCliMessage {
   readonly message: string;
@@ -39,5 +43,12 @@ export class DevCli {
       kind: DevFailureKind.Configuration,
       message: `${name} is required for this manual dev-manager task`,
     });
+  }
+
+  static requiredCommitSha(name: string): Result<CommitSha, DevFailure> {
+    const raw = process.env[name];
+    return typeof raw === 'string'
+      ? CommitSha.parse(raw)
+      : DevCli.missingEnvironment(name);
   }
 }
