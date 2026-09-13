@@ -371,13 +371,13 @@ impl<S: TaskStore> Worker<S> {
             result: &result,
         }
         .admit()?;
-        let bootstrap_evidence = task
-            .bootstrap_evidence
-            .as_ref()
-            .ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
-        plan.verify_owner_deliveries(&repository, bootstrap_evidence)
+        plan.verify_owner_deliveries(&repository, task.bootstrap_evidence.as_ref())
             .await?;
         if task.kind.is_main_repair() {
+            let bootstrap_evidence = task
+                .bootstrap_evidence
+                .as_ref()
+                .ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
             (MainRepairDelivery {
                 repository: &repository,
                 branch: &task.id.repair_branch_name(),

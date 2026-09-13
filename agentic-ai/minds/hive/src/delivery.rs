@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::model::{BootstrapEvidence, GitSha};
+use crate::model::BootstrapEvidence;
 
 use self::command::DeliveryCommand;
 use self::local_dev::LocalDevEvidence;
@@ -29,51 +29,27 @@ impl MainRepairDelivery<'_> {
         &self,
         task_id: &str,
     ) -> crate::HiveResult<()> {
-        let feature_sha = self.feature_head_sha().await?;
+        let feature_sha = &self.evidence.feature_head_sha;
         (RemoteCompileEvidence {
             repository: self.repository,
-            origin_main_sha: &self.evidence.origin_main_sha,
-            pinned_local_dev_sha: &self.evidence.pinned_local_dev_sha,
+            branch: self.branch,
             feature_sha,
         })
         .validate()
         .await?;
-        (LocalDevEvidence {
-            repository: self.repository,
-            origin_main_sha: &self.evidence.origin_main_sha,
-            pinned_local_dev_sha: &self.evidence.pinned_local_dev_sha,
-            feature_sha,
-        })
-        .validate()
-        .await?;
-        (WorkbenchCompletionCheck {
+        let workbench = (WorkbenchCompletionCheck {
             repository: self.repository,
             task_id,
-            feature_sha,
+            evidence: self.evidence,
         })
         .validate_workbench_completion()
-        .await
-    }
-}
-
-impl MainRepairDelivery<'_> {
-    /// Verifies the subset needed when a blocker checks whether its repair
-    /// owners are already out of the dependency path.
-    pub(crate) async fn verify_main_repair_merge_and_main(&self) -> crate::HiveResult<()> {
-        let feature_sha = self.feature_head_sha().await?;
-        (RemoteCompileEvidence {
-            repository: self.repository,
-            origin_main_sha: &self.evidence.origin_main_sha,
-            pinned_local_dev_sha: &self.evidence.pinned_local_dev_sha,
-            feature_sha,
-        })
-        .validate()
         .await?;
         (LocalDevEvidence {
             repository: self.repository,
             origin_main_sha: &self.evidence.origin_main_sha,
             pinned_local_dev_sha: &self.evidence.pinned_local_dev_sha,
             feature_sha,
+            local_dev_sha: &workbench.local_dev_sha,
         })
         .validate()
         .await
@@ -81,17 +57,65 @@ impl MainRepairDelivery<'_> {
 }
 
 impl MainRepairDelivery<'_> {
-    async fn feature_head_sha(&self) -> crate::HiveResult<&GitSha> {
-        let current_head = DeliveryCommand::git_output(self.repository, &["rev-parse", "HEAD"])
-            .await?;
-        let feature_head = self.evidence.feature_head_sha.as_str();
-        if current_head != feature_head {
-            return Err(crate::HiveError::message(format!(
-                "Hive repair delivery is incomplete: detached workspace HEAD {} does not equal exact feature head {}",
-                current_head, feature_head
-            )));
-        }
-        Ok(&self.evidence.feature_head_sha)
+    /// Verifies the canonical exact-SHA promotion evidence needed when an
+    /// obsolete blocker checks whether its repair owners are out of the
+    /// dependency path. This does not reintroduce PR or squash semantics.
+    pub(crate) async fn verify_main_repair_promotion_and_main(
+        &self,
+        task_id: &str,
+    ) -> crate::HiveResult<()> {
+        let feature_sha = &self.evidence.feature_head_sha;
+        (RemoteCompileEvidence {
+            repository: self.repository,
+            branch: self.branch,
+            feature_sha,
+        })
+        .validate()
+        .await?;
+        let workbench = (WorkbenchCompletionCheck {
+            repository: self.repository,
+            task_id,
+            evidence: self.evidence,
+        })
+        .validate_main_promotion()
+        .await?;
+        (LocalDevEvidence {
+            repository: self.repository,
+            origin_main_sha: &self.evidence.origin_main_sha,
+            pinned_local_dev_sha: &self.evidence.pinned_local_dev_sha,
+            feature_sha,
+            local_dev_sha: &workbench.local_dev_sha,
+        })
+        .validate()
+        .await?;
+        DeliveryCommand::run_git_status(
+            self.repository,
+            &["fetch", "--no-tags", "origin", "main"],
+            "fetch canonical Main for exact promotion verification",
+        )
+        .await?;
+        DeliveryCommand::run_git_status(
+            self.repository,
+            &[
+                "merge-base",
+                "--is-ancestor",
+                workbench.local_dev_sha.as_str(),
+                workbench.main_sha.as_str(),
+            ],
+            "verify canonical Main contains the exact tested local-dev SHA",
+        )
+        .await?;
+        DeliveryCommand::run_git_status(
+            self.repository,
+            &[
+                "merge-base",
+                "--is-ancestor",
+                workbench.main_sha.as_str(),
+                "FETCH_HEAD",
+            ],
+            "verify canonical Main contains the exact promoted SHA",
+        )
+        .await
     }
 }
 
@@ -110,6 +134,6 @@ mod tests {
     #[test]
     fn repair_delivery_keeps_the_worker_call_surface() {
         let _delivery_method = MainRepairDelivery::verify_main_repair_delivery;
-        let _retirement_method = MainRepairDelivery::verify_main_repair_merge_and_main;
+        let _retirement_method = MainRepairDelivery::verify_main_repair_promotion_and_main;
     }
 }

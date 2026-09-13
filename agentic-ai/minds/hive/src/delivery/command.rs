@@ -35,13 +35,23 @@ impl DeliveryCommand<'_> {
 }
 
 impl DeliveryCommand<'_> {
+    fn isolated_git(repository: &Path, arguments: &[&str]) -> Command {
+        let mut command = Command::new("git");
+        command
+            .args(arguments)
+            .current_dir(repository)
+            .env("GIT_NO_REPLACE_OBJECTS", "1")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null");
+        command
+    }
+
     pub(super) async fn git_output(
         repository: &Path,
         arguments: &[&str],
     ) -> crate::HiveResult<String> {
-        let output = Command::new("git")
-            .args(arguments)
-            .current_dir(repository)
+        let output = Self::isolated_git(repository, arguments)
             .stdin(Stdio::null())
             .output()
             .await
@@ -64,9 +74,7 @@ impl DeliveryCommand<'_> {
         arguments: &[&str],
         operation: &str,
     ) -> crate::HiveResult<()> {
-        let status = Command::new("git")
-            .args(arguments)
-            .current_dir(repository)
+        let status = Self::isolated_git(repository, arguments)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())

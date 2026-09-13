@@ -8,6 +8,7 @@ pub(super) struct LocalDevEvidence<'a> {
     pub(super) origin_main_sha: &'a GitSha,
     pub(super) pinned_local_dev_sha: &'a GitSha,
     pub(super) feature_sha: &'a GitSha,
+    pub(super) local_dev_sha: &'a GitSha,
 }
 
 impl LocalDevEvidence<'_> {
@@ -17,10 +18,12 @@ impl LocalDevEvidence<'_> {
             origin_main_sha,
             pinned_local_dev_sha,
             feature_sha,
+            local_dev_sha,
         } = self;
         let origin_main_sha = origin_main_sha.as_str();
         let pinned_local_dev_sha = pinned_local_dev_sha.as_str();
         let feature_sha = feature_sha.as_str();
+        let local_dev_sha = local_dev_sha.as_str();
         DeliveryCommand::run_git_status(
             repository,
             &["merge-base", "--is-ancestor", origin_main_sha, pinned_local_dev_sha],
@@ -35,12 +38,23 @@ impl LocalDevEvidence<'_> {
         DeliveryCommand::run_git_status(
             repository,
             &["merge-base", "--is-ancestor", pinned_local_dev_sha, feature_sha],
-            "verify serialized local-dev fast-forward contains the exact feature head",
+            "verify the exact feature head descends from the pinned local-dev base",
         )
         .await
         .map_err(|error| {
             crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: feature head {feature_sha} is not a fast-forward descendant of pinnedLocalDevSha {pinned_local_dev_sha}: {error}"
+            ))
+        })?;
+        DeliveryCommand::run_git_status(
+            repository,
+            &["merge-base", "--is-ancestor", feature_sha, local_dev_sha],
+            "verify serialized local-dev landing contains the exact feature head",
+        )
+        .await
+        .map_err(|error| {
+            crate::HiveError::message(format!(
+                "Hive repair delivery is incomplete: serialized local-dev head {local_dev_sha} does not contain exact feature head {feature_sha}: {error}"
             ))
         })
     }
@@ -59,6 +73,10 @@ mod tests {
         let output = Command::new("git")
             .args(arguments)
             .current_dir(repository)
+            .env("GIT_NO_REPLACE_OBJECTS", "1")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .output()?;
         if !output.status.success() {
             return Err(crate::HiveError::message(format!(
@@ -80,7 +98,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn local_dev_accepts_an_exact_feature_ancestor() -> HiveResult<()> {
+    async fn local_dev_accepts_an_exact_feature_landing_after_pinned_base() -> HiveResult<()> {
         let repository = tempfile::tempdir()?;
         configure(repository.path())?;
         fs::write(repository.path().join("repair.txt"), "base\n")?;
@@ -100,14 +118,16 @@ mod tests {
         )?;
         let dev_sha = git(repository.path(), &["rev-parse", "dev"])?;
         let origin_main_sha = GitSha::try_from(base_sha.as_str())?;
-        let pinned_local_dev_sha = GitSha::try_from(dev_sha.as_str())?;
+        let pinned_local_dev_sha = GitSha::try_from(base_sha.as_str())?;
         let feature_sha = GitSha::try_from(feature_sha.as_str())?;
+        let local_dev_sha = GitSha::try_from(dev_sha.as_str())?;
 
         LocalDevEvidence {
             repository: repository.path(),
             origin_main_sha: &origin_main_sha,
             pinned_local_dev_sha: &pinned_local_dev_sha,
             feature_sha: &feature_sha,
+            local_dev_sha: &local_dev_sha,
         }
         .validate()
         .await?;
@@ -115,7 +135,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn local_dev_rejects_a_feature_not_descended_from_pinned_dev() -> HiveResult<()> {
+    async fn local_dev_rejects_a_pinned_base_without_feature_landing() -> HiveResult<()> {
         let repository = tempfile::tempdir()?;
         configure(repository.path())?;
         fs::write(repository.path().join("repair.txt"), "base\n")?;
@@ -128,32 +148,30 @@ mod tests {
         git(repository.path(), &["commit", "--quiet", "-m", "repair"])?;
         let feature_sha = git(repository.path(), &["rev-parse", "HEAD"])?;
 
-        let other = tempfile::tempdir()?;
-        configure(other.path())?;
-        fs::write(other.path().join("repair.txt"), "other\n")?;
-        git(other.path(), &["add", "repair.txt"])?;
-        git(other.path(), &["commit", "--quiet", "-m", "other"])?;
-        let dev_sha = git(other.path(), &["rev-parse", "HEAD"])?;
         let origin_main_sha = GitSha::try_from(base_sha.as_str())?;
-        let pinned_local_dev_sha = GitSha::try_from(dev_sha.as_str())?;
+        let pinned_local_dev_sha = GitSha::try_from(base_sha.as_str())?;
         let feature_sha = GitSha::try_from(feature_sha.as_str())?;
+        let local_dev_sha = GitSha::try_from(base_sha.as_str())?;
 
         let error = LocalDevEvidence {
             repository: repository.path(),
             origin_main_sha: &origin_main_sha,
             pinned_local_dev_sha: &pinned_local_dev_sha,
             feature_sha: &feature_sha,
+            local_dev_sha: &local_dev_sha,
         }
         .validate()
         .await
         .err()
         .ok_or_else(|| crate::HiveError::message("unlanded feature was accepted"))?;
-        assert!(error.to_string().contains("originMainSha is not an ancestor"));
+        assert!(error
+            .to_string()
+            .contains("serialized local-dev head"));
         Ok(())
     }
 
     #[tokio::test]
-    async fn local_dev_requires_the_three_pinned_commits() -> HiveResult<()> {
+    async fn local_dev_requires_the_bootstrap_chain_and_landed_head() -> HiveResult<()> {
         let repository = tempfile::tempdir()?;
         configure(repository.path())?;
         fs::write(repository.path().join("repair.txt"), "base\n")?;
@@ -165,12 +183,14 @@ mod tests {
         )?;
         let pinned_local_dev_sha = GitSha::try_from(feature_sha.as_str())?;
         let feature_sha = GitSha::try_from(feature_sha.as_str())?;
+        let local_dev_sha = GitSha::try_from(feature_sha.as_str())?;
 
         let error = LocalDevEvidence {
             repository: repository.path(),
             origin_main_sha: &origin_main_sha,
             pinned_local_dev_sha: &pinned_local_dev_sha,
             feature_sha: &feature_sha,
+            local_dev_sha: &local_dev_sha,
         }
         .validate()
         .await

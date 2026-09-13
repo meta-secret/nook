@@ -70,20 +70,21 @@ impl CompletionPlan<'_> {
     pub(super) async fn verify_owner_deliveries(
         &self,
         repository: &Path,
-        evidence: &BootstrapEvidence,
+        evidence: Option<&BootstrapEvidence>,
     ) -> crate::HiveResult<()> {
         use crate::HiveContext;
         if let Self::ObsoleteRetirement { owning_repairs } = self {
+            let evidence = evidence.ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
             for owner in *owning_repairs {
                 crate::delivery::MainRepairDelivery {
                     repository,
                     branch: &owner.repair_branch_name(),
                     evidence,
                 }
-                .verify_main_repair_merge_and_main()
+                .verify_main_repair_promotion_and_main(owner.as_str())
                 .await
                 .hive_context(format!(
-                    "obsolete blocker retirement requires a merged repair and green Main for owner {owner}"
+                    "obsolete blocker retirement requires exact-SHA local-dev promotion and green Main evidence for owner {owner}"
                 ))?;
             }
         }
