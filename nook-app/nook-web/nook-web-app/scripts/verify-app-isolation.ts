@@ -134,13 +134,17 @@ type PagesWorkerModule = {
 
 const requireFromApp = createRequire(import.meta.url)
 
+type ConcreteObject = Record<string, unknown>
+
+function isConcreteObject(value: unknown): value is ConcreteObject {
+  return typeof value === 'object' && Object(value) === value
+}
+
 function isPagesWorkerModule(value: unknown): value is PagesWorkerModule {
   if (
-    typeof value !== 'object' ||
-    Object(value) !== value ||
+    !isConcreteObject(value) ||
     !('default' in value) ||
-    typeof value.default !== 'object' ||
-    Object(value.default) !== value.default ||
+    !isConcreteObject(value.default) ||
     !('fetch' in value.default)
   ) {
     return false
