@@ -13,11 +13,6 @@ export type SentinelGenesisParticipation = {
   readonly participantLabel?: string;
 };
 
-export type CardParticipantRequest = {
-  readonly payload: string;
-  readonly participantLabel: string;
-};
-
 export type LoginCreateVaultChooserProps = {
   vault: VaultState;
   appKind: VaultApplication;

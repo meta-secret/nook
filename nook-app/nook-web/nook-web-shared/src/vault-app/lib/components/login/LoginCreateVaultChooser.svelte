@@ -5,10 +5,10 @@
     VaultStorageFailureKind,
   } from "$lib/runtime/storage-failure";
   import type {
-    CardParticipantRequest,
     LoginCreateVaultChooserProps,
     SentinelGenesisParticipation,
   } from "./login-create-vault-chooser-contract";
+  import type { SentinelParticipation } from "./sentinel-card-stack-contract";
 import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
@@ -137,7 +137,7 @@ import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
   }
 
   function addCardParticipant(
-    request: CardParticipantRequest,
+    request: SentinelParticipation,
   ): Promise<SentinelActionResult<void>> {
     return onAddSentinelGenesisParticipantResponse
       ? onAddSentinelGenesisParticipantResponse(request)
