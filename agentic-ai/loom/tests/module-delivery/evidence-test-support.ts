@@ -440,5 +440,3 @@ export type MutableProviderEvidenceIdentity = Omit<
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
   'acceptedProviderEvidence'
 > & { acceptedProviderEvidence: MutableProviderEvidenceIdentity[] };
-
-

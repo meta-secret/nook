@@ -2,6 +2,7 @@ import { ModuleEvidenceBoundary } from './evidence.ts';
 import type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryAcceptedProviderEvidenceIdentityV1,
+  ModuleDeliveryEvidenceClaimIdentity,
 } from './evidence.ts';
 import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
@@ -670,4 +671,3 @@ class EvidenceRecordReader {
       throw new Error('Evidence handoff contains unsupported fields.');
   }
 }
-

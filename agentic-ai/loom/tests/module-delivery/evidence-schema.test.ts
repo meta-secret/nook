@@ -257,5 +257,3 @@ test('current v2 evidence handoff preserves canonical identity property order', 
     ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(active.fixture);
   }
 });
-
-

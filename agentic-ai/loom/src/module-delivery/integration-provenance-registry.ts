@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
+import { realpathSync } from 'node:fs';
 import { ModuleRepositoryGit } from './git-command.ts';
 import { ModuleDeliverySourceRepositorySnapshot } from './repository-snapshot.ts';
+import { ModuleIntegrationPhase } from './evidence-schema.ts';
 import {
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryGenerationFenceKind,
@@ -177,6 +179,55 @@ export type CleanupModuleIntegrationRequest = Readonly<{
 }>;
 
 export type CleanupModuleIntegrationResult = Readonly<{ removed: boolean }>;
+
+export type ModuleIntegrationRefRequest = Readonly<{
+  workspace: ModuleWorktreeHandle;
+  planDigest: string;
+}>;
+
+export type UpdateModuleIntegrationRefRequest = Readonly<{
+  provenance: ModuleIntegrationProvenance;
+  nextCommit: string;
+  rollback: boolean;
+}>;
+
+export type FreshModuleIntegrationStateInspection = Readonly<{
+  state: ModuleIntegrationState;
+  provenance: ModuleIntegrationProvenance;
+}>;
+
+export type RecordIntegratedLeaseAcceptanceRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  state: ModuleDeliveryAdmissionState;
+  lease: ModuleDeliveryAttemptLease;
+}>;
+
+export type ModuleIntegrationHandoffRepositoryInspection = Readonly<{
+  state: ModuleIntegrationState;
+  handoff: ModuleDeliveryHandoffSubmission;
+}>;
+
+export type CurrentModuleIntegrationAdmissionInspection = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  state: ModuleIntegrationState;
+}>;
+
+export type ModuleIntegrationLeaseFrontierInspection = Readonly<{
+  state: ModuleIntegrationState;
+  lease: ModuleDeliveryAttemptLease;
+}>;
+
+export type ModuleIntegrationProviderPrecedenceInspection = Readonly<{
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  state: ModuleIntegrationState;
+  taskId: string;
+  lease: ModuleDeliveryAttemptLease;
+}>;
+
+export type ModuleIntegrationCompletedWaveCountRequest = Readonly<{
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  state: ModuleIntegrationState;
+}>;
 
 /** Owns the module integration provenance registry registry and its capability transitions. */
 
@@ -611,4 +662,3 @@ export type IntegrationStateRegistration = {
   readonly workspaceSnapshot: SourceRepositorySnapshot;
   readonly session: ModuleIntegrationSession;
 };
-
