@@ -163,7 +163,7 @@ afterEach(() => {
     rmSync(path, { recursive: true, force: true });
 });
 
-describe('PR Steward credentials and invocation codec', () => {
+describe('PR Lifecycle Agent credentials and invocation codec', () => {
   test('loads only the infrastructure-owned credential shape', () => {
     const directory = mkdtempSync(join(tmpdir(), 'nook-pr-events-'));
     temporaryPaths.push(directory);

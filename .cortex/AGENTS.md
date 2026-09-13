@@ -388,8 +388,9 @@ The active harness owns dynamic admission capacity and actual spawn results.
 - A functional Team Agent needing PR information sends a request to Gizmo
   through the active harness. Include the known target, needed evidence, and
   work that depends on it.
-- Gizmo routes dev PR requests to the dev manager, which authorizes internal
-  Steward's evidence collection through Team Gizmo. Gizmo may authorize
+- Gizmo routes dev PR requests to the dev manager.
+  The dev manager authorizes the PR Lifecycle Agent's evidence collection
+  through Team Gizmo. Gizmo may authorize
   feature compilation evidence and local landing requests. Return the evidence
   or blocker to the worker.
 - Only the PR Lifecycle Agent monitors PR state, checks, reviews, and workflow
@@ -405,7 +406,8 @@ The active harness owns dynamic admission capacity and actual spawn results.
   and promotion. This grants no general shared-branch Git authority.
 - Functional teams diagnose evidence returned by the PR Lifecycle Agent.
 - Each controller authors its stage's Workbench records and decides outcomes.
-  Steward publishes only the issuing controller's exact content and destination.
+  The PR Lifecycle Agent publishes only the issuing controller's exact content
+  and destination.
 - Use the [authorization handshake](teams/delivery-pipeline/pr-lifecycle/workflows/authorization-handshake.md)
   for PR, repository, run, and Workbench operations.
 - This is an agent execution rule, not a credential sandbox. Shared tools and

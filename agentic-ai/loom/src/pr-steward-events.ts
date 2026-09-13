@@ -343,7 +343,7 @@ class EventDecodeError extends Error {
     readonly code: PrStewardWebhookDecodeCode;
     readonly attribution: EventDecodeError['attribution'];
   }) {
-    super(`PR Steward webhook decode failed: ${request.code}`);
+    super(`PR Lifecycle Agent webhook decode failed: ${request.code}`);
     this.name = 'EventDecodeError';
     this.attribution = request.attribution;
   }
@@ -887,7 +887,7 @@ if (import.meta.main) {
       const message =
         cause instanceof Error ? cause.message : 'subscription failed';
       process.stderr.write(
-        `PR Steward event subscription failed: ${message}\n`,
+        `PR Lifecycle Agent event subscription failed: ${message}\n`,
       );
       process.exitCode = 1;
     });
