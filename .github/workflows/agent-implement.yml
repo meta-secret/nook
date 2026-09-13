@@ -30,6 +30,10 @@ on:
         required: false
         type: boolean
         default: false
+      pinned_local_dev_sha:
+        description: Required canonical local-dev base SHA pinned by Gizmo Prime
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -49,6 +53,7 @@ jobs:
       WORKBENCH_REPOSITORY: meta-secret/nook-workbench
       WORKBENCH_PLAN_FILE: .nook-workbench-plan.md
       WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md
+      PINNED_LOCAL_DEV_SHA: ${{ inputs.pinned_local_dev_sha }}
     steps:
       - name: Validate dispatch inputs
         env:
@@ -56,6 +61,7 @@ jobs:
           ISSUE_PATH: ${{ inputs.issue_path }}
           PROMPT: ${{ inputs.prompt }}
           TASK_TITLE: ${{ inputs.task_title }}
+          PINNED_LOCAL_DEV_SHA: ${{ inputs.pinned_local_dev_sha }}
         run: |
           if { [ -z "$PROMPT" ] && [ -z "$ISSUE_PATH" ]; } || { [ -n "$PROMPT" ] && [ -n "$ISSUE_PATH" ]; }; then
             echo "::error::Supply exactly one of issue_path or prompt."
@@ -77,6 +83,10 @@ jobs:
           printf 'MANUAL_TASK_TITLE=%s\n' "$normalized_title" >> "$GITHUB_ENV"
           if [ -n "$CONTINUING_OWNER" ] && ! printf '%s' "$CONTINUING_OWNER" | grep -Eq '^[a-z0-9][a-z0-9._-]*$'; then
             echo "::error::continuing_owner must be a lowercase GitHub login."
+            exit 1
+          fi
+          if ! printf '%s' "$PINNED_LOCAL_DEV_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::pinned_local_dev_sha must be an exact 40-character lowercase commit SHA."
             exit 1
           fi
 
@@ -206,13 +216,11 @@ jobs:
           set -euo pipefail
           if [ -n "$DISPATCH_PROMPT" ]; then
             feature_source="$MANUAL_TASK_TITLE"
-            checkout_ref="main"
             title="$MANUAL_TASK_TITLE"
             task="$DISPATCH_PROMPT"
             continuing_owner="$MANUAL_CONTINUING_OWNER"
           else
             feature_source="$(printf '%s' "$ISSUE_PATH" | cut -d/ -f2)"
-            checkout_ref="main"
             title="$ISSUE_TITLE"
             task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
             continuing_owner="$ISSUE_CONTINUING_OWNER"
@@ -258,7 +266,6 @@ jobs:
             echo "MAJOR_CHANGE_AUTHORIZED=$MAJOR_CHANGE_AUTHORIZED"
           } >> "$GITHUB_ENV"
           echo "ready=true" >> "$GITHUB_OUTPUT"
-          echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
 
       - name: Reject an existing feature branch on rerun
         id: rerun
@@ -283,9 +290,9 @@ jobs:
             core.setOutput('terminal', 'false')
 
       - name: Prepare isolated implementation worktree
+        id: bootstrap
         if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
         env:
-          IMPLEMENTATION_REF: ${{ steps.task.outputs.checkout_ref }}
           NOOK_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}
           TRUSTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
@@ -305,12 +312,33 @@ jobs:
           GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
           GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
           git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
-            "refs/heads/${IMPLEMENTATION_REF}:refs/remotes/origin/${IMPLEMENTATION_REF}"
-          implementation_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse "refs/remotes/origin/${IMPLEMENTATION_REF}")"
+            "+refs/heads/main:refs/remotes/origin/main"
+          origin_main_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse refs/remotes/origin/main^{commit})"
+          GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+          git -C "$GITHUB_WORKSPACE" fetch --no-tags origin "$PINNED_LOCAL_DEV_SHA"
           unset auth NOOK_TOKEN
+          pinned_local_dev_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse "$PINNED_LOCAL_DEV_SHA^{commit}")"
+          if [ "$pinned_local_dev_sha" != "$PINNED_LOCAL_DEV_SHA" ]; then
+            echo "::error::The pinned local-dev SHA did not resolve to the exact requested commit."
+            exit 1
+          fi
+          if ! git -C "$GITHUB_WORKSPACE" merge-base --is-ancestor "$origin_main_sha" "$pinned_local_dev_sha"; then
+            echo "::error::Pinned local dev is not descended from the freshly fetched origin/main."
+            exit 1
+          fi
           git -C "$GITHUB_WORKSPACE" worktree add --detach "$implementation_root" \
-            "refs/remotes/origin/${IMPLEMENTATION_REF}"
-          echo "IMPLEMENTATION_REPO_ROOT=$implementation_root" >> "$GITHUB_ENV"
+            "$pinned_local_dev_sha"
+          {
+            echo "IMPLEMENTATION_REPO_ROOT=$implementation_root"
+            echo "ORIGIN_MAIN_SHA=$origin_main_sha"
+            echo "PINNED_LOCAL_DEV_SHA=$pinned_local_dev_sha"
+          } >> "$GITHUB_ENV"
+          {
+            echo "ORIGIN_MAIN_SHA=$origin_main_sha"
+            echo "PINNED_LOCAL_DEV_SHA=$pinned_local_dev_sha"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Validate continuing GitHub owner
         if: steps.task.outputs.ready == 'true' && steps.rerun.outputs.terminal != 'true'
@@ -391,6 +419,8 @@ jobs:
           TASK_PLAN_PATH: ${{ env.TASK_PLAN_PATH }}
           TASK_PLAN_STARTED_AT: ${{ env.TASK_PLAN_STARTED_AT }}
           TASK_TITLE: ${{ env.TASK_TITLE }}
+          ORIGIN_MAIN_SHA: ${{ env.ORIGIN_MAIN_SHA }}
+          PINNED_LOCAL_DEV_SHA: ${{ env.PINNED_LOCAL_DEV_SHA }}
           WORKBENCH_PLAN_FILE: ${{ env.WORKBENCH_PLAN_FILE }}
           WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
           WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
@@ -446,6 +476,8 @@ jobs:
               `feature: ${process.env.TASK_FEATURE}`,
               `issue: ${process.env.ISSUE_PATH || 'null'}`,
               `gizmo_id: ${currentGizmoId}`,
+              `originMainSha: ${process.env.ORIGIN_MAIN_SHA}`,
+              `pinnedLocalDevSha: ${process.env.PINNED_LOCAL_DEV_SHA}`,
               `started_at: ${process.env.TASK_PLAN_STARTED_AT}`,
               'agent: cursor',
               '---',
@@ -632,6 +664,8 @@ jobs:
           IMPLEMENTATION_REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
           PUBLISHED_BRANCH: ${{ steps.implement.outputs.published_branch }}
           PUBLISHED_HEAD_SHA: ${{ steps.implement.outputs.published_head_sha }}
+          ORIGIN_MAIN_SHA: ${{ env.ORIGIN_MAIN_SHA }}
+          PINNED_LOCAL_DEV_SHA: ${{ env.PINNED_LOCAL_DEV_SHA }}
         with:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
@@ -743,8 +777,10 @@ jobs:
               `feature: ${feature}`,
               `issue: ${issuePath || 'null'}`,
               `plan: ${process.env.PLAN_PATH || 'null'}`,
-                  `published_branch: ${publishedBranch || 'null'}`,
-                  `published_head_sha: ${publishedHead || 'null'}`,
+              `originMainSha: ${process.env.ORIGIN_MAIN_SHA}`,
+              `pinnedLocalDevSha: ${process.env.PINNED_LOCAL_DEV_SHA}`,
+              `published_branch: ${publishedBranch || 'null'}`,
+              `published_head_sha: ${publishedHead || 'null'}`,
               `status: ${success ? 'in_progress' : 'blocked'}`,
               `started_at: ${workflowRun.created_at || now}`,
               `finished_at: ${now}`,
