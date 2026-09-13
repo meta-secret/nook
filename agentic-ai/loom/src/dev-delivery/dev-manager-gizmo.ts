@@ -10,7 +10,6 @@ import {
   type CommitSha,
   type DevFailure,
   type DevSnapshot,
-  type DevelopmentPullRequest,
   type RemoteBranchSnapshot,
   type WorktreeRecord,
   WorktreeState,
@@ -191,6 +190,9 @@ export class DevManagerGizmoCommand {
   private planInsideLocks(
     inspection: DevManagerGizmoInspection,
   ): Result<DevManagerGizmoPlan, DevFailure> {
+    // Planning is intentionally local-Git-only. PR, check, review, security,
+    // and deployment state remains with PR Steward; the manager-only command
+    // seams below may publish a snapshot or prepare its PR.
     if (
       inspection.localToMain === DevCommitRelation.Behind ||
       inspection.localToMain === DevCommitRelation.Diverged
@@ -210,23 +212,8 @@ export class DevManagerGizmoCommand {
 
     if (
       inspection.localToMain === DevCommitRelation.Equal &&
-      inspection.localToOriginDev === undefined
-    ) {
-      return ok({
-        kind: DevManagerGizmoPlanKind.Report,
-        outcome: this.outcome({
-          inspection,
-          state: DevManagerGizmoState.Idle,
-          action: DevManagerGizmoAction.NoAction,
-          expectedSha: inspection.devSha,
-          detail: 'no local commits exist beyond origin/main',
-        }),
-      });
-    }
-
-    if (
-      inspection.localToMain === DevCommitRelation.Equal &&
-      inspection.localToOriginDev === DevCommitRelation.Equal
+      (inspection.localToOriginDev === undefined ||
+        inspection.localToOriginDev === DevCommitRelation.Equal)
     ) {
       return ok({
         kind: DevManagerGizmoPlanKind.Report,
@@ -264,178 +251,14 @@ export class DevManagerGizmoCommand {
       });
     }
 
-    if (inspection.localToOriginDev === DevCommitRelation.Ahead) {
-      return this.planUnpublishedLocalDev(inspection);
-    }
-
-    return this.planFrozenSnapshot(inspection);
-  }
-
-  private planUnpublishedLocalDev(
-    inspection: DevManagerGizmoInspection,
-  ): Result<DevManagerGizmoPlan, DevFailure> {
-    const pullRequest = this.workspace.github.findDevelopmentPullRequest({
-      workingDirectory: this.workspace.root,
-    });
-    if (pullRequest.isErr()) return err(pullRequest.error);
-    if (pullRequest.value.kind === 'found') {
-      return this.planFrozenPullRequest({
-        inspection,
-        pullRequest: pullRequest.value.pullRequest,
-      });
-    }
-    return ok({ kind: DevManagerGizmoPlanKind.Publish, inspection });
-  }
-
-  private planFrozenSnapshot(
-    inspection: DevManagerGizmoInspection,
-  ): Result<DevManagerGizmoPlan, DevFailure> {
-    const expectedSha = this.remoteDevSha(inspection);
-    const pullRequest = this.workspace.github.findDevelopmentPullRequest({
-      workingDirectory: this.workspace.root,
-    });
-    if (pullRequest.isErr()) return err(pullRequest.error);
-    if (pullRequest.value.kind === 'absent') {
+    if (inspection.localToOriginDev === DevCommitRelation.Equal) {
       return ok({
         kind: DevManagerGizmoPlanKind.PrManager,
         inspection,
       });
     }
-    return this.planFrozenPullRequest({
-      inspection,
-      pullRequest: pullRequest.value.pullRequest,
-    });
-  }
 
-  private planFrozenPullRequest(request: {
-    readonly inspection: DevManagerGizmoInspection;
-    readonly pullRequest: DevelopmentPullRequest;
-  }): Result<DevManagerGizmoPlan, DevFailure> {
-    const expectedSha = this.remoteDevSha(request.inspection);
-    const currentPullRequest = request.pullRequest;
-    if (!currentPullRequest.headSha.equals(expectedSha)) {
-      return err({
-        kind: DevFailureKind.Race,
-        message: `The live dev-to-main pull request is at ${currentPullRequest.headSha.value()} but origin/dev is at ${expectedSha.value()}; refusing to infer validation state`,
-      });
-    }
-    if (currentPullRequest.isDraft) {
-      return ok({
-        kind: DevManagerGizmoPlanKind.Report,
-        outcome: this.outcome({
-          inspection: request.inspection,
-          state: DevManagerGizmoState.ReviewRequired,
-          action: DevManagerGizmoAction.ObtainReview,
-          expectedSha,
-          detail: 'the dev-to-main pull request is still a draft',
-        }),
-      });
-    }
-    const terminal = this.workspace.github.requireDevelopmentCiTerminal({
-      sha: expectedSha,
-      workingDirectory: this.workspace.root,
-      replacement: true,
-    });
-    if (terminal.isErr()) {
-      return this.planPriorValidationBlocker({
-        inspection: request.inspection,
-        expectedSha,
-        failure: terminal.error,
-      });
-    }
-    const evidence = this.workspace.github.requirePromotionEvidence({
-      sha: expectedSha,
-      pullRequest: currentPullRequest,
-      workingDirectory: this.workspace.root,
-    });
-    if (evidence.isErr()) {
-      return this.planPromotionBlocker({
-        inspection: request.inspection,
-        expectedSha,
-        failure: evidence.error,
-      });
-    }
-    return ok({
-      kind: DevManagerGizmoPlanKind.Report,
-      outcome: this.outcome({
-        inspection: request.inspection,
-        state: DevManagerGizmoState.PromotionReady,
-        action: DevManagerGizmoAction.Promote,
-        expectedSha,
-        detail:
-          'complete exact-head validation, review, security, and deployment evidence was observed; promotion remains a separate guarded operation',
-      }),
-    });
-  }
-
-  private planPriorValidationBlocker(request: {
-    readonly inspection: DevManagerGizmoInspection;
-    readonly expectedSha: CommitSha;
-    readonly failure: DevFailure;
-  }): Result<DevManagerGizmoPlan, DevFailure> {
-    if (request.failure.kind !== DevFailureKind.Checks) {
-      return err(request.failure);
-    }
-    const isActive = / is (queued|in_progress);/u.test(request.failure.message);
-    return ok({
-      kind: DevManagerGizmoPlanKind.Report,
-      outcome: this.outcome({
-        inspection: request.inspection,
-        state: isActive
-          ? DevManagerGizmoState.ValidationFrozen
-          : DevManagerGizmoState.ValidationRequired,
-        action: DevManagerGizmoAction.WaitForValidation,
-        expectedSha: request.expectedSha,
-        detail: isActive
-          ? `${request.failure.message}; local dev is newer and remains preserved`
-          : `${request.failure.message}; obtain an exact-head terminal outcome before replacing origin/dev`,
-      }),
-    });
-  }
-
-  private planPromotionBlocker(request: {
-    readonly inspection: DevManagerGizmoInspection;
-    readonly expectedSha: CommitSha;
-    readonly failure: DevFailure;
-  }): Result<DevManagerGizmoPlan, DevFailure> {
-    switch (request.failure.kind) {
-      case DevFailureKind.Checks:
-        return ok({
-          kind: DevManagerGizmoPlanKind.Report,
-          outcome: this.outcome({
-            inspection: request.inspection,
-            state: DevManagerGizmoState.RepairRequired,
-            action: DevManagerGizmoAction.RequestRepair,
-            expectedSha: request.expectedSha,
-            detail: `${request.failure.message}; route the failed snapshot through a Feature Gizmo for repair`,
-          }),
-        });
-      case DevFailureKind.Reviews:
-        return ok({
-          kind: DevManagerGizmoPlanKind.Report,
-          outcome: this.outcome({
-            inspection: request.inspection,
-            state: DevManagerGizmoState.ReviewRequired,
-            action: DevManagerGizmoAction.ObtainReview,
-            expectedSha: request.expectedSha,
-            detail: request.failure.message,
-          }),
-        });
-      case DevFailureKind.Deployment:
-      case DevFailureKind.Evidence:
-        return ok({
-          kind: DevManagerGizmoPlanKind.Report,
-          outcome: this.outcome({
-            inspection: request.inspection,
-            state: DevManagerGizmoState.EvidenceRequired,
-            action: DevManagerGizmoAction.ObtainEvidence,
-            expectedSha: request.expectedSha,
-            detail: `${request.failure.message}; collect the required security/deployment evidence`,
-          }),
-        });
-      default:
-        return err(request.failure);
-    }
+    return ok({ kind: DevManagerGizmoPlanKind.Publish, inspection });
   }
 
   private publish(
@@ -462,6 +285,17 @@ export class DevManagerGizmoCommand {
     if (manager.isErr()) {
       return err(this.operationFailure({ inspection, failure: manager.error }));
     }
+    if (!manager.value.devSha.equals(published.value.devSha)) {
+      return err(
+        this.operationFailure({
+          inspection,
+          failure: {
+            kind: DevFailureKind.Race,
+            message: `origin/dev changed between exact publication and PR-manager execution: expected ${published.value.devSha.value()}, found ${manager.value.devSha.value()}`,
+          },
+        }),
+      );
+    }
     return ok(
       this.outcome({
         inspection: this.afterPublication(inspection, published.value.devSha),
@@ -481,6 +315,17 @@ export class DevManagerGizmoCommand {
     const manager = new DevPrManagerCommand(this.workspace).execute();
     if (manager.isErr()) {
       return err(this.operationFailure({ inspection, failure: manager.error }));
+    }
+    if (!manager.value.devSha.equals(inspection.devSha)) {
+      return err(
+        this.operationFailure({
+          inspection,
+          failure: {
+            kind: DevFailureKind.Race,
+            message: `origin/dev changed between exact inspection and PR-manager execution: expected ${inspection.devSha.value()}, found ${manager.value.devSha.value()}`,
+          },
+        }),
+      );
     }
     return ok(
       this.outcome({

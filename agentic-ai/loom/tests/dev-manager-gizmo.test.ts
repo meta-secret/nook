@@ -24,8 +24,6 @@ const SHA_B = '2222222222222222222222222222222222222222';
 
 interface PullRequestFixture {
   readonly headSha: string;
-  readonly isDraft: boolean;
-  readonly reviewDecision: string;
 }
 
 interface ScenarioOptions {
@@ -35,14 +33,12 @@ interface ScenarioOptions {
   readonly remoteDevPresent?: boolean;
   readonly pullRequest?: PullRequestFixture;
   readonly ciStatus?: string;
-  readonly ciConclusion?: string;
-  readonly ciPresent?: boolean;
   readonly malformedWorktree?: boolean;
   readonly reportedWorktreeSha?: string;
   readonly observedHeadSha?: string;
 }
 
-/** Simulates Git/GitHub transport observations without asserting provider state. */
+/** Simulates local Git and bounded manager-seam transport responses. */
 class DevManagerGizmoRunner implements CommandRunner {
   readonly requests: CommandRequest[] = [];
   private remoteDevPresent: boolean;
@@ -148,8 +144,6 @@ class DevManagerGizmoRunner implements CommandRunner {
     if (args[0] === 'pr' && args[1] === 'create') {
       this.pullRequest = {
         headSha: this.remoteDevSha,
-        isDraft: false,
-        reviewDecision: 'REVIEW_REQUIRED',
       };
       return ok(this.output({ stdout: 'https://github.example/pr/42\n' }));
     }
@@ -161,34 +155,6 @@ class DevManagerGizmoRunner implements CommandRunner {
     }
     if (args[0] === 'run' && args[1] === 'list') {
       return ok(this.ciRuns());
-    }
-    if (args[0] === 'run' && args[1] === 'view') {
-      return ok(
-        this.output({
-          stdout: JSON.stringify({
-            jobs: [
-              {
-                name: 'Dev promotion readiness',
-                status: 'completed',
-                conclusion: 'success',
-              },
-            ],
-          }),
-        }),
-      );
-    }
-    if (args[0] === 'api' && args[1] === 'graphql') {
-      return ok(
-        this.output({
-          stdout: JSON.stringify({
-            data: {
-              repository: {
-                pullRequest: { reviewThreads: { nodes: [] } },
-              },
-            },
-          }),
-        }),
-      );
     }
     return ok(this.output());
   }
@@ -204,7 +170,7 @@ class DevManagerGizmoRunner implements CommandRunner {
           headRefOid: this.pullRequest.headSha,
           baseRefOid: SHA_A,
           url: 'https://github.example/pr/42',
-          isDraft: this.pullRequest.isDraft,
+          isDraft: false,
         },
       ]),
     });
@@ -220,18 +186,16 @@ class DevManagerGizmoRunner implements CommandRunner {
         headRefOid: pullRequest?.headSha ?? this.remoteDevSha,
         baseRefOid: SHA_A,
         url: 'https://github.example/pr/42',
-        isDraft: pullRequest?.isDraft ?? false,
+        isDraft: false,
         state: 'OPEN',
         headRepository: { nameWithOwner: 'nook/example' },
         baseRepository: { nameWithOwner: 'nook/example' },
-        reviewDecision: pullRequest?.reviewDecision ?? 'REVIEW_REQUIRED',
+        reviewDecision: 'REVIEW_REQUIRED',
       }),
     });
   }
 
   private ciRuns(): CommandOutput {
-    if (this.request.options.ciPresent === false)
-      return this.output({ stdout: '[]' });
     return this.output({
       stdout: JSON.stringify([
         {
@@ -239,7 +203,7 @@ class DevManagerGizmoRunner implements CommandRunner {
           headBranch: 'dev',
           headSha: this.remoteDevSha,
           status: this.request.options.ciStatus ?? 'completed',
-          conclusion: this.request.options.ciConclusion ?? 'success',
+          conclusion: 'pending',
           event: 'pull_request',
           workflowName: 'CI',
         },
@@ -312,7 +276,31 @@ test('reports idle when local dev has no commits beyond refreshed main', () => {
   }
 });
 
-test('publishes unpublished local dev through existing manager commands and reports the frozen expected SHA', () => {
+test('reports idle when no origin/dev snapshot has been published', () => {
+  const harness = new DevManagerGizmoHarness({
+    localSha: SHA_A,
+    remoteDevSha: SHA_A,
+    ancestryPairs: [],
+    remoteDevPresent: false,
+  });
+  try {
+    const result = new DevManagerGizmoCommand(harness.workspace).execute();
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) return;
+    expect(result.value.state).toBe(DevManagerGizmoState.Idle);
+    expect(result.value.action).toBe(DevManagerGizmoAction.NoAction);
+    expect(result.value.expectedSha.value()).toBe(SHA_A);
+    expect(
+      harness.runner.requests.some(
+        (request) => request.executable === CommandExecutable.GitHub,
+      ),
+    ).toBe(false);
+  } finally {
+    harness.dispose();
+  }
+});
+
+test('publishes unpublished local dev through existing manager commands and reports the exact expected SHA', () => {
   const harness = new DevManagerGizmoHarness({
     localSha: SHA_B,
     remoteDevSha: SHA_A,
@@ -344,23 +332,27 @@ test('publishes unpublished local dev through existing manager commands and repo
           request.args[1] === 'create',
       ),
     ).toBe(true);
+    expect(
+      harness.runner.requests.some(
+        (request) =>
+          request.executable === CommandExecutable.GitHub &&
+          (request.args[0] === 'run' || request.args[0] === 'api'),
+      ),
+    ).toBe(false);
   } finally {
     harness.dispose();
   }
 });
 
-test('preserves newer local dev while an exact-head validation attempt is active', () => {
+test('preserves newer local dev when the bounded publication seam reports active validation', () => {
   const harness = new DevManagerGizmoHarness({
     localSha: SHA_B,
     remoteDevSha: SHA_A,
     ancestryPairs: [[SHA_A, SHA_B]],
     pullRequest: {
       headSha: SHA_A,
-      isDraft: false,
-      reviewDecision: 'APPROVED',
     },
     ciStatus: 'in_progress',
-    ciConclusion: 'pending',
   });
   try {
     const result = new DevManagerGizmoCommand(harness.workspace).execute();
@@ -378,32 +370,93 @@ test('preserves newer local dev while an exact-head validation attempt is active
           request.args[0] === 'push',
       ),
     ).toBe(false);
+    expect(
+      harness.runner.requests.some(
+        (request) =>
+          request.executable === CommandExecutable.GitHub &&
+          request.args[0] === 'run' &&
+          request.args[1] === 'list',
+      ),
+    ).toBe(true);
   } finally {
     harness.dispose();
   }
 });
 
-test('routes a completed failed exact-head validation to Feature Gizmo repair', () => {
+test('uses the manager-only PR seam for an already frozen snapshot without observing provider readiness', () => {
   const harness = new DevManagerGizmoHarness({
     localSha: SHA_B,
     remoteDevSha: SHA_B,
     ancestryPairs: [[SHA_A, SHA_B]],
-    pullRequest: {
-      headSha: SHA_B,
-      isDraft: false,
-      reviewDecision: 'APPROVED',
-    },
-    ciStatus: 'completed',
-    ciConclusion: 'failure',
   });
   try {
     const result = new DevManagerGizmoCommand(harness.workspace).execute();
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
-    expect(result.value.state).toBe(DevManagerGizmoState.RepairRequired);
-    expect(result.value.action).toBe(DevManagerGizmoAction.RequestRepair);
+    expect(result.value.state).toBe(DevManagerGizmoState.ValidationRequired);
+    expect(result.value.action).toBe(DevManagerGizmoAction.WaitForValidation);
     expect(result.value.expectedSha.value()).toBe(SHA_B);
-    expect(result.value.message).toContain('Feature Gizmo');
+    expect(result.value.pullRequestUrl).toBe('https://github.example/pr/42');
+    expect(
+      harness.runner.requests.some(
+        (request) =>
+          request.executable === CommandExecutable.Git &&
+          request.args[0] === 'push',
+      ),
+    ).toBe(false);
+    expect(
+      harness.runner.requests.some(
+        (request) =>
+          request.executable === CommandExecutable.GitHub &&
+          (request.args[0] === 'run' || request.args[0] === 'api'),
+      ),
+    ).toBe(false);
+  } finally {
+    harness.dispose();
+  }
+});
+
+test('requires feature-path reconciliation when local dev is not based on refreshed main', () => {
+  const harness = new DevManagerGizmoHarness({
+    localSha: SHA_B,
+    remoteDevSha: SHA_A,
+    ancestryPairs: [],
+  });
+  try {
+    const result = new DevManagerGizmoCommand(harness.workspace).execute();
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) return;
+    expect(result.value.state).toBe(DevManagerGizmoState.ReconcileRequired);
+    expect(result.value.action).toBe(DevManagerGizmoAction.Reconcile);
+    expect(result.value.expectedSha.value()).toBe(SHA_A);
+    expect(
+      harness.runner.requests.some(
+        (request) => request.executable === CommandExecutable.GitHub,
+      ),
+    ).toBe(false);
+  } finally {
+    harness.dispose();
+  }
+});
+
+test('requires feature-path reconciliation when origin/dev is ahead of local dev', () => {
+  const harness = new DevManagerGizmoHarness({
+    localSha: SHA_A,
+    remoteDevSha: SHA_B,
+    ancestryPairs: [[SHA_A, SHA_B]],
+  });
+  try {
+    const result = new DevManagerGizmoCommand(harness.workspace).execute();
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) return;
+    expect(result.value.state).toBe(DevManagerGizmoState.ReconcileRequired);
+    expect(result.value.action).toBe(DevManagerGizmoAction.Reconcile);
+    expect(result.value.expectedSha.value()).toBe(SHA_B);
+    expect(
+      harness.runner.requests.some(
+        (request) => request.executable === CommandExecutable.GitHub,
+      ),
+    ).toBe(false);
   } finally {
     harness.dispose();
   }
