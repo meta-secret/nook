@@ -168,13 +168,16 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     }
 
     for required in [
-        "feature_branch",
-        "refs/heads/${FEATURE_BRANCH}:refs/remotes/origin/${FEATURE_BRANCH}",
-        "remote_feature_sha",
-        "if [ \"$remote_feature_sha\" != \"$PINNED_LOCAL_DEV_SHA\" ]",
-        "worktree add --detach \"$implementation_root\" \"$pinned_local_dev_sha\"",
-        "origin_main_sha",
-        "merge-base --is-ancestor \"$origin_main_sha\" \"$pinned_local_dev_sha\"",
+        "feature_branch:",
+        "Required prepublished feature branch",
+        "branch.commit.sha !== process.env.PINNED_LOCAL_DEV_SHA",
+        "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH",
+        "fetched_origin_main_sha=\"$(git -C \"$GITHUB_WORKSPACE\" rev-parse refs/remotes/origin/main^{commit})\"",
+        "if [ \"$fetched_origin_main_sha\" != \"$ORIGIN_MAIN_SHA\" ]",
+        "pinned_local_dev_sha=\"$(git -C \"$GITHUB_WORKSPACE\" rev-parse \"refs/remotes/origin/$FEATURE_BRANCH^{commit}\")\"",
+        "if [ \"$pinned_local_dev_sha\" != \"$PINNED_LOCAL_DEV_SHA\" ]",
+        "merge-base --is-ancestor \"$ORIGIN_MAIN_SHA\" \"$pinned_local_dev_sha\"",
+        "worktree add --detach \"$implementation_root\" \"refs/remotes/origin/$FEATURE_BRANCH\"",
     ] {
         assert!(
             normalized_workflow.contains(required),
