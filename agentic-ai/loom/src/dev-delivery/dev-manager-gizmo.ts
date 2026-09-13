@@ -360,6 +360,16 @@ export class DevManagerGizmoCommand {
     };
   }
 
+  private operationFailure(request: {
+    readonly inspection: DevManagerGizmoInspection;
+    readonly failure: DevFailure;
+  }): DevFailure {
+    return {
+      kind: request.failure.kind,
+      message: `${request.failure.message}; expected SHA: ${request.inspection.devSha.value()}; next action: stop and inspect the exact local/remote state before retrying`,
+    };
+  }
+
   private outcome(request: {
     readonly inspection: DevManagerGizmoInspection;
     readonly state: DevManagerGizmoState;
