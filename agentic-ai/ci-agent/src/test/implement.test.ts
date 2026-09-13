@@ -16,6 +16,7 @@ import test, { describe, it } from "node:test";
 import {
   CiImplementationCommand,
   AgentImplementationPublishBranch,
+  AgentImplementationRecordPublication,
   AgentImplementationRecordTrustedBudgetBlocker,
   AgentImplementationResolveDeliveryTarget,
   AgentImplementationRunCiImplementationPhases,
@@ -25,10 +26,10 @@ import {
   CiImplementationMode,
 } from "../main/implement.js";
 
-const EXPECTED_HEAD = "a".repeat(40);
 const ORIGIN_MAIN_SHA = "b".repeat(40);
 const PINNED_LOCAL_DEV_SHA = "c".repeat(40);
 const FEATURE_HEAD_SHA = "d".repeat(40);
+const PUBLISHED_FEATURE_SHA = "e".repeat(40);
 
 class BootstrapReplacementFixture {
   private constructor(readonly root: string) {}
@@ -116,20 +117,20 @@ class ImplementDeliveryArgs {
     const log = this.request;
     return {
       agentBranch: "codex/agent-branching",
-      expectedHead: EXPECTED_HEAD,
+      featureHeadSha: FEATURE_HEAD_SHA,
       assertBudget: async () => {
         log.push("budget");
         return ok();
       },
-      pushBranch: async () => {
-        log.push("push");
-        return ok();
+      pushBranch: async (expectedRemoteHeadSha) => {
+        log.push(`push:${expectedRemoteHeadSha}`);
+        return ok(PUBLISHED_FEATURE_SHA);
       },
       readPublishedHead: () =>
         new ImplementStep({
           log,
           name: "read-origin-head",
-          value: EXPECTED_HEAD,
+          value: PUBLISHED_FEATURE_SHA,
         }).execute(),
     };
   }
@@ -183,17 +184,69 @@ void test("feature delivery publishes and verifies one exact branch head without
   )
     .execute()
     .then(CiResultAssertions.assertSuccess);
-  assert.equal(published, EXPECTED_HEAD);
-  assert.deepEqual(events, ["budget", "push", "read-origin-head"]);
+  assert.deepEqual(published, {
+    branch: "codex/agent-branching",
+    featureHeadSha: FEATURE_HEAD_SHA,
+    publishedFeatureSha: PUBLISHED_FEATURE_SHA,
+  });
+  assert.deepEqual(events, [
+    "budget",
+    `push:${FEATURE_HEAD_SHA}`,
+    "read-origin-head",
+  ]);
 });
 
 void test("agent delivery rejects a branch whose remote head changed during publication", async () => {
   const args = new ImplementDeliveryArgs([]).execute();
-  args.readPublishedHead = async () => ok("b".repeat(40));
+  args.readPublishedHead = async () => ok("f".repeat(40));
   await CiResultAssertions.assertAsyncFailure(
     new AgentImplementationPublishBranch(args).execute(),
-    /published at .* expected/u,
+    /published at .* expected publishedFeatureSha/u,
   );
+});
+
+void test("agent delivery rejects a publication that reuses the pre-edit head", async () => {
+  const args = new ImplementDeliveryArgs([]).execute();
+  args.pushBranch = async () => ok(FEATURE_HEAD_SHA);
+  await CiResultAssertions.assertAsyncFailure(
+    new AgentImplementationPublishBranch(args).execute(),
+    /publishedFeatureSha must differ from the pinned featureHeadSha/u,
+  );
+});
+
+void test("publication output records the pinned and published identities as JSON", () => {
+  const root = mkdtempSync(join(tmpdir(), "nook-publication-output-"));
+  const output = join(root, "github-output");
+  try {
+    CiResultAssertions.assertSuccess(
+      new AgentImplementationRecordPublication({
+        outputPath: output,
+        evidence: {
+          branch: "codex/agent-branching",
+          featureHeadSha: FEATURE_HEAD_SHA,
+          publishedFeatureSha: PUBLISHED_FEATURE_SHA,
+        },
+      }).execute(),
+    );
+    const lines = Object.fromEntries(
+      readFileSync(output, "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => {
+          const separator = line.indexOf("=");
+          return [line.slice(0, separator), line.slice(separator + 1)];
+        }),
+    );
+    assert.equal(lines.feature_head_sha, FEATURE_HEAD_SHA);
+    assert.equal(lines.published_feature_sha, PUBLISHED_FEATURE_SHA);
+    assert.deepEqual(JSON.parse(lines.publication_json), {
+      branch: "codex/agent-branching",
+      featureHeadSha: FEATURE_HEAD_SHA,
+      publishedFeatureSha: PUBLISHED_FEATURE_SHA,
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 void test("implementation phases edit once and publish only changed work", async () => {
@@ -430,4 +483,20 @@ void test("bootstrap verification rejects replacement-ref ancestry bypasses", as
   } finally {
     fixture.dispose();
   }
+});
+
+void test("bootstrap verification request keeps the branch beside typed evidence", () => {
+  const request = {
+    repoRoot: "/tmp/nook-implementation",
+    evidence: {
+      branch: "codex/agent-branching",
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+      featureHeadSha: FEATURE_HEAD_SHA,
+    },
+  } satisfies ConstructorParameters<
+    typeof AgentImplementationVerifyBootstrap
+  >[0];
+  assert.equal(request.evidence.branch, "codex/agent-branching");
+  assert.equal(request.evidence.featureHeadSha, FEATURE_HEAD_SHA);
 });

@@ -126,21 +126,21 @@ export class CiImplementationCommand {
     if (repositoryName.isErr()) return err(repositoryName.error);
     const repoRef = repositoryName.value,
       selected = target.value,
-      head = await new CiRepository(repoRoot).revParseImmutable({ ref: "HEAD" });
-    if (head.isErr()) return err(head.error);
+      repositoryInstance = new CiRepository(repoRoot);
     const preserved = await new AgentImplementationPublishBranch({
       agentBranch: selected.branch,
-      expectedHead: head.value,
+      featureHeadSha: selected.featureHeadSha,
       assertBudget: () =>
         new AuthoredChangeBudget({
           repoRoot,
           baseRef: selected.budgetBaseRef,
           maximumLines: 2_000,
         }).enforce(),
-      pushBranch: () =>
-        new CiRepository(repoRoot).pushFixBranch({
+      pushBranch: (expectedRemoteHeadSha) =>
+        repositoryInstance.pushFixBranch({
           fixBranch: selected.branch,
           runId,
+          expectedRemoteHeadSha,
         }),
       readPublishedHead: () =>
         new GitHubClient(octokit).readBranchHeadOnOrigin({
@@ -156,24 +156,12 @@ export class CiImplementationCommand {
       return new CiCleanupOutcome(recorded).finish(err(preserved.error));
     }
     log.info(
-      `Feature branch ${selected.branch} exact head ${preserved.value} published; no pull request was created`,
+      `Feature branch ${preserved.value.branch} advanced from ${preserved.value.featureHeadSha} to exact head ${preserved.value.publishedFeatureSha}; no pull request was created`,
     );
-    const outputPath = this.environment.GITHUB_OUTPUT?.trim();
-    if (outputPath) {
-      try {
-        appendFileSync(
-          outputPath,
-          `published_branch=${selected.branch}\npublished_head_sha=${preserved.value}\n`,
-          "utf8",
-        );
-      } catch {
-        return err({
-          kind: CiFailureKind.Filesystem,
-          message: "Unable to record the published feature branch",
-        });
-      }
-    }
-    return ok();
+    return new AgentImplementationRecordPublication({
+      outputPath: this.environment.GITHUB_OUTPUT?.trim() || "",
+      evidence: preserved.value,
+    }).execute();
   }
 }
 
@@ -205,6 +193,45 @@ export class AgentImplementationRecordTrustedBudgetBlocker {
   }
 }
 
+export interface AgentImplementationRecordPublicationRequest {
+  readonly outputPath: string;
+  readonly evidence: AgentImplementationPublicationEvidence;
+}
+
+/** Writes exact publication identities for GitHub Actions consumers. */
+export class AgentImplementationRecordPublication {
+  constructor(
+    private readonly request: AgentImplementationRecordPublicationRequest,
+  ) {}
+  execute(): Result<void, CiFailure> {
+    const { outputPath, evidence } = this.request;
+    if (!outputPath) return ok();
+    try {
+      const publicationJson = JSON.stringify(evidence);
+      appendFileSync(
+        outputPath,
+        [
+          `published_branch=${evidence.branch}`,
+          `feature_head_sha=${evidence.featureHeadSha}`,
+          `published_feature_sha=${evidence.publishedFeatureSha}`,
+          // Keep the legacy workflow output while consumers migrate to the
+          // explicit publication identity.
+          `published_head_sha=${evidence.publishedFeatureSha}`,
+          `publication_json=${publicationJson}`,
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      return ok();
+    } catch {
+      return err({
+        kind: CiFailureKind.Filesystem,
+        message: "Unable to record the published feature branch",
+      });
+    }
+  }
+}
+
 interface VerifyBootstrapRequest {
   readonly repoRoot: string;
   readonly evidence: AgentImplementationBootstrapEvidence & {
@@ -222,6 +249,7 @@ export class AgentImplementationVerifyBootstrap {
     ).execute();
     if (validated.isErr()) return err(validated.error);
     const evidence = validated.value;
+    const branch = this.request.evidence.branch;
     const repository = new CiRepository(repoRoot);
     const head = await repository.revParseImmutable({ ref: "HEAD" });
     if (head.isErr()) return err(head.error);
@@ -257,7 +285,7 @@ export class AgentImplementationVerifyBootstrap {
     if (symbolicHead.error.code !== 1) return err(symbolicHead.error);
 
     const remoteFeatureHead = await repository.revParseImmutable({
-      ref: `refs/remotes/origin/${evidence.branch}`,
+      ref: `refs/remotes/origin/${branch}`,
     });
     if (remoteFeatureHead.isErr()) return err(remoteFeatureHead.error);
     if (remoteFeatureHead.value !== evidence.featureHeadSha) {
@@ -311,22 +339,56 @@ export class AgentImplementationVerifyBootstrap {
 
 export class AgentImplementationPublishBranch {
   constructor(private readonly request: PublishBranchArgs) {}
-  async execute(): Promise<Result<string, CiFailure>> {
+  async execute(): Promise<
+    Result<AgentImplementationPublicationEvidence, CiFailure>
+  > {
     const args = this.request;
 
-    const budget = await args.assertBudget();
-    if (budget.isErr()) return err(budget.error);
-    const pushed = await args.pushBranch();
-    if (pushed.isErr()) return err(pushed.error);
-    const published = await args.readPublishedHead();
-    if (published.isErr()) return err(published.error);
-    if (published.value !== args.expectedHead) {
+    if (!FULL_COMMIT_SHA.test(args.featureHeadSha)) {
       return err({
-        kind: CiFailureKind.Github,
-        message: `Feature branch ${args.agentBranch} published at ${published.value}, expected ${args.expectedHead}`,
+        kind: CiFailureKind.Configuration,
+        message:
+          "featureHeadSha must be an exact lowercase 40-hex commit SHA",
       });
     }
-    return ok(published.value);
+    const budget = await args.assertBudget();
+    if (budget.isErr()) return err(budget.error);
+    const committed = await args.pushBranch(args.featureHeadSha);
+    if (committed.isErr()) return err(committed.error);
+    if (!FULL_COMMIT_SHA.test(committed.value)) {
+      return err({
+        kind: CiFailureKind.Git,
+        message:
+          "Implementation publication returned a non-canonical publishedFeatureSha",
+      });
+    }
+    if (committed.value === args.featureHeadSha) {
+      return err({
+        kind: CiFailureKind.Baseline,
+        message:
+          "publishedFeatureSha must differ from the pinned featureHeadSha after an implementation commit",
+      });
+    }
+    const published = await args.readPublishedHead();
+    if (published.isErr()) return err(published.error);
+    if (!FULL_COMMIT_SHA.test(published.value)) {
+      return err({
+        kind: CiFailureKind.Github,
+        message:
+          "Canonical remote feature ref returned a non-canonical publishedFeatureSha",
+      });
+    }
+    if (published.value !== committed.value) {
+      return err({
+        kind: CiFailureKind.Github,
+        message: `Feature branch ${args.agentBranch} published at ${published.value}, expected publishedFeatureSha ${committed.value}`,
+      });
+    }
+    return ok({
+      branch: args.agentBranch,
+      featureHeadSha: args.featureHeadSha,
+      publishedFeatureSha: committed.value,
+    });
   }
 }
 
@@ -522,11 +584,21 @@ const log = new Logger("implement");
 
 type PublishBranchArgs = {
   agentBranch: string;
-  expectedHead: string;
+  featureHeadSha: string;
   assertBudget: () => Promise<Result<void, CiFailure>>;
-  pushBranch: () => Promise<Result<void, CiFailure>>;
+  pushBranch: (
+    expectedRemoteHeadSha: string,
+  ) => Promise<Result<string, CiFailure>>;
   readPublishedHead: () => Promise<Result<string, CiFailure>>;
 };
+
+export interface AgentImplementationPublicationEvidence {
+  readonly branch: string;
+  /** The Prime-pinned pre-edit head and remote update lease. */
+  readonly featureHeadSha: string;
+  /** The exact post-edit commit published to the canonical feature branch. */
+  readonly publishedFeatureSha: string;
+}
 
 export type PinnedLocalDevSha = string & {
   readonly [PINNED_LOCAL_DEV_SHA]: "pinned-local-dev-sha";
