@@ -59,7 +59,7 @@ const IMMUTABLE_GIT_ARGUMENTS = [
   '-c',
   'protocol.ssh.allow=never',
   '-c',
-  'protocol.https.allow=always',
+  'protocol.https.allow=never',
   '-c',
   'diff.external=',
   '-c',
@@ -104,19 +104,18 @@ export class RepositoryCommand {
           ? githubApiOutputBytes
           : defaultOutputBytes,
     };
+    let args: readonly string[] = request.args;
     if (
       request.command === RepositoryCommandExecutable.Git &&
       request.gitSecurity === RepositoryGitSecurityPolicy.ImmutableObjects
     ) {
+      const validation = ImmutableGitCommandPolicy.validate(request.args);
+      if (validation.isErr()) return err(validation.error);
       options.env = new RepositoryGitSecurityEnvironment(
         process.env,
       ).isolated();
+      args = [...IMMUTABLE_GIT_ARGUMENTS, ...validation.value];
     }
-    const args =
-      request.command === RepositoryCommandExecutable.Git &&
-      request.gitSecurity === RepositoryGitSecurityPolicy.ImmutableObjects
-        ? [...IMMUTABLE_GIT_ARGUMENTS, ...request.args]
-        : request.args;
     let result;
     try {
       switch (command) {
@@ -330,6 +329,46 @@ export type RepositoryCommandFailure = {
 
 export type HostCommandFailure = RepositoryCommandFailure;
 
+/** Owns the closed read-only command vocabulary for immutable Git checks. */
+class ImmutableGitCommandPolicy {
+  static validate(
+    args: readonly string[],
+  ): Result<readonly string[], RepositoryCommandFailure> {
+    const [command = '', ...arguments_] = args;
+    const valid =
+      (command === 'merge-base' &&
+        arguments_.length === 3 &&
+        arguments_[0] === '--is-ancestor' &&
+        ImmutableGitCommandPolicy.isRevision(arguments_[1]) &&
+        ImmutableGitCommandPolicy.isRevision(arguments_[2])) ||
+      (command === 'rev-parse' &&
+        ((arguments_.length === 1 &&
+          ImmutableGitCommandPolicy.isRevision(arguments_[0])) ||
+          (arguments_.length === 2 &&
+            arguments_[0] === '--verify' &&
+            ImmutableGitCommandPolicy.isRevision(arguments_[1])))) ||
+      (command === 'status' &&
+        arguments_.length === 2 &&
+        arguments_[0] === '--porcelain' &&
+        arguments_[1] === '--untracked-files=normal');
+    if (valid) return ok([...args]);
+    return err({
+      code: LoomFailureCode.CommandFailedToStart,
+      message:
+        'Immutable Git policy permits only validated read commands without caller configuration.',
+    });
+  }
+
+  private static isRevision(value: string | undefined): boolean {
+    return (
+      value !== undefined &&
+      /^(?:[0-9a-f]{40}|HEAD(?:\^\{commit\})?|refs\/remotes\/origin\/main\^\{commit\})$/u.test(
+        value,
+      )
+    );
+  }
+}
+
 /** Owns the Git environment boundary for immutable repository object checks. */
 class RepositoryGitSecurityEnvironment {
   constructor(private readonly inheritedEnvironment: NodeJS.ProcessEnv) {}
@@ -346,7 +385,7 @@ class RepositoryGitSecurityEnvironment {
       SYSTEMROOT: environment.SYSTEMROOT,
       SystemRoot: environment.SystemRoot,
       WINDIR: environment.WINDIR,
-      GIT_ALLOW_PROTOCOL: 'https',
+      GIT_ALLOW_PROTOCOL: '',
       GIT_ATTR_NOSYSTEM: '1',
       GIT_CONFIG: nullDevice,
       GIT_CONFIG_GLOBAL: nullDevice,
