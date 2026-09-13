@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -10,6 +12,7 @@ import {
   AuthoredAdditionBudget,
   AuthoredBudgetMode,
   AuthoredBudgetFailureKind,
+  AuthoredBudgetWorkspace,
 } from '../src/commands/pr-authored-budget.ts';
 
 void test('keeps delivery at or below 2,000 authored additions', () => {
@@ -90,5 +93,58 @@ void test('counts an untracked symlink blob without following its target', () =>
     assert.equal(summary.authoredLines, 1);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('measures authored additions from the pinned local-dev commit', () => {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'nook-budget-pinned-base-'));
+  const git = (...args: string[]): string =>
+    execFileSync('git', ['-C', repoRoot, ...args], {
+      encoding: 'utf8',
+    }).trim();
+  try {
+    git('init', '-q');
+    git('config', 'user.name', 'Loom Fixture');
+    git('config', 'user.email', 'loom-fixture@example.test');
+    writeFileSync(join(repoRoot, 'history.txt'), 'main\n');
+    git('add', '--', 'history.txt');
+    git('commit', '-qm', 'main');
+    const originMainSha = git('rev-parse', 'HEAD');
+    git('update-ref', 'refs/remotes/origin/main', originMainSha);
+
+    writeFileSync(join(repoRoot, 'prior-dev.ts'), 'x\n'.repeat(2_001));
+    git('add', '--', 'prior-dev.ts');
+    git('commit', '-qm', 'prior dev');
+    const pinnedLocalDevSha = git('rev-parse', 'HEAD');
+
+    writeFileSync(join(repoRoot, 'feature.ts'), 'const feature = true;\n');
+    git('add', '--', 'feature.ts');
+    git('commit', '-qm', 'feature');
+
+    const result = new AuthoredBudgetWorkspace({
+      environment: {
+        ...process.env,
+        ORIGIN_MAIN_SHA: originMainSha,
+        PINNED_LOCAL_DEV_SHA: pinnedLocalDevSha,
+      },
+      repoRoot,
+    }).main();
+    assert(result.isOk());
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+void test('fails closed when authored-budget bootstrap evidence is stale', () => {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'nook-budget-stale-base-'));
+  try {
+    const result = new AuthoredBudgetWorkspace({
+      environment: { ...process.env },
+      repoRoot,
+    }).main();
+    assert(result.isErr());
+    assert.equal(result.error.kind, AuthoredBudgetFailureKind.BaseEvidence);
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
   }
 });

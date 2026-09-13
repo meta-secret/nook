@@ -4,6 +4,8 @@ import type { PrePushRequest } from '../codec/args/pre-push.ts';
 
 import { ChangedCortexDensity } from '../lib/changed-cortex-density.ts';
 
+import { PinnedDevBaseEnvironment } from '../lib/pinned-dev-base-environment.ts';
+
 import {
   RepositoryBashScript,
   RepositoryCommand,
@@ -25,22 +27,16 @@ export class PrePushCommand {
     const { request, repoRoot } = this.input;
     const messages: string[] = [];
 
-    const formatArgs: RepositoryCommandRequest = {
-      command: RepositoryCommandExecutable.Task,
-      args: ['format'],
-      rootDirectory: repoRoot,
-      workingDirectory: repoRoot,
-    };
-    const formatLaunch = new RepositoryCommand(formatArgs).execute();
-    if (formatLaunch.isErr()) return err(formatLaunch.error);
-    const format = formatLaunch.value;
-    if (format.exitCode !== 0) {
+    const initialEvidence = PinnedDevBaseEnvironment.resolve({
+      environment: process.env,
+      repoRoot,
+    });
+    if (initialEvidence.isErr()) {
       return err({
         code: LoomFailureCode.CommandFailed,
-        message: `task format failed (exit ${format.exitCode}): ${format.stderr || format.stdout}`,
+        message: `Pinned local-dev bootstrap evidence is invalid: ${initialEvidence.error.message}`,
       });
     }
-    messages.push('task format passed');
 
     if (request.fetchOriginMain) {
       const fetchArgs: RepositoryCommandRequest = {
@@ -60,30 +56,37 @@ export class PrePushCommand {
       }
     }
 
-    const baseArgs: RepositoryCommandRequest = {
-      command: RepositoryCommandExecutable.Git,
-      args: ['rev-parse', 'origin/main'],
+    const evidence = request.fetchOriginMain
+      ? PinnedDevBaseEnvironment.resolve({
+          environment: process.env,
+          repoRoot,
+        })
+      : initialEvidence;
+    if (evidence.isErr())
+      return err({
+        code: LoomFailureCode.CommandFailed,
+        message: `Pinned local-dev bootstrap evidence is invalid: ${evidence.error.message}`,
+      });
+    const { pinnedLocalDevSha } = evidence.value;
+
+    const formatArgs: RepositoryCommandRequest = {
+      command: RepositoryCommandExecutable.Task,
+      args: ['format'],
       rootDirectory: repoRoot,
       workingDirectory: repoRoot,
     };
-    const baseLaunch = new RepositoryCommand(baseArgs).execute();
-    if (baseLaunch.isErr()) return err(baseLaunch.error);
-    const base = baseLaunch.value;
-    if (base.exitCode !== 0) {
+    const formatLaunch = new RepositoryCommand(formatArgs).execute();
+    if (formatLaunch.isErr()) return err(formatLaunch.error);
+    const format = formatLaunch.value;
+    if (format.exitCode !== 0) {
       return err({
         code: LoomFailureCode.CommandFailed,
-        message: `git rev-parse origin/main failed: ${base.stderr}`,
+        message: `task format failed (exit ${format.exitCode}): ${format.stderr || format.stdout}`,
       });
     }
-    const baseSha = base.stdout.trim();
-    if (!/^[0-9a-f]{40}$/.test(baseSha)) {
-      return err({
-        code: LoomFailureCode.CommandFailed,
-        message: `origin/main did not resolve to a full SHA: ${baseSha}`,
-      });
-    }
+    messages.push('task format passed');
 
-    const densityArgs = { baseSha, repoRoot };
+    const densityArgs = { baseSha: pinnedLocalDevSha, repoRoot };
     const densityResult = new ChangedCortexDensity(densityArgs).execute();
     if (densityResult.isErr()) return err(densityResult.error);
     const density = densityResult.value;
@@ -109,7 +112,7 @@ export class PrePushCommand {
     const contractArgs: RepositoryCommandRequest = {
       command: RepositoryCommandExecutable.Bash,
       script: RepositoryBashScript.UiDemoContract,
-      args: [baseSha],
+      args: [pinnedLocalDevSha],
       rootDirectory: repoRoot,
       workingDirectory: repoRoot,
     };
@@ -148,7 +151,7 @@ export class PrePushCommand {
     return ok({
       formatOk: true,
       uiDemoOk: true,
-      baseSha,
+      baseSha: pinnedLocalDevSha,
       staged,
       messages,
     });

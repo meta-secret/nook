@@ -6,6 +6,8 @@ import { execFileSync } from 'node:child_process';
 import { lstatSync, readFileSync, readlinkSync } from 'node:fs';
 import { extname } from 'node:path';
 
+import { PinnedDevBaseEnvironment } from '../lib/pinned-dev-base-environment.ts';
+
 const PR_ADDITION_LIMIT = 2_000;
 const PR_ADDITION_WARNING = 1_500;
 
@@ -183,6 +185,7 @@ export class SourceText {
   }
 }
 export enum AuthoredBudgetFailureKind {
+  BaseEvidence = 'base-evidence',
   Git = 'git',
   Filesystem = 'filesystem',
   MergeBase = 'merge-base',
@@ -242,14 +245,18 @@ export class AuthoredAdditionBudget {
     return ok({ mode: AuthoredBudgetMode.AdditionsOnly });
   }
 }
-class AuthoredBudgetWorkspace {
+export class AuthoredBudgetWorkspace {
+  constructor(private readonly request: AuthoredBudgetWorkspaceRequest = {}) {}
+
   private runGit(
     args: readonly string[],
   ): Result<string, AuthoredBudgetFailure> {
     try {
       return ok(
         execFileSync('git', args, {
+          cwd: this.repoRoot(),
           encoding: 'utf8',
+          env: this.environment(),
           stdio: ['ignore', 'pipe', 'pipe'],
         }),
       );
@@ -261,14 +268,17 @@ class AuthoredBudgetWorkspace {
     }
   }
   main(): Result<void, AuthoredBudgetFailure> {
-    const merged = this.runGit(['merge-base', 'HEAD', 'origin/main']);
-    if (merged.isErr()) return err(merged.error);
-    const mergeBase = merged.value.trim();
-    if (!/^[0-9a-f]{40}$/.test(mergeBase))
+    const evidence = PinnedDevBaseEnvironment.resolve({
+      environment: this.environment(),
+      repoRoot: this.repoRoot(),
+    });
+    if (evidence.isErr()) {
       return err({
-        kind: AuthoredBudgetFailureKind.MergeBase,
-        message: 'PR merge base is unavailable',
+        kind: AuthoredBudgetFailureKind.BaseEvidence,
+        message: evidence.error.message,
       });
+    }
+    const { pinnedLocalDevSha } = evidence.value;
     const numstat = this.runGit([
       'diff',
       '--no-ext-diff',
@@ -276,7 +286,7 @@ class AuthoredBudgetWorkspace {
       '-z',
       '--find-renames',
       '-l0',
-      mergeBase,
+      pinnedLocalDevSha,
     ]);
     if (numstat.isErr()) return err(numstat.error);
     const deleted = this.runGit([
@@ -285,7 +295,7 @@ class AuthoredBudgetWorkspace {
       '--diff-filter=D',
       '--name-only',
       '-z',
-      mergeBase,
+      pinnedLocalDevSha,
     ]);
     if (deleted.isErr()) return err(deleted.error);
     const deletedPaths = new Set(deleted.value.split('\0').filter(Boolean));
@@ -316,7 +326,20 @@ class AuthoredBudgetWorkspace {
     console.log('PR authored-addition budget passed');
     return ok();
   }
+
+  private repoRoot(): string {
+    return this.request.repoRoot ?? process.cwd();
+  }
+
+  private environment(): NodeJS.ProcessEnv {
+    return this.request.environment ?? process.env;
+  }
 }
+
+export type AuthoredBudgetWorkspaceRequest = Readonly<{
+  readonly environment?: NodeJS.ProcessEnv;
+  readonly repoRoot?: string;
+}>;
 if (import.meta.main) {
   const outcome = new AuthoredBudgetWorkspace().main();
   if (outcome.isErr()) {
