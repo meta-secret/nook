@@ -21,6 +21,7 @@ import {
 
 const SHA_A = '1111111111111111111111111111111111111111';
 const SHA_B = '2222222222222222222222222222222222222222';
+const SHA_MAIN = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 interface PullRequestFixture {
   readonly headSha: string;
@@ -29,10 +30,14 @@ interface PullRequestFixture {
 interface ScenarioOptions {
   readonly localSha: string;
   readonly remoteDevSha: string;
+  readonly originMainSha?: string;
+  readonly mainSha?: string;
   readonly ancestryPairs: readonly (readonly [string, string])[];
   readonly remoteDevPresent?: boolean;
   readonly pullRequest?: PullRequestFixture;
   readonly ciStatus?: string;
+  readonly dirtyMain?: boolean;
+  readonly dirtyDev?: boolean;
   readonly malformedWorktree?: boolean;
   readonly reportedWorktreeSha?: string;
   readonly observedHeadSha?: string;
@@ -44,10 +49,13 @@ class DevManagerGizmoRunner implements CommandRunner {
   private remoteDevPresent: boolean;
   private remoteDevSha: string;
   private pullRequest: PullRequestFixture | undefined;
+  private readonly originMainSha: string;
+  private fetchedOriginMainSha: string | undefined;
 
   constructor(
     private readonly request: {
       readonly root: string;
+      readonly mainPath: string;
       readonly devPath: string;
       readonly options: ScenarioOptions;
     },
@@ -55,6 +63,7 @@ class DevManagerGizmoRunner implements CommandRunner {
     this.remoteDevPresent = request.options.remoteDevPresent ?? true;
     this.remoteDevSha = request.options.remoteDevSha;
     this.pullRequest = request.options.pullRequest;
+    this.originMainSha = request.options.originMainSha ?? SHA_MAIN;
   }
 
   run(request: CommandRequest): Result<CommandOutput, DevFailure> {
@@ -69,26 +78,61 @@ class DevManagerGizmoRunner implements CommandRunner {
     const args = request.args;
     switch (args[0]) {
       case 'fetch':
+        this.fetchedOriginMainSha = this.originMainSha;
         return ok(this.output());
       case 'worktree':
         return ok(
           this.output({
             stdout: this.request.options.malformedWorktree
-              ? `worktree ${this.request.devPath}\nbranch refs/heads/dev\n`
-              : `worktree ${this.request.devPath}\nHEAD ${this.request.options.reportedWorktreeSha ?? this.request.options.localSha}\nbranch refs/heads/dev\n`,
+              ? `worktree ${this.request.mainPath}\nbranch refs/heads/main\n`
+              : [
+                  `worktree ${this.request.mainPath}`,
+                  `HEAD ${this.request.options.mainSha ?? this.originMainSha}`,
+                  'branch refs/heads/main',
+                  '',
+                  `worktree ${this.request.devPath}`,
+                  `HEAD ${this.request.options.reportedWorktreeSha ?? this.request.options.localSha}`,
+                  'branch refs/heads/dev',
+                  '',
+                ].join('\n'),
           }),
         );
       case 'status':
-        return ok(this.output());
+        return ok(
+          this.output({
+            stdout:
+              request.workingDirectory === this.request.mainPath
+                ? this.request.options.dirtyMain
+                  ? 'dirty main\n'
+                  : ''
+                : this.request.options.dirtyDev
+                  ? 'dirty dev\n'
+                  : '',
+          }),
+        );
       case 'branch':
-        return ok(this.output({ stdout: 'dev\n' }));
+        return ok(
+          this.output({
+            stdout: `${
+              request.workingDirectory === this.request.mainPath ? 'main' : 'dev'
+            }\n`,
+          }),
+        );
       case 'rev-parse':
         return ok(
           this.output({
             stdout:
               args[1] === '--git-common-dir'
                 ? `${this.request.root}\n`
-                : `${this.request.options.observedHeadSha ?? this.request.options.localSha}\n`,
+                : args[1] === '--verify' &&
+                    args[2] === 'refs/remotes/origin/main^{commit}'
+                  ? `${this.fetchedOriginMainSha ?? this.originMainSha}\n`
+                  : `${
+                      request.workingDirectory === this.request.devPath
+                        ? (this.request.options.observedHeadSha ??
+                          this.request.options.localSha)
+                        : (this.request.options.mainSha ?? this.originMainSha)
+                    }\n`,
           }),
         );
       case 'ls-remote':
@@ -109,7 +153,11 @@ class DevManagerGizmoRunner implements CommandRunner {
   ): Result<CommandOutput, DevFailure> {
     const reference = args.at(-1);
     if (reference === 'refs/heads/main') {
-      return ok(this.output({ stdout: `${SHA_A} refs/heads/main\n` }));
+      return ok(
+        this.output({
+          stdout: `${this.fetchedOriginMainSha ?? this.originMainSha} refs/heads/main\n`,
+        }),
+      );
     }
     if (reference === 'refs/heads/dev' && this.remoteDevPresent) {
       return ok(
@@ -168,7 +216,7 @@ class DevManagerGizmoRunner implements CommandRunner {
           headRefName: 'dev',
           baseRefName: 'main',
           headRefOid: this.pullRequest.headSha,
-          baseRefOid: SHA_A,
+          baseRefOid: this.originMainSha,
           url: 'https://github.example/pr/42',
           isDraft: false,
         },
@@ -184,7 +232,7 @@ class DevManagerGizmoRunner implements CommandRunner {
         headRefName: 'dev',
         baseRefName: 'main',
         headRefOid: pullRequest?.headSha ?? this.remoteDevSha,
-        baseRefOid: SHA_A,
+        baseRefOid: this.originMainSha,
         url: 'https://github.example/pr/42',
         isDraft: false,
         state: 'OPEN',
@@ -227,15 +275,18 @@ class DevManagerGizmoRunner implements CommandRunner {
 
 class DevManagerGizmoHarness {
   readonly root: string;
+  readonly mainPath: string;
   readonly devPath: string;
   readonly runner: DevManagerGizmoRunner;
   readonly workspace: DevDeliveryWorkspace;
 
   constructor(options: ScenarioOptions) {
     this.root = mkdtempSync(join(tmpdir(), 'nook-dev-manager-gizmo-'));
+    this.mainPath = join(this.root, 'main');
     this.devPath = join(this.root, 'dev');
     this.runner = new DevManagerGizmoRunner({
       root: this.root,
+      mainPath: this.mainPath,
       devPath: this.devPath,
       options,
     });
@@ -252,8 +303,8 @@ class DevManagerGizmoHarness {
 
 test('reports idle when local dev has no commits beyond refreshed main', () => {
   const harness = new DevManagerGizmoHarness({
-    localSha: SHA_A,
-    remoteDevSha: SHA_A,
+    localSha: SHA_MAIN,
+    remoteDevSha: SHA_MAIN,
     ancestryPairs: [],
   });
   try {
@@ -262,10 +313,30 @@ test('reports idle when local dev has no commits beyond refreshed main', () => {
     if (result.isErr()) return;
     expect(result.value.state).toBe(DevManagerGizmoState.Idle);
     expect(result.value.action).toBe(DevManagerGizmoAction.NoAction);
-    expect(result.value.expectedSha.value()).toBe(SHA_A);
+    expect(result.value.expectedSha.value()).toBe(SHA_MAIN);
+    expect(result.value.originMainSha.value()).toBe(SHA_MAIN);
+    expect(result.value.pinnedLocalDevSha.value()).toBe(SHA_MAIN);
     expect(result.value.message).toContain(
       'no local commits exist beyond origin/main',
     );
+    expect(
+      harness.runner.requests.some(
+        (request) =>
+          request.executable === CommandExecutable.Git &&
+          request.args[0] === 'fetch' &&
+          request.args[1] === '--prune' &&
+          request.args[2] === 'origin',
+      ),
+    ).toBe(true);
+    expect(
+      harness.runner.requests.some(
+        (request) =>
+          request.executable === CommandExecutable.Git &&
+          request.args[0] === 'rev-parse' &&
+          request.args[1] === '--verify' &&
+          request.args[2] === 'refs/remotes/origin/main^{commit}',
+      ),
+    ).toBe(true);
     expect(
       harness.runner.requests.some(
         (request) => request.executable === CommandExecutable.GitHub,
@@ -278,8 +349,8 @@ test('reports idle when local dev has no commits beyond refreshed main', () => {
 
 test('reports idle when no origin/dev snapshot has been published', () => {
   const harness = new DevManagerGizmoHarness({
-    localSha: SHA_A,
-    remoteDevSha: SHA_A,
+    localSha: SHA_MAIN,
+    remoteDevSha: SHA_MAIN,
     ancestryPairs: [],
     remoteDevPresent: false,
   });
@@ -289,7 +360,9 @@ test('reports idle when no origin/dev snapshot has been published', () => {
     if (result.isErr()) return;
     expect(result.value.state).toBe(DevManagerGizmoState.Idle);
     expect(result.value.action).toBe(DevManagerGizmoAction.NoAction);
-    expect(result.value.expectedSha.value()).toBe(SHA_A);
+    expect(result.value.expectedSha.value()).toBe(SHA_MAIN);
+    expect(result.value.originMainSha.value()).toBe(SHA_MAIN);
+    expect(result.value.pinnedLocalDevSha.value()).toBe(SHA_MAIN);
     expect(
       harness.runner.requests.some(
         (request) => request.executable === CommandExecutable.GitHub,
@@ -304,7 +377,10 @@ test('publishes unpublished local dev through existing manager commands and repo
   const harness = new DevManagerGizmoHarness({
     localSha: SHA_B,
     remoteDevSha: SHA_A,
-    ancestryPairs: [[SHA_A, SHA_B]],
+    ancestryPairs: [
+      [SHA_MAIN, SHA_B],
+      [SHA_A, SHA_B],
+    ],
   });
   try {
     const result = new DevManagerGizmoCommand(harness.workspace).execute();
@@ -313,6 +389,8 @@ test('publishes unpublished local dev through existing manager commands and repo
     expect(result.value.state).toBe(DevManagerGizmoState.ValidationRequired);
     expect(result.value.action).toBe(DevManagerGizmoAction.WaitForValidation);
     expect(result.value.expectedSha.value()).toBe(SHA_B);
+    expect(result.value.originMainSha.value()).toBe(SHA_MAIN);
+    expect(result.value.pinnedLocalDevSha.value()).toBe(SHA_B);
     expect(result.value.message).toContain(SHA_B);
     expect(result.value.message).toContain(
       'wait for complete exact-head evidence',
@@ -348,7 +426,10 @@ test('preserves newer local dev when the bounded publication seam reports active
   const harness = new DevManagerGizmoHarness({
     localSha: SHA_B,
     remoteDevSha: SHA_A,
-    ancestryPairs: [[SHA_A, SHA_B]],
+    ancestryPairs: [
+      [SHA_MAIN, SHA_B],
+      [SHA_A, SHA_B],
+    ],
     pullRequest: {
       headSha: SHA_A,
     },
@@ -361,6 +442,8 @@ test('preserves newer local dev when the bounded publication seam reports active
     expect(result.value.state).toBe(DevManagerGizmoState.ValidationFrozen);
     expect(result.value.action).toBe(DevManagerGizmoAction.WaitForValidation);
     expect(result.value.expectedSha.value()).toBe(SHA_A);
+    expect(result.value.originMainSha.value()).toBe(SHA_MAIN);
+    expect(result.value.pinnedLocalDevSha.value()).toBe(SHA_B);
     expect(result.value.localDevSha.value()).toBe(SHA_B);
     expect(result.value.message).toContain('local dev remains preserved');
     expect(
@@ -387,7 +470,7 @@ test('uses the manager-only PR seam for an already frozen snapshot without obser
   const harness = new DevManagerGizmoHarness({
     localSha: SHA_B,
     remoteDevSha: SHA_B,
-    ancestryPairs: [[SHA_A, SHA_B]],
+    ancestryPairs: [[SHA_MAIN, SHA_B]],
   });
   try {
     const result = new DevManagerGizmoCommand(harness.workspace).execute();
@@ -396,6 +479,8 @@ test('uses the manager-only PR seam for an already frozen snapshot without obser
     expect(result.value.state).toBe(DevManagerGizmoState.ValidationRequired);
     expect(result.value.action).toBe(DevManagerGizmoAction.WaitForValidation);
     expect(result.value.expectedSha.value()).toBe(SHA_B);
+    expect(result.value.originMainSha.value()).toBe(SHA_MAIN);
+    expect(result.value.pinnedLocalDevSha.value()).toBe(SHA_B);
     expect(result.value.pullRequestUrl).toBe('https://github.example/pr/42');
     expect(
       harness.runner.requests.some(
@@ -416,7 +501,7 @@ test('uses the manager-only PR seam for an already frozen snapshot without obser
   }
 });
 
-test('requires feature-path reconciliation when local dev is not based on refreshed main', () => {
+test('fails closed when local dev is not based on refreshed main', () => {
   const harness = new DevManagerGizmoHarness({
     localSha: SHA_B,
     remoteDevSha: SHA_A,
@@ -424,11 +509,44 @@ test('requires feature-path reconciliation when local dev is not based on refres
   });
   try {
     const result = new DevManagerGizmoCommand(harness.workspace).execute();
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error.kind).toBe(DevFailureKind.Conflict);
+    expect(result.error.message).toContain(
+      'Canonical dev worktree diverged from the required baseline',
+    );
+    expect(
+      harness.runner.requests.some(
+        (request) => request.executable === CommandExecutable.GitHub,
+      ),
+    ).toBe(false);
+    expect(
+      harness.runner.requests.some(
+        (request) =>
+          request.executable === CommandExecutable.Git &&
+          request.args[0] === 'push',
+      ),
+    ).toBe(false);
+  } finally {
+    harness.dispose();
+  }
+});
+
+test('requires feature-path reconciliation when origin/dev is ahead of local dev', () => {
+  const harness = new DevManagerGizmoHarness({
+    localSha: SHA_MAIN,
+    remoteDevSha: SHA_B,
+    ancestryPairs: [[SHA_MAIN, SHA_B]],
+  });
+  try {
+    const result = new DevManagerGizmoCommand(harness.workspace).execute();
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
     expect(result.value.state).toBe(DevManagerGizmoState.ReconcileRequired);
     expect(result.value.action).toBe(DevManagerGizmoAction.Reconcile);
-    expect(result.value.expectedSha.value()).toBe(SHA_A);
+    expect(result.value.expectedSha.value()).toBe(SHA_B);
+    expect(result.value.originMainSha.value()).toBe(SHA_MAIN);
+    expect(result.value.pinnedLocalDevSha.value()).toBe(SHA_MAIN);
     expect(
       harness.runner.requests.some(
         (request) => request.executable === CommandExecutable.GitHub,
@@ -439,19 +557,28 @@ test('requires feature-path reconciliation when local dev is not based on refres
   }
 });
 
-test('requires feature-path reconciliation when origin/dev is ahead of local dev', () => {
+test('fails closed when canonical main is ahead of the fetched origin/main baseline', () => {
   const harness = new DevManagerGizmoHarness({
-    localSha: SHA_A,
-    remoteDevSha: SHA_B,
-    ancestryPairs: [[SHA_A, SHA_B]],
+    localSha: SHA_MAIN,
+    remoteDevSha: SHA_MAIN,
+    mainSha: SHA_B,
+    ancestryPairs: [[SHA_MAIN, SHA_B]],
   });
   try {
     const result = new DevManagerGizmoCommand(harness.workspace).execute();
-    expect(result.isOk()).toBe(true);
-    if (result.isErr()) return;
-    expect(result.value.state).toBe(DevManagerGizmoState.ReconcileRequired);
-    expect(result.value.action).toBe(DevManagerGizmoAction.Reconcile);
-    expect(result.value.expectedSha.value()).toBe(SHA_B);
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error.kind).toBe(DevFailureKind.Conflict);
+    expect(result.error.message).toContain(
+      'Canonical main worktree is ahead of the required baseline',
+    );
+    expect(
+      harness.runner.requests.some(
+        (request) =>
+          request.executable === CommandExecutable.Git &&
+          request.args[0] === 'merge',
+      ),
+    ).toBe(false);
     expect(
       harness.runner.requests.some(
         (request) => request.executable === CommandExecutable.GitHub,
@@ -464,8 +591,8 @@ test('requires feature-path reconciliation when origin/dev is ahead of local dev
 
 test('returns typed failures for malformed and racing local worktree observations', () => {
   const malformed = new DevManagerGizmoHarness({
-    localSha: SHA_A,
-    remoteDevSha: SHA_A,
+    localSha: SHA_MAIN,
+    remoteDevSha: SHA_MAIN,
     ancestryPairs: [],
     malformedWorktree: true,
   });
@@ -482,7 +609,7 @@ test('returns typed failures for malformed and racing local worktree observation
   const racing = new DevManagerGizmoHarness({
     localSha: SHA_B,
     remoteDevSha: SHA_A,
-    ancestryPairs: [[SHA_A, SHA_B]],
+    ancestryPairs: [[SHA_MAIN, SHA_B]],
     reportedWorktreeSha: SHA_A,
     observedHeadSha: SHA_B,
   });
