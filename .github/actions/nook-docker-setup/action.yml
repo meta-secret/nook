@@ -381,6 +381,15 @@ runs:
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ]; then
           publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
+          # web-deps is an aggregate of independent app/research lockfile stages. Probe the
+          # child scopes so their standalone targets can restore exact-or-Main without merging
+          # both generations into one importer set.
+          publish_exact_availability GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$scope_suffix"
+          if [ -n "$scope_suffix" ]; then
+            publish_main_availability GHA_CACHE_MAIN_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1"
+            publish_main_availability GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1"
+          fi
         fi
         case "$cache_selection" in
           general|native|wasm|preflight|web-e2e|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)

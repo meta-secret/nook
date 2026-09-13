@@ -5,7 +5,7 @@
 //   nook-app/nook-web/docker/web.docker-bake.hcl       -> web/e2e bases + final-image cache scopes
 //   nook-app/nook-platform/nook-core/docker-bake.hcl   -> builder-core-deps, focused rust leaves
 //   nook-app/nook-platform/nook-wasm/docker-bake.hcl   -> builder-wasm, web-artifacts, nook-rust*
-//   nook-app/nook-web/docker/toolchain.docker-bake.hcl -> web-deps + web-deps cache scope
+//   nook-app/nook-web/docker/toolchain.docker-bake.hcl -> web-deps + independent Bun dependency scopes
 //   nook-app/nook-web/nook-web-app/docker-bake.hcl     -> loadable nook-web* images
 //   preflight/docker-bake.hcl                         -> preflight targets + cache scopes
 // Callers pass all files via NOOK_BAKE_FILES / PREFLIGHT_BAKE_FILES (bake has no `include`).
@@ -120,6 +120,24 @@ variable "GHA_CACHE_EXACT_PROBES_COMPLETE" {
 }
 
 variable "GHA_CACHE_EXACT_WEB_E2E_AVAILABLE" {
+  default = ""
+}
+
+// Hosted setup probes the two independent Bun dependency scopes used by the web-deps aggregate.
+// A present exact scope is imported alone; Main is considered only after an exact miss.
+variable "GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_MAIN_WEB_APP_DEPS_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE" {
   default = ""
 }
 

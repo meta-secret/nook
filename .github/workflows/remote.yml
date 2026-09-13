@@ -172,6 +172,9 @@ jobs:
         env:
           E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts
         run: .github/scripts/remote-task-batch.sh --run "$REQUESTED_REMOTE_TASKS"
+      - name: Preserve compile cache telemetry
+        if: always() && (inputs.tasks || inputs.task) == 'build:compile'
+        uses: ./.github/actions/nook-cache-telemetry
       - name: Preserve Playwright diagnostics
         if: always() && (contains(inputs.tasks, 'e2e') || contains(inputs.task, 'e2e'))
         uses: actions/upload-artifact@v7
