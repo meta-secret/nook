@@ -330,8 +330,21 @@ test('blocks current-head actionable feedback but ignores stale feedback', () =>
   expect(stale.result.isOk()).toBe(true);
 });
 
-test('ignores unknown, dismissed, and pending states without actionable feedback', () => {
-  for (const state of ['UNRECOGNIZED', 'DISMISSED', 'PENDING']) {
+test('blocks an unknown current-head review state', () => {
+  const { result } = new ReviewEvidenceRunner({
+    reviewPages: [
+      ReviewEvidenceRunner.reviewPage({
+        reviews: [{ state: 'UNRECOGNIZED', body: '' }],
+      }),
+    ],
+  }).reviewResult();
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
+});
+
+test('ignores known non-actionable states without substantive feedback', () => {
+  for (const state of ['DISMISSED', 'PENDING']) {
     const { result } = new ReviewEvidenceRunner({
       reviewPages: [
         ReviewEvidenceRunner.reviewPage({ reviews: [{ state, body: '' }] }),
@@ -400,4 +413,59 @@ test('reports a pull-request head race after collecting review evidence', () => 
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Race);
+});
+
+test('fails closed for unprovable bindings on substantive or blocking reviews', () => {
+  for (const review of [
+    { state: 'COMMENTED', body: 'Please address this.', commit: null },
+    { state: 'COMMENTED', body: 'Please address this.', commit: 'not-a-sha' },
+    { state: 'CHANGES_REQUESTED', body: '', commit: null },
+  ]) {
+    const { result } = new ReviewEvidenceRunner({
+      reviewPages: [ReviewEvidenceRunner.reviewPage({ reviews: [review] })],
+    }).reviewResult();
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
+  }
+});
+
+test('blocks current-head substantive feedback regardless of review state', () => {
+  for (const state of ['APPROVED', 'COMMENTED']) {
+    const { result } = new ReviewEvidenceRunner({
+      reviewPages: [
+        ReviewEvidenceRunner.reviewPage({
+          reviews: [{ state, body: 'Please address this.' }],
+        }),
+      ],
+    }).reviewResult();
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
+  }
+});
+
+test('blocks current-head CHANGES_REQUESTED with an empty body', () => {
+  const { result } = new ReviewEvidenceRunner({
+    reviewPages: [
+      ReviewEvidenceRunner.reviewPage({
+        reviews: [{ state: 'CHANGES_REQUESTED', body: '' }],
+      }),
+    ],
+  }).reviewResult();
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
+});
+
+test('ignores an empty non-actionable COMMENTED review', () => {
+  const { result } = new ReviewEvidenceRunner({
+    reviewPages: [
+      ReviewEvidenceRunner.reviewPage({
+        reviews: [{ state: 'COMMENTED', body: '' }],
+      }),
+    ],
+  }).reviewResult();
+
+  expect(result.isOk()).toBe(true);
 });

@@ -63,6 +63,11 @@ const reviewRecordSchema = z.object({
 });
 type ReviewRecord = z.infer<typeof reviewRecordSchema>;
 
+enum ReviewRecordDisposition {
+  Ignore = 'ignore',
+  Block = 'block',
+}
+
 const pullRequestReviewIdentitySchema = z.object({
   number: z.number().int().positive(),
   url: z.string(),
@@ -365,11 +370,12 @@ export class DevelopmentPullRequestGateway {
       });
       if (reviewIdentity.isErr()) return err(reviewIdentity.error);
       for (const review of page.data.repository.pullRequest.reviews.nodes) {
-        const actionable = this.isActionableCurrentHeadReview({
+        const disposition = this.reviewRecordDisposition({
           review,
           pullRequest: admitted.value,
         });
-        actionableReview ||= actionable;
+        actionableReview ||=
+          disposition === ReviewRecordDisposition.Block;
       }
     }
 
@@ -595,19 +601,39 @@ export class DevelopmentPullRequestGateway {
     return ok();
   }
 
-  private isActionableCurrentHeadReview(request: {
+  private reviewRecordDisposition(request: {
     readonly review: ReviewRecord;
     readonly pullRequest: AdmittedDevelopmentPullRequest;
-  }): boolean {
+  }): ReviewRecordDisposition {
     const { review, pullRequest } = request;
-    if (review.state !== 'COMMENTED' && review.state !== 'CHANGES_REQUESTED') {
-      return false;
+    const substantive = review.body !== null && review.body.trim().length > 0;
+    const blockingState = review.state === 'CHANGES_REQUESTED';
+    const commit = review.commit ? CommitSha.parse(review.commit.oid) : null;
+
+    // A malformed, missing, or otherwise unprovable binding cannot establish
+    // that a substantive or blocking review is stale.
+    if (!commit || commit.isErr()) {
+      return substantive || blockingState
+        ? ReviewRecordDisposition.Block
+        : ReviewRecordDisposition.Ignore;
     }
-    if (!review.body || review.body.trim().length === 0 || !review.commit) {
-      return false;
+    if (!commit.value.equals(pullRequest.headSha)) {
+      return ReviewRecordDisposition.Ignore;
     }
-    const commit = CommitSha.parse(review.commit.oid);
-    return commit.isOk() && commit.value.equals(pullRequest.headSha);
+
+    // Once a review is proven current, unknown states are not safe to ignore.
+    if (
+      review.state !== 'APPROVED' &&
+      review.state !== 'COMMENTED' &&
+      review.state !== 'CHANGES_REQUESTED' &&
+      review.state !== 'DISMISSED' &&
+      review.state !== 'PENDING'
+    ) {
+      return ReviewRecordDisposition.Block;
+    }
+    return substantive || blockingState
+      ? ReviewRecordDisposition.Block
+      : ReviewRecordDisposition.Ignore;
   }
 
   private samePullRequest(
