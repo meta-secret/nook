@@ -92,9 +92,18 @@ exit 0
     expect(output).toContain('https://github.com/meta-secret/nook.git');
     expect(output).toContain('--no-verify');
     expect(output).toContain('--no-replace-objects');
+    expect(output).toContain('http.saveCookies=false');
+    expect(output).toContain('http.sslVerify=true');
+    expect(output).toContain('protocol.https.allow=always');
     expect(output).toContain(
       '--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER',
     );
+    expect(output).not.toContain('credential.helper=');
+    expect(output).not.toContain('http.cookieFile=');
+    expect(output).not.toContain('http.sslCAInfo=');
+    expect(output).not.toContain('http.sslCAPath=');
+    expect(output).not.toContain('http.sslCert=');
+    expect(output).not.toContain('http.sslKey=');
     expect(output).toContain(`${SHA}:refs/heads/dev`);
     expect(output).not.toContain('delivery-secret');
   } finally {
@@ -118,6 +127,7 @@ test('ignores unsafe local and worktree config during remote Git execution', () 
   const fakeGit = join(bin, 'git');
   const previousPath = process.env.PATH;
   const previousCapture = process.env.NOOK_DEV_COMMAND_CAPTURE;
+  const previousToken = process.env.NOOK_GITHUB_PAT;
   try {
     mkdirSync(bin);
     GitFixture.initialize(root);
@@ -144,21 +154,31 @@ exit 0
     process.env.PATH = `${bin}:${previousPath ?? '/usr/bin:/bin'}`;
     process.env.NOOK_DEV_COMMAND_CAPTURE = capture;
 
-    const result = new ProcessCommandRunner({ repositoryRoot: root }).run({
-      executable: CommandExecutable.Git,
-      args: ['ls-remote', '--refs', 'origin', 'refs/heads/main'],
-      workingDirectory: root,
-    });
+    for (const token of [undefined, ''] as const) {
+      if (token === undefined) delete process.env.NOOK_GITHUB_PAT;
+      else process.env.NOOK_GITHUB_PAT = token;
+      const result = new ProcessCommandRunner({ repositoryRoot: root }).run({
+        executable: CommandExecutable.Git,
+        args: ['ls-remote', '--refs', 'origin', 'refs/heads/main'],
+        workingDirectory: root,
+      });
+      expect(result.isOk()).toBe(true);
+    }
 
-    expect(result.isOk()).toBe(true);
     const output = readFileSync(capture, 'utf8');
     expect(output).toContain('invoked\n');
     expect(output).toContain('gitDir=');
     expect(output).toContain('workTree=' + root);
+    expect(output).toContain('http.saveCookies=false');
     expect(output).toContain('http.sslVerify=true');
-    expect(output).toContain('http.cookieFile=');
-    expect(output).toContain('http.sslCAInfo=');
     expect(output).toContain('protocol.file.allow=never');
+    expect(output).toContain('protocol.https.allow=always');
+    expect(output).not.toContain('credential.helper=');
+    expect(output).not.toContain('http.cookieFile=');
+    expect(output).not.toContain('http.sslCAInfo=');
+    expect(output).not.toContain('http.sslCAPath=');
+    expect(output).not.toContain('http.sslCert=');
+    expect(output).not.toContain('http.sslKey=');
     expect(output).not.toContain('evil.example');
     expect(output).not.toContain('evil-ca');
     expect(output).not.toContain('evil-cookie');
@@ -168,6 +188,8 @@ exit 0
     if (previousCapture === undefined)
       delete process.env.NOOK_DEV_COMMAND_CAPTURE;
     else process.env.NOOK_DEV_COMMAND_CAPTURE = previousCapture;
+    if (previousToken === undefined) delete process.env.NOOK_GITHUB_PAT;
+    else process.env.NOOK_GITHUB_PAT = previousToken;
     rmSync(root, { recursive: true, force: true });
   }
 });
