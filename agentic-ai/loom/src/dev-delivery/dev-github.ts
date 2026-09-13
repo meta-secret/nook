@@ -686,7 +686,7 @@ export class DevGitHubGateway {
 
   private readPullRequest(
     request: PullRequestReadRequest,
-  ): Result<DevelopmentPullRequest, DevFailure> {
+  ): Result<AdmittedDevelopmentPullRequest, DevFailure> {
     const output = this.successful({
       args: [
         'pr',
@@ -711,7 +711,7 @@ export class DevGitHubGateway {
   private admitDevelopmentPullRequest(request: {
     readonly view: PullRequestView;
     readonly workingDirectory: string;
-  }): Result<DevelopmentPullRequest, DevFailure> {
+  }): Result<AdmittedDevelopmentPullRequest, DevFailure> {
     const { view } = request;
     const repository = this.repository(request.workingDirectory);
     if (repository.isErr()) return err(repository.error);
