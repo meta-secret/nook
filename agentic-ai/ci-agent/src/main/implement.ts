@@ -251,7 +251,7 @@ export class AgentImplementationVerifyBootstrap {
     const branch = this.request.evidence.branch;
     const repository = new CiRepository(repoRoot);
     const head = await repository.revParseImmutable({ ref: "HEAD" });
-    if (head.isErr()) return err(head.error);
+    if (head.isErr()) return err(head.error as CiFailure);
     const featureBase = await repository.immutableGit({
       args: [
         "merge-base",
@@ -261,14 +261,15 @@ export class AgentImplementationVerifyBootstrap {
       ],
     });
     if (featureBase.isErr()) {
-      if (featureBase.error.code === 1) {
+      const error = featureBase.error as CiFailure;
+      if (error.kind !== CiFailureKind.Combined && error.code === 1) {
         return err({
           kind: CiFailureKind.Baseline,
           message:
             "Implementation worktree is not based on the Prime-pinned local-dev SHA",
         });
       }
-      return err(featureBase.error);
+      return err(error);
     }
 
     const symbolicHead = await repository.immutableGit({
@@ -281,12 +282,18 @@ export class AgentImplementationVerifyBootstrap {
           "Implementation worktree HEAD must be detached at featureHeadSha",
       });
     }
-    if (symbolicHead.error.code !== 1) return err(symbolicHead.error);
+    const symbolicHeadError = symbolicHead.error as CiFailure;
+    if (
+      symbolicHeadError.kind !== CiFailureKind.Combined &&
+      symbolicHeadError.code !== 1
+    )
+      return err(symbolicHeadError);
 
     const remoteFeatureHead = await repository.revParseImmutable({
       ref: `refs/remotes/origin/${branch}`,
     });
-    if (remoteFeatureHead.isErr()) return err(remoteFeatureHead.error);
+    if (remoteFeatureHead.isErr())
+      return err(remoteFeatureHead.error as CiFailure);
     if (remoteFeatureHead.value !== evidence.featureHeadSha) {
       return err({
         kind: CiFailureKind.Baseline,
@@ -305,7 +312,7 @@ export class AgentImplementationVerifyBootstrap {
     const originMain = await repository.revParseImmutable({
       ref: "refs/remotes/origin/main",
     });
-    if (originMain.isErr()) return err(originMain.error);
+    if (originMain.isErr()) return err(originMain.error as CiFailure);
     if (originMain.value !== evidence.originMainSha) {
       return err({
         kind: CiFailureKind.Baseline,
@@ -323,14 +330,15 @@ export class AgentImplementationVerifyBootstrap {
       ],
     });
     if (ancestry.isErr()) {
-      if (ancestry.error.code === 1) {
+      const error = ancestry.error as CiFailure;
+      if (error.kind !== CiFailureKind.Combined && error.code === 1) {
         return err({
           kind: CiFailureKind.Baseline,
           message:
             "Recorded pinnedLocalDevSha is not based on the fetched originMainSha",
         });
       }
-      return err(ancestry.error);
+      return err(error);
     }
     return ok();
   }
