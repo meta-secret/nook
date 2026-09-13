@@ -9,7 +9,14 @@ import { fromMarkdown } from 'mdast-util-from-markdown';
 import type { Heading, Link, Parent, Root, RootContent } from 'mdast';
 
 import {
+  CORTEX_OWNER_GRAPH_PATHS,
+  collectCortexChildGraphPaths,
+  cortexGraphOwner,
+  cortexOwningKnowledgeGraphPath,
   CortexStructureFindingCode,
+  isAllowedCortexChildGraphReference,
+  isCortexChildGraphReadOnlyReference,
+  isCortexKnowledgeGraphPath,
   type CortexStructureFinding,
 } from './cortex-document-structure.ts';
 
@@ -153,7 +160,7 @@ export class CortexDocumentMapVerifier {
     const graphDocuments = new Map<string, EvidenceDocument>();
     const rootPath = this.normalize(args.root.relativePath);
     graphDocuments.set(rootPath, args.root);
-    for (const graphPath of NESTED_OWNER_GRAPHS) {
+    for (const graphPath of collectCortexChildGraphPaths(args.catalog.keys())) {
       const [graph = false] = [args.catalog.get(graphPath)];
       if (graph !== false) graphDocuments.set(graphPath, graph);
     }
@@ -300,6 +307,14 @@ export class CortexDocumentMapVerifier {
         });
         continue;
       }
+      if (!isAllowedCortexChildGraphReference(args.graph.relativePath, resolved.target)) {
+        this.add(args.findings)({
+          code: CortexStructureFindingCode.InvalidIndexEntry,
+          file: args.graph.relativePath,
+          line: this.line(link),
+          message: `Child knowledge graph may link only its own directory or explicit read-only authorities: ${resolved.target}`,
+        });
+      }
       args.indexed.add(resolved.target);
       const [count = 0] = [counts.get(resolved.target)];
       counts.set(resolved.target, count + 1);
@@ -389,62 +404,22 @@ export class CortexDocumentMapVerifier {
   }
 
   private isGraph(value: string): boolean {
-    return (
-      /^(?:\.cortex\/)?(?:knowledge-graph|k-graph|INDEX)\.md$/u.test(value) ||
-      /^\.cortex\/teams\/delivery-pipeline\/internal\/(?:gizmo|pr-steward)\/knowledge-graph\.md$/u.test(
-        value,
-      ) ||
-      /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|dev-manager|dev-manager-gizmo|delivery-pipeline|security|sre|web-dev)|shared)\/knowledge-graph\.md$/u.test(
-        value,
-      )
-    );
+    return isCortexKnowledgeGraphPath(value);
   }
 
   private isReadOnlyExternalReference(
     graphPath: string,
     indexedPath: string,
   ): boolean {
-    const nestedGraphPath = NESTED_OWNER_GRAPHS.find(
-      (candidate) => candidate === graphPath,
-    );
-    if (!nestedGraphPath) return false;
-    return !indexedPath.startsWith(
-      `${path.posix.dirname(nestedGraphPath)}/`,
-    );
+    return isCortexChildGraphReadOnlyReference(graphPath, indexedPath);
   }
 
   private owningGraph(value: string): string {
-    if (
-      value.startsWith(
-        '.cortex/teams/delivery-pipeline/internal/gizmo/',
-      )
-    ) {
-      return '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md';
-    }
-    if (
-      value.startsWith(
-        '.cortex/teams/delivery-pipeline/internal/pr-steward/',
-      )
-    ) {
-      return '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md';
-    }
-    const match =
-      /^(\.cortex\/(?:gizmo|shared|teams\/(?:ai|dev-core|dev-manager|dev-manager-gizmo|delivery-pipeline|security|sre|web-dev)))\//u.exec(
-        value,
-      );
-    return match
-      ? `${match[1]}/knowledge-graph.md`
-      : '.cortex/knowledge-graph.md';
+    return cortexOwningKnowledgeGraphPath(value);
   }
 
   private owner(value: string): string | false {
-    const match =
-      /^\.cortex\/(gizmo|shared|teams\/(?:ai|dev-core|dev-manager|dev-manager-gizmo|delivery-pipeline|security|sre|web-dev))\//u.exec(
-        value,
-      );
-    if (!match) return false;
-    const [, context = false] = match;
-    return context;
+    return cortexGraphOwner(value);
   }
 
   private links(root: Root): Link[] {
@@ -515,22 +490,6 @@ type ResolvedLink = {
   readonly fragment: string | false;
 };
 
-const OWNER_GRAPHS = [
-  '.cortex/gizmo/knowledge-graph.md',
-  '.cortex/teams/ai/knowledge-graph.md',
-  '.cortex/teams/dev-core/knowledge-graph.md',
-  '.cortex/teams/dev-manager/knowledge-graph.md',
-  '.cortex/teams/dev-manager-gizmo/knowledge-graph.md',
-  '.cortex/teams/delivery-pipeline/knowledge-graph.md',
-  '.cortex/teams/security/knowledge-graph.md',
-  '.cortex/teams/sre/knowledge-graph.md',
-  '.cortex/teams/web-dev/knowledge-graph.md',
-  '.cortex/shared/knowledge-graph.md',
-] as const;
-
-const NESTED_OWNER_GRAPHS = [
-  '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md',
-  '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md',
-] as const;
+const OWNER_GRAPHS = CORTEX_OWNER_GRAPH_PATHS;
 
 const FAILURE = 'Cortex document-map verification failed.';
