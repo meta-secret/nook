@@ -16,11 +16,22 @@ import {
   type RemoteBranchSnapshot,
   RemoteBranchPresence,
   WorktreeBranchKind,
-  type WorktreeBranch,
   WorktreeRecord,
   WorktreeState,
 } from './dev-types.ts';
 import { CommitSha as CommitShaValue } from './dev-types.ts';
+import {
+  ManagedWorktreeSelection,
+  WorktreeInventoryDecoder,
+} from './dev-git-worktrees.ts';
+import { DevGitMergeBoundary } from './dev-git-merge.ts';
+
+export {
+  DevelopmentWorktreeSelection,
+  MainWorktreeSelection,
+  ManagedWorktreeSelection,
+  WorktreeInventoryDecoder,
+} from './dev-git-worktrees.ts';
 
 interface GitInvocation {
   readonly args: readonly string[];
@@ -81,154 +92,6 @@ interface BootstrapWorktreePathRequest {
   readonly requestedPath: string | undefined;
   readonly records: readonly WorktreeRecord[];
   readonly repositoryIdentity: string;
-}
-
-interface MutableWorktreeBlock {
-  path: string;
-  head: string;
-  branch: string;
-  detached: boolean;
-  prunable: boolean;
-}
-
-enum WorktreeBlockKind {
-  Empty = 'empty',
-  Active = 'active',
-}
-
-type WorktreeBlock =
-  | { readonly kind: WorktreeBlockKind.Empty }
-  | {
-      readonly kind: WorktreeBlockKind.Active;
-      readonly value: MutableWorktreeBlock;
-    };
-
-/** Decodes Git's porcelain worktree inventory without selecting a worktree. */
-export class WorktreeInventoryDecoder {
-  decode(source: string): Result<readonly WorktreeRecord[], DevFailure> {
-    const records: WorktreeRecord[] = [];
-    let block: WorktreeBlock = { kind: WorktreeBlockKind.Empty };
-    for (const line of source.split(/\r?\n/u)) {
-      if (line.startsWith('worktree ')) {
-        if (block.kind === WorktreeBlockKind.Active) {
-          const completed = this.complete(block.value);
-          if (completed.isErr()) return err(completed.error);
-          records.push(completed.value);
-        }
-        block = {
-          kind: WorktreeBlockKind.Active,
-          value: {
-            path: line.slice('worktree '.length),
-            head: '',
-            branch: '',
-            detached: false,
-            prunable: false,
-          },
-        };
-        continue;
-      }
-      if (block.kind === WorktreeBlockKind.Empty) continue;
-      if (line.startsWith('HEAD '))
-        block.value.head = line.slice('HEAD '.length);
-      if (line.startsWith('branch '))
-        block.value.branch = line.slice('branch '.length);
-      if (line === 'detached') block.value.detached = true;
-      if (line.startsWith('prunable')) block.value.prunable = true;
-    }
-    if (block.kind === WorktreeBlockKind.Active) {
-      const completed = this.complete(block.value);
-      if (completed.isErr()) return err(completed.error);
-      records.push(completed.value);
-    }
-    return ok(records);
-  }
-
-  private complete(
-    block: MutableWorktreeBlock,
-  ): Result<WorktreeRecord, DevFailure> {
-    if (!block.path || !block.head) {
-      return err({
-        kind: DevFailureKind.Git,
-        message: 'Git returned an incomplete worktree record',
-      });
-    }
-    const head = CommitShaValue.parse(block.head);
-    if (head.isErr()) return err(head.error);
-    let branch: WorktreeBranch;
-    if (block.branch.startsWith('refs/heads/')) {
-      const name = BranchName.parse(block.branch.slice('refs/heads/'.length));
-      if (name.isErr()) return err(name.error);
-      branch = { kind: WorktreeBranchKind.Branch, name: name.value };
-    } else if (block.detached) {
-      branch = { kind: WorktreeBranchKind.Detached };
-    } else {
-      return err({
-        kind: DevFailureKind.Git,
-        message: `Git returned a worktree without a branch or detached marker: ${block.path}`,
-      });
-    }
-    return ok(
-      new WorktreeRecord({
-        path: resolve(block.path),
-        head: head.value,
-        branch,
-        prunable: block.prunable,
-      }),
-    );
-  }
-}
-
-/** Selects exactly one usable managed worktree for a named branch. */
-export class ManagedWorktreeSelection {
-  select(
-    records: readonly WorktreeRecord[],
-    branch: ManagedBranch,
-  ): Result<WorktreeRecord, DevFailure> {
-    const candidates = records.filter((record) =>
-      !record.prunable &&
-      record.branch.kind === WorktreeBranchKind.Branch &&
-      record.branch.name.value() === branch,
-    );
-    if (candidates.length === 0) {
-      return err({
-        kind: DevFailureKind.Configuration,
-        message:
-          `No usable local ${branch} worktree was found; create one explicitly before delivery`,
-      });
-    }
-    if (candidates.length > 1) {
-      return err({
-        kind: DevFailureKind.Configuration,
-        message: `Multiple local ${branch} worktrees were found (${candidates.map((candidate) => candidate.path).join(', ')}); refusing to choose one`,
-      });
-    }
-    const candidate = candidates[0];
-    if (!candidate) {
-      return err({
-        kind: DevFailureKind.Configuration,
-        message: `Local ${branch} worktree selection was empty`,
-      });
-    }
-    return ok(candidate);
-  }
-}
-
-/** Selects exactly one usable local development worktree. */
-export class DevelopmentWorktreeSelection {
-  select(
-    records: readonly WorktreeRecord[],
-  ): Result<WorktreeRecord, DevFailure> {
-    return new ManagedWorktreeSelection().select(records, ManagedBranch.Dev);
-  }
-}
-
-/** Selects exactly one canonical local main worktree. */
-export class MainWorktreeSelection {
-  select(
-    records: readonly WorktreeRecord[],
-  ): Result<WorktreeRecord, DevFailure> {
-    return new ManagedWorktreeSelection().select(records, ManagedBranch.Main);
-  }
 }
 
 /** Owns read-only Git observations and the narrowly authorized local effects. */
@@ -537,295 +400,12 @@ export class DevGitRepository {
   }
 
   mergeInto(request: MergeRequest): Result<CommitSha, DevFailure> {
-    const repository = this.repositoryIdentityAt(request.devPath);
-    if (repository.isErr()) return err(repository.error);
-    const featureRepository = this.repositoryIdentityAt(this.request.root);
-    if (featureRepository.isErr()) return err(featureRepository.error);
-    if (repository.value !== featureRepository.value) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `Assigned development worktree changed repositories before its feature merge: ${request.devPath}`,
-      });
-    }
-    const branch = this.branchAt(request.devPath);
-    if (branch.isErr()) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `Assigned development worktree became detached before its feature merge: ${request.devPath}`,
-      });
-    }
-    if (branch.value.value() !== ManagedBranch.Dev) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `Assigned development worktree changed from dev before its feature merge: ${request.devPath}`,
-      });
-    }
-    const featureBranch = this.currentBranch();
-    if (featureBranch.isErr()) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          'The feature worktree became detached before its feature merge could begin',
-      });
-    }
-    if (!featureBranch.value.equals(request.featureBranch)) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          'The feature worktree branch changed before its feature merge could begin',
-      });
-    }
-    const featureState = this.stateAt(this.request.root);
-    if (featureState.isErr()) return err(featureState.error);
-    if (featureState.value !== WorktreeState.Clean) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          'The feature worktree became dirty before its feature merge could begin',
-      });
-    }
-    const featureHead = this.head();
-    if (featureHead.isErr()) return err(featureHead.error);
-    if (!featureHead.value.equals(request.featureHead)) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `The feature worktree commit changed before its feature merge could begin: expected ${request.featureHead.value()}, found ${featureHead.value.value()}`,
-      });
-    }
-    const remoteFeature = this.remoteBranch(request.featureBranch);
-    if (remoteFeature.isErr()) return err(remoteFeature.error);
-    if (
-      remoteFeature.value.presence !== RemoteBranchPresence.Present ||
-      !remoteFeature.value.sha.equals(request.featureHead)
-    ) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          'The pushed feature branch changed before its feature merge could begin',
-      });
-    }
-    const originMain = this.remoteBranch(ManagedBranch.Main);
-    if (originMain.isErr()) return err(originMain.error);
-    if (
-      originMain.value.presence !== RemoteBranchPresence.Present ||
-      !originMain.value.sha.equals(request.originMainSha)
-    ) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          'origin/main changed before the feature could land in local dev',
-      });
-    }
-    const current = this.headAt(request.devPath);
-    if (current.isErr()) return err(current.error);
-    if (!current.value.equals(request.expectedDevHead)) {
-      return err({
-        kind: DevFailureKind.Race,
-        message: 'Local dev changed while landing was being prepared',
-      });
-    }
-    const state = this.stateAt(request.devPath);
-    if (state.isErr()) return err(state.error);
-    if (state.value !== WorktreeState.Clean) {
-      return err({
-        kind: DevFailureKind.DirtyWorktree,
-        message: `Local dev is dirty; refusing to alter it: ${request.devPath}`,
-      });
-    }
-    const preview = this.execute({
-      args: [
-        'merge-tree',
-        '--write-tree',
-        request.expectedDevHead.value(),
-        request.featureHead.value(),
-      ],
-      workingDirectory: request.devPath,
-    });
-    if (preview.isErr()) return err(preview.error);
-    if (preview.value.exitCode !== 0) {
-      return err({
-        kind: DevFailureKind.Conflict,
-        message:
-          'Feature cannot merge cleanly into local dev; merge latest local dev into FEATURE, rebuild it remotely, and retry',
-      });
-    }
-
-    // The merge preview is read-only but can give an external actor time to
-    // move either checkout or ref. Re-run every guard immediately before the
-    // mutating git merge.
-    const finalRepository = this.repositoryIdentityAt(request.devPath);
-    if (finalRepository.isErr()) return err(finalRepository.error);
-    const finalFeatureRepository = this.repositoryIdentityAt(this.request.root);
-    if (finalFeatureRepository.isErr())
-      return err(finalFeatureRepository.error);
-    if (finalRepository.value !== finalFeatureRepository.value) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `Assigned development worktree changed repositories before its feature merge: ${request.devPath}`,
-      });
-    }
-    const finalDevBranch = this.branchAt(request.devPath);
-    if (finalDevBranch.isErr()) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `Assigned development worktree became detached before its feature merge: ${request.devPath}`,
-      });
-    }
-    if (finalDevBranch.value.value() !== ManagedBranch.Dev) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `Assigned development worktree changed from dev before its feature merge: ${request.devPath}`,
-      });
-    }
-    const finalFeatureBranch = this.currentBranch();
-    if (finalFeatureBranch.isErr()) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          'The feature worktree became detached before its feature merge could begin',
-      });
-    }
-    if (!finalFeatureBranch.value.equals(request.featureBranch)) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          'The feature worktree branch changed before its feature merge could begin',
-      });
-    }
-    const finalFeatureState = this.stateAt(this.request.root);
-    if (finalFeatureState.isErr()) return err(finalFeatureState.error);
-    if (finalFeatureState.value !== WorktreeState.Clean) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          'The feature worktree became dirty before its feature merge could begin',
-      });
-    }
-    const finalFeatureHead = this.head();
-    if (finalFeatureHead.isErr()) return err(finalFeatureHead.error);
-    if (!finalFeatureHead.value.equals(request.featureHead)) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `The feature worktree commit changed before its feature merge could begin: expected ${request.featureHead.value()}, found ${finalFeatureHead.value.value()}`,
-      });
-    }
-    const finalRemoteFeature = this.remoteBranch(request.featureBranch);
-    if (finalRemoteFeature.isErr()) return err(finalRemoteFeature.error);
-    if (
-      finalRemoteFeature.value.presence !== RemoteBranchPresence.Present ||
-      !finalRemoteFeature.value.sha.equals(request.featureHead)
-    ) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          'The pushed feature branch changed before its feature merge could begin',
-      });
-    }
-    const finalOriginMain = this.remoteBranch(ManagedBranch.Main);
-    if (finalOriginMain.isErr()) return err(finalOriginMain.error);
-    if (
-      finalOriginMain.value.presence !== RemoteBranchPresence.Present ||
-      !finalOriginMain.value.sha.equals(request.originMainSha)
-    ) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          'origin/main changed before the feature could land in local dev',
-      });
-    }
-    const finalDevHead = this.headAt(request.devPath);
-    if (finalDevHead.isErr()) return err(finalDevHead.error);
-    if (!finalDevHead.value.equals(request.expectedDevHead)) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `Local dev changed while landing was being prepared: expected ${request.expectedDevHead.value()}, found ${finalDevHead.value.value()}`,
-      });
-    }
-    const finalDevState = this.stateAt(request.devPath);
-    if (finalDevState.isErr()) return err(finalDevState.error);
-    if (finalDevState.value !== WorktreeState.Clean) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `Local dev became dirty before its feature merge: ${request.devPath}`,
-      });
-    }
-
-    const merge = this.execute({
-      args: ['merge', '--no-edit', request.featureHead.value()],
-      workingDirectory: request.devPath,
-    });
-    if (merge.isErr()) return err(merge.error);
-    if (merge.value.exitCode !== 0) {
-      const abort = this.execute({
-        args: ['merge', '--abort'],
-        workingDirectory: request.devPath,
-      });
-      const abortMessage =
-        abort.isErr() || abort.value.exitCode !== 0
-          ? ' Git merge abort also failed; inspect the shared dev worktree without discarding changes.'
-          : '';
-      return err({
-        kind: DevFailureKind.Conflict,
-        message: `Feature merge into local dev failed: ${new CommandFailureMessage(merge.value).text()}.${abortMessage}`,
-      });
-    }
-    const after = this.stateAt(request.devPath);
-    if (after.isErr()) return err(after.error);
-    if (after.value !== WorktreeState.Clean) {
-      return err({
-        kind: DevFailureKind.DirtyWorktree,
-        message:
-          'The local merge left dev dirty; no cleanup was attempted so foreign changes remain intact',
-      });
-    }
-    const afterBranch = this.branchAt(request.devPath);
-    if (afterBranch.isErr()) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `Assigned development worktree became detached after its feature merge: ${request.devPath}`,
-      });
-    }
-    if (afterBranch.value.value() !== ManagedBranch.Dev) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `Assigned development worktree changed from dev after its feature merge: ${request.devPath}`,
-      });
-    }
-    const afterHead = this.headAt(request.devPath);
-    if (afterHead.isErr()) return err(afterHead.error);
-    if (afterHead.value.equals(request.expectedDevHead)) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `Local dev did not advance after merging ${request.featureHead.value()}: ${request.devPath}`,
-      });
-    }
-    const included = this.ancestry({
-      ancestor: request.featureHead,
-      descendant: afterHead.value,
-      workingDirectory: request.devPath,
-    });
-    if (included.isErr()) return err(included.error);
-    if (included.value !== Ancestry.Ancestor) {
-      return err({
-        kind: DevFailureKind.Conflict,
-        message:
-          'The local dev merge completed without retaining the expected feature commit',
-      });
-    }
-    return ok(afterHead.value);
+    return new DevGitMergeBoundary({
+      repository: this,
+      featurePath: this.request.root,
+      execute: (invocation) => this.execute(invocation),
+      branchHeadAt: (path, branch) => this.branchHeadAt(path, branch),
+    }).mergeInto(request);
   }
 
   /** Fast-forwards local dev to a promoted snapshot without rewriting newer work. */
@@ -897,6 +477,18 @@ export class DevGitRepository {
       });
     }
     return ok();
+  }
+
+  private branchHeadAt(
+    path: string,
+    branch: ManagedBranch,
+  ): Result<CommitSha, DevFailure> {
+    const output = this.successful({
+      args: ['rev-parse', '--verify', `refs/heads/${branch}^{commit}`],
+      workingDirectory: path,
+    });
+    if (output.isErr()) return err(output.error);
+    return CommitShaValue.parse(output.value.stdout.trim());
   }
 
   private trackingHead(branch: ManagedBranch): Result<CommitSha, DevFailure> {
