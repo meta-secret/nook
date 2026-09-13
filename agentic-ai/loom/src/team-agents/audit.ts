@@ -323,7 +323,9 @@ export class TeamAgentContract {
               'Team context paths must be normalized and repository-relative.',
           };
           findings.push(finding);
-        } else if (!existsSync(join(request.repoRoot, contextPath))) {
+        } else if (
+          !TeamAgentContract.isRegularFile(join(request.repoRoot, contextPath))
+        ) {
           const finding: TeamAuthorityAuditFinding = {
             code: 'missing-team-context-path',
             path: contextPath,

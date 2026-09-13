@@ -264,6 +264,71 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
+  test('rejects directories and symlinks as canonical Team Authority context paths', async () => {
+    for (const contextNode of ['directory', 'symlink'] as const) {
+      const fixtureRoot = await mkdtemp(
+        join(tmpdir(), `loom-authority-${contextNode}-`),
+      );
+      const cortexRoot = join(fixtureRoot, '.cortex');
+      const teamsRoot = join(cortexRoot, 'teams');
+      const aiRoot = join(teamsRoot, 'ai');
+      const aiAgentsPath = join(aiRoot, 'AGENTS.md');
+
+      try {
+        await mkdir(teamsRoot, CREATE_RECURSIVELY);
+        await symlink(
+          join(REPO_ROOT, '.cortex/AGENTS.md'),
+          join(cortexRoot, 'AGENTS.md'),
+        );
+        await symlink(
+          join(REPO_ROOT, '.cortex/gizmo'),
+          join(cortexRoot, 'gizmo'),
+        );
+        for (const teamDirectory of [
+          'dev-core',
+          'security',
+          'sre',
+          'web-dev',
+          'delivery-pipeline',
+        ]) {
+          await symlink(
+            join(REPO_ROOT, '.cortex/teams', teamDirectory),
+            join(teamsRoot, teamDirectory),
+          );
+        }
+        await mkdir(aiRoot, CREATE_RECURSIVELY);
+        await symlink(
+          join(REPO_ROOT, '.cortex/teams/ai/dynamic-skills'),
+          join(aiRoot, 'dynamic-skills'),
+        );
+        await writeFile(join(aiRoot, 'knowledge-graph.md'), 'knowledge\n');
+        if (contextNode === 'directory') {
+          await mkdir(aiAgentsPath);
+        } else {
+          await symlink(
+            join(REPO_ROOT, '.cortex/teams/ai/AGENTS.md'),
+            aiAgentsPath,
+          );
+        }
+
+        const report = TeamAgentContract.auditTeamAuthorities({
+          repoRoot: fixtureRoot,
+          authorities: TEAM_AUTHORITY_CATALOG,
+        });
+
+        expect(report.auditOk).toBe(false);
+        expect(report.findings).toContainEqual({
+          code: 'missing-team-context-path',
+          path: '.cortex/teams/ai/AGENTS.md',
+          message:
+            'Canonical Cortex team context is missing: .cortex/teams/ai/AGENTS.md',
+        });
+      } finally {
+        await rm(fixtureRoot, REMOVE_RECURSIVELY);
+      }
+    }
+  });
+
   test('rejects stable-key, identity, context, and capability drift', () => {
     const aiAuthority = TeamAgentsAuditScenario.requiredAiAuthority();
     const driftedAuthorities: readonly TeamAuthority[][] = [
