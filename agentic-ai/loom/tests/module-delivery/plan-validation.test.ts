@@ -146,6 +146,26 @@ const DEFAULT_EDGES: readonly ModuleDeliveryEdgeContract[] = [
   CORE_WASM_EDGE,
 ];
 
+type LimitRejectionRequest = {
+  readonly serialized: string;
+  readonly path: string;
+};
+
+class ModuleDeliveryPlanTransportCollectionScenario {
+  private constructor() {}
+
+  static expectLimitRejection(request: LimitRejectionRequest): void {
+    const result =
+      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
+        request.serialized,
+      );
+    expect(result.status).toBe(ModuleDeliveryCompatibilityStatus.Rejected);
+    if (result.status !== ModuleDeliveryCompatibilityStatus.Rejected) return;
+    expect(result.issues[0]?.code).toBe(ModuleDeliveryIssueCode.LimitExceeded);
+    expect(result.issues[0]?.path).toBe(request.path);
+  }
+}
+
 describe('reviewed module delivery plan', () => {
   test('admits ordinary team tasks and rejects forged identity, profile, and scope', () => {
     const accepted = (node: ModuleDeliveryNodeV2) =>
@@ -555,20 +575,6 @@ describe('bounded module delivery plan transport collections', () => {
     edgeContracts: [],
   });
 
-  const expectLimitRejection = (request: {
-    readonly serialized: string;
-    readonly path: string;
-  }): void => {
-    const result =
-      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
-        request.serialized,
-      );
-    expect(result.status).toBe(ModuleDeliveryCompatibilityStatus.Rejected);
-    if (result.status !== ModuleDeliveryCompatibilityStatus.Rejected) return;
-    expect(result.issues[0]?.code).toBe(ModuleDeliveryIssueCode.LimitExceeded);
-    expect(result.issues[0]?.path).toBe(request.path);
-  };
-
   test('rejects an oversized root node list before node decoding', () => {
     const serialized = JSON.stringify({
       ...basePlan,
@@ -577,7 +583,10 @@ describe('bounded module delivery plan transport collections', () => {
         () => CORE_NODE,
       ),
     });
-    expectLimitRejection({ serialized, path: '$.nodes' });
+    ModuleDeliveryPlanTransportCollectionScenario.expectLimitRejection({
+      serialized,
+      path: '$.nodes',
+    });
   });
 
   test('rejects an oversized edge contract list before edge decoding', () => {
@@ -588,7 +597,10 @@ describe('bounded module delivery plan transport collections', () => {
         () => ({}),
       ),
     });
-    expectLimitRejection({ serialized, path: '$.edgeContracts' });
+    ModuleDeliveryPlanTransportCollectionScenario.expectLimitRejection({
+      serialized,
+      path: '$.edgeContracts',
+    });
   });
 
   test('rejects oversized expected producers before producer decoding', () => {
@@ -610,7 +622,7 @@ describe('bounded module delivery plan transport collections', () => {
         },
       ],
     });
-    expectLimitRejection({
+    ModuleDeliveryPlanTransportCollectionScenario.expectLimitRejection({
       serialized,
       path: '$.nodes[0].evidenceInput.expectedProducers',
     });
@@ -626,7 +638,7 @@ describe('bounded module delivery plan transport collections', () => {
         }).fill('task validation'),
       },
     });
-    expectLimitRejection({
+    ModuleDeliveryPlanTransportCollectionScenario.expectLimitRejection({
       serialized,
       path: '$.parentJoin.validationCommands',
     });

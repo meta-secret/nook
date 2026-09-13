@@ -31,13 +31,6 @@ type ModuleIntegrationCapabilityBridge = Readonly<{
   );
 })();
 
-const capabilityBridges = (): ModuleIntegrationCapabilityBridge[] => {
-  const value = (globalThis as unknown as Record<symbol, unknown>)[
-    Symbol.for('nook.loom.module-integration-capability-bridge')
-  ];
-  return Array.isArray(value) ? (value as ModuleIntegrationCapabilityBridge[]) : [];
-};
-
 /**
  * Owns verification for the provenance-backed capabilities emitted by module
  * integration. Minting stays in the coordinator's lexical closure: this
@@ -46,10 +39,21 @@ const capabilityBridges = (): ModuleIntegrationCapabilityBridge[] => {
 export class ModuleIntegrationCapabilityRegistry {
   private constructor() {}
 
+  static #capabilityBridges(): ModuleIntegrationCapabilityBridge[] {
+    const value = (globalThis as unknown as Record<symbol, unknown>)[
+      Symbol.for('nook.loom.module-integration-capability-bridge')
+    ];
+    return Array.isArray(value)
+      ? (value as ModuleIntegrationCapabilityBridge[])
+      : [];
+  }
+
   static assertModuleDeliveryIntegratedWriterFrontierCapability(
     request: AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
   ): void {
-    const bridge = capabilityBridges().at(-1);
+    const bridge = ModuleIntegrationCapabilityRegistry.#capabilityBridges().at(
+      -1,
+    );
     if (!bridge)
       throw new Error('Integrated writer frontier capability is invalid.');
     const provenance = bridge.frontierProvenance(request.capability);
@@ -70,7 +74,9 @@ export class ModuleIntegrationCapabilityRegistry {
   static assertModuleDeliveryCanonicalEvidenceTransition(
     request: AssertModuleDeliveryCanonicalEvidenceTransitionRequest,
   ): void {
-    const bridge = capabilityBridges().at(-1);
+    const bridge = ModuleIntegrationCapabilityRegistry.#capabilityBridges().at(
+      -1,
+    );
     if (!bridge)
       throw new Error('Canonical evidence transition is invalid.');
     const provenance = bridge.transitionProvenance(request.transition);
