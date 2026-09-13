@@ -9,16 +9,34 @@ import type {
   ModuleDeliveryCanonicalEvidenceTransition,
 } from './integration-provenance.ts';
 
-const WRITER_FRONTIER_PROVENANCE = new WeakMap<
-  ModuleDeliveryIntegratedWriterFrontierCapability,
-  IntegratedWriterFrontierProvenance
->();
-const CANONICAL_EVIDENCE_PROVENANCE = new WeakMap<
-  ModuleDeliveryCanonicalEvidenceTransition,
-  CanonicalEvidenceTransitionProvenance
->();
-const MINT_AUTHORITIES = new WeakSet<object>();
-let boundMintAuthority: object | undefined;
+type ModuleIntegrationCapabilityBridge = Readonly<{
+  frontierProvenance: (
+    capability: ModuleDeliveryIntegratedWriterFrontierCapability,
+  ) => IntegratedWriterFrontierProvenance | undefined;
+  transitionProvenance: (
+    transition: ModuleDeliveryCanonicalEvidenceTransition,
+  ) => CanonicalEvidenceTransitionProvenance | undefined;
+}>;
+
+(() => {
+  const globalValue = (globalThis as unknown as Record<symbol, unknown>)[
+    Symbol.for('nook.loom.module-integration-capability-bridge')
+  ];
+  if (Array.isArray(globalValue)) return;
+  const bridges: ModuleIntegrationCapabilityBridge[] = [];
+  Object.defineProperty(
+    globalThis,
+    Symbol.for('nook.loom.module-integration-capability-bridge'),
+    { configurable: false, enumerable: false, value: bridges, writable: true },
+  );
+})();
+
+const capabilityBridges = (): ModuleIntegrationCapabilityBridge[] => {
+  const value = (globalThis as unknown as Record<symbol, unknown>)[
+    Symbol.for('nook.loom.module-integration-capability-bridge')
+  ];
+  return Array.isArray(value) ? (value as ModuleIntegrationCapabilityBridge[]) : [];
+};
 
 /**
  * Owns verification for the provenance-backed capabilities emitted by module
@@ -28,51 +46,13 @@ let boundMintAuthority: object | undefined;
 export class ModuleIntegrationCapabilityRegistry {
   private constructor() {}
 
-  static bindMintAuthority(authority: object): void {
-    if (boundMintAuthority && boundMintAuthority !== authority)
-      throw new Error('Module integration capability mint authority is bound.');
-    boundMintAuthority ??= authority;
-    MINT_AUTHORITIES.add(authority);
-  }
-
-  static acceptIntegratedWriterFrontier(
-    request: BindIntegratedWriterFrontierRequest,
-  ): void {
-    ModuleIntegrationCapabilityRegistry.assertMintAuthority(
-      request.mintAuthority,
-    );
-    WRITER_FRONTIER_PROVENANCE.set(
-      request.capability,
-      Object.freeze({
-        ...request.provenance,
-        integratedTaskIds: Object.freeze(
-          request.provenance.integratedTaskIds.slice(),
-        ),
-      }),
-    );
-  }
-
-  static acceptCanonicalEvidenceTransition(
-    request: BindCanonicalEvidenceTransitionRequest,
-  ): void {
-    ModuleIntegrationCapabilityRegistry.assertMintAuthority(
-      request.mintAuthority,
-    );
-    CANONICAL_EVIDENCE_PROVENANCE.set(
-      request.transition,
-      Object.freeze({
-        ...request.provenance,
-        integratedTaskIds: Object.freeze(
-          request.provenance.integratedTaskIds.slice(),
-        ),
-      }),
-    );
-  }
-
   static assertModuleDeliveryIntegratedWriterFrontierCapability(
     request: AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
   ): void {
-    const provenance = WRITER_FRONTIER_PROVENANCE.get(request.capability);
+    const bridge = capabilityBridges().at(-1);
+    if (!bridge)
+      throw new Error('Integrated writer frontier capability is invalid.');
+    const provenance = bridge.frontierProvenance(request.capability);
     if (
       !provenance ||
       provenance.authority !== request.authority ||
@@ -90,7 +70,10 @@ export class ModuleIntegrationCapabilityRegistry {
   static assertModuleDeliveryCanonicalEvidenceTransition(
     request: AssertModuleDeliveryCanonicalEvidenceTransitionRequest,
   ): void {
-    const provenance = CANONICAL_EVIDENCE_PROVENANCE.get(request.transition);
+    const bridge = capabilityBridges().at(-1);
+    if (!bridge)
+      throw new Error('Canonical evidence transition is invalid.');
+    const provenance = bridge.transitionProvenance(request.transition);
     if (
       !provenance ||
       provenance.authority !== request.authority ||
@@ -101,21 +84,4 @@ export class ModuleIntegrationCapabilityRegistry {
     )
       throw new Error('Canonical evidence transition is invalid.');
   }
-
-  private static assertMintAuthority(authority: object): void {
-    if (!MINT_AUTHORITIES.has(authority))
-      throw new Error('Module integration capability mint authority is invalid.');
-  }
 }
-
-type BindIntegratedWriterFrontierRequest = Readonly<{
-  mintAuthority: object;
-  capability: ModuleDeliveryIntegratedWriterFrontierCapability;
-  provenance: IntegratedWriterFrontierProvenance;
-}>;
-
-type BindCanonicalEvidenceTransitionRequest = Readonly<{
-  mintAuthority: object;
-  transition: ModuleDeliveryCanonicalEvidenceTransition;
-  provenance: CanonicalEvidenceTransitionProvenance;
-}>;

@@ -26,8 +26,10 @@ test('keeps the integration capability runtime graph acyclic', () => {
     'utf8',
   );
 
-  expect(capabilitySource).toContain('new WeakMap');
-  expect(capabilitySource).toContain('new WeakSet');
+  expect(capabilitySource).toContain('capabilityBridges');
+  expect(capabilitySource).not.toMatch(
+    /\b(?:bindMintAuthority|accept(?:Integrated|Canonical)|register(?:Integrated|Canonical)|mint(?:Integrated|Canonical))/u,
+  );
   expect(capabilitySource).not.toContain('Object.getOwnPropertySymbols');
   expect(capabilitySource).not.toContain("from './integration.ts'");
   expect(admissionAuthoritySource).not.toContain("from './integration.ts'");
@@ -46,7 +48,7 @@ test('keeps capability minting behind the coordinator boundary', async () => {
   );
   expect(capabilitySource).not.toMatch(/\bregister(?:Integrated|Canonical)/u);
   expect(integrationSource).not.toMatch(
-    /ModuleIntegrationCapabilityMintAuthority|createModuleIntegrationCapabilityMintAuthority|CAPABILITY_AUTHORITY_PROOF/u,
+    /ModuleIntegrationCapabilityMintAuthority|createModuleIntegrationCapabilityMintAuthority|CAPABILITY_AUTHORITY_PROOF|bindMintAuthority|CAPABILITY_MINT_AUTHORITY/u,
   );
 
   const directModule = await import(
@@ -87,9 +89,10 @@ test('keeps capability minting behind the coordinator boundary', async () => {
       'canonicalEvidenceTransition',
     ),
   ).toBe(false);
-  expect(() =>
-    directModule.ModuleIntegrationCapabilityRegistry.bindMintAuthority({}),
-  ).toThrow('mint authority is bound');
+  expect(Object.hasOwn(directModule, 'bindMintAuthority')).toBe(false);
+  expect(
+    Object.hasOwn(directModule.ModuleIntegrationCapabilityRegistry, 'bindMintAuthority'),
+  ).toBe(false);
   expect(
     Object.hasOwn(directIndex, 'createModuleIntegrationCapabilityMintAuthority'),
   ).toBe(false);

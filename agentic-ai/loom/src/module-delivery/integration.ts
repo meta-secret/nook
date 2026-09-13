@@ -9,6 +9,7 @@ import type {
   IntegrationStateUpdate,
   ModuleDeliveryIntegratedWriterFrontierCapability,
   AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
+  IntegratedWriterFrontierProvenance,
   MintIntegratedWriterFrontierRequest,
 } from './integration-contracts.ts';
 export type {
@@ -16,7 +17,6 @@ export type {
   AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
 } from './integration-contracts.ts';
 import { randomUUID } from 'node:crypto';
-
 import { ModuleRepositoryGit } from './git-command.ts';
 import { ModuleDeliveryTaskKind } from './domain.ts';
 import { ModuleCommitHandoff } from './handoff.ts';
@@ -54,7 +54,6 @@ import type {
 } from './integration-provenance.ts';
 import { ModuleWorktree } from './workspace.ts';
 import type { GitCommandRequest } from './git-command.ts';
-
 import type {
   ModuleCommitPathRequest,
   VerifyModuleCommitHandoffRequest,
@@ -93,27 +92,54 @@ const PROHIBITED_MATERIALIZATION_FILES = new Set([
   '.gitmodules',
   '.lfsconfig',
 ]);
-const CAPABILITY_MINT_AUTHORITY = Object.freeze({});
-ModuleIntegrationCapabilityRegistry.bindMintAuthority(CAPABILITY_MINT_AUTHORITY);
-
+type CapabilityBridge = {
+  frontierProvenance: (capability: ModuleDeliveryIntegratedWriterFrontierCapability) => IntegratedWriterFrontierProvenance | undefined;
+  transitionProvenance: (transition: ModuleDeliveryCanonicalEvidenceTransition) => CanonicalEvidenceTransitionProvenance | undefined;
+};
+const capabilityProvenance = (() => {
+  const frontiers = new WeakMap<ModuleDeliveryIntegratedWriterFrontierCapability, IntegratedWriterFrontierProvenance>();
+  const transitions = new WeakMap<ModuleDeliveryCanonicalEvidenceTransition, CanonicalEvidenceTransitionProvenance>();
+  return Object.freeze({
+    frontierProvenance: (capability: ModuleDeliveryIntegratedWriterFrontierCapability) =>
+      frontiers.get(capability),
+    transitionProvenance: (transition: ModuleDeliveryCanonicalEvidenceTransition) =>
+      transitions.get(transition),
+    recordFrontier: (
+      capability: ModuleDeliveryIntegratedWriterFrontierCapability,
+      provenance: IntegratedWriterFrontierProvenance,
+    ) => frontiers.set(capability, provenance),
+    recordTransition: (
+      transition: ModuleDeliveryCanonicalEvidenceTransition,
+      provenance: CanonicalEvidenceTransitionProvenance,
+    ) => transitions.set(transition, provenance),
+  });
+})();
+const bridgeValue = (globalThis as unknown as Record<symbol, unknown>)[
+  Symbol.for('nook.loom.module-integration-capability-bridge')
+];
+const capabilityBridges = Array.isArray(bridgeValue)
+  ? (bridgeValue as CapabilityBridge[])
+  : [];
+const coordinatorBridge = Object.freeze({
+  frontierProvenance: capabilityProvenance.frontierProvenance,
+  transitionProvenance: capabilityProvenance.transitionProvenance,
+});
+Object.defineProperty(globalThis, Symbol.for('nook.loom.module-integration-capability-bridge'), { configurable: false, enumerable: false, value: [...capabilityBridges, coordinatorBridge], writable: true });
 enum IntegrationHeadCommitKind {
   Pending = 'pending',
   Applied = 'applied',
 }
-
 type IntegrationHeadCommit =
   | { readonly kind: IntegrationHeadCommitKind.Pending }
   | {
       readonly kind: IntegrationHeadCommitKind.Applied;
       readonly value: string;
     };
-
 /** Owns module integration lifecycle coordination and its public capability boundary. */
 export class ModuleIntegrationCoordinator {
   private constructor() {
     throw new Error('ModuleIntegrationCoordinator is not constructible.');
   }
-
   static #mintIntegratedWriterFrontier(
     request: MintIntegratedWriterFrontierRequest,
   ): ModuleDeliveryIntegratedWriterFrontierCapability {
@@ -126,14 +152,12 @@ export class ModuleIntegrationCoordinator {
       headCommit: request.headCommit,
       integratedTaskIds,
     });
-    ModuleIntegrationCapabilityRegistry.acceptIntegratedWriterFrontier({
-      mintAuthority: CAPABILITY_MINT_AUTHORITY,
+    capabilityProvenance.recordFrontier(
       capability,
-      provenance: Object.freeze({ ...request, integratedTaskIds }),
-    });
+      Object.freeze({ ...request, integratedTaskIds }),
+    );
     return capability;
   }
-
   static assertModuleDeliveryIntegratedWriterFrontierCapability(
     request: AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
   ): void {
@@ -141,7 +165,6 @@ export class ModuleIntegrationCoordinator {
       request,
     );
   }
-
   static assertModuleDeliveryCanonicalEvidenceTransition(
     request: AssertModuleDeliveryCanonicalEvidenceTransitionRequest,
   ): void {
@@ -149,7 +172,6 @@ export class ModuleIntegrationCoordinator {
       request,
     );
   }
-
   static #canonicalEvidenceTransition(
     request: CanonicalEvidenceTransitionProvenance,
   ): ModuleDeliveryCanonicalEvidenceTransition {
@@ -159,14 +181,12 @@ export class ModuleIntegrationCoordinator {
       canonicalHeadCommit: request.canonicalHeadCommit,
       integratedTaskIds,
     });
-    ModuleIntegrationCapabilityRegistry.acceptCanonicalEvidenceTransition({
-      mintAuthority: CAPABILITY_MINT_AUTHORITY,
+    capabilityProvenance.recordTransition(
       transition,
-      provenance: Object.freeze({ ...request, integratedTaskIds }),
-    });
+      Object.freeze({ ...request, integratedTaskIds }),
+    );
     return transition;
   }
-
   private static gitRequest(
     invocation: ModuleGitInvocation,
   ): GitCommandRequest {
@@ -179,7 +199,6 @@ export class ModuleIntegrationCoordinator {
     }
     return { cwd: invocation.cwd, args: invocation.args };
   }
-
   private static gitInvocation(invocation: ModuleGitInvocation): string {
     return ModuleRepositoryGit.gitText(
       ModuleRepositoryGit.runModuleDeliveryGit(
@@ -187,7 +206,6 @@ export class ModuleIntegrationCoordinator {
       ),
     );
   }
-
   private static verifyExpectedHandoff(
     verification: ExpectedHandoffVerification,
   ): void {
@@ -241,7 +259,6 @@ export class ModuleIntegrationCoordinator {
       );
     }
   }
-
   private static applyAndValidateWave(
     application: ValidatedWaveApplication,
   ): string {
@@ -262,7 +279,6 @@ export class ModuleIntegrationCoordinator {
     };
     return ModuleWaveTree.apply(applyRequest);
   }
-
   private static advancedIntegrationState(
     request: AdvancedIntegrationStateRequest,
   ): ModuleIntegrationState {
@@ -291,7 +307,6 @@ export class ModuleIntegrationCoordinator {
     );
     return immutable;
   }
-
   private static authoritativeProviderLease(
     inspection: ProviderLeaseInspection,
   ): ModuleDeliveryAttemptLease {
@@ -335,7 +350,6 @@ export class ModuleIntegrationCoordinator {
     }
     return inspection.lease;
   }
-
   private static refreshedWriterFrontiers(
     request: RefreshedWriterFrontiersRequest,
   ): readonly ModuleDeliveryIntegratedWriterFrontierCapability[] {
@@ -357,14 +371,12 @@ export class ModuleIntegrationCoordinator {
       }),
     );
   }
-
   private static updatedIntegrationState([
     state,
     updates,
   ]: IntegrationStateUpdate): ModuleIntegrationState {
     return Object.assign({}, state, updates);
   }
-
   static prepareModuleIntegration(
     request: PrepareModuleIntegrationRequest,
   ): ModuleIntegrationState {
@@ -481,7 +493,6 @@ export class ModuleIntegrationCoordinator {
       );
     }
   }
-
   static integrateVerifiedModuleDeliveryTask(
     request: IntegrateVerifiedModuleDeliveryTaskRequest,
   ): ModuleIntegrationState {
@@ -812,7 +823,6 @@ export class ModuleIntegrationCoordinator {
     );
     return integrated;
   }
-
   static finalizeModuleDeliveryIntegration(
     request: FinalizeModuleDeliveryIntegrationRequest,
   ): ModuleIntegrationState {
@@ -976,7 +986,6 @@ export class ModuleIntegrationCoordinator {
       throw new Error('Final module join failed and was fully rolled back.');
     }
   }
-
   static cleanupModuleIntegration(
     request: CleanupModuleIntegrationRequest,
   ): CleanupModuleIntegrationResult {
