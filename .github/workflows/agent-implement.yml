@@ -118,6 +118,42 @@ jobs:
             exit 1
           fi
 
+      - name: Recreate trusted checkout workspace
+        run: |
+          set -euo pipefail
+          case "$RUNNER_WORKSPACE" in
+            /*) ;;
+            *) echo "::error::RUNNER_WORKSPACE must be an absolute path."; exit 1 ;;
+          esac
+          case "$GITHUB_WORKSPACE" in
+            /*) ;;
+            *) echo "::error::GITHUB_WORKSPACE must be an absolute path."; exit 1 ;;
+          esac
+          runner_workspace="$(realpath -e -- "$RUNNER_WORKSPACE")"
+          workspace_parent="$(realpath -e -- "$(dirname -- "$GITHUB_WORKSPACE")")"
+          workspace_name="$(basename -- "$GITHUB_WORKSPACE")"
+          if [ "$workspace_parent" != "$runner_workspace" ]; then
+            echo "::error::GITHUB_WORKSPACE must be a direct child of RUNNER_WORKSPACE."
+            exit 1
+          fi
+          if ! printf '%s' "$workspace_name" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*$' || [ "$workspace_name" = "." ] || [ "$workspace_name" = ".." ]; then
+            echo "::error::GITHUB_WORKSPACE has an unsafe leaf name."
+            exit 1
+          fi
+          if [ ! -d "$GITHUB_WORKSPACE" ] || [ -L "$GITHUB_WORKSPACE" ]; then
+            echo "::error::GITHUB_WORKSPACE must be an existing non-symlink directory."
+            exit 1
+          fi
+          if [ "$(realpath -e -- "$GITHUB_WORKSPACE")" != "$runner_workspace/$workspace_name" ]; then
+            echo "::error::GITHUB_WORKSPACE did not resolve to the validated runner child."
+            exit 1
+          fi
+          find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+          if find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
+            echo "::error::Failed to clear inherited workspace contents."
+            exit 1
+          fi
+
       - name: Checkout trusted workflow tooling
         uses: actions/checkout@v7
         with:
@@ -349,7 +385,6 @@ jobs:
           GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
           git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
             "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH"
-          unset auth NOOK_TOKEN
           pinned_local_dev_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse "refs/remotes/origin/$FEATURE_BRANCH^{commit}")"
           if [ "$pinned_local_dev_sha" != "$PINNED_LOCAL_DEV_SHA" ]; then
             echo "::error::Freshly fetched feature branch does not match pinned_local_dev_sha."
@@ -359,8 +394,22 @@ jobs:
             echo "::error::Pinned local dev is not descended from the freshly fetched origin/main."
             exit 1
           fi
-          git -C "$GITHUB_WORKSPACE" worktree add --detach "$implementation_root" \
-            "refs/remotes/origin/$FEATURE_BRANCH"
+          git init "$implementation_root"
+          git -C "$implementation_root" remote add origin \
+            "https://github.com/$GITHUB_REPOSITORY.git"
+          GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+          git -C "$implementation_root" fetch --no-tags origin \
+            "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH"
+          implementation_head="$(git -C "$implementation_root" rev-parse "refs/remotes/origin/$FEATURE_BRANCH^{commit}")"
+          if [ "$implementation_head" != "$PINNED_LOCAL_DEV_SHA" ]; then
+            echo "::error::Isolated implementation repository does not match pinned_local_dev_sha."
+            exit 1
+          fi
+          git -C "$implementation_root" checkout --detach "$implementation_head"
+          test "$(git -C "$implementation_root" rev-parse HEAD)" = "$PINNED_LOCAL_DEV_SHA"
+          unset auth NOOK_TOKEN
           {
             echo "IMPLEMENTATION_REPO_ROOT=$implementation_root"
             echo "ORIGIN_MAIN_SHA=$ORIGIN_MAIN_SHA"
