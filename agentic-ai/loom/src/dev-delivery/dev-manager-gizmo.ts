@@ -315,7 +315,10 @@ export class DevManagerGizmoCommand {
   private runPrManager(
     inspection: DevManagerGizmoInspection,
   ): Result<DevManagerGizmoOutcome, DevFailure> {
-    const manager = new DevPrManagerCommand(this.workspace).execute();
+    const manager = new DevPrManagerCommand({
+      workspace: this.workspace,
+      expectedSha: inspection.devSha,
+    }).execute();
     if (manager.isErr()) {
       return err(this.operationFailure({ inspection, failure: manager.error }));
     }

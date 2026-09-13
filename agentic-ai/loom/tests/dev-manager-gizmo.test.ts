@@ -9,12 +9,14 @@ import {
   DevManagerGizmoCommand,
   DevManagerGizmoState,
 } from '../src/dev-delivery/dev-manager-gizmo.ts';
+import { DevPrManagerCommand } from '../src/dev-delivery/dev-pr-manager.ts';
 import { DevDeliveryWorkspace } from '../src/dev-delivery/dev-workspace.ts';
 import {
   CommandExecutable,
   type CommandOutput,
   type CommandRequest,
   type CommandRunner,
+  CommitSha,
   DevFailureKind,
   type DevFailure,
 } from '../src/dev-delivery/dev-types.ts';
@@ -469,6 +471,66 @@ test('uses the manager-only PR seam for an already frozen snapshot without obser
         (request) =>
           request.executable === CommandExecutable.GitHub &&
           (request.args[0] === 'run' || request.args[0] === 'api'),
+      ),
+    ).toBe(false);
+  } finally {
+    harness.dispose();
+  }
+});
+
+test('requires the exact selected SHA before invoking the manager PR seam', () => {
+  const harness = new DevManagerGizmoHarness({
+    localSha: SHA_B,
+    remoteDevSha: SHA_A,
+    ancestryPairs: [[SHA_MAIN, SHA_B]],
+  });
+  const expectedSha = CommitSha.parse(SHA_B);
+  try {
+    expect(expectedSha.isOk()).toBe(true);
+    if (expectedSha.isErr()) return;
+    const result = new DevPrManagerCommand({
+      workspace: harness.workspace,
+      expectedSha: expectedSha.value,
+    }).execute();
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error.kind).toBe(DevFailureKind.Race);
+    expect(result.error.message).toContain(SHA_B);
+    expect(
+      harness.runner.requests.some(
+        (request) => request.executable === CommandExecutable.GitHub,
+      ),
+    ).toBe(false);
+  } finally {
+    harness.dispose();
+  }
+});
+
+test('rejects a mismatched existing PR before any PR mutation', () => {
+  const harness = new DevManagerGizmoHarness({
+    localSha: SHA_B,
+    remoteDevSha: SHA_B,
+    pullRequest: { headSha: SHA_A },
+    ancestryPairs: [[SHA_MAIN, SHA_B]],
+  });
+  const expectedSha = CommitSha.parse(SHA_B);
+  try {
+    expect(expectedSha.isOk()).toBe(true);
+    if (expectedSha.isErr()) return;
+    const result = new DevPrManagerCommand({
+      workspace: harness.workspace,
+      expectedSha: expectedSha.value,
+    }).execute();
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error.kind).toBe(DevFailureKind.Race);
+    expect(result.error.message).toContain('refusing to mutate it');
+    expect(
+      harness.runner.requests.some(
+        (request) =>
+          request.executable === CommandExecutable.GitHub &&
+          (request.args[0] === 'pr' &&
+            (request.args[1] === 'create' || request.args[1] === 'edit')),
       ),
     ).toBe(false);
   } finally {
