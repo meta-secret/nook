@@ -90,6 +90,7 @@ import type {
   ResourceConflictRequest,
 } from './authority.ts';
 import { ModuleAdmissionSource } from './admission-source.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 const AUTHORITY = Symbol('module-delivery-generation-authority');
 const admissionStateStoreAuthorities = {
   assertCanonicalTransition:
@@ -206,6 +207,12 @@ export class ModuleGenerationAuthority {
       ) !== authority.repositoryRoot
     )
       throw new Error('Module delivery repository authority is invalid.');
+    PinnedDevBaseEvidenceContract.assertAncestry({
+      originMainSha: authority.acceptedPlan.plan.originMainSha,
+      pinnedLocalDevSha: authority.acceptedPlan.plan.pinnedLocalDevSha,
+      sourceCommit: authority.acceptedPlan.plan.sourceCommit,
+      workingDirectory: authority.repositoryRoot,
+    });
   }
 
   static assertAcceptedModuleDeliveryEvidence(
@@ -454,6 +461,8 @@ export class ModuleGenerationAuthority {
       generation: acceptedPlan.plan.generation,
       planDigest: acceptedPlan.planDigest,
       headCommit: acceptedPlan.plan.sourceCommit,
+      originMainSha: acceptedPlan.plan.originMainSha,
+      pinnedLocalDevSha: acceptedPlan.plan.pinnedLocalDevSha,
       integratedWriterFrontiers: frontiers,
       acceptedProviderEvidence: identities,
     };
@@ -496,6 +505,12 @@ export class ModuleGenerationAuthority {
       planDigest: authority.acceptedPlan.planDigest,
     };
     ModuleAdmissionStateRegistry.assertAdmissionStateCurrent(currentInspection);
+    if (
+      inspection.state.originMainSha !== authority.acceptedPlan.plan.originMainSha ||
+      inspection.state.pinnedLocalDevSha !==
+        authority.acceptedPlan.plan.pinnedLocalDevSha
+    )
+      throw new Error('Module delivery admission base evidence is invalid.');
   }
 
   static selectModuleDeliveryAdmissions(
@@ -595,6 +610,8 @@ export class ModuleGenerationAuthority {
         planDigest: request.state.planDigest,
         startingFrontier:
           ModuleGenerationAuthority.startingFrontier(frontierRequest),
+        originMainSha: authority.acceptedPlan.plan.originMainSha,
+        pinnedLocalDevSha: authority.acceptedPlan.plan.pinnedLocalDevSha,
         resources,
         ...contextFields,
         team: node.team,
@@ -721,7 +738,10 @@ export class ModuleGenerationAuthority {
         ModuleGenerationAuthority.attemptKey(inspection.lease),
       ) !== inspection.lease ||
       inspection.lease.generation !== authority.acceptedPlan.plan.generation ||
-      inspection.lease.planDigest !== authority.acceptedPlan.planDigest
+      inspection.lease.planDigest !== authority.acceptedPlan.planDigest ||
+      inspection.lease.originMainSha !== authority.acceptedPlan.plan.originMainSha ||
+      inspection.lease.pinnedLocalDevSha !==
+        authority.acceptedPlan.plan.pinnedLocalDevSha
     )
       throw new Error('Module delivery lease authority is invalid.');
   }

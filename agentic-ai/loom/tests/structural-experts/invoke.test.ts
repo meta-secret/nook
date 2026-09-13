@@ -139,6 +139,8 @@ export class StructuralExpertsInvokeScenario {
       runId: `${prefix}-${randomUUID()}`,
       expert: 'code_refactoring_expert',
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
       task: 'inspect-code',
       attempt: 1,
       depth: 2,

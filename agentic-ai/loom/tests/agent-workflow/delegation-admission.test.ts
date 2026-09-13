@@ -82,6 +82,8 @@ export class AgentWorkflowDelegationAdmissionScenario {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       runId: RUN_ID,
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
       rootMaterializer: ROOT,
       attempts: [root, expert, specialist],
     };
@@ -98,6 +100,8 @@ export class AgentWorkflowDelegationAdmissionScenario {
     return {
       runId: RUN_ID,
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
       identity: declaration.identity,
       depth: declaration.depth,
       parent: declaration.parent,
@@ -269,6 +273,8 @@ describe('ordinary delegation admission', () => {
     const wrongRootRequest: DelegationAdmissionRequest = {
       runId: RUN_ID,
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
       identity: ROOT,
       depth: 2,
       parent: { kind: AgentAttemptParentKind.WorkflowRoot },

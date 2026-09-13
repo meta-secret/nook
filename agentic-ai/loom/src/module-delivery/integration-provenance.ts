@@ -21,6 +21,7 @@ import type {
   ModuleDeliveryEvidenceClaimIdentity,
 } from './evidence.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
+import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 import type {
   ModuleDeliveryNode,
   ModuleDeliveryOwnerIdentity,
@@ -47,25 +48,26 @@ export enum ModuleIntegrationPhase {
   Finalized = 'finalized',
 }
 
-export type ModuleDeliveryReadOnlyEvidenceSubmission = Readonly<{
-  kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence;
-  schemaVersion: typeof MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION;
-  taskId: string;
-  attempt: number;
-  generation: number;
-  planDigest: string;
-  sourceCommit: string;
-  producerTeam: TeamKey;
-  functionalOwner: ModuleDeliveryOwnerIdentity;
-  acceptanceOwner: ModuleDeliveryOwnerIdentity;
-  acceptanceRequirements: readonly string[];
-  claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
-  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
-  artifactIdentity: string;
-  artifactDigest: string;
-  verdict: ModuleDeliveryEvidenceVerdict;
-  evidence: readonly string[];
-}>;
+export type ModuleDeliveryReadOnlyEvidenceSubmission = PinnedDevBaseEvidence &
+  Readonly<{
+    kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence;
+    schemaVersion: typeof MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION;
+    taskId: string;
+    attempt: number;
+    generation: number;
+    planDigest: string;
+    sourceCommit: string;
+    producerTeam: TeamKey;
+    functionalOwner: ModuleDeliveryOwnerIdentity;
+    acceptanceOwner: ModuleDeliveryOwnerIdentity;
+    acceptanceRequirements: readonly string[];
+    claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
+    acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+    artifactIdentity: string;
+    artifactDigest: string;
+    verdict: ModuleDeliveryEvidenceVerdict;
+    evidence: readonly string[];
+  }>;
 
 export type AcceptedModuleDeliveryEvidence =
   ModuleDeliveryReadOnlyEvidenceSubmission &
@@ -144,13 +146,14 @@ export type ModuleDeliveryHandoffSubmission = Readonly<{
   workspace: ModuleWorktreeHandle;
 }>;
 
-export type ModuleDeliveryWriteProviderSubmission = Readonly<{
-  kind: ModuleDeliveryProviderSubmissionKind.Write;
-  generation: number;
-  acceptedByTeam: ModuleDeliveryOwnerIdentity;
-  verdict: ModuleDeliveryEvidenceVerdict;
-  handoff: ModuleDeliveryHandoffSubmission;
-}>;
+export type ModuleDeliveryWriteProviderSubmission = PinnedDevBaseEvidence &
+  Readonly<{
+    kind: ModuleDeliveryProviderSubmissionKind.Write;
+    generation: number;
+    acceptedByTeam: ModuleDeliveryOwnerIdentity;
+    verdict: ModuleDeliveryEvidenceVerdict;
+    handoff: ModuleDeliveryHandoffSubmission;
+  }>;
 
 export type ModuleDeliveryProviderSubmission =
   | ModuleDeliveryWriteProviderSubmission
@@ -162,6 +165,8 @@ export type AcceptedModuleDeliveryWrite = Readonly<{
   generation: number;
   planDigest: string;
   startingFrontier: string;
+  originMainSha: string;
+  pinnedLocalDevSha: string;
   integrationCommit: string;
   acceptedByTeam: ModuleDeliveryOwnerIdentity;
   handoff: ModuleDeliveryHandoffSubmission;
@@ -171,22 +176,23 @@ export type ModuleIntegrationCleanupHandle = Readonly<{
   sessionId: string;
 }>;
 
-export type ModuleIntegrationState = Readonly<{
-  phase: ModuleIntegrationPhase;
-  generation: number;
-  planDigest: string;
-  sourceCommit: string;
-  topologicalOrder: readonly string[];
-  waves: readonly (readonly string[])[];
-  completedWaveCount: number;
-  integratedTaskIds: readonly string[];
-  acceptedWrites: readonly AcceptedModuleDeliveryWrite[];
-  acceptedEvidence: readonly AcceptedModuleDeliveryEvidence[];
-  headCommit: string;
-  admissionState: ModuleDeliveryAdmissionState;
-  workspace: ModuleWorktreeHandle;
-  cleanupHandle: ModuleIntegrationCleanupHandle;
-}>;
+export type ModuleIntegrationState = PinnedDevBaseEvidence &
+  Readonly<{
+    phase: ModuleIntegrationPhase;
+    generation: number;
+    planDigest: string;
+    sourceCommit: string;
+    topologicalOrder: readonly string[];
+    waves: readonly (readonly string[])[];
+    completedWaveCount: number;
+    integratedTaskIds: readonly string[];
+    acceptedWrites: readonly AcceptedModuleDeliveryWrite[];
+    acceptedEvidence: readonly AcceptedModuleDeliveryEvidence[];
+    headCommit: string;
+    admissionState: ModuleDeliveryAdmissionState;
+    workspace: ModuleWorktreeHandle;
+    cleanupHandle: ModuleIntegrationCleanupHandle;
+  }>;
 
 export type IntegrateVerifiedModuleDeliveryTaskRequest = Readonly<{
   authority: ModuleDeliveryGenerationAuthority;
@@ -562,6 +568,8 @@ export class ModuleIntegrationProvenanceRegistry {
       authority: registration.authority,
       planDigest: registration.state.planDigest,
       sourceCommit: registration.state.sourceCommit,
+      originMainSha: registration.state.originMainSha,
+      pinnedLocalDevSha: registration.state.pinnedLocalDevSha,
       completedWaveCount: registration.state.completedWaveCount,
       headCommit: registration.state.headCommit,
       workspace: registration.state.workspace,
@@ -644,6 +652,8 @@ export class ModuleIntegrationProvenanceRegistry {
     if (
       provenance.planDigest !== state.planDigest ||
       provenance.sourceCommit !== state.sourceCommit ||
+      provenance.originMainSha !== state.originMainSha ||
+      provenance.pinnedLocalDevSha !== state.pinnedLocalDevSha ||
       provenance.completedWaveCount !== state.completedWaveCount ||
       provenance.headCommit !== state.headCommit ||
       provenance.workspace !== state.workspace
@@ -672,6 +682,8 @@ export class ModuleIntegrationProvenanceRegistry {
     if (
       state.workspace.planDigest !== state.planDigest ||
       state.workspace.baselineCommit !== state.sourceCommit ||
+      state.admissionState.originMainSha !== state.originMainSha ||
+      state.admissionState.pinnedLocalDevSha !== state.pinnedLocalDevSha ||
       state.workspace.taskId !== INTEGRATION_TASK_ID ||
       state.workspace.attempt !== 1
     )
@@ -826,6 +838,9 @@ export class ModuleIntegrationProvenanceRegistry {
       inspection.state.planDigest !== validation.planDigest ||
       inspection.state.generation !== validation.plan.generation ||
       inspection.state.sourceCommit !== validation.plan.sourceCommit ||
+      inspection.state.originMainSha !== validation.plan.originMainSha ||
+      inspection.state.pinnedLocalDevSha !==
+        validation.plan.pinnedLocalDevSha ||
       JSON.stringify(inspection.state.topologicalOrder) !==
         JSON.stringify(validation.topologicalOrder) ||
       JSON.stringify(inspection.state.waves) !==
@@ -885,6 +900,8 @@ export type ModuleIntegrationProvenance = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly planDigest: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
   readonly completedWaveCount: number;
   readonly headCommit: string;
   readonly workspace: ModuleWorktreeHandle;

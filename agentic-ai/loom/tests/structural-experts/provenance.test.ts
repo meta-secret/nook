@@ -18,6 +18,8 @@ test('rejects direct construction of structural provenance without authority', (
     workflow: DelegatedAgentWorkflowName.AgentWork,
     workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
     sourceCommit: '0123456789abcdef0123456789abcdef01234567',
+    originMainSha: '0123456789abcdef0123456789abcdef01234567',
+    pinnedLocalDevSha: '0123456789abcdef0123456789abcdef01234567',
     task: 'forged-structural-task',
     agent: 'code_refactoring_expert',
     attempt: 1,

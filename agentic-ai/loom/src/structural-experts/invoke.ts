@@ -90,6 +90,8 @@ export class StructuralExpertInvocation {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: STRUCTURAL_EXPERT_WORKFLOW_VERSION,
       sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
       task: request.task,
       agent: request.expert,
       attempt: request.attempt,
@@ -255,6 +257,8 @@ export class StructuralExpertInvocation {
       runId: input.request.runId,
       expert: input.request.expert,
       sourceCommit: input.request.sourceCommit,
+      originMainSha: input.request.originMainSha,
+      pinnedLocalDevSha: input.request.pinnedLocalDevSha,
       task: input.request.task,
       attempt: input.request.attempt,
       depth: 2,
@@ -350,6 +354,8 @@ export class StructuralExpertInvocation {
       first.adapter !== AgentAttemptAdapterKind.StructuralExpertInvocation ||
       first.runId !== result.runId ||
       first.sourceCommit !== result.sourceCommit ||
+      first.originMainSha !== result.originMainSha ||
+      first.pinnedLocalDevSha !== result.pinnedLocalDevSha ||
       first.task !== result.task ||
       first.agent !== result.expert ||
       first.attempt !== result.attempt ||
@@ -406,6 +412,8 @@ export type StructuralExpertInvocationResult = {
   readonly runId: string;
   readonly expert: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
   readonly task: string;
   readonly attempt: number;
   readonly depth: 2;

@@ -37,6 +37,8 @@ export class ModuleExpertsIsolationReceiptFixture {
       task: 'inspect-core-contract',
       attempt: 1,
       sourceCommit: ModuleExpertsIsolationReceiptFixture.SOURCE_COMMIT,
+      originMainSha: ModuleExpertsIsolationReceiptFixture.SOURCE_COMMIT,
+      pinnedLocalDevSha: ModuleExpertsIsolationReceiptFixture.SOURCE_COMMIT,
       runId: ModuleExpertsIsolationReceiptFixture.RUN_ID,
       workingDirectory: '/tmp/module-expert-receipt',
       upstreamOutputs: [],

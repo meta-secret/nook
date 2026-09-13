@@ -4,6 +4,10 @@ import {
 } from './domain.ts';
 
 import type { AgentAttemptParent } from './domain.ts';
+import {
+  PinnedDevBaseEvidenceContract,
+  type PinnedDevBaseEvidence,
+} from '../lib/base-evidence.ts';
 
 export class DelegationPlanContract {
   private constructor(private readonly request: DelegationPlan) {}
@@ -73,6 +77,11 @@ export class DelegationPlanContract {
         'Delegation plan source commit must be exactly 40 lowercase hex characters.',
       );
     }
+    const evidence: PinnedDevBaseEvidence = {
+      originMainSha: plan.originMainSha,
+      pinnedLocalDevSha: plan.pinnedLocalDevSha,
+    };
+    PinnedDevBaseEvidenceContract.assertShape(evidence);
     DelegationPlanContract.assertAttemptIdentity(plan.rootMaterializer);
   }
 
@@ -287,7 +296,7 @@ export type DelegationAttemptDeclaration = {
   readonly terminalBarrier: DelegationTerminalBarrier;
 };
 
-export type DelegationAdmissionRequest = {
+export type DelegationAdmissionRequest = PinnedDevBaseEvidence & {
   readonly runId: string;
   readonly sourceCommit: string;
   readonly identity: DelegationAttemptIdentity;
@@ -295,7 +304,7 @@ export type DelegationAdmissionRequest = {
   readonly parent: AgentAttemptParent;
 };
 
-export type DelegationPlan = {
+export type DelegationPlan = PinnedDevBaseEvidence & {
   readonly schemaVersion: typeof DELEGATION_PLAN_SCHEMA_VERSION;
   readonly workflow: DelegatedAgentWorkflowName.AgentWork;
   readonly runId: string;
@@ -304,7 +313,7 @@ export type DelegationPlan = {
   readonly attempts: readonly DelegationAttemptDeclaration[];
 };
 
-export type DelegationRunEventMetadata = {
+export type DelegationRunEventMetadata = PinnedDevBaseEvidence & {
   readonly runId: string;
   readonly sourceCommit: string;
   readonly planSha256: string;

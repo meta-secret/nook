@@ -111,6 +111,8 @@ export class ModuleDeliveryPlanSchema {
       version: MODULE_DELIVERY_PLAN_VERSION,
       generation: legacy ? 1 : fields.positiveInteger('generation'),
       sourceCommit: fields.string('sourceCommit'),
+      originMainSha: legacy ? '' : fields.string('originMainSha'),
+      pinnedLocalDevSha: legacy ? '' : fields.string('pinnedLocalDevSha'),
       maxAgentDepth: fields.positiveInteger('maxAgentDepth'),
       maxAttempts: fields.positiveInteger('maxAttempts'),
       parentOwnedResources: fields.nonEmptyStringList('parentOwnedResources'),
@@ -776,6 +778,8 @@ enum ModulePlanRootField {
   Nodes = 'nodes',
   ParentJoin = 'parentJoin',
   ParentOwnedResources = 'parentOwnedResources',
+  OriginMainSha = 'originMainSha',
+  PinnedLocalDevSha = 'pinnedLocalDevSha',
   SourceCommit = 'sourceCommit',
   Version = 'version',
 }

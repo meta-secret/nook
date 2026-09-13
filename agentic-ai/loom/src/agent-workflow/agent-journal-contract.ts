@@ -29,6 +29,8 @@ export type AgentAttemptJournalConfiguration = {
   readonly workflow: AgentProcessingWorkflowName;
   readonly workflowVersion: WorkflowVersion;
   readonly sourceCommit: GitCommit;
+  readonly originMainSha: GitCommit;
+  readonly pinnedLocalDevSha: GitCommit;
   readonly task: string;
   readonly agent: string;
   readonly attempt: WorkflowAttemptNumber;

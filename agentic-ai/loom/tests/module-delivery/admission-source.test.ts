@@ -75,6 +75,8 @@ export class ModuleDeliveryAdmissionSourceScenario {
       version: MODULE_DELIVERY_PLAN_VERSION,
       generation: request.generation,
       sourceCommit: request.sourceCommit,
+      originMainSha: request.sourceCommit,
+      pinnedLocalDevSha: request.sourceCommit,
       maxAgentDepth: 1,
       maxAttempts: 1,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

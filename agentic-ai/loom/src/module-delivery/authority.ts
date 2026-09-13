@@ -321,6 +321,8 @@ export class ModuleSourceAuthority {
         functionalOwner: evidence.functionalOwner,
         acceptanceOwner: evidence.acceptanceOwner,
         sourceCommit: evidence.sourceCommit,
+        originMainSha: evidence.originMainSha,
+        pinnedLocalDevSha: evidence.pinnedLocalDevSha,
         verifiedHeadCommit: evidence.verifiedHeadCommit,
         artifactIdentity: evidence.artifactIdentity,
         artifactDigest: evidence.artifactDigest,

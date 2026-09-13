@@ -164,6 +164,8 @@ export class ModuleExpertsInvokeParentFixtureScenario {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: MODULE_EXPERT_WORKFLOW_VERSION,
       sourceCommit: args.sourceCommit,
+      originMainSha: args.originMainSha ?? args.sourceCommit,
+      pinnedLocalDevSha: args.pinnedLocalDevSha ?? args.sourceCommit,
       task: args.task,
       agent: args.agent,
       attempt: args.attempt,
@@ -185,6 +187,8 @@ export type CreateCompletedAttemptArgs = {
   readonly repoRoot: string;
   readonly runId: string;
   readonly sourceCommit: string;
+  readonly originMainSha?: string;
+  readonly pinnedLocalDevSha?: string;
   readonly task: string;
   readonly agent: string;
   readonly attempt: number;

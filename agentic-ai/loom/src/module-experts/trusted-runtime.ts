@@ -58,6 +58,8 @@ export type ModuleExpertRuntimeIdentity = {
   readonly workflow: DelegatedAgentWorkflowName.AgentWork;
   readonly workflowVersion: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
   readonly task: string;
   readonly agent: string;
   readonly attempt: number;
@@ -239,6 +241,8 @@ export class ModuleExpertRuntimeAuthority {
     const parentRequest = {
       runId: request.runId,
       sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
       task: request.task,
       expert: profile.name,
       attempt: request.attempt,
@@ -271,6 +275,8 @@ export class ModuleExpertRuntimeAuthority {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: MODULE_EXPERT_WORKFLOW_VERSION,
       sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
       task: request.task,
       agent: profile.name,
       attempt: request.attempt,
@@ -336,6 +342,8 @@ export class ModuleExpertRuntimeAuthority {
       task: record.identity.task,
       attempt: record.identity.attempt,
       sourceCommit: record.identity.sourceCommit,
+      originMainSha: record.identity.originMainSha,
+      pinnedLocalDevSha: record.identity.pinnedLocalDevSha,
       runId: record.identity.runId,
       workingDirectory: record.identity.workingDirectory,
       upstreamOutputs: [],

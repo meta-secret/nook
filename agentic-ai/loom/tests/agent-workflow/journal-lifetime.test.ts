@@ -25,6 +25,8 @@ class JournalLifetimeFixture {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sourceCommit: '0123456789abcdef0123456789abcdef01234567',
+      originMainSha: '0123456789abcdef0123456789abcdef01234567',
+      pinnedLocalDevSha: '0123456789abcdef0123456789abcdef01234567',
       task: 'inspect',
       agent: 'auditor',
       attempt: 1,

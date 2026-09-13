@@ -188,6 +188,7 @@ void describe("resolveDeliveryTarget", () => {
           branch: "codex/agent-branching",
           originMainSha: ORIGIN_MAIN_SHA,
           pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+          budgetBaseRef: PINNED_LOCAL_DEV_SHA,
         },
       );
     },
@@ -208,6 +209,7 @@ void describe("resolveDeliveryTarget", () => {
           "codex/agent-branching/ai/loom-specialist/define-branch-naming-contract",
         originMainSha: ORIGIN_MAIN_SHA,
         pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+        budgetBaseRef: PINNED_LOCAL_DEV_SHA,
       },
     );
   });
@@ -298,6 +300,7 @@ void describe("resolveTargetFromEnvironment", () => {
       branch: "codex/agent-branching",
       originMainSha: ORIGIN_MAIN_SHA,
       pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+      budgetBaseRef: PINNED_LOCAL_DEV_SHA,
     });
   });
 

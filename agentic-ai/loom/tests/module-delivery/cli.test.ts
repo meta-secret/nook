@@ -32,6 +32,8 @@ export class ModuleDeliveryCliScenario {
       version: 2,
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],

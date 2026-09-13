@@ -1,6 +1,7 @@
 import { TeamKey } from '../team-agents/catalog.ts';
 import { TaskResourceClaim } from '../agent-workflow/domain.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
+import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 
 export const MODULE_DELIVERY_PLAN_VERSION = 2;
 export type ModuleDeliveryPlanInputVersion =
@@ -356,7 +357,7 @@ export type ModuleDeliveryParentJoin = {
   readonly validationCommands: readonly string[];
 };
 
-export type ModuleDeliveryPlanV2 = {
+export type ModuleDeliveryPlanV2 = PinnedDevBaseEvidence & {
   readonly version: typeof MODULE_DELIVERY_PLAN_VERSION;
   readonly generation: number;
   readonly sourceCommit: string;
@@ -438,6 +439,7 @@ export enum ModuleDeliveryIssueCode {
   ModuleOwnershipMismatch = 'module-ownership-mismatch',
   WriteScopeMismatch = 'write-scope-mismatch',
   BaselineMismatch = 'baseline-mismatch',
+  BaseEvidenceMismatch = 'base-evidence-mismatch',
   MissingDependency = 'missing-dependency',
   SelfDependency = 'self-dependency',
   DependencyCycle = 'dependency-cycle',

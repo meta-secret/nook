@@ -539,6 +539,8 @@ describe('module delivery admission authority', () => {
       generation: 2,
       planDigest: replacement.planDigest,
       headCommit: REPLACEMENT_SOURCE,
+      originMainSha: replacement.plan.originMainSha,
+      pinnedLocalDevSha: replacement.plan.pinnedLocalDevSha,
       integratedWriterFrontiers: [],
       acceptedProviderEvidence: [],
     };

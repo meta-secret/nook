@@ -60,6 +60,8 @@ export class ModuleDeliveryCortexAdmissionScenario {
       version: 2,
       generation: 7,
       sourceCommit,
+      originMainSha: sourceCommit,
+      pinnedLocalDevSha: sourceCommit,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

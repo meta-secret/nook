@@ -51,6 +51,8 @@ export class AgentWorkflowDelegationPlanTreeScenario {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       runId: 'visual-plan',
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
       rootMaterializer: ROOT,
       attempts,
     };

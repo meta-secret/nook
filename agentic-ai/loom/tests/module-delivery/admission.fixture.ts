@@ -95,7 +95,11 @@ export class ModuleDeliveryAdmissionScenario {
   private execute(): ModuleDeliveryPlanV2 {
     const sourceCommit = this.request;
     const plan = structuredClone(PLAN);
-    const source = { sourceCommit };
+    const source = {
+      sourceCommit,
+      originMainSha: sourceCommit,
+      pinnedLocalDevSha: sourceCommit,
+    };
     Object.assign(plan, source);
     for (const node of plan.nodes)
       if (node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit)
@@ -259,6 +263,8 @@ export class ModuleDeliveryAdmissionScenario {
       generation: request.lease.generation,
       planDigest: request.lease.planDigest,
       sourceCommit: request.lease.startingFrontier,
+      originMainSha: request.lease.originMainSha,
+      pinnedLocalDevSha: request.lease.pinnedLocalDevSha,
       producerTeam: request.lease.team,
       functionalOwner: request.lease.functionalOwner,
       acceptanceOwner: request.lease.acceptanceOwner,
@@ -425,6 +431,8 @@ export const PLAN: ModuleDeliveryPlanV2 = {
   version: 2,
   generation: 1,
   sourceCommit: SOURCE,
+  originMainSha: SOURCE,
+  pinnedLocalDevSha: SOURCE,
   maxAgentDepth: 3,
   maxAttempts: 2,
   parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

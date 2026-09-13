@@ -57,8 +57,9 @@ functional ownership, readiness, promotion, or final delivery.
 - Do not cancel an active dev validation run or introduce a custom scheduler.
 - Do not create stacked branches or pull requests. When a feature genuinely
   requires multiple slices, use one strictly sequential sequence from the
-  current Prime-pinned `pinnedLocalDevSha` and complete this procedure for
-  every slice.
+  exact Prime-pinned local-dev feature base recorded for each slice and
+  complete this procedure for every slice. The fetched `origin/main` SHA is
+  ancestry evidence, not the feature base.
 
 ## PR title and description
 

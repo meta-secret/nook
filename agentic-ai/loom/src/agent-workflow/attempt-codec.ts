@@ -22,6 +22,7 @@ import {
   type UntrustedYamlMap,
   type UntrustedYamlNode,
 } from '../lib/guards.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 
 /** Decodes persisted attempt artifacts before lifecycle or authorization logic. */
 export class AgentAttemptTransport {
@@ -55,6 +56,12 @@ export class AgentAttemptTransport {
       sourceCommit: AgentAttemptTransport.string(
         AgentAttemptTransport.field(node, 'sourceCommit'),
       ),
+      originMainSha: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'originMainSha'),
+      ),
+      pinnedLocalDevSha: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'pinnedLocalDevSha'),
+      ),
       task: AgentAttemptTransport.string(
         AgentAttemptTransport.field(node, 'task'),
       ),
@@ -78,6 +85,10 @@ export class AgentAttemptTransport {
         AgentAttemptTransport.field(node, 'occurredAt'),
       ),
     };
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha: metadata.originMainSha,
+      pinnedLocalDevSha: metadata.pinnedLocalDevSha,
+    });
     const fields = Object.keys(metadata);
     const kind = AgentAttemptTransport.enumeration({
       value: AgentAttemptTransport.field(node, 'kind'),

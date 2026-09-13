@@ -71,6 +71,8 @@ export class ModuleExpertsTrustedRuntimeScenario {
     const childRequest: ModuleExpertChildRequest = {
       runId: request.runId,
       sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
       task: request.task,
       expert: request.expert,
       attempt: request.attempt,
@@ -101,6 +103,8 @@ export class ModuleExpertsTrustedRuntimeScenario {
       expert: 'core_expert',
       selectedContextPaths: [],
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
       task: 'inspect-core-contract',
       attempt: 1,
       depth: 2,

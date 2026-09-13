@@ -31,6 +31,7 @@ import type {
   UntrustedYamlNode,
   UntrustedYamlPropertyArgs,
 } from '../lib/guards.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 
 /** Owns the delegation journal schema registry and its capability transitions. */
 export class DelegationJournalSchema {
@@ -40,6 +41,8 @@ export class DelegationJournalSchema {
     'workflow',
     'runId',
     'sourceCommit',
+    'originMainSha',
+    'pinnedLocalDevSha',
     'rootMaterializer',
     'attempts',
   ] as const;
@@ -72,6 +75,8 @@ export class DelegationJournalSchema {
     'kind',
     'runId',
     'sourceCommit',
+    'originMainSha',
+    'pinnedLocalDevSha',
     'planSha256',
     'sequence',
     'occurredAt',
@@ -83,6 +88,8 @@ export class DelegationJournalSchema {
     'kind',
     'runId',
     'sourceCommit',
+    'originMainSha',
+    'pinnedLocalDevSha',
     'planSha256',
     'sequence',
     'occurredAt',
@@ -92,6 +99,8 @@ export class DelegationJournalSchema {
   private static readonly ADMISSION_REQUEST_FIELDS = [
     'runId',
     'sourceCommit',
+    'originMainSha',
+    'pinnedLocalDevSha',
     'identity',
     'depth',
     'parent',
@@ -114,6 +123,8 @@ export class DelegationJournalSchema {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       runId: reader.string('runId'),
       sourceCommit: reader.string('sourceCommit'),
+      originMainSha: reader.string('originMainSha'),
+      pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
       rootMaterializer: DelegationJournalSchema.decodeIdentity(
         reader.node('rootMaterializer'),
       ),
@@ -135,9 +146,15 @@ export class DelegationJournalSchema {
     DelegationJournalSchema.assertExactKeys(reader.record)(
       DelegationJournalSchema.ADMISSION_REQUEST_FIELDS,
     );
+    const evidence = {
+      originMainSha: reader.string('originMainSha'),
+      pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
+    };
+    PinnedDevBaseEvidenceContract.assertShape(evidence);
     return {
       runId: reader.string('runId'),
       sourceCommit: reader.string('sourceCommit'),
+      ...evidence,
       identity: DelegationJournalSchema.decodeIdentity(reader.node('identity')),
       depth: reader.number('depth'),
       parent: DelegationJournalSchema.decodeParent(reader.node('parent')),
@@ -182,9 +199,15 @@ export class DelegationJournalSchema {
   private static decodeRunEventMetadata(
     reader: RecordReader,
   ): DelegationRunEventMetadata {
+    const evidence = {
+      originMainSha: reader.string('originMainSha'),
+      pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
+    };
+    PinnedDevBaseEvidenceContract.assertShape(evidence);
     return {
       runId: reader.string('runId'),
       sourceCommit: reader.string('sourceCommit'),
+      ...evidence,
       planSha256: reader.string('planSha256'),
       sequence: reader.number('sequence'),
       occurredAt: reader.string('occurredAt'),

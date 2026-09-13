@@ -14,6 +14,7 @@ import type {
 } from '../lib/guards.ts';
 import { StructuralExpertKind, StructuralExpertCatalog } from './catalog.ts';
 import { StructuralExpertContract } from './audit.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 
 /** Owns the structural expert request decoder registry and its capability transitions. */
 export class StructuralExpertRequestDecoder {
@@ -52,7 +53,9 @@ export class StructuralExpertRequestDecoder {
             'expert',
             'instruction',
             'kind',
+            'originMainSha',
             'parent',
+            'pinnedLocalDevSha',
             'runId',
             'sourceCommit',
             'task',
@@ -64,7 +67,9 @@ export class StructuralExpertRequestDecoder {
             'expert',
             'instruction',
             'kind',
+            'originMainSha',
             'parent',
+            'pinnedLocalDevSha',
             'runId',
             'sourceCommit',
             'task',
@@ -116,6 +121,8 @@ export class StructuralExpertRequestDecoder {
     const reader = new StructuralRequestReader(node);
     const runId = reader.string('runId');
     const sourceCommit = reader.string('sourceCommit');
+    const originMainSha = reader.string('originMainSha');
+    const pinnedLocalDevSha = reader.string('pinnedLocalDevSha');
     const task = reader.string('task');
     const instruction = reader.string('instruction');
     const attempt = reader.number('attempt');
@@ -137,10 +144,20 @@ export class StructuralExpertRequestDecoder {
     ) {
       StructuralExpertRequestDecoder.invalidRequest();
     }
+    try {
+      PinnedDevBaseEvidenceContract.assertShape({
+        originMainSha,
+        pinnedLocalDevSha,
+      });
+    } catch {
+      StructuralExpertRequestDecoder.invalidRequest();
+    }
     return {
       runId,
       expert: request.expert,
       sourceCommit,
+      originMainSha,
+      pinnedLocalDevSha,
       task,
       attempt,
       depth: 2,
@@ -323,6 +340,8 @@ type StructuralInvocationFields = {
   readonly runId: string;
   readonly expert: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
   readonly task: string;
   readonly attempt: number;
   readonly depth: 2;

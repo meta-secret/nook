@@ -281,6 +281,8 @@ export class ModuleAdmissionStateRegistry {
       generation: acceptedPlan.plan.generation,
       planDigest: acceptedPlan.planDigest,
       headCommit: request.headCommit,
+      originMainSha: acceptedPlan.plan.originMainSha,
+      pinnedLocalDevSha: acceptedPlan.plan.pinnedLocalDevSha,
       integratedWriterFrontiers: frontiers,
       acceptedProviderEvidence: evidence.identities,
     };

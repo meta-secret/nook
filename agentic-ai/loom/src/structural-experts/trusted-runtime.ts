@@ -61,6 +61,8 @@ export type StructuralRuntimeIdentity = {
   readonly workflow: DelegatedAgentWorkflowName.AgentWork;
   readonly workflowVersion: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
   readonly task: string;
   readonly agent: string;
   readonly attempt: number;
@@ -249,6 +251,8 @@ export class StructuralExpertRuntimeAuthority {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: STRUCTURAL_EXPERT_WORKFLOW_VERSION,
       sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
       task: request.task,
       agent: request.expert,
       attempt: request.attempt,
@@ -273,6 +277,8 @@ export class StructuralExpertRuntimeAuthority {
       task: request.task,
       attempt: request.attempt,
       sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
       runId: request.runId,
       workingDirectory: repoRoot,
       upstreamOutputs: [],
@@ -451,6 +457,8 @@ export class StructuralExpertRuntimeAuthority {
         contextFiles,
       },
       sourceCommit: input.request.sourceCommit,
+      originMainSha: input.request.originMainSha,
+      pinnedLocalDevSha: input.request.pinnedLocalDevSha,
       workingDirectory: input.repoRoot,
     };
   }

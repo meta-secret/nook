@@ -98,6 +98,8 @@ describe('delegated agent journal CLI', () => {
       const request = {
         runId: 'ordinary-coding-run',
         sourceCommit,
+        originMainSha: sourceCommit,
+        pinnedLocalDevSha: sourceCommit,
         task: 'inspect-contract',
         agent: 'contract-auditor',
         attempt: 1,
@@ -124,6 +126,8 @@ describe('delegated agent journal CLI', () => {
         workflow: DelegatedAgentWorkflowName.AgentWork,
         runId: request.runId,
         sourceCommit: request.sourceCommit,
+        originMainSha: sourceCommit,
+        pinnedLocalDevSha: sourceCommit,
         rootMaterializer: {
           task: request.task,
           agent: request.agent,
@@ -180,6 +184,8 @@ describe('delegated agent journal CLI', () => {
       const admissionRequest = {
         runId: request.runId,
         sourceCommit: request.sourceCommit,
+        originMainSha: sourceCommit,
+        pinnedLocalDevSha: sourceCommit,
         identity: {
           task: request.task,
           agent: request.agent,
@@ -313,6 +319,8 @@ describe('delegated agent journal CLI', () => {
       const finalizationRequest = {
         runId: request.runId,
         sourceCommit: request.sourceCommit,
+        originMainSha: request.originMainSha,
+        pinnedLocalDevSha: request.pinnedLocalDevSha,
         barrierEvidence: [
           {
             parent: plan.rootMaterializer,
@@ -352,6 +360,8 @@ describe('delegated agent journal CLI', () => {
         runId: request.runId,
         workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
         sourceCommit: request.sourceCommit,
+        originMainSha: request.originMainSha,
+        pinnedLocalDevSha: request.pinnedLocalDevSha,
         identity: {
           task: request.task,
           agent: request.agent,
@@ -500,6 +510,8 @@ describe('delegated agent journal CLI', () => {
           workflow: DelegatedAgentWorkflowName.AgentWork,
           runId,
           sourceCommit: SOURCE_COMMIT,
+          originMainSha: SOURCE_COMMIT,
+          pinnedLocalDevSha: SOURCE_COMMIT,
           rootMaterializer: identity,
           attempts: [
             {
@@ -532,6 +544,8 @@ describe('delegated agent journal CLI', () => {
         const request = {
           runId,
           sourceCommit: SOURCE_COMMIT,
+          originMainSha: SOURCE_COMMIT,
+          pinnedLocalDevSha: SOURCE_COMMIT,
           ...identity,
           depth: 1,
           parent,

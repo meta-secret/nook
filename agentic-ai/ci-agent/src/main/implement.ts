@@ -133,7 +133,7 @@ export class CiImplementationCommand {
       assertBudget: () =>
         new AuthoredChangeBudget({
           repoRoot,
-          baseRef: selected.pinnedLocalDevSha,
+          baseRef: selected.budgetBaseRef,
           maximumLines: 2_000,
         }).enforce(),
       pushBranch: () =>
@@ -414,10 +414,15 @@ export class AgentImplementationResolveDeliveryTarget {
       pinnedLocalDevSha: input.pinnedLocalDevSha,
     }).execute();
     if (evidence.isErr()) return err(evidence.error);
+    const budgetBaseRef = new PinnedLocalDevShaParser(
+      evidence.value.pinnedLocalDevSha,
+    ).parse();
+    if (budgetBaseRef.isErr()) return err(budgetBaseRef.error);
     return ok({
       branch: input.branch,
       originMainSha: evidence.value.originMainSha,
       pinnedLocalDevSha: evidence.value.pinnedLocalDevSha,
+      budgetBaseRef: budgetBaseRef.value,
     });
   }
 }
@@ -486,10 +491,15 @@ type PublishBranchArgs = {
   readPublishedHead: () => Promise<Result<string, CiFailure>>;
 };
 
+export type PinnedLocalDevSha = string & {
+  readonly [PINNED_LOCAL_DEV_SHA]: "pinned-local-dev-sha";
+};
+
 export interface ImplementDeliveryTarget {
   readonly branch: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly budgetBaseRef: PinnedLocalDevSha;
 }
 
 type ImplementDeliveryTargetInput = {
@@ -497,6 +507,22 @@ type ImplementDeliveryTargetInput = {
   originMainSha: string;
   pinnedLocalDevSha: string;
 };
+
+declare const PINNED_LOCAL_DEV_SHA: unique symbol;
+
+class PinnedLocalDevShaParser {
+  constructor(private readonly value: string) {}
+  parse(): Result<PinnedLocalDevSha, CiFailure> {
+    if (!/^[0-9a-f]{40}$/u.test(this.value)) {
+      return err({
+        kind: CiFailureKind.Configuration,
+        message:
+          "PINNED_LOCAL_DEV_SHA must be an exact lowercase 40-hex commit SHA",
+      });
+    }
+    return ok(this.value as PinnedLocalDevSha);
+  }
+}
 
 export enum CiEditOutcome {
   Changed = "changed",

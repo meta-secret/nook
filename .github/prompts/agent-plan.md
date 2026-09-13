@@ -195,9 +195,11 @@ State that Gizmo must fully implement and validate the current slice, land the
 feature through local dev with `dev:land`, publish local dev with `dev:publish`,
 and use `dev:promote` for the guarded exact-head ordinary fast-forward to main
 before closing out the current slice. State that the next branch starts from
-the current Prime-pinned `pinnedLocalDevSha`. Prohibit direct feature-to-main
-delivery, history rewriting, implementation against an unmerged predecessor,
-and stacked branches or pull requests.
+the exact Prime-pinned local-dev feature base recorded for that slice. The
+fresh fetched `origin/main` SHA is ancestry evidence, not the feature base.
+Prohibit direct feature-to-main delivery, history
+rewriting, implementation against an unmerged predecessor, and stacked branches
+or pull requests.
 
 Write the current slice as `<scope>; Acceptance evidence: <observable proof>`.
 Write every numbered PR row in the mapped, estimated form defined above.

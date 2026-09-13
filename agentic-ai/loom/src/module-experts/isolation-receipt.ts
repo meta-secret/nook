@@ -132,6 +132,8 @@ export class ModuleExpertIsolationReceipts {
       task: invocation.task,
       attempt: invocation.attempt,
       sourceCommit: invocation.sourceCommit,
+      originMainSha: invocation.originMainSha,
+      pinnedLocalDevSha: invocation.pinnedLocalDevSha,
       runId: invocation.runId,
       workingDirectory: invocation.workingDirectory,
       upstreamOutputs: invocation.upstreamOutputs,

@@ -42,6 +42,10 @@ import type {
   UntrustedYamlNode,
   UntrustedYamlPropertyArgs,
 } from '../lib/guards.ts';
+import {
+  PinnedDevBaseEvidenceContract,
+  type PinnedDevBaseEvidence,
+} from '../lib/base-evidence.ts';
 
 /** Owns the delegation run finalization registry and its capability transitions. */
 export class DelegationRunFinalization {
@@ -49,6 +53,8 @@ export class DelegationRunFinalization {
   private static readonly FINALIZATION_REQUEST_FIELDS = [
     'runId',
     'sourceCommit',
+    'originMainSha',
+    'pinnedLocalDevSha',
     'barrierEvidence',
   ] as const;
 
@@ -108,15 +114,23 @@ export class DelegationRunFinalization {
     );
     const runId = reader.string('runId');
     const sourceCommit = reader.string('sourceCommit');
+    const originMainSha = reader.string('originMainSha');
+    const pinnedLocalDevSha = reader.string('pinnedLocalDevSha');
     if (
       !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(runId) ||
       !/^[0-9a-f]{40}$/.test(sourceCommit)
     ) {
       throw new Error('Delegation finalization request identity is invalid.');
     }
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha,
+      pinnedLocalDevSha,
+    });
     return {
       runId,
       sourceCommit,
+      originMainSha,
+      pinnedLocalDevSha,
       barrierEvidence: reader
         .array('barrierEvidence')
         .map(DelegationRunFinalization.decodeBarrierEvidence),
@@ -205,7 +219,11 @@ export class DelegationRunFinalization {
       runId: input.request.runId,
     };
     const loaded = await DelegationRunJournal.loadDelegationRunState(loadInput);
-    if (loaded.plan.sourceCommit !== input.request.sourceCommit) {
+    if (
+      loaded.plan.sourceCommit !== input.request.sourceCommit ||
+      loaded.plan.originMainSha !== input.request.originMainSha ||
+      loaded.plan.pinnedLocalDevSha !== input.request.pinnedLocalDevSha
+    ) {
       throw new Error('Delegation finalization source identity is invalid.');
     }
     const lockInput: DelegationLifecycleLockInput = {
@@ -217,7 +235,11 @@ export class DelegationRunFinalization {
       lease.assertHeld(loaded.runDirectory);
       const reloaded =
         await DelegationRunJournal.loadDelegationRunState(loadInput);
-      if (reloaded.plan.sourceCommit !== input.request.sourceCommit) {
+      if (
+        reloaded.plan.sourceCommit !== input.request.sourceCommit ||
+        reloaded.plan.originMainSha !== input.request.originMainSha ||
+        reloaded.plan.pinnedLocalDevSha !== input.request.pinnedLocalDevSha
+      ) {
         throw new Error('Delegation finalization source identity is invalid.');
       }
       const lockedInput: FinalizeWhileLockedInput = {
@@ -271,6 +293,8 @@ export class DelegationRunFinalization {
         DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION,
       runId: input.loaded.plan.runId,
       sourceCommit: input.loaded.plan.sourceCommit,
+      originMainSha: input.loaded.plan.originMainSha,
+      pinnedLocalDevSha: input.loaded.plan.pinnedLocalDevSha,
       planSha256: input.loaded.planSha256,
       rootMaterializer: input.loaded.plan.rootMaterializer,
       attempts: input.loaded.plan.attempts.map((declaration) => {
@@ -350,6 +374,8 @@ export class DelegationRunFinalization {
         runId: loaded.plan.runId,
         workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
         sourceCommit: loaded.plan.sourceCommit,
+        originMainSha: loaded.plan.originMainSha,
+        pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
         identity: { ...declaration.identity, depth: declaration.depth },
       };
       const verified =
@@ -674,7 +700,7 @@ export class DelegationRunFinalization {
   }
 }
 
-export type DelegationFinalizationRequest = {
+export type DelegationFinalizationRequest = PinnedDevBaseEvidence & {
   readonly runId: string;
   readonly sourceCommit: string;
   readonly barrierEvidence: readonly DelegationBarrierEvidence[];
@@ -706,7 +732,7 @@ export type DelegationFinalizedAttempt = {
   readonly view: MaterializedViewReference;
 };
 
-export type DelegationRunResult = {
+export type DelegationRunResult = PinnedDevBaseEvidence & {
   readonly schemaVersion: typeof DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION;
   readonly runId: string;
   readonly sourceCommit: string;

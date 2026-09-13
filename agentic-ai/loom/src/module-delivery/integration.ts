@@ -343,6 +343,14 @@ export class ModuleIntegrationCoordinator {
     ) {
       throw new Error('Provider lease belongs to an obsolete plan.');
     }
+    if (
+      inspection.submission.kind === ModuleDeliveryProviderSubmissionKind.Write &&
+      (inspection.submission.originMainSha !== inspection.lease.originMainSha ||
+        inspection.submission.pinnedLocalDevSha !==
+          inspection.lease.pinnedLocalDevSha)
+    ) {
+      throw new Error('Provider write base evidence is invalid.');
+    }
     const taskId =
       inspection.submission.kind === ModuleDeliveryProviderSubmissionKind.Write
         ? inspection.submission.handoff.taskId
@@ -452,6 +460,8 @@ export class ModuleIntegrationCoordinator {
         generation: request.acceptedPlan.plan.generation,
         planDigest: request.acceptedPlan.planDigest,
         sourceCommit: request.acceptedPlan.plan.sourceCommit,
+        originMainSha: request.acceptedPlan.plan.originMainSha,
+        pinnedLocalDevSha: request.acceptedPlan.plan.pinnedLocalDevSha,
         topologicalOrder: request.acceptedPlan.topologicalOrder,
         waves: request.acceptedPlan.waves,
         completedWaveCount: 0,
@@ -660,6 +670,8 @@ export class ModuleIntegrationCoordinator {
                 generation: request.submission.generation,
                 planDigest: request.submission.handoff.planDigest,
                 startingFrontier: lease.startingFrontier,
+                originMainSha: lease.originMainSha,
+                pinnedLocalDevSha: lease.pinnedLocalDevSha,
                 integrationCommit: appliedHeadCommit,
                 acceptedByTeam: request.submission.acceptedByTeam,
                 handoff: request.submission.handoff,

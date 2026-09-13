@@ -13,6 +13,7 @@ import type {
 import { ModuleExpertContextAdmission } from './context-selection.ts';
 import type { ModuleExpertContextSelection } from './context-selection.ts';
 import type { ModuleExpertTaskContextPath } from './catalog.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 
 /** Owns the module expert request decoder registry and its capability transitions. */
 export class ModuleExpertRequestDecoder {
@@ -46,6 +47,8 @@ export class ModuleExpertRequestDecoder {
       'parent',
       'runId',
       'sourceCommit',
+      'originMainSha',
+      'pinnedLocalDevSha',
       'task',
     ];
     const actualKeys = Object.keys(node).sort();
@@ -67,6 +70,14 @@ export class ModuleExpertRequestDecoder {
     const sourceCommitProperty: ModuleExpertRequestProperty = {
       record: node,
       key: 'sourceCommit',
+    };
+    const originMainShaProperty: ModuleExpertRequestProperty = {
+      record: node,
+      key: 'originMainSha',
+    };
+    const pinnedLocalDevShaProperty: ModuleExpertRequestProperty = {
+      record: node,
+      key: 'pinnedLocalDevSha',
     };
     const taskProperty: ModuleExpertRequestProperty = {
       record: node,
@@ -96,6 +107,10 @@ export class ModuleExpertRequestDecoder {
     const expert = ModuleExpertRequestDecoder.requiredString(expertProperty);
     const sourceCommit =
       ModuleExpertRequestDecoder.requiredString(sourceCommitProperty);
+    const originMainSha =
+      ModuleExpertRequestDecoder.requiredString(originMainShaProperty);
+    const pinnedLocalDevSha =
+      ModuleExpertRequestDecoder.requiredString(pinnedLocalDevShaProperty);
     const task = ModuleExpertRequestDecoder.requiredString(taskProperty);
     const instruction =
       ModuleExpertRequestDecoder.requiredString(instructionProperty);
@@ -141,10 +156,20 @@ export class ModuleExpertRequestDecoder {
     ) {
       ModuleExpertRequestDecoder.invalidRequest();
     }
+    try {
+      PinnedDevBaseEvidenceContract.assertShape({
+        originMainSha,
+        pinnedLocalDevSha,
+      });
+    } catch {
+      ModuleExpertRequestDecoder.invalidRequest();
+    }
     return {
       runId,
       expert,
       sourceCommit,
+      originMainSha,
+      pinnedLocalDevSha,
       task,
       attempt,
       depth,
@@ -330,6 +355,8 @@ export type ModuleExpertInvocationRequest = {
   readonly runId: string;
   readonly expert: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
   readonly task: string;
   readonly attempt: number;
   readonly depth: number;

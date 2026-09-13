@@ -29,6 +29,8 @@ const started: AgentAttemptStartedEvent = {
   workflow: DelegatedAgentWorkflowName.AgentWork,
   workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
   sourceCommit: 'a'.repeat(40),
+  originMainSha: 'a'.repeat(40),
+  pinnedLocalDevSha: 'a'.repeat(40),
   task: 'worker',
   agent: 'agent',
   attempt: 1,

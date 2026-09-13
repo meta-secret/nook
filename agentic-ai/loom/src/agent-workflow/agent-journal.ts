@@ -47,6 +47,7 @@ import {
 } from './events.ts';
 import type { RuntimeActivityObservation } from './events.ts';
 import type { ModuleExpertJournalBinding } from '../module-experts/trusted-runtime.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 
 const RECURSIVE_DIRECTORY_OPTIONS: { readonly recursive: true } = {
   recursive: true,
@@ -147,6 +148,10 @@ class AgentJournalRecords<TTask extends string> {
     ) {
       throw new Error('Agent attempt source identity must be bounded.');
     }
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha: configuration.originMainSha,
+      pinnedLocalDevSha: configuration.pinnedLocalDevSha,
+    });
     AgentJournalRecords.assertParentLineage(configuration);
     this.configuration = configuration;
     this.attemptDirectory = join(
@@ -211,6 +216,8 @@ class AgentJournalRecords<TTask extends string> {
       workflow: this.configuration.workflow,
       workflowVersion: this.configuration.workflowVersion,
       sourceCommit: this.configuration.sourceCommit,
+      originMainSha: this.configuration.originMainSha,
+      pinnedLocalDevSha: this.configuration.pinnedLocalDevSha,
       task: this.configuration.task,
       agent: this.configuration.agent,
       attempt: this.configuration.attempt,
@@ -625,6 +632,8 @@ class AgentJournalRecords<TTask extends string> {
       args.configuration.workflow === args.identity.workflow &&
       args.configuration.workflowVersion === args.identity.workflowVersion &&
       args.configuration.sourceCommit === args.identity.sourceCommit &&
+      args.configuration.originMainSha === args.identity.originMainSha &&
+      args.configuration.pinnedLocalDevSha === args.identity.pinnedLocalDevSha &&
       args.configuration.task === args.identity.task &&
       args.configuration.agent === args.identity.agent &&
       args.configuration.attempt === args.identity.attempt &&
@@ -691,6 +700,8 @@ class AgentJournalRecords<TTask extends string> {
       configuration.workflowVersion === identity.workflowVersion &&
       configuration.runId === identity.runId &&
       configuration.sourceCommit === identity.sourceCommit &&
+      configuration.originMainSha === identity.originMainSha &&
+      configuration.pinnedLocalDevSha === identity.pinnedLocalDevSha &&
       configuration.task === identity.task &&
       configuration.agent === identity.agent &&
       configuration.attempt === identity.attempt &&

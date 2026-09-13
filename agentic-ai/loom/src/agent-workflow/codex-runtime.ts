@@ -49,6 +49,7 @@ import type {
   ReadOnlyExpertRuntimeIsolationRequest,
 } from '../module-experts/runtime-contract.ts';
 import { MODULE_EXPERT_READ_CONTEXT_TOOLS } from '../module-experts/read-context-mcp.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 
 export enum AgentSourceStabilityPhase {
   BeforeAttempt = 'before attempt',
@@ -57,6 +58,8 @@ export enum AgentSourceStabilityPhase {
 export type AgentSourceStabilityCheck = {
   readonly workingDirectory: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
   readonly phase: AgentSourceStabilityPhase;
 };
 export type CodexExecutionFailureRequest = {
@@ -285,6 +288,8 @@ export class ModuleExpertCodexSdkAgentRuntime<
       parentEnvironment: process.env,
       selectedContextPaths: args.selectedContextPaths,
       sourceCommit: invocation.sourceCommit,
+      originMainSha: invocation.originMainSha,
+      pinnedLocalDevSha: invocation.pinnedLocalDevSha,
       workingDirectory: invocation.workingDirectory,
     };
     const isolationUse: ModuleExpertRuntimeIsolationUse<
@@ -377,6 +382,8 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
     const beforeAttempt: AgentSourceStabilityCheck = {
       workingDirectory: execution.invocation.workingDirectory,
       sourceCommit: execution.invocation.sourceCommit,
+      originMainSha: execution.invocation.originMainSha,
+      pinnedLocalDevSha: execution.invocation.pinnedLocalDevSha,
       phase: AgentSourceStabilityPhase.BeforeAttempt,
     };
     const before = new AgentSourceSnapshot(beforeAttempt).assertStable();
@@ -389,6 +396,8 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
       const afterAttempt: AgentSourceStabilityCheck = {
         workingDirectory: execution.invocation.workingDirectory,
         sourceCommit: execution.invocation.sourceCommit,
+        originMainSha: execution.invocation.originMainSha,
+        pinnedLocalDevSha: execution.invocation.pinnedLocalDevSha,
         phase: AgentSourceStabilityPhase.AfterAttempt,
       };
       after = new AgentSourceSnapshot(afterAttempt).assertStable();
@@ -457,6 +466,8 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
       invocation.agentProfile.instructionPrefix,
       invocation.execution.instruction,
       `Immutable source commit: ${invocation.sourceCommit}`,
+      `Fetched origin/main evidence: ${invocation.originMainSha}`,
+      `Pinned local-dev feature base: ${invocation.pinnedLocalDevSha}`,
       `Required resultKind: ${invocation.execution.resultKind}`,
       'Author materializedViewMarkdown as a concise Markdown read model of outcomes, evidence, risks, and parent actions. It must not contain hidden reasoning, prompts, credentials, or raw command output.',
       'Return only the requested structured result. Do not create unscheduled subagents.',
@@ -697,6 +708,21 @@ export class AgentSourceSnapshot {
         new CodexExecutionFailure({
           kind: CodexExecutionFailureKind.DirtyWorktree,
           message: `Codex agent worktree is not clean ${check.phase}.`,
+        }),
+      );
+    }
+    try {
+      PinnedDevBaseEvidenceContract.assertAncestry({
+        originMainSha: check.originMainSha,
+        pinnedLocalDevSha: check.pinnedLocalDevSha,
+        sourceCommit: check.sourceCommit,
+        workingDirectory: check.workingDirectory,
+      });
+    } catch {
+      return err(
+        new CodexExecutionFailure({
+          kind: CodexExecutionFailureKind.SourceCommit,
+          message: `Codex agent source does not descend from the pinned local-dev base ${check.phase}.`,
         }),
       );
     }

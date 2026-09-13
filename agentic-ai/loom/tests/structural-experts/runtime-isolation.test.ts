@@ -40,6 +40,8 @@ test('materializes synthesis context without repository paths or credentials', a
         ],
       },
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
       temporaryRoot,
       workingDirectory: REPO_ROOT,
     };
@@ -96,6 +98,8 @@ test('rejects traversal and oversized synthetic context before agent execution',
         contextFiles: [{ path: '../escape.md', content: 'escape' }],
       },
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
       temporaryRoot,
       workingDirectory: REPO_ROOT,
     };
@@ -150,6 +154,8 @@ test('materializes only exact shared formatter and lint tooling', async () => {
         contextFiles: [],
       },
       sourceCommit,
+      originMainSha: sourceCommit,
+      pinnedLocalDevSha: sourceCommit,
       temporaryRoot,
       workingDirectory: REPO_ROOT,
     };

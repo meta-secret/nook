@@ -135,6 +135,8 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
       version: 2,
       generation: 1,
       sourceCommit: fixture.sourceCommit,
+      originMainSha: fixture.sourceCommit,
+      pinnedLocalDevSha: fixture.sourceCommit,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

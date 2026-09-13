@@ -153,14 +153,24 @@ export class ModuleDeliveryPlanDecoder {
   }
 
   private validateCommit(state: ValidationState): void {
-    if (!/^[0-9a-f]{40}$/u.test(state.plan.sourceCommit)) {
-      const request: IssueRequest = {
-        state,
-        code: ModuleDeliveryIssueCode.InvalidField,
-        path: '$.sourceCommit',
-        message: 'sourceCommit must be an exact lowercase 40-hex commit.',
-      };
-      this.issue(request);
+    const commits = [
+      ['sourceCommit', state.plan.sourceCommit],
+      ['originMainSha', state.plan.originMainSha],
+      ['pinnedLocalDevSha', state.plan.pinnedLocalDevSha],
+    ] as const;
+    for (const [name, value] of commits) {
+      if (!/^[0-9a-f]{40}$/u.test(value)) {
+        const request: IssueRequest = {
+          state,
+          code:
+            name === 'sourceCommit'
+              ? ModuleDeliveryIssueCode.InvalidField
+              : ModuleDeliveryIssueCode.BaseEvidenceMismatch,
+          path: `$.${name}`,
+          message: `${name} must be an exact lowercase 40-hex commit.`,
+        };
+        this.issue(request);
+      }
     }
   }
 
@@ -522,13 +532,15 @@ export class ModuleDeliveryPlanDecoder {
       if (
         request.node.baseline.kind !==
           ModuleDeliveryBaselineKind.SourceCommit ||
-        request.node.baseline.sourceCommit !== request.state.plan.sourceCommit
+        request.node.baseline.sourceCommit !==
+          request.state.plan.pinnedLocalDevSha
       ) {
         const issueRequest: IssueRequest = {
           state: request.state,
           code: ModuleDeliveryIssueCode.BaselineMismatch,
           path: `${request.path}.baseline`,
-          message: 'Independent tasks require the exact plan source baseline.',
+          message:
+            'Independent tasks require the exact pinned local-dev feature base.',
         };
         this.issue(issueRequest);
       }
