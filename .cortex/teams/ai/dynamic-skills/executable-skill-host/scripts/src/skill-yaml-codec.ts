@@ -316,17 +316,12 @@ export class ExecutableSkillYamlAdmission {
     const entries = Object.entries(value);
     state.nodes += entries.length;
     if (state.nodes > SKILL_YAML_NODE_LIMIT) return this.invalid();
-    const admitted: UntrustedSkillYamlMapBuilder = {};
+    let admitted: UntrustedSkillYamlMapBuilder = {};
     for (const [key, child] of entries) {
       if (this.oversizedScalar(key)) return this.invalid();
       const outcome = this.admit({ depth: depth + 1, state, value: child });
       if (outcome.isErr()) return err(outcome.error);
-      Object.defineProperty(admitted, key, {
-        configurable: true,
-        enumerable: true,
-        value: outcome.value,
-        writable: true,
-      });
+      admitted = { ...admitted, [key]: outcome.value };
     }
     return ok(admitted);
   }
