@@ -72,6 +72,10 @@ export class CortexDocumentStructure {
         rootIndexDoc.relativePath,
       );
       graphDocuments.set(rootGraphPath, rootIndexDoc);
+      for (const graphPath of NESTED_OWNER_GRAPHS) {
+        const graphDocument = catalog.get(graphPath);
+        if (graphDocument) graphDocuments.set(graphPath, graphDocument);
+      }
       if (distributedTopology) {
         for (const graphPath of ownerGraphPaths) {
           const graphDocument = catalog.get(graphPath);
@@ -364,6 +368,9 @@ export class CortexDocumentStructure {
       filePath === 'k-graph.md' ||
       filePath === '.cortex/INDEX.md' ||
       filePath === 'INDEX.md' ||
+      /^\.cortex\/teams\/delivery-pipeline\/internal\/(?:gizmo|pr-steward)\/knowledge-graph\.md$/.test(
+        filePath,
+      ) ||
       /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|dev-manager|delivery-pipeline|security|sre|web-dev)|shared)\/knowledge-graph\.md$/.test(
         filePath,
       )
@@ -371,6 +378,20 @@ export class CortexDocumentStructure {
   }
 
   private owningKnowledgeGraphPath(filePath: string): string {
+    if (
+      filePath.startsWith(
+        '.cortex/teams/delivery-pipeline/internal/gizmo/',
+      )
+    ) {
+      return '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md';
+    }
+    if (
+      filePath.startsWith(
+        '.cortex/teams/delivery-pipeline/internal/pr-steward/',
+      )
+    ) {
+      return '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md';
+    }
     if (filePath.startsWith('.cortex/gizmo/')) {
       return '.cortex/gizmo/knowledge-graph.md';
     }
@@ -455,6 +476,11 @@ export class CortexDocumentStructure {
     }
   }
 }
+
+const NESTED_OWNER_GRAPHS = [
+  '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md',
+  '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md',
+] as const;
 
 export enum CortexStructureFindingCode {
   InvalidTitle = 'invalid-title',

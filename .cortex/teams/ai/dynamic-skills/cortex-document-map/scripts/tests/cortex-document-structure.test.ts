@@ -169,6 +169,47 @@ ${args.rootExtra}`,
       ),
     ];
   }
+
+  static nestedDistributedDocuments(): CortexDocumentSource[] {
+    const pipelineGraphPath =
+      '.cortex/teams/delivery-pipeline/knowledge-graph.md';
+    const documents = this.distributedDocuments({
+      rootExtra: '',
+      devTarget: 'policy.md',
+      gizmoTarget: 'policy.md',
+    }).map((document) =>
+      document.relativePath === pipelineGraphPath
+        ? {
+            ...document,
+            content: `${document.content}
+- [Team Gizmo](internal/gizmo/knowledge-graph.md)
+- [PR Steward](internal/pr-steward/knowledge-graph.md)
+`,
+          }
+        : document,
+    );
+    documents.push(
+      this.makeDocument({
+        path: '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md',
+        content:
+          '# Delivery Pipeline Team Gizmo Knowledge Graph\n\n- [Policy](policy.md)\n',
+      }),
+      this.makeDocument({
+        path: '.cortex/teams/delivery-pipeline/internal/gizmo/policy.md',
+        content: '# Team Gizmo Policy\n',
+      }),
+      this.makeDocument({
+        path: '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md',
+        content:
+          '# Delivery Pipeline Internal PR Steward Knowledge Graph\n\n- [Policy](workflows/policy.md)\n',
+      }),
+      this.makeDocument({
+        path: '.cortex/teams/delivery-pipeline/internal/pr-steward/workflows/policy.md',
+        content: '# PR Steward Policy\n',
+      }),
+    );
+    return documents;
+  }
 }
 
 const REPO_ROOT = '/repo';
@@ -359,6 +400,105 @@ test('indexes Delivery Pipeline documents only through their owning graph', () =
     file: '.cortex/gizmo/knowledge-graph.md',
     line: 1,
     message: `Owning knowledge graph cannot index another context's document: ${policyPath}`,
+  });
+});
+
+test('audits Delivery Pipeline nested graphs with matching subtree ownership', () => {
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(documents),
+  ).toEqual([]);
+
+  const pipelineGraphPath =
+    '.cortex/teams/delivery-pipeline/knowledge-graph.md';
+  const stewardGraphPath =
+    '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md';
+  const stewardPolicyPath =
+    '.cortex/teams/delivery-pipeline/internal/pr-steward/workflows/policy.md';
+  const parentOnlyIndex = documents.map((document) => {
+    if (document.relativePath === stewardGraphPath) {
+      return {
+        ...document,
+        content: '# Delivery Pipeline Internal PR Steward Knowledge Graph\n',
+      };
+    }
+    if (document.relativePath === pipelineGraphPath) {
+      return {
+        ...document,
+        content: `${document.content}- [Policy](${stewardPolicyPath.replace(
+          '.cortex/teams/delivery-pipeline/',
+          '',
+        )})\n`,
+      };
+    }
+    return document;
+  });
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(parentOnlyIndex),
+  ).toContainEqual({
+    code: CortexStructureFindingCode.MissingFromIndex,
+    file: stewardGraphPath,
+    line: 1,
+    message: `Document is not indexed in its owning knowledge graph ${stewardGraphPath}: ${stewardPolicyPath}`,
+  });
+});
+
+test('validates nested graph titles and duplicate entries without root links', () => {
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
+  const gizmoGraphPath =
+    '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md';
+  const stewardGraphPath =
+    '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md';
+  const malformed = documents.map((document) => {
+    if (document.relativePath === gizmoGraphPath) {
+      return {
+        ...document,
+        content: `Introductory text.\n\n${document.content}`,
+      };
+    }
+    if (document.relativePath === stewardGraphPath) {
+      return {
+        ...document,
+        content: `${document.content}- [Duplicate policy](workflows/policy.md)\n`,
+      };
+    }
+    return document;
+  });
+  const findings =
+    CortexDocumentMapCortexDocumentStructureScenario.audit(malformed);
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(findings, {
+      code: CortexStructureFindingCode.InvalidTitle,
+      file: gizmoGraphPath,
+    }),
+  ).toBe(true);
+  expect(findings).toContainEqual({
+    code: CortexStructureFindingCode.InvalidIndexEntry,
+    file: stewardGraphPath,
+    line: 1,
+    message: `Knowledge graph must index each document once: .cortex/teams/delivery-pipeline/internal/pr-steward/workflows/policy.md`,
+  });
+});
+
+test('rejects a root link that bypasses Delivery Pipeline nested graphs', () => {
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
+  const root = documents[0];
+  if (!root) throw new Error('Expected nested distributed root document');
+  documents[0] = {
+    ...root,
+    content: `${root.content}- [Nested Gizmo](teams/delivery-pipeline/internal/gizmo/knowledge-graph.md)\n`,
+  };
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(documents),
+  ).toContainEqual({
+    code: CortexStructureFindingCode.InvalidIndexEntry,
+    file: '.cortex/knowledge-graph.md',
+    line: 1,
+    message:
+      'Root knowledge graph must route through owner graphs instead of indexing owned documents directly: .cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md',
   });
 });
 

@@ -153,6 +153,10 @@ export class CortexDocumentMapVerifier {
     const graphDocuments = new Map<string, EvidenceDocument>();
     const rootPath = this.normalize(args.root.relativePath);
     graphDocuments.set(rootPath, args.root);
+    for (const graphPath of NESTED_OWNER_GRAPHS) {
+      const [graph = false] = [args.catalog.get(graphPath)];
+      if (graph !== false) graphDocuments.set(graphPath, graph);
+    }
     if (distributed) {
       for (const graphPath of OWNER_GRAPHS) {
         const [graph = false] = [args.catalog.get(graphPath)];
@@ -363,6 +367,9 @@ export class CortexDocumentMapVerifier {
   private isGraph(value: string): boolean {
     return (
       /^(?:\.cortex\/)?(?:knowledge-graph|k-graph|INDEX)\.md$/u.test(value) ||
+      /^\.cortex\/teams\/delivery-pipeline\/internal\/(?:gizmo|pr-steward)\/knowledge-graph\.md$/u.test(
+        value,
+      ) ||
       /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|dev-manager|delivery-pipeline|security|sre|web-dev)|shared)\/knowledge-graph\.md$/u.test(
         value,
       )
@@ -370,6 +377,20 @@ export class CortexDocumentMapVerifier {
   }
 
   private owningGraph(value: string): string {
+    if (
+      value.startsWith(
+        '.cortex/teams/delivery-pipeline/internal/gizmo/',
+      )
+    ) {
+      return '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md';
+    }
+    if (
+      value.startsWith(
+        '.cortex/teams/delivery-pipeline/internal/pr-steward/',
+      )
+    ) {
+      return '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md';
+    }
     const match =
       /^(\.cortex\/(?:gizmo|shared|teams\/(?:ai|dev-core|dev-manager|delivery-pipeline|security|sre|web-dev)))\//u.exec(
         value,
@@ -467,6 +488,11 @@ const OWNER_GRAPHS = [
   '.cortex/teams/sre/knowledge-graph.md',
   '.cortex/teams/web-dev/knowledge-graph.md',
   '.cortex/shared/knowledge-graph.md',
+] as const;
+
+const NESTED_OWNER_GRAPHS = [
+  '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md',
+  '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md',
 ] as const;
 
 const FAILURE = 'Cortex document-map verification failed.';
