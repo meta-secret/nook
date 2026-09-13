@@ -253,8 +253,10 @@ export class ModuleIntegrationProvenanceRegistry {
   static captureSourceSnapshot(
     repositoryRoot: string,
   ): SourceRepositorySnapshot {
-    return ModuleDeliverySourceRepositorySnapshot.captureSourceSnapshot(
-      repositoryRoot,
+    return ModuleIntegrationProvenanceRegistry.immutableSourceSnapshot(
+      ModuleDeliverySourceRepositorySnapshot.captureSourceSnapshot(
+        repositoryRoot,
+      ),
     );
   }
 
@@ -291,6 +293,14 @@ export class ModuleIntegrationProvenanceRegistry {
   static registerIntegrationState(
     registration: IntegrationStateRegistration,
   ): void {
+    const sourceSnapshot =
+      ModuleIntegrationProvenanceRegistry.immutableSourceSnapshot(
+        registration.sourceSnapshot,
+      );
+    const workspaceSnapshot =
+      ModuleIntegrationProvenanceRegistry.immutableSourceSnapshot(
+        registration.workspaceSnapshot,
+      );
     const provenanceValue: ModuleIntegrationProvenance = {
       authority: registration.authority,
       planDigest: registration.state.planDigest,
@@ -301,8 +311,8 @@ export class ModuleIntegrationProvenanceRegistry {
       completedWaveCount: registration.state.completedWaveCount,
       headCommit: registration.state.headCommit,
       workspace: registration.state.workspace,
-      sourceSnapshot: registration.sourceSnapshot,
-      workspaceSnapshot: registration.workspaceSnapshot,
+      sourceSnapshot,
+      workspaceSnapshot,
       session: registration.session,
     };
     ModuleIntegrationProvenanceRegistry.PROVENANCE.set(
@@ -314,6 +324,31 @@ export class ModuleIntegrationProvenanceRegistry {
   static integrationProvenance(
     state: ModuleIntegrationState,
   ): ModuleIntegrationProvenance {
+    return ModuleIntegrationProvenanceRegistry.registeredProvenance(state);
+  }
+
+  static retireIntegrationState(state: ModuleIntegrationState): void {
+    ModuleIntegrationProvenanceRegistry.RETIRED_STATES.add(state);
+  }
+
+  private static immutableSourceSnapshot(
+    snapshot: SourceRepositorySnapshot,
+  ): SourceRepositorySnapshot {
+    const value: SourceRepositorySnapshot = {
+      headCommit: snapshot.headCommit,
+      symbolicHead: snapshot.symbolicHead,
+      contentDigest: snapshot.contentDigest,
+      metadataDigest: snapshot.metadataDigest,
+      indexDigest: snapshot.indexDigest,
+      refsDigest: snapshot.refsDigest,
+      configDigest: snapshot.configDigest,
+    };
+    return Object.freeze(value);
+  }
+
+  private static registeredProvenance(
+    state: ModuleIntegrationState,
+  ): ModuleIntegrationProvenance {
     if (ModuleIntegrationProvenanceRegistry.RETIRED_STATES.has(state)) {
       throw new Error('Module integration state is stale.');
     }
@@ -323,10 +358,6 @@ export class ModuleIntegrationProvenanceRegistry {
       throw new Error('Module integration state lacks private provenance.');
     }
     return provenance;
-  }
-
-  static retireIntegrationState(state: ModuleIntegrationState): void {
-    ModuleIntegrationProvenanceRegistry.RETIRED_STATES.add(state);
   }
 
   private static frozenAcceptedWrite(
@@ -376,7 +407,13 @@ export class ModuleIntegrationProvenanceRegistry {
   static assertFreshModuleIntegrationState(
     request: FreshModuleIntegrationStateInspection,
   ): void {
-    const { state, provenance } = request;
+    const { state } = request;
+    const provenance =
+      ModuleIntegrationProvenanceRegistry.registeredProvenance(state);
+    if (request.provenance !== provenance)
+      throw new Error(
+        'Module integration state violates its private provenance.',
+      );
     if (
       provenance.planDigest !== state.planDigest ||
       provenance.sourceCommit !== state.sourceCommit ||

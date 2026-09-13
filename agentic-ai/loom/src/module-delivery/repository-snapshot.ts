@@ -298,7 +298,7 @@ export class ModuleDeliverySourceRepositorySnapshot {
         ModuleDeliverySourceRepositorySnapshot.gitRequest(indexPathInvocation),
       ),
     );
-    return {
+    return Object.freeze({
       headCommit: ModuleRepositoryGit.gitText(
         ModuleRepositoryGit.runModuleDeliveryGit(
           ModuleDeliverySourceRepositorySnapshot.gitRequest(headInvocation),
@@ -318,7 +318,7 @@ export class ModuleDeliverySourceRepositorySnapshot {
       configDigest: ModuleDeliverySourceRepositorySnapshot.digestBuffers([
         ModuleDeliverySourceRepositorySnapshot.gitBytes(configInvocation),
       ]),
-    };
+    });
   }
 
   static captureSourceSnapshot(

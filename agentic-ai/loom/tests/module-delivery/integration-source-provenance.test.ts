@@ -12,6 +12,15 @@ import type { SourceSnapshotExpectation } from '../../src/module-delivery/integr
 
 import type { GitFixture } from './worktree-test-support.ts';
 
+import type {
+  ModuleDeliveryGenerationAuthority,
+} from '../../src/module-delivery/admission.ts';
+
+import type {
+  ModuleIntegrationSession,
+  ModuleIntegrationState,
+} from '../../src/module-delivery/integration-provenance.ts';
+
 export class ModuleDeliveryIntegrationSourceProvenanceScenario {
   private constructor(private readonly request: GitFixture) {}
 
@@ -47,6 +56,78 @@ afterEach(() => {
 });
 
 describe('module delivery source provenance', () => {
+  test('captures an immutable snapshot at the return boundary', () => {
+    const fixture =
+      ModuleDeliveryIntegrationSourceProvenanceScenario.trackedFixture();
+    const snapshot = ModuleIntegrationProvenanceRegistry.captureSourceSnapshot(
+      fixture.sourceRoot,
+    );
+    const original = snapshot.refsDigest;
+
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Reflect.set(snapshot, 'refsDigest', 'f'.repeat(64))).toBe(false);
+    expect(snapshot.refsDigest).toBe(original);
+  });
+
+  test('copies and freezes snapshots before storing private provenance', () => {
+    const fixture =
+      ModuleDeliveryIntegrationSourceProvenanceScenario.trackedFixture();
+    const capturedSource =
+      ModuleIntegrationProvenanceRegistry.captureSourceSnapshot(
+        fixture.sourceRoot,
+      );
+    const capturedWorkspace =
+      ModuleIntegrationProvenanceRegistry.captureSourceSnapshot(
+        fixture.sourceRoot,
+      );
+    const sourceSnapshot = { ...capturedSource };
+    const workspaceSnapshot = { ...capturedWorkspace };
+    const state = {} as ModuleIntegrationState;
+
+    ModuleIntegrationProvenanceRegistry.registerIntegrationState({
+      authority: {} as ModuleDeliveryGenerationAuthority,
+      state,
+      sourceSnapshot,
+      workspaceSnapshot,
+      session: {} as ModuleIntegrationSession,
+    });
+
+    sourceSnapshot.refsDigest = 'f'.repeat(64);
+    workspaceSnapshot.indexDigest = 'f'.repeat(64);
+    const provenance =
+      ModuleIntegrationProvenanceRegistry.integrationProvenance(state);
+
+    expect(provenance.sourceSnapshot).not.toBe(sourceSnapshot);
+    expect(provenance.workspaceSnapshot).not.toBe(workspaceSnapshot);
+    expect(Object.isFrozen(provenance.sourceSnapshot)).toBe(true);
+    expect(Object.isFrozen(provenance.workspaceSnapshot)).toBe(true);
+    expect(provenance.sourceSnapshot.refsDigest).toBe(
+      capturedSource.refsDigest,
+    );
+    expect(provenance.workspaceSnapshot.indexDigest).toBe(
+      capturedWorkspace.indexDigest,
+    );
+    expect(
+      Reflect.set(provenance.sourceSnapshot, 'contentDigest', 'f'.repeat(64)),
+    ).toBe(false);
+    expect(
+      Reflect.set(provenance.workspaceSnapshot, 'metadataDigest', 'f'.repeat(64)),
+    ).toBe(false);
+    const forgedProvenance = {
+      ...provenance,
+      sourceSnapshot: {
+        ...provenance.sourceSnapshot,
+        refsDigest: 'f'.repeat(64),
+      },
+    };
+    expect(() =>
+      ModuleIntegrationProvenanceRegistry.assertFreshModuleIntegrationState({
+        state,
+        provenance: forgedProvenance,
+      }),
+    ).toThrow('violates its private provenance');
+  });
+
   test('rejects drift in a custom ref outside private namespaces', () => {
     const fixture =
       ModuleDeliveryIntegrationSourceProvenanceScenario.trackedFixture();
