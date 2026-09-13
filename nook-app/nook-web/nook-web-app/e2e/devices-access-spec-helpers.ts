@@ -2,15 +2,11 @@ import type { Page } from '@playwright/test'
 import { expect } from './fixtures'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, installPasskeyMock } from './helpers'
 
-export interface DevicesAccessScenarioRequest {
-  page: Page
-}
-
 export class DevicesAccessScenario {
   private readonly page: Page
 
-  constructor(request: DevicesAccessScenarioRequest) {
-    this.page = request.page
+  constructor(page: Page) {
+    this.page = page
   }
 
   async prepare(): Promise<void> {

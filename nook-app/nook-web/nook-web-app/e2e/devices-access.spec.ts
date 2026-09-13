@@ -12,7 +12,7 @@ import {
 
 test.describe('devices and access dashboard', () => {
   test.beforeEach(async ({ page }) => {
-    await new DevicesAccessScenario({ page }).prepare()
+    await new DevicesAccessScenario(page).prepare()
   })
 
   test('is available before any vault and lets the suggestion stay dismissed', async ({
@@ -559,7 +559,7 @@ test.describe('devices and access dashboard', () => {
   }) => {
     await connectLocalVault(page)
     await page.getByTestId('header-devices-access-btn').click()
-    await new DevicesAccessScenario({ page }).openRelationshipGraph()
+    await new DevicesAccessScenario(page).openRelationshipGraph()
     await page.setViewportSize({ width: 320, height: 844 })
     await page.getByTestId('header-mobile-tools-btn').click()
     const mobileTools = page.getByTestId('header-mobile-tools')
@@ -749,7 +749,7 @@ test.describe('devices and access dashboard', () => {
     expect(preparationFailure).toBe('')
 
     await page.getByTestId('header-devices-access-btn').click()
-    await new DevicesAccessScenario({ page }).openRelationshipGraph()
+    await new DevicesAccessScenario(page).openRelationshipGraph()
     const bridge = page.getByTestId('devices-access-chain')
     await expect(bridge).toContainText('Paired device identity', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -765,7 +765,7 @@ test.describe('devices and access dashboard', () => {
   }, testInfo) => {
     await connectLocalVault(page)
     await page.getByTestId('header-devices-access-btn').click()
-    await new DevicesAccessScenario({ page }).openRelationshipGraph()
+    await new DevicesAccessScenario(page).openRelationshipGraph()
     await expect(
       page.getByTestId('devices-access-strength-vaults'),
     ).toContainText('Test vault', { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
@@ -853,7 +853,7 @@ test.describe('devices and access dashboard', () => {
   }) => {
     await connectLocalVault(page)
     await page.getByTestId('header-devices-access-btn').click()
-    await new DevicesAccessScenario({ page }).openRelationshipGraph()
+    await new DevicesAccessScenario(page).openRelationshipGraph()
     await expect(
       page.getByTestId('devices-access-strength-vaults'),
     ).toHaveCount(1, {
@@ -945,7 +945,7 @@ test.describe('devices and access dashboard', () => {
     // The dashboard reads the snapshot when it mounts, so leave and come back.
     await page.getByTestId('vault-secrets-tab').click()
     await page.getByTestId('header-devices-access-btn').click()
-    await new DevicesAccessScenario({ page }).openRelationshipGraph()
+    await new DevicesAccessScenario(page).openRelationshipGraph()
 
     const chain = page.getByTestId('devices-access-chain')
     await expect(chain).toContainText('0 vaults')
@@ -966,7 +966,7 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await new DevicesAccessScenario({ page }).openRelationshipGraph()
+    await new DevicesAccessScenario(page).openRelationshipGraph()
     // Wait for persisted passkey evidence — Identity unlocked alone can appear
     // from the in-memory session before the wrapped app key is durable, and
     // locking then leaves Access on the Missing-protection preview.
@@ -982,7 +982,7 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('header-lock-vault-btn').click()
     // Locking from /devices-access keeps that URL, so login opens Access directly.
     await expect(page).toHaveURL(/\/devices-access$/)
-    await new DevicesAccessScenario({ page }).openRelationshipGraph()
+    await new DevicesAccessScenario(page).openRelationshipGraph()
     await expect(
       page.getByTestId('devices-access-identity-state'),
     ).toContainText('Identity locked', {
