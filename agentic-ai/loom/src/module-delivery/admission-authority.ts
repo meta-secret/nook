@@ -70,9 +70,6 @@ import type {
 import { ModuleAdmissionSource } from './admission-source.ts';
 import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 const AUTHORITY = Symbol('module-delivery-generation-authority');
-const CAPABILITY_AUTHORITY_PROOF = Symbol(
-  'module-delivery-capability-authority-proof',
-);
 const admissionStateStoreAuthorities = {
   assertCanonicalTransition:
     ModuleIntegrationCapabilityRegistry.assertModuleDeliveryCanonicalEvidenceTransition,
@@ -130,10 +127,7 @@ export class ModuleGenerationAuthority {
     };
     const expectedLineage =
       ModuleSourceAuthority.expectedModuleDeliveryLineageMap(lineageRequest);
-    const value = {
-      [AUTHORITY]: true,
-      [CAPABILITY_AUTHORITY_PROOF]: Object.freeze({}),
-    };
+    const value = { [AUTHORITY]: true };
     const authority = Object.freeze(value) as ModuleDeliveryGenerationAuthority;
     const authorityState: AuthorityState = {
       repositoryRoot,

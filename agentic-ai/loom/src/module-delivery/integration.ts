@@ -93,9 +93,8 @@ const PROHIBITED_MATERIALIZATION_FILES = new Set([
   '.gitmodules',
   '.lfsconfig',
 ]);
-const CAPABILITY_AUTHORITY_PROOF = Symbol(
-  'module-integration-capability-authority-proof',
-);
+const CAPABILITY_MINT_AUTHORITY = Object.freeze({});
+ModuleIntegrationCapabilityRegistry.bindMintAuthority(CAPABILITY_MINT_AUTHORITY);
 
 enum IntegrationHeadCommitKind {
   Pending = 'pending',
@@ -115,19 +114,6 @@ export class ModuleIntegrationCoordinator {
     throw new Error('ModuleIntegrationCoordinator is not constructible.');
   }
 
-  static #capabilityAuthorityProof(authority: object): object {
-    const proof = Object.getOwnPropertySymbols(authority)
-      .map((symbol) => (authority as Record<symbol, unknown>)[symbol])
-      .find(
-        (value): value is object => typeof value === 'object' && value !== null,
-      );
-    if (!proof)
-      throw new Error(
-        'Module delivery capability authority proof is unavailable.',
-      );
-    return proof;
-  }
-
   static #mintIntegratedWriterFrontier(
     request: MintIntegratedWriterFrontierRequest,
   ): ModuleDeliveryIntegratedWriterFrontierCapability {
@@ -139,9 +125,11 @@ export class ModuleIntegrationCoordinator {
       planDigest: request.planDigest,
       headCommit: request.headCommit,
       integratedTaskIds,
-      [CAPABILITY_AUTHORITY_PROOF]: ModuleIntegrationCoordinator.#capabilityAuthorityProof(
-        request.authority,
-      ),
+    });
+    ModuleIntegrationCapabilityRegistry.acceptIntegratedWriterFrontier({
+      mintAuthority: CAPABILITY_MINT_AUTHORITY,
+      capability,
+      provenance: Object.freeze({ ...request, integratedTaskIds }),
     });
     return capability;
   }
@@ -170,9 +158,11 @@ export class ModuleIntegrationCoordinator {
       previousHeadCommit: request.previousHeadCommit,
       canonicalHeadCommit: request.canonicalHeadCommit,
       integratedTaskIds,
-      [CAPABILITY_AUTHORITY_PROOF]: ModuleIntegrationCoordinator.#capabilityAuthorityProof(
-        request.authority,
-      ),
+    });
+    ModuleIntegrationCapabilityRegistry.acceptCanonicalEvidenceTransition({
+      mintAuthority: CAPABILITY_MINT_AUTHORITY,
+      transition,
+      provenance: Object.freeze({ ...request, integratedTaskIds }),
     });
     return transition;
   }

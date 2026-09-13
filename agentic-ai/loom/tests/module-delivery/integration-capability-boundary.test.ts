@@ -11,12 +11,6 @@ import type { ModuleDeliveryIntegratedWriterFrontierCapability } from '../../src
 const CAPABILITY_MODULE_PATH = fileURLToPath(
   new URL('../../src/module-delivery/integration-capabilities.ts', import.meta.url),
 );
-const AUTHORITY_MODULE_PATH = fileURLToPath(
-  new URL(
-    '../../src/module-delivery/integration-capability-authority.ts',
-    import.meta.url,
-  ),
-);
 const INTEGRATION_MODULE_PATH = fileURLToPath(
   new URL('../../src/module-delivery/integration.ts', import.meta.url),
 );
@@ -25,7 +19,6 @@ const ADMISSION_AUTHORITY_MODULE_PATH = fileURLToPath(
 );
 
 test('keeps the integration capability runtime graph acyclic', () => {
-  const authoritySource = readFileSync(AUTHORITY_MODULE_PATH, 'utf8');
   const capabilitySource = readFileSync(CAPABILITY_MODULE_PATH, 'utf8');
   const integrationSource = readFileSync(INTEGRATION_MODULE_PATH, 'utf8');
   const admissionAuthoritySource = readFileSync(
@@ -33,20 +26,13 @@ test('keeps the integration capability runtime graph acyclic', () => {
     'utf8',
   );
 
-  expect(authoritySource).not.toMatch(/\bfrom\s+['"][^'"]+['"]/u);
-  expect(authoritySource).not.toContain('CAPABILITY_MINT_AUTHORITY_TOKEN');
-  expect(authoritySource).not.toContain('new WeakSet<object>()');
-  expect(authoritySource).not.toMatch(/export\s+(?:function|const|class)\s+/u);
+  expect(capabilitySource).toContain('new WeakMap');
+  expect(capabilitySource).toContain('new WeakSet');
+  expect(capabilitySource).not.toContain('Object.getOwnPropertySymbols');
   expect(capabilitySource).not.toContain("from './integration.ts'");
-  expect(capabilitySource).not.toContain(
-    "from './integration-capability-authority.ts'",
-  );
   expect(admissionAuthoritySource).not.toContain("from './integration.ts'");
   expect(integrationSource).not.toContain('CAPABILITY_MINT_AUTHORITY_TOKEN');
-  expect(integrationSource).not.toContain('new WeakSet<object>()');
-  expect(integrationSource).not.toContain(
-    "from './integration-capability-authority.ts'",
-  );
+  expect(integrationSource).not.toContain('Object.getOwnPropertySymbols');
   expect(admissionAuthoritySource).toContain(
     "from './integration-capabilities.ts'",
   );
@@ -54,24 +40,17 @@ test('keeps the integration capability runtime graph acyclic', () => {
 
 test('keeps capability minting behind the coordinator boundary', async () => {
   const capabilitySource = readFileSync(CAPABILITY_MODULE_PATH, 'utf8');
-  const authoritySource = readFileSync(AUTHORITY_MODULE_PATH, 'utf8');
   const integrationSource = readFileSync(INTEGRATION_MODULE_PATH, 'utf8');
   expect(capabilitySource).not.toMatch(
     /static\s+(?:mintIntegratedWriterFrontier|canonicalEvidenceTransition)\s*\(/u,
   );
   expect(capabilitySource).not.toMatch(/\bregister(?:Integrated|Canonical)/u);
-  expect(authoritySource).not.toMatch(
-    /createModuleIntegrationCapabilityMintAuthority|CAPABILITY_MINT_AUTHORITY_TOKEN/u,
-  );
   expect(integrationSource).not.toMatch(
-    /ModuleIntegrationCapabilityMintAuthority|createModuleIntegrationCapabilityMintAuthority/u,
+    /ModuleIntegrationCapabilityMintAuthority|createModuleIntegrationCapabilityMintAuthority|CAPABILITY_AUTHORITY_PROOF/u,
   );
 
   const directModule = await import(
     '../../src/module-delivery/integration-capabilities.ts'
-  );
-  const directAuthority = await import(
-    '../../src/module-delivery/integration-capability-authority.ts'
   );
   const directCoordinator = await import(
     '../../src/module-delivery/integration.ts'
@@ -98,15 +77,6 @@ test('keeps capability minting behind the coordinator boundary', async () => {
   ).toBe(false);
   expect(
     Object.hasOwn(
-      directAuthority,
-      'createModuleIntegrationCapabilityMintAuthority',
-    ),
-  ).toBe(false);
-  expect(
-    Object.hasOwn(directAuthority, 'CAPABILITY_MINT_AUTHORITY_TOKEN'),
-  ).toBe(false);
-  expect(
-    Object.hasOwn(
       directCoordinator.ModuleIntegrationCoordinator,
       'mintIntegratedWriterFrontier',
     ),
@@ -117,6 +87,9 @@ test('keeps capability minting behind the coordinator boundary', async () => {
       'canonicalEvidenceTransition',
     ),
   ).toBe(false);
+  expect(() =>
+    directModule.ModuleIntegrationCapabilityRegistry.bindMintAuthority({}),
+  ).toThrow('mint authority is bound');
   expect(
     Object.hasOwn(directIndex, 'createModuleIntegrationCapabilityMintAuthority'),
   ).toBe(false);
@@ -137,6 +110,25 @@ test('keeps capability minting behind the coordinator boundary', async () => {
     ModuleIntegrationCapabilityRegistry.assertModuleDeliveryIntegratedWriterFrontierCapability({
       authority: rawAuthority,
       capability: Object.freeze(rawCapability),
+      taskId: rawCapability.taskId,
+      attempt: rawCapability.attempt,
+      generation: rawCapability.generation,
+      planDigest: rawCapability.planDigest,
+      headCommit: rawCapability.headCommit,
+      integratedTaskIds: rawCapability.integratedTaskIds,
+    }),
+  ).toThrow('capability is invalid');
+
+  const reflectiveClone = Object.freeze({
+    ...rawCapability,
+    [Symbol('module-integration-capability-authority-proof')]: Object.freeze(
+      {},
+    ),
+  });
+  expect(() =>
+    ModuleIntegrationCapabilityRegistry.assertModuleDeliveryIntegratedWriterFrontierCapability({
+      authority: rawAuthority,
+      capability: reflectiveClone,
       taskId: rawCapability.taskId,
       attempt: rawCapability.attempt,
       generation: rawCapability.generation,
