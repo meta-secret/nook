@@ -2,8 +2,9 @@
 
 Hive is Nook's single-task, Kata-isolated AI worker. Kubernetes maintains a
 warm pool of four workers; each worker claims one runnable Neo4j task, runs one
-embedded Codex thread, and owns Main-repair delivery through a green merged
-revision. It commits the terminal result using its lease token and exits. The
+embedded Codex thread, and owns Main-repair delivery through a reviewed,
+exact-SHA feature build and serialized local-dev landing. It commits the
+terminal result using its lease token and exits. The
 Deployment then creates a clean microVM-backed replacement.
 
 Nested subagents are disabled inside that thread.
@@ -74,28 +75,32 @@ work. It requires the referenced Actions run to be the exact
 `meta-secret/nook` Main push on `main` at that SHA before enqueueing, so a
 successful rerun makes a stale incident a no-op. A repository-scoped
 GitHub credential is exposed directly to the trusted Main-repair Codex agent as
-`GH_TOKEN`. The runtime includes the standard `gh` CLI, and Codex uses ordinary
-`git`, `gh`, and repository Taskfile commands for deterministic branch
-publication, PR inspection, review replies and resolution, exact-head
-squash merge, resulting Main verification, and Workbench completion. Review,
-comment, repair-PR, and check histories must be traversed completely. Hive does
-not add a custom publication broker, mailbox, signing protocol, or private
-checkout to hide this credential from the agent.
+`GH_TOKEN`. The runtime includes the standard `gh` CLI. Codex uses ordinary
+`git`, `gh`, and repository Taskfile commands for deterministic feature
+publication, exact-head remote compilation, review resolution, serialized
+local-dev landing, and Workbench completion. It does not create or merge a
+feature pull request. The Dev Manager separately owns the validated dev
+snapshot and guarded fast-forward promotion to Main. Hive observes exact
+remote refs, lifecycle state, and the exact-SHA Main run only when retiring an
+obsolete blocker. Hive does not add a custom publication broker, mailbox,
+signing protocol, or private checkout to hide this credential from the agent.
 
 If Codex discovers blocking work, its structured result names the blocker.
 Hive atomically creates a higher-priority task, adds a `DEPENDS_ON` edge, and
 releases the original attempt without consuming its retry budget. Completing
 the blocker promotes the original task back to `READY`.
 
-The prototype fetches the task's full pinned Git object ID over HTTPS into a
-disposable `emptyDir`; every task in one dependency DAG must target that same
-revision. Before marking an implementation task complete, Hive collects a
+The prototype fetches the task's typed `originMainSha`, `pinnedLocalDevSha`,
+and `featureHeadSha` over HTTPS into a disposable `emptyDir`; every task in one
+dependency DAG must target that same evidence chain. Before marking an
+implementation task complete, Hive collects a
 bounded binary Git patch, stores its digest and content as an `Artifact` node
 linked to the attempt, and commits that artifact in the same Neo4j transaction
 as the terminal result. Main-repair agents do not return their completed result
-until they have squash-merged the PR and verified the resulting Main workflow.
-Deterministic branches and GitHub inspection let replacement Pods resume an
-existing delivery instead of creating duplicates.
+until the exact feature head has reviewed remote compile evidence and exact
+serialized local-dev landing evidence. Deterministic branches and GitHub
+inspection let replacement Pods resume an existing delivery instead of
+creating duplicates.
 
 The complete Main-repair lifecycle has a six-hour execution bound. Embedded
 Codex validation commands append typed, secret-sanitized local execution events

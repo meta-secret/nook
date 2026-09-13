@@ -2,13 +2,14 @@ use std::path::Path;
 
 use crate::model::BootstrapEvidence;
 
-use self::command::DeliveryCommand;
 use self::local_dev::LocalDevEvidence;
+use self::promotion::PromotionEvidence;
 use self::remote_compile::RemoteCompileEvidence;
 use self::workbench::WorkbenchCompletionCheck;
 
 mod command;
 mod local_dev;
+mod promotion;
 mod remote_compile;
 mod workbench;
 
@@ -88,33 +89,11 @@ impl MainRepairDelivery<'_> {
         })
         .validate()
         .await?;
-        DeliveryCommand::run_git_status(
-            self.repository,
-            &["fetch", "--no-tags", "origin", "main"],
-            "fetch canonical Main for exact promotion verification",
-        )
-        .await?;
-        DeliveryCommand::run_git_status(
-            self.repository,
-            &[
-                "merge-base",
-                "--is-ancestor",
-                workbench.local_dev_sha.as_str(),
-                workbench.main_sha.as_str(),
-            ],
-            "verify canonical Main contains the exact tested local-dev SHA",
-        )
-        .await?;
-        DeliveryCommand::run_git_status(
-            self.repository,
-            &[
-                "merge-base",
-                "--is-ancestor",
-                workbench.main_sha.as_str(),
-                "FETCH_HEAD",
-            ],
-            "verify canonical Main contains the exact promoted SHA",
-        )
+        (PromotionEvidence {
+            repository: self.repository,
+            promoted_sha: &workbench.main_sha,
+        })
+        .validate()
         .await
     }
 }
