@@ -62,6 +62,57 @@ const reviewRecordSchema = z.object({
   submittedAt: z.string().nullable(),
   commit: z.object({ oid: z.string() }).nullable(),
 });
+type ReviewRecord = z.infer<typeof reviewRecordSchema>;
+
+/** The only review states admitted from GitHub into promotion logic. */
+enum SubmittedReviewState {
+  Approved = 'APPROVED',
+  ChangesRequested = 'CHANGES_REQUESTED',
+  Commented = 'COMMENTED',
+  Dismissed = 'DISMISSED',
+  Pending = 'PENDING',
+}
+
+enum CleanReviewEvidenceKind {
+  Approved = 'approved',
+  EmptyComment = 'empty-comment',
+}
+
+interface CleanReviewEvidence {
+  readonly kind: CleanReviewEvidenceKind;
+  readonly submittedAt: CanonicalReviewTimestamp;
+  readonly commit: CommitSha;
+}
+
+/** GitHub's UTC RFC3339 timestamp, normalized to seconds or milliseconds. */
+class CanonicalReviewTimestamp {
+  private constructor(private readonly raw: string) {}
+
+  static parse(
+    input: string | null,
+  ): Result<CanonicalReviewTimestamp, DevFailure> {
+    const canonical = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
+    const parsed = input === null ? Number.NaN : Date.parse(input);
+    if (
+      input === null ||
+      !canonical.test(input) ||
+      !Number.isFinite(parsed) ||
+      new Date(parsed).toISOString() !== input &&
+        new Date(parsed).toISOString().replace('.000Z', 'Z') !== input
+    ) {
+      return err({
+        kind: DevFailureKind.Reviews,
+        message:
+          'GitHub returned a submitted review without a canonical UTC timestamp',
+      });
+    }
+    return ok(new CanonicalReviewTimestamp(input));
+  }
+
+  value(): string {
+    return this.raw;
+  }
+}
 
 const pullRequestReviewIdentitySchema = z.object({
   number: z.number().int().positive(),
@@ -376,7 +427,9 @@ export class DevelopmentPullRequestGateway {
           pullRequest: admitted.value,
         });
         if (checked.isErr()) return err(checked.error);
-        if (checked.value) approvedReviewCount += 1;
+        if (checked.value.kind === CleanReviewEvidenceKind.Approved) {
+          approvedReviewCount += 1;
+        }
       }
     }
     if (approvedReviewCount === 0) {
@@ -609,20 +662,56 @@ export class DevelopmentPullRequestGateway {
   }
 
   private checkReview(request: {
-    readonly review: z.infer<typeof reviewRecordSchema>;
+    readonly review: ReviewRecord;
     readonly pullRequest: AdmittedDevelopmentPullRequest;
-  }): Result<boolean, DevFailure> {
+  }): Result<CleanReviewEvidence, DevFailure> {
     const { review, pullRequest } = request;
-    if (
-      review.submittedAt === null ||
-      review.submittedAt.length === 0 ||
-      review.body === null ||
-      review.commit === null
-    ) {
+    const state = this.submittedReviewState(review.state);
+    if (state.isErr()) return err(state.error);
+    switch (state.value) {
+      case SubmittedReviewState.ChangesRequested:
+        return err({
+          kind: DevFailureKind.Reviews,
+          message:
+            'The pull request has a submitted CHANGES_REQUESTED review; promotion evidence is incomplete',
+        });
+      case SubmittedReviewState.Dismissed:
+        return err({
+          kind: DevFailureKind.Reviews,
+          message:
+            'The pull request has a dismissed submitted review; promotion evidence is incomplete',
+        });
+      case SubmittedReviewState.Pending:
+        return err({
+          kind: DevFailureKind.Reviews,
+          message:
+            'The pull request has an unsubmitted pending review; promotion evidence is incomplete',
+        });
+      case SubmittedReviewState.Approved:
+      case SubmittedReviewState.Commented:
+        break;
+    }
+    if (review.body === null) {
       return err({
         kind: DevFailureKind.Reviews,
         message:
-          'GitHub returned a submitted review without complete body, submission, or commit evidence',
+          'GitHub returned a submitted review without a review body; promotion evidence is incomplete',
+      });
+    }
+    if (review.body.trim().length > 0) {
+      return err({
+        kind: DevFailureKind.Reviews,
+        message:
+          'The pull request has a substantive submitted review body without an explicit disposition',
+      });
+    }
+    const submittedAt = CanonicalReviewTimestamp.parse(review.submittedAt);
+    if (submittedAt.isErr()) return err(submittedAt.error);
+    if (review.commit === null) {
+      return err({
+        kind: DevFailureKind.Reviews,
+        message:
+          'GitHub returned a submitted review without a commit binding; promotion evidence is incomplete',
       });
     }
     const commit = CommitSha.parse(review.commit.oid);
@@ -632,40 +721,41 @@ export class DevelopmentPullRequestGateway {
         message: 'GitHub returned an invalid review commit binding',
       });
     }
-    switch (review.state) {
-      case PullRequestReviewDecision.Approved:
-        if (!commit.value.equals(pullRequest.headSha)) {
-          return err({
-            kind: DevFailureKind.Race,
-            message:
-              'An APPROVED review is bound to a stale pull-request head; refusing promotion evidence',
-          });
-        }
-        return ok(true);
-      case PullRequestReviewDecision.ChangesRequested:
-        return err({
-          kind: DevFailureKind.Reviews,
-          message:
-            'The pull request has a submitted CHANGES_REQUESTED review; promotion evidence is incomplete',
-        });
-      case 'DISMISSED':
-        return err({
-          kind: DevFailureKind.Reviews,
-          message:
-            'The pull request has a dismissed submitted review; promotion evidence is incomplete',
-        });
-      case 'COMMENTED':
-        return ok(false);
-      case 'PENDING':
-        return err({
-          kind: DevFailureKind.Reviews,
-          message:
-            'The pull request has an unsubmitted pending review; promotion evidence is incomplete',
-        });
+    if (!commit.value.equals(pullRequest.headSha)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'A submitted review is bound to a stale pull-request head; promotion evidence is incomplete',
+      });
+    }
+    return ok({
+      kind:
+        state.value === SubmittedReviewState.Approved
+          ? CleanReviewEvidenceKind.Approved
+          : CleanReviewEvidenceKind.EmptyComment,
+      submittedAt: submittedAt.value,
+      commit: commit.value,
+    });
+  }
+
+  private submittedReviewState(
+    input: string,
+  ): Result<SubmittedReviewState, DevFailure> {
+    switch (input) {
+      case SubmittedReviewState.Approved:
+        return ok(SubmittedReviewState.Approved);
+      case SubmittedReviewState.ChangesRequested:
+        return ok(SubmittedReviewState.ChangesRequested);
+      case SubmittedReviewState.Commented:
+        return ok(SubmittedReviewState.Commented);
+      case SubmittedReviewState.Dismissed:
+        return ok(SubmittedReviewState.Dismissed);
+      case SubmittedReviewState.Pending:
+        return ok(SubmittedReviewState.Pending);
       default:
         return err({
           kind: DevFailureKind.Reviews,
-          message: `GitHub returned an unknown submitted review state: ${review.state}`,
+          message: `GitHub returned an unknown submitted review state: ${input}`,
         });
     }
   }
