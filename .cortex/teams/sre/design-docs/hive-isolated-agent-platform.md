@@ -569,7 +569,7 @@ That command:
   - Repository permissions remain the authorization boundary.
 - **Publication tools:** Feature Gizmo owns feature publication and landing requests.
   The dev manager owns dev PR creation/update, slow evidence, and promotion.
-  PR Steward performs GitHub mechanics only under the owning controller's packet.
+  PR Lifecycle Agent performs GitHub mechanics only under the owning controller's packet.
   - Traverse every relevant check, review, comment, and thread page.
   - Follow the repository's normal readiness rules.
   - Guest readiness tooling does not authorize independent publication.

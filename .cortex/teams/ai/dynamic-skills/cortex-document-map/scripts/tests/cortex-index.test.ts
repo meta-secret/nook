@@ -46,17 +46,14 @@ Model text.
   const markdown = CORTEX_CONTEXT_ROUTER_MARKDOWN;
   expect(markdown).toContain('# Cortex Context Router');
   expect(markdown).toContain('## Owning contexts');
-  expect(markdown).toContain('[Gizmo Prime](gizmo/knowledge-graph.md)');
+  expect(markdown).toContain('[Gizmo Prime](gizmo-prime/knowledge-graph.md)');
   expect(markdown).not.toContain(
     '[Gizmo Prime](teams/gizmo/knowledge-graph.md)',
   );
   expect(markdown).toContain(
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
   );
-  expect(markdown).toContain(
-    '[Dev manager Gizmo](teams/dev-manager-gizmo/knowledge-graph.md)',
-  );
-  expect(markdown).not.toContain('teams/dev-manager-gizmo/AGENTS.md');
+  expect(markdown).not.toContain('teams/dev-manager-gizmo/');
   expect(markdown).not.toContain(
     'teams/delivery-pipeline/internal/',
   );
@@ -86,9 +83,8 @@ test('renders the complete canonical Cortex context router', () => {
   }
 
   const teamOwnershipContracts = [
-    '[Dev manager](teams/dev-manager/knowledge-graph.md): manually operated dev',
-    '[Dev manager Gizmo](teams/dev-manager-gizmo/knowledge-graph.md): on-demand entry',
-    'publication, dev PR creation/update, slow evidence, readiness, repair',
+    '[Gizmo Prime](gizmo-prime/knowledge-graph.md): planning, delegation, integration,',
+    '[Dev delivery architecture](gizmo-prime/architecture/dev-delivery.md): canonical',
     'feature review, feature acceptance, local landing requests, and Workbench.',
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md): operational',
     '[AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,',
@@ -106,7 +102,7 @@ test('renders the complete canonical Cortex context router', () => {
   expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
 });
 
-test('keeps Delivery Pipeline nested ownership in its parent graph', () => {
+test('keeps Delivery Pipeline direct-child ownership in its parent graph', () => {
   const deliveryPipelineGraph = readFileSync(
     new URL(
       '../../../../../../teams/delivery-pipeline/knowledge-graph.md',
@@ -116,23 +112,15 @@ test('keeps Delivery Pipeline nested ownership in its parent graph', () => {
   );
 
   expect(deliveryPipelineGraph).toContain(
-    '- [Team Gizmo knowledge graph](internal/gizmo/knowledge-graph.md)',
+    '- [Team Gizmo knowledge graph](gizmo/knowledge-graph.md)',
   );
   expect(deliveryPipelineGraph).toContain(
-    '- [PR Steward knowledge graph](internal/pr-steward/knowledge-graph.md)',
+    '- [Dev Manager knowledge graph](dev-manager/knowledge-graph.md)',
   );
   expect(deliveryPipelineGraph).toContain(
-    '[Authorization handshake](internal/pr-steward/workflows/authorization-handshake.md)',
+    '- [PR Lifecycle Agent knowledge graph](pr-lifecycle/knowledge-graph.md)',
   );
-  expect(deliveryPipelineGraph).toContain(
-    '[Pull-request lifecycle](internal/pr-steward/workflows/pull-request-lifecycle.md)',
-  );
-  expect(deliveryPipelineGraph).not.toContain(
-    'internal/gizmo/AGENTS.md',
-  );
-  expect(deliveryPipelineGraph).not.toContain(
-    'internal/pr-steward/AGENTS.md',
-  );
+  expect(deliveryPipelineGraph).not.toContain('internal/');
 });
 
 test('stripDocumentNavigation strips relationships and document map', () => {

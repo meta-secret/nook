@@ -55,17 +55,17 @@ AI owns dynamic-skill semantics and Loom tooling. The owning Feature Gizmo
 authors any Workbench record or request content and decides its Workbench
 state. For feature build or check mechanics, the owning Feature Gizmo submits
 the exact head to Gizmo Prime. Gizmo Prime authorizes Delivery Pipeline Team
-Gizmo, which dispatches internal PR Steward through the active harness and
+Gizmo, which dispatches PR Lifecycle Agent through the active harness and
 returns the evidence. The dev manager authorizes manager-stage publication,
 slow checks, and promotion through the same Delivery Pipeline Team Gizmo to
-internal PR Steward route.
+PR Lifecycle Agent route.
 
 For Workbench publication, Feature Gizmo approves the exact record and state.
 Gizmo Prime routes the approved packet through Delivery Pipeline Team Gizmo,
-which dispatches internal PR Steward through the active harness to publish
+which dispatches PR Lifecycle Agent through the active harness to publish
 only that controller-authored content.
 
-Team Gizmo and internal PR Steward perform only packetized mechanics. They do
+Team Gizmo and PR Lifecycle Agent perform only packetized mechanics. They do
 not create or update pull requests, author Workbench content, or decide policy,
 readiness, promotion, or Workbench state.
 
@@ -156,6 +156,6 @@ When applying a skill to code:
    AI team returns a fresh formatted commit. The Feature Gizmo continues from
    it, reruns hygiene, and pushes. For applicable feature build or check
    mechanics, Gizmo Prime authorizes the Delivery Pipeline Team Gizmo packet;
-   Team Gizmo dispatches internal PR Steward through the active harness. Use
+   Team Gizmo dispatches PR Lifecycle Agent through the active harness. Use
    focused remote evidence until the head is ready. Dispatch complete
    exact-head validation immediately when it is ready through that same route.

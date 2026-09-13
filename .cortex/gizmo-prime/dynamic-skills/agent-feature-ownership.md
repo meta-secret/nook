@@ -54,7 +54,7 @@ Treat every other active task as foreign work.
 - The worker must not create another worker.
 - A missing dependency returns to Gizmo for assignment to its owner.
 - A functional worker must not mutate Workbench, branch publication, PR,
-  review, check, or merge state. PR Steward is the narrow operational Team
+  review, check, or merge state. PR Lifecycle Agent is the narrow operational Team
   Agent exception and may mutate only the exact pull-request state
   named in Gizmo's current authorization packet.
 - Its ownership ends when the result is handed back.
@@ -88,8 +88,8 @@ Applies to:
 - shared worktrees and independent worktrees;
 - interactive agents, scheduled agents, and recovery agents;
 - issue, branch, pull-request, review, check, and merge operations. The
-  PR Steward exception is governed by
-  [the PR Steward contract](../../teams/delivery-pipeline/internal/pr-steward/AGENTS.md).
+  PR Lifecycle Agent exception is governed by
+  [the PR Lifecycle Agent contract](../../teams/delivery-pipeline/pr-lifecycle/AGENTS.md).
 
 Does not apply to:
 

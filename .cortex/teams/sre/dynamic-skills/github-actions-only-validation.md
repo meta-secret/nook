@@ -11,7 +11,7 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
 - **Feature compilation**
   - The owning Feature Gizmo publishes the feature branch.
   - Gizmo Prime authorizes the exact feature SHA request; Delivery Pipeline
-    Team Gizmo dispatches internal PR Steward through the active harness for
+    Team Gizmo dispatches PR Lifecycle Agent through the active harness for
     remote build-only execution.
   - Execute build-only and type-compilation work for the exact feature SHA.
   - Keep tests, coverage, e2e, and preflight outside its transitive task graph.
@@ -21,10 +21,10 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
   - The manually run dev manager selects the published dev snapshot.
   - The dev manager authorizes Delivery Pipeline Team Gizmo to route the
     publication and validation packet through the active harness to internal
-    PR Steward for bounded execution.
+    PR Lifecycle Agent for bounded execution.
   - The dev manager retains manager-stage policy authority, and
     `dev:pr-manager` remains the sole pull-request creation/update path; Team
-    Gizmo and internal PR Steward do not create or update pull requests or
+    Gizmo and PR Lifecycle Agent do not create or update pull requests or
     decide policy, readiness, or promotion verdicts.
   - Run the full existing slow PR checks on the captured dev head SHA.
   - Preserve e2e opt-ins and security-required focused browser checks.

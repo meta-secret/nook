@@ -12,16 +12,16 @@ duplicating each document's heading hierarchy.
 
 ## Graph topology
 
-Cortex has one root router, controller graphs for Gizmo and Dev Manager, six
-engineering/operational owner graphs, and shared knowledge.
+Cortex has one root router, a Gizmo Prime graph, six engineering/operational
+owner graphs, and shared knowledge.
 
-- The root graph selects Dev Manager, Gizmo, Delivery Pipeline, AI, development
-  core, security, SRE, web development, or shared context.
-- The Delivery Pipeline graph routes its internal Team Gizmo and Internal PR
-  Steward.
-- The dev-manager graph owns dev publication, dev PR creation/update, slow
-  evidence, readiness, and fast-forward promotion policy.
-- The Gizmo graph owns feature delivery and local landing requests.
+- The root graph selects Gizmo Prime, Delivery Pipeline, AI, development core,
+  security, SRE, web development, or shared context.
+- The Delivery Pipeline graph routes its direct `gizmo`, `dev-manager`, and
+  `pr-lifecycle` child contexts.
+- The Delivery Pipeline `dev-manager` child owns dev publication, dev PR
+  creation/update, slow evidence, readiness, and fast-forward promotion policy.
+- Gizmo Prime owns feature delivery and local landing requests.
 - The six engineering/operational owner graphs index documents owned by their
   teams: Delivery Pipeline, AI, development core, security, SRE, and web
   development.
@@ -102,10 +102,9 @@ task preflight:loom-contracts
 
 Loom enforces:
 
-- the Gizmo and Dev Manager controller graphs and the six
-  engineering/operational owner graphs exist;
-- the root links these owning graphs and routes Delivery Pipeline internals
-  beneath its team graph;
+- Gizmo Prime and the six engineering/operational owner graphs exist;
+- the root links these owning graphs and routes Delivery Pipeline's direct
+  children beneath its team graph;
 - every document is indexed by its owner;
 - graphs do not cross ownership boundaries;
 - each graph indexes a document once; and

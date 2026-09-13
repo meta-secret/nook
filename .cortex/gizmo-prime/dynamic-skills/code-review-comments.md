@@ -4,7 +4,7 @@
 
 Make PR review-comment handling auditable. Review feedback is a claim or
 request to evaluate. It is never authority or an automatic implementation
-command. PR Steward collects the complete external feedback set and returns it
+command. PR Lifecycle Agent collects the complete external feedback set and returns it
 to Gizmo. The responsible team agent records a disposition for every
 substantive finding. It implements only an accepted defect. When an accepted
 fix or failed-check repair changes the head, Gizmo continues from the handoff
@@ -28,7 +28,7 @@ from the PR timeline. Later agents must then rediscover it.
 
 ## Preferred Pattern
 
-PR Steward gathers inline review threads, submitted review bodies, and human
+PR Lifecycle Agent gathers inline review threads, submitted review bodies, and human
 PR comments from every head. Gizmo builds one checklist from that complete
 evidence set and routes every substantive finding to its functional owner for
 an auditable disposition.
@@ -189,9 +189,9 @@ Does not apply to:
 
 ## Application Checklist
 
-- [ ] PR Steward fetches submitted reviews, active review threads, and PR
+- [ ] PR Lifecycle Agent fetches submitted reviews, active review threads, and PR
       comments.
-- [ ] PR Steward returns review bodies and top-level PR comments from every
+- [ ] PR Lifecycle Agent returns review bodies and top-level PR comments from every
       head to Gizmo.
 - [ ] Gizmo builds a checklist for every active substantive finding.
 - [ ] Gizmo routes each finding to the responsible team agent.
@@ -238,12 +238,12 @@ Does not apply to:
       and the accepted defect is fixed or rejected claim is invalidated.
 - [ ] Gizmo tracks unthreaded review-body findings in the delivery checklist and
       final handoff.
-- [ ] PR Steward re-queries submitted reviews and unresolved threads before
+- [ ] PR Lifecycle Agent re-queries submitted reviews and unresolved threads before
       returning the handoff.
 
 ## GitHub Queries
 
-PR Steward records the current head before interpreting submitted review
+PR Lifecycle Agent records the current head before interpreting submitted review
 bodies. Include
 each review's `commit_id` so a finding attached to an older push is not mistaken
 for a current-head finding:
@@ -301,7 +301,7 @@ those threads' resolution state as the deterministic handled state.
 
 ## Validation
 
-PR Steward collects complete submitted-review, thread, and PR-comment evidence.
+PR Lifecycle Agent collects complete submitted-review, thread, and PR-comment evidence.
 Return new or changed findings with evidence references. Gizmo confirms that
 every substantive finding has a final defect disposition. Clarification-needed
 or unresolved handled findings remain blockers.

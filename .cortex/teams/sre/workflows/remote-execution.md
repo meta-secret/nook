@@ -26,7 +26,7 @@ machines use only the lightweight feedback allowed by the dev contract.
 
 The owning Feature Gizmo publishes its feature branch. Gizmo Prime authorizes
 the exact-SHA delivery packet, and Delivery Pipeline Team Gizmo dispatches
-internal PR Steward through the active harness to run the required remote
+PR Lifecycle Agent through the active harness to run the required remote
 build-only capability.
 
 - Compile and type-check without tests, coverage, e2e, or preflight.
@@ -38,10 +38,10 @@ build-only capability.
 
 The manually started dev manager authorizes publication of the selected
 snapshot and the full existing PR checks. Delivery Pipeline Team Gizmo routes
-that manager-authorized packet through the active harness to internal PR
-Steward for snapshot publication and bounded check execution. The dev manager
+that manager-authorized packet through the active harness to PR Lifecycle Agent
+for snapshot publication and bounded check execution. The dev manager
 retains policy authority, and manager-only `dev:pr-manager` remains the sole
-path for pull-request creation/update. Team Gizmo and internal PR Steward do
+path for pull-request creation/update. Team Gizmo and PR Lifecycle Agent do
 not create or update pull requests or decide policy, readiness, or promotion
 verdicts. Follow
 [dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
@@ -65,8 +65,8 @@ All remote task and PR-check invocations below are routed through Delivery
 Pipeline Team Gizmo. For feature build-only work, the owning Feature Gizmo
 submits the exact SHA and Gizmo Prime authorizes the packet. For manager-stage
 publication, slow checks, and promotion, the dev manager authorizes the packet.
-Delivery Pipeline Team Gizmo dispatches internal PR Steward through the active
-harness and returns exact-SHA evidence. Neither Team Gizmo nor internal PR
+Delivery Pipeline Team Gizmo dispatches PR Lifecycle Agent through the active
+harness and returns exact-SHA evidence. Neither Team Gizmo nor PR Lifecycle
 Steward may create or update pull requests or decide policy, readiness,
 promotion, or Workbench state.
 

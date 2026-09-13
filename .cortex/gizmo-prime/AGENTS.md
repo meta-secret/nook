@@ -15,9 +15,10 @@ upward to Gizmo Prime; Team Gizmo is an internal team orchestrator, not a
 second Prime.
 
 Gizmo publishes only its feature branch and requests remote `build:compile`.
-It authorizes Delivery Pipeline Team Gizmo to route internal PR Steward's
+It authorizes Delivery Pipeline Team Gizmo to route PR Lifecycle's
 bounded `dev:land` operation for the completed feature.
-The manually run dev manager owns remote dev publication and main promotion.
+The manually run Dev Manager inside Delivery Pipeline owns remote dev
+publication and main promotion.
 
 ## Mandatory Gizmo Gate — fail closed
 
@@ -33,9 +34,10 @@ The active Gizmo harness and its required Team Agent dispatch are mandatory.
   child worktree, and named acceptance evidence.
 - Gizmo Prime verifies committed Team Agent handoffs and integrates them in
   serialized order.
-- Pull-request operations remain with Delivery Pipeline's internal PR Steward
-  or the dev-manager path. Gizmo, Team Gizmos, and Team Agents do not create or
-  update pull requests.
+- Pull-request operations remain with Delivery Pipeline's PR Lifecycle Agent
+  or Dev Manager path. Gizmo, Team Gizmos, and Team Agents do not create or
+  update pull requests; only manager-only `dev:pr-manager` creates or updates
+  the dev-to-main PR.
 
 ### Prohibited actions
 
@@ -76,21 +78,21 @@ Gizmo owns:
 - Workbench completion; and
 - the feature delivery verdict.
 
-The dev manager controls dev PR creation/update, slow evidence, readiness,
-and promotion. Team Gizmos route authorized mechanics to their internal Team
-Agents; Delivery Pipeline's internal PR Steward performs those mechanics only
+The Dev Manager controls dev PR creation/update, slow evidence, readiness, and
+promotion. Team Gizmos route authorized mechanics to their internal Team
+Agents; Delivery Pipeline's PR Lifecycle Agent performs those mechanics only
 under a manager packet.
 
 Gizmo delegates all GitHub execution, including read-only commands and wrappers,
 to Delivery Pipeline Team Gizmo, which dispatches the
-[internal PR Steward Team Agent](../teams/delivery-pipeline/internal/pr-steward/AGENTS.md).
+[PR Lifecycle Team Agent](../teams/delivery-pipeline/pr-lifecycle/AGENTS.md).
 The [Delivery Pipeline knowledge graph](../teams/delivery-pipeline/knowledge-graph.md)
-defines this operational context. Internal PR Steward never acts without an
+defines this operational context. PR Lifecycle Agent never acts without an
 explicit operation packet from the controller that owns the requested stage.
 
 Workers send missing PR-information requests to Gizmo through the active
-harness. Gizmo routes dev PR evidence requests to the dev manager. The manager
-authorizes Steward's collection and returns the result. Gizmo may directly
+harness. Gizmo routes dev PR evidence requests to the Dev Manager. The manager
+authorizes PR Lifecycle's collection and returns the result. Gizmo may directly
 authorize feature compilation evidence and local landing requests.
 
 Gizmo does not:
@@ -102,7 +104,7 @@ Gizmo does not:
 - waive a blocking functional-owner or security verdict; or
 - create unmanaged checkouts or let a worker choose an unissued worktree.
 
-Gizmo does not allow Team Gizmo or internal PR Steward to edit functional code,
+Gizmo does not allow Team Gizmo or PR Lifecycle to edit functional code,
 adjudicate technical findings, sequence feature writers, own Workbench
 outcomes, or decide readiness, promotion, or the final delivery verdict.
 

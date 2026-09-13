@@ -31,8 +31,8 @@ Prime-to-Team-Gizmo dispatch chain.
 - Author tests without executing them in the feature stage.
 - Local feedback is limited to scoped rustfmt and bounded TS diagnostics.
 - Delivery Pipeline Team Gizmo requests remote build-only execution through
-  its internal PR Steward.
-- Every Team Agent task has one team identity. An internal PR Steward task
+  its PR Lifecycle Agent.
+- Every Team Agent task has one team identity. An PR Lifecycle Agent task
   uses the Delivery Pipeline operational context and remains a child task of
   Team Gizmo for policy and authorization.
 - Every task names its outcome, allowed files, forbidden files, and acceptance
@@ -78,11 +78,11 @@ Prime-to-Team-Gizmo dispatch chain.
 - Gizmo Prime owns feature sequencing, review, acceptance, and landing
   requests. Team Gizmo owns only its team's mechanics and evidence synthesis.
   The dev manager controls dev PR creation/update through `dev:pr-manager`,
-  slow evidence, readiness, and promotion. Internal PR Steward observes the
+  slow evidence, readiness, and promotion. PR Lifecycle Agent observes the
   PR and performs only review, check, status, and promotion mechanics under
   manager packets.
   Follow the
-  [internal PR Steward lifecycle](../../teams/delivery-pipeline/internal/pr-steward/workflows/pull-request-lifecycle.md).
+  [PR Lifecycle Agent lifecycle](../../teams/delivery-pipeline/pr-lifecycle/workflows/pull-request-lifecycle.md).
 
 ## Procedure
 
@@ -169,9 +169,9 @@ delivery sequence.
    Team Gizmo, which escalates the missing evidence and dependent work to
    Gizmo Prime.
 2. Delivery Pipeline Team Gizmo supplies an explicit operation packet to
-   internal PR Steward. Only internal PR Steward queries GitHub or starts a
+   PR Lifecycle Agent. Only PR Lifecycle Agent queries GitHub or starts a
    monitoring subscription.
-3. Internal PR Steward returns bounded evidence or a blocker to Delivery
+3. PR Lifecycle Agent returns bounded evidence or a blocker to Delivery
    Pipeline Team Gizmo.
 4. Team Gizmo synthesizes the result, reports it to Gizmo Prime, and forwards
    the result to the requesting worker.

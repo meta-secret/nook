@@ -11,7 +11,7 @@ The statistics contract has explicit owners:
 - **Delivery Pipeline Team Gizmo:** Routes authorized mechanical packets through
   the active harness and synthesizes evidence. It has no PR creation/update or
   policy authority.
-- **Internal PR Steward:** Executes only the packetized mechanical Loom and
+- **PR Lifecycle Agent:** Executes only the packetized mechanical Loom and
   GitHub operations dispatched by Delivery Pipeline Team Gizmo through the
   active harness. It has no PR creation/update, Workbench authorship/state, or
   policy authority.
@@ -30,22 +30,22 @@ It is not a free-form task diary.
    begins.
 2. Feature Gizmo appends every local lightweight execution, focused remote run,
    complete validation run, retrigger, and merge attempt as it happens.
-3. The dev manager authorizes Delivery Pipeline Team Gizmo to route the guarded
-   fast-forward promotion packet through the active harness to internal PR
-   Steward after full slow validation and required review/security acceptance.
+3. The Dev Manager authorizes Delivery Pipeline Team Gizmo to route the guarded
+   fast-forward promotion packet through the active harness to PR Lifecycle
+   Agent after full slow validation and required review/security acceptance.
 4. After merge, Feature Gizmo authors and approves the assemble request and
    exact Workbench record content. Gizmo Prime routes the packet through
-   Delivery Pipeline Team Gizmo, which dispatches internal PR Steward through
+   Delivery Pipeline Team Gizmo, which dispatches PR Lifecycle Agent through
    the active harness to mechanically assemble
    `stats/ai-agent/<pr-number>.yaml` with Loom.
 5. Feature Gizmo compares the record with one or two recent comparable records.
 6. Feature Gizmo decides that the YAML is approved for its Workbench state.
    Gizmo Prime routes the publication packet through Delivery Pipeline Team
-   Gizmo, which dispatches internal PR Steward through the active harness to
+   Gizmo, which dispatches PR Lifecycle Agent through the active harness to
    mechanically publish the exact approved YAML to Workbench `main` with Loom.
 7. Feature Gizmo records an actionable build-performance improvement and routes
    implementation to the responsible team through the normal delivery path;
-   Feature Gizmo, Delivery Pipeline Team Gizmo, and internal PR Steward do not
+   Feature Gizmo, Delivery Pipeline Team Gizmo, and PR Lifecycle Agent do not
    create or update pull requests. The manager-only `dev:pr-manager` path
    remains the sole PR creation/update path for the manager-stage dev cycle.
 
@@ -57,9 +57,9 @@ It is not a free-form task diary.
 - Gizmo Prime routes each feature-authorized packet through Delivery Pipeline
   Team Gizmo. For manager-stage publication, validation, and promotion, the
   dev manager authorizes the Delivery Pipeline packet. Team Gizmo dispatches
-  internal PR Steward through the active harness to mechanically run the
+  PR Lifecycle Agent through the active harness to mechanically run the
   packetized GitHub-backed operations.
-- Team Gizmo and internal PR Steward must not create or update PRs, author
+- Team Gizmo and PR Lifecycle Agent must not create or update PRs, author
   Workbench content, or decide policy, readiness, promotion, or Workbench
   state.
 - Local validation without GitHub access remains with the responsible owner.
@@ -237,8 +237,8 @@ Publication requires:
 - Feature Gizmo authors the exact record content and decides its Workbench
   publication state; Gizmo Prime owns the delivery handoff.
 - Gizmo Prime routes the authorized packet through Delivery Pipeline Team
-  Gizmo, which dispatches internal PR Steward through the active harness.
-- Internal PR Steward mechanically publishes only the exact controller-authored
+  Gizmo, which dispatches PR Lifecycle Agent through the active harness.
+- PR Lifecycle Agent mechanically publishes only the exact controller-authored
   content to the named destination. It does not author Workbench content, decide
   Workbench state or policy, or create/update PRs.
 - The filename is `stats/ai-agent/<source-pr-number>.yaml`.
@@ -250,7 +250,7 @@ Before publishing:
 - do not create a Nook branch or PR;
 - do not wait for Main or deployment;
 - validate with Loom after Delivery Pipeline Team Gizmo dispatches the packet
-  to internal PR Steward through the active harness;
+  to PR Lifecycle Agent through the active harness;
 - publish with Loom after that routed dispatch
   (`task loom:agent-stats CONFIG=<publish-request.yaml>`).
 

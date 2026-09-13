@@ -83,9 +83,9 @@ Verify:
 - exact-head remote build-only provider-consumer evidence passed;
 - the parent feature worktree contains the complete result; and
   - Gizmo Prime owns feature push sequencing, review, acceptance, and local
-    landing requests. Delivery Pipeline Team Gizmo routes internal PR Steward
+    landing requests. Delivery Pipeline Team Gizmo routes PR Lifecycle Agent
     mechanics. The manually operated dev manager owns dev publication, dev PR
     creation/update, slow evidence, readiness, and fast-forward promotion. The
-    manager invokes `dev:pr-manager`; internal PR Steward observes the
+    manager invokes `dev:pr-manager`; PR Lifecycle Agent observes the
     resulting PR and performs review, check, and promotion mechanics only under
     the manager's bounded packet, as defined by the [dev delivery contract](../architecture/dev-delivery.md).

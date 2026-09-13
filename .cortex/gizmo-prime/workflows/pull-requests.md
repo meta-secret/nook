@@ -5,14 +5,14 @@
 Follow [dev delivery](../architecture/dev-delivery.md) for the two-stage
 contract. Feature Gizmos publish feature branches and obtain remote
 build-only execution evidence. They authorize Delivery Pipeline Team Gizmo's
-local-integration packet to internal PR Steward for local dev.
+local-integration packet to PR Lifecycle Agent for local dev.
 The manually run dev manager selects snapshots and owns the slow PR cycle.
 
 Another active task's branch and pull request are read-only without an
 explicit handoff. Related scope does not transfer ownership. Follow
 [agent feature ownership](../dynamic-skills/agent-feature-ownership.md).
 Gizmo Prime remains the mission/root coordinator. Delivery Pipeline Team Gizmo
-receives Prime's high-level delivery packet and routes internal PR Steward's
+receives Prime's high-level delivery packet and routes PR Lifecycle Agent's
 bounded mechanics; Team Gizmo is not a second Prime and does not decide
 functional ownership, readiness, promotion, or final delivery.
 
@@ -25,7 +25,7 @@ functional ownership, readiness, promotion, or final delivery.
   - Keep the dev branch permanent.
   - The manager owns readiness and promotion verdicts.
   - The dev manager invokes the manager-only `dev:pr-manager` path for PR
-    creation/update. Delivery Pipeline Team Gizmo routes internal PR Steward,
+    creation/update. Delivery Pipeline Team Gizmo routes PR Lifecycle Agent,
     which executes only review, check, status, and promotion mechanics under
     explicit packets.
 - **Evidence**
@@ -96,7 +96,7 @@ this order:
 
 ## Review and repair procedure
 
-1. Have Delivery Pipeline Team Gizmo route internal PR Steward to collect
+1. Have Delivery Pipeline Team Gizmo route PR Lifecycle Agent to collect
    submitted reviews, inline threads, and PR comments.
 2. Disposition every substantive finding using
    [code review comments](../dynamic-skills/code-review-comments.md).
@@ -111,7 +111,7 @@ this order:
    - Do not resolve silently.
    - Outdated review markers do not make unresolved findings optional.
 5. Once the prior validation attempt finishes, select a new local dev snapshot.
-6. Authorize Delivery Pipeline Team Gizmo to route internal PR Steward's
+6. Authorize Delivery Pipeline Team Gizmo to route PR Lifecycle Agent's
    publication and repeat full slow PR validation.
 
 A typecheck or compilation result never replaces behavioral tests or security
@@ -121,9 +121,9 @@ review. Missing evidence remains visible.
 
 1. Require successful slow checks for the frozen origin/dev SHA.
 2. Require completed review dispositions and functional/security verdicts.
-3. Reconcile final GitHub state through internal PR Steward via Delivery
+3. Reconcile final GitHub state through PR Lifecycle Agent via Delivery
    Pipeline Team Gizmo.
-4. Authorize Delivery Pipeline Team Gizmo to route internal PR Steward's
+4. Authorize Delivery Pipeline Team Gizmo to route PR Lifecycle Agent's
    guarded fast-forward promotion.
    - Main must be an ancestor of the tested SHA.
    - Ordinary publication must move main to that exact SHA.
@@ -134,7 +134,7 @@ review. Missing evidence remains visible.
 7. Preserve any newer local dev work for the next manually selected cycle.
 
 Follow [mission delivery](mission-delivery.md) for feature handoffs and
-[dev promotion](../../teams/dev-manager/dynamic-skills/dev-promote.md) for
+[dev promotion](../../teams/delivery-pipeline/dev-manager/dynamic-skills/dev-promote.md) for
 manager operations. Apply
 [self-improvement](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review)
 only when the work reveals an evidence-backed durable lesson. Record the

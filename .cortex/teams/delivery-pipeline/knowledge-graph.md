@@ -22,9 +22,8 @@ scopes are disjoint and dependencies are resolved. It reports only high-level
 evidence and blockers to Gizmo Prime. No internal agent creates or updates a
 pull request; only the Dev Manager's manager-only `dev:pr-manager` path does.
 
-The internal agent is named `pr-lifecycle`, replacing `pr-steward`, because
-the new name precisely identifies PR lifecycle and mechanics without implying
-stewardship or policy authority.
+The direct child agent is named `pr-lifecycle`. The name precisely identifies
+PR lifecycle and mechanics without implying stewardship or policy authority.
 
 ## Team contract
 

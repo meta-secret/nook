@@ -35,7 +35,7 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 - Do not run tests, coverage, e2e, or preflight remotely in the feature stage.
 - Do not push dev or main from a feature task.
 - Do not introduce a Team Agent lifecycle service, scheduler, or Git-state machinery.
-- Do not introduce a persistent Delivery Pipeline or internal PR Steward
+- Do not introduce a persistent Delivery Pipeline or PR Lifecycle Agent
   service, scheduler, or notification journal.
 - Do not rebase, squash, force-push, or discard another feature's work.
 
@@ -67,7 +67,7 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
    - Have later iterations inspect the last one or two relevant commits and diffs.
 5. **Compile and review.**
    - Push the coherent feature branch.
-   - Have Delivery Pipeline Team Gizmo route internal PR Steward's remote
+   - Have Delivery Pipeline Team Gizmo route PR Lifecycle Agent's remote
      build-only execution packet for that SHA.
    - For web changes, use `task remote TASK_NAME=web:build` and
      `task remote TASK_NAME=web:e2e` as applicable.
@@ -77,16 +77,16 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
    - Require positive compilation evidence for the final feature SHA.
    - Require resolved review findings and required security acceptance.
    - Authorize Delivery Pipeline Team Gizmo's bounded local-integration packet
-     to internal PR Steward.
+     to PR Lifecycle Agent.
    - Tooling serializes the shared local dev checkout and verifies build evidence.
    - Record feature and resulting local dev SHAs.
 7. **Hand off to the manager.**
    - The manager selects publication through Delivery Pipeline Team Gizmo's
-     packet to internal PR Steward for snapshot publication.
+     packet to PR Lifecycle Agent for snapshot publication.
    - The manager runs the full slow PR cycle.
    - Failure returns to a feature Gizmo through this same procedure.
    - Successful promotion uses the Dev Manager's packet to Delivery Pipeline
-     Team Gizmo and internal PR Steward's guarded fast-forward mechanics.
+     Team Gizmo and PR Lifecycle Agent's guarded fast-forward mechanics.
 
 ## Fix ownership
 

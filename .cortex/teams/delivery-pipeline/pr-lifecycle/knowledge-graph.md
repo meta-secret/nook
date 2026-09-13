@@ -1,8 +1,8 @@
-# Delivery Pipeline Internal PR Lifecycle Knowledge Graph
+# Delivery Pipeline PR Lifecycle Knowledge Graph
 
 Load only the authority required by the current pull-request operation.
 
-## Internal Team Agent contract
+## Team Agent contract
 
 - [PR Lifecycle Agent contract](AGENTS.md) defines the internal operational boundary,
   fixed dispatch profile, and parent authorization seam.

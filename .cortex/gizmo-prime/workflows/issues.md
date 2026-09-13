@@ -74,19 +74,19 @@ discover missing functionality that the current PR will not finish.
 
 Gizmo authors Workbench content and decides its lifecycle state. Delivery
 Pipeline Team Gizmo routes every Workbench search, publisher, branch, review,
-and status packet through the active harness to internal PR Steward.
-Internal PR Steward executes only the packetized mechanics. Team Gizmo and
-internal PR Steward never create or update PRs or decide policy. Publication
+and status packet through the active harness to PR Lifecycle Agent.
+PR Lifecycle Agent executes only the packetized mechanics. Team Gizmo and
+PR Lifecycle Agent never create or update PRs or decide policy. Publication
 does not transfer authorship or lifecycle decisions to either actor.
 
 The Dev Manager remains the policy owner and sole invoker of `dev:pr-manager`.
 Any dev PR review, check, status, or promotion mechanics use the same Delivery
-Pipeline Team Gizmo -> active harness -> internal PR Steward route.
+Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent route.
 
 ## Search first
 
 Have Delivery Pipeline Team Gizmo route a search packet through the active
-harness to internal PR Steward. Internal PR Steward clones or updates the
+harness to PR Lifecycle Agent. PR Lifecycle Agent clones or updates the
 Workbench outside the Nook working tree. Then search feature
 summaries, issues, plans, and worklogs with both product language and code
 terms:
@@ -167,8 +167,8 @@ to avoid naming the feature; `backlog` is primarily the historical import area.
 
 Workbench records are content, not Nook product changes. The owning Gizmo
 authors the record and its lifecycle state. Route a single-record publication
-packet through Delivery Pipeline Team Gizmo -> active harness -> internal PR
-Steward, which executes the checked-in helper. For an existing issue, first
+packet through Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle
+Agent, which executes the checked-in helper. For an existing issue, first
 read the file and retain the blob SHA that the local edit is based on, then pass
 that exact SHA as `NOOK_WORKBENCH_EXPECTED_SHA`:
 
@@ -190,7 +190,7 @@ need an expected SHA; existing statistics are immutable and cannot be replaced.
 
 For coordinated multi-file restructuring, use a focused Workbench branch and
 PR. Route its packetized branch, review, and status mechanics through Delivery
-Pipeline Team Gizmo -> active harness -> internal PR Steward. Never mix
+Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent. Never mix
 Workbench files into a Nook implementation PR.
 
 ## Team safety
@@ -285,7 +285,7 @@ materially.
 
 Do not rewrite the earlier plan.
 The owning Gizmo authors the plan. Route its publication packet through Delivery
-Pipeline Team Gizmo -> active harness -> internal PR Steward, which executes the
+Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent, which executes the
 checked-in publisher for interactive work:
 
 ```bash
@@ -325,7 +325,7 @@ task plan, and include:
 
 The owning Gizmo decides the associated issue status and `related_prs`. Route
 the Workbench update through Delivery Pipeline Team Gizmo -> active harness ->
-internal PR Steward in the same completion boundary. Feature completion records
+PR Lifecycle Agent in the same completion boundary. Feature completion records
 local dev integration. Manager completion records promotion and actual PR
 status. A concrete external blocker moves the owning record to `blocked`.
 
@@ -336,5 +336,5 @@ the feature, focused issue, task-start plan, worklog, and implementation PR.
 State what remains only when work is incomplete.
 
 Route the readback through Delivery Pipeline Team Gizmo -> active harness ->
-internal PR Steward. Re-open the published files before handoff and verify the
+PR Lifecycle Agent. Re-open the published files before handoff and verify the
 links and state are visible on Workbench `main`.

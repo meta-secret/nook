@@ -19,11 +19,10 @@ The Delivery Pipeline team reports to Gizmo Prime.
 - Team Gizmo is the team's high-level internal orchestrator and owns the
   team's one worktree through `gizmo/`.
 - The team has three direct child contexts: `gizmo/`, `dev-manager/`, and
-  `pr-lifecycle/`. The former `dev-manager-gizmo/` context is this team's
-  canonical `gizmo/` and is not a second Team Gizmo.
-- Internal PR Lifecycle Agent is the team's bounded PR and delivery-mechanics
-  execution agent. `pr-lifecycle/` is the renamed replacement for the former
-  `pr-steward/` context; the name is chosen because it precisely describes
+  `pr-lifecycle/`.
+- PR Lifecycle Agent is the team's bounded PR and delivery-mechanics
+  execution agent. `pr-lifecycle/` is the canonical context; the name is
+  chosen because it precisely describes
   packetized PR lifecycle and mechanics without implying policy ownership.
 - Gizmo Prime remains the parent for mission control, functional ownership,
   feature acceptance, and feature-level delivery decisions.

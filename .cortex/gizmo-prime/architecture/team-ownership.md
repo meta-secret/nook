@@ -12,7 +12,8 @@ coordinates delivery but does not redefine a team's technical contract.
 ## Universal rules
 
 - Follow [dev delivery](dev-delivery.md) for feature and manager stages.
-- Each concurrent feature has a separate Gizmo and isolated Team Agent children.
+- Each concurrent feature has a separate Gizmo Prime and isolated Team Agent
+  children.
 - Every team has one Team Gizmo. Team Gizmo receives a high-level packet from
   Gizmo Prime, decomposes only its team's mechanics, dispatches internal Team
   Agents through the active harness, synthesizes exact-SHA evidence and
@@ -20,8 +21,8 @@ coordinates delivery but does not redefine a team's technical contract.
 - Team Gizmo is not a second Prime and never decides functional ownership,
   readiness, promotion, or final delivery.
 - The manually run dev manager owns dev publication and main promotion.
-- Every Team Agent task has exactly one team identity. Delivery Pipeline's
-  internal PR Steward is an operational Team Agent for bounded pull-request
+- Every Team Agent task has exactly one team identity. Delivery Pipeline's PR
+  Lifecycle Agent is an operational Team Agent for bounded pull-request
   observation and review mechanics.
 - The functional owner defines behavior, contracts, tests, and acceptance.
 - File location is evidence of ownership, not an exception to semantic
@@ -40,11 +41,39 @@ coordinates delivery but does not redefine a team's technical contract.
   coordination, parent integration, feature acceptance, and local landing
   authorization. Team Gizmo coordinates issued internal child worktrees and
   commit handoffs within its packet.
-- Internal PR Steward performs only explicitly authorized pull-request
+- PR Lifecycle performs only explicitly authorized pull-request
   observation, review, and status mechanics; the manager-only `dev:pr-manager`
   command owns PR creation and updates.
 
 ## Teams
+
+### Canonical team topology
+
+Gizmo Prime creates or reuses exactly one Team Gizmo per team with model
+`gpt-5.6-sol` and `low` reasoning. Each Team Gizmo owns one team worktree.
+Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning and receives a
+separate issued child worktree. A Team Gizmo may dispatch disjoint specialists
+in parallel, integrates their committed results into its feature branch, and
+reports high-level evidence or blockers to Prime.
+
+- **AI**
+  - Team Gizmo: `teams/ai/gizmo`
+  - Team Agents: `loom-specialist`, `cortex-specialist`
+- **Development Core**
+  - Team Gizmo: `teams/dev-core/gizmo`
+  - Team Agents: `rust-core-developer`, `rust-auth2-developer`
+- **Security**
+  - Team Gizmo: `teams/security/gizmo`
+  - Team Agents: `cryptography-specialist`, `security-review-specialist`
+- **SRE**
+  - Team Gizmo: `teams/sre/gizmo`
+  - Team Agents: `provisioning`, `cloud-native`
+- **Web Development**
+  - Team Gizmo: `teams/web-dev/gizmo`
+  - Team Agents: `typescript-specialist`, `svelte-specialist`
+- **Delivery Pipeline**
+  - Team Gizmo: `teams/delivery-pipeline/gizmo`
+  - Team Agents: `dev-manager`, `pr-lifecycle`
 
 ### Gizmo Prime and Team Gizmo delivery control
 
@@ -59,17 +88,17 @@ Gizmo Prime owns:
 - Workbench state; and
 - the feature delivery verdict.
 
-The dev manager controls dev PR creation/update through `dev:pr-manager`, plus
-slow evidence, readiness, and promotion. Internal PR Steward observes the PR
+The Dev Manager controls dev PR creation/update through `dev:pr-manager`, plus
+slow evidence, readiness, and promotion. PR Lifecycle observes the PR
 and performs only these other mechanics under a manager packet issued through
 Delivery Pipeline Team Gizmo.
 
 Team Gizmo routes its team's authorized mechanics to internal Team Agents. The
-Delivery Pipeline Team Gizmo coordinates the current internal PR Steward for
+Delivery Pipeline Team Gizmo coordinates the current PR Lifecycle Agent for
 pull-request metadata, review and check observation, exact-head validation
 retriggers, readiness evidence collection, bounded dev tasks, guarded
-fast-forward publication, and remote PR-state verification. Internal PR
-Steward is not a functional engineering team and does not own technical
+fast-forward publication, and remote PR-state verification. PR Lifecycle is
+not a functional engineering team and does not own technical
 findings.
 
 Team Gizmo does not become the implementation owner when an internal Team
@@ -87,11 +116,11 @@ Its current internal agents are:
 - Delivery Pipeline Team Gizmo, which handles Level 1 delivery-pipeline
   orchestration, commit handoffs, and remote build-only task packets under
   Gizmo Prime's packet; and
-- the internal PR Steward, which performs packetized external GitHub, PR,
+- the PR Lifecycle Agent, which performs packetized external GitHub, PR,
   check, review, and status mechanics plus bounded dev tasks.
 
-Delivery Pipeline executes authorized mechanics only. Team Gizmo and internal
-PR Steward never create or update pull requests, invoke the manager-only
+Delivery Pipeline executes authorized mechanics only. Team Gizmo and PR
+Lifecycle never create or update pull requests, invoke the manager-only
 `dev:pr-manager`, replace the active harness, or decide readiness, promotion,
 or final delivery. The Dev Manager remains policy owner for dev snapshots,
 validation, readiness, promotion, and `dev:pr-manager`. Feature Gizmos remain
@@ -201,9 +230,9 @@ Within its assigned scope, a team owns:
 
 Team Gizmo coordinates internal Team Agents and reports evidence. Gizmo Prime
 owns feature acceptance and the local landing request. The dev manager owns
-dev PR policy, invokes `dev:pr-manager`, and owns promotion. Internal PR
-Steward observes the PR and executes only review, check, status, and promotion
-actions after the manager's authorization.
+dev PR policy, invokes `dev:pr-manager`, and owns promotion. PR Lifecycle Agent
+observes the PR and executes only review, check, status, and promotion actions
+after the manager's authorization.
 
 ## Validation
 

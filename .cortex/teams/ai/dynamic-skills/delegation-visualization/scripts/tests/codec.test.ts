@@ -18,7 +18,7 @@ class DelegationVisualizationRequestFixture {
       },
       {
         id: 'second',
-        team: DelegationVisualizationTeam.PrSteward,
+        team: DelegationVisualizationTeam.DeliveryPipeline,
         description: 'second task',
         dependencies: ['first'],
       },

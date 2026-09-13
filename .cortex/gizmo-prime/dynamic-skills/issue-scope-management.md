@@ -67,5 +67,5 @@ serialized local dev integration under [dev delivery](../architecture/dev-delive
 
 ## Validation
 
-Run record validation in the manager's slow stage. PR Steward inspects published
+Run record validation in the manager's slow stage. PR Lifecycle Agent inspects published
 records under an explicit packet. Full workflow: [issues](../workflows/issues.md).

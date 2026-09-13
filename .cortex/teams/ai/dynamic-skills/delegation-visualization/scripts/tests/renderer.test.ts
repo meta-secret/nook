@@ -23,8 +23,8 @@ describe('delegation visualization renderer', () => {
           dependencies: [],
         },
         {
-          id: 'steward-pr',
-          team: DelegationVisualizationTeam.PrSteward,
+          id: 'delivery-pipeline-pr-lifecycle',
+          team: DelegationVisualizationTeam.DeliveryPipeline,
           description: 'perform authorized pull-request delivery mechanics',
           dependencies: ['update-cortex'],
         },
@@ -32,7 +32,7 @@ describe('delegation visualization renderer', () => {
           id: 'auth-module',
           team: DelegationVisualizationTeam.DevelopmentCore,
           description: 'implement auth module',
-          dependencies: ['steward-pr'],
+          dependencies: ['delivery-pipeline-pr-lifecycle'],
         },
       ],
     };
@@ -53,8 +53,8 @@ describe('delegation visualization renderer', () => {
         depends_on: [],
       },
       {
-        id: 'steward-pr',
-        team: DelegationVisualizationTeam.PrSteward,
+        id: 'delivery-pipeline-pr-lifecycle',
+        team: DelegationVisualizationTeam.DeliveryPipeline,
         description: 'perform authorized pull-request delivery mechanics',
         depends_on: ['update-cortex'],
       },
@@ -62,7 +62,7 @@ describe('delegation visualization renderer', () => {
         id: 'auth-module',
         team: DelegationVisualizationTeam.DevelopmentCore,
         description: 'implement auth module',
-        depends_on: ['steward-pr'],
+        depends_on: ['delivery-pipeline-pr-lifecycle'],
       },
     ]);
   });
@@ -167,7 +167,7 @@ describe('delegation visualization renderer', () => {
         },
         {
           id: 'second',
-          team: DelegationVisualizationTeam.PrSteward,
+          team: DelegationVisualizationTeam.DeliveryPipeline,
           description: 'second task',
           dependencies: [],
         },

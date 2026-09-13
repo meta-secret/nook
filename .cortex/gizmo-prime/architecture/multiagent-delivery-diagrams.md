@@ -4,7 +4,7 @@
 
 This document is the mandatory first read and primary end-to-end explanation
 for multiagent delivery. Every Feature Gizmo, Team Gizmo, Team Agent, reviewer,
-internal PR Steward, Dev Manager, and repair Gizmo reads it completely before
+PR Lifecycle Agent, Dev Manager, and repair Gizmo reads it completely before
 acting in the workflow.
 
 These diagrams define stage ownership, boundaries, feedback loops, and
@@ -56,12 +56,36 @@ flowchart LR
     Synthesis -->|high-level report| Prime
 ```
 
-For the current operational team, the internal agents are Delivery Pipeline
-Team Gizmo and the existing PR Steward at
-`teams/delivery-pipeline/internal/pr-steward`. Delivery Pipeline Team Gizmo
-handles Level 1 delivery-pipeline orchestration, commit handoffs, and remote
-build-only task packets. Internal PR Steward handles packetized external
-GitHub, PR, check, review, and status mechanics plus bounded dev tasks.
+The canonical teams and internal agents are:
+
+- **AI**
+  - Team Gizmo: `teams/ai/gizmo/`
+  - Team Agents: `loom-specialist`, `cortex-specialist`
+- **Development Core**
+  - Team Gizmo: `teams/dev-core/gizmo/`
+  - Team Agents: `rust-core-developer`, `rust-auth2-developer`
+- **Security**
+  - Team Gizmo: `teams/security/gizmo/`
+  - Team Agents: `cryptography-specialist`, `security-review-specialist`
+- **SRE**
+  - Team Gizmo: `teams/sre/gizmo/`
+  - Team Agents: `provisioning`, `cloud-native`
+- **Web Development**
+  - Team Gizmo: `teams/web-dev/gizmo/`
+  - Team Agents: `typescript-specialist`, `svelte-specialist`
+- **Delivery Pipeline**
+  - Team Gizmo: `teams/delivery-pipeline/gizmo/`
+  - Team Agents: `dev-manager`, `pr-lifecycle`
+
+Gizmo Prime creates or reuses a compatible Team Gizmo before dispatch. Every
+Team Gizmo uses `gpt-5.6-sol` with `low` reasoning and owns one team worktree.
+Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning and receives a
+separate issued child worktree. Disjoint specialists may run in parallel. The
+Team Gizmo integrates their committed results into its team feature branch and
+reports one synthesized exact-SHA result or blocker to Gizmo Prime. The Delivery Pipeline Team Gizmo handles
+Level 1 delivery-pipeline orchestration, commit handoffs, and remote
+build-only task packets. Its `pr-lifecycle` agent handles only packetized
+external GitHub, PR, check, review, status, and bounded dev mechanics.
 
 ## Delivery overview
 
@@ -70,7 +94,7 @@ flowchart LR
     Prime["Gizmo Prime<br/>mission/root coordinator"]
     Feature["Feature Gizmos<br/>feature owners and Team Agents"]
     Pipeline["Delivery Pipeline Team Gizmo<br/>Level 1 routing"]
-    Steward["Internal PR Steward<br/>bounded mechanics"]
+    Steward["PR Lifecycle Agent<br/>bounded mechanics"]
     Checks["Remote build-only evidence"]
     Parallel["Parallel Feature Gizmos"]
     Dev["Local dev integration"]
@@ -102,7 +126,7 @@ flowchart LR
     Teams["Team Agents"]
     GizmoManagement["Feature Gizmo:<br/>reviews and integrates commits"]
     Pipeline["Delivery Pipeline Team Gizmo:<br/>Level 1 orchestration"]
-    Steward["Internal PR Steward:<br/>remote build-only packet"]
+    Steward["PR Lifecycle Agent:<br/>remote build-only packet"]
     Checks["Remote build-only evidence"]
     Green{"Green?"}
     Feedback["Gizmo Prime:<br/>routes feature feedback"]
@@ -132,7 +156,7 @@ sequenceDiagram
 
     box Delivery Pipeline team
         participant Pipeline as delivery-pipeline:team-gizmo
-        participant Steward as delivery-pipeline:internal/pr-steward
+        participant Steward as delivery-pipeline:pr-lifecycle
     end
 
     box External checks
@@ -171,7 +195,7 @@ sequenceDiagram
 ## Level 2: Remote task under Delivery Pipeline
 
 This level expands `external:feature-checks` through Delivery Pipeline Team
-Gizmo and its internal PR Steward. Review and remote compilation are separate
+Gizmo and its `pr-lifecycle` agent. Review and remote compilation are separate
 checks internally, but they return one exact-SHA verdict through Team Gizmo to
 Gizmo Prime and the Feature Gizmo. The remote task is build-only: it does not
 run tests, coverage, e2e, or preflight.
@@ -187,7 +211,7 @@ flowchart LR
     TypeSafety["Remote type-safety check"]
     Green{"Green?"}
     Pipeline["Delivery Pipeline Team Gizmo:<br/>decomposes mechanics"]
-    Steward["Internal PR Steward:<br/>dispatches remote task"]
+    Steward["PR Lifecycle Agent:<br/>dispatches remote task"]
     Feedback["Gizmo Prime and Feature Gizmo:<br/>receive feedback"]
     Ready([Verified feature SHA])
 
@@ -218,7 +242,7 @@ sequenceDiagram
 
     box Delivery Pipeline team
         participant Pipeline as delivery-pipeline:team-gizmo
-        participant Steward as delivery-pipeline:internal/pr-steward
+        participant Steward as delivery-pipeline:pr-lifecycle
         participant Build as remote:build-compile
     end
 
@@ -315,8 +339,8 @@ sequenceDiagram
 
 Git is the coordination layer. Gizmo Prime remains the mission/root owner and
 each Feature Gizmo owns its completed feature and landing request. Delivery
-Pipeline Team Gizmo routes the bounded `dev:land` packet to internal PR
-Steward, which executes the ordinary merge under the serialized local
+Pipeline Team Gizmo routes the bounded `dev:land` packet to its `pr-lifecycle`
+agent, which executes the ordinary merge under the serialized local
 integration task. There is no feature PR and no publication of `dev` here.
 
 ### Flow
@@ -325,7 +349,7 @@ integration task. There is no feature PR and no publication of `dev` here.
 flowchart LR
     Gizmo["Feature Gizmo:<br/>verified SHA"]
     Pipeline["Delivery Pipeline Team Gizmo:<br/>routes dev:land"]
-    Landing["Internal PR Steward:<br/>runs dev:land"]
+    Landing["PR Lifecycle Agent:<br/>runs dev:land"]
     Result{"Git result"}
     Retry["Feature Gizmo:<br/>retries landing"]
     Resolve["Feature Gizmo and teams:<br/>reconcile with local dev"]
@@ -356,7 +380,7 @@ sequenceDiagram
 
     box Serialized local integration
         participant Pipeline as delivery-pipeline:team-gizmo
-        participant Steward as delivery-pipeline:internal/pr-steward
+        participant Steward as delivery-pipeline:pr-lifecycle
         participant Git as task:dev-land
         participant Dev as branch:local-dev
     end
@@ -400,9 +424,9 @@ sequenceDiagram
 The manually started Dev Manager is the sole policy owner of dev snapshots,
 dev publication, slow validation, repair delegation, readiness, promotion,
 and manager-only `dev:pr-manager`. Delivery Pipeline Team Gizmo routes
-manager-authorized mechanics to internal PR Steward through the active
-harness. Every GitHub check and PR-state observation returns through internal
-PR Steward and Team Gizmo before the Dev Manager receives its evidence. Team
+manager-authorized mechanics to its `pr-lifecycle` agent through the active
+harness. Every GitHub check and PR-state observation returns through
+`pr-lifecycle` and Team Gizmo before the Dev Manager receives its evidence. Team
 Gizmo and Team Agents never create or update PRs, decide policy verdicts, or
 replace the active harness. Local `dev` may continue receiving features while
 the published `origin/dev` SHA remains frozen for its validation cycle.
@@ -415,18 +439,18 @@ flowchart LR
     Select["Dev Manager:<br/>selects and freezes snapshot"]
     Publish["Dev Manager:<br/>authorizes dev:publish"]
     Pipeline["Delivery Pipeline Team Gizmo:<br/>routes manager packet"]
-    PublishTask["Internal PR Steward:<br/>runs bounded dev:publish"]
+    PublishTask["PR Lifecycle Agent:<br/>runs bounded dev:publish"]
     PR["Dev Manager:<br/>invokes dev:pr-manager directly"]
     Checks["GitHub:<br/>full slow checks"]
     SlowRequest["Dev Manager:<br/>requests exact-SHA slow-check observation"]
-    SlowObserve["Internal PR Steward:<br/>observes exact-SHA slow checks"]
+    SlowObserve["PR Lifecycle Agent:<br/>observes exact-SHA slow checks"]
     Green{"Green?"}
     Fix["Dev Manager:<br/>starts repair Gizmo"]
     Promote["Dev Manager:<br/>authorizes dev:promote"]
-    PromoteTask["Internal PR Steward:<br/>runs guarded fast-forward"]
+    PromoteTask["PR Lifecycle Agent:<br/>runs guarded fast-forward"]
     Main([Main updated])
     VerifyRequest["Dev Manager:<br/>requests final merged-PR-state verification"]
-    VerifyObserve["Internal PR Steward:<br/>observes actual merged PR state"]
+    VerifyObserve["PR Lifecycle Agent:<br/>observes actual merged PR state"]
     PRState["GitHub:<br/>dev-to-main PR state"]
     Verified["Dev Manager:<br/>receives actual merged PR state"]
 
@@ -453,7 +477,7 @@ sequenceDiagram
 
     box Authorized mechanics
         participant Pipeline as delivery-pipeline:team-gizmo
-        participant Steward as delivery-pipeline:internal/pr-steward
+        participant Steward as delivery-pipeline:pr-lifecycle
     end
 
     box GitHub validation and promotion
@@ -498,7 +522,7 @@ sequenceDiagram
     Pipeline-->>Manager: Actual merged-PR-state evidence
 
     Note over Dev,OriginDev: Local dev may advance while origin/dev is frozen
-    Note over Manager,PRManager: Only the Dev Manager invokes manager-only dev:pr-manager; Team Gizmo and PR Steward never create or update the PR or decide policy verdicts
+    Note over Manager,PRManager: Only the Dev Manager invokes manager-only dev:pr-manager; Team Gizmo and PR Lifecycle Agent never create or update the PR or decide policy verdicts
     Note over Pipeline,Main: No PR merge substitute; squash, rebase, force-push, and promotion merge commits are prohibited
 ```
 
@@ -509,7 +533,7 @@ sequenceDiagram
   evidence or blockers to Prime.
 - Delivery Pipeline is the operational team for CI, PR lifecycle, dev
   publication, workflow execution, local landing, evidence, and guarded
-  promotion. Its Team Gizmo routes internal PR Steward packets.
+  promotion. Its Team Gizmo routes `pr-lifecycle` packets.
 - Team Gizmos and Team Agents never create or update pull requests, decide
   functional ownership, readiness, promotion, or final delivery, or replace
   the active harness.
@@ -518,7 +542,7 @@ sequenceDiagram
 - Feature-stage remote execution is build-only. Full tests belong only to the
   Dev Manager's dev-to-main PR.
 - Team Agents mutate isolated child worktrees and return committed iterations.
-- Internal PR Steward performs only packetized external GitHub, PR, check,
+- PR Lifecycle Agent performs only packetized external GitHub, PR, check,
   review, status, and bounded dev mechanics under Team Gizmo and controller
   authorization.
 - Feature Gizmos never publish `dev` or `main`.

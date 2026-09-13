@@ -20,13 +20,33 @@ export const CORTEX_OWNER_GRAPH_PATHS = [
 
 const CORTEX_TEAM_PATTERN =
   /^(?:ai|dev-core|security|sre|web-dev|delivery-pipeline)$/u;
+const CORTEX_TEAM_CHILDREN: Readonly<Record<string, readonly string[]>> = {
+  ai: ['gizmo', 'loom-specialist', 'cortex-specialist'],
+  'dev-core': ['gizmo', 'rust-core-developer', 'rust-auth2-developer'],
+  security: ['gizmo', 'cryptography-specialist', 'security-review-specialist'],
+  sre: ['gizmo', 'provisioning', 'cloud-native'],
+  'web-dev': ['gizmo', 'typescript-specialist', 'svelte-specialist'],
+  'delivery-pipeline': ['gizmo', 'dev-manager', 'pr-lifecycle'],
+};
 const CORTEX_CHILD_DIRECTORY_PATTERN =
-  /^\.cortex\/teams\/(ai|dev-core|security|sre|web-dev|delivery-pipeline)\/([^/]+)(?:\/|$)/u;
-const CORTEX_CHILD_GRAPH_PATTERN =
-  /^\.cortex\/teams\/(ai|dev-core|security|sre|web-dev|delivery-pipeline)\/([^/]+)\/knowledge-graph\.md$/u;
+  /^\.cortex\/teams\/([^/]+)\/([^/]+)(?:\/|$)/u;
+
+function canonicalCortexChildDirectory(
+  filePath: string,
+): { readonly team: string; readonly child: string } | false {
+  const match = CORTEX_CHILD_DIRECTORY_PATTERN.exec(filePath);
+  const team = match?.[1];
+  const child = match?.[2];
+  if (!team || !child || !CORTEX_TEAM_PATTERN.test(team)) return false;
+  if (!CORTEX_TEAM_CHILDREN[team]?.includes(child)) return false;
+  return { team, child };
+}
 
 export function isCortexChildGraphPath(filePath: string): boolean {
-  return CORTEX_CHILD_GRAPH_PATTERN.test(filePath);
+  return (
+    filePath.endsWith('/knowledge-graph.md') &&
+    canonicalCortexChildDirectory(filePath) !== false
+  );
 }
 
 export function collectCortexChildGraphPaths(
@@ -38,20 +58,20 @@ export function collectCortexChildGraphPaths(
 export function cortexChildGraphParentPath(
   graphPath: string,
 ): string | false {
-  const match = CORTEX_CHILD_GRAPH_PATTERN.exec(graphPath);
-  const team = match?.[1];
-  return team ? `.cortex/teams/${team}/knowledge-graph.md` : false;
+  const child = canonicalCortexChildDirectory(graphPath);
+  return child ? `.cortex/teams/${child.team}/knowledge-graph.md` : false;
 }
 
 function cortexChildDirectoryPath(filePath: string): string | false {
-  const match = CORTEX_CHILD_DIRECTORY_PATTERN.exec(filePath);
-  const team = match?.[1];
-  const child = match?.[2];
-  return team && child ? `.cortex/teams/${team}/${child}` : false;
+  const child = canonicalCortexChildDirectory(filePath);
+  return child ? `.cortex/teams/${child.team}/${child.child}` : false;
 }
 
 export function cortexChildGraphTeam(graphPath: string): string | false {
-  return CORTEX_CHILD_GRAPH_PATTERN.exec(graphPath)?.[1] ?? false;
+  const child = canonicalCortexChildDirectory(graphPath);
+  return child && graphPath.endsWith('/knowledge-graph.md')
+    ? child.team
+    : false;
 }
 
 export function isCortexKnowledgeGraphPath(filePath: string): boolean {

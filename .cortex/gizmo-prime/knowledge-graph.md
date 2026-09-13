@@ -8,14 +8,23 @@ Load only the category required for the current delivery stage.
 
 ## Team reporting
 
-- Every team has a Team Gizmo that receives Prime's high-level packet,
-  dispatches internal Team Agents through the active harness, and reports
-  exact-SHA evidence or blockers back to Gizmo Prime.
-- [Delivery Pipeline Team Gizmo](../teams/delivery-pipeline/internal/gizmo/knowledge-graph.md)
-  is the current operational Team Gizmo for CI, PR lifecycle, dev publication,
-  workflow execution, local landing, evidence, and guarded promotion. It is not
-  a second Prime and does not decide functional ownership, readiness, promotion,
-  or final delivery.
+Every team has exactly one Team Gizmo. Prime creates or reuses each compatible
+Team Gizmo with `gpt-5.6-sol` and `low` reasoning, gives it one team worktree,
+and receives its high-level evidence or blockers. Each leaf Team Agent uses
+`gpt-5.6-luna` with `xhigh` reasoning and receives a separate issued child
+worktree. A Team Gizmo may run disjoint specialists in parallel, integrates
+their committed results into the feature branch, and never creates or updates
+pull requests.
+
+- [AI Team Gizmo](../teams/ai/gizmo/knowledge-graph.md)
+- [Development Core Team Gizmo](../teams/dev-core/gizmo/knowledge-graph.md)
+- [Security Team Gizmo](../teams/security/gizmo/knowledge-graph.md)
+- [SRE Team Gizmo](../teams/sre/gizmo/knowledge-graph.md)
+- [Web Development Team Gizmo](../teams/web-dev/gizmo/knowledge-graph.md)
+- [Delivery Pipeline Team Gizmo](../teams/delivery-pipeline/gizmo/knowledge-graph.md)
+  owns CI, PR lifecycle, dev publication, local landing, evidence, and guarded
+  promotion mechanics. It is not a second Prime and does not decide functional
+  ownership, readiness, promotion, or final delivery.
 
 ## Architecture and ownership
 
@@ -41,7 +50,7 @@ Use these skills only for the delivery action in scope.
 Open one workflow at the stage that requires it.
 
 - [Mission delivery](workflows/mission-delivery.md)
-- [Internal PR Steward Team Agent](../teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md)
+- [PR Lifecycle Team Agent](../teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md)
 - [Agent statistics](workflows/agent-statistics.md)
 - [Pull request workflow](workflows/pull-requests.md)
 - [Review request workflow](workflows/code-review.md)

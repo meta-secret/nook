@@ -10,7 +10,10 @@ The canonical routing tree is rooted at `.cortex/gizmo-prime`. It has exactly
 six top-level teams: `ai`, `dev-core`, `security`, `sre`, `web-dev`, and
 `delivery-pipeline`. Each team has exactly one `gizmo` at
 `teams/<team>/gizmo/`; every Team Gizmo reports to Gizmo Prime and uses
-`gpt-5.6-luna` with `xhigh` reasoning.
+`gpt-5.6-sol` with `low` reasoning.
+
+Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning and receives a
+separate issued child worktree.
 
 Each Team Gizmo owns one team worktree for its packet. Gizmo Prime first
 reuses an existing compatible Team Agent; only when no compatible agent exists
@@ -212,8 +215,8 @@ or relax any repository scope, ownership, or handoff rule.
     worktree created from the parent feature worktree's current commit.
   - Gizmo Prime controls mission-level child-worktree allocation, write waves,
     commit turns, and parent integration. A Team Gizmo coordinates issued
-    internal child worktrees and commit handoffs within its packet. Internal PR
-    Steward may observe or perform only the named review, check, status, and
+    internal child worktrees and commit handoffs within its packet. PR Lifecycle
+    Agent may observe or perform only the named review, check, status, and
     bounded dev mechanics; it never creates or updates pull-request identity
     or metadata.
   - Write-capable Team Agents may run concurrently only when their explicit

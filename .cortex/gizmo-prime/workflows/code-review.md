@@ -11,14 +11,14 @@ feature checks.
 Feature Gizmo owns feature review content, disposition, and acceptance. The Dev
 Manager owns dev review policy and promotion acceptance. Route feature, remote,
 and dev review mechanics through Delivery Pipeline Team Gizmo -> active harness
--> internal PR Steward.
+-> PR Lifecycle Agent.
 
 ## Required actions
 
 - **Review requests**
   - Delivery Pipeline Team Gizmo routes the owning controller's review packet
-    through the active harness to internal PR Steward.
-  - Internal PR Steward executes only the packetized GitHub review operations.
+    through the active harness to PR Lifecycle Agent.
+  - PR Lifecycle Agent executes only the packetized GitHub review operations.
   - Codex is the sole automatic review provider.
   - Preserve the existing final-head review opt-in for the manager's slow PR cycle.
   - An eye reaction is liveness evidence only.
@@ -39,7 +39,7 @@ and dev review mechanics through Delivery Pipeline Team Gizmo -> active harness
   - Compilation and type safety do not replace authored behavior tests.
   - The manager requires complete slow checks and review for the frozen dev SHA.
   - Confirm actual remote review state through Delivery Pipeline Team Gizmo ->
-    active harness -> internal PR Steward before promotion.
+    active harness -> PR Lifecycle Agent before promotion.
 
 ## Prohibited actions
 
@@ -54,7 +54,7 @@ and dev review mechanics through Delivery Pipeline Team Gizmo -> active harness
 ## Repair procedure
 
 1. Collect the current review inventory through Delivery Pipeline Team Gizmo ->
-   active harness -> internal PR Steward.
+   active harness -> PR Lifecycle Agent.
 2. Route alleged security violations to the authorized security owner.
    - Confirm findings against code and evidence.
    - A confirmed violation blocks acceptance and promotion.
@@ -62,14 +62,14 @@ and dev review mechanics through Delivery Pipeline Team Gizmo -> active harness
 4. Send accepted repairs to a feature Gizmo with bounded team scopes.
 5. Author regression tests and route the repaired feature SHA's build-only
    evidence through Delivery Pipeline Team Gizmo -> active harness -> internal
-   PR Steward.
+   PR Lifecycle Agent.
 6. Route the accepted repair through Delivery Pipeline Team Gizmo -> active
-   harness -> internal PR Steward for serialized integration into local dev.
+   harness -> PR Lifecycle Agent for serialized integration into local dev.
 7. After the prior slow attempt finishes, let the manager select a new snapshot.
 8. Repeat full slow checks and required review for that published SHA through
-   Delivery Pipeline Team Gizmo -> active harness -> internal PR Steward.
+   Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent.
 9. Route review replies and resolution mechanics through Delivery Pipeline Team
-   Gizmo -> active harness -> internal PR Steward. Keep the finding decisions
+   Gizmo -> active harness -> PR Lifecycle Agent. Keep the finding decisions
    with the owning Gizmo or Dev Manager.
 
 A rejected-only batch does not create replacement commits. Keep missing

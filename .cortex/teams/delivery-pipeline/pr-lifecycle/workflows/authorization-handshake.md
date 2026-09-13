@@ -2,12 +2,12 @@
 
 ## Authority
 
-Delivery Pipeline Team Gizmo dispatches PR Steward for one bounded operation
+Delivery Pipeline Team Gizmo dispatches PR Lifecycle Agent for one bounded operation
 under a feature Gizmo or dev-manager packet. The controller owns policy and
 verdicts. The active harness carries the packet. It creates no persistent
 scheduler, journal, or retry service.
 
-Follow [dev delivery](../../../../../gizmo/architecture/dev-delivery.md).
+Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
 
 ## Required actions
 

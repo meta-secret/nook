@@ -2,7 +2,7 @@
 
 ## Authority
 
-PR Steward performs bounded mechanics under the
+PR Lifecycle Agent performs bounded mechanics under the
 [authorization handshake](authorization-handshake.md) after Delivery Pipeline
 Team Gizmo dispatches the child packet. Feature Gizmos own
 feature compilation and local integration decisions. The manually run dev
@@ -38,8 +38,8 @@ manager owns publication, slow PR validation, and promotion.
    - Local landing uses local integration with positive feature build evidence.
    - Manager publication uses snapshot publication.
 3. The dev manager invokes `dev:pr-manager` to create or update one open
-   dev-to-main PR. PR Steward only observes the resulting exact PR identity.
-   - Use [PR metadata](../../../../../gizmo/workflows/pull-requests.md#pr-title-and-description).
+   dev-to-main PR. PR Lifecycle Agent only observes the resulting exact PR identity.
+   - Use [PR metadata](../../../../gizmo-prime/workflows/pull-requests.md#pr-title-and-description).
    - A merged PR is never reused for a later cycle.
 4. Request the full existing slow PR checks under the manager packet.
    - Preserve e2e opt-ins and security-required focused checks.
@@ -69,14 +69,14 @@ manager owns publication, slow PR validation, and promotion.
 
 ## Reactive observation
 
-Delivery Pipeline Team Gizmo starts a fresh PR Steward child for each
+Delivery Pipeline Team Gizmo starts a fresh PR Lifecycle Agent child for each
 check-observation iteration.
 Each child subscribes before reading its initial GitHub snapshot. That snapshot
 freezes the iteration head. A changed head is a blocker, never a new assignment.
 
 ### Required actions
 
-1. Start the live subscription from the active PR Steward task.
+1. Start the live subscription from the active PR Lifecycle Agent task.
 
    ```bash
    bun agentic-ai/loom/src/pr-steward-events.ts --pr <number>
@@ -128,9 +128,9 @@ freezes the iteration head. A changed head is a blocker, never a new assignment.
   child replay missed notifications.
 - Missed and duplicate notifications are acceptable hints.
 - One child never changes its assigned PR dynamically.
-- The controller must authorize PR Steward to read final GitHub state before its
+- The controller must authorize PR Lifecycle Agent to read final GitHub state before its
   readiness or completion verdict.
-- PR Steward returns that direct observation to the controller for reconciliation.
+- PR Lifecycle Agent returns that direct observation to the controller for reconciliation.
 
 ### Output contract
 
@@ -172,8 +172,8 @@ from these hints. The subscriber does not summarize or decide readiness.
   substitutes a closure result for completed checks.
 - After successful exit, send one compact handoff to the controller and end the child.
   The controller acts on the result and starts a fresh child for another iteration.
-- The controller authorizes PR Steward to collect final direct GitHub evidence.
-  PR Steward returns the evidence to the controller for reconciliation.
+- The controller authorizes PR Lifecycle Agent to collect final direct GitHub evidence.
+  PR Lifecycle Agent returns the evidence to the controller for reconciliation.
 - The controller retains readiness and merge authority.
 - Use a harness wait that wakes on output when available. Otherwise use the
   longest host-bounded PTY read. Empty reads produce no messages or GitHub queries.

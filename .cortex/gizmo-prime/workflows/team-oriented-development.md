@@ -36,7 +36,7 @@ blockers to Prime.
 5. Require every writer to commit its complete scoped iteration.
 6. Verify each child commit and integrate it into the parent feature worktree.
 7. Push the stable feature head and have Delivery Pipeline Team Gizmo route
-   the remote build-only packet to internal PR Steward.
+   the remote build-only packet to PR Lifecycle Agent.
 8. Require each terminal handoff to enumerate all iteration commits.
    - Each entry names its SHA, outcome, evidence, and unresolved blockers.
 9. Verify each commit's changed paths and evidence.
@@ -71,12 +71,12 @@ when no dependency remains between them.
 - Team Agents author tests for the manager's slow stage.
 - Gizmo Prime requests Delivery Pipeline Team Gizmo's remote compilation packet
   and owns feature review dispositions.
-- Delivery Pipeline Team Gizmo routes internal PR Steward's serialized local
+- Delivery Pipeline Team Gizmo routes PR Lifecycle Agent's serialized local
   integration after feature acceptance.
 - The manually run dev manager controls publication, invokes
   `dev:pr-manager` for PR creation/update, and owns slow evidence, readiness,
   and promotion.
-- Internal PR Steward observes the PR and performs only review, check, status,
+- PR Lifecycle Agent observes the PR and performs only review, check, status,
   and promotion mechanics under a manager packet.
 
 ## Prohibited complexity

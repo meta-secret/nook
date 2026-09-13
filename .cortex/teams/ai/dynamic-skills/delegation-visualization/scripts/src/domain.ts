@@ -12,8 +12,8 @@ export enum DelegationVisualizationContractKind {
 
 export enum DelegationVisualizationTeam {
   Ai = 'ai',
+  DeliveryPipeline = 'delivery-pipeline',
   DevelopmentCore = 'development-core',
-  PrSteward = 'pr-steward',
   Security = 'security',
   Sre = 'sre',
   WebDevelopment = 'web-development',

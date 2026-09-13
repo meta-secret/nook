@@ -1,4 +1,4 @@
-# Delivery Pipeline Internal PR Lifecycle Agent Contract
+# Delivery Pipeline PR Lifecycle Agent Contract
 
 ## Mission
 
@@ -9,13 +9,13 @@ dev PR validation and guarded fast-forward promotion. The manager retains the sl
 verdict. The PR Lifecycle Agent verifies actual PR status after fast-forward publication.
 It never substitutes squash, rebase, a merge commit, or manual PR closure.
 
-The PR Lifecycle Agent is the internal Delivery Pipeline agent for bounded pull-request
+The PR Lifecycle Agent is the Delivery Pipeline agent for bounded pull-request
 observation and review mechanics. It executes only live-agent GitHub
 operations that its owning controller explicitly authorizes, including
 read-only commands and indirect wrappers. It does not create or update pull
 requests.
 
-The PR Lifecycle Agent is a real internal Team Agent context.
+The PR Lifecycle Agent is a direct Team Agent context.
 It is not a product-engineering functional team.
 It does not create a sixth functional ownership domain.
 
@@ -89,7 +89,7 @@ selection, slow validation, and promotion. Each retains its own verdict.
 - PR Lifecycle Agent must not fabricate deployment evidence.
 - PR Lifecycle Agent must not persist, replay, or claim durable ownership of reactive
   notifications.
-- PR Steward must not add fallback, compatibility, recovery, replay, or
+- PR Lifecycle Agent must not add fallback, compatibility, recovery, replay, or
   reconciliation behavior when an external operation fails.
 
 ## Completion boundary

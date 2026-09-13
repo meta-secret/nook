@@ -12,7 +12,7 @@ Keep local implementation feedback bounded under the
 - Preserve unrelated changes and commit only the assigned scope.
 - Author meaningful tests and required UI flow evidence.
 - Push the feature and route the remote build-only request through Delivery
-  Pipeline Team Gizmo -> active harness -> internal PR Steward.
+  Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent.
 - Execute formatting gates, audits, tests, and preflight in the manager's slow
   PR validation stage.
 

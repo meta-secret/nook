@@ -9,8 +9,8 @@ for future refactors.
 The AI team owns dynamic-skill meaning, card authoring, and registry
 maintenance. Gizmo owns feature delivery state when a card is applied. Route
 feature, remote validation, review, Workbench, and promotion mechanics through
-Delivery Pipeline Team Gizmo -> active harness -> internal PR Steward. Team
-Gizmo and internal PR Steward perform only packetized mechanics. They never
+Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent. Team
+Gizmo and PR Lifecycle Agent perform only packetized mechanics. They never
 create or update PRs or decide policy. The Dev Manager remains the policy owner
 and sole invoker of `dev:pr-manager`.
 
@@ -98,6 +98,6 @@ return the exact scoped commit to Gizmo. If pre-push hygiene mutates
 AI-owned content, the AI team returns a fresh formatted commit. Gizmo then
 continues from it, reruns hygiene, and pushes. Gizmo routes the hosted
 validation packet through Delivery Pipeline Team Gizmo -> active harness ->
-internal PR Steward. Use focused remote evidence until the head is ready.
+PR Lifecycle Agent. Use focused remote evidence until the head is ready.
 Dispatch complete exact-head validation through the same route immediately when
 it is ready.
