@@ -15,6 +15,31 @@ Gizmo publishes only its feature branch and requests remote `build:compile`.
 It authorizes PR Steward to land the completed feature through `dev:land`.
 The manually run dev manager owns remote dev publication and main promotion.
 
+## Mandatory Gizmo Gate — fail closed
+
+Every implementation or delivery run begins under this Gizmo Prime contract.
+The active Gizmo harness and its required Team Agent dispatch are mandatory.
+
+### Required actions
+
+- Gizmo Prime dispatches every worker-executable implementation task to a
+  bounded Team Agent through the active Gizmo harness.
+- Each dispatch names one team identity, one bounded file scope, one issued
+  child worktree, and named acceptance evidence.
+- Gizmo Prime verifies committed Team Agent handoffs and integrates them in
+  serialized order.
+- Pull-request operations remain with the authorized PR Steward or dev-manager
+  path. Gizmo and Team Agents do not create or update pull requests.
+
+### Prohibited actions
+
+- A non-Gizmo direct implementation or delivery fallback is a failed run.
+- Do not replace the active Gizmo harness with an ordinary Codex task, thread,
+  cloud task, or external agent.
+- If Gizmo or a required Team Agent harness is unavailable, stop before
+  implementation, validation, GitHub operations, or landing.
+- Do not continue or claim delivery after the mandatory gate fails.
+
 ## Context loading
 
 1. Read the complete

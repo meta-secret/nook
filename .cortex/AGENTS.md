@@ -4,6 +4,33 @@ This file is the repository entry point. It selects one owning context and
 states only boundaries that apply everywhere. Detailed delivery and delegation
 rules belong to Gizmo's linked authorities.
 
+## Mandatory Gizmo Gate — fail closed
+
+Every implementation or delivery run must begin under Gizmo Prime. Gizmo Prime
+is the required coordinator and the active Gizmo harness is a prerequisite for
+the run.
+
+### Required actions
+
+- Gizmo Prime must dispatch every worker-executable implementation task to a
+  bounded Team Agent through the active Gizmo harness.
+- The dispatch must name one team identity, one bounded write scope, one
+  issued child worktree, and the acceptance evidence.
+- Team Agents return committed scoped work to Gizmo Prime for verification and
+  serialized integration.
+- Gizmo Prime must route pull-request operations to the authorized PR Steward
+  or dev-manager path. Feature Gizmos and Team Agents never create or update
+  pull requests.
+
+### Prohibited actions
+
+- A non-Gizmo direct implementation or delivery fallback is a failed run.
+- Do not substitute an ordinary Codex task, thread, cloud task, or external
+  agent for the active Gizmo harness or its required Team Agent.
+- If the active Gizmo or a required Team Agent harness is unavailable, stop
+  before implementation, validation, GitHub operations, or landing.
+- Do not continue, claim progress, or claim delivery after that gate fails.
+
 ## Mandatory context selection
 
 1. Read the [root context router](knowledge-graph.md).
