@@ -331,15 +331,30 @@ mod tests {
             "en",
         );
         assert_eq!(alerts.len(), 4);
-        assert_eq!(alerts[0].kind, AlertKind::TaskFailed);
-        assert_eq!(alerts[0].severity, AlertSeverity::Critical);
-        assert_eq!(alerts[1].task_id, "cancelling");
-        assert_eq!(alerts[2].task_id, "stale");
         assert_eq!(
-            alerts[2].first_observed_at,
-            now - 6 * 60_000 + STALE_ACTIVITY_MS
+            alerts.first().map(|alert| alert.kind),
+            Some(AlertKind::TaskFailed)
         );
-        assert_eq!(alerts[3].task_id, "blocked");
+        assert_eq!(
+            alerts.first().map(|alert| alert.severity),
+            Some(AlertSeverity::Critical)
+        );
+        assert_eq!(
+            alerts.get(1).map(|alert| alert.task_id.as_str()),
+            Some("cancelling")
+        );
+        assert_eq!(
+            alerts.get(2).map(|alert| alert.task_id.as_str()),
+            Some("stale")
+        );
+        assert_eq!(
+            alerts.get(2).map(|alert| alert.first_observed_at),
+            Some(now - 6 * 60_000 + STALE_ACTIVITY_MS)
+        );
+        assert_eq!(
+            alerts.get(3).map(|alert| alert.task_id.as_str()),
+            Some("blocked")
+        );
 
         failed.status = ObservedTaskState::Completed;
         assert!(ObservedAlert::derive_alerts(&[failed], now, "en").is_empty());
@@ -354,10 +369,13 @@ mod tests {
         failed.dependency_failure = true;
 
         let alerts = ObservedAlert::derive_alerts(&[failed], now, "en");
-        assert_eq!(alerts[0].kind, AlertKind::DependencyFailed);
         assert_eq!(
-            alerts[0].reason,
-            "Task could not start because a dependency failed"
+            alerts.first().map(|alert| alert.kind),
+            Some(AlertKind::DependencyFailed)
+        );
+        assert_eq!(
+            alerts.first().map(|alert| alert.reason.as_str()),
+            Some("Task could not start because a dependency failed")
         );
     }
 
@@ -370,8 +388,8 @@ mod tests {
         let alerts = ObservedAlert::derive_alerts(&tasks, now, "ru");
         assert_eq!(alerts.len(), 100);
         assert_eq!(
-            alerts[0].reason,
-            "Все разрешённые попытки завершились ошибкой"
+            alerts.first().map(|alert| alert.reason.as_str()),
+            Some("Все разрешённые попытки завершились ошибкой")
         );
     }
 

@@ -33,10 +33,23 @@ use configuration::{Authentication, ExecutionLogging};
 mod progress;
 mod progress_output;
 
-use progress::*;
+use progress::{
+    ProgressDecoration, ProgressOutput, ProgressReporter, TaskProgressOutput, TaskProgressReporter,
+    TurnProgress,
+};
 
 const OUTPUT_SCHEMA: &str = include_str!("planner-output.schema.json");
 const TASK_OUTPUT_SCHEMA: &str = include_str!("task-output.schema.json");
+const SOL_EXHAUSTION_MARKERS: [&str; 8] = [
+    "sol exhausted",
+    "sol budget",
+    "sol limit",
+    "sol quota",
+    "out of sol",
+    "insufficient sol",
+    "no sol",
+    "usage limit",
+];
 pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.6-sol";
 pub const DEFAULT_CODEX_REASONING_EFFORT: &str = "medium";
 pub const SOL_EXHAUSTED_CODEX_MODEL: &str = "gpt-5.3-codex-spark";
@@ -60,6 +73,7 @@ pub struct CodexOptions {
 }
 
 impl CodexOptions {
+    #[must_use]
     pub fn new(repo_root: PathBuf) -> Self {
         Self {
             repo_root,
@@ -72,11 +86,13 @@ impl CodexOptions {
         }
     }
 
+    #[must_use]
     pub fn with_workspace_write(mut self) -> Self {
         self.access = CodexAccess::WorkspaceWrite;
         self
     }
 
+    #[must_use]
     pub fn with_activity_sender(mut self, sender: mpsc::UnboundedSender<TaskActivity>) -> Self {
         self.activity_sender = ActivityReporting::Enabled(sender);
         self
@@ -97,6 +113,7 @@ pub struct InProcessCodexRunner {
 }
 
 impl InProcessCodexRunner {
+    #[must_use]
     pub fn new(options: CodexOptions) -> Self {
         Self {
             options,
@@ -112,16 +129,17 @@ impl InProcessCodexRunner {
     }
 
     async fn run_turn(&self, prompt: &str, kind: TurnKind) -> Result<CodexTurnOutput, CodexError> {
-        let primary_result = self.attempt_turn(prompt, kind.clone(), &self.options).await;
+        let primary_result = Box::pin(self.attempt_turn(prompt, kind.clone(), &self.options)).await;
         if let Err(error) = primary_result {
             if self.options.model != SOL_EXHAUSTED_CODEX_MODEL
                 && CodexError::is_sol_exhausted_error(&error)
             {
                 let mut fallback_options = self.options.clone();
-                fallback_options.model = SOL_EXHAUSTED_CODEX_MODEL.to_owned();
-                fallback_options.reasoning_effort = SOL_EXHAUSTED_CODEX_REASONING_EFFORT.to_owned();
-                let fallback_result = self
-                    .attempt_turn(prompt, kind, &fallback_options)
+                SOL_EXHAUSTED_CODEX_MODEL.clone_into(&mut fallback_options.model);
+                SOL_EXHAUSTED_CODEX_REASONING_EFFORT
+                    .clone_into(&mut fallback_options.reasoning_effort);
+                let fallback_result = Box::pin(self
+                    .attempt_turn(prompt, kind, &fallback_options))
                     .await
                     .map_err(|fallback_error| CodexError::Run(format!(
                         "primary model `{}` failed, fallback to `{}` with xhigh effort also failed: {}; {}",
@@ -227,15 +245,17 @@ impl InProcessCodexRunner {
         Ok(response)
     }
 
+    /// Executes a task turn and converts the structured response into a terminal result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the Codex turn fails or its structured output is invalid.
     pub async fn execute_task(
         &self,
         task_id: &str,
         prompt: &str,
     ) -> Result<TerminalResult, CodexError> {
-        match self
-            .run_turn(prompt, TurnKind::Task(task_id.to_owned()))
-            .await?
-        {
+        match Box::pin(self.run_turn(prompt, TurnKind::Task(task_id.to_owned()))).await? {
             CodexTurnOutput::Task(result) => Ok(result),
             CodexTurnOutput::Planning(_) => Err(CodexError::UnexpectedOutput),
         }
@@ -277,16 +297,6 @@ impl CodexError {
     fn is_sol_exhaustion_message(message: &str) -> bool {
         let message = message.to_ascii_lowercase();
 
-        const SOL_EXHAUSTION_MARKERS: [&str; 8] = [
-            "sol exhausted",
-            "sol budget",
-            "sol limit",
-            "sol quota",
-            "out of sol",
-            "insufficient sol",
-            "no sol",
-            "usage limit",
-        ];
         if SOL_EXHAUSTION_MARKERS
             .iter()
             .any(|marker| message.contains(marker))
@@ -367,7 +377,7 @@ impl CodexTurn<'_> {
         } else {
             ProgressDecoration::Plain
         };
-        let mut progress = match &kind {
+        let progress = match &kind {
             TurnKind::Planning => TurnProgress::Planning(ProgressReporter::new(ProgressOutput {
                 writer: stderr,
                 decoration: decorate,
@@ -382,6 +392,16 @@ impl CodexTurn<'_> {
                 }))
             }
         };
+        Self::wait_for_completion(thread, &kind, execution_log, activity_sender, progress).await
+    }
+
+    async fn wait_for_completion(
+        thread: &CodexThread,
+        kind: &TurnKind,
+        execution_log: &ExecutionLogging,
+        activity_sender: &ActivityReporting,
+        mut progress: TurnProgress<io::Stderr>,
+    ) -> Result<CodexTurnOutput, CodexError> {
         loop {
             let event = thread
                 .next_event()
@@ -398,7 +418,7 @@ impl CodexTurn<'_> {
                 activity_sender,
                 TaskActivity::task_activity_from_event(&event.msg),
             ) {
-                let _ = sender.send(activity);
+                drop(sender.send(activity));
             }
             if let (ExecutionLogging::File(path), EventMsg::ExecCommandEnd(execution)) =
                 (execution_log, &event.msg)
@@ -418,7 +438,7 @@ impl CodexTurn<'_> {
                         .last_agent_message
                         .filter(|message| !message.trim().is_empty())
                         .ok_or(CodexError::EmptyResponse)?;
-                    return CodexTurnOutput::decode(&kind, &text).map_err(CodexError::OutputDecode);
+                    return CodexTurnOutput::decode(kind, &text).map_err(CodexError::OutputDecode);
                 }
                 EventMsg::Error(event) => return Err(CodexError::Run(event.message)),
                 EventMsg::TurnAborted(event) => {
@@ -452,6 +472,10 @@ impl CodexTurn<'_> {
 
 #[cfg(test)]
 mod tests {
+    use super::progress::{
+        Announcement, InspectionHints, InspectionSummary, ProgressDetail, ProgressText,
+        TaskProgressLabel,
+    };
     use super::*;
     use std::time;
     use tokio::fs as async_fs;

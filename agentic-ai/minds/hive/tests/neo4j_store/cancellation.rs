@@ -8,7 +8,7 @@ pub(super) struct CancellationScenario<'a> {
     pub(super) suffix: &'a str,
 }
 
-impl<'a> CancellationScenario<'a> {
+impl CancellationScenario<'_> {
     pub(super) async fn exercise(self) -> anyhow::Result<()> {
         let Self {
             store,
@@ -35,8 +35,11 @@ impl<'a> CancellationScenario<'a> {
         );
         let targets = store.cancellation_targets(&cancelling.id).await?;
         assert_eq!(targets.len(), 1);
-        assert_eq!(targets[0].task_id, cancelling.id);
-        assert_eq!(targets[0].pod_name, agent_a.as_str());
+        let target = targets
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("cancellation target must be returned"))?;
+        assert_eq!(target.task_id, cancelling.id);
+        assert_eq!(target.pod_name, agent_a.as_str());
         assert!(
             store
                 .acknowledge_cancellation(&cancelling_claim, agent_a)

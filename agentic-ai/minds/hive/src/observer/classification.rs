@@ -32,6 +32,7 @@ impl From<&str> for ObservedTaskState {
     }
 }
 impl ObservedTaskState {
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             Self::Ready => "READY",
@@ -82,6 +83,7 @@ impl From<&str> for ObservedTaskTrigger {
     }
 }
 impl ObservedTaskTrigger {
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             Self::AgentDependency => "agent-dependency",

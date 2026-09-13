@@ -159,7 +159,7 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
         .ok_or_else(|| anyhow::anyhow!("schema-9 migration row was missing"))?;
     assert_eq!(migrated.get::<String>("last_retry_release")?, "");
     assert!(migrated.get::<bool>("removed_legacy_marker")?);
-    assert_eq!(migrated.get::<i64>("latest_activity_at")?, 123456);
+    assert_eq!(migrated.get::<i64>("latest_activity_at")?, 123_456);
     assert!(!migrated.get::<bool>("task_obsolete")?);
     assert!(!migrated.get::<bool>("attempt_obsolete")?);
     assert!(migrated.get::<bool>("retired_obsolete")?);
@@ -339,16 +339,31 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
     assert_eq!(parent.id.as_str(), "schema-9-active-parent");
     assert_eq!(parent.dependency_context.len(), 1);
     assert_eq!(
-        parent.dependency_context[0].id.as_str(),
+        parent
+            .dependency_context
+            .first()
+            .context("parent dependency context must be populated")?
+            .id
+            .as_str(),
         "schema-9-active-child"
     );
     assert_eq!(
-        parent.dependency_context[0].summary.as_str(),
+        parent
+            .dependency_context
+            .first()
+            .context("parent dependency context must be populated")?
+            .summary
+            .as_str(),
         "active child repair completed"
     );
     assert_eq!(parent.dependency_artifacts.len(), 1);
     assert_eq!(
-        parent.dependency_artifacts[0].id.as_str(),
+        parent
+            .dependency_artifacts
+            .first()
+            .context("parent dependency artifacts must be populated")?
+            .id
+            .as_str(),
         "schema-9-active-child-artifact"
     );
     graph

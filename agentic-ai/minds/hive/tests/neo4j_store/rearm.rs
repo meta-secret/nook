@@ -18,7 +18,7 @@ fn task(id: String, dependencies: Vec<TaskId>) -> anyhow::Result<EnqueueTask> {
     })
 }
 
-impl<'a> FixtureCompletion<'a> {
+impl FixtureCompletion<'_> {
     async fn complete(self) -> anyhow::Result<()> {
         let Self {
             store,
@@ -159,7 +159,7 @@ pub async fn verify_block_serializes_with_retirement(
     let blocking_agent = agent.clone();
     let blocking_task = owner_claim.clone();
     let blocking_definition = blocker.clone();
-    let blocked = tokio::spawn(async move {
+    let blocked_handle = tokio::spawn(async move {
         blocking_store
             .block(
                 &blocking_task,
@@ -172,7 +172,7 @@ pub async fn verify_block_serializes_with_retirement(
     sleep(Duration::from_millis(100)).await;
     retirement.commit().await?;
     assert!(
-        timeout(Duration::from_secs(5), blocked)
+        timeout(Duration::from_secs(5), blocked_handle)
             .await
             .map_err(|_| anyhow::anyhow!(
                 "blocker attachment remained locked after retirement"

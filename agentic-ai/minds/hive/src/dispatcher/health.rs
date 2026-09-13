@@ -13,9 +13,14 @@ use tokio::time as async_time;
 use crate::HiveContext;
 
 const PROGRESS_INTERVAL: Duration = Duration::from_secs(30);
-const OPERATION_TIMEOUT: Duration = Duration::from_secs(540);
+const OPERATION_TIMEOUT: Duration = Duration::from_mins(9);
 
 impl DispatcherHealth<'_> {
+    /// Clears stale heartbeat files and records the initial dispatcher heartbeat.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when heartbeat files cannot be removed or written.
     pub async fn prepare_dispatcher_health(self) -> crate::HiveResult<()> {
         let Self { health_path } = self;
         let progress_path = DispatcherHealth::progress_path(health_path);
@@ -49,6 +54,11 @@ impl DispatcherHealth<'_> {
 }
 
 impl DispatcherHealth<'_> {
+    /// Runs an operation while periodically recording dispatcher progress.
+    ///
+    /// # Errors
+    ///
+    /// Returns the operation, heartbeat, or timeout error.
     pub(super) async fn while_recording_dispatcher_progress<F, T>(
         health_path: &Path,
         future: F,
@@ -76,6 +86,11 @@ impl DispatcherHealth<'_> {
 }
 
 impl DispatcherHealth<'_> {
+    /// Sleeps for a bounded interval while recording dispatcher progress.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a progress heartbeat cannot be written.
     pub(super) async fn sleep_while_recording_dispatcher_progress(
         health_path: &Path,
         duration: Duration,
@@ -138,6 +153,12 @@ impl DispatcherHealth<'_> {
 }
 
 impl DispatcherHealth<'_> {
+    /// Checks whether the Workbench dispatcher heartbeat is current and owned by a live process.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the heartbeat cannot be read, is stale, or does not identify a live
+    /// Workbench dispatcher process.
     pub fn check_workbench_dispatcher_health(
         health_path: &Path,
         max_age: Duration,
@@ -152,6 +173,12 @@ impl DispatcherHealth<'_> {
 }
 
 impl DispatcherHealth<'_> {
+    /// Checks whether the Workbench dispatcher progress heartbeat is current.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the progress heartbeat cannot be read, is stale, or does not identify
+    /// a live Workbench dispatcher process.
     pub fn check_workbench_dispatcher_progress(
         health_path: &Path,
         max_age: Duration,

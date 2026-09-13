@@ -224,149 +224,116 @@ fn main() -> hive::HiveResult<()> {
         .map_err(|error| hive::HiveError::message(error.to_string()))
 }
 
-impl Cli {
-    async fn run_main(arg0_paths: Arg0DispatchPaths) -> hive::HiveResult<()> {
-        let cli = Cli::parse();
+struct CliInvocation {
+    arg0_paths: Arg0DispatchPaths,
+    neo4j_uri: String,
+    neo4j_username: String,
+    neo4j_password: Neo4jAuthentication,
+}
 
-        match cli.command {
+struct WorkbenchDispatcherRequest {
+    repository_url: String,
+    checkout: PathBuf,
+    health_path: PathBuf,
+    poll_seconds: u64,
+}
+
+struct WorkerRequest {
+    agent_id: String,
+    pod_name: String,
+    repository_url: String,
+    workspace: PathBuf,
+    lease_seconds: i64,
+    heartbeat_seconds: u64,
+    task_timeout_seconds: u64,
+    poll_min_seconds: u64,
+    poll_max_seconds: u64,
+    model: String,
+    reasoning_effort: String,
+    auth_socket: PathBuf,
+    coordinator_socket: PathBuf,
+    codex_linux_sandbox_exe: SandboxExecutable,
+}
+
+struct EnqueueRequest {
+    id: String,
+    kind: String,
+    prompt: String,
+    source_commit: String,
+    priority: i64,
+    max_attempts: i64,
+    depends_on: Vec<String>,
+}
+
+struct ObserverRequest {
+    address: SocketAddr,
+    dashboard: PathBuf,
+    coordinator_socket: PathBuf,
+}
+
+struct DispatcherHealthRequest {
+    health_path: PathBuf,
+    max_age_seconds: u64,
+    progress: bool,
+}
+
+enum CliCommand {
+    AuthBroker(AuthBroker),
+    Queue(QueueAction),
+    Observer(ObserverRequest),
+    ObserverCoordinator(PathBuf),
+    Coordinator(PathBuf),
+    WorkbenchDispatcher(WorkbenchDispatcherRequest),
+    WorkbenchDispatcherHealth(DispatcherHealthRequest),
+    Worker(WorkerRequest),
+    Migrate,
+    Enqueue(EnqueueRequest),
+}
+
+impl From<Command> for CliCommand {
+    fn from(command: Command) -> Self {
+        match command {
             Command::AuthBroker {
                 socket,
                 auth_source,
                 auth_home,
-            } => {
-                (AuthBroker {
-                    socket_path: socket,
-                    auth_source,
-                    auth_home,
-                })
-                .run_auth_broker()
-                .await
-            }
-            Command::Queue { action } => {
-                let neo4j_password = cli
-                    .neo4j_password
-                    .require_password("NEO4J_PASSWORD is required for queue operations")?;
-                let store =
-                    Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
-                        .await?;
-                store.migrate().await?;
-                match action {
-                    QueueAction::Status { limit } => {
-                        println!(
-                            "{}",
-                            serde_json::to_string_pretty(&store.queue_status(limit).await?)?
-                        );
-                        Ok(())
-                    }
-                    QueueAction::RetryFailedMain {
-                        task_id,
-                        release_id,
-                    } => {
-                        let task_id = TaskId::try_from(task_id)?;
-                        if !store.retry_failed_main_task(&task_id, &release_id).await? {
-                            return Err(hive::HiveError::message(format!(
-                                "task {task_id} is not a retryable failed Main-repair task"
-                            )));
-                        }
-                        println!(
-                            "requeued failed chain for {task_id} with at least 3 remaining attempts per runnable member on {release_id}"
-                        );
-                        Ok(())
-                    }
-                    QueueAction::Cancel { task_id, reason } => {
-                        let task_id = TaskId::try_from(task_id)?;
-                        if !store.cancel(&task_id, &reason).await? {
-                            return Err(hive::HiveError::message(format!(
-                                "task {task_id} is not an active cancellable Hive task"
-                            )));
-                        }
-                        println!("cancelled {task_id}");
-                        Ok(())
-                    }
-                }
-            }
+            } => Self::AuthBroker(AuthBroker {
+                socket_path: socket,
+                auth_source,
+                auth_home,
+            }),
+            Command::Queue { action } => Self::Queue(action),
             Command::Observer {
                 address,
                 dashboard,
                 coordinator_socket,
-            } => {
-                let store = ObserverCoordinatorStore::connect(&coordinator_socket).await?;
-                (ObserverServer {
-                    store,
-                    address,
-                    dashboard,
-                })
-                .run_observer()
-                .await
-            }
-            Command::ObserverCoordinator { socket } => {
-                let neo4j_password = cli
-                    .neo4j_password
-                    .require_password("NEO4J_PASSWORD is required for the observer coordinator")?;
-                let store =
-                    Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
-                        .await?;
-                (ObserverCoordinator { socket, store })
-                    .run_observer_coordinator()
-                    .await
-            }
-            Command::Coordinator { socket } => {
-                let neo4j_password = cli
-                    .neo4j_password
-                    .require_password("NEO4J_PASSWORD is required for the coordinator")?;
-                let store =
-                    Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
-                        .await?;
-                (CoordinatorServer { socket, store })
-                    .run_coordinator()
-                    .await
-            }
+            } => Self::Observer(ObserverRequest {
+                address,
+                dashboard,
+                coordinator_socket,
+            }),
+            Command::ObserverCoordinator { socket } => Self::ObserverCoordinator(socket),
+            Command::Coordinator { socket } => Self::Coordinator(socket),
             Command::WorkbenchDispatcher {
                 repository_url,
                 checkout,
                 health_path,
                 poll_seconds,
-            } => {
-                (DispatcherHealth {
-                    health_path: &health_path,
-                })
-                .prepare_dispatcher_health()
-                .await?;
-                let neo4j_password = cli
-                    .neo4j_password
-                    .require_password("NEO4J_PASSWORD is required for the Workbench dispatcher")?;
-                let store = async_time::timeout(
-                    time::Duration::from_secs(300),
-                    Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password),
-                )
-                .await
-                .map_err(|_| {
-                    hive::HiveError::message(
-                        "Workbench dispatcher Neo4j connection exceeded 300 seconds",
-                    )
-                })??;
-                (WorkbenchDispatcher {
-                    store,
-                    repository_url: &repository_url,
-                    checkout: &checkout,
-                    health_path: &health_path,
-                    poll_seconds,
-                })
-                .run_workbench_dispatcher()
-                .await
-            }
+            } => Self::WorkbenchDispatcher(WorkbenchDispatcherRequest {
+                repository_url,
+                checkout,
+                health_path,
+                poll_seconds,
+            }),
             Command::WorkbenchDispatcherHealth {
                 health_path,
                 max_age_seconds,
                 progress,
-            } => {
-                let max_age = time::Duration::from_secs(max_age_seconds);
-                if progress {
-                    DispatcherHealth::check_workbench_dispatcher_progress(&health_path, max_age)
-                } else {
-                    DispatcherHealth::check_workbench_dispatcher_health(&health_path, max_age)
-                }
-            }
+            } => Self::WorkbenchDispatcherHealth(DispatcherHealthRequest {
+                health_path,
+                max_age_seconds,
+                progress,
+            }),
             Command::Worker {
                 agent_id,
                 pod_name,
@@ -382,50 +349,23 @@ impl Cli {
                 auth_socket,
                 coordinator_socket,
                 codex_linux_sandbox_exe,
-            } => {
-                let store = CoordinatorTaskStore::connect(&coordinator_socket).await?;
-                if heartbeat_seconds == 0 || i64::try_from(heartbeat_seconds)? >= lease_seconds {
-                    return Err(hive::HiveError::message(
-                        "heartbeat interval must be positive and shorter than the lease",
-                    ));
-                }
-                if poll_min_seconds == 0 || poll_min_seconds > poll_max_seconds {
-                    return Err(hive::HiveError::message(
-                        "poll interval must be positive and ordered",
-                    ));
-                }
-                let arg0_paths =
-                    Cli::with_linux_sandbox_override(arg0_paths, codex_linux_sandbox_exe);
-                Worker::new(
-                    store,
-                    WorkerConfig {
-                        agent_id: AgentId::try_from(agent_id)?,
-                        pod_name,
-                        repository_url,
-                        workspace,
-                        lease_seconds,
-                        heartbeat_seconds,
-                        task_timeout_seconds,
-                        poll_min_seconds,
-                        poll_max_seconds,
-                        model,
-                        reasoning_effort,
-                        arg0_paths,
-                        auth_socket,
-                    },
-                )
-                .run()
-                .await
-            }
-            Command::Migrate => {
-                let neo4j_password = cli
-                    .neo4j_password
-                    .require_password("NEO4J_PASSWORD is required for migration")?;
-                Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
-                    .await?
-                    .migrate()
-                    .await
-            }
+            } => Self::Worker(WorkerRequest {
+                agent_id,
+                pod_name,
+                repository_url,
+                workspace,
+                lease_seconds,
+                heartbeat_seconds,
+                task_timeout_seconds,
+                poll_min_seconds,
+                poll_max_seconds,
+                model,
+                reasoning_effort,
+                auth_socket,
+                coordinator_socket,
+                codex_linux_sandbox_exe,
+            }),
+            Command::Migrate => Self::Migrate,
             Command::Enqueue {
                 id,
                 kind,
@@ -434,33 +374,285 @@ impl Cli {
                 priority,
                 max_attempts,
                 depends_on,
+            } => Self::Enqueue(EnqueueRequest {
+                id,
+                kind,
+                prompt,
+                source_commit,
+                priority,
+                max_attempts,
+                depends_on,
+            }),
+        }
+    }
+}
+
+impl CliInvocation {
+    async fn run(self, command: CliCommand) -> hive::HiveResult<()> {
+        match command {
+            CliCommand::AuthBroker(broker) => self.run_auth_broker(broker).await,
+            CliCommand::Queue(action) => self.run_queue(action).await,
+            CliCommand::Observer(request) => self.run_observer(request).await,
+            CliCommand::ObserverCoordinator(socket) => self.run_observer_coordinator(socket).await,
+            CliCommand::Coordinator(socket) => self.run_coordinator(socket).await,
+            CliCommand::WorkbenchDispatcher(request) => {
+                self.run_workbench_dispatcher(request).await
+            }
+            CliCommand::WorkbenchDispatcherHealth(request) => Self::run_dispatcher_health(request),
+            CliCommand::Worker(request) => self.run_worker(request).await,
+            CliCommand::Migrate => self.run_migrate().await,
+            CliCommand::Enqueue(request) => self.run_enqueue(request).await,
+        }
+    }
+
+    async fn run_auth_broker(self, broker: AuthBroker) -> hive::HiveResult<()> {
+        broker.run_auth_broker().await
+    }
+
+    async fn run_queue(self, action: QueueAction) -> hive::HiveResult<()> {
+        let neo4j_password = self
+            .neo4j_password
+            .require_password("NEO4J_PASSWORD is required for queue operations")?;
+        let store =
+            Neo4jTaskStore::connect(&self.neo4j_uri, &self.neo4j_username, neo4j_password).await?;
+        store.migrate().await?;
+        match action {
+            QueueAction::Status { limit } => {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&store.queue_status(limit).await?)?
+                );
+                Ok(())
+            }
+            QueueAction::RetryFailedMain {
+                task_id,
+                release_id,
             } => {
-                let neo4j_password = cli
-                    .neo4j_password
-                    .require_password("NEO4J_PASSWORD is required for enqueue")?;
-                let store =
-                    Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
-                        .await?;
-                store.migrate().await?;
-                let dependencies = depends_on
-                    .into_iter()
-                    .map(TaskId::try_from)
-                    .collect::<Result<Vec<_>, _>>()
-                    .hive_context("invalid dependency id")?;
-                store
-                    .enqueue(&EnqueueTask {
-                        id: TaskId::try_from(id)?,
-                        kind: kind.into(),
-                        trigger: TaskTrigger::ManualCli,
-                        prompt,
-                        source_commit,
-                        priority,
-                        max_attempts,
-                        dependencies,
-                    })
-                    .await
+                let task_id = TaskId::try_from(task_id)?;
+                if !store.retry_failed_main_task(&task_id, &release_id).await? {
+                    return Err(hive::HiveError::message(format!(
+                        "task {task_id} is not a retryable failed Main-repair task"
+                    )));
+                }
+                println!(
+                    "requeued failed chain for {task_id} with at least 3 remaining attempts per runnable member on {release_id}"
+                );
+                Ok(())
+            }
+            QueueAction::Cancel { task_id, reason } => {
+                let task_id = TaskId::try_from(task_id)?;
+                if !store.cancel(&task_id, &reason).await? {
+                    return Err(hive::HiveError::message(format!(
+                        "task {task_id} is not an active cancellable Hive task"
+                    )));
+                }
+                println!("cancelled {task_id}");
+                Ok(())
             }
         }
+    }
+
+    async fn run_observer_coordinator(self, socket: PathBuf) -> hive::HiveResult<()> {
+        let neo4j_password = self
+            .neo4j_password
+            .require_password("NEO4J_PASSWORD is required for the observer coordinator")?;
+        let store =
+            Neo4jTaskStore::connect(&self.neo4j_uri, &self.neo4j_username, neo4j_password).await?;
+        (ObserverCoordinator { socket, store })
+            .run_observer_coordinator()
+            .await
+    }
+
+    async fn run_observer(self, request: ObserverRequest) -> hive::HiveResult<()> {
+        let ObserverRequest {
+            address,
+            dashboard,
+            coordinator_socket,
+        } = request;
+        let store = ObserverCoordinatorStore::connect(&coordinator_socket).await?;
+        (ObserverServer {
+            store,
+            address,
+            dashboard,
+        })
+        .run_observer()
+        .await
+    }
+
+    fn run_dispatcher_health(request: DispatcherHealthRequest) -> hive::HiveResult<()> {
+        let DispatcherHealthRequest {
+            health_path,
+            max_age_seconds,
+            progress,
+        } = request;
+        let max_age = time::Duration::from_secs(max_age_seconds);
+        if progress {
+            DispatcherHealth::check_workbench_dispatcher_progress(&health_path, max_age)
+        } else {
+            DispatcherHealth::check_workbench_dispatcher_health(&health_path, max_age)
+        }
+    }
+
+    async fn run_coordinator(self, socket: PathBuf) -> hive::HiveResult<()> {
+        let neo4j_password = self
+            .neo4j_password
+            .require_password("NEO4J_PASSWORD is required for the coordinator")?;
+        let store =
+            Neo4jTaskStore::connect(&self.neo4j_uri, &self.neo4j_username, neo4j_password).await?;
+        (CoordinatorServer { socket, store })
+            .run_coordinator()
+            .await
+    }
+
+    async fn run_workbench_dispatcher(
+        self,
+        request: WorkbenchDispatcherRequest,
+    ) -> hive::HiveResult<()> {
+        let WorkbenchDispatcherRequest {
+            repository_url,
+            checkout,
+            health_path,
+            poll_seconds,
+        } = request;
+        (DispatcherHealth {
+            health_path: &health_path,
+        })
+        .prepare_dispatcher_health()
+        .await?;
+        let neo4j_password = self
+            .neo4j_password
+            .require_password("NEO4J_PASSWORD is required for the Workbench dispatcher")?;
+        let store = async_time::timeout(
+            time::Duration::from_mins(5),
+            Neo4jTaskStore::connect(&self.neo4j_uri, &self.neo4j_username, neo4j_password),
+        )
+        .await
+        .map_err(|_| {
+            hive::HiveError::message("Workbench dispatcher Neo4j connection exceeded 300 seconds")
+        })??;
+        (WorkbenchDispatcher {
+            store,
+            repository_url: &repository_url,
+            checkout: &checkout,
+            health_path: &health_path,
+            poll_seconds,
+        })
+        .run_workbench_dispatcher()
+        .await
+    }
+
+    async fn run_worker(self, request: WorkerRequest) -> hive::HiveResult<()> {
+        let WorkerRequest {
+            agent_id,
+            pod_name,
+            repository_url,
+            workspace,
+            lease_seconds,
+            heartbeat_seconds,
+            task_timeout_seconds,
+            poll_min_seconds,
+            poll_max_seconds,
+            model,
+            reasoning_effort,
+            auth_socket,
+            coordinator_socket,
+            codex_linux_sandbox_exe,
+        } = request;
+        let store = CoordinatorTaskStore::connect(&coordinator_socket).await?;
+        if heartbeat_seconds == 0 || i64::try_from(heartbeat_seconds)? >= lease_seconds {
+            return Err(hive::HiveError::message(
+                "heartbeat interval must be positive and shorter than the lease",
+            ));
+        }
+        if poll_min_seconds == 0 || poll_min_seconds > poll_max_seconds {
+            return Err(hive::HiveError::message(
+                "poll interval must be positive and ordered",
+            ));
+        }
+        let arg0_paths = Cli::with_linux_sandbox_override(self.arg0_paths, codex_linux_sandbox_exe);
+        Worker::new(
+            store,
+            WorkerConfig {
+                agent_id: AgentId::try_from(agent_id)?,
+                pod_name,
+                repository_url,
+                workspace,
+                lease_seconds,
+                heartbeat_seconds,
+                task_timeout_seconds,
+                poll_min_seconds,
+                poll_max_seconds,
+                model,
+                reasoning_effort,
+                arg0_paths,
+                auth_socket,
+            },
+        )
+        .run()
+        .await
+    }
+
+    async fn run_migrate(self) -> hive::HiveResult<()> {
+        let neo4j_password = self
+            .neo4j_password
+            .require_password("NEO4J_PASSWORD is required for migration")?;
+        Neo4jTaskStore::connect(&self.neo4j_uri, &self.neo4j_username, neo4j_password)
+            .await?
+            .migrate()
+            .await
+    }
+
+    async fn run_enqueue(self, request: EnqueueRequest) -> hive::HiveResult<()> {
+        let EnqueueRequest {
+            id,
+            kind,
+            prompt,
+            source_commit,
+            priority,
+            max_attempts,
+            depends_on,
+        } = request;
+        let neo4j_password = self
+            .neo4j_password
+            .require_password("NEO4J_PASSWORD is required for enqueue")?;
+        let store =
+            Neo4jTaskStore::connect(&self.neo4j_uri, &self.neo4j_username, neo4j_password).await?;
+        store.migrate().await?;
+        let dependencies = depends_on
+            .into_iter()
+            .map(TaskId::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .hive_context("invalid dependency id")?;
+        store
+            .enqueue(&EnqueueTask {
+                id: TaskId::try_from(id)?,
+                kind: kind.into(),
+                trigger: TaskTrigger::ManualCli,
+                prompt,
+                source_commit,
+                priority,
+                max_attempts,
+                dependencies,
+            })
+            .await
+    }
+}
+
+impl Cli {
+    async fn run_main(arg0_paths: Arg0DispatchPaths) -> hive::HiveResult<()> {
+        let Cli {
+            neo4j_uri,
+            neo4j_username,
+            neo4j_password,
+            command,
+        } = Cli::parse();
+        let invocation = CliInvocation {
+            arg0_paths,
+            neo4j_uri,
+            neo4j_username,
+            neo4j_password,
+        };
+        invocation.run(CliCommand::from(command)).await
     }
 }
 
@@ -657,7 +849,11 @@ mod tests {
                     && auth_source.as_path() == path::Path::new("/tmp/source.json")
                     && auth_home.as_path() == path::Path::new("/tmp/auth-home")
         ));
+        Ok(())
+    }
 
+    #[test]
+    fn queue_commands_keep_their_typed_actions() -> hive::HiveResult<()> {
         for (arguments, expected) in [
             (
                 vec!["hive", "queue", "status", "--limit", "17"],

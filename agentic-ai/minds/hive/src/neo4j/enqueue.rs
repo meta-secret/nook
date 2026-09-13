@@ -67,7 +67,7 @@ impl Neo4jTaskStore {
                     .param("dependency", dependency.as_str()),
                 )
                 .await
-                .with_hive_context(|| format!("dependency {} does not exist", dependency))?;
+                .with_hive_context(|| format!("dependency {dependency} does not exist"))?;
             if rows.next(transaction.handle()).await?.is_none() {
                 transaction.rollback().await?;
                 return Err(crate::HiveError::message(format!(

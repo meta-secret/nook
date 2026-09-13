@@ -136,7 +136,7 @@ impl WorkbenchCheckout<'_> {
         operation: &str,
     ) -> crate::HiveResult<process::Output> {
         command.kill_on_drop(true);
-        async_time::timeout(Duration::from_secs(300), command.output())
+        async_time::timeout(Duration::from_mins(5), command.output())
             .await
             .map_err(|_| crate::HiveError::message(format!("{operation} exceeded 300 seconds")))?
             .with_hive_context(|| format!("start {operation}"))

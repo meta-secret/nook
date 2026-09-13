@@ -137,10 +137,10 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     assert_eq!(artifact_row.get::<String>("digest")?, artifact.digest);
     assert_eq!(artifact_row.get::<String>("content")?, artifact.content);
 
-    let (claim_b_result, claim_c_result) =
+    let (first_claim_result, second_claim_result) =
         tokio::join!(store.claim(&agent_b, 300), store.claim(&agent_c, 300));
-    let claim_b = claim_b_result?;
-    let claim_c = claim_c_result?;
+    let claim_b = first_claim_result?;
+    let claim_c = second_claim_result?;
     let (stale_claim, stale_agent, retry_agent) = match (claim_b, claim_c) {
         (ClaimOutcome::Claimed(claim), ClaimOutcome::NoTask) => (claim, &agent_b, &agent_c),
         (ClaimOutcome::NoTask, ClaimOutcome::Claimed(claim)) => (claim, &agent_c, &agent_b),
