@@ -10,6 +10,7 @@ pub struct TaskWorkspace<'scan> {
     pub dependency_artifacts: &'scan [Artifact],
 }
 use super::*;
+use crate::model::GitSha;
 use tokio::fs as async_fs;
 
 const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
@@ -369,6 +370,7 @@ impl PreparedWorkspace {
             repository,
             baseline,
             resumed,
+            ..
         } = self;
         let repository = repository.as_path();
         let baseline = baseline.as_str();

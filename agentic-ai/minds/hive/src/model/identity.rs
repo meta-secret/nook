@@ -205,15 +205,31 @@ impl TryFrom<String> for FeatureBranch {
     type Error = ModelError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let valid = value.starts_with("codex/")
-            && value.len() > "codex/".len()
-            && !value.contains("..")
-            && !value.ends_with('/')
-            && value.bytes().all(|byte| {
-                byte.is_ascii_lowercase()
-                    || byte.is_ascii_digit()
-                    || matches!(byte, b'/' | b'-' | b'_')
-            });
+        let segments = value.strip_prefix("codex/").and_then(|branch| {
+            if branch.is_empty() || branch.ends_with('/') {
+                None
+            } else {
+                Some(branch.split('/').collect::<Vec<_>>())
+            }
+        });
+        let valid = value.len() <= 120 && segments.is_some_and(|segments| {
+            match segments.as_slice() {
+                // Prime's published feature branch is the exact two-segment
+                // form. Child branches use the fully qualified form below.
+                [feature] => {
+                    Self::is_kebab_segment(feature, 10, 20)
+                        || Self::is_canonical_machine_branch(&segments)
+                }
+                [feature, team, role, work] => {
+                    Self::is_kebab_segment(feature, 10, 20)
+                        && Self::is_canonical_team(team)
+                        && Self::is_canonical_role(team, role)
+                        && Self::is_kebab_segment(work, 20, 50)
+                        && *work != "cleanup"
+                }
+                _ => Self::is_canonical_machine_branch(&segments),
+            }
+        });
         if !valid {
             return Err(ModelError::InvalidFeatureBranch);
         }
@@ -236,6 +252,58 @@ impl From<FeatureBranch> for String {
 }
 
 impl FeatureBranch {
+    fn is_kebab_segment(segment: &str, minimum: usize, maximum: usize) -> bool {
+        let bytes = segment.as_bytes();
+        !bytes.is_empty()
+            && bytes.len() >= minimum
+            && bytes.len() <= maximum
+            && !segment.starts_with('-')
+            && !segment.ends_with('-')
+            && !segment.contains("--")
+            && bytes
+                .iter()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'-')
+    }
+
+    fn is_canonical_team(team: &str) -> bool {
+        matches!(
+            team,
+            "ai" | "dev-core" | "security" | "sre" | "web-dev" | "delivery-pipeline"
+        )
+    }
+
+    fn is_canonical_role(team: &str, role: &str) -> bool {
+        match team {
+            "ai" => matches!(role, "gizmo" | "loom-specialist" | "cortex-specialist"),
+            "dev-core" => {
+                matches!(role, "gizmo" | "rust-core-developer" | "rust-auth2-developer")
+            }
+            "security" => matches!(
+                role,
+                "gizmo" | "cryptography-specialist" | "security-review-specialist"
+            ),
+            "sre" => matches!(role, "gizmo" | "provisioning" | "cloud-native"),
+            "web-dev" => matches!(role, "gizmo" | "typescript-specialist" | "svelte-specialist"),
+            "delivery-pipeline" => matches!(role, "gizmo" | "dev-manager" | "pr-lifecycle"),
+            _ => false,
+        }
+    }
+
+    fn is_canonical_machine_branch(segments: &[&str]) -> bool {
+        if segments.len() != 1 {
+            return false;
+        }
+        let Some(suffix) = segments[0].strip_prefix("hive-") else {
+            return false;
+        };
+        !suffix.is_empty()
+            && suffix
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+            && !suffix.starts_with('-')
+            && !suffix.ends_with('-')
+    }
+
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -282,7 +350,29 @@ mod tests {
     fn feature_branch_requires_a_canonical_codex_ref() -> crate::HiveResult<()> {
         let branch = FeatureBranch::try_from("codex/repair-cache")?;
         assert_eq!(branch.as_str(), "codex/repair-cache");
-        for invalid in ["main", "codex/", "codex/../main", "codex/Repair"] {
+        let child = FeatureBranch::try_from(
+            "codex/agent-branching/sre/provisioning/fix-hive-branch-compile",
+        )?;
+        assert_eq!(
+            child.as_str(),
+            "codex/agent-branching/sre/provisioning/fix-hive-branch-compile"
+        );
+        let machine = FeatureBranch::try_from("codex/hive-main-failure-abc-run-42-attempt-1")?;
+        assert_eq!(
+            machine.as_str(),
+            "codex/hive-main-failure-abc-run-42-attempt-1"
+        );
+        for invalid in [
+            "main",
+            "codex/",
+            "codex/repair",
+            "codex/../main",
+            "codex/Repair-cache",
+            "codex/agent-branching/sre/provisioning/short",
+            "codex/agent-branching/web-dev/provisioning/fix-hive-branch-compile",
+            "codex/hive-",
+            "codex/hive-main--failure",
+        ] {
             assert!(FeatureBranch::try_from(invalid).is_err());
         }
         Ok(())
