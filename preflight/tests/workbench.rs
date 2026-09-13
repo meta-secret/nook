@@ -178,7 +178,16 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "pinned_local_dev_sha=\"$(git -C \"$GITHUB_WORKSPACE\" rev-parse \"refs/remotes/origin/$FEATURE_BRANCH^{commit}\")\"",
         "if [ \"$pinned_local_dev_sha\" != \"$PINNED_LOCAL_DEV_SHA\" ]",
         "merge-base --is-ancestor \"$ORIGIN_MAIN_SHA\" \"$pinned_local_dev_sha\"",
-        "worktree add --detach \"$implementation_root\" \"refs/remotes/origin/$FEATURE_BRANCH\"",
+        "git init \"$implementation_root\"",
+        "git -C \"$implementation_root\" remote add origin \"https://github.com/$GITHUB_REPOSITORY.git\"",
+        "git -C \"$implementation_root\" fetch --no-tags origin \"+refs/heads/main:refs/remotes/origin/main\" \"+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH\"",
+        "implementation_origin_main_sha=\"$(git -C \"$implementation_root\" rev-parse refs/remotes/origin/main^{commit})\"",
+        "if [ \"$implementation_origin_main_sha\" != \"$ORIGIN_MAIN_SHA\" ]",
+        "implementation_head=\"$(git -C \"$implementation_root\" rev-parse \"refs/remotes/origin/$FEATURE_BRANCH^{commit}\")\"",
+        "if [ \"$implementation_head\" != \"$PINNED_LOCAL_DEV_SHA\" ]",
+        "git -C \"$implementation_root\" merge-base --is-ancestor \"$implementation_origin_main_sha\" \"$implementation_head\"",
+        "git -C \"$implementation_root\" checkout --detach \"$implementation_head\"",
+        "test \"$(git -C \"$implementation_root\" rev-parse HEAD)\" = \"$PINNED_LOCAL_DEV_SHA\"",
     ] {
         assert!(
             normalized_workflow.contains(required),
@@ -188,6 +197,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     assert!(
         !workflow.contains("checkout_ref=\"main\"")
             && !workflow.contains("branch=\"agent/")
+            && !normalized_workflow.contains("worktree add --detach")
             && !normalized_workflow.contains("worktree add -b")
             && !normalized_workflow.contains("git checkout -b")
             && !normalized_workflow.contains("git switch -c"),
