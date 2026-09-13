@@ -400,10 +400,12 @@ sequenceDiagram
 The manually started Dev Manager is the sole policy owner of dev snapshots,
 dev publication, slow validation, repair delegation, readiness, promotion,
 and manager-only `dev:pr-manager`. Delivery Pipeline Team Gizmo routes
-manager-authorized mechanics to internal PR Steward. Team Gizmo and Team
-Agents never create or update PRs and never replace the active harness. Local
-`dev` may continue receiving features while the published `origin/dev` SHA
-remains frozen for its validation cycle.
+manager-authorized mechanics to internal PR Steward through the active
+harness. Every GitHub check and PR-state observation returns through internal
+PR Steward and Team Gizmo before the Dev Manager receives its evidence. Team
+Gizmo and Team Agents never create or update PRs, decide policy verdicts, or
+replace the active harness. Local `dev` may continue receiving features while
+the published `origin/dev` SHA remains frozen for its validation cycle.
 
 ### Flow
 
@@ -416,15 +418,22 @@ flowchart LR
     PublishTask["Internal PR Steward:<br/>runs bounded dev:publish"]
     PR["Dev Manager:<br/>invokes dev:pr-manager directly"]
     Checks["GitHub:<br/>full slow checks"]
+    SlowRequest["Dev Manager:<br/>requests exact-SHA slow-check observation"]
+    SlowObserve["Internal PR Steward:<br/>observes exact-SHA slow checks"]
     Green{"Green?"}
     Fix["Dev Manager:<br/>starts repair Gizmo"]
     Promote["Dev Manager:<br/>authorizes dev:promote"]
     PromoteTask["Internal PR Steward:<br/>runs guarded fast-forward"]
     Main([Main updated])
+    VerifyRequest["Dev Manager:<br/>requests final merged-PR-state verification"]
+    VerifyObserve["Internal PR Steward:<br/>observes actual merged PR state"]
+    PRState["GitHub:<br/>dev-to-main PR state"]
+    Verified["Dev Manager:<br/>receives actual merged PR state"]
 
-    Dev --> Select --> Publish --> Pipeline --> PublishTask --> PR --> Checks --> Green
+    Dev --> Select --> Publish --> Pipeline --> PublishTask --> PR --> Checks
+    Checks --> SlowRequest --> Pipeline --> SlowObserve --> Pipeline --> Green
     Green -- No --> Fix --> Dev
-    Green -- Yes --> Promote --> Pipeline --> PromoteTask --> Main
+    Green -- Yes --> Promote --> Pipeline --> PromoteTask --> Main --> VerifyRequest --> Pipeline --> VerifyObserve --> PRState --> Pipeline --> Verified
 ```
 
 ### Component communication
@@ -450,6 +459,7 @@ sequenceDiagram
     box GitHub validation and promotion
         participant OriginDev as origin:dev
         participant PR as PR:dev-to-main
+        participant PRManager as command:dev:pr-manager
         participant CI as full:slow-checks
         participant Main as origin:main
     end
@@ -461,11 +471,15 @@ sequenceDiagram
     OriginDev-->>Steward: Frozen origin/dev SHA
     Steward-->>Pipeline: Exact-SHA publication evidence
     Pipeline-->>Manager: Frozen SHA and blocker/evidence
-    Manager->>PR: Invoke dev:pr-manager directly
-    PR->>PR: Create or update the single dev-to-main PR
-    PR->>CI: Validate captured dev SHA
-    CI-->>Pipeline: Exact-SHA check evidence
-    Pipeline-->>Manager: Validation result
+    Manager->>PRManager: Invoke manager-only dev:pr-manager directly
+    PRManager->>PR: Create or update the single dev-to-main PR
+    PR->>CI: Run full slow checks for captured dev SHA
+    Manager->>Pipeline: Authorize exact-SHA slow-check observation
+    Pipeline->>Steward: Dispatch observation packet through active harness
+    Steward->>CI: Observe exact-SHA slow-check result
+    CI-->>Steward: Exact-SHA check evidence or blocker
+    Steward-->>Pipeline: Exact-SHA check evidence or blocker
+    Pipeline-->>Manager: Exact-SHA slow-check evidence or blocker
 
     Manager->>Repair: On failure, repair current local dev
     Repair->>Dev: Land repair through Levels 1 through 4
@@ -474,11 +488,17 @@ sequenceDiagram
     Pipeline->>Steward: Dispatch frozen-SHA promotion packet
     Steward->>Main: Fast-forward exact tested SHA
     Main-->>Steward: Confirm remote main equality
-    Steward-->>Pipeline: Ref equality and actual PR state
+    Steward-->>Pipeline: Exact ref-equality promotion evidence
     Pipeline-->>Manager: Promotion mechanics evidence
-    Manager->>PR: Verify actual merged state
+    Manager->>Pipeline: Authorize final actual merged-PR-state verification
+    Pipeline->>Steward: Dispatch PR-state observation packet through active harness
+    Steward->>PR: Observe actual merged PR state
+    PR-->>Steward: Actual merged PR state
+    Steward-->>Pipeline: Actual merged-PR-state evidence
+    Pipeline-->>Manager: Actual merged-PR-state evidence
 
     Note over Dev,OriginDev: Local dev may advance while origin/dev is frozen
+    Note over Manager,PRManager: Only the Dev Manager invokes manager-only dev:pr-manager; Team Gizmo and PR Steward never create or update the PR or decide policy verdicts
     Note over Pipeline,Main: No PR merge substitute; squash, rebase, force-push, and promotion merge commits are prohibited
 ```
 
