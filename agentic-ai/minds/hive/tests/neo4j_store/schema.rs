@@ -3,35 +3,7 @@ use hive::model::{AgentId, Artifact, CompletionArtifact};
 use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{Graph, query};
 
-pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow::Result<()> {
-    graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await
-        .context("clean isolated integration database")?;
-    graph
-        .run(query(
-            "CREATE (:HiveSchemaMigration {version: 1})
-             CREATE (:Task {id: 'legacy-without-source-commit', status: 'READY'})",
-        ))
-        .await
-        .context("create schema-1 fixture")?;
-    let migration_error = store
-        .migrate()
-        .await
-        .err()
-        .ok_or_else(|| anyhow::anyhow!("schema-1 legacy tasks must block schema 2"))?;
-    assert!(
-        migration_error
-            .to_string()
-            .contains("without source_commit")
-    );
-    graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await
-        .context("clean schema migration fixture")?;
-    graph
-        .run(query(
-            "CREATE (:HiveSchemaMigration {version: 3})
+const SCHEMA_NINE_FIXTURE: &str = r"CREATE (:HiveSchemaMigration {version: 3})
              CREATE (:Task {
                id: 'schema-3-task',
                status: 'FAILED',
@@ -111,14 +83,9 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
                source_commit: '0123456789abcdef0123456789abcdef01234567'
              })
              CREATE (historical_consumer)-[:DEPENDS_ON]->(completed_parent)
-             CREATE (completed_parent)-[:DEPENDS_ON]->(completed_child)",
-        ))
-        .await
-        .context("create schema-3 fixture")?;
-    store.migrate().await?;
-    let mut rows = graph
-        .execute(query(
-            "MATCH (task:Task {id: 'schema-3-task'})
+             CREATE (completed_parent)-[:DEPENDS_ON]->(completed_child)";
+
+const SCHEMA_NINE_MIGRATION_QUERY: &str = r"MATCH (task:Task {id: 'schema-3-task'})
              MATCH (activity_task:Task {id: 'schema-6-activity-task'})
              MATCH (attempt:Attempt {id: 'schema-7-attempt'})
              MATCH (retired:Task {id: 'schema-7-retired-task'})
@@ -150,49 +117,9 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
                     count(DISTINCT history) AS historical_dependencies,
                     count(DISTINCT active_lineage) AS active_lineage_count,
                     count(DISTINCT history_lineage) AS history_lineage_count,
-                    migration.version AS version",
-        ))
-        .await?;
-    let migrated = rows
-        .next()
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("schema-9 migration row was missing"))?;
-    assert_eq!(migrated.get::<String>("last_retry_release")?, "");
-    assert!(migrated.get::<bool>("removed_legacy_marker")?);
-    assert_eq!(migrated.get::<i64>("latest_activity_at")?, 123_456);
-    assert!(!migrated.get::<bool>("task_obsolete")?);
-    assert!(!migrated.get::<bool>("attempt_obsolete")?);
-    assert!(migrated.get::<bool>("retired_obsolete")?);
-    assert!(migrated.get::<bool>("retired_attempt_obsolete")?);
-    assert_eq!(migrated.get::<String>("blocker_status")?, "BLOCKED");
-    assert!(!migrated.get::<bool>("blocker_reason_removed")?);
-    assert_eq!(migrated.get::<i64>("blocker_version")?, 4);
-    assert_eq!(migrated.get::<i64>("nested_dependencies")?, 1);
-    assert_eq!(migrated.get::<i64>("historical_dependencies")?, 0);
-    assert_eq!(migrated.get::<i64>("active_lineage_count")?, 0);
-    assert_eq!(migrated.get::<i64>("history_lineage_count")?, 1);
-    assert_eq!(migrated.get::<i64>("version")?, 9);
-    let mut rollback_rows = graph
-        .execute(query(
-            "MATCH (task:Task {id: 'schema-4-rollback-task'})
-             RETURN task.last_retry_release AS last_retry_release",
-        ))
-        .await?;
-    let rollback = rollback_rows
-        .next()
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("schema-4 rollback row was missing"))?;
-    assert_eq!(
-        rollback.get::<String>("last_retry_release")?,
-        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    );
-    graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await
-        .context("clean schema-9 migration fixture")?;
-    graph
-        .run(query(
-            "CREATE (:HiveSchemaMigration {version: 8})
+                    migration.version AS version";
+
+const ARTIFACT_LINEAGE_FIXTURE: &str = r"CREATE (:HiveSchemaMigration {version: 8})
              CREATE (consumer:Task {
                id: 'schema-9-artifact-consumer',
                kind: 'main-repair',
@@ -238,32 +165,9 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
                uri: 'hive://artifact/schema-9-child-artifact',
                digest: 'sha256:child',
                content: 'child patch'
-             })",
-        ))
-        .await
-        .context("create schema-9 artifact lineage fixture")?;
-    store.migrate().await?;
-    let agent = AgentId::try_from("schema-9-artifact-agent")?;
-    store
-        .register_agent(&agent, "schema-9-artifact-pod")
-        .await?;
-    let claimed = hive::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
-    assert_eq!(claimed.id.as_str(), "schema-9-artifact-consumer");
-    assert_eq!(
-        claimed
-            .dependency_artifacts
-            .iter()
-            .map(|artifact| artifact.id.as_str())
-            .collect::<Vec<_>>(),
-        vec!["schema-9-child-artifact", "schema-9-parent-artifact"]
-    );
-    graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await
-        .context("clean schema-9 artifact lineage fixture")?;
-    graph
-        .run(query(
-            "CREATE (:HiveSchemaMigration {version: 8})
+             })";
+
+const ACTIVE_CHILD_FIXTURE: &str = r"CREATE (:HiveSchemaMigration {version: 8})
              CREATE (parent:Task {
                id: 'schema-9-active-parent',
                kind: 'blocker',
@@ -288,8 +192,134 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
                max_attempts: 3,
                version: 0
              })
-             CREATE (parent)-[:DEPENDS_ON]->(child)",
+             CREATE (parent)-[:DEPENDS_ON]->(child)";
+
+pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow::Result<()> {
+    verify_legacy_migration_blocker(store, graph).await?;
+    verify_schema_nine_migration(store, graph).await?;
+    verify_artifact_lineage_migration(store, graph).await?;
+    verify_active_child_transition(store, graph).await
+}
+
+async fn verify_legacy_migration_blocker(
+    store: &Neo4jTaskStore,
+    graph: &Graph,
+) -> anyhow::Result<()> {
+    graph
+        .run(query("MATCH (node) DETACH DELETE node"))
+        .await
+        .context("clean isolated integration database")?;
+    graph
+        .run(query(
+            "CREATE (:HiveSchemaMigration {version: 1})
+             CREATE (:Task {id: 'legacy-without-source-commit', status: 'READY'})",
         ))
+        .await
+        .context("create schema-1 fixture")?;
+    let migration_error = store
+        .migrate()
+        .await
+        .err()
+        .ok_or_else(|| anyhow::anyhow!("schema-1 legacy tasks must block schema 2"))?;
+    assert!(
+        migration_error
+            .to_string()
+            .contains("without source_commit")
+    );
+    Ok(())
+}
+
+async fn verify_schema_nine_migration(store: &Neo4jTaskStore, graph: &Graph) -> anyhow::Result<()> {
+    graph
+        .run(query("MATCH (node) DETACH DELETE node"))
+        .await
+        .context("clean schema migration fixture")?;
+    graph
+        .run(query(SCHEMA_NINE_FIXTURE))
+        .await
+        .context("create schema-3 fixture")?;
+    store.migrate().await?;
+    let mut rows = graph.execute(query(SCHEMA_NINE_MIGRATION_QUERY)).await?;
+    let migrated = rows
+        .next()
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("schema-9 migration row was missing"))?;
+    assert_eq!(migrated.get::<String>("last_retry_release")?, "");
+    assert!(migrated.get::<bool>("removed_legacy_marker")?);
+    assert_eq!(migrated.get::<i64>("latest_activity_at")?, 123_456);
+    assert!(!migrated.get::<bool>("task_obsolete")?);
+    assert!(!migrated.get::<bool>("attempt_obsolete")?);
+    assert!(migrated.get::<bool>("retired_obsolete")?);
+    assert!(migrated.get::<bool>("retired_attempt_obsolete")?);
+    assert_eq!(migrated.get::<String>("blocker_status")?, "BLOCKED");
+    assert!(!migrated.get::<bool>("blocker_reason_removed")?);
+    assert_eq!(migrated.get::<i64>("blocker_version")?, 4);
+    assert_eq!(migrated.get::<i64>("nested_dependencies")?, 1);
+    assert_eq!(migrated.get::<i64>("historical_dependencies")?, 0);
+    assert_eq!(migrated.get::<i64>("active_lineage_count")?, 0);
+    assert_eq!(migrated.get::<i64>("history_lineage_count")?, 1);
+    assert_eq!(migrated.get::<i64>("version")?, 9);
+    verify_schema_four_rollback(graph).await
+}
+
+async fn verify_schema_four_rollback(graph: &Graph) -> anyhow::Result<()> {
+    let mut rows = graph
+        .execute(query(
+            "MATCH (task:Task {id: 'schema-4-rollback-task'})
+             RETURN task.last_retry_release AS last_retry_release",
+        ))
+        .await?;
+    let rollback = rows
+        .next()
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("schema-4 rollback row was missing"))?;
+    assert_eq!(
+        rollback.get::<String>("last_retry_release")?,
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    );
+    Ok(())
+}
+
+async fn verify_artifact_lineage_migration(
+    store: &Neo4jTaskStore,
+    graph: &Graph,
+) -> anyhow::Result<()> {
+    graph
+        .run(query("MATCH (node) DETACH DELETE node"))
+        .await
+        .context("clean schema-9 migration fixture")?;
+    graph
+        .run(query(ARTIFACT_LINEAGE_FIXTURE))
+        .await
+        .context("create schema-9 artifact lineage fixture")?;
+    store.migrate().await?;
+    let agent = AgentId::try_from("schema-9-artifact-agent")?;
+    store
+        .register_agent(&agent, "schema-9-artifact-pod")
+        .await?;
+    let claimed = hive::model::ClaimedTask::try_from(store.claim(&agent, 300).await?)?;
+    assert_eq!(claimed.id.as_str(), "schema-9-artifact-consumer");
+    assert_eq!(
+        claimed
+            .dependency_artifacts
+            .iter()
+            .map(|artifact| artifact.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["schema-9-child-artifact", "schema-9-parent-artifact"]
+    );
+    Ok(())
+}
+
+async fn verify_active_child_transition(
+    store: &Neo4jTaskStore,
+    graph: &Graph,
+) -> anyhow::Result<()> {
+    graph
+        .run(query("MATCH (node) DETACH DELETE node"))
+        .await
+        .context("clean schema-9 artifact lineage fixture")?;
+    graph
+        .run(query(ACTIVE_CHILD_FIXTURE))
         .await
         .context("create schema-9 active child fixture")?;
     store.migrate().await?;
@@ -313,11 +343,19 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
                 agent_id: &active_agent,
                 relevance: hive::model::CompletionRelevance::Current,
                 summary: "active child repair completed",
-                artifact: &child_artifact
+                artifact: &child_artifact,
             })
             .await?
     );
-    let mut transition_rows = graph
+    verify_active_parent_state(store, graph, &active_agent).await
+}
+
+async fn verify_active_parent_state(
+    store: &Neo4jTaskStore,
+    graph: &Graph,
+    active_agent: &AgentId,
+) -> anyhow::Result<()> {
+    let mut rows = graph
         .execute(query(
             "MATCH (parent:Task {id: 'schema-9-active-parent'})
              MATCH (child:Task {id: 'schema-9-active-child'})
@@ -328,34 +366,22 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
                     count(DISTINCT lineage) AS lineage",
         ))
         .await?;
-    let transitioned = transition_rows
+    let transitioned = rows
         .next()
         .await?
         .ok_or_else(|| anyhow::anyhow!("active child transition row was missing"))?;
     assert_eq!(transitioned.get::<String>("parent_status")?, "READY");
     assert_eq!(transitioned.get::<i64>("dependencies")?, 0);
     assert_eq!(transitioned.get::<i64>("lineage")?, 1);
-    let parent = hive::model::ClaimedTask::try_from(store.claim(&active_agent, 300).await?)?;
+    let parent = hive::model::ClaimedTask::try_from(store.claim(active_agent, 300).await?)?;
     assert_eq!(parent.id.as_str(), "schema-9-active-parent");
     assert_eq!(parent.dependency_context.len(), 1);
-    assert_eq!(
-        parent
-            .dependency_context
-            .first()
-            .context("parent dependency context must be populated")?
-            .id
-            .as_str(),
-        "schema-9-active-child"
-    );
-    assert_eq!(
-        parent
-            .dependency_context
-            .first()
-            .context("parent dependency context must be populated")?
-            .summary
-            .as_str(),
-        "active child repair completed"
-    );
+    let context = parent
+        .dependency_context
+        .first()
+        .context("parent dependency context must be populated")?;
+    assert_eq!(context.id.as_str(), "schema-9-active-child");
+    assert_eq!(context.summary.as_str(), "active child repair completed");
     assert_eq!(parent.dependency_artifacts.len(), 1);
     assert_eq!(
         parent
