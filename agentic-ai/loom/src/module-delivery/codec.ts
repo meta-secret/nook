@@ -1,50 +1,35 @@
-import { createHash } from 'node:crypto';
-import { UntrustedYamlBoundary } from '../lib/guards.ts';
 import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
-import { AgentAttemptParentKind } from '../agent-workflow/domain.ts';
-import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
+import { UntrustedYamlBoundary } from '../lib/guards.ts';
 import type { UntrustedYamlNode } from '../lib/guards.ts';
 import { ModulePlanDecodeFailure, ModulePlanFields } from './codec-fields.ts';
+import { ModuleDeliveryPlanDigest } from './codec-digest.ts';
+import { ModuleDeliveryPlanNodeCodec } from './codec-node.ts';
+import {
+  LegacyModulePlanRootField,
+  ModulePlanRootField,
+  ModulePlanV3RootField,
+  ModulePlanV4RootField,
+} from './codec-schema.ts';
 import type {
-  ModulePlanObjectDecodeRequest,
-  ModulePlanTransportList,
-} from './codec-fields.ts';
+  ModulePlanNodeListRequest,
+  RejectedModulePlanRequest,
+} from './codec-schema.ts';
 import {
-  CORTEX_TEAM_WRITER_EXPERT,
   MODULE_DELIVERY_PLAN_VERSION,
-  ModuleDeliveryBaselineKind,
   ModuleDeliveryCompatibilityStatus,
-  ModuleDeliveryEvidenceInputSchema,
   ModuleDeliveryIssueCode,
-  ModuleDeliveryJoinKind,
-  ModuleDeliveryOwner,
-  ModuleDeliveryTaskKind,
-  ModuleDeliveryWorkspaceKind,
-  ModuleTaskOwnership,
 } from './domain.ts';
-import { TeamKey, TeamAuthorityCatalog } from '../team-agents/catalog.ts';
-import {
-  CortexAuthoringResources,
-  CortexSkillAuthorization,
-} from './cortex-authoring-codec.ts';
-import type { CortexAuthoringResourceCompositionRequest } from './cortex-authoring-codec.ts';
 import type {
   CompatibleModuleDeliveryPlanDecode,
-  ModuleDeliveryBaseline,
-  ModuleDeliveryCortexAuthoring,
-  ModuleDeliveryEdgeContract,
-  ModuleDeliveryIssue,
-  ModuleDeliveryNodeV2,
-  ModuleDeliveryParentJoin,
-  ModuleDeliveryPlanV4,
-  ModuleDeliveryPlanV3,
+  LegacyModuleDeliveryPlan,
   ModuleDeliveryPlanV2,
-  ModuleDeliveryExpectedProducerIdentity,
-  ModuleDeliveryEvidenceInputContract,
+  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV4,
+  ModuleDeliveryIssue,
   RejectedCompatibleModuleDeliveryPlan,
 } from './domain.ts';
 
-/** Owns the module delivery plan schema registry and its capability transitions. */
+/** Owns the public module delivery plan codec boundary and version registry. */
 export class ModuleDeliveryPlanSchema {
   private constructor() {}
   private static readonly MAX_SERIALIZED_PLAN_BYTES = 262_144;
@@ -86,15 +71,35 @@ export class ModuleDeliveryPlanSchema {
     }
   }
 
+  /** Creates a current plan from V3 evidence without mutating the old plan. */
+  static migrateModuleDeliveryPlan(
+    plan: ModuleDeliveryPlanV3,
+    featureHeadSha: string,
+  ): ModuleDeliveryPlanV4 {
+    if (plan.version !== 3)
+      throw new Error('Only module delivery plan version 3 can be migrated.');
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha: plan.originMainSha,
+      pinnedLocalDevSha: plan.pinnedLocalDevSha,
+      featureHeadSha,
+    });
+    return {
+      ...plan,
+      version: MODULE_DELIVERY_PLAN_VERSION,
+      featureHeadSha,
+    };
+  }
+
+  static moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV4): string {
+    return ModuleDeliveryPlanDigest.moduleDeliveryPlanDigest(plan);
+  }
+
   private static decodePlanRoot(
     node: UntrustedYamlNode,
   ): CompatibleModuleDeliveryPlanDecode {
     if (!UntrustedYamlBoundary.isRecord(node))
       ModuleDeliveryPlanSchema.fail('Plan root must be an object.');
-    const fieldRequest: ModulePlanObjectDecodeRequest = {
-      record: node,
-      path: '$',
-    };
+    const fieldRequest = { record: node, path: '$' };
     const fields = new ModulePlanFields(fieldRequest);
     const version = fields.positiveInteger('version');
     if (
@@ -111,7 +116,7 @@ export class ModuleDeliveryPlanSchema {
     else if (version === 2) fields.requireExactKeys(ModulePlanRootField);
     else if (version === 3) fields.requireExactKeys(ModulePlanV3RootField);
     else fields.requireExactKeys(ModulePlanV4RootField);
-    const parentJoinRequest: ModulePlanObjectDecodeRequest = {
+    const parentJoinRequest = {
       record: fields.recordField('parentJoin'),
       path: '$.parentJoin',
     };
@@ -126,11 +131,11 @@ export class ModuleDeliveryPlanSchema {
     const parentOwnedResources = fields.nonEmptyStringList(
       'parentOwnedResources',
     );
-    const parentJoin = ModuleDeliveryPlanSchema.decodeParentJoin(
+    const parentJoin = ModuleDeliveryPlanNodeCodec.decodeParentJoin(
       parentJoinRequest,
     );
-    const nodes = ModuleDeliveryPlanSchema.decodeNodes(nodeListRequest);
-    const edgeContracts = ModuleDeliveryPlanSchema.decodeEdgeContracts(
+    const nodes = ModuleDeliveryPlanNodeCodec.decodeNodes(nodeListRequest);
+    const edgeContracts = ModuleDeliveryPlanNodeCodec.decodeEdgeContracts(
       fields.list('edgeContracts'),
     );
     const common = {
@@ -209,504 +214,6 @@ export class ModuleDeliveryPlanSchema {
     };
   }
 
-  /** Creates a current plan from V3 evidence without mutating the old plan. */
-  static migrateModuleDeliveryPlan(
-    plan: ModuleDeliveryPlanV3,
-    featureHeadSha: string,
-  ): ModuleDeliveryPlanV4 {
-    if (plan.version !== 3)
-      throw new Error('Only module delivery plan version 3 can be migrated.');
-    PinnedDevBaseEvidenceContract.assertShape({
-      originMainSha: plan.originMainSha,
-      pinnedLocalDevSha: plan.pinnedLocalDevSha,
-      featureHeadSha,
-    });
-    return {
-      ...plan,
-      version: MODULE_DELIVERY_PLAN_VERSION,
-      featureHeadSha,
-    };
-  }
-
-  private static decodeParentJoin(
-    request: ModulePlanObjectDecodeRequest,
-  ): ModuleDeliveryParentJoin {
-    const fields = new ModulePlanFields(request);
-    fields.requireExactKeys(ModulePlanParentJoinField);
-    if (fields.string('kind') !== ModuleDeliveryJoinKind.DirectCommits) {
-      ModuleDeliveryPlanSchema.fail(
-        `${request.path}.kind: unsupported parent join.`,
-      );
-    }
-    return {
-      kind: ModuleDeliveryJoinKind.DirectCommits,
-      owner: fields.identifier('owner'),
-      validationCommands: fields.nonEmptyStringList('validationCommands'),
-    };
-  }
-
-  private static decodeNodes(
-    request: ModulePlanNodeListRequest,
-  ): readonly ModuleDeliveryNodeV2[] {
-    const nodes: ModuleDeliveryNodeV2[] = [];
-    for (const [index, value] of request.values.entries()) {
-      const nodeRequest: ModulePlanIndexedNodeRequest = {
-        value,
-        index,
-        legacy: request.legacy,
-      };
-      nodes.push(ModuleDeliveryPlanSchema.decodeNode(nodeRequest));
-    }
-    return nodes;
-  }
-
-  private static decodeNode(
-    request: ModulePlanIndexedNodeRequest,
-  ): ModuleDeliveryNodeV2 {
-    const path = `$.nodes[${request.index}]`;
-    if (!UntrustedYamlBoundary.isRecord(request.value))
-      ModuleDeliveryPlanSchema.fail(`${path}: node must be an object.`);
-    const fieldRequest: ModulePlanObjectDecodeRequest = {
-      record: request.value,
-      path,
-    };
-    const fields = new ModulePlanFields(fieldRequest);
-    const kind = fields.string('kind');
-    if (request.legacy) {
-      if (kind === ModuleDeliveryTaskKind.Write) {
-        fields.requireExactKeys(LegacyModulePlanWriteNodeField);
-      } else if (kind === ModuleDeliveryTaskKind.ReadOnly) {
-        fields.requireExactKeys(LegacyModulePlanReadOnlyNodeField);
-      } else {
-        ModuleDeliveryPlanSchema.fail(
-          `${path}.kind: legacy plans only support read-only and write tasks.`,
-        );
-      }
-    } else if (kind === ModuleDeliveryTaskKind.Write) {
-      if (Object.hasOwn(request.value, 'cortexAuthoring'))
-        fields.requireExactKeys(ModulePlanCortexWriteNodeField);
-      else fields.requireExactKeys(ModulePlanWriteNodeField);
-    } else if (kind === ModuleDeliveryTaskKind.ReadOnly) {
-      fields.requireExactKeys(ModulePlanReadOnlyNodeField);
-    } else if (kind === ModuleDeliveryTaskKind.EvidenceSynthesis) {
-      fields.requireExactKeys(ModulePlanSynthesisNodeField);
-    } else {
-      ModuleDeliveryPlanSchema.fail(`${path}.kind: unsupported task kind.`);
-    }
-    const resourceRequest: ModulePlanObjectDecodeRequest = {
-      record: fields.recordField('resources'),
-      path: `${path}.resources`,
-    };
-    const acceptanceRequest: ModulePlanObjectDecodeRequest = {
-      record: fields.recordField('acceptance'),
-      path: `${path}.acceptance`,
-    };
-    const baselineRequest: ModulePlanObjectDecodeRequest = {
-      record: fields.recordField('baseline'),
-      path: `${path}.baseline`,
-    };
-    const expert = fields.identifier('expert');
-    const moduleRoot = fields.string('moduleRoot');
-    const legacyTeamRequest: LegacyTaskTeamRequest = {
-      kind,
-      expert,
-      moduleRoot,
-    };
-    const teamRequest: ModuleDeliveryTeamDecodeRequest = {
-      value: request.legacy
-        ? ModuleDeliveryPlanSchema.legacyTaskTeam(legacyTeamRequest)
-        : fields.string('team'),
-      path,
-    };
-    const allowGizmoPrime =
-      !request.legacy &&
-      kind === ModuleDeliveryTaskKind.Write &&
-      teamRequest.value === TeamKey.Ai &&
-      expert === CORTEX_TEAM_WRITER_EXPERT &&
-      moduleRoot === TeamAuthorityCatalog.teamCortexRoot(TeamKey.Ai) &&
-      Object.hasOwn(request.value, 'cortexAuthoring');
-    const functionalOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
-      value: request.legacy
-        ? teamRequest.value
-        : fields.string('functionalOwner'),
-      path: `${path}.functionalOwner`,
-      allowGizmoPrime,
-    };
-    const acceptanceOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
-      value: request.legacy
-        ? teamRequest.value
-        : fields.string('acceptanceOwner'),
-      path: `${path}.acceptanceOwner`,
-      allowGizmoPrime,
-    };
-    const parentLineageRequest: ModulePlanObjectDecodeRequest = {
-      record: request.legacy
-        ? request.value
-        : fields.recordField('parentLineage'),
-      path: `${path}.parentLineage`,
-    };
-    const parentLineage = request.legacy
-      ? { kind: AgentAttemptParentKind.WorkflowRoot as const }
-      : ModuleDeliveryPlanSchema.decodeParentLineage(parentLineageRequest);
-    const resourceClaimsRequest: ModulePlanResourceDecodeRequest = {
-      ...resourceRequest,
-      legacy: request.legacy,
-      readOnly: kind === ModuleDeliveryTaskKind.ReadOnly,
-    };
-    const acceptanceDecodeRequest: ModulePlanAcceptanceDecodeRequest = {
-      ...acceptanceRequest,
-      legacy: request.legacy,
-    };
-    const common = {
-      taskId: fields.identifier('taskId'),
-      team: ModuleDeliveryPlanSchema.decodeTeam(teamRequest),
-      functionalOwner: ModuleDeliveryPlanSchema.decodeOwner(
-        functionalOwnerRequest,
-      ),
-      acceptanceOwner: ModuleDeliveryPlanSchema.decodeOwner(
-        acceptanceOwnerRequest,
-      ),
-      parentLineage,
-      expert,
-      moduleRoot,
-      consumerOutcome: fields.string('consumerOutcome'),
-      baseline: ModuleDeliveryPlanSchema.decodeBaseline(baselineRequest),
-      agentDepthLimit: fields.positiveInteger('agentDepthLimit'),
-      dependencies: fields.stringList('dependencies'),
-      resources: ModuleDeliveryPlanSchema.decodeResourceClaims(
-        resourceClaimsRequest,
-      ),
-      parentOwnedExclusions: fields.nonEmptyStringList('parentOwnedExclusions'),
-      acceptance: ModuleDeliveryPlanSchema.decodeAcceptance(
-        acceptanceDecodeRequest,
-      ),
-    };
-    if (kind === ModuleDeliveryTaskKind.ReadOnly) {
-      return { kind: ModuleDeliveryTaskKind.ReadOnly, ...common };
-    }
-    if (kind === ModuleDeliveryTaskKind.EvidenceSynthesis) {
-      const inputRequest: ModulePlanObjectDecodeRequest = {
-        record: fields.recordField('evidenceInput'),
-        path: `${path}.evidenceInput`,
-      };
-      return {
-        kind: ModuleDeliveryTaskKind.EvidenceSynthesis,
-        ...common,
-        evidenceInput:
-          ModuleDeliveryPlanSchema.decodeEvidenceInput(inputRequest),
-      };
-    }
-    const workspaceRequest: ModulePlanObjectDecodeRequest = {
-      record: fields.recordField('workspace'),
-      path: `${path}.workspace`,
-    };
-    const workspaceFields = new ModulePlanFields(workspaceRequest);
-    workspaceFields.requireExactKeys(ModulePlanWorkspaceField);
-    if (
-      workspaceFields.string('kind') !==
-      ModuleDeliveryWorkspaceKind.SharedCheckout
-    ) {
-      ModuleDeliveryPlanSchema.fail(
-        `${path}.workspace.kind: unsupported workspace kind.`,
-      );
-    }
-    const workspace = {
-      kind: ModuleDeliveryWorkspaceKind.SharedCheckout,
-      expectedCommitHandoff: workspaceFields.trueValue('expectedCommitHandoff'),
-    } as const;
-    if (!Object.hasOwn(request.value, 'cortexAuthoring')) {
-      return {
-        kind: ModuleDeliveryTaskKind.Write,
-        ...common,
-        workspace,
-      };
-    }
-    const cortexAuthoringRequest: ModulePlanObjectDecodeRequest = {
-      record: fields.recordField('cortexAuthoring'),
-      path: `${path}.cortexAuthoring`,
-    };
-    const cortexAuthoring = ModuleDeliveryPlanSchema.decodeCortexAuthoring(
-      cortexAuthoringRequest,
-    );
-    if (new Set(common.resources.read).size !== common.resources.read.length)
-      ModuleDeliveryPlanSchema.fail(
-        `${path}.resources.read: authored read claims must be unique.`,
-      );
-    const resourceCompositionRequest: CortexAuthoringResourceCompositionRequest =
-      {
-        team: common.team,
-        resources: common.resources,
-        cortexAuthoring,
-        path: `${path}.cortexAuthoring`,
-      };
-    const unauthorizedSkill = CortexSkillAuthorization.rejectUnauthorized(
-      resourceCompositionRequest,
-    );
-    if (unauthorizedSkill !== false)
-      ModuleDeliveryPlanSchema.fail(
-        `${path}.cortexAuthoring.selectedSkillPaths: ${unauthorizedSkill} was not authorized by the submitted read claims.`,
-      );
-    const resources = CortexAuthoringResources.compose(
-      resourceCompositionRequest,
-    );
-    if (resources.read.length > 128)
-      ModuleDeliveryPlanSchema.fail(
-        `${path}.resources.read: composed read claims exceed 128 entries.`,
-      );
-    return {
-      kind: ModuleDeliveryTaskKind.Write,
-      ...common,
-      resources,
-      cortexAuthoring,
-      workspace,
-    };
-  }
-
-  private static decodeCortexAuthoring(
-    request: ModulePlanObjectDecodeRequest,
-  ): ModuleDeliveryCortexAuthoring {
-    const fields = new ModulePlanFields(request);
-    fields.requireExactKeys(ModulePlanCortexAuthoringField);
-    return {
-      selectedSkillPaths: fields.stringList('selectedSkillPaths'),
-      sharedWriteClaims: fields.stringList('sharedWriteClaims'),
-    };
-  }
-
-  private static decodeBaseline(
-    request: ModulePlanObjectDecodeRequest,
-  ): ModuleDeliveryBaseline {
-    const fields = new ModulePlanFields(request);
-    const kind = fields.string('kind');
-    if (kind === ModuleDeliveryBaselineKind.SourceCommit) {
-      fields.requireExactKeys(ModulePlanSourceBaselineField);
-      return {
-        kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: fields.string('sourceCommit'),
-      };
-    }
-    if (kind === ModuleDeliveryBaselineKind.IntegratedDependencies) {
-      fields.requireExactKeys(ModulePlanIntegratedBaselineField);
-      return {
-        kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
-        providerTaskIds: fields.nonEmptyStringList('providerTaskIds'),
-      };
-    }
-    ModuleDeliveryPlanSchema.fail(
-      `${request.path}.kind: unsupported baseline kind.`,
-    );
-  }
-
-  private static decodeResourceClaims(
-    request: ModulePlanResourceDecodeRequest,
-  ): ModuleDeliveryNodeV2['resources'] {
-    const fields = new ModulePlanFields(request);
-    if (request.legacy) fields.requireExactKeys(LegacyModulePlanResourceField);
-    else fields.requireExactKeys(ModulePlanResourceField);
-    const read = fields.stringList('read');
-    return {
-      read,
-      write: fields.stringList('write'),
-      evidenceSurface: request.legacy
-        ? request.readOnly
-          ? read
-          : []
-        : fields.stringList('evidenceSurface'),
-    };
-  }
-
-  private static decodeTeam(request: ModuleDeliveryTeamDecodeRequest): TeamKey {
-    const teams = Object.values(TeamKey);
-    const team = teams.find((candidate) => candidate === request.value);
-    if (!team) {
-      ModuleDeliveryPlanSchema.fail(
-        `${request.path}.team: unsupported team identity.`,
-      );
-    }
-    return team;
-  }
-
-  private static decodeOwner(request: ModuleDeliveryOwnerDecodeRequest) {
-    if (
-      request.allowGizmoPrime &&
-      request.value === ModuleDeliveryOwner.GizmoPrime
-    )
-      return ModuleDeliveryOwner.GizmoPrime;
-    return ModuleDeliveryPlanSchema.decodeTeam(request);
-  }
-
-  private static legacyTaskTeam(request: LegacyTaskTeamRequest): TeamKey {
-    const profile = MODULE_EXPERT_CATALOG.find(
-      ({ name }) => name === request.expert,
-    );
-    const taskKind = Object.values(ModuleDeliveryTaskKind).find(
-      (candidate) => candidate === request.kind,
-    );
-    if (!taskKind) return TeamKey.Ai;
-    const [defaulted1 = []] = [profile?.canonicalContextPaths];
-    const teamRequest = {
-      kind: taskKind,
-      moduleRoot: request.moduleRoot,
-      expertContextPaths: defaulted1,
-    };
-    const team = ModuleTaskOwnership.moduleDeliveryTaskTeam(teamRequest);
-    return team === false ? TeamKey.Ai : team;
-  }
-
-  private static decodeParentLineage(
-    request: ModulePlanObjectDecodeRequest,
-  ): ModuleDeliveryNodeV2['parentLineage'] {
-    const fields = new ModulePlanFields(request);
-    const kind = fields.string('kind');
-    if (kind === AgentAttemptParentKind.WorkflowRoot) {
-      fields.requireExactKeys(ModulePlanRootLineageField);
-      return { kind: AgentAttemptParentKind.WorkflowRoot };
-    }
-    if (kind !== AgentAttemptParentKind.AgentAttempt) {
-      ModuleDeliveryPlanSchema.fail(
-        `${request.path}.kind: unsupported parent lineage kind.`,
-      );
-    }
-    fields.requireExactKeys(ModulePlanAttemptLineageField);
-    return {
-      kind: AgentAttemptParentKind.AgentAttempt,
-      task: fields.identifier('task'),
-      agent: fields.identifier('agent'),
-      attempt: fields.positiveInteger('attempt'),
-    };
-  }
-
-  private static decodeEvidenceInput(
-    request: ModulePlanObjectDecodeRequest,
-  ): ModuleDeliveryEvidenceInputContract {
-    const fields = new ModulePlanFields(request);
-    fields.requireExactKeys(ModulePlanEvidenceInputField);
-    const schema = fields.string('schema');
-    if (
-      schema !== ModuleDeliveryEvidenceInputSchema.AcceptedProviderEvidenceV1
-    ) {
-      ModuleDeliveryPlanSchema.fail(
-        `${request.path}.schema: unsupported evidence input schema.`,
-      );
-    }
-    const values = fields.nodeList('expectedProducers');
-    const expectedProducers: ModuleDeliveryExpectedProducerIdentity[] = [];
-    for (const [index, value] of values.entries()) {
-      const producerRequest: ModulePlanIndexedProducerRequest = {
-        value,
-        index,
-        path: request.path,
-      };
-      expectedProducers.push(
-        ModuleDeliveryPlanSchema.decodeExpectedProducer(producerRequest),
-      );
-    }
-    return {
-      schema: ModuleDeliveryEvidenceInputSchema.AcceptedProviderEvidenceV1,
-      expectedProducers,
-    };
-  }
-
-  private static decodeExpectedProducer(
-    request: ModulePlanIndexedProducerRequest,
-  ): ModuleDeliveryExpectedProducerIdentity {
-    const path = `${request.path}.expectedProducers[${request.index}]`;
-    if (!UntrustedYamlBoundary.isRecord(request.value))
-      ModuleDeliveryPlanSchema.fail(`${path}: expected an object.`);
-    const fieldRequest: ModulePlanObjectDecodeRequest = {
-      record: request.value,
-      path,
-    };
-    const fields = new ModulePlanFields(fieldRequest);
-    fields.requireExactKeys(ModulePlanExpectedProducerField);
-    const teamRequest: ModuleDeliveryTeamDecodeRequest = {
-      value: fields.string('team'),
-      path: `${path}.team`,
-    };
-    const functionalOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
-      value: fields.string('functionalOwner'),
-      path: `${path}.functionalOwner`,
-      allowGizmoPrime: true,
-    };
-    const acceptanceOwnerRequest: ModuleDeliveryOwnerDecodeRequest = {
-      value: fields.string('acceptanceOwner'),
-      path: `${path}.acceptanceOwner`,
-      allowGizmoPrime: true,
-    };
-    return {
-      taskId: fields.identifier('taskId'),
-      team: ModuleDeliveryPlanSchema.decodeTeam(teamRequest),
-      functionalOwner: ModuleDeliveryPlanSchema.decodeOwner(
-        functionalOwnerRequest,
-      ),
-      acceptanceOwner: ModuleDeliveryPlanSchema.decodeOwner(
-        acceptanceOwnerRequest,
-      ),
-    };
-  }
-
-  private static decodeAcceptance(
-    request: ModulePlanAcceptanceDecodeRequest,
-  ): ModuleDeliveryNodeV2['acceptance'] {
-    const fields = new ModulePlanFields(request);
-    if (request.legacy)
-      fields.requireExactKeys(LegacyModulePlanAcceptanceField);
-    else fields.requireExactKeys(ModulePlanAcceptanceField);
-    const evidence = fields.nonEmptyStringList('evidence');
-    return {
-      commands: fields.nonEmptyStringList('commands'),
-      evidence,
-    };
-  }
-
-  private static decodeEdgeContracts(
-    values: ModulePlanTransportList,
-  ): readonly ModuleDeliveryEdgeContract[] {
-    const contracts: ModuleDeliveryEdgeContract[] = [];
-    for (const [index, value] of values.entries()) {
-      const path = `$.edgeContracts[${index}]`;
-      if (!UntrustedYamlBoundary.isRecord(value))
-        ModuleDeliveryPlanSchema.fail(
-          `${path}: edge contract must be an object.`,
-        );
-      const request: ModulePlanObjectDecodeRequest = { record: value, path };
-      contracts.push(ModuleDeliveryPlanSchema.decodeEdgeContract(request));
-    }
-    return contracts;
-  }
-
-  private static decodeEdgeContract(
-    request: ModulePlanObjectDecodeRequest,
-  ): ModuleDeliveryEdgeContract {
-    const fields = new ModulePlanFields(request);
-    fields.requireExactKeys(ModulePlanEdgeField);
-    return {
-      providerTaskId: fields.identifier('providerTaskId'),
-      consumerTaskId: fields.identifier('consumerTaskId'),
-      capability: fields.string('capability'),
-      publicTypes: fields.nonEmptyStringList('publicTypes'),
-      errors: fields.nonEmptyStringList('errors'),
-      behaviorInvariants: fields.nonEmptyStringList('behaviorInvariants'),
-      securityInvariants: fields.nonEmptyStringList('securityInvariants'),
-      compatibilityExpectations: fields.nonEmptyStringList(
-        'compatibilityExpectations',
-      ),
-      owningTests: fields.nonEmptyStringList('owningTests'),
-    };
-  }
-
-  private static hasControlCharacter(value: string): boolean {
-    for (let index = 0; index < value.length; index += 1) {
-      const code = value.charCodeAt(index);
-      if (code <= 31 || code === 127) return true;
-    }
-    return false;
-  }
-
-  private static fail(message: string): never {
-    throw new ModulePlanDecodeFailure(message);
-  }
-
   private static rejected(
     request: RejectedModulePlanRequest,
   ): RejectedCompatibleModuleDeliveryPlan {
@@ -721,376 +228,7 @@ export class ModuleDeliveryPlanSchema {
     };
   }
 
-  static moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV4): string {
-    const nodes = plan.nodes
-      .map(({ taskId }) => taskId)
-      .sort()
-      .map((taskId) => {
-        const lookup: ModulePlanDigestNodeLookup = { plan, taskId };
-        return ModuleDeliveryPlanSchema.digestNode(lookup);
-      });
-    const edgeContracts = plan.edgeContracts
-      .map(
-        (contract) => `${contract.providerTaskId}->${contract.consumerTaskId}`,
-      )
-      .sort()
-      .map((key) => {
-        const lookup: ModulePlanDigestContractLookup = { plan, key };
-        return ModuleDeliveryPlanSchema.digestContract(lookup);
-      });
-    const canonical = {
-      ...plan,
-      parentOwnedResources: [...plan.parentOwnedResources].sort(),
-      parentJoin: {
-        ...plan.parentJoin,
-        validationCommands: plan.parentJoin.validationCommands,
-      },
-      nodes,
-      edgeContracts,
-    };
-    return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
-  }
-
-  private static digestNode(lookup: ModulePlanDigestNodeLookup) {
-    const node = lookup.plan.nodes.find(
-      ({ taskId }) => taskId === lookup.taskId,
-    );
-    if (!node) throw new Error(`Validated task ${lookup.taskId} is missing.`);
-    const expectedProducers =
-      node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
-        ? node.evidenceInput.expectedProducers
-            .map(({ taskId }) => taskId)
-            .sort()
-            .map((taskId) => {
-              const producer = node.evidenceInput.expectedProducers.find(
-                (candidate) => candidate.taskId === taskId,
-              );
-              if (!producer)
-                throw new Error(`Validated producer ${taskId} is missing.`);
-              return producer;
-            })
-        : [];
-    return {
-      ...node,
-      baseline:
-        node.baseline.kind === ModuleDeliveryBaselineKind.IntegratedDependencies
-          ? {
-              ...node.baseline,
-              providerTaskIds: [...node.baseline.providerTaskIds].sort(),
-            }
-          : node.baseline,
-      dependencies: [...node.dependencies].sort(),
-      resources: {
-        read: [...node.resources.read].sort(),
-        write: [...node.resources.write].sort(),
-        evidenceSurface: [...node.resources.evidenceSurface].sort(),
-      },
-      parentOwnedExclusions: [...node.parentOwnedExclusions].sort(),
-      acceptance: {
-        commands: node.acceptance.commands,
-        evidence: [...node.acceptance.evidence].sort(),
-      },
-      ...(node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
-        ? {
-            evidenceInput: { ...node.evidenceInput, expectedProducers },
-          }
-        : {}),
-      ...(node.kind === ModuleDeliveryTaskKind.Write && node.cortexAuthoring
-        ? {
-            cortexAuthoring: {
-              selectedSkillPaths: [
-                ...node.cortexAuthoring.selectedSkillPaths,
-              ].sort(),
-              sharedWriteClaims: [
-                ...node.cortexAuthoring.sharedWriteClaims,
-              ].sort(),
-            },
-          }
-        : {}),
-    };
-  }
-
-  private static digestContract(lookup: ModulePlanDigestContractLookup) {
-    const contract = lookup.plan.edgeContracts.find(
-      (candidate) =>
-        `${candidate.providerTaskId}->${candidate.consumerTaskId}` ===
-        lookup.key,
-    );
-    if (!contract)
-      throw new Error(`Validated edge contract ${lookup.key} is missing.`);
-    return {
-      ...contract,
-      publicTypes: [...contract.publicTypes].sort(),
-      errors: [...contract.errors].sort(),
-      behaviorInvariants: [...contract.behaviorInvariants].sort(),
-      securityInvariants: [...contract.securityInvariants].sort(),
-      compatibilityExpectations: [...contract.compatibilityExpectations].sort(),
-      owningTests: [...contract.owningTests].sort(),
-    };
+  private static fail(message: string): never {
+    throw new ModulePlanDecodeFailure(message);
   }
 }
-
-type ModulePlanIndexedNodeRequest = {
-  readonly value: UntrustedYamlNode;
-  readonly index: number;
-  readonly legacy: boolean;
-};
-
-type ModuleDeliveryTeamDecodeRequest = {
-  readonly value: string;
-  readonly path: string;
-};
-type ModuleDeliveryOwnerDecodeRequest = ModuleDeliveryTeamDecodeRequest & {
-  readonly allowGizmoPrime: boolean;
-};
-type ModulePlanIndexedProducerRequest = {
-  readonly value: UntrustedYamlNode;
-  readonly index: number;
-  readonly path: string;
-};
-type ModulePlanResourceDecodeRequest = ModulePlanObjectDecodeRequest & {
-  readonly legacy: boolean;
-  readonly readOnly: boolean;
-};
-type ModulePlanAcceptanceDecodeRequest = ModulePlanObjectDecodeRequest & {
-  readonly legacy: boolean;
-};
-type LegacyTaskTeamRequest = {
-  readonly kind: string;
-  readonly expert: string;
-  readonly moduleRoot: string;
-};
-type ModulePlanDigestNodeLookup = {
-  readonly plan: ModuleDeliveryPlanV4;
-  readonly taskId: string;
-};
-type ModulePlanDigestContractLookup = {
-  readonly plan: ModuleDeliveryPlanV4;
-  readonly key: string;
-};
-
-enum ModulePlanRootField {
-  EdgeContracts = 'edgeContracts',
-  Generation = 'generation',
-  MaxAgentDepth = 'maxAgentDepth',
-  MaxAttempts = 'maxAttempts',
-  Nodes = 'nodes',
-  ParentJoin = 'parentJoin',
-  ParentOwnedResources = 'parentOwnedResources',
-  SourceCommit = 'sourceCommit',
-  Version = 'version',
-}
-enum ModulePlanV3RootField {
-  EdgeContracts = 'edgeContracts',
-  Generation = 'generation',
-  MaxAgentDepth = 'maxAgentDepth',
-  MaxAttempts = 'maxAttempts',
-  Nodes = 'nodes',
-  ParentJoin = 'parentJoin',
-  ParentOwnedResources = 'parentOwnedResources',
-  OriginMainSha = 'originMainSha',
-  PinnedLocalDevSha = 'pinnedLocalDevSha',
-  SourceCommit = 'sourceCommit',
-  Version = 'version',
-}
-enum ModulePlanV4RootField {
-  EdgeContracts = 'edgeContracts',
-  Generation = 'generation',
-  MaxAgentDepth = 'maxAgentDepth',
-  MaxAttempts = 'maxAttempts',
-  Nodes = 'nodes',
-  ParentJoin = 'parentJoin',
-  ParentOwnedResources = 'parentOwnedResources',
-  OriginMainSha = 'originMainSha',
-  PinnedLocalDevSha = 'pinnedLocalDevSha',
-  FeatureHeadSha = 'featureHeadSha',
-  SourceCommit = 'sourceCommit',
-  Version = 'version',
-}
-enum LegacyModulePlanRootField {
-  EdgeContracts = 'edgeContracts',
-  MaxAgentDepth = 'maxAgentDepth',
-  MaxAttempts = 'maxAttempts',
-  Nodes = 'nodes',
-  ParentJoin = 'parentJoin',
-  ParentOwnedResources = 'parentOwnedResources',
-  SourceCommit = 'sourceCommit',
-  Version = 'version',
-}
-enum ModulePlanParentJoinField {
-  Kind = 'kind',
-  Owner = 'owner',
-  ValidationCommands = 'validationCommands',
-}
-enum ModulePlanReadOnlyNodeField {
-  Acceptance = 'acceptance',
-  AcceptanceOwner = 'acceptanceOwner',
-  AgentDepthLimit = 'agentDepthLimit',
-  Baseline = 'baseline',
-  ConsumerOutcome = 'consumerOutcome',
-  Dependencies = 'dependencies',
-  Expert = 'expert',
-  FunctionalOwner = 'functionalOwner',
-  Kind = 'kind',
-  ModuleRoot = 'moduleRoot',
-  ParentLineage = 'parentLineage',
-  ParentOwnedExclusions = 'parentOwnedExclusions',
-  Resources = 'resources',
-  TaskId = 'taskId',
-  Team = 'team',
-}
-enum ModulePlanWriteNodeField {
-  Acceptance = 'acceptance',
-  AcceptanceOwner = 'acceptanceOwner',
-  AgentDepthLimit = 'agentDepthLimit',
-  Baseline = 'baseline',
-  ConsumerOutcome = 'consumerOutcome',
-  Dependencies = 'dependencies',
-  Expert = 'expert',
-  FunctionalOwner = 'functionalOwner',
-  Kind = 'kind',
-  ModuleRoot = 'moduleRoot',
-  ParentLineage = 'parentLineage',
-  ParentOwnedExclusions = 'parentOwnedExclusions',
-  Resources = 'resources',
-  TaskId = 'taskId',
-  Team = 'team',
-  Workspace = 'workspace',
-}
-enum ModulePlanCortexWriteNodeField {
-  Acceptance = 'acceptance',
-  AcceptanceOwner = 'acceptanceOwner',
-  AgentDepthLimit = 'agentDepthLimit',
-  Baseline = 'baseline',
-  ConsumerOutcome = 'consumerOutcome',
-  CortexAuthoring = 'cortexAuthoring',
-  Dependencies = 'dependencies',
-  Expert = 'expert',
-  FunctionalOwner = 'functionalOwner',
-  Kind = 'kind',
-  ModuleRoot = 'moduleRoot',
-  ParentLineage = 'parentLineage',
-  ParentOwnedExclusions = 'parentOwnedExclusions',
-  Resources = 'resources',
-  TaskId = 'taskId',
-  Team = 'team',
-  Workspace = 'workspace',
-}
-enum ModulePlanCortexAuthoringField {
-  SelectedSkillPaths = 'selectedSkillPaths',
-  SharedWriteClaims = 'sharedWriteClaims',
-}
-enum LegacyModulePlanReadOnlyNodeField {
-  Acceptance = 'acceptance',
-  AgentDepthLimit = 'agentDepthLimit',
-  Baseline = 'baseline',
-  ConsumerOutcome = 'consumerOutcome',
-  Dependencies = 'dependencies',
-  Expert = 'expert',
-  Kind = 'kind',
-  ModuleRoot = 'moduleRoot',
-  ParentOwnedExclusions = 'parentOwnedExclusions',
-  Resources = 'resources',
-  TaskId = 'taskId',
-}
-enum LegacyModulePlanWriteNodeField {
-  Acceptance = 'acceptance',
-  AgentDepthLimit = 'agentDepthLimit',
-  Baseline = 'baseline',
-  ConsumerOutcome = 'consumerOutcome',
-  Dependencies = 'dependencies',
-  Expert = 'expert',
-  Kind = 'kind',
-  ModuleRoot = 'moduleRoot',
-  ParentOwnedExclusions = 'parentOwnedExclusions',
-  Resources = 'resources',
-  TaskId = 'taskId',
-  Workspace = 'workspace',
-}
-enum ModulePlanSynthesisNodeField {
-  Acceptance = 'acceptance',
-  AcceptanceOwner = 'acceptanceOwner',
-  AgentDepthLimit = 'agentDepthLimit',
-  Baseline = 'baseline',
-  ConsumerOutcome = 'consumerOutcome',
-  Dependencies = 'dependencies',
-  EvidenceInput = 'evidenceInput',
-  Expert = 'expert',
-  FunctionalOwner = 'functionalOwner',
-  Kind = 'kind',
-  ModuleRoot = 'moduleRoot',
-  ParentLineage = 'parentLineage',
-  ParentOwnedExclusions = 'parentOwnedExclusions',
-  Resources = 'resources',
-  TaskId = 'taskId',
-  Team = 'team',
-}
-enum ModulePlanWorkspaceField {
-  ExpectedCommitHandoff = 'expectedCommitHandoff',
-  Kind = 'kind',
-}
-enum ModulePlanSourceBaselineField {
-  Kind = 'kind',
-  SourceCommit = 'sourceCommit',
-}
-enum ModulePlanIntegratedBaselineField {
-  Kind = 'kind',
-  ProviderTaskIds = 'providerTaskIds',
-}
-enum ModulePlanResourceField {
-  EvidenceSurface = 'evidenceSurface',
-  Read = 'read',
-  Write = 'write',
-}
-enum ModulePlanAcceptanceField {
-  Commands = 'commands',
-  Evidence = 'evidence',
-}
-enum LegacyModulePlanResourceField {
-  Read = 'read',
-  Write = 'write',
-}
-enum LegacyModulePlanAcceptanceField {
-  Commands = 'commands',
-  Evidence = 'evidence',
-}
-enum ModulePlanEdgeField {
-  BehaviorInvariants = 'behaviorInvariants',
-  Capability = 'capability',
-  CompatibilityExpectations = 'compatibilityExpectations',
-  ConsumerTaskId = 'consumerTaskId',
-  Errors = 'errors',
-  OwningTests = 'owningTests',
-  ProviderTaskId = 'providerTaskId',
-  PublicTypes = 'publicTypes',
-  SecurityInvariants = 'securityInvariants',
-}
-enum ModulePlanRootLineageField {
-  Kind = 'kind',
-}
-enum ModulePlanAttemptLineageField {
-  Agent = 'agent',
-  Attempt = 'attempt',
-  Kind = 'kind',
-  Task = 'task',
-}
-enum ModulePlanEvidenceInputField {
-  ExpectedProducers = 'expectedProducers',
-  Schema = 'schema',
-}
-enum ModulePlanExpectedProducerField {
-  AcceptanceOwner = 'acceptanceOwner',
-  FunctionalOwner = 'functionalOwner',
-  TaskId = 'taskId',
-  Team = 'team',
-}
-
-type ModulePlanNodeListRequest = {
-  readonly values: ModulePlanTransportList;
-  readonly legacy: boolean;
-};
-
-type RejectedModulePlanRequest = {
-  readonly code: ModuleDeliveryIssueCode;
-  readonly message: string;
-};
