@@ -74,6 +74,29 @@ export type ModuleDeliveryAcceptedProviderEvidenceIdentity =
     acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
   }>;
 
+/** Historical V1 evidence identity; it intentionally has no feature head. */
+export type ModuleDeliveryAcceptedProviderEvidenceIdentityV1 = Readonly<{
+  schemaVersion: 1;
+  generation: number;
+  planDigest: string;
+  taskId: string;
+  attempt: number;
+  producerTeam: TeamKey;
+  functionalOwner: ModuleDeliveryOwnerIdentity;
+  acceptanceOwner: ModuleDeliveryOwnerIdentity;
+  sourceCommit: string;
+  originMainSha: string;
+  pinnedLocalDevSha: string;
+  verifiedHeadCommit: string;
+  artifactIdentity: string;
+  artifactDigest: string;
+  sourceProvenanceDigest: string;
+  verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess;
+  claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
+  acceptanceRequirements: readonly string[];
+  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentityV1[];
+}>;
+
 export type ModuleDeliveryEvidenceSubmissionVerification = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;

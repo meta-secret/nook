@@ -24,6 +24,7 @@ import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow
 
 import {
   DELEGATION_PLAN_SCHEMA_VERSION,
+  LEGACY_DELEGATION_PLAN_SCHEMA_VERSION,
   DelegationBarrierPolicy,
   DelegationRunEventKind,
   DelegationPlanContract,
@@ -34,6 +35,7 @@ import type {
   DelegationAdmissionRequest,
   DelegationAttemptIdentity,
   DelegationPlan,
+  DelegationPlanV1,
 } from '../../src/agent-workflow/delegation-domain.ts';
 
 import { DelegationJournalSchema } from '../../src/agent-workflow/delegation-codec.ts';
@@ -166,6 +168,33 @@ describe('ordinary delegation admission', () => {
     );
     expect(decoded).toEqual(plan);
     expect(decoded.attempts).toHaveLength(3);
+  });
+
+  test('decodes and migrates the historical v1 plan without mutating it', () => {
+    const current = AgentWorkflowDelegationAdmissionScenario.validPlan();
+    const { featureHeadSha: _featureHeadSha, ...withoutFeature } = current;
+    const historical: DelegationPlanV1 = {
+      ...withoutFeature,
+      schemaVersion: LEGACY_DELEGATION_PLAN_SCHEMA_VERSION,
+    };
+    const before = structuredClone(historical);
+    const decoded = DelegationJournalSchema.decodeCompatibleDelegationPlan(
+      JSON.stringify(historical),
+    );
+    expect(decoded).toEqual(historical);
+    expect(Object.hasOwn(decoded, 'featureHeadSha')).toBe(false);
+    expect(() =>
+      DelegationJournalSchema.decodeDelegationPlan(JSON.stringify(historical)),
+    ).toThrow('schema version is unsupported');
+    const migrated = DelegationJournalSchema.migrateDelegationPlan(
+      historical,
+      'b'.repeat(40),
+    );
+    expect(historical).toEqual(before);
+    expect(migrated.schemaVersion).toBe(DELEGATION_PLAN_SCHEMA_VERSION);
+    expect(migrated.originMainSha).toBe(historical.originMainSha);
+    expect(migrated.pinnedLocalDevSha).toBe(historical.pinnedLocalDevSha);
+    expect(migrated.featureHeadSha).toBe('b'.repeat(40));
   });
 
   test('rejects a barrier that omits a declared direct child', () => {

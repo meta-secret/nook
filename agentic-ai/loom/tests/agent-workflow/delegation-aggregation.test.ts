@@ -58,6 +58,7 @@ import type {
   DelegationChildTerminalEvidence,
   DelegationFinalizationRequest,
   FinalizeDelegationRunInput,
+  DelegationRunResultV1,
 } from '../../src/agent-workflow/delegation-aggregation.ts';
 
 import { DelegationRunJournal } from '../../src/agent-workflow/delegation-run-journal.ts';
@@ -544,6 +545,45 @@ const NONCOMPLETED_KINDS: readonly TaskTerminalKind[] = [
 ];
 
 describe('ordinary delegation run aggregation', () => {
+  test('decodes and migrates the historical v1 run result without mutating it', () => {
+    const historical: DelegationRunResultV1 = {
+      schemaVersion:
+        DelegationRunFinalization.LEGACY_DELEGATION_RUN_RESULT_SCHEMA_VERSION,
+      runId: 'run-1',
+      sourceCommit: 'a'.repeat(40),
+      originMainSha: 'b'.repeat(40),
+      pinnedLocalDevSha: 'c'.repeat(40),
+      planSha256: 'd'.repeat(64),
+      rootMaterializer: { task: 'root', agent: 'agent', attempt: 1 },
+      attempts: [],
+      barrierEvidence: [],
+      materializedView: { path: 'view.md', sha256: 'e'.repeat(64) },
+    };
+    const before = structuredClone(historical);
+    const decoded =
+      DelegationRunFinalization.decodeCompatibleDelegationRunResult(
+        JSON.stringify(historical),
+      );
+    expect(decoded).toEqual(historical);
+    expect(Object.hasOwn(decoded, 'featureHeadSha')).toBe(false);
+    expect(() =>
+      DelegationRunFinalization.decodeDelegationRunResult(
+        JSON.stringify(historical),
+      ),
+    ).toThrow('schema version is unsupported');
+    const migrated = DelegationRunFinalization.migrateDelegationRunResult(
+      historical,
+      'f'.repeat(40),
+    );
+    expect(historical).toEqual(before);
+    expect(migrated.schemaVersion).toBe(
+      DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION,
+    );
+    expect(migrated.originMainSha).toBe(historical.originMainSha);
+    expect(migrated.pinnedLocalDevSha).toBe(historical.pinnedLocalDevSha);
+    expect(migrated.featureHeadSha).toBe('f'.repeat(40));
+  });
+
   test('recursively closes three tiers, retains failure evidence, and is idempotent', async () => {
     const workingDirectory = await mkdtemp(join(tmpdir(), 'loom-aggregate-'));
     try {

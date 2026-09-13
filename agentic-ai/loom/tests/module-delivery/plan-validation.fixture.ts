@@ -18,6 +18,7 @@ import type {
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlanV2,
   ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV4,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -124,7 +125,7 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static plan(fixture: PlanFixture): ModuleDeliveryPlanV3 {
+  static plan(fixture: PlanFixture): ModuleDeliveryPlanV4 {
     return new ModuleDeliveryPlanValidationScenario(fixture).execute();
   }
 
@@ -143,10 +144,27 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  private execute(): ModuleDeliveryPlanV3 {
-    const fixture = this.request;
+  static historicalV3Plan(fixture: PlanFixture): ModuleDeliveryPlanV3 {
+    const plan = ModuleDeliveryPlanValidationScenario.plan(fixture);
     return {
       version: 3,
+      generation: plan.generation,
+      sourceCommit: plan.sourceCommit,
+      originMainSha: plan.originMainSha,
+      pinnedLocalDevSha: plan.pinnedLocalDevSha,
+      maxAgentDepth: plan.maxAgentDepth,
+      maxAttempts: plan.maxAttempts,
+      parentOwnedResources: plan.parentOwnedResources,
+      parentJoin: plan.parentJoin,
+      nodes: plan.nodes,
+      edgeContracts: plan.edgeContracts,
+    };
+  }
+
+  private execute(): ModuleDeliveryPlanV4 {
+    const fixture = this.request;
+    return {
+      version: 4,
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
       originMainSha: ORIGIN_MAIN_SHA,
@@ -165,7 +183,7 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static validate(value: ModuleDeliveryPlanV3): ModuleDeliveryPlanValidation {
+  static validate(value: ModuleDeliveryPlanV4): ModuleDeliveryPlanValidation {
     return ModuleDeliveryPlanDecoder.decodeAndValidate(JSON.stringify(value));
   }
 

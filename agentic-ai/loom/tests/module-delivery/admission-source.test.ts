@@ -21,7 +21,7 @@ import { ModuleAdmissionSource } from '../../src/module-delivery/admission-sourc
 import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-support.ts';
 
 import type {
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV4,
   ModuleDeliveryWriteNodeV2,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
@@ -75,7 +75,7 @@ export class ModuleDeliveryAdmissionSourceScenario {
         expectedCommitHandoff: true,
       },
     };
-    const plan: ModuleDeliveryPlanV3 = {
+    const plan: ModuleDeliveryPlanV4 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
       generation: request.generation,
       sourceCommit: request.sourceCommit,

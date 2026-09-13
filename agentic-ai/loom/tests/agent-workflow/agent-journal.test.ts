@@ -572,7 +572,7 @@ describe('agent attempt journal', () => {
 
     const unsupportedVersion = {
       ...legacyWithoutAdapter,
-      workflowVersion: '5.0.0',
+      workflowVersion: '6.0.0',
     };
     const unsupportedReplayRequest = { events: [unsupportedVersion] };
     expect(() => AgentAttemptReplay.replay(unsupportedReplayRequest)).toThrow(

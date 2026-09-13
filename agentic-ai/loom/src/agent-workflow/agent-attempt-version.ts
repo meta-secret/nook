@@ -5,6 +5,14 @@ export class AgentAttemptSchema {
   static assertCurrent(version: WorkflowVersion): void {
     return new AgentAttemptSchema(version).execute();
   }
+  static assertCompatible(version: WorkflowVersion): void {
+    if (
+      version === CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION ||
+      version === BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION
+    )
+      return;
+    return new AgentAttemptSchema(version).execute();
+  }
   private execute(): void {
     const version = this.request;
     if (version === CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION) return;
@@ -23,13 +31,22 @@ export class AgentAttemptSchema {
         'Agent attempt journal version 3.0.0 may contain persisted runtime activity. Remove and recreate the persisted attempt before retrying.',
       );
     }
+    if (version === BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION) {
+      throw new AgentAttemptSchemaCompatibilityError(
+        'Agent attempt journal version 4.0.0 predates feature-head provenance. Migrate the persisted attempt with an explicit feature head before retrying.',
+      );
+    }
     throw new AgentAttemptSchemaCompatibilityError(
       'Agent attempt journal version is unsupported. Remove or explicitly migrate the persisted attempt before retrying.',
     );
   }
 }
 
-export const CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION: WorkflowVersion = '4.0.0';
+export const CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION: WorkflowVersion = '5.0.0';
+
+/** Version 4 persisted origin/main and pinned-dev provenance, but no feature head. */
+export const BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION: WorkflowVersion =
+  '4.0.0';
 
 export const PERSISTED_ACTIVITY_AGENT_ATTEMPT_WORKFLOW_VERSION: WorkflowVersion =
   '3.0.0';

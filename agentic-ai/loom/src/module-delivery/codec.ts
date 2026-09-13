@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { UntrustedYamlBoundary } from '../lib/guards.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 import { AgentAttemptParentKind } from '../agent-workflow/domain.ts';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
 import type { UntrustedYamlNode } from '../lib/guards.ts';
@@ -35,6 +36,7 @@ import type {
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
   ModuleDeliveryParentJoin,
+  ModuleDeliveryPlanV4,
   ModuleDeliveryPlanV3,
   ModuleDeliveryPlanV2,
   ModuleDeliveryExpectedProducerIdentity,
@@ -98,15 +100,17 @@ export class ModuleDeliveryPlanSchema {
     if (
       version !== 1 &&
       version !== 2 &&
+      version !== 3 &&
       version !== MODULE_DELIVERY_PLAN_VERSION
     )
       ModuleDeliveryPlanSchema.fail(
-        '$.version: plan version must be 1, 2, or 3.',
+        '$.version: plan version must be 1, 2, 3, or 4.',
       );
     const legacy = version === 1;
     if (legacy) fields.requireExactKeys(LegacyModulePlanRootField);
     else if (version === 2) fields.requireExactKeys(ModulePlanRootField);
-    else fields.requireExactKeys(ModulePlanV3RootField);
+    else if (version === 3) fields.requireExactKeys(ModulePlanV3RootField);
+    else fields.requireExactKeys(ModulePlanV4RootField);
     const parentJoinRequest: ModulePlanObjectDecodeRequest = {
       record: fields.recordField('parentJoin'),
       path: '$.parentJoin',
@@ -139,27 +143,88 @@ export class ModuleDeliveryPlanSchema {
       nodes,
       edgeContracts,
     };
-    const plan: ModuleDeliveryPlanV2 | ModuleDeliveryPlanV3 =
-      version === MODULE_DELIVERY_PLAN_VERSION
-        ? {
-            version: MODULE_DELIVERY_PLAN_VERSION,
-            generation,
-            sourceCommit,
-            originMainSha: fields.string('originMainSha'),
-            pinnedLocalDevSha: fields.string('pinnedLocalDevSha'),
-            featureHeadSha: fields.string('featureHeadSha'),
-            maxAgentDepth,
-            maxAttempts,
-            parentOwnedResources,
-            parentJoin,
-            nodes,
-            edgeContracts,
-          }
-        : { version: 2, ...common };
+    if (version === 1) {
+      const plan: LegacyModuleDeliveryPlan = {
+        version: 1,
+        sourceCommit,
+        maxAgentDepth,
+        maxAttempts,
+        parentOwnedResources,
+        parentJoin,
+        nodes,
+        edgeContracts,
+      };
+      return {
+        status: ModuleDeliveryCompatibilityStatus.Decoded,
+        inputVersion: version,
+        plan,
+      };
+    }
+    if (version === 2) {
+      const plan: ModuleDeliveryPlanV2 = { version: 2, ...common };
+      return {
+        status: ModuleDeliveryCompatibilityStatus.Decoded,
+        inputVersion: version,
+        plan,
+      };
+    }
+    if (version === 3) {
+      const plan: ModuleDeliveryPlanV3 = {
+        version: 3,
+        generation,
+        sourceCommit,
+        originMainSha: fields.string('originMainSha'),
+        pinnedLocalDevSha: fields.string('pinnedLocalDevSha'),
+        maxAgentDepth,
+        maxAttempts,
+        parentOwnedResources,
+        parentJoin,
+        nodes,
+        edgeContracts,
+      };
+      return {
+        status: ModuleDeliveryCompatibilityStatus.Decoded,
+        inputVersion: version,
+        plan,
+      };
+    }
+    const plan: ModuleDeliveryPlanV4 = {
+      version: MODULE_DELIVERY_PLAN_VERSION,
+      generation,
+      sourceCommit,
+      originMainSha: fields.string('originMainSha'),
+      pinnedLocalDevSha: fields.string('pinnedLocalDevSha'),
+      featureHeadSha: fields.string('featureHeadSha'),
+      maxAgentDepth,
+      maxAttempts,
+      parentOwnedResources,
+      parentJoin,
+      nodes,
+      edgeContracts,
+    };
     return {
       status: ModuleDeliveryCompatibilityStatus.Decoded,
       inputVersion: version,
       plan,
+    };
+  }
+
+  /** Creates a current plan from V3 evidence without mutating the old plan. */
+  static migrateModuleDeliveryPlan(
+    plan: ModuleDeliveryPlanV3,
+    featureHeadSha: string,
+  ): ModuleDeliveryPlanV4 {
+    if (plan.version !== 3)
+      throw new Error('Only module delivery plan version 3 can be migrated.');
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha: plan.originMainSha,
+      pinnedLocalDevSha: plan.pinnedLocalDevSha,
+      featureHeadSha,
+    });
+    return {
+      ...plan,
+      version: MODULE_DELIVERY_PLAN_VERSION,
+      featureHeadSha,
     };
   }
 
@@ -656,7 +721,7 @@ export class ModuleDeliveryPlanSchema {
     };
   }
 
-  static moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV3): string {
+  static moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV4): string {
     const nodes = plan.nodes
       .map(({ taskId }) => taskId)
       .sort()
@@ -796,11 +861,11 @@ type LegacyTaskTeamRequest = {
   readonly moduleRoot: string;
 };
 type ModulePlanDigestNodeLookup = {
-  readonly plan: ModuleDeliveryPlanV3;
+  readonly plan: ModuleDeliveryPlanV4;
   readonly taskId: string;
 };
 type ModulePlanDigestContractLookup = {
-  readonly plan: ModuleDeliveryPlanV3;
+  readonly plan: ModuleDeliveryPlanV4;
   readonly key: string;
 };
 
@@ -816,6 +881,19 @@ enum ModulePlanRootField {
   Version = 'version',
 }
 enum ModulePlanV3RootField {
+  EdgeContracts = 'edgeContracts',
+  Generation = 'generation',
+  MaxAgentDepth = 'maxAgentDepth',
+  MaxAttempts = 'maxAttempts',
+  Nodes = 'nodes',
+  ParentJoin = 'parentJoin',
+  ParentOwnedResources = 'parentOwnedResources',
+  OriginMainSha = 'originMainSha',
+  PinnedLocalDevSha = 'pinnedLocalDevSha',
+  SourceCommit = 'sourceCommit',
+  Version = 'version',
+}
+enum ModulePlanV4RootField {
   EdgeContracts = 'edgeContracts',
   Generation = 'generation',
   MaxAgentDepth = 'maxAgentDepth',

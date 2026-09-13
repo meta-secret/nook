@@ -264,7 +264,9 @@ export class DelegationPlanContract {
   }
 }
 
-export const DELEGATION_PLAN_SCHEMA_VERSION = '1.0.0';
+export const DELEGATION_PLAN_SCHEMA_VERSION = '2.0.0';
+
+export const LEGACY_DELEGATION_PLAN_SCHEMA_VERSION = '1.0.0';
 
 export const MAX_DELEGATION_ATTEMPTS = 16;
 
@@ -305,7 +307,18 @@ export type DelegationAdmissionRequest = PinnedDevBaseEvidence & {
   readonly parent: AgentAttemptParent;
 };
 
-export type DelegationPlan = PinnedDevBaseEvidence & {
+export type DelegationPlanV1 = {
+  readonly schemaVersion: typeof LEGACY_DELEGATION_PLAN_SCHEMA_VERSION;
+  readonly workflow: DelegatedAgentWorkflowName.AgentWork;
+  readonly runId: string;
+  readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly rootMaterializer: DelegationAttemptIdentity;
+  readonly attempts: readonly DelegationAttemptDeclaration[];
+};
+
+export type DelegationPlanV2 = PinnedDevBaseEvidence & {
   readonly schemaVersion: typeof DELEGATION_PLAN_SCHEMA_VERSION;
   readonly workflow: DelegatedAgentWorkflowName.AgentWork;
   readonly runId: string;
@@ -313,6 +326,9 @@ export type DelegationPlan = PinnedDevBaseEvidence & {
   readonly rootMaterializer: DelegationAttemptIdentity;
   readonly attempts: readonly DelegationAttemptDeclaration[];
 };
+
+/** Canonical delegation plans always carry the feature-head provenance chain. */
+export type DelegationPlan = DelegationPlanV2;
 
 export type DelegationRunEventMetadata = PinnedDevBaseEvidence & {
   readonly runId: string;

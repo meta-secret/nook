@@ -10,6 +10,8 @@ import type {
 import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from './agent-attempt-version.ts';
 import {
   AgentAttemptAdapterKind,
+  AgentAttemptParentKind,
+  MaterializedViewAuthorKind,
   MaterializedViewPresence,
   TaskTerminalKind,
 } from './domain.ts';
@@ -94,7 +96,137 @@ export class DelegationRunFinalization {
 
   private static readonly MAX_FINALIZATION_REQUEST_BYTES = 262_144;
 
-  static readonly DELEGATION_RUN_RESULT_SCHEMA_VERSION = '1.0.0';
+  static readonly DELEGATION_RUN_RESULT_SCHEMA_VERSION = '2.0.0';
+
+  static readonly LEGACY_DELEGATION_RUN_RESULT_SCHEMA_VERSION = '1.0.0';
+
+  private static readonly RUN_RESULT_FIELDS = [
+    'schemaVersion',
+    'runId',
+    'sourceCommit',
+    'originMainSha',
+    'pinnedLocalDevSha',
+    'featureHeadSha',
+    'planSha256',
+    'rootMaterializer',
+    'attempts',
+    'barrierEvidence',
+    'materializedView',
+  ] as const;
+
+  private static readonly LEGACY_RUN_RESULT_FIELDS = [
+    'schemaVersion',
+    'runId',
+    'sourceCommit',
+    'originMainSha',
+    'pinnedLocalDevSha',
+    'planSha256',
+    'rootMaterializer',
+    'attempts',
+    'barrierEvidence',
+    'materializedView',
+  ] as const;
+
+  /** Decodes historical results without adding provenance to the old value. */
+  static decodeCompatibleDelegationRunResult(
+    serialized: string,
+  ): DelegationRunResult | DelegationRunResultV1 {
+    const transport = UntrustedYamlBoundary.parseJson(serialized);
+    if (!UntrustedYamlBoundary.isRecord(transport))
+      throw new Error('Delegation run result must be an object.');
+    const reader = new RecordReader(transport);
+    const schemaVersion = reader.string('schemaVersion');
+    const legacy =
+      schemaVersion ===
+      DelegationRunFinalization.LEGACY_DELEGATION_RUN_RESULT_SCHEMA_VERSION;
+    DelegationRunFinalization.assertExactKeys(reader.record)(
+      legacy
+        ? DelegationRunFinalization.LEGACY_RUN_RESULT_FIELDS
+        : DelegationRunFinalization.RUN_RESULT_FIELDS,
+    );
+    if (
+      !legacy &&
+      schemaVersion !==
+        DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION
+    )
+      throw new Error('Delegation run result schema version is unsupported.');
+    const common = {
+      runId: reader.string('runId'),
+      sourceCommit: reader.string('sourceCommit'),
+      originMainSha: reader.string('originMainSha'),
+      pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
+      planSha256: reader.sha256('planSha256'),
+      rootMaterializer: DelegationRunFinalization.decodeIdentity(
+        reader.node('rootMaterializer'),
+      ),
+      attempts: reader
+        .array('attempts')
+        .map(DelegationRunFinalization.decodeFinalizedAttempt),
+      barrierEvidence: reader
+        .array('barrierEvidence')
+        .map(DelegationRunFinalization.decodeBarrierEvidence),
+      materializedView: DelegationRunFinalization.decodeProjection(
+        reader.node('materializedView'),
+      ),
+    };
+    if (legacy) {
+      return {
+        schemaVersion:
+          DelegationRunFinalization.LEGACY_DELEGATION_RUN_RESULT_SCHEMA_VERSION,
+        ...common,
+      };
+    }
+    const result: DelegationRunResult = {
+      schemaVersion:
+        DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION,
+      ...common,
+      featureHeadSha: reader.string('featureHeadSha'),
+    };
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha: result.originMainSha,
+      pinnedLocalDevSha: result.pinnedLocalDevSha,
+      featureHeadSha: result.featureHeadSha,
+    });
+    return result;
+  }
+
+  static decodeDelegationRunResult(
+    serialized: string,
+  ): DelegationRunResult {
+    const decoded =
+      DelegationRunFinalization.decodeCompatibleDelegationRunResult(serialized);
+    if (
+      decoded.schemaVersion !==
+      DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION
+    )
+      throw new Error('Delegation run result schema version is unsupported.');
+    return decoded;
+  }
+
+  /** Creates a current result from V1 evidence without rewriting the V1 value. */
+  static migrateDelegationRunResult(
+    result: DelegationRunResultV1,
+    featureHeadSha: string,
+  ): DelegationRunResult {
+    if (
+      result.schemaVersion !==
+      DelegationRunFinalization.LEGACY_DELEGATION_RUN_RESULT_SCHEMA_VERSION
+    )
+      throw new Error(
+        'Only delegation run result schema 1.0.0 can be migrated.',
+      );
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha: result.originMainSha,
+      pinnedLocalDevSha: result.pinnedLocalDevSha,
+      featureHeadSha,
+    });
+    return {
+      ...result,
+      schemaVersion:
+        DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION,
+      featureHeadSha,
+    };
+  }
 
   static decodeDelegationFinalizationRequest(
     serialized: string,
@@ -527,6 +659,111 @@ export class DelegationRunFinalization {
     };
   }
 
+  private static decodeFinalizedAttempt(
+    node: UntrustedYamlNode,
+  ): DelegationFinalizedAttempt {
+    const reader = new RecordReader(
+      DelegationRunFinalization.requireRecord(node),
+    );
+    DelegationRunFinalization.assertExactKeys(reader.record)([
+      'identity',
+      'depth',
+      'parent',
+      'terminalKind',
+      'result',
+      'view',
+    ]);
+    return {
+      identity: DelegationRunFinalization.decodeIdentity(
+        reader.node('identity'),
+      ),
+      depth: reader.number('depth'),
+      parent: DelegationRunFinalization.decodeParent(reader.node('parent')),
+      terminalKind: DelegationRunFinalization.requireTaskTerminalKind(
+        reader.string('terminalKind'),
+      ),
+      result: DelegationRunFinalization.decodeProjection(
+        reader.node('result'),
+      ),
+      view: DelegationRunFinalization.decodeView(reader.node('view')),
+    };
+  }
+
+  private static decodeProjection(
+    node: UntrustedYamlNode,
+  ): ProjectionReference {
+    const reader = new RecordReader(
+      DelegationRunFinalization.requireRecord(node),
+    );
+    DelegationRunFinalization.assertExactKeys(reader.record)([
+      'path',
+      'sha256',
+    ]);
+    return { path: reader.string('path'), sha256: reader.sha256('sha256') };
+  }
+
+  private static decodeView(
+    node: UntrustedYamlNode,
+  ): MaterializedViewReference {
+    const reader = new RecordReader(
+      DelegationRunFinalization.requireRecord(node),
+    );
+    const presence = reader.string('presence');
+    if (presence === MaterializedViewPresence.Unavailable) {
+      DelegationRunFinalization.assertExactKeys(reader.record)([
+        'presence',
+        'reason',
+      ]);
+      return { presence, reason: reader.string('reason') };
+    }
+    if (presence === MaterializedViewPresence.Recorded) {
+      DelegationRunFinalization.assertExactKeys(reader.record)([
+        'presence',
+        'authorKind',
+        'projection',
+        'eventHighWaterMark',
+      ]);
+      const authorKind = reader.string('authorKind');
+      if (!Object.values(MaterializedViewAuthorKind).includes(authorKind as MaterializedViewAuthorKind))
+        throw new Error('Delegation materialized view author is invalid.');
+      return {
+        presence,
+        authorKind: authorKind as MaterializedViewAuthorKind,
+        projection: DelegationRunFinalization.decodeProjection(
+          reader.node('projection'),
+        ),
+        eventHighWaterMark: reader.number('eventHighWaterMark'),
+      };
+    }
+    throw new Error('Delegation materialized view presence is invalid.');
+  }
+
+  private static decodeParent(node: UntrustedYamlNode): AgentAttemptParent {
+    const reader = new RecordReader(
+      DelegationRunFinalization.requireRecord(node),
+    );
+    const kind = reader.string('kind');
+    if (kind === AgentAttemptParentKind.WorkflowRoot) {
+      DelegationRunFinalization.assertExactKeys(reader.record)(['kind']);
+      return { kind };
+    }
+    if (kind === AgentAttemptParentKind.AgentAttempt) {
+      DelegationRunFinalization.assertExactKeys(reader.record)([
+        'kind',
+        'task',
+        'agent',
+        'attempt',
+      ]);
+      return {
+        kind,
+        task: reader.string('task'),
+        agent: reader.string('agent'),
+        attempt: reader.number('attempt'),
+      };
+    }
+    throw new Error('Delegation attempt parent kind is unsupported.');
+  }
+
   private static async assertExactAttemptStorage(
     loaded: LoadedDelegationRunState,
   ): Promise<void> {
@@ -744,6 +981,19 @@ export type DelegationRunResult = PinnedDevBaseEvidence & {
   readonly schemaVersion: typeof DelegationRunFinalization.DELEGATION_RUN_RESULT_SCHEMA_VERSION;
   readonly runId: string;
   readonly sourceCommit: string;
+  readonly planSha256: string;
+  readonly rootMaterializer: DelegationAttemptIdentity;
+  readonly attempts: readonly DelegationFinalizedAttempt[];
+  readonly barrierEvidence: readonly DelegationBarrierEvidence[];
+  readonly materializedView: ProjectionReference;
+};
+
+export type DelegationRunResultV1 = {
+  readonly schemaVersion: typeof DelegationRunFinalization.LEGACY_DELEGATION_RUN_RESULT_SCHEMA_VERSION;
+  readonly runId: string;
+  readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
   readonly planSha256: string;
   readonly rootMaterializer: DelegationAttemptIdentity;
   readonly attempts: readonly DelegationFinalizedAttempt[];

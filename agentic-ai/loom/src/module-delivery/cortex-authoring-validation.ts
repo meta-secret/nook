@@ -9,7 +9,7 @@ import {
   ModuleDeliveryTaskKind,
 } from './domain.ts';
 
-import type { ModuleDeliveryNodeV2, ModuleDeliveryPlanV3 } from './domain.ts';
+import type { ModuleDeliveryNodeV2, ModuleDeliveryPlanV4 } from './domain.ts';
 
 export class CortexAuthoringPolicy {
   private constructor(
@@ -222,6 +222,6 @@ export type CortexWriteAuthorizationRequest = {
 };
 
 export type ParentOwnedExclusionsRequest = {
-  readonly plan: ModuleDeliveryPlanV3;
+  readonly plan: ModuleDeliveryPlanV4;
   readonly node: ModuleDeliveryNodeV2;
 };

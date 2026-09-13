@@ -22,12 +22,15 @@ export { TeamKey } from '../team-agents/catalog.ts';
 export { ModuleEvidenceBoundary } from './evidence.ts';
 export type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
+  ModuleDeliveryAcceptedProviderEvidenceIdentityV1,
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryEvidenceDigestRequest,
 } from './evidence.ts';
 export {
+  LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   ModuleDeliveryEvidenceVerdict,
+  ModuleDeliveryEvidenceSchema,
   ModuleDeliveryProviderSubmissionKind,
   ModuleIntegrationPhase,
 } from './integration-provenance.ts';
@@ -36,6 +39,7 @@ export type {
   AcceptedModuleDeliveryWrite,
   ModuleDeliveryProviderSubmission,
   ModuleDeliveryReadOnlyEvidenceSubmission,
+  ModuleDeliveryReadOnlyEvidenceSubmissionV1,
   ModuleDeliveryWriteProviderSubmission,
 } from './integration-provenance.ts';
 export { ModuleWorktree } from './workspace.ts';

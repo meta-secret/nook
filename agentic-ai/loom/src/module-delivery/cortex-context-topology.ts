@@ -8,12 +8,12 @@ import { ModuleResourceContainment } from './resource-claim-containment.ts';
 
 import type { ResourceClaimListPair } from './resource-claim-containment.ts';
 
-import type { ModuleDeliveryPlanV3 } from './domain.ts';
+import type { ModuleDeliveryPlanV4 } from './domain.ts';
 
 export class CortexContextTopology {
-  private constructor(private readonly request: ModuleDeliveryPlanV3) {}
+  private constructor(private readonly request: ModuleDeliveryPlanV4) {}
   static precedence(
-    plan: ModuleDeliveryPlanV3,
+    plan: ModuleDeliveryPlanV4,
   ): readonly CortexContextPrecedence[] {
     return new CortexContextTopology(plan).execute();
   }

@@ -56,7 +56,7 @@ import {
 import type {
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV4,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryExecutionPrecedence,
   RejectedModuleDeliveryPlan,
@@ -87,7 +87,7 @@ export class ModuleDeliveryPlanDecoder {
       const issue: ModuleDeliveryIssue = {
         code: ModuleDeliveryIssueCode.InvalidField,
         path: '$.version',
-        message: 'Canonical validation requires authored plan version 3.',
+        message: 'Canonical validation requires authored plan version 4.',
       };
       const rejection: RejectedModuleDeliveryPlan = {
         status: ModuleDeliveryValidationStatus.Rejected,
@@ -99,7 +99,7 @@ export class ModuleDeliveryPlanDecoder {
   }
 
   private validateDecodedModuleDeliveryPlan(
-    plan: ModuleDeliveryPlanV3,
+    plan: ModuleDeliveryPlanV4,
   ): ModuleDeliveryPlanValidation {
     const issues: ModuleDeliveryIssue[] = [];
     const nodesById = new Map<string, ModuleDeliveryNodeV2>();

@@ -38,6 +38,12 @@ export type AgentAttemptEventMetadata = {
   readonly occurredAt: IsoTimestamp;
 };
 
+/** Version 4 persisted the fetched-main and pinned-dev evidence only. */
+export type LegacyAgentAttemptEventMetadata = Omit<
+  AgentAttemptEventMetadata,
+  'featureHeadSha'
+>;
+
 export type AgentAttemptStartedEvent = AgentAttemptEventMetadata & {
   readonly kind: AgentAttemptEventKind.AttemptStarted;
   readonly invocationContextSha256?: string;
@@ -65,6 +71,12 @@ export type AgentAttemptEvent =
   | AgentResultProjectedEvent
   | AgentViewProjectedEvent
   | AgentAttemptTerminalRecordedEvent;
+
+export type LegacyAgentAttemptEvent =
+  | Omit<AgentAttemptStartedEvent, 'featureHeadSha'>
+  | Omit<AgentResultProjectedEvent, 'featureHeadSha'>
+  | Omit<AgentViewProjectedEvent, 'featureHeadSha'>
+  | Omit<AgentAttemptTerminalRecordedEvent, 'featureHeadSha'>;
 
 export type AgentAttemptEventWithoutMetadata =
   | Omit<AgentAttemptStartedEvent, keyof AgentAttemptEventMetadata>

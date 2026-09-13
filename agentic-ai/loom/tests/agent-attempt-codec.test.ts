@@ -5,6 +5,7 @@ import {
 } from '../src/agent-workflow/attempt-codec.ts';
 import {
   AgentAttemptEventKind,
+  type LegacyAgentAttemptEvent,
   type AgentAttemptStartedEvent,
 } from '../src/agent-workflow/agent-events.ts';
 import {
@@ -14,7 +15,10 @@ import {
   TaskTerminalKind,
   type FailedTaskTerminal,
 } from '../src/agent-workflow/domain.ts';
-import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../src/agent-workflow/agent-attempt-version.ts';
+import {
+  BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION,
+  CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
+} from '../src/agent-workflow/agent-attempt-version.ts';
 
 const terminal: FailedTaskTerminal<string> = {
   kind: TaskTerminalKind.Failed,
@@ -49,6 +53,32 @@ test('decodes concrete terminal and journal variants without retaining transport
   expect(
     AgentAttemptTransport.decodeEvents(`${JSON.stringify(started)}\n`),
   ).toEqual([started]);
+});
+
+test('decodes and migrates the historical v4 journal without mutating it', () => {
+  const { featureHeadSha: _featureHeadSha, ...startedWithoutFeature } = started;
+  const historical: LegacyAgentAttemptEvent = {
+    ...startedWithoutFeature,
+    workflowVersion: BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION,
+  };
+  const decoded = AgentAttemptTransport.decodeCompatibleEvent(
+    JSON.stringify(historical),
+  );
+  expect(decoded).toEqual(historical);
+  expect(Object.hasOwn(decoded, 'featureHeadSha')).toBe(false);
+  expect(() => AgentAttemptTransport.decodeEvent(JSON.stringify(historical))).toThrow(
+    AgentAttemptDecodeError,
+  );
+  const migrated = AgentAttemptTransport.migrateEvent(
+    decoded as LegacyAgentAttemptEvent,
+    'b'.repeat(40),
+  );
+  expect(historical).toEqual({
+    ...startedWithoutFeature,
+    workflowVersion: BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION,
+  });
+  expect(migrated.workflowVersion).toBe(CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION);
+  expect(migrated.featureHeadSha).toBe('b'.repeat(40));
 });
 
 test('rejects terminal variants with missing or mismatched payloads', () => {

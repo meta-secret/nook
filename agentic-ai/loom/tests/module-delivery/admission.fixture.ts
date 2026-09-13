@@ -15,6 +15,7 @@ import {
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
   ModuleDeliveryProviderSubmissionKind,
+  MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   ModuleGenerationAuthority,
   ModuleDeliveryPlanDecoder,
   ModuleEvidenceBoundary,
@@ -30,7 +31,7 @@ import type {
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV4,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryWriteNodeV2,
   RecordModuleDeliveryAttemptDispositionRequest,
@@ -88,11 +89,11 @@ export class ModuleDeliveryAdmissionScenario {
     };
   }
 
-  static planAt(sourceCommit: string): ModuleDeliveryPlanV3 {
+  static planAt(sourceCommit: string): ModuleDeliveryPlanV4 {
     return new ModuleDeliveryAdmissionScenario(sourceCommit).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV3 {
+  private execute(): ModuleDeliveryPlanV4 {
     const sourceCommit = this.request;
     const plan = structuredClone(PLAN);
     Object.assign(plan, {
@@ -109,7 +110,7 @@ export class ModuleDeliveryAdmissionScenario {
     return plan;
   }
 
-  static generationPlan(request: GenerationPlanRequest): ModuleDeliveryPlanV3 {
+  static generationPlan(request: GenerationPlanRequest): ModuleDeliveryPlanV4 {
     const plan = structuredClone(
       ModuleDeliveryAdmissionScenario.planAt(request.sourceCommit),
     );
@@ -124,7 +125,7 @@ export class ModuleDeliveryAdmissionScenario {
     return plan;
   }
 
-  static validate(plan: ModuleDeliveryPlanV3): ValidatedModuleDeliveryPlan {
+  static validate(plan: ModuleDeliveryPlanV4): ValidatedModuleDeliveryPlan {
     const result = ModuleDeliveryPlanDecoder.decodeAndValidate(
       JSON.stringify(plan),
     );
@@ -259,7 +260,7 @@ export class ModuleDeliveryAdmissionScenario {
     };
     return {
       kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
-      schemaVersion: 1,
+      schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
       taskId: node.taskId,
       attempt: request.lease.attempt,
       generation: request.lease.generation,
@@ -375,7 +376,7 @@ export type GenerationRestartRequest = {
 
 export type GenerationPlanUpdate = {
   readonly generation: number;
-  readonly nodes: ModuleDeliveryPlanV3['nodes'];
+      readonly nodes: ModuleDeliveryPlanV4['nodes'];
 };
 
 export type EvidenceSubmissionRequest = {
@@ -434,8 +435,8 @@ export const edge: ModuleDeliveryEdgeContract = {
   owningTests: ['alpha contract test'],
 };
 
-export const PLAN: ModuleDeliveryPlanV3 = {
-  version: 3,
+export const PLAN: ModuleDeliveryPlanV4 = {
+  version: 4,
   generation: 1,
   sourceCommit: SOURCE,
   originMainSha: ORIGIN_MAIN_SHA,

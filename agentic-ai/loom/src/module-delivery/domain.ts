@@ -3,9 +3,9 @@ import { TaskResourceClaim } from '../agent-workflow/domain.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 
-export const MODULE_DELIVERY_PLAN_VERSION = 3;
+export const MODULE_DELIVERY_PLAN_VERSION = 4;
 export type ModuleDeliveryPlanInputVersion =
-  1 | 2 | typeof MODULE_DELIVERY_PLAN_VERSION;
+  1 | 2 | 3 | typeof MODULE_DELIVERY_PLAN_VERSION;
 export const MAX_MODULE_DELIVERY_NODES = 64;
 export const MAX_MODULE_DELIVERY_AGENT_DEPTH = 3;
 export const MAX_MODULE_DELIVERY_ATTEMPTS = 5;
@@ -357,7 +357,7 @@ export type ModuleDeliveryParentJoin = {
   readonly validationCommands: readonly string[];
 };
 
-/** Historical V2 plan shape. Keep this wire contract free of V3 bootstrap fields. */
+/** Historical V2 plan shape. Keep this wire contract free of bootstrap fields. */
 export type ModuleDeliveryPlanV2 = {
   readonly version: 2;
   readonly generation: number;
@@ -370,7 +370,22 @@ export type ModuleDeliveryPlanV2 = {
   readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
 };
 
-export type ModuleDeliveryPlanV3 = PinnedDevBaseEvidence & {
+/** Historical V3 plan shape. Keep this wire contract free of feature-head evidence. */
+export type ModuleDeliveryPlanV3 = {
+  readonly version: 3;
+  readonly generation: number;
+  readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly maxAgentDepth: number;
+  readonly maxAttempts: number;
+  readonly parentOwnedResources: readonly string[];
+  readonly parentJoin: ModuleDeliveryParentJoin;
+  readonly nodes: readonly ModuleDeliveryNodeV2[];
+  readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
+};
+
+export type ModuleDeliveryPlanV4 = PinnedDevBaseEvidence & {
   readonly version: typeof MODULE_DELIVERY_PLAN_VERSION;
   readonly generation: number;
   readonly sourceCommit: string;
@@ -442,7 +457,8 @@ export type ModuleDeliveryNode =
 export type ModuleDeliveryPlanInput =
   | LegacyModuleDeliveryPlan
   | ModuleDeliveryPlanV2
-  | ModuleDeliveryPlanV3;
+  | ModuleDeliveryPlanV3
+  | ModuleDeliveryPlanV4;
 
 export type ModuleDeliveryPlan = ModuleDeliveryPlanInput;
 
@@ -490,13 +506,23 @@ export enum ModuleDeliveryCompatibilityStatus {
 export type DecodedCompatibleModuleDeliveryPlan =
   | {
       readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-      readonly inputVersion: 1 | 2;
+      readonly inputVersion: 1;
+      readonly plan: LegacyModuleDeliveryPlan;
+    }
+  | {
+      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
+      readonly inputVersion: 2;
       readonly plan: ModuleDeliveryPlanV2;
     }
   | {
       readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-      readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
+      readonly inputVersion: 3;
       readonly plan: ModuleDeliveryPlanV3;
+    }
+  | {
+      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
+      readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
+      readonly plan: ModuleDeliveryPlanV4;
     };
 
 export type RejectedCompatibleModuleDeliveryPlan = {
@@ -510,7 +536,7 @@ export type CompatibleModuleDeliveryPlanDecode =
 export type ValidatedModuleDeliveryPlan = {
   readonly status: ModuleDeliveryValidationStatus.Accepted;
   readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
-  readonly plan: ModuleDeliveryPlanV3;
+  readonly plan: ModuleDeliveryPlanV4;
   readonly planDigest: string;
   readonly topologicalOrder: readonly string[];
   readonly waves: readonly (readonly string[])[];

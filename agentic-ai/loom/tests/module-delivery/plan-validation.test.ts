@@ -36,7 +36,7 @@ import type {
   ModuleDeliveryExecutionPrecedence,
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlan,
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV4,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
@@ -231,7 +231,7 @@ describe('reviewed module delivery plan', () => {
     }
   });
 
-  test('decodes the historical v2 root without upgrading it to v3', () => {
+  test('decodes the historical v2 root without upgrading it to v4', () => {
     const historical =
       ModuleDeliveryPlanValidationScenario.historicalV2Plan({
         nodes: [CORE_NODE],
@@ -252,6 +252,43 @@ describe('reviewed module delivery plan', () => {
         false,
       );
     }
+    const canonical = ModuleDeliveryPlanDecoder.decodeAndValidate(
+      JSON.stringify(historical),
+    );
+    expect(canonical.status).toBe(ModuleDeliveryValidationStatus.Rejected);
+    expect(ModuleDeliveryPlanValidationScenario.codes(canonical)).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
+    );
+  });
+
+  test('decodes and migrates the historical v3 root without mutating it', () => {
+    const historical =
+      ModuleDeliveryPlanValidationScenario.historicalV3Plan({
+        nodes: [CORE_NODE],
+        edgeContracts: [],
+      });
+    const before = structuredClone(historical);
+    const compatibility =
+      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
+        JSON.stringify(historical),
+      );
+    expect(compatibility.status).toBe(
+      ModuleDeliveryCompatibilityStatus.Decoded,
+    );
+    if (compatibility.status === ModuleDeliveryCompatibilityStatus.Decoded) {
+      expect(compatibility.inputVersion).toBe(3);
+      expect(compatibility.plan).toEqual(historical);
+      expect(Object.hasOwn(compatibility.plan, 'featureHeadSha')).toBe(false);
+    }
+    const migrated = ModuleDeliveryPlanSchema.migrateModuleDeliveryPlan(
+      historical,
+      '4'.repeat(40),
+    );
+    expect(historical).toEqual(before);
+    expect(migrated.version).toBe(4);
+    expect(migrated.originMainSha).toBe(historical.originMainSha);
+    expect(migrated.pinnedLocalDevSha).toBe(historical.pinnedLocalDevSha);
+    expect(migrated.featureHeadSha).toBe('4'.repeat(40));
     const canonical = ModuleDeliveryPlanDecoder.decodeAndValidate(
       JSON.stringify(historical),
     );
@@ -411,7 +448,7 @@ describe('reviewed module delivery plan', () => {
         commands: ['task core:second', 'task core:first'],
       },
     };
-    const reversedNodePlan: ModuleDeliveryPlanV3 = {
+    const reversedNodePlan: ModuleDeliveryPlanV4 = {
       ...orderedPlan,
       nodes: [reversedNode],
     };
@@ -481,7 +518,7 @@ describe('reviewed module delivery plan', () => {
       edgeContracts: DEFAULT_EDGES,
     };
     const validPlan = ModuleDeliveryPlanValidationScenario.plan(fixture);
-    const invalidPlan: ModuleDeliveryPlanV3 = {
+    const invalidPlan: ModuleDeliveryPlanV4 = {
       ...validPlan,
       sourceCommit: 'main',
       maxAgentDepth: 4,

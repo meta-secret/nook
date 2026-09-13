@@ -24,7 +24,7 @@ import type {
   LegacyModuleDeliveryPlan,
   ModuleDeliveryEdgeContract,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV4,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -123,16 +123,16 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
     return value;
   }
 
-  static plan(fixture: PlanFixture): ModuleDeliveryPlanV3 {
+  static plan(fixture: PlanFixture): ModuleDeliveryPlanV4 {
     return new ModuleDeliveryIntegrationAdmissionGuardScenario(
       fixture,
     ).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV3 {
+  private execute(): ModuleDeliveryPlanV4 {
     const fixture = this.request;
     return {
-      version: 3,
+      version: 4,
       generation: 1,
       sourceCommit: fixture.sourceCommit,
       originMainSha: ORIGIN_MAIN_SHA,
@@ -151,11 +151,11 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
     };
   }
 
-  static validate(value: ModuleDeliveryPlanV3): ModuleDeliveryPlanValidation {
+  static validate(value: ModuleDeliveryPlanV4): ModuleDeliveryPlanValidation {
     return ModuleDeliveryPlanDecoder.decodeAndValidate(JSON.stringify(value));
   }
 
-  static validated(value: ModuleDeliveryPlanV3): ValidatedModuleDeliveryPlan {
+  static validated(value: ModuleDeliveryPlanV4): ValidatedModuleDeliveryPlan {
     const result =
       ModuleDeliveryIntegrationAdmissionGuardScenario.validate(value);
     if (result.status !== ModuleDeliveryValidationStatus.Accepted) {

@@ -12,12 +12,14 @@ import {
   DelegationBarrierPolicy,
   DelegationRunEventKind,
   DelegationPlanContract,
+  LEGACY_DELEGATION_PLAN_SCHEMA_VERSION,
 } from './delegation-domain.ts';
 import type {
   DelegationAdmissionRequest,
   DelegationAttemptDeclaration,
   DelegationAttemptIdentity,
   DelegationPlan,
+  DelegationPlanV1,
   DelegationRunEvent,
   DelegationRunEventMetadata,
   DelegationTerminalBarrier,
@@ -44,6 +46,17 @@ export class DelegationJournalSchema {
     'originMainSha',
     'pinnedLocalDevSha',
     'featureHeadSha',
+    'rootMaterializer',
+    'attempts',
+  ] as const;
+
+  private static readonly LEGACY_PLAN_FIELDS = [
+    'schemaVersion',
+    'workflow',
+    'runId',
+    'sourceCommit',
+    'originMainSha',
+    'pinnedLocalDevSha',
     'rootMaterializer',
     'attempts',
   ] as const;
@@ -111,25 +124,43 @@ export class DelegationJournalSchema {
   ] as const;
 
   static decodeDelegationPlan(serialized: string): DelegationPlan {
+    const decoded = DelegationJournalSchema.decodeCompatibleDelegationPlan(
+      serialized,
+    );
+    if (decoded.schemaVersion !== DELEGATION_PLAN_SCHEMA_VERSION)
+      throw new Error('Delegation plan schema version is unsupported.');
+    return decoded;
+  }
+
+  /** Decodes historical plans without rewriting their wire shape. */
+  static decodeCompatibleDelegationPlan(
+    serialized: string,
+  ): DelegationPlan | DelegationPlanV1 {
     const transport = UntrustedYamlBoundary.parseJson(serialized);
     const reader = new RecordReader(
       DelegationJournalSchema.requireRecord(transport),
     );
-    DelegationJournalSchema.assertExactKeys(reader.record)(
-      DelegationJournalSchema.PLAN_FIELDS,
-    );
-    if (reader.string('schemaVersion') !== DELEGATION_PLAN_SCHEMA_VERSION)
-      throw new Error('Delegation plan schema version is unsupported.');
+    const schemaVersion = reader.string('schemaVersion');
+    const legacy = schemaVersion === LEGACY_DELEGATION_PLAN_SCHEMA_VERSION;
+    if (legacy)
+      DelegationJournalSchema.assertExactKeys(reader.record)(
+        DelegationJournalSchema.LEGACY_PLAN_FIELDS,
+      );
+    else {
+      DelegationJournalSchema.assertExactKeys(reader.record)(
+        DelegationJournalSchema.PLAN_FIELDS,
+      );
+      if (schemaVersion !== DELEGATION_PLAN_SCHEMA_VERSION)
+        throw new Error('Delegation plan schema version is unsupported.');
+    }
     if (reader.string('workflow') !== DelegatedAgentWorkflowName.AgentWork)
       throw new Error('Delegation plan workflow is unsupported.');
-    const plan: DelegationPlan = {
-      schemaVersion: DELEGATION_PLAN_SCHEMA_VERSION,
+    const common = {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       runId: reader.string('runId'),
       sourceCommit: reader.string('sourceCommit'),
       originMainSha: reader.string('originMainSha'),
       pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
-      featureHeadSha: reader.string('featureHeadSha'),
       rootMaterializer: DelegationJournalSchema.decodeIdentity(
         reader.node('rootMaterializer'),
       ),
@@ -137,8 +168,41 @@ export class DelegationJournalSchema {
         .array('attempts')
         .map(DelegationJournalSchema.decodeAttemptDeclaration),
     };
+    if (legacy) {
+      const plan: DelegationPlanV1 = {
+        schemaVersion: LEGACY_DELEGATION_PLAN_SCHEMA_VERSION,
+        ...common,
+      };
+      return plan;
+    }
+    const plan: DelegationPlan = {
+      schemaVersion: DELEGATION_PLAN_SCHEMA_VERSION,
+      ...common,
+      featureHeadSha: reader.string('featureHeadSha'),
+    };
     DelegationPlanContract.validateDelegationPlan(plan);
     return plan;
+  }
+
+  /** Creates a new current plan while leaving the historical value untouched. */
+  static migrateDelegationPlan(
+    plan: DelegationPlanV1,
+    featureHeadSha: string,
+  ): DelegationPlan {
+    if (plan.schemaVersion !== LEGACY_DELEGATION_PLAN_SCHEMA_VERSION)
+      throw new Error('Only delegation plan schema 1.0.0 can be migrated.');
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha: plan.originMainSha,
+      pinnedLocalDevSha: plan.pinnedLocalDevSha,
+      featureHeadSha,
+    });
+    const migrated: DelegationPlan = {
+      ...plan,
+      schemaVersion: DELEGATION_PLAN_SCHEMA_VERSION,
+      featureHeadSha,
+    };
+    DelegationPlanContract.validateDelegationPlan(migrated);
+    return migrated;
   }
 
   static decodeDelegationAdmissionRequest(

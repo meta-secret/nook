@@ -19,7 +19,7 @@ import {
 
 import type {
   LegacyModuleDeliveryPlan,
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV4,
 } from '../../src/module-delivery/index.ts';
 
 import { TeamKey } from '../../src/team-agents/catalog.ts';
@@ -27,9 +27,9 @@ import { TeamKey } from '../../src/team-agents/catalog.ts';
 export class ModuleDeliveryCliScenario {
   private constructor(private readonly request: string) {}
 
-  static cliPlan(): ModuleDeliveryPlanV3 {
+  static cliPlan(): ModuleDeliveryPlanV4 {
     return {
-      version: 3,
+      version: 4,
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
       originMainSha: ORIGIN_MAIN_SHA,
@@ -179,7 +179,7 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
     );
     expect(firstResult).toBe(secondResult);
     expect(firstResult).toContain('"status":"accepted"');
-    expect(firstResult).toContain('"inputVersion":3');
+    expect(firstResult).toContain('"inputVersion":4');
     expect(firstResult).toMatch(/"planDigest":"[0-9a-f]{64}"/u);
 
     const legacyCommand = [
@@ -198,7 +198,7 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
     expect(legacy.exitCode).not.toBe(0);
     expect(
       ModuleDeliveryCliScenario.resultLine(legacy.stdout.toString()),
-    ).toContain('Canonical CLI admission requires plan version 3.');
+    ).toContain('Canonical CLI admission requires plan version 4.');
 
     const rejectedCommand = [
       'task',

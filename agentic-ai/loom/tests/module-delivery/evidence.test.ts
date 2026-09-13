@@ -15,6 +15,9 @@ import {
   ModuleDeliveryGenerationFenceKind,
   ModuleDeliveryJoinKind,
   ModuleDeliveryProviderSubmissionKind,
+  MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+  LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+  ModuleDeliveryEvidenceSchema,
   ModuleDeliveryTaskKind,
   ModuleDeliveryTaskProfile,
   ModuleDeliveryValidationStatus,
@@ -37,8 +40,9 @@ import type {
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryGenerationAuthority,
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV4,
   ModuleDeliveryReadOnlyEvidenceSubmission,
+  ModuleDeliveryReadOnlyEvidenceSubmissionV1,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
   RecordModuleDeliveryAttemptLeasesRequest,
@@ -73,7 +77,7 @@ export class ModuleDeliveryEvidenceScenario {
       errors: ['EvidenceRejected'],
       behaviorInvariants: ['Evidence identity is exact.'],
       securityInvariants: ['Only accepted evidence is synthesized.'],
-      compatibilityExpectations: ['Schema v1 remains exact.'],
+      compatibilityExpectations: ['Schema v1 migrates without mutation.'],
       owningTests: ['evidence authority tests'],
     };
   }
@@ -169,8 +173,8 @@ export class ModuleDeliveryEvidenceScenario {
       providerTaskId: providerB.taskId,
       consumerTaskId: synthesis.taskId,
     };
-    const plan: ModuleDeliveryPlanV3 = {
-      version: 3,
+    const plan: ModuleDeliveryPlanV4 = {
+      version: 4,
       generation: 1,
       sourceCommit: fixture.sourceCommit,
       originMainSha: fixture.originMainSha,
@@ -261,8 +265,8 @@ export class ModuleDeliveryEvidenceScenario {
         expectedCommitHandoff: true,
       },
     };
-    const plan: ModuleDeliveryPlanV3 = {
-      version: 3,
+    const plan: ModuleDeliveryPlanV4 = {
+      version: 4,
       generation: 1,
       sourceCommit: fixture.sourceCommit,
       originMainSha: fixture.originMainSha,
@@ -368,7 +372,7 @@ export class ModuleDeliveryEvidenceScenario {
       );
     return {
       kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
-      schemaVersion: 1,
+      schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
       taskId: node.taskId,
       attempt: lease.attempt,
       generation: lease.generation,
@@ -453,6 +457,46 @@ type MutableProviderEvidenceIdentity = Omit<
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
   'acceptedProviderEvidence'
 > & { acceptedProviderEvidence: MutableProviderEvidenceIdentity[] };
+
+test('migrates the historical v1 evidence handoff without mutating it', () => {
+  const active = ModuleDeliveryEvidenceScenario.runtime();
+  try {
+    const lease = ModuleDeliveryEvidenceScenario.admittedLease({
+      runtime: active,
+      taskId: active.provider.taskId,
+    });
+    const current = ModuleDeliveryEvidenceScenario.submission({
+      runtime: active,
+      lease,
+      acceptedProviderEvidence: [],
+    });
+    const { featureHeadSha: _featureHeadSha, ...withoutFeature } = current;
+    const historical: ModuleDeliveryReadOnlyEvidenceSubmissionV1 = {
+      ...withoutFeature,
+      schemaVersion: LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+      acceptedProviderEvidence: [],
+    };
+    const before = structuredClone(historical);
+    const decoded =
+      ModuleDeliveryEvidenceSchema.decodeCompatibleReadOnlyEvidenceSubmission(
+        JSON.stringify(historical),
+      );
+    expect(decoded).toEqual(historical);
+    const migrated = ModuleDeliveryEvidenceSchema.migrateReadOnlyEvidenceSubmission(
+      historical,
+      'f'.repeat(40),
+    );
+    expect(historical).toEqual(before);
+    expect(migrated.schemaVersion).toBe(
+      MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+    );
+    expect(migrated.originMainSha).toBe(historical.originMainSha);
+    expect(migrated.pinnedLocalDevSha).toBe(historical.pinnedLocalDevSha);
+    expect(migrated.featureHeadSha).toBe('f'.repeat(40));
+  } finally {
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(active.fixture);
+  }
+});
 
 test('rejects forged evidence and restores a canonical redacted receipt after restart', () => {
   const active = ModuleDeliveryEvidenceScenario.runtime();
@@ -599,7 +643,7 @@ test('canonical redacted receipt replay rejects inconsistent lifecycle fields wi
         accepted,
       );
     const inconsistent = [
-      { ...receipt, schemaVersion: 2 },
+      { ...receipt, schemaVersion: 1 },
       { ...receipt, generation: 2 },
       { ...receipt, planDigest: 'f'.repeat(64) },
       { ...receipt, taskId: active.providerB.taskId },
@@ -645,7 +689,7 @@ test('canonical receipt replay rejects write leases before consuming state', () 
       taskId: active.writer.taskId,
     });
     const receipt: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
-      schemaVersion: 1,
+      schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
       generation: lease.generation,
       planDigest: lease.planDigest,
       taskId: lease.taskId,

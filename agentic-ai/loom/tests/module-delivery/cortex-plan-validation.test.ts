@@ -22,7 +22,7 @@ import type {
   ModuleDeliveryExecutionPrecedence,
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV3,
+  ModuleDeliveryPlanV4,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
@@ -79,14 +79,14 @@ export class ModuleDeliveryCortexPlanValidationScenario {
     };
   }
 
-  static plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV3 {
+  static plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV4 {
     return new ModuleDeliveryCortexPlanValidationScenario(nodes).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV3 {
+  private execute(): ModuleDeliveryPlanV4 {
     const nodes = this.request;
     return {
-      version: 3,
+      version: 4,
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
       originMainSha: ORIGIN_MAIN_SHA,
