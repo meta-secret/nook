@@ -112,6 +112,51 @@ class ReviewEvidenceRunner implements CommandRunner {
 
   constructor(private readonly scenario: ReviewScenario) {}
 
+  static admitted(): AdmittedDevelopmentPullRequest {
+    const number = PullRequestNumber.parse(42);
+    const headSha = CommitSha.parse(HEAD);
+    const baseSha = CommitSha.parse(BASE);
+    const repository = RepositorySlug.parse(REPOSITORY);
+    if (
+      number.isErr() ||
+      headSha.isErr() ||
+      baseSha.isErr() ||
+      repository.isErr()
+    ) {
+      throw new Error('review evidence fixture identity is invalid');
+    }
+    return {
+      number: number.value,
+      headSha: headSha.value,
+      baseSha: baseSha.value,
+      url: 'https://github.example/pr/42',
+      isDraft: false,
+      reviewDecision: PullRequestReviewDecision.Approved,
+      repository: repository.value,
+    };
+  }
+
+  static reviewPage(request: {
+    readonly reviews: readonly ReviewFixture[];
+    readonly pagination?: Partial<ReviewPageFixture>;
+  }): ReviewPageFixture {
+    return {
+      hasNextPage: request.pagination?.hasNextPage ?? false,
+      endCursor: request.pagination?.endCursor ?? null,
+      reviews: request.reviews,
+    };
+  }
+
+  reviewResult() {
+    const result = new DevelopmentPullRequestGateway({ runner: this }).requireCleanReviews(
+      {
+        pullRequest: ReviewEvidenceRunner.admitted(),
+        workingDirectory: '/tmp/review-evidence-fixture',
+      },
+    );
+    return { result, runner: this };
+  }
+
   run(request: CommandRequest): Result<CommandOutput, DevFailure> {
     this.requests.push(request);
     if (request.executable === CommandExecutable.GitHub) {
@@ -230,64 +275,16 @@ class ReviewEvidenceRunner implements CommandRunner {
   }
 }
 
-function admitted(): AdmittedDevelopmentPullRequest {
-  const number = PullRequestNumber.parse(42);
-  const headSha = CommitSha.parse(HEAD);
-  const baseSha = CommitSha.parse(BASE);
-  const repository = RepositorySlug.parse(REPOSITORY);
-  if (
-    number.isErr() ||
-    headSha.isErr() ||
-    baseSha.isErr() ||
-    repository.isErr()
-  ) {
-    throw new Error('review evidence fixture identity is invalid');
-  }
-  return {
-    number: number.value,
-    headSha: headSha.value,
-    baseSha: baseSha.value,
-    url: 'https://github.example/pr/42',
-    isDraft: false,
-    reviewDecision: PullRequestReviewDecision.Approved,
-    repository: repository.value,
-  };
-}
-
-function reviewPage(
-  request: {
-    readonly reviews: readonly ReviewFixture[];
-    readonly pagination?: Partial<ReviewPageFixture>;
-  },
-): ReviewPageFixture {
-  return {
-    hasNextPage: request.pagination?.hasNextPage ?? false,
-    endCursor: request.pagination?.endCursor ?? null,
-    reviews: request.reviews,
-  };
-}
-
-function reviewResult(scenario: ReviewScenario) {
-  const runner = new ReviewEvidenceRunner(scenario);
-  const result = new DevelopmentPullRequestGateway({ runner }).requireCleanReviews(
-    {
-      pullRequest: admitted(),
-      workingDirectory: '/tmp/review-evidence-fixture',
-    },
-  );
-  return { result, runner };
-}
-
 test('accepts complete multi-page current-head review and thread evidence', () => {
-  const { result, runner } = reviewResult({
+  const { result, runner } = new ReviewEvidenceRunner({
     reviewPages: [
-      reviewPage({
+      ReviewEvidenceRunner.reviewPage({
         reviews: [{ state: 'COMMENTED', body: '' }],
         pagination: { hasNextPage: true, endCursor: 'cursor-1' },
       }),
-      reviewPage({ reviews: [{ state: 'APPROVED', body: '' }] }),
+      ReviewEvidenceRunner.reviewPage({ reviews: [{ state: 'APPROVED', body: '' }] }),
     ],
-  });
+  }).reviewResult();
 
   expect(result.isOk()).toBe(true);
   expect(
@@ -296,14 +293,14 @@ test('accepts complete multi-page current-head review and thread evidence', () =
 });
 
 test('rejects an incomplete review pagination sequence', () => {
-  const { result } = reviewResult({
+  const { result } = new ReviewEvidenceRunner({
     reviewPages: [
-      reviewPage({
+      ReviewEvidenceRunner.reviewPage({
         reviews: [{ state: 'APPROVED', body: '' }],
         pagination: { hasNextPage: true, endCursor: 'cursor-1' },
       }),
     ],
-  });
+  }).reviewResult();
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
@@ -314,11 +311,13 @@ test('does not let an approval mask a substantive current or stale comment', () 
     { state: 'COMMENTED', body: 'Please address this.' },
     { state: 'COMMENTED', body: 'Please address this.', commit: STALE },
   ]) {
-    const { result } = reviewResult({
+    const { result } = new ReviewEvidenceRunner({
       reviewPages: [
-        reviewPage({ reviews: [{ state: 'APPROVED', body: '' }, comment] }),
+        ReviewEvidenceRunner.reviewPage({
+          reviews: [{ state: 'APPROVED', body: '' }, comment],
+        }),
       ],
-    });
+    }).reviewResult();
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error.kind).toBe(DevFailureKind.Reviews);
@@ -328,9 +327,11 @@ test('does not let an approval mask a substantive current or stale comment', () 
 
 test('rejects unknown, dismissed, and pending review states', () => {
   for (const state of ['UNRECOGNIZED', 'DISMISSED', 'PENDING']) {
-    const { result } = reviewResult({
-      reviewPages: [reviewPage({ reviews: [{ state, body: '' }] })],
-    });
+    const { result } = new ReviewEvidenceRunner({
+      reviewPages: [
+        ReviewEvidenceRunner.reviewPage({ reviews: [{ state, body: '' }] }),
+      ],
+    }).reviewResult();
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error.kind).toBe(DevFailureKind.Reviews);
@@ -339,39 +340,41 @@ test('rejects unknown, dismissed, and pending review states', () => {
 });
 
 test('rejects a noncanonical submittedAt timestamp', () => {
-  const { result } = reviewResult({
+  const { result } = new ReviewEvidenceRunner({
     reviewPages: [
-      reviewPage({
+      ReviewEvidenceRunner.reviewPage({
         reviews: [
           { state: 'APPROVED', body: '', submittedAt: '2026-09-13' },
         ],
       }),
     ],
-  });
+  }).reviewResult();
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
 });
 
 test('rejects stale-head approval and unresolved review threads', () => {
-  const stale = reviewResult({
+  const stale = new ReviewEvidenceRunner({
     reviewPages: [
-      reviewPage({
+      ReviewEvidenceRunner.reviewPage({
         reviews: [{ state: 'APPROVED', body: '', commit: STALE }],
       }),
     ],
-  });
+  }).reviewResult();
   expect(stale.result.isErr()).toBe(true);
   if (stale.result.isErr()) {
     expect(stale.result.error.kind).toBe(DevFailureKind.Race);
   }
 
-  const unresolved = reviewResult({
-    reviewPages: [reviewPage({ reviews: [{ state: 'APPROVED', body: '' }] })],
+  const unresolved = new ReviewEvidenceRunner({
+    reviewPages: [
+      ReviewEvidenceRunner.reviewPage({ reviews: [{ state: 'APPROVED', body: '' }] }),
+    ],
     threadPages: [
       { hasNextPage: false, endCursor: null, unresolved: true },
     ],
-  });
+  }).reviewResult();
   expect(unresolved.result.isErr()).toBe(true);
   if (unresolved.result.isErr()) {
     expect(unresolved.result.error.kind).toBe(DevFailureKind.Reviews);
@@ -379,10 +382,12 @@ test('rejects stale-head approval and unresolved review threads', () => {
 });
 
 test('reports a pull-request head race after collecting review evidence', () => {
-  const { result } = reviewResult({
-    reviewPages: [reviewPage({ reviews: [{ state: 'APPROVED', body: '' }] })],
+  const { result } = new ReviewEvidenceRunner({
+    reviewPages: [
+      ReviewEvidenceRunner.reviewPage({ reviews: [{ state: 'APPROVED', body: '' }] }),
+    ],
     finalHead: STALE,
-  });
+  }).reviewResult();
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Race);
