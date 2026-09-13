@@ -145,6 +145,15 @@ export class DevPrManagerCommand {
 
     const pullRequest = workspace.github.ensureDevelopmentPullRequest({
       expectedSha: this.request.expectedSha,
+      expectedBaseSha: main.value.sha,
+      admitted: existingPullRequest.value,
+      beforeMutation: () =>
+        this.revalidateBeforeMutation({
+          workspace,
+          developmentPath: development.value.path,
+          expectedSha: this.request.expectedSha,
+          expectedBaseSha: main.value.sha,
+        }),
       workingDirectory: workspace.root,
     });
     if (pullRequest.isErr()) return err(pullRequest.error);
@@ -175,5 +184,106 @@ export class DevPrManagerCommand {
       pullRequestUrl: pullRequest.value.url,
       message: `Manager PR ${pullRequest.value.url} now records origin/dev at ${this.request.expectedSha.value()}`,
     });
+  }
+
+  private revalidateBeforeMutation(request: {
+    readonly workspace: DevDeliveryWorkspace;
+    readonly developmentPath: string;
+    readonly expectedSha: CommitSha;
+    readonly expectedBaseSha: CommitSha;
+  }): Result<void, DevFailure> {
+    const development = request.workspace.developmentWorktree();
+    if (development.isErr()) return err(development.error);
+    if (development.value.path !== request.developmentPath) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The selected local dev worktree changed immediately before manager PR mutation',
+      });
+    }
+    if (!development.value.head.equals(request.expectedSha)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message: `Local dev worktree changed immediately before manager PR mutation: expected ${request.expectedSha.value()}, found ${development.value.head.value()}`,
+      });
+    }
+    const developmentState = request.workspace.git.stateAt(
+      request.developmentPath,
+    );
+    if (developmentState.isErr()) return err(developmentState.error);
+    if (developmentState.value !== WorktreeState.Clean) {
+      return err({
+        kind: DevFailureKind.DirtyWorktree,
+        message:
+          'Local dev became dirty immediately before manager PR mutation; refusing to mutate the pull request',
+      });
+    }
+    const developmentBranch = request.workspace.git.branchAt(
+      request.developmentPath,
+    );
+    if (developmentBranch.isErr()) return err(developmentBranch.error);
+    if (developmentBranch.value.value() !== ManagedBranch.Dev) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'Local dev worktree branch changed immediately before manager PR mutation',
+      });
+    }
+    const localDevSha = request.workspace.git.headAt(
+      request.developmentPath,
+    );
+    if (localDevSha.isErr()) return err(localDevSha.error);
+    if (!localDevSha.value.equals(request.expectedSha)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message: `Local dev changed immediately before manager PR mutation: expected ${request.expectedSha.value()}, found ${localDevSha.value.value()}`,
+      });
+    }
+
+    const remoteDev = request.workspace.git.remoteBranch(ManagedBranch.Dev);
+    if (remoteDev.isErr()) return err(remoteDev.error);
+    if (remoteDev.value.presence !== RemoteBranchPresence.Present) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'origin/dev disappeared immediately before manager PR mutation',
+      });
+    }
+    if (!remoteDev.value.sha.equals(request.expectedSha)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message: `origin/dev changed immediately before manager PR mutation: expected ${request.expectedSha.value()}, found ${remoteDev.value.sha.value()}`,
+      });
+    }
+
+    const remoteMain = request.workspace.git.remoteBranch(ManagedBranch.Main);
+    if (remoteMain.isErr()) return err(remoteMain.error);
+    if (remoteMain.value.presence !== RemoteBranchPresence.Present) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'origin/main disappeared immediately before manager PR mutation',
+      });
+    }
+    if (!remoteMain.value.sha.equals(request.expectedBaseSha)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message: `origin/main changed immediately before manager PR mutation: expected ${request.expectedBaseSha.value()}, found ${remoteMain.value.sha.value()}`,
+      });
+    }
+    const ancestry = request.workspace.git.ancestry({
+      ancestor: request.expectedBaseSha,
+      descendant: request.expectedSha,
+      workingDirectory: request.workspace.root,
+    });
+    if (ancestry.isErr()) return err(ancestry.error);
+    if (ancestry.value !== Ancestry.Ancestor) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'origin/main is no longer an ancestor of origin/dev immediately before manager PR mutation',
+      });
+    }
+    return ok();
   }
 }

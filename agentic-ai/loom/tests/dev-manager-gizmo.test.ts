@@ -42,6 +42,9 @@ interface ScenarioOptions {
   readonly malformedWorktree?: boolean;
   readonly reportedWorktreeSha?: string;
   readonly observedHeadSha?: string;
+  readonly pullRequestAppearsAfterAdmission?: boolean;
+  readonly foreignPullRequestOnRecheck?: boolean;
+  readonly remoteDevChangesBeforeMutation?: boolean;
 }
 
 /** Simulates local Git and bounded manager-seam transport responses. */
@@ -52,6 +55,8 @@ class DevManagerGizmoRunner implements CommandRunner {
   private pullRequest: PullRequestFixture | undefined;
   private readonly originMainSha: string;
   private fetchedOriginMainSha: string | undefined;
+  private pullRequestListCount = 0;
+  private pullRequestViewCount = 0;
 
   constructor(
     private readonly request: {
@@ -188,6 +193,7 @@ class DevManagerGizmoRunner implements CommandRunner {
       return ok(this.output({ stdout: 'nook/example\n' }));
     }
     if (args[0] === 'pr' && args[1] === 'list') {
+      this.pullRequestListCount += 1;
       return ok(this.pullRequestList());
     }
     if (args[0] === 'pr' && args[1] === 'create') {
@@ -200,20 +206,37 @@ class DevManagerGizmoRunner implements CommandRunner {
       return ok(this.output());
     }
     if (args[0] === 'pr' && args[1] === 'view') {
+      this.pullRequestViewCount += 1;
+      if (
+        this.request.options.remoteDevChangesBeforeMutation &&
+        this.pullRequestViewCount === 2
+      ) {
+        this.remoteDevSha = SHA_A;
+      }
       return ok(this.pullRequestView());
     }
     return ok(this.output());
   }
 
   private pullRequestList(): CommandOutput {
-    if (!this.pullRequest) return this.output({ stdout: '[]' });
+    if (
+      !this.pullRequest &&
+      !(
+        this.request.options.pullRequestAppearsAfterAdmission &&
+        this.pullRequestListCount === 2
+      )
+    ) {
+      return this.output({ stdout: '[]' });
+    }
+    const headSha =
+      this.pullRequest?.headSha ?? this.request.options.localSha;
     return this.output({
       stdout: JSON.stringify([
         {
           number: 42,
           headRefName: 'dev',
           baseRefName: 'main',
-          headRefOid: this.pullRequest.headSha,
+          headRefOid: headSha,
           baseRefOid: this.originMainSha,
           url: 'https://github.example/pr/42',
           isDraft: false,
@@ -224,6 +247,9 @@ class DevManagerGizmoRunner implements CommandRunner {
 
   private pullRequestView(): CommandOutput {
     const pullRequest = this.pullRequest;
+    const foreign =
+      this.request.options.foreignPullRequestOnRecheck &&
+      this.pullRequestViewCount === 2;
     return this.output({
       stdout: JSON.stringify({
         number: 42,
@@ -234,8 +260,12 @@ class DevManagerGizmoRunner implements CommandRunner {
         url: 'https://github.example/pr/42',
         isDraft: false,
         state: 'OPEN',
-        headRepository: { nameWithOwner: 'nook/example' },
-        baseRepository: { nameWithOwner: 'nook/example' },
+        headRepository: {
+          nameWithOwner: foreign ? 'other/example' : 'nook/example',
+        },
+        baseRepository: {
+          nameWithOwner: foreign ? 'other/example' : 'nook/example',
+        },
         reviewDecision: 'REVIEW_REQUIRED',
       }),
     });
@@ -531,6 +561,104 @@ test('rejects a mismatched existing PR before any PR mutation', () => {
           request.executable === CommandExecutable.GitHub &&
           (request.args[0] === 'pr' &&
             (request.args[1] === 'create' || request.args[1] === 'edit')),
+      ),
+    ).toBe(false);
+  } finally {
+    harness.dispose();
+  }
+});
+
+test('rejects a newly appearing PR instead of selecting it after absent admission', () => {
+  const harness = new DevManagerGizmoHarness({
+    localSha: SHA_B,
+    remoteDevSha: SHA_B,
+    pullRequestAppearsAfterAdmission: true,
+    ancestryPairs: [[SHA_MAIN, SHA_B]],
+  });
+  const expectedSha = CommitSha.parse(SHA_B);
+  try {
+    expect(expectedSha.isOk()).toBe(true);
+    if (expectedSha.isErr()) return;
+    const result = new DevPrManagerCommand({
+      workspace: harness.workspace,
+      expectedSha: expectedSha.value,
+    }).execute();
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error.kind).toBe(DevFailureKind.Race);
+    expect(result.error.message).toContain('appeared after admission');
+    expect(
+      harness.runner.requests.some(
+        (request) =>
+          request.executable === CommandExecutable.GitHub &&
+          request.args[0] === 'pr' &&
+          request.args[1] === 'create',
+      ),
+    ).toBe(false);
+  } finally {
+    harness.dispose();
+  }
+});
+
+test('rechecks the admitted PR repository before editing it', () => {
+  const harness = new DevManagerGizmoHarness({
+    localSha: SHA_B,
+    remoteDevSha: SHA_B,
+    pullRequest: { headSha: SHA_B },
+    foreignPullRequestOnRecheck: true,
+    ancestryPairs: [[SHA_MAIN, SHA_B]],
+  });
+  const expectedSha = CommitSha.parse(SHA_B);
+  try {
+    expect(expectedSha.isOk()).toBe(true);
+    if (expectedSha.isErr()) return;
+    const result = new DevPrManagerCommand({
+      workspace: harness.workspace,
+      expectedSha: expectedSha.value,
+    }).execute();
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error.kind).toBe(DevFailureKind.Race);
+    expect(result.error.message).toContain('identity or repository');
+    expect(
+      harness.runner.requests.some(
+        (request) =>
+          request.executable === CommandExecutable.GitHub &&
+          request.args[0] === 'pr' &&
+          request.args[1] === 'edit',
+      ),
+    ).toBe(false);
+  } finally {
+    harness.dispose();
+  }
+});
+
+test('rechecks remote dev immediately before editing the admitted PR', () => {
+  const harness = new DevManagerGizmoHarness({
+    localSha: SHA_B,
+    remoteDevSha: SHA_B,
+    pullRequest: { headSha: SHA_B },
+    remoteDevChangesBeforeMutation: true,
+    ancestryPairs: [[SHA_MAIN, SHA_B]],
+  });
+  const expectedSha = CommitSha.parse(SHA_B);
+  try {
+    expect(expectedSha.isOk()).toBe(true);
+    if (expectedSha.isErr()) return;
+    const result = new DevPrManagerCommand({
+      workspace: harness.workspace,
+      expectedSha: expectedSha.value,
+    }).execute();
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error.kind).toBe(DevFailureKind.Race);
+    expect(result.error.message).toContain('origin/dev changed immediately');
+    expect(
+      harness.runner.requests.some(
+        (request) =>
+          request.executable === CommandExecutable.GitHub &&
+          request.args[0] === 'pr' &&
+          request.args[1] === 'edit',
       ),
     ).toBe(false);
   } finally {

@@ -180,12 +180,25 @@ export enum DevelopmentPullRequestLookupKind {
   Absent = 'absent',
 }
 
+export interface AdmittedDevelopmentPullRequest
+  extends DevelopmentPullRequest {
+  readonly repository: RepositorySlug;
+}
+
 export type DevelopmentPullRequestLookup =
   | {
       readonly kind: DevelopmentPullRequestLookupKind.Found;
-      readonly pullRequest: DevelopmentPullRequest;
+      readonly pullRequest: AdmittedDevelopmentPullRequest;
     }
   | { readonly kind: DevelopmentPullRequestLookupKind.Absent };
+
+export interface DevelopmentPullRequestMutationRequest {
+  readonly expectedSha: CommitSha;
+  readonly expectedBaseSha: CommitSha;
+  readonly admitted: DevelopmentPullRequestLookup;
+  readonly beforeMutation: () => Result<void, DevFailure>;
+  readonly workingDirectory: string;
+}
 
 interface PromotionEvidenceRequest {
   readonly sha: CommitSha;
@@ -321,10 +334,9 @@ export class DevGitHubGateway {
     return ok({ sha: request.sha, runId: runId.value });
   }
 
-  ensureDevelopmentPullRequest(request: {
-    readonly expectedSha: CommitSha;
-    readonly workingDirectory: string;
-  }): Result<DevelopmentPullRequest, DevFailure> {
+  ensureDevelopmentPullRequest(
+    request: DevelopmentPullRequestMutationRequest,
+  ): Result<DevelopmentPullRequest, DevFailure> {
     const title = 'Promote development to main';
     const body = [
       '## Summary',
@@ -348,17 +360,15 @@ export class DevGitHubGateway {
       `- Selected origin/dev SHA: \`${request.expectedSha.value()}\``,
       '- Full slow validation and final promotion are separate manager operations.',
     ].join('\n');
-    const selection = this.openPullRequests(request.workingDirectory);
-    if (selection.isErr()) return err(selection.error);
-    const existing = selection.value[0];
-    if (selection.value.length > 1) {
-      return err({
-        kind: DevFailureKind.GitHub,
-        message:
-          'More than one open dev-to-main pull request exists; refusing to choose one',
-      });
-    }
-    if (existing) {
+    const admission = this.revalidateDevelopmentPullRequest(request);
+    if (admission.isErr()) return err(admission.error);
+    const beforeMutation = request.beforeMutation();
+    if (beforeMutation.isErr()) return err(beforeMutation.error);
+
+    if (
+      request.admitted.kind === DevelopmentPullRequestLookupKind.Found
+    ) {
+      const existing = request.admitted.pullRequest;
       const edited = this.successful({
         args: [
           'pr',
@@ -402,6 +412,62 @@ export class DevGitHubGateway {
       });
     }
     return ok(live.value);
+  }
+
+  private revalidateDevelopmentPullRequest(
+    request: DevelopmentPullRequestMutationRequest,
+  ): Result<void, DevFailure> {
+    if (
+      request.admitted.kind === DevelopmentPullRequestLookupKind.Absent
+    ) {
+      const selection = this.openPullRequests(request.workingDirectory);
+      if (selection.isErr()) return err(selection.error);
+      if (selection.value.length > 0) {
+        return err({
+          kind: DevFailureKind.Race,
+          message:
+            'A dev-to-main pull request appeared after admission; refusing to select it for mutation',
+        });
+      }
+      return ok();
+    }
+
+    const admitted = request.admitted.pullRequest;
+    if (
+      !admitted.headSha.equals(request.expectedSha) ||
+      !admitted.baseSha.equals(request.expectedBaseSha)
+    ) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The admitted dev-to-main pull request does not match the expected snapshots; refusing to mutate it',
+      });
+    }
+    const live = this.readPullRequest({
+      number: admitted.number,
+      workingDirectory: request.workingDirectory,
+    });
+    if (live.isErr()) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The admitted dev-to-main pull request changed identity or repository before mutation; refusing to mutate it',
+      });
+    }
+    if (
+      live.value.number.value() !== admitted.number.value() ||
+      live.value.url !== admitted.url ||
+      live.value.repository.value() !== admitted.repository.value() ||
+      !live.value.headSha.equals(request.expectedSha) ||
+      !live.value.baseSha.equals(request.expectedBaseSha)
+    ) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'The admitted dev-to-main pull request changed identity, repository, or snapshots before mutation; refusing to mutate it',
+      });
+    }
+    return ok();
   }
 
   readDevelopmentPullRequest(request: {
@@ -673,6 +739,7 @@ export class DevGitHubGateway {
       headSha: headSha.value,
       baseSha: baseSha.value,
       url: view.url,
+      repository: repository.value,
       isDraft: view.isDraft,
       reviewDecision: DevGitHubGateway.reviewDecision(
         DevGitHubGateway.reviewDecisionInput(view.reviewDecision),
