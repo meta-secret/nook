@@ -111,12 +111,16 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     '13ea52eb03efd9af5133fc810aeb67a85176d1dd30bb7f884a159d05be3280f1',
   ],
   [
+    '.github/workflows/lib/linear-ui-demo.cjs',
+    'a52477a1e74c01cebd9d4f9c8de03790e1426cd15e2ddffcd34a85e5e2052fa4',
+  ],
+  [
     'agentic-ai/loom/src/dev-delivery/dev-command.ts',
     '220e7aa593817fbc849cee1025b2d05ae608f9cfd2735d3f499e4cc020898324',
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    '6023a6f3261854070bdece7f6242555800d38906030e1c8a4887a6d7fb76a81f',
+    '694df9d56073e6a1b76593f7a9657905fc9a0f9b85789fcb5f0255fe38a74d80',
   ],
   [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',
@@ -128,7 +132,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/sim/kubernetes-cache/contracts.ts',
-    '414fe9bbc3c8405974607ccd0ff34892084d1047322dbd26072b4b19cd2ec0f5',
+    'c0619a1141f15ad1d83e13e4d96f87651732908f19663ac0c8287a4316dbabd7',
   ],
   [
     '.github/formatting/format-host-apply.test.sh',
@@ -156,19 +160,19 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/k0s-firewall-rollback-test.ts',
-    '29a99be57360e1471993627d63f0d4064ae0b76e11f0d8a9e6f540e71c3ba7b8',
+    'fcb88b6d082c36b4d1865471610309fadfc2e37125d61f1b2679a731b96a2df8',
   ],
   [
     '.github/scripts/remote-task-batch.sh',
-    'f0c2e0839cce0a6380d877ed44e71805f234952c11d9bcffc920fe0a83d56e42',
+    'fb545bae3ce8b7e4fabcdc8f15e5efb7220e7389e10cb8670f012a992543f1a4',
   ],
   [
     'infra/operator-ssh.ts',
-    'e2f949bdb73bdd874c1e620acf2fa66ad13ccae8f5864afd2dd1fac68acb0e38',
+    '89e0c14ca66093c1febe3411ec40bdbeba2468e59d697142b0213a1ef71920ca',
   ],
   [
     'infra/providers/ovh-dedicated.ts',
-    'b0313dcc087492bdeb5c47a2a5dc9f76bcc7199a8dadfaab308582cc56f18caa',
+    '36f5cb338983aba88a971674f1337731c83b50a30e74e4aeee852f9ad87f15e0',
   ],
   [
     'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
@@ -180,7 +184,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.mjs',
-    'ec3010f2f755694e1962b6a42b7ccc5c17618d30e42d1694c14bbd2484c992d9',
+    '733ddc1c96230b73e248c8117d0315e47d6f6e5c851cf02c0c05c3e70b633e43',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.sh',

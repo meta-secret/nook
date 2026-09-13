@@ -382,8 +382,11 @@ test('rejects project configs that weaken canonical source coverage', async () =
       await writeFile(
         configPath,
         source
-          .replace('"include": ["src/**/*.ts", "tests/**/*.ts"]', replacement)
-          .replace("files: ['src/**/*.ts', 'tests/**/*.ts']", replacement)
+          .replace(
+            '"include": ["**/*.ts", "**/*.js", "**/*.mjs", "**/*.cjs"]',
+            replacement,
+          )
+          .replace("files: ['**/*.{ts,js,mjs,cjs}']", replacement)
           .replace('"printWidth": 80', replacement),
       );
       expect(

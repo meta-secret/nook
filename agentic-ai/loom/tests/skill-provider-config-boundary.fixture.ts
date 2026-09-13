@@ -106,7 +106,11 @@ export class SkillProviderConfigBoundaryScenario {
         path: importer,
         source,
       };
-      if (graph.roots.includes(importer))
+      const auditedRuntimeSource =
+        SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource(
+          sourceBoundaryRequest,
+        );
+      if (graph.roots.includes(importer) && !auditedRuntimeSource)
         SkillProviderConfigApplicationScenario.assertConfigurationSourceBoundary(
           sourceBoundaryRequest,
         );
@@ -558,6 +562,10 @@ export class SkillProviderConfigBoundaryScenario {
         source,
       };
       if (
+        !SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource({
+          path: importer,
+          source,
+        }) &&
         SkillProviderBoundaryScenario.violatesSkillProviderBoundary(
           boundaryInspection,
         )

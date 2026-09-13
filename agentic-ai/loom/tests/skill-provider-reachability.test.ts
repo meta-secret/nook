@@ -15,6 +15,8 @@ import { PRODUCTION_SOURCE_EXTENSIONS } from './skill-provider-type-context.ts';
 
 import { CortexArticleAdapterBoundaryScenario } from './cortex-article-adapter-boundary.ts';
 
+import { SkillProviderSourcedSeamsScenario } from './skill-provider-sourced-seams.ts';
+
 import { stringMapFromHost } from './skill-provider-command-types.ts';
 
 import { UntrustedYamlBoundary } from '../src/lib/guards.ts';
@@ -94,12 +96,18 @@ export class SkillProviderReachabilityScenario {
         sources: inspection.sources,
       };
       const adapterInspection = { path, source: sourceBody };
+      const auditedRuntimeSource =
+        SkillProviderSourcedSeamsScenario.isAuditedRuntimeSource({
+          path,
+          source,
+        });
       if (
         (path === LOOM_ARTICLE_ADAPTER || path === LOOM_CONSISTENCY_ADAPTER
           ? CortexArticleAdapterBoundaryScenario.cortexArticleAdapterViolatesBoundary(
               adapterInspection,
             )
-          : path !== EXECUTABLE_SKILL_PACKAGE_GATE &&
+          : !auditedRuntimeSource &&
+            path !== EXECUTABLE_SKILL_PACKAGE_GATE &&
             SkillProviderExecutableScriptScenario.executableScriptViolatesBoundary(
               boundaryInspection,
             )) ||
@@ -111,6 +119,7 @@ export class SkillProviderReachabilityScenario {
         violations.push(path);
         continue;
       }
+      if (auditedRuntimeSource) continue;
       const importedModules =
         EXECUTABLE_SOURCE_EXTENSION.test(path) || extensionless
           ? RUNTIME_IMPORT_SCANNER.scanImports(sourceBody)
