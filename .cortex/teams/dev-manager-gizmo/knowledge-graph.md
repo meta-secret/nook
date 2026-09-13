@@ -22,12 +22,14 @@ the policy; this context makes that policy available for one active task.
 
 ## PR Steward seam
 
-- [PR Steward contract](../pr-steward/AGENTS.md)
-- [Authorization handshake](../pr-steward/workflows/authorization-handshake.md)
-- [Pull-request lifecycle](../pr-steward/workflows/pull-request-lifecycle.md)
+- [Delivery Pipeline team](../delivery-pipeline/AGENTS.md)
+- [Delivery Pipeline Team Gizmo](../delivery-pipeline/internal/gizmo/AGENTS.md)
+- [Internal PR Steward contract](../delivery-pipeline/internal/pr-steward/AGENTS.md)
+- [Authorization handshake](../delivery-pipeline/internal/pr-steward/workflows/authorization-handshake.md)
+- [Pull-request lifecycle](../delivery-pipeline/internal/pr-steward/workflows/pull-request-lifecycle.md)
 
 The Dev Manager decides snapshot selection, validation readiness, repair
-routing, and promotion. PR Steward performs only the exact packetized GitHub,
-review, check, status, publication, and promotion mechanics that the manager
-authorizes. Feature Gizmos and Team Agents never create or update pull
-requests.
+routing, and promotion. Delivery Pipeline Team Gizmo dispatches internal PR
+Steward for only the exact packetized GitHub, review, check, status,
+publication, and promotion mechanics that the manager authorizes. Feature
+Gizmos, Team Gizmos, and Team Agents never create or update pull requests.

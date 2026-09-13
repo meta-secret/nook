@@ -9,10 +9,14 @@ Concurrent features have independent Gizmos. Read the complete
 before planning or acting, then follow
 [dev delivery](architecture/dev-delivery.md) for the authoritative stage rules.
 
-Within each feature mission, its Gizmo Prime is the single root delivery owner.
+Within each feature mission, its Gizmo Prime is the mission/root coordinator
+and single root delivery owner. Every team has a Team Gizmo that reports
+upward to Gizmo Prime; Team Gizmo is an internal team orchestrator, not a
+second Prime.
 
 Gizmo publishes only its feature branch and requests remote `build:compile`.
-It authorizes PR Steward to land the completed feature through `dev:land`.
+It authorizes Delivery Pipeline Team Gizmo to route internal PR Steward's
+bounded `dev:land` operation for the completed feature.
 The manually run dev manager owns remote dev publication and main promotion.
 
 ## Mandatory Gizmo Gate — fail closed
@@ -22,14 +26,16 @@ The active Gizmo harness and its required Team Agent dispatch are mandatory.
 
 ### Required actions
 
-- Gizmo Prime dispatches every worker-executable implementation task to a
-  bounded Team Agent through the active Gizmo harness.
+- Gizmo Prime issues high-level team packets through the active Gizmo harness.
+  Each Team Gizmo decomposes only its team's mechanics and dispatches bounded
+  internal Team Agents through that harness.
 - Each dispatch names one team identity, one bounded file scope, one issued
   child worktree, and named acceptance evidence.
 - Gizmo Prime verifies committed Team Agent handoffs and integrates them in
   serialized order.
-- Pull-request operations remain with the authorized PR Steward or dev-manager
-  path. Gizmo and Team Agents do not create or update pull requests.
+- Pull-request operations remain with Delivery Pipeline's internal PR Steward
+  or the dev-manager path. Gizmo, Team Gizmos, and Team Agents do not create or
+  update pull requests.
 
 ### Prohibited actions
 
@@ -71,14 +77,16 @@ Gizmo owns:
 - the feature delivery verdict.
 
 The dev manager controls dev PR creation/update, slow evidence, readiness,
-and promotion. PR Steward performs those mechanics only under a manager packet.
+and promotion. Team Gizmos route authorized mechanics to their internal Team
+Agents; Delivery Pipeline's internal PR Steward performs those mechanics only
+under a manager packet.
 
 Gizmo delegates all GitHub execution, including read-only commands and wrappers,
-to the separate
-[PR Steward Team Agent](../teams/pr-steward/AGENTS.md). PR Steward is not a
-sixth functional team. Its [knowledge graph](../teams/pr-steward/knowledge-graph.md)
-defines the operational context, and it never acts without an explicit
-operation packet from the controller that owns the requested stage.
+to Delivery Pipeline Team Gizmo, which dispatches the
+[internal PR Steward Team Agent](../teams/delivery-pipeline/internal/pr-steward/AGENTS.md).
+The [Delivery Pipeline knowledge graph](../teams/delivery-pipeline/knowledge-graph.md)
+defines this operational context. Internal PR Steward never acts without an
+explicit operation packet from the controller that owns the requested stage.
 
 Workers send missing PR-information requests to Gizmo through the active
 harness. Gizmo routes dev PR evidence requests to the dev manager. The manager
@@ -94,9 +102,9 @@ Gizmo does not:
 - waive a blocking functional-owner or security verdict; or
 - create unmanaged checkouts or let a worker choose an unissued worktree.
 
-Gizmo does not allow PR Steward to edit functional code, adjudicate technical
-findings, sequence shared-branch writers, own Workbench outcomes, or decide
-the final delivery verdict.
+Gizmo does not allow Team Gizmo or internal PR Steward to edit functional code,
+adjudicate technical findings, sequence feature writers, own Workbench
+outcomes, or decide readiness, promotion, or the final delivery verdict.
 
 ## Feature scope
 
@@ -105,6 +113,13 @@ may aggregate several complete features. Feature and team count do not impose
 PR slices. Prefer the smallest sufficient change without numeric size gates.
 
 ## Team routing
+
+Every team routes through one Team Gizmo reporting to Gizmo Prime. Team Gizmo
+receives the high-level packet, decomposes only mechanics owned by that team,
+dispatches internal Team Agents through the active harness, synthesizes exact-
+SHA evidence and blockers, and reports the high-level result to Prime. It does
+not make functional ownership, readiness, promotion, or final delivery
+decisions.
 
 Each Team Agent task has exactly one team identity, bounded file scope, and named
 acceptance evidence.

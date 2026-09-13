@@ -6,6 +6,10 @@ Team-oriented delivery routes work to functional owners while keeping one
 serialized integration sequence within each feature. Concurrent features have
 separate Gizmos and worktrees. The
 [dev delivery contract](../architecture/dev-delivery.md) owns stage boundaries.
+Gizmo Prime is the mission/root coordinator. Each team reports through a Team
+Gizmo, which decomposes only team mechanics, dispatches internal Team Agents
+through the active harness, and returns synthesized exact-SHA evidence or
+blockers to Prime.
 
 ## Planning
 
@@ -31,7 +35,8 @@ separate Gizmos and worktrees. The
    - Permit only scoped rustfmt and bounded inexpensive TS diagnostics locally.
 5. Require every writer to commit its complete scoped iteration.
 6. Verify each child commit and integrate it into the parent feature worktree.
-7. Push the stable feature head and request remote build-only execution via Steward.
+7. Push the stable feature head and have Delivery Pipeline Team Gizmo route
+   the remote build-only packet to internal PR Steward.
 8. Require each terminal handoff to enumerate all iteration commits.
    - Each entry names its SHA, outcome, evidence, and unresolved blockers.
 9. Verify each commit's changed paths and evidence.
@@ -64,13 +69,15 @@ when no dependency remains between them.
 - Give fixes fresh child worktrees from the current parent frontier and integrate
   accepted commits through the same parent sequence.
 - Team Agents author tests for the manager's slow stage.
-- Gizmo requests remote compilation and owns feature review dispositions.
-- Gizmo authorizes Steward's serialized local integration after feature acceptance.
+- Gizmo Prime requests Delivery Pipeline Team Gizmo's remote compilation packet
+  and owns feature review dispositions.
+- Delivery Pipeline Team Gizmo routes internal PR Steward's serialized local
+  integration after feature acceptance.
 - The manually run dev manager controls publication, invokes
   `dev:pr-manager` for PR creation/update, and owns slow evidence, readiness,
   and promotion.
-- PR Steward observes the PR and performs only review, check, status, and
-  promotion mechanics under a manager packet.
+- Internal PR Steward observes the PR and performs only review, check, status,
+  and promotion mechanics under a manager packet.
 
 ## Prohibited complexity
 

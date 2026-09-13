@@ -2,7 +2,9 @@
 
 ## Purpose
 
-Gizmo assigns bounded work to Team Agents and owns the delivery sequence.
+Gizmo Prime assigns high-level team packets and owns the mission delivery
+sequence. Each Team Gizmo assigns bounded internal work within its team's
+packet and reports the synthesized result upward.
 
 Delegation must stay simple. It must not create a second workflow engine around
 the active harness.
@@ -10,26 +12,29 @@ the active harness.
 ## Mandatory fail-closed invocation gate
 
 Every implementation or delivery run must start through Gizmo Prime. Gizmo
-Prime must invoke the active Gizmo harness and dispatch bounded Team Agents
+Prime must invoke the active Gizmo harness and issue the high-level packet to
+the owning Team Gizmo; that Team Gizmo dispatches bounded internal Team Agents
 before any implementation, repair, review, validation, GitHub, landing, dev
 validation, or promotion work begins. This dispatch requirement is mandatory;
 disjoint scopes or a small task never authorize direct execution by the root.
 
-If Gizmo Prime or the Team Agent harness cannot be invoked or started, the run
-is failed and stops immediately. No implementation, validation, GitHub, or
-landing work may continue. A non-Gizmo root must not execute the work directly,
-and another Codex task, thread, cloud task, or external agent is not a fallback
-or a substitute for Gizmo dispatch.
+If Gizmo Prime, a required Team Gizmo, or the Team Agent harness cannot be
+invoked or started, the run is failed and stops immediately. No
+implementation, validation, GitHub, or landing work may continue. A non-Gizmo
+root must not execute the work directly, and another Codex task, thread, cloud
+task, or external agent is not a fallback or a substitute for the
+Prime-to-Team-Gizmo dispatch chain.
 
 ## Rules
 
 - Follow [dev delivery](../architecture/dev-delivery.md) for stage boundaries.
 - Author tests without executing them in the feature stage.
 - Local feedback is limited to scoped rustfmt and bounded TS diagnostics.
-- Gizmo requests remote build-only execution through PR Steward.
-- Every Team Agent task has one team identity. A PR Steward task uses the
-  separate `pr-steward` operational context and remains a child task of Gizmo
-  for policy and authorization.
+- Delivery Pipeline Team Gizmo requests remote build-only execution through
+  its internal PR Steward.
+- Every Team Agent task has one team identity. An internal PR Steward task
+  uses the Delivery Pipeline operational context and remains a child task of
+  Team Gizmo for policy and authorization.
 - Every task names its outcome, allowed files, forbidden files, and acceptance
   evidence.
 - Internally establish every known task and dependency before dispatch.
@@ -70,19 +75,22 @@ or a substitute for Gizmo dispatch.
 - Gizmo verifies each child commit and integrates it into the parent feature
   worktree through the guarded module integrator.
 - Do not copy, replay, or synthesize a worker commit into an unrelated branch.
-- Gizmo owns feature sequencing, review, acceptance, and landing requests.
+- Gizmo Prime owns feature sequencing, review, acceptance, and landing
+  requests. Team Gizmo owns only its team's mechanics and evidence synthesis.
   The dev manager controls dev PR creation/update through `dev:pr-manager`,
-  slow evidence, readiness, and promotion. Steward observes the PR and
-  performs only review, check, status, and promotion mechanics under manager
-  packets.
+  slow evidence, readiness, and promotion. Internal PR Steward observes the
+  PR and performs only review, check, status, and promotion mechanics under
+  manager packets.
   Follow the
-  [PR Steward lifecycle](../../teams/pr-steward/workflows/pull-request-lifecycle.md).
+  [internal PR Steward lifecycle](../../teams/delivery-pipeline/internal/pr-steward/workflows/pull-request-lifecycle.md).
 
 ## Procedure
 
-1. Identify the team that owns the requested change.
+1. Identify the team that owns the requested change and its Team Gizmo.
 2. Discover every Team Agent task and dependency currently known.
-3. Define each bounded task with explicit file scope and acceptance evidence.
+3. Have Gizmo Prime issue the high-level packet through the active harness.
+4. Define each bounded internal task with explicit file scope and acceptance
+   evidence.
    - Name every acceptance command's read, write, and output scopes.
    - Include the [GitHub execution boundary](../../AGENTS.md#github-execution-boundary)
      in every functional worker prompt.
@@ -90,37 +98,38 @@ or a substitute for Gizmo dispatch.
      evidence from Gizmo.
    - Explicitly prohibit direct `gh` queries, equivalent GitHub access, and
      PR monitoring, including read-only `gh pr view`.
-4. Inspect the current dirty paths and diff hunks.
-5. Attribute every dirty change to its owner and task.
+5. Inspect the current dirty paths and diff hunks.
+6. Attribute every dirty change to its owner and task.
    - If a proposed scope overlaps a pre-existing user or foreign change, block
      that task.
    - Proceed only after an exact handoff or same-task attribution.
-6. Build the next dependency-ready wave.
+7. Build the next dependency-ready wave.
    - Require disjoint file scopes.
    - Require concurrency-safe acceptance command scopes.
    - Treat shared generated and output paths as shared files.
    - Defer unsafe checks until the relevant changes are committed.
-7. Create one child worktree per task from the parent feature worktree's current
+8. Create one child worktree per task from the parent feature worktree's current
    commit.
-8. Start that wave through the active harness with each worker in its issued
+9. Start that wave through the active harness with each worker in its issued
    child worktree.
-9. Let each Team Agent implement and author behavior-focused tests.
-10. Require each worker to commit its complete iteration in its child worktree.
+10. Let each Team Agent implement and author behavior-focused tests.
+11. Require each worker to commit its complete iteration in its child worktree.
     - The worker stages only its allowed files.
     - The commit must be directly after the child baseline.
-11. Verify each child commit and integrate it into the parent feature worktree
+12. Verify each child commit and have Team Gizmo return it to Gizmo Prime for
+    serialized integration into the parent feature worktree
     in a serialized integration turn.
-12. Request remote compilation after the parent has a stable committed head.
+13. Request remote compilation after the parent has a stable committed head.
     - Route any tracked output to its assigned owner.
     - Require that owner to commit the output as a complete new iteration.
-13. Request one terminal handoff from each writer.
+14. Request one terminal handoff from each writer.
     - Enumerate every committed iteration in order.
     - For each iteration, include its SHA, outcome, evidence, and unresolved
       blockers.
-14. Verify each commit stays inside its declared scope.
-15. Co-validate the combined parent branch after all tasks in the wave commit.
-16. Continue with the next dependency-ready wave from the parent frontier.
-17. Route corrections to the team that owns the affected change.
+15. Verify each commit stays inside its declared scope.
+16. Co-validate the combined parent branch after all tasks in the wave commit.
+17. Continue with the next dependency-ready wave from the parent frontier.
+18. Route corrections to the team that owns the affected change.
 
 Before a later implementation or repair iteration, the Team Agent reads the
 last one or two commits relevant to its allowed files and named interfaces. It
@@ -156,12 +165,16 @@ delivery sequence.
 
 ### PR information requests
 
-1. The worker reports the known branch, run, or manager-owned PR target to Gizmo.
-   It names the missing evidence and dependent work.
-2. Gizmo supplies an explicit operation packet to PR Steward.
-   Only PR Steward queries GitHub or starts a monitoring subscription.
-3. PR Steward returns bounded evidence or a blocker to Gizmo.
-4. Gizmo forwards the result to the requesting worker.
+1. The worker reports the known branch, run, or manager-owned PR target to its
+   Team Gizmo, which escalates the missing evidence and dependent work to
+   Gizmo Prime.
+2. Delivery Pipeline Team Gizmo supplies an explicit operation packet to
+   internal PR Steward. Only internal PR Steward queries GitHub or starts a
+   monitoring subscription.
+3. Internal PR Steward returns bounded evidence or a blocker to Delivery
+   Pipeline Team Gizmo.
+4. Team Gizmo synthesizes the result, reports it to Gizmo Prime, and forwards
+   the result to the requesting worker.
    The worker continues independent in-scope work while waiting when possible.
 
 Missing PR identity is part of the request, not permission for worker discovery.

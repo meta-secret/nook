@@ -6,6 +6,17 @@ Load only the category required for the current delivery stage.
 
 - [Gizmo Prime agent contract](AGENTS.md)
 
+## Team reporting
+
+- Every team has a Team Gizmo that receives Prime's high-level packet,
+  dispatches internal Team Agents through the active harness, and reports
+  exact-SHA evidence or blockers back to Gizmo Prime.
+- [Delivery Pipeline Team Gizmo](../teams/delivery-pipeline/internal/gizmo/knowledge-graph.md)
+  is the current operational Team Gizmo for CI, PR lifecycle, dev publication,
+  workflow execution, local landing, evidence, and guarded promotion. It is not
+  a second Prime and does not decide functional ownership, readiness, promotion,
+  or final delivery.
+
 ## Architecture and ownership
 
 Use this authority to classify team work and shared delivery state.
@@ -30,7 +41,7 @@ Use these skills only for the delivery action in scope.
 Open one workflow at the stage that requires it.
 
 - [Mission delivery](workflows/mission-delivery.md)
-- [PR Steward Team Agent](../teams/pr-steward/knowledge-graph.md)
+- [Internal PR Steward Team Agent](../teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md)
 - [Agent statistics](workflows/agent-statistics.md)
 - [Pull request workflow](workflows/pull-requests.md)
 - [Review request workflow](workflows/code-review.md)

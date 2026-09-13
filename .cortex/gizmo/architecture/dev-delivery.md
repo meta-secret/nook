@@ -22,20 +22,44 @@ handoffs. Read it completely before selecting a stage in this detailed
 contract. This document supplies the authorization, evidence, and failure rules
 behind that architecture.
 
+## Hierarchy and stage ownership
+
+Gizmo Prime is the mission/root coordinator. Every team has a Team Gizmo that
+reports upward to Prime, receives high-level packets, decomposes only its
+team's mechanics, dispatches internal Team Agents through the active harness,
+and returns synthesized exact-SHA evidence or blockers. A Team Gizmo is not a
+second Prime and never decides functional ownership, readiness, promotion, or
+final delivery.
+
+Delivery Pipeline is the operational team for CI, pull-request lifecycle, dev
+publication, workflow execution, local landing, evidence, and guarded
+promotion. Delivery Pipeline Team Gizmo owns Level 1 delivery-pipeline
+orchestration, commit handoffs, and remote build-only task packets. Its
+internal PR Steward performs packetized external GitHub, PR, check, review,
+status, and bounded dev mechanics. Neither creates or updates pull requests or
+replaces the active harness.
+
+Feature Gizmos remain feature owners. The Dev Manager remains the policy owner
+for dev snapshots, dev validation, readiness, promotion, and manager-only
+`dev:pr-manager`.
+
 ## Runtime command contracts
 
 - **`build:compile`**
   - Repeatable remote build-only execution for the pushed feature SHA.
-  - Gizmo authorizes PR Steward's remote dispatch.
+  - Gizmo Prime authorizes Delivery Pipeline Team Gizmo's remote-task packet;
+    internal PR Steward performs the bounded dispatch.
   - No tests, coverage, e2e, or preflight may execute transitively.
 - **`dev:land`**
   - Serialized feature merge into the shared local dev checkout.
-  - Gizmo authorizes Steward's bounded invocation.
+  - Gizmo Prime authorizes Delivery Pipeline Team Gizmo's packet; internal PR
+    Steward performs the bounded invocation.
   - Verify positive remote build evidence for the exact feature SHA.
   - Do not publish dev.
 - **`dev:publish`**
   - Publish the manually selected local dev snapshot to origin/dev.
-  - Only the dev manager authorizes Steward's invocation.
+  - Only the dev manager authorizes the Delivery Pipeline packet to internal PR
+    Steward.
   - Preserve newer local dev commits and freeze the published SHA for validation.
 - **`dev:pr-manager`**
   - Create or update the single dev-to-main pull request from the exact
@@ -44,7 +68,8 @@ behind that architecture.
     Team Agents never invoke it or create PRs.
 - **`dev:promote`**
   - Guarded ordinary fast-forward publication of the tested dev SHA to main.
-  - Only the dev manager authorizes Steward's invocation.
+  - Only the dev manager authorizes the Delivery Pipeline packet to internal PR
+    Steward.
   - Require full slow PR checks, review/security verdicts, and main ancestry.
   - Verify remote main equality and actual PR state without manually closing it.
 
@@ -68,7 +93,8 @@ behind that architecture.
   - A completed feature has passing compilation for its final SHA and resolved
     required review and security findings.
 - **Local integration**
-  - Gizmo authorizes PR Steward to invoke bounded local integration for local dev.
+  - Gizmo Prime authorizes Delivery Pipeline Team Gizmo to route bounded local
+    integration to internal PR Steward for local dev.
   - The task verifies positive GitHub compilation evidence for the feature SHA.
   - Serialize all mutations of the shared local dev checkout and index.
   - Task tooling owns the integration exclusion across concurrent Gizmos.
@@ -78,10 +104,12 @@ behind that architecture.
 - **Slow stage ownership**
   - A manually started [dev manager](../../teams/dev-manager/AGENTS.md) is the
     sole publisher of local dev to `origin/dev`.
-  - The manager selects each snapshot and authorizes Steward's snapshot publication.
+  - The manager selects each snapshot and authorizes Delivery Pipeline Team
+    Gizmo to route internal PR Steward's snapshot publication.
   - The dev manager owns one open `dev` to `main` PR per validation cycle;
-    `dev:pr-manager` creates or updates it. PR Steward observes and reports
-    the resulting state but does not create or update the PR.
+    `dev:pr-manager` creates or updates it. Delivery Pipeline Team Gizmo routes
+    the manager packet to internal PR Steward, which observes and reports the
+    resulting state but does not create or update the PR.
   - After a merged cycle, create the next PR for a later published snapshot.
   - A merged PR is never reused. The dev branch itself remains permanent.
   - Run the full existing slow PR checks, including authored tests, coverage,
@@ -131,7 +159,8 @@ behind that architecture.
 
 ## Manager validation and repair procedure
 
-1. Select a committed local dev snapshot and authorize Steward's snapshot publication.
+1. Select a committed local dev snapshot and authorize Delivery Pipeline Team
+   Gizmo to route internal PR Steward's snapshot publication.
    - Publish by ordinary fast-forward push to `origin/dev`.
    - Stop on an unexpected remote advance or ancestry mismatch.
 2. Invoke manager-only `dev:pr-manager` to create or update the dev-to-main PR,
@@ -156,14 +185,16 @@ behind that architecture.
    - Remote main must be an ancestor of the tested SHA.
    - If main is not an ancestor, reconcile it into local dev through the normal
      feature path, publish a fresh snapshot, and repeat full validation.
-3. Authorize Steward's guarded fast-forward promotion to push the tested SHA to main.
+3. Authorize Delivery Pipeline Team Gizmo to route internal PR Steward's
+   guarded fast-forward promotion to push the tested SHA to main.
    - This is an actual fast-forward ref move preserving the tested commit SHA.
    - It preserves the complete graph, including existing feature merge commits.
    - It does not promise a linear commit graph.
    - Protection rejection stops promotion visibly.
    - A concurrent main change requires fresh ancestry and evidence review.
 4. Verify remote main equals the tested SHA.
-5. Have PR Steward verify the remote PR status.
+5. Have internal PR Steward verify the remote PR status through Delivery
+   Pipeline Team Gizmo.
    - Report an unmerged or unavailable PR status as a distinct incomplete result.
    - Never emulate GitHub's merged status with a manual close.
 6. Preserve local dev, even when it is ahead of the promoted SHA.
@@ -182,7 +213,7 @@ behind that architecture.
   - Implement guarded fast-forward promotion with ordinary pushes and evidence checks.
   - Verify protection rules permit the authorized fast-forward publication.
   - The manually run manager may use the already authorized ADMIN identity
-    through the guarded exact-SHA tasks and Steward packets.
+    through the guarded exact-SHA tasks and Delivery Pipeline packets.
   - Its existing repository bypass does not authorize skipping required checks.
   - Do not introduce a broad automatic administrator fallback.
   - Disable squash and rebase PR methods and branch deletion in repository policy.

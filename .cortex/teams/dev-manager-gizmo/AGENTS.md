@@ -17,15 +17,17 @@ durable lifecycle owner.
      [publish skill](../dev-manager/dynamic-skills/dev-publish.md) or
      [promotion skill](../dev-manager/dynamic-skills/dev-promote.md) required
      by the current operation.
-   - Read the [PR Steward contract](../pr-steward/AGENTS.md),
-     [authorization handshake](../pr-steward/workflows/authorization-handshake.md),
-     and [pull-request lifecycle](../pr-steward/workflows/pull-request-lifecycle.md).
+   - Read the [Delivery Pipeline team contract](../delivery-pipeline/AGENTS.md),
+     [Team Gizmo contract](../delivery-pipeline/internal/gizmo/AGENTS.md),
+     [internal PR Steward contract](../delivery-pipeline/internal/pr-steward/AGENTS.md),
+     [authorization handshake](../delivery-pipeline/internal/pr-steward/workflows/authorization-handshake.md),
+     and [pull-request lifecycle](../delivery-pipeline/internal/pr-steward/workflows/pull-request-lifecycle.md).
 
 2. Enforce the Gizmo gate.
    - Run only under an active Gizmo Prime and Team Agent harness.
    - Stop as `blocked` before delivery work if that harness is unavailable.
    - Keep this context as the dev-manager controller. Do not become a Feature
-     Gizmo, functional Team Agent, or PR Steward.
+     Gizmo, functional Team Agent, or internal PR Steward.
 
 3. Inspect the local and remote branch state before selecting work.
    - Record the repository, current worktree, branch, and clean or dirty state.
@@ -36,7 +38,8 @@ durable lifecycle owner.
    - Identify newer committed local-dev changes that are not in the current
      published snapshot.
    - Use ordinary local Git inspection for this state. Route GitHub-backed
-     observation and all `gh` or equivalent mechanics to PR Steward.
+     observation and all `gh` or equivalent mechanics to Delivery Pipeline
+     Team Gizmo, which dispatches internal PR Steward.
 
 4. Select one terminal path from [Outcomes](#outcomes).
    - If no new committed local-dev changes exist and no cycle is active, report
@@ -46,14 +49,16 @@ durable lifecycle owner.
    - Do not publish a dirty checkout or an uncommitted snapshot.
 
 5. Publish and start the manager validation cycle.
-   - Authorize PR Steward, with an explicit packet, to run the manager-only
-     `dev:publish` for the selected committed snapshot.
+   - Authorize Delivery Pipeline Team Gizmo, with an explicit packet, to route
+     internal PR Steward's manager-only `dev:publish` for the selected
+     committed snapshot.
    - Record the published SHA and freeze that exact `origin/dev` SHA for the
      cycle. Local `dev` may continue to receive completed feature landings.
    - Invoke manager-only `dev:pr-manager` directly. It is the sole path that
      creates or updates the one dev-to-main PR for this cycle.
-   - Give PR Steward the resulting repository, PR, head, and run packet for
-     GitHub observation and bounded mechanics. Steward must not invoke
+   - Give Delivery Pipeline Team Gizmo the resulting repository, PR, head, and
+     run packet so it can dispatch internal PR Steward for GitHub observation
+     and bounded mechanics. Neither Team Gizmo nor internal PR Steward may invoke
      `dev:pr-manager` or create or update the PR.
 
 6. Trigger and observe the complete slow validation.
@@ -64,10 +69,11 @@ durable lifecycle owner.
      default and do not use path diffs to skip coalesced changes.
    - Require captured-SHA checkouts, native validation concurrency with
      `cancel-in-progress: false`, one active run, and the latest pending run.
-   - Have PR Steward subscribe and observe one bounded iteration. Treat running,
+   - Have Delivery Pipeline Team Gizmo dispatch internal PR Steward to
+     subscribe and observe one bounded iteration. Treat running,
      failed, unknown, empty, stale-head, or unavailable evidence as non-success.
    - Do not create a custom polling loop. A five-minute inactivity check is the
-     narrow lifecycle behavior defined by the PR Steward authority.
+     narrow lifecycle behavior defined by the internal PR Steward authority.
 
 7. Route failures through the feature delivery path.
    - Bind every failure to its exact source SHA, run, attempt, check, and URL.
@@ -90,12 +96,13 @@ durable lifecycle owner.
    - Require `origin/main` to be an ancestor of that exact SHA.
    - Require passing required checks, review verdicts, security verdicts, and
      deployment evidence for that same SHA.
-   - Issue a separate promotion packet to PR Steward for guarded
-     `dev:promote`.
+   - Issue a separate promotion packet to Delivery Pipeline Team Gizmo for
+     internal PR Steward's guarded `dev:promote`.
    - Require the ordinary fast-forward result to preserve the tested SHA.
-   - Have Steward verify that remote `main` equals the tested SHA and report
-     actual PR state separately. An unmerged or unavailable PR state is an
-     incomplete result, not a successful promotion.
+   - Have internal PR Steward verify through Delivery Pipeline Team Gizmo that
+     remote `main` equals the tested SHA and report actual PR state separately.
+     An unmerged or unavailable PR state is an incomplete result, not a
+     successful promotion.
    - Preserve local `dev` and report any newer unpublished commits.
 
 9. End with one compact report using [Evidence and report](#evidence-and-report).
@@ -109,10 +116,11 @@ durable lifecycle owner.
 - Do not create a daemon, scheduler, heartbeat, automation, recurring task,
   retry queue, journal, lease, or custom polling loop.
 - Do not run `gh`, a GitHub API, or an equivalent GitHub CLI or wrapper.
-  Delegate every GitHub CLI and GitHub-backed mechanical operation to PR
-  Steward under an explicit packet.
+  Delegate every GitHub CLI and GitHub-backed mechanical operation to Delivery
+  Pipeline Team Gizmo for an explicit internal PR Steward packet.
 - Do not delegate `dev:pr-manager`. The Dev Manager invokes that manager-only
-  operation directly.
+  operation directly; Delivery Pipeline Team Gizmo and internal PR Steward
+  never create or update the PR.
 - Do not let Feature Gizmos or Team Agents create or update pull requests.
   `dev:pr-manager` remains the sole creation and update path.
 - Do not fix product code, tests, or ownership decisions in response to a
@@ -156,16 +164,17 @@ durable lifecycle owner.
   - `origin/dev` equals that SHA before promotion.
   - `origin/main` was an ancestor of that SHA.
   - Guarded `dev:promote` moved remote `main` to that exact SHA.
-  - Steward observed the actual PR state and returned it separately.
+  - Internal PR Steward observed the actual PR state and returned it through
+    Delivery Pipeline Team Gizmo.
 
 - **`blocked`**
   - Authority, harness, target, exact-SHA, branch, evidence, review,
-    security, deployment, ancestry, protection, PR-state, or Steward
-    availability is missing or mismatched.
+    security, deployment, ancestry, protection, PR-state, or Delivery Pipeline
+    Team Gizmo/internal PR Steward availability is missing or mismatched.
   - Stop the affected operation and report the exact blocker.
   - Do not substitute another merge method, identity, snapshot, or workflow.
 
-## Steward authorization packet
+## Internal PR Steward authorization packet
 
 Every packet names the controller, repository, operation, assigned checkout,
 required evidence, and target identity.

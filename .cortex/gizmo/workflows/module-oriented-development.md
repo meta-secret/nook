@@ -4,6 +4,11 @@
 
 Module-oriented delivery follows real provider and consumer boundaries without
 creating a separate Git integration system.
+Gizmo Prime is the mission/root coordinator. Each team reports through a Team
+Gizmo; Team Gizmo decomposes only that team's mechanics, dispatches internal
+Team Agents through the active harness, and reports exact-SHA evidence or
+blockers back to Prime. It is not a second Prime and does not decide functional
+ownership, readiness, promotion, or final delivery.
 
 ## Rules
 
@@ -43,13 +48,14 @@ creating a separate Git integration system.
    feature worktree's current commit.
 5. Use only the permitted lightweight local diagnostics during the wave.
 6. Verify each completed child commit and integrate it into the parent worktree.
-7. Push the feature branch and request remote build-only compilation for its
-   exact committed head; do not run feature tests or slow PR checks.
+7. Push the feature branch and have Delivery Pipeline Team Gizmo route a
+   remote build-only compilation packet for its exact committed head; do not
+   run feature tests or slow PR checks.
 8. Review authored focused tests and scoped changes without executing tests.
 9. Start dependent consumers from the integrated provider commit.
 10. Obtain remote compilation and type evidence on the combined feature head.
-    Gizmo authorizes Steward's bounded `dev:land` packet for serialized local
-    dev integration; Gizmo does not publish dev.
+    Gizmo Prime authorizes Delivery Pipeline Team Gizmo's bounded `dev:land`
+    packet for serialized local dev integration; Gizmo does not publish dev.
 11. Route failures to the responsible provider, consumer, or both.
 
 ## Review and corrections
@@ -76,9 +82,10 @@ Verify:
 - meaningful module tests were authored for the slow stage;
 - exact-head remote build-only provider-consumer evidence passed;
 - the parent feature worktree contains the complete result; and
-- Gizmo owns feature push sequencing, review, acceptance, and local landing
-  requests. The manually operated dev manager owns dev publication, dev PR
-  creation/update, slow evidence, readiness, and fast-forward promotion.
-  The manager invokes `dev:pr-manager`; PR Steward observes the resulting PR
-  and performs review, check, and promotion mechanics only under the manager's
-  bounded packet, as defined by the [dev delivery contract](../architecture/dev-delivery.md).
+  - Gizmo Prime owns feature push sequencing, review, acceptance, and local
+    landing requests. Delivery Pipeline Team Gizmo routes internal PR Steward
+    mechanics. The manually operated dev manager owns dev publication, dev PR
+    creation/update, slow evidence, readiness, and fast-forward promotion. The
+    manager invokes `dev:pr-manager`; internal PR Steward observes the
+    resulting PR and performs review, check, and promotion mechanics only under
+    the manager's bounded packet, as defined by the [dev delivery contract](../architecture/dev-delivery.md).

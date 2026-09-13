@@ -3,9 +3,9 @@
 ## Status and authority
 
 This document is the mandatory first read and primary end-to-end explanation
-for multiagent delivery. Every Feature Gizmo, Team Agent, reviewer, PR Steward,
-Dev Manager, and repair Gizmo reads it completely before acting in the
-workflow.
+for multiagent delivery. Every Feature Gizmo, Team Gizmo, Team Agent, reviewer,
+internal PR Steward, Dev Manager, and repair Gizmo reads it completely before
+acting in the workflow.
 
 These diagrams define stage ownership, boundaries, feedback loops, and
 exact-SHA handoffs. After identifying the current level and role, follow the
@@ -19,52 +19,97 @@ previous level becomes one component.
 ## Mandatory Gizmo invocation gate
 
 Every implementation or delivery run must begin with an invocation of Gizmo
-Prime. Gizmo Prime must dispatch the required bounded Team Agents through the
-active Gizmo harness before any worker-executable implementation, repair,
-review, validation, external check, GitHub operation, local landing, dev
-validation, or main-promotion work proceeds. Delegation is mandatory even when
-the work appears small or its file scopes are disjoint.
+Prime. Gizmo Prime is the mission/root coordinator. It must issue each team's
+high-level packet through the active Gizmo harness, and the receiving Team
+Gizmo must dispatch the required bounded internal Team Agents through that
+harness before any worker-executable implementation, repair, review,
+validation, external check, GitHub operation, local landing, dev validation,
+or main-promotion work proceeds. Delegation is mandatory even when the work
+appears small or its file scopes are disjoint.
 
-If Gizmo Prime or the Team Agent harness is missing or unavailable, the run is
-failed closed. Stop all implementation, validation, GitHub, and landing work
-and report the blocker. Direct execution by a non-Gizmo root, including an
-ordinary Codex task, thread, cloud task, or external agent, is not a fallback
-and cannot substitute for Gizmo dispatch.
+If Gizmo Prime, a required Team Gizmo, or the Team Agent harness is missing or
+unavailable, the run is failed closed. Stop all implementation, validation,
+GitHub, and landing work and report the blocker. Direct execution by a
+non-Gizmo root, including an ordinary Codex task, thread, cloud task, or
+external agent, is not a fallback and cannot substitute for the Prime-to-Team
+Gizmo dispatch chain.
+
+## Hierarchy and reporting
+
+Gizmo Prime is the mission/root coordinator. Every team has one Team Gizmo
+that reports upward to Prime. A Team Gizmo receives a high-level packet,
+decomposes only its team's mechanics, dispatches internal Team Agents through
+the active harness, synthesizes exact-SHA evidence and blockers, and reports a
+high-level result to Prime. Team Gizmo is not a second Prime and never decides
+functional ownership, readiness, promotion, or final delivery.
+
+```mermaid
+flowchart LR
+    Prime["Gizmo Prime<br/>mission/root coordinator"]
+    Team["Team Gizmo<br/>team-scoped orchestrator"]
+    Agents["Internal Team Agents<br/>bounded mechanics"]
+    Synthesis["Team Gizmo<br/>synthesizes exact-SHA evidence"]
+
+    Prime -->|high-level packet| Team
+    Team -->|active harness dispatch| Agents
+    Agents -->|committed results or blockers| Synthesis
+    Synthesis -->|high-level report| Prime
+```
+
+For the current operational team, the internal agents are Delivery Pipeline
+Team Gizmo and the existing PR Steward at
+`teams/delivery-pipeline/internal/pr-steward`. Delivery Pipeline Team Gizmo
+handles Level 1 delivery-pipeline orchestration, commit handoffs, and remote
+build-only task packets. Internal PR Steward handles packetized external
+GitHub, PR, check, review, and status mechanics plus bounded dev tasks.
 
 ## Delivery overview
 
 ```mermaid
 flowchart LR
-    Feature["Feature Gizmo<br/>and Team Agents"]
-    Checks["External checks"]
+    Prime["Gizmo Prime<br/>mission/root coordinator"]
+    Feature["Feature Gizmos<br/>feature owners and Team Agents"]
+    Pipeline["Delivery Pipeline Team Gizmo<br/>Level 1 routing"]
+    Steward["Internal PR Steward<br/>bounded mechanics"]
+    Checks["Remote build-only evidence"]
     Parallel["Parallel Feature Gizmos"]
     Dev["Local dev integration"]
-    Validation["Dev Manager validation"]
+    Validation["Dev Manager<br/>validation and promotion policy"]
     Main["origin/main"]
 
-    Feature --> Checks --> Parallel --> Dev --> Validation --> Main
+    Prime --> Parallel
+    Parallel --> Feature --> Pipeline --> Steward --> Checks
+    Checks --> Pipeline --> Dev --> Validation --> Main
 ```
 
-## Level 1: Feature Gizmo and Team Agents
+## Level 1: Feature Gizmo, Team Gizmo, and Team Agents
 
-The Feature Gizmo owns planning, delegation, review, team-commit integration,
-and feedback routing. Team Agents work in isolated child worktrees. Code review
-and remote type safety appear here as one external-check boundary.
+Gizmo Prime owns the mission/root delivery decision. The Feature Gizmo remains
+the feature owner for planning, functional delegation, review, team-commit
+integration, and feedback routing. Each team's Team Gizmo handles only its
+team's delivery mechanics, including commit-level handoffs and remote
+build-only task packets. Internal Team Agents work in isolated child
+worktrees. Code review and remote type safety appear here as one external-check
+boundary.
 
 ### Flow
 
 ```mermaid
 flowchart LR
     Request([Feature requested])
-    GizmoPlan["Gizmo:<br/>planning"]
+    Prime["Gizmo Prime:<br/>mission/root packet"]
+    GizmoPlan["Feature Gizmo:<br/>feature ownership and planning"]
     Teams["Team Agents"]
-    GizmoManagement["Gizmo:<br/>reviews and merges team commits"]
-    Checks["External checks"]
+    GizmoManagement["Feature Gizmo:<br/>reviews and integrates commits"]
+    Pipeline["Delivery Pipeline Team Gizmo:<br/>Level 1 orchestration"]
+    Steward["Internal PR Steward:<br/>remote build-only packet"]
+    Checks["Remote build-only evidence"]
     Green{"Green?"}
-    Feedback["Gizmo:<br/>routes feedback to responsible team"]
+    Feedback["Gizmo Prime:<br/>routes feature feedback"]
     Ready([Feature ready])
 
-    Request --> GizmoPlan --> Teams --> GizmoManagement --> Checks --> Green
+    Request --> Prime --> GizmoPlan --> Teams --> GizmoManagement
+    GizmoManagement --> Pipeline --> Steward --> Checks --> Pipeline --> Prime --> Green
     Green -- No --> Feedback --> GizmoPlan
     Green -- Yes --> Ready
 ```
@@ -75,16 +120,26 @@ flowchart LR
 sequenceDiagram
     autonumber
 
+    box Mission root
+        participant Prime as gizmo-prime:mission-root
+    end
+
     box Feature worktree
-        participant Gizmo as gizmo:feature-a
+        participant Gizmo as gizmo:feature-a-owner
         participant Code as team:code-dev
         participant Web as team:web-dev
+    end
+
+    box Delivery Pipeline team
+        participant Pipeline as delivery-pipeline:team-gizmo
+        participant Steward as delivery-pipeline:internal/pr-steward
     end
 
     box External checks
         participant Checks as external:feature-checks
     end
 
+    Prime->>Gizmo: Issue feature ownership packet
     Gizmo->>Gizmo: Plan complete feature
     Gizmo->>Code: Assign Rust and domain work
     Gizmo->>Web: Assign web work
@@ -99,36 +154,48 @@ sequenceDiagram
 
     Gizmo->>Gizmo: Inspect and merge Team Agent commits
     Gizmo->>Gizmo: Push exact integrated SHA
-    Gizmo->>Checks: Validate exact SHA
-    Checks-->>Gizmo: Green result or feedback
+    Gizmo->>Prime: Feature SHA and review disposition
+    Prime->>Pipeline: Delivery-pipeline packet for exact SHA
+    Pipeline->>Steward: Build-only remote-task packet
+    Steward->>Checks: Validate exact SHA
+    Checks-->>Steward: Green result or diagnostics
+    Steward-->>Pipeline: Exact-SHA evidence or blocker
+    Pipeline-->>Prime: Synthesized evidence or blocker
+    Prime-->>Gizmo: Green result or feedback
 
+    Note over Prime,Pipeline: Team Gizmo is a child orchestrator, not a second Prime
+    Note over Pipeline,Checks: Feature-stage remote execution is build-only
     Note over Gizmo,Checks: Failed checks restart the Level 1 flow
 ```
 
-## Level 2: External feature checks
+## Level 2: Remote task under Delivery Pipeline
 
-This level expands `external:feature-checks`. Review and remote compilation are
-separate checks internally, but they return one exact-SHA verdict to the Feature
-Gizmo. The remote task is build-only: it does not run tests, coverage, e2e, or
-preflight.
+This level expands `external:feature-checks` through Delivery Pipeline Team
+Gizmo and its internal PR Steward. Review and remote compilation are separate
+checks internally, but they return one exact-SHA verdict through Team Gizmo to
+Gizmo Prime and the Feature Gizmo. The remote task is build-only: it does not
+run tests, coverage, e2e, or preflight.
 
 ### Flow
 
 ```mermaid
 flowchart LR
+    Prime["Gizmo Prime:<br/>issues delivery packet"]
     Gizmo["Feature Gizmo:<br/>submits exact SHA"]
     Review["Code review"]
     Accepted{"Accepted?"}
     TypeSafety["Remote type-safety check"]
     Green{"Green?"}
-    Feedback["Feature Gizmo:<br/>receives check feedback"]
+    Pipeline["Delivery Pipeline Team Gizmo:<br/>decomposes mechanics"]
+    Steward["Internal PR Steward:<br/>dispatches remote task"]
+    Feedback["Gizmo Prime and Feature Gizmo:<br/>receive feedback"]
     Ready([Verified feature SHA])
 
-    Gizmo --> Review --> Accepted
+    Prime --> Gizmo --> Review --> Accepted
     Accepted -- No --> Feedback --> Gizmo
-    Accepted -- Yes --> TypeSafety --> Green
+    Accepted -- Yes --> Pipeline --> Steward --> TypeSafety --> Green
     Green -- No --> Feedback
-    Green -- Yes --> Ready
+    Green -- Yes --> Pipeline --> Prime --> Ready
 ```
 
 ### Component communication
@@ -141,9 +208,17 @@ sequenceDiagram
         participant Feature as gizmo:feature-a-and-teams
     end
 
+    box Mission root
+        participant Prime as gizmo-prime:mission-root
+    end
+
     box External feature checks
         participant Review as check:code-review
-        participant Steward as team:pr-steward
+    end
+
+    box Delivery Pipeline team
+        participant Pipeline as delivery-pipeline:team-gizmo
+        participant Steward as delivery-pipeline:internal/pr-steward
         participant Build as remote:build-compile
     end
 
@@ -151,36 +226,44 @@ sequenceDiagram
         participant Delivery as feature:verified
     end
 
+    Prime->>Feature: Route feature mission
     Feature->>Review: Review exact feature SHA
     Review-->>Feature: Accepted SHA or findings
-    Feature->>Steward: Authorize build:compile for accepted SHA
+    Feature->>Prime: Accepted exact SHA
+    Prime->>Pipeline: Authorize delivery-pipeline packet
+    Pipeline->>Steward: Dispatch build:compile packet
     Steward->>Build: Dispatch build-only task
     Build-->>Steward: Exact-SHA compilation result
-    Steward-->>Feature: Green evidence or diagnostics
+    Steward-->>Pipeline: Green evidence or diagnostics
+    Pipeline-->>Prime: Synthesized exact-SHA result
+    Prime-->>Feature: Green evidence or feedback
     Feature->>Delivery: Deliver green exact SHA
 
+    Note over Prime,Steward: Team Gizmo preserves Prime's controller and exact-SHA target
     Note over Feature,Build: Any failure returns to Level 1
 ```
 
 ## Level 3: Parallel feature development
 
-Every feature has an independent Gizmo, feature branch, worktree, Team Agents,
-and external-check loop. No feature PR or global feature scheduler coordinates
-them.
+Every feature has an independent Feature Gizmo, feature branch, worktree, Team
+Agents, and external-check loop. Gizmo Prime routes each feature and its team
+packets. No feature PR or global feature scheduler coordinates them.
 
 ### Flow
 
 ```mermaid
 flowchart LR
+    Prime["Gizmo Prime:<br/>mission/root coordinator"]
     Requests([Feature requests])
     GizmoA["Gizmo:<br/>feature A"]
     GizmoB["Gizmo:<br/>feature B"]
     GizmoC["Gizmo:<br/>feature C"]
     Dev["Local dev integration"]
 
-    Requests --> GizmoA --> Dev
-    Requests --> GizmoB --> Dev
-    Requests --> GizmoC --> Dev
+    Requests --> Prime
+    Prime --> GizmoA --> Dev
+    Prime --> GizmoB --> Dev
+    Prime --> GizmoC --> Dev
 ```
 
 ### Component communication
@@ -193,10 +276,14 @@ sequenceDiagram
         participant Users as users
     end
 
+    box Mission root
+        participant Prime as gizmo-prime:mission-root
+    end
+
     box Parallel feature delivery
-        participant A as gizmo:feature-a
-        participant B as gizmo:feature-b
-        participant C as gizmo:feature-c
+        participant A as gizmo:feature-a-owner
+        participant B as gizmo:feature-b-owner
+        participant C as gizmo:feature-c-owner
     end
 
     box Local integration
@@ -204,24 +291,32 @@ sequenceDiagram
     end
 
     par Feature A
-        Users->>A: Implement feature A
+        Users->>Prime: Request feature A
+        Prime->>A: Issue feature-A packet
         A->>A: Complete Levels 1 and 2
-        A-->>Landing: Authorize dev:land for green SHA A
+        A-->>Prime: Green SHA A and landing request
+        Prime-->>Landing: Authorize dev:land for green SHA A
     and Feature B
-        Users->>B: Implement feature B
+        Users->>Prime: Request feature B
+        Prime->>B: Issue feature-B packet
         B->>B: Complete Levels 1 and 2
-        B-->>Landing: Authorize dev:land for green SHA B
+        B-->>Prime: Green SHA B and landing request
+        Prime-->>Landing: Authorize dev:land for green SHA B
     and Feature C
-        Users->>C: Implement feature C
+        Users->>Prime: Request feature C
+        Prime->>C: Issue feature-C packet
         C->>C: Complete Levels 1 and 2
-        C-->>Landing: Authorize dev:land for green SHA C
+        C-->>Prime: Green SHA C and landing request
+        Prime-->>Landing: Authorize dev:land for green SHA C
     end
 ```
 
-## Level 4: Local dev integration
+## Level 4: Local dev integration ownership boundary
 
-Git is the coordination layer. Each Feature Gizmo authorizes its own bounded
-`dev:land`; PR Steward executes the ordinary merge under the serialized local
+Git is the coordination layer. Gizmo Prime remains the mission/root owner and
+each Feature Gizmo owns its completed feature and landing request. Delivery
+Pipeline Team Gizmo routes the bounded `dev:land` packet to internal PR
+Steward, which executes the ordinary merge under the serialized local
 integration task. There is no feature PR and no publication of `dev` here.
 
 ### Flow
@@ -229,7 +324,8 @@ integration task. There is no feature PR and no publication of `dev` here.
 ```mermaid
 flowchart LR
     Gizmo["Feature Gizmo:<br/>verified SHA"]
-    Landing["PR Steward:<br/>runs dev:land"]
+    Pipeline["Delivery Pipeline Team Gizmo:<br/>routes dev:land"]
+    Landing["Internal PR Steward:<br/>runs dev:land"]
     Result{"Git result"}
     Retry["Feature Gizmo:<br/>retries landing"]
     Resolve["Feature Gizmo and teams:<br/>reconcile with local dev"]
@@ -237,10 +333,10 @@ flowchart LR
     Dev["Local dev:<br/>updated"]
     Complete([Feature complete])
 
-    Gizmo --> Landing --> Result
+    Gizmo --> Pipeline --> Landing --> Result
     Result -- Lock busy --> Retry --> Landing
     Result -- Conflict --> Resolve --> Checks --> Landing
-    Result -- Success --> Dev --> Complete
+    Result -- Success --> Pipeline --> Dev --> Complete
 ```
 
 ### Component communication
@@ -254,8 +350,13 @@ sequenceDiagram
         participant B as gizmo:feature-b
     end
 
+    box Mission root
+        participant Prime as gizmo-prime:mission-root
+    end
+
     box Serialized local integration
-        participant Steward as team:pr-steward
+        participant Pipeline as delivery-pipeline:team-gizmo
+        participant Steward as delivery-pipeline:internal/pr-steward
         participant Git as task:dev-land
         participant Dev as branch:local-dev
     end
@@ -265,50 +366,65 @@ sequenceDiagram
     end
 
     par Independent landing requests
-        A->>Steward: Authorize dev:land for green SHA A
+        A-->>Prime: Request landing for green SHA A
     and
-        B->>Steward: Authorize dev:land for green SHA B
+        B-->>Prime: Request landing for green SHA B
     end
 
+    Prime->>Pipeline: Authorize dev:land for green SHA A
+    Pipeline->>Steward: Dispatch bounded dev:land packet
     Steward->>Git: Merge SHA A under integration lock
     Git->>Dev: Advance local dev
     Git-->>Steward: Feature SHA and resulting dev SHA
-    Steward-->>A: Landing evidence
+    Steward-->>Pipeline: Landing evidence
+    Pipeline-->>Prime: Synthesized landing evidence
+    Prime-->>A: Landing result
 
+    Prime->>Pipeline: Authorize dev:land for green SHA B
+    Pipeline->>Steward: Dispatch bounded dev:land packet
     Steward->>Git: Merge SHA B under integration lock
     Git->>Dev: Advance local dev
     Git-->>Steward: Feature SHA and resulting dev SHA
-    Steward-->>B: Landing evidence
+    Steward-->>Pipeline: Landing evidence
+    Pipeline-->>Prime: Synthesized landing evidence
+    Prime-->>B: Landing result
 
     Dev-->>Manager: New local dev snapshot available
 
+    Note over Prime,Steward: Feature Gizmo owns the request; Delivery Pipeline owns mechanics
     Note over A,Git: Lock retries and conflict repair follow the Level 4 flow
 ```
 
-## Level 5: Dev validation and main promotion
+## Level 5: Dev validation and main promotion ownership boundary
 
-The manually started Dev Manager is the sole owner of dev publication, slow
-validation, repair delegation, readiness, and promotion. PR Steward performs
-only manager-authorized mechanics. Local `dev` may continue receiving features
-while the published `origin/dev` SHA remains frozen for its validation cycle.
+The manually started Dev Manager is the sole policy owner of dev snapshots,
+dev publication, slow validation, repair delegation, readiness, promotion,
+and manager-only `dev:pr-manager`. Delivery Pipeline Team Gizmo routes
+manager-authorized mechanics to internal PR Steward. Team Gizmo and Team
+Agents never create or update PRs and never replace the active harness. Local
+`dev` may continue receiving features while the published `origin/dev` SHA
+remains frozen for its validation cycle.
 
 ### Flow
 
 ```mermaid
 flowchart LR
     Dev["Local dev:<br/>new commits"]
-    Select["Dev Manager:<br/>selects snapshot"]
-    Publish["Dev Manager:<br/>invokes dev:publish"]
-    PR["Dev PR Manager:<br/>creates or updates dev to main PR"]
+    Select["Dev Manager:<br/>selects and freezes snapshot"]
+    Publish["Dev Manager:<br/>authorizes dev:publish"]
+    Pipeline["Delivery Pipeline Team Gizmo:<br/>routes manager packet"]
+    PublishTask["Internal PR Steward:<br/>runs bounded dev:publish"]
+    PR["Dev Manager:<br/>invokes dev:pr-manager directly"]
     Checks["GitHub:<br/>full slow checks"]
     Green{"Green?"}
     Fix["Dev Manager:<br/>starts repair Gizmo"]
-    Promote["Dev Manager:<br/>invokes dev:promote"]
+    Promote["Dev Manager:<br/>authorizes dev:promote"]
+    PromoteTask["Internal PR Steward:<br/>runs guarded fast-forward"]
     Main([Main updated])
 
-    Dev --> Select --> Publish --> PR --> Checks --> Green
+    Dev --> Select --> Publish --> Pipeline --> PublishTask --> PR --> Checks --> Green
     Green -- No --> Fix --> Dev
-    Green -- Yes --> Promote --> Main
+    Green -- Yes --> Promote --> Pipeline --> PromoteTask --> Main
 ```
 
 ### Component communication
@@ -327,7 +443,8 @@ sequenceDiagram
     end
 
     box Authorized mechanics
-        participant Steward as team:pr-steward
+        participant Pipeline as delivery-pipeline:team-gizmo
+        participant Steward as delivery-pipeline:internal/pr-steward
     end
 
     box GitHub validation and promotion
@@ -338,33 +455,55 @@ sequenceDiagram
     end
 
     Dev-->>Manager: Committed local dev snapshot available
-    Manager->>OriginDev: Invoke dev:publish for selected SHA
-    Manager->>PR: Invoke dev:pr-manager
+    Manager->>Pipeline: Authorize manager-only dev:publish for selected SHA
+    Pipeline->>Steward: Dispatch bounded publication packet
+    Steward->>OriginDev: Publish selected SHA
+    OriginDev-->>Steward: Frozen origin/dev SHA
+    Steward-->>Pipeline: Exact-SHA publication evidence
+    Pipeline-->>Manager: Frozen SHA and blocker/evidence
+    Manager->>PR: Invoke dev:pr-manager directly
     PR->>PR: Create or update the single dev-to-main PR
     PR->>CI: Validate captured dev SHA
-    CI-->>Steward: Exact-SHA check evidence
-    Steward-->>Manager: Validation result
+    CI-->>Pipeline: Exact-SHA check evidence
+    Pipeline-->>Manager: Validation result
 
     Manager->>Repair: On failure, repair current local dev
     Repair->>Dev: Land repair through Levels 1 through 4
 
-    Manager->>Main: Invoke dev:promote after approval
-    Main-->>Manager: Confirm remote main equality
+    Manager->>Pipeline: Authorize guarded dev:promote after approval
+    Pipeline->>Steward: Dispatch frozen-SHA promotion packet
+    Steward->>Main: Fast-forward exact tested SHA
+    Main-->>Steward: Confirm remote main equality
+    Steward-->>Pipeline: Ref equality and actual PR state
+    Pipeline-->>Manager: Promotion mechanics evidence
     Manager->>PR: Verify actual merged state
 
     Note over Dev,OriginDev: Local dev may advance while origin/dev is frozen
-    Note over OriginDev,Main: Squash, rebase, and promotion merge commits are prohibited
+    Note over Pipeline,Main: No PR merge substitute; squash, rebase, force-push, and promotion merge commits are prohibited
 ```
 
 ## Delivery invariants
 
+- Gizmo Prime is the mission/root coordinator. Every team reports through its
+  Team Gizmo, which decomposes only team mechanics and returns exact-SHA
+  evidence or blockers to Prime.
+- Delivery Pipeline is the operational team for CI, PR lifecycle, dev
+  publication, workflow execution, local landing, evidence, and guarded
+  promotion. Its Team Gizmo routes internal PR Steward packets.
+- Team Gizmos and Team Agents never create or update pull requests, decide
+  functional ownership, readiness, promotion, or final delivery, or replace
+  the active harness.
 - A Feature Gizmo exits Level 1 only with resolved required review findings and
   green remote compilation evidence for the exact final feature SHA.
 - Feature-stage remote execution is build-only. Full tests belong only to the
   Dev Manager's dev-to-main PR.
 - Team Agents mutate isolated child worktrees and return committed iterations.
+- Internal PR Steward performs only packetized external GitHub, PR, check,
+  review, status, and bounded dev mechanics under Team Gizmo and controller
+  authorization.
 - Feature Gizmos never publish `dev` or `main`.
-- Feature Gizmos and Team Agents never create or update pull requests.
+- Feature Gizmos, Team Gizmos, and Team Agents never create or update pull
+  requests.
 - `dev:land` serializes shared local-dev mutations and never creates a feature
   PR.
 - `dev:pr-manager` is the sole pull-request creation/update path and operates
