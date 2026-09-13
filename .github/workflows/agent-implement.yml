@@ -186,7 +186,6 @@ jobs:
             core.setOutput('title', issueTitle)
             core.setOutput('body', body)
             core.setOutput('url', `https://github.com/${owner}/${repo}/blob/main/${path}`)
-            core.setOutput('slug', path.replace(/^issues\//, '').replace(/\.md$/, '').replaceAll('/', '-'))
             core.setOutput('continuing_owner', continuingOwner)
             core.setOutput('gizmo_id', assignedGizmoId)
 
@@ -203,24 +202,30 @@ jobs:
           MANUAL_CONTINUING_OWNER: ${{ inputs.continuing_owner }}
           MAJOR_CHANGE_AUTHORIZED: ${{ inputs.major_change_authorized }}
           RUN_ID: ${{ github.run_id }}
-          WORKBENCH_SLUG: ${{ steps.workbench.outputs.slug }}
         run: |
           set -euo pipefail
           if [ -n "$DISPATCH_PROMPT" ]; then
-            branch="agent/prompt-${RUN_ID}"
+            feature_source="$MANUAL_TASK_TITLE"
             checkout_ref="main"
             title="$MANUAL_TASK_TITLE"
             task="$DISPATCH_PROMPT"
             continuing_owner="$MANUAL_CONTINUING_OWNER"
           else
-            branch="agent/workbench-${WORKBENCH_SLUG}-${RUN_ID}"
+            feature_source="$(printf '%s' "$ISSUE_PATH" | cut -d/ -f2)"
             checkout_ref="main"
             title="$ISSUE_TITLE"
             task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
             continuing_owner="$ISSUE_CONTINUING_OWNER"
           fi
-          feature="${ISSUE_PATH:-issues/unplanned/task.md}"
-          feature="$(printf '%s' "$feature" | cut -d/ -f2)"
+          feature="$(printf '%s' "$feature_source" | LC_ALL=C tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' | cut -c1-20 | sed 's/-*$//')"
+          if [ -n "$feature" ] && [ "${#feature}" -lt 10 ]; then
+            feature="$(printf '%s-task-feature' "$feature" | cut -c1-20 | sed 's/-*$//')"
+          fi
+          if [ "${#feature}" -lt 10 ] || [ "${#feature}" -gt 20 ] || ! printf '%s' "$feature" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+)*$'; then
+            echo "::error::The task context must produce a 10-20 character lowercase-kebab feature identifier."
+            exit 1
+          fi
+          branch="codex/${feature}"
           plan_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           plan_timestamp="$(printf '%s' "$plan_started_at" | tr ':' '-')"
           plan_path="plans/${feature}/${plan_timestamp}-run-${RUN_ID}.md"
@@ -255,7 +260,7 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
 
-      - name: Reject an existing agent branch on rerun
+      - name: Reject an existing feature branch on rerun
         id: rerun
         if: steps.task.outputs.ready == 'true'
         uses: actions/github-script@v9
@@ -270,7 +275,7 @@ jobs:
                 ...context.repo,
                 branch: process.env.AGENT_BRANCH,
               })
-              core.setFailed(`Agent branch ${process.env.AGENT_BRANCH} already exists; preserve it for explicit recovery`)
+              core.setFailed(`Feature branch ${process.env.AGENT_BRANCH} already exists; preserve it for explicit recovery`)
               return
             } catch (error) {
               if (error.status !== 404) throw error
@@ -488,7 +493,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$IMPLEMENTATION_TERMINAL" = true ]; then
-            echo "Agent branch delivery is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun."
+            echo "Feature branch delivery is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun."
             exit 0
           fi
           plan="$REPO_ROOT/$WORKBENCH_PLAN_FILE"
@@ -588,7 +593,7 @@ jobs:
             }
             core.setOutput('capability', deliveredCapability)
 
-      - name: Publish implementation branch
+      - name: Publish feature branch
         id: implement
         if: steps.rerun.outputs.terminal == 'true' || (steps.agent_edit.outputs.changed == 'true' && steps.format.outcome == 'success')
         env:
@@ -598,7 +603,7 @@ jobs:
           REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
         run: |
           if [ "$IMPLEMENTATION_TERMINAL" = true ]; then
-            echo "Agent branch delivery is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete."
+            echo "Feature branch delivery is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete."
             exit 0
           fi
           CI_AGENT_TOOLING_ROOT="$GITHUB_WORKSPACE" \
@@ -665,7 +670,7 @@ jobs:
                   '',
                   '## Outcome',
                   '',
-                  success ? `Published agent branch \`${publishedBranch}\` at \`${publishedHead}\`; the feature Gizmo owns remote compilation and local dev landing.` : 'The bounded implementation run did not publish an agent branch.',
+                  success ? `Published feature branch \`${publishedBranch}\` at \`${publishedHead}\`; the feature Gizmo owns remote compilation and local dev landing.` : 'The bounded implementation run did not publish a feature branch.',
                   '',
                   '## Progress',
                   '',
@@ -673,7 +678,7 @@ jobs:
                   '',
                   '## Implementation problems',
                   '',
-                  success ? '- No problem summary was emitted by the bounded worker.' : '- The workflow or agent stopped before publishing an agent branch.',
+                  success ? '- No problem summary was emitted by the bounded worker.' : '- The workflow or agent stopped before publishing a feature branch.',
                   '',
                   '## Decisions',
                   '',
@@ -712,7 +717,7 @@ jobs:
                 '',
                 '## Progress',
                 '',
-                '- The bounded agent completed editing and trusted formatting, but no implementation branch was published.',
+                '- The bounded agent completed editing and trusted formatting, but no feature branch was published.',
                 '',
                 '## Implementation problems',
                 '',
@@ -768,8 +773,8 @@ jobs:
               .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
             if (!success) body = body.replace(/^status:\s*in_progress$/m, 'status: blocked')
             const progressOutcome = success
-              ? `published agent branch \`${publishedBranch}\` at \`${publishedHead}\``
-              : 'stopped before publishing an agent branch'
+              ? `published feature branch \`${publishedBranch}\` at \`${publishedHead}\``
+              : 'stopped before publishing a feature branch'
             const progress = `- ${now}: [Agent run ${context.runId}](${runUrl}) ${progressOutcome}; [worklog](${worklogUrl}).`
             body = body.replace(/^## Progress\s*$/m, `## Progress\n\n${progress}`)
             await github.rest.repos.createOrUpdateFileContents({
