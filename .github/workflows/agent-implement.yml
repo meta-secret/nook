@@ -42,6 +42,10 @@ on:
         description: Required prepublished canonical Prime feature branch
         required: true
         type: string
+      feature_head_sha:
+        description: Required exact head SHA of the prepublished feature branch
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -62,6 +66,7 @@ jobs:
       WORKBENCH_PLAN_FILE: .nook-workbench-plan.md
       WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md
       FEATURE_BRANCH: ${{ inputs.feature_branch }}
+      FEATURE_HEAD_SHA: ${{ inputs.feature_head_sha }}
       ORIGIN_MAIN_SHA: ${{ inputs.origin_main_sha }}
       PINNED_LOCAL_DEV_SHA: ${{ inputs.pinned_local_dev_sha }}
       GIT_NO_REPLACE_OBJECTS: "1"
@@ -117,6 +122,7 @@ jobs:
           PROMPT: ${{ inputs.prompt }}
           TASK_TITLE: ${{ inputs.task_title }}
           FEATURE_BRANCH: ${{ inputs.feature_branch }}
+          FEATURE_HEAD_SHA: ${{ inputs.feature_head_sha }}
           ORIGIN_MAIN_SHA: ${{ inputs.origin_main_sha }}
           PINNED_LOCAL_DEV_SHA: ${{ inputs.pinned_local_dev_sha }}
         run: |
@@ -148,6 +154,10 @@ jobs:
           fi
           if ! printf '%s' "$ORIGIN_MAIN_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
             echo "::error::origin_main_sha must be an exact 40-character lowercase commit SHA."
+            exit 1
+          fi
+          if ! printf '%s' "$FEATURE_HEAD_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::feature_head_sha must be an exact 40-character lowercase commit SHA."
             exit 1
           fi
           if [ "${#FEATURE_BRANCH}" -gt 120 ] || ! printf '%s' "$FEATURE_BRANCH" | grep -Eq '^codex/[a-z0-9]+(-[a-z0-9]+)*$'; then
@@ -371,7 +381,7 @@ jobs:
         uses: actions/github-script@v9
         env:
           AGENT_BRANCH: ${{ env.AGENT_BRANCH }}
-          PINNED_LOCAL_DEV_SHA: ${{ env.PINNED_LOCAL_DEV_SHA }}
+          FEATURE_HEAD_SHA: ${{ env.FEATURE_HEAD_SHA }}
         with:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
@@ -387,8 +397,8 @@ jobs:
               core.setFailed(`Required prepublished feature branch ${process.env.AGENT_BRANCH} does not exist`)
               return
             }
-            if (branch.commit.sha !== process.env.PINNED_LOCAL_DEV_SHA) {
-              core.setFailed(`Prepublished feature branch ${process.env.AGENT_BRANCH} does not match pinned_local_dev_sha`)
+            if (branch.commit.sha !== process.env.FEATURE_HEAD_SHA) {
+              core.setFailed(`Prepublished feature branch ${process.env.AGENT_BRANCH} does not match feature_head_sha`)
               return
             }
             core.setOutput('terminal', 'false')
@@ -416,24 +426,28 @@ jobs:
           GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
           GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
           git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
-            "+refs/heads/main:refs/remotes/origin/main"
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH"
           fetched_origin_main_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse refs/remotes/origin/main^{commit})"
           if [ "$fetched_origin_main_sha" != "$ORIGIN_MAIN_SHA" ]; then
             echo "::error::Freshly fetched origin/main does not match the caller-pinned SHA."
             exit 1
           fi
-          GIT_CONFIG_COUNT=1 \
-          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
-          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
-          git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
-            "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH"
-          pinned_local_dev_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse "refs/remotes/origin/$FEATURE_BRANCH^{commit}")"
-          if [ "$pinned_local_dev_sha" != "$PINNED_LOCAL_DEV_SHA" ]; then
-            echo "::error::Freshly fetched feature branch does not match pinned_local_dev_sha."
+          feature_head_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse "refs/remotes/origin/$FEATURE_BRANCH^{commit}")"
+          if [ "$feature_head_sha" != "$FEATURE_HEAD_SHA" ]; then
+            echo "::error::Freshly fetched feature branch does not match feature_head_sha."
             exit 1
           fi
-          if ! git -C "$GITHUB_WORKSPACE" merge-base --is-ancestor "$ORIGIN_MAIN_SHA" "$pinned_local_dev_sha"; then
+          if ! git -C "$GITHUB_WORKSPACE" cat-file -e "$PINNED_LOCAL_DEV_SHA^{commit}"; then
+            echo "::error::Pinned local dev commit is missing from the freshly fetched feature history."
+            exit 1
+          fi
+          if ! git -C "$GITHUB_WORKSPACE" merge-base --is-ancestor "$ORIGIN_MAIN_SHA" "$PINNED_LOCAL_DEV_SHA"; then
             echo "::error::Pinned local dev is not descended from the freshly fetched origin/main."
+            exit 1
+          fi
+          if ! git -C "$GITHUB_WORKSPACE" merge-base --is-ancestor "$PINNED_LOCAL_DEV_SHA" "$feature_head_sha"; then
+            echo "::error::Feature head is not descended from pinned local dev."
             exit 1
           fi
           git init "$implementation_root"
@@ -451,25 +465,35 @@ jobs:
             exit 1
           fi
           implementation_head="$(git -C "$implementation_root" rev-parse "refs/remotes/origin/$FEATURE_BRANCH^{commit}")"
-          if [ "$implementation_head" != "$PINNED_LOCAL_DEV_SHA" ]; then
-            echo "::error::Isolated implementation repository does not match pinned_local_dev_sha."
+          if [ "$implementation_head" != "$FEATURE_HEAD_SHA" ]; then
+            echo "::error::Isolated implementation repository does not match feature_head_sha."
             exit 1
           fi
-          if ! git -C "$implementation_root" merge-base --is-ancestor "$implementation_origin_main_sha" "$implementation_head"; then
+          if ! git -C "$implementation_root" cat-file -e "$PINNED_LOCAL_DEV_SHA^{commit}"; then
+            echo "::error::Pinned local dev commit is missing from the isolated implementation repository."
+            exit 1
+          fi
+          if ! git -C "$implementation_root" merge-base --is-ancestor "$implementation_origin_main_sha" "$PINNED_LOCAL_DEV_SHA"; then
             echo "::error::Pinned local dev is not descended from origin/main in the isolated implementation repository."
             exit 1
           fi
+          if ! git -C "$implementation_root" merge-base --is-ancestor "$PINNED_LOCAL_DEV_SHA" "$implementation_head"; then
+            echo "::error::Feature head is not descended from pinned local dev in the isolated implementation repository."
+            exit 1
+          fi
           git -C "$implementation_root" checkout --detach "$implementation_head"
-          test "$(git -C "$implementation_root" rev-parse HEAD)" = "$PINNED_LOCAL_DEV_SHA"
+          test "$(git -C "$implementation_root" rev-parse HEAD)" = "$FEATURE_HEAD_SHA"
           unset auth NOOK_TOKEN
           {
             echo "IMPLEMENTATION_REPO_ROOT=$implementation_root"
             echo "ORIGIN_MAIN_SHA=$ORIGIN_MAIN_SHA"
-            echo "PINNED_LOCAL_DEV_SHA=$pinned_local_dev_sha"
+            echo "PINNED_LOCAL_DEV_SHA=$PINNED_LOCAL_DEV_SHA"
+            echo "FEATURE_HEAD_SHA=$feature_head_sha"
           } >> "$GITHUB_ENV"
           {
             echo "ORIGIN_MAIN_SHA=$ORIGIN_MAIN_SHA"
-            echo "PINNED_LOCAL_DEV_SHA=$pinned_local_dev_sha"
+            echo "PINNED_LOCAL_DEV_SHA=$PINNED_LOCAL_DEV_SHA"
+            echo "FEATURE_HEAD_SHA=$feature_head_sha"
           } >> "$GITHUB_OUTPUT"
 
       - name: Validate continuing GitHub owner
@@ -553,6 +577,7 @@ jobs:
           TASK_TITLE: ${{ env.TASK_TITLE }}
           ORIGIN_MAIN_SHA: ${{ env.ORIGIN_MAIN_SHA }}
           PINNED_LOCAL_DEV_SHA: ${{ env.PINNED_LOCAL_DEV_SHA }}
+          FEATURE_HEAD_SHA: ${{ env.FEATURE_HEAD_SHA }}
           WORKBENCH_PLAN_FILE: ${{ env.WORKBENCH_PLAN_FILE }}
           WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
           WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
@@ -610,6 +635,7 @@ jobs:
               `gizmo_id: ${currentGizmoId}`,
               `originMainSha: ${process.env.ORIGIN_MAIN_SHA}`,
               `pinnedLocalDevSha: ${process.env.PINNED_LOCAL_DEV_SHA}`,
+              `featureHeadSha: ${process.env.FEATURE_HEAD_SHA}`,
               `started_at: ${process.env.TASK_PLAN_STARTED_AT}`,
               'agent: cursor',
               '---',
@@ -802,6 +828,7 @@ jobs:
           PUBLISHED_HEAD_SHA: ${{ steps.implement.outputs.published_head_sha }}
           ORIGIN_MAIN_SHA: ${{ env.ORIGIN_MAIN_SHA }}
           PINNED_LOCAL_DEV_SHA: ${{ env.PINNED_LOCAL_DEV_SHA }}
+          FEATURE_HEAD_SHA: ${{ env.FEATURE_HEAD_SHA }}
         with:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
@@ -915,6 +942,7 @@ jobs:
               `plan: ${process.env.PLAN_PATH || 'null'}`,
               `originMainSha: ${process.env.ORIGIN_MAIN_SHA}`,
               `pinnedLocalDevSha: ${process.env.PINNED_LOCAL_DEV_SHA}`,
+              `featureHeadSha: ${process.env.FEATURE_HEAD_SHA}`,
               `published_branch: ${publishedBranch || 'null'}`,
               `published_head_sha: ${publishedHead || 'null'}`,
               `status: ${success ? 'in_progress' : 'blocked'}`,
