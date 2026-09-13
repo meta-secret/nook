@@ -221,7 +221,7 @@ rewriting, implementation against an unmerged predecessor, and stacked branches
 or pull requests.
 
 Write the current slice as `<scope>; Acceptance evidence: <observable proof>`.
-Write every numbered PR row in the mapped, estimated form defined above.
+Write every numbered feature row in the mapped, estimated form defined above.
 Never use `None`, `N/A`, or another placeholder for its scope, estimate, or
 acceptance evidence.
 

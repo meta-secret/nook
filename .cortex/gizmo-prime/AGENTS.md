@@ -134,7 +134,7 @@ outcomes, or decide readiness, promotion, or the final delivery verdict.
 
 Keep each feature cohesive and independently reviewable. The manager's dev PR
 may aggregate several complete features. Feature and team count do not impose
-PR slices. Prefer the smallest sufficient change without numeric size gates.
+Feature slices. Prefer the smallest sufficient change without numeric size gates.
 
 ## Team routing
 
