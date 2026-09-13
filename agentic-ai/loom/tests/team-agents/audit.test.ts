@@ -232,6 +232,38 @@ describe('canonical Cortex team authority', () => {
     );
   });
 
+  test('rejects directories and symlinks as Team Gizmo context paths', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-context-node-'));
+    const contextFile = join(fixtureRoot, 'context.md');
+    const contextDirectory = join(fixtureRoot, 'context-directory');
+    const contextSymlink = join(fixtureRoot, 'context-symlink.md');
+    const teamGizmo = TEAM_GIZMO_CATALOG[0];
+    if (!teamGizmo)
+      throw new Error('Delivery Pipeline Team Gizmo profile is incomplete.');
+
+    try {
+      await writeFile(contextFile, 'context\n', 'utf8');
+      await mkdir(contextDirectory);
+      await symlink(contextFile, contextSymlink);
+
+      for (const contextPath of ['context-directory', 'context-symlink.md']) {
+        const report = TeamAgentContract.auditTeamGizmos({
+          repoRoot: fixtureRoot,
+          gizmos: [{ ...teamGizmo, contextPaths: [contextPath] }],
+        });
+
+        expect(report.auditOk).toBe(false);
+        expect(report.findings).toContainEqual({
+          code: 'missing-team-gizmo-context-path',
+          path: contextPath,
+          message: `Team Gizmo context is missing: ${contextPath}`,
+        });
+      }
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
   test('rejects stable-key, identity, context, and capability drift', () => {
     const aiAuthority = TeamAgentsAuditScenario.requiredAiAuthority();
     const driftedAuthorities: readonly TeamAuthority[][] = [

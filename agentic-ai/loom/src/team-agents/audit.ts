@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 
 import { join, normalize } from 'node:path';
 
@@ -185,7 +185,9 @@ export class TeamAgentContract {
           path: contextPath,
           message: `${contextLabel} context paths must be normalized and repository-relative.`,
         });
-      } else if (!existsSync(join(repoRoot, contextPath))) {
+      } else if (
+        !TeamAgentContract.isRegularFile(join(repoRoot, contextPath))
+      ) {
         findings.push({
           code: missingCode,
           path: contextPath,
@@ -347,6 +349,14 @@ export class TeamAgentContract {
       !path.split('/').includes('..') &&
       normalize(path) === path
     );
+  }
+
+  private static isRegularFile(path: string): boolean {
+    try {
+      return lstatSync(path).isFile();
+    } catch {
+      return false;
+    }
   }
 
   private static gizmoProhibitionSection(source: string): string {
