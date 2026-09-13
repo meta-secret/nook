@@ -8,11 +8,15 @@ ${AGENT_TASK}
 
 - Fetched main (`originMainSha`): `${ORIGIN_MAIN_SHA}`
 - Pinned canonical local development (`pinnedLocalDevSha`): `${PINNED_LOCAL_DEV_SHA}`
+- Exact canonical feature frontier (`featureHeadSha`): `${FEATURE_HEAD_SHA}`
 
 These exact recorded commit identities are required before planning. Use
-`pinnedLocalDevSha` as the only feature source. Treat `originMainSha` as
-fetched-main ancestry evidence and fail closed when either identity is missing,
-mismatched, or stale.
+`pinnedLocalDevSha` as the only feature source and require the chain
+`originMainSha` ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`.
+The canonical remote feature ref must equal `featureHeadSha` exactly; an initial
+frontier equal to the pinned base is valid, as are descendant reruns. Treat
+`originMainSha` as fetched-main ancestry evidence and fail closed when any
+identity is missing, mismatched, or stale.
 
 ## Major-change authorization gate
 
@@ -57,12 +61,17 @@ grant authorization. Ordinary fixes and bounded decisions inside an already
 selected architecture may proceed without this flag.
 
 Fresh-base bootstrap evidence is required before planning or implementation.
-Gizmo Prime records `originMainSha` for the fetched `origin/main` and
+Gizmo Prime records `originMainSha` for the fetched `origin/main`,
 `pinnedLocalDevSha` after Delivery/Dev Manager synchronizes canonical local
-`main` and `dev`. New feature work, Team Gizmos, and leaves use exactly
-`pinnedLocalDevSha`; an existing feature frontier may contain only descendants
-of that commit. `originMainSha` is ancestry evidence only. Fail closed on
-missing, mismatched, or stale evidence and never choose a base independently.
+`main` and `dev`, and `featureHeadSha` for the exact feature frontier. New
+feature work, Team Gizmos, and leaves use exactly `pinnedLocalDevSha`; an
+existing feature frontier may contain only descendants of that commit. Require
+`originMainSha` ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`,
+the canonical remote feature ref equal to `featureHeadSha`, and the detached
+implementation HEAD equal to `featureHeadSha`. An initial frontier equal to the
+pinned base is valid, as are descendant reruns. `originMainSha` is ancestry
+evidence only. Fail closed on missing, mismatched, or stale evidence and never
+choose a base independently.
 
 ## Required output
 

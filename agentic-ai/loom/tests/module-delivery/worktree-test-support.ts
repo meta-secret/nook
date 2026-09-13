@@ -68,6 +68,7 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
       sourceCommit: input.state.headCommit,
       originMainSha: input.lease.originMainSha,
       pinnedLocalDevSha: input.lease.pinnedLocalDevSha,
+      featureHeadSha: input.lease.pinnedLocalDevSha,
       producerTeam: input.node.team,
       functionalOwner: input.node.functionalOwner,
       acceptanceOwner: input.node.acceptanceOwner,

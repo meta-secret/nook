@@ -107,6 +107,7 @@ type DelegationRecordRequest = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly task: string;
   readonly agent: string;
   readonly attempt: WorkflowAttemptNumber;
@@ -120,6 +121,7 @@ enum DelegationRecordRequestField {
   SourceCommit = 'sourceCommit',
   OriginMainSha = 'originMainSha',
   PinnedLocalDevSha = 'pinnedLocalDevSha',
+  FeatureHeadSha = 'featureHeadSha',
   Task = 'task',
   Agent = 'agent',
   Attempt = 'attempt',
@@ -183,6 +185,7 @@ export class DelegationJournalCli {
       sourceCommit: plan.sourceCommit,
       originMainSha: plan.originMainSha,
       pinnedLocalDevSha: plan.pinnedLocalDevSha,
+      featureHeadSha: plan.featureHeadSha,
       declaration: root,
     };
     const admissionInput: AdmitDelegationAttemptInput = {
@@ -251,6 +254,7 @@ export class DelegationJournalCli {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       identity: {
         task: request.task,
         agent: request.agent,
@@ -277,6 +281,7 @@ export class DelegationJournalCli {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       task: request.task,
       agent: request.agent,
       attempt: request.attempt,
@@ -296,6 +301,7 @@ export class DelegationJournalCli {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       identity: {
         task: request.task,
         agent: request.agent,
@@ -319,6 +325,7 @@ export class DelegationJournalCli {
       sourceCommit: input.sourceCommit,
       originMainSha: input.originMainSha,
       pinnedLocalDevSha: input.pinnedLocalDevSha,
+      featureHeadSha: input.featureHeadSha,
       identity: input.declaration.identity,
       depth: input.declaration.depth,
       parent: input.declaration.parent,
@@ -402,6 +409,7 @@ export class DelegationJournalCli {
       typeof value.sourceCommit !== 'string' ||
       typeof value.originMainSha !== 'string' ||
       typeof value.pinnedLocalDevSha !== 'string' ||
+      typeof value.featureHeadSha !== 'string' ||
       typeof value.task !== 'string' ||
       typeof value.agent !== 'string' ||
       typeof value.attempt !== 'number' ||
@@ -417,6 +425,7 @@ export class DelegationJournalCli {
       sourceCommit: value.sourceCommit,
       originMainSha: value.originMainSha,
       pinnedLocalDevSha: value.pinnedLocalDevSha,
+      featureHeadSha: value.featureHeadSha,
       task: value.task,
       agent: value.agent,
       attempt: value.attempt,
@@ -446,6 +455,7 @@ export class DelegationJournalCli {
       !/^[0-9a-f]{40}$/.test(request.sourceCommit) ||
       !/^[0-9a-f]{40}$/.test(request.originMainSha) ||
       !/^[0-9a-f]{40}$/.test(request.pinnedLocalDevSha) ||
+      !/^[0-9a-f]{40}$/.test(request.featureHeadSha) ||
       !request.terminal ||
       !TERMINAL_KINDS.has(request.terminal.kind) ||
       request.terminal.task !== request.task ||
@@ -539,6 +549,7 @@ type AdmissionRequestForDeclarationInput = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly declaration: DelegationAttemptDeclaration;
 };
 

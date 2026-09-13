@@ -37,6 +37,7 @@ export class StructuralExpertsIsolationReceiptFixture {
       sourceCommit: StructuralExpertsIsolationReceiptFixture.SOURCE_COMMIT,
       originMainSha: StructuralExpertsIsolationReceiptFixture.SOURCE_COMMIT,
       pinnedLocalDevSha: StructuralExpertsIsolationReceiptFixture.SOURCE_COMMIT,
+      featureHeadSha: StructuralExpertsIsolationReceiptFixture.SOURCE_COMMIT,
       runId: 'structural-isolation-receipt',
       workingDirectory: '/tmp/structural-isolation-receipt',
       upstreamOutputs: [],
@@ -64,6 +65,7 @@ export class StructuralExpertsIsolationReceiptFixture {
       sourceCommit: StructuralExpertsIsolationReceiptFixture.SOURCE_COMMIT,
       originMainSha: StructuralExpertsIsolationReceiptFixture.SOURCE_COMMIT,
       pinnedLocalDevSha: StructuralExpertsIsolationReceiptFixture.SOURCE_COMMIT,
+      featureHeadSha: StructuralExpertsIsolationReceiptFixture.SOURCE_COMMIT,
       workingDirectory: '/tmp/structural-isolation-receipt',
       snapshot: {
         scopePaths: ['agentic-ai/loom/src'],

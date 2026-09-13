@@ -91,6 +91,7 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: ORIGIN_MAIN_SHA,
       pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+      featureHeadSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

@@ -42,6 +42,7 @@ test('materializes synthesis context without repository paths or credentials', a
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       temporaryRoot,
       workingDirectory: REPO_ROOT,
     };
@@ -100,6 +101,7 @@ test('rejects traversal and oversized synthetic context before agent execution',
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       temporaryRoot,
       workingDirectory: REPO_ROOT,
     };
@@ -156,6 +158,7 @@ test('materializes only exact shared formatter and lint tooling', async () => {
       sourceCommit,
       originMainSha: sourceCommit,
       pinnedLocalDevSha: sourceCommit,
+      featureHeadSha: sourceCommit,
       temporaryRoot,
       workingDirectory: REPO_ROOT,
     };

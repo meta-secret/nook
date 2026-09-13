@@ -160,6 +160,7 @@ export class ModuleDeliveryPlanDecoder {
       ['sourceCommit', state.plan.sourceCommit],
       ['originMainSha', state.plan.originMainSha],
       ['pinnedLocalDevSha', state.plan.pinnedLocalDevSha],
+      ['featureHeadSha', state.plan.featureHeadSha],
     ] as const;
     for (const [name, value] of commits) {
       if (!/^[0-9a-f]{40}$/u.test(value)) {

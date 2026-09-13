@@ -60,6 +60,7 @@ export type ModuleExpertRuntimeIdentity = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly task: string;
   readonly agent: string;
   readonly attempt: number;
@@ -243,6 +244,7 @@ export class ModuleExpertRuntimeAuthority {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       task: request.task,
       expert: profile.name,
       attempt: request.attempt,
@@ -277,6 +279,7 @@ export class ModuleExpertRuntimeAuthority {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       task: request.task,
       agent: profile.name,
       attempt: request.attempt,
@@ -344,6 +347,7 @@ export class ModuleExpertRuntimeAuthority {
       sourceCommit: record.identity.sourceCommit,
       originMainSha: record.identity.originMainSha,
       pinnedLocalDevSha: record.identity.pinnedLocalDevSha,
+      featureHeadSha: record.identity.featureHeadSha,
       runId: record.identity.runId,
       workingDirectory: record.identity.workingDirectory,
       upstreamOutputs: [],

@@ -321,6 +321,7 @@ export class AgentWorkflowDelegationAggregationScenario {
       sourceCommit: plan.sourceCommit,
       originMainSha: plan.originMainSha,
       pinnedLocalDevSha: plan.pinnedLocalDevSha,
+      featureHeadSha: plan.pinnedLocalDevSha,
       barrierEvidence:
         AgentWorkflowDelegationAggregationScenario.barrierEvidence(
           barrierInput,
@@ -377,6 +378,7 @@ export class AgentWorkflowDelegationAggregationScenario {
         sourceCommit: input.plan.sourceCommit,
         originMainSha: input.plan.originMainSha,
         pinnedLocalDevSha: input.plan.pinnedLocalDevSha,
+        featureHeadSha: input.plan.pinnedLocalDevSha,
         identity: input.declaration.identity,
         depth: input.declaration.depth,
         parent: input.declaration.parent,
@@ -394,6 +396,7 @@ export class AgentWorkflowDelegationAggregationScenario {
       sourceCommit: input.plan.sourceCommit,
       originMainSha: input.plan.originMainSha,
       pinnedLocalDevSha: input.plan.pinnedLocalDevSha,
+      featureHeadSha: input.plan.pinnedLocalDevSha,
       task: input.declaration.identity.task,
       agent: input.declaration.identity.agent,
       attempt: input.declaration.identity.attempt,
@@ -517,6 +520,7 @@ export class AgentWorkflowDelegationAggregationScenario {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       rootMaterializer: rootIdentity,
       attempts: [root, expert, leaf],
     };
@@ -655,6 +659,7 @@ describe('ordinary delegation run aggregation', () => {
         sourceCommit: plan.sourceCommit,
         originMainSha: plan.originMainSha,
         pinnedLocalDevSha: plan.pinnedLocalDevSha,
+        featureHeadSha: plan.pinnedLocalDevSha,
         barrierEvidence: [],
       };
       const incompleteInput: FinalizeDelegationRunInput = {

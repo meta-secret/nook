@@ -88,6 +88,7 @@ export class DelegationRunJournal {
       sourceCommit: input.plan.sourceCommit,
       originMainSha: input.plan.originMainSha,
       pinnedLocalDevSha: input.plan.pinnedLocalDevSha,
+      featureHeadSha: input.plan.featureHeadSha,
       planSha256,
       sequence: 1,
       occurredAt: new Date().toISOString(),
@@ -238,6 +239,7 @@ export class DelegationRunJournal {
       sourceCommit: loaded.plan.sourceCommit,
       originMainSha: loaded.plan.originMainSha,
       pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
+      featureHeadSha: loaded.plan.featureHeadSha,
     };
     DelegationRunJournal.assertAdmissionRequest(admissionBinding);
     const identityKey = DelegationPlanContract.delegationAttemptIdentityKey(
@@ -281,6 +283,7 @@ export class DelegationRunJournal {
       sourceCommit: loaded.plan.sourceCommit,
       originMainSha: loaded.plan.originMainSha,
       pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
+      featureHeadSha: loaded.plan.featureHeadSha,
     };
     DelegationRunJournal.assertAdmissionRequest(admissionBinding);
     const admitted = DelegationRunJournal.admittedIdentityKeys(events);
@@ -323,6 +326,7 @@ export class DelegationRunJournal {
         sourceCommit: loaded.plan.sourceCommit,
         originMainSha: loaded.plan.originMainSha,
         pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
+        featureHeadSha: loaded.plan.featureHeadSha,
         identity: {
           task: declaration.parent.task,
           agent: declaration.parent.agent,
@@ -341,6 +345,7 @@ export class DelegationRunJournal {
       sourceCommit: loaded.plan.sourceCommit,
       originMainSha: loaded.plan.originMainSha,
       pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
+      featureHeadSha: loaded.plan.featureHeadSha,
       planSha256: loaded.planSha256,
       sequence: events.length + 1,
       occurredAt: new Date().toISOString(),
@@ -435,6 +440,7 @@ export class DelegationRunJournal {
       binding.request.sourceCommit !== binding.sourceCommit ||
       binding.request.originMainSha !== binding.originMainSha ||
       binding.request.pinnedLocalDevSha !== binding.pinnedLocalDevSha ||
+      binding.request.featureHeadSha !== binding.featureHeadSha ||
       binding.request.depth !== binding.declaration.depth ||
       JSON.stringify(binding.request.parent) !==
         JSON.stringify(binding.declaration.parent)
@@ -515,6 +521,7 @@ export class DelegationRunJournal {
       input.event.sourceCommit !== input.plan.sourceCommit ||
       input.event.originMainSha !== input.plan.originMainSha ||
       input.event.pinnedLocalDevSha !== input.plan.pinnedLocalDevSha ||
+      input.event.featureHeadSha !== input.plan.featureHeadSha ||
       input.event.planSha256 !== input.planSha256 ||
       input.event.sequence !== input.expectedSequence ||
       !/^[0-9a-f]{64}$/.test(input.event.planSha256) ||
@@ -723,6 +730,7 @@ type AdmissionRequestBinding = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
 };
 
 type DelegationRunDirectoryInput = {

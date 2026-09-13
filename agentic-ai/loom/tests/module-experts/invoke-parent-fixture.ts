@@ -166,6 +166,7 @@ export class ModuleExpertsInvokeParentFixtureScenario {
       sourceCommit: args.sourceCommit,
       originMainSha: args.originMainSha ?? args.sourceCommit,
       pinnedLocalDevSha: args.pinnedLocalDevSha ?? args.sourceCommit,
+      featureHeadSha: args.pinnedLocalDevSha ?? args.sourceCommit,
       task: args.task,
       agent: args.agent,
       attempt: args.attempt,

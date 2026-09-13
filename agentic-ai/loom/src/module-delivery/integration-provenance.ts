@@ -167,6 +167,7 @@ export type AcceptedModuleDeliveryWrite = Readonly<{
   startingFrontier: string;
   originMainSha: string;
   pinnedLocalDevSha: string;
+  featureHeadSha: string;
   integrationCommit: string;
   acceptedByTeam: ModuleDeliveryOwnerIdentity;
   handoff: ModuleDeliveryHandoffSubmission;
@@ -570,6 +571,7 @@ export class ModuleIntegrationProvenanceRegistry {
       sourceCommit: registration.state.sourceCommit,
       originMainSha: registration.state.originMainSha,
       pinnedLocalDevSha: registration.state.pinnedLocalDevSha,
+      featureHeadSha: registration.state.featureHeadSha,
       completedWaveCount: registration.state.completedWaveCount,
       headCommit: registration.state.headCommit,
       workspace: registration.state.workspace,
@@ -654,6 +656,7 @@ export class ModuleIntegrationProvenanceRegistry {
       provenance.sourceCommit !== state.sourceCommit ||
       provenance.originMainSha !== state.originMainSha ||
       provenance.pinnedLocalDevSha !== state.pinnedLocalDevSha ||
+      provenance.featureHeadSha !== state.featureHeadSha ||
       provenance.completedWaveCount !== state.completedWaveCount ||
       provenance.headCommit !== state.headCommit ||
       provenance.workspace !== state.workspace
@@ -684,6 +687,7 @@ export class ModuleIntegrationProvenanceRegistry {
       state.workspace.baselineCommit !== state.sourceCommit ||
       state.admissionState.originMainSha !== state.originMainSha ||
       state.admissionState.pinnedLocalDevSha !== state.pinnedLocalDevSha ||
+      state.admissionState.featureHeadSha !== state.featureHeadSha ||
       state.workspace.taskId !== INTEGRATION_TASK_ID ||
       state.workspace.attempt !== 1
     )
@@ -841,6 +845,7 @@ export class ModuleIntegrationProvenanceRegistry {
       inspection.state.originMainSha !== validation.plan.originMainSha ||
       inspection.state.pinnedLocalDevSha !==
         validation.plan.pinnedLocalDevSha ||
+      inspection.state.featureHeadSha !== validation.plan.featureHeadSha ||
       JSON.stringify(inspection.state.topologicalOrder) !==
         JSON.stringify(validation.topologicalOrder) ||
       JSON.stringify(inspection.state.waves) !==
@@ -902,6 +907,7 @@ export type ModuleIntegrationProvenance = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly completedWaveCount: number;
   readonly headCommit: string;
   readonly workspace: ModuleWorktreeHandle;

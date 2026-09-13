@@ -33,6 +33,7 @@ export class ModuleExpertsInvokeScenario {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       task: 'inspect-core-contract',
       attempt: 1,
       depth: 2,

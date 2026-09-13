@@ -201,6 +201,7 @@ export class AgentWorkflowCodexRuntimeScenario {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       task: 'inspect-stream-failure',
       attempt: 1,
       depth: 2,
@@ -429,6 +430,7 @@ describe('Codex agent source stability', () => {
         sourceCommit,
         originMainSha: sourceCommit,
         pinnedLocalDevSha: sourceCommit,
+        featureHeadSha: sourceCommit,
         phase: AgentSourceStabilityPhase.BeforeAttempt,
       };
       const runtimeFailure1 = new AgentSourceSnapshot(

@@ -53,6 +53,7 @@ export class AgentWorkflowDelegationPlanTreeScenario {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       rootMaterializer: ROOT,
       attempts,
     };

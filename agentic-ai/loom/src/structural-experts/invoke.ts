@@ -92,6 +92,7 @@ export class StructuralExpertInvocation {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       task: request.task,
       agent: request.expert,
       attempt: request.attempt,
@@ -259,6 +260,7 @@ export class StructuralExpertInvocation {
       sourceCommit: input.request.sourceCommit,
       originMainSha: input.request.originMainSha,
       pinnedLocalDevSha: input.request.pinnedLocalDevSha,
+      featureHeadSha: input.request.featureHeadSha,
       task: input.request.task,
       attempt: input.request.attempt,
       depth: 2,
@@ -356,6 +358,7 @@ export class StructuralExpertInvocation {
       first.sourceCommit !== result.sourceCommit ||
       first.originMainSha !== result.originMainSha ||
       first.pinnedLocalDevSha !== result.pinnedLocalDevSha ||
+      first.featureHeadSha !== result.featureHeadSha ||
       first.task !== result.task ||
       first.agent !== result.expert ||
       first.attempt !== result.attempt ||
@@ -414,6 +417,7 @@ export type StructuralExpertInvocationResult = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly task: string;
   readonly attempt: number;
   readonly depth: 2;

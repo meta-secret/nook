@@ -188,6 +188,7 @@ export class StructuralExpertsOutputScopeScenario {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       task: 'inspect-scope',
       attempt: 1,
       depth: 2,

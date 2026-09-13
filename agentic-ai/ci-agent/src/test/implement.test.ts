@@ -28,6 +28,7 @@ import {
 const EXPECTED_HEAD = "a".repeat(40);
 const ORIGIN_MAIN_SHA = "b".repeat(40);
 const PINNED_LOCAL_DEV_SHA = "c".repeat(40);
+const FEATURE_HEAD_SHA = "d".repeat(40);
 
 class BootstrapReplacementFixture {
   private constructor(readonly root: string) {}
@@ -246,7 +247,7 @@ void test("implementation phases are single-use", async () => {
 
 void describe("resolveDeliveryTarget", () => {
   void it(
-    "records fetched-main evidence and uses the pinned local-dev base",
+    "records the bootstrap chain and uses the pinned local-dev base for budget",
     () => {
       assert.deepEqual(
         CiResultAssertions.assertSuccess(
@@ -254,12 +255,14 @@ void describe("resolveDeliveryTarget", () => {
             branch: "codex/agent-branching",
             originMainSha: ORIGIN_MAIN_SHA,
             pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+            featureHeadSha: FEATURE_HEAD_SHA,
           }).execute(),
         ),
         {
           branch: "codex/agent-branching",
           originMainSha: ORIGIN_MAIN_SHA,
           pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+          featureHeadSha: FEATURE_HEAD_SHA,
           budgetBaseRef: PINNED_LOCAL_DEV_SHA,
         },
       );
@@ -274,6 +277,7 @@ void describe("resolveDeliveryTarget", () => {
             "codex/agent-branching/ai/loom-specialist/define-branch-naming-contract",
           originMainSha: ORIGIN_MAIN_SHA,
           pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+          featureHeadSha: FEATURE_HEAD_SHA,
         }).execute(),
       ),
       {
@@ -281,6 +285,7 @@ void describe("resolveDeliveryTarget", () => {
           "codex/agent-branching/ai/loom-specialist/define-branch-naming-contract",
         originMainSha: ORIGIN_MAIN_SHA,
         pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+        featureHeadSha: FEATURE_HEAD_SHA,
         budgetBaseRef: PINNED_LOCAL_DEV_SHA,
       },
     );
@@ -292,6 +297,7 @@ void describe("resolveDeliveryTarget", () => {
         branch: "agent/workbench-feature-42",
         originMainSha: ORIGIN_MAIN_SHA,
         pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+        featureHeadSha: FEATURE_HEAD_SHA,
       }).execute(),
       /malformed/u,
     );
@@ -304,6 +310,7 @@ void describe("resolveDeliveryTarget", () => {
           "codex/agent-branching/ai/dev-manager/define-branch-naming-contract",
         originMainSha: ORIGIN_MAIN_SHA,
         pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+        featureHeadSha: FEATURE_HEAD_SHA,
       }).execute(),
       /malformed/u,
     );
@@ -315,6 +322,7 @@ void describe("resolveDeliveryTarget", () => {
         branch: "codex/feature",
         originMainSha: ORIGIN_MAIN_SHA,
         pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+        featureHeadSha: FEATURE_HEAD_SHA,
       }).execute(),
       /malformed/u,
     );
@@ -326,6 +334,7 @@ void describe("resolveDeliveryTarget", () => {
         branch: "codex/agent-branching",
         originMainSha: "",
         pinnedLocalDevSha: "",
+        featureHeadSha: "",
       }).execute(),
       /bootstrap evidence requires/u,
     );
@@ -337,6 +346,7 @@ void describe("resolveDeliveryTarget", () => {
         branch: "codex/agent-branching",
         originMainSha: "main",
         pinnedLocalDevSha: "dev",
+        featureHeadSha: "feature",
       }).execute(),
       /bootstrap evidence requires/u,
     );
@@ -344,17 +354,19 @@ void describe("resolveDeliveryTarget", () => {
 });
 
 void describe("validateBootstrapEvidence", () => {
-  void it("preserves both exact commit identities", () => {
+  void it("preserves all exact bootstrap commit identities", () => {
     assert.deepEqual(
       CiResultAssertions.assertSuccess(
         new AgentImplementationValidateBootstrapEvidence({
           originMainSha: ORIGIN_MAIN_SHA,
           pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+          featureHeadSha: FEATURE_HEAD_SHA,
         }).execute(),
       ),
       {
         originMainSha: ORIGIN_MAIN_SHA,
         pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+        featureHeadSha: FEATURE_HEAD_SHA,
       },
     );
   });
@@ -367,11 +379,13 @@ void describe("resolveTargetFromEnvironment", () => {
       AGENT_BRANCH: "codex/agent-branching",
       ORIGIN_MAIN_SHA,
       PINNED_LOCAL_DEV_SHA,
+      FEATURE_HEAD_SHA,
     }).resolveTargetFromEnvironment();
     assert.deepEqual(CiResultAssertions.assertSuccess(target), {
       branch: "codex/agent-branching",
       originMainSha: ORIGIN_MAIN_SHA,
       pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+      featureHeadSha: FEATURE_HEAD_SHA,
       budgetBaseRef: PINNED_LOCAL_DEV_SHA,
     });
   });
@@ -392,12 +406,22 @@ void test("bootstrap verification rejects replacement-ref ancestry bypasses", as
     const originMainSha = fixture.commit("origin main");
     const pinnedLocalDevSha = fixture.commit("pinned local dev");
     fixture.git("update-ref", "refs/remotes/origin/main", originMainSha);
-    fixture.head(pinnedLocalDevSha);
+    fixture.git(
+      "update-ref",
+      "refs/remotes/origin/codex/agent-branching",
+      pinnedLocalDevSha,
+    );
+    fixture.git("checkout", "-q", "--detach", pinnedLocalDevSha);
     fixture.replaceCommit(pinnedLocalDevSha, originMainSha);
 
     const result = await new AgentImplementationVerifyBootstrap({
       repoRoot: fixture.root,
-      evidence: { originMainSha, pinnedLocalDevSha },
+      evidence: {
+        branch: "codex/agent-branching",
+        originMainSha,
+        pinnedLocalDevSha,
+        featureHeadSha: pinnedLocalDevSha,
+      },
     }).execute();
     CiResultAssertions.assertFailure(
       result,

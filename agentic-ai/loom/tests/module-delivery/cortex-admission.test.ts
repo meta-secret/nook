@@ -62,6 +62,7 @@ export class ModuleDeliveryCortexAdmissionScenario {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.pinnedLocalDevSha,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

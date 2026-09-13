@@ -18,15 +18,20 @@ ${VALIDATED_PLAN}
 - Existing canonical feature branch (harness commits here — do not git): `${AGENT_BRANCH}`
 - Fetched main evidence (`originMainSha`): `${ORIGIN_MAIN_SHA}`
 - Prime-pinned local development base (`pinnedLocalDevSha`): `${PINNED_LOCAL_DEV_SHA}`
+- Exact canonical feature frontier (`featureHeadSha`): `${FEATURE_HEAD_SHA}`
 
-The two recorded commit SHAs above are mandatory bootstrap evidence. Delivery
+The three recorded commit SHAs above are mandatory bootstrap evidence. Delivery
 and the Dev Manager fetched `origin/main`, synchronized canonical local `main`,
 and brought canonical local `dev` onto or including that main before this
 worktree was issued. Prime creates the feature branch and worktree from
 `${PINNED_LOCAL_DEV_SHA}`; an existing feature frontier may add only descendants
-of that commit. `originMainSha` proves fetched-main ancestry only; it is never
-a feature base. Stop closed if either value is missing, does not match the
-checked-out refs, or is stale.
+of that commit. The validated chain is `originMainSha` ancestor of
+`pinnedLocalDevSha` ancestor of `featureHeadSha`; the canonical remote feature
+ref and detached implementation HEAD must equal `featureHeadSha` exactly.
+`originMainSha` proves fetched-main ancestry only; it is never a feature base.
+The initial frontier may equal the pinned base, and later reruns may use a
+descendant frontier. Stop closed if any value is missing, mismatched, stale, or
+the chain cannot be proven.
 - The planning phase has already published the task-start record and left its
   validated body in `.nook-workbench-plan.md`.
 

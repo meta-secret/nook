@@ -30,6 +30,7 @@ export class ModuleAdmissionSource {
     PinnedDevBaseEvidenceContract.assertAncestry({
       originMainSha: acceptedPlan.plan.originMainSha,
       pinnedLocalDevSha: acceptedPlan.plan.pinnedLocalDevSha,
+      featureHeadSha: acceptedPlan.plan.featureHeadSha,
       sourceCommit: acceptedPlan.plan.sourceCommit,
       workingDirectory: repositoryRoot,
     });

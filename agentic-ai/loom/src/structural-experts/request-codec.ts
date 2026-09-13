@@ -56,6 +56,7 @@ export class StructuralExpertRequestDecoder {
             'originMainSha',
             'parent',
             'pinnedLocalDevSha',
+            'featureHeadSha',
             'runId',
             'sourceCommit',
             'task',
@@ -70,6 +71,7 @@ export class StructuralExpertRequestDecoder {
             'originMainSha',
             'parent',
             'pinnedLocalDevSha',
+            'featureHeadSha',
             'runId',
             'sourceCommit',
             'task',
@@ -123,6 +125,7 @@ export class StructuralExpertRequestDecoder {
     const sourceCommit = reader.string('sourceCommit');
     const originMainSha = reader.string('originMainSha');
     const pinnedLocalDevSha = reader.string('pinnedLocalDevSha');
+    const featureHeadSha = reader.string('featureHeadSha');
     const task = reader.string('task');
     const instruction = reader.string('instruction');
     const attempt = reader.number('attempt');
@@ -148,6 +151,7 @@ export class StructuralExpertRequestDecoder {
       PinnedDevBaseEvidenceContract.assertShape({
         originMainSha,
         pinnedLocalDevSha,
+        featureHeadSha,
       });
     } catch {
       StructuralExpertRequestDecoder.invalidRequest();
@@ -158,6 +162,7 @@ export class StructuralExpertRequestDecoder {
       sourceCommit,
       originMainSha,
       pinnedLocalDevSha,
+      featureHeadSha,
       task,
       attempt,
       depth: 2,
@@ -342,6 +347,7 @@ type StructuralInvocationFields = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly task: string;
   readonly attempt: number;
   readonly depth: 2;

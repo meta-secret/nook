@@ -60,6 +60,7 @@ export type AgentSourceStabilityCheck = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly phase: AgentSourceStabilityPhase;
 };
 export type CodexExecutionFailureRequest = {
@@ -290,6 +291,7 @@ export class ModuleExpertCodexSdkAgentRuntime<
       sourceCommit: invocation.sourceCommit,
       originMainSha: invocation.originMainSha,
       pinnedLocalDevSha: invocation.pinnedLocalDevSha,
+      featureHeadSha: invocation.featureHeadSha,
       workingDirectory: invocation.workingDirectory,
     };
     const isolationUse: ModuleExpertRuntimeIsolationUse<
@@ -384,6 +386,7 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
       sourceCommit: execution.invocation.sourceCommit,
       originMainSha: execution.invocation.originMainSha,
       pinnedLocalDevSha: execution.invocation.pinnedLocalDevSha,
+      featureHeadSha: execution.invocation.featureHeadSha,
       phase: AgentSourceStabilityPhase.BeforeAttempt,
     };
     const before = new AgentSourceSnapshot(beforeAttempt).assertStable();
@@ -398,6 +401,7 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
         sourceCommit: execution.invocation.sourceCommit,
         originMainSha: execution.invocation.originMainSha,
         pinnedLocalDevSha: execution.invocation.pinnedLocalDevSha,
+        featureHeadSha: execution.invocation.featureHeadSha,
         phase: AgentSourceStabilityPhase.AfterAttempt,
       };
       after = new AgentSourceSnapshot(afterAttempt).assertStable();
@@ -468,6 +472,7 @@ class GuardedCodexExecution<TTask extends string, TAgent extends string> {
       `Immutable source commit: ${invocation.sourceCommit}`,
       `Fetched origin/main evidence: ${invocation.originMainSha}`,
       `Pinned local-dev feature base: ${invocation.pinnedLocalDevSha}`,
+      `Canonical feature frontier: ${invocation.featureHeadSha}`,
       `Required resultKind: ${invocation.execution.resultKind}`,
       'Author materializedViewMarkdown as a concise Markdown read model of outcomes, evidence, risks, and parent actions. It must not contain hidden reasoning, prompts, credentials, or raw command output.',
       'Return only the requested structured result. Do not create unscheduled subagents.',
@@ -715,6 +720,7 @@ export class AgentSourceSnapshot {
       PinnedDevBaseEvidenceContract.assertAncestry({
         originMainSha: check.originMainSha,
         pinnedLocalDevSha: check.pinnedLocalDevSha,
+        featureHeadSha: check.featureHeadSha,
         sourceCommit: check.sourceCommit,
         workingDirectory: check.workingDirectory,
       });

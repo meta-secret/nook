@@ -55,6 +55,7 @@ export class DelegationRunFinalization {
     'sourceCommit',
     'originMainSha',
     'pinnedLocalDevSha',
+    'featureHeadSha',
     'barrierEvidence',
   ] as const;
 
@@ -116,6 +117,7 @@ export class DelegationRunFinalization {
     const sourceCommit = reader.string('sourceCommit');
     const originMainSha = reader.string('originMainSha');
     const pinnedLocalDevSha = reader.string('pinnedLocalDevSha');
+    const featureHeadSha = reader.string('featureHeadSha');
     if (
       !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(runId) ||
       !/^[0-9a-f]{40}$/.test(sourceCommit)
@@ -125,12 +127,14 @@ export class DelegationRunFinalization {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha,
       pinnedLocalDevSha,
+      featureHeadSha,
     });
     return {
       runId,
       sourceCommit,
       originMainSha,
       pinnedLocalDevSha,
+      featureHeadSha,
       barrierEvidence: reader
         .array('barrierEvidence')
         .map(DelegationRunFinalization.decodeBarrierEvidence),
@@ -222,7 +226,8 @@ export class DelegationRunFinalization {
     if (
       loaded.plan.sourceCommit !== input.request.sourceCommit ||
       loaded.plan.originMainSha !== input.request.originMainSha ||
-      loaded.plan.pinnedLocalDevSha !== input.request.pinnedLocalDevSha
+      loaded.plan.pinnedLocalDevSha !== input.request.pinnedLocalDevSha ||
+      loaded.plan.featureHeadSha !== input.request.featureHeadSha
     ) {
       throw new Error('Delegation finalization source identity is invalid.');
     }
@@ -238,7 +243,8 @@ export class DelegationRunFinalization {
       if (
         reloaded.plan.sourceCommit !== input.request.sourceCommit ||
         reloaded.plan.originMainSha !== input.request.originMainSha ||
-        reloaded.plan.pinnedLocalDevSha !== input.request.pinnedLocalDevSha
+        reloaded.plan.pinnedLocalDevSha !== input.request.pinnedLocalDevSha ||
+        reloaded.plan.featureHeadSha !== input.request.featureHeadSha
       ) {
         throw new Error('Delegation finalization source identity is invalid.');
       }
@@ -295,6 +301,7 @@ export class DelegationRunFinalization {
       sourceCommit: input.loaded.plan.sourceCommit,
       originMainSha: input.loaded.plan.originMainSha,
       pinnedLocalDevSha: input.loaded.plan.pinnedLocalDevSha,
+      featureHeadSha: input.loaded.plan.featureHeadSha,
       planSha256: input.loaded.planSha256,
       rootMaterializer: input.loaded.plan.rootMaterializer,
       attempts: input.loaded.plan.attempts.map((declaration) => {
@@ -376,6 +383,7 @@ export class DelegationRunFinalization {
         sourceCommit: loaded.plan.sourceCommit,
         originMainSha: loaded.plan.originMainSha,
         pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
+        featureHeadSha: loaded.plan.featureHeadSha,
         identity: { ...declaration.identity, depth: declaration.depth },
       };
       const verified =

@@ -84,6 +84,7 @@ export class AgentWorkflowDelegationAdmissionScenario {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       rootMaterializer: ROOT,
       attempts: [root, expert, specialist],
     };
@@ -102,6 +103,7 @@ export class AgentWorkflowDelegationAdmissionScenario {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       identity: declaration.identity,
       depth: declaration.depth,
       parent: declaration.parent,
@@ -275,6 +277,7 @@ describe('ordinary delegation admission', () => {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: SOURCE_COMMIT,
       pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       identity: ROOT,
       depth: 2,
       parent: { kind: AgentAttemptParentKind.WorkflowRoot },

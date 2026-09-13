@@ -63,6 +63,7 @@ export type StructuralRuntimeIdentity = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly task: string;
   readonly agent: string;
   readonly attempt: number;
@@ -253,6 +254,7 @@ export class StructuralExpertRuntimeAuthority {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       task: request.task,
       agent: request.expert,
       attempt: request.attempt,
@@ -279,6 +281,7 @@ export class StructuralExpertRuntimeAuthority {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       runId: request.runId,
       workingDirectory: repoRoot,
       upstreamOutputs: [],
@@ -459,6 +462,7 @@ export class StructuralExpertRuntimeAuthority {
       sourceCommit: input.request.sourceCommit,
       originMainSha: input.request.originMainSha,
       pinnedLocalDevSha: input.request.pinnedLocalDevSha,
+      featureHeadSha: input.request.featureHeadSha,
       workingDirectory: input.repoRoot,
     };
   }

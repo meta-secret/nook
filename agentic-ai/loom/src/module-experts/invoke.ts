@@ -92,6 +92,7 @@ export class ModuleExpertInvocation {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       task: request.task,
       expert: request.expert,
       attempt: request.attempt,
@@ -116,6 +117,7 @@ export class ModuleExpertInvocation {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       task: request.task,
       agent: profile.name,
       attempt: request.attempt,
@@ -259,6 +261,7 @@ export class ModuleExpertInvocation {
       sourceCommit: context.request.sourceCommit,
       originMainSha: context.request.originMainSha,
       pinnedLocalDevSha: context.request.pinnedLocalDevSha,
+      featureHeadSha: context.request.featureHeadSha,
       task: context.request.task,
       attempt: context.request.attempt,
       depth: context.request.depth,
@@ -426,6 +429,7 @@ export class ModuleExpertInvocation {
       firstEvent.sourceCommit !== result.sourceCommit ||
       firstEvent.originMainSha !== result.originMainSha ||
       firstEvent.pinnedLocalDevSha !== result.pinnedLocalDevSha ||
+      firstEvent.featureHeadSha !== result.featureHeadSha ||
       firstEvent.task !== result.task ||
       firstEvent.agent !== result.expert ||
       firstEvent.attempt !== result.attempt ||
@@ -509,6 +513,7 @@ export type ModuleExpertInvocationResult = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly task: string;
   readonly attempt: number;
   readonly depth: number;

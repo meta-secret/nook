@@ -104,12 +104,13 @@ const FOREIGN_SOURCE = ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(
 )(['rev-parse', 'HEAD']);
 
 describe('module delivery admission authority', () => {
-  test('keeps bootstrap commits distinct and rejects reversed ancestry', () => {
+  test('records the feature frontier and rejects reversed ancestry', () => {
     expect(new Set([ORIGIN_MAIN_SHA, PINNED_LOCAL_DEV_SHA, SOURCE]).size).toBe(
       3,
     );
     expect(PLAN.originMainSha).toBe(ORIGIN_MAIN_SHA);
     expect(PLAN.pinnedLocalDevSha).toBe(PINNED_LOCAL_DEV_SHA);
+    expect(PLAN.featureHeadSha).toBe(PINNED_LOCAL_DEV_SHA);
     expect(PLAN.sourceCommit).toBe(SOURCE);
     expect(
       PLAN.nodes
@@ -144,6 +145,7 @@ describe('module delivery admission authority', () => {
       ...PLAN,
       originMainSha: PINNED_LOCAL_DEV_SHA,
       pinnedLocalDevSha: ORIGIN_MAIN_SHA,
+      featureHeadSha: ORIGIN_MAIN_SHA,
       nodes: PLAN.nodes.map((node) =>
         node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit
           ? {
@@ -165,6 +167,7 @@ describe('module delivery admission authority', () => {
     const reversedSource = ModuleDeliveryAdmissionScenario.validate({
       ...PLAN,
       pinnedLocalDevSha: SOURCE,
+      featureHeadSha: SOURCE,
       sourceCommit: PINNED_LOCAL_DEV_SHA,
       nodes: PLAN.nodes.map((node) =>
         node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit
@@ -182,7 +185,7 @@ describe('module delivery admission authority', () => {
       ModuleGenerationAuthority.createModuleDeliveryGenerationAuthority(
         ModuleDeliveryAdmissionScenario.authorityRequest(reversedSource),
       ),
-    ).toThrow('sourceCommit must be descended from the pinned local-dev base');
+    ).toThrow('sourceCommit must be descended from the feature head');
   });
 
   test('admits disjoint writers and rejects unproven writer frontiers', () => {
@@ -624,6 +627,7 @@ describe('module delivery admission authority', () => {
       headCommit: REPLACEMENT_SOURCE,
       originMainSha: replacement.plan.originMainSha,
       pinnedLocalDevSha: replacement.plan.pinnedLocalDevSha,
+      featureHeadSha: replacement.plan.pinnedLocalDevSha,
       integratedWriterFrontiers: [],
       acceptedProviderEvidence: [],
     };

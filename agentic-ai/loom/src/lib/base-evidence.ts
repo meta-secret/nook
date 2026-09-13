@@ -5,10 +5,11 @@ import {
   RepositoryGitSecurityPolicy,
 } from './run.ts';
 
-/** The fetched main reference is evidence; the pinned local-dev commit is the feature base. */
+/** The fetched main reference, pinned base, and feature frontier are explicit provenance evidence. */
 export type PinnedDevBaseEvidence = Readonly<{
   originMainSha: GitCommit;
   pinnedLocalDevSha: GitCommit;
+  featureHeadSha: GitCommit;
 }>;
 
 export type PinnedDevBaseAncestryRequest = PinnedDevBaseEvidence &
@@ -17,19 +18,20 @@ export type PinnedDevBaseAncestryRequest = PinnedDevBaseEvidence &
     sourceCommit?: GitCommit;
   }>;
 
-/** Owns fail-closed validation of the two distinct bootstrap commits. */
+/** Owns fail-closed validation of the bootstrap commit chain. */
 export class PinnedDevBaseEvidenceContract {
   private constructor() {}
 
   static assertShape(evidence: PinnedDevBaseEvidence): void {
     const keys = Object.keys(evidence);
     if (
-      keys.length !== 2 ||
+      keys.length !== 3 ||
       !keys.includes('originMainSha') ||
-      !keys.includes('pinnedLocalDevSha')
+      !keys.includes('pinnedLocalDevSha') ||
+      !keys.includes('featureHeadSha')
     ) {
       throw new Error(
-        'Bootstrap evidence must declare originMainSha and pinnedLocalDevSha exactly once.',
+        'Bootstrap evidence must declare originMainSha, pinnedLocalDevSha, and featureHeadSha exactly once.',
       );
     }
     for (const [name, sha] of Object.entries(evidence)) {
@@ -45,6 +47,7 @@ export class PinnedDevBaseEvidenceContract {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
     });
     if (request.sourceCommit !== undefined) {
       PinnedDevBaseEvidenceContract.assertCommitShape(
@@ -60,13 +63,20 @@ export class PinnedDevBaseEvidenceContract {
       message:
         'pinnedLocalDevSha must include the fetched origin/main commit as an ancestor.',
     });
+    PinnedDevBaseEvidenceContract.assertAncestor({
+      ancestor: request.pinnedLocalDevSha,
+      descendant: request.featureHeadSha,
+      workingDirectory: request.workingDirectory,
+      message:
+        'featureHeadSha must be descended from the pinned local-dev base.',
+    });
     if (request.sourceCommit !== undefined) {
       PinnedDevBaseEvidenceContract.assertAncestor({
-        ancestor: request.pinnedLocalDevSha,
+        ancestor: request.featureHeadSha,
         descendant: request.sourceCommit,
         workingDirectory: request.workingDirectory,
         message:
-          'sourceCommit must be descended from the pinned local-dev base.',
+          'sourceCommit must be descended from the feature head.',
       });
     }
   }

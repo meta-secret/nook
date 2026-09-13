@@ -49,6 +49,7 @@ export class ModuleExpertRequestDecoder {
       'sourceCommit',
       'originMainSha',
       'pinnedLocalDevSha',
+      'featureHeadSha',
       'task',
     ];
     const actualKeys = Object.keys(node).sort();
@@ -78,6 +79,10 @@ export class ModuleExpertRequestDecoder {
     const pinnedLocalDevShaProperty: ModuleExpertRequestProperty = {
       record: node,
       key: 'pinnedLocalDevSha',
+    };
+    const featureHeadShaProperty: ModuleExpertRequestProperty = {
+      record: node,
+      key: 'featureHeadSha',
     };
     const taskProperty: ModuleExpertRequestProperty = {
       record: node,
@@ -111,6 +116,8 @@ export class ModuleExpertRequestDecoder {
       ModuleExpertRequestDecoder.requiredString(originMainShaProperty);
     const pinnedLocalDevSha =
       ModuleExpertRequestDecoder.requiredString(pinnedLocalDevShaProperty);
+    const featureHeadSha =
+      ModuleExpertRequestDecoder.requiredString(featureHeadShaProperty);
     const task = ModuleExpertRequestDecoder.requiredString(taskProperty);
     const instruction =
       ModuleExpertRequestDecoder.requiredString(instructionProperty);
@@ -160,6 +167,7 @@ export class ModuleExpertRequestDecoder {
       PinnedDevBaseEvidenceContract.assertShape({
         originMainSha,
         pinnedLocalDevSha,
+        featureHeadSha,
       });
     } catch {
       ModuleExpertRequestDecoder.invalidRequest();
@@ -170,6 +178,7 @@ export class ModuleExpertRequestDecoder {
       sourceCommit,
       originMainSha,
       pinnedLocalDevSha,
+      featureHeadSha,
       task,
       attempt,
       depth,
@@ -357,6 +366,7 @@ export type ModuleExpertInvocationRequest = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly task: string;
   readonly attempt: number;
   readonly depth: number;

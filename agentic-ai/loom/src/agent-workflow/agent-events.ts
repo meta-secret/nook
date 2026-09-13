@@ -27,6 +27,7 @@ export type AgentAttemptEventMetadata = {
   readonly sourceCommit: GitCommit;
   readonly originMainSha: GitCommit;
   readonly pinnedLocalDevSha: GitCommit;
+  readonly featureHeadSha: GitCommit;
   readonly task: string;
   readonly agent: string;
   readonly attempt: WorkflowAttemptNumber;

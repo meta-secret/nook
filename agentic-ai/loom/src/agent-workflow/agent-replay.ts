@@ -202,6 +202,7 @@ export class AgentAttemptReplay {
       PinnedDevBaseEvidenceContract.assertShape({
         originMainSha: event.originMainSha,
         pinnedLocalDevSha: event.pinnedLocalDevSha,
+        featureHeadSha: event.featureHeadSha,
       });
     } catch {
       throw new Error('Agent attempt bootstrap evidence is invalid.');
@@ -294,6 +295,7 @@ export class AgentAttemptReplay {
       actual.sourceCommit !== expected.sourceCommit ||
       actual.originMainSha !== expected.originMainSha ||
       actual.pinnedLocalDevSha !== expected.pinnedLocalDevSha ||
+      actual.featureHeadSha !== expected.featureHeadSha ||
       actual.task !== expected.task ||
       actual.agent !== expected.agent ||
       actual.attempt !== expected.attempt ||
@@ -343,6 +345,7 @@ const EVENT_METADATA_KEYS = [
   'sourceCommit',
   'originMainSha',
   'pinnedLocalDevSha',
+  'featureHeadSha',
   'task',
   'agent',
   'attempt',

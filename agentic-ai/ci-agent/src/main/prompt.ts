@@ -29,17 +29,19 @@ export class AgentPromptEnvironment {
     const originMainSha = this.environment.ORIGIN_MAIN_SHA?.trim() || "";
     const pinnedLocalDevSha =
       this.environment.PINNED_LOCAL_DEV_SHA?.trim() || "";
+    const featureHeadSha = this.environment.FEATURE_HEAD_SHA?.trim() || "";
     if (
       !FULL_COMMIT_SHA.test(originMainSha) ||
-      !FULL_COMMIT_SHA.test(pinnedLocalDevSha)
+      !FULL_COMMIT_SHA.test(pinnedLocalDevSha) ||
+      !FULL_COMMIT_SHA.test(featureHeadSha)
     ) {
       return err({
         kind: CiFailureKind.Configuration,
         message:
-          "Recorded bootstrap evidence requires ORIGIN_MAIN_SHA and PINNED_LOCAL_DEV_SHA",
+          "Recorded bootstrap evidence requires ORIGIN_MAIN_SHA, PINNED_LOCAL_DEV_SHA, and FEATURE_HEAD_SHA",
       });
     }
-    return ok({ originMainSha, pinnedLocalDevSha });
+    return ok({ originMainSha, pinnedLocalDevSha, featureHeadSha });
   }
 }
 
@@ -66,7 +68,8 @@ export class AgentPrompt {
     ).resolveBootstrapEvidence();
     if (
       template.includes("${ORIGIN_MAIN_SHA}") ||
-      template.includes("${PINNED_LOCAL_DEV_SHA}")
+      template.includes("${PINNED_LOCAL_DEV_SHA}") ||
+      template.includes("${FEATURE_HEAD_SHA}")
     ) {
       if (bootstrapEvidence.isErr()) return err(bootstrapEvidence.error);
     }
@@ -146,6 +149,12 @@ export class AgentPrompt {
             ? bootstrapEvidence.value.pinnedLocalDevSha
             : "",
         )
+        .replaceAll(
+          "${FEATURE_HEAD_SHA}",
+          bootstrapEvidence.isOk()
+            ? bootstrapEvidence.value.featureHeadSha
+            : "",
+        )
         .replaceAll("${MAJOR_CHANGE_AUTHORIZATION}", majorChangeAuthorization)
         .replaceAll("${AGENT_TASK}", agentTask.value)
         .replaceAll("${RUST_DEPS_OUTDATED_REPORT}", outdatedReport)
@@ -159,6 +168,7 @@ export class AgentPrompt {
 export interface AgentBootstrapEvidence {
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
 }
 
 const FULL_COMMIT_SHA = /^[0-9a-f]{40}$/u;

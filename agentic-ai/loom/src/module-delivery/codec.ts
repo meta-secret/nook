@@ -147,6 +147,7 @@ export class ModuleDeliveryPlanSchema {
             sourceCommit,
             originMainSha: fields.string('originMainSha'),
             pinnedLocalDevSha: fields.string('pinnedLocalDevSha'),
+            featureHeadSha: fields.string('featureHeadSha'),
             maxAgentDepth,
             maxAttempts,
             parentOwnedResources,
@@ -824,6 +825,7 @@ enum ModulePlanV3RootField {
   ParentOwnedResources = 'parentOwnedResources',
   OriginMainSha = 'originMainSha',
   PinnedLocalDevSha = 'pinnedLocalDevSha',
+  FeatureHeadSha = 'featureHeadSha',
   SourceCommit = 'sourceCommit',
   Version = 'version',
 }

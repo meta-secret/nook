@@ -43,6 +43,7 @@ export class DelegationJournalSchema {
     'sourceCommit',
     'originMainSha',
     'pinnedLocalDevSha',
+    'featureHeadSha',
     'rootMaterializer',
     'attempts',
   ] as const;
@@ -77,6 +78,7 @@ export class DelegationJournalSchema {
     'sourceCommit',
     'originMainSha',
     'pinnedLocalDevSha',
+    'featureHeadSha',
     'planSha256',
     'sequence',
     'occurredAt',
@@ -90,6 +92,7 @@ export class DelegationJournalSchema {
     'sourceCommit',
     'originMainSha',
     'pinnedLocalDevSha',
+    'featureHeadSha',
     'planSha256',
     'sequence',
     'occurredAt',
@@ -101,6 +104,7 @@ export class DelegationJournalSchema {
     'sourceCommit',
     'originMainSha',
     'pinnedLocalDevSha',
+    'featureHeadSha',
     'identity',
     'depth',
     'parent',
@@ -125,6 +129,7 @@ export class DelegationJournalSchema {
       sourceCommit: reader.string('sourceCommit'),
       originMainSha: reader.string('originMainSha'),
       pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
+      featureHeadSha: reader.string('featureHeadSha'),
       rootMaterializer: DelegationJournalSchema.decodeIdentity(
         reader.node('rootMaterializer'),
       ),
@@ -149,6 +154,7 @@ export class DelegationJournalSchema {
     const evidence = {
       originMainSha: reader.string('originMainSha'),
       pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
+      featureHeadSha: reader.string('featureHeadSha'),
     };
     PinnedDevBaseEvidenceContract.assertShape(evidence);
     return {
@@ -202,6 +208,7 @@ export class DelegationJournalSchema {
     const evidence = {
       originMainSha: reader.string('originMainSha'),
       pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
+      featureHeadSha: reader.string('featureHeadSha'),
     };
     PinnedDevBaseEvidenceContract.assertShape(evidence);
     return {

@@ -99,6 +99,7 @@ export class ModuleDeliveryAdmissionScenario {
       sourceCommit,
       originMainSha: ORIGIN_MAIN_SHA,
       pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+      featureHeadSha: PINNED_LOCAL_DEV_SHA,
     });
     for (const node of plan.nodes)
       if (node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit)
@@ -266,6 +267,7 @@ export class ModuleDeliveryAdmissionScenario {
       sourceCommit: request.lease.startingFrontier,
       originMainSha: request.lease.originMainSha,
       pinnedLocalDevSha: request.lease.pinnedLocalDevSha,
+      featureHeadSha: request.lease.pinnedLocalDevSha,
       producerTeam: request.lease.team,
       functionalOwner: request.lease.functionalOwner,
       acceptanceOwner: request.lease.acceptanceOwner,
@@ -438,6 +440,7 @@ export const PLAN: ModuleDeliveryPlanV3 = {
   sourceCommit: SOURCE,
   originMainSha: ORIGIN_MAIN_SHA,
   pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+  featureHeadSha: PINNED_LOCAL_DEV_SHA,
   maxAgentDepth: 3,
   maxAttempts: 2,
   parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

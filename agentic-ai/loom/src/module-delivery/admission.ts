@@ -210,6 +210,7 @@ export class ModuleGenerationAuthority {
     PinnedDevBaseEvidenceContract.assertAncestry({
       originMainSha: authority.acceptedPlan.plan.originMainSha,
       pinnedLocalDevSha: authority.acceptedPlan.plan.pinnedLocalDevSha,
+      featureHeadSha: authority.acceptedPlan.plan.featureHeadSha,
       sourceCommit: authority.acceptedPlan.plan.sourceCommit,
       workingDirectory: authority.repositoryRoot,
     });
@@ -463,6 +464,7 @@ export class ModuleGenerationAuthority {
       headCommit: acceptedPlan.plan.sourceCommit,
       originMainSha: acceptedPlan.plan.originMainSha,
       pinnedLocalDevSha: acceptedPlan.plan.pinnedLocalDevSha,
+      featureHeadSha: acceptedPlan.plan.featureHeadSha,
       integratedWriterFrontiers: frontiers,
       acceptedProviderEvidence: identities,
     };
@@ -508,7 +510,9 @@ export class ModuleGenerationAuthority {
     if (
       inspection.state.originMainSha !== authority.acceptedPlan.plan.originMainSha ||
       inspection.state.pinnedLocalDevSha !==
-        authority.acceptedPlan.plan.pinnedLocalDevSha
+        authority.acceptedPlan.plan.pinnedLocalDevSha ||
+      inspection.state.featureHeadSha !==
+        authority.acceptedPlan.plan.featureHeadSha
     )
       throw new Error('Module delivery admission base evidence is invalid.');
   }
@@ -612,6 +616,7 @@ export class ModuleGenerationAuthority {
           ModuleGenerationAuthority.startingFrontier(frontierRequest),
         originMainSha: authority.acceptedPlan.plan.originMainSha,
         pinnedLocalDevSha: authority.acceptedPlan.plan.pinnedLocalDevSha,
+        featureHeadSha: authority.acceptedPlan.plan.featureHeadSha,
         resources,
         ...contextFields,
         team: node.team,
@@ -741,7 +746,9 @@ export class ModuleGenerationAuthority {
       inspection.lease.planDigest !== authority.acceptedPlan.planDigest ||
       inspection.lease.originMainSha !== authority.acceptedPlan.plan.originMainSha ||
       inspection.lease.pinnedLocalDevSha !==
-        authority.acceptedPlan.plan.pinnedLocalDevSha
+        authority.acceptedPlan.plan.pinnedLocalDevSha ||
+      inspection.lease.featureHeadSha !==
+        authority.acceptedPlan.plan.featureHeadSha
     )
       throw new Error('Module delivery lease authority is invalid.');
   }

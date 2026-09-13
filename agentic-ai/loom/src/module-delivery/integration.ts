@@ -347,7 +347,8 @@ export class ModuleIntegrationCoordinator {
       inspection.submission.kind === ModuleDeliveryProviderSubmissionKind.Write &&
       (inspection.submission.originMainSha !== inspection.lease.originMainSha ||
         inspection.submission.pinnedLocalDevSha !==
-          inspection.lease.pinnedLocalDevSha)
+          inspection.lease.pinnedLocalDevSha ||
+        inspection.submission.featureHeadSha !== inspection.lease.featureHeadSha)
     ) {
       throw new Error('Provider write base evidence is invalid.');
     }
@@ -462,6 +463,7 @@ export class ModuleIntegrationCoordinator {
         sourceCommit: request.acceptedPlan.plan.sourceCommit,
         originMainSha: request.acceptedPlan.plan.originMainSha,
         pinnedLocalDevSha: request.acceptedPlan.plan.pinnedLocalDevSha,
+        featureHeadSha: request.acceptedPlan.plan.featureHeadSha,
         topologicalOrder: request.acceptedPlan.topologicalOrder,
         waves: request.acceptedPlan.waves,
         completedWaveCount: 0,
@@ -672,6 +674,7 @@ export class ModuleIntegrationCoordinator {
                 startingFrontier: lease.startingFrontier,
                 originMainSha: lease.originMainSha,
                 pinnedLocalDevSha: lease.pinnedLocalDevSha,
+                featureHeadSha: lease.featureHeadSha,
                 integrationCommit: appliedHeadCommit,
                 acceptedByTeam: request.submission.acceptedByTeam,
                 handoff: request.submission.handoff,

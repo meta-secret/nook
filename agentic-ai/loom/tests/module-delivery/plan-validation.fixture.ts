@@ -151,6 +151,7 @@ export class ModuleDeliveryPlanValidationScenario {
       sourceCommit: SOURCE_COMMIT,
       originMainSha: ORIGIN_MAIN_SHA,
       pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+      featureHeadSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: PARENT_OWNED_RESOURCES,

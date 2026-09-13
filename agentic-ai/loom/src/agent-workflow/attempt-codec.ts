@@ -62,6 +62,9 @@ export class AgentAttemptTransport {
       pinnedLocalDevSha: AgentAttemptTransport.string(
         AgentAttemptTransport.field(node, 'pinnedLocalDevSha'),
       ),
+      featureHeadSha: AgentAttemptTransport.string(
+        AgentAttemptTransport.field(node, 'featureHeadSha'),
+      ),
       task: AgentAttemptTransport.string(
         AgentAttemptTransport.field(node, 'task'),
       ),
@@ -88,6 +91,7 @@ export class AgentAttemptTransport {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: metadata.originMainSha,
       pinnedLocalDevSha: metadata.pinnedLocalDevSha,
+      featureHeadSha: metadata.featureHeadSha,
     });
     const fields = Object.keys(metadata);
     const kind = AgentAttemptTransport.enumeration({

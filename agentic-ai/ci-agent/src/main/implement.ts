@@ -28,6 +28,7 @@ export class CiImplementationCommand {
       originMainSha: this.environment.ORIGIN_MAIN_SHA?.trim() || "",
       pinnedLocalDevSha:
         this.environment.PINNED_LOCAL_DEV_SHA?.trim() || "",
+      featureHeadSha: this.environment.FEATURE_HEAD_SHA?.trim() || "",
     }).execute();
   }
   async runCiEdit(): Promise<Result<CiEditOutcome, CiFailure>> {
@@ -206,7 +207,9 @@ export class AgentImplementationRecordTrustedBudgetBlocker {
 
 interface VerifyBootstrapRequest {
   readonly repoRoot: string;
-  readonly evidence: AgentImplementationBootstrapEvidence;
+  readonly evidence: AgentImplementationBootstrapEvidence & {
+    readonly branch: string;
+  };
 }
 
 export class AgentImplementationVerifyBootstrap {
@@ -227,7 +230,7 @@ export class AgentImplementationVerifyBootstrap {
         "merge-base",
         "--is-ancestor",
         evidence.pinnedLocalDevSha,
-        head.value,
+        evidence.featureHeadSha,
       ],
     });
     if (featureBase.isErr()) {
@@ -239,6 +242,37 @@ export class AgentImplementationVerifyBootstrap {
         });
       }
       return err(featureBase.error);
+    }
+
+    const symbolicHead = await repository.immutableGit({
+      args: ["symbolic-ref", "--quiet", "HEAD"],
+    });
+    if (symbolicHead.isOk()) {
+      return err({
+        kind: CiFailureKind.Baseline,
+        message:
+          "Implementation worktree HEAD must be detached at featureHeadSha",
+      });
+    }
+    if (symbolicHead.error.code !== 1) return err(symbolicHead.error);
+
+    const remoteFeatureHead = await repository.revParseImmutable({
+      ref: `refs/remotes/origin/${evidence.branch}`,
+    });
+    if (remoteFeatureHead.isErr()) return err(remoteFeatureHead.error);
+    if (remoteFeatureHead.value !== evidence.featureHeadSha) {
+      return err({
+        kind: CiFailureKind.Baseline,
+        message:
+          "Canonical remote feature ref does not match the recorded featureHeadSha",
+      });
+    }
+    if (head.value !== evidence.featureHeadSha) {
+      return err({
+        kind: CiFailureKind.Baseline,
+        message:
+          "Implementation worktree HEAD does not match the recorded featureHeadSha",
+      });
     }
 
     const originMain = await repository.revParseImmutable({
@@ -412,6 +446,7 @@ export class AgentImplementationResolveDeliveryTarget {
     const evidence = new AgentImplementationValidateBootstrapEvidence({
       originMainSha: input.originMainSha,
       pinnedLocalDevSha: input.pinnedLocalDevSha,
+      featureHeadSha: input.featureHeadSha,
     }).execute();
     if (evidence.isErr()) return err(evidence.error);
     const budgetBaseRef = new PinnedLocalDevShaParser(
@@ -422,6 +457,7 @@ export class AgentImplementationResolveDeliveryTarget {
       branch: input.branch,
       originMainSha: evidence.value.originMainSha,
       pinnedLocalDevSha: evidence.value.pinnedLocalDevSha,
+      featureHeadSha: evidence.value.featureHeadSha,
       budgetBaseRef: budgetBaseRef.value,
     });
   }
@@ -433,18 +469,19 @@ export class AgentImplementationValidateBootstrapEvidence {
   constructor(private readonly request: AgentImplementationBootstrapEvidence) {}
 
   execute(): Result<AgentImplementationBootstrapEvidence, CiFailure> {
-    const { originMainSha, pinnedLocalDevSha } = this.request;
+    const { originMainSha, pinnedLocalDevSha, featureHeadSha } = this.request;
     if (
       !FULL_COMMIT_SHA.test(originMainSha) ||
-      !FULL_COMMIT_SHA.test(pinnedLocalDevSha)
+      !FULL_COMMIT_SHA.test(pinnedLocalDevSha) ||
+      !FULL_COMMIT_SHA.test(featureHeadSha)
     ) {
       return err({
         kind: CiFailureKind.Configuration,
         message:
-          "Recorded bootstrap evidence requires originMainSha and pinnedLocalDevSha",
+          "Recorded bootstrap evidence requires originMainSha, pinnedLocalDevSha, and featureHeadSha",
       });
     }
-    return ok({ originMainSha, pinnedLocalDevSha });
+    return ok({ originMainSha, pinnedLocalDevSha, featureHeadSha });
   }
 }
 
@@ -499,6 +536,7 @@ export interface ImplementDeliveryTarget {
   readonly branch: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly budgetBaseRef: PinnedLocalDevSha;
 }
 
@@ -506,6 +544,7 @@ type ImplementDeliveryTargetInput = {
   branch: string;
   originMainSha: string;
   pinnedLocalDevSha: string;
+  featureHeadSha: string;
 };
 
 declare const PINNED_LOCAL_DEV_SHA: unique symbol;

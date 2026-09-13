@@ -69,6 +69,7 @@ export class ModuleExpertIsolation {
       sourceCommit: request.sourceCommit,
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       workingDirectory: request.workingDirectory,
       ...(request.temporaryRoot
         ? { temporaryRoot: request.temporaryRoot }
@@ -94,6 +95,7 @@ export class ModuleExpertIsolation {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
     });
     const source = ModuleExpertIsolation.assertSourceCommit(
       request.sourceCommit,
@@ -626,6 +628,7 @@ export type ModuleExpertRuntimeIsolationRequest = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly selectedContextPaths: readonly string[];
   readonly temporaryRoot?: string;
   readonly workingDirectory: string;
@@ -650,6 +653,7 @@ export type ReadOnlyExpertRuntimeIsolationRequest = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly temporaryRoot?: string;
   readonly workingDirectory: string;
 };

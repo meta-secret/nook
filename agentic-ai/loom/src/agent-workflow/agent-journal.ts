@@ -151,6 +151,7 @@ class AgentJournalRecords<TTask extends string> {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: configuration.originMainSha,
       pinnedLocalDevSha: configuration.pinnedLocalDevSha,
+      featureHeadSha: configuration.featureHeadSha,
     });
     AgentJournalRecords.assertParentLineage(configuration);
     this.configuration = configuration;
@@ -218,6 +219,7 @@ class AgentJournalRecords<TTask extends string> {
       sourceCommit: this.configuration.sourceCommit,
       originMainSha: this.configuration.originMainSha,
       pinnedLocalDevSha: this.configuration.pinnedLocalDevSha,
+      featureHeadSha: this.configuration.featureHeadSha,
       task: this.configuration.task,
       agent: this.configuration.agent,
       attempt: this.configuration.attempt,
@@ -634,6 +636,7 @@ class AgentJournalRecords<TTask extends string> {
       args.configuration.sourceCommit === args.identity.sourceCommit &&
       args.configuration.originMainSha === args.identity.originMainSha &&
       args.configuration.pinnedLocalDevSha === args.identity.pinnedLocalDevSha &&
+      args.configuration.featureHeadSha === args.identity.featureHeadSha &&
       args.configuration.task === args.identity.task &&
       args.configuration.agent === args.identity.agent &&
       args.configuration.attempt === args.identity.attempt &&
@@ -702,6 +705,7 @@ class AgentJournalRecords<TTask extends string> {
       configuration.sourceCommit === identity.sourceCommit &&
       configuration.originMainSha === identity.originMainSha &&
       configuration.pinnedLocalDevSha === identity.pinnedLocalDevSha &&
+      configuration.featureHeadSha === identity.featureHeadSha &&
       configuration.task === identity.task &&
       configuration.agent === identity.agent &&
       configuration.attempt === identity.attempt &&

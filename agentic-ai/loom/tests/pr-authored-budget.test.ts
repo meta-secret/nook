@@ -120,12 +120,14 @@ void test('measures authored additions from the pinned local-dev commit', () => 
     writeFileSync(join(repoRoot, 'feature.ts'), 'const feature = true;\n');
     git('add', '--', 'feature.ts');
     git('commit', '-qm', 'feature');
+    const featureHeadSha = git('rev-parse', 'HEAD');
 
     const result = new AuthoredBudgetWorkspace({
       environment: {
         ...process.env,
         ORIGIN_MAIN_SHA: originMainSha,
         PINNED_LOCAL_DEV_SHA: pinnedLocalDevSha,
+        FEATURE_HEAD_SHA: featureHeadSha,
       },
       repoRoot,
     }).main();

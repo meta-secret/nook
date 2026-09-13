@@ -20,6 +20,7 @@ export type ModuleExpertChildRequest = {
   readonly sourceCommit: string;
   readonly originMainSha: string;
   readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly task: string;
   readonly expert: string;
   readonly attempt: number;
@@ -84,6 +85,7 @@ export class ModuleExpertParentAuthorization {
       sourceCommit: args.request.sourceCommit,
       originMainSha: args.request.originMainSha,
       pinnedLocalDevSha: args.request.pinnedLocalDevSha,
+      featureHeadSha: args.request.featureHeadSha,
       identity: immediateIdentity,
     };
     const immediate =
@@ -176,6 +178,7 @@ export class ModuleExpertParentAuthorization {
       sourceCommit: input.args.request.sourceCommit,
       originMainSha: input.args.request.originMainSha,
       pinnedLocalDevSha: input.args.request.pinnedLocalDevSha,
+      featureHeadSha: input.args.request.featureHeadSha,
       identity: authorityIdentity,
     };
     return VerifiedAttemptArtifacts.readVerifiedParentAttempt(authorityRead);

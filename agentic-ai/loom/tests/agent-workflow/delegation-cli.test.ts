@@ -100,6 +100,7 @@ describe('delegated agent journal CLI', () => {
         sourceCommit,
         originMainSha: sourceCommit,
         pinnedLocalDevSha: sourceCommit,
+        featureHeadSha: sourceCommit,
         task: 'inspect-contract',
         agent: 'contract-auditor',
         attempt: 1,
@@ -128,6 +129,7 @@ describe('delegated agent journal CLI', () => {
         sourceCommit: request.sourceCommit,
         originMainSha: sourceCommit,
         pinnedLocalDevSha: sourceCommit,
+        featureHeadSha: sourceCommit,
         rootMaterializer: {
           task: request.task,
           agent: request.agent,
@@ -186,6 +188,7 @@ describe('delegated agent journal CLI', () => {
         sourceCommit: request.sourceCommit,
         originMainSha: sourceCommit,
         pinnedLocalDevSha: sourceCommit,
+        featureHeadSha: sourceCommit,
         identity: {
           task: request.task,
           agent: request.agent,
@@ -321,6 +324,7 @@ describe('delegated agent journal CLI', () => {
         sourceCommit: request.sourceCommit,
         originMainSha: request.originMainSha,
         pinnedLocalDevSha: request.pinnedLocalDevSha,
+        featureHeadSha: request.pinnedLocalDevSha,
         barrierEvidence: [
           {
             parent: plan.rootMaterializer,
@@ -362,6 +366,7 @@ describe('delegated agent journal CLI', () => {
         sourceCommit: request.sourceCommit,
         originMainSha: request.originMainSha,
         pinnedLocalDevSha: request.pinnedLocalDevSha,
+        featureHeadSha: request.pinnedLocalDevSha,
         identity: {
           task: request.task,
           agent: request.agent,
@@ -512,6 +517,7 @@ describe('delegated agent journal CLI', () => {
           sourceCommit: SOURCE_COMMIT,
           originMainSha: SOURCE_COMMIT,
           pinnedLocalDevSha: SOURCE_COMMIT,
+          featureHeadSha: SOURCE_COMMIT,
           rootMaterializer: identity,
           attempts: [
             {
@@ -546,6 +552,7 @@ describe('delegated agent journal CLI', () => {
           sourceCommit: SOURCE_COMMIT,
           originMainSha: SOURCE_COMMIT,
           pinnedLocalDevSha: SOURCE_COMMIT,
+          featureHeadSha: SOURCE_COMMIT,
           ...identity,
           depth: 1,
           parent,

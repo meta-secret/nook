@@ -323,6 +323,7 @@ export class ModuleSourceAuthority {
         sourceCommit: evidence.sourceCommit,
         originMainSha: evidence.originMainSha,
         pinnedLocalDevSha: evidence.pinnedLocalDevSha,
+        featureHeadSha: evidence.featureHeadSha,
         verifiedHeadCommit: evidence.verifiedHeadCommit,
         artifactIdentity: evidence.artifactIdentity,
         artifactDigest: evidence.artifactDigest,

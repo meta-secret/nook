@@ -112,6 +112,7 @@ export class ModuleExpertsRuntimeContractScenario {
       sourceCommit: request.repository.sourceCommit,
       originMainSha: request.repository.sourceCommit,
       pinnedLocalDevSha: request.repository.sourceCommit,
+      featureHeadSha: request.repository.sourceCommit,
       selectedContextPaths: [],
       temporaryRoot: request.isolationRoot,
       workingDirectory: request.repository.root,

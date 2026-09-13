@@ -31,6 +31,7 @@ const started: AgentAttemptStartedEvent = {
   sourceCommit: 'a'.repeat(40),
   originMainSha: 'a'.repeat(40),
   pinnedLocalDevSha: 'a'.repeat(40),
+  featureHeadSha: 'a'.repeat(40),
   task: 'worker',
   agent: 'agent',
   attempt: 1,
