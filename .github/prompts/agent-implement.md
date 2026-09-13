@@ -103,10 +103,11 @@ a container runtime.
   Gizmo dispatches scoped fixes to the responsible team agents and integrates
   their verified handoffs. Gizmo runs exact-head readiness, then has Delivery
   Pipeline Team Gizmo route feature/Gizmo Prime-authorized `dev:land` to PR
-  Lifecycle for execution. Only the Dev Manager authorizes `dev:publish` and
-  `dev:promote` for PR Lifecycle execution and invokes `dev:pr-manager`; Gizmos
-  and leaves never create or update PRs. Promotion uses an ordinary non-forced
-  fast-forward of the exact tested commit; it does not rewrite history.
+  Lifecycle for execution, which performs only controller-authorized mechanics.
+  Only the Dev Manager authorizes `dev:publish` and `dev:promote` for PR
+  Lifecycle execution and invokes `dev:pr-manager`; Gizmos and leaves never
+  create or update PRs. Promotion uses an ordinary non-forced fast-forward of
+  the exact tested commit; it does not rewrite history.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the requested task.
 - Stay in the harness-provided isolated workspace. Return the work to the

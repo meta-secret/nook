@@ -16,12 +16,12 @@ import { AgentIsolation, ConfiguredAgentRuntime } from "./run-agent.js";
 export class CiImplementationCommand {
   constructor(private readonly environment: NodeJS.ProcessEnv) {}
   resolveTargetFromEnvironment(): Result<ImplementDeliveryTarget, CiFailure> {
-    const runId = this.environment.GITHUB_RUN_ID?.trim() || "";
+    const configuredBranch =
+      this.environment.AGENT_BRANCH?.trim() ||
+      this.environment.FIX_BRANCH?.trim();
+    const feature = this.environment.TASK_FEATURE?.trim() || "";
     return new AgentImplementationResolveDeliveryTarget({
-      branch:
-        this.environment.AGENT_BRANCH?.trim() ||
-        this.environment.FIX_BRANCH?.trim() ||
-        `agent/prompt-${runId}`,
+      branch: configuredBranch || (feature ? `codex/${feature}` : ""),
     }).execute();
   }
   async runCiEdit(): Promise<Result<CiEditOutcome, CiFailure>> {
@@ -139,7 +139,7 @@ export class CiImplementationCommand {
       return new CiCleanupOutcome(recorded).finish(err(preserved.error));
     }
     log.info(
-      `Agent branch ${selected.branch} exact head ${preserved.value} published; no pull request was created`,
+      `Feature branch ${selected.branch} exact head ${preserved.value} published; no pull request was created`,
     );
     const outputPath = this.environment.GITHUB_OUTPUT?.trim();
     if (outputPath) {
@@ -152,7 +152,7 @@ export class CiImplementationCommand {
       } catch {
         return err({
           kind: CiFailureKind.Filesystem,
-          message: "Unable to record the published agent branch",
+          message: "Unable to record the published feature branch",
         });
       }
     }
@@ -202,7 +202,7 @@ export class AgentImplementationPublishBranch {
     if (published.value !== args.expectedHead) {
       return err({
         kind: CiFailureKind.Github,
-        message: `Agent branch ${args.agentBranch} published at ${published.value}, expected ${args.expectedHead}`,
+        message: `Feature branch ${args.agentBranch} published at ${published.value}, expected ${args.expectedHead}`,
       });
     }
     return ok(published.value);
@@ -216,7 +216,7 @@ class AgentImplementationIsValidBranch {
 
     if (
       !branch ||
-      branch.length > 255 ||
+      branch.length > 120 ||
       branch === "@" ||
       branch.startsWith("-") ||
       branch.startsWith("/") ||
@@ -229,14 +229,87 @@ class AgentImplementationIsValidBranch {
     ) {
       return false;
     }
-    return branch
-      .split("/")
-      .every(
-        (component) =>
-          !component.startsWith(".") && !component.endsWith(".lock"),
-      );
+    const components = branch.split("/");
+    if (components[0] !== "codex") return false;
+    if (components.length === 2) {
+      return this.isFeatureSegment(components[1]);
+    }
+    if (components.length !== 5) return false;
+    const [prefix, feature, team, role, work] = components;
+    if (
+      prefix !== "codex" ||
+      !this.isFeatureSegment(feature) ||
+      !this.isKebabSegment(team) ||
+      !this.isKebabSegment(role) ||
+      !this.isWorkSegment(work)
+    ) {
+      return false;
+    }
+    return this.isRegisteredRole(team, role);
+  }
+
+  private isFeatureSegment(segment: string | undefined): boolean {
+    return (
+      typeof segment === "string" &&
+      segment.length >= 10 &&
+      segment.length <= 20 &&
+      this.isKebabSegment(segment)
+    );
+  }
+
+  private isWorkSegment(segment: string | undefined): boolean {
+    return (
+      typeof segment === "string" &&
+      segment.length >= 20 &&
+      segment.length <= 50 &&
+      this.isKebabSegment(segment)
+    );
+  }
+
+  private isKebabSegment(segment: string | undefined): segment is string {
+    return (
+      typeof segment === "string" &&
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(segment)
+    );
+  }
+
+  private isRegisteredRole(
+    team: string | undefined,
+    role: string | undefined,
+  ): boolean {
+    return (
+      typeof team === "string" &&
+      typeof role === "string" &&
+      this.rolesForTeam(team).includes(role)
+    );
+  }
+
+  private rolesForTeam(team: string): readonly string[] {
+    return CANONICAL_TEAM_ROLES[team as CanonicalTeam] || [];
   }
 }
+
+type CanonicalTeam =
+  | "ai"
+  | "dev-core"
+  | "security"
+  | "sre"
+  | "web-dev"
+  | "delivery-pipeline";
+
+const CANONICAL_TEAM_ROLES: Readonly<Record<CanonicalTeam, readonly string[]>> =
+  {
+    ai: ["gizmo", "loom-specialist", "cortex-specialist"],
+    "dev-core": ["gizmo", "rust-core-developer", "rust-auth2-developer"],
+    security: [
+      "gizmo",
+      "cryptography-specialist",
+      "security-review-specialist",
+    ],
+    sre: ["gizmo", "provisioning", "cloud-native"],
+    "web-dev": ["gizmo", "typescript-specialist", "svelte-specialist"],
+    "delivery-pipeline": ["gizmo", "dev-manager", "pr-lifecycle"],
+  };
 
 export class AgentImplementationResolveDeliveryTarget {
   constructor(private readonly request: ImplementDeliveryTargetInput) {}

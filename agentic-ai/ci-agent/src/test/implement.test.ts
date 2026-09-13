@@ -8,6 +8,7 @@ import { join } from "node:path";
 import test, { describe, it } from "node:test";
 
 import {
+  CiImplementationCommand,
   AgentImplementationPublishBranch,
   AgentImplementationRecordTrustedBudgetBlocker,
   AgentImplementationResolveDeliveryTarget,
@@ -38,7 +39,7 @@ class ImplementDeliveryArgs {
   execute(): ConstructorParameters<typeof AgentImplementationPublishBranch>[0] {
     const log = this.request;
     return {
-      agentBranch: "agent/test",
+      agentBranch: "codex/agent-branching",
       expectedHead: EXPECTED_HEAD,
       assertBudget: async () => {
         log.push("budget");
@@ -173,22 +174,77 @@ void describe("resolveDeliveryTarget", () => {
     assert.deepEqual(
       CiResultAssertions.assertSuccess(
         new AgentImplementationResolveDeliveryTarget({
-          branch: "agent/workbench-feature-42",
+          branch: "codex/agent-branching",
         }).execute(),
       ),
       {
-        branch: "agent/workbench-feature-42",
+        branch: "codex/agent-branching",
         budgetBaseRef: "origin/main",
       },
+    );
+  });
+
+  void it("accepts a canonical child branch for a registered team role", () => {
+    assert.deepEqual(
+      CiResultAssertions.assertSuccess(
+        new AgentImplementationResolveDeliveryTarget({
+          branch:
+            "codex/agent-branching/ai/loom-specialist/define-branch-naming-contract",
+        }).execute(),
+      ),
+      {
+        branch:
+          "codex/agent-branching/ai/loom-specialist/define-branch-naming-contract",
+        budgetBaseRef: "origin/main",
+      },
+    );
+  });
+
+  void it("rejects legacy agent branches", () => {
+    CiResultAssertions.assertFailure(
+      new AgentImplementationResolveDeliveryTarget({
+        branch: "agent/workbench-feature-42",
+      }).execute(),
+      /malformed/u,
+    );
+  });
+
+  void it("rejects an unregistered team and role combination", () => {
+    CiResultAssertions.assertFailure(
+      new AgentImplementationResolveDeliveryTarget({
+        branch:
+          "codex/agent-branching/ai/dev-manager/define-branch-naming-contract",
+      }).execute(),
+      /malformed/u,
     );
   });
 
   void it("rejects malformed branch metadata", () => {
     CiResultAssertions.assertFailure(
       new AgentImplementationResolveDeliveryTarget({
-        branch: "agent/feature successor",
+        branch: "codex/feature",
       }).execute(),
       /malformed/u,
     );
+  });
+});
+
+void describe("resolveTargetFromEnvironment", () => {
+  void it("derives the prime feature branch without a run-id suffix", () => {
+    const target = new CiImplementationCommand({
+      GITHUB_RUN_ID: "410",
+      TASK_FEATURE: "agent-branching",
+    }).resolveTargetFromEnvironment();
+    assert.deepEqual(CiResultAssertions.assertSuccess(target), {
+      branch: "codex/agent-branching",
+      budgetBaseRef: "origin/main",
+    });
+  });
+
+  void it("fails closed when branch metadata is absent", () => {
+    const target = new CiImplementationCommand({
+      GITHUB_RUN_ID: "410",
+    }).resolveTargetFromEnvironment();
+    CiResultAssertions.assertFailure(target, /malformed/u);
   });
 });
