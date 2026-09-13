@@ -1,4 +1,4 @@
-version: "3"
+version: '3'
 
 vars:
   REPO_ROOT:
@@ -30,6 +30,6 @@ tasks:
     requires:
       vars: [EXPECTED_SHA]
     env:
-      EXPECTED_SHA: "{{.EXPECTED_SHA}}"
+      EXPECTED_SHA: '{{.EXPECTED_SHA}}'
     cmds:
       - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/dev-delivery/dev-promote-cli.ts"
