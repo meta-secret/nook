@@ -1,7 +1,6 @@
 import { err, ok, type Result } from 'neverthrow';
 
 import { DevPrManagerCommand } from './dev-pr-manager.ts';
-import { DevPublishCommand } from './dev-publish.ts';
 import { DevDeliveryWorkspace } from './dev-workspace.ts';
 import { type DevGitBootstrapEvidence } from './dev-git.ts';
 import { Ancestry, RemoteBranchPresence } from './dev-types.ts';
@@ -46,6 +45,24 @@ export enum DevCommitRelation {
   Diverged = 'diverged',
 }
 
+/**
+ * Exact manager authorization for Delivery Pipeline's bounded publication
+ * operation. The Team Gizmo forwards this packet to PR Lifecycle; it does
+ * not grant either child PR-management authority.
+ */
+export interface DevManagerGizmoPublicationHandoff {
+  readonly operation: 'dev:publish';
+  readonly controller: 'dev-manager';
+  readonly route: 'delivery-pipeline-gizmo';
+  readonly executor: 'pr-lifecycle';
+  readonly repositoryRoot: string;
+  readonly devPath: string;
+  readonly targetBranch: ManagedBranch.Dev;
+  readonly expectedSha: CommitSha;
+  readonly originMainSha: CommitSha;
+  readonly pinnedLocalDevSha: CommitSha;
+}
+
 export interface DevManagerGizmoOutcome {
   readonly state: DevManagerGizmoState;
   readonly action: DevManagerGizmoAction;
@@ -55,6 +72,7 @@ export interface DevManagerGizmoOutcome {
   readonly pinnedLocalDevSha: CommitSha;
   readonly originDev: RemoteBranchSnapshot;
   readonly expectedSha: CommitSha;
+  readonly publicationHandoff?: DevManagerGizmoPublicationHandoff;
   readonly pullRequestUrl?: string;
   readonly message: string;
 }
@@ -104,7 +122,7 @@ export class DevManagerGizmoCommand {
       case DevManagerGizmoPlanKind.Report:
         return ok(plan.value.outcome);
       case DevManagerGizmoPlanKind.Publish:
-        return this.publish(plan.value.inspection);
+        return this.requestPublication(plan.value.inspection);
       case DevManagerGizmoPlanKind.PrManager:
         return this.runPrManager(plan.value.inspection);
     }
@@ -208,8 +226,8 @@ export class DevManagerGizmoCommand {
     inspection: DevManagerGizmoInspection,
   ): Result<DevManagerGizmoPlan, DevFailure> {
     // Planning is intentionally local-Git-only. PR, check, review, security,
-    // and deployment state remains with PR Steward; the manager-only command
-    // seams below may publish a snapshot or prepare its PR.
+    // and deployment state remains with the Delivery Pipeline Team Gizmo and
+    // its PR Lifecycle child; the manager-only seam below may prepare its PR.
     if (
       inspection.localToMain === DevCommitRelation.Behind ||
       inspection.localToMain === DevCommitRelation.Diverged
@@ -278,50 +296,18 @@ export class DevManagerGizmoCommand {
     return ok({ kind: DevManagerGizmoPlanKind.Publish, inspection });
   }
 
-  private publish(
+  private requestPublication(
     inspection: DevManagerGizmoInspection,
   ): Result<DevManagerGizmoOutcome, DevFailure> {
-    const published = new DevPublishCommand(this.workspace).execute();
-    if (published.isErr()) {
-      if (published.error.kind === DevFailureKind.Checks) {
-        return ok(
-          this.outcome({
-            inspection,
-            state: DevManagerGizmoState.ValidationFrozen,
-            action: DevManagerGizmoAction.WaitForValidation,
-            expectedSha: this.remoteDevSha(inspection),
-            detail: `${published.error.message}; local dev remains preserved`,
-          }),
-        );
-      }
-      return err(
-        this.operationFailure({ inspection, failure: published.error }),
-      );
-    }
-    const manager = new DevPrManagerCommand(this.workspace).execute();
-    if (manager.isErr()) {
-      return err(this.operationFailure({ inspection, failure: manager.error }));
-    }
-    if (!manager.value.devSha.equals(published.value.devSha)) {
-      return err(
-        this.operationFailure({
-          inspection,
-          failure: {
-            kind: DevFailureKind.Race,
-            message: `origin/dev changed between exact publication and PR-manager execution: expected ${published.value.devSha.value()}, found ${manager.value.devSha.value()}`,
-          },
-        }),
-      );
-    }
     return ok(
       this.outcome({
-        inspection: this.afterPublication(inspection, published.value.devSha),
+        inspection,
         state: DevManagerGizmoState.ValidationRequired,
-        action: DevManagerGizmoAction.WaitForValidation,
-        expectedSha: published.value.devSha,
-        pullRequestUrl: manager.value.pullRequestUrl,
+        action: DevManagerGizmoAction.Publish,
+        expectedSha: inspection.devSha,
+        publicationHandoff: this.publicationHandoff(inspection),
         detail:
-          'published the selected local dev snapshot and prepared the manager-owned dev-to-main pull request; wait for complete exact-head evidence',
+          'selected the committed local dev snapshot; route the typed dev:publish handoff through Delivery Pipeline Team Gizmo to PR Lifecycle, then wait for complete exact-head evidence',
       }),
     );
   }
@@ -357,29 +343,20 @@ export class DevManagerGizmoCommand {
     );
   }
 
-  private afterPublication(
+  private publicationHandoff(
     inspection: DevManagerGizmoInspection,
-    devSha: CommitSha,
-  ): DevManagerGizmoInspection {
+  ): DevManagerGizmoPublicationHandoff {
     return {
-      ...inspection,
-      devSha,
-      originDev: {
-        presence: RemoteBranchPresence.Present,
-        branch: ManagedBranch.Dev,
-        sha: devSha,
-      },
-      localToOriginDev: DevCommitRelation.Equal,
-    };
-  }
-
-  private operationFailure(request: {
-    readonly inspection: DevManagerGizmoInspection;
-    readonly failure: DevFailure;
-  }): DevFailure {
-    return {
-      kind: request.failure.kind,
-      message: `${request.failure.message}; expected SHA: ${request.inspection.devSha.value()}; next action: stop and inspect the exact local/remote state before retrying`,
+      operation: 'dev:publish',
+      controller: 'dev-manager',
+      route: 'delivery-pipeline-gizmo',
+      executor: 'pr-lifecycle',
+      repositoryRoot: this.workspace.root,
+      devPath: inspection.devPath,
+      targetBranch: ManagedBranch.Dev,
+      expectedSha: inspection.devSha,
+      originMainSha: inspection.originMainSha,
+      pinnedLocalDevSha: inspection.pinnedLocalDevSha,
     };
   }
 
@@ -389,6 +366,7 @@ export class DevManagerGizmoCommand {
     readonly action: DevManagerGizmoAction;
     readonly expectedSha: CommitSha;
     readonly detail: string;
+    readonly publicationHandoff?: DevManagerGizmoPublicationHandoff;
     readonly pullRequestUrl?: string;
   }): DevManagerGizmoOutcome {
     const pullRequestUrl = request.pullRequestUrl;
@@ -402,6 +380,9 @@ export class DevManagerGizmoCommand {
       pinnedLocalDevSha: request.inspection.pinnedLocalDevSha,
       originDev: request.inspection.originDev,
       expectedSha: request.expectedSha,
+      ...(request.publicationHandoff
+        ? { publicationHandoff: request.publicationHandoff }
+        : {}),
       ...(pullRequestUrl ? { pullRequestUrl } : {}),
       message: [
         'Dev Manager Gizmo report',
@@ -415,6 +396,11 @@ export class DevManagerGizmoCommand {
         `local dev vs origin/main: ${request.inspection.localToMain}`,
         `local dev vs origin/dev: ${this.localToOriginDevText(request.inspection)}`,
         `expected SHA: ${request.expectedSha.value()}`,
+        ...(request.publicationHandoff
+          ? [
+              `publication handoff: ${request.publicationHandoff.operation} via ${request.publicationHandoff.route} to ${request.publicationHandoff.executor}`,
+            ]
+          : []),
         `pull request: ${pullRequestLine}`,
         'feature worktree issuance: Prime-owned from pinnedLocalDevSha; no manager worktree issuance was performed',
         `next action: ${request.detail}`,

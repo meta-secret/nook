@@ -35,7 +35,6 @@ interface ScenarioOptions {
   readonly ancestryPairs: readonly (readonly [string, string])[];
   readonly remoteDevPresent?: boolean;
   readonly pullRequest?: PullRequestFixture;
-  readonly ciStatus?: string;
   readonly dirtyMain?: boolean;
   readonly dirtyDev?: boolean;
   readonly malformedWorktree?: boolean;
@@ -201,9 +200,6 @@ class DevManagerGizmoRunner implements CommandRunner {
     if (args[0] === 'pr' && args[1] === 'view') {
       return ok(this.pullRequestView());
     }
-    if (args[0] === 'run' && args[1] === 'list') {
-      return ok(this.ciRuns());
-    }
     return ok(this.output());
   }
 
@@ -240,22 +236,6 @@ class DevManagerGizmoRunner implements CommandRunner {
         baseRepository: { nameWithOwner: 'nook/example' },
         reviewDecision: 'REVIEW_REQUIRED',
       }),
-    });
-  }
-
-  private ciRuns(): CommandOutput {
-    return this.output({
-      stdout: JSON.stringify([
-        {
-          databaseId: 7,
-          headBranch: 'dev',
-          headSha: this.remoteDevSha,
-          status: this.request.options.ciStatus ?? 'completed',
-          conclusion: 'pending',
-          event: 'pull_request',
-          workflowName: 'CI',
-        },
-      ]),
     });
   }
 
@@ -373,7 +353,7 @@ test('reports idle when no origin/dev snapshot has been published', () => {
   }
 });
 
-test('publishes unpublished local dev through existing manager commands and reports the exact expected SHA', () => {
+test('returns a typed publication handoff for unpublished local dev without publishing it', () => {
   const harness = new DevManagerGizmoHarness({
     localSha: SHA_B,
     remoteDevSha: SHA_A,
@@ -387,34 +367,36 @@ test('publishes unpublished local dev through existing manager commands and repo
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
     expect(result.value.state).toBe(DevManagerGizmoState.ValidationRequired);
-    expect(result.value.action).toBe(DevManagerGizmoAction.WaitForValidation);
+    expect(result.value.action).toBe(DevManagerGizmoAction.Publish);
     expect(result.value.expectedSha.value()).toBe(SHA_B);
     expect(result.value.originMainSha.value()).toBe(SHA_MAIN);
     expect(result.value.pinnedLocalDevSha.value()).toBe(SHA_B);
     expect(result.value.message).toContain(SHA_B);
     expect(result.value.message).toContain(
-      'wait for complete exact-head evidence',
+      'route the typed dev:publish handoff through Delivery Pipeline Team Gizmo to PR Lifecycle',
     );
+    expect(result.value.publicationHandoff).toEqual({
+      operation: 'dev:publish',
+      controller: 'dev-manager',
+      route: 'delivery-pipeline-gizmo',
+      executor: 'pr-lifecycle',
+      repositoryRoot: harness.root,
+      devPath: harness.devPath,
+      targetBranch: 'dev',
+      expectedSha: result.value.expectedSha,
+      originMainSha: result.value.originMainSha,
+      pinnedLocalDevSha: result.value.pinnedLocalDevSha,
+    });
     expect(
       harness.runner.requests.some(
         (request) =>
           request.executable === CommandExecutable.Git &&
           request.args[0] === 'push',
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       harness.runner.requests.some(
-        (request) =>
-          request.executable === CommandExecutable.GitHub &&
-          request.args[0] === 'pr' &&
-          request.args[1] === 'create',
-      ),
-    ).toBe(true);
-    expect(
-      harness.runner.requests.some(
-        (request) =>
-          request.executable === CommandExecutable.GitHub &&
-          (request.args[0] === 'run' || request.args[0] === 'api'),
+        (request) => request.executable === CommandExecutable.GitHub,
       ),
     ).toBe(false);
   } finally {
@@ -422,7 +404,7 @@ test('publishes unpublished local dev through existing manager commands and repo
   }
 });
 
-test('preserves newer local dev when the bounded publication seam reports active validation', () => {
+test('returns a publication handoff while preserving newer local dev during validation', () => {
   const harness = new DevManagerGizmoHarness({
     localSha: SHA_B,
     remoteDevSha: SHA_A,
@@ -430,22 +412,18 @@ test('preserves newer local dev when the bounded publication seam reports active
       [SHA_MAIN, SHA_B],
       [SHA_A, SHA_B],
     ],
-    pullRequest: {
-      headSha: SHA_A,
-    },
-    ciStatus: 'in_progress',
   });
   try {
     const result = new DevManagerGizmoCommand(harness.workspace).execute();
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
-    expect(result.value.state).toBe(DevManagerGizmoState.ValidationFrozen);
-    expect(result.value.action).toBe(DevManagerGizmoAction.WaitForValidation);
-    expect(result.value.expectedSha.value()).toBe(SHA_A);
+    expect(result.value.state).toBe(DevManagerGizmoState.ValidationRequired);
+    expect(result.value.action).toBe(DevManagerGizmoAction.Publish);
+    expect(result.value.expectedSha.value()).toBe(SHA_B);
     expect(result.value.originMainSha.value()).toBe(SHA_MAIN);
     expect(result.value.pinnedLocalDevSha.value()).toBe(SHA_B);
     expect(result.value.localDevSha.value()).toBe(SHA_B);
-    expect(result.value.message).toContain('local dev remains preserved');
+    expect(result.value.publicationHandoff?.expectedSha.value()).toBe(SHA_B);
     expect(
       harness.runner.requests.some(
         (request) =>
@@ -455,12 +433,9 @@ test('preserves newer local dev when the bounded publication seam reports active
     ).toBe(false);
     expect(
       harness.runner.requests.some(
-        (request) =>
-          request.executable === CommandExecutable.GitHub &&
-          request.args[0] === 'run' &&
-          request.args[1] === 'list',
+        (request) => request.executable === CommandExecutable.GitHub,
       ),
-    ).toBe(true);
+    ).toBe(false);
   } finally {
     harness.dispose();
   }
