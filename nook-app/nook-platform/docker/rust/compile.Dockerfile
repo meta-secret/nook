@@ -250,7 +250,11 @@ COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modul
   /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
 COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules \
   /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules
-RUN ln -s nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/node_modules \
+RUN mkdir -p \
+      /meta-secret/nook/nook-app/nook-web/nook-vault-simple \
+      /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel \
+      /meta-secret/nook/nook-app/nook-web/nook-web-extension \
+    && ln -s nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/node_modules \
     && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-vault-simple/node_modules \
     && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/node_modules \
     && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules
