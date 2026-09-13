@@ -3,6 +3,7 @@ import { err, ok, type Result } from 'neverthrow';
 import { DevPrManagerCommand } from './dev-pr-manager.ts';
 import { DevPublishCommand } from './dev-publish.ts';
 import { DevDeliveryWorkspace } from './dev-workspace.ts';
+import { type DevGitBootstrapEvidence } from './dev-git.ts';
 import { Ancestry, RemoteBranchPresence } from './dev-types.ts';
 import {
   DevFailureKind,
@@ -51,6 +52,7 @@ export interface DevManagerGizmoOutcome {
   readonly localDevPath: string;
   readonly localDevSha: CommitSha;
   readonly originMainSha: CommitSha;
+  readonly pinnedLocalDevSha: CommitSha;
   readonly originDev: RemoteBranchSnapshot;
   readonly expectedSha: CommitSha;
   readonly pullRequestUrl?: string;
@@ -59,7 +61,8 @@ export interface DevManagerGizmoOutcome {
 
 interface DevManagerGizmoInspection extends DevSnapshot {
   readonly worktree: WorktreeRecord;
-  readonly originMainSha: CommitSha;
+  readonly originMainSha: DevGitBootstrapEvidence['originMainSha'];
+  readonly pinnedLocalDevSha: DevGitBootstrapEvidence['pinnedLocalDevSha'];
   readonly originDev: RemoteBranchSnapshot;
   readonly localToMain: DevCommitRelation;
   readonly localToOriginDev: DevCommitRelation | undefined;
@@ -120,11 +123,27 @@ export class DevManagerGizmoCommand {
   }
 
   private inspectInsideLocks(): Result<DevManagerGizmoInspection, DevFailure> {
-    const refreshed = this.workspace.git.refreshManagedRefs();
-    if (refreshed.isErr()) return err(refreshed.error);
+    // Delivery owns the fetch/prune and canonical main/dev synchronization.
+    // The manager consumes its typed evidence and never reimplements those Git
+    // mechanics. A dev checkout may already include main (for example, after
+    // feature landing), so synchronization must preserve an ahead clean head
+    // while still rejecting dirty, divergent, or racing state.
+    const bootstrap = this.workspace.git.bootstrap({
+      fetchOrigin: true,
+      requireDevEquality: false,
+    });
+    if (bootstrap.isErr()) return err(bootstrap.error);
+
     const development = this.workspace.developmentWorktree();
     if (development.isErr()) return err(development.error);
     const worktree = development.value;
+    if (worktree.path !== bootstrap.value.devPath) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          `Development worktree changed during bootstrap: expected ${bootstrap.value.devPath}, found ${worktree.path}`,
+      });
+    }
     const state = this.workspace.git.stateAt(worktree.path);
     if (state.isErr()) return err(state.error);
     if (state.value !== WorktreeState.Clean) {
@@ -149,19 +168,17 @@ export class DevManagerGizmoCommand {
         message: `Local dev changed while its exact snapshot was being observed: expected ${worktree.head.value()}, found ${localDevSha.value.value()}`,
       });
     }
-    const originMain = this.workspace.git.remoteBranch(ManagedBranch.Main);
-    if (originMain.isErr()) return err(originMain.error);
-    if (originMain.value.presence !== RemoteBranchPresence.Present) {
+    if (!localDevSha.value.equals(bootstrap.value.pinnedLocalDevSha)) {
       return err({
-        kind: DevFailureKind.Configuration,
+        kind: DevFailureKind.Race,
         message:
-          'origin/main must exist before the manager can select a snapshot',
+          `Local dev changed during bootstrap: expected ${bootstrap.value.pinnedLocalDevSha.value()}, found ${localDevSha.value.value()}`,
       });
     }
     const originDev = this.workspace.git.remoteBranch(ManagedBranch.Dev);
     if (originDev.isErr()) return err(originDev.error);
     const localToMain = this.relation({
-      base: originMain.value.sha,
+      base: bootstrap.value.originMainSha,
       candidate: localDevSha.value,
       workingDirectory: worktree.path,
     });
@@ -180,7 +197,8 @@ export class DevManagerGizmoCommand {
       devPath: worktree.path,
       devSha: localDevSha.value,
       worktree,
-      originMainSha: originMain.value.sha,
+      originMainSha: bootstrap.value.originMainSha,
+      pinnedLocalDevSha: bootstrap.value.pinnedLocalDevSha,
       originDev: originDev.value,
       localToMain: localToMain.value,
       localToOriginDev,
@@ -382,6 +400,7 @@ export class DevManagerGizmoCommand {
       localDevPath: request.inspection.devPath,
       localDevSha: request.inspection.devSha,
       originMainSha: request.inspection.originMainSha,
+      pinnedLocalDevSha: request.inspection.pinnedLocalDevSha,
       originDev: request.inspection.originDev,
       expectedSha: request.expectedSha,
       ...(pullRequestUrl ? { pullRequestUrl } : {}),
@@ -392,11 +411,13 @@ export class DevManagerGizmoCommand {
         `local dev worktree: ${request.inspection.devPath}`,
         `local dev SHA: ${request.inspection.devSha.value()}`,
         `origin/main SHA: ${request.inspection.originMainSha.value()}`,
+        `pinned local dev SHA (feature baseline): ${request.inspection.pinnedLocalDevSha.value()}`,
         `origin/dev SHA: ${this.remoteDevText(request.inspection.originDev)}`,
         `local dev vs origin/main: ${request.inspection.localToMain}`,
         `local dev vs origin/dev: ${this.localToOriginDevText(request.inspection)}`,
         `expected SHA: ${request.expectedSha.value()}`,
         `pull request: ${pullRequestLine}`,
+        'feature worktree issuance: Prime-owned from pinnedLocalDevSha; no manager worktree issuance was performed',
         `next action: ${request.detail}`,
       ].join('\n'),
     };
