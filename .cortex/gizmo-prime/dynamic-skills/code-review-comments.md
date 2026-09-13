@@ -121,10 +121,12 @@ rejected.
 ### Feedback target handling
 
 When an accepted fix or failed-check repair changes the head, Gizmo continues
-from the verified commit. It runs pre-push hygiene. It pushes the result. It
-then obtains replacement-head validation. A batch with no accepted fix or
-failed-check repair does not create replacement-head work. Gizmo then applies
-the handling rule for the feedback target:
+from the verified commit, commits the complete repair, and pushes the result.
+It then obtains replacement-head remote build-only evidence through the
+Delivery Pipeline. Full validation remains in the Dev Manager's later CI
+cycle. A batch with no accepted fix or failed-check repair does not create
+replacement-head work. Gizmo then applies the handling rule for the feedback
+target:
 
 - **Inline conversation:** Reply on the original target. Resolve it only after
   the finding is fixed or explicitly invalidated.

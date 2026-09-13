@@ -137,10 +137,10 @@ After:
 
 - Review the docs diff to verify that product specifications accurately describe current product behavior.
 - Run `task loom:cortex-audit` to verify links, index entries, and structure.
-- For implementation tasks, run the focused worker proof and commit the
-  coherent formatted handoff. Include every formatter mutation in allowed
-  source or Cortex paths. Return the exact commit and evidence to Gizmo. If
-  integrated pre-push hygiene mutates team-owned content, that team returns a
-  fresh formatted commit before Gizmo continues and pushes. Gizmo
-  immediately dispatches a relevant focused remote task when the pushed head is
-  not validation-ready, or complete exact-head validation when it is ready.
+- For implementation tasks, apply only permitted scoped formatting or
+  inexpensive diagnostics and commit the coherent handoff. Include every
+  formatter mutation in allowed source or Cortex paths. Return the exact commit
+  and evidence to Gizmo. Do not run a local pre-push or broad validation gate.
+  Gizmo immediately dispatches the relevant remote build-only task through
+  Delivery Pipeline Team Gizmo and PR Lifecycle Agent. The Dev Manager owns
+  complete exact-head CI validation when the snapshot is ready.

@@ -122,8 +122,10 @@ Use UTC timestamps and integer durations in seconds.
 
 Measure wall-clock time, including owned wait time.
 
-- **Local executions:** normally `task format` / Loom pre-push and the UI demo
-  contract. Heavy checks belong in GitHub Actions.
+- **Local executions:** only scoped formatting or inexpensive diagnostics that
+  are permitted during implementation. Feature compilation is the remote
+  build-only `build:compile` task; heavy checks belong in the Dev Manager's
+  later GitHub Actions cycle.
 - **GitHub Actions:** every repository-owned workflow run on every observed PR
   head between PR creation and merge. Expand every rerun attempt. Include queue
   time from attempt creation through completion.

@@ -150,12 +150,10 @@ When applying a skill to code:
 4. Preserve package boundaries in [`.cortex/shared/architecture/system.md`](../../../shared/architecture/system.md).
 5. Add or update tests when the refactor changes behavior or protects a durable
    invariant.
-6. Run the focused worker proof and required formatters. Commit every resulting
-   mutation in the allowed paths and return the exact handoff to the owning
-   Feature Gizmo. If integrated pre-push hygiene mutates AI-owned content, the
-   AI team returns a fresh formatted commit. The Feature Gizmo continues from
-   it, reruns hygiene, and pushes. For applicable feature build or check
+6. Apply only the permitted scoped formatting or inexpensive diagnostics during
+   implementation. Commit every resulting mutation in the allowed paths and
+   return the exact handoff to the owning Feature Gizmo. Do not run a local
+   pre-push or broad validation gate. For applicable feature build or check
    mechanics, Gizmo Prime authorizes the Delivery Pipeline Team Gizmo packet;
-   Team Gizmo dispatches PR Lifecycle Agent through the active harness. Use
-   focused remote evidence until the head is ready. Dispatch complete
-   exact-head validation immediately when it is ready through that same route.
+   Team Gizmo dispatches PR Lifecycle Agent through the active harness for the
+   remote build-only task. The Dev Manager owns later CI validation.

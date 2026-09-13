@@ -55,14 +55,14 @@ export class RequestBlueprintComparison {
 
   private static fallbackCatalogEntry(): ExampleCatalogEntry {
     const lookup = LoomRequestExamples.familyRootCatalogEntry(
-      RequestFamily.PrePush,
+      RequestFamily.ToolsList,
     );
     if (lookup.presence === ExampleCatalogPresence.Present) {
       return lookup.entry;
     }
     const loomFailureDetailArgs: LoomFailureDetailArgs = {
       code: LoomFailureCode.ValidationFailed,
-      text: 'missing prePush example catalog entry',
+      text: 'missing toolsList example catalog entry',
     };
     LoomFailure.detail(loomFailureDetailArgs);
   }

@@ -56,7 +56,7 @@ export class CortexAuditSessionScenario {
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
 
-test('uses the pre-push commit for push stability audits', () => {
+test('uses the event commit for publication stability audits', () => {
   const before = '1'.repeat(40);
   const base = '2'.repeat(40);
   expect(

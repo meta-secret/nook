@@ -71,8 +71,6 @@ Harness profile directories must not mirror or redefine these cards.
   - Purpose: Route feature compilation and manager slow checks to remote execution
 - **[kubernetes-native-cluster-execution.md](../../sre/dynamic-skills/kubernetes-native-cluster-execution.md)**
   - Purpose: Prohibit nested container runtimes in k8s and k0s and require direct Pod execution for Playwright and other workloads
-- **[pre-push-hygiene.md](../../sre/dynamic-skills/pre-push-hygiene.md)**
-  - Purpose: Describe prior pre-push runtime under the current dev-stage restrictions
 - **[browser-extension-release-security.md](../../security/dynamic-skills/browser-extension-release-security.md)**
   - Purpose: Apply origin, identity, archive, redirect, and profile-isolation checks before shipping extension artifacts
 - **[feature-issue-planning.md](../../../gizmo-prime/dynamic-skills/feature-issue-planning.md)**

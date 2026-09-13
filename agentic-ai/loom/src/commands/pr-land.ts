@@ -10,7 +10,6 @@ import { RemoteTaskPresence } from '../codec/args/pr-land.ts';
 import { PrLandOperation, RequestFamily } from '../codec/enums.ts';
 
 import {
-  RepositoryBunScript,
   RepositoryCommand,
   RepositoryCommandExecutable,
 } from '../lib/run.ts';
@@ -144,23 +143,6 @@ export class PullRequestValidationCommand {
   async execute(): Promise<Result<PrLandReport, PrLandFailure>> {
     const { repoRoot, request } = this.request;
 
-    const prePushArgs: RepositoryCommandRequest = {
-      command: RepositoryCommandExecutable.Bun,
-      script: RepositoryBunScript.Loom,
-      args: ['--default', 'prePush'],
-      rootDirectory: repoRoot,
-      workingDirectory: repoRoot,
-    };
-    const prePushLaunch = new RepositoryCommand(prePushArgs).execute();
-    if (prePushLaunch.isErr()) return err(prePushLaunch.error);
-    const prePush = prePushLaunch.value;
-    if (prePush.exitCode !== 0) {
-      return err({
-        code: LoomFailureCode.CommandFailed,
-        message: `prePush failed before validate: ${prePush.stderr || prePush.stdout}`,
-      });
-    }
-
     if (request.remoteTask.presence === RemoteTaskPresence.Specified) {
       const remoteArgs: RepositoryCommandRequest = {
         command: RepositoryCommandExecutable.Task,
@@ -210,7 +192,6 @@ export class PullRequestValidationCommand {
       nextStep: PR_LAND_VALIDATE_NEXT_STEP,
       ready: false,
       messages: [
-        'prePush passed',
         (validated.stdout || 'pr:validate dispatched').trim(),
       ],
     });

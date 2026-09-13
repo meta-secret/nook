@@ -694,7 +694,7 @@ test('follows repository subprocess entrypoints and fails closed', () => {
       'agentic-ai/loom/src/cli.ts',
       `const request = {
   command: 'bun',
-  args: ['run', '--cwd', 'agentic-ai/loom', 'loom', '--', '--default', 'prePush'],
+  args: ['run', '--cwd', 'agentic-ai/loom', 'loom', '--', '--default', 'toolsList'],
 };
       runCommand(request);`,
     ],

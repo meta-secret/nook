@@ -172,29 +172,12 @@ tasks:
         bun run --cwd agentic-ai/loom loom -- "$config"
 
   loom:default:
-    desc: Run a defaultable Loom family from in-code examples (FAMILY=prePush|toolsList|cortexAudit|cortexSessionClean|dependencyPopularity).
+    desc: Run a defaultable Loom family from in-code examples (FAMILY=toolsList|cortexAudit|cortexSessionClean|dependencyPopularity).
     deps: [loom:install]
     requires:
       vars: [FAMILY]
     cmds:
       - bun run --cwd agentic-ai/loom loom -- --default "{{.FAMILY}}"
-
-  loom:pre-push:
-    desc: Run the default pre-push request; its host formatter includes Loom.
-    deps: [loom:install, tooling:install]
-    vars:
-      CONFIG: '{{default "" .CONFIG}}'
-      PR: '{{default "" .PR}}'
-    cmds:
-      - bun agentic-ai/loom/src/commands/pr-authored-budget.ts "{{.PR}}" --stop-only
-      - |
-        set -euo pipefail
-        if [ -n "{{.CONFIG}}" ]; then
-          task loom:run CONFIG="{{.CONFIG}}"
-        else
-          task loom:default FAMILY=prePush
-        fi
-      - bun agentic-ai/loom/src/commands/pr-authored-budget.ts "{{.PR}}"
 
   loom:cortex-audit:
     desc: Audit .cortex via Loom (optional CONFIG YAML, otherwise in-code default).

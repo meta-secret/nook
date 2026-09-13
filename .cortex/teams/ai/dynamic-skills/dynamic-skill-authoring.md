@@ -92,12 +92,9 @@ Does not apply to:
 
 For documentation-only captures, run `task loom:cortex-audit`.
 
-For code refactors using a dynamic skill, run the focused worker proof and
-required formatters. Commit every resulting mutation in the allowed paths and
-return the exact scoped commit to Gizmo. If pre-push hygiene mutates
-AI-owned content, the AI team returns a fresh formatted commit. Gizmo then
-continues from it, reruns hygiene, and pushes. Gizmo routes the hosted
-validation packet through Delivery Pipeline Team Gizmo -> active harness ->
-PR Lifecycle Agent. Use focused remote evidence until the head is ready.
-Dispatch complete exact-head validation through the same route immediately when
-it is ready.
+For code refactors using a dynamic skill, apply only the permitted scoped
+formatters or inexpensive diagnostics. Commit every resulting mutation in the
+allowed paths and return the exact scoped commit to Gizmo. Do not run a local
+pre-push or broad validation gate. Gizmo routes the hosted build-only packet
+through Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent.
+The Dev Manager owns later CI validation.

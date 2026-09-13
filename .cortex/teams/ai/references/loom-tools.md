@@ -178,17 +178,18 @@ Prefer libraries over boilerplate:
 ## Common requests
 
 `task loom:tools-list` returns the canonical invoke command in
-`exampleRequest`, exact `exampleYaml`, and typed `inputSchema` for every
+`exampleRequest`, exact `exampleYaml`, and typed `inputSchema` for every active
 direct request below.
 `resolvedExampleYaml` equals the generated example for static requests and
 fills dynamic tokens for the current worktree and commit. Consume that output
 instead of maintaining request bodies in Cortex.
 
-### prePush
+### prePush (deprecated)
 
-This legacy task is not a local feature gate. Follow
-[dev delivery](../../../gizmo-prime/architecture/dev-delivery.md) for permitted
-compilation and manager-stage validation.
+The historical request identifier is retained only for compatibility and fails
+closed without executing commands. Follow [dev
+delivery](../../../gizmo-prime/architecture/dev-delivery.md) for the remote
+build-only compilation stage and the manager-owned CI validation stage.
 
 ### cortexAudit
 
