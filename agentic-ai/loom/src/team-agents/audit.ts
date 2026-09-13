@@ -543,4 +543,14 @@ const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
       capabilityBoundary: `Web development may implement bounded TypeScript expertise without taking consumer capability semantics or Cortex authority. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
     },
   ],
+  [
+    TeamKey.DeliveryPipeline,
+    {
+      identity: 'Delivery Pipeline',
+      contextDirectory: 'delivery-pipeline',
+      description:
+        'Owns delivery mechanics across CI, pull-request lifecycle, development-branch publication, workflow execution, validation evidence, local landing, and guarded promotion.',
+      capabilityBoundary: `Delivery Pipeline executes authorized delivery mechanics without owning functional product implementation or policy verdicts. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
+    },
+  ],
 ]);
