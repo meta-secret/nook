@@ -13,7 +13,6 @@ pub struct TaskWorkspace<'scan> {
 }
 use super::*;
 use tokio::fs as async_fs;
-use tokio::time as async_time;
 
 const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
 
@@ -30,48 +29,6 @@ fn append_hex_byte(encoded: &mut String, byte: u8) {
             .copied()
             .unwrap_or(b'0'),
     ));
-}
-
-impl TaskWorkspace<'_> {
-    pub(super) async fn heartbeat_loop<S: TaskStore>(
-        store: S,
-        agent_id: AgentId,
-        task: ClaimedTask,
-        lease_seconds: i64,
-        heartbeat_seconds: u64,
-        mut stop: watch::Receiver<bool>,
-    ) -> crate::HiveResult<()> {
-        let mut interval = async_time::interval(Duration::from_secs(heartbeat_seconds));
-        let mut renewal = 0_u64;
-        interval.tick().await;
-        loop {
-            tokio::select! {
-                changed = stop.changed() => {
-                    if changed.is_err() || *stop.borrow() {
-                        return Ok(());
-                    }
-                }
-                _ = interval.tick() => {
-                    let accepted = store
-                        .heartbeat(
-                            &task.id,
-                            &agent_id,
-                            &task.lease_token,
-                            lease_seconds,
-                        )
-                        .await?;
-                    if !accepted {
-                        return Err(WorkerCancellationRequested.into());
-                    }
-                    renewal += 1;
-                    eprintln!(
-                        "Hive lease heartbeat accepted task={} renewal={renewal}",
-                        task.id
-                    );
-                }
-            }
-        }
-    }
 }
 
 impl TaskWorkspace<'_> {

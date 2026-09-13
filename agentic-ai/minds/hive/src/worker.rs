@@ -26,6 +26,7 @@ use crate::model::{
 use crate::store::TaskStore;
 
 mod lifecycle;
+mod heartbeat;
 mod task_prompt;
 mod workspace;
 use lifecycle::{ClaimStep, TaskClaim, WorkerCompletionMarker, WorkerShutdown, WorkerStartup};
@@ -205,7 +206,7 @@ impl<S: TaskStore> Worker<S> {
         shutdown: watch::Receiver<bool>,
     ) -> crate::HiveResult<()> {
         let (stop_tx, stop_rx) = watch::channel(false);
-        let mut heartbeat = tokio::spawn(TaskWorkspace::heartbeat_loop(
+        let mut heartbeat = tokio::spawn(heartbeat::run(
             self.store.clone(),
             self.config.agent_id.clone(),
             task.clone(),
