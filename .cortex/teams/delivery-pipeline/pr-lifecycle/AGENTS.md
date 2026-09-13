@@ -3,8 +3,9 @@
 ## Mission
 
 For the current flow, follow
-[dev delivery](../../../gizmo-prime/architecture/dev-delivery.md). A feature Gizmo
-authorizes compilation operations. The manually run dev manager authorizes
+[dev delivery](../../../gizmo-prime/architecture/dev-delivery.md). Gizmo Prime
+authorizes the exact canonical feature branch name and `featureHeadSha` for
+feature compilation. The manually run dev manager authorizes
 dev PR validation and guarded fast-forward promotion. The manager retains the slow-stage
 verdict. The PR Lifecycle Agent verifies actual PR status after fast-forward publication.
 It never substitutes squash, rebase, a merge commit, or manual PR closure.
@@ -50,6 +51,9 @@ selection, slow validation, and promotion. Each retains its own verdict.
 - Confirm the packet's repository and applicable target identity before acting.
 - Execute `gh` commands and equivalent GitHub wrappers only within that packet.
 - Execute `dev:land` under the feature Gizmo's packet.
+- For feature compilation, require the Prime-authored canonical branch and
+  exact `featureHeadSha` packet. Verify that ref before pushing it and invoking
+  its remote task.
 - Execute `dev:publish` and `dev:promote` under the Dev Manager's packet.
 - Observe the manager-owned `dev:pr-manager` result and report exact PR state
   under the dev manager's packet; do not invoke the PR manager.
@@ -79,7 +83,9 @@ selection, slow validation, and promotion. Each retains its own verdict.
   adjudicate technical findings, or decide scope.
 - PR Lifecycle Agent must not sequence writers, create a worker, or synthesize a
   replacement commit. Shared-branch mutation is permitted only through the
-  three bounded dev tasks above, never through general Git authority.
+  three bounded dev tasks above, plus the Prime-authorized canonical feature
+  push. It must never push a temporary leaf branch or invoke `task remote` or
+  `workflow_dispatch` while checked out on a temporary branch.
 - PR Lifecycle Agent must not author Workbench records or decide their outcomes.
   Exact parent-authorized publication is a mechanical operation.
 - PR Lifecycle Agent must not declare readiness, waive a team or security verdict, or

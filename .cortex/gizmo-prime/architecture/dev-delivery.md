@@ -34,10 +34,12 @@ final delivery.
 Delivery Pipeline is the operational team for CI, pull-request lifecycle, dev
 publication, workflow execution, local landing, evidence, and guarded
 promotion. Delivery Pipeline Team Gizmo owns Level 1 delivery-pipeline
-orchestration, commit handoffs, and remote build-only task packets. Its
-PR Lifecycle Agent performs packetized external GitHub, PR, check, review,
-status, and bounded dev mechanics. Neither creates or updates pull requests or
-replaces the active harness.
+orchestration and commit handoffs. Gizmo Prime authorizes the exact canonical
+feature branch name and `featureHeadSha`; its packet authorizes PR Lifecycle to
+push that branch and invoke the remote build-only task. PR Lifecycle also
+performs packetized external GitHub, PR, check, review, status, and bounded dev
+mechanics. Neither creates or updates pull requests or replaces the active
+harness.
 
 Feature Gizmos remain feature owners. The Dev Manager remains the policy owner
 for dev snapshots, dev validation, readiness, promotion, and manager-only
@@ -47,8 +49,13 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
 
 - **`build:compile`**
   - Repeatable remote build-only execution for the pushed feature SHA.
-  - Gizmo Prime authorizes Delivery Pipeline Team Gizmo's remote-task packet;
-    PR Lifecycle Agent performs the bounded dispatch.
+  - Gizmo Prime authorizes the canonical feature branch name and exact SHA in
+    the remote-task packet.
+  - Delivery Pipeline Team Gizmo forwards that packet unchanged to PR Lifecycle
+    Agent, which verifies the canonical checkout, pushes the branch, and
+    performs the bounded dispatch.
+  - PR Lifecycle Agent must not push a temporary leaf branch or dispatch while
+    checked out on one.
   - The packet carries `originMainSha`, `pinnedLocalDevSha`, and
     `featureHeadSha`. Require `originMainSha` ancestor of
     `pinnedLocalDevSha` ancestor/equal to `featureHeadSha`.
@@ -93,7 +100,9 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
 - **Fast feature stage**
   - Permit only scoped local rustfmt and bounded inexpensive TS diagnostics or
     formatting as implementation feedback.
-  - Push the feature branch and repeatedly request remote build-only execution.
+  - Have Gizmo Prime authorize the exact canonical feature branch and SHA.
+  - Have Delivery Pipeline Team Gizmo route the packet to PR Lifecycle, which
+    pushes the branch and repeatedly invokes the remote build-only task.
   - Bind compilation evidence to the pushed `featureHeadSha`.
   - Preserve the full chain `originMainSha` ancestor of
     `pinnedLocalDevSha` ancestor/equal to `featureHeadSha` in every handoff.

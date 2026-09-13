@@ -229,7 +229,7 @@ flowchart LR
     Ready([Feature ready])
 
     Request --> Prime --> GizmoPlan --> Teams --> GizmoManagement
-    GizmoManagement --> Pipeline --> Steward --> Checks --> Pipeline --> Prime --> Green
+    GizmoManagement --> Prime --> Pipeline --> Steward --> Checks --> Pipeline --> Green
     Green -- No --> Feedback --> GizmoPlan
     Green -- Yes --> Ready
 ```
@@ -276,11 +276,11 @@ sequenceDiagram
     end
 
     Gizmo->>Gizmo: Inspect and merge Team Agent commits
-    Gizmo->>Gizmo: Push exact integrated SHA
-    Gizmo->>Prime: Feature SHA and review disposition
-    Prime->>Pipeline: Delivery-pipeline packet for exact SHA
-    Pipeline->>Steward: Build-only remote-task packet
-    Steward->>Checks: Validate exact SHA
+    Gizmo->>Prime: Integrated SHA and review disposition
+    Prime->>Pipeline: Authorize canonical branch and exact SHA
+    Pipeline->>Steward: Forward unchanged feature packet
+    Steward->>Feature: Push canonical branch at exact SHA
+    Steward->>Checks: Invoke build-only remote task for exact SHA
     Checks-->>Steward: Green result or diagnostics
     Steward-->>Pipeline: Exact-SHA evidence or blocker
     Pipeline-->>Prime: Synthesized evidence or blocker
@@ -294,10 +294,12 @@ sequenceDiagram
 ## Level 2: Remote task under Delivery Pipeline
 
 This level expands `external:feature-checks` through Delivery Pipeline Team
-Gizmo and its `pr-lifecycle` agent. Review and remote compilation are separate
-checks internally, but they return one exact-SHA verdict through Team Gizmo to
-Gizmo Prime and the Feature Gizmo. The remote task is build-only: it does not
-run tests, coverage, e2e, or preflight.
+Gizmo and its `pr-lifecycle` agent. Gizmo Prime authorizes the canonical feature
+branch and exact SHA. Team Gizmo forwards that packet unchanged, and PR
+Lifecycle pushes the canonical branch and invokes the remote task. Review and
+remote compilation are separate checks internally, but they return one
+exact-SHA verdict through Team Gizmo to Gizmo Prime and the Feature Gizmo. The
+remote task is build-only: it does not run tests, coverage, e2e, or preflight.
 
 The Delivery Pipeline packet preserves all three identities. It accepts a
 feature head only when `originMainSha` is an ancestor of
@@ -315,8 +317,8 @@ flowchart LR
     Accepted{"Accepted?"}
     TypeSafety["Remote type-safety check"]
     Green{"Green?"}
-    Pipeline["Delivery Pipeline Team Gizmo:<br/>decomposes mechanics"]
-    Steward["PR Lifecycle Agent:<br/>dispatches remote task"]
+    Pipeline["Delivery Pipeline Team Gizmo:<br/>forwards Prime packet"]
+    Steward["PR Lifecycle Agent:<br/>pushes canonical ref and dispatches"]
     Feedback["Gizmo Prime and Feature Gizmo:<br/>receive feedback"]
     Ready([Verified feature SHA])
 
@@ -359,16 +361,17 @@ sequenceDiagram
     Feature->>Review: Review exact featureHeadSha
     Review-->>Feature: Accepted SHA or findings
     Feature->>Prime: Accepted exact SHA
-    Prime->>Pipeline: Authorize delivery-pipeline packet
-    Pipeline->>Steward: Dispatch build:compile packet
-    Steward->>Build: Dispatch build-only task
+    Prime->>Pipeline: Authorize canonical branch and exact SHA
+    Pipeline->>Steward: Forward unchanged build:compile packet
+    Steward->>Feature: Push canonical feature ref at exact SHA
+    Steward->>Build: Dispatch build-only task for exact SHA
     Build-->>Steward: Exact-SHA compilation result
     Steward-->>Pipeline: Green evidence or diagnostics
     Pipeline-->>Prime: Synthesized exact-SHA result
     Prime-->>Feature: Green evidence or feedback
     Feature->>Delivery: Deliver green exact SHA
 
-    Note over Prime,Steward: Team Gizmo preserves Prime's controller and exact-SHA target
+    Note over Prime,Steward: Prime authorizes the canonical ref and SHA; PR Lifecycle executes the push and dispatch
     Note over Feature,Build: Any failure returns to Level 1
 ```
 

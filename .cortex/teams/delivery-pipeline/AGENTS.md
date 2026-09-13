@@ -49,6 +49,9 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
   scopes and shared mutations.
 - Route packetized GitHub, pull-request, check, review, status, publication,
   promotion, and bounded local-dev mechanics to the PR Lifecycle Agent.
+- For feature delivery, forward Gizmo Prime's exact canonical feature branch
+  name and `featureHeadSha` unchanged. PR Lifecycle must push that ref and
+  invoke its remote task after verifying the ref and SHA.
 - Preserve the Feature Gizmo or Dev Manager as the policy controller in every
   child packet.
 - Require the PR Lifecycle Agent to verify the live target and expected SHA
@@ -72,6 +75,8 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
 - Do not choose functional ownership or adjudicate functional findings.
 - Do not directly implement or repair product code, tests, or functional
   Cortex content.
+- Do not push a feature branch or invoke a remote task. Team Gizmo only
+  forwards Prime-authorized packets and returns typed evidence.
 - Internal agents never create or update pull requests. Only the manager-only
   `dev:pr-manager` path, invoked by the Dev Manager, creates or updates the
   dev-to-main pull request.
@@ -91,11 +96,13 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
 - **Team Gizmo:** receives high-level packets from Gizmo Prime in the team's
   one worktree. It decomposes delivery-pipeline work, dispatches internal
   agents in parallel when scopes are disjoint, coordinates commit-level and
-  remote-task packets, and reports only high-level evidence or blockers to
+  Prime-authorized remote-task packets, and reports only high-level evidence or
   Gizmo Prime. It does not write implementation code or make policy
   decisions.
 - **PR Lifecycle Agent:** executes packetized external GitHub, pull-request,
-  check, review, status, publication, and promotion mechanics. It also runs
+  check, review, status, publication, and promotion mechanics. Under a
+  Prime-authorized feature packet, it pushes the exact canonical feature ref
+  and invokes the remote task for that SHA. It also runs
   the three bounded local-dev tasks: `dev:land`, `dev:publish`, and
   `dev:promote`. It returns evidence and never supplies a policy verdict.
 - **Dev Manager:** selects the dev snapshot, owns slow validation, owns

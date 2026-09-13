@@ -14,9 +14,12 @@ and single root delivery owner. Every team has a Team Gizmo that reports
 upward to Gizmo Prime; Team Gizmo is an internal team orchestrator, not a
 second Prime.
 
-Gizmo publishes only its feature branch and requests remote `build:compile`.
-It authorizes Delivery Pipeline Team Gizmo to route PR Lifecycle's
-bounded `dev:land` operation for the completed feature.
+Gizmo Prime authorizes the exact canonical feature branch name and
+`featureHeadSha` for publication and remote `build:compile` execution.
+Delivery Pipeline Team Gizmo routes that packet to PR Lifecycle, which performs
+the canonical push and remote invocation after verifying the branch and SHA.
+It authorizes Delivery Pipeline Team Gizmo to route PR Lifecycle's bounded
+`dev:land` operation for the completed feature.
 The manually run Dev Manager inside Delivery Pipeline owns remote dev
 publication and main promotion.
 
@@ -35,9 +38,11 @@ The active Gizmo harness and its required Team Agent dispatch are mandatory.
 - Gizmo Prime verifies committed Team Agent handoffs and integrates them in
   serialized order.
 - Pull-request operations remain with Delivery Pipeline's PR Lifecycle Agent
-  or Dev Manager path. Gizmo, Team Gizmos, and Team Agents do not create or
-  update pull requests; only manager-only `dev:pr-manager` creates or updates
-  the dev-to-main PR.
+  or Dev Manager path. Gizmo Prime authors the canonical feature publication
+  and remote-task packet; PR Lifecycle performs those mechanics only for the
+  exact named branch and SHA. Gizmo, Team Gizmos, and Team Agents do not create
+  or update pull requests; only manager-only `dev:pr-manager` creates or
+  updates the dev-to-main PR.
 
 ### Prohibited actions
 
@@ -102,8 +107,10 @@ Gizmo owns:
 
 The Dev Manager controls dev PR creation/update, slow evidence, readiness, and
 promotion. Team Gizmos route authorized mechanics to their internal Team
-Agents; Delivery Pipeline's PR Lifecycle Agent performs those mechanics only
-under a manager packet.
+Agents; Delivery Pipeline's PR Lifecycle Agent performs those mechanics under
+the applicable manager packet or Prime-authored canonical feature packet.
+PR Lifecycle must never push a temporary leaf branch or invoke a remote task
+while checked out on one.
 
 Gizmo delegates all GitHub execution, including read-only commands and wrappers,
 to Delivery Pipeline Team Gizmo, which dispatches the
@@ -114,8 +121,9 @@ explicit operation packet from the controller that owns the requested stage.
 
 Workers send missing PR-information requests to Gizmo through the active
 harness. Gizmo routes dev PR evidence requests to the Dev Manager. The manager
-authorizes PR Lifecycle's collection and returns the result. Gizmo may directly
-authorize feature compilation evidence and local landing requests.
+authorizes PR Lifecycle's collection and returns the result. Gizmo Prime
+authorizes the exact feature branch publication and compilation request, plus
+local landing requests.
 
 Gizmo does not:
 
@@ -192,7 +200,9 @@ worker boundary.
 5. Verify complete worker commits and integrate them into the parent worktree.
 6. Co-validate returned changes and interface evidence.
 7. Route corrections to the responsible team.
-8. Push the feature branch and obtain remote build-only evidence.
+8. Authorize Delivery Pipeline Team Gizmo to route PR Lifecycle's packet. PR
+   Lifecycle pushes the exact canonical feature branch and invokes the remote
+   build-only task after verifying the named branch and `featureHeadSha`.
 9. Complete the user-selected terminal state.
 
 For a feature mission, completion includes code review, remote compilation of

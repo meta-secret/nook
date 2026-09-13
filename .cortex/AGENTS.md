@@ -289,7 +289,10 @@ The active harness owns dynamic admission capacity and actual spawn results.
   - Team workers author meaningful tests but do not execute them locally.
   - Only scoped rustfmt and bounded inexpensive TS diagnostics or formatting
     are permitted local feedback.
-  - Gizmo pushes the feature branch and requests remote build-only execution.
+  - Gizmo Prime authorizes the exact canonical feature branch name and
+    `featureHeadSha` for publication and remote build-only execution.
+  - Delivery Pipeline's PR Lifecycle Agent performs that packetized push and
+    remote task invocation only after verifying the canonical ref and SHA.
   - Completed features enter local dev through serialized local integration.
   - The dev manager alone publishes dev and requests full slow PR validation.
 - **Feature ownership**
@@ -405,11 +408,18 @@ The active harness owns dynamic admission capacity and actual spawn results.
 - The same boundary applies to Task, Loom, scripts, and other wrappers that
   invoke `gh` or perform GitHub API operations.
 - Gizmo owns decisions, local authoring, shared-branch sequencing, and ordinary
-  `git` preparation, fetch, commit, and push.
-- The PR Lifecycle Agent has one narrow local Git exception: mechanically invoke bounded
-  local integration, snapshot publication, or fast-forward promotion under the owning controller's
-  packet. Gizmo authorizes local integration; the dev manager authorizes publication
-  and promotion. This grants no general shared-branch Git authority.
+  `git` preparation, fetch, and commit.
+- Gizmo Prime authors the exact canonical feature branch name and
+  `featureHeadSha` in the feature delivery packet.
+- The PR Lifecycle Agent must push that canonical feature branch and invoke its
+  remote task under the Prime-authored packet after verifying the checkout and
+  SHA. It must not push a temporary leaf branch or dispatch while checked out
+  on one.
+- The PR Lifecycle Agent also has a narrow local Git exception: it may
+  mechanically invoke bounded local integration, snapshot publication, or
+  fast-forward promotion under the owning controller's packet. Gizmo
+  authorizes local integration; the dev manager authorizes publication and
+  promotion. This grants no general shared-branch Git authority.
 - Functional teams diagnose evidence returned by the PR Lifecycle Agent.
 - Each controller authors its stage's Workbench records and decides outcomes.
   The PR Lifecycle Agent publishes only the issuing controller's exact content
@@ -425,6 +435,9 @@ The active harness owns dynamic admission capacity and actual spawn results.
 
 - Gizmo, the dev manager, and functional Team Agents must not execute `gh`, even for read-only
   inspection, authentication, or version checks.
+- Feature Gizmos, Team Gizmos, the Dev Manager, and functional Team Agents must
+  not push the canonical feature branch or invoke its remote task. They return
+  typed readiness or evidence packets to Gizmo Prime.
 - A read-only worker assignment does not authorize `gh pr view` or monitoring.
 - Functional Team Agents must not start or contact the PR Lifecycle Agent
   directly. Route requests through their Team Gizmo and Gizmo Prime even when
@@ -456,16 +469,23 @@ The remote task selectors map local validation work to hosted execution:
 
 Run hosted validation from a clean, committed non-main branch:
 
-1. Push the branch and confirm that the remote branch is at the same commit as
-   local `HEAD`.
-2. Have Delivery Pipeline Team Gizmo issue a PR Lifecycle Agent packet for
-   one remote task with `task remote TASK_NAME=<task>`, for example
+1. Gizmo Prime authors a packet naming the canonical feature branch and exact
+   `featureHeadSha`.
+2. Delivery Pipeline Team Gizmo forwards that packet unchanged to the PR
+   Lifecycle Agent.
+3. The PR Lifecycle Agent verifies the canonical checkout and pushes the
+   exact SHA, then invokes one remote task with
+   `task remote TASK_NAME=<task>`; for example,
    `task remote TASK_NAME=loom:verify`.
-3. Have Delivery Pipeline Team Gizmo issue one PR Lifecycle Agent packet for
-   compatible tasks together with
-   `task remote TASK_NAMES=<task-a>,<task-b>` when one hosted job is preferred.
-4. Have the PR Lifecycle Agent inspect the exact-head run and return its URL and
-   result through Team Gizmo to the owning controller.
+4. The PR Lifecycle Agent must invoke compatible tasks together with
+   `task remote TASK_NAMES=<task-a>,<task-b>` when the Prime packet requests
+   one hosted job.
+5. The PR Lifecycle Agent inspects the exact-head run and returns its URL and
+   result through Team Gizmo to Gizmo Prime.
+
+The same authority applies to `workflow_dispatch` and every other hosted
+remote-task entry point. A temporary leaf or Team Gizmo branch is never a
+valid source for publication or dispatch.
 
 `task remote` rejects a dirty checkout, `main`, an unpushed branch, or a local
 `HEAD` that differs from the remote branch. The remote runner invokes the

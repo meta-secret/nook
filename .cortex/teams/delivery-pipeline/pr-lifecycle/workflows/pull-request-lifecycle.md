@@ -34,7 +34,10 @@ manager owns publication, slow PR validation, and promotion.
 
 1. Confirm the packet's live target and expected SHA.
 2. Execute the named operation.
-   - Feature compilation uses remote build-only execution.
+   - Feature compilation first verifies the Prime-authorized canonical branch
+     and exact SHA, then pushes that ref and invokes the remote build-only task.
+     Temporary leaf and Team Gizmo branches are never pushed or used as the
+     workflow ref.
    - Local landing uses local integration with positive feature build evidence.
    - Manager publication uses snapshot publication.
 3. The dev manager invokes `dev:pr-manager` to create or update one open

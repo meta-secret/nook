@@ -24,8 +24,11 @@ receives the terminal handoff. The PR Lifecycle Agent returns evidence to that p
 which forwards it to the controller that owns the policy.
 Feature Gizmo controls feature compilation, review, and local landing requests.
 The Dev Manager controls dev PR creation/update through `dev:pr-manager`, plus
-slow evidence, readiness, and promotion. The PR Lifecycle Agent observes the resulting PR and
-performs only manager-authorized review, check, and promotion mechanics.
+slow evidence, readiness, and promotion. For feature delivery, Gizmo Prime
+authorizes the canonical branch name and exact SHA; PR Lifecycle pushes that
+ref and invokes its remote task. It performs manager-authorized review, check,
+and promotion mechanics for the dev cycle.
 
-The PR Lifecycle Agent never creates or updates a pull request, chooses functional
-ownership, or decides readiness or promotion.
+The PR Lifecycle Agent never pushes a temporary leaf branch, invokes a remote
+task from a temporary checkout, creates or updates a pull request, chooses
+functional ownership, or decides readiness or promotion.

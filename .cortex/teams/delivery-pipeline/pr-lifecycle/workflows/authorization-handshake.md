@@ -23,7 +23,11 @@ Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
     the packet.
   - Team Gizmo may translate packet shape but may not add authority.
 - **Allowed task authority**
-  - A feature Gizmo authorizes remote build-only execution and bounded local integration.
+  - Gizmo Prime authorizes the canonical feature branch name and exact
+    `featureHeadSha`; Delivery Pipeline routes that packet to PR Lifecycle for
+    the required branch push and remote build-only execution.
+  - A Feature Gizmo authorizes bounded local integration after it receives the
+    resulting evidence.
   - A dev manager authorizes snapshot publication, slow PR checks, and fast-forward promotion.
   - A landing packet names the feature SHA and assigned local dev checkout.
   - The landing tool verifies positive build evidence and serializes integration.
@@ -52,6 +56,8 @@ Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
 ## Prohibited actions
 
 - Do not infer authority for another SHA, branch, repository, or operation.
+- Do not push a temporary leaf or Team Gizmo branch. Do not invoke `task
+  remote` or `workflow_dispatch` while checked out on a temporary branch.
 - Do not grant PR Lifecycle Agent general shared-branch Git authority.
 - Do not waive checks, security verdicts, or unresolved review findings.
 - Do not use automatic administrator fallback after a rejection.
