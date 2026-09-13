@@ -262,7 +262,7 @@ COPY agentic-ai/minds/hive-console/tsconfig.compile.json ./
 RUN bun run contracts \
     && node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json \
     && node_modules/.bin/tsc --noEmit -p tsconfig.compile.json \
-    && bun run build \
+    && node_modules/.bin/vite build \
     && mkdir -p /opt/nook \
     && touch /opt/nook/hive-console-compile-passed
 
@@ -325,15 +325,31 @@ RUN cd nook-app/nook-web/nook-web-app \
        VITE_PUBLIC_APP_URL="${VITE_PUBLIC_APP_URL}" \
        VITE_SIMPLE_APP_URL="${VITE_SIMPLE_APP_URL}" \
        VITE_SENTINEL_APP_URL="${VITE_SENTINEL_APP_URL}" \
-       bun run build
+       node_modules/.bin/vite build --mode unified \
+    && VITE_BASE="${VITE_BASE}" \
+       VITE_SITE_URL="${VITE_SITE_URL}" \
+       VITE_PUBLIC_APP_URL="${VITE_PUBLIC_APP_URL}" \
+       VITE_SIMPLE_APP_URL="${VITE_SIMPLE_APP_URL}" \
+       VITE_SENTINEL_APP_URL="${VITE_SENTINEL_APP_URL}" \
+       node_modules/.bin/vite build --mode site
+RUN cd nook-app/nook-web/nook-vault-simple \
+    && VITE_SITE_URL="${VITE_SITE_URL}" \
+       VITE_SIMPLE_APP_URL="${VITE_SIMPLE_APP_URL}" \
+       ../nook-web-app/node_modules/.bin/vite build
+RUN cd nook-app/nook-web/nook-vault-sentinel \
+    && VITE_SIMPLE_APP_URL="${VITE_SIMPLE_APP_URL}" \
+       VITE_SENTINEL_APP_URL="${VITE_SENTINEL_APP_URL}" \
+       ../nook-web-app/node_modules/.bin/vite build
+RUN cd nook-app/nook-web/nook-web-app \
+    && bun scripts/assemble-preview.ts
 RUN cd nook-app/nook-web/nook-web-extension \
     && NOOK_SIMPLE_VAULT_URL="${NOOK_SIMPLE_VAULT_URL}" \
        NOOK_EXTENSION_CHANNEL="${NOOK_EXTENSION_CHANNEL}" \
        NOOK_EXTENSION_VERSION="${NOOK_EXTENSION_VERSION}" \
        NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}" \
        NOOK_EXTENSION_SITE_URL="${NOOK_EXTENSION_SITE_URL}" \
-       bun run build
-RUN cd nook-app/nook-web/nook-web-research && bun run build
+       bun scripts/build.ts
+RUN cd nook-app/nook-web/nook-web-research && node_modules/.bin/vite build
 RUN mkdir -p /opt/nook && touch /opt/nook/web-compile-passed
 
 FROM registry.dev.nokey.sh/library/node:24-trixie-slim@sha256:0711b541c1c33a8a530ac4f0d391baa9a15b3d804695b1b24a47daa5fb60e74d AS compile-ci-agent
@@ -343,7 +359,7 @@ COPY agentic-ai/ci-agent/package.json agentic-ai/ci-agent/package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY agentic-ai/ci-agent/tsconfig.json ./
 COPY agentic-ai/ci-agent/src/main src/main
-RUN npm run build \
+RUN node_modules/.bin/tsc \
     && mkdir -p /opt/nook \
     && touch /opt/nook/ci-agent-compile-passed
 

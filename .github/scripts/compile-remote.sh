@@ -19,7 +19,8 @@ active_compile_dockerfile="$(sed -E '/^[[:space:]]*#/d; s/[[:space:]]+#.*$//' "$
 forbidden_compile_patterns=(
   'cargo[[:space:]]+test'
   'cargo[[:space:]]+clippy'
-  '(bun|npm|pnpm|yarn)[[:space:]]+(run[[:space:]]+)?test'
+  '(bun|npm|pnpm|yarn)[[:space:]]+(run[[:space:]]+)?(test|check|lint|verify|audit|coverage|e2e|preflight)([^[:alnum:]_]|$)'
+  '(bun|npm|pnpm|yarn)[[:space:]]+run[[:space:]]+build([^[:alnum:]_]|$)'
   'coverage'
   '(^|[^[:alnum:]_])e2e([^[:alnum:]_]|$)'
   '(^|[^[:alnum:]_])preflight([^[:alnum:]_]|$)'
