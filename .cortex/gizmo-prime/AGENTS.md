@@ -62,6 +62,20 @@ The active Gizmo harness and its required Team Agent dispatch are mandatory.
    creating any feature, Team Gizmo, or leaf branch.
 7. Stop loading Cortex when the delivery decision has enough evidence.
 
+## Fresh-base bootstrap
+
+Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
+`git fetch --prune origin`; a fetch failure fails the run closed.
+Delivery/Dev Manager then synchronizes canonical local `main` to the fetched
+`origin/main` and brings canonical local `dev` onto or including that main
+baseline under the dev-delivery workflow. If local dev is not current with
+main, the run fails closed. Prime records both the exact fetched `origin/main` SHA
+and the exact synchronized local-dev SHA in the mission packet and every child
+handoff. New feature work starts from that pinned local-dev SHA unless the user
+explicitly selects another base and Prime records that choice. Team Gizmos and
+leaves consume the pinned local-dev SHA; they must not use stale local refs or
+resolve or guess a base independently.
+
 ## Communication
 
 Follow the universal [agent communication](../AGENTS.md#agent-communication)

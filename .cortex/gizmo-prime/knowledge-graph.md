@@ -25,6 +25,18 @@ a fixed numeric agent or subagent concurrency cap. A Team Gizmo may run
 disjoint specialists concurrently, integrates their committed results into the
 feature branch, and never creates or updates pull requests.
 
+Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
+`git fetch --prune origin`; a fetch failure fails closed. Delivery/Dev Manager
+then synchronizes canonical local `main` to the fetched `origin/main` and
+brings canonical local `dev` onto or including that main baseline under the
+dev-delivery workflow. If local dev is not current with main, the run fails
+closed. Prime records both the exact fetched `origin/main` SHA and the exact
+synchronized local-dev SHA in the mission packet and every child handoff. New
+feature work starts from that pinned local-dev SHA unless the user explicitly
+selects another base and Prime records that choice. Team Gizmos and leaves
+consume the pinned local-dev SHA and must not use stale local refs or resolve
+or guess a base independently.
+
 - [AI Team Gizmo](../teams/ai/gizmo/knowledge-graph.md)
 - [Development Core Team Gizmo](../teams/dev-core/gizmo/knowledge-graph.md)
 - [Security Team Gizmo](../teams/security/gizmo/knowledge-graph.md)

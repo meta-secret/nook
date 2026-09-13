@@ -66,6 +66,15 @@ Model text.
   expect(markdown).toContain(
     'Each Team Gizmo requests Fast mode with `service_tier: fast`',
   );
+  expect(markdown).toContain(
+    'Before planning, delegation, worktree creation, or edits, Gizmo Prime runs',
+  );
+  expect(markdown).toContain(
+    '`git fetch --prune origin`; a fetch failure fails closed.',
+  );
+  expect(markdown).toContain(
+    'Team Gizmos and leaves consume the pinned local-dev SHA and must not use',
+  );
   expect(markdown).not.toContain('rules.md');
   expect(markdown).not.toContain('#overview');
 });
@@ -90,6 +99,7 @@ test('renders the complete canonical Cortex context router', () => {
 
   const teamOwnershipContracts = [
     '[Gizmo Prime](gizmo-prime/knowledge-graph.md): planning, delegation, integration,',
+    'New feature and child branches follow the [branch naming contract](gizmo-prime/dynamic-skills/branch-naming.md).',
     '[Dev delivery architecture](gizmo-prime/architecture/dev-delivery.md): canonical',
     'feature review, feature acceptance, local landing requests, and Workbench.',
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md): operational',
@@ -106,6 +116,50 @@ test('renders the complete canonical Cortex context router', () => {
   expect(markdown).toContain('return to the selected owning context');
   expect(markdown).toContain('foreign-team write requirement to Gizmo Prime');
   expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
+});
+
+test('keeps AI and Delivery Pipeline authority links on the canonical tree', () => {
+  const aiGraph = readFileSync(
+    new URL('../../../../../../teams/ai/knowledge-graph.md', import.meta.url),
+    'utf8',
+  );
+  const aiSkills = readFileSync(
+    new URL(
+      '../../../../../../teams/ai/dynamic-skills/index.md',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const pipelineGizmo = readFileSync(
+    new URL(
+      '../../../../../../teams/delivery-pipeline/gizmo/AGENTS.md',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const pipelineGraph = readFileSync(
+    new URL(
+      '../../../../../../teams/delivery-pipeline/gizmo/knowledge-graph.md',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+
+  expect(aiGraph).toContain(
+    '[Dev manager context](../delivery-pipeline/dev-manager/AGENTS.md)',
+  );
+  expect(aiSkills).toContain(
+    '[Dev publication](../../delivery-pipeline/dev-manager/dynamic-skills/dev-publish.md)',
+  );
+  expect(aiSkills).toContain(
+    '[Dev promotion](../../delivery-pipeline/dev-manager/dynamic-skills/dev-promote.md)',
+  );
+  expect(pipelineGizmo).toContain(
+    '[Delivery Pipeline team contract](../AGENTS.md)',
+  );
+  expect(pipelineGraph).toContain(
+    '[Delivery Pipeline team contract](../AGENTS.md)',
+  );
 });
 
 test('keeps Delivery Pipeline direct-child ownership in its parent graph', () => {

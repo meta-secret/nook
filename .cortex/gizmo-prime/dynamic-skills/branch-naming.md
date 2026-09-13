@@ -96,6 +96,9 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 - Prime routes additions concurrently when dependencies are ready and scopes are
   disjoint.
 - Prime remains the user-facing mission coordinator and root, not a subagent.
+- Prime's pinned local-dev SHA is the source state for new feature work. Team
+  Gizmos and leaves consume that same pinned SHA and never resolve or guess a
+  base independently.
 
 Follow [Team Agent Delegation](../workflows/subagent-delegation.md) for packet,
 worktree, and integration sequencing.

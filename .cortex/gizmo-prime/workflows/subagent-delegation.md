@@ -28,6 +28,17 @@ Prime-to-Team-Gizmo dispatch chain.
 ## Rules
 
 - Follow [dev delivery](../architecture/dev-delivery.md) for stage boundaries.
+- Gizmo Prime must complete the fresh-base bootstrap before planning,
+  delegation, worktree creation, or edits: run `git fetch --prune origin` and
+  fail closed on failure.
+  Delivery/Dev Manager synchronizes canonical local `main` to the fetched
+  `origin/main`, then brings canonical local `dev` onto or including that main
+  baseline under the dev-delivery workflow; stale local dev fails closed. Prime
+  records both the exact fetched `origin/main` SHA and exact synchronized local-dev
+  SHA, pins the local-dev SHA in the mission packet, and starts new feature
+  work from it unless the user explicitly selects another base and Prime
+  records that choice. Team Gizmos and leaves consume the pinned local-dev SHA
+  and never use stale local refs or resolve or guess a base independently.
 - Apply the [branch naming contract](../dynamic-skills/branch-naming.md) to
   every new Prime, Team Gizmo, and leaf branch.
 - Author tests without executing them in the feature stage.
@@ -50,6 +61,8 @@ Prime-to-Team-Gizmo dispatch chain.
   delegation transport.
 - Create exactly one child worktree for each Team Agent from the parent feature
   worktree's current committed frontier.
+- Pass the Prime-pinned local-dev base SHA through every child packet and
+  handoff.
 - Bind the child path and branch to the task and attempt identity.
 - The child worktree must be disjoint from the parent and every other active
   child worktree.

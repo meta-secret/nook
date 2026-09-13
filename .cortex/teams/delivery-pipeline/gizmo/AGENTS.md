@@ -17,7 +17,7 @@ second root delivery owner.
 ## Context loading
 
 1. Read the complete [multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md).
-2. Read the [Delivery Pipeline team contract](../../AGENTS.md).
+2. Read the [Delivery Pipeline team contract](../AGENTS.md).
 3. Read this agent's [knowledge graph](knowledge-graph.md).
 4. Apply the [branch naming contract](../../../gizmo-prime/dynamic-skills/branch-naming.md)
    before creating a team or leaf branch.

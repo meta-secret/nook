@@ -7,7 +7,7 @@ packet.
 
 - [Team Gizmo contract](AGENTS.md) defines parent reporting, decomposition,
   internal dispatch, exact-SHA handoffs, and escalation.
-- [Delivery Pipeline team contract](../../AGENTS.md) defines the team's
+- [Delivery Pipeline team contract](../AGENTS.md) defines the team's
   boundary and responsibility split.
 
 ## Delivery authorities

@@ -15,6 +15,8 @@ It handles only AI-owned Loom work named in the packet.
 ## Required actions
 
 - Accept the packet from AI Team Gizmo through the active harness.
+- Consume the local-dev base SHA pinned by Gizmo Prime; do not use stale local
+  refs or resolve or guess a base independently.
 - Read only the parent authorities and task-specific evidence needed for the packet.
 - Write only the assigned AI-owned Loom scope.
 - Commit the complete scoped iteration during the granted commit turn.

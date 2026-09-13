@@ -34,6 +34,54 @@ non-Gizmo root, including an ordinary Codex task, thread, cloud task, or
 external agent, is not a fallback and cannot substitute for the Prime-to-Team
 Gizmo dispatch chain.
 
+### Fresh-base bootstrap
+
+Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
+`git fetch --prune origin`; a fetch failure fails the run closed.
+Delivery/Dev Manager then synchronizes canonical local `main` to the fetched
+`origin/main` and brings canonical local `dev` onto or including that main
+baseline under the dev-delivery workflow. If local dev is not current with
+main, the run fails closed. Prime records both the exact fetched `origin/main` SHA
+and the exact synchronized local-dev SHA in the mission packet and every child
+handoff. New feature work starts from that pinned local-dev SHA unless the user
+explicitly selects another base and Prime records that choice. Team Gizmos and
+leaves consume the pinned local-dev SHA; they must not use stale local refs or
+resolve or guess a base independently.
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Prime as Gizmo Prime
+    participant Origin as fetched origin/main
+    participant Manager as Delivery/Dev Manager
+    participant Main as canonical local main
+    participant Dev as canonical local dev
+    participant Team as Team Gizmo
+    participant Leaf as Team Agent
+
+    User->>Prime: Request mission
+    Prime->>Origin: git fetch --prune origin
+    alt Fetch fails
+        Origin-->>Prime: Fetch failure
+        Prime-->>User: Fail closed; no planning or edits
+    else Fetch succeeds
+        Origin-->>Prime: Refreshed refs
+        Prime->>Origin: Resolve exact fetched origin/main SHA
+        Prime->>Manager: Synchronize local main to fetched origin/main
+        Manager->>Main: Advance canonical local main
+        Manager->>Dev: Bring local dev onto or including main baseline
+        alt Local dev is not current with main
+            Dev-->>Prime: Dev/main currency failure
+            Prime-->>User: Fail closed; no planning or edits
+        else Local dev is current with main
+            Dev-->>Prime: Exact local-dev SHA
+            Prime->>Prime: Record origin/main SHA and pin local-dev SHA
+            Prime->>Team: Issue packet with pinned local-dev SHA
+            Team->>Leaf: Forward the same pinned local-dev SHA
+        end
+    end
+```
+
 ## Hierarchy and reporting
 
 Gizmo Prime is the mission/root coordinator. Every team has one Team Gizmo
@@ -190,6 +238,7 @@ sequenceDiagram
         participant Checks as external:feature-checks
     end
 
+    Prime->>Prime: Bootstrap and record the pinned local-dev SHA
     Prime->>Gizmo: Issue feature ownership packet
     Gizmo->>Gizmo: Plan complete feature
     Gizmo->>Code: Assign Rust and domain work

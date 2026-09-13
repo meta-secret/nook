@@ -13,9 +13,9 @@ Harness profile directories must not mirror or redefine these cards.
 
 ## Skill catalog
 
-- **[Dev publication](../../dev-manager/dynamic-skills/dev-publish.md)**
+- **[Dev publication](../../delivery-pipeline/dev-manager/dynamic-skills/dev-publish.md)**
   - Purpose: Manually publish dev snapshots and coordinate full slow validation.
-- **[Dev promotion](../../dev-manager/dynamic-skills/dev-promote.md)**
+- **[Dev promotion](../../delivery-pipeline/dev-manager/dynamic-skills/dev-promote.md)**
   - Purpose: Fast-forward main to the tested dev SHA with verified remote state.
 - **[team-oriented-development.md](../../../gizmo-prime/dynamic-skills/team-oriented-development.md)**
   - Purpose: Route capabilities across the root/controller graphs plus six engineering/operational owner graphs, including Delivery Pipeline and its nested internal graphs, with optional bounded expertise providers and Gizmo-owned cross-team joins

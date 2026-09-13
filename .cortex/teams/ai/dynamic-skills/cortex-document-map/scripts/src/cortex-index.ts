@@ -312,6 +312,18 @@ worktree. Prime reuses a compatible existing Team Agent before spawning.
 Otherwise it issues separate child worktrees for required specialists. Team
 Gizmo integrates specialist commits into its feature branch.
 
+Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
+`git fetch --prune origin`; a fetch failure fails closed. Delivery/Dev Manager
+then synchronizes canonical local `main` to the fetched `origin/main` and
+brings canonical local `dev` onto or including that main baseline under the
+dev-delivery workflow. If local dev is not current with main, the run fails
+closed. Prime records both the exact fetched `origin/main` SHA and the exact
+synchronized local-dev SHA in the mission packet and every child handoff. New
+feature work starts from that pinned local-dev SHA unless the user explicitly
+selects another base and Prime records that choice. Team Gizmos and leaves
+consume the pinned local-dev SHA and must not use stale local refs or resolve
+or guess a base independently.
+
 Active harness admission is dynamic. Gizmo immediately attempts every
 dependency-ready Team Gizmo with a disjoint scope concurrently and uses the
 actual admission result. A temporary admission refusal queues work for retry when capacity
@@ -343,6 +355,10 @@ Current specialist routing includes SRE (`teams/sre/provisioning/` and
   feature compilation, local integration, and dev-to-main contract.
 - [Gizmo Prime](gizmo-prime/knowledge-graph.md): planning, delegation, integration,
   feature review, feature acceptance, local landing requests, and Workbench.
+  New feature and child branches follow the [branch naming contract](gizmo-prime/dynamic-skills/branch-naming.md).
+- [Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md): operational
+  delivery mechanics across CI, pull-request lifecycle, dev publication,
+  workflow execution, local landing, evidence, and guarded promotion.
 - [AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,
   routing, and AI automation.
 - [Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault
