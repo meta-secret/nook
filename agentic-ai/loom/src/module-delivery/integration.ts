@@ -9,7 +9,6 @@ import type {
   IntegrationStateUpdate,
   ModuleDeliveryIntegratedWriterFrontierCapability,
   AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
-  IntegratedWriterFrontierProvenance,
   MintIntegratedWriterFrontierRequest,
 } from './integration-contracts.ts';
 export type {
@@ -28,7 +27,7 @@ import {
 } from './integration-provenance.ts';
 import { ModuleWaveTree } from './tree-integration.ts';
 import { ModuleWriterFrontierRegistry } from './integration-writer-frontiers.ts';
-import { ModuleIntegrationCapabilityRegistry } from './integration-capabilities.ts';
+import { ModuleIntegrationCapabilityProvenance } from './integration-capability-provenance.ts';
 import { CanonicalWriterClosure } from './integration-finalization.ts';
 import type { CanonicalModuleFinalizationInspection } from './integration-finalization.ts';
 import { ModuleGenerationAuthority } from './admission.ts';
@@ -92,39 +91,14 @@ const PROHIBITED_MATERIALIZATION_FILES = new Set([
   '.gitmodules',
   '.lfsconfig',
 ]);
-type CapabilityBridge = {
-  frontierProvenance: (capability: ModuleDeliveryIntegratedWriterFrontierCapability) => IntegratedWriterFrontierProvenance | undefined;
-  transitionProvenance: (transition: ModuleDeliveryCanonicalEvidenceTransition) => CanonicalEvidenceTransitionProvenance | undefined;
-};
-const capabilityProvenance = (() => {
-  const frontiers = new WeakMap<ModuleDeliveryIntegratedWriterFrontierCapability, IntegratedWriterFrontierProvenance>();
-  const transitions = new WeakMap<ModuleDeliveryCanonicalEvidenceTransition, CanonicalEvidenceTransitionProvenance>();
-  return Object.freeze({
-    frontierProvenance: (capability: ModuleDeliveryIntegratedWriterFrontierCapability) =>
-      frontiers.get(capability),
-    transitionProvenance: (transition: ModuleDeliveryCanonicalEvidenceTransition) =>
-      transitions.get(transition),
-    recordFrontier: (
-      capability: ModuleDeliveryIntegratedWriterFrontierCapability,
-      provenance: IntegratedWriterFrontierProvenance,
-    ) => frontiers.set(capability, provenance),
-    recordTransition: (
-      transition: ModuleDeliveryCanonicalEvidenceTransition,
-      provenance: CanonicalEvidenceTransitionProvenance,
-    ) => transitions.set(transition, provenance),
-  });
-})();
-const bridgeValue = (globalThis as unknown as Record<symbol, unknown>)[
-  Symbol.for('nook.loom.module-integration-capability-bridge')
-];
-const capabilityBridges = Array.isArray(bridgeValue)
-  ? (bridgeValue as CapabilityBridge[])
-  : [];
-const coordinatorBridge = Object.freeze({
-  frontierProvenance: capabilityProvenance.frontierProvenance,
-  transitionProvenance: capabilityProvenance.transitionProvenance,
+const capabilityProvenance = new ModuleIntegrationCapabilityProvenance();
+/** Frozen read-only boundary for capability verification across the ESM cycle. */
+export const ModuleIntegrationCapabilityAssertions = Object.freeze({
+  assertModuleDeliveryIntegratedWriterFrontierCapability:
+    capabilityProvenance.assertFrontier.bind(capabilityProvenance),
+  assertModuleDeliveryCanonicalEvidenceTransition:
+    capabilityProvenance.assertTransition.bind(capabilityProvenance),
 });
-Object.defineProperty(globalThis, Symbol.for('nook.loom.module-integration-capability-bridge'), { configurable: false, enumerable: false, value: [...capabilityBridges, coordinatorBridge], writable: true });
 enum IntegrationHeadCommitKind {
   Pending = 'pending',
   Applied = 'applied',
@@ -161,16 +135,12 @@ export class ModuleIntegrationCoordinator {
   static assertModuleDeliveryIntegratedWriterFrontierCapability(
     request: AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
   ): void {
-    ModuleIntegrationCapabilityRegistry.assertModuleDeliveryIntegratedWriterFrontierCapability(
-      request,
-    );
+    capabilityProvenance.assertFrontier(request);
   }
   static assertModuleDeliveryCanonicalEvidenceTransition(
     request: AssertModuleDeliveryCanonicalEvidenceTransitionRequest,
   ): void {
-    ModuleIntegrationCapabilityRegistry.assertModuleDeliveryCanonicalEvidenceTransition(
-      request,
-    );
+    capabilityProvenance.assertTransition(request);
   }
   static #canonicalEvidenceTransition(
     request: CanonicalEvidenceTransitionProvenance,

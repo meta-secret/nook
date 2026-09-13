@@ -18,7 +18,7 @@ const ADMISSION_AUTHORITY_MODULE_PATH = fileURLToPath(
   new URL('../../src/module-delivery/admission-authority.ts', import.meta.url),
 );
 
-test('keeps the integration capability runtime graph acyclic', () => {
+test('keeps capability provenance closure-private across the ESM cycle', () => {
   const capabilitySource = readFileSync(CAPABILITY_MODULE_PATH, 'utf8');
   const integrationSource = readFileSync(INTEGRATION_MODULE_PATH, 'utf8');
   const admissionAuthoritySource = readFileSync(
@@ -26,15 +26,17 @@ test('keeps the integration capability runtime graph acyclic', () => {
     'utf8',
   );
 
-  expect(capabilitySource).toContain('capabilityBridges');
+  expect(capabilitySource).toContain("from './integration.ts'");
   expect(capabilitySource).not.toMatch(
     /\b(?:bindMintAuthority|accept(?:Integrated|Canonical)|register(?:Integrated|Canonical)|mint(?:Integrated|Canonical))/u,
   );
-  expect(capabilitySource).not.toContain('Object.getOwnPropertySymbols');
-  expect(capabilitySource).not.toContain("from './integration.ts'");
-  expect(admissionAuthoritySource).not.toContain("from './integration.ts'");
-  expect(integrationSource).not.toContain('CAPABILITY_MINT_AUTHORITY_TOKEN');
-  expect(integrationSource).not.toContain('Object.getOwnPropertySymbols');
+  expect(capabilitySource).not.toMatch(/Symbol\.for|globalThis|Object\.defineProperty/u);
+  expect(integrationSource).toContain('ModuleIntegrationCapabilityProvenance');
+  expect(integrationSource).toContain('ModuleIntegrationCapabilityAssertions');
+  expect(integrationSource).not.toMatch(/Symbol\.for|globalThis|Object\.defineProperty/u);
+  expect(admissionAuthoritySource).toContain(
+    'ModuleAdmissionStateCapabilityAuthorities',
+  );
   expect(admissionAuthoritySource).toContain(
     "from './integration-capabilities.ts'",
   );
@@ -98,6 +100,9 @@ test('keeps capability minting behind the coordinator boundary', async () => {
   ).toBe(false);
   expect(Object.hasOwn(directIndex, 'registerIntegratedWriterFrontier')).toBe(
     false,
+  );
+  expect(Object.isFrozen(directCoordinator.ModuleIntegrationCapabilityAssertions)).toBe(
+    true,
   );
 
   const rawCapability: ModuleDeliveryIntegratedWriterFrontierCapability = {

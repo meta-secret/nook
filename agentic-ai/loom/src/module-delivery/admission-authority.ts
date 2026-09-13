@@ -34,7 +34,6 @@ import {
 import { ModuleSourceAuthority } from './authority.ts';
 import { ModuleDeliveryTaskKind } from './domain.ts';
 import { ModuleEvidenceBoundary } from './evidence.ts';
-import { ModuleIntegrationCapabilityRegistry } from './integration-capabilities.ts';
 import { ModuleAdmissionStateRegistry } from './admission-state.ts';
 import type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
@@ -57,7 +56,9 @@ import type {
   ModuleDeliveryAuthorityRepositoryInspection,
   RecordModuleDeliveryAttemptDispositionRequest,
 } from './integration-provenance.ts';
-import type { ModuleDeliveryIntegratedWriterFrontierCapability } from './integration-contracts.ts';
+import type {
+  ModuleDeliveryIntegratedWriterFrontierCapability,
+} from './integration-contracts.ts';
 
 import type {
   AcceptedModuleDeliveryEvidenceInspection,
@@ -68,13 +69,14 @@ import type {
   ResourceConflictRequest,
 } from './authority.ts';
 import { ModuleAdmissionSource } from './admission-source.ts';
+import { ModuleAdmissionStateCapabilityAuthorities } from './admission-state-capability-authorities.ts';
 import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 const AUTHORITY = Symbol('module-delivery-generation-authority');
 const admissionStateStoreAuthorities = {
   assertCanonicalTransition:
-    ModuleIntegrationCapabilityRegistry.assertModuleDeliveryCanonicalEvidenceTransition,
+    ModuleAdmissionStateCapabilityAuthorities.assertCanonicalTransition,
   assertWriterFrontier:
-    ModuleIntegrationCapabilityRegistry.assertModuleDeliveryIntegratedWriterFrontierCapability,
+    ModuleAdmissionStateCapabilityAuthorities.assertWriterFrontier,
 };
 const admissionStateStore =
   ModuleAdmissionStateRegistry.createModuleDeliveryAdmissionStateStore(
