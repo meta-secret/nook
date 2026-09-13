@@ -38,7 +38,7 @@ import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-suppo
 import type { FixtureFileWrite, GitFixture } from './worktree-test-support.ts';
 
 export class ModuleDeliveryCortexAdmissionScenario {
-  private constructor(private readonly request: string) {}
+  private constructor(private readonly request: BootstrapCommitFixture) {}
 
   static write(request: CortexFixtureFileWriteRequest): void {
     const { fixture, relativePath } = request;
@@ -50,18 +50,18 @@ export class ModuleDeliveryCortexAdmissionScenario {
     ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile(fileWrite);
   }
 
-  static plan(sourceCommit: string): ModuleDeliveryPlanV3 {
-    return new ModuleDeliveryCortexAdmissionScenario(sourceCommit).execute();
+  static plan(request: BootstrapCommitFixture): ModuleDeliveryPlanV3 {
+    return new ModuleDeliveryCortexAdmissionScenario(request).execute();
   }
 
   private execute(): ModuleDeliveryPlanV3 {
-    const sourceCommit = this.request;
+    const request = this.request;
     return {
       version: 3,
       generation: 7,
-      sourceCommit,
-      originMainSha: sourceCommit,
-      pinnedLocalDevSha: sourceCommit,
+      sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -83,7 +83,7 @@ export class ModuleDeliveryCortexAdmissionScenario {
           consumerOutcome: 'SRE guidance and its shared index are current.',
           baseline: {
             kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit,
+            sourceCommit: request.pinnedLocalDevSha,
           },
           agentDepthLimit: 3,
           dependencies: [],
@@ -147,6 +147,12 @@ interface CortexFixtureFileWriteRequest {
   readonly relativePath: string;
 }
 
+type BootstrapCommitFixture = Readonly<{
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly sourceCommit: string;
+}>;
+
 describe('Cortex module-delivery admission', () => {
   test('freezes context reads, accepts regular blob modes, and records the lease', () => {
     const fixture =
@@ -181,7 +187,11 @@ describe('Cortex module-delivery admission', () => {
         fixture,
       )(['rev-parse', 'HEAD']);
       const accepted = ModuleDeliveryCortexAdmissionScenario.validate(
-        ModuleDeliveryCortexAdmissionScenario.plan(sourceCommit),
+        ModuleDeliveryCortexAdmissionScenario.plan({
+          originMainSha: fixture.originMainSha,
+          pinnedLocalDevSha: fixture.pinnedLocalDevSha,
+          sourceCommit,
+        }),
       );
       const generationRequest: CreateModuleDeliveryGenerationAuthorityRequest =
         {

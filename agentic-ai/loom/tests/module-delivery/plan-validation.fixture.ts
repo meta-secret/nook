@@ -32,7 +32,7 @@ export class ModuleDeliveryPlanValidationScenario {
       fixture.dependencies.length === 0
         ? {
             kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: SOURCE_COMMIT,
+            sourceCommit: PINNED_LOCAL_DEV_SHA,
           }
         : {
             kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
@@ -78,7 +78,7 @@ export class ModuleDeliveryPlanValidationScenario {
       fixture.dependencies.length === 0
         ? {
             kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: SOURCE_COMMIT,
+            sourceCommit: PINNED_LOCAL_DEV_SHA,
           }
         : {
             kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
@@ -149,8 +149,8 @@ export class ModuleDeliveryPlanValidationScenario {
       version: 3,
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
-      originMainSha: SOURCE_COMMIT,
-      pinnedLocalDevSha: SOURCE_COMMIT,
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: PARENT_OWNED_RESOURCES,
@@ -213,7 +213,11 @@ export class ModuleDeliveryPlanValidationScenario {
   }
 }
 
-export const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+export const SOURCE_COMMIT = '3'.repeat(40);
+
+export const ORIGIN_MAIN_SHA = '1'.repeat(40);
+
+export const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 export const PARENT_OWNED_RESOURCES: readonly string[] = [
   ...REQUIRED_PARENT_OWNED_RESOURCES,

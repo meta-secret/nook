@@ -52,7 +52,7 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
       consumerOutcome: 'The bounded team-owned change is delivered.',
       baseline: {
         kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: SOURCE_COMMIT,
+        sourceCommit: PINNED_LOCAL_DEV_SHA,
       },
       agentDepthLimit: 1,
       dependencies: [],
@@ -71,8 +71,8 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
       version: MODULE_DELIVERY_PLAN_VERSION,
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
-      originMainSha: SOURCE_COMMIT,
-      pinnedLocalDevSha: SOURCE_COMMIT,
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 1,
       maxAttempts: 1,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -91,7 +91,11 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
   }
 }
 
-const SOURCE_COMMIT = '1'.repeat(40);
+const SOURCE_COMMIT = '3'.repeat(40);
+
+const ORIGIN_MAIN_SHA = '1'.repeat(40);
+
+const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 test('keeps Delivery Pipeline out of ordinary product ownership', () => {
   for (const team of Object.values(TeamKey))

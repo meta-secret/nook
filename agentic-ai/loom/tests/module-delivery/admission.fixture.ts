@@ -63,7 +63,7 @@ export class ModuleDeliveryAdmissionScenario {
         dependencies.length === 0
           ? {
               kind: ModuleDeliveryBaselineKind.SourceCommit,
-              sourceCommit: SOURCE,
+              sourceCommit: PINNED_LOCAL_DEV_SHA,
             }
           : {
               kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
@@ -95,15 +95,16 @@ export class ModuleDeliveryAdmissionScenario {
   private execute(): ModuleDeliveryPlanV3 {
     const sourceCommit = this.request;
     const plan = structuredClone(PLAN);
-    const source = {
+    Object.assign(plan, {
       sourceCommit,
-      originMainSha: sourceCommit,
-      pinnedLocalDevSha: sourceCommit,
-    };
-    Object.assign(plan, source);
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+    });
     for (const node of plan.nodes)
       if (node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit)
-        Object.assign(node.baseline, source);
+        Object.assign(node.baseline, {
+          sourceCommit: PINNED_LOCAL_DEV_SHA,
+        });
     return plan;
   }
 
@@ -158,7 +159,7 @@ export class ModuleDeliveryAdmissionScenario {
     const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority,
       acceptedPlan: plan,
-      headCommit: SOURCE,
+      headCommit: plan.sourceCommit,
       integratedWriterFrontiers: [],
       acceptedEvidence: [],
     };
@@ -329,7 +330,11 @@ export class ModuleDeliveryAdmissionScenario {
 export const fixture =
   ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
 
-export const SOURCE = fixture.baselineCommit;
+export const ORIGIN_MAIN_SHA = fixture.originMainSha;
+
+export const PINNED_LOCAL_DEV_SHA = fixture.pinnedLocalDevSha;
+
+export const SOURCE = fixture.sourceCommit;
 
 export const ROOT = 'nook-app/nook-platform/nook-core';
 
@@ -431,8 +436,8 @@ export const PLAN: ModuleDeliveryPlanV3 = {
   version: 3,
   generation: 1,
   sourceCommit: SOURCE,
-  originMainSha: SOURCE,
-  pinnedLocalDevSha: SOURCE,
+  originMainSha: ORIGIN_MAIN_SHA,
+  pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
   maxAgentDepth: 3,
   maxAttempts: 2,
   parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

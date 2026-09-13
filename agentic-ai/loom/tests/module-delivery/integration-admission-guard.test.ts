@@ -38,7 +38,7 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
     return dependencies.length === 0
       ? {
           kind: ModuleDeliveryBaselineKind.SourceCommit as const,
-          sourceCommit: SOURCE_COMMIT,
+          sourceCommit: PINNED_LOCAL_DEV_SHA,
         }
       : {
           kind: ModuleDeliveryBaselineKind.IntegratedDependencies as const,
@@ -135,8 +135,8 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
       version: 3,
       generation: 1,
       sourceCommit: fixture.sourceCommit,
-      originMainSha: fixture.sourceCommit,
-      pinnedLocalDevSha: fixture.sourceCommit,
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -209,7 +209,11 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
   }
 }
 
-const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+const SOURCE_COMMIT = '3'.repeat(40);
+
+const ORIGIN_MAIN_SHA = '1'.repeat(40);
+
+const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 

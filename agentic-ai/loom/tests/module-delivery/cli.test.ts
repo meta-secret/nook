@@ -32,8 +32,8 @@ export class ModuleDeliveryCliScenario {
       version: 3,
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
-      originMainSha: SOURCE_COMMIT,
-      pinnedLocalDevSha: SOURCE_COMMIT,
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],
@@ -56,7 +56,7 @@ export class ModuleDeliveryCliScenario {
             'The delivery owner receives reviewed core evidence.',
           baseline: {
             kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: SOURCE_COMMIT,
+            sourceCommit: PINNED_LOCAL_DEV_SHA,
           },
           agentDepthLimit: 2,
           dependencies: [],
@@ -128,7 +128,11 @@ export class ModuleDeliveryCliScenario {
 
 const REPOSITORY_ROOT = resolve(import.meta.dir, '../../../..');
 
-const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+const SOURCE_COMMIT = '3'.repeat(40);
+
+const ORIGIN_MAIN_SHA = '1'.repeat(40);
+
+const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 

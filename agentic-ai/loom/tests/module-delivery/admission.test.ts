@@ -1,6 +1,8 @@
 import {
   ModuleDeliveryAdmissionScenario,
   ROOT,
+  ORIGIN_MAIN_SHA,
+  PINNED_LOCAL_DEV_SHA,
   SOURCE,
   PLAN,
   gamma,
@@ -102,6 +104,87 @@ const FOREIGN_SOURCE = ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(
 )(['rev-parse', 'HEAD']);
 
 describe('module delivery admission authority', () => {
+  test('keeps bootstrap commits distinct and rejects reversed ancestry', () => {
+    expect(new Set([ORIGIN_MAIN_SHA, PINNED_LOCAL_DEV_SHA, SOURCE]).size).toBe(
+      3,
+    );
+    expect(PLAN.originMainSha).toBe(ORIGIN_MAIN_SHA);
+    expect(PLAN.pinnedLocalDevSha).toBe(PINNED_LOCAL_DEV_SHA);
+    expect(PLAN.sourceCommit).toBe(SOURCE);
+    expect(
+      PLAN.nodes
+        .filter(
+          (node) =>
+            node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit,
+        )
+        .map((node) =>
+          node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit
+            ? node.baseline.sourceCommit
+            : '',
+        ),
+    ).toEqual([
+      PINNED_LOCAL_DEV_SHA,
+      PINNED_LOCAL_DEV_SHA,
+      PINNED_LOCAL_DEV_SHA,
+    ]);
+    const git = ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture);
+    expect(() =>
+      git([
+        'merge-base',
+        '--is-ancestor',
+        ORIGIN_MAIN_SHA,
+        PINNED_LOCAL_DEV_SHA,
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      git(['merge-base', '--is-ancestor', PINNED_LOCAL_DEV_SHA, SOURCE]),
+    ).not.toThrow();
+
+    const reversedBase = ModuleDeliveryAdmissionScenario.validate({
+      ...PLAN,
+      originMainSha: PINNED_LOCAL_DEV_SHA,
+      pinnedLocalDevSha: ORIGIN_MAIN_SHA,
+      nodes: PLAN.nodes.map((node) =>
+        node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit
+          ? {
+              ...node,
+              baseline: {
+                kind: ModuleDeliveryBaselineKind.SourceCommit,
+                sourceCommit: ORIGIN_MAIN_SHA,
+              },
+            }
+          : node,
+      ),
+    });
+    expect(() =>
+      ModuleGenerationAuthority.createModuleDeliveryGenerationAuthority(
+        ModuleDeliveryAdmissionScenario.authorityRequest(reversedBase),
+      ),
+    ).toThrow('pinnedLocalDevSha must include the fetched origin/main commit');
+
+    const reversedSource = ModuleDeliveryAdmissionScenario.validate({
+      ...PLAN,
+      pinnedLocalDevSha: SOURCE,
+      sourceCommit: PINNED_LOCAL_DEV_SHA,
+      nodes: PLAN.nodes.map((node) =>
+        node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit
+          ? {
+              ...node,
+              baseline: {
+                kind: ModuleDeliveryBaselineKind.SourceCommit,
+                sourceCommit: SOURCE,
+              },
+            }
+          : node,
+      ),
+    });
+    expect(() =>
+      ModuleGenerationAuthority.createModuleDeliveryGenerationAuthority(
+        ModuleDeliveryAdmissionScenario.authorityRequest(reversedSource),
+      ),
+    ).toThrow('sourceCommit must be descended from the pinned local-dev base');
+  });
+
   test('admits disjoint writers and rejects unproven writer frontiers', () => {
     const active = ModuleDeliveryAdmissionScenario.runtime(
       ModuleDeliveryAdmissionScenario.validate(PLAN),
@@ -596,7 +679,7 @@ describe('module delivery admission authority', () => {
       consumerOutcome: 'AI receives accepted provider evidence.',
       baseline: {
         kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: SOURCE,
+        sourceCommit: PINNED_LOCAL_DEV_SHA,
       },
       agentDepthLimit: 2,
       dependencies: [],

@@ -52,7 +52,7 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       consumerOutcome: `${request.taskId} Cortex guidance is current.`,
       baseline: {
         kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: SOURCE_COMMIT,
+        sourceCommit: PINNED_LOCAL_DEV_SHA,
       },
       agentDepthLimit: 2,
       dependencies: [],
@@ -89,8 +89,8 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       version: 3,
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
-      originMainSha: SOURCE_COMMIT,
-      pinnedLocalDevSha: SOURCE_COMMIT,
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -153,7 +153,11 @@ export class ModuleDeliveryCortexPlanValidationScenario {
   }
 }
 
-const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+const SOURCE_COMMIT = '3'.repeat(40);
+
+const ORIGIN_MAIN_SHA = '1'.repeat(40);
+
+const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 const SRE_SKILL = '.cortex/teams/sre/dynamic-skills/quality.md';
 

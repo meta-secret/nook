@@ -94,7 +94,7 @@ export class ModuleDeliveryEvidenceScenario {
       consumerOutcome: 'AI receives accepted core evidence.',
       baseline: {
         kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: fixture.baselineCommit,
+        sourceCommit: fixture.pinnedLocalDevSha,
       },
       agentDepthLimit: 2,
       dependencies: [],
@@ -172,9 +172,9 @@ export class ModuleDeliveryEvidenceScenario {
     const plan: ModuleDeliveryPlanV3 = {
       version: 3,
       generation: 1,
-      sourceCommit: fixture.baselineCommit,
-      originMainSha: fixture.baselineCommit,
-      pinnedLocalDevSha: fixture.baselineCommit,
+      sourceCommit: fixture.sourceCommit,
+      originMainSha: fixture.originMainSha,
+      pinnedLocalDevSha: fixture.pinnedLocalDevSha,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -209,7 +209,7 @@ export class ModuleDeliveryEvidenceScenario {
     const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority,
       acceptedPlan: result,
-      headCommit: fixture.baselineCommit,
+      headCommit: fixture.sourceCommit,
       integratedWriterFrontiers: [],
       acceptedEvidence: [],
     };
@@ -241,7 +241,7 @@ export class ModuleDeliveryEvidenceScenario {
       consumerOutcome: 'The bounded core change is delivered.',
       baseline: {
         kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: fixture.baselineCommit,
+        sourceCommit: fixture.pinnedLocalDevSha,
       },
       agentDepthLimit: 1,
       dependencies: [],
@@ -263,9 +263,9 @@ export class ModuleDeliveryEvidenceScenario {
     const plan: ModuleDeliveryPlanV3 = {
       version: 3,
       generation: 1,
-      sourceCommit: fixture.baselineCommit,
-      originMainSha: fixture.baselineCommit,
-      pinnedLocalDevSha: fixture.baselineCommit,
+      sourceCommit: fixture.sourceCommit,
+      originMainSha: fixture.originMainSha,
+      pinnedLocalDevSha: fixture.pinnedLocalDevSha,
       maxAgentDepth: 1,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -293,7 +293,7 @@ export class ModuleDeliveryEvidenceScenario {
     const state = ModuleGenerationAuthority.createModuleDeliveryAdmissionState({
       authority,
       acceptedPlan: accepted,
-      headCommit: fixture.baselineCommit,
+      headCommit: fixture.sourceCommit,
       integratedWriterFrontiers: [],
       acceptedEvidence: [],
     });
@@ -467,7 +467,7 @@ test('rejects forged evidence and restores a canonical redacted receipt after re
     const exact = ModuleDeliveryEvidenceScenario.submission(submissionRequest);
     const gitClaimRequest: ModuleDeliveryEvidenceDigestRequest = {
       repositoryRoot: active.fixture.sourceRoot,
-      sourceCommit: active.fixture.baselineCommit,
+      sourceCommit: active.fixture.sourceCommit,
       evidenceSurface: ['git:index'],
     };
     expect(() =>
@@ -544,7 +544,7 @@ test('rejects forged evidence and restores a canonical redacted receipt after re
     const forgedEvidence: AcceptedModuleDeliveryEvidence = {
       ...exact,
       sourceProvenanceDigest: 'f'.repeat(64),
-      verifiedHeadCommit: active.fixture.baselineCommit,
+      verifiedHeadCommit: active.fixture.sourceCommit,
     };
     const isolatedRegistry =
       evidenceAuthority.ModuleSourceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
@@ -560,7 +560,7 @@ test('rejects forged evidence and restores a canonical redacted receipt after re
     const forgedStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
-      headCommit: active.fixture.baselineCommit,
+      headCommit: active.fixture.sourceCommit,
       integratedWriterFrontiers: [],
       acceptedEvidence: [forgedEvidence],
     };
@@ -721,7 +721,7 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     const evidenceStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
-      headCommit: active.fixture.baselineCommit,
+      headCommit: active.fixture.sourceCommit,
       integratedWriterFrontiers: [],
       acceptedEvidence: [providerEvidence],
     };
@@ -808,7 +808,7 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     const completeStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
-      headCommit: active.fixture.baselineCommit,
+      headCommit: active.fixture.sourceCommit,
       integratedWriterFrontiers: [],
       acceptedEvidence: [providerEvidence, providerBEvidence],
     };
