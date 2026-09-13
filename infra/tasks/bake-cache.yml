@@ -189,9 +189,6 @@ tasks:
           local bake_status=$?
           set -e
           cat "$log_file"
-          if [ "$bake_status" -ne 0 ] && grep -Eq 'exporting cache to registry| CACHED$|bake-sim-' "$log_file"; then
-            return 0
-          fi
           return "$bake_status"
         }
 
