@@ -25,8 +25,9 @@ inputs:
     description: >-
       Allow hosted runners to publish only an isolated remote-buildcache ref keyed by
       git commit SHA (-git-<sha>) while using Main when that exact ref is absent. ARC
-      keeps large graphs in its node-local persistent shard. Never writes Main's
-      nook/buildcache refs.
+      keeps ordinary large graphs in its node-local persistent shard; the explicit
+      build:compile handoff may publish this portable isolated ref. Never writes
+      Main's nook/buildcache refs.
     required: false
     default: "false"
   require-e2e-cache:
@@ -216,10 +217,17 @@ runs:
           read_only=1
         fi
 
-        # ARC retains its solved graph in the persistent shard and does not publish
-        # exact-SHA caches. Do not probe refs this execution path never writes.
-        if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+        # ARC retains its solved graph in the persistent shard for ordinary PR and
+        # validation jobs. The manually dispatched build:compile handoff is the
+        # exception: its isolated git-scoped registry export is the portable cache
+        # that lets the next runner reuse Rust dependency layers. Keep the default
+        # ARC-local behavior for every other task and never publish a Main ref.
+        if [ "${NOOK_ARC_RUNNER:-}" = "1" ] \
+          && [ "${NOOK_REMOTE_TASK_SELECTION:-}" != "build:compile" ]; then
           isolated_cache_write=false
+          echo "ARC skips general exact-SHA registry export; Main and sccache remain reusable"
+        elif [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+          echo "ARC build:compile publishes an isolated exact-SHA registry cache"
         fi
 
         scope_suffix=""
@@ -337,6 +345,17 @@ runs:
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then
           # Native consumes exact dependency scopes and the complete native source graph.
           # Main source also owns fresh dependency-only restores after publication.
+          if [ "$cache_selection" = "general" ]; then
+            # build:compile has a separate Dockerfile lineage. Probe both its
+            # source-free dependency scope and complete source graph so the
+            # Bake target never merges exact and Main importers.
+            if [ -n "$scope_suffix" ]; then
+              publish_exact_availability GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE "nook-rust-compile-deps-v1$scope_suffix"
+              publish_exact_availability GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE "nook-build-compile-v1$scope_suffix"
+            fi
+            publish_main_availability GHA_CACHE_MAIN_RUST_COMPILE_DEPS_AVAILABLE "nook-rust-compile-deps-v1"
+            publish_main_availability GHA_CACHE_MAIN_BUILD_COMPILE_AVAILABLE "nook-build-compile-v1"
+          fi
           publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
           if [ -n "$scope_suffix" ]; then
             publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$scope_suffix"
@@ -426,15 +445,7 @@ runs:
         fi
         cache_write_enabled=""
         if [ "$isolated_cache_write" = "true" ]; then
-          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            # Even mode=min includes the final result layer. Rust dependency
-            # targets can exceed 15 GiB, so parallel PR uploads overload Zot's
-            # HDD and turn a successful verification into a cache failure.
-            # ARC keeps this node-local and reads Main plus sccache instead.
-            echo "ARC skips general exact-SHA registry export; Main and sccache remain reusable"
-          else
-            cache_write_enabled=1
-          fi
+          cache_write_enabled=1
         elif [ -z "$read_only" ] && [ "${{ inputs.cache-write }}" = "true" ]; then
           cache_write_enabled=1
         fi
