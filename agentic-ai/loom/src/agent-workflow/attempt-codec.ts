@@ -137,7 +137,6 @@ export class AgentAttemptTransport {
       PinnedDevBaseEvidenceContract.assertShape({
         originMainSha: metadata.originMainSha,
         pinnedLocalDevSha: metadata.pinnedLocalDevSha,
-        featureHeadSha: (metadata as AgentAttemptEventMetadata).featureHeadSha,
       });
     } else if (
       !/^[0-9a-f]{40}$/.test(metadata.originMainSha) ||
@@ -225,7 +224,6 @@ export class AgentAttemptTransport {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: event.originMainSha,
       pinnedLocalDevSha: event.pinnedLocalDevSha,
-      featureHeadSha,
     });
     return {
       ...event,

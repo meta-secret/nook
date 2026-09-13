@@ -3,9 +3,9 @@ import { TaskResourceClaim } from '../agent-workflow/domain.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 
-export const MODULE_DELIVERY_PLAN_VERSION = 4;
+export const MODULE_DELIVERY_PLAN_VERSION = 5;
 export type ModuleDeliveryPlanInputVersion =
-  1 | 2 | 3 | typeof MODULE_DELIVERY_PLAN_VERSION;
+  1 | 2 | 3 | 4 | typeof MODULE_DELIVERY_PLAN_VERSION;
 export const MAX_MODULE_DELIVERY_NODES = 64;
 /** A plan can describe every directed edge between distinct task nodes. */
 export const MAX_MODULE_DELIVERY_EDGE_CONTRACTS =
@@ -391,8 +391,26 @@ export type ModuleDeliveryPlanV3 = {
   readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
 };
 
-export type ModuleDeliveryPlanV4 = PinnedDevBaseEvidence & {
+/** Historical V4 plan shape. Its feature head is retained only for migration. */
+export type ModuleDeliveryPlanV4 = {
+  readonly version: 4;
+  readonly generation: number;
+  readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
+  readonly maxAgentDepth: number;
+  readonly maxAttempts: number;
+  readonly parentOwnedResources: readonly string[];
+  readonly parentJoin: ModuleDeliveryParentJoin;
+  readonly nodes: readonly ModuleDeliveryNodeV2[];
+  readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
+};
+
+/** Current plan authority: the canonical branch moves; Delivery resolves its head per stage. */
+export type ModuleDeliveryPlanV5 = PinnedDevBaseEvidence & {
   readonly version: typeof MODULE_DELIVERY_PLAN_VERSION;
+  readonly featureBranch: string;
   readonly generation: number;
   readonly sourceCommit: string;
   readonly maxAgentDepth: number;
@@ -464,7 +482,8 @@ export type ModuleDeliveryPlanInput =
   | LegacyModuleDeliveryPlan
   | ModuleDeliveryPlanV2
   | ModuleDeliveryPlanV3
-  | ModuleDeliveryPlanV4;
+  | ModuleDeliveryPlanV4
+  | ModuleDeliveryPlanV5;
 
 export type ModuleDeliveryPlan = ModuleDeliveryPlanInput;
 
@@ -527,8 +546,13 @@ export type DecodedCompatibleModuleDeliveryPlan =
     }
   | {
       readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
-      readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
+      readonly inputVersion: 4;
       readonly plan: ModuleDeliveryPlanV4;
+    }
+  | {
+      readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
+      readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
+      readonly plan: ModuleDeliveryPlanV5;
     };
 
 export type RejectedCompatibleModuleDeliveryPlan = {
@@ -542,7 +566,7 @@ export type CompatibleModuleDeliveryPlanDecode =
 export type ValidatedModuleDeliveryPlan = {
   readonly status: ModuleDeliveryValidationStatus.Accepted;
   readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
-  readonly plan: ModuleDeliveryPlanV4;
+  readonly plan: ModuleDeliveryPlanV5;
   readonly planDigest: string;
   readonly topologicalOrder: readonly string[];
   readonly waves: readonly (readonly string[])[];

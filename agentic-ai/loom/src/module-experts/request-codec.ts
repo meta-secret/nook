@@ -167,7 +167,6 @@ export class ModuleExpertRequestDecoder {
       PinnedDevBaseEvidenceContract.assertShape({
         originMainSha,
         pinnedLocalDevSha,
-        featureHeadSha,
       });
     } catch {
       ModuleExpertRequestDecoder.invalidRequest();

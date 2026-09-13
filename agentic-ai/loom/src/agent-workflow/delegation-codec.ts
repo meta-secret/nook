@@ -194,7 +194,6 @@ export class DelegationJournalSchema {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: plan.originMainSha,
       pinnedLocalDevSha: plan.pinnedLocalDevSha,
-      featureHeadSha,
     });
     const migrated: DelegationPlan = {
       ...plan,
@@ -220,7 +219,10 @@ export class DelegationJournalSchema {
       pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
       featureHeadSha: reader.string('featureHeadSha'),
     };
-    PinnedDevBaseEvidenceContract.assertShape(evidence);
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha: evidence.originMainSha,
+      pinnedLocalDevSha: evidence.pinnedLocalDevSha,
+    });
     return {
       runId: reader.string('runId'),
       sourceCommit: reader.string('sourceCommit'),
@@ -274,7 +276,10 @@ export class DelegationJournalSchema {
       pinnedLocalDevSha: reader.string('pinnedLocalDevSha'),
       featureHeadSha: reader.string('featureHeadSha'),
     };
-    PinnedDevBaseEvidenceContract.assertShape(evidence);
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha: evidence.originMainSha,
+      pinnedLocalDevSha: evidence.pinnedLocalDevSha,
+    });
     return {
       runId: reader.string('runId'),
       sourceCommit: reader.string('sourceCommit'),

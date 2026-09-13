@@ -1,4 +1,7 @@
-import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
+import {
+  CanonicalFeatureBranchContract,
+  PinnedDevBaseEvidenceContract,
+} from '../lib/base-evidence.ts';
 import { UntrustedYamlBoundary } from '../lib/guards.ts';
 import type { UntrustedYamlNode } from '../lib/guards.ts';
 import { ModulePlanDecodeFailure, ModulePlanFields } from './codec-fields.ts';
@@ -13,6 +16,7 @@ import {
   ModulePlanRootField,
   ModulePlanV3RootField,
   ModulePlanV4RootField,
+  ModulePlanV5RootField,
 } from './codec-schema.ts';
 import type {
   RejectedModulePlanRequest,
@@ -38,6 +42,7 @@ import type {
   ModuleDeliveryPlanV2,
   ModuleDeliveryPlanV3,
   ModuleDeliveryPlanV4,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryIssue,
   RejectedCompatibleModuleDeliveryPlan,
 } from './domain.ts';
@@ -205,26 +210,28 @@ export class ModuleDeliveryPlanSchema {
     throw new ModuleDeliveryPlanTransportLimit(request);
   }
 
-  /** Creates a current plan from V3 evidence without mutating the old plan. */
+  /** Creates a branch-authoritative plan from a historical V4 value without mutating it. */
   static migrateModuleDeliveryPlan(
-    plan: ModuleDeliveryPlanV3,
-    featureHeadSha: string,
-  ): ModuleDeliveryPlanV4 {
-    if (plan.version !== 3)
-      throw new Error('Only module delivery plan version 3 can be migrated.');
+    plan: ModuleDeliveryPlanV4,
+    featureBranch: string,
+  ): ModuleDeliveryPlanV5 {
+    if (plan.version !== 4)
+      throw new Error('Only module delivery plan version 4 can be migrated.');
+    const branch = CanonicalFeatureBranchContract.parse(featureBranch);
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: plan.originMainSha,
       pinnedLocalDevSha: plan.pinnedLocalDevSha,
-      featureHeadSha,
     });
+    const { featureHeadSha: _observedFeatureHeadSha, ...withoutFeatureHead } =
+      plan;
     return {
-      ...plan,
+      ...withoutFeatureHead,
       version: MODULE_DELIVERY_PLAN_VERSION,
-      featureHeadSha,
+      featureBranch: branch,
     };
   }
 
-  static moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV4): string {
+  static moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV5): string {
     return ModuleDeliveryPlanDigest.moduleDeliveryPlanDigest(plan);
   }
 
@@ -240,16 +247,18 @@ export class ModuleDeliveryPlanSchema {
       version !== 1 &&
       version !== 2 &&
       version !== 3 &&
+      version !== 4 &&
       version !== MODULE_DELIVERY_PLAN_VERSION
     )
       ModuleDeliveryPlanSchema.fail(
-        '$.version: plan version must be 1, 2, 3, or 4.',
+        '$.version: plan version must be 1, 2, 3, 4, or 5.',
       );
     const legacy = version === 1;
     if (legacy) fields.requireExactKeys(LegacyModulePlanRootField);
     else if (version === 2) fields.requireExactKeys(ModulePlanRootField);
     else if (version === 3) fields.requireExactKeys(ModulePlanV3RootField);
-    else fields.requireExactKeys(ModulePlanV4RootField);
+    else if (version === 4) fields.requireExactKeys(ModulePlanV4RootField);
+    else fields.requireExactKeys(ModulePlanV5RootField);
     const parentJoinRequest = {
       record: fields.recordField('parentJoin'),
       path: '$.parentJoin',
@@ -335,7 +344,7 @@ export class ModuleDeliveryPlanSchema {
       };
     }
     const plan: ModuleDeliveryPlanV4 = {
-      version: MODULE_DELIVERY_PLAN_VERSION,
+      version: 4,
       generation,
       sourceCommit,
       originMainSha: fields.string('originMainSha'),
@@ -348,10 +357,32 @@ export class ModuleDeliveryPlanSchema {
       nodes,
       edgeContracts,
     };
+    if (version === 4)
+      return {
+        status: ModuleDeliveryCompatibilityStatus.Decoded,
+        inputVersion: version,
+        plan,
+      };
+    const currentPlan: ModuleDeliveryPlanV5 = {
+      version: MODULE_DELIVERY_PLAN_VERSION,
+      generation,
+      sourceCommit,
+      originMainSha: fields.string('originMainSha'),
+      pinnedLocalDevSha: fields.string('pinnedLocalDevSha'),
+      featureBranch: CanonicalFeatureBranchContract.parse(
+        fields.string('featureBranch'),
+      ),
+      maxAgentDepth,
+      maxAttempts,
+      parentOwnedResources,
+      parentJoin,
+      nodes,
+      edgeContracts,
+    };
     return {
       status: ModuleDeliveryCompatibilityStatus.Decoded,
       inputVersion: version,
-      plan,
+      plan: currentPlan,
     };
   }
 

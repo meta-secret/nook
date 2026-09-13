@@ -95,6 +95,22 @@ export enum ModulePlanV4RootField {
   Version = 'version',
 }
 
+/** Current branch-authoritative plan shape. Feature heads are resolved by Delivery. */
+export enum ModulePlanV5RootField {
+  EdgeContracts = 'edgeContracts',
+  FeatureBranch = 'featureBranch',
+  Generation = 'generation',
+  MaxAgentDepth = 'maxAgentDepth',
+  MaxAttempts = 'maxAttempts',
+  Nodes = 'nodes',
+  ParentJoin = 'parentJoin',
+  ParentOwnedResources = 'parentOwnedResources',
+  OriginMainSha = 'originMainSha',
+  PinnedLocalDevSha = 'pinnedLocalDevSha',
+  SourceCommit = 'sourceCommit',
+  Version = 'version',
+}
+
 export enum LegacyModulePlanRootField {
   EdgeContracts = 'edgeContracts',
   MaxAgentDepth = 'maxAgentDepth',

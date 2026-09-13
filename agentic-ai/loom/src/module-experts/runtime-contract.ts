@@ -95,7 +95,6 @@ export class ModuleExpertIsolation {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
-      featureHeadSha: request.featureHeadSha,
     });
     const source = ModuleExpertIsolation.assertSourceCommit(
       request.sourceCommit,

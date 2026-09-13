@@ -34,7 +34,6 @@ export class PinnedDevBaseEnvironment {
     const { environment, repoRoot } = this.request;
     const originMainSha = environment.ORIGIN_MAIN_SHA?.trim() ?? '';
     const pinnedLocalDevSha = environment.PINNED_LOCAL_DEV_SHA?.trim() ?? '';
-    const featureHeadSha = environment.FEATURE_HEAD_SHA?.trim() ?? '';
     if (!FULL_COMMIT_SHA.test(originMainSha)) {
       return err({
         message:
@@ -47,17 +46,9 @@ export class PinnedDevBaseEnvironment {
           'PINNED_LOCAL_DEV_SHA must be an exact lowercase 40-hex commit SHA.',
       });
     }
-    if (!FULL_COMMIT_SHA.test(featureHeadSha)) {
-      return err({
-        message:
-          'FEATURE_HEAD_SHA must be an exact lowercase 40-hex commit SHA.',
-      });
-    }
-
     const evidence: PinnedDevBaseEvidence = {
       originMainSha,
       pinnedLocalDevSha,
-      featureHeadSha,
     };
     const currentOriginMain = this.gitSha({
       ref: 'refs/remotes/origin/main^{commit}',

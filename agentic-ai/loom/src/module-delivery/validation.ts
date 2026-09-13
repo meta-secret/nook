@@ -52,11 +52,12 @@ import {
   ModuleDeliveryValidationStatus,
   ModuleTaskOwnership,
 } from './domain.ts';
+import { CanonicalFeatureBranchContract } from '../lib/base-evidence.ts';
 
 import type {
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV4,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryExecutionPrecedence,
   RejectedModuleDeliveryPlan,
@@ -87,7 +88,7 @@ export class ModuleDeliveryPlanDecoder {
       const issue: ModuleDeliveryIssue = {
         code: ModuleDeliveryIssueCode.InvalidField,
         path: '$.version',
-        message: 'Canonical validation requires authored plan version 4.',
+        message: 'Canonical validation requires authored plan version 5.',
       };
       const rejection: RejectedModuleDeliveryPlan = {
         status: ModuleDeliveryValidationStatus.Rejected,
@@ -99,7 +100,7 @@ export class ModuleDeliveryPlanDecoder {
   }
 
   private validateDecodedModuleDeliveryPlan(
-    plan: ModuleDeliveryPlanV4,
+    plan: ModuleDeliveryPlanV5,
   ): ModuleDeliveryPlanValidation {
     const issues: ModuleDeliveryIssue[] = [];
     const nodesById = new Map<string, ModuleDeliveryNodeV2>();
@@ -160,7 +161,6 @@ export class ModuleDeliveryPlanDecoder {
       ['sourceCommit', state.plan.sourceCommit],
       ['originMainSha', state.plan.originMainSha],
       ['pinnedLocalDevSha', state.plan.pinnedLocalDevSha],
-      ['featureHeadSha', state.plan.featureHeadSha],
     ] as const;
     for (const [name, value] of commits) {
       if (!/^[0-9a-f]{40}$/u.test(value)) {
@@ -175,6 +175,16 @@ export class ModuleDeliveryPlanDecoder {
         };
         this.issue(request);
       }
+    }
+    try {
+      CanonicalFeatureBranchContract.parse(state.plan.featureBranch);
+    } catch {
+      this.issue({
+        state,
+        code: ModuleDeliveryIssueCode.InvalidField,
+        path: '$.featureBranch',
+        message: 'featureBranch must be a canonical codex branch.',
+      });
     }
   }
 
@@ -544,7 +554,7 @@ export class ModuleDeliveryPlanDecoder {
           code: ModuleDeliveryIssueCode.BaselineMismatch,
           path: `${request.path}.baseline`,
           message:
-            'Independent tasks require the exact pinned local-dev feature base.',
+            'Independent tasks require the pinned local-dev bootstrap base.',
         };
         this.issue(issueRequest);
       }

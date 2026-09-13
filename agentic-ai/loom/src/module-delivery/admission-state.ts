@@ -283,7 +283,6 @@ export class ModuleAdmissionStateRegistry {
       headCommit: request.headCommit,
       originMainSha: acceptedPlan.plan.originMainSha,
       pinnedLocalDevSha: acceptedPlan.plan.pinnedLocalDevSha,
-      featureHeadSha: acceptedPlan.plan.featureHeadSha,
       integratedWriterFrontiers: frontiers,
       acceptedProviderEvidence: evidence.identities,
     };

@@ -307,7 +307,6 @@ export class ModuleEvidenceBoundary {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: submission.originMainSha,
       pinnedLocalDevSha: submission.pinnedLocalDevSha,
-      featureHeadSha: submission.featureHeadSha,
     });
     if (
       node.kind === ModuleDeliveryTaskKind.Write ||

@@ -5,12 +5,52 @@ import {
   RepositoryGitSecurityPolicy,
 } from './run.ts';
 
-/** The fetched main reference, pinned base, and feature frontier are explicit provenance evidence. */
+/** Bootstrap ancestry evidence is deliberately independent of the moving feature branch. */
 export type PinnedDevBaseEvidence = Readonly<{
   originMainSha: GitCommit;
   pinnedLocalDevSha: GitCommit;
-  featureHeadSha: GitCommit;
 }>;
+
+declare const CANONICAL_FEATURE_BRANCH: unique symbol;
+
+/** The branch is the stable workflow authority; its head is resolved by Delivery at each stage. */
+export type CanonicalFeatureBranch = string & {
+  readonly [CANONICAL_FEATURE_BRANCH]: 'canonical-feature-branch';
+};
+
+export class CanonicalFeatureBranchContract {
+  private constructor(private readonly value: string) {}
+
+  static parse(value: string): CanonicalFeatureBranch {
+    return new CanonicalFeatureBranchContract(value).execute();
+  }
+
+  private execute(): CanonicalFeatureBranch {
+    const branch = this.value;
+    if (
+      !branch ||
+      branch.length > 120 ||
+      branch === '@' ||
+      branch.startsWith('-') ||
+      branch.startsWith('/') ||
+      branch.endsWith('/') ||
+      branch.endsWith('.') ||
+      branch.includes('..') ||
+      branch.includes('//') ||
+      branch.includes('@{') ||
+      /[\u0000-\u0020\u007f~^:?*\[\\]/u.test(branch)
+    )
+      throw new Error('Canonical feature branch is malformed.');
+    const components = branch.split('/');
+    if (
+      components.length < 2 ||
+      components[0] !== 'codex' ||
+      components.some((component) => component.length === 0)
+    )
+      throw new Error('Canonical feature branch must be a codex branch.');
+    return branch as CanonicalFeatureBranch;
+  }
+}
 
 export type PinnedDevBaseAncestryRequest = PinnedDevBaseEvidence &
   Readonly<{
@@ -25,13 +65,12 @@ export class PinnedDevBaseEvidenceContract {
   static assertShape(evidence: PinnedDevBaseEvidence): void {
     const keys = Object.keys(evidence);
     if (
-      keys.length !== 3 ||
+      keys.length !== 2 ||
       !keys.includes('originMainSha') ||
-      !keys.includes('pinnedLocalDevSha') ||
-      !keys.includes('featureHeadSha')
+      !keys.includes('pinnedLocalDevSha')
     ) {
       throw new Error(
-        'Bootstrap evidence must declare originMainSha, pinnedLocalDevSha, and featureHeadSha exactly once.',
+        'Bootstrap evidence must declare originMainSha and pinnedLocalDevSha exactly once.',
       );
     }
     for (const [name, sha] of Object.entries(evidence)) {
@@ -47,7 +86,6 @@ export class PinnedDevBaseEvidenceContract {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: request.originMainSha,
       pinnedLocalDevSha: request.pinnedLocalDevSha,
-      featureHeadSha: request.featureHeadSha,
     });
     if (request.sourceCommit !== undefined) {
       PinnedDevBaseEvidenceContract.assertCommitShape(
@@ -63,16 +101,9 @@ export class PinnedDevBaseEvidenceContract {
       message:
         'pinnedLocalDevSha must include the fetched origin/main commit as an ancestor.',
     });
-    PinnedDevBaseEvidenceContract.assertAncestor({
-      ancestor: request.pinnedLocalDevSha,
-      descendant: request.featureHeadSha,
-      workingDirectory: request.workingDirectory,
-      message:
-        'featureHeadSha must be descended from the pinned local-dev base.',
-    });
     if (request.sourceCommit !== undefined) {
       PinnedDevBaseEvidenceContract.assertAncestor({
-        ancestor: request.featureHeadSha,
+        ancestor: request.pinnedLocalDevSha,
         descendant: request.sourceCommit,
         workingDirectory: request.workingDirectory,
         message:

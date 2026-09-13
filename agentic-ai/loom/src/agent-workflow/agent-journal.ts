@@ -151,7 +151,6 @@ class AgentJournalRecords<TTask extends string> {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: configuration.originMainSha,
       pinnedLocalDevSha: configuration.pinnedLocalDevSha,
-      featureHeadSha: configuration.featureHeadSha,
     });
     AgentJournalRecords.assertParentLineage(configuration);
     this.configuration = configuration;

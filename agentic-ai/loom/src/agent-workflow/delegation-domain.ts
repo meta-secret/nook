@@ -80,7 +80,6 @@ export class DelegationPlanContract {
     const evidence: PinnedDevBaseEvidence = {
       originMainSha: plan.originMainSha,
       pinnedLocalDevSha: plan.pinnedLocalDevSha,
-      featureHeadSha: plan.featureHeadSha,
     };
     PinnedDevBaseEvidenceContract.assertShape(evidence);
     DelegationPlanContract.assertAttemptIdentity(plan.rootMaterializer);

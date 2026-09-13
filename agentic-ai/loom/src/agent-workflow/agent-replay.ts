@@ -202,7 +202,6 @@ export class AgentAttemptReplay {
       PinnedDevBaseEvidenceContract.assertShape({
         originMainSha: event.originMainSha,
         pinnedLocalDevSha: event.pinnedLocalDevSha,
-        featureHeadSha: event.featureHeadSha,
       });
     } catch {
       throw new Error('Agent attempt bootstrap evidence is invalid.');

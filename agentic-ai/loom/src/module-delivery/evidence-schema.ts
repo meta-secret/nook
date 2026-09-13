@@ -361,7 +361,6 @@ export class ModuleDeliveryEvidenceSchema {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha,
       pinnedLocalDevSha,
-      featureHeadSha,
     });
     return submission;
   }
@@ -490,7 +489,6 @@ export class ModuleDeliveryEvidenceSchema {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: migrated.originMainSha,
       pinnedLocalDevSha: migrated.pinnedLocalDevSha,
-      featureHeadSha: migrated.featureHeadSha,
     });
     return migrated;
   }
@@ -553,7 +551,6 @@ export class ModuleDeliveryEvidenceSchema {
       PinnedDevBaseEvidenceContract.assertShape({
         originMainSha,
         pinnedLocalDevSha,
-        featureHeadSha,
       });
     if (legacy) {
       return {

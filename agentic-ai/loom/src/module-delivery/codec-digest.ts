@@ -3,15 +3,15 @@ import {
   ModuleDeliveryBaselineKind,
   ModuleDeliveryTaskKind,
 } from './domain.ts';
-import type { ModuleDeliveryPlanV4 } from './domain.ts';
+import type { ModuleDeliveryPlanV5 } from './domain.ts';
 
 type ModulePlanDigestNodeLookup = {
-  readonly plan: ModuleDeliveryPlanV4;
+  readonly plan: ModuleDeliveryPlanV5;
   readonly taskId: string;
 };
 
 type ModulePlanDigestContractLookup = {
-  readonly plan: ModuleDeliveryPlanV4;
+  readonly plan: ModuleDeliveryPlanV5;
   readonly key: string;
 };
 
@@ -19,7 +19,7 @@ type ModulePlanDigestContractLookup = {
 export class ModuleDeliveryPlanDigest {
   private constructor() {}
 
-  static moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV4): string {
+  static moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV5): string {
     const nodes = plan.nodes
       .map(({ taskId }) => taskId)
       .sort()

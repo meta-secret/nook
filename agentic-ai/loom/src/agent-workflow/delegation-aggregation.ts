@@ -204,7 +204,6 @@ export class DelegationRunFinalization {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: result.originMainSha,
       pinnedLocalDevSha: result.pinnedLocalDevSha,
-      featureHeadSha: result.featureHeadSha,
     });
     return result;
   }
@@ -237,7 +236,6 @@ export class DelegationRunFinalization {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: result.originMainSha,
       pinnedLocalDevSha: result.pinnedLocalDevSha,
-      featureHeadSha,
     });
     return {
       ...result,
@@ -278,7 +276,6 @@ export class DelegationRunFinalization {
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha,
       pinnedLocalDevSha,
-      featureHeadSha,
     });
     return {
       runId,

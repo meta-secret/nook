@@ -151,7 +151,6 @@ export class StructuralExpertRequestDecoder {
       PinnedDevBaseEvidenceContract.assertShape({
         originMainSha,
         pinnedLocalDevSha,
-        featureHeadSha,
       });
     } catch {
       StructuralExpertRequestDecoder.invalidRequest();
