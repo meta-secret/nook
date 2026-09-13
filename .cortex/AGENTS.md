@@ -2,7 +2,7 @@
 
 This file is the repository entry point. It selects one owning context and
 states only boundaries that apply everywhere. Detailed delivery and delegation
-rules belong to Gizmo's linked authorities.
+rules belong to Gizmo Prime's linked authorities.
 
 ## Mandatory Gizmo Gate — fail closed
 
@@ -53,7 +53,7 @@ requires an explicit expertise task from Gizmo Prime.
 Before acting in any feature implementation, delegation, review, external
 check, local landing, dev validation, repair, pull-request operation, or main
 promotion stage, read the complete
-[multiagent delivery visual model](gizmo/architecture/multiagent-delivery-diagrams.md).
+[multiagent delivery visual model](gizmo-prime/architecture/multiagent-delivery-diagrams.md).
 It is the primary end-to-end explanation of the delivery system. Identify the
 current level, owning actor, incoming artifact, feedback path, and terminal
 handoff before taking action.
@@ -62,12 +62,12 @@ This mandatory read applies to Feature Gizmos, Team Gizmos, Team Agents,
 reviewers, internal PR Steward, the Dev Manager, and repair Gizmos. After
 reading it, load only the
 detailed authority required for the selected stage. The
-[dev delivery contract](gizmo/architecture/dev-delivery.md) supplies those
+[dev delivery contract](gizmo-prime/architecture/dev-delivery.md) supplies those
 detailed authorization, evidence, and failure rules.
 
 ## Context routes
 
-- [Gizmo Prime](gizmo/AGENTS.md) owns mission planning, delegation,
+- [Gizmo Prime](gizmo-prime/AGENTS.md) owns mission planning, delegation,
   feature-branch sequencing, feature review and acceptance, local landing
   requests, and feature Workbench state.
 - [Delivery Pipeline](teams/delivery-pipeline/AGENTS.md) owns authorized
@@ -136,9 +136,9 @@ unowned lifetime, plaintext persistence, or sensitive log as a P1 finding.
 Each concurrent feature has its own Gizmo delivery owner and isolated team
 worktrees. The manually run [dev manager](teams/dev-manager/AGENTS.md) owns
 publication and promotion. Start with the mandatory
-[multiagent delivery visual model](gizmo/architecture/multiagent-delivery-diagrams.md),
+[multiagent delivery visual model](gizmo-prime/architecture/multiagent-delivery-diagrams.md),
 then follow the detailed
-[dev delivery contract](gizmo/architecture/dev-delivery.md) for the current
+[dev delivery contract](gizmo-prime/architecture/dev-delivery.md) for the current
 stage.
 
 That contract replaces all older delivery-stage instructions below and in
@@ -249,7 +249,7 @@ or relax any repository scope, ownership, or handoff rule.
   - Web code receives public typed projections.
   - Agents mutate only their owned feature.
   - See
-    [agent feature ownership](gizmo/dynamic-skills/agent-feature-ownership.md).
+    [agent feature ownership](gizmo-prime/dynamic-skills/agent-feature-ownership.md).
 - **Trusted publishers**
   - Exactly two trusted GitHub Actions agent publishers are narrow exceptions
     to the committed worker-handoff path:
@@ -389,7 +389,7 @@ or relax any repository scope, ownership, or handoff rule.
 
 The selectors below describe existing task behavior. The current feature
 stage uses only remote build-only execution; the dev manager requests slow checks
-through the dev PR. Follow [dev delivery](gizmo/architecture/dev-delivery.md).
+through the dev PR. Follow [dev delivery](gizmo-prime/architecture/dev-delivery.md).
 These old task descriptions do not authorize feature tests or an automatic
 dev-push validation pipeline.
 
@@ -593,11 +593,11 @@ complete feature delivery. Every change passes through dev.
 
 Use the detailed authority only when its stage is reached:
 
-- [Team Agent delegation](gizmo/workflows/subagent-delegation.md) owns worker
+- [Team Agent delegation](gizmo-prime/workflows/subagent-delegation.md) owns worker
   scope and shared-branch sequencing.
-- [Mission delivery](gizmo/workflows/mission-delivery.md) owns the end-to-end
+- [Mission delivery](gizmo-prime/workflows/mission-delivery.md) owns the end-to-end
   delivery sequence.
-- [Pull requests](gizmo/workflows/pull-requests.md) owns exact-head review,
+- [Pull requests](gizmo-prime/workflows/pull-requests.md) owns exact-head review,
   validation, readiness, and merge.
 
 Cortex instruction-only changes do not require local preflight or Loom checks.

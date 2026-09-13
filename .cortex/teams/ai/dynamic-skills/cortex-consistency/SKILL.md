@@ -88,7 +88,7 @@ Default task scope:
 A full-tree GC follows this ownership model:
 
 1. Follow
-   [subagent delegation](../../../../gizmo/workflows/subagent-delegation.md).
+   [subagent delegation](../../../../gizmo-prime/workflows/subagent-delegation.md).
 2. When multiple document families are in scope, delegate read-only evidence
    collection by family.
 3. Keep one task owner responsible for conflict resolution and the final edit.
@@ -141,7 +141,7 @@ After:
 4. Commit the complete scoped iteration and return it to the feature Gizmo.
 5. Run mechanical link, index, and contract audits in the manager's slow PR stage.
 
-Follow [dev delivery](../../../../gizmo/architecture/dev-delivery.md).
+Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
 Do not run local audits, tests, or broad pre-push commands. Do not present a
 semantic reading as a successful mechanical audit.
 

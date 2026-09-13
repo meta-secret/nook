@@ -504,7 +504,7 @@ A later failed rerun:
   - Use bounded timeouts for Kubernetes Pod API calls.
 
 One logical Hive task tracks the repair incident. Delivery controllers retain
-the responsibilities in [dev delivery](../../../gizmo/architecture/dev-delivery.md).
+the responsibilities in [dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
 
 1. Diagnose from retained workflow evidence.
 2. Route implementation and authored tests through the feature Gizmo's teams.
@@ -975,6 +975,6 @@ and exclusive intent creation prevents retries from refreshing its deadline.
   [`.github/workflows/hive.yml`](../../../../.github/workflows/hive.yml)
 - **Main coalescing and delivery:**
   [`.github/workflows/main.yml`](../../../../.github/workflows/main.yml)
-- **Workbench issue contract:** [issues](../../../gizmo/workflows/issues.md)
+- **Workbench issue contract:** [issues](../../../gizmo-prime/workflows/issues.md)
 - **Pull-request ownership contract:**
-  [pull requests](../../../gizmo/workflows/pull-requests.md)
+  [pull requests](../../../gizmo-prime/workflows/pull-requests.md)

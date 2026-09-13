@@ -187,7 +187,7 @@ instead of maintaining request bodies in Cortex.
 ### prePush
 
 This legacy task is not a local feature gate. Follow
-[dev delivery](../../../gizmo/architecture/dev-delivery.md) for permitted
+[dev delivery](../../../gizmo-prime/architecture/dev-delivery.md) for permitted
 compilation and manager-stage validation.
 
 ### cortexAudit
@@ -225,7 +225,7 @@ task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 Validate and publish use `agentStats.validate` / `agentStats.publish` with
 `statsFile`. Agent-statistics paths accept `{agentTempDir}` for stable isolation
 by Git commit and worktree. See
-[Agent PR Statistics](../../../gizmo/workflows/agent-statistics.md#mechanical-entrypoint--loom).
+[Agent PR Statistics](../../../gizmo-prime/workflows/agent-statistics.md#mechanical-entrypoint--loom).
 
 ### prLand (status / validate / ready / mergeCheck)
 

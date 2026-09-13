@@ -2,7 +2,7 @@
 
 ## Agent delivery applicability
 
-Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
+Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
 feature-stage slow checks. Paused Hive remains outside the manual manager
@@ -162,7 +162,7 @@ Use this workflow for quality, CI, and deployment changes.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
 10. **CI policy** — see subsections below. Gizmo follows
-    [the pull request pipeline](../../../gizmo/workflows/pull-requests.md).
+    [the pull request pipeline](../../../gizmo-prime/workflows/pull-requests.md).
 
     #### Workflows and runners
     - Trusted native Rust and Rust ecosystem PR jobs and Main build producers
@@ -494,7 +494,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Missing capability is a blocker, not permission for slow feature checks.
     - The manually run dev manager owns the full slow dev-to-main PR cycle.
     - Local tests, Docker work, compilation, and broad pre-push are prohibited.
-    - See [dev delivery](../../../gizmo/architecture/dev-delivery.md).
+    - See [dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
 12. After a slow-stage failure, delegate repair through the normal feature path.
     Select a replacement snapshot only after the prior slow attempt finishes.
 13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
@@ -599,4 +599,4 @@ Threshold or ignore edits belong only in an explicit gate-maintenance change,
 with the rationale in the PR. Default agent behavior is: read the failure → fix
 the code → re-run the same gate until green. See
 [AGENTS.md — Fix every failing check finding](../../../../AGENTS.md#non-negotiable-fix-every-failing-check-finding)
-and [mission delivery](../../../gizmo/workflows/mission-delivery.md).
+and [mission delivery](../../../gizmo-prime/workflows/mission-delivery.md).

@@ -19,7 +19,7 @@ const FORBIDDEN_AUTHORITY_REFERENCES: [&str; 6] = [
     ".codex/agents",
 ];
 const EXECUTABLE_SKILL_OWNERS: [&str; 7] = [
-    ".cortex/gizmo/dynamic-skills",
+    ".cortex/gizmo-prime/dynamic-skills",
     ".cortex/shared/dynamic-skills",
     ".cortex/teams/ai/dynamic-skills",
     ".cortex/teams/dev-core/dynamic-skills",
@@ -303,10 +303,10 @@ fn cortex_prohibits_speculative_recovery_engines() {
 fn gizmo_dispatches_complete_harness_neutral_team_contracts() {
     let authority = [
         RepositoryFixture::repository_root().read(".cortex/AGENTS.md"),
-        RepositoryFixture::repository_root().read(".cortex/gizmo/AGENTS.md"),
+        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/AGENTS.md"),
         RepositoryFixture::repository_root()
-            .read(".cortex/gizmo/workflows/team-oriented-development.md"),
-        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/subagent-delegation.md"),
+            .read(".cortex/gizmo-prime/workflows/team-oriented-development.md"),
+        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/subagent-delegation.md"),
     ]
     .join("\n")
     .split_whitespace()

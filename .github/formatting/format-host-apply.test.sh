@@ -79,7 +79,7 @@ for required in \
     || { echo "format-host-apply test: missing shared TypeScript formatter contract: $required" >&2; exit 1; }
 done
 for required in \
-  '.cortex/gizmo/dynamic-skills/*/scripts/*' \
+  '.cortex/gizmo-prime/dynamic-skills/*/scripts/*' \
   '.cortex/shared/dynamic-skills/*/scripts/*' \
   '.cortex/teams/*/dynamic-skills/*/scripts/*' \
   '^(\.cortex/(gizmo|shared|teams/[^/]+)/dynamic-skills/[^/]+/scripts)/(.+)$' \

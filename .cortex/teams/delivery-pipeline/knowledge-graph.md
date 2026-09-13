@@ -5,17 +5,44 @@ Load only the authority required by the current delivery-pipeline operation.
 The Delivery Pipeline team reports to Gizmo Prime. It is an operational
 delivery team, not a functional product-engineering team.
 
+## Team tree
+
+Delivery Pipeline owns one team worktree through Team Gizmo. Its direct child
+contexts are:
+
+- [Team Gizmo](gizmo/AGENTS.md), the high-level orchestrator and evidence
+  synthesizer;
+- [Dev Manager Gizmo](dev-manager-gizmo/AGENTS.md), the on-demand manager-cycle
+  activation context;
+- [Dev Manager](dev-manager/AGENTS.md), the canonical manager policy context;
+  and
+- [PR Lifecycle Agent](pr-lifecycle/AGENTS.md), the bounded PR lifecycle and
+  delivery-mechanics context.
+
+Team Gizmo may dispatch multiple internal agents in parallel only when their
+scopes are disjoint and dependencies are resolved. It reports only high-level
+evidence and blockers to Gizmo Prime. No internal agent creates or updates a
+pull request; only the Dev Manager's manager-only `dev:pr-manager` path does.
+
+The internal agent is named `pr-lifecycle`, replacing `pr-steward`, because
+the new name precisely identifies PR lifecycle and mechanics without implying
+stewardship or policy authority.
+
 ## Team contract
 
 - [Delivery Pipeline contract](AGENTS.md) defines the team boundary,
   responsibility split, packets, handoffs, and delivery invariants.
 
-## Internal graphs
+## Child graphs
 
-- [Team Gizmo knowledge graph](internal/gizmo/knowledge-graph.md) indexes its
-  internal authorities and escalation paths.
-- [PR Steward knowledge graph](internal/pr-steward/knowledge-graph.md) indexes
-  its authorization and lifecycle workflows.
+- [Team Gizmo knowledge graph](gizmo/knowledge-graph.md) indexes its internal
+  authorities and escalation paths.
+- [Dev Manager Gizmo knowledge graph](dev-manager-gizmo/knowledge-graph.md)
+  indexes its on-demand activation and orchestration context.
+- [Dev Manager knowledge graph](dev-manager/knowledge-graph.md) indexes the
+  canonical manager policy and bounded operations.
+- [PR Lifecycle Agent knowledge graph](pr-lifecycle/knowledge-graph.md)
+  indexes its authorization and lifecycle workflows.
 
 ## Parent and policy authorities
 
@@ -24,5 +51,5 @@ delivery team, not a functional product-engineering team.
   defines levels, ownership, and exact-SHA handoffs.
 - [Dev delivery](../../gizmo/architecture/dev-delivery.md) defines detailed
   authorization and promotion rules.
-- [Dev Manager](../dev-manager/AGENTS.md) owns dev validation, readiness,
+- [Dev Manager](dev-manager/AGENTS.md) owns dev validation, readiness,
   promotion, and `dev:pr-manager`.

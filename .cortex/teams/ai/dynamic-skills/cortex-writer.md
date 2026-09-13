@@ -260,7 +260,7 @@ Full rewritten example:
 2. Commit the complete scoped authoring iteration.
 3. Return evidence and unresolved dependencies to the feature Gizmo.
 4. Execute mechanical link, structure, and consistency checks in the manager's
-   slow PR stage under [dev delivery](../../../gizmo/architecture/dev-delivery.md).
+   slow PR stage under [dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
 
 Do not run local Loom tests, audits, broad formatting, or pre-push checks.
 Feature compilation does not establish successful documentation audit results.

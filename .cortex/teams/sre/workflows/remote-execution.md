@@ -44,7 +44,7 @@ retains policy authority, and manager-only `dev:pr-manager` remains the sole
 path for pull-request creation/update. Team Gizmo and internal PR Steward do
 not create or update pull requests or decide policy, readiness, or promotion
 verdicts. Follow
-[dev delivery](../../../gizmo/architecture/dev-delivery.md).
+[dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
 
 - Freeze origin/dev during validation and promotion.
 - Check out the captured dev SHA in every job.

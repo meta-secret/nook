@@ -141,5 +141,5 @@ For a bounded worker:
 The repository preflight contract must retain the ownership guard in:
 
 - `.cortex/AGENTS.md`;
-- `.cortex/gizmo/workflows/mission-delivery.md`;
-- `.cortex/gizmo/workflows/issues.md`.
+- `.cortex/gizmo-prime/workflows/mission-delivery.md`;
+- `.cortex/gizmo-prime/workflows/issues.md`.

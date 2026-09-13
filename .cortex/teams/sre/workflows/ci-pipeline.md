@@ -2,7 +2,7 @@
 
 ## Agent delivery applicability
 
-Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
+Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
 feature-stage slow checks. Paused Hive remains outside the manual manager
@@ -14,8 +14,8 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 
 Agent worklogs and statistics live in `meta-secret/nook-workbench`, so they do
 not create Nook branches, PRs, product validation, or recursive Main builds.
-See [issues](../../../gizmo/workflows/issues.md),
-[agent statistics](../../../gizmo/workflows/agent-statistics.md), and
+See [issues](../../../gizmo-prime/workflows/issues.md),
+[agent statistics](../../../gizmo-prime/workflows/agent-statistics.md), and
 [main-build-statistics.md](main-build-statistics.md).
 
 ## Central CI entrypoint

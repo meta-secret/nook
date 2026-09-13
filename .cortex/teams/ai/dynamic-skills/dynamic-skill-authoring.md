@@ -26,7 +26,7 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
 
 1. Inspect the referenced code.
 2. Select the responsible team through
-   [Engineering team ownership](../../../gizmo/architecture/team-ownership.md).
+   [Engineering team ownership](../../../gizmo-prime/architecture/team-ownership.md).
 3. Convert the explanation into a concise card in the owner's
    `dynamic-skills/` directory.
    - Use Gizmo for delivery-control knowledge.

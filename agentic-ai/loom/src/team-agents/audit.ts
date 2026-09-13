@@ -426,7 +426,7 @@ const TEAM_CATALOG_PATH = 'agentic-ai/loom/src/team-agents/catalog.ts';
 
 const TEAM_AUTHORITY_PATH = '.cortex/AGENTS.md';
 
-const GIZMO_AUTHORITY_PATH = '.cortex/gizmo/AGENTS.md';
+const GIZMO_AUTHORITY_PATH = '.cortex/gizmo-prime/AGENTS.md';
 
 const TEAM_AUTHORITY_MARKERS = [
   '## Mandatory context selection',

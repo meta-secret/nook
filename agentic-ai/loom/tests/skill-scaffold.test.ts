@@ -105,7 +105,7 @@ describe('skill scaffold', () => {
       skillOwner: SkillOwner.Gizmo,
     };
     expect(new SkillOwnerDirectory(directoryArgs).path()).toBe(
-      '/repo/.cortex/gizmo/dynamic-skills',
+      '/repo/.cortex/gizmo-prime/dynamic-skills',
     );
   });
 

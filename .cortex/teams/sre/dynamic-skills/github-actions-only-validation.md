@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The [dev delivery contract](../../../gizmo/architecture/dev-delivery.md)
+The [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md)
 defines two remote stages. Agents keep local work limited to editing, reading,
 scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
 

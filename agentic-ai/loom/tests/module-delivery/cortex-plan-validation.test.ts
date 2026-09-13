@@ -210,7 +210,7 @@ describe('Cortex module-delivery plan validation', () => {
   });
 
   test('admits only an exact Gizmo grant owned by Gizmo Prime and written by AI', () => {
-    const claim = '.cortex/gizmo/workflows/subagent-delegation.md';
+    const claim = '.cortex/gizmo-prime/workflows/subagent-delegation.md';
     const gizmo: ModuleDeliveryWriteNodeV2 = {
       ...ModuleDeliveryCortexPlanValidationScenario.cortexNode({
         taskId: 'gizmo-workflow',
@@ -230,21 +230,21 @@ describe('Cortex module-delivery plan validation', () => {
       { ...gizmo, acceptanceOwner: TeamKey.Ai },
       {
         ...gizmo,
-        resources: { ...gizmo.resources, write: ['.cortex/gizmo/**'] },
+        resources: { ...gizmo.resources, write: ['.cortex/gizmo-prime/**'] },
         cortexAuthoring: {
           selectedSkillPaths: [],
-          sharedWriteClaims: ['.cortex/gizmo/**'],
+          sharedWriteClaims: ['.cortex/gizmo-prime/**'],
         },
       },
       {
         ...gizmo,
         resources: {
           ...gizmo.resources,
-          write: ['.cortex/gizmo/workflows'],
+          write: ['.cortex/gizmo-prime/workflows'],
         },
         cortexAuthoring: {
           selectedSkillPaths: [],
-          sharedWriteClaims: ['.cortex/gizmo/workflows'],
+          sharedWriteClaims: ['.cortex/gizmo-prime/workflows'],
         },
       },
     ])

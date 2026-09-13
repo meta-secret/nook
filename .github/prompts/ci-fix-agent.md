@@ -12,8 +12,8 @@ Load only:
 
 - `.cortex/AGENTS.md`;
 - `.cortex/knowledge-graph.md`;
-- `.cortex/gizmo/AGENTS.md`; and
-- `.cortex/gizmo/knowledge-graph.md`.
+- `.cortex/gizmo-prime/AGENTS.md`; and
+- `.cortex/gizmo-prime/knowledge-graph.md`.
 
 Do not load an implementation-team graph into Gizmo's context. Do not give
 Gizmo context to an implementation worker.
@@ -32,7 +32,7 @@ Gizmo context to an implementation worker.
    dev-to-main PR.
 
 Gizmo selects each team through the canonical mapping authority at
-`.cortex/gizmo/workflows/team-oriented-development.md`.
+`.cortex/gizmo-prime/workflows/team-oriented-development.md`.
 
 CI stages do not determine ownership. Route each finding by the functional owner
 of the failing behavior. Use more than one team subagent when failures cross
@@ -41,7 +41,7 @@ team boundaries.
 ## Writer task contract
 
 Every writer follows the root `.cortex/AGENTS.md` team worker contract and
-`.cortex/gizmo/workflows/subagent-delegation.md`.
+`.cortex/gizmo-prime/workflows/subagent-delegation.md`.
 
 The CI-specific contract also names:
 

@@ -24,7 +24,7 @@ const EXECUTABLE_SKILL_WORKSPACE_FILES = [
   'package.json',
 ] as const;
 const EXECUTABLE_SKILL_WORKSPACES = [
-  'gizmo/dynamic-skills/*/scripts',
+  'gizmo-prime/dynamic-skills/*/scripts',
   'shared/dynamic-skills/*/scripts',
   'teams/*/dynamic-skills/*/scripts',
 ] as const;

@@ -16,8 +16,14 @@ implementation or policy verdicts.
 
 The Delivery Pipeline team reports to Gizmo Prime.
 
-- Team Gizmo is the team's high-level internal orchestrator.
-- Internal PR Steward is the team's bounded mechanical execution agent.
+- Team Gizmo is the team's high-level internal orchestrator and owns the
+  team's one worktree through `gizmo/`.
+- The team has four direct child contexts: `gizmo/`, `dev-manager-gizmo/`,
+  `dev-manager/`, and `pr-lifecycle/`.
+- Internal PR Lifecycle Agent is the team's bounded PR and delivery-mechanics
+  execution agent. `pr-lifecycle/` is the renamed replacement for the former
+  `pr-steward/` context; the name is chosen because it precisely describes
+  packetized PR lifecycle and mechanics without implying policy ownership.
 - Gizmo Prime remains the parent for mission control, functional ownership,
   feature acceptance, and feature-level delivery decisions.
 - The Dev Manager remains the policy owner for dev validation, readiness,
@@ -35,14 +41,18 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
 - Accept a high-level packet only from Gizmo Prime through the active harness.
 - Require each packet to name the operation, repository, bounded scope,
   controller, expected source SHA, target identity, and acceptance evidence.
-- Use Team Gizmo for Level 1 delivery-pipeline orchestration, commit-level
-  handoffs, and remote-task packets.
+- Use Team Gizmo's one team worktree for Level 1 delivery-pipeline
+  orchestration, commit-level handoffs, and remote-task packets.
 - Require Team Gizmo to dispatch internal execution through the active harness.
+- Permit multiple internal agents to run in parallel only when their explicit
+  scopes are disjoint and no dependency is unresolved; serialize overlapping
+  scopes and shared mutations.
 - Route packetized GitHub, pull-request, check, review, status, publication,
-  promotion, and bounded local-dev mechanics to internal PR Steward.
+  promotion, and bounded local-dev mechanics to the PR Lifecycle Agent.
 - Preserve the Feature Gizmo or Dev Manager as the policy controller in every
   child packet.
-- Require PR Steward to verify the live target and expected SHA before acting.
+- Require the PR Lifecycle Agent to verify the live target and expected SHA
+  before acting.
 - Keep feature-stage remote execution build-only. Tests, coverage, e2e, and
   preflight remain outside that stage.
 - Keep `dev:land` serialized and limited to the named local development
@@ -62,7 +72,9 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
 - Do not choose functional ownership or adjudicate functional findings.
 - Do not directly implement or repair product code, tests, or functional
   Cortex content.
-- Do not create or update pull requests from Team Gizmo or PR Steward.
+- Internal agents never create or update pull requests. Only the manager-only
+  `dev:pr-manager` path, invoked by the Dev Manager, creates or updates the
+  dev-to-main pull request.
 - Do not decide readiness, dev-validation success, or promotion success.
 - Do not invoke `dev:pr-manager`; the Dev Manager owns that path.
 - Do not treat a successful push as proof of pull-request completion.
@@ -76,17 +88,22 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
 
 ## Responsibility split
 
-- **Team Gizmo:** receives high-level packets from Gizmo Prime. It decomposes
-  delivery-pipeline work, dispatches internal agents, coordinates commit-level
-  and remote-task packets, synthesizes evidence, and reports a high-level
-  summary or blocker to Gizmo Prime. It does not write implementation code.
-- **Internal PR Steward:** executes packetized external GitHub, pull-request,
+- **Team Gizmo:** receives high-level packets from Gizmo Prime in the team's
+  one worktree. It decomposes delivery-pipeline work, dispatches internal
+  agents in parallel when scopes are disjoint, coordinates commit-level and
+  remote-task packets, and reports only high-level evidence or blockers to
+  Gizmo Prime. It does not write implementation code or make policy
+  decisions.
+- **PR Lifecycle Agent:** executes packetized external GitHub, pull-request,
   check, review, status, publication, and promotion mechanics. It also runs
   the three bounded local-dev tasks: `dev:land`, `dev:publish`, and
   `dev:promote`. It returns evidence and never supplies a policy verdict.
 - **Dev Manager:** selects the dev snapshot, owns slow validation, owns
-  readiness and promotion policy, and invokes `dev:pr-manager` for the single
-  dev-to-main pull request.
+  readiness and promotion policy, and alone invokes `dev:pr-manager` for the
+  single dev-to-main pull request.
+- **Dev Manager Gizmo:** is the on-demand activation and orchestration context
+  for one manually operated manager cycle; it preserves the Dev Manager's
+  policy authority and does not create or update the pull request.
 - **Gizmo Prime:** owns the mission, functional-team routing, feature
   acceptance, and the final feature delivery decision.
 
@@ -100,16 +117,18 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
    within this team's boundary.
    - Ambiguous functional ownership returns to Gizmo Prime.
    - A missing or unavailable harness fails the operation closed.
-3. Team Gizmo sends PR Steward one bounded child packet per mechanical
+3. Team Gizmo sends the PR Lifecycle Agent one bounded child packet per mechanical
    operation.
    - The child packet carries the original controller, target, expected SHA,
      required evidence, and bounded write scope.
    - Team Gizmo may not add authority while translating the packet.
-4. PR Steward performs the named operation and returns one terminal handoff.
+4. The PR Lifecycle Agent performs the named operation and returns one terminal
+   handoff.
    - The handoff names the operation, source SHA, observed target, run or PR
      identifiers, result, evidence, and unresolved blocker.
 5. Team Gizmo checks that the result still applies to the packet's exact
-   target. It synthesizes the child evidence and reports it to Gizmo Prime.
+   target. It synthesizes only high-level child evidence and reports it to
+   Gizmo Prime.
    - Manager-owned evidence also returns to the Dev Manager.
    - Team Gizmo does not convert evidence into a readiness or promotion
      verdict.

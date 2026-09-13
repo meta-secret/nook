@@ -2,8 +2,8 @@
 
 ## Delivery and ownership
 
-Use [mission delivery](../../../gizmo/workflows/mission-delivery.md) and the
-[dev contract](../../../gizmo/architecture/dev-delivery.md). Each feature Gizmo
+Use [mission delivery](../../../gizmo-prime/workflows/mission-delivery.md) and the
+[dev contract](../../../gizmo-prime/architecture/dev-delivery.md). Each feature Gizmo
 owns a branch and isolated Team Agent children. The AI worker returns scoped
 commits to its feature Gizmo. The worker does not publish or promote branches.
 

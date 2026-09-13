@@ -26,13 +26,13 @@ give that worker only the explicit expertise contract, its own team graph, and
 the named consumer interfaces. Do not preload the functional owner's graph or
 transfer capability semantics and consumer-team Cortex ownership. The delivery
 owner follows
-`.cortex/gizmo/workflows/mission-delivery.md` without passing unrelated Gizmo context
+`.cortex/gizmo-prime/workflows/mission-delivery.md` without passing unrelated Gizmo context
 to a team worker.
 
 The validated plan selects one semantic team identity. Apply the root
 `.cortex/AGENTS.md` team worker contract and
-`.cortex/gizmo/workflows/subagent-delegation.md`. Use
-`.cortex/gizmo/workflows/team-oriented-development.md` for team-specific
+`.cortex/gizmo-prime/workflows/subagent-delegation.md`. Use
+`.cortex/gizmo-prime/workflows/team-oriented-development.md` for team-specific
 routing.
 
 When a selected team authority links a foreign-team skill as required
@@ -78,7 +78,7 @@ a container runtime.
    Repository policy and PR verification enforce the UI-demo and other product
    or publication contracts.
 5. If part of the request is too large, risky, blocked, or out of scope, follow
-   `.cortex/gizmo/workflows/issues.md` (update/create Workbench Markdown records)
+   `.cortex/gizmo-prime/workflows/issues.md` (update/create Workbench Markdown records)
    rather than silently dropping work. Stop and record the blocker, its cause,
    and all incomplete scope in the worklog. Do not create or propose a successor
    issue, branch, pull request, stack, or rebuilt delivery.
@@ -109,7 +109,7 @@ a container runtime.
 - Keep the diff focused on the requested task.
 - Stay in the harness-provided isolated workspace. Return the work to the
   parent through the harness commit handoff.
-- Follow `.cortex/gizmo/workflows/pull-requests.md` for current review and
+- Follow `.cortex/gizmo-prime/workflows/pull-requests.md` for current review and
   authorization policy, and use the dev-manager flow for feature-to-local-dev-
   to-origin/dev-to-origin/main delivery. Do not merge a feature directly to
   main or rewrite history. Also follow

@@ -424,7 +424,7 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 
 Delivery uses one Gizmo context and five Cortex engineering team domains:
 
-- [Gizmo](.cortex/gizmo/knowledge-graph.md) owns coordination, integration,
+- [Gizmo Prime](.cortex/gizmo-prime/knowledge-graph.md) owns coordination, integration,
   lifecycle state, and the final integrated PR verdict.
 
 - [AI](.cortex/teams/ai/knowledge-graph.md) owns Cortex, Loom, agent skills,

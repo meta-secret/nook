@@ -3,7 +3,7 @@
 ## Purpose
 
 Keep local implementation feedback bounded under the
-[dev delivery contract](../../../gizmo/architecture/dev-delivery.md).
+[dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md).
 
 ## Required actions
 

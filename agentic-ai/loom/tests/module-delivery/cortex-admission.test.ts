@@ -88,13 +88,13 @@ export class ModuleDeliveryCortexAdmissionScenario {
           dependencies: [],
           resources: {
             read: [SRE_SKILL],
-            write: ['.cortex/gizmo/workflows/subagent-delegation.md'],
+            write: ['.cortex/gizmo-prime/workflows/subagent-delegation.md'],
             evidenceSurface: [],
           },
           cortexAuthoring: {
             selectedSkillPaths: [SRE_SKILL],
             sharedWriteClaims: [
-              '.cortex/gizmo/workflows/subagent-delegation.md',
+              '.cortex/gizmo-prime/workflows/subagent-delegation.md',
             ],
           },
           parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES.filter(
@@ -246,7 +246,7 @@ describe('Cortex module-delivery admission', () => {
       expect(admission?.resources.read).toEqual(expectedContext);
       expect(admission?.functionalOwner).toBe(ModuleDeliveryOwner.GizmoPrime);
       expect(admission?.resources.write).toEqual([
-        '.cortex/gizmo/workflows/subagent-delegation.md',
+        '.cortex/gizmo-prime/workflows/subagent-delegation.md',
       ]);
       const leaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
         authority,

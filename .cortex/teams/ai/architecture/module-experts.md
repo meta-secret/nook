@@ -11,7 +11,7 @@ It does not replace package responsibilities in
 
 Universal worker behavior follows the root
 [team worker contract](../../../AGENTS.md#team-worker-contract) and
-[subagent delegation](../../../gizmo/workflows/subagent-delegation.md).
+[subagent delegation](../../../gizmo-prime/workflows/subagent-delegation.md).
 
 ## Engineering team routing
 
@@ -245,7 +245,7 @@ It identifies:
   - `.cortex/teams/web-dev/AGENTS.md`
   - `.cortex/teams/web-dev/knowledge-graph.md`
   - `.cortex/teams/ai/dynamic-skills/module-expert.md`
-  - `.cortex/gizmo/workflows/module-oriented-development.md`
+  - `.cortex/gizmo-prime/workflows/module-oriented-development.md`
 - **Allowed product authority catalog:** The task selects only the authorities
   that own its assigned functionality.
   - `.cortex/teams/dev-core/product-specs/authenticator-items.md`

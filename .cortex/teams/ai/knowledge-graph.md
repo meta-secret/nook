@@ -11,7 +11,7 @@ Load only the category that owns the assigned AI functionality.
 Use these documents for AI runtime design and read-only expert routing.
 
 - [Module expert registry](architecture/module-experts.md)
-- [Dev delivery contract](../../gizmo/architecture/dev-delivery.md)
+- [Dev delivery contract](../../gizmo-prime/architecture/dev-delivery.md)
 - [Dev manager context](../dev-manager/AGENTS.md)
 - [Structural refactoring expert registry](architecture/refactoring-experts.md)
 - [Core agent-first beliefs](design-docs/core-beliefs.md)

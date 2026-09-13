@@ -94,7 +94,7 @@ PR delivery helpers live in `agentic-ai/ci-agent`.
 - The dev manager requires full slow PR checks and review/security acceptance.
 - Guarded promotion must fast-forward main to the tested dev SHA.
 - This requires the integrated publication tooling defined by the
-  [dev delivery contract](../../../gizmo/architecture/dev-delivery.md).
+  [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md).
 
 Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace the audit binary between build and readiness execution.
 
