@@ -82,8 +82,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "const rawGizmoId = gizmoIdRows[0]?.[1].trim() || ''",
         "const assignedGizmoId = rawGizmoId === 'null' ? '' : rawGizmoId",
         "uses unsupported stacked-PR metadata",
-        "AGENT_PR_BASE_BRANCH=$base_branch",
-        "AGENT_PR_TARGET_KIND=$target_kind",
+        "ORIGIN_MAIN_SHA",
+        "PINNED_LOCAL_DEV_SHA",
+        "originMainSha",
+        "pinnedLocalDevSha",
         "Checkout trusted workflow tooling",
         "ref: ${{ github.workflow_sha }}",
         "Prepare isolated implementation worktree",
@@ -125,27 +127,22 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "npm ci --ignore-scripts --include=dev --prefix",
         "uses: ./.github/actions/nook-docker-setup",
         "Format implementation with trusted Docker tooling",
-        "Prepare delivered PR metadata",
+        "Validate delivered capability metadata",
         "Work summary Outcome must contain exactly one bullet.",
-        "Delivered PR metadata must not copy the source task.",
+        "Delivered capability metadata must not copy the source task.",
         "const workbenchHeading = '## Nook Workbench\\n'",
         "/^- Worklog: pending$/m",
         "Validate and publish Workbench task plan",
-        "Resolve standalone prompt rerun",
-        "if: steps.task.outputs.ready == 'true' && inputs.prompt != ''",
-        "Multiple open PRs use standalone branch",
-        "Existing standalone implementation PR has an unexpected repository or base",
-        "state: 'all'",
-        "github.rest.pulls.get",
-        "pull.state === 'open'",
-        "pull.merged",
-        "was closed without merge; preserve it for explicit recovery",
+        "Reject an existing feature branch on rerun",
         "github.rest.repos.getBranch",
-        "exists without a PR; preserve it for explicit recovery",
+        "already exists; preserve it for explicit recovery",
         "error.status !== 404",
         "steps.rerun.outputs.terminal != 'true'",
-        "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun.",
-        "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete.",
+        "Feature branch delivery is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun.",
+        "Feature branch delivery is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete.",
+        "Delivery Pipeline Team Gizmo",
+        "PR Lifecycle Agent",
+        "Dev Manager",
         "Materialize validated implementation plan",
         "VALIDATED_PLAN_SHA256=$EXPECTED_PLAN_SHA256",
         "sha256sum \"$implementation_plan\"",
@@ -708,7 +705,7 @@ fn pr_workbench_suite_loads_sequential_contract_tests() {
 }
 
 #[test]
-fn workbench_plans_enforce_one_or_strictly_sequential_prs() {
+fn workbench_plans_preserve_assignment_and_pinned_local_dev_bootstrap() {
     let validator =
         RepositoryFixture::repository_root().read(".github/scripts/workbench-records.cjs");
     let prompt = RepositoryFixture::repository_root().read(".github/prompts/agent-plan.md");
@@ -736,10 +733,14 @@ fn workbench_plans_enforce_one_or_strictly_sequential_prs() {
     assert!(
         normalized_prompt.contains("`PR sequence mode: Sequential PRs`")
             && normalized_prompt.contains("Never use independent or stacked PRs")
-            && normalized_prompt.contains("next branch starts from current `origin/main`")
+            && normalized_prompt.contains("pinned local-dev SHA")
+            && normalized_prompt.contains("origin/main")
+            && normalized_prompt.contains("ancestry evidence")
             && normalized_pull_requests.contains("Do not create stacked branches or pull requests")
-            && normalized_pull_requests.contains("complete this procedure for every slice"),
-        "planning policy must enforce bounded sequential delivery without stacks"
+            && normalized_pull_requests.contains("pinned local-dev SHA")
+            && normalized_pull_requests.contains("origin/main")
+            && normalized_pull_requests.contains("ancestry evidence"),
+        "planning policy must preserve bounded assignment while bootstrapping feature work from pinned local dev"
     );
 }
 
