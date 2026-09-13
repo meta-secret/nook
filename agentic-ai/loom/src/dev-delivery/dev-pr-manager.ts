@@ -108,8 +108,9 @@ export class DevPrManagerCommand {
         message: 'origin/main must exist before the dev PR manager can run',
       });
     }
+    const mainSha = main.value.sha;
     const ancestry = workspace.git.ancestry({
-      ancestor: main.value.sha,
+      ancestor: mainSha,
       descendant: this.request.expectedSha,
       workingDirectory: workspace.root,
     });
@@ -133,7 +134,7 @@ export class DevPrManagerCommand {
       const existing = existingPullRequest.value.pullRequest;
       if (
         !existing.headSha.equals(this.request.expectedSha) ||
-        !existing.baseSha.equals(main.value.sha)
+        !existing.baseSha.equals(mainSha)
       ) {
         return err({
           kind: DevFailureKind.Race,
@@ -145,14 +146,14 @@ export class DevPrManagerCommand {
 
     const pullRequest = workspace.github.ensureDevelopmentPullRequest({
       expectedSha: this.request.expectedSha,
-      expectedBaseSha: main.value.sha,
+      expectedBaseSha: mainSha,
       admitted: existingPullRequest.value,
       beforeMutation: () =>
         this.revalidateBeforeMutation({
           workspace,
           developmentPath: development.value.path,
           expectedSha: this.request.expectedSha,
-          expectedBaseSha: main.value.sha,
+          expectedBaseSha: mainSha,
         }),
       workingDirectory: workspace.root,
     });
@@ -168,10 +169,10 @@ export class DevPrManagerCommand {
       remoteAfter.value.presence !== RemoteBranchPresence.Present ||
       !remoteAfter.value.sha.equals(this.request.expectedSha) ||
       mainAfter.value.presence !== RemoteBranchPresence.Present ||
-      !mainAfter.value.sha.equals(main.value.sha) ||
+      !mainAfter.value.sha.equals(mainSha) ||
       !localAfter.value.equals(this.request.expectedSha) ||
       !pullRequest.value.headSha.equals(this.request.expectedSha) ||
-      !pullRequest.value.baseSha.equals(main.value.sha)
+      !pullRequest.value.baseSha.equals(mainSha)
     ) {
       return err({
         kind: DevFailureKind.Race,
