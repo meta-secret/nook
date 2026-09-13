@@ -331,6 +331,10 @@ COPY agentic-ai/loom/src src
 # skill dependencies or running their test/verification scripts.
 COPY .cortex /meta-secret/nook/.cortex
 RUN bun install --frozen-lockfile --ignore-scripts \
+    && ln -s /meta-secret/nook/agentic-ai/loom/node_modules \
+      /meta-secret/nook/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/node_modules \
+    && ln -s /meta-secret/nook/agentic-ai/loom/node_modules \
+      /meta-secret/nook/.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/node_modules \
     && node_modules/.bin/tsc --noEmit -p tsconfig.compile.json \
     && mkdir -p /opt/nook \
     && touch /opt/nook/loom-compile-passed
