@@ -105,7 +105,7 @@ export class TeamAgentContract {
       findings.push({
         code: 'invalid-team-gizmo-count',
         path: TEAM_CATALOG_PATH,
-        message: 'The Team Gizmo catalog must contain one profile.',
+        message: `The Team Gizmo catalog must contain one profile per team (${EXPECTED_TEAM_GIZMOS.size} total).`,
       });
     }
     return {
@@ -160,7 +160,7 @@ export class TeamAgentContract {
       findings.push({
         code: 'invalid-team-internal-agent-count',
         path: TEAM_CATALOG_PATH,
-        message: 'The internal Team Agent catalog must contain one profile.',
+        message: `The internal Team Agent catalog must contain the canonical roster (${EXPECTED_TEAM_INTERNAL_AGENTS.size} total).`,
       });
     }
     return {
@@ -453,56 +453,14 @@ const GIZMO_IMPLEMENTATION_PROHIBITION =
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
 
-const EXPECTED_TEAM_GIZMOS = new Map<TeamGizmoKey, TeamGizmoProfile>([
-  [
-    TeamGizmoKey.DeliveryPipeline,
-    {
-      key: TeamGizmoKey.DeliveryPipeline,
-      team: TeamKey.DeliveryPipeline,
-      identity: 'Delivery Pipeline Team Gizmo',
-      description:
-        'High-level internal orchestrator for Delivery Pipeline packets, bounded mechanics, internal dispatch, evidence synthesis, and reporting to Gizmo Prime.',
-      model: 'gpt-5.6-sol',
-      reasoningEffort: 'xhigh',
-      contextPaths: [
-        '.cortex/teams/delivery-pipeline/internal/gizmo/AGENTS.md',
-        '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md',
-      ],
-      parent: 'Gizmo Prime',
-      reportingBoundary:
-        'Reports high-level delivery-pipeline summaries and blockers to Gizmo Prime; it does not replace Prime or create a second root delivery owner.',
-      capabilityBoundary:
-        'Team Gizmo coordinates only Delivery Pipeline mechanics. It does not implement product code, choose functional ownership, decide readiness or promotion, or issue the final delivery verdict.',
-    },
-  ],
-]);
+const EXPECTED_TEAM_GIZMOS = new Map<TeamGizmoKey, TeamGizmoProfile>(
+  TEAM_GIZMO_CATALOG.map((gizmo) => [gizmo.key, gizmo]),
+);
 
 const EXPECTED_TEAM_INTERNAL_AGENTS = new Map<
   TeamInternalAgentKey,
   TeamInternalAgentProfile
->([
-  [
-    TeamInternalAgentKey.PrSteward,
-    {
-      key: TeamInternalAgentKey.PrSteward,
-      team: TeamKey.DeliveryPipeline,
-      identity: 'PR Steward',
-      description:
-        'Executes explicitly authorized pull-request, check, review, status, publication, promotion, and bounded local-dev mechanics for Delivery Pipeline.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      contextPaths: [
-        '.cortex/teams/delivery-pipeline/internal/pr-steward/AGENTS.md',
-        '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md',
-      ],
-      parent: TeamGizmoKey.DeliveryPipeline,
-      reportingBoundary:
-        'Reports bounded operation evidence and blockers to Delivery Pipeline Team Gizmo, which forwards policy-owned evidence to the issuing controller.',
-      capabilityBoundary:
-        'PR Steward never edits functional code, creates or updates pull requests, chooses functional ownership, decides readiness or promotion, or issues the final delivery verdict.',
-    },
-  ],
-]);
+>(TEAM_INTERNAL_AGENT_CATALOG.map((agent) => [agent.key, agent]));
 
 const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
   [

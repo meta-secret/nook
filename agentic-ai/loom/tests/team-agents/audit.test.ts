@@ -58,11 +58,11 @@ export class TeamAgentsAuditScenario {
       join(tmpdir(), 'loom-team-authority-drift-'),
     );
     const cortexRoot = join(fixtureRoot, '.cortex');
-    await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
+    await mkdir(join(cortexRoot, 'gizmo-prime'), CREATE_RECURSIVELY);
     await symlink(join(REPO_ROOT, '.cortex/teams'), join(cortexRoot, 'teams'));
     await writeFile(join(cortexRoot, 'AGENTS.md'), 'routing only\n', 'utf8');
     await writeFile(
-      join(cortexRoot, 'gizmo/AGENTS.md'),
+      join(cortexRoot, 'gizmo-prime/AGENTS.md'),
       'delivery only\n',
       'utf8',
     );
@@ -79,7 +79,10 @@ export class TeamAgentsAuditScenario {
     const cortexRoot = join(fixtureRoot, '.cortex');
     await mkdir(cortexRoot, CREATE_RECURSIVELY);
     await symlink(join(REPO_ROOT, '.cortex/teams'), join(cortexRoot, 'teams'));
-    await symlink(join(REPO_ROOT, '.cortex/gizmo'), join(cortexRoot, 'gizmo'));
+    await symlink(
+      join(REPO_ROOT, '.cortex/gizmo-prime'),
+      join(cortexRoot, 'gizmo-prime'),
+    );
     const authority = await readFile(
       join(REPO_ROOT, '.cortex/AGENTS.md'),
       'utf8',
@@ -131,18 +134,22 @@ describe('canonical Cortex team authority', () => {
 
     expect(report.findings).toEqual([]);
     expect(report.authorityCount).toBe(6);
-    expect(report.teamGizmoCount).toBe(1);
-    expect(report.teamInternalAgentCount).toBe(1);
+    expect(report.teamGizmoCount).toBe(6);
+    expect(report.teamInternalAgentCount).toBe(12);
     expect(report.auditOk).toBe(true);
   });
 
-  test('models the Delivery Pipeline Team Gizmo and internal PR Steward hierarchy', () => {
+  test('models every Team Gizmo and internal-agent hierarchy', () => {
     expect(TEAM_AUTHORITY_CATALOG).toHaveLength(6);
-    expect(TEAM_GIZMO_CATALOG).toHaveLength(1);
-    expect(TEAM_INTERNAL_AGENT_CATALOG).toHaveLength(1);
+    expect(TEAM_GIZMO_CATALOG).toHaveLength(6);
+    expect(TEAM_INTERNAL_AGENT_CATALOG).toHaveLength(12);
 
-    const teamGizmo = TEAM_GIZMO_CATALOG[0];
-    const internalAgent = TEAM_INTERNAL_AGENT_CATALOG[0];
+    const teamGizmo = TEAM_GIZMO_CATALOG.find(
+      (candidate) => candidate.key === TeamGizmoKey.DeliveryPipeline,
+    );
+    const internalAgent = TEAM_INTERNAL_AGENT_CATALOG.find(
+      (candidate) => candidate.key === TeamInternalAgentKey.PrLifecycle,
+    );
     if (!teamGizmo || !internalAgent)
       throw new Error('Delivery Pipeline profiles are incomplete.');
 
@@ -152,18 +159,18 @@ describe('canonical Cortex team authority', () => {
       identity: 'Delivery Pipeline Team Gizmo',
       parent: 'Gizmo Prime',
       contextPaths: [
-        '.cortex/teams/delivery-pipeline/internal/gizmo/AGENTS.md',
-        '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md',
+        '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md',
+        '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md',
       ],
     });
     expect(internalAgent).toMatchObject({
-      key: TeamInternalAgentKey.PrSteward,
+      key: TeamInternalAgentKey.PrLifecycle,
       team: TeamKey.DeliveryPipeline,
-      identity: 'PR Steward',
+      identity: 'PR Lifecycle',
       parent: TeamGizmoKey.DeliveryPipeline,
       contextPaths: [
-        '.cortex/teams/delivery-pipeline/internal/pr-steward/AGENTS.md',
-        '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md',
+        '.cortex/teams/delivery-pipeline/pr-lifecycle/AGENTS.md',
+        '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
       ],
     });
     expect(
@@ -171,7 +178,7 @@ describe('canonical Cortex team authority', () => {
     ).toEqual(teamGizmo);
     expect(
       TeamAuthorityCatalog.teamInternalAgentProfile(
-        TeamInternalAgentKey.PrSteward,
+        TeamInternalAgentKey.PrLifecycle,
       ),
     ).toEqual(internalAgent);
     expect(
@@ -181,7 +188,7 @@ describe('canonical Cortex team authority', () => {
       TeamAuthorityCatalog.teamAgentProfile(TeamGizmoKey.DeliveryPipeline),
     ).toEqual(teamGizmo);
     expect(
-      TeamAuthorityCatalog.teamAgentProfile(TeamInternalAgentKey.PrSteward),
+      TeamAuthorityCatalog.teamAgentProfile(TeamInternalAgentKey.PrLifecycle),
     ).toEqual(internalAgent);
   });
 
@@ -281,8 +288,8 @@ describe('canonical Cortex team authority', () => {
           join(cortexRoot, 'AGENTS.md'),
         );
         await symlink(
-          join(REPO_ROOT, '.cortex/gizmo'),
-          join(cortexRoot, 'gizmo'),
+          join(REPO_ROOT, '.cortex/gizmo-prime'),
+          join(cortexRoot, 'gizmo-prime'),
         );
         for (const teamDirectory of [
           'dev-core',
@@ -418,7 +425,7 @@ describe('canonical Cortex team authority', () => {
       const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-gizmo-grant-'));
       const cortexRoot = join(fixtureRoot, '.cortex');
       try {
-        await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
+        await mkdir(join(cortexRoot, 'gizmo-prime'), CREATE_RECURSIVELY);
         await symlink(
           join(REPO_ROOT, '.cortex/teams'),
           join(cortexRoot, 'teams'),
@@ -429,12 +436,12 @@ describe('canonical Cortex team authority', () => {
           'utf8',
         );
         const gizmoAuthority = await readFile(
-          join(REPO_ROOT, '.cortex/gizmo/AGENTS.md'),
+          join(REPO_ROOT, '.cortex/gizmo-prime/AGENTS.md'),
           'utf8',
         );
         expect(gizmoAuthority).toContain(drift.current);
         await writeFile(
-          join(cortexRoot, 'gizmo/AGENTS.md'),
+          join(cortexRoot, 'gizmo-prime/AGENTS.md'),
           gizmoAuthority.replace(drift.current, drift.replacement),
           'utf8',
         );
@@ -444,7 +451,7 @@ describe('canonical Cortex team authority', () => {
         });
         expect(report.findings).toContainEqual({
           code: 'invalid-cortex-gizmo-authority',
-          path: '.cortex/gizmo/AGENTS.md',
+          path: '.cortex/gizmo-prime/AGENTS.md',
           message: `Canonical Gizmo authority is missing marker: ${drift.current}`,
         });
       } finally {

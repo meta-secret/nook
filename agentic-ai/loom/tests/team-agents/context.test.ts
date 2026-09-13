@@ -27,12 +27,12 @@ const SRE_CONTEXT_PATHS = [
 const SRE_DELTA_SKILL =
   '.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md';
 const DELIVERY_PIPELINE_GIZMO_CONTEXT_PATHS = [
-  '.cortex/teams/delivery-pipeline/internal/gizmo/AGENTS.md',
-  '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md',
+  '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md',
+  '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md',
 ] as const;
-const DELIVERY_PIPELINE_PR_STEWARD_CONTEXT_PATHS = [
-  '.cortex/teams/delivery-pipeline/internal/pr-steward/AGENTS.md',
-  '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md',
+const DELIVERY_PIPELINE_PR_LIFECYCLE_CONTEXT_PATHS = [
+  '.cortex/teams/delivery-pipeline/pr-lifecycle/AGENTS.md',
+  '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
 ] as const;
 
 describe('team task context', () => {
@@ -110,19 +110,19 @@ describe('team task context', () => {
     expect(context.skillPaths).toEqual([]);
   });
 
-  test('composes the internal PR Steward Team Agent context', () => {
+  test('composes the internal PR Lifecycle Team Agent context', () => {
     const request: TeamTaskContextRequest = {
       repositoryRoot: REPO_ROOT,
-      team: TeamInternalAgentKey.PrSteward,
+      team: TeamInternalAgentKey.PrLifecycle,
       readClaims: [],
       writeClaims: [],
       selectedSkillPaths: [],
     };
     const context = TeamTaskContextResolver.resolveTeamTaskContext(request);
 
-    expect(context.team).toBe(TeamInternalAgentKey.PrSteward);
+    expect(context.team).toBe(TeamInternalAgentKey.PrLifecycle);
     expect(context.contextPaths).toEqual(
-      DELIVERY_PIPELINE_PR_STEWARD_CONTEXT_PATHS,
+      DELIVERY_PIPELINE_PR_LIFECYCLE_CONTEXT_PATHS,
     );
     expect(context.skillPaths).toEqual([]);
   });

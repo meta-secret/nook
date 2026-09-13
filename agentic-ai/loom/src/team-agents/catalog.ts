@@ -225,8 +225,8 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
     model: 'gpt-5.6-luna',
     reasoningEffort: 'xhigh',
     contextPaths: [
-      '.cortex/teams/ai/internal/gizmo/AGENTS.md',
-      '.cortex/teams/ai/internal/gizmo/knowledge-graph.md',
+      '.cortex/teams/ai/gizmo/AGENTS.md',
+      '.cortex/teams/ai/gizmo/knowledge-graph.md',
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
@@ -242,8 +242,8 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
     model: 'gpt-5.6-luna',
     reasoningEffort: 'xhigh',
     contextPaths: [
-      '.cortex/teams/dev-core/internal/gizmo/AGENTS.md',
-      '.cortex/teams/dev-core/internal/gizmo/knowledge-graph.md',
+      '.cortex/teams/dev-core/gizmo/AGENTS.md',
+      '.cortex/teams/dev-core/gizmo/knowledge-graph.md',
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
@@ -259,8 +259,8 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
     model: 'gpt-5.6-luna',
     reasoningEffort: 'xhigh',
     contextPaths: [
-      '.cortex/teams/security/internal/gizmo/AGENTS.md',
-      '.cortex/teams/security/internal/gizmo/knowledge-graph.md',
+      '.cortex/teams/security/gizmo/AGENTS.md',
+      '.cortex/teams/security/gizmo/knowledge-graph.md',
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
@@ -276,8 +276,8 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
     model: 'gpt-5.6-luna',
     reasoningEffort: 'xhigh',
     contextPaths: [
-      '.cortex/teams/sre/internal/gizmo/AGENTS.md',
-      '.cortex/teams/sre/internal/gizmo/knowledge-graph.md',
+      '.cortex/teams/sre/gizmo/AGENTS.md',
+      '.cortex/teams/sre/gizmo/knowledge-graph.md',
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
@@ -293,8 +293,8 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
     model: 'gpt-5.6-luna',
     reasoningEffort: 'xhigh',
     contextPaths: [
-      '.cortex/teams/web-dev/internal/gizmo/AGENTS.md',
-      '.cortex/teams/web-dev/internal/gizmo/knowledge-graph.md',
+      '.cortex/teams/web-dev/gizmo/AGENTS.md',
+      '.cortex/teams/web-dev/gizmo/knowledge-graph.md',
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
@@ -310,8 +310,8 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
     model: 'gpt-5.6-luna',
     reasoningEffort: 'xhigh',
     contextPaths: [
-      '.cortex/teams/delivery-pipeline/internal/gizmo/AGENTS.md',
-      '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md',
+      '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md',
+      '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md',
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
@@ -331,8 +331,8 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       contextPaths: [
-        '.cortex/teams/ai/internal/loom-specialist/AGENTS.md',
-        '.cortex/teams/ai/internal/loom-specialist/knowledge-graph.md',
+        '.cortex/teams/ai/loom-specialist/AGENTS.md',
+        '.cortex/teams/ai/loom-specialist/knowledge-graph.md',
       ],
       parent: TeamGizmoKey.Ai,
       reportingBoundary:
@@ -348,8 +348,8 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       contextPaths: [
-        '.cortex/teams/ai/internal/cortex-specialist/AGENTS.md',
-        '.cortex/teams/ai/internal/cortex-specialist/knowledge-graph.md',
+        '.cortex/teams/ai/cortex-specialist/AGENTS.md',
+        '.cortex/teams/ai/cortex-specialist/knowledge-graph.md',
       ],
       parent: TeamGizmoKey.Ai,
       reportingBoundary:
@@ -365,8 +365,8 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       contextPaths: [
-        '.cortex/teams/dev-core/internal/rust-core-developer/AGENTS.md',
-        '.cortex/teams/dev-core/internal/rust-core-developer/knowledge-graph.md',
+        '.cortex/teams/dev-core/rust-core-developer/AGENTS.md',
+        '.cortex/teams/dev-core/rust-core-developer/knowledge-graph.md',
       ],
       parent: TeamGizmoKey.DevelopmentCore,
       reportingBoundary:
@@ -382,8 +382,8 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       contextPaths: [
-        '.cortex/teams/dev-core/internal/rust-auth2-developer/AGENTS.md',
-        '.cortex/teams/dev-core/internal/rust-auth2-developer/knowledge-graph.md',
+        '.cortex/teams/dev-core/rust-auth2-developer/AGENTS.md',
+        '.cortex/teams/dev-core/rust-auth2-developer/knowledge-graph.md',
       ],
       parent: TeamGizmoKey.DevelopmentCore,
       reportingBoundary:
@@ -399,8 +399,8 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       contextPaths: [
-        '.cortex/teams/security/internal/cryptography-specialist/AGENTS.md',
-        '.cortex/teams/security/internal/cryptography-specialist/knowledge-graph.md',
+        '.cortex/teams/security/cryptography-specialist/AGENTS.md',
+        '.cortex/teams/security/cryptography-specialist/knowledge-graph.md',
       ],
       parent: TeamGizmoKey.Security,
       reportingBoundary:
@@ -416,8 +416,8 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       contextPaths: [
-        '.cortex/teams/security/internal/security-review-specialist/AGENTS.md',
-        '.cortex/teams/security/internal/security-review-specialist/knowledge-graph.md',
+        '.cortex/teams/security/security-review-specialist/AGENTS.md',
+        '.cortex/teams/security/security-review-specialist/knowledge-graph.md',
       ],
       parent: TeamGizmoKey.Security,
       reportingBoundary:
@@ -433,8 +433,8 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       contextPaths: [
-        '.cortex/teams/sre/internal/provisioning/AGENTS.md',
-        '.cortex/teams/sre/internal/provisioning/knowledge-graph.md',
+        '.cortex/teams/sre/provisioning/AGENTS.md',
+        '.cortex/teams/sre/provisioning/knowledge-graph.md',
       ],
       parent: TeamGizmoKey.Sre,
       reportingBoundary:
@@ -450,8 +450,8 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       contextPaths: [
-        '.cortex/teams/sre/internal/cloud-native/AGENTS.md',
-        '.cortex/teams/sre/internal/cloud-native/knowledge-graph.md',
+        '.cortex/teams/sre/cloud-native/AGENTS.md',
+        '.cortex/teams/sre/cloud-native/knowledge-graph.md',
       ],
       parent: TeamGizmoKey.Sre,
       reportingBoundary:
@@ -467,8 +467,8 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       contextPaths: [
-        '.cortex/teams/web-dev/internal/typescript-specialist/AGENTS.md',
-        '.cortex/teams/web-dev/internal/typescript-specialist/knowledge-graph.md',
+        '.cortex/teams/web-dev/typescript-specialist/AGENTS.md',
+        '.cortex/teams/web-dev/typescript-specialist/knowledge-graph.md',
       ],
       parent: TeamGizmoKey.WebDevelopment,
       reportingBoundary:
@@ -484,8 +484,8 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       contextPaths: [
-        '.cortex/teams/web-dev/internal/svelte-specialist/AGENTS.md',
-        '.cortex/teams/web-dev/internal/svelte-specialist/knowledge-graph.md',
+        '.cortex/teams/web-dev/svelte-specialist/AGENTS.md',
+        '.cortex/teams/web-dev/svelte-specialist/knowledge-graph.md',
       ],
       parent: TeamGizmoKey.WebDevelopment,
       reportingBoundary:
@@ -501,8 +501,8 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       contextPaths: [
-        '.cortex/teams/delivery-pipeline/internal/dev-manager/AGENTS.md',
-        '.cortex/teams/delivery-pipeline/internal/dev-manager/knowledge-graph.md',
+        '.cortex/teams/delivery-pipeline/dev-manager/AGENTS.md',
+        '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md',
       ],
       parent: TeamGizmoKey.DeliveryPipeline,
       reportingBoundary:
@@ -518,8 +518,8 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       contextPaths: [
-        '.cortex/teams/delivery-pipeline/internal/pr-lifecycle/AGENTS.md',
-        '.cortex/teams/delivery-pipeline/internal/pr-lifecycle/knowledge-graph.md',
+        '.cortex/teams/delivery-pipeline/pr-lifecycle/AGENTS.md',
+        '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
       ],
       parent: TeamGizmoKey.DeliveryPipeline,
       reportingBoundary:
