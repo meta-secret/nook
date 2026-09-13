@@ -50,8 +50,6 @@ interface PushRequest {
 }
 
 export interface DevGitBootstrapRequest {
-  /** Refresh origin refs before resolving the bootstrap baseline. */
-  readonly fetchOrigin?: boolean;
   /** Require clean-start local dev to finish exactly at origin/main. */
   readonly requireDevEquality?: boolean;
   /** Canonical worktree paths; omitted paths are discovered from Git. */
@@ -406,9 +404,7 @@ export class DevGitRepository {
   bootstrap(
     request: DevGitBootstrapRequest = {},
   ): Result<DevGitBootstrapEvidence, DevFailure> {
-    const refreshed = request.fetchOrigin
-      ? this.refreshManagedRefs({ prune: true })
-      : ok();
+    const refreshed = this.refreshManagedRefs({ prune: true });
     if (refreshed.isErr()) return err(refreshed.error);
 
     const originMain = this.originMainSha();
