@@ -88,8 +88,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "uses unsupported stacked-PR metadata",
         "ORIGIN_MAIN_SHA",
         "PINNED_LOCAL_DEV_SHA",
+        "FEATURE_HEAD_SHA",
         "originMainSha",
         "pinnedLocalDevSha",
+        "featureHeadSha",
         "Checkout trusted workflow tooling",
         "ref: ${{ github.workflow_sha }}",
         "Prepare isolated implementation worktree",
@@ -140,7 +142,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "Verify prepublished feature branch",
         "github.rest.repos.getBranch",
         "Required prepublished feature branch ${process.env.AGENT_BRANCH} does not exist",
-        "Prepublished feature branch ${process.env.AGENT_BRANCH} does not match pinned_local_dev_sha",
+        "Prepublished feature branch ${process.env.AGENT_BRANCH} does not match feature_head_sha",
         "error.status !== 404",
         "steps.rerun.outputs.terminal != 'true'",
         "Feature branch delivery is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun.",
@@ -170,30 +172,65 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
 
     for required in [
         "feature_branch:",
+        "feature_head_sha:",
+        "FEATURE_HEAD_SHA: ${{ inputs.feature_head_sha }}",
+        "feature_head_sha must be an exact 40-character lowercase commit SHA.",
         "Required prepublished feature branch",
-        "branch.commit.sha !== process.env.PINNED_LOCAL_DEV_SHA",
+        "branch.commit.sha !== process.env.FEATURE_HEAD_SHA",
         "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH",
         "fetched_origin_main_sha=\"$(git -C \"$GITHUB_WORKSPACE\" rev-parse refs/remotes/origin/main^{commit})\"",
         "if [ \"$fetched_origin_main_sha\" != \"$ORIGIN_MAIN_SHA\" ]",
-        "pinned_local_dev_sha=\"$(git -C \"$GITHUB_WORKSPACE\" rev-parse \"refs/remotes/origin/$FEATURE_BRANCH^{commit}\")\"",
-        "if [ \"$pinned_local_dev_sha\" != \"$PINNED_LOCAL_DEV_SHA\" ]",
-        "merge-base --is-ancestor \"$ORIGIN_MAIN_SHA\" \"$pinned_local_dev_sha\"",
+        "feature_head_sha=\"$(git -C \"$GITHUB_WORKSPACE\" rev-parse \"refs/remotes/origin/$FEATURE_BRANCH^{commit}\")\"",
+        "if [ \"$feature_head_sha\" != \"$FEATURE_HEAD_SHA\" ]",
+        "merge-base --is-ancestor \"$ORIGIN_MAIN_SHA\" \"$PINNED_LOCAL_DEV_SHA\"",
+        "merge-base --is-ancestor \"$PINNED_LOCAL_DEV_SHA\" \"$feature_head_sha\"",
         "git init \"$implementation_root\"",
         "git -C \"$implementation_root\" remote add origin \"https://github.com/$GITHUB_REPOSITORY.git\"",
         "git -C \"$implementation_root\" fetch --no-tags origin \"+refs/heads/main:refs/remotes/origin/main\" \"+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH\"",
         "implementation_origin_main_sha=\"$(git -C \"$implementation_root\" rev-parse refs/remotes/origin/main^{commit})\"",
         "if [ \"$implementation_origin_main_sha\" != \"$ORIGIN_MAIN_SHA\" ]",
         "implementation_head=\"$(git -C \"$implementation_root\" rev-parse \"refs/remotes/origin/$FEATURE_BRANCH^{commit}\")\"",
-        "if [ \"$implementation_head\" != \"$PINNED_LOCAL_DEV_SHA\" ]",
-        "git -C \"$implementation_root\" merge-base --is-ancestor \"$implementation_origin_main_sha\" \"$implementation_head\"",
+        "if [ \"$implementation_head\" != \"$FEATURE_HEAD_SHA\" ]",
+        "git -C \"$implementation_root\" merge-base --is-ancestor \"$implementation_origin_main_sha\" \"$PINNED_LOCAL_DEV_SHA\"",
+        "git -C \"$implementation_root\" merge-base --is-ancestor \"$PINNED_LOCAL_DEV_SHA\" \"$implementation_head\"",
         "git -C \"$implementation_root\" checkout --detach \"$implementation_head\"",
-        "test \"$(git -C \"$implementation_root\" rev-parse HEAD)\" = \"$PINNED_LOCAL_DEV_SHA\"",
+        "test \"$(git -C \"$implementation_root\" rev-parse HEAD)\" = \"$FEATURE_HEAD_SHA\"",
     ] {
         assert!(
             normalized_workflow.contains(required),
             "agent implementation bootstrap is missing its pinned canonical feature-ref contract: {required}"
         );
     }
+    let initial_run = ("main", "pinned-dev", "pinned-dev");
+    let descendant_rerun = ("main", "pinned-dev", "feature-descendant");
+    let reversed_ancestry = ("main", "feature-descendant", "pinned-dev");
+    let valid_feature_chain = |(main, pinned_dev, feature_head)| {
+        main == "main"
+            && pinned_dev == "pinned-dev"
+            && matches!(feature_head, "pinned-dev" | "feature-descendant")
+    };
+    assert!(
+        valid_feature_chain(initial_run),
+        "an initial run may pin the feature head exactly to pinned local dev"
+    );
+    assert!(
+        valid_feature_chain(descendant_rerun),
+        "a rerun must accept a current feature head descended from pinned local dev"
+    );
+    assert!(
+        !valid_feature_chain(reversed_ancestry),
+        "a feature head must not be accepted by reversing pinned-dev ancestry"
+    );
+    assert!(
+        !normalized_workflow.contains("branch.commit.sha !== process.env.PINNED_LOCAL_DEV_SHA")
+            && !normalized_workflow.contains(
+                "merge-base --is-ancestor \"$feature_head_sha\" \"$PINNED_LOCAL_DEV_SHA\""
+            )
+            && !normalized_workflow.contains(
+                "merge-base --is-ancestor \"$implementation_head\" \"$PINNED_LOCAL_DEV_SHA\""
+            ),
+        "the implementation bootstrap must not require current feature-head equality with pinned local dev or reverse their ancestry"
+    );
     assert!(
         !workflow.contains("checkout_ref=\"main\"")
             && !workflow.contains("branch=\"agent/")
