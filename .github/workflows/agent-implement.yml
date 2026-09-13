@@ -66,8 +66,50 @@ jobs:
       PINNED_LOCAL_DEV_SHA: ${{ inputs.pinned_local_dev_sha }}
       GIT_NO_REPLACE_OBJECTS: "1"
       GIT_CONFIG_NOSYSTEM: "1"
-      GIT_CONFIG_GLOBAL: /dev/null
     steps:
+      - name: Initialize isolated writable Git configuration
+        run: |
+          set -euo pipefail
+          case "$RUNNER_TEMP" in
+            /*) ;;
+            *) echo "::error::RUNNER_TEMP must be an absolute path."; exit 1 ;;
+          esac
+          if [ ! -d "$RUNNER_TEMP" ] || [ -L "$RUNNER_TEMP" ]; then
+            echo "::error::RUNNER_TEMP must be an existing non-symlink directory."
+            exit 1
+          fi
+          runner_temp="$(realpath -e -- "$RUNNER_TEMP")"
+          if [ "$runner_temp" != "$RUNNER_TEMP" ]; then
+            echo "::error::RUNNER_TEMP must already be a canonical path."
+            exit 1
+          fi
+          if ! printf '%s' "$GITHUB_RUN_ID" | grep -Eq '^[0-9]+$' ||
+             ! printf '%s' "$GITHUB_RUN_ATTEMPT" | grep -Eq '^[0-9]+$'; then
+            echo "::error::Git configuration scope requires numeric run identifiers."
+            exit 1
+          fi
+          git_config_root="$runner_temp/nook-git-config-agent-implement-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if ! mkdir -m 0700 -- "$git_config_root"; then
+            echo "::error::Refusing to reuse an existing Git configuration path."
+            exit 1
+          fi
+          git_config_global="$git_config_root/config"
+          xdg_config_home="$git_config_root/xdg"
+          mkdir -m 0700 -- "$xdg_config_home"
+          umask 077
+          set -C
+          : > "$git_config_global"
+          set +C
+          if [ ! -f "$git_config_global" ] || [ -L "$git_config_global" ]; then
+            echo "::error::Failed to create a regular non-symlink Git configuration."
+            exit 1
+          fi
+          {
+            echo "GIT_CONFIG_GLOBAL=$git_config_global"
+            echo "XDG_CONFIG_HOME=$xdg_config_home"
+            echo "TRUSTED_GIT_CONFIG_ROOT=$git_config_root"
+          } >> "$GITHUB_ENV"
+
       - name: Validate dispatch inputs
         env:
           CONTINUING_OWNER: ${{ inputs.continuing_owner }}
@@ -626,8 +668,12 @@ jobs:
           test "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" = "$TRUSTED_WORKFLOW_SHA"
           test "$IMPLEMENTATION_REPO_ROOT" != "$GITHUB_WORKSPACE"
           changed_files="$RUNNER_TEMP/nook-format-${GITHUB_RUN_ID}.files"
-          git -C "$IMPLEMENTATION_REPO_ROOT" diff --name-only -z HEAD > "$changed_files"
-          git -C "$IMPLEMENTATION_REPO_ROOT" ls-files --others --exclude-standard -z >> "$changed_files"
+          git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+            -C "$IMPLEMENTATION_REPO_ROOT" diff --no-ext-diff --no-textconv \
+            --name-only -z HEAD > "$changed_files"
+          git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+            -c core.excludesFile=/dev/null -C "$IMPLEMENTATION_REPO_ROOT" \
+            ls-files --others --exclude-per-directory=.gitignore -z >> "$changed_files"
           REPO_ROOT="$GITHUB_WORKSPACE" \
           FORMAT_CHANGED_FILES="$changed_files" \
             task --taskfile "$GITHUB_WORKSPACE/Taskfile.yml" ci:format:implementation
@@ -902,3 +948,26 @@ jobs:
               message: `${success ? 'progress' : 'block'}: ${issuePath}`,
               content: Buffer.from(body).toString('base64'),
             })
+
+      - name: Remove isolated Git configuration
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -z "${TRUSTED_GIT_CONFIG_ROOT:-}" ]; then
+            exit 0
+          fi
+          case "$RUNNER_TEMP" in
+            /*) ;;
+            *) echo "::error::Refusing cleanup with an invalid RUNNER_TEMP."; exit 1 ;;
+          esac
+          if ! printf '%s' "$GITHUB_RUN_ID" | grep -Eq '^[0-9]+$' ||
+             ! printf '%s' "$GITHUB_RUN_ATTEMPT" | grep -Eq '^[0-9]+$'; then
+            echo "::error::Refusing cleanup with invalid run identifiers."
+            exit 1
+          fi
+          expected="$RUNNER_TEMP/nook-git-config-agent-implement-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [ "$TRUSTED_GIT_CONFIG_ROOT" != "$expected" ]; then
+            echo "::error::Refusing to clean an unexpected Git configuration path."
+            exit 1
+          fi
+          rm -rf -- "$expected"
