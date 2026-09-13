@@ -11,7 +11,7 @@ variable "NOOK_COMPILE_HIVE" {
 // The compile graph keeps manifest-only dependency RUNs before authored source
 // COPY/RUN steps. A single stable registry ref with mode=max retains those
 // native BuildKit vertices even when compiler sccache is unavailable.
-compile_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-build-compile-v1:buildcache"
+compile_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v1:buildcache"
 
 compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
   "type=registry,ref=${compile_cache_ref},ignore-error=true",

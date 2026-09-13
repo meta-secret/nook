@@ -658,12 +658,13 @@ fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Resul
 
     let compile_from = assignment_body(&compile_bake, "compile_cache_from")?;
     let compile_to = assignment_body(&compile_bake, "compile_cache_to")?;
-    let compile_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-build-compile-v1:buildcache";
+    let compile_ref =
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v1:buildcache";
     let compile_ref_assignment = assignment_body(&compile_bake, "compile_cache_ref")?;
     assert_eq!(
         compile_ref_assignment,
         format!("\"{compile_ref}\""),
-        "build:compile must name the stable Main registry scope explicitly"
+        "build:compile must name its stable remote registry scope explicitly"
     );
     assert_eq!(
         compile_from.matches("type=registry,ref=").count(),
@@ -679,9 +680,9 @@ fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Resul
         compile_from.contains("${compile_cache_ref}")
             && compile_to.contains("${compile_cache_ref}")
             && !compile_bake.contains("write_cache_repository")
-            && !compile_bake.contains("remote-buildcache")
+            && compile_bake.contains("remote-buildcache")
             && !compile_bake.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "build:compile must use only its stable Main registry scope"
+        "build:compile must use only its stable remote registry scope"
     );
 
     let build_compile = bake_target_body(&compile_bake, "build-compile");
