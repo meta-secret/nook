@@ -1,6 +1,10 @@
 export { ModuleDeliveryPlanDecoder } from './validation.ts';
 export { ModuleDeliveryPlanSchema } from './codec.ts';
 export {
+  ModuleDeliveryPlanTransportLimit,
+  ModuleDeliveryPlanTransportLimitCode,
+} from './codec-fields.ts';
+export {
   ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryGenerationFenceKind,
@@ -38,6 +42,12 @@ export {
   ModuleIntegrationPhase,
 } from './integration-provenance.ts';
 export {
+  MAX_MODULE_DELIVERY_PLAN_AGGREGATE_NODES,
+  MAX_MODULE_DELIVERY_PLAN_AGGREGATE_STRING_CODE_UNITS,
+  MAX_MODULE_DELIVERY_PLAN_ARRAY_ENTRIES,
+  MAX_MODULE_DELIVERY_PLAN_DEPTH,
+  MAX_MODULE_DELIVERY_PLAN_HANDOFF_BYTES,
+  MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS,
   MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES,
   MAX_MODULE_DELIVERY_EVIDENCE_DEPTH,
   MAX_MODULE_DELIVERY_EVIDENCE_HANDOFF_BYTES,

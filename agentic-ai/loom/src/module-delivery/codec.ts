@@ -2,6 +2,10 @@ import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 import { UntrustedYamlBoundary } from '../lib/guards.ts';
 import type { UntrustedYamlNode } from '../lib/guards.ts';
 import { ModulePlanDecodeFailure, ModulePlanFields } from './codec-fields.ts';
+import {
+  ModuleDeliveryPlanTransportLimit,
+  ModuleDeliveryPlanTransportLimitCode,
+} from './codec-fields.ts';
 import { ModuleDeliveryPlanDigest } from './codec-digest.ts';
 import { ModuleDeliveryPlanNodeCodec } from './codec-node.ts';
 import {
@@ -21,6 +25,14 @@ import {
   ModuleDeliveryCompatibilityStatus,
   ModuleDeliveryIssueCode,
 } from './domain.ts';
+import {
+  MAX_MODULE_DELIVERY_PLAN_AGGREGATE_NODES,
+  MAX_MODULE_DELIVERY_PLAN_AGGREGATE_STRING_CODE_UNITS,
+  MAX_MODULE_DELIVERY_PLAN_ARRAY_ENTRIES,
+  MAX_MODULE_DELIVERY_PLAN_DEPTH,
+  MAX_MODULE_DELIVERY_PLAN_HANDOFF_BYTES,
+  MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS,
+} from './evidence-limits.ts';
 import type {
   CompatibleModuleDeliveryPlanDecode,
   LegacyModuleDeliveryPlan,
@@ -34,24 +46,28 @@ import type {
 /** Owns the public module delivery plan codec boundary and version registry. */
 export class ModuleDeliveryPlanSchema {
   private constructor() {}
-  private static readonly MAX_SERIALIZED_PLAN_BYTES = 262_144;
 
   static decodeCompatibleModuleDeliveryPlan(
     serialized: string,
   ): CompatibleModuleDeliveryPlanDecode {
     if (
-      Buffer.byteLength(serialized, 'utf8') >
-      ModuleDeliveryPlanSchema.MAX_SERIALIZED_PLAN_BYTES
+      Buffer.byteLength(serialized, 'utf8') > MAX_MODULE_DELIVERY_PLAN_HANDOFF_BYTES
     ) {
+      const error = new ModuleDeliveryPlanTransportLimit({
+        code: ModuleDeliveryPlanTransportLimitCode.SerializedByteLimit,
+        observed: Buffer.byteLength(serialized, 'utf8'),
+        limit: MAX_MODULE_DELIVERY_PLAN_HANDOFF_BYTES,
+      });
       const request: RejectedModulePlanRequest = {
-        code: ModuleDeliveryIssueCode.LimitExceeded,
-        message: 'Plan transport exceeds 262144 bytes.',
+        code: error.code,
+        path: error.path,
+        message: error.message,
       };
       return ModuleDeliveryPlanSchema.rejected(request);
     }
-    let node: UntrustedYamlNode;
+    let parsed: unknown;
     try {
-      node = UntrustedYamlBoundary.fromHost(JSON.parse(serialized));
+      parsed = JSON.parse(serialized) as unknown;
     } catch {
       const request: RejectedModulePlanRequest = {
         code: ModuleDeliveryIssueCode.MalformedTransport,
@@ -59,9 +75,20 @@ export class ModuleDeliveryPlanSchema {
       };
       return ModuleDeliveryPlanSchema.rejected(request);
     }
+    let node: UntrustedYamlNode;
     try {
+      ModuleDeliveryPlanSchema.assertTransportWithinBounds(parsed);
+      node = UntrustedYamlBoundary.fromHost(parsed);
       return ModuleDeliveryPlanSchema.decodePlanRoot(node);
     } catch (error) {
+      if (error instanceof ModuleDeliveryPlanTransportLimit) {
+        const request: RejectedModulePlanRequest = {
+          code: error.code,
+          path: error.path,
+          message: error.message,
+        };
+        return ModuleDeliveryPlanSchema.rejected(request);
+      }
       if (error instanceof ModulePlanDecodeFailure) {
         const request: RejectedModulePlanRequest = {
           code: error.code,
@@ -72,6 +99,111 @@ export class ModuleDeliveryPlanSchema {
       }
       throw error;
     }
+  }
+
+  /** Iteratively bounds parsed JSON before the recursive transport adapter. */
+  private static assertTransportWithinBounds(node: unknown): void {
+    const pending: ModulePlanTransportFrame[] = [
+      { node, depth: 0, path: '$' },
+    ];
+    let aggregateNodes = 0;
+    let aggregateStringCodeUnits = 0;
+    while (pending.length > 0) {
+      const current = pending.pop();
+      if (!current) continue;
+      aggregateNodes += 1;
+      if (aggregateNodes > MAX_MODULE_DELIVERY_PLAN_AGGREGATE_NODES)
+        ModuleDeliveryPlanSchema.throwTransportLimit({
+          code: ModuleDeliveryPlanTransportLimitCode.AggregateNodeLimit,
+          observed: aggregateNodes,
+          limit: MAX_MODULE_DELIVERY_PLAN_AGGREGATE_NODES,
+          path: '$',
+        });
+      if (current.depth > MAX_MODULE_DELIVERY_PLAN_DEPTH)
+        ModuleDeliveryPlanSchema.throwTransportLimit({
+          code: ModuleDeliveryPlanTransportLimitCode.DepthLimit,
+          observed: current.depth,
+          limit: MAX_MODULE_DELIVERY_PLAN_DEPTH,
+          path: current.path,
+        });
+      if (typeof current.node === 'string') {
+        aggregateStringCodeUnits += current.node.length;
+        if (
+          aggregateStringCodeUnits >
+          MAX_MODULE_DELIVERY_PLAN_AGGREGATE_STRING_CODE_UNITS
+        )
+          ModuleDeliveryPlanSchema.throwTransportLimit({
+            code: ModuleDeliveryPlanTransportLimitCode.AggregateStringLimit,
+            observed: aggregateStringCodeUnits,
+            limit: MAX_MODULE_DELIVERY_PLAN_AGGREGATE_STRING_CODE_UNITS,
+            path: '$',
+          });
+        continue;
+      }
+      if (
+        current.node === null ||
+        typeof current.node === 'boolean' ||
+        typeof current.node === 'number'
+      )
+        continue;
+      if (Array.isArray(current.node)) {
+        if (current.node.length > MAX_MODULE_DELIVERY_PLAN_ARRAY_ENTRIES)
+          ModuleDeliveryPlanSchema.throwTransportLimit({
+            code: ModuleDeliveryPlanTransportLimitCode.ArrayEntryLimit,
+            observed: current.node.length,
+            limit: MAX_MODULE_DELIVERY_PLAN_ARRAY_ENTRIES,
+            path: current.path,
+          });
+        const childDepth = current.depth + 1;
+        for (let index = current.node.length - 1; index >= 0; index -= 1)
+          pending.push({
+            node: current.node[index],
+            depth: childDepth,
+            path: `${current.path}[${index}]`,
+          });
+        continue;
+      }
+      if (typeof current.node !== 'object') continue;
+      const object = current.node as Record<string, unknown>;
+      const keys = Object.keys(object);
+      if (keys.length > MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS)
+        ModuleDeliveryPlanSchema.throwTransportLimit({
+          code: ModuleDeliveryPlanTransportLimitCode.ObjectKeyLimit,
+          observed: keys.length,
+          limit: MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS,
+          path: current.path,
+        });
+      const childDepth = current.depth + 1;
+      for (let index = keys.length - 1; index >= 0; index -= 1) {
+        const key = keys[index];
+        if (key === undefined) continue;
+        aggregateStringCodeUnits += key.length;
+        if (
+          aggregateStringCodeUnits >
+          MAX_MODULE_DELIVERY_PLAN_AGGREGATE_STRING_CODE_UNITS
+        )
+          ModuleDeliveryPlanSchema.throwTransportLimit({
+            code: ModuleDeliveryPlanTransportLimitCode.AggregateStringLimit,
+            observed: aggregateStringCodeUnits,
+            limit: MAX_MODULE_DELIVERY_PLAN_AGGREGATE_STRING_CODE_UNITS,
+            path: '$',
+          });
+        pending.push({
+          node: object[key],
+          depth: childDepth,
+          path: current.path,
+        });
+      }
+    }
+  }
+
+  private static throwTransportLimit(request: {
+    readonly code: ModuleDeliveryPlanTransportLimitCode;
+    readonly observed: number;
+    readonly limit: number;
+    readonly path: string;
+  }): never {
+    throw new ModuleDeliveryPlanTransportLimit(request);
   }
 
   /** Creates a current plan from V3 evidence without mutating the old plan. */
@@ -235,3 +367,9 @@ export class ModuleDeliveryPlanSchema {
     throw new ModulePlanDecodeFailure({ message });
   }
 }
+
+type ModulePlanTransportFrame = {
+  readonly node: unknown;
+  readonly depth: number;
+  readonly path: string;
+};

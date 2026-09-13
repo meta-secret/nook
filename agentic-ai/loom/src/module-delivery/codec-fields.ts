@@ -46,6 +46,38 @@ export class ModulePlanDecodeFailure extends Error {
   }
 }
 
+export enum ModuleDeliveryPlanTransportLimitCode {
+  SerializedByteLimit = 'serialized-byte-limit',
+  DepthLimit = 'depth-limit',
+  ObjectKeyLimit = 'object-key-limit',
+  ArrayEntryLimit = 'array-entry-limit',
+  AggregateNodeLimit = 'aggregate-node-limit',
+  AggregateStringLimit = 'aggregate-string-limit',
+}
+
+export class ModuleDeliveryPlanTransportLimit extends ModulePlanDecodeFailure {
+  readonly limitCode: ModuleDeliveryPlanTransportLimitCode;
+  readonly observed: number;
+  readonly limit: number;
+
+  constructor(request: {
+    readonly code: ModuleDeliveryPlanTransportLimitCode;
+    readonly observed: number;
+    readonly limit: number;
+    readonly path?: string;
+  }) {
+    super({
+      code: ModuleDeliveryIssueCode.LimitExceeded,
+      path: request.path,
+      message: `Plan transport ${request.code} exceeded its bound (${request.observed} > ${request.limit}).`,
+    });
+    this.name = 'ModuleDeliveryPlanTransportLimit';
+    this.limitCode = request.code;
+    this.observed = request.observed;
+    this.limit = request.limit;
+  }
+}
+
 export class ModulePlanFields {
   readonly record: UntrustedYamlMap;
   readonly path: string;
