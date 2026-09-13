@@ -3,13 +3,19 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, normalize } from 'node:path';
 
 import {
-  GIZMO_OWNED_AGENT_CATALOG,
+  TEAM_GIZMO_CATALOG,
+  TEAM_INTERNAL_AGENT_CATALOG,
   TEAM_AUTHORITY_CATALOG,
-  GizmoOwnedAgentKey,
+  TeamGizmoKey,
+  TeamInternalAgentKey,
   TeamKey,
 } from './catalog.ts';
 
-import type { GizmoOwnedAgentProfile, TeamAuthority } from './catalog.ts';
+import type {
+  TeamAuthority,
+  TeamGizmoProfile,
+  TeamInternalAgentProfile,
+} from './catalog.ts';
 
 import { CORTEX_AUTHORING_SKILL_PATHS } from './context.ts';
 
@@ -18,11 +24,11 @@ export class TeamAgentContract {
 
   static auditTeamAgents(
     request: AuditTeamAgentsRequest,
-  ): TeamAuthorityAuditReport {
+  ): TeamAgentAuditReport {
     return new TeamAgentContract(request).execute();
   }
 
-  private execute(): TeamAuthorityAuditReport {
+  private execute(): TeamAgentAuditReport {
     const request = this.request;
     const authorityRequest: AuditTeamAuthoritiesRequest = {
       repoRoot: request.repoRoot,
@@ -30,67 +36,162 @@ export class TeamAgentContract {
     };
     const authorityReport =
       TeamAgentContract.auditTeamAuthorities(authorityRequest);
-    const operationalFindings = TeamAgentContract.auditGizmoOwnedAgents(
-      request.repoRoot,
-    );
+    const gizmoReport = TeamAgentContract.auditTeamGizmos({
+      repoRoot: request.repoRoot,
+      gizmos: TEAM_GIZMO_CATALOG,
+    });
+    const internalAgentReport = TeamAgentContract.auditTeamInternalAgents({
+      repoRoot: request.repoRoot,
+      agents: TEAM_INTERNAL_AGENT_CATALOG,
+    });
     return {
       ...authorityReport,
-      findings: [...authorityReport.findings, ...operationalFindings],
-      auditOk: authorityReport.auditOk && operationalFindings.length === 0,
+      findings: [
+        ...authorityReport.findings,
+        ...gizmoReport.findings,
+        ...internalAgentReport.findings,
+      ],
+      auditOk:
+        authorityReport.auditOk &&
+        gizmoReport.auditOk &&
+        internalAgentReport.auditOk,
+      teamGizmoCount: gizmoReport.catalogCount,
+      teamInternalAgentCount: internalAgentReport.catalogCount,
     };
   }
 
-  private static auditGizmoOwnedAgents(
-    repoRoot: string,
-  ): readonly TeamAuthorityAuditFinding[] {
+  static auditTeamGizmos(
+    request: AuditTeamGizmosRequest,
+  ): TeamAgentCatalogAuditReport {
     const findings: TeamAuthorityAuditFinding[] = [];
-    const seenKeys = new Set<GizmoOwnedAgentKey>();
+    const seenKeys = new Set<TeamGizmoKey>();
     const seenIdentities = new Set<string>();
-    for (const agent of GIZMO_OWNED_AGENT_CATALOG) {
-      const expected = EXPECTED_GIZMO_OWNED_AGENTS.get(agent.key);
+    for (const gizmo of request.gizmos) {
+      const expected = EXPECTED_TEAM_GIZMOS.get(gizmo.key);
       if (
         !expected ||
+        gizmo.team !== expected.team ||
+        gizmo.identity !== expected.identity ||
+        seenKeys.has(gizmo.key) ||
+        seenIdentities.has(gizmo.identity) ||
+        gizmo.description !== expected.description ||
+        gizmo.model !== expected.model ||
+        gizmo.reasoningEffort !== expected.reasoningEffort ||
+        gizmo.parent !== expected.parent ||
+        gizmo.reportingBoundary !== expected.reportingBoundary ||
+        gizmo.capabilityBoundary !== expected.capabilityBoundary ||
+        JSON.stringify(gizmo.contextPaths) !==
+          JSON.stringify(expected.contextPaths)
+      ) {
+        findings.push({
+          code: 'invalid-team-gizmo-contract',
+          path: TEAM_CATALOG_PATH,
+          message: `Team Gizmo contract is missing, duplicated, or drifted: ${gizmo.key}`,
+        });
+      }
+      seenKeys.add(gizmo.key);
+      seenIdentities.add(gizmo.identity);
+      findings.push(
+        ...TeamAgentContract.auditContextPaths(
+          request.repoRoot,
+          gizmo.contextPaths,
+          'unsafe-team-gizmo-context-path',
+          'missing-team-gizmo-context-path',
+          'Team Gizmo',
+        ),
+      );
+    }
+    if (request.gizmos.length !== EXPECTED_TEAM_GIZMOS.size) {
+      findings.push({
+        code: 'invalid-team-gizmo-count',
+        path: TEAM_CATALOG_PATH,
+        message: 'The Team Gizmo catalog must contain one profile.',
+      });
+    }
+    return {
+      findings,
+      catalogCount: request.gizmos.length,
+      auditOk: findings.length === 0,
+    };
+  }
+
+  static auditTeamInternalAgents(
+    request: AuditTeamInternalAgentsRequest,
+  ): TeamAgentCatalogAuditReport {
+    const findings: TeamAuthorityAuditFinding[] = [];
+    const seenKeys = new Set<TeamInternalAgentKey>();
+    const seenIdentities = new Set<string>();
+    for (const agent of request.agents) {
+      const expected = EXPECTED_TEAM_INTERNAL_AGENTS.get(agent.key);
+      if (
+        !expected ||
+        agent.team !== expected.team ||
         agent.identity !== expected.identity ||
         seenKeys.has(agent.key) ||
         seenIdentities.has(agent.identity) ||
         agent.description !== expected.description ||
-        agent.model !== 'gpt-5.6-luna' ||
-        agent.reasoningEffort !== 'xhigh' ||
+        agent.model !== expected.model ||
+        agent.reasoningEffort !== expected.reasoningEffort ||
+        agent.parent !== expected.parent ||
+        agent.reportingBoundary !== expected.reportingBoundary ||
         agent.capabilityBoundary !== expected.capabilityBoundary ||
         JSON.stringify(agent.contextPaths) !==
           JSON.stringify(expected.contextPaths)
       ) {
         findings.push({
-          code: 'invalid-operational-team-agent-contract',
+          code: 'invalid-team-internal-agent-contract',
           path: TEAM_CATALOG_PATH,
-          message: `Operational Team Agent contract is missing, duplicated, or drifted: ${agent.key}`,
+          message: `Internal Team Agent contract is missing, duplicated, or drifted: ${agent.key}`,
         });
       }
       seenKeys.add(agent.key);
       seenIdentities.add(agent.identity);
-      for (const contextPath of agent.contextPaths) {
-        if (!TeamAgentContract.safeRepositoryPath(contextPath)) {
-          findings.push({
-            code: 'unsafe-operational-team-context-path',
-            path: contextPath,
-            message:
-              'Operational Team Agent context paths must be normalized and repository-relative.',
-          });
-        } else if (!existsSync(join(repoRoot, contextPath))) {
-          findings.push({
-            code: 'missing-operational-team-context-path',
-            path: contextPath,
-            message: `Operational Team Agent context is missing: ${contextPath}`,
-          });
-        }
-      }
+      findings.push(
+        ...TeamAgentContract.auditContextPaths(
+          request.repoRoot,
+          agent.contextPaths,
+          'unsafe-team-internal-agent-context-path',
+          'missing-team-internal-agent-context-path',
+          'Internal Team Agent',
+        ),
+      );
     }
-    if (GIZMO_OWNED_AGENT_CATALOG.length !== EXPECTED_GIZMO_OWNED_AGENTS.size) {
+    if (request.agents.length !== EXPECTED_TEAM_INTERNAL_AGENTS.size) {
       findings.push({
-        code: 'invalid-operational-team-agent-count',
+        code: 'invalid-team-internal-agent-count',
         path: TEAM_CATALOG_PATH,
-        message: 'The operational Team Agent catalog has drifted.',
+        message: 'The internal Team Agent catalog must contain one profile.',
       });
+    }
+    return {
+      findings,
+      catalogCount: request.agents.length,
+      auditOk: findings.length === 0,
+    };
+  }
+
+  private static auditContextPaths(
+    repoRoot: string,
+    contextPaths: readonly string[],
+    unsafeCode: string,
+    missingCode: string,
+    contextLabel: string,
+  ): readonly TeamAuthorityAuditFinding[] {
+    const findings: TeamAuthorityAuditFinding[] = [];
+    for (const contextPath of contextPaths) {
+      if (!TeamAgentContract.safeRepositoryPath(contextPath)) {
+        findings.push({
+          code: unsafeCode,
+          path: contextPath,
+          message: `${contextLabel} context paths must be normalized and repository-relative.`,
+        });
+      } else if (!existsSync(join(repoRoot, contextPath))) {
+        findings.push({
+          code: missingCode,
+          path: contextPath,
+          message: `${contextLabel} context is missing: ${contextPath}`,
+        });
+      }
     }
     return findings;
   }
@@ -171,7 +272,7 @@ export class TeamAgentContract {
       const finding: TeamAuthorityAuditFinding = {
         code: 'invalid-team-authority-count',
         path: TEAM_CATALOG_PATH,
-        message: 'The canonical Cortex team catalog must contain five teams.',
+        message: 'The canonical Cortex team catalog must contain six teams.',
       };
       findings.push(finding);
     }
@@ -272,6 +373,17 @@ export type TeamAuthorityAuditReport = {
   readonly auditOk: boolean;
 };
 
+export type TeamAgentAuditReport = TeamAuthorityAuditReport & {
+  readonly teamGizmoCount: number;
+  readonly teamInternalAgentCount: number;
+};
+
+export type TeamAgentCatalogAuditReport = {
+  readonly findings: readonly TeamAuthorityAuditFinding[];
+  readonly catalogCount: number;
+  readonly auditOk: boolean;
+};
+
 export type AuditTeamAuthoritiesRequest = {
   readonly repoRoot: string;
   readonly authorities: readonly TeamAuthority[];
@@ -279,6 +391,16 @@ export type AuditTeamAuthoritiesRequest = {
 
 export type AuditTeamAgentsRequest = {
   readonly repoRoot: string;
+};
+
+export type AuditTeamGizmosRequest = {
+  readonly repoRoot: string;
+  readonly gizmos: readonly TeamGizmoProfile[];
+};
+
+export type AuditTeamInternalAgentsRequest = {
+  readonly repoRoot: string;
+  readonly agents: readonly TeamInternalAgentProfile[];
 };
 
 type ExpectedTeamAuthority = {
@@ -319,22 +441,53 @@ const GIZMO_IMPLEMENTATION_PROHIBITION =
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
 
-const EXPECTED_GIZMO_OWNED_AGENTS = new Map<
-  GizmoOwnedAgentKey,
-  Omit<GizmoOwnedAgentProfile, 'key' | 'model' | 'reasoningEffort'>
+const EXPECTED_TEAM_GIZMOS = new Map<TeamGizmoKey, TeamGizmoProfile>([
+  [
+    TeamGizmoKey.DeliveryPipeline,
+    {
+      key: TeamGizmoKey.DeliveryPipeline,
+      team: TeamKey.DeliveryPipeline,
+      identity: 'Delivery Pipeline Team Gizmo',
+      description:
+        'High-level internal orchestrator for Delivery Pipeline packets, bounded mechanics, internal dispatch, evidence synthesis, and reporting to Gizmo Prime.',
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'xhigh',
+      contextPaths: [
+        '.cortex/teams/delivery-pipeline/internal/gizmo/AGENTS.md',
+        '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md',
+      ],
+      parent: 'Gizmo Prime',
+      reportingBoundary:
+        'Reports high-level delivery-pipeline summaries and blockers to Gizmo Prime; it does not replace Prime or create a second root delivery owner.',
+      capabilityBoundary:
+        'Team Gizmo coordinates only Delivery Pipeline mechanics. It does not implement product code, choose functional ownership, decide readiness or promotion, or issue the final delivery verdict.',
+    },
+  ],
+]);
+
+const EXPECTED_TEAM_INTERNAL_AGENTS = new Map<
+  TeamInternalAgentKey,
+  TeamInternalAgentProfile
 >([
   [
-    GizmoOwnedAgentKey.PrSteward,
+    TeamInternalAgentKey.PrSteward,
     {
+      key: TeamInternalAgentKey.PrSteward,
+      team: TeamKey.DeliveryPipeline,
       identity: 'PR Steward',
       description:
-        'Executes explicitly authorized pull-request metadata, review, validation, readiness-evidence, merge, and merge-verification operations for Gizmo Prime.',
+        'Executes explicitly authorized pull-request, check, review, status, publication, promotion, and bounded local-dev mechanics for Delivery Pipeline.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
       contextPaths: [
-        '.cortex/teams/pr-steward/AGENTS.md',
-        '.cortex/teams/pr-steward/knowledge-graph.md',
+        '.cortex/teams/delivery-pipeline/internal/pr-steward/AGENTS.md',
+        '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md',
       ],
+      parent: TeamGizmoKey.DeliveryPipeline,
+      reportingBoundary:
+        'Reports bounded operation evidence and blockers to Delivery Pipeline Team Gizmo, which forwards policy-owned evidence to the issuing controller.',
       capabilityBoundary:
-        'PR Steward never edits functional code, adjudicates technical findings, sequences shared-branch writers, owns Workbench outcomes, or issues the final delivery verdict.',
+        'PR Steward never edits functional code, creates or updates pull requests, chooses functional ownership, decides readiness or promotion, or issues the final delivery verdict.',
     },
   ],
 ]);

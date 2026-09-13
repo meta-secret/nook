@@ -23,14 +23,20 @@ import type {
 } from '../../src/team-agents/audit.ts';
 
 import {
-  GIZMO_OWNED_AGENT_CATALOG,
-  GizmoOwnedAgentKey,
   TEAM_AUTHORITY_CATALOG,
+  TEAM_GIZMO_CATALOG,
+  TEAM_INTERNAL_AGENT_CATALOG,
+  TeamGizmoKey,
+  TeamInternalAgentKey,
   TeamKey,
   TeamAuthorityCatalog,
 } from '../../src/team-agents/catalog.ts';
 
-import type { TeamAuthority } from '../../src/team-agents/catalog.ts';
+import type {
+  TeamAuthority,
+  TeamGizmoProfile,
+  TeamInternalAgentProfile,
+} from '../../src/team-agents/catalog.ts';
 
 export class TeamAgentsAuditScenario {
   private constructor(private readonly request: string) {}
@@ -94,18 +100,29 @@ const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
 const CREATE_RECURSIVELY: MakeDirectoryOptions = { recursive: true };
 
 describe('canonical Cortex team authority', () => {
-  test('defines five stable keys and human-readable identities', () => {
+  test('defines six stable keys and human-readable identities', () => {
     expect(TEAM_AUTHORITY_CATALOG.map((authority) => authority.key)).toEqual([
       TeamKey.Ai,
       TeamKey.DevelopmentCore,
       TeamKey.Security,
       TeamKey.Sre,
       TeamKey.WebDevelopment,
+      TeamKey.DeliveryPipeline,
     ]);
     expect(
       TEAM_AUTHORITY_CATALOG.map((authority) => authority.identity),
-    ).toEqual(['AI', 'Development core', 'Security', 'SRE', 'Web development']);
+    ).toEqual([
+      'AI',
+      'Development core',
+      'Security',
+      'SRE',
+      'Web development',
+      'Delivery Pipeline',
+    ]);
     expect(TeamAuthorityCatalog.teamAuthority(TeamKey.Ai)).not.toBe(false);
+    expect(TeamAuthorityCatalog.teamCortexRoot(TeamKey.DeliveryPipeline)).toBe(
+      '.cortex/teams/delivery-pipeline',
+    );
   });
 
   test('audits canonical Cortex paths and capability boundaries', () => {
@@ -113,33 +130,106 @@ describe('canonical Cortex team authority', () => {
     const report = TeamAgentContract.auditTeamAgents(auditRequest);
 
     expect(report.findings).toEqual([]);
-    expect(report.authorityCount).toBe(5);
+    expect(report.authorityCount).toBe(6);
+    expect(report.teamGizmoCount).toBe(1);
+    expect(report.teamInternalAgentCount).toBe(1);
     expect(report.auditOk).toBe(true);
   });
 
-  test('keeps PR Steward outside the five functional authorities', () => {
-    expect(TEAM_AUTHORITY_CATALOG).toHaveLength(5);
-    expect(GIZMO_OWNED_AGENT_CATALOG).toEqual([
-      {
-        key: GizmoOwnedAgentKey.PrSteward,
-        identity: 'PR Steward',
-        description:
-          'Executes explicitly authorized pull-request metadata, review, validation, readiness-evidence, merge, and merge-verification operations for Gizmo Prime.',
-        model: 'gpt-5.6-luna',
-        reasoningEffort: 'xhigh',
-        contextPaths: [
-          '.cortex/teams/pr-steward/AGENTS.md',
-          '.cortex/teams/pr-steward/knowledge-graph.md',
-        ],
-        capabilityBoundary:
-          'PR Steward never edits functional code, adjudicates technical findings, sequences shared-branch writers, owns Workbench outcomes, or issues the final delivery verdict.',
-      },
-    ]);
-    const firstAgent = GIZMO_OWNED_AGENT_CATALOG[0];
-    if (!firstAgent) throw new Error('Gizmo agent catalog is empty.');
+  test('models the Delivery Pipeline Team Gizmo and internal PR Steward hierarchy', () => {
+    expect(TEAM_AUTHORITY_CATALOG).toHaveLength(6);
+    expect(TEAM_GIZMO_CATALOG).toHaveLength(1);
+    expect(TEAM_INTERNAL_AGENT_CATALOG).toHaveLength(1);
+
+    const teamGizmo = TEAM_GIZMO_CATALOG[0];
+    const internalAgent = TEAM_INTERNAL_AGENT_CATALOG[0];
+    if (!teamGizmo || !internalAgent)
+      throw new Error('Delivery Pipeline profiles are incomplete.');
+
+    expect(teamGizmo).toMatchObject({
+      key: TeamGizmoKey.DeliveryPipeline,
+      team: TeamKey.DeliveryPipeline,
+      identity: 'Delivery Pipeline Team Gizmo',
+      parent: 'Gizmo Prime',
+      contextPaths: [
+        '.cortex/teams/delivery-pipeline/internal/gizmo/AGENTS.md',
+        '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md',
+      ],
+    });
+    expect(internalAgent).toMatchObject({
+      key: TeamInternalAgentKey.PrSteward,
+      team: TeamKey.DeliveryPipeline,
+      identity: 'PR Steward',
+      parent: TeamGizmoKey.DeliveryPipeline,
+      contextPaths: [
+        '.cortex/teams/delivery-pipeline/internal/pr-steward/AGENTS.md',
+        '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md',
+      ],
+    });
     expect(
-      TeamAuthorityCatalog.gizmoOwnedAgentProfile(GizmoOwnedAgentKey.PrSteward),
-    ).toEqual(firstAgent);
+      TeamAuthorityCatalog.teamGizmoProfile(TeamGizmoKey.DeliveryPipeline),
+    ).toEqual(teamGizmo);
+    expect(
+      TeamAuthorityCatalog.teamInternalAgentProfile(
+        TeamInternalAgentKey.PrSteward,
+      ),
+    ).toEqual(internalAgent);
+    expect(
+      TeamAuthorityCatalog.teamAgentProfile(TeamKey.DeliveryPipeline),
+    ).toEqual(TEAM_AUTHORITY_CATALOG[5]);
+    expect(
+      TeamAuthorityCatalog.teamAgentProfile(TeamGizmoKey.DeliveryPipeline),
+    ).toEqual(teamGizmo);
+    expect(
+      TeamAuthorityCatalog.teamAgentProfile(TeamInternalAgentKey.PrSteward),
+    ).toEqual(internalAgent);
+  });
+
+  test('rejects Team Gizmo and internal-agent contract, hierarchy, count, and path drift', () => {
+    const teamGizmo = TEAM_GIZMO_CATALOG[0];
+    const internalAgent = TEAM_INTERNAL_AGENT_CATALOG[0];
+    if (!teamGizmo || !internalAgent)
+      throw new Error('Delivery Pipeline profiles are incomplete.');
+
+    const driftedGizmos: readonly TeamGizmoProfile[][] = [
+      [],
+      [{ ...teamGizmo, reportingBoundary: '' }],
+      [{ ...teamGizmo, contextPaths: ['../outside/AGENTS.md'] }],
+      [teamGizmo, teamGizmo],
+    ];
+    for (const gizmos of driftedGizmos) {
+      expect(
+        TeamAgentContract.auditTeamGizmos({
+          repoRoot: REPO_ROOT,
+          gizmos,
+        }).auditOk,
+      ).toBe(false);
+    }
+
+    const driftedAgents: readonly TeamInternalAgentProfile[][] = [
+      [],
+      [{ ...internalAgent, team: TeamKey.Ai }],
+      [{ ...internalAgent, capabilityBoundary: '' }],
+      [internalAgent, internalAgent],
+    ];
+    for (const agents of driftedAgents) {
+      expect(
+        TeamAgentContract.auditTeamInternalAgents({
+          repoRoot: REPO_ROOT,
+          agents,
+        }).auditOk,
+      ).toBe(false);
+    }
+
+    const unsafeAgentReport = TeamAgentContract.auditTeamInternalAgents({
+      repoRoot: REPO_ROOT,
+      agents: [
+        { ...internalAgent, contextPaths: ['.cortex/../outside/AGENTS.md'] },
+      ],
+    });
+    expect(unsafeAgentReport.findings.map((finding) => finding.code)).toContain(
+      'unsafe-team-internal-agent-context-path',
+    );
   });
 
   test('rejects stable-key, identity, context, and capability drift', () => {

@@ -7,35 +7,47 @@ export class TeamAuthorityCatalog {
 
   private execute(): TeamAuthority | false {
     const teamKey = this.request;
-    const [defaulted1 = false] = [
-      TEAM_AUTHORITY_CATALOG.find((authority) => authority.key === teamKey),
+    const [authority = false] = [
+      TEAM_AUTHORITY_CATALOG.find((candidate) => candidate.key === teamKey),
     ];
-    return defaulted1;
+    return authority;
   }
 
-  static gizmoOwnedAgentProfile(
-    agentKey: GizmoOwnedAgentKey,
-  ): GizmoOwnedAgentProfile | false {
-    const [defaulted1 = false] = [
-      GIZMO_OWNED_AGENT_CATALOG.find((agent) => agent.key === agentKey),
+  static teamGizmoProfile(gizmoKey: TeamGizmoKey): TeamGizmoProfile | false {
+    const [profile = false] = [
+      TEAM_GIZMO_CATALOG.find((candidate) => candidate.key === gizmoKey),
     ];
-    return defaulted1;
+    return profile;
+  }
+
+  static teamInternalAgentProfile(
+    agentKey: TeamInternalAgentKey,
+  ): TeamInternalAgentProfile | false {
+    const [profile = false] = [
+      TEAM_INTERNAL_AGENT_CATALOG.find(
+        (candidate) => candidate.key === agentKey,
+      ),
+    ];
+    return profile;
   }
 
   static teamAgentProfile(
     agentKey: TeamAgentKey,
-  ): TeamAuthority | GizmoOwnedAgentProfile | false {
-    if (Object.values(TeamKey).some((key) => key === agentKey)) {
-      const teamKey = Object.values(TeamKey).find((key) => key === agentKey);
-      if (!teamKey) return false;
-      return TeamAuthorityCatalog.teamAuthority(teamKey);
-    }
-    const gizmoKey = Object.values(GizmoOwnedAgentKey).find(
-      (key) => key === agentKey,
+  ): TeamAuthority | TeamGizmoProfile | TeamInternalAgentProfile | false {
+    const authority = TEAM_AUTHORITY_CATALOG.find(
+      (candidate) => candidate.key === agentKey,
     );
-    return gizmoKey
-      ? TeamAuthorityCatalog.gizmoOwnedAgentProfile(gizmoKey)
-      : false;
+    if (authority) return authority;
+
+    const gizmo = TEAM_GIZMO_CATALOG.find(
+      (candidate) => candidate.key === agentKey,
+    );
+    if (gizmo) return gizmo;
+
+    const internalAgent = TEAM_INTERNAL_AGENT_CATALOG.find(
+      (candidate) => candidate.key === agentKey,
+    );
+    return internalAgent ?? false;
   }
 
   static teamCortexRoot(teamKey: TeamKey): string {
@@ -50,22 +62,30 @@ export class TeamAuthorityCatalog {
         return '.cortex/teams/sre';
       case TeamKey.WebDevelopment:
         return '.cortex/teams/web-dev';
+      case TeamKey.DeliveryPipeline:
+        return '.cortex/teams/delivery-pipeline';
     }
   }
 }
+
 export enum TeamKey {
   Ai = 'ai',
   DevelopmentCore = 'development-core',
   Security = 'security',
   Sre = 'sre',
   WebDevelopment = 'web-development',
+  DeliveryPipeline = 'delivery-pipeline',
 }
 
-export enum GizmoOwnedAgentKey {
-  PrSteward = 'pr-steward',
+export enum TeamGizmoKey {
+  DeliveryPipeline = 'delivery-pipeline-gizmo',
 }
 
-export type TeamAgentKey = TeamKey | GizmoOwnedAgentKey;
+export enum TeamInternalAgentKey {
+  PrSteward = 'delivery-pipeline-pr-steward',
+}
+
+export type TeamAgentKey = TeamKey | TeamGizmoKey | TeamInternalAgentKey;
 
 export type TeamAuthority = {
   readonly key: TeamKey;
@@ -75,13 +95,29 @@ export type TeamAuthority = {
   readonly capabilityBoundary: string;
 };
 
-export type GizmoOwnedAgentProfile = {
-  readonly key: GizmoOwnedAgentKey;
+export type TeamGizmoProfile = {
+  readonly key: TeamGizmoKey;
+  readonly team: TeamKey;
+  readonly identity: string;
+  readonly description: string;
+  readonly model: 'gpt-5.6-sol';
+  readonly reasoningEffort: 'xhigh';
+  readonly contextPaths: readonly string[];
+  readonly parent: 'Gizmo Prime';
+  readonly reportingBoundary: string;
+  readonly capabilityBoundary: string;
+};
+
+export type TeamInternalAgentProfile = {
+  readonly key: TeamInternalAgentKey;
+  readonly team: TeamKey;
   readonly identity: string;
   readonly description: string;
   readonly model: 'gpt-5.6-luna';
   readonly reasoningEffort: 'xhigh';
   readonly contextPaths: readonly string[];
+  readonly parent: TeamGizmoKey;
+  readonly reportingBoundary: string;
   readonly capabilityBoundary: string;
 };
 
@@ -144,21 +180,58 @@ export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
     ],
     capabilityBoundary: `Web development may implement bounded TypeScript expertise without taking consumer capability semantics or Cortex authority. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
   },
-] as const;
-
-export const GIZMO_OWNED_AGENT_CATALOG: readonly GizmoOwnedAgentProfile[] = [
   {
-    key: GizmoOwnedAgentKey.PrSteward,
-    identity: 'PR Steward',
+    key: TeamKey.DeliveryPipeline,
+    identity: 'Delivery Pipeline',
     description:
-      'Executes explicitly authorized pull-request metadata, review, validation, readiness-evidence, merge, and merge-verification operations for Gizmo Prime.',
-    model: 'gpt-5.6-luna',
-    reasoningEffort: 'xhigh',
+      'Owns delivery mechanics across CI, pull-request lifecycle, development-branch publication, workflow execution, validation evidence, local landing, and guarded promotion.',
     contextPaths: [
-      '.cortex/teams/pr-steward/AGENTS.md',
-      '.cortex/teams/pr-steward/knowledge-graph.md',
+      '.cortex/teams/delivery-pipeline/AGENTS.md',
+      '.cortex/teams/delivery-pipeline/knowledge-graph.md',
     ],
-    capabilityBoundary:
-      'PR Steward never edits functional code, adjudicates technical findings, sequences shared-branch writers, owns Workbench outcomes, or issues the final delivery verdict.',
+    capabilityBoundary: `Delivery Pipeline executes authorized delivery mechanics without owning functional product implementation or policy verdicts. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
   },
 ] as const;
+
+export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
+  {
+    key: TeamGizmoKey.DeliveryPipeline,
+    team: TeamKey.DeliveryPipeline,
+    identity: 'Delivery Pipeline Team Gizmo',
+    description:
+      'High-level internal orchestrator for Delivery Pipeline packets, bounded mechanics, internal dispatch, evidence synthesis, and reporting to Gizmo Prime.',
+    model: 'gpt-5.6-sol',
+    reasoningEffort: 'xhigh',
+    contextPaths: [
+      '.cortex/teams/delivery-pipeline/internal/gizmo/AGENTS.md',
+      '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md',
+    ],
+    parent: 'Gizmo Prime',
+    reportingBoundary:
+      'Reports high-level delivery-pipeline summaries and blockers to Gizmo Prime; it does not replace Prime or create a second root delivery owner.',
+    capabilityBoundary:
+      'Team Gizmo coordinates only Delivery Pipeline mechanics. It does not implement product code, choose functional ownership, decide readiness or promotion, or issue the final delivery verdict.',
+  },
+] as const;
+
+export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
+  [
+    {
+      key: TeamInternalAgentKey.PrSteward,
+      team: TeamKey.DeliveryPipeline,
+      identity: 'PR Steward',
+      description:
+        'Executes explicitly authorized pull-request, check, review, status, publication, promotion, and bounded local-dev mechanics for Delivery Pipeline.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      contextPaths: [
+        '.cortex/teams/delivery-pipeline/internal/pr-steward/AGENTS.md',
+        '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.DeliveryPipeline,
+      reportingBoundary:
+        'Reports bounded operation evidence and blockers to Delivery Pipeline Team Gizmo, which forwards policy-owned evidence to the issuing controller.',
+      capabilityBoundary:
+        'PR Steward never edits functional code, creates or updates pull requests, chooses functional ownership, decides readiness or promotion, or issues the final delivery verdict.',
+    },
+  ] as const;
