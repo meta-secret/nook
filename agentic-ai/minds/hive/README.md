@@ -145,7 +145,7 @@ view, while `task infra:hive:diagnose` includes bounded observer logs.
 
 ## Graph schema
 
-Hive graph schema version `10` retains unique constraints for `Task`, `Agent`,
+Hive graph schema version `11` retains unique constraints for `Task`, `Agent`,
 `Attempt`, and `Artifact`, adds `TaskActivity` identity and timeline indexes,
 and retains the task-claim index. Migration records are
 stored as `(:HiveSchemaMigration {version, applied_at})`. A worker refuses to
@@ -175,15 +175,28 @@ artifacts, including when a completed blocker is reused by a future consumer.
 Scheduling and rearm traversal ignore the lineage.
 
 Version 10 adds the task properties `origin_main_sha`,
-`pinned_local_dev_sha`, and the legacy `feature_head_sha` field. Version 11 adds
-the canonical `feature_branch` identity. The migration backfills each new
-property to the empty string for existing tasks, preserving the distinction
-between legacy non-repair tasks and a malformed main-repair task. New
+`pinned_local_dev_sha`, and the legacy `feature_head_sha` field. Version 11
+replaces that caller-supplied head with the canonical `feature_branch` identity.
+The 10-to-11 migration preserves an already-persisted branch and initializes
+an empty branch only for tasks with no bootstrap evidence. It fails before any
+v11 data write when a main-repair or any task carrying legacy bootstrap
+evidence has no canonical branch; a commit SHA, prompt text, or legacy
+`feature_head_sha` is never reinterpreted as a branch. After that check passes,
+the migration removes `feature_head_sha` from every `Task` and records the
+version-11 marker only after the cleanup and schema statements succeed. New
 main-repair enqueue and claim paths require both creation-base SHAs and a
 canonical feature branch; active-delivery lookup and duplicate enqueue
 reconciliation include that branch identity as part of task identity. The
 feature branch's current head is observed per worker run and is not caller
 evidence.
+
+To roll version 11 back to a version-10 binary, first stop every Hive worker,
+coordinator, observer, and dispatcher and restore the pre-version-11 Neo4j
+data-volume backup. The v11 migration removes `feature_head_sha`, and the old
+head cannot be reconstructed from `feature_branch`; deleting only the v11
+marker or trying to synthesize a replacement head is unsafe. If a compatible
+pre-version-11 backup is unavailable, remain on schema 11 and do not start a
+version-10 binary.
 
 To roll version 10 back to a version-9 binary, first stop every Hive worker,
 coordinator, observer, and dispatcher and back up the Neo4j data volume. Delete

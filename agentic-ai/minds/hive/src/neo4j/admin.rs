@@ -304,6 +304,9 @@ impl Neo4jTaskStore {
     }
 
     pub(super) fn bootstrap_evidence(row: &Row) -> crate::HiveResult<Option<BootstrapEvidence>> {
+        // Schema 11 deliberately accepts only creation-base SHAs plus the
+        // canonical branch. The retired feature_head_sha is never a fallback;
+        // migration must remove it or fail closed before a task is claimed.
         let origin_main_sha = row.get::<String>("origin_main_sha")?;
         let pinned_local_dev_sha = row.get::<String>("pinned_local_dev_sha")?;
         let feature_branch = row.get::<String>("feature_branch")?;

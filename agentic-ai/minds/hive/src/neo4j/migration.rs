@@ -110,13 +110,29 @@ impl Neo4jTaskStore {
                 .hive_context("failed to initialize schema-10 bootstrap evidence")?;
         }
         if installed_version < 11 {
+            Self::validate_schema_eleven_tasks(graph).await?;
             graph
                 .run(query(
                     "MATCH (task:Task)
-                     SET task.feature_branch = coalesce(task.feature_branch, '')",
+                     SET task.feature_branch = coalesce(task.feature_branch, '')
+                     REMOVE task.feature_head_sha",
                 ))
                 .await
                 .hive_context("failed to initialize schema-11 canonical feature branches")?;
+        } else {
+            // A previous v11 attempt may have persisted the marker before this
+            // cleanup was added. Reconcile that graph before allowing any
+            // worker to use the v11 marker, while retaining the same
+            // fail-closed evidence checks as the initial migration.
+            Self::validate_schema_eleven_tasks(graph).await?;
+            graph
+                .run(query(
+                    "MATCH (task:Task)
+                     SET task.feature_branch = coalesce(task.feature_branch, '')
+                     REMOVE task.feature_head_sha",
+                ))
+                .await
+                .hive_context("failed to reconcile schema-11 canonical feature branches")?;
         }
         for statement in CONSTRAINTS {
             graph
@@ -153,6 +169,53 @@ impl Neo4jTaskStore {
             return Err(crate::HiveError::message(format!(
                 "Hive schema 1 contains {legacy_tasks} task(s) without source_commit; \
                  drain or remove those legacy tasks before upgrading to schema 2"
+            )));
+        }
+        Ok(())
+    }
+
+    async fn validate_schema_eleven_tasks(graph: &neo4rs::Graph) -> crate::HiveResult<()> {
+        let mut rows = graph
+            .execute(query(
+                "MATCH (task:Task)
+                 WITH task,
+                      coalesce(task.origin_main_sha, '') AS origin_main_sha,
+                      coalesce(task.pinned_local_dev_sha, '') AS pinned_local_dev_sha,
+                      coalesce(task.feature_head_sha, '') AS feature_head_sha,
+                      coalesce(task.feature_branch, '') AS feature_branch
+                 RETURN count(CASE
+                                WHEN (task.kind = 'main-repair'
+                                      OR origin_main_sha <> ''
+                                      OR pinned_local_dev_sha <> ''
+                                      OR feature_head_sha <> '')
+                                     AND feature_branch = ''
+                                THEN 1
+                              END) AS missing_feature_branch,
+                        count(CASE
+                                WHEN feature_branch <> ''
+                                     AND (origin_main_sha = '' OR pinned_local_dev_sha = '')
+                                THEN 1
+                              END) AS incomplete_bootstrap_evidence,
+                        count(CASE
+                                WHEN feature_branch <> ''
+                                     AND (NOT (feature_branch =~ 'codex/[a-z0-9/_-]+')
+                                          OR feature_branch ENDS WITH '/')
+                                THEN 1
+                              END) AS invalid_feature_branch",
+            ))
+            .await?;
+        let row = rows.next().await?.ok_or_else(|| {
+            crate::HiveError::message("schema-11 migration validation returned no row")
+        })?;
+        let missing_feature_branch = row.get::<i64>("missing_feature_branch")?;
+        let incomplete_bootstrap_evidence = row.get::<i64>("incomplete_bootstrap_evidence")?;
+        let invalid_feature_branch = row.get::<i64>("invalid_feature_branch")?;
+        if missing_feature_branch > 0
+            || incomplete_bootstrap_evidence > 0
+            || invalid_feature_branch > 0
+        {
+            return Err(crate::HiveError::message(format!(
+                "schema-11 migration requires an existing canonical feature_branch for every task with bootstrap evidence; found {missing_feature_branch} task(s) without a derivable branch, {incomplete_bootstrap_evidence} task(s) with incomplete bootstrap evidence, and {invalid_feature_branch} task(s) with an invalid branch; feature_head_sha cannot be reinterpreted as a branch"
             )));
         }
         Ok(())
