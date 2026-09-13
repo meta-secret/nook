@@ -9,7 +9,7 @@ snapshot selection, concurrency, and evidence semantics.
 ## Procedure
 
 1. Confirm the prior published attempt has finished.
-2. Select a committed local dev snapshot and authorize Steward's snapshot publication.
+2. Select a committed local dev snapshot and authorize the PR Lifecycle Agent's snapshot publication.
 3. Record the published SHA and freeze remote dev.
 4. Invoke manager-only `dev:pr-manager` to create or update the dev-to-main
    PR, then have the PR Lifecycle Agent observe the exact PR and run full slow

@@ -25,6 +25,10 @@ tasks:
 
   pr-manager:
     desc: Manager-only creation or update of the single dev-to-main pull request for origin/dev.
+    requires:
+      vars: [EXPECTED_SHA]
+    env:
+      EXPECTED_SHA: '{{.EXPECTED_SHA}}'
     cmds:
       - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/dev-delivery/dev-pr-manager-cli.ts"
 

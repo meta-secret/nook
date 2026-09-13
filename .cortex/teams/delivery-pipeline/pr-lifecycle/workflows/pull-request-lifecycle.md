@@ -143,7 +143,7 @@ clears that suppression so a later recurrence is visible. Event identifiers
 do not define a blocker change. This bounded memory is never persisted.
 
 Output contains only bounded hints. It never contains bodies, review text,
-logs, raw payloads, or credentials. Steward performs authorized reconciliation
+logs, raw payloads, or credentials. PR Lifecycle Agent performs authorized reconciliation
 from these hints. The subscriber does not summarize or decide readiness.
 
 ### Active-task waiting
