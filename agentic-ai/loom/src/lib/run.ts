@@ -9,6 +9,65 @@ import { LoomFailureCode } from '../loom-failure.ts';
 
 const githubApiOutputBytes = 16 * 1024 * 1024;
 const defaultOutputBytes = 1024 * 1024;
+const IMMUTABLE_GIT_ARGUMENTS = [
+  '-c',
+  'core.hooksPath=/dev/null',
+  '-c',
+  'core.fsmonitor=false',
+  '-c',
+  'core.untrackedCache=false',
+  '-c',
+  'core.gitProxy=none',
+  '-c',
+  'core.attributesFile=/dev/null',
+  '-c',
+  'core.excludesFile=/dev/null',
+  '-c',
+  'core.sshCommand=',
+  '-c',
+  'credential.helper=',
+  '-c',
+  'filter.lfs.clean=',
+  '-c',
+  'filter.lfs.process=',
+  '-c',
+  'filter.lfs.required=false',
+  '-c',
+  'filter.lfs.smudge=',
+  '-c',
+  'http.proxy=',
+  '-c',
+  'http.noProxy=',
+  '-c',
+  'https.proxy=',
+  '-c',
+  'https.noProxy=',
+  '-c',
+  'protocol.allow=never',
+  '-c',
+  'protocol.ext.allow=never',
+  '-c',
+  'protocol.file.allow=never',
+  '-c',
+  'protocol.ftp.allow=never',
+  '-c',
+  'protocol.ftps.allow=never',
+  '-c',
+  'protocol.git.allow=never',
+  '-c',
+  'protocol.http.allow=never',
+  '-c',
+  'protocol.ssh.allow=never',
+  '-c',
+  'protocol.https.allow=always',
+  '-c',
+  'diff.external=',
+  '-c',
+  'core.pager=',
+  '--no-pager',
+  '--no-replace-objects',
+  '--literal-pathspecs',
+] as const;
 
 export class RepositoryCommand {
   constructor(private readonly request: RepositoryCommandRequest) {}
@@ -49,8 +108,15 @@ export class RepositoryCommand {
       request.command === RepositoryCommandExecutable.Git &&
       request.gitSecurity === RepositoryGitSecurityPolicy.ImmutableObjects
     ) {
-      options.env = new RepositoryGitSecurityEnvironment(process.env).isolated();
+      options.env = new RepositoryGitSecurityEnvironment(
+        process.env,
+      ).isolated();
     }
+    const args =
+      request.command === RepositoryCommandExecutable.Git &&
+      request.gitSecurity === RepositoryGitSecurityPolicy.ImmutableObjects
+        ? [...IMMUTABLE_GIT_ARGUMENTS, ...request.args]
+        : request.args;
     let result;
     try {
       switch (command) {
@@ -114,7 +180,7 @@ export class RepositoryCommand {
           result = spawnSync('gh', [...request.args], options);
           break;
         case RepositoryCommandExecutable.Git:
-          result = spawnSync('git', [...request.args], options);
+          result = spawnSync('git', [...args], options);
           break;
         case RepositoryCommandExecutable.Node:
           switch (request.script) {
@@ -252,7 +318,7 @@ export enum RepositoryCommandExecutable {
   Vale = 'vale',
 }
 
-/** Restricts Git's object identity checks to the repository's actual objects. */
+/** Runs Git reads with the repository's immutable no-execution policy. */
 export enum RepositoryGitSecurityPolicy {
   ImmutableObjects = 'immutableObjects',
 }
@@ -269,30 +335,27 @@ class RepositoryGitSecurityEnvironment {
   constructor(private readonly inheritedEnvironment: NodeJS.ProcessEnv) {}
 
   isolated(): NodeJS.ProcessEnv {
-    const environment = { ...this.inheritedEnvironment };
-    for (const name of Object.keys(environment)) {
-      if (
-        name === 'GIT_CONFIG' ||
-        name === 'GIT_CONFIG_COUNT' ||
-        name === 'GIT_CONFIG_PARAMETERS' ||
-        /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/u.test(name) ||
-        name === 'GIT_DIR' ||
-        name === 'GIT_WORK_TREE' ||
-        name === 'GIT_COMMON_DIR' ||
-        name === 'GIT_INDEX_FILE' ||
-        name === 'GIT_OBJECT_DIRECTORY' ||
-        name === 'GIT_ALTERNATE_OBJECT_DIRECTORIES' ||
-        name === 'GIT_NAMESPACE'
-      ) {
-        delete environment[name];
-      }
-    }
+    const environment = this.inheritedEnvironment;
+    const nullDevice = process.platform === 'win32' ? 'NUL' : '/dev/null';
     return {
-      ...environment,
-      GIT_CONFIG_GLOBAL: '/dev/null',
+      COMSPEC: environment.COMSPEC,
+      LC_ALL: 'C',
+      PATH: environment.PATH,
+      Path: environment.Path,
+      PATHEXT: environment.PATHEXT,
+      SYSTEMROOT: environment.SYSTEMROOT,
+      SystemRoot: environment.SystemRoot,
+      WINDIR: environment.WINDIR,
+      GIT_ALLOW_PROTOCOL: 'https',
+      GIT_ATTR_NOSYSTEM: '1',
+      GIT_CONFIG: nullDevice,
+      GIT_CONFIG_GLOBAL: nullDevice,
       GIT_CONFIG_NOSYSTEM: '1',
-      GIT_CONFIG_SYSTEM: '/dev/null',
+      GIT_CONFIG_SYSTEM: nullDevice,
       GIT_NO_REPLACE_OBJECTS: '1',
+      GIT_OPTIONAL_LOCKS: '0',
+      GIT_PAGER: '',
+      GIT_TERMINAL_PROMPT: '0',
     };
   }
 }

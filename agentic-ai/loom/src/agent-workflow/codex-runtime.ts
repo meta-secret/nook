@@ -37,7 +37,11 @@ import type {
 import { WorkflowResultSchema } from './structured-result-codec.ts';
 import { WorkflowRuntimeActivityKind } from './events.ts';
 import type { RuntimeActivityObservation } from './events.ts';
-import { RepositoryCommand, RepositoryCommandExecutable } from '../lib/run.ts';
+import {
+  RepositoryCommand,
+  RepositoryCommandExecutable,
+  RepositoryGitSecurityPolicy,
+} from '../lib/run.ts';
 import type { RepositoryCommandRequest } from '../lib/run.ts';
 import {
   MODULE_EXPERT_CONTEXT_MCP,
@@ -684,6 +688,7 @@ export class AgentSourceSnapshot {
     const headCommand: RepositoryCommandRequest = {
       command: RepositoryCommandExecutable.Git,
       args: ['rev-parse', 'HEAD'],
+      gitSecurity: RepositoryGitSecurityPolicy.ImmutableObjects,
       rootDirectory: check.workingDirectory,
       workingDirectory: check.workingDirectory,
     };
@@ -702,6 +707,7 @@ export class AgentSourceSnapshot {
     const statusCommand: RepositoryCommandRequest = {
       command: RepositoryCommandExecutable.Git,
       args: ['status', '--porcelain', '--untracked-files=normal'],
+      gitSecurity: RepositoryGitSecurityPolicy.ImmutableObjects,
       rootDirectory: check.workingDirectory,
       workingDirectory: check.workingDirectory,
     };

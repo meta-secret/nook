@@ -3,7 +3,16 @@ import { type Result } from 'neverthrow';
 import { type AgentExecutionFailure } from '../../src/agent-workflow/runtime.ts';
 import { randomUUID } from 'node:crypto';
 
-import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
+
+import { existsSync } from 'node:fs';
 
 import type { RmOptions } from 'node:fs';
 
@@ -475,6 +484,85 @@ describe('Codex agent source stability', () => {
       );
     } finally {
       await rm(workingDirectory, removeOptions);
+    }
+  });
+
+  test('ignores executable fsmonitor and ambient Git config', async () => {
+    const fixtureRoot = await mkdtemp(
+      join(tmpdir(), 'loom-agent-git-isolation-'),
+    );
+    const workingDirectory = join(fixtureRoot, 'repository');
+    const marker = join(fixtureRoot, 'fsmonitor-ran');
+    const monitor = join(fixtureRoot, 'fsmonitor.sh');
+    const globalConfig = join(fixtureRoot, 'global.gitconfig');
+    const systemConfig = join(fixtureRoot, 'system.gitconfig');
+    const configNames = [
+      'GIT_CONFIG_GLOBAL',
+      'GIT_CONFIG_SYSTEM',
+      'GIT_CONFIG_COUNT',
+      'GIT_CONFIG_KEY_0',
+      'GIT_CONFIG_VALUE_0',
+    ] as const;
+    const previousEnvironment = new Map(
+      configNames.map((name) => [name, process.env[name]]),
+    );
+    await mkdir(workingDirectory);
+    try {
+      const command = (args: readonly string[]): string =>
+        AgentWorkflowCodexRuntimeScenario.runGit({
+          command: RepositoryCommandExecutable.Git,
+          args,
+          rootDirectory: workingDirectory,
+          workingDirectory,
+        });
+      command(['init']);
+      await writeFile(join(workingDirectory, 'tracked.txt'), 'stable\n');
+      command(['add', 'tracked.txt']);
+      command([
+        '-c',
+        'user.name=Loom Test',
+        '-c',
+        'user.email=loom@example.test',
+        'commit',
+        '-m',
+        'fixture',
+      ]);
+      const sourceCommit = command(['rev-parse', 'HEAD']);
+      command(['update-ref', 'refs/remotes/origin/main', sourceCommit]);
+      await writeFile(
+        monitor,
+        `#!/bin/sh\nprintf touched > '${marker}'\nexit 1\n`,
+        { mode: 0o700 },
+      );
+      command(['config', '--local', 'core.fsmonitor', monitor]);
+      await writeFile(globalConfig, `[core]\nfsmonitor = ${monitor}\n`);
+      await writeFile(systemConfig, `[core]\nfsmonitor = ${monitor}\n`);
+      await rm(marker, { force: true });
+      process.env.GIT_CONFIG_GLOBAL = globalConfig;
+      process.env.GIT_CONFIG_SYSTEM = systemConfig;
+      process.env.GIT_CONFIG_COUNT = '1';
+      process.env.GIT_CONFIG_KEY_0 = 'core.fsmonitor';
+      process.env.GIT_CONFIG_VALUE_0 = monitor;
+      try {
+        const result = new AgentSourceSnapshot({
+          workingDirectory,
+          sourceCommit,
+          originMainSha: sourceCommit,
+          pinnedLocalDevSha: sourceCommit,
+          featureHeadSha: sourceCommit,
+          phase: AgentSourceStabilityPhase.BeforeAttempt,
+        }).assertStable();
+        assert(result.isOk());
+      } finally {
+        for (const name of configNames) {
+          const value = previousEnvironment.get(name);
+          if (value === undefined) delete process.env[name];
+          else process.env[name] = value;
+        }
+      }
+      expect(existsSync(marker)).toBe(false);
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
     }
   });
 });

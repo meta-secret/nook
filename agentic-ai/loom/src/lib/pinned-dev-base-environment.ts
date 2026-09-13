@@ -10,6 +10,7 @@ import {
 import {
   RepositoryCommand,
   RepositoryCommandExecutable,
+  RepositoryGitSecurityPolicy,
 } from './run.ts';
 
 const FULL_COMMIT_SHA = /^[0-9a-f]{40}$/u;
@@ -95,6 +96,7 @@ export class PinnedDevBaseEnvironment {
     const result = new RepositoryCommand({
       command: RepositoryCommandExecutable.Git,
       args: ['rev-parse', '--verify', args.ref],
+      gitSecurity: RepositoryGitSecurityPolicy.ImmutableObjects,
       rootDirectory: args.repoRoot,
       workingDirectory: args.repoRoot,
     }).execute();
