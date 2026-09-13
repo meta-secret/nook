@@ -256,6 +256,21 @@ export class DevGitRepository {
     });
   }
 
+  /** Resolves the latest committed head of an authorized remote feature ref. */
+  resolveFeatureBranchHead(
+    branch: BranchName,
+  ): Result<CommitSha, DevFailure> {
+    const snapshot = this.remoteBranch(branch);
+    if (snapshot.isErr()) return err(snapshot.error);
+    if (snapshot.value.presence !== RemoteBranchPresence.Present) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `origin/${branch.value()} must exist before landing a feature into dev`,
+      });
+    }
+    return ok(snapshot.value.sha);
+  }
+
   /** Refreshes the delivery refs, optionally pruning stale origin refs. */
   refreshManagedRefs(
     request: { readonly prune?: boolean } = {},

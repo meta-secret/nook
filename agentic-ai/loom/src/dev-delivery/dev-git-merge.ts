@@ -14,6 +14,42 @@ import {
   WorktreeState,
 } from './dev-types.ts';
 
+/** Stable discriminator for a feature branch that moved after compilation. */
+export const BranchAdvanced = 'branch-advanced' as const;
+
+export interface BranchAdvancedFailure extends DevFailure {
+  readonly kind: DevFailureKind.Race;
+  readonly code: typeof BranchAdvanced;
+  readonly branch: BranchName;
+  readonly currentHead: CommitSha;
+}
+
+export function branchAdvancedFailure(
+  branch: BranchName,
+  currentHead: CommitSha,
+): BranchAdvancedFailure {
+  return {
+    kind: DevFailureKind.Race,
+    code: BranchAdvanced,
+    branch,
+    currentHead,
+    message:
+      `The canonical feature branch ${branch.value()} advanced to ${currentHead.value()} after build:compile evidence; rerun build:compile before landing`,
+  };
+}
+
+export function isBranchAdvancedFailure(
+  failure: DevFailure,
+): failure is BranchAdvancedFailure {
+  return (
+    failure.kind === DevFailureKind.Race &&
+    'code' in failure &&
+    failure.code === BranchAdvanced &&
+    'currentHead' in failure &&
+    typeof failure.currentHead === 'object'
+  );
+}
+
 export interface MergeRequest {
   readonly devPath: string;
   readonly expectedDevHead: CommitSha;
@@ -224,26 +260,19 @@ export class DevGitMergeBoundary {
           'The feature worktree became dirty before its feature merge could begin',
       });
     }
-    const featureHead = repository.head();
-    if (featureHead.isErr()) return err(featureHead.error);
-    if (!featureHead.value.equals(request.featureHead)) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          `The feature worktree commit changed before its feature merge could begin: expected ${request.featureHead.value()}, found ${featureHead.value.value()}`,
-      });
-    }
     const remoteFeature = repository.remoteBranch(request.featureBranch);
     if (remoteFeature.isErr()) return err(remoteFeature.error);
-    if (
-      remoteFeature.value.presence !== RemoteBranchPresence.Present ||
-      !remoteFeature.value.sha.equals(request.featureHead)
-    ) {
+    if (remoteFeature.value.presence !== RemoteBranchPresence.Present) {
       return err({
         kind: DevFailureKind.Race,
         message:
           'The pushed feature branch changed before its feature merge could begin',
       });
+    }
+    if (!remoteFeature.value.sha.equals(request.featureHead)) {
+      return err(
+        branchAdvancedFailure(request.featureBranch, remoteFeature.value.sha),
+      );
     }
     const originMain = repository.remoteBranch(ManagedBranch.Main);
     if (originMain.isErr()) return err(originMain.error);
