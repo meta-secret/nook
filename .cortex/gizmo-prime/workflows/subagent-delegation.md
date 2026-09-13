@@ -237,4 +237,4 @@ Before accepting Team Agent work, verify:
   access or monitoring; and
 - Gizmo owns feature-stage decisions and landing authorization.
 - The dev manager controls dev PR operations, readiness, and promotion.
-- Steward mutations stay inside the owning controller's packet.
+- PR Lifecycle Agent mutations stay inside the owning controller's packet.
