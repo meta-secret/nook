@@ -20,6 +20,11 @@ tasks:
     cmds:
       - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/dev-delivery/dev-pr-manager-cli.ts"
 
+  manager-gizmo:
+    desc: On-demand Dev Manager snapshot inspection and safe next-state guidance.
+    cmds:
+      - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/dev-delivery/dev-manager-gizmo-cli.ts"
+
   promote:
     desc: Manager-only guarded promotion of the exact tested origin/dev SHA to origin/main.
     requires:
