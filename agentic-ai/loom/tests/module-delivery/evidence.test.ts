@@ -458,7 +458,7 @@ type MutableProviderEvidenceIdentity = Omit<
   'acceptedProviderEvidence'
 > & { acceptedProviderEvidence: MutableProviderEvidenceIdentity[] };
 
-test('migrates the historical v1 evidence handoff without mutating it', () => {
+test('migrates nested historical v1 evidence bottom-up without mutating it', () => {
   const active = ModuleDeliveryEvidenceScenario.runtime();
   try {
     const lease = ModuleDeliveryEvidenceScenario.admittedLease({
@@ -470,12 +470,12 @@ test('migrates the historical v1 evidence handoff without mutating it', () => {
       lease,
       acceptedProviderEvidence: [],
     });
-    const nestedArtifactIdentity = 'evidence/nested-provider.json';
-    const nestedCurrent: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
+    const deepestArtifactIdentity = 'evidence/deepest-provider.json';
+    const deepestCurrent: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
       schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
       generation: current.generation,
       planDigest: current.planDigest,
-      taskId: 'nested-provider',
+      taskId: 'deepest-provider',
       attempt: current.attempt,
       producerTeam: current.producerTeam,
       functionalOwner: current.functionalOwner,
@@ -485,28 +485,56 @@ test('migrates the historical v1 evidence handoff without mutating it', () => {
       pinnedLocalDevSha: current.pinnedLocalDevSha,
       featureHeadSha: current.featureHeadSha,
       verifiedHeadCommit: current.sourceCommit,
-      artifactIdentity: nestedArtifactIdentity,
-      artifactDigest:
-        ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
-          artifactIdentity: nestedArtifactIdentity,
-          evidence: ['Nested provider evidence.'],
-          acceptanceRequirements: current.acceptanceRequirements,
-          acceptedProviderEvidence: [],
-        }),
+      artifactIdentity: deepestArtifactIdentity,
+      artifactDigest: '0'.repeat(64),
       sourceProvenanceDigest: 'a'.repeat(64),
       verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
       claimIdentities: [],
       acceptanceRequirements: current.acceptanceRequirements,
       acceptedProviderEvidence: [],
     };
-    const {
-      featureHeadSha: _nestedFeatureHeadSha,
-      ...nestedWithoutFeature
-    } = nestedCurrent;
-    const historicalNested: ModuleDeliveryAcceptedProviderEvidenceIdentityV1 = {
-      ...nestedWithoutFeature,
-      schemaVersion: LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+    const deepestCurrentCanonical: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
+      ...deepestCurrent,
+      artifactDigest:
+        ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
+          artifactIdentity: deepestArtifactIdentity,
+          evidence: [],
+          acceptanceRequirements: current.acceptanceRequirements,
+          acceptedProviderEvidence: [],
+        }),
     };
+    const nestedArtifactIdentity = 'evidence/nested-provider.json';
+    const nestedCurrent: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
+      ...deepestCurrentCanonical,
+      taskId: 'nested-provider',
+      artifactIdentity: nestedArtifactIdentity,
+      artifactDigest: '0'.repeat(64),
+      acceptedProviderEvidence: [deepestCurrentCanonical],
+    };
+    const nestedCurrentCanonical: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
+      ...nestedCurrent,
+      artifactDigest:
+        ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
+          artifactIdentity: nestedArtifactIdentity,
+          evidence: [],
+          acceptanceRequirements: current.acceptanceRequirements,
+          acceptedProviderEvidence: [deepestCurrentCanonical],
+        }),
+    };
+    const historicalIdentity = (
+      identity: ModuleDeliveryAcceptedProviderEvidenceIdentity,
+    ): ModuleDeliveryAcceptedProviderEvidenceIdentityV1 => {
+      const { featureHeadSha: _featureHeadSha, ...withoutFeature } = identity;
+      return {
+        ...withoutFeature,
+        schemaVersion: LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+        acceptedProviderEvidence: identity.acceptedProviderEvidence.map(
+          historicalIdentity,
+        ),
+      };
+    };
+    const historicalDeepest = historicalIdentity(deepestCurrentCanonical);
+    const historicalNested = historicalIdentity(nestedCurrentCanonical);
     const { featureHeadSha: _featureHeadSha, ...withoutFeature } = current;
     const historical: ModuleDeliveryReadOnlyEvidenceSubmissionV1 = {
       ...withoutFeature,
@@ -540,12 +568,31 @@ test('migrates the historical v1 evidence handoff without mutating it', () => {
     expect(migrated.pinnedLocalDevSha).toBe(historical.pinnedLocalDevSha);
     expect(migrated.featureHeadSha).toBe('f'.repeat(40));
     const migratedNested = migrated.acceptedProviderEvidence[0];
-    if (!migratedNested) throw new Error('Nested migration fixture is missing.');
-    expect(migratedNested.schemaVersion).toBe(
+    const migratedDeepest = migratedNested?.acceptedProviderEvidence[0];
+    if (!migratedNested || !migratedDeepest)
+      throw new Error('Nested migration fixture is missing.');
+    expect(migratedDeepest.schemaVersion).toBe(
       MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
     );
-    expect(migratedNested.featureHeadSha).toBe('f'.repeat(40));
-    expect(migratedNested.artifactDigest).toBe(nestedCurrent.artifactDigest);
+    expect(migratedDeepest.featureHeadSha).toBe('f'.repeat(40));
+    const nestedKeys = Object.keys(migratedNested);
+    expect(nestedKeys.indexOf('featureHeadSha')).toBe(
+      nestedKeys.indexOf('verifiedHeadCommit') - 1,
+    );
+    expect(migratedDeepest.artifactDigest).toBe(
+      historicalDeepest.artifactDigest,
+    );
+    expect(migratedNested.artifactDigest).toBe(
+      ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
+        artifactIdentity: migratedNested.artifactIdentity,
+        evidence: [],
+        acceptanceRequirements: migratedNested.acceptanceRequirements,
+        acceptedProviderEvidence: [migratedDeepest],
+      }),
+    );
+    expect(migratedNested.artifactDigest).not.toBe(
+      historicalNested.artifactDigest,
+    );
     expect(migrated.artifactDigest).toBe(
       ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
         artifactIdentity: migrated.artifactIdentity,
@@ -554,18 +601,71 @@ test('migrates the historical v1 evidence handoff without mutating it', () => {
         acceptedProviderEvidence: migrated.acceptedProviderEvidence,
       }),
     );
-    const tamperedNested: ModuleDeliveryReadOnlyEvidenceSubmissionV1 = {
+    expect(migrated.artifactDigest).not.toBe(historical.artifactDigest);
+
+    const currentRoundTrip =
+      ModuleDeliveryEvidenceSchema.decodeCompatibleReadOnlyEvidenceSubmission(
+        JSON.stringify(migrated),
+      );
+    expect(JSON.stringify(currentRoundTrip)).toBe(JSON.stringify(migrated));
+    expect(currentRoundTrip).toEqual(migrated);
+
+    const tamperedDeepest: ModuleDeliveryAcceptedProviderEvidenceIdentityV1 = {
+      ...historicalDeepest,
+      artifactDigest: 'f'.repeat(64),
+    };
+    const tamperedNested: ModuleDeliveryAcceptedProviderEvidenceIdentityV1 = {
+      ...historicalNested,
+      acceptedProviderEvidence: [tamperedDeepest],
+    };
+    const tamperedRoot: ModuleDeliveryReadOnlyEvidenceSubmissionV1 = {
       ...historical,
-      acceptedProviderEvidence: [
-        { ...historicalNested, artifactDigest: 'f'.repeat(64) },
-      ],
+      acceptedProviderEvidence: [tamperedNested],
+      artifactDigest:
+        ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
+          artifactIdentity: historical.artifactIdentity,
+          evidence: historical.evidence,
+          acceptanceRequirements: historical.acceptanceRequirements,
+          acceptedProviderEvidence: [
+            tamperedNested as unknown as ModuleDeliveryAcceptedProviderEvidenceIdentity,
+          ],
+        }),
     };
     expect(() =>
       ModuleDeliveryEvidenceSchema.migrateReadOnlyEvidenceSubmission(
-        tamperedNested,
+        tamperedRoot,
         'f'.repeat(40),
       ),
     ).toThrow('Historical evidence artifact digest is invalid.');
+  } finally {
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(active.fixture);
+  }
+});
+
+/*
+ * Keep the migration fixture's identity payload explicit. Provider identities
+ * intentionally carry the artifact digest, not the provider's evidence text.
+ * Their canonical migration digest therefore uses the identity's empty local
+ * evidence surface and recursively binds the accepted identity children.
+ */
+test('current v2 evidence handoff preserves canonical identity property order', () => {
+  const active = ModuleDeliveryEvidenceScenario.runtime();
+  try {
+    const lease = ModuleDeliveryEvidenceScenario.admittedLease({
+      runtime: active,
+      taskId: active.provider.taskId,
+    });
+    const current = ModuleDeliveryEvidenceScenario.submission({
+      runtime: active,
+      lease,
+      acceptedProviderEvidence: [],
+    });
+    const decoded =
+      ModuleDeliveryEvidenceSchema.decodeCompatibleReadOnlyEvidenceSubmission(
+        JSON.stringify(current),
+      );
+    expect(JSON.stringify(decoded)).toBe(JSON.stringify(current));
+    expect(decoded).toEqual(current);
   } finally {
     ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(active.fixture);
   }

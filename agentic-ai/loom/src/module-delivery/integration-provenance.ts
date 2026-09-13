@@ -226,53 +226,81 @@ export class ModuleDeliveryEvidenceSchema {
       throw new Error('Evidence handoff kind is unsupported.');
     const originMainSha = reader.commit('originMainSha');
     const pinnedLocalDevSha = reader.commit('pinnedLocalDevSha');
+    const taskId = reader.string('taskId');
+    const attempt = reader.positiveInteger('attempt');
+    const generation = reader.positiveInteger('generation');
+    const planDigest = reader.sha256('planDigest');
+    const sourceCommit = reader.commit('sourceCommit');
+    const producerTeam = reader.string('producerTeam') as TeamKey;
+    const functionalOwner = reader.string(
+      'functionalOwner',
+    ) as ModuleDeliveryOwnerIdentity;
+    const acceptanceOwner = reader.string(
+      'acceptanceOwner',
+    ) as ModuleDeliveryOwnerIdentity;
+    const acceptanceRequirements = reader.stringList(
+      'acceptanceRequirements',
+    );
+    const claimIdentities = reader.array('claimIdentities').map(
+      ModuleDeliveryEvidenceSchema.decodeClaimIdentity,
+    );
+    const artifactIdentity = reader.string('artifactIdentity');
+    const artifactDigest = reader.sha256('artifactDigest');
+    const verdict = reader.verdict('verdict');
+    const evidence = reader.stringList('evidence');
     const acceptedProviderEvidence = reader
       .array('acceptedProviderEvidence')
       .map((node) =>
         ModuleDeliveryEvidenceSchema.decodeIdentity(node, legacy),
       );
-    const common = {
-      kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
-      taskId: reader.string('taskId'),
-      attempt: reader.positiveInteger('attempt'),
-      generation: reader.positiveInteger('generation'),
-      planDigest: reader.sha256('planDigest'),
-      sourceCommit: reader.commit('sourceCommit'),
-      originMainSha,
-      pinnedLocalDevSha,
-      producerTeam: reader.string('producerTeam') as TeamKey,
-      functionalOwner: reader.string(
-        'functionalOwner',
-      ) as ModuleDeliveryOwnerIdentity,
-      acceptanceOwner: reader.string(
-        'acceptanceOwner',
-      ) as ModuleDeliveryOwnerIdentity,
-      acceptanceRequirements: reader.stringList('acceptanceRequirements'),
-      claimIdentities: reader.array('claimIdentities').map(
-        ModuleDeliveryEvidenceSchema.decodeClaimIdentity,
-      ),
-      acceptedProviderEvidence,
-      artifactIdentity: reader.string('artifactIdentity'),
-      artifactDigest: reader.sha256('artifactDigest'),
-      verdict: reader.verdict('verdict'),
-      evidence: reader.stringList('evidence'),
-    };
     if (legacy) {
       const submission: ModuleDeliveryReadOnlyEvidenceSubmissionV1 = {
-        ...common,
+        kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
         schemaVersion: LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+        taskId,
+        attempt,
+        generation,
+        planDigest,
+        sourceCommit,
+        originMainSha,
+        pinnedLocalDevSha,
+        producerTeam,
+        functionalOwner,
+        acceptanceOwner,
+        acceptanceRequirements,
+        claimIdentities,
         acceptedProviderEvidence:
           acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentityV1[],
+        artifactIdentity,
+        artifactDigest,
+        verdict,
+        evidence,
       };
       return submission;
     }
     const featureHeadSha = reader.commit('featureHeadSha');
     const submission: ModuleDeliveryReadOnlyEvidenceSubmission = {
-      ...common,
+      kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
       schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+      taskId,
+      attempt,
+      generation,
+      planDigest,
+      sourceCommit,
+      originMainSha,
+      pinnedLocalDevSha,
       featureHeadSha,
+      producerTeam,
+      functionalOwner,
+      acceptanceOwner,
+      acceptanceRequirements,
+      claimIdentities,
       acceptedProviderEvidence:
         acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
+      artifactIdentity,
+      artifactDigest,
+      verdict,
+      evidence,
     };
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha,
@@ -292,22 +320,34 @@ export class ModuleDeliveryEvidenceSchema {
     )
       throw new Error('Only evidence handoff schema 1 can be migrated.');
     const legacyArtifactDigest =
-      ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
+      ModuleDeliveryEvidenceSchema.identityArtifactDigest({
         artifactIdentity: submission.artifactIdentity,
-        evidence: submission.evidence,
         acceptanceRequirements: submission.acceptanceRequirements,
         acceptedProviderEvidence:
-          submission.acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
+          submission.acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentityV1[],
+        evidence: submission.evidence,
       });
     if (legacyArtifactDigest !== submission.artifactDigest)
       throw new Error('Historical evidence artifact digest is invalid.');
     const migrateIdentity = (
       identity: ModuleDeliveryAcceptedProviderEvidenceIdentityV1,
     ): ModuleDeliveryAcceptedProviderEvidenceIdentity => {
+      if (
+        identity.schemaVersion !==
+        LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION
+      )
+        throw new Error('Historical nested evidence schema version is invalid.');
+      const legacyDigest = ModuleDeliveryEvidenceSchema.identityArtifactDigest({
+        artifactIdentity: identity.artifactIdentity,
+        acceptanceRequirements: identity.acceptanceRequirements,
+        acceptedProviderEvidence: identity.acceptedProviderEvidence,
+      });
+      if (legacyDigest !== identity.artifactDigest)
+        throw new Error('Historical evidence artifact digest is invalid.');
       const acceptedProviderEvidence = identity.acceptedProviderEvidence.map(
         migrateIdentity,
       );
-      return {
+      const migrated: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
         schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
         generation: identity.generation,
         planDigest: identity.planDigest,
@@ -329,23 +369,44 @@ export class ModuleDeliveryEvidenceSchema {
         acceptanceRequirements: identity.acceptanceRequirements,
         acceptedProviderEvidence,
       };
+      return {
+        ...migrated,
+        artifactDigest: ModuleDeliveryEvidenceSchema.identityArtifactDigest({
+          artifactIdentity: migrated.artifactIdentity,
+          acceptanceRequirements: migrated.acceptanceRequirements,
+          acceptedProviderEvidence: migrated.acceptedProviderEvidence,
+        }),
+      };
     };
     const acceptedProviderEvidence = submission.acceptedProviderEvidence.map(
       migrateIdentity,
     );
     const migrated: ModuleDeliveryReadOnlyEvidenceSubmission = {
-      ...submission,
+      kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
       schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+      taskId: submission.taskId,
+      attempt: submission.attempt,
+      generation: submission.generation,
+      planDigest: submission.planDigest,
+      sourceCommit: submission.sourceCommit,
+      originMainSha: submission.originMainSha,
+      pinnedLocalDevSha: submission.pinnedLocalDevSha,
       featureHeadSha,
+      producerTeam: submission.producerTeam,
+      functionalOwner: submission.functionalOwner,
+      acceptanceOwner: submission.acceptanceOwner,
+      acceptanceRequirements: submission.acceptanceRequirements,
+      claimIdentities: submission.claimIdentities,
       acceptedProviderEvidence,
-      artifactDigest: ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest(
-        {
-          artifactIdentity: submission.artifactIdentity,
-          evidence: submission.evidence,
-          acceptanceRequirements: submission.acceptanceRequirements,
-          acceptedProviderEvidence,
-        },
-      ),
+      artifactIdentity: submission.artifactIdentity,
+      artifactDigest: ModuleDeliveryEvidenceSchema.identityArtifactDigest({
+        artifactIdentity: submission.artifactIdentity,
+        evidence: submission.evidence,
+        acceptanceRequirements: submission.acceptanceRequirements,
+        acceptedProviderEvidence,
+      }),
+      verdict: submission.verdict,
+      evidence: submission.evidence,
     };
     PinnedDevBaseEvidenceContract.assertShape({
       originMainSha: migrated.originMainSha,
@@ -382,57 +443,108 @@ export class ModuleDeliveryEvidenceSchema {
         ? ModuleDeliveryEvidenceSchema.IDENTITY_FIELDS
         : ModuleDeliveryEvidenceSchema.CURRENT_IDENTITY_FIELDS,
     );
+    const generation = reader.positiveInteger('generation');
+    const planDigest = reader.sha256('planDigest');
+    const taskId = reader.string('taskId');
+    const attempt = reader.positiveInteger('attempt');
+    const producerTeam = reader.string('producerTeam') as TeamKey;
+    const functionalOwner = reader.string(
+      'functionalOwner',
+    ) as ModuleDeliveryOwnerIdentity;
+    const acceptanceOwner = reader.string(
+      'acceptanceOwner',
+    ) as ModuleDeliveryOwnerIdentity;
+    const sourceCommit = reader.commit('sourceCommit');
     const originMainSha = reader.commit('originMainSha');
     const pinnedLocalDevSha = reader.commit('pinnedLocalDevSha');
-    const common = {
-      generation: reader.positiveInteger('generation'),
-      planDigest: reader.sha256('planDigest'),
-      taskId: reader.string('taskId'),
-      attempt: reader.positiveInteger('attempt'),
-      producerTeam: reader.string('producerTeam') as TeamKey,
-      functionalOwner: reader.string(
-        'functionalOwner',
-      ) as ModuleDeliveryOwnerIdentity,
-      acceptanceOwner: reader.string(
-        'acceptanceOwner',
-      ) as ModuleDeliveryOwnerIdentity,
-      sourceCommit: reader.commit('sourceCommit'),
-      originMainSha,
-      pinnedLocalDevSha,
-      verifiedHeadCommit: reader.commit('verifiedHeadCommit'),
-      artifactIdentity: reader.string('artifactIdentity'),
-      artifactDigest: reader.sha256('artifactDigest'),
-      sourceProvenanceDigest: reader.sha256('sourceProvenanceDigest'),
-      verdict: reader.verdict('verdict'),
-      claimIdentities: reader.array('claimIdentities').map(
-        ModuleDeliveryEvidenceSchema.decodeClaimIdentity,
-      ),
-      acceptanceRequirements: reader.stringList('acceptanceRequirements'),
-      acceptedProviderEvidence: reader
-        .array('acceptedProviderEvidence')
-        .map((child) => ModuleDeliveryEvidenceSchema.decodeIdentity(child, legacy)),
-    };
+    const featureHeadSha = legacy ? undefined : reader.commit('featureHeadSha');
+    const verifiedHeadCommit = reader.commit('verifiedHeadCommit');
+    const artifactIdentity = reader.string('artifactIdentity');
+    const artifactDigest = reader.sha256('artifactDigest');
+    const sourceProvenanceDigest = reader.sha256('sourceProvenanceDigest');
+    const verdict = reader.verdict('verdict');
+    const claimIdentities = reader.array('claimIdentities').map(
+      ModuleDeliveryEvidenceSchema.decodeClaimIdentity,
+    );
+    const acceptanceRequirements = reader.stringList('acceptanceRequirements');
+    const acceptedProviderEvidence = reader
+      .array('acceptedProviderEvidence')
+      .map((child) => ModuleDeliveryEvidenceSchema.decodeIdentity(child, legacy));
+    if (featureHeadSha !== undefined)
+      PinnedDevBaseEvidenceContract.assertShape({
+        originMainSha,
+        pinnedLocalDevSha,
+        featureHeadSha,
+      });
     if (legacy) {
       return {
         schemaVersion: LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
-        ...common,
+        generation,
+        planDigest,
+        taskId,
+        attempt,
+        producerTeam,
+        functionalOwner,
+        acceptanceOwner,
+        sourceCommit,
+        originMainSha,
+        pinnedLocalDevSha,
+        verifiedHeadCommit,
+        artifactIdentity,
+        artifactDigest,
+        sourceProvenanceDigest,
+        verdict,
+        claimIdentities,
+        acceptanceRequirements,
         acceptedProviderEvidence:
-          common.acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentityV1[],
+          acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentityV1[],
       };
     }
-    const featureHeadSha = reader.commit('featureHeadSha');
-    PinnedDevBaseEvidenceContract.assertShape({
-      originMainSha,
-      pinnedLocalDevSha,
-      featureHeadSha,
-    });
+    const currentFeatureHeadSha = featureHeadSha;
+    if (currentFeatureHeadSha === undefined)
+      throw new Error('Evidence handoff feature head is missing.');
     return {
       schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
-      ...common,
-      featureHeadSha,
+      generation,
+      planDigest,
+      taskId,
+      attempt,
+      producerTeam,
+      functionalOwner,
+      acceptanceOwner,
+      sourceCommit,
+      originMainSha,
+      pinnedLocalDevSha,
+      featureHeadSha: currentFeatureHeadSha,
+      verifiedHeadCommit,
+      artifactIdentity,
+      artifactDigest,
+      sourceProvenanceDigest,
+      verdict,
+      claimIdentities,
+      acceptanceRequirements,
       acceptedProviderEvidence:
-        common.acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
+        acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
     };
+  }
+
+  private static identityArtifactDigest(
+    request: Readonly<{
+      artifactIdentity: string;
+      evidence?: readonly string[];
+      acceptanceRequirements: readonly string[];
+      acceptedProviderEvidence:
+        | readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[]
+        | readonly ModuleDeliveryAcceptedProviderEvidenceIdentityV1[];
+    }>,
+  ): string {
+    return ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
+      artifactIdentity: request.artifactIdentity,
+      evidence: request.evidence ?? [],
+      acceptanceRequirements: request.acceptanceRequirements,
+      acceptedProviderEvidence:
+        request.acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
+    });
   }
 
   private static requireRecord(node: UntrustedYamlNode): UntrustedYamlMap {
