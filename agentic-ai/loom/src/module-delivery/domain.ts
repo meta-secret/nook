@@ -198,6 +198,7 @@ export const ORDINARY_TASK_WRITE_ROOTS = {
     'nook-app/nook-platform/nook-wasm',
   ],
   [TeamKey.Security]: [],
+  [TeamKey.DeliveryPipeline]: [],
   [TeamKey.Sre]: [
     ...ModuleTaskOwnership.SRE_EXACT_OPERATIONAL_FILES,
     'infra',

@@ -12,6 +12,7 @@ import {
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
   TeamKey,
+  ORDINARY_TASK_WRITE_ROOTS,
   ModuleDeliveryPlanDecoder,
 } from '../../src/module-delivery/index.ts';
 
@@ -90,6 +91,21 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
 }
 
 const SOURCE_COMMIT = '1'.repeat(40);
+
+test('keeps Delivery Pipeline out of ordinary product ownership', () => {
+  for (const team of Object.values(TeamKey))
+    expect(ORDINARY_TASK_WRITE_ROOTS[team]).toBeDefined();
+  expect(ORDINARY_TASK_WRITE_ROOTS[TeamKey.DeliveryPipeline]).toEqual([]);
+  expect(
+    ModuleDeliveryOrdinaryTaskOwnershipScenario.accepted(
+      ModuleDeliveryOrdinaryTaskOwnershipScenario.ordinaryWrite({
+        team: TeamKey.DeliveryPipeline,
+        moduleRoot: 'agentic-ai/loom',
+        write: 'agentic-ai/loom/src/module-delivery/domain.ts',
+      }),
+    ),
+  ).toBe(false);
+});
 
 test('limits Development Core minds writes to Rust-owned surfaces', () => {
   expect(
