@@ -62,6 +62,32 @@ export class BranchName {
     return ok(new BranchName(input));
   }
 
+  static parseFeature(input: string): Result<BranchName, DevFailure> {
+    const branch = BranchName.parse(input);
+    if (branch.isErr()) return err(branch.error);
+    const value = branch.value.value();
+    const components = value.split('/');
+    if (
+      value === '@' ||
+      value === ManagedBranch.Main ||
+      value === ManagedBranch.Dev ||
+      value.endsWith('/') ||
+      components.some(
+        (component) =>
+          component.length === 0 ||
+          component.startsWith('.') ||
+          component.endsWith('.') ||
+          component.endsWith('.lock'),
+      )
+    ) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Invalid Git feature branch name: ${input}`,
+      });
+    }
+    return branch;
+  }
+
   value(): string {
     return this.raw;
   }
@@ -293,13 +319,15 @@ export interface DevSnapshot {
 export interface DevLandRequest {
   /** Exact assigned canonical local-dev checkout path. */
   readonly devPath: string;
+  /** Exact canonical feature branch authorized for local integration. */
+  readonly featureBranch: BranchName;
   /** Exact freshly fetched origin/main identity recorded by Gizmo Prime. */
   readonly originMainSha: CommitSha;
   /** Exact synchronized local-dev baseline selected for this feature. */
   readonly pinnedLocalDevSha: CommitSha;
-  /** Exact canonical feature frontier accepted for local integration. */
+  /** Feature worktree HEAD observed internally immediately before landing. */
   readonly featureHeadSha: CommitSha;
-  /** Exact published feature head that the landing operation will merge. */
+  /** Feature worktree HEAD observed internally for the runtime merge boundary. */
   readonly expectedFeatureSha: CommitSha;
 }
 

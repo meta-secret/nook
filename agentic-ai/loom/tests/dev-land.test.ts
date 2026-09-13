@@ -36,15 +36,18 @@ test(
     const pinnedLocalDevSha = CommitSha.parse(SHA_A);
     const featureHeadSha = CommitSha.parse(SHA_A);
     const expectedFeatureSha = CommitSha.parse(SHA_B);
+    const featureBranch = BranchName.parse('feature/land');
     expect(originMainSha.isOk()).toBe(true);
     expect(pinnedLocalDevSha.isOk()).toBe(true);
     expect(featureHeadSha.isOk()).toBe(true);
     expect(expectedFeatureSha.isOk()).toBe(true);
+    expect(featureBranch.isOk()).toBe(true);
     if (
       originMainSha.isErr() ||
       pinnedLocalDevSha.isErr() ||
       featureHeadSha.isErr() ||
-      expectedFeatureSha.isErr()
+      expectedFeatureSha.isErr() ||
+      featureBranch.isErr()
     )
       return;
 
@@ -54,6 +57,7 @@ test(
     ).execute({
       originMainSha: originMainSha.value,
       pinnedLocalDevSha: pinnedLocalDevSha.value,
+      featureBranch: featureBranch.value,
       featureHeadSha: featureHeadSha.value,
       expectedFeatureSha: expectedFeatureSha.value,
       devPath: '/tmp/nook-dev-land/dev',

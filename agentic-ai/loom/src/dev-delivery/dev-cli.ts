@@ -4,9 +4,11 @@ import { err, ok, type Result } from 'neverthrow';
 import { ProcessCommandRunner } from './dev-command.ts';
 import { DevDeliveryWorkspace } from './dev-workspace.ts';
 import {
+  BranchName,
   CommitSha,
   DevFailureKind,
   type DevFailure,
+  type DevLandRequest,
 } from './dev-types.ts';
 
 export interface DevCliMessage {
@@ -14,20 +16,17 @@ export interface DevCliMessage {
 }
 
 /**
- * Prime-issued provenance carried by the serialized dev:land task.
- *
- * The request deliberately retains both feature-head fields: `featureHeadSha`
- * is the provenance identity from the delivery packet, while
- * `expectedFeatureSha` is the exact branch head the landing operation must
- * observe. The downstream DevLandRequest owns the final relationship check.
+ * Prime-issued target and provenance carried by the serialized dev:land task.
+ * The feature worktree HEAD is intentionally absent: the CLI observes it
+ * after validating the authorized branch identity.
  */
 export interface DevLandProvenancePacket {
   /** Exact assigned canonical local-dev checkout path. */
   readonly devPath: string;
+  /** Exact canonical feature branch authorized for local integration. */
+  readonly featureBranch: BranchName;
   readonly originMainSha: CommitSha;
   readonly pinnedLocalDevSha: CommitSha;
-  readonly featureHeadSha: CommitSha;
-  readonly expectedFeatureSha: CommitSha;
 }
 
 /** Provides the manual task boundary and a single human-readable failure format. */
@@ -83,27 +82,54 @@ export class DevCli {
     return ok(raw);
   }
 
-  /** Resolves every exact identity required by the dev:land packet. */
+  /** Resolves the branch and base identities required by the dev:land packet. */
   static requiredDevLandPacket(): Result<
     DevLandProvenancePacket,
     DevFailure
   > {
     const devPath = DevCli.requiredAbsolutePath('DEV_PATH');
     if (devPath.isErr()) return err(devPath.error);
+    const featureBranch = DevCli.requiredFeatureBranch();
+    if (featureBranch.isErr()) return err(featureBranch.error);
     const originMainSha = DevCli.requiredCommitSha('ORIGIN_MAIN_SHA');
     if (originMainSha.isErr()) return err(originMainSha.error);
     const pinnedLocalDevSha = DevCli.requiredCommitSha('PINNED_LOCAL_DEV_SHA');
     if (pinnedLocalDevSha.isErr()) return err(pinnedLocalDevSha.error);
-    const featureHeadSha = DevCli.requiredCommitSha('FEATURE_HEAD_SHA');
-    if (featureHeadSha.isErr()) return err(featureHeadSha.error);
-    const expectedFeatureSha = DevCli.requiredCommitSha('EXPECTED_FEATURE_SHA');
-    if (expectedFeatureSha.isErr()) return err(expectedFeatureSha.error);
     return ok({
       devPath: devPath.value,
+      featureBranch: featureBranch.value,
       originMainSha: originMainSha.value,
       pinnedLocalDevSha: pinnedLocalDevSha.value,
-      featureHeadSha: featureHeadSha.value,
-      expectedFeatureSha: expectedFeatureSha.value,
+    });
+  }
+
+  static requiredFeatureBranch(): Result<BranchName, DevFailure> {
+    const raw = process.env.FEATURE_BRANCH;
+    return typeof raw === 'string'
+      ? BranchName.parseFeature(raw)
+      : DevCli.missingEnvironment('FEATURE_BRANCH');
+  }
+
+  /** Binds the serialized target to the feature worktree state observed locally. */
+  static observeDevLandRequest(
+    workspace: DevDeliveryWorkspace,
+    packet: DevLandProvenancePacket,
+  ): Result<DevLandRequest, DevFailure> {
+    const featureBranch = workspace.git.currentBranch();
+    if (featureBranch.isErr()) return err(featureBranch.error);
+    if (!featureBranch.value.equals(packet.featureBranch)) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message:
+          `The feature worktree branch ${featureBranch.value.value()} does not match the authorized FEATURE_BRANCH ${packet.featureBranch.value()}`,
+      });
+    }
+    const featureSha = workspace.git.head();
+    if (featureSha.isErr()) return err(featureSha.error);
+    return ok({
+      ...packet,
+      featureHeadSha: featureSha.value,
+      expectedFeatureSha: featureSha.value,
     });
   }
 }
