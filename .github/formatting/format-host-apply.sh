@@ -10,11 +10,32 @@ scripts_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$scripts_dir/../.." && pwd)"
 cd "$repo_root"
 
+if [[ ! "${PINNED_LOCAL_DEV_SHA:-}" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "PINNED_LOCAL_DEV_SHA must be an exact 40-character lowercase commit SHA" >&2
+  exit 1
+fi
+
+resolved_base_sha="$({
+  GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_NO_REPLACE_OBJECTS=1 \
+    git rev-parse --verify "${PINNED_LOCAL_DEV_SHA}^{commit}"
+} 2>/dev/null)" || {
+  echo "PINNED_LOCAL_DEV_SHA does not resolve to a commit" >&2
+  exit 1
+}
+if [[ "$resolved_base_sha" != "$PINNED_LOCAL_DEV_SHA" ]]; then
+  echo "PINNED_LOCAL_DEV_SHA did not resolve to the exact supplied commit" >&2
+  exit 1
+fi
+
 changed_files="$(mktemp)"
 trap 'rm -f "$changed_files"' EXIT
-base_ref="$(git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD)"
 {
-  git diff --name-only --diff-filter=ACMR -z "$base_ref"
+  GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_NO_REPLACE_OBJECTS=1 \
+    git diff --name-only --diff-filter=ACMR -z "$PINNED_LOCAL_DEV_SHA"
   git ls-files --others --exclude-standard -z
 } >"$changed_files"
 
