@@ -129,7 +129,6 @@ export class DevManagerGizmoCommand {
     // feature landing), so synchronization must preserve an ahead clean head
     // while still rejecting dirty, divergent, or racing state.
     const bootstrap = this.workspace.git.bootstrap({
-      fetchOrigin: true,
       requireDevEquality: false,
     });
     if (bootstrap.isErr()) return err(bootstrap.error);
