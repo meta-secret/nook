@@ -1,4 +1,5 @@
 use crate::HiveContext;
+use crate::model::FeatureBranch;
 use crate::neo4j::Neo4jTaskStore;
 use neo4rs::query;
 
@@ -196,12 +197,9 @@ impl Neo4jTaskStore {
                                      AND (origin_main_sha = '' OR pinned_local_dev_sha = '')
                                 THEN 1
                               END) AS incomplete_bootstrap_evidence,
-                        count(CASE
-                                WHEN feature_branch <> ''
-                                     AND (NOT (feature_branch =~ 'codex/[a-z0-9/_-]+')
-                                          OR feature_branch ENDS WITH '/')
-                                THEN 1
-                              END) AS invalid_feature_branch",
+                        collect(CASE
+                                  WHEN feature_branch <> '' THEN feature_branch
+                                END) AS feature_branches",
             ))
             .await?;
         let row = rows.next().await?.ok_or_else(|| {
@@ -209,7 +207,11 @@ impl Neo4jTaskStore {
         })?;
         let missing_feature_branch = row.get::<i64>("missing_feature_branch")?;
         let incomplete_bootstrap_evidence = row.get::<i64>("incomplete_bootstrap_evidence")?;
-        let invalid_feature_branch = row.get::<i64>("invalid_feature_branch")?;
+        let feature_branches = row.get::<Vec<String>>("feature_branches")?;
+        let invalid_feature_branch = feature_branches
+            .iter()
+            .filter(|branch| FeatureBranch::try_from(branch.as_str()).is_err())
+            .count();
         if missing_feature_branch > 0
             || incomplete_bootstrap_evidence > 0
             || invalid_feature_branch > 0

@@ -297,6 +297,7 @@ impl FeatureBranch {
             return false;
         };
         !suffix.is_empty()
+            && !suffix.contains("--")
             && suffix
                 .bytes()
                 .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')

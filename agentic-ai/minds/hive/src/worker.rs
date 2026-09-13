@@ -863,6 +863,7 @@ mod tests {
         assert!(prompt.contains("`originMainSha`"));
         assert!(prompt.contains("`pinnedLocalDevSha`"));
         assert!(prompt.contains("`featureBranch`"));
+        assert!(prompt.contains("(not applicable)"));
         assert!(prompt.contains("observed run head"));
         assert!(prompt.contains("strictly from the exact `pinnedLocalDevSha`"));
         assert!(prompt.contains("`origin/main` is ancestry evidence only"));
