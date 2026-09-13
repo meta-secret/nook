@@ -629,7 +629,10 @@ the `e2e` list and thin live smoke specs to `e2e/live/`.
 
 ## Parallelism and isolation
 
-Do **not** set `workers` in `playwright.config.ts` — use Playwright defaults locally and override with `--workers=N` when you want more parallelism than the default. Spec files that need ordering use `test.describe.configure({ mode: 'serial' })` within the file only.
+The Playwright configuration does not set `workers`; hosted invocations use
+their stage-owned `--workers=N` overrides. This runtime description does not
+authorize a local Playwright run. Spec files that need ordering use
+`test.describe.configure({ mode: 'serial' })` within the file only.
 
 `sync-live` keeps `fullyParallel: false` because CI assigns one `NOOK_GITHUB_E2E_REPO` per container; parallel live files would share that remote. The local `stable` and `unstable` groups use `fullyParallel: true`, but run in separate invocations with 3 and 2 workers respectively.
 
@@ -666,18 +669,15 @@ The trusted host fails closed unless:
 - the diff contains only regular Rust dependency mission files and compatibility
   changes;
 - trusted workflow checkout uses `persist-credentials: false`; the isolated
-  editor never receives the PAT. An existing-PR rerun may apply the token
-  only to a host Git fetch of the audited refs, then remove it before
-  isolated validation;
+  editor and remote build-only executor never receive the PAT. The trusted
+  host may expose the token only to the bounded Git publication step, then
+  removes it immediately;
 - frozen HEAD, index, Git/common directories, and effective configuration remain
-  exact after editing and validation, while trusted Git disables hooks,
+  exact across the editor handoff and publication, while trusted Git disables hooks,
   filesystem monitors, and signing;
-- validation's fresh HOME contains no publication, registry, or compiler-cache
-  credentials. The immutable Docker wrapper injects `network=none` for the
-  `docker run` form used by trusted validation and rejects unknown wrapper
-  operations. Alternate Docker CLI forms are not the trusted validation path;
-- the three-hour `CI_AGENT_TIMEOUT_MS=10800000` leaves half of the six-hour job
-  for validation/publication; and
+- the editor's fresh HOME contains no publication or registry credentials;
+- the three-hour `CI_AGENT_TIMEOUT_MS=10800000` bounds the isolated editing
+  phase and leaves the remaining job time for publication-integrity checks; and
 - exact branch identity is unambiguous and the publisher returns its verified
   remote head SHA to Gizmo after commit and push. No PR is created by this
   workflow; the later dev manager flow owns the single dev-to-main PR.
@@ -785,10 +785,10 @@ verification.
 - Never put the secret in workflow YAML, logs, comments, artifacts, or agent
   statistics.
 
-The local Linear MCP OAuth connection is useful for interactive issue
-management. It is separate from this unattended CI credential. Use
-`task ui:demo` from the repository root or `cargo ui-demo` from `nook-app/` to
-reproduce a recording locally.
+The local Linear MCP OAuth connection is separate from this unattended CI
+credential. The `task ui:demo` and `cargo ui-demo` entry points are retained as
+non-authorizing runtime references; this document does not permit agents or
+delivery actors to reproduce recordings locally.
 
 Playwright DOM/state assertions decide pass or failure. Humans and multimodal AI
 agents may review the video as supporting evidence, but visual AI review is
@@ -996,10 +996,12 @@ authenticator-domain to 90 percent.
 - Three finding batches open a circuit breaker and require comprehensive
   stabilization before another review request.
 - Codex is the sole automatic provider. No fallback reviewer is requested.
-- `task pr:ready PR=<number>` remains the feedback and exact-head readiness
-  authority.
+- `task pr:ready PR=<number>` is a runtime entry point used only in the Dev
+  Manager-controlled dev-to-main cycle. The Dev Manager owns its invocation,
+  the exact-head readiness decision, and all resulting feedback policy.
 - Ordinary pushes do not start `pr.yml`.
-- Every later push requires another explicit validation before readiness.
+- Every later Dev Manager-selected snapshot requires another explicit slow PR
+  validation before the Dev Manager may declare readiness.
 - Every actionable comment already present must be addressed and resolved.
 - When review is requested, request it immediately after dispatch. Do not defer
   it until checks finish.
@@ -1066,10 +1068,13 @@ authenticator-domain to 90 percent.
 **Zot registry policy:**
 
 - Delivery BuildKit caches use authenticated `type=registry` refs on `registry.dev.nokey.sh` (Zot behind Traefik HTTPS + htpasswd), not GitHub Actions cache storage.
-- Local Task Bake restores git-commit remote-buildcache scopes when remote registry credentials exist.
-- Explicit local build tasks may upload source-free Rust/WASM dependency stages
-  to unique candidate tags. The shared formatter never reads or writes those
-  caches.
+- The Task Bake runtime can restore git-commit remote-buildcache scopes when
+  remote registry credentials exist; this capability does not authorize an
+  agent or delivery actor to invoke it locally.
+- The implementation contains local build entry points that can upload
+  source-free Rust/WASM dependency stages to unique candidate tags. They are
+  non-authorizing runtime references. The shared formatter never reads or
+  writes those caches.
 - The Main-defined Remote workflow completely downloads each
   candidate.
 - It uploads and downloads a hosted-normalized tag before atomically assigning
@@ -1079,11 +1084,12 @@ authenticator-domain to 90 percent.
   A Main final-image cache therefore cannot substitute a stale source snapshot.
 - Main and release jobs import neither candidate nor stable formatter tags.
 - Hosted promotion independently fingerprints the exact committed source SHA.
-- Gizmo still dispatches build, test, proof, and validation tasks remotely.
-  This cache description grants no local test, check, preflight, or Docker
-  execution permission.
-- Commit-scoped local publish requires a clean worktree. Dirty builds remain
-  local and cannot poison the committed PR scope.
+- At the feature stage, Gizmo Prime may authorize only the remote
+  `build:compile` packet; no test, proof, or validation task belongs to that
+  dispatch. The Dev Manager alone owns remote slow tests, proof, and validation
+  in the dev-to-main PR cycle. This cache description grants no local build,
+  publication, test, check, preflight, or Docker execution permission, whether
+  the worktree is clean or dirty.
 - The formatter dependency candidate is the exception because its targets
   contain no authored source.
 - It still skips upload whenever the Dockerfile, Bake graph, publisher,
