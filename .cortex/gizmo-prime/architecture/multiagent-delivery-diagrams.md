@@ -8,7 +8,7 @@ PR Lifecycle Agent, Dev Manager, and repair Gizmo reads it completely before
 acting in the workflow.
 
 These diagrams define stage ownership, boundaries, feedback loops, and
-exact-SHA handoffs. After identifying the current level and role, follow the
+branch-authority handoffs. After identifying the current level and role, follow the
 canonical [dev delivery contract](dev-delivery.md) for detailed authorization,
 evidence, and failure rules when a diagram omits an operational edge case.
 
@@ -41,17 +41,14 @@ Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
 Delivery/Dev Manager then synchronizes canonical local `main` to the fetched
 `origin/main` and brings canonical local `dev` onto or including that main
 baseline under the dev-delivery workflow. If local dev is not current with
-main, the run fails closed. Prime records `originMainSha` for the exact freshly
-fetched `origin/main`, `pinnedLocalDevSha` for the exact synchronized
-local-dev SHA, and `featureHeadSha` for the exact canonical feature frontier in
-the mission packet and every child handoff. Require the chain `originMainSha`
-ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`. The initial
-frontier may equal the pinned local-dev SHA. Prime creates every new feature
-branch and worktree strictly from the exact `pinnedLocalDevSha`; no alternate
-base is permitted. The existing canonical feature ref and detached
-implementation HEAD must equal `featureHeadSha` exactly. Descendant frontiers
-are valid for reruns. Team Gizmos and leaves consume all three pinned
-identities. Missing, stale, mismatched, or unprovable evidence fails closed.
+main, the run fails closed. Prime authorizes the canonical feature branch name,
+which is the workflow authority. At creation, Prime starts the feature branch
+and worktree from the current committed local-dev feature base and preserves
+that base. Base and head SHAs are observational evidence only, not required
+packet fields. Delivery re-fetches and resolves the latest committed branch
+head before every remote dispatch, review, or landing operation. If the branch
+advances, follow the latest head and rerun affected evidence. Team Gizmos and
+leaves keep temporary branches private.
 
 ```mermaid
 sequenceDiagram
@@ -80,13 +77,13 @@ sequenceDiagram
             Dev-->>Prime: Dev/main currency failure
             Prime-->>User: Fail closed; no planning or edits
         else Local dev is current with main
-            Dev-->>Prime: Exact pinnedLocalDevSha
-            Prime->>Feature: Create or read the canonical feature ref
-            Feature-->>Prime: featureHeadSha equal to pinnedLocalDevSha initially
-            Prime->>Prime: Prove originMainSha ancestor of pinnedLocalDevSha ancestor/equal to featureHeadSha
+            Dev-->>Prime: Current committed local-dev feature base
+            Prime->>Feature: Create or read the canonical feature ref by name
+            Feature-->>Prime: Latest committed branch head
+            Prime->>Prime: Record base and head SHAs as observations only
             Prime->>Team: Issue packet with all three recorded SHAs
             Team->>Leaf: Forward all three pinned identities
-            Team->>Feature: Require the canonical ref to equal featureHeadSha
+            Team->>Feature: Keep temporary child branches private
         end
     end
 ```
@@ -202,16 +199,14 @@ boundary.
 
 ### Flow
 
-The implementation packet carries the recorded JSON fields `originMainSha`,
-`pinnedLocalDevSha`, and `featureHeadSha`. Prime creates every feature branch
-and worktree strictly from the exact `pinnedLocalDevSha`; no alternate base is
-permitted. The implementation worker consumes the
-existing canonical feature frontier and verifies the chain `originMainSha`
-ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`. The canonical
-feature ref and detached implementation HEAD must equal `featureHeadSha`
-exactly. Equality is valid for the initial frontier. A descendant frontier is
-valid for a rerun. Missing, mismatched, stale, or unprovable evidence fails
-closed. No implementation worker creates work from `origin/main` or
+The implementation packet carries the canonical feature branch name. Prime
+creates the branch and worktree from the current committed local-dev feature
+base and preserves that base. The branch name is the workflow authority.
+Workers keep temporary branches private. Base and head SHAs may be recorded as
+observational evidence, but are not packet authority. Delivery re-fetches and
+resolves the latest committed branch head before remote work, review, or
+landing. A branch advance follows the latest head and reruns affected
+evidence. No implementation worker creates work from `origin/main` or
 `origin/dev`.
 
 ```mermaid
@@ -276,13 +271,13 @@ sequenceDiagram
     end
 
     Gizmo->>Gizmo: Inspect and merge Team Agent commits
-    Gizmo->>Prime: Integrated SHA and review disposition
-    Prime->>Pipeline: Authorize canonical branch and exact SHA
+    Gizmo->>Prime: Integrated branch state and review disposition
+    Prime->>Pipeline: Authorize canonical branch name
     Pipeline->>Steward: Forward unchanged feature packet
-    Steward->>Feature: Push canonical branch at exact SHA
-    Steward->>Checks: Invoke build-only remote task for exact SHA
+    Steward->>Feature: Re-fetch and push latest committed branch head
+    Steward->>Checks: Invoke build-only remote task for latest head
     Checks-->>Steward: Green result or diagnostics
-    Steward-->>Pipeline: Exact-SHA evidence or blocker
+    Steward-->>Pipeline: Observed-head evidence or blocker
     Pipeline-->>Prime: Synthesized evidence or blocker
     Prime-->>Gizmo: Green result or feedback
 
@@ -295,24 +290,22 @@ sequenceDiagram
 
 This level expands `external:feature-checks` through Delivery Pipeline Team
 Gizmo and its `pr-lifecycle` agent. Gizmo Prime authorizes the canonical feature
-branch and exact SHA. Team Gizmo forwards that packet unchanged, and PR
-Lifecycle pushes the canonical branch and invokes the remote task. Review and
-remote compilation are separate checks internally, but they return one
-exact-SHA verdict through Team Gizmo to Gizmo Prime and the Feature Gizmo. The
-remote task is build-only: it does not run tests, coverage, e2e, or preflight.
+branch name. Team Gizmo forwards that packet unchanged, and PR Lifecycle
+re-fetches and resolves the latest committed branch head before pushing or
+invoking the remote task. Review and remote compilation are separate checks
+internally, but they return branch-head observations through Team Gizmo to
+Gizmo Prime and the Feature Gizmo. The remote task is build-only: it does not
+run tests, coverage, e2e, or preflight.
 
-The Delivery Pipeline packet preserves all three identities. It accepts a
-feature head only when `originMainSha` is an ancestor of
-`pinnedLocalDevSha`, and `pinnedLocalDevSha` is an ancestor of
-`featureHeadSha`. The existing canonical feature ref remains exactly
-`featureHeadSha`; a descendant head is the only valid rerun frontier.
+The Delivery Pipeline packet carries the branch name, not a pinned feature
+head. A branch advance follows the latest head and reruns affected evidence.
 
 ### Flow
 
 ```mermaid
 flowchart LR
     Prime["Gizmo Prime:<br/>issues delivery packet"]
-    Gizmo["Feature Gizmo:<br/>submits exact SHA"]
+    Gizmo["Feature Gizmo:<br/>submits canonical branch"]
     Review["Code review"]
     Accepted{"Accepted?"}
     TypeSafety["Remote type-safety check"]
@@ -320,7 +313,7 @@ flowchart LR
     Pipeline["Delivery Pipeline Team Gizmo:<br/>forwards Prime packet"]
     Steward["PR Lifecycle Agent:<br/>pushes canonical ref and dispatches"]
     Feedback["Gizmo Prime and Feature Gizmo:<br/>receive feedback"]
-    Ready([Verified feature SHA])
+    Ready([Verified branch head])
 
     Prime --> Gizmo --> Review --> Accepted
     Accepted -- No --> Feedback --> Gizmo
@@ -358,18 +351,18 @@ sequenceDiagram
     end
 
     Prime->>Feature: Route mission with all three pinned identities
-    Feature->>Review: Review exact featureHeadSha
-    Review-->>Feature: Accepted SHA or findings
-    Feature->>Prime: Accepted exact SHA
-    Prime->>Pipeline: Authorize canonical branch and exact SHA
+    Feature->>Review: Review latest committed branch head
+    Review-->>Feature: Accepted head observation or findings
+    Feature->>Prime: Accepted branch state
+    Prime->>Pipeline: Authorize canonical branch name
     Pipeline->>Steward: Forward unchanged build:compile packet
-    Steward->>Feature: Push canonical feature ref at exact SHA
-    Steward->>Build: Dispatch build-only task for exact SHA
-    Build-->>Steward: Exact-SHA compilation result
+    Steward->>Feature: Re-fetch and push latest committed branch head
+    Steward->>Build: Dispatch build-only task for latest head
+    Build-->>Steward: Observed-head compilation result
     Steward-->>Pipeline: Green evidence or diagnostics
-    Pipeline-->>Prime: Synthesized exact-SHA result
+    Pipeline-->>Prime: Synthesized branch-head result
     Prime-->>Feature: Green evidence or feedback
-    Feature->>Delivery: Deliver green exact SHA
+    Feature->>Delivery: Deliver green branch head
 
     Note over Prime,Steward: Prime authorizes the canonical ref and SHA; PR Lifecycle executes the push and dispatch
     Note over Feature,Build: Any failure returns to Level 1

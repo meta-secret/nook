@@ -26,21 +26,15 @@ disjoint specialists concurrently, integrates their committed results into the
 feature branch, and never creates or updates pull requests.
 
 Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
-`git fetch --prune origin`; a fetch failure fails closed. Delivery/Dev Manager
-then synchronizes canonical local `main` to the fetched `origin/main` and
-brings canonical local `dev` onto or including that main baseline under the
-dev-delivery workflow. If local dev is not current with main, the run fails
-closed. Prime records `originMainSha` for the exact freshly fetched
-`origin/main`, `pinnedLocalDevSha` for the exact synchronized local-dev
-commit, and `featureHeadSha` for the exact canonical feature frontier in the
-mission packet and every child handoff. Require the chain `originMainSha`
-ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`. The initial
-frontier may equal the pinned local-dev SHA. Prime creates every new feature
-branch and worktree strictly from the exact `pinnedLocalDevSha`; no alternate
-base is permitted. The existing canonical feature ref and detached
-implementation HEAD must equal `featureHeadSha` exactly. Descendant frontiers
-are valid for reruns. Team Gizmos and leaves consume all three pinned
-identities. Missing, stale, mismatched, or unprovable evidence fails closed.
+`git fetch --prune origin`; a fetch failure fails closed. Prime authorizes the
+canonical feature branch name, which is the workflow authority. At creation,
+Prime starts the feature branch and worktree from the current committed
+local-dev feature base and preserves that base. Base and head SHAs are
+observational evidence only, not required packet fields. Delivery re-fetches
+and resolves the latest committed branch head before each remote dispatch,
+review, or landing operation. If the branch advances, follow the latest head
+and rerun affected evidence. Team Gizmos and leaves keep temporary branches
+private.
 
 - [AI Team Gizmo](../teams/ai/gizmo/knowledge-graph.md)
 - [Development Core Team Gizmo](../teams/dev-core/gizmo/knowledge-graph.md)

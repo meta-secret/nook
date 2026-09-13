@@ -14,10 +14,11 @@ and single root delivery owner. Every team has a Team Gizmo that reports
 upward to Gizmo Prime; Team Gizmo is an internal team orchestrator, not a
 second Prime.
 
-Gizmo Prime authorizes the exact canonical feature branch name and
-`featureHeadSha` for publication and remote `build:compile` execution.
-Delivery Pipeline Team Gizmo routes that packet to PR Lifecycle, which performs
-the canonical push and remote invocation after verifying the branch and SHA.
+Gizmo Prime authorizes the canonical feature branch name for publication and
+remote `build:compile` execution. The branch name is the workflow authority.
+Delivery Pipeline Team Gizmo routes that packet to PR Lifecycle, which
+re-fetches and resolves the latest committed head before pushing or invoking
+the remote task.
 It authorizes Delivery Pipeline Team Gizmo to route PR Lifecycle's bounded
 `dev:land` operation for the completed feature.
 The manually run Dev Manager inside Delivery Pipeline owns remote dev
@@ -40,7 +41,7 @@ The active Gizmo harness and its required Team Agent dispatch are mandatory.
 - Pull-request operations remain with Delivery Pipeline's PR Lifecycle Agent
   or Dev Manager path. Gizmo Prime authors the canonical feature publication
   and remote-task packet; PR Lifecycle performs those mechanics only for the
-  exact named branch and SHA. Gizmo, Team Gizmos, and Team Agents do not create
+  named branch and its latest committed head. Gizmo, Team Gizmos, and Team Agents do not create
   or update pull requests; only manager-only `dev:pr-manager` creates or
   updates the dev-to-main PR.
 
@@ -57,7 +58,7 @@ The active Gizmo harness and its required Team Agent dispatch are mandatory.
 
 1. Read the complete
    [multiagent delivery architecture](architecture/multiagent-delivery-diagrams.md).
-2. Identify the current workflow level, actor, exact-SHA input, feedback path,
+2. Identify the current workflow level, actor, branch input, feedback path,
    and terminal handoff.
 3. Read the [Gizmo knowledge graph](knowledge-graph.md).
 4. Open only the detailed authority required for the current delivery stage.
@@ -74,18 +75,15 @@ Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
 Delivery/Dev Manager then synchronizes canonical local `main` to the fetched
 `origin/main` and brings canonical local `dev` onto or including that main
 baseline under the dev-delivery workflow. If local dev is not current with
-main, the run fails closed. Prime records an `originMainSha` for the exact
-freshly fetched `origin/main`, a `pinnedLocalDevSha` for the exact synchronized
-local-dev commit, and a `featureHeadSha` for the exact canonical feature
-frontier in the mission packet and every child handoff. Require the chain
-`originMainSha` ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`.
-The initial frontier may equal the pinned local-dev SHA. Prime creates every
-new feature branch and worktree strictly from the exact `pinnedLocalDevSha`;
-no alternate base is permitted. The existing canonical feature ref
-and detached implementation HEAD must equal `featureHeadSha` exactly.
-Descendant frontiers are valid for reruns. Team Gizmos and leaves consume all
-three pinned identities. Missing, stale, mismatched, or unprovable evidence
-fails closed.
+main, the run fails closed. Prime authorizes the canonical feature branch name,
+which is the workflow authority. At creation, Prime starts the feature branch
+and worktree from the current committed local-dev feature base and preserves
+that base. Base and head SHAs are observational evidence only, not required
+packet fields. Delivery re-fetches and resolves the latest committed branch
+head before every remote dispatch, review, or landing operation. If the branch
+advances, follow the latest head and rerun affected evidence. Do not fail
+because an earlier observed SHA is stale. Team Gizmos and leaves keep
+temporary branches private.
 
 ## Communication
 
@@ -122,7 +120,7 @@ explicit operation packet from the controller that owns the requested stage.
 Workers send missing PR-information requests to Gizmo through the active
 harness. Gizmo routes dev PR evidence requests to the Dev Manager. The manager
 authorizes PR Lifecycle's collection and returns the result. Gizmo Prime
-authorizes the exact feature branch publication and compilation request, plus
+authorizes the canonical feature branch publication and compilation request, plus
 local landing requests.
 
 Gizmo does not:
@@ -148,8 +146,8 @@ Feature slices. Prefer the smallest sufficient change without numeric size gates
 
 Every team routes through one Team Gizmo reporting to Gizmo Prime. Team Gizmo
 receives the high-level packet, decomposes only mechanics owned by that team,
-dispatches internal Team Agents through the active harness, synthesizes exact-
-SHA evidence and blockers, and reports the high-level result to Prime. It does
+dispatches internal Team Agents through the active harness, synthesizes
+branch/head evidence and blockers, and reports the high-level result to Prime. It does
 not make functional ownership, readiness, promotion, or final delivery
 decisions.
 
@@ -196,24 +194,26 @@ worker boundary.
 1. Define the requested outcome and terminal evidence.
 2. Assign bounded tasks to their functional owners.
 3. Create one bounded child worktree for each dependency-ready task.
-4. Dispatch the wave with disjoint write scopes and immutable parent frontier.
+4. Dispatch the wave with disjoint file scopes and the current parent branch frontier.
 5. Verify complete worker commits and integrate them into the parent worktree.
 6. Co-validate returned changes and interface evidence.
 7. Route corrections to the responsible team.
 8. Authorize Delivery Pipeline Team Gizmo to route PR Lifecycle's packet. PR
-   Lifecycle pushes the exact canonical feature branch and invokes the remote
-   build-only task after verifying the named branch and `featureHeadSha`.
+   Lifecycle re-fetches and resolves the latest committed canonical feature
+   branch, then pushes and invokes the remote build-only task for that head.
 9. Complete the user-selected terminal state.
 
 For a feature mission, completion includes code review, remote compilation of
-the final feature SHA, serialized local dev integration, and Workbench handoff.
+the current branch head, serialized local dev integration, and Workbench handoff.
 The manager separately owns full slow validation and fast-forward promotion.
 
 ## Verdict
 
-The final verdict is bound to the exact pull-request head.
-The feature verdict is bound to the exact feature head. A head change
-invalidates evidence that is not head-stable.
+The canonical feature branch name is the workflow authority. A commit SHA is
+recorded only as an observation associated with a run or evidence result. It
+is not required in a user packet or immutable authority across stages. When
+the branch advances, delivery follows the latest head and reruns affected
+operations before a verdict.
 
 Use [mission delivery](workflows/mission-delivery.md) for the end-to-end
 sequence and [pull requests](workflows/pull-requests.md) for GitHub, validation,

@@ -58,7 +58,7 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 - Do not duplicate an agent-type segment, such as
   `cortex-specialist/cortex-specialist`.
 - Do not create a child branch that omits either its team or role segment.
-- Do not create an empty commit, an empty merge commit, or a commit with
+- Do not create an empty commit, an empty merge, or a commit with
   `--allow-empty`.
 - Do not integrate with `--no-ff`.
 - Do not squash, rebase, or force-push a feature or child branch.
@@ -96,15 +96,17 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 - Prime routes additions concurrently when dependencies are ready and scopes are
   disjoint.
 - Prime remains the user-facing mission coordinator and root, not a subagent.
-- Prime's `pinnedLocalDevSha` is the source state for new feature work. Prime
-  records `originMainSha`, `pinnedLocalDevSha`, and `featureHeadSha` for every
-  feature frontier. The required chain is `originMainSha` ancestor of
-  `pinnedLocalDevSha` ancestor of `featureHeadSha`; initial equality between
-  the latter two is valid and later descendants are valid for reruns.
-- The existing canonical feature ref and detached implementation HEAD must
-  equal `featureHeadSha` exactly. Team Gizmos and leaves consume all three
-  pinned identities and never resolve or guess a base independently. Missing,
-  stale, mismatched, or unprovable evidence fails closed.
+- Prime authorizes the canonical feature branch name. The branch name is the
+  workflow authority for publication and remote work.
+- At creation, Prime starts the feature branch and worktree from the current
+  committed local-dev feature base and preserves that base. Base and head SHAs
+  are observational evidence only and are not required packet fields.
+- Delivery re-fetches and resolves the latest committed branch head before
+  remote dispatch, review, or landing. If the branch advances, follow the
+  latest head and rerun affected evidence instead of failing on stale SHA
+  observations.
+- Temporary Team Gizmo and leaf branches are private. Only the canonical
+  feature branch is published or used as a remote workflow ref.
 
 Follow [Team Agent Delegation](../workflows/subagent-delegation.md) for packet,
 worktree, and integration sequencing.
