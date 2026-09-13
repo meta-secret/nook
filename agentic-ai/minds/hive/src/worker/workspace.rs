@@ -44,7 +44,7 @@ impl TaskWorkspace<'_> {
         async_fs::create_dir_all(workspace.join("temporary")).await?;
         let (repository, did_resume) = match bootstrap_evidence {
             Some(evidence) => {
-                bootstrap::prepare_pinned_repository(
+                TaskWorkspace::prepare_pinned_repository(
                     workspace,
                     repository_url,
                     evidence,
@@ -53,7 +53,7 @@ impl TaskWorkspace<'_> {
                 .await?
             }
             None => {
-                bootstrap::prepare_repository(
+                TaskWorkspace::prepare_repository(
                     workspace,
                     repository_url,
                     source_commit,

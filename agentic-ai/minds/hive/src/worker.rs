@@ -206,14 +206,17 @@ impl<S: TaskStore> Worker<S> {
         shutdown: watch::Receiver<bool>,
     ) -> crate::HiveResult<()> {
         let (stop_tx, stop_rx) = watch::channel(false);
-        let mut heartbeat = tokio::spawn(heartbeat::run(
-            self.store.clone(),
-            self.config.agent_id.clone(),
-            task.clone(),
-            self.config.lease_seconds,
-            self.config.heartbeat_seconds,
-            stop_rx,
-        ));
+        let mut heartbeat = tokio::spawn(
+            heartbeat::LeaseHeartbeat::new(
+                self.store.clone(),
+                self.config.agent_id.clone(),
+                task.clone(),
+                self.config.lease_seconds,
+                self.config.heartbeat_seconds,
+                stop_rx,
+            )
+            .run(),
+        );
 
         let execution = async_time::timeout(
             Duration::from_secs(self.config.task_timeout_seconds),

@@ -24,6 +24,30 @@ struct RemoteCompileRun {
     display_title: String,
 }
 
+#[cfg(test)]
+impl RemoteCompileRun {
+    fn new(
+        database_id: u64,
+        branch: &str,
+        sha: &str,
+        status: &str,
+        conclusion: &str,
+        title: &str,
+        created_at: &str,
+    ) -> Self {
+        Self {
+            database_id,
+            head_sha: sha.to_owned(),
+            head_branch: branch.to_owned(),
+            event: "workflow_dispatch".to_owned(),
+            status: status.to_owned(),
+            conclusion: conclusion.to_owned(),
+            created_at: created_at.to_owned(),
+            display_title: title.to_owned(),
+        }
+    }
+}
+
 impl RemoteCompileEvidence<'_> {
     pub(super) async fn validate(self) -> crate::HiveResult<()> {
         let Self {
@@ -99,33 +123,12 @@ mod tests {
     use super::RemoteCompileRun;
     use crate::HiveResult;
 
-    fn run(
-        id: u64,
-        branch: &str,
-        sha: &str,
-        status: &str,
-        conclusion: &str,
-        title: &str,
-        created_at: &str,
-    ) -> RemoteCompileRun {
-        RemoteCompileRun {
-            database_id: id,
-            head_sha: sha.to_owned(),
-            head_branch: branch.to_owned(),
-            event: "workflow_dispatch".to_owned(),
-            status: status.to_owned(),
-            conclusion: conclusion.to_owned(),
-            created_at: created_at.to_owned(),
-            display_title: title.to_owned(),
-        }
-    }
-
     #[test]
     fn exact_compile_run_requires_sha_branch_and_task_identity() -> HiveResult<()> {
         let sha = "0123456789012345678901234567890123456789";
         let branch = "codex/hive-main-failure-42";
         let title = format!("Remote / build:compile @ {sha} / nonce");
-        let runs = vec![run(
+        let runs = vec![RemoteCompileRun::new(
             7,
             branch,
             sha,
@@ -160,7 +163,7 @@ mod tests {
         let branch = "codex/hive-main-failure-42";
         let title = format!("Remote / build:compile @ {sha} / nonce");
         let runs = vec![
-            run(
+            RemoteCompileRun::new(
                 8,
                 branch,
                 sha,
@@ -169,7 +172,7 @@ mod tests {
                 &title,
                 "2026-09-13T01:00:00Z",
             ),
-            run(
+            RemoteCompileRun::new(
                 9,
                 branch,
                 sha,
@@ -191,7 +194,7 @@ mod tests {
     fn non_compile_remote_tasks_are_not_compile_evidence() -> HiveResult<()> {
         let sha = "0123456789012345678901234567890123456789";
         let branch = "codex/hive-main-failure-42";
-        let runs = vec![run(
+        let runs = vec![RemoteCompileRun::new(
             10,
             branch,
             sha,

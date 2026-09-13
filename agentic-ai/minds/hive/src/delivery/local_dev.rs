@@ -69,61 +69,74 @@ mod tests {
     use std::path::Path;
     use std::process::Command;
 
-    fn git(repository: &Path, arguments: &[&str]) -> HiveResult<String> {
-        let output = Command::new("git")
-            .args(arguments)
-            .current_dir(repository)
-            .env("GIT_NO_REPLACE_OBJECTS", "1")
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_SYSTEM", "/dev/null")
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .output()?;
-        if !output.status.success() {
-            return Err(crate::HiveError::message(format!(
-                "local-dev fixture git {arguments:?} failed with {}",
-                output.status
-            )));
-        }
-        Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+    struct LocalDevFixture {
+        repository: tempfile::TempDir,
     }
 
-    fn configure(repository: &Path) -> HiveResult<()> {
-        git(repository, &["init", "--quiet"])?;
-        git(repository, &["config", "user.name", "Hive Test"])?;
-        git(
-            repository,
-            &["config", "user.email", "hive@example.invalid"],
-        )?;
-        Ok(())
+    impl LocalDevFixture {
+        fn new() -> HiveResult<Self> {
+            let fixture = Self {
+                repository: tempfile::tempdir()?,
+            };
+            fixture.configure()?;
+            Ok(fixture)
+        }
+
+        fn path(&self) -> &Path {
+            self.repository.path()
+        }
+
+        fn git(&self, arguments: &[&str]) -> HiveResult<String> {
+            let output = Command::new("git")
+                .args(arguments)
+                .current_dir(self.path())
+                .env("GIT_NO_REPLACE_OBJECTS", "1")
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .env("GIT_CONFIG_SYSTEM", "/dev/null")
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .output()?;
+            if !output.status.success() {
+                return Err(crate::HiveError::message(format!(
+                    "local-dev fixture git {arguments:?} failed with {}",
+                    output.status
+                )));
+            }
+            Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+        }
+
+        fn configure(&self) -> HiveResult<()> {
+            self.git(&["init", "--quiet"])?;
+            self.git(&["config", "user.name", "Hive Test"])?;
+            self.git(&["config", "user.email", "hive@example.invalid"])?;
+            Ok(())
+        }
     }
 
     #[tokio::test]
     async fn local_dev_accepts_an_exact_feature_landing_after_pinned_base() -> HiveResult<()> {
-        let repository = tempfile::tempdir()?;
-        configure(repository.path())?;
-        fs::write(repository.path().join("repair.txt"), "base\n")?;
-        git(repository.path(), &["add", "repair.txt"])?;
-        git(repository.path(), &["commit", "--quiet", "-m", "base"])?;
-        let base_sha = git(repository.path(), &["rev-parse", "HEAD"])?;
-        git(repository.path(), &["branch", "dev"])?;
-        git(repository.path(), &["checkout", "--quiet", "-b", "codex/hive-repair"])?;
-        fs::write(repository.path().join("repair.txt"), "base\nrepair\n")?;
-        git(repository.path(), &["add", "repair.txt"])?;
-        git(repository.path(), &["commit", "--quiet", "-m", "repair"])?;
-        let feature_sha = git(repository.path(), &["rev-parse", "HEAD"])?;
-        git(repository.path(), &["checkout", "--quiet", "dev"])?;
-        git(
-            repository.path(),
+        let fixture = LocalDevFixture::new()?;
+        fs::write(fixture.path().join("repair.txt"), "base\n")?;
+        fixture.git(&["add", "repair.txt"])?;
+        fixture.git(&["commit", "--quiet", "-m", "base"])?;
+        let base_sha = fixture.git(&["rev-parse", "HEAD"])?;
+        fixture.git(&["branch", "dev"])?;
+        fixture.git(&["checkout", "--quiet", "-b", "codex/hive-repair"])?;
+        fs::write(fixture.path().join("repair.txt"), "base\nrepair\n")?;
+        fixture.git(&["add", "repair.txt"])?;
+        fixture.git(&["commit", "--quiet", "-m", "repair"])?;
+        let feature_sha = fixture.git(&["rev-parse", "HEAD"])?;
+        fixture.git(&["checkout", "--quiet", "dev"])?;
+        fixture.git(
             &["merge", "--quiet", "--ff-only", "codex/hive-repair"],
         )?;
-        let dev_sha = git(repository.path(), &["rev-parse", "dev"])?;
+        let dev_sha = fixture.git(&["rev-parse", "dev"])?;
         let origin_main_sha = GitSha::try_from(base_sha.as_str())?;
         let pinned_local_dev_sha = GitSha::try_from(base_sha.as_str())?;
         let feature_sha = GitSha::try_from(feature_sha.as_str())?;
         let local_dev_sha = GitSha::try_from(dev_sha.as_str())?;
 
         LocalDevEvidence {
-            repository: repository.path(),
+            repository: fixture.path(),
             origin_main_sha: &origin_main_sha,
             pinned_local_dev_sha: &pinned_local_dev_sha,
             feature_sha: &feature_sha,
@@ -136,17 +149,16 @@ mod tests {
 
     #[tokio::test]
     async fn local_dev_rejects_a_pinned_base_without_feature_landing() -> HiveResult<()> {
-        let repository = tempfile::tempdir()?;
-        configure(repository.path())?;
-        fs::write(repository.path().join("repair.txt"), "base\n")?;
-        git(repository.path(), &["add", "repair.txt"])?;
-        git(repository.path(), &["commit", "--quiet", "-m", "base"])?;
-        let base_sha = git(repository.path(), &["rev-parse", "HEAD"])?;
-        git(repository.path(), &["checkout", "--quiet", "-b", "codex/hive-repair"])?;
-        fs::write(repository.path().join("repair.txt"), "base\nrepair\n")?;
-        git(repository.path(), &["add", "repair.txt"])?;
-        git(repository.path(), &["commit", "--quiet", "-m", "repair"])?;
-        let feature_sha = git(repository.path(), &["rev-parse", "HEAD"])?;
+        let fixture = LocalDevFixture::new()?;
+        fs::write(fixture.path().join("repair.txt"), "base\n")?;
+        fixture.git(&["add", "repair.txt"])?;
+        fixture.git(&["commit", "--quiet", "-m", "base"])?;
+        let base_sha = fixture.git(&["rev-parse", "HEAD"])?;
+        fixture.git(&["checkout", "--quiet", "-b", "codex/hive-repair"])?;
+        fs::write(fixture.path().join("repair.txt"), "base\nrepair\n")?;
+        fixture.git(&["add", "repair.txt"])?;
+        fixture.git(&["commit", "--quiet", "-m", "repair"])?;
+        let feature_sha = fixture.git(&["rev-parse", "HEAD"])?;
 
         let origin_main_sha = GitSha::try_from(base_sha.as_str())?;
         let pinned_local_dev_sha = GitSha::try_from(base_sha.as_str())?;
@@ -154,7 +166,7 @@ mod tests {
         let local_dev_sha = GitSha::try_from(base_sha.as_str())?;
 
         let error = LocalDevEvidence {
-            repository: repository.path(),
+            repository: fixture.path(),
             origin_main_sha: &origin_main_sha,
             pinned_local_dev_sha: &pinned_local_dev_sha,
             feature_sha: &feature_sha,
@@ -172,12 +184,11 @@ mod tests {
 
     #[tokio::test]
     async fn local_dev_requires_the_bootstrap_chain_and_landed_head() -> HiveResult<()> {
-        let repository = tempfile::tempdir()?;
-        configure(repository.path())?;
-        fs::write(repository.path().join("repair.txt"), "base\n")?;
-        git(repository.path(), &["add", "repair.txt"])?;
-        git(repository.path(), &["commit", "--quiet", "-m", "base"])?;
-        let feature_sha = git(repository.path(), &["rev-parse", "HEAD"])?;
+        let fixture = LocalDevFixture::new()?;
+        fs::write(fixture.path().join("repair.txt"), "base\n")?;
+        fixture.git(&["add", "repair.txt"])?;
+        fixture.git(&["commit", "--quiet", "-m", "base"])?;
+        let feature_sha = fixture.git(&["rev-parse", "HEAD"])?;
         let origin_main_sha = GitSha::try_from(
             "ffffffffffffffffffffffffffffffffffffffff",
         )?;
@@ -186,7 +197,7 @@ mod tests {
         let local_dev_sha = GitSha::try_from(feature_sha.as_str())?;
 
         let error = LocalDevEvidence {
-            repository: repository.path(),
+            repository: fixture.path(),
             origin_main_sha: &origin_main_sha,
             pinned_local_dev_sha: &pinned_local_dev_sha,
             feature_sha: &feature_sha,
