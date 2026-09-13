@@ -4,8 +4,17 @@
 
 The statistics contract has explicit owners:
 
-- **Gizmo:** Measures normal pull-request delivery. It owns the lifecycle,
-  publication, and performance follow-up.
+- **Gizmo Prime and Feature Gizmo:** Gizmo Prime owns mission-level routing and
+  delivery decisions. Feature Gizmo owns measurement judgment, exact
+  Workbench record authorship, Workbench state decisions, and performance
+  follow-up within its scope.
+- **Delivery Pipeline Team Gizmo:** Routes authorized mechanical packets through
+  the active harness and synthesizes evidence. It has no PR creation/update or
+  policy authority.
+- **Internal PR Steward:** Executes only the packetized mechanical Loom and
+  GitHub operations dispatched by Delivery Pipeline Team Gizmo through the
+  active harness. It has no PR creation/update, Workbench authorship/state, or
+  policy authority.
 - **AI team:** Owns the Loom tooling, schema, and analysis implementation.
 - **Responsible teams:** Return scoped execution evidence through implementation
   handoffs.
@@ -17,24 +26,37 @@ It is not a free-form task diary.
 
 ## Lifecycle
 
-1. Gizmo starts an out-of-tree scratch event log when PR-bound work begins.
-2. Gizmo appends every local lightweight execution, focused remote run, complete
-   validation run, retrigger, and merge attempt as it happens.
-3. The dev manager authorizes Steward's guarded fast-forward promotion after
-   full slow validation and required review/security acceptance.
-4. Gizmo authorizes PR Steward to assemble `stats/ai-agent/<pr-number>.yaml`
-   with Loom after merge.
-5. Gizmo compares the record with one or two recent comparable records.
-6. Gizmo authorizes PR Steward to publish the approved YAML to Workbench
-   `main` with Loom.
-7. Gizmo opens a separate build-performance PR when waste or regression is
-   actionable.
+1. Feature Gizmo starts an out-of-tree scratch event log when PR-bound work
+   begins.
+2. Feature Gizmo appends every local lightweight execution, focused remote run,
+   complete validation run, retrigger, and merge attempt as it happens.
+3. The dev manager authorizes Delivery Pipeline Team Gizmo to route the guarded
+   fast-forward promotion packet through the active harness to internal PR
+   Steward after full slow validation and required review/security acceptance.
+4. After merge, Feature Gizmo authors and approves the assemble request and
+   exact Workbench record content. Gizmo Prime routes the packet through
+   Delivery Pipeline Team Gizmo, which dispatches internal PR Steward through
+   the active harness to mechanically assemble
+   `stats/ai-agent/<pr-number>.yaml` with Loom.
+5. Feature Gizmo compares the record with one or two recent comparable records.
+6. Feature Gizmo decides that the YAML is approved for its Workbench state.
+   Gizmo Prime routes the publication packet through Delivery Pipeline Team
+   Gizmo, which dispatches internal PR Steward through the active harness to
+   mechanically publish the exact approved YAML to Workbench `main` with Loom.
+7. Feature Gizmo records an actionable build-performance improvement and routes
+   implementation to the responsible team through the normal delivery path;
+   no Gizmo, Team Gizmo, or PR Steward creates or updates a PR.
 
 ## Mechanical entrypoint — Loom
 
 - Keep judgment in this document.
-- Gizmo prepares Loom YAML requests and owns their interpretation.
-- PR Steward runs GitHub-backed assemble and publish requests.
+- Feature Gizmo authors the Loom YAML requests, exact Workbench record content,
+  and lifecycle decisions and owns their interpretation.
+- Gizmo Prime routes each authorized packet through Delivery Pipeline Team
+  Gizmo. Team Gizmo dispatches internal PR Steward through the active harness to
+  mechanically run GitHub-backed assemble and publish requests.
+- Team Gizmo and internal PR Steward must not create or update PRs, author
+  Workbench content, or decide policy or Workbench state.
 - Local validation without GitHub access remains with the responsible owner.
 - Scratch JSON must include:
   - `started_at`;
@@ -86,7 +108,7 @@ task loom:agent-stats CONFIG=path/to/agent-owned/assemble-request.yaml
 - **AI-owned Loom tooling provides:** PR metadata, paginated Actions and Codex
   review history, per-head delivery evidence, optional test inventory, and
   summary derivations.
-- **Gizmo owns:** comparison quality and waste-assessment text in the
+- **Feature Gizmo owns:** comparison quality and waste-assessment text in the
   scratch log before assembly.
 
 ## What to measure
@@ -197,16 +219,22 @@ reruns, premature merge attempts, and unexpected `direct_compile` use.
 If waste is actionable, `waste_assessment.required_actions` must name the
 concrete change.
 
-Gizmo records the actionable improvement and routes implementation to the
-responsible team. The resulting feature branch follows the normal remote
-compilation and manager-controlled dev delivery path; Gizmo does not open a
-pull request.
+Feature Gizmo records the actionable improvement and routes implementation to
+the responsible team. The resulting feature branch follows the normal remote
+compilation and manager-controlled dev delivery path; Gizmo does not open or
+update a pull request.
 
 ## Workbench publication contract
 
 Publication requires:
 
-- Gizmo owns and performs the procedure.
+- Feature Gizmo authors the exact record content and decides its Workbench
+  publication state; Gizmo Prime owns the delivery handoff.
+- Gizmo Prime routes the authorized packet through Delivery Pipeline Team
+  Gizmo, which dispatches internal PR Steward through the active harness.
+- Internal PR Steward mechanically publishes only the exact controller-authored
+  content to the named destination. It does not author Workbench content, decide
+  Workbench state or policy, or create/update PRs.
 - The filename is `stats/ai-agent/<source-pr-number>.yaml`.
 - The source Nook PR is already merged.
 
@@ -215,7 +243,9 @@ Before publishing:
 - do not run local product checks or tests;
 - do not create a Nook branch or PR;
 - do not wait for Main or deployment;
-- validate with Loom;
-- publish with Loom (`task loom:agent-stats CONFIG=<publish-request.yaml>`).
+- validate with Loom after Delivery Pipeline Team Gizmo dispatches the packet
+  to internal PR Steward through the active harness;
+- publish with Loom after that routed dispatch
+  (`task loom:agent-stats CONFIG=<publish-request.yaml>`).
 
 Invalid records must be corrected before publication.
