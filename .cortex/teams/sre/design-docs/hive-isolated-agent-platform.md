@@ -558,12 +558,14 @@ That command:
 
 ### GitHub delivery recovery
 
-- **Branch generations:** Use deterministic base branch
-  `codex/hive-<task-id>`.
-  - If a repair PR is closed or merged while durable work remains, create
-    `-g2`, `-g3`, and later generations instead of reusing a closed PR.
-  - Replacement Pods inspect GitHub for the latest generation and merged commit,
-    then resume Main verification without a duplicate PR.
+- **Canonical feature branch:** Consume the exact canonical `codex/...`
+  feature branch selected by Gizmo Prime. The branch name is authoritative.
+  - Each replacement Pod fetches the branch and records its latest committed
+    head as observational evidence for that attempt.
+  - If the branch advances, the next attempt follows the new head. Hive does
+    not create numbered generations or a repair pull request.
+  - Replacement Pods resume durable delivery state on the same canonical
+    branch without creating a temporary publication branch.
 - **GitHub authorization:** Mount the GitHub token into the Main-repair worker
   and expose it through `GH_TOKEN`.
   - A shared repository-scoped token is acceptable.
