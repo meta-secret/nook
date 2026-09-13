@@ -444,14 +444,18 @@ sequenceDiagram
 Git is the coordination layer. Gizmo Prime remains the mission/root owner and
 each Feature Gizmo owns its completed feature and landing request. Delivery
 Pipeline Team Gizmo routes the bounded `dev:land` packet to its `pr-lifecycle`
-agent, which executes the ordinary merge under the serialized local
+agent, which executes the fast-forward-only landing under the serialized local
 integration task. There is no feature PR and no publication of `dev` here.
 
-The landing request names the Prime-authorized canonical feature branch and
-retains `originMainSha` and `pinnedLocalDevSha` as bootstrap/base evidence.
-Any observed feature-head SHA is run association only. Before landing, PR
-Lifecycle re-fetches and resolves the latest committed branch head; a branch
-advance follows the latest head and reruns affected evidence.
+The landing request names only the Prime-authorized canonical feature branch;
+it carries no caller-selected checkout path or synchronization SHAs. Before
+landing, PR Lifecycle fetches and prunes origin, resolves the current
+`origin/main` and local `dev` refs, and re-resolves the latest committed
+feature head with its build evidence. It discovers at most one existing
+checked-out `dev` worktree from canonical Git metadata; otherwise it operates
+on the local ref. The final mutation is fast-forward-only, transactional for
+an un-checked-out or absent ref, and never force, squashes, or creates an
+empty merge.
 
 ### Flow
 

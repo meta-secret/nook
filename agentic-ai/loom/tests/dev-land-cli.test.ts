@@ -6,41 +6,29 @@ import { DevDeliveryWorkspace } from '../src/dev-delivery/dev-workspace.ts';
 import {
   BranchName,
   CommandExecutable,
-  CommitSha,
   type CommandOutput,
   type CommandRequest,
   type CommandRunner,
 } from '../src/dev-delivery/dev-types.ts';
 
-const ORIGIN_MAIN_SHA = 'a'.repeat(40);
-const PINNED_LOCAL_DEV_SHA = 'b'.repeat(40);
 const FEATURE_BRANCH = 'codex/agent-branching';
-const DEV_PATH = '/tmp/nook-dev';
 
-test('resolves the branch and base dev:land packet without feature SHA input', () => {
-  const names = [
-    'DEV_PATH',
-    'FEATURE_BRANCH',
-    'ORIGIN_MAIN_SHA',
-    'PINNED_LOCAL_DEV_SHA',
-  ] as const;
+test('resolves the public dev:land packet from its canonical branch only', () => {
+  const names = ['FEATURE_BRANCH'] as const;
   const previous = Object.fromEntries(
     names.map((name) => [name, process.env[name]]),
   );
   Object.assign(process.env, {
-    DEV_PATH,
     FEATURE_BRANCH,
-    ORIGIN_MAIN_SHA,
-    PINNED_LOCAL_DEV_SHA,
   });
   try {
     const packet = DevCli.requiredDevLandPacket();
     expect(packet.isOk()).toBe(true);
     if (packet.isErr()) return;
-    expect(packet.value.devPath).toBe(DEV_PATH);
     expect(packet.value.featureBranch.value()).toBe(FEATURE_BRANCH);
-    expect(packet.value.originMainSha.value()).toBe(ORIGIN_MAIN_SHA);
-    expect(packet.value.pinnedLocalDevSha.value()).toBe(PINNED_LOCAL_DEV_SHA);
+    expect(Object.hasOwn(packet.value, 'devPath')).toBe(false);
+    expect(Object.hasOwn(packet.value, 'originMainSha')).toBe(false);
+    expect(Object.hasOwn(packet.value, 'pinnedLocalDevSha')).toBe(false);
     expect(Object.hasOwn(packet.value, 'featureHeadSha')).toBe(false);
     expect(Object.hasOwn(packet.value, 'expectedFeatureSha')).toBe(false);
   } finally {
@@ -53,20 +41,12 @@ test('resolves the branch and base dev:land packet without feature SHA input', (
 });
 
 test('rejects missing and invalid dev:land branch identity', () => {
-  const names = [
-    'DEV_PATH',
-    'FEATURE_BRANCH',
-    'ORIGIN_MAIN_SHA',
-    'PINNED_LOCAL_DEV_SHA',
-  ] as const;
+  const names = ['FEATURE_BRANCH'] as const;
   const previous = Object.fromEntries(
     names.map((name) => [name, process.env[name]]),
   );
   Object.assign(process.env, {
-    DEV_PATH,
     FEATURE_BRANCH,
-    ORIGIN_MAIN_SHA,
-    PINNED_LOCAL_DEV_SHA,
   });
   try {
     delete process.env.FEATURE_BRANCH;
@@ -120,22 +100,10 @@ test(
       runner,
     });
     const featureBranch = BranchName.parseFeature(FEATURE_BRANCH);
-    const originMainSha = CommitSha.parse(ORIGIN_MAIN_SHA);
-    const pinnedLocalDevSha = CommitSha.parse(PINNED_LOCAL_DEV_SHA);
     expect(featureBranch.isOk()).toBe(true);
-    expect(originMainSha.isOk()).toBe(true);
-    expect(pinnedLocalDevSha.isOk()).toBe(true);
-    if (
-      featureBranch.isErr() ||
-      originMainSha.isErr() ||
-      pinnedLocalDevSha.isErr()
-    )
-      return;
+    if (featureBranch.isErr()) return;
     const packet = DevCli.observeDevLandRequest(workspace, {
-      devPath: DEV_PATH,
       featureBranch: featureBranch.value,
-      originMainSha: originMainSha.value,
-      pinnedLocalDevSha: pinnedLocalDevSha.value,
     });
 
     expect(packet.isOk()).toBe(true);
@@ -148,36 +116,18 @@ test(
   },
 );
 
-test('rejects missing, empty, relative, and NUL-containing dev checkout paths', () => {
-  const names = [
-    'DEV_PATH',
-    'FEATURE_BRANCH',
-    'ORIGIN_MAIN_SHA',
-    'PINNED_LOCAL_DEV_SHA',
-  ] as const;
+test('does not require a caller-selected dev checkout path', () => {
+  const names = ['FEATURE_BRANCH'] as const;
   const previous = Object.fromEntries(
     names.map((name) => [name, process.env[name]]),
   );
   Object.assign(process.env, {
-    DEV_PATH,
     FEATURE_BRANCH,
-    ORIGIN_MAIN_SHA,
-    PINNED_LOCAL_DEV_SHA,
   });
   try {
-    for (const value of [
-      undefined,
-      '',
-      'relative/dev',
-      `${DEV_PATH}\u0000dev`,
-    ]) {
-      if (typeof value === 'string') process.env.DEV_PATH = value;
-      else delete process.env.DEV_PATH;
-      const packet = DevCli.requiredDevLandPacket();
-      expect(packet.isErr()).toBe(true);
-      if (packet.isOk()) return;
-      expect(packet.error.message).toContain('DEV_PATH');
-    }
+    delete process.env.DEV_PATH;
+    const packet = DevCli.requiredDevLandPacket();
+    expect(packet.isOk()).toBe(true);
   } finally {
     for (const name of names) {
       const value = previous[name];

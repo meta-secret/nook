@@ -22,7 +22,6 @@ import {
   type DevLandRequest,
 } from '../src/dev-delivery/dev-types.ts';
 
-const SHA_A = '1111111111111111111111111111111111111111';
 const SHA_B = '2222222222222222222222222222222222222222';
 
 test('dev:land exposes branch advancement as a typed runtime failure', () => {
@@ -49,10 +48,7 @@ test('dev:land exposes branch advancement as a typed runtime failure', () => {
 class DetachedMergeRunner implements CommandRunner {
   readonly requests: CommandRequest[] = [];
 
-  constructor(
-    private readonly root: string,
-    private readonly devPath: string,
-  ) {}
+  constructor(private readonly root: string) {}
 
   run(request: CommandRequest): Result<CommandOutput, never> {
     this.requests.push(request);
@@ -63,42 +59,22 @@ class DetachedMergeRunner implements CommandRunner {
     ) {
       return ok({ exitCode: 0, stdout: `${this.root}\n`, stderr: '' });
     }
-    if (
-      request.executable === CommandExecutable.Git &&
-      request.args[0] === 'branch' &&
-      request.workingDirectory === this.devPath
-    ) {
-      return ok({ exitCode: 0, stdout: '', stderr: '' });
-    }
     return ok({ exitCode: 0, stdout: '', stderr: '' });
   }
 }
 
 test('dev:land rejects a non-canonical feature branch before reading Git', () => {
   const root = mkdtempSync(join(tmpdir(), 'nook-dev-land-branch-boundary-'));
-  const devPath = join(root, 'dev');
-  const originMainSha = CommitSha.parse(SHA_A);
-  const pinnedLocalDevSha = CommitSha.parse(SHA_B);
-  expect(originMainSha.isOk()).toBe(true);
-  expect(pinnedLocalDevSha.isOk()).toBe(true);
-  if (originMainSha.isErr() || pinnedLocalDevSha.isErr()) {
-    rmSync(root, { recursive: true, force: true });
-    return;
-  }
-
-  const runner = new DetachedMergeRunner(root, devPath);
+  const runner = new DetachedMergeRunner(root);
   try {
     for (const branch of ['feature/foo', 'child/temp']) {
       const result = new DevLandCommand(
         new DevDeliveryWorkspace({ root, runner }),
       ).execute({
-        devPath,
         featureBranch: {
           equals: () => true,
           value: () => branch,
         },
-        originMainSha: originMainSha.value,
-        pinnedLocalDevSha: pinnedLocalDevSha.value,
       } as unknown as DevLandRequest);
 
       expect(result.isErr()).toBe(true);
@@ -113,39 +89,26 @@ test('dev:land rejects a non-canonical feature branch before reading Git', () =>
   }
 });
 
-test(
-  'merge boundary rejects a detached assigned dev worktree before mutation',
-  () => {
+test('merge boundary rejects a detached feature worktree before mutation', () => {
     const root = mkdtempSync(join(tmpdir(), 'nook-dev-land-boundary-'));
-    const devPath = join(root, 'dev');
-    const expectedDevHead = CommitSha.parse(SHA_A);
     const featureHead = CommitSha.parse(SHA_B);
     const featureBranch = BranchName.parse('codex/agent-branching');
-    const originMainSha = CommitSha.parse(SHA_A);
-    if (
-      expectedDevHead.isErr() ||
-      featureHead.isErr() ||
-      featureBranch.isErr() ||
-      originMainSha.isErr()
-    ) {
+    if (featureHead.isErr() || featureBranch.isErr()) {
       rmSync(root, { recursive: true, force: true });
       return;
     }
-    const runner = new DetachedMergeRunner(root, devPath);
+    const runner = new DetachedMergeRunner(root);
     try {
       const result = new DevGitRepository({ root, runner }).mergeInto({
-        devPath,
-        expectedDevHead: expectedDevHead.value,
         featureHead: featureHead.value,
         featureBranch: featureBranch.value,
-        originMainSha: originMainSha.value,
       });
 
       expect(result.isErr()).toBe(true);
       if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Race);
       expect(
         runner.requests.some(
-          ({ args }) => args[0] === 'merge' || args[0] === 'merge-tree',
+          ({ args }) => args[0] === 'merge' || args[0] === 'update-ref',
         ),
       ).toBe(false);
     } finally {

@@ -21,12 +21,8 @@ export interface DevCliMessage {
  * after validating the authorized branch identity.
  */
 export interface DevLandProvenancePacket {
-  /** Exact assigned canonical local-dev checkout path. */
-  readonly devPath: string;
   /** Exact canonical feature branch authorized for local integration. */
   readonly featureBranch: BranchName;
-  readonly originMainSha: CommitSha;
-  readonly pinnedLocalDevSha: CommitSha;
 }
 
 /** Provides the manual task boundary and a single human-readable failure format. */
@@ -82,24 +78,15 @@ export class DevCli {
     return ok(raw);
   }
 
-  /** Resolves the branch and base identities required by the dev:land packet. */
+  /** Resolves the target identities required by the dev:land packet. */
   static requiredDevLandPacket(): Result<
     DevLandProvenancePacket,
     DevFailure
   > {
-    const devPath = DevCli.requiredAbsolutePath('DEV_PATH');
-    if (devPath.isErr()) return err(devPath.error);
     const featureBranch = DevCli.requiredFeatureBranch();
     if (featureBranch.isErr()) return err(featureBranch.error);
-    const originMainSha = DevCli.requiredCommitSha('ORIGIN_MAIN_SHA');
-    if (originMainSha.isErr()) return err(originMainSha.error);
-    const pinnedLocalDevSha = DevCli.requiredCommitSha('PINNED_LOCAL_DEV_SHA');
-    if (pinnedLocalDevSha.isErr()) return err(pinnedLocalDevSha.error);
     return ok({
-      devPath: devPath.value,
       featureBranch: featureBranch.value,
-      originMainSha: originMainSha.value,
-      pinnedLocalDevSha: pinnedLocalDevSha.value,
     });
   }
 

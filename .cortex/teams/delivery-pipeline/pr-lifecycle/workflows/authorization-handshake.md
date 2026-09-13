@@ -32,8 +32,10 @@ Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
   - A Feature Gizmo authorizes bounded local integration after it receives the
     resulting evidence.
   - A dev manager authorizes snapshot publication, slow PR checks, and fast-forward promotion.
-  - A landing packet names the canonical feature branch and assigned local dev
-    checkout. Its evidence records the observed feature commit.
+  - A landing packet names only the canonical feature branch. The landing
+    implementation discovers any existing local `dev` checkout from canonical
+    Git worktree metadata and resolves all synchronization refs internally;
+    caller path and SHA fields are not accepted.
   - The landing tool verifies positive build evidence for the current branch
     head and serializes integration.
   - A publication packet names the selected committed local dev snapshot.

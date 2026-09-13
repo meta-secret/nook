@@ -308,14 +308,8 @@ export interface DevSnapshot {
 }
 
 export interface DevLandRequest {
-  /** Exact assigned canonical local-dev checkout path. */
-  readonly devPath: string;
   /** Exact canonical feature branch authorized for local integration. */
   readonly featureBranch: BranchName;
-  /** Exact freshly fetched origin/main identity recorded by Gizmo Prime. */
-  readonly originMainSha: CommitSha;
-  /** Exact synchronized local-dev baseline selected for this feature. */
-  readonly pinnedLocalDevSha: CommitSha;
 }
 
 export interface DevPublishRequest {

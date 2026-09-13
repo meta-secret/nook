@@ -6,14 +6,11 @@ vars:
 
 tasks:
   land:
-    desc: Land the current clean, remotely compiled feature commit into the shared local dev worktree.
+    desc: Land the current clean, remotely compiled feature commit into local dev.
     requires:
-      vars: [DEV_PATH, FEATURE_BRANCH, ORIGIN_MAIN_SHA, PINNED_LOCAL_DEV_SHA]
+      vars: [FEATURE_BRANCH]
     env:
-      DEV_PATH: '{{.DEV_PATH}}'
       FEATURE_BRANCH: '{{.FEATURE_BRANCH}}'
-      ORIGIN_MAIN_SHA: '{{.ORIGIN_MAIN_SHA}}'
-      PINNED_LOCAL_DEV_SHA: '{{.PINNED_LOCAL_DEV_SHA}}'
     cmds:
       - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/dev-delivery/dev-land-cli.ts"
 

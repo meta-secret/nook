@@ -61,8 +61,9 @@ policy owner between Gizmo Prime, a Feature Gizmo, or the Dev Manager.
   cross-stage feature authority.
 - Keep feature-stage remote execution build-only. Tests, coverage, e2e, and
   preflight remain outside that stage.
-- Keep `dev:land` serialized and limited to the named local development
-  checkout and current canonical feature branch state.
+- Keep `dev:land` serialized and limited to the uniquely discovered local
+  development ref or existing checkout and current canonical feature branch
+  state; callers provide no checkout path or synchronization SHA.
 - Keep `dev:publish` limited to the Dev Manager's selected committed snapshot.
 - Keep `dev:promote` limited to the Dev Manager's separately authorized,
   fully validated, frozen SHA.

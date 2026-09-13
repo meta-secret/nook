@@ -67,10 +67,18 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
   - Missing or unprovable branch/bootstrap evidence fails closed.
   - No tests, coverage, e2e, or preflight may execute transitively.
 - **`dev:land`**
-  - Serialized feature merge into the shared local dev checkout.
+  - Serialized feature fast-forward into local `dev`, accepting only the
+    canonical feature branch as public input.
   - Gizmo Prime authorizes Delivery Pipeline Team Gizmo's packet; PR Lifecycle
     Agent performs the bounded invocation.
   - Verify positive remote build evidence for the current canonical branch head.
+  - At the merge boundary, fetch and prune origin, resolve current
+    `origin/main`, local `main`, and local `dev`, and discover a unique existing
+    checked-out `dev` worktree from canonical Git metadata when present. A
+    checked-out worktree uses clean `merge --ff-only`; an un-checked-out or
+    absent local ref uses compare-and-swap `update-ref`. Require the necessary
+    main/dev/feature ancestry and preserve prior dev commits; never force,
+    squash, or create an empty merge.
   - Do not publish dev.
 - **`dev:publish`**
   - Publish the manually selected local dev snapshot to origin/dev.

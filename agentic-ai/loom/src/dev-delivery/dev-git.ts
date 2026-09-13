@@ -45,11 +45,8 @@ interface AncestryRequest {
 }
 
 interface MergeRequest {
-  readonly devPath: string;
-  readonly expectedDevHead: CommitSha;
   readonly featureHead: CommitSha;
   readonly featureBranch: BranchName;
-  readonly originMainSha: CommitSha;
 }
 
 interface FastForwardRequest {
@@ -180,6 +177,22 @@ export class DevGitRepository {
     });
     if (output.isErr()) return err(output.error);
     return new WorktreeInventoryDecoder().decode(output.value.stdout);
+  }
+
+  /** Resolves an existing checked-out dev worktree without creating one. */
+  developmentWorktreeForLanding(): Result<WorktreeRecord | undefined, DevFailure> {
+    const records = this.worktrees();
+    if (records.isErr()) return err(records.error);
+    const candidates = records.value.filter((record) =>
+      record.isManagedDevelopmentWorktree(),
+    );
+    if (candidates.length > 1) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Multiple local dev worktrees were found (${candidates.map((candidate) => candidate.path).join(', ')}); refusing to choose one`,
+      });
+    }
+    return ok(candidates[0]);
   }
 
   stateAt(path: string): Result<WorktreeState, DevFailure> {
@@ -419,8 +432,28 @@ export class DevGitRepository {
       repository: this,
       featurePath: this.request.root,
       execute: (invocation) => this.execute(invocation),
-      branchHeadAt: (path, branch) => this.branchHeadAt(path, branch),
     }).mergeInto(request);
+  }
+
+  /** Resolves a local branch ref, returning undefined when it does not exist. */
+  localBranchHead(
+    branch: ManagedBranch,
+  ): Result<CommitSha | undefined, DevFailure> {
+    const output = this.execute({
+      args: ['rev-parse', '--verify', `refs/heads/${branch}^{commit}`],
+      workingDirectory: this.request.root,
+    });
+    if (output.isErr()) return err(output.error);
+    if (output.value.exitCode === 1) return ok(undefined);
+    if (output.value.exitCode !== 0) {
+      return err({
+        kind: DevFailureKind.Git,
+        message: `Unable to resolve local refs/heads/${branch}: ${new CommandFailureMessage(output.value).text()}`,
+      });
+    }
+    const sha = CommitShaValue.parse(output.value.stdout.trim());
+    if (sha.isErr()) return err(sha.error);
+    return ok(sha.value);
   }
 
   /** Fast-forwards local dev to a promoted snapshot without rewriting newer work. */
@@ -492,18 +525,6 @@ export class DevGitRepository {
       });
     }
     return ok();
-  }
-
-  private branchHeadAt(
-    path: string,
-    branch: ManagedBranch,
-  ): Result<CommitSha, DevFailure> {
-    const output = this.successful({
-      args: ['rev-parse', '--verify', `refs/heads/${branch}^{commit}`],
-      workingDirectory: path,
-    });
-    if (output.isErr()) return err(output.error);
-    return CommitShaValue.parse(output.value.stdout.trim());
   }
 
   private trackingHead(branch: ManagedBranch): Result<CommitSha, DevFailure> {
