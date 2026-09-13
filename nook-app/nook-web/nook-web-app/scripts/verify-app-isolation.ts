@@ -137,7 +137,7 @@ const requireFromApp = createRequire(import.meta.url)
 type ConcreteObject = Record<string, unknown>
 
 function isConcreteObject(value: unknown): value is ConcreteObject {
-  return typeof value === 'object' && Object(value) === value
+  return Boolean(value) && typeof value === 'object'
 }
 
 function isPagesWorkerModule(value: unknown): value is PagesWorkerModule {
