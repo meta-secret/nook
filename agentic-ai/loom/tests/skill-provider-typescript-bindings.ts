@@ -444,7 +444,7 @@ type DynamicCwdExemption = {
 
 const DYNAMIC_CWD_EXEMPTIONS: readonly DynamicCwdExemption[] = [
   {
-    digest: '97006296741baaf862880c9f64045df91a89cbbbdb83da23457cf67c87d27612',
+    digest: '3f7ebcaa85a8b281beebf41e8cde824002b0cea1b3d6c8bbaae79b91eb290bb8',
     className: 'RepositoryCommand',
     functionName: 'execute',
     path: 'agentic-ai/loom/src/lib/run.ts',

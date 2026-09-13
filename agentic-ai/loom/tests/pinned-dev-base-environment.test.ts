@@ -30,6 +30,19 @@ class PinnedDevBaseEnvironmentFixture {
     this.git('update-ref', 'refs/remotes/origin/main', sha);
   }
 
+  environmentFor(
+    originMainSha: string,
+    pinnedLocalDevSha: string,
+    featureHeadSha: string,
+  ): NodeJS.ProcessEnv {
+    return {
+      ...process.env,
+      ORIGIN_MAIN_SHA: originMainSha,
+      PINNED_LOCAL_DEV_SHA: pinnedLocalDevSha,
+      FEATURE_HEAD_SHA: featureHeadSha,
+    };
+  }
+
   git(...args: string[]): string {
     return execFileSync('git', ['-C', this.root, ...args], {
       encoding: 'utf8',
@@ -40,17 +53,6 @@ class PinnedDevBaseEnvironmentFixture {
     rmSync(this.root, { recursive: true, force: true });
   }
 }
-
-const environmentFor = (
-  originMainSha: string,
-  pinnedLocalDevSha: string,
-  featureHeadSha: string,
-): NodeJS.ProcessEnv => ({
-  ...process.env,
-  ORIGIN_MAIN_SHA: originMainSha,
-  PINNED_LOCAL_DEV_SHA: pinnedLocalDevSha,
-  FEATURE_HEAD_SHA: featureHeadSha,
-});
 
 describe('pinned local-dev comparison evidence', () => {
   test('accepts the exact pinned local-dev commit and its ancestry', () => {
@@ -70,7 +72,7 @@ describe('pinned local-dev comparison evidence', () => {
       fixture.originRef(originMainSha);
 
       const resolved = PinnedDevBaseEnvironment.resolve({
-        environment: environmentFor(
+        environment: fixture.environmentFor(
           originMainSha,
           pinnedLocalDevSha,
           featureHeadSha,
@@ -108,7 +110,7 @@ describe('pinned local-dev comparison evidence', () => {
       assert.match(missing.error.message, /ORIGIN_MAIN_SHA/u);
 
       const malformed = PinnedDevBaseEnvironment.resolve({
-        environment: environmentFor(
+        environment: fixture.environmentFor(
           'main',
           pinnedLocalDevSha,
           featureHeadSha,
@@ -119,7 +121,7 @@ describe('pinned local-dev comparison evidence', () => {
       assert.match(malformed.error.message, /40-hex/u);
 
       const stale = PinnedDevBaseEnvironment.resolve({
-        environment: environmentFor(
+        environment: fixture.environmentFor(
           pinnedLocalDevSha,
           pinnedLocalDevSha,
           featureHeadSha,
@@ -153,7 +155,11 @@ describe('pinned local-dev comparison evidence', () => {
       const otherBase = fixture.commit('other.txt', 'other\n', 'other');
       fixture.git('checkout', '-q', '--detach', featureSha);
       const rejected = PinnedDevBaseEnvironment.resolve({
-        environment: environmentFor(originMainSha, otherBase, featureSha),
+        environment: fixture.environmentFor(
+          originMainSha,
+          otherBase,
+          featureSha,
+        ),
         repoRoot: fixture.root,
       });
       assert(rejected.isErr());

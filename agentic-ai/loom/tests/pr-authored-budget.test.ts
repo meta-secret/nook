@@ -15,6 +15,26 @@ import {
   AuthoredBudgetWorkspace,
 } from '../src/commands/pr-authored-budget.ts';
 
+class AuthoredBudgetRepositoryFixture {
+  private constructor(readonly root: string) {}
+
+  static create(): AuthoredBudgetRepositoryFixture {
+    return new AuthoredBudgetRepositoryFixture(
+      mkdtempSync(join(tmpdir(), 'nook-budget-pinned-base-')),
+    );
+  }
+
+  git(...args: string[]): string {
+    return execFileSync('git', ['-C', this.root, ...args], {
+      encoding: 'utf8',
+    }).trim();
+  }
+
+  dispose(): void {
+    rmSync(this.root, { recursive: true, force: true });
+  }
+}
+
 void test('keeps delivery at or below 2,000 authored additions', () => {
   const admitted = new AuthoredAdditionBudget(2_000).evaluate();
   assert(admitted.isOk());
@@ -97,30 +117,29 @@ void test('counts an untracked symlink blob without following its target', () =>
 });
 
 void test('measures authored additions from the pinned local-dev commit', () => {
-  const repoRoot = mkdtempSync(join(tmpdir(), 'nook-budget-pinned-base-'));
-  const git = (...args: string[]): string =>
-    execFileSync('git', ['-C', repoRoot, ...args], {
-      encoding: 'utf8',
-    }).trim();
+  const fixture = AuthoredBudgetRepositoryFixture.create();
   try {
-    git('init', '-q');
-    git('config', 'user.name', 'Loom Fixture');
-    git('config', 'user.email', 'loom-fixture@example.test');
-    writeFileSync(join(repoRoot, 'history.txt'), 'main\n');
-    git('add', '--', 'history.txt');
-    git('commit', '-qm', 'main');
-    const originMainSha = git('rev-parse', 'HEAD');
-    git('update-ref', 'refs/remotes/origin/main', originMainSha);
+    fixture.git('init', '-q');
+    fixture.git('config', 'user.name', 'Loom Fixture');
+    fixture.git('config', 'user.email', 'loom-fixture@example.test');
+    writeFileSync(join(fixture.root, 'history.txt'), 'main\n');
+    fixture.git('add', '--', 'history.txt');
+    fixture.git('commit', '-qm', 'main');
+    const originMainSha = fixture.git('rev-parse', 'HEAD');
+    fixture.git('update-ref', 'refs/remotes/origin/main', originMainSha);
 
-    writeFileSync(join(repoRoot, 'prior-dev.ts'), 'x\n'.repeat(2_001));
-    git('add', '--', 'prior-dev.ts');
-    git('commit', '-qm', 'prior dev');
-    const pinnedLocalDevSha = git('rev-parse', 'HEAD');
+    writeFileSync(join(fixture.root, 'prior-dev.ts'), 'x\n'.repeat(2_001));
+    fixture.git('add', '--', 'prior-dev.ts');
+    fixture.git('commit', '-qm', 'prior dev');
+    const pinnedLocalDevSha = fixture.git('rev-parse', 'HEAD');
 
-    writeFileSync(join(repoRoot, 'feature.ts'), 'const feature = true;\n');
-    git('add', '--', 'feature.ts');
-    git('commit', '-qm', 'feature');
-    const featureHeadSha = git('rev-parse', 'HEAD');
+    writeFileSync(
+      join(fixture.root, 'feature.ts'),
+      'const feature = true;\n',
+    );
+    fixture.git('add', '--', 'feature.ts');
+    fixture.git('commit', '-qm', 'feature');
+    const featureHeadSha = fixture.git('rev-parse', 'HEAD');
 
     const result = new AuthoredBudgetWorkspace({
       environment: {
@@ -129,11 +148,11 @@ void test('measures authored additions from the pinned local-dev commit', () => 
         PINNED_LOCAL_DEV_SHA: pinnedLocalDevSha,
         FEATURE_HEAD_SHA: featureHeadSha,
       },
-      repoRoot,
+      repoRoot: fixture.root,
     }).main();
     assert(result.isOk());
   } finally {
-    rmSync(repoRoot, { recursive: true, force: true });
+    fixture.dispose();
   }
 });
 
