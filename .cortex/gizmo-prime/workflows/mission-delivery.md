@@ -32,7 +32,7 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 - Do not perform team-owned implementation as Gizmo.
 - Do not execute local tests, including Loom tests.
 - Do not run local product compilation, Docker work, coverage, or preflight.
-- Do not run tests, coverage, e2e, or preflight remotely in the feature stage.
+- Do not run tests, checks, coverage, e2e, or preflight remotely in the feature stage.
 - Do not push dev or main from a feature task.
 - Do not introduce a Team Agent lifecycle service, scheduler, or Git-state machinery.
 - Do not introduce a persistent Delivery Pipeline or PR Lifecycle Agent
@@ -69,8 +69,8 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
    - Push the coherent feature branch.
    - Have Delivery Pipeline Team Gizmo route PR Lifecycle Agent's remote
      build-only execution packet for that SHA.
-   - For web changes, use `task remote TASK_NAME=web:build` and
-     `task remote TASK_NAME=web:e2e` as applicable.
+   - Run only `task remote TASK_NAME=build:compile` for feature-stage remote execution.
+   - Do not request tests, checks, coverage, e2e, or preflight in that stage.
    - Fast agents review code and required security boundaries.
    - Route fixes to the responsible team and repeat compilation after each push.
 6. **Land the completed feature.**

@@ -67,7 +67,7 @@ submits the exact SHA and Gizmo Prime authorizes the packet. For manager-stage
 publication, slow checks, and promotion, the dev manager authorizes the packet.
 Delivery Pipeline Team Gizmo dispatches PR Lifecycle Agent through the active
 harness and returns exact-SHA evidence. Neither Team Gizmo nor PR Lifecycle
-Steward may create or update pull requests or decide policy, readiness,
+Agent may create or update pull requests or decide policy, readiness,
 promotion, or Workbench state.
 
 - Invoke Rust validation remotely with `task remote TASK_NAME=rust:ci`.

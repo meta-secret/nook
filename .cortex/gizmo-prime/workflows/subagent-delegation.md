@@ -186,7 +186,7 @@ delivery sequence.
    The worker continues independent in-scope work while waiting when possible.
 
 Missing PR identity is part of the request, not permission for worker discovery.
-An unavailable Steward remains a blocker for the dependent work.
+An unavailable PR Lifecycle Agent remains a blocker for the dependent work.
 
 ### Later discovery
 

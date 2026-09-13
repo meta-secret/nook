@@ -52,7 +52,7 @@ Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
 ## Prohibited actions
 
 - Do not infer authority for another SHA, branch, repository, or operation.
-- Do not grant Steward general shared-branch Git authority.
+- Do not grant PR Lifecycle Agent general shared-branch Git authority.
 - Do not waive checks, security verdicts, or unresolved review findings.
 - Do not use automatic administrator fallback after a rejection.
 - Do not squash, rebase, force-push, or create a promotion merge commit.

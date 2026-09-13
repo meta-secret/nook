@@ -333,9 +333,6 @@ Current specialist routing includes SRE (`teams/sre/provisioning/` and
   feature compilation, local integration, and dev-to-main contract.
 - [Gizmo Prime](gizmo-prime/knowledge-graph.md): planning, delegation, integration,
   feature review, feature acceptance, local landing requests, and Workbench.
-- [Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md): operational
-  delivery mechanics across CI, pull-request lifecycle, dev publication,
-  workflow execution, local landing, evidence, and guarded promotion.
 - [AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,
   routing, and AI automation.
 - [Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault
