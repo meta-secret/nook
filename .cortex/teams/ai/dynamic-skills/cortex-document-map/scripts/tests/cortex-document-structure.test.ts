@@ -192,7 +192,7 @@ ${args.rootExtra}`,
       this.makeDocument({
         path: '.cortex/teams/delivery-pipeline/internal/gizmo/knowledge-graph.md',
         content:
-          '# Delivery Pipeline Team Gizmo Knowledge Graph\n\n- [Policy](policy.md)\n',
+          '# Delivery Pipeline Team Gizmo Knowledge Graph\n\n- [Policy](policy.md)\n- [Gizmo authority](../../../../gizmo/policy.md)\n- [PR Steward](../pr-steward/knowledge-graph.md)\n',
       }),
       this.makeDocument({
         path: '.cortex/teams/delivery-pipeline/internal/gizmo/policy.md',
@@ -201,7 +201,7 @@ ${args.rootExtra}`,
       this.makeDocument({
         path: '.cortex/teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md',
         content:
-          '# Delivery Pipeline Internal PR Steward Knowledge Graph\n\n- [Policy](workflows/policy.md)\n',
+          '# Delivery Pipeline Internal PR Steward Knowledge Graph\n\n- [Policy](workflows/policy.md)\n- [Gizmo authority](../../../../gizmo/policy.md)\n',
       }),
       this.makeDocument({
         path: '.cortex/teams/delivery-pipeline/internal/pr-steward/workflows/policy.md',
@@ -441,6 +441,32 @@ test('audits Delivery Pipeline nested graphs with matching subtree ownership', (
     file: stewardGraphPath,
     line: 1,
     message: `Document is not indexed in its owning knowledge graph ${stewardGraphPath}: ${stewardPolicyPath}`,
+  });
+});
+
+test('rejects duplicate nested document indexing but allows external authorities', () => {
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
+  const pipelineGraphPath =
+    '.cortex/teams/delivery-pipeline/knowledge-graph.md';
+  const workflowPath =
+    '.cortex/teams/delivery-pipeline/internal/pr-steward/workflows/policy.md';
+  const indexedByParent = documents.map((document) =>
+    document.relativePath === pipelineGraphPath
+      ? {
+          ...document,
+          content: `${document.content}- [PR Steward policy](internal/pr-steward/workflows/policy.md)\n`,
+        }
+      : document,
+  );
+
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(indexedByParent),
+  ).toContainEqual({
+    code: CortexStructureFindingCode.InvalidIndexEntry,
+    file: pipelineGraphPath,
+    line: 1,
+    message: `Knowledge graphs must index each non-graph document once: ${workflowPath}`,
   });
 });
 

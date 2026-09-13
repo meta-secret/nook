@@ -109,6 +109,33 @@ export class CortexDocumentStructure {
         indexedByGraph.set(graphPath, indexedFiles);
       }
 
+      const indexedDocumentGraphs = new Map<string, string[]>();
+      for (const [graphPath, indexedFiles] of indexedByGraph) {
+        for (const indexedPath of indexedFiles) {
+          if (
+            this.isKnowledgeGraphPath(indexedPath) ||
+            this.isReadOnlyExternalReference(graphPath, indexedPath)
+          ) {
+            continue;
+          }
+          const graphPaths = indexedDocumentGraphs.get(indexedPath) ?? [];
+          graphPaths.push(graphPath);
+          indexedDocumentGraphs.set(indexedPath, graphPaths);
+        }
+      }
+      for (const [indexedPath, graphPaths] of indexedDocumentGraphs) {
+        for (const graphPath of graphPaths.slice(1)) {
+          const findingArgs: AddFindingArgs = {
+            findings,
+            code: CortexStructureFindingCode.InvalidIndexEntry,
+            file: graphPath,
+            line: 1,
+            message: `Knowledge graphs must index each non-graph document once: ${indexedPath}`,
+          };
+          this.addFinding(findingArgs);
+        }
+      }
+
       for (const [normPath] of catalog) {
         if (this.isKnowledgeGraphPath(normPath)) continue;
         const canonicalOwnerGraphPath = this.owningKnowledgeGraphPath(normPath);
@@ -374,6 +401,19 @@ export class CortexDocumentStructure {
       /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|dev-manager|delivery-pipeline|security|sre|web-dev)|shared)\/knowledge-graph\.md$/.test(
         filePath,
       )
+    );
+  }
+
+  private isReadOnlyExternalReference(
+    graphPath: string,
+    indexedPath: string,
+  ): boolean {
+    const nestedGraphPath = NESTED_OWNER_GRAPHS.find(
+      (candidate) => candidate === graphPath,
+    );
+    if (!nestedGraphPath) return false;
+    return !indexedPath.startsWith(
+      `${path.posix.dirname(nestedGraphPath)}/`,
     );
   }
 

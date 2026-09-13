@@ -17,13 +17,6 @@ delivery team, not a functional product-engineering team.
 - [PR Steward knowledge graph](internal/pr-steward/knowledge-graph.md) indexes
   its authorization and lifecycle workflows.
 
-## Internal workflows
-
-- [Authorization handshake](internal/pr-steward/workflows/authorization-handshake.md)
-  defines packet identity, exact-head checks, and bounded authority.
-- [Pull-request lifecycle](internal/pr-steward/workflows/pull-request-lifecycle.md)
-  defines review, validation, evidence, waiting, and promotion mechanics.
-
 ## Parent and policy authorities
 
 - [Gizmo Prime](../../gizmo/AGENTS.md) is the parent delivery owner.
