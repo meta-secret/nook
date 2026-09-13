@@ -95,6 +95,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "FEATURE_HEAD_SHA",
         "originMainSha",
         "pinnedLocalDevSha",
+        "featureBranch",
         "featureHeadSha",
         "Checkout trusted workflow tooling",
         "ref: ${{ github.workflow_sha }}",
@@ -179,6 +180,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "const rejection = validateAgentRecord(candidate, 'worklog', secrets, env.AGENT_PROMPT)",
         "publishing trusted fallback metadata",
         "`plan: ${env.PLAN_PATH || 'null'}`",
+        "`featureBranch: ${featureBranch || 'null'}`",
+        "`featureHeadSha: ${env.FEATURE_HEAD_SHA || 'null'}`",
+        "`publishedFeatureSha: ${publishedHead || 'null'}`",
+        "published canonical feature branch",
         "## Decisions",
         "worklogs/${feature}/",
         "createOrUpdateFileContents",
@@ -219,6 +224,11 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
             "agent implementation bootstrap is missing its pinned canonical feature-ref contract: {required}"
         );
     }
+    assert!(
+        !workbench_publisher.contains("published_branch:")
+            && !workbench_publisher.contains("published_head_sha:"),
+        "Workbench records must use canonical featureBranch and observed head fields"
+    );
     let initial_run = ("main", "pinned-dev", "pinned-dev");
     let descendant_rerun = ("main", "pinned-dev", "feature-descendant");
     let reversed_ancestry = ("main", "feature-descendant", "pinned-dev");
@@ -244,7 +254,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
             && !workflow.contains("inputs.feature_head_sha")
             && !workflow.contains("FEATURE_HEAD_SHA: ${{ inputs.feature_head_sha }}")
             && !normalized_workflow.contains(
-                "if [ \"$feature_head_sha\" != \"$FEATURE_HEAD_SHA\" ]"
+                "if [ \"$feature_head_sha\" != \"$FEATURE_HEAD_SHA\" ]",
             ),
         "feature_head_sha must be observed from the canonical branch at run start, not supplied by dispatch"
     );

@@ -33,6 +33,7 @@ const { validateAgentRecord } = require('./workbench-records.cjs')
  *   GITHUB_WORKSPACE: string,
  *   WORKBENCH_SUMMARY_FILE: string,
  *   IMPLEMENT_OUTCOME: string,
+ *   FEATURE_BRANCH: string,
  *   PUBLISHED_BRANCH: string,
  *   PUBLISHED_HEAD_SHA: string,
  *   ORIGIN_MAIN_SHA: string,
@@ -116,6 +117,10 @@ class AgentImplementWorkbenchPublisher {
         value: source.IMPLEMENT_OUTCOME,
         name: 'IMPLEMENT_OUTCOME',
       }),
+      FEATURE_BRANCH: this.requireEnvironmentValue({
+        value: source.FEATURE_BRANCH,
+        name: 'FEATURE_BRANCH',
+      }),
       PUBLISHED_BRANCH: this.requireEnvironmentValue({
         value: source.PUBLISHED_BRANCH,
         name: 'PUBLISHED_BRANCH',
@@ -173,10 +178,12 @@ class AgentImplementWorkbenchPublisher {
     ...context.repo,
     run_id: context.runId,
   })
+  const featureBranch = env.FEATURE_BRANCH.trim()
   const publishedBranch = env.PUBLISHED_BRANCH.trim()
   const publishedHead = env.PUBLISHED_HEAD_SHA.trim()
   const success = env.IMPLEMENT_OUTCOME === 'success' &&
-    /^[0-9a-f]{40}$/.test(publishedHead) && Boolean(publishedBranch)
+    /^[0-9a-f]{40}$/.test(publishedHead) &&
+    Boolean(featureBranch) && publishedBranch === featureBranch
   const implementationSummaryPath = `${env.IMPLEMENTATION_REPO_ROOT}/${env.WORKBENCH_SUMMARY_FILE}`
   const planningSummaryPath = `${env.GITHUB_WORKSPACE}/${env.WORKBENCH_SUMMARY_FILE}`
   const implementationSummaryExists = fs.existsSync(implementationSummaryPath)
@@ -195,7 +202,7 @@ class AgentImplementWorkbenchPublisher {
         '',
         '## Outcome',
         '',
-        success ? `Published feature branch \`${publishedBranch}\` at \`${publishedHead}\`; the feature Gizmo owns remote compilation and local dev landing.` : 'The bounded implementation run did not publish a feature branch.',
+        success ? `Published canonical feature branch \`${featureBranch}\` at observed head \`${publishedHead}\`; the feature Gizmo owns remote compilation and local dev landing.` : 'The bounded implementation run did not publish a feature branch.',
         '',
         '## Progress',
         '',
@@ -215,7 +222,7 @@ class AgentImplementWorkbenchPublisher {
         '',
         '## Remaining work',
         '',
-        success ? `- Feature Gizmo must dispatch exact-head remote build-only compilation, then land \`${publishedBranch}\` into local dev.` : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
+        success ? `- Feature Gizmo must dispatch remote build-only compilation for the current head of \`${featureBranch}\`, then land it into local dev.` : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
       ].join('\n')
   let summary = fallbackSummary
   if (fs.existsSync(summaryPath)) {
@@ -270,9 +277,10 @@ class AgentImplementWorkbenchPublisher {
     `plan: ${env.PLAN_PATH || 'null'}`,
     `originMainSha: ${env.ORIGIN_MAIN_SHA}`,
     `pinnedLocalDevSha: ${env.PINNED_LOCAL_DEV_SHA}`,
-    `featureHeadSha: ${env.FEATURE_HEAD_SHA}`,
-    `published_branch: ${publishedBranch || 'null'}`,
-    `published_head_sha: ${publishedHead || 'null'}`,
+    `featureBranch: ${featureBranch || 'null'}`,
+    // This run-start observation is evidence only; the branch name remains authoritative.
+    `featureHeadSha: ${env.FEATURE_HEAD_SHA || 'null'}`,
+    `publishedFeatureSha: ${publishedHead || 'null'}`,
     `status: ${success ? 'in_progress' : 'blocked'}`,
     `started_at: ${workflowRun.created_at || now}`,
     `finished_at: ${now}`,
@@ -301,7 +309,7 @@ class AgentImplementWorkbenchPublisher {
     .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
   if (!success) body = body.replace(/^status:\s*in_progress$/m, 'status: blocked')
   const progressOutcome = success
-    ? `published feature branch \`${publishedBranch}\` at \`${publishedHead}\``
+    ? `published canonical feature branch \`${featureBranch}\` at observed head \`${publishedHead}\``
     : 'stopped before publishing a feature branch'
   const progress = `- ${now}: [Agent run ${context.runId}](${runUrl}) ${progressOutcome}; [worklog](${worklogUrl}).`
   body = body.replace(/^## Progress\s*$/m, `## Progress\n\n${progress}`)
