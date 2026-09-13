@@ -193,8 +193,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -p nook-wasm -p nook-companion-wasm \
     && mkdir -p /opt/nook/wasm-handoff \
     && case "${WASM_BUILD_MODE}" in \
-         prod) wasm_opt_flag="" ;; \
-         dev) wasm_opt_flag="--no-opt" ;; \
+         prod) wasm_opt_flag=""; stamp_mode="optimized" ;; \
+         dev) wasm_opt_flag="--no-opt"; stamp_mode="no-opt" ;; \
          *) echo "Unsupported WASM_BUILD_MODE=${WASM_BUILD_MODE}" >&2; exit 2 ;; \
        esac \
     && wasm-pack build nook-wasm --target web \
@@ -203,6 +203,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && wasm-pack build nook-companion-wasm --target web \
          --out-dir /opt/nook/wasm-handoff/nook-companion-wasm \
          --out-name nook_companion_wasm $wasm_opt_flag \
+    && printf '%s\n' "$stamp_mode" > /opt/nook/wasm-handoff/nook-wasm/nook-wasm-build-mode \
     && touch /opt/nook/wasm-compile-passed
 
 FROM rust-base AS compile-minds-base
