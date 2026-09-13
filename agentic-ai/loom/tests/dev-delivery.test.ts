@@ -189,3 +189,23 @@ test('promotion contract keeps the stable aggregate readiness gate', () => {
     'Dev promotion readiness',
   ]);
 });
+
+test('remote build title fixture accepts both canonical cache modes', () => {
+  const titlePattern = DevDeliveryContract.remoteBuild.titlePattern;
+  for (const mode of ['publish', 'read-only']) {
+    const title = `Remote / build:compile @ ${SHA_A} / compile-cache=${mode} / manual`;
+    expect(titlePattern.exec(title)?.[1]).toBe(SHA_A);
+  }
+});
+
+test('remote build title fixture rejects unrelated run-name modes', () => {
+  const titlePattern = DevDeliveryContract.remoteBuild.titlePattern;
+  expect(
+    titlePattern.test(
+      `Remote / build:compile @ ${SHA_A} / compile-cache=disabled / manual`,
+    ),
+  ).toBe(false);
+  expect(
+    titlePattern.test(`Remote / hive:verify @ ${SHA_A} / manual`),
+  ).toBe(false);
+});

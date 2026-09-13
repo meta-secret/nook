@@ -43,7 +43,7 @@ export const DevDeliveryContract = {
     taskName: 'build:compile',
     jobName: 'Remote / build:compile',
     titlePattern:
-      /^Remote \/ build:compile @ ([0-9a-f]{40}) \/ [A-Za-z0-9._-]+$/u,
+      /^Remote \/ build:compile @ ([0-9a-f]{40}) \/ compile-cache=(?:publish|read-only) \/ [A-Za-z0-9._-]+$/u,
   },
   promotion: {
     workflowName: 'CI',
