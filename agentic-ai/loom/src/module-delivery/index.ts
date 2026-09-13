@@ -29,6 +29,7 @@ export type {
 export {
   LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+  MigrationEvidenceRequired,
   ModuleDeliveryEvidenceVerdict,
   ModuleDeliveryEvidenceSchema,
   ModuleDeliveryProviderSubmissionKind,
@@ -40,6 +41,8 @@ export type {
   ModuleDeliveryProviderSubmission,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryReadOnlyEvidenceSubmissionV1,
+  ModuleDeliveryEvidenceMigrationPayload,
+  MigrationEvidenceRequiredRequest,
   ModuleDeliveryWriteProviderSubmission,
 } from './integration-provenance.ts';
 export { ModuleWorktree } from './workspace.ts';

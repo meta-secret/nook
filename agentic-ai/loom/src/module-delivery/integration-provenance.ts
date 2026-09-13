@@ -107,6 +107,37 @@ export type ModuleDeliveryReadOnlyEvidenceSubmissionV1 = Readonly<{
   evidence: readonly string[];
 }>;
 
+/** Original evidence needed to reconstruct a redacted V1 provider identity. */
+export type ModuleDeliveryEvidenceMigrationPayload = Readonly<{
+  taskId: string;
+  artifactIdentity: string;
+  evidence: readonly string[];
+}>;
+
+export type MigrationEvidenceRequiredRequest = Readonly<{
+  taskId: string;
+  artifactIdentity: string;
+  artifactDigest: string;
+}>;
+
+/** Signals that a redacted V1 identity cannot be migrated without its evidence. */
+export class MigrationEvidenceRequired extends Error {
+  readonly kind = 'migration-evidence-required' as const;
+  readonly taskId: string;
+  readonly artifactIdentity: string;
+  readonly artifactDigest: string;
+
+  constructor(request: MigrationEvidenceRequiredRequest) {
+    super(
+      `Original nested evidence payload is required to reconstruct artifact digest for ${request.taskId}.`,
+    );
+    this.name = 'MigrationEvidenceRequired';
+    this.taskId = request.taskId;
+    this.artifactIdentity = request.artifactIdentity;
+    this.artifactDigest = request.artifactDigest;
+  }
+}
+
 /** Handles evidence handoff compatibility without changing historical values. */
 export class ModuleDeliveryEvidenceSchema {
   private constructor() {}
@@ -313,6 +344,7 @@ export class ModuleDeliveryEvidenceSchema {
   static migrateReadOnlyEvidenceSubmission(
     submission: ModuleDeliveryReadOnlyEvidenceSubmissionV1,
     featureHeadSha: string,
+    migrationEvidence?: readonly ModuleDeliveryEvidenceMigrationPayload[],
   ): ModuleDeliveryReadOnlyEvidenceSubmission {
     if (
       submission.schemaVersion !==
@@ -329,6 +361,17 @@ export class ModuleDeliveryEvidenceSchema {
       });
     if (legacyArtifactDigest !== submission.artifactDigest)
       throw new Error('Historical evidence artifact digest is invalid.');
+    const evidenceByTaskId = new Map<
+      string,
+      ModuleDeliveryEvidenceMigrationPayload
+    >();
+    migrationEvidence?.forEach((payload) => {
+      if (evidenceByTaskId.has(payload.taskId))
+        throw new Error(
+          `Historical migration evidence is duplicated for ${payload.taskId}.`,
+        );
+      evidenceByTaskId.set(payload.taskId, payload);
+    });
     const migrateIdentity = (
       identity: ModuleDeliveryAcceptedProviderEvidenceIdentityV1,
     ): ModuleDeliveryAcceptedProviderEvidenceIdentity => {
@@ -337,8 +380,19 @@ export class ModuleDeliveryEvidenceSchema {
         LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION
       )
         throw new Error('Historical nested evidence schema version is invalid.');
+      const payload = evidenceByTaskId.get(identity.taskId);
+      if (
+        !payload ||
+        payload.artifactIdentity !== identity.artifactIdentity
+      )
+        throw new MigrationEvidenceRequired({
+          taskId: identity.taskId,
+          artifactIdentity: identity.artifactIdentity,
+          artifactDigest: identity.artifactDigest,
+        });
       const legacyDigest = ModuleDeliveryEvidenceSchema.identityArtifactDigest({
         artifactIdentity: identity.artifactIdentity,
+        evidence: payload.evidence,
         acceptanceRequirements: identity.acceptanceRequirements,
         acceptedProviderEvidence: identity.acceptedProviderEvidence,
       });
@@ -373,6 +427,7 @@ export class ModuleDeliveryEvidenceSchema {
         ...migrated,
         artifactDigest: ModuleDeliveryEvidenceSchema.identityArtifactDigest({
           artifactIdentity: migrated.artifactIdentity,
+          evidence: payload.evidence,
           acceptanceRequirements: migrated.acceptanceRequirements,
           acceptedProviderEvidence: migrated.acceptedProviderEvidence,
         }),
@@ -531,7 +586,7 @@ export class ModuleDeliveryEvidenceSchema {
   private static identityArtifactDigest(
     request: Readonly<{
       artifactIdentity: string;
-      evidence?: readonly string[];
+      evidence: readonly string[];
       acceptanceRequirements: readonly string[];
       acceptedProviderEvidence:
         | readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[]
@@ -540,7 +595,7 @@ export class ModuleDeliveryEvidenceSchema {
   ): string {
     return ModuleEvidenceBoundary.moduleDeliveryEvidenceArtifactDigest({
       artifactIdentity: request.artifactIdentity,
-      evidence: request.evidence ?? [],
+      evidence: request.evidence,
       acceptanceRequirements: request.acceptanceRequirements,
       acceptedProviderEvidence:
         request.acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
