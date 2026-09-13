@@ -387,12 +387,15 @@ test('finds durable task history by exact ID outside the overview', async ({
 test('uses typed server alerts instead of inferring policy in the browser', async ({
   page,
 }) => {
+  const firstTask = snapshot.tasks[0];
+  if (!firstTask)
+    throw new Error('Expected snapshot fixture to contain a task');
   await routeSnapshot(page, {
     ...snapshot,
     alerts: [],
     tasks: [
       {
-        ...snapshot.tasks[0],
+        ...firstTask,
         updated_at: now - 10 * 60_000,
       },
     ],
