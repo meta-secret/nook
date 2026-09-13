@@ -24,10 +24,11 @@ machines use only the lightweight feedback allowed by the dev contract.
 
 ## Feature compilation
 
-The owning Feature Gizmo publishes its feature branch. Gizmo Prime authorizes
-the exact-SHA delivery packet, and Delivery Pipeline Team Gizmo dispatches
-PR Lifecycle Agent through the active harness to run the required remote
-build-only capability.
+The owning Feature Gizmo publishes its canonical feature branch. Gizmo Prime
+authorizes the branch delivery packet, and Delivery Pipeline Team Gizmo
+dispatches PR Lifecycle Agent through the active harness to run the required
+remote build-only capability. Each stage re-fetches and resolves the latest
+committed branch head; the returned exact SHA is observational evidence only.
 
 - Compile and type-check without tests, coverage, e2e, or preflight.
 - Preserve that boundary through every transitive Task and Docker stage.
@@ -63,12 +64,15 @@ Routing rules:
 
 All remote task and PR-check invocations below are routed through Delivery
 Pipeline Team Gizmo. For feature build-only work, the owning Feature Gizmo
-submits the exact SHA and Gizmo Prime authorizes the packet. For manager-stage
-publication, slow checks, and promotion, the dev manager authorizes the packet.
-Delivery Pipeline Team Gizmo dispatches PR Lifecycle Agent through the active
-harness and returns exact-SHA evidence. Neither Team Gizmo nor PR Lifecycle
-Agent may create or update pull requests or decide policy, readiness,
-promotion, or Workbench state.
+submits the canonical feature branch and Gizmo Prime authorizes the packet.
+PR Lifecycle Agent re-fetches and resolves that branch's latest committed head
+before each stage and returns the exact SHA as observational evidence only. A
+stale caller-provided feature SHA does not reject branch-authorized execution.
+For manager-stage publication, slow checks, and promotion, the dev manager
+authorizes the packet. Delivery Pipeline Team Gizmo dispatches PR Lifecycle
+Agent through the active harness. Neither Team Gizmo nor PR Lifecycle Agent may
+create or update pull requests or decide policy, readiness, promotion, or
+Workbench state.
 
 - Invoke Rust validation remotely with `task remote TASK_NAME=rust:ci`.
 - Invoke Loom verification remotely with `task remote TASK_NAME=loom:verify`.

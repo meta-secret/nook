@@ -9,11 +9,14 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
 ## Required actions
 
 - **Feature compilation**
-  - The owning Feature Gizmo publishes the feature branch.
-  - Gizmo Prime authorizes the exact feature SHA request; Delivery Pipeline
+  - The owning Feature Gizmo publishes the canonical feature branch.
+  - Gizmo Prime authorizes the canonical feature branch request; Delivery Pipeline
     Team Gizmo dispatches PR Lifecycle Agent through the active harness for
     remote build-only execution.
-  - Execute build-only and type-compilation work for the exact feature SHA.
+  - Each stage re-fetches and resolves the latest committed branch head for
+    build-only and type-compilation work, recording the exact SHA as
+    observational evidence only. A stale caller-provided feature SHA does not
+    reject branch-authorized execution.
   - Keep tests, coverage, e2e, and preflight outside its transitive task graph.
   - Author meaningful tests for later execution.
   - Require code review and security acceptance before local dev landing.

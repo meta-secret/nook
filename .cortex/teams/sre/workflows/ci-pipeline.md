@@ -229,10 +229,13 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Audits every direct dependency in each Rust root.
 - The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
 - When an update exists, an AI agent makes the bounded dependency edits and a
-  trusted publisher publishes the exact feature SHA.
-- The feature gate runs only `build:compile` for that exact SHA. The full slow
-  suite runs later only in the Dev Manager-controlled dev-to-main PR cycle;
-  the dependency agent does not create a PR or decide readiness.
+  trusted publisher publishes the canonical feature branch.
+- The feature gate runs only `build:compile` for the latest committed head of
+  that branch. Each stage re-fetches and resolves the latest head, recording
+  the exact SHA as observational evidence only; a stale caller-provided
+  feature SHA is not a rejection reason. The full slow suite runs later only
+  in the Dev Manager-controlled dev-to-main PR cycle; the dependency agent does
+  not create a PR or decide readiness.
 
 **`agent-implement.yml`**
 
@@ -662,12 +665,14 @@ publisher is not an ordinary Team Agent: its isolated editor updates every
 outdated direct dependency and necessary compatibility code without Git,
 validation, credentials, or publication authority.
 
-The trusted publisher may publish only the exact feature SHA for remote
-`build:compile` execution. That feature-stage graph is build-only: tests,
-coverage, e2e, and preflight must not execute transitively, including through
-Docker stages. No local tests, checks, preflight, or Docker work may precede
-publication. Full slow validation runs later only in the Dev
-Manager-controlled dev-to-main GitHub PR cycle.
+The trusted publisher may publish only the canonical feature branch for remote
+`build:compile` execution. Each stage re-fetches and resolves the latest
+committed branch head and records the exact SHA as observational evidence only;
+a stale caller-provided feature SHA is not a rejection reason. That
+feature-stage graph is build-only: tests, coverage, e2e, and preflight must not
+execute transitively, including through Docker stages. No local tests, checks,
+preflight, or Docker work may precede publication. Full slow validation runs
+later only in the Dev Manager-controlled dev-to-main GitHub PR cycle.
 
 The trusted host fails closed unless:
 
@@ -688,10 +693,11 @@ The trusted host fails closed unless:
   workflow; the later dev manager flow owns the single dev-to-main PR.
 
 That handoff resumes the ordinary delivery boundary. The publisher returns the
-verified remote feature head and owns neither readiness, merge, nor pull-request
-operations. Gizmo Prime owns feature review and acceptance for the returned
-exact SHA. The Dev Manager alone owns the later dev-to-main PR, full slow
-validation, readiness, and promotion.
+verified canonical feature-branch head as stage evidence and owns neither
+readiness, merge, nor pull-request operations. Gizmo Prime owns feature review
+and acceptance; a returned SHA is observational evidence only, and later stages
+resolve the current branch head again. The Dev Manager alone owns the later
+dev-to-main PR, full slow validation, readiness, and promotion.
 
 The following `ci:pr:e2e` graph is a non-authorizing runtime description of the
 slow product checks. It runs only in the Dev Manager-controlled dev-to-main
@@ -989,8 +995,10 @@ authenticator-domain to 90 percent.
   TypeScript diagnostics or formatting in their allowed scope, then return
   coherent exact committed handoffs. They do not push, dispatch remote work,
   or operate external PR/check state.
-- Feature Gizmos request only repeatable `build:compile` evidence bound to the
-  exact `featureHeadSha`.
+- Feature Gizmos request only repeatable `build:compile` evidence for the
+  canonical feature branch. Each invocation re-fetches and resolves its latest
+  committed head and records the exact SHA as observational stage evidence;
+  stale caller-provided feature SHAs do not reject branch-authorized execution.
 - The build-only command contract must be integrated before feature acceptance.
 - Only the dev manager's dev-to-main cycle uses the full slow PR workflow.
 - Existing e2e opt-ins and security-required focused checks remain confined to
