@@ -608,12 +608,17 @@ export class DevelopmentPullRequestGateway {
     const { review, pullRequest } = request;
     const substantive = review.body !== null && review.body.trim().length > 0;
     const blockingState = review.state === 'CHANGES_REQUESTED';
+    const knownNonActionableState =
+      review.state === 'APPROVED' ||
+      review.state === 'COMMENTED' ||
+      review.state === 'DISMISSED' ||
+      review.state === 'PENDING';
     const commit = review.commit ? CommitSha.parse(review.commit.oid) : null;
 
     // A malformed, missing, or otherwise unprovable binding cannot establish
-    // that a substantive or blocking review is stale.
+    // that a substantive, blocking, or unknown review is stale.
     if (!commit || commit.isErr()) {
-      return substantive || blockingState
+      return substantive || blockingState || !knownNonActionableState
         ? ReviewRecordDisposition.Block
         : ReviewRecordDisposition.Ignore;
     }

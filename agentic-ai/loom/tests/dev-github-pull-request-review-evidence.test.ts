@@ -343,6 +343,32 @@ test('blocks an unknown current-head review state', () => {
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
 });
 
+test('fails closed for unprovable unknown review bindings unless stale', () => {
+  for (const body of ['', null]) {
+    for (const commit of [null, 'not-a-sha']) {
+      const { result } = new ReviewEvidenceRunner({
+        reviewPages: [
+          ReviewEvidenceRunner.reviewPage({
+            reviews: [{ state: 'UNRECOGNIZED', body, commit }],
+          }),
+        ],
+      }).reviewResult();
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Reviews);
+    }
+  }
+
+  const stale = new ReviewEvidenceRunner({
+    reviewPages: [
+      ReviewEvidenceRunner.reviewPage({
+        reviews: [{ state: 'UNRECOGNIZED', body: null, commit: STALE }],
+      }),
+    ],
+  }).reviewResult();
+  expect(stale.result.isOk()).toBe(true);
+});
+
 test('ignores known non-actionable states without substantive feedback', () => {
   for (const state of ['DISMISSED', 'PENDING']) {
     const { result } = new ReviewEvidenceRunner({
