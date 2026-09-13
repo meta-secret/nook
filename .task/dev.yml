@@ -8,8 +8,9 @@ tasks:
   land:
     desc: Land the current clean, remotely compiled feature commit into the shared local dev worktree.
     requires:
-      vars: [ORIGIN_MAIN_SHA, PINNED_LOCAL_DEV_SHA, FEATURE_HEAD_SHA, EXPECTED_FEATURE_SHA]
+      vars: [DEV_PATH, ORIGIN_MAIN_SHA, PINNED_LOCAL_DEV_SHA, FEATURE_HEAD_SHA, EXPECTED_FEATURE_SHA]
     env:
+      DEV_PATH: '{{.DEV_PATH}}'
       ORIGIN_MAIN_SHA: '{{.ORIGIN_MAIN_SHA}}'
       PINNED_LOCAL_DEV_SHA: '{{.PINNED_LOCAL_DEV_SHA}}'
       FEATURE_HEAD_SHA: '{{.FEATURE_HEAD_SHA}}'

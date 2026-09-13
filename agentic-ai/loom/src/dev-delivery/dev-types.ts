@@ -289,6 +289,8 @@ export interface DevSnapshot {
 }
 
 export interface DevLandRequest {
+  /** Exact assigned canonical local-dev checkout path. */
+  readonly devPath: string;
   /** Exact freshly fetched origin/main identity recorded by Gizmo Prime. */
   readonly originMainSha: CommitSha;
   /** Exact synchronized local-dev baseline selected for this feature. */

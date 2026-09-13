@@ -47,6 +47,7 @@ test(
     const result = new DevLandCommand(
       new DevDeliveryWorkspace({ root: '/tmp/nook-dev-land', runner }),
     ).execute({
+      devPath: '/tmp/nook-dev-land',
       originMainSha: originMainSha.value,
       pinnedLocalDevSha: pinnedLocalDevSha.value,
       featureHeadSha: featureHeadSha.value,

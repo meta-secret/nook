@@ -1,5 +1,5 @@
-import { resolve } from 'node:path';
-import { err, type Result } from 'neverthrow';
+import { isAbsolute, resolve } from 'node:path';
+import { err, ok, type Result } from 'neverthrow';
 
 import { ProcessCommandRunner } from './dev-command.ts';
 import { DevDeliveryWorkspace } from './dev-workspace.ts';
@@ -22,6 +22,8 @@ export interface DevCliMessage {
  * observe. The downstream DevLandRequest owns the final relationship check.
  */
 export interface DevLandProvenancePacket {
+  /** Exact assigned canonical local-dev checkout path. */
+  readonly devPath: string;
   readonly originMainSha: CommitSha;
   readonly pinnedLocalDevSha: CommitSha;
   readonly featureHeadSha: CommitSha;
@@ -67,11 +69,25 @@ export class DevCli {
       : DevCli.missingEnvironment(name);
   }
 
+  static requiredAbsolutePath(name: string): Result<string, DevFailure> {
+    const raw = process.env[name];
+    if (typeof raw !== 'string') return DevCli.missingEnvironment(name);
+    if (raw.length === 0 || raw.includes('\u0000') || !isAbsolute(raw)) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `${name} must be a non-empty absolute path for this manual dev-manager task`,
+      });
+    }
+    return ok(raw);
+  }
+
   /** Resolves every exact identity required by the dev:land packet. */
   static requiredDevLandPacket(): Result<
     DevLandProvenancePacket,
     DevFailure
   > {
+    const devPath = DevCli.requiredAbsolutePath('DEV_PATH');
+    if (devPath.isErr()) return err(devPath.error);
     const originMainSha = DevCli.requiredCommitSha('ORIGIN_MAIN_SHA');
     if (originMainSha.isErr()) return err(originMainSha.error);
     const pinnedLocalDevSha = DevCli.requiredCommitSha('PINNED_LOCAL_DEV_SHA');
@@ -81,6 +97,7 @@ export class DevCli {
     const expectedFeatureSha = DevCli.requiredCommitSha('EXPECTED_FEATURE_SHA');
     if (expectedFeatureSha.isErr()) return err(expectedFeatureSha.error);
     return ok({
+      devPath: devPath.value,
       originMainSha: originMainSha.value,
       pinnedLocalDevSha: pinnedLocalDevSha.value,
       featureHeadSha: featureHeadSha.value,
