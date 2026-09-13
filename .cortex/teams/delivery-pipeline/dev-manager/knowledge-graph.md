@@ -3,11 +3,11 @@
 ## Contract
 
 - [Dev manager](AGENTS.md)
-- [Canonical dev delivery architecture](../../gizmo/architecture/dev-delivery.md)
+- [Canonical dev delivery architecture](../../../gizmo-prime/architecture/dev-delivery.md)
 
 ## Bounded operations
 
 - [Publish and validate](dynamic-skills/dev-publish.md), including the
   manager-only `dev:pr-manager` operation
 - [Promote tested dev](dynamic-skills/dev-promote.md)
-- [PR Steward authorization](../delivery-pipeline/internal/pr-steward/workflows/authorization-handshake.md)
+- [PR Lifecycle authorization](../pr-lifecycle/workflows/authorization-handshake.md)

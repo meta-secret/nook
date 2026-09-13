@@ -3,7 +3,7 @@
 ## Scope
 
 Use only in a manually started dev-manager task. The
-[canonical architecture](../../../gizmo/architecture/dev-delivery.md) owns
+[canonical architecture](../../../../gizmo-prime/architecture/dev-delivery.md) owns
 snapshot selection, concurrency, and evidence semantics.
 
 ## Procedure
@@ -12,7 +12,8 @@ snapshot selection, concurrency, and evidence semantics.
 2. Select a committed local dev snapshot and authorize Steward's snapshot publication.
 3. Record the published SHA and freeze remote dev.
 4. Invoke manager-only `dev:pr-manager` to create or update the dev-to-main
-   PR, then have PR Steward observe the exact PR and run full slow checks.
+   PR, then have the PR Lifecycle Agent observe the exact PR and run full slow
+   checks.
 5. On failure, send the evidence to a feature Gizmo for repair.
    - Require remote compilation and local integration for that repair.
    - Publish a new snapshot only after the prior attempt finishes.

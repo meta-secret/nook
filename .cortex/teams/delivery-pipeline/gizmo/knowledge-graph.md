@@ -12,22 +12,24 @@ packet.
 
 ## Delivery authorities
 
-- [Gizmo Prime](../../../../gizmo/AGENTS.md) is the parent delivery owner.
-- [Multiagent delivery architecture](../../../../gizmo/architecture/multiagent-delivery-diagrams.md)
+- [Gizmo Prime](../../../gizmo-prime/AGENTS.md) is the parent delivery owner.
+- [Multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)
   defines the levels and handoffs.
-- [Dev delivery](../../../../gizmo/architecture/dev-delivery.md) defines
+- [Dev delivery](../../../gizmo-prime/architecture/dev-delivery.md) defines
   detailed evidence and guarded-promotion policy.
 
-## Internal child
+## Internal children
 
-- [Internal PR Steward](../pr-steward/AGENTS.md) performs only the mechanical
-  operation named in Team Gizmo's child packet.
-- [PR Steward knowledge graph](../pr-steward/knowledge-graph.md) indexes its
-  operation workflows.
+- [Dev Manager](../dev-manager/AGENTS.md) preserves manager-only policy and
+  performs the bounded manager-cycle mechanics named in its packet.
+- [PR Lifecycle Agent](../pr-lifecycle/AGENTS.md) performs only the bounded
+  PR and delivery-mechanics operation named in its packet.
+- [PR Lifecycle knowledge graph](../pr-lifecycle/knowledge-graph.md) indexes
+  its operation workflows.
 
 ## Escalation
 
 - Functional ownership, feature acceptance, and mission decisions return to
-  [Gizmo Prime](../../../../gizmo/AGENTS.md).
+  [Gizmo Prime](../../../gizmo-prime/AGENTS.md).
 - Dev validation, readiness, promotion, and pull-request creation policy
-  return to the [Dev Manager](../../../dev-manager/AGENTS.md).
+  return to the [Dev Manager](../dev-manager/AGENTS.md).

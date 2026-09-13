@@ -16,11 +16,12 @@ second root delivery owner.
 
 ## Context loading
 
-1. Read the complete [multiagent delivery architecture](../../../../gizmo/architecture/multiagent-delivery-diagrams.md).
+1. Read the complete [multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md).
 2. Read the [Delivery Pipeline team contract](../../AGENTS.md).
 3. Read this agent's [knowledge graph](knowledge-graph.md).
-4. Read the [PR Steward contract](../pr-steward/AGENTS.md) when dispatching a
-   mechanical child operation.
+4. Read the [Dev Manager contract](../dev-manager/AGENTS.md) and [PR Lifecycle
+   contract](../pr-lifecycle/AGENTS.md) when dispatching a mechanical child
+   operation.
 5. Read the detailed workflow named by the parent packet.
 6. Stop loading Cortex when the packet can be executed safely.
 
@@ -35,7 +36,8 @@ second root delivery owner.
   - Preserve Dev Manager authority for dev validation, readiness, promotion,
     and `dev:pr-manager`.
 - Dispatch internal work through the active harness.
-  - Use one bounded PR Steward child per mechanical operation.
+  - Use one bounded Dev Manager or PR Lifecycle child per mechanical
+    operation.
   - Give the child an issued worktree when a bounded local-dev task requires
     one.
   - Keep dependent or shared mutations ordered.
@@ -49,7 +51,8 @@ second root delivery owner.
   - Never author or rewrite the implementation commit.
 - Route feature-stage remote work as build-only.
   - Do not request tests, coverage, e2e, or preflight at this stage.
-- Receive the PR Steward terminal handoff and synthesize its evidence.
+  - Receive the Dev Manager or PR Lifecycle terminal handoff and synthesize
+    its evidence.
   - Preserve run identifiers, PR identifiers, URLs, SHAs, and blockers.
   - Return manager-owned evidence to the Dev Manager.
   - Report the high-level summary and unresolved blockers to Gizmo Prime.
@@ -67,7 +70,7 @@ second root delivery owner.
 - Do not directly implement or repair product code, tests, or functional
   Cortex content.
 - Do not execute `gh`, direct GitHub API calls, or GitHub wrappers. Route them
-  to internal PR Steward.
+  to the PR Lifecycle Agent.
 - Do not create or update pull requests, including through a substitute
   command or manual metadata edit.
 - Do not invoke `dev:pr-manager`.
@@ -84,11 +87,11 @@ second root delivery owner.
 ## Parent and child reporting
 
 - Gizmo Prime sends the high-level packet to Team Gizmo.
-- Team Gizmo sends a bounded packet to internal PR Steward.
-- PR Steward sends one terminal operation handoff to Team Gizmo.
+- Team Gizmo sends a bounded packet to the Dev Manager or PR Lifecycle agent.
+- The child agent sends one terminal operation handoff to Team Gizmo.
 - Team Gizmo sends synthesized evidence and blockers to Gizmo Prime.
 - Team Gizmo also forwards Dev Manager-owned evidence to the Dev Manager.
-- PR Steward must not bypass Team Gizmo to create an untracked delivery path.
+- Child agents must not bypass Team Gizmo to create an untracked delivery path.
 - Team Gizmo must not hide a child blocker or convert it into a verdict.
 
 ## Failure and escalation procedure
@@ -98,7 +101,7 @@ second root delivery owner.
 2. Stop when the child observes a changed SHA, repository, branch, PR, run,
    or target.
    - Report the stale handoff to Gizmo Prime and the policy controller.
-3. Stop when the harness or PR Steward is unavailable.
+3. Stop when the harness or a required child agent is unavailable.
    - Direct execution is not a fallback.
 4. Return external failures with the exact operation and evidence observed.
    - The policy controller decides whether a fresh packet is warranted.

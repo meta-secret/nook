@@ -12,8 +12,6 @@ contexts are:
 
 - [Team Gizmo](gizmo/AGENTS.md), the high-level orchestrator and evidence
   synthesizer;
-- [Dev Manager Gizmo](dev-manager-gizmo/AGENTS.md), the on-demand manager-cycle
-  activation context;
 - [Dev Manager](dev-manager/AGENTS.md), the canonical manager policy context;
   and
 - [PR Lifecycle Agent](pr-lifecycle/AGENTS.md), the bounded PR lifecycle and
@@ -37,8 +35,6 @@ stewardship or policy authority.
 
 - [Team Gizmo knowledge graph](gizmo/knowledge-graph.md) indexes its internal
   authorities and escalation paths.
-- [Dev Manager Gizmo knowledge graph](dev-manager-gizmo/knowledge-graph.md)
-  indexes its on-demand activation and orchestration context.
 - [Dev Manager knowledge graph](dev-manager/knowledge-graph.md) indexes the
   canonical manager policy and bounded operations.
 - [PR Lifecycle Agent knowledge graph](pr-lifecycle/knowledge-graph.md)
@@ -46,10 +42,10 @@ stewardship or policy authority.
 
 ## Parent and policy authorities
 
-- [Gizmo Prime](../../gizmo/AGENTS.md) is the parent delivery owner.
-- [Multiagent delivery architecture](../../gizmo/architecture/multiagent-delivery-diagrams.md)
+- [Gizmo Prime](../../gizmo-prime/AGENTS.md) is the parent delivery owner.
+- [Multiagent delivery architecture](../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)
   defines levels, ownership, and exact-SHA handoffs.
-- [Dev delivery](../../gizmo/architecture/dev-delivery.md) defines detailed
+- [Dev delivery](../../gizmo-prime/architecture/dev-delivery.md) defines detailed
   authorization and promotion rules.
 - [Dev Manager](dev-manager/AGENTS.md) owns dev validation, readiness,
   promotion, and `dev:pr-manager`.

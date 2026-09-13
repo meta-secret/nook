@@ -10,28 +10,28 @@ cycle it creates a new PR for the next snapshot. Dev remains permanent.
 ## Context loading
 
 1. Read the [dev manager graph](knowledge-graph.md).
-2. Read the canonical [dev delivery contract](../../gizmo/architecture/dev-delivery.md).
+2. Read the canonical [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md).
 3. Load the bounded skill for the current operation.
 
 ## Required actions
 
 - Authorize `dev:publish` as the sole publication operation to origin/dev.
   Route its packet through Delivery Pipeline Team Gizmo -> active harness ->
-  internal PR Steward.
+  PR Lifecycle Agent.
 - Remain the policy owner and sole invoker of the manager-only
   `dev:pr-manager` command for dev PR creation/update.
 - Route every other dev PR review, check, status, and promotion mechanic through
-  Delivery Pipeline Team Gizmo -> active harness -> internal PR Steward under
+  Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent under
   an explicit manager packet.
 - Freeze origin/dev while checking and promoting the selected SHA.
 - Run the full existing slow PR checks for each published snapshot.
 - Route slow validation evidence through Delivery Pipeline Team Gizmo -> active
-  harness -> internal PR Steward.
+  harness -> PR Lifecycle Agent.
 - Route failures to a feature Gizmo through the normal feature path.
 - Authorize `dev:promote` only with complete frozen-SHA evidence, routed through
-  Delivery Pipeline Team Gizmo -> active harness -> internal PR Steward.
+  Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent.
 - Verify main equals that SHA and obtain actual remote PR status through
-  Delivery Pipeline Team Gizmo -> active harness -> internal PR Steward.
+  Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent.
 - Preserve local dev when newer features have already landed there.
 
 ## Prohibited actions
