@@ -77,6 +77,7 @@ export class TeamAgentContract {
         gizmo.description !== expected.description ||
         gizmo.model !== expected.model ||
         gizmo.reasoningEffort !== expected.reasoningEffort ||
+        gizmo.serviceTier !== expected.serviceTier ||
         gizmo.parent !== expected.parent ||
         gizmo.reportingBoundary !== expected.reportingBoundary ||
         gizmo.capabilityBoundary !== expected.capabilityBoundary ||

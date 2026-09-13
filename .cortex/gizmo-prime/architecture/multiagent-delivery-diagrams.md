@@ -78,7 +78,9 @@ The canonical teams and internal agents are:
   - Team Agents: `dev-manager`, `pr-lifecycle`
 
 Gizmo Prime creates or reuses a compatible Team Gizmo before dispatch. Every
-Team Gizmo uses `gpt-5.6-sol` with `low` reasoning and owns one team worktree.
+Team Gizmo uses `gpt-5.6-sol` with `low` reasoning and requests Fast mode with
+`service_tier: fast`, which resolves as `priority`. Each Team Gizmo owns one
+team worktree.
 Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning. It requests
 Fast mode with `service_tier: fast`, which resolves as `priority`. Each leaf
 receives a separate issued child worktree. Disjoint specialists may run in parallel. The

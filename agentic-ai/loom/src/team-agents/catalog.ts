@@ -118,6 +118,7 @@ export type TeamGizmoProfile = {
   readonly description: string;
   readonly model: 'gpt-5.6-sol';
   readonly reasoningEffort: 'low';
+  readonly serviceTier: 'fast';
   readonly contextPaths: readonly string[];
   readonly parent: 'Gizmo Prime';
   readonly reportingBoundary: string;
@@ -225,6 +226,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
       'High-level internal orchestrator for AI packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
     model: 'gpt-5.6-sol',
     reasoningEffort: 'low',
+    serviceTier: 'fast',
     contextPaths: [
       '.cortex/teams/ai/gizmo/AGENTS.md',
       '.cortex/teams/ai/gizmo/knowledge-graph.md',
@@ -242,6 +244,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
       'High-level internal orchestrator for Development Core packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
     model: 'gpt-5.6-sol',
     reasoningEffort: 'low',
+    serviceTier: 'fast',
     contextPaths: [
       '.cortex/teams/dev-core/gizmo/AGENTS.md',
       '.cortex/teams/dev-core/gizmo/knowledge-graph.md',
@@ -259,6 +262,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
       'High-level internal orchestrator for Security packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
     model: 'gpt-5.6-sol',
     reasoningEffort: 'low',
+    serviceTier: 'fast',
     contextPaths: [
       '.cortex/teams/security/gizmo/AGENTS.md',
       '.cortex/teams/security/gizmo/knowledge-graph.md',
@@ -276,6 +280,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
       'High-level internal orchestrator for SRE packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
     model: 'gpt-5.6-sol',
     reasoningEffort: 'low',
+    serviceTier: 'fast',
     contextPaths: [
       '.cortex/teams/sre/gizmo/AGENTS.md',
       '.cortex/teams/sre/gizmo/knowledge-graph.md',
@@ -293,6 +298,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
       'High-level internal orchestrator for Web Development packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
     model: 'gpt-5.6-sol',
     reasoningEffort: 'low',
+    serviceTier: 'fast',
     contextPaths: [
       '.cortex/teams/web-dev/gizmo/AGENTS.md',
       '.cortex/teams/web-dev/gizmo/knowledge-graph.md',
@@ -310,6 +316,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
       'High-level internal orchestrator for Delivery Pipeline packets, bounded mechanics, internal dispatch, evidence synthesis, and reporting to Gizmo Prime.',
     model: 'gpt-5.6-sol',
     reasoningEffort: 'low',
+    serviceTier: 'fast',
     contextPaths: [
       '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md',
       '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md',

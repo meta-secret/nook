@@ -8,10 +8,11 @@ Load only the category required for the current delivery stage.
 
 ## Team reporting
 
-Every team has exactly one Team Gizmo. Gizmo Prime and every Team Gizmo use
-`gpt-5.6-sol` with `low` reasoning. Prime creates or reuses each compatible
-Team Gizmo, gives it one team worktree, and receives its high-level evidence or
-blockers. Each leaf Team Agent uses
+Every team has exactly one Team Gizmo. Gizmo Prime uses `gpt-5.6-sol` with
+`low` reasoning. Every Team Gizmo uses the same model and reasoning. Each Team
+Gizmo requests Fast mode with `service_tier: fast`, which resolves as `priority`.
+Prime creates or reuses each compatible Team Gizmo, gives it one team worktree,
+and receives its high-level evidence or blockers. Each leaf Team Agent uses
 `gpt-5.6-luna` with `xhigh` reasoning. It requests Fast mode with
 `service_tier: fast`, which resolves as `priority`. Each leaf receives a separate
 issued child worktree. Gizmo Prime dispatches all dependency-ready Team Gizmos with disjoint

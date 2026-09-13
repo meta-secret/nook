@@ -43,6 +43,7 @@ import {
   TaskTerminalKind,
   WorkflowResultKind,
 } from '../../src/agent-workflow/domain.ts';
+import { TEAM_GIZMO_CATALOG } from '../../src/team-agents/catalog.ts';
 
 import type { WorkflowTaskOutput } from '../../src/agent-workflow/domain.ts';
 
@@ -241,6 +242,22 @@ describe('Team Agent Codex settings', () => {
 
     expect(configured.config?.service_tier).toBe('fast');
     expect(codexOptions.config?.service_tier).toBeUndefined();
+  });
+
+  test('maps every catalog Team Gizmo service tier through the SDK config boundary', () => {
+    for (const teamGizmo of TEAM_GIZMO_CATALOG) {
+      const codexOptions: CodexOptions = {
+        config: { existing_override: true },
+      };
+      const configured = AgentCodexOptions.forProfile({
+        codexOptions,
+        agentProfile: teamGizmo,
+      });
+
+      expect(configured.config?.service_tier).toBe('fast');
+      expect(configured.config?.existing_override).toBe(true);
+      expect(codexOptions.config?.service_tier).toBeUndefined();
+    }
   });
 });
 

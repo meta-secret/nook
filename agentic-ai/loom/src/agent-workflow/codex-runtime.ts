@@ -15,6 +15,7 @@ import type {
 } from '@openai/codex-sdk';
 import { AgentReasoningEffort, AgentWorkspacePolicy } from './domain.ts';
 import type { AgentProfile, WorkflowResultKind } from './domain.ts';
+import type { TeamGizmoProfile } from '../team-agents/catalog.ts';
 import type {
   AgentExecutionCompletion,
   AgentExecutionInvocation,
@@ -61,10 +62,12 @@ export class CodexExecutionFailure {
 
 export type AgentCodexOptionsRequest = {
   readonly codexOptions: CodexOptions;
-  readonly agentProfile: Pick<AgentProfile<string>, 'serviceTier'>;
+  readonly agentProfile:
+    | Pick<AgentProfile<string>, 'serviceTier'>
+    | Pick<TeamGizmoProfile, 'serviceTier'>;
 };
 
-/** Owns the typed mapping from an agent profile to Codex CLI configuration. */
+/** Owns the typed mapping from a catalog profile to Codex CLI configuration. */
 export class AgentCodexOptions {
   private constructor() {}
 

@@ -303,13 +303,14 @@ Use this file only to select one owning context. Do not preload linked graphs.
 Gizmo Prime lives at `gizmo-prime/`. Its six and only six top-level teams are
 `teams/ai/`, `teams/dev-core/`, `teams/security/`, `teams/sre/`,
 `teams/web-dev/`, and `teams/delivery-pipeline/`. Each team has one `gizmo/`
-that reports to Prime and uses `gpt-5.6-sol` with `low` reasoning. Each leaf
-Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning. It requests Fast mode
-with `service_tier: fast`, which resolves as `priority`. Each leaf receives a
-separate issued child worktree. Each Team Gizmo owns one team worktree; Prime reuses a
-compatible existing Team Agent before spawning and otherwise issues separate
-child worktrees per specialist. Team Gizmo integrates specialist commits into
-its feature branch.
+that reports to Prime. Every Team Gizmo uses `gpt-5.6-sol` with `low` reasoning.
+Each Team Gizmo requests Fast mode with `service_tier: fast`, which resolves as
+`priority`. Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning. It
+requests Fast mode with `service_tier: fast`, which resolves as `priority`. Each
+leaf receives a separate issued child worktree. Each Team Gizmo owns one team
+worktree. Prime reuses a compatible existing Team Agent before spawning.
+Otherwise it issues separate child worktrees for required specialists. Team
+Gizmo integrates specialist commits into its feature branch.
 
 Current specialist routing includes SRE (`teams/sre/provisioning/` and
 `teams/sre/cloud-native/`), Development Core

@@ -60,6 +60,12 @@ Model text.
   expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
   expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');
+  expect(markdown).toContain(
+    'Every Team Gizmo uses `gpt-5.6-sol` with `low` reasoning.',
+  );
+  expect(markdown).toContain(
+    'Each Team Gizmo requests Fast mode with `service_tier: fast`',
+  );
   expect(markdown).not.toContain('rules.md');
   expect(markdown).not.toContain('#overview');
 });

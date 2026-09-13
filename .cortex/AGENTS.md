@@ -10,7 +10,8 @@ The canonical routing tree is rooted at `.cortex/gizmo-prime`. It has exactly
 six top-level teams: `ai`, `dev-core`, `security`, `sre`, `web-dev`, and
 `delivery-pipeline`. Each team has exactly one `gizmo` at
 `teams/<team>/gizmo/`; every Team Gizmo reports to Gizmo Prime and uses
-`gpt-5.6-sol` with `low` reasoning.
+`gpt-5.6-sol` with `low` reasoning. It requests Fast mode with
+`service_tier: fast`, which resolves as `priority`.
 
 Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning.
 It requests Fast mode with `service_tier: fast`, which resolves as `priority`.

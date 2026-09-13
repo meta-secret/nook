@@ -147,6 +147,7 @@ describe('canonical Cortex team authority', () => {
     for (const gizmo of TEAM_GIZMO_CATALOG) {
       expect(gizmo.model).toBe('gpt-5.6-sol');
       expect(gizmo.reasoningEffort).toBe('low');
+      expect(gizmo.serviceTier).toBe('fast');
       expect(gizmo.parent).toBe('Gizmo Prime');
     }
     const teamGizmoByTeam = new Map(

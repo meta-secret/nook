@@ -49,8 +49,13 @@ coordinates delivery but does not redefine a team's technical contract.
 
 ### Canonical team topology
 
-Gizmo Prime creates or reuses exactly one Team Gizmo per team with model
-`gpt-5.6-sol` and `low` reasoning. Each Team Gizmo owns one team worktree.
+Gizmo Prime creates or reuses exactly one Team Gizmo per team. Every Team Gizmo
+uses `gpt-5.6-sol` with `low` reasoning and requests Fast mode with
+`service_tier: fast`, which resolves as `priority`. Each Team Gizmo owns one
+team worktree.
+Team Gizmos require complex professional coordination, conflict and integration
+judgment, and fail-closed delivery decisions, so `gpt-5.6-sol` is canonical over
+`gpt-5.6-terra`'s intelligence/cost balance.
 Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning. It requests Fast
 mode with `service_tier: fast`, which resolves as `priority`. Each leaf receives
 a separate issued child worktree. A Team Gizmo may dispatch disjoint specialists
