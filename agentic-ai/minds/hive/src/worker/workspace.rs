@@ -1,8 +1,6 @@
-#[derive(Debug)]
-pub(super) enum WorkspaceOrigin<'a> {
-    Fresh,
-    ResumeBranch(&'a str),
-}
+mod bootstrap;
+pub(super) use bootstrap::WorkspaceOrigin;
+
 pub struct TaskWorkspace<'scan> {
     pub workspace: &'scan Path,
     pub repository_url: &'scan str,
@@ -46,7 +44,7 @@ impl TaskWorkspace<'_> {
         async_fs::create_dir_all(workspace.join("temporary")).await?;
         let (repository, did_resume) = match bootstrap_evidence {
             Some(evidence) => {
-                Self::prepare_pinned_repository(
+                bootstrap::prepare_pinned_repository(
                     workspace,
                     repository_url,
                     evidence,
@@ -55,8 +53,13 @@ impl TaskWorkspace<'_> {
                 .await?
             }
             None => {
-                Self::prepare_repository(workspace, repository_url, source_commit, &resume_branch)
-                    .await?
+                bootstrap::prepare_repository(
+                    workspace,
+                    repository_url,
+                    source_commit,
+                    &resume_branch,
+                )
+                .await?
             }
         };
         TaskWorkspace::validate_dependency_artifacts(dependency_artifacts)?;
@@ -131,214 +134,6 @@ impl TaskWorkspace<'_> {
         }))
     }
 
-    async fn prepare_repository(
-        workspace: &Path,
-        repository_url: &str,
-        source_commit: &str,
-        resume_branch: &WorkspaceOrigin<'_>,
-    ) -> crate::HiveResult<(PathBuf, bool)> {
-        let repository = workspace.join("repository");
-        if repository.join(".git").is_dir() {
-            return Err(crate::HiveError::message(
-                "refusing to reuse a repository left by an earlier worker process",
-            ));
-        }
-        async_fs::create_dir_all(&repository).await?;
-        let status = Self::git_command()
-            .arg("init")
-            .arg("--quiet")
-            .arg(&repository)
-            .stdin(Stdio::null())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-            .await
-            .hive_context("failed to initialize the task repository")?;
-        if !status.success() {
-            return Err(crate::HiveError::message(format!(
-                "git init failed with status {status}"
-            )));
-        }
-        TaskWorkspace::run_git_status(
-            &repository,
-            &["remote", "add", "origin", repository_url],
-            "configure the task repository remote",
-        )
-        .await?;
-        TaskWorkspace::run_git_status(
-            &repository,
-            &["fetch", "--depth=1", "origin", source_commit],
-            "fetch the pinned task revision",
-        )
-        .await?;
-        let mut did_resume = false;
-        if let WorkspaceOrigin::ResumeBranch(branch) = resume_branch {
-            let resumed = Self::git_command()
-                .args([
-                    "fetch",
-                    "--depth=100",
-                    "origin",
-                    &format!("refs/heads/{branch}"),
-                ])
-                .current_dir(&repository)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .await?;
-            if resumed.success() {
-                TaskWorkspace::run_git_status(
-                    &repository,
-                    &["checkout", "--quiet", "-B", branch, "FETCH_HEAD"],
-                    "resume the durable Hive repair branch",
-                )
-                .await?;
-                TaskWorkspace::run_git_status(
-                    &repository,
-                    &["merge-base", "--is-ancestor", source_commit, "HEAD"],
-                    "verify the repair branch descends from its pinned revision",
-                )
-                .await?;
-                did_resume = true;
-            }
-        }
-        if !did_resume {
-            TaskWorkspace::run_git_status(
-                &repository,
-                &["checkout", "--quiet", "--detach", source_commit],
-                "check out the pinned task revision",
-            )
-            .await?;
-        }
-        Ok((repository, did_resume))
-    }
-
-    async fn prepare_pinned_repository(
-        workspace: &Path,
-        repository_url: &str,
-        evidence: &BootstrapEvidence,
-        resume_branch: &WorkspaceOrigin<'_>,
-    ) -> crate::HiveResult<(PathBuf, bool)> {
-        let repository = workspace.join("repository");
-        if repository.join(".git").is_dir() {
-            return Err(crate::HiveError::message(
-                "refusing to reuse a repository left by an earlier worker process",
-            ));
-        }
-        async_fs::create_dir_all(&repository).await?;
-        let status = Self::git_command()
-            .args(["init", "--quiet"])
-            .arg(&repository)
-            .stdin(Stdio::null())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-            .await
-            .hive_context("failed to initialize the pinned task repository")?;
-        if !status.success() {
-            return Err(crate::HiveError::message(format!(
-                "git init failed with status {status}"
-            )));
-        }
-        Self::run_git_status(
-            &repository,
-            &["remote", "add", "origin", repository_url],
-            "configure the pinned task repository remote",
-        )
-        .await?;
-        Self::run_git_status(
-            &repository,
-            &[
-                "fetch",
-                "--no-tags",
-                "origin",
-                evidence.origin_main_sha.as_str(),
-                evidence.pinned_local_dev_sha.as_str(),
-                evidence.feature_head_sha.as_str(),
-            ],
-            "fetch the pinned bootstrap commits",
-        )
-        .await?;
-        Self::run_git_status(
-            &repository,
-            &[
-                "merge-base",
-                "--is-ancestor",
-                evidence.origin_main_sha.as_str(),
-                evidence.pinned_local_dev_sha.as_str(),
-            ],
-            "verify originMainSha ancestry",
-        )
-        .await?;
-        Self::run_git_status(
-            &repository,
-            &[
-                "merge-base",
-                "--is-ancestor",
-                evidence.pinned_local_dev_sha.as_str(),
-                evidence.feature_head_sha.as_str(),
-            ],
-            "verify featureHeadSha ancestry",
-        )
-        .await?;
-        let mut did_resume = false;
-        if let WorkspaceOrigin::ResumeBranch(branch) = resume_branch {
-            let resumed = Self::git_command()
-                .args([
-                    "fetch",
-                    "--no-tags",
-                    "--depth=100",
-                    "origin",
-                    &format!("refs/heads/{branch}"),
-                ])
-                .current_dir(&repository)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .await?;
-            if resumed.success() {
-                Self::run_git_status(
-                    &repository,
-                    &["checkout", "--quiet", "-B", branch, "FETCH_HEAD"],
-                    "resume the durable Hive repair branch",
-                )
-                .await?;
-                Self::run_git_status(
-                    &repository,
-                    &[
-                        "merge-base",
-                        "--is-ancestor",
-                        evidence.feature_head_sha.as_str(),
-                        "HEAD",
-                    ],
-                    "verify the resumed branch descends from featureHeadSha",
-                )
-                .await?;
-                did_resume = true;
-            }
-        }
-        if !did_resume {
-            Self::run_git_status(
-                &repository,
-                &[
-                    "checkout",
-                    "--quiet",
-                    "--detach",
-                    evidence.feature_head_sha.as_str(),
-                ],
-                "check out the exact canonical feature frontier",
-            )
-            .await?;
-            let checked_out = Self::git_output(&repository, &["rev-parse", "HEAD"]).await?;
-            if checked_out != evidence.feature_head_sha.as_str() {
-                return Err(crate::HiveError::message(
-                    "detached workspace HEAD does not equal featureHeadSha",
-                ));
-            }
-        }
-        Ok((repository, did_resume))
-    }
 }
 
 impl TaskWorkspace<'_> {
