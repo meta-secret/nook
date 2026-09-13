@@ -34,6 +34,14 @@ on:
         description: Required canonical local-dev base SHA pinned by Gizmo Prime
         required: true
         type: string
+      origin_main_sha:
+        description: Required fetched origin/main SHA pinned by Gizmo Prime
+        required: true
+        type: string
+      feature_branch:
+        description: Required prepublished canonical Prime feature branch
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -53,6 +61,8 @@ jobs:
       WORKBENCH_REPOSITORY: meta-secret/nook-workbench
       WORKBENCH_PLAN_FILE: .nook-workbench-plan.md
       WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md
+      FEATURE_BRANCH: ${{ inputs.feature_branch }}
+      ORIGIN_MAIN_SHA: ${{ inputs.origin_main_sha }}
       PINNED_LOCAL_DEV_SHA: ${{ inputs.pinned_local_dev_sha }}
     steps:
       - name: Validate dispatch inputs
@@ -61,6 +71,8 @@ jobs:
           ISSUE_PATH: ${{ inputs.issue_path }}
           PROMPT: ${{ inputs.prompt }}
           TASK_TITLE: ${{ inputs.task_title }}
+          FEATURE_BRANCH: ${{ inputs.feature_branch }}
+          ORIGIN_MAIN_SHA: ${{ inputs.origin_main_sha }}
           PINNED_LOCAL_DEV_SHA: ${{ inputs.pinned_local_dev_sha }}
         run: |
           if { [ -z "$PROMPT" ] && [ -z "$ISSUE_PATH" ]; } || { [ -n "$PROMPT" ] && [ -n "$ISSUE_PATH" ]; }; then
@@ -87,6 +99,19 @@ jobs:
           fi
           if ! printf '%s' "$PINNED_LOCAL_DEV_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
             echo "::error::pinned_local_dev_sha must be an exact 40-character lowercase commit SHA."
+            exit 1
+          fi
+          if ! printf '%s' "$ORIGIN_MAIN_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::origin_main_sha must be an exact 40-character lowercase commit SHA."
+            exit 1
+          fi
+          if [ "${#FEATURE_BRANCH}" -gt 120 ] || ! printf '%s' "$FEATURE_BRANCH" | grep -Eq '^codex/[a-z0-9]+(-[a-z0-9]+)*$'; then
+            echo "::error::feature_branch must use canonical Prime form codex/<lowercase-kebab>."
+            exit 1
+          fi
+          feature="${FEATURE_BRANCH#codex/}"
+          if [ "${#feature}" -lt 10 ] || [ "${#feature}" -gt 20 ]; then
+            echo "::error::feature_branch feature identifier must be 10-20 characters."
             exit 1
           fi
 
@@ -215,25 +240,16 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "$DISPATCH_PROMPT" ]; then
-            feature_source="$MANUAL_TASK_TITLE"
             title="$MANUAL_TASK_TITLE"
             task="$DISPATCH_PROMPT"
             continuing_owner="$MANUAL_CONTINUING_OWNER"
           else
-            feature_source="$(printf '%s' "$ISSUE_PATH" | cut -d/ -f2)"
             title="$ISSUE_TITLE"
             task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
             continuing_owner="$ISSUE_CONTINUING_OWNER"
           fi
-          feature="$(printf '%s' "$feature_source" | LC_ALL=C tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' | cut -c1-20 | sed 's/-*$//')"
-          if [ -n "$feature" ] && [ "${#feature}" -lt 10 ]; then
-            feature="$(printf '%s-task-feature' "$feature" | cut -c1-20 | sed 's/-*$//')"
-          fi
-          if [ "${#feature}" -lt 10 ] || [ "${#feature}" -gt 20 ] || ! printf '%s' "$feature" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+)*$'; then
-            echo "::error::The task context must produce a 10-20 character lowercase-kebab feature identifier."
-            exit 1
-          fi
-          branch="codex/${feature}"
+          feature="${FEATURE_BRANCH#codex/}"
+          branch="$FEATURE_BRANCH"
           plan_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           plan_timestamp="$(printf '%s' "$plan_started_at" | tr ':' '-')"
           plan_path="plans/${feature}/${plan_timestamp}-run-${RUN_ID}.md"
@@ -267,25 +283,31 @@ jobs:
           } >> "$GITHUB_ENV"
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
-      - name: Reject an existing feature branch on rerun
+      - name: Verify prepublished feature branch
         id: rerun
         if: steps.task.outputs.ready == 'true'
         uses: actions/github-script@v9
         env:
           AGENT_BRANCH: ${{ env.AGENT_BRANCH }}
+          PINNED_LOCAL_DEV_SHA: ${{ env.PINNED_LOCAL_DEV_SHA }}
         with:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
           script: |
+            let branch
             try {
-              await github.rest.repos.getBranch({
-                ...context.repo,
-                branch: process.env.AGENT_BRANCH,
-              })
-              core.setFailed(`Feature branch ${process.env.AGENT_BRANCH} already exists; preserve it for explicit recovery`)
-              return
+              ;({ data: branch } = await github.rest.repos.getBranch({
+                  ...context.repo,
+                  branch: process.env.AGENT_BRANCH,
+                }))
             } catch (error) {
               if (error.status !== 404) throw error
+              core.setFailed(`Required prepublished feature branch ${process.env.AGENT_BRANCH} does not exist`)
+              return
+            }
+            if (branch.commit.sha !== process.env.PINNED_LOCAL_DEV_SHA) {
+              core.setFailed(`Prepublished feature branch ${process.env.AGENT_BRANCH} does not match pinned_local_dev_sha`)
+              return
             }
             core.setOutput('terminal', 'false')
 
@@ -313,30 +335,35 @@ jobs:
           GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
           git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
             "+refs/heads/main:refs/remotes/origin/main"
-          origin_main_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse refs/remotes/origin/main^{commit})"
+          fetched_origin_main_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse refs/remotes/origin/main^{commit})"
+          if [ "$fetched_origin_main_sha" != "$ORIGIN_MAIN_SHA" ]; then
+            echo "::error::Freshly fetched origin/main does not match the caller-pinned SHA."
+            exit 1
+          fi
           GIT_CONFIG_COUNT=1 \
           GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
           GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
-          git -C "$GITHUB_WORKSPACE" fetch --no-tags origin "$PINNED_LOCAL_DEV_SHA"
+          git -C "$GITHUB_WORKSPACE" fetch --no-tags origin \
+            "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH"
           unset auth NOOK_TOKEN
-          pinned_local_dev_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse "$PINNED_LOCAL_DEV_SHA^{commit}")"
+          pinned_local_dev_sha="$(git -C "$GITHUB_WORKSPACE" rev-parse "refs/remotes/origin/$FEATURE_BRANCH^{commit}")"
           if [ "$pinned_local_dev_sha" != "$PINNED_LOCAL_DEV_SHA" ]; then
-            echo "::error::The pinned local-dev SHA did not resolve to the exact requested commit."
+            echo "::error::Freshly fetched feature branch does not match pinned_local_dev_sha."
             exit 1
           fi
-          if ! git -C "$GITHUB_WORKSPACE" merge-base --is-ancestor "$origin_main_sha" "$pinned_local_dev_sha"; then
+          if ! git -C "$GITHUB_WORKSPACE" merge-base --is-ancestor "$ORIGIN_MAIN_SHA" "$pinned_local_dev_sha"; then
             echo "::error::Pinned local dev is not descended from the freshly fetched origin/main."
             exit 1
           fi
           git -C "$GITHUB_WORKSPACE" worktree add --detach "$implementation_root" \
-            "$pinned_local_dev_sha"
+            "refs/remotes/origin/$FEATURE_BRANCH"
           {
             echo "IMPLEMENTATION_REPO_ROOT=$implementation_root"
-            echo "ORIGIN_MAIN_SHA=$origin_main_sha"
+            echo "ORIGIN_MAIN_SHA=$ORIGIN_MAIN_SHA"
             echo "PINNED_LOCAL_DEV_SHA=$pinned_local_dev_sha"
           } >> "$GITHUB_ENV"
           {
-            echo "ORIGIN_MAIN_SHA=$origin_main_sha"
+            echo "ORIGIN_MAIN_SHA=$ORIGIN_MAIN_SHA"
             echo "PINNED_LOCAL_DEV_SHA=$pinned_local_dev_sha"
           } >> "$GITHUB_OUTPUT"
 
