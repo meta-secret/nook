@@ -17,6 +17,14 @@ import type {
 } from '../lib/guards.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
 import type { ModuleDeliveryOwnerIdentity } from './domain.ts';
+import {
+  MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES,
+  MAX_MODULE_DELIVERY_EVIDENCE_DEPTH,
+  MAX_MODULE_DELIVERY_EVIDENCE_HANDOFF_BYTES,
+  MAX_MODULE_DELIVERY_EVIDENCE_IDENTITIES,
+  MAX_MODULE_DELIVERY_EVIDENCE_OBJECT_KEYS,
+  MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS,
+} from './evidence-limits.ts';
 
 export const MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION = 2;
 export const LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION = 1;
@@ -113,6 +121,36 @@ export class MigrationEvidenceRequired extends Error {
     this.taskId = request.taskId;
     this.artifactIdentity = request.artifactIdentity;
     this.artifactDigest = request.artifactDigest;
+  }
+}
+
+export enum ModuleDeliveryEvidenceDecodeErrorCode {
+  SerializedByteLimit = 'serialized-byte-limit',
+  ObjectSizeLimit = 'object-size-limit',
+  ArraySizeLimit = 'array-size-limit',
+  StringSizeLimit = 'string-size-limit',
+  IdentityCountLimit = 'identity-count-limit',
+  DepthLimit = 'depth-limit',
+}
+
+export class ModuleDeliveryEvidenceDecodeError extends Error {
+  readonly kind = 'module-delivery-evidence-decode-error' as const;
+  readonly code: ModuleDeliveryEvidenceDecodeErrorCode;
+  readonly observed: number;
+  readonly limit: number;
+
+  constructor(request: {
+    readonly code: ModuleDeliveryEvidenceDecodeErrorCode;
+    readonly observed: number;
+    readonly limit: number;
+  }) {
+    super(
+      `Evidence handoff ${request.code} exceeded its bound (${request.observed} > ${request.limit}).`,
+    );
+    this.name = 'ModuleDeliveryEvidenceDecodeError';
+    this.code = request.code;
+    this.observed = request.observed;
+    this.limit = request.limit;
   }
 }
 
@@ -213,7 +251,16 @@ export class ModuleDeliveryEvidenceSchema {
   ):
     | ModuleDeliveryReadOnlyEvidenceSubmission
     | ModuleDeliveryReadOnlyEvidenceSubmissionV1 {
-    const transport = UntrustedYamlBoundary.fromJson(JSON.parse(serialized));
+    const serializedBytes = Buffer.byteLength(serialized, 'utf8');
+    if (serializedBytes > MAX_MODULE_DELIVERY_EVIDENCE_HANDOFF_BYTES)
+      ModuleDeliveryEvidenceSchema.throwDecodeLimit(
+        ModuleDeliveryEvidenceDecodeErrorCode.SerializedByteLimit,
+        serializedBytes,
+        MAX_MODULE_DELIVERY_EVIDENCE_HANDOFF_BYTES,
+      );
+    const parsed = JSON.parse(serialized) as unknown;
+    ModuleDeliveryEvidenceSchema.assertTransportWithinBounds(parsed);
+    const transport = UntrustedYamlBoundary.fromJson(parsed);
     if (!UntrustedYamlBoundary.isRecord(transport))
       throw new Error('Evidence handoff must be an object.');
     const reader = new EvidenceRecordReader(transport);
@@ -584,7 +631,129 @@ export class ModuleDeliveryEvidenceSchema {
       throw new Error('Evidence handoff nested value must be an object.');
     return node;
   }
+
+  private static assertTransportWithinBounds(node: unknown): void {
+    const pending: EvidenceTransportFrame[] = [
+      {
+        node,
+        depth: 0,
+        identityDepth: 0,
+        isIdentity: false,
+        isIdentityArray: false,
+      },
+    ];
+    let identityCount = 0;
+    while (pending.length > 0) {
+      const current = pending.pop();
+      if (!current) continue;
+      if (current.depth > MAX_MODULE_DELIVERY_EVIDENCE_DEPTH)
+        ModuleDeliveryEvidenceSchema.throwDecodeLimit(
+          ModuleDeliveryEvidenceDecodeErrorCode.DepthLimit,
+          current.depth,
+          MAX_MODULE_DELIVERY_EVIDENCE_DEPTH,
+        );
+      if (current.isIdentity) {
+        identityCount += 1;
+        if (identityCount > MAX_MODULE_DELIVERY_EVIDENCE_IDENTITIES)
+          ModuleDeliveryEvidenceSchema.throwDecodeLimit(
+            ModuleDeliveryEvidenceDecodeErrorCode.IdentityCountLimit,
+            identityCount,
+            MAX_MODULE_DELIVERY_EVIDENCE_IDENTITIES,
+          );
+        if (current.identityDepth > MAX_MODULE_DELIVERY_EVIDENCE_DEPTH)
+          ModuleDeliveryEvidenceSchema.throwDecodeLimit(
+            ModuleDeliveryEvidenceDecodeErrorCode.DepthLimit,
+            current.identityDepth,
+            MAX_MODULE_DELIVERY_EVIDENCE_DEPTH,
+          );
+      }
+      if (typeof current.node === 'string') {
+        if (
+          current.node.length > MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS
+        )
+          ModuleDeliveryEvidenceSchema.throwDecodeLimit(
+            ModuleDeliveryEvidenceDecodeErrorCode.StringSizeLimit,
+            current.node.length,
+            MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS,
+          );
+        continue;
+      }
+      if (
+        current.node === null ||
+        typeof current.node === 'boolean' ||
+        typeof current.node === 'number'
+      )
+        continue;
+      if (Array.isArray(current.node)) {
+        if (
+          current.node.length > MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES
+        )
+          ModuleDeliveryEvidenceSchema.throwDecodeLimit(
+            ModuleDeliveryEvidenceDecodeErrorCode.ArraySizeLimit,
+            current.node.length,
+            MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES,
+          );
+        const childDepth = current.depth + 1;
+        const childIdentityDepth = current.isIdentityArray
+          ? current.identityDepth + 1
+          : current.identityDepth;
+        for (let index = current.node.length - 1; index >= 0; index -= 1) {
+          pending.push({
+            node: current.node[index],
+            depth: childDepth,
+            identityDepth: childIdentityDepth,
+            isIdentity: current.isIdentityArray,
+            isIdentityArray: false,
+          });
+        }
+        continue;
+      }
+      if (typeof current.node !== 'object') continue;
+      const object = current.node as Record<string, unknown>;
+      const keys = Object.keys(object);
+      if (keys.length > MAX_MODULE_DELIVERY_EVIDENCE_OBJECT_KEYS)
+        ModuleDeliveryEvidenceSchema.throwDecodeLimit(
+          ModuleDeliveryEvidenceDecodeErrorCode.ObjectSizeLimit,
+          keys.length,
+          MAX_MODULE_DELIVERY_EVIDENCE_OBJECT_KEYS,
+        );
+      const childDepth = current.depth + 1;
+      for (let index = keys.length - 1; index >= 0; index -= 1) {
+        const key = keys[index];
+        if (key === undefined) continue;
+        if (key.length > MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS)
+          ModuleDeliveryEvidenceSchema.throwDecodeLimit(
+            ModuleDeliveryEvidenceDecodeErrorCode.StringSizeLimit,
+            key.length,
+            MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS,
+          );
+        pending.push({
+          node: object[key],
+          depth: childDepth,
+          identityDepth: current.identityDepth,
+          isIdentity: false,
+          isIdentityArray: key === 'acceptedProviderEvidence',
+        });
+      }
+    }
+  }
+
+  private static throwDecodeLimit(
+    code: ModuleDeliveryEvidenceDecodeErrorCode,
+    observed: number,
+    limit: number,
+  ): never {
+    throw new ModuleDeliveryEvidenceDecodeError({ code, observed, limit });
+  }
 }
+
+type EvidenceTransportFrame = {
+  readonly node: unknown;
+  readonly depth: number;
+  readonly identityDepth: number;
+  readonly isIdentity: boolean;
+  readonly isIdentityArray: boolean;
+};
 
 
 class EvidenceRecordReader {

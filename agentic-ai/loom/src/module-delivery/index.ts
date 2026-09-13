@@ -29,12 +29,22 @@ export type {
 export {
   LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+  ModuleDeliveryEvidenceDecodeError,
+  ModuleDeliveryEvidenceDecodeErrorCode,
   MigrationEvidenceRequired,
   ModuleDeliveryEvidenceVerdict,
   ModuleDeliveryEvidenceSchema,
   ModuleDeliveryProviderSubmissionKind,
   ModuleIntegrationPhase,
 } from './integration-provenance.ts';
+export {
+  MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES,
+  MAX_MODULE_DELIVERY_EVIDENCE_DEPTH,
+  MAX_MODULE_DELIVERY_EVIDENCE_HANDOFF_BYTES,
+  MAX_MODULE_DELIVERY_EVIDENCE_IDENTITIES,
+  MAX_MODULE_DELIVERY_EVIDENCE_OBJECT_KEYS,
+  MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS,
+} from './evidence-limits.ts';
 export type {
   AcceptedModuleDeliveryEvidence,
   AcceptedModuleDeliveryWrite,

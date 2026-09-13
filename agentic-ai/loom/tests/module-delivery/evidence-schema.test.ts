@@ -3,9 +3,16 @@ import {
   LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   MigrationEvidenceRequired,
+  ModuleDeliveryEvidenceDecodeError,
   ModuleDeliveryEvidenceSchema,
   ModuleDeliveryEvidenceVerdict,
   ModuleEvidenceBoundary,
+  MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES,
+  MAX_MODULE_DELIVERY_EVIDENCE_DEPTH,
+  MAX_MODULE_DELIVERY_EVIDENCE_HANDOFF_BYTES,
+  MAX_MODULE_DELIVERY_EVIDENCE_IDENTITIES,
+  MAX_MODULE_DELIVERY_EVIDENCE_OBJECT_KEYS,
+  MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS,
 } from '../../src/module-delivery/index.ts';
 import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-support.ts';
 import { ModuleDeliveryEvidenceScenario } from './evidence-test-support.ts';
@@ -253,6 +260,81 @@ test('current v2 evidence handoff preserves canonical identity property order', 
       );
     expect(JSON.stringify(decoded)).toBe(JSON.stringify(current));
     expect(decoded).toEqual(current);
+  } finally {
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(active.fixture);
+  }
+});
+
+test('rejects oversized and deeply nested evidence transports before decoding', () => {
+  const active = ModuleDeliveryEvidenceScenario.runtime();
+  try {
+    const lease = ModuleDeliveryEvidenceScenario.admittedLease({
+      runtime: active,
+      taskId: active.provider.taskId,
+    });
+    const current = ModuleDeliveryEvidenceScenario.submission({
+      runtime: active,
+      lease,
+      acceptedProviderEvidence: [],
+    });
+    expect(() =>
+      ModuleDeliveryEvidenceSchema.decodeCompatibleReadOnlyEvidenceSubmission(
+        JSON.stringify({
+          ...current,
+          evidence: ['x'.repeat(MAX_MODULE_DELIVERY_EVIDENCE_HANDOFF_BYTES)],
+        }),
+      ),
+    ).toThrow(ModuleDeliveryEvidenceDecodeError);
+    expect(() =>
+      ModuleDeliveryEvidenceSchema.decodeCompatibleReadOnlyEvidenceSubmission(
+        JSON.stringify({
+          ...current,
+          evidence: ['x'.repeat(MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS + 1)],
+        }),
+      ),
+    ).toThrow(ModuleDeliveryEvidenceDecodeError);
+    expect(() =>
+      ModuleDeliveryEvidenceSchema.decodeCompatibleReadOnlyEvidenceSubmission(
+        JSON.stringify({
+          ...current,
+          ...Object.fromEntries(
+            Array.from(
+              { length: MAX_MODULE_DELIVERY_EVIDENCE_OBJECT_KEYS },
+              (_, index) => [`extra-${index}`, true],
+            ),
+          ),
+        }),
+      ),
+    ).toThrow(ModuleDeliveryEvidenceDecodeError);
+    expect(() =>
+      ModuleDeliveryEvidenceSchema.decodeCompatibleReadOnlyEvidenceSubmission(
+        JSON.stringify({
+          ...current,
+          acceptanceRequirements: new Array(
+            MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES + 1,
+          ).fill('extra'),
+        }),
+      ),
+    ).toThrow(ModuleDeliveryEvidenceDecodeError);
+    let deeplyNested: unknown = 'safe';
+    for (let depth = 0; depth < MAX_MODULE_DELIVERY_EVIDENCE_DEPTH; depth += 1)
+      deeplyNested = [deeplyNested];
+    expect(() =>
+      ModuleDeliveryEvidenceSchema.decodeCompatibleReadOnlyEvidenceSubmission(
+        JSON.stringify({ ...current, evidence: deeplyNested }),
+      ),
+    ).toThrow(ModuleDeliveryEvidenceDecodeError);
+    expect(() =>
+      ModuleDeliveryEvidenceSchema.decodeCompatibleReadOnlyEvidenceSubmission(
+        JSON.stringify({
+          ...current,
+          acceptedProviderEvidence: Array.from(
+            { length: MAX_MODULE_DELIVERY_EVIDENCE_IDENTITIES },
+            () => ({ acceptedProviderEvidence: [{}] }),
+          ),
+        }),
+      ),
+    ).toThrow(ModuleDeliveryEvidenceDecodeError);
   } finally {
     ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(active.fixture);
   }
