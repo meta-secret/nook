@@ -1,7 +1,6 @@
 import type {
   AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
   IntegratedWriterFrontierProvenance,
-  MintIntegratedWriterFrontierRequest,
   ModuleDeliveryIntegratedWriterFrontierCapability,
 } from './integration-contracts.ts';
 import type {
@@ -9,6 +8,7 @@ import type {
   CanonicalEvidenceTransitionProvenance,
   ModuleDeliveryCanonicalEvidenceTransition,
 } from './integration-provenance.ts';
+import { ModuleIntegrationCoordinator } from './integration.ts';
 
 /** Owns the provenance-backed capabilities emitted by module integration. */
 export class ModuleIntegrationCapabilityRegistry {
@@ -24,29 +24,14 @@ export class ModuleIntegrationCapabilityRegistry {
     CanonicalEvidenceTransitionProvenance
   >();
 
-  static mintIntegratedWriterFrontier(
-    request: MintIntegratedWriterFrontierRequest,
-  ): ModuleDeliveryIntegratedWriterFrontierCapability {
-    const integratedTaskIds = Object.freeze(request.integratedTaskIds.slice());
-    const capabilityValue: ModuleDeliveryIntegratedWriterFrontierCapability = {
-      taskId: request.taskId,
-      attempt: request.attempt,
-      generation: request.generation,
-      planDigest: request.planDigest,
-      headCommit: request.headCommit,
-      integratedTaskIds,
-    };
-    const capability = Object.freeze(capabilityValue);
-    const provenance: IntegratedWriterFrontierProvenance = Object.assign(
-      {},
-      request,
-      { integratedTaskIds },
-    );
+  static registerIntegratedWriterFrontier(
+    request: RegisterIntegratedWriterFrontierRequest,
+  ): void {
+    ModuleIntegrationCapabilityRegistry.assertMintAuthority(request.authority);
     ModuleIntegrationCapabilityRegistry.WRITER_FRONTIER_PROVENANCE.set(
-      capability,
-      Object.freeze(provenance),
+      request.capability,
+      Object.freeze(request.provenance),
     );
-    return capability;
   }
 
   static assertModuleDeliveryIntegratedWriterFrontierCapability(
@@ -88,25 +73,36 @@ export class ModuleIntegrationCapabilityRegistry {
       throw new Error('Canonical evidence transition is invalid.');
   }
 
-  static canonicalEvidenceTransition(
-    request: CanonicalEvidenceTransitionProvenance,
-  ): ModuleDeliveryCanonicalEvidenceTransition {
-    const integratedTaskIds = Object.freeze(request.integratedTaskIds.slice());
-    const transitionValue: ModuleDeliveryCanonicalEvidenceTransition = {
-      previousHeadCommit: request.previousHeadCommit,
-      canonicalHeadCommit: request.canonicalHeadCommit,
-      integratedTaskIds,
-    };
-    const transition = Object.freeze(transitionValue);
-    const provenance: CanonicalEvidenceTransitionProvenance = Object.assign(
-      {},
-      request,
-      { integratedTaskIds },
-    );
+  static registerCanonicalEvidenceTransition(
+    request: RegisterCanonicalEvidenceTransitionRequest,
+  ): void {
+    ModuleIntegrationCapabilityRegistry.assertMintAuthority(request.authority);
     ModuleIntegrationCapabilityRegistry.CANONICAL_EVIDENCE_TRANSITIONS.set(
-      transition,
-      Object.freeze(provenance),
+      request.transition,
+      Object.freeze(request.provenance),
     );
-    return transition;
+  }
+
+  private static assertMintAuthority(
+    authority: ModuleIntegrationCoordinator,
+  ): void {
+    if (
+      !ModuleIntegrationCoordinator.isModuleIntegrationCapabilityMintAuthority(
+        authority,
+      )
+    )
+      throw new Error('Module integration capability mint authority is invalid.');
   }
 }
+
+type RegisterIntegratedWriterFrontierRequest = Readonly<{
+  authority: ModuleIntegrationCoordinator;
+  capability: ModuleDeliveryIntegratedWriterFrontierCapability;
+  provenance: IntegratedWriterFrontierProvenance;
+}>;
+
+type RegisterCanonicalEvidenceTransitionRequest = Readonly<{
+  authority: ModuleIntegrationCoordinator;
+  transition: ModuleDeliveryCanonicalEvidenceTransition;
+  provenance: CanonicalEvidenceTransitionProvenance;
+}>;

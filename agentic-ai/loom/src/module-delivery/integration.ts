@@ -93,6 +93,10 @@ const PROHIBITED_MATERIALIZATION_FILES = new Set([
   '.gitmodules',
   '.lfsconfig',
 ]);
+const CAPABILITY_MINT_AUTHORITY_TOKEN = Symbol(
+  'module-integration-capability-mint-authority',
+);
+const CAPABILITY_MINT_AUTHORITIES = new WeakSet<object>();
 
 enum IntegrationHeadCommitKind {
   Pending = 'pending',
@@ -108,14 +112,41 @@ type IntegrationHeadCommit =
 
 /** Owns module integration lifecycle coordination and its public capability boundary. */
 export class ModuleIntegrationCoordinator {
-  private constructor() {}
+  static #capabilityMintAuthority = new ModuleIntegrationCoordinator(
+    CAPABILITY_MINT_AUTHORITY_TOKEN,
+  );
 
-  private static mintIntegratedWriterFrontier(
+  private constructor(token?: symbol) {
+    if (token !== CAPABILITY_MINT_AUTHORITY_TOKEN)
+      throw new Error('ModuleIntegrationCoordinator is not constructible.');
+    CAPABILITY_MINT_AUTHORITIES.add(this);
+  }
+
+  static isModuleIntegrationCapabilityMintAuthority(
+    authority: ModuleIntegrationCoordinator,
+  ): boolean {
+    return CAPABILITY_MINT_AUTHORITIES.has(authority);
+  }
+
+  static #mintIntegratedWriterFrontier(
     request: MintIntegratedWriterFrontierRequest,
   ): ModuleDeliveryIntegratedWriterFrontierCapability {
-    return ModuleIntegrationCapabilityRegistry.mintIntegratedWriterFrontier(
-      request,
-    );
+    const integratedTaskIds = Object.freeze(request.integratedTaskIds.slice());
+    const capability = Object.freeze({
+      taskId: request.taskId,
+      attempt: request.attempt,
+      generation: request.generation,
+      planDigest: request.planDigest,
+      headCommit: request.headCommit,
+      integratedTaskIds,
+    });
+    const provenance = Object.assign({}, request, { integratedTaskIds });
+    ModuleIntegrationCapabilityRegistry.registerIntegratedWriterFrontier({
+      authority: ModuleIntegrationCoordinator.#capabilityMintAuthority,
+      capability,
+      provenance,
+    });
+    return capability;
   }
 
   static assertModuleDeliveryIntegratedWriterFrontierCapability(
@@ -134,12 +165,22 @@ export class ModuleIntegrationCoordinator {
     );
   }
 
-  private static canonicalEvidenceTransition(
+  static #canonicalEvidenceTransition(
     request: CanonicalEvidenceTransitionProvenance,
   ): ModuleDeliveryCanonicalEvidenceTransition {
-    return ModuleIntegrationCapabilityRegistry.canonicalEvidenceTransition(
-      request,
-    );
+    const integratedTaskIds = Object.freeze(request.integratedTaskIds.slice());
+    const transition = Object.freeze({
+      previousHeadCommit: request.previousHeadCommit,
+      canonicalHeadCommit: request.canonicalHeadCommit,
+      integratedTaskIds,
+    });
+    const provenance = Object.assign({}, request, { integratedTaskIds });
+    ModuleIntegrationCapabilityRegistry.registerCanonicalEvidenceTransition({
+      authority: ModuleIntegrationCoordinator.#capabilityMintAuthority,
+      transition,
+      provenance,
+    });
+    return transition;
   }
 
   private static gitRequest(
@@ -323,7 +364,7 @@ export class ModuleIntegrationCoordinator {
           headCommit: state.headCommit,
           integratedTaskIds: state.integratedTaskIds,
         };
-        return ModuleIntegrationCoordinator.mintIntegratedWriterFrontier(
+        return ModuleIntegrationCoordinator.#mintIntegratedWriterFrontier(
           request,
         );
       }),
@@ -878,7 +919,7 @@ export class ModuleIntegrationCoordinator {
       integratedTaskIds: writerTaskIds,
     };
     const canonicalTransition =
-      ModuleIntegrationCoordinator.canonicalEvidenceTransition(
+      ModuleIntegrationCoordinator.#canonicalEvidenceTransition(
         transitionRequest,
       );
     const stateRequest: PrepareFinalModuleDeliveryAdmissionStateRequest = {
