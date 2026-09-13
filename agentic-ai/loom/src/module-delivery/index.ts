@@ -42,6 +42,7 @@ export type {
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryReadOnlyEvidenceSubmissionV1,
   ModuleDeliveryEvidenceMigrationPayload,
+  ModuleDeliveryEvidenceMigrationRequest,
   MigrationEvidenceRequiredRequest,
   ModuleDeliveryWriteProviderSubmission,
 } from './integration-provenance.ts';

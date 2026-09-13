@@ -114,6 +114,12 @@ export type ModuleDeliveryEvidenceMigrationPayload = Readonly<{
   evidence: readonly string[];
 }>;
 
+export type ModuleDeliveryEvidenceMigrationRequest = Readonly<{
+  submission: ModuleDeliveryReadOnlyEvidenceSubmissionV1;
+  featureHeadSha: string;
+  migrationEvidence?: readonly ModuleDeliveryEvidenceMigrationPayload[];
+}>;
+
 export type MigrationEvidenceRequiredRequest = Readonly<{
   taskId: string;
   artifactIdentity: string;
@@ -342,10 +348,9 @@ export class ModuleDeliveryEvidenceSchema {
   }
 
   static migrateReadOnlyEvidenceSubmission(
-    submission: ModuleDeliveryReadOnlyEvidenceSubmissionV1,
-    featureHeadSha: string,
-    migrationEvidence?: readonly ModuleDeliveryEvidenceMigrationPayload[],
+    request: ModuleDeliveryEvidenceMigrationRequest,
   ): ModuleDeliveryReadOnlyEvidenceSubmission {
+    const { submission, featureHeadSha, migrationEvidence } = request;
     if (
       submission.schemaVersion !==
       LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION

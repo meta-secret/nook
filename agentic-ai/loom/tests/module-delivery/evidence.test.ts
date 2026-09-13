@@ -562,8 +562,10 @@ test('migrates nested historical v1 evidence with supplied payload and fails clo
     expect(decoded).toEqual(historical);
     expect(() =>
       ModuleDeliveryEvidenceSchema.migrateReadOnlyEvidenceSubmission(
-        historical,
-        'f'.repeat(40),
+        {
+          submission: historical,
+          featureHeadSha: 'f'.repeat(40),
+        },
       ),
     ).toThrow(MigrationEvidenceRequired);
     const migrationEvidence: readonly ModuleDeliveryEvidenceMigrationPayload[] = [
@@ -579,9 +581,11 @@ test('migrates nested historical v1 evidence with supplied payload and fails clo
       },
     ];
     const migrated = ModuleDeliveryEvidenceSchema.migrateReadOnlyEvidenceSubmission(
-      historical,
-      'f'.repeat(40),
-      migrationEvidence,
+      {
+        submission: historical,
+        featureHeadSha: 'f'.repeat(40),
+        migrationEvidence,
+      },
     );
     expect(historical).toEqual(before);
     expect(migrated.schemaVersion).toBe(
@@ -656,9 +660,11 @@ test('migrates nested historical v1 evidence with supplied payload and fails clo
     };
     expect(() =>
       ModuleDeliveryEvidenceSchema.migrateReadOnlyEvidenceSubmission(
-        tamperedRoot,
-        'f'.repeat(40),
-        migrationEvidence,
+        {
+          submission: tamperedRoot,
+          featureHeadSha: 'f'.repeat(40),
+          migrationEvidence,
+        },
       ),
     ).toThrow('Historical evidence artifact digest is invalid.');
   } finally {
