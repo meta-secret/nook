@@ -43,7 +43,7 @@ type RemoteIdentityConfig = {
 
 /** Owns the bounded host-process boundary for the dev delivery commands. */
 export class ProcessCommandRunner implements CommandRunner {
-  private readonly repositoryRoot?: string;
+  private readonly repositoryRoot: string | undefined;
 
   private static readonly maxOutputBytes = 16 * 1024 * 1024;
 
