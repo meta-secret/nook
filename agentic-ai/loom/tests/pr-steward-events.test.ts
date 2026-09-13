@@ -699,7 +699,7 @@ describe('exact-head routing observations', () => {
 test('documents the direct foreground process', () => {
   const lifecycle = readFileSync(
     new URL(
-      '../../../.cortex/teams/delivery-pipeline/internal/pr-steward/workflows/pull-request-lifecycle.md',
+      '../../../.cortex/teams/delivery-pipeline/pr-lifecycle/workflows/pull-request-lifecycle.md',
       import.meta.url,
     ),
     'utf8',

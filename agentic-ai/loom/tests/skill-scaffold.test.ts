@@ -242,7 +242,7 @@ describe('skill scaffold', () => {
     const cortexRoot = join(fixtureRoot, '.cortex');
     const gizmoCard = join(
       cortexRoot,
-      'gizmo',
+      'gizmo-prime',
       'dynamic-skills',
       'workflow-routing.md',
     );
@@ -250,7 +250,7 @@ describe('skill scaffold', () => {
     try {
       const directoryOptions = { recursive: true } as const;
       await mkdir(
-        join(cortexRoot, 'gizmo', 'dynamic-skills'),
+        join(cortexRoot, 'gizmo-prime', 'dynamic-skills'),
         directoryOptions,
       );
       await writeFile(gizmoCard, '# Workflow Routing\n', 'utf8');

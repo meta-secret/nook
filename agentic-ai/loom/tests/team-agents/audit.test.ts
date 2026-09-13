@@ -144,6 +144,20 @@ describe('canonical Cortex team authority', () => {
     expect(TEAM_GIZMO_CATALOG).toHaveLength(6);
     expect(TEAM_INTERNAL_AGENT_CATALOG).toHaveLength(12);
 
+    for (const gizmo of TEAM_GIZMO_CATALOG) {
+      expect(gizmo.model).toBe('gpt-5.6-sol');
+      expect(gizmo.reasoningEffort).toBe('low');
+      expect(gizmo.parent).toBe('Gizmo Prime');
+    }
+    const teamGizmoByTeam = new Map(
+      TEAM_GIZMO_CATALOG.map((gizmo) => [gizmo.team, gizmo.key]),
+    );
+    for (const agent of TEAM_INTERNAL_AGENT_CATALOG) {
+      expect(agent.model).toBe('gpt-5.6-luna');
+      expect(agent.reasoningEffort).toBe('xhigh');
+      expect(teamGizmoByTeam.get(agent.team)).toBe(agent.parent);
+    }
+
     const teamGizmo = TEAM_GIZMO_CATALOG.find(
       (candidate) => candidate.key === TeamGizmoKey.DeliveryPipeline,
     );
