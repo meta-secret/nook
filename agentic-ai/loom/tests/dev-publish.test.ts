@@ -25,6 +25,11 @@ interface PullRequestFixture {
   readonly url: string;
 }
 
+type DevPublishPublicationRequest = {
+  readonly pullRequests: readonly (PullRequestFixture | undefined)[];
+  readonly ciStatuses?: readonly string[];
+};
+
 /** Simulates the bounded Git and GitHub observations used by dev:publish. */
 class PublishRunner implements CommandRunner {
   readonly requests: CommandRequest[] = [];
@@ -187,45 +192,61 @@ class PublishRunner implements CommandRunner {
   }
 }
 
-function pullRequest(
-  request: { readonly number?: number; readonly headSha?: string } = {},
-): PullRequestFixture {
-  return {
-    number: request.number ?? 42,
-    headSha: request.headSha ?? SHA_PRIOR,
-    url: `https://github.example/pr/${request.number ?? 42}`,
-  };
+class DevPublishPullRequestFixture {
+  private constructor(
+    private readonly request: {
+      readonly number?: number;
+      readonly headSha?: string;
+    },
+  ) {}
+
+  static from(
+    request: { readonly number?: number; readonly headSha?: string } = {},
+  ): PullRequestFixture {
+    return new DevPublishPullRequestFixture(request).execute();
+  }
+
+  private execute(): PullRequestFixture {
+    const request = this.request;
+    return {
+      number: request.number ?? 42,
+      headSha: request.headSha ?? SHA_PRIOR,
+      url: `https://github.example/pr/${request.number ?? 42}`,
+    };
+  }
 }
 
-function runPublication(request: {
-  readonly pullRequests: readonly (PullRequestFixture | undefined)[];
-  readonly ciStatuses?: readonly string[];
-}): {
-  readonly runner: PublishRunner;
-  readonly result: ReturnType<DevPublishCommand['execute']>;
-} {
-  const root = mkdtempSync(join(tmpdir(), 'nook-dev-publish-'));
-  const devPath = join(root, 'dev');
-  const runner = new PublishRunner({
-    root,
-    devPath,
-    pullRequests: request.pullRequests,
-    ciStatuses: request.ciStatuses ?? ['completed'],
-  });
-  const workspace = new DevDeliveryWorkspace({ root, runner });
-  const expectedSha = CommitSha.parse(SHA_SELECTED);
-  if (expectedSha.isErr()) throw new Error(expectedSha.error.message);
-  const result = new DevPublishCommand(workspace).execute({
-    expectedSha: expectedSha.value,
-  });
-  rmSync(root, { recursive: true, force: true });
-  return { runner, result };
+class DevPublishPublicationScenario {
+  constructor(private readonly request: DevPublishPublicationRequest) {}
+
+  execute(): {
+    readonly runner: PublishRunner;
+    readonly result: ReturnType<DevPublishCommand['execute']>;
+  } {
+    const request = this.request;
+    const root = mkdtempSync(join(tmpdir(), 'nook-dev-publish-'));
+    const devPath = join(root, 'dev');
+    const runner = new PublishRunner({
+      root,
+      devPath,
+      pullRequests: request.pullRequests,
+      ciStatuses: request.ciStatuses ?? ['completed'],
+    });
+    const workspace = new DevDeliveryWorkspace({ root, runner });
+    const expectedSha = CommitSha.parse(SHA_SELECTED);
+    if (expectedSha.isErr()) throw new Error(expectedSha.error.message);
+    const result = new DevPublishCommand(workspace).execute({
+      expectedSha: expectedSha.value,
+    });
+    rmSync(root, { recursive: true, force: true });
+    return { runner, result };
+  }
 }
 
 test('publication rejects a PR that appears before the final push boundary', () => {
-  const { result, runner } = runPublication({
-    pullRequests: [undefined, pullRequest()],
-  });
+  const { result, runner } = new DevPublishPublicationScenario({
+    pullRequests: [undefined, DevPublishPullRequestFixture.from()],
+  }).execute();
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Race);
@@ -235,9 +256,12 @@ test('publication rejects a PR that appears before the final push boundary', () 
 });
 
 test('publication rejects a changed PR head before the final push boundary', () => {
-  const { result, runner } = runPublication({
-    pullRequests: [pullRequest(), pullRequest({ headSha: SHA_SELECTED })],
-  });
+  const { result, runner } = new DevPublishPublicationScenario({
+    pullRequests: [
+      DevPublishPullRequestFixture.from(),
+      DevPublishPullRequestFixture.from({ headSha: SHA_SELECTED }),
+    ],
+  }).execute();
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Race);
@@ -247,10 +271,13 @@ test('publication rejects a changed PR head before the final push boundary', () 
 });
 
 test('publication rechecks replacement CI and rejects an active attempt', () => {
-  const { result, runner } = runPublication({
-    pullRequests: [pullRequest(), pullRequest()],
+  const { result, runner } = new DevPublishPublicationScenario({
+    pullRequests: [
+      DevPublishPullRequestFixture.from(),
+      DevPublishPullRequestFixture.from(),
+    ],
     ciStatuses: ['completed', 'in_progress'],
-  });
+  }).execute();
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) expect(result.error.kind).toBe(DevFailureKind.Checks);
@@ -260,10 +287,13 @@ test('publication rechecks replacement CI and rejects an active attempt', () => 
 });
 
 test('publication pushes the selected SHA when the PR and CI remain frozen', () => {
-  const { result, runner } = runPublication({
-    pullRequests: [pullRequest(), pullRequest()],
+  const { result, runner } = new DevPublishPublicationScenario({
+    pullRequests: [
+      DevPublishPullRequestFixture.from(),
+      DevPublishPullRequestFixture.from(),
+    ],
     ciStatuses: ['completed', 'completed'],
-  });
+  }).execute();
 
   expect(result.isOk()).toBe(true);
   expect(

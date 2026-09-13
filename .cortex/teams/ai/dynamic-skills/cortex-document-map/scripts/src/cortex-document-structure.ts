@@ -31,136 +31,159 @@ const CORTEX_TEAM_CHILDREN: Readonly<Record<string, readonly string[]>> = {
 const CORTEX_CHILD_DIRECTORY_PATTERN =
   /^\.cortex\/teams\/([^/]+)\/([^/]+)(?:\/|$)/u;
 
-function canonicalCortexChildDirectory(
-  filePath: string,
-): { readonly team: string; readonly child: string } | false {
-  const match = CORTEX_CHILD_DIRECTORY_PATTERN.exec(filePath);
-  const team = match?.[1];
-  const child = match?.[2];
-  if (!team || !child || !CORTEX_TEAM_PATTERN.test(team)) return false;
-  if (!CORTEX_TEAM_CHILDREN[team]?.includes(child)) return false;
-  return { team, child };
-}
+type CortexChildDirectory = {
+  readonly team: string;
+  readonly child: string;
+};
 
-export function isCortexChildGraphPath(filePath: string): boolean {
-  return (
-    filePath.endsWith('/knowledge-graph.md') &&
-    canonicalCortexChildDirectory(filePath) !== false
-  );
-}
+/** Owns the meaning and ownership decisions for one Cortex document path. */
+export class CortexDocumentPath {
+  constructor(private readonly filePath: string) {}
 
-export function collectCortexChildGraphPaths(
-  paths: Iterable<string>,
-): string[] {
-  return [...paths].filter(isCortexChildGraphPath).sort();
-}
-
-export function cortexChildGraphParentPath(
-  graphPath: string,
-): string | false {
-  const child = canonicalCortexChildDirectory(graphPath);
-  return child ? `.cortex/teams/${child.team}/knowledge-graph.md` : false;
-}
-
-function cortexChildDirectoryPath(filePath: string): string | false {
-  const child = canonicalCortexChildDirectory(filePath);
-  return child ? `.cortex/teams/${child.team}/${child.child}` : false;
-}
-
-export function cortexChildGraphTeam(graphPath: string): string | false {
-  const child = canonicalCortexChildDirectory(graphPath);
-  return child && graphPath.endsWith('/knowledge-graph.md')
-    ? child.team
-    : false;
-}
-
-export function isCortexKnowledgeGraphPath(filePath: string): boolean {
-  return (
-    filePath === '.cortex/knowledge-graph.md' ||
-    filePath === '.cortex/k-graph.md' ||
-    filePath === '.cortex/INDEX.md' ||
-    CORTEX_OWNER_GRAPH_PATHS.includes(
-      filePath as (typeof CORTEX_OWNER_GRAPH_PATHS)[number],
-    ) ||
-    isCortexChildGraphPath(filePath)
-  );
-}
-
-export function cortexOwningKnowledgeGraphPath(filePath: string): string {
-  const childDirectory = cortexChildDirectoryPath(filePath);
-  if (childDirectory !== false)
-    return `${childDirectory}/knowledge-graph.md`;
-  if (filePath.startsWith('.cortex/gizmo-prime/')) {
-    return '.cortex/gizmo-prime/knowledge-graph.md';
+  value(): string {
+    return this.filePath;
   }
-  if (filePath.startsWith('.cortex/shared/')) {
-    return '.cortex/shared/knowledge-graph.md';
+
+  isChildGraphPath(): boolean {
+    return (
+      this.filePath.endsWith('/knowledge-graph.md') &&
+      this.canonicalChildDirectory() !== false
+    );
   }
-  const teamMatch = /^\.cortex\/teams\/([^/]+)\//u.exec(filePath);
-  const team = teamMatch?.[1];
-  if (team && CORTEX_TEAM_PATTERN.test(team)) {
-    return `.cortex/teams/${team}/knowledge-graph.md`;
+
+  childGraphParentPath(): string | false {
+    const child = this.canonicalChildDirectory();
+    return child ? `.cortex/teams/${child.team}/knowledge-graph.md` : false;
   }
-  return '.cortex/knowledge-graph.md';
+
+  childGraphTeam(): string | false {
+    const child = this.canonicalChildDirectory();
+    return child && this.filePath.endsWith('/knowledge-graph.md')
+      ? child.team
+      : false;
+  }
+
+  isKnowledgeGraphPath(): boolean {
+    return (
+      this.filePath === '.cortex/knowledge-graph.md' ||
+      this.filePath === '.cortex/k-graph.md' ||
+      this.filePath === '.cortex/INDEX.md' ||
+      CORTEX_OWNER_GRAPH_PATHS.includes(
+        this.filePath as (typeof CORTEX_OWNER_GRAPH_PATHS)[number],
+      ) ||
+      this.isChildGraphPath()
+    );
+  }
+
+  owningKnowledgeGraphPath(): string {
+    const childDirectory = this.childDirectoryPath();
+    if (childDirectory !== false)
+      return `${childDirectory}/knowledge-graph.md`;
+    if (this.filePath.startsWith('.cortex/gizmo-prime/')) {
+      return '.cortex/gizmo-prime/knowledge-graph.md';
+    }
+    if (this.filePath.startsWith('.cortex/shared/')) {
+      return '.cortex/shared/knowledge-graph.md';
+    }
+    const teamMatch = /^\.cortex\/teams\/([^/]+)\//u.exec(this.filePath);
+    const team = teamMatch?.[1];
+    if (team && CORTEX_TEAM_PATTERN.test(team)) {
+      return `.cortex/teams/${team}/knowledge-graph.md`;
+    }
+    return '.cortex/knowledge-graph.md';
+  }
+
+  graphOwner(): string | false {
+    if (this.filePath.startsWith('.cortex/gizmo-prime/'))
+      return 'gizmo-prime';
+    if (this.filePath.startsWith('.cortex/shared/')) return 'shared';
+    const childTeam = this.childGraphTeam();
+    if (childTeam !== false) return childTeam;
+    const teamMatch = /^\.cortex\/teams\/([^/]+)\//u.exec(this.filePath);
+    const team = teamMatch?.[1];
+    return team && CORTEX_TEAM_PATTERN.test(team) ? team : false;
+  }
+
+  ownsChildGraphPath(indexedPath: string): boolean {
+    const graphDirectory = path.posix.dirname(this.filePath);
+    return indexedPath.startsWith(`${graphDirectory}/`);
+  }
+
+  private childDirectoryPath(): string | false {
+    const child = this.canonicalChildDirectory();
+    return child ? `.cortex/teams/${child.team}/${child.child}` : false;
+  }
+
+  private canonicalChildDirectory(): CortexChildDirectory | false {
+    const match = CORTEX_CHILD_DIRECTORY_PATTERN.exec(this.filePath);
+    const team = match?.[1];
+    const child = match?.[2];
+    if (!team || !child || !CORTEX_TEAM_PATTERN.test(team)) return false;
+    if (!CORTEX_TEAM_CHILDREN[team]?.includes(child)) return false;
+    return { team, child };
+  }
 }
 
-export function cortexGraphOwner(filePath: string): string | false {
-  if (filePath.startsWith('.cortex/gizmo-prime/')) return 'gizmo-prime';
-  if (filePath.startsWith('.cortex/shared/')) return 'shared';
-  const childTeam = cortexChildGraphTeam(filePath);
-  if (childTeam !== false) return childTeam;
-  const teamMatch = /^\.cortex\/teams\/([^/]+)\//u.exec(filePath);
-  const team = teamMatch?.[1];
-  return team && CORTEX_TEAM_PATTERN.test(team) ? team : false;
+/** Owns discovery of canonical child knowledge graphs in a path catalog. */
+export class CortexChildGraphPathCollection {
+  constructor(private readonly paths: Iterable<string>) {}
+
+  execute(): string[] {
+    return [...this.paths]
+      .filter((filePath) => new CortexDocumentPath(filePath).isChildGraphPath())
+      .sort();
+  }
 }
 
-export function isCortexChildGraphOwnedPath(
-  graphPath: string,
-  indexedPath: string,
-): boolean {
-  const graphDirectory = path.posix.dirname(graphPath);
-  return indexedPath.startsWith(`${graphDirectory}/`);
-}
+/** Owns the allowed and read-only reference relation between child graphs. */
+export class CortexChildGraphReference {
+  private readonly graphPath: CortexDocumentPath;
+  private readonly indexedPath: CortexDocumentPath;
 
-export function isAllowedCortexChildGraphReference(
-  graphPath: string,
-  indexedPath: string,
-): boolean {
-  if (!isCortexChildGraphPath(graphPath)) return true;
-  if (isCortexChildGraphOwnedPath(graphPath, indexedPath)) return true;
-  if (
-    indexedPath.startsWith('.cortex/gizmo-prime/') ||
-    indexedPath.startsWith('.cortex/shared/')
+  constructor(
+    request: { readonly graphPath: string; readonly indexedPath: string },
   ) {
-    return true;
+    this.graphPath = new CortexDocumentPath(request.graphPath);
+    this.indexedPath = new CortexDocumentPath(request.indexedPath);
   }
-  if (indexedPath === cortexChildGraphParentPath(graphPath)) return true;
-  const parentTeamPath = cortexChildGraphParentPath(graphPath);
-  if (
-    parentTeamPath !== false &&
-    indexedPath === parentTeamPath.replace(
-      '/knowledge-graph.md',
-      '/AGENTS.md',
-    )
-  ) {
-    return true;
-  }
-  const graphTeam = cortexChildGraphTeam(graphPath);
-  const indexedTeam = cortexChildGraphTeam(indexedPath);
-  return (
-    graphTeam !== false &&
-    indexedTeam === graphTeam &&
-    indexedPath !== graphPath
-  );
-}
 
-export function isCortexChildGraphReadOnlyReference(
-  graphPath: string,
-  indexedPath: string,
-): boolean {
-  if (!isCortexChildGraphPath(graphPath)) return false;
-  if (isCortexChildGraphOwnedPath(graphPath, indexedPath)) return false;
-  return isAllowedCortexChildGraphReference(graphPath, indexedPath);
+  isAllowed(): boolean {
+    if (!this.graphPath.isChildGraphPath()) return true;
+    if (this.graphPath.ownsChildGraphPath(this.indexedPath.value())) {
+      return true;
+    }
+    const indexedPath = this.indexedPath.value();
+    if (
+      indexedPath.startsWith('.cortex/gizmo-prime/') ||
+      indexedPath.startsWith('.cortex/shared/')
+    ) {
+      return true;
+    }
+    if (indexedPath === this.graphPath.childGraphParentPath()) return true;
+    const parentTeamPath = this.graphPath.childGraphParentPath();
+    if (
+      parentTeamPath !== false &&
+      indexedPath ===
+        parentTeamPath.replace('/knowledge-graph.md', '/AGENTS.md')
+    ) {
+      return true;
+    }
+    const graphTeam = this.graphPath.childGraphTeam();
+    const indexedTeam = this.indexedPath.childGraphTeam();
+    return (
+      graphTeam !== false &&
+      indexedTeam === graphTeam &&
+      indexedPath !== this.graphPath.value()
+    );
+  }
+
+  isReadOnly(): boolean {
+    if (!this.graphPath.isChildGraphPath()) return false;
+    if (this.graphPath.ownsChildGraphPath(this.indexedPath.value())) {
+      return false;
+    }
+    return this.isAllowed();
+  }
 }
 
 export class CortexDocumentStructure {
@@ -218,7 +241,9 @@ export class CortexDocumentStructure {
         rootIndexDoc.relativePath,
       );
       graphDocuments.set(rootGraphPath, rootIndexDoc);
-      for (const graphPath of collectCortexChildGraphPaths(catalog.keys())) {
+      for (const graphPath of new CortexChildGraphPathCollection(
+        catalog.keys(),
+      ).execute()) {
         const graphDocument = catalog.get(graphPath);
         if (graphDocument) graphDocuments.set(graphPath, graphDocument);
       }
@@ -259,8 +284,8 @@ export class CortexDocumentStructure {
       for (const [graphPath, indexedFiles] of indexedByGraph) {
         for (const indexedPath of indexedFiles) {
           if (
-            this.isKnowledgeGraphPath(indexedPath) ||
-            isCortexChildGraphReadOnlyReference(graphPath, indexedPath)
+            new CortexDocumentPath(indexedPath).isKnowledgeGraphPath() ||
+            new CortexChildGraphReference({ graphPath, indexedPath }).isReadOnly()
           ) {
             continue;
           }
@@ -283,8 +308,10 @@ export class CortexDocumentStructure {
       }
 
       for (const [normPath] of catalog) {
-        if (this.isKnowledgeGraphPath(normPath)) continue;
-        const canonicalOwnerGraphPath = cortexOwningKnowledgeGraphPath(normPath);
+        if (new CortexDocumentPath(normPath).isKnowledgeGraphPath()) continue;
+        const canonicalOwnerGraphPath = new CortexDocumentPath(
+          normPath,
+        ).owningKnowledgeGraphPath();
         const ownerGraphPath =
           canonicalOwnerGraphPath === '.cortex/knowledge-graph.md'
             ? rootGraphPath
@@ -318,12 +345,12 @@ export class CortexDocumentStructure {
           }
         }
         for (const ownerGraphPath of ownerGraphPaths) {
-          const graphOwner = cortexGraphOwner(ownerGraphPath);
+          const graphOwner = new CortexDocumentPath(ownerGraphPath).graphOwner();
           const [ownerIndexedFiles = new Set<string>()] = [
             indexedByGraph.get(ownerGraphPath),
           ];
           for (const indexedPath of ownerIndexedFiles) {
-            const indexedOwner = cortexGraphOwner(indexedPath);
+            const indexedOwner = new CortexDocumentPath(indexedPath).graphOwner();
             if (indexedOwner === false || indexedOwner === graphOwner) continue;
             const findingArgs: AddFindingArgs = {
               findings,
@@ -359,7 +386,7 @@ export class CortexDocumentStructure {
 
     for (const document of parsedDocuments) {
       const normPath = this.normalizeCortexRelativePath(document.relativePath);
-      if (this.isKnowledgeGraphPath(normPath)) continue;
+      if (new CortexDocumentPath(normPath).isKnowledgeGraphPath()) continue;
       const validateArgs: ValidateDocumentArgs = {
         document,
         findings,
@@ -444,12 +471,11 @@ export class CortexDocumentStructure {
       }
 
       const targetDoc = args.catalog.get(resolved.targetRelativePath);
-      if (
-        !isAllowedCortexChildGraphReference(
-          args.indexDocument.relativePath,
-          resolved.targetRelativePath,
-        )
-      ) {
+      const reference = new CortexChildGraphReference({
+        graphPath: args.indexDocument.relativePath,
+        indexedPath: resolved.targetRelativePath,
+      });
+      if (!reference.isAllowed()) {
         const findingArgs: AddFindingArgs = {
           findings: args.findings,
           code: CortexStructureFindingCode.InvalidIndexEntry,
@@ -546,10 +572,6 @@ export class CortexDocumentStructure {
       targetRelativePath,
       fragment: fragment && fragment.length > 0 ? fragment : false,
     };
-  }
-
-  private isKnowledgeGraphPath(filePath: string): boolean {
-    return isCortexKnowledgeGraphPath(filePath);
   }
 
   private collectAllLinks(root: Root): Link[] {

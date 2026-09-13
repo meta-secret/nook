@@ -10,13 +10,10 @@ import type { Heading, Link, Parent, Root, RootContent } from 'mdast';
 
 import {
   CORTEX_OWNER_GRAPH_PATHS,
-  collectCortexChildGraphPaths,
-  cortexGraphOwner,
-  cortexOwningKnowledgeGraphPath,
+  CortexChildGraphPathCollection,
+  CortexChildGraphReference,
+  CortexDocumentPath,
   CortexStructureFindingCode,
-  isAllowedCortexChildGraphReference,
-  isCortexChildGraphReadOnlyReference,
-  isCortexKnowledgeGraphPath,
   type CortexStructureFinding,
 } from './cortex-document-structure.ts';
 
@@ -138,7 +135,11 @@ export class CortexDocumentMapVerifier {
       this.deriveGraphFindings({ ...args, catalog, root });
     }
     for (const document of args.documents) {
-      if (!this.isGraph(this.normalize(document.relativePath))) {
+      if (
+        !new CortexDocumentPath(
+          this.normalize(document.relativePath),
+        ).isKnowledgeGraphPath()
+      ) {
         this.deriveDocumentFindings({
           document,
           findings: args.findings,
@@ -160,7 +161,9 @@ export class CortexDocumentMapVerifier {
     const graphDocuments = new Map<string, EvidenceDocument>();
     const rootPath = this.normalize(args.root.relativePath);
     graphDocuments.set(rootPath, args.root);
-    for (const graphPath of collectCortexChildGraphPaths(args.catalog.keys())) {
+    for (const graphPath of new CortexChildGraphPathCollection(
+      args.catalog.keys(),
+    ).execute()) {
       const [graph = false] = [args.catalog.get(graphPath)];
       if (graph !== false) graphDocuments.set(graphPath, graph);
     }
@@ -193,8 +196,8 @@ export class CortexDocumentMapVerifier {
     for (const [graphPath, indexedPaths] of indexedByGraph) {
       for (const indexedPath of indexedPaths) {
         if (
-          this.isGraph(indexedPath) ||
-          this.isReadOnlyExternalReference(graphPath, indexedPath)
+          new CortexDocumentPath(indexedPath).isKnowledgeGraphPath() ||
+          new CortexChildGraphReference({ graphPath, indexedPath }).isReadOnly()
         ) {
           continue;
         }
@@ -215,8 +218,10 @@ export class CortexDocumentMapVerifier {
     }
     for (const document of args.documents) {
       const documentPath = this.normalize(document.relativePath);
-      if (this.isGraph(documentPath)) continue;
-      const ownerGraph = this.owningGraph(documentPath);
+      if (new CortexDocumentPath(documentPath).isKnowledgeGraphPath()) continue;
+      const ownerGraph = new CortexDocumentPath(
+        documentPath,
+      ).owningKnowledgeGraphPath();
       const graphPath =
         ownerGraph === '.cortex/knowledge-graph.md' ? rootPath : ownerGraph;
       if (indexedByGraph.get(graphPath)?.has(documentPath)) continue;
@@ -241,8 +246,9 @@ export class CortexDocumentMapVerifier {
     for (const graphPath of OWNER_GRAPHS) {
       const [indexedPaths = []] = [indexedByGraph.get(graphPath)];
       for (const indexedPath of indexedPaths) {
-        const indexedOwner = this.owner(indexedPath);
-        if (indexedOwner === false || indexedOwner === this.owner(graphPath))
+        const indexedOwner = new CortexDocumentPath(indexedPath).graphOwner();
+        const graphOwner = new CortexDocumentPath(graphPath).graphOwner();
+        if (indexedOwner === false || indexedOwner === graphOwner)
           continue;
         this.add(args.findings)({
           code: CortexStructureFindingCode.InvalidIndexEntry,
@@ -307,7 +313,11 @@ export class CortexDocumentMapVerifier {
         });
         continue;
       }
-      if (!isAllowedCortexChildGraphReference(args.graph.relativePath, resolved.target)) {
+      const reference = new CortexChildGraphReference({
+        graphPath: args.graph.relativePath,
+        indexedPath: resolved.target,
+      });
+      if (!reference.isAllowed()) {
         this.add(args.findings)({
           code: CortexStructureFindingCode.InvalidIndexEntry,
           file: args.graph.relativePath,
@@ -401,25 +411,6 @@ export class CortexDocumentMapVerifier {
     if (normalized.startsWith('.cortex/')) return normalized;
     if (normalized.startsWith('./.cortex/')) return normalized.slice(2);
     return `.cortex/${normalized}`;
-  }
-
-  private isGraph(value: string): boolean {
-    return isCortexKnowledgeGraphPath(value);
-  }
-
-  private isReadOnlyExternalReference(
-    graphPath: string,
-    indexedPath: string,
-  ): boolean {
-    return isCortexChildGraphReadOnlyReference(graphPath, indexedPath);
-  }
-
-  private owningGraph(value: string): string {
-    return cortexOwningKnowledgeGraphPath(value);
-  }
-
-  private owner(value: string): string | false {
-    return cortexGraphOwner(value);
   }
 
   private links(root: Root): Link[] {
