@@ -11,7 +11,7 @@
   import {
     ExtensionPairingDeliveryKind,
     type ExtensionConnectRequest,
-  } from '$lib/extension/connect'
+  } from '../extension/connect'
   import type { VaultState } from '$lib/vault.svelte'
   import { ExtensionVaultApproval } from '$lib/extension/vault-approval'
   import { ExtensionConsentScopeTranslation } from './extension-connect-consent-state'
