@@ -6,6 +6,14 @@ Capture a user's concrete code feedback as durable project knowledge in the
 canonical team-owned dynamic-skill registry, then make that knowledge reusable
 for future refactors.
 
+The AI team owns dynamic-skill meaning, card authoring, and registry
+maintenance. Gizmo owns feature delivery state when a card is applied. Route
+feature, remote validation, review, Workbench, and promotion mechanics through
+Delivery Pipeline Team Gizmo -> active harness -> internal PR Steward. Team
+Gizmo and internal PR Steward perform only packetized mechanics. They never
+create or update PRs or decide policy. The Dev Manager remains the policy owner
+and sole invoker of `dev:pr-manager`.
+
 ## Problem Pattern
 
 The user has to repeatedly explain the same architectural or logic mistake in
@@ -33,7 +41,8 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
 4. Update `.cortex/teams/ai/dynamic-skills/index.md`.
 5. Keep harness-specific profile directories outside the tracked repository.
    Do not duplicate semantic guidance under `.agents`, `.cursor`, or `.claude`.
-6. Apply the skill to code when the user asks for capture plus refactor.
+6. Apply the skill to code through the owning Feature Gizmo's feature path when
+   the user asks for capture plus refactor.
 
 ## Scope
 
@@ -85,8 +94,10 @@ For documentation-only captures, run `task loom:cortex-audit`.
 
 For code refactors using a dynamic skill, run the focused worker proof and
 required formatters. Commit every resulting mutation in the allowed paths and
-return the exact direct commit to Gizmo. If pre-push hygiene mutates
+return the exact scoped commit to Gizmo. If pre-push hygiene mutates
 AI-owned content, the AI team returns a fresh formatted commit. Gizmo then
-continues from it, reruns hygiene, and pushes. Gizmo authorizes PR Steward to
-dispatch hosted validation. Use focused remote evidence until the head is ready.
-Dispatch complete exact-head validation immediately when it is ready.
+continues from it, reruns hygiene, and pushes. Gizmo routes the hosted
+validation packet through Delivery Pipeline Team Gizmo -> active harness ->
+internal PR Steward. Use focused remote evidence until the head is ready.
+Dispatch complete exact-head validation through the same route immediately when
+it is ready.

@@ -8,14 +8,25 @@ feedback from the manually operated slow dev PR cycle.
 ## Required actions
 
 1. Integrate complete scoped Team Agent commits into the feature worktree.
-2. Push the feature and request remote build-only execution through PR Steward.
-3. Review code and required security boundaries.
+2. Push the feature and route the remote build-only request through Delivery
+   Pipeline Team Gizmo -> active harness -> internal PR Steward.
+3. Route the feature review packet through Delivery Pipeline Team Gizmo -> active
+   harness -> internal PR Steward. The Feature Gizmo decides the review state.
 4. Repair accepted findings through the same team path.
-5. Authorize Steward's local integration after the final feature SHA compiles.
+5. Authorize Delivery Pipeline Team Gizmo to route the local-integration packet
+   through active harness -> internal PR Steward after the final feature SHA
+   compiles.
 6. Let the dev manager select the next snapshot publication snapshot.
-7. Run the full existing slow PR checks for that frozen SHA.
+7. Route the full existing slow PR checks for that frozen SHA through Delivery
+   Pipeline Team Gizmo -> active harness -> internal PR Steward.
 8. Delegate failures back to feature Gizmos.
-9. Authorize guarded fast-forward promotion only after complete acceptance.
+9. Authorize Delivery Pipeline Team Gizmo to route guarded fast-forward
+   promotion through active harness -> internal PR Steward only after complete
+   acceptance.
+
+The Feature Gizmo owns feature delivery state. The Dev Manager owns dev PR
+policy, readiness, and promotion policy. Team Gizmo and internal PR Steward do
+only packetized mechanics. They never create or update PRs or decide policy.
 
 ## Prohibited actions
 

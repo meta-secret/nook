@@ -70,17 +70,24 @@ Before an agent says any of the following, it must apply this workflow:
 The workflow also applies when tests, review comments, or implementation work
 discover missing functionality that the current PR will not finish.
 
-## GitHub execution ownership
+## Delivery and GitHub execution ownership
 
-Gizmo authors Workbench content and decides its state. PR Steward executes all
-GitHub commands and publisher wrappers shown below under an explicit packet.
-Gizmo may search and edit the returned local files. Publication does not transfer
-authorship or lifecycle decisions to PR Steward.
+Gizmo authors Workbench content and decides its lifecycle state. Delivery
+Pipeline Team Gizmo routes every Workbench search, publisher, branch, review,
+and status packet through the active harness to internal PR Steward.
+Internal PR Steward executes only the packetized mechanics. Team Gizmo and
+internal PR Steward never create or update PRs or decide policy. Publication
+does not transfer authorship or lifecycle decisions to either actor.
+
+The Dev Manager remains the policy owner and sole invoker of `dev:pr-manager`.
+Any dev PR review, check, status, or promotion mechanics use the same Delivery
+Pipeline Team Gizmo -> active harness -> internal PR Steward route.
 
 ## Search first
 
-Have PR Steward clone or update the Workbench outside the Nook working tree.
-Then search feature
+Have Delivery Pipeline Team Gizmo route a search packet through the active
+harness to internal PR Steward. Internal PR Steward clones or updates the
+Workbench outside the Nook working tree. Then search feature
 summaries, issues, plans, and worklogs with both product language and code
 terms:
 
@@ -158,10 +165,12 @@ to avoid naming the feature; `backlog` is primarily the historical import area.
 
 ## Publishing changes
 
-Workbench records are content, not Nook product changes. Publish a single
-record through PR Steward with the checked-in helper. For an existing issue, first read
-the file and retain the blob SHA that the local edit is based on, then pass that
-exact SHA as `NOOK_WORKBENCH_EXPECTED_SHA`:
+Workbench records are content, not Nook product changes. The owning Gizmo
+authors the record and its lifecycle state. Route a single-record publication
+packet through Delivery Pipeline Team Gizmo -> active harness -> internal PR
+Steward, which executes the checked-in helper. For an existing issue, first
+read the file and retain the blob SHA that the local edit is based on, then pass
+that exact SHA as `NOOK_WORKBENCH_EXPECTED_SHA`:
 
 ```bash
 export NOOK_WORKBENCH_EXPECTED_SHA="$(
@@ -180,7 +189,9 @@ overwriting it. New plans, worklogs, and statistics use unique paths and do not
 need an expected SHA; existing statistics are immutable and cannot be replaced.
 
 For coordinated multi-file restructuring, use a focused Workbench branch and
-PR. Never mix Workbench files into a Nook implementation PR.
+PR. Route its packetized branch, review, and status mechanics through Delivery
+Pipeline Team Gizmo -> active harness -> internal PR Steward. Never mix
+Workbench files into a Nook implementation PR.
 
 ## Team safety
 
@@ -215,8 +226,8 @@ its focused issues. See
 
 ## Task-start plan requirement
 
-Before implementation edits, every task-owning agent must publish one plan from
-`plans/_templates/plan.md`, including for a direct user request with no issue.
+Before implementation edits, every task-owning agent must author one plan from
+`plans/_templates/plan.md`, including for a user request with no issue.
 Use `plans/<feature>/<timestamp>-<task>.md`; use the closest feature or
 `unplanned` when no feature record exists.
 
@@ -273,7 +284,9 @@ Publish a superseding plan when the request, design, scope, or estimate changes
 materially.
 
 Do not rewrite the earlier plan.
-Authorize PR Steward to execute the checked-in publisher for interactive work:
+The owning Gizmo authors the plan. Route its publication packet through Delivery
+Pipeline Team Gizmo -> active harness -> internal PR Steward, which executes the
+checked-in publisher for interactive work:
 
 ```bash
 NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \
@@ -290,7 +303,8 @@ NOOK_WORKBENCH_ASSIGNED_GIZMO_ID=<focused-issue-gizmo-id> \
   - Do not publish it.
 - Set the assigned issue path and `NOOK_WORKBENCH_ASSIGNED_GIZMO_ID` from the
   trusted focused-issue dispatch when publishing its plan. For legacy issues,
-  set only the issue path; omit both fields for direct standalone plans.
+  set only the issue path; omit both fields for standalone plans without an
+  assigned issue.
 - The bounded worker:
   1. uses a dedicated planning LLM turn;
   2. validates and publishes the plan; and
@@ -298,8 +312,8 @@ NOOK_WORKBENCH_ASSIGNED_GIZMO_ID=<focused-issue-gizmo-id> \
 - A missing or rejected plan blocks implementation.
 ## Worklog requirement
 
-Every task-owning agent must publish one worklog before reporting completion or
-a blocker, even when the task began from a direct user prompt and had no issue.
+Every task-owning agent must author one worklog before reporting completion or a
+blocker, even when the task began without a Workbench issue.
 Use `worklogs/_templates/worklog.md`, set its `plan` field to the corresponding
 task plan, and include:
 
@@ -309,10 +323,11 @@ task plan, and include:
 - validation and linked Nook PR;
 - remaining work or `None`.
 
-Update the associated issue status and `related_prs` in the same completion
-boundary. Feature completion records local dev integration. Manager completion records
-promotion and actual PR status. A concrete external blocker moves the owning
-record to `blocked`.
+The owning Gizmo decides the associated issue status and `related_prs`. Route
+the Workbench update through Delivery Pipeline Team Gizmo -> active harness ->
+internal PR Steward in the same completion boundary. Feature completion records
+local dev integration. Manager completion records promotion and actual PR
+status. A concrete external blocker moves the owning record to `blocked`.
 
 ## Required handoff
 
@@ -320,5 +335,6 @@ Link one canonical completion record from the final handoff. That record links
 the feature, focused issue, task-start plan, worklog, and implementation PR.
 State what remains only when work is incomplete.
 
-Re-open the published files before handoff and verify the links and state are
-visible on Workbench `main`.
+Route the readback through Delivery Pipeline Team Gizmo -> active harness ->
+internal PR Steward. Re-open the published files before handoff and verify the
+links and state are visible on Workbench `main`.

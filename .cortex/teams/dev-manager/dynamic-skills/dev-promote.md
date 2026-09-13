@@ -5,17 +5,27 @@
 Use under dev-manager authority with complete slow-stage evidence. Follow the
 [canonical promotion procedure](../../../gizmo/architecture/dev-delivery.md#fast-forward-promotion-procedure).
 
+The Dev Manager remains the policy owner and the sole invoker of
+`dev:pr-manager`. Route review, remote, and promotion mechanics through
+Delivery Pipeline Team Gizmo -> active harness -> internal PR Steward. Team
+Gizmo and internal PR Steward perform only the packetized mechanics. They never
+create or update PRs or decide policy.
+
 ## Procedure
 
 1. Freeze the tested SHA and successful review/security verdicts.
-2. Authorize PR Steward to invoke guarded fast-forward promotion.
-3. Require `origin/dev` to equal the exact frozen tested SHA before publication.
+2. Authorize Delivery Pipeline Team Gizmo to route the guarded fast-forward
+   promotion packet through active harness -> internal PR Steward.
+3. Through the routed promotion packet, require `origin/dev` to equal the exact
+   frozen tested SHA before publication.
    - Merely observing an unchanged remote head is insufficient.
    - Require remote main to be an ancestor of that exact SHA.
    - If main is not an ancestor, return reconciliation to the feature path.
    - Validate the resulting new dev snapshot before another promotion.
-4. Verify remote main equals the tested SHA.
-5. Obtain actual GitHub PR status through PR Steward.
+4. Through the routed promotion packet, verify remote main equals the tested
+   SHA.
+5. Obtain actual GitHub PR status through Delivery Pipeline Team Gizmo -> active
+   harness -> internal PR Steward.
 6. Report completion or the exact remaining blocker.
 
 ## Prohibited actions

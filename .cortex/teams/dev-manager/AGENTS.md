@@ -15,18 +15,23 @@ cycle it creates a new PR for the next snapshot. Dev remains permanent.
 
 ## Required actions
 
-- Authorize Steward's `dev:publish` as the sole publisher to origin/dev.
-- Control dev PR creation/update through the manager-only `dev:pr-manager`
-  command, plus slow evidence, readiness, and promotion.
-- Authorize each dev PR mechanical operation through a manager packet.
+- Authorize `dev:publish` as the sole publication operation to origin/dev.
+  Route its packet through Delivery Pipeline Team Gizmo -> active harness ->
+  internal PR Steward.
+- Remain the policy owner and sole invoker of the manager-only
+  `dev:pr-manager` command for dev PR creation/update.
+- Route every other dev PR review, check, status, and promotion mechanic through
+  Delivery Pipeline Team Gizmo -> active harness -> internal PR Steward under
+  an explicit manager packet.
 - Freeze origin/dev while checking and promoting the selected SHA.
-- Invoke `dev:pr-manager` directly as the manager-owned PR create/update
-  operation; delegate only the remaining GitHub observation and mechanical
-  operations to PR Steward under an explicit packet.
 - Run the full existing slow PR checks for each published snapshot.
+- Route slow validation evidence through Delivery Pipeline Team Gizmo -> active
+  harness -> internal PR Steward.
 - Route failures to a feature Gizmo through the normal feature path.
-- Authorize Steward's `dev:promote` only with complete frozen-SHA evidence.
-- Verify main equals that SHA and obtain actual remote PR status.
+- Authorize `dev:promote` only with complete frozen-SHA evidence, routed through
+  Delivery Pipeline Team Gizmo -> active harness -> internal PR Steward.
+- Verify main equals that SHA and obtain actual remote PR status through
+  Delivery Pipeline Team Gizmo -> active harness -> internal PR Steward.
 - Preserve local dev when newer features have already landed there.
 
 ## Prohibited actions
