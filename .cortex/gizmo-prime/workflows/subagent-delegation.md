@@ -34,12 +34,17 @@ Prime-to-Team-Gizmo dispatch chain.
   Delivery/Dev Manager synchronizes canonical local `main` to the fetched
   `origin/main`, then brings canonical local `dev` onto or including that main
   baseline under the dev-delivery workflow; stale local dev fails closed.
-  Prime records `originMainSha` for the exact fetched main and
-  `pinnedLocalDevSha` for the exact synchronized local-dev SHA, pins that
-  local-dev SHA in the mission packet, and starts new feature work from it
+  Prime records `originMainSha` for the exact freshly fetched main,
+  `pinnedLocalDevSha` for the exact synchronized local-dev SHA, and
+  `featureHeadSha` for the exact canonical feature frontier. The packet proves
+  `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`.
+  The initial feature head may equal the pinned base; descendant heads are
+  valid for reruns. Prime creates new feature work from `pinnedLocalDevSha`
   unless the user explicitly selects another base and Prime records that
-  choice. Team Gizmos and leaves consume `pinnedLocalDevSha` and never use
-  stale local refs or resolve or guess a base independently.
+  choice. The existing canonical feature ref and detached implementation HEAD
+  must equal `featureHeadSha` exactly. Team Gizmos and leaves consume all three
+  pinned identities. Missing, stale, mismatched, or unprovable evidence fails
+  closed.
 - Apply the [branch naming contract](../dynamic-skills/branch-naming.md) to
   every new Prime, Team Gizmo, and leaf branch.
 - Author tests without executing them in the feature stage.
@@ -62,8 +67,10 @@ Prime-to-Team-Gizmo dispatch chain.
   delegation transport.
 - Create exactly one child worktree for each Team Agent from the parent feature
   worktree's current committed frontier.
-- Pass the Prime-pinned local-dev base SHA through every child packet and
-  handoff.
+- Pass all three Prime-pinned identities through every child packet and handoff:
+  `originMainSha`, `pinnedLocalDevSha`, and `featureHeadSha`.
+- Preserve the ordered ancestry chain and exact canonical feature-ref equality
+  in every child handoff. Do not resolve any identity independently.
 - Bind the child path and branch to the task and attempt identity.
 - The child worktree must be disjoint from the parent and every other active
   child worktree.

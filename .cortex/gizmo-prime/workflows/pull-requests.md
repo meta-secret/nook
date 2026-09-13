@@ -34,6 +34,13 @@ functional ownership, readiness, promotion, or final delivery.
   - Use `task remote TASK_NAME=web:build` and
     `task remote TASK_NAME=web:e2e` for focused web build and browser evidence.
   - Bind source checkouts and artifacts to the captured dev head SHA.
+  - Feature packets carry `originMainSha`, `pinnedLocalDevSha`, and
+    `featureHeadSha`. Require `originMainSha` ancestor of
+    `pinnedLocalDevSha` ancestor/equal to `featureHeadSha`.
+  - Prime creates feature work from `pinnedLocalDevSha`. Existing canonical
+    feature refs and detached implementation heads equal `featureHeadSha`
+    exactly. Initial equality and descendant reruns are valid.
+  - Missing, stale, mismatched, or unprovable feature evidence fails closed.
   - Freeze origin/dev during validation and promotion.
   - Local dev may continue accepting completed features.
   - Preserve complete review and security acceptance for the promoted SHA.
@@ -58,8 +65,9 @@ functional ownership, readiness, promotion, or final delivery.
 - Do not create stacked branches or pull requests. When a feature genuinely
   requires multiple slices, use one strictly sequential sequence from the
   exact Prime-pinned local-dev feature base recorded for each slice and
-  complete this procedure for every slice. The fetched `origin/main` SHA is
-  ancestry evidence, not the feature base.
+  complete this procedure for every slice. Each slice records its exact
+  `featureHeadSha`; a later slice must be a descendant of the prior head.
+  The fetched `origin/main` SHA is ancestry evidence, not the feature base.
 
 ## PR title and description
 

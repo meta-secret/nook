@@ -18,12 +18,17 @@ Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
 then synchronizes canonical local `main` to the fetched `origin/main` and
 brings canonical local `dev` onto or including that main baseline under the
 dev-delivery workflow. If local dev is not current with main, the run fails
-closed. Prime records `originMainSha` for the exact fetched `origin/main` and
-`pinnedLocalDevSha` for the exact synchronized local-dev SHA in the mission
-packet and every child handoff. New feature work starts from
+closed. Prime records `originMainSha` for the exact freshly fetched
+`origin/main`, `pinnedLocalDevSha` for the exact synchronized local-dev SHA,
+and `featureHeadSha` for the exact canonical feature frontier in the mission
+packet and every child handoff. Require the chain `originMainSha` ancestor of
+`pinnedLocalDevSha` ancestor of `featureHeadSha`. The initial frontier may
+equal the pinned local-dev SHA. Prime creates new feature work from
 `pinnedLocalDevSha` unless the user explicitly selects another base and Prime
-records that choice. Team Gizmos and leaves consume that pinned SHA and must
-not use stale local refs or resolve or guess a base independently.
+records that choice. The existing canonical feature ref and detached
+implementation HEAD must equal `featureHeadSha` exactly. Descendant frontiers
+are valid for reruns. Team Gizmos and leaves consume all three pinned
+identities. Missing, stale, mismatched, or unprovable evidence fails closed.
 
 1. Define the requested outcome.
 2. Identify the team that owns each required change.

@@ -41,12 +41,17 @@ Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
 Delivery/Dev Manager then synchronizes canonical local `main` to the fetched
 `origin/main` and brings canonical local `dev` onto or including that main
 baseline under the dev-delivery workflow. If local dev is not current with
-main, the run fails closed. Prime records `originMainSha` for the exact fetched
-`origin/main` and `pinnedLocalDevSha` for the exact synchronized local-dev SHA
-in the mission packet and every child handoff. New feature work starts from
-`pinnedLocalDevSha` unless the user explicitly selects another base and Prime
-records that choice. Team Gizmos and leaves consume `pinnedLocalDevSha`; they
-must not use stale local refs or resolve or guess a base independently.
+main, the run fails closed. Prime records `originMainSha` for the exact freshly
+fetched `origin/main`, `pinnedLocalDevSha` for the exact synchronized
+local-dev SHA, and `featureHeadSha` for the exact canonical feature frontier in
+the mission packet and every child handoff. Require the chain `originMainSha`
+ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`. The initial
+frontier may equal the pinned local-dev SHA. Prime creates new feature work
+from `pinnedLocalDevSha` unless the user explicitly selects another base and
+Prime records that choice. The existing canonical feature ref and detached
+implementation HEAD must equal `featureHeadSha` exactly. Descendant frontiers
+are valid for reruns. Team Gizmos and leaves consume all three pinned
+identities. Missing, stale, mismatched, or unprovable evidence fails closed.
 
 ```mermaid
 sequenceDiagram
@@ -56,6 +61,7 @@ sequenceDiagram
     participant Manager as Delivery/Dev Manager
     participant Main as canonical local main
     participant Dev as canonical local dev
+    participant Feature as canonical feature ref
     participant Team as Team Gizmo
     participant Leaf as Team Agent
 
@@ -74,10 +80,13 @@ sequenceDiagram
             Dev-->>Prime: Dev/main currency failure
             Prime-->>User: Fail closed; no planning or edits
         else Local dev is current with main
-            Dev-->>Prime: Exact local-dev SHA
-            Prime->>Prime: Record originMainSha and pinnedLocalDevSha
-            Prime->>Team: Issue packet with both recorded SHAs
-            Team->>Leaf: Forward the same pinnedLocalDevSha
+            Dev-->>Prime: Exact pinnedLocalDevSha
+            Prime->>Feature: Create or read the canonical feature ref
+            Feature-->>Prime: featureHeadSha equal to pinnedLocalDevSha initially
+            Prime->>Prime: Prove originMainSha ancestor of pinnedLocalDevSha ancestor/equal to featureHeadSha
+            Prime->>Team: Issue packet with all three recorded SHAs
+            Team->>Leaf: Forward all three pinned identities
+            Team->>Feature: Require the canonical ref to equal featureHeadSha
         end
     end
 ```
@@ -193,14 +202,16 @@ boundary.
 
 ### Flow
 
-The implementation packet carries the recorded JSON fields `originMainSha`
-and `pinnedLocalDevSha`. The feature worktree and branch are created from
-`pinnedLocalDevSha`. The implementation worker consumes that existing feature
-frontier and verifies that the pinned local-dev commit is an ancestor of its
-head. It also verifies that `originMainSha` still names the fetched main and is
-an ancestor of the pinned local-dev commit. Missing, mismatched, or stale
-evidence fails closed. No implementation worker creates work from
-`origin/main` or `origin/dev`.
+The implementation packet carries the recorded JSON fields `originMainSha`,
+`pinnedLocalDevSha`, and `featureHeadSha`. Prime creates the feature worktree
+and branch from `pinnedLocalDevSha`. The implementation worker consumes the
+existing canonical feature frontier and verifies the chain `originMainSha`
+ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`. The canonical
+feature ref and detached implementation HEAD must equal `featureHeadSha`
+exactly. Equality is valid for the initial frontier. A descendant frontier is
+valid for a rerun. Missing, mismatched, stale, or unprovable evidence fails
+closed. No implementation worker creates work from `origin/main` or
+`origin/dev`.
 
 ```mermaid
 flowchart LR
@@ -233,6 +244,7 @@ sequenceDiagram
     end
 
     box Feature worktree
+        participant Feature as canonical feature ref
         participant Gizmo as gizmo:feature-a-owner
         participant Code as team:dev-core
         participant Web as team:web-dev
@@ -247,7 +259,8 @@ sequenceDiagram
         participant Checks as external:feature-checks
     end
 
-    Prime->>Prime: Bootstrap and record originMainSha plus pinnedLocalDevSha
+    Prime->>Prime: Bootstrap and record originMainSha, pinnedLocalDevSha, and featureHeadSha
+    Prime->>Feature: Create from pinnedLocalDevSha or verify existing ref at featureHeadSha
     Prime->>Gizmo: Issue feature ownership packet
     Gizmo->>Gizmo: Plan complete feature
     Gizmo->>Code: Assign Rust and domain work
@@ -284,6 +297,12 @@ Gizmo and its `pr-lifecycle` agent. Review and remote compilation are separate
 checks internally, but they return one exact-SHA verdict through Team Gizmo to
 Gizmo Prime and the Feature Gizmo. The remote task is build-only: it does not
 run tests, coverage, e2e, or preflight.
+
+The Delivery Pipeline packet preserves all three identities. It accepts a
+feature head only when `originMainSha` is an ancestor of
+`pinnedLocalDevSha`, and `pinnedLocalDevSha` is an ancestor of
+`featureHeadSha`. The existing canonical feature ref remains exactly
+`featureHeadSha`; a descendant head is the only valid rerun frontier.
 
 ### Flow
 
@@ -335,8 +354,8 @@ sequenceDiagram
         participant Delivery as feature:verified
     end
 
-    Prime->>Feature: Route feature mission
-    Feature->>Review: Review exact feature SHA
+    Prime->>Feature: Route mission with all three pinned identities
+    Feature->>Review: Review exact featureHeadSha
     Review-->>Feature: Accepted SHA or findings
     Feature->>Prime: Accepted exact SHA
     Prime->>Pipeline: Authorize delivery-pipeline packet
@@ -356,7 +375,9 @@ sequenceDiagram
 
 Every feature has an independent Feature Gizmo, feature branch, worktree, Team
 Agents, and external-check loop. Gizmo Prime routes each feature and its team
-packets. No feature PR or global feature scheduler coordinates them.
+packets. Each feature starts from its Prime-issued `pinnedLocalDevSha` and
+keeps its canonical feature ref exactly at `featureHeadSha`. No feature PR or
+global feature scheduler coordinates them.
 
 ### Flow
 
@@ -401,19 +422,19 @@ sequenceDiagram
 
     par Feature A
         Users->>Prime: Request feature A
-        Prime->>A: Issue feature-A packet
+        Prime->>A: Issue feature-A packet with all three pinned identities
         A->>A: Complete Levels 1 and 2
         A-->>Prime: Green SHA A and landing request
         Prime-->>Landing: Authorize dev:land for green SHA A
     and Feature B
         Users->>Prime: Request feature B
-        Prime->>B: Issue feature-B packet
+        Prime->>B: Issue feature-B packet with all three pinned identities
         B->>B: Complete Levels 1 and 2
         B-->>Prime: Green SHA B and landing request
         Prime-->>Landing: Authorize dev:land for green SHA B
     and Feature C
         Users->>Prime: Request feature C
-        Prime->>C: Issue feature-C packet
+        Prime->>C: Issue feature-C packet with all three pinned identities
         C->>C: Complete Levels 1 and 2
         C-->>Prime: Green SHA C and landing request
         Prime-->>Landing: Authorize dev:land for green SHA C
@@ -427,6 +448,10 @@ each Feature Gizmo owns its completed feature and landing request. Delivery
 Pipeline Team Gizmo routes the bounded `dev:land` packet to its `pr-lifecycle`
 agent, which executes the ordinary merge under the serialized local
 integration task. There is no feature PR and no publication of `dev` here.
+
+The landing request names the exact `featureHeadSha` already accepted by
+Prime. It also carries `originMainSha` and `pinnedLocalDevSha`; landing must
+not replace or infer any of these identities.
 
 ### Flow
 
@@ -475,9 +500,9 @@ sequenceDiagram
     end
 
     par Independent landing requests
-        A-->>Prime: Request landing for green SHA A
+        A-->>Prime: Request landing for exact green featureHeadSha A
     and
-        B-->>Prime: Request landing for green SHA B
+        B-->>Prime: Request landing for exact green featureHeadSha B
     end
 
     Prime->>Pipeline: Authorize dev:land for green SHA A
@@ -616,6 +641,13 @@ sequenceDiagram
 - Gizmo Prime is the mission/root coordinator. Every team reports through its
   Team Gizmo, which decomposes only team mechanics and returns exact-SHA
   evidence or blockers to Prime.
+- Every feature packet carries `originMainSha`, `pinnedLocalDevSha`, and
+  `featureHeadSha`. The chain is `originMainSha` ancestor of
+  `pinnedLocalDevSha` ancestor/equal to `featureHeadSha`.
+- Prime creates the feature branch and worktree from `pinnedLocalDevSha`.
+  Existing canonical feature refs and detached implementation heads must equal
+  `featureHeadSha` exactly. Initial equality and descendant reruns are valid.
+  Missing, stale, mismatched, or unprovable evidence fails closed.
 - Delivery Pipeline is the operational team for CI, PR lifecycle, dev
   publication, workflow execution, local landing, evidence, and guarded
   promotion. Its Team Gizmo routes `pr-lifecycle` packets.

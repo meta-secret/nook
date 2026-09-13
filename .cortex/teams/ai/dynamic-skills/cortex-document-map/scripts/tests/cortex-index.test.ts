@@ -77,6 +77,20 @@ Model text.
   );
   expect(markdown).toContain('`originMainSha`');
   expect(markdown).toContain('`pinnedLocalDevSha`');
+  expect(markdown).toContain('`featureHeadSha`');
+  expect(markdown).toContain(
+    'ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`',
+  );
+  expect(markdown).toContain(
+    'detached implementation HEAD must equal `featureHeadSha` exactly.',
+  );
+  expect(markdown).toContain('Descendant frontiers are valid for reruns.');
+  expect(markdown).toContain(
+    'Team Gizmos and leaves consume all three pinned identities.',
+  );
+  expect(markdown).toContain(
+    'Missing, stale, mismatched, or unprovable evidence fails closed.',
+  );
   expect(markdown).not.toContain('rules.md');
   expect(markdown).not.toContain('#overview');
 });
@@ -116,6 +130,10 @@ test('renders the complete canonical Cortex context router', () => {
   }
 
   expect(markdown).toContain('return to the selected owning context');
+  expect(markdown).toContain(
+    'ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`',
+  );
+  expect(markdown).toContain('Prime creates new feature');
   expect(markdown).toContain('foreign-team write requirement to Gizmo Prime');
   expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
 });

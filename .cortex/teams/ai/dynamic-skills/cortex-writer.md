@@ -165,8 +165,13 @@ are described below. Execute documentation audits in the manager's slow PR
 stage; this description grants no local pre-push permission.
 
 - It compares the working branch with its merge base against the recorded
-  `pinnedLocalDevSha`; `originMainSha` proves fetched-main ancestry only and
-  is not the feature source.
+  `featureHeadSha`; the packet must prove `originMainSha` ancestor of
+  `pinnedLocalDevSha` ancestor/equal to `featureHeadSha`.
+- Prime creates feature work from `pinnedLocalDevSha`; `originMainSha` proves
+  freshly fetched-main ancestry only and is not the feature source. Existing
+  canonical feature refs must equal `featureHeadSha` exactly. Initial equality
+  and descendant reruns are valid. Missing, stale, mismatched, or unprovable
+  evidence fails closed.
 - A pure rename within persistent Cortex keeps its source ancestry.
 - A rename from outside persistent Cortex checks the full destination.
 - A Git type change into regular Cortex Markdown checks the full file.

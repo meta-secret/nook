@@ -96,9 +96,15 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 - Prime routes additions concurrently when dependencies are ready and scopes are
   disjoint.
 - Prime remains the user-facing mission coordinator and root, not a subagent.
-- Prime's pinned local-dev SHA is the source state for new feature work. Team
-  Gizmos and leaves consume that same pinned SHA and never resolve or guess a
-  base independently.
+- Prime's `pinnedLocalDevSha` is the source state for new feature work. Prime
+  records `originMainSha`, `pinnedLocalDevSha`, and `featureHeadSha` for every
+  feature frontier. The required chain is `originMainSha` ancestor of
+  `pinnedLocalDevSha` ancestor of `featureHeadSha`; initial equality between
+  the latter two is valid and later descendants are valid for reruns.
+- The existing canonical feature ref and detached implementation HEAD must
+  equal `featureHeadSha` exactly. Team Gizmos and leaves consume all three
+  pinned identities and never resolve or guess a base independently. Missing,
+  stale, mismatched, or unprovable evidence fails closed.
 
 Follow [Team Agent Delegation](../workflows/subagent-delegation.md) for packet,
 worktree, and integration sequencing.

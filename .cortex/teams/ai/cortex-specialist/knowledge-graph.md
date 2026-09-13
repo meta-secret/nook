@@ -21,6 +21,10 @@ Load only the authority needed for the assigned Cortex packet.
 - [Multiagent delivery architecture](../../../gizmo-prime/architecture/multiagent-delivery-diagrams.md)
 - [Dev delivery](../../../gizmo-prime/architecture/dev-delivery.md)
 
-The packet must include `originMainSha` and `pinnedLocalDevSha`. Use only the
-pinned local-dev SHA as the feature source. Reject missing, mismatched, or
-stale bootstrap evidence.
+The packet must include `originMainSha`, `pinnedLocalDevSha`, and
+`featureHeadSha`. Require `originMainSha` ancestor of `pinnedLocalDevSha`
+ancestor of `featureHeadSha`. Use only the Prime-pinned local-dev SHA as the
+feature source. The existing canonical feature ref and detached implementation
+HEAD must equal `featureHeadSha` exactly. Initial equality and descendant
+frontiers for reruns are valid. Reject missing, mismatched, stale, or
+unprovable bootstrap evidence.

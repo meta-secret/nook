@@ -49,6 +49,13 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
   - Repeatable remote build-only execution for the pushed feature SHA.
   - Gizmo Prime authorizes Delivery Pipeline Team Gizmo's remote-task packet;
     PR Lifecycle Agent performs the bounded dispatch.
+  - The packet carries `originMainSha`, `pinnedLocalDevSha`, and
+    `featureHeadSha`. Require `originMainSha` ancestor of
+    `pinnedLocalDevSha` ancestor/equal to `featureHeadSha`.
+  - Prime creates the feature branch from `pinnedLocalDevSha`. The existing
+    canonical feature ref and detached implementation HEAD must equal
+    `featureHeadSha` exactly. Initial equality and descendant reruns are valid.
+  - Missing, stale, mismatched, or unprovable evidence fails closed.
   - No tests, coverage, e2e, or preflight may execute transitively.
 - **`dev:land`**
   - Serialized feature merge into the shared local dev checkout.
@@ -86,7 +93,9 @@ for dev snapshots, dev validation, readiness, promotion, and manager-only
   - Permit only scoped local rustfmt and bounded inexpensive TS diagnostics or
     formatting as implementation feedback.
   - Push the feature branch and repeatedly request remote build-only execution.
-  - Bind compilation evidence to the pushed feature SHA.
+  - Bind compilation evidence to the pushed `featureHeadSha`.
+  - Preserve the full chain `originMainSha` ancestor of
+    `pinnedLocalDevSha` ancestor/equal to `featureHeadSha` in every handoff.
   - The task builds and checks type compilation without running tests,
     coverage, e2e, or preflight, including transitively through Docker stages.
   - Fast agents review code and route corrections through the owning team.

@@ -70,11 +70,17 @@ Delivery/Dev Manager then synchronizes canonical local `main` to the fetched
 `origin/main` and brings canonical local `dev` onto or including that main
 baseline under the dev-delivery workflow. If local dev is not current with
 main, the run fails closed. Prime records an `originMainSha` for the exact
-fetched `origin/main` and a `pinnedLocalDevSha` for the exact synchronized
-local-dev commit in the mission packet and every child handoff. New feature
-work starts from `pinnedLocalDevSha` unless the user explicitly selects another
-base and Prime records that choice. Team Gizmos and leaves consume that pinned
-SHA; they must not use stale local refs or resolve or guess a base independently.
+freshly fetched `origin/main`, a `pinnedLocalDevSha` for the exact synchronized
+local-dev commit, and a `featureHeadSha` for the exact canonical feature
+frontier in the mission packet and every child handoff. Require the chain
+`originMainSha` ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`.
+The initial frontier may equal the pinned local-dev SHA. Prime creates new
+feature work from `pinnedLocalDevSha` unless the user explicitly selects
+another base and Prime records that choice. The existing canonical feature ref
+and detached implementation HEAD must equal `featureHeadSha` exactly.
+Descendant frontiers are valid for reruns. Team Gizmos and leaves consume all
+three pinned identities. Missing, stale, mismatched, or unprovable evidence
+fails closed.
 
 ## Communication
 

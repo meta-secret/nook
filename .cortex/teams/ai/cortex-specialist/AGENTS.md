@@ -17,10 +17,14 @@ packet.
 
 - Accept the packet from AI Team Gizmo through the active harness.
 - Read only the parent authorities and task-specific evidence needed for the packet.
-- Consume the Prime-issued `pinnedLocalDevSha`; carry `originMainSha` only as
-  fetched-main ancestry evidence. Do not use stale local refs or resolve or
-  guess a base independently. Missing, mismatched, or stale evidence fails
-  closed.
+- Consume the Prime-issued `originMainSha`, `pinnedLocalDevSha`, and
+  `featureHeadSha`. Require `originMainSha` ancestor of `pinnedLocalDevSha`
+  ancestor of `featureHeadSha`. Prime creates new feature work from
+  `pinnedLocalDevSha`; the existing canonical feature ref and detached
+  implementation HEAD must equal `featureHeadSha` exactly. Initial equality
+  and descendant reruns are valid. Do not use stale local refs or resolve or
+  guess a base independently. Missing, mismatched, stale, or unprovable
+  evidence fails closed.
 - Write only the assigned AI-owned Cortex scope.
 - Commit the complete scoped iteration during the granted commit turn.
 - Report the commit SHA, acceptance evidence, and unresolved blockers to Team Gizmo.

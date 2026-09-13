@@ -25,11 +25,17 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
   `origin/main` and brings canonical local `dev` onto or including that main
   baseline under the dev-delivery workflow. If local dev is not current with
   main, the run fails closed. Prime records `originMainSha` for the exact
-  fetched `origin/main` and `pinnedLocalDevSha` for the exact synchronized
-  local-dev SHA in the mission packet and every child handoff. New feature work
-  starts from `pinnedLocalDevSha` unless the user explicitly selected another
-  base and Prime records the choice. Team Gizmos and leaves consume that pinned
-  SHA and never use stale local refs or independently resolve or guess a base.
+  freshly fetched `origin/main`, `pinnedLocalDevSha` for the exact synchronized
+  local-dev SHA, and `featureHeadSha` for the exact canonical feature frontier
+  in the mission packet and every child handoff. Require the chain
+  `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of `featureHeadSha`.
+  The initial frontier may equal the pinned local-dev SHA. Prime creates new
+  feature work from `pinnedLocalDevSha` unless the user explicitly selected
+  another base and Prime records the choice. An existing canonical feature ref
+  and detached implementation HEAD must equal `featureHeadSha` exactly.
+  Descendant frontiers are valid for reruns. Team Gizmos and leaves consume all
+  three pinned identities. Missing, stale, mismatched, or unprovable evidence
+  fails closed.
 - Preserve functional ownership and required security verdicts.
 - Use the active harness for Team Gizmo and internal Team Agent communication.
 - Keep every writer within its issued child worktree and explicit file scope.
@@ -59,12 +65,21 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
      fetched `origin/main`, then bring canonical local `dev` onto or including
      that main baseline under the dev-delivery workflow. Stop closed if local
      dev is not current with main.
-   - Resolve and record `originMainSha` for the exact fetched `origin/main`
-     commit and `pinnedLocalDevSha` for the exact synchronized local-dev
-     commit.
+   - Resolve and record `originMainSha` for the exact freshly fetched
+     `origin/main` commit and `pinnedLocalDevSha` for the exact synchronized
+     local-dev commit.
+   - Create or read the canonical feature ref and record its exact
+     `featureHeadSha`.
+   - Prove `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of
+     `featureHeadSha`. Allow equality only between the pinned local-dev and
+     initial feature head; allow later feature heads only as descendants for
+     reruns.
    - Pin `pinnedLocalDevSha` for the mission unless the user explicitly
      selected another base, and record the explicit selection.
    - Start the feature branch and worktree from `pinnedLocalDevSha`.
+   - Require the existing canonical feature ref and detached implementation
+     HEAD to equal `featureHeadSha` exactly. Stop closed on missing, stale,
+     mismatched, or unprovable evidence.
 2. **Interpret and scope the feature.**
    - Identify functional owners and required acceptance evidence.
    - Treat every other active task as read-only.
@@ -126,7 +141,9 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 
 - Every worker used its issued child worktree and bounded scope.
 - The handoff records the successful fetch, `originMainSha`,
-  `pinnedLocalDevSha`, and any explicit user-selected base.
+  `pinnedLocalDevSha`, `featureHeadSha`, and any explicit user-selected base.
+- The handoff proves the ordered ancestry chain and exact canonical feature-ref
+  equality. Initial equality and descendant reruns are recorded explicitly.
 - Dirty changes remained attributed and unrelated changes were preserved.
 - Parent integration and shared local dev integration were serialized.
 - The feature's final SHA has passing remote build-only evidence.

@@ -43,12 +43,18 @@ for the run. Every team has a Team Gizmo that reports upward to Gizmo Prime.
   `origin/main` and brings canonical local `dev` onto or including that main
   baseline under the dev-delivery workflow. If local dev is not current with
   main, the run fails closed. Prime records `originMainSha` for the exact
-  fetched `origin/main` and `pinnedLocalDevSha` for the exact synchronized
-  local-dev SHA in the mission packet and every child handoff. New feature work
-  starts from `pinnedLocalDevSha` unless the user explicitly selects another
-  base and Prime records that choice. Team Gizmos and leaves consume
-  `pinnedLocalDevSha`; they must not use stale local refs or resolve or guess a
-  base independently.
+  freshly fetched `origin/main`, `pinnedLocalDevSha` for the exact synchronized
+  local-dev SHA, and `featureHeadSha` for the exact canonical feature frontier
+  in the mission packet and every child handoff. The evidence chain is
+  `originMainSha` ancestor of `pinnedLocalDevSha` ancestor of
+  `featureHeadSha`; equality between the latter two is valid for an initial
+  frontier. Prime creates new feature work from `pinnedLocalDevSha` unless the
+  user explicitly selects another base and Prime records that choice. An
+  existing canonical feature ref and the detached implementation HEAD must
+  equal `featureHeadSha` exactly. Descendant feature frontiers are valid for
+  reruns. Team Gizmos and leaves consume all three pinned identities; they must
+  not use stale local refs or resolve or guess a base independently. Missing,
+  stale, mismatched, or unprovable evidence fails closed.
 - Gizmo Prime must issue each team's high-level packet through the active Gizmo
   harness. The receiving Team Gizmo decomposes only its team's mechanics and
   dispatches bounded internal Team Agents through that harness.
@@ -468,9 +474,15 @@ runner. Runtime-backed selectors and `arc:runtime` should be dispatched alone
 so their Task implementations receive the correct runner image.
 When a task requires a current base:
 
-- It verifies that the packet's `originMainSha` and `pinnedLocalDevSha` are
-  recorded, that the branch contains the pinned local-dev commit before
-  dispatch, and that fetched-main ancestry evidence is still valid.
+- It verifies that the packet's `originMainSha`, `pinnedLocalDevSha`, and
+  `featureHeadSha` are recorded.
+- It verifies the chain `originMainSha` ancestor of `pinnedLocalDevSha` ancestor
+  of `featureHeadSha`.
+- It verifies that the existing canonical feature ref and detached worktree
+  HEAD equal `featureHeadSha` exactly before dispatch.
+- It accepts equality for the initial frontier and descendants for reruns.
+- It fails closed when any identity is absent, stale, mismatched, or cannot be
+  proven from the fetched refs.
 - A later push invalidates the earlier run as delivery evidence.
 - A later advance of `main` does not invalidate successful exact-head PR
   evidence by itself.
