@@ -10,15 +10,10 @@ delivery team, not a functional product-engineering team.
 - [Delivery Pipeline contract](AGENTS.md) defines the team boundary,
   responsibility split, packets, handoffs, and delivery invariants.
 
-## Internal agents
+## Internal graphs
 
-- [Delivery Pipeline Team Gizmo](internal/gizmo/AGENTS.md) owns high-level
-  orchestration, packet decomposition, internal dispatch, and evidence
-  synthesis.
 - [Team Gizmo knowledge graph](internal/gizmo/knowledge-graph.md) indexes its
   internal authorities and escalation paths.
-- [Internal PR Steward](internal/pr-steward/AGENTS.md) owns bounded mechanical
-  execution under an explicit packet.
 - [PR Steward knowledge graph](internal/pr-steward/knowledge-graph.md) indexes
   its authorization and lifecycle workflows.
 

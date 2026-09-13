@@ -53,20 +53,8 @@ Model text.
   expect(markdown).toContain(
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
   );
-  expect(markdown).toContain(
-    '  - [Team Gizmo](teams/delivery-pipeline/internal/gizmo/knowledge-graph.md):',
-  );
-  expect(markdown).toContain(
-    '  - [Internal PR Steward](teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md):',
-  );
   expect(markdown).not.toContain(
-    '\n- [PR Steward](teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md)',
-  );
-  expect(markdown).not.toContain(
-    '\n- [Team Gizmo](teams/delivery-pipeline/internal/gizmo/knowledge-graph.md)',
-  );
-  expect(markdown).not.toContain(
-    '\n- [Internal PR Steward](teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md)',
+    'teams/delivery-pipeline/internal/',
   );
   expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
@@ -98,8 +86,6 @@ test('renders the complete canonical Cortex context router', () => {
     'publication, dev PR creation/update, slow evidence, readiness, repair',
     'feature review, feature acceptance, local landing requests, and Workbench.',
     '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md): operational',
-    '  - [Team Gizmo](teams/delivery-pipeline/internal/gizmo/knowledge-graph.md):',
-    '  - [Internal PR Steward](teams/delivery-pipeline/internal/pr-steward/knowledge-graph.md):',
     '[AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,',
     '[Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault',
     '[Security](teams/security/knowledge-graph.md): security architecture,',
@@ -112,6 +98,36 @@ test('renders the complete canonical Cortex context router', () => {
 
   expect(markdown).toContain('return to the selected owning context');
   expect(markdown).toContain('foreign-team write requirement to Gizmo Prime');
+  expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
+});
+
+test('keeps Delivery Pipeline nested ownership in its parent graph', () => {
+  const deliveryPipelineGraph = readFileSync(
+    new URL(
+      '../../../../../../teams/delivery-pipeline/knowledge-graph.md',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+
+  expect(deliveryPipelineGraph).toContain(
+    '- [Team Gizmo knowledge graph](internal/gizmo/knowledge-graph.md)',
+  );
+  expect(deliveryPipelineGraph).toContain(
+    '- [PR Steward knowledge graph](internal/pr-steward/knowledge-graph.md)',
+  );
+  expect(deliveryPipelineGraph).toContain(
+    '[Authorization handshake](internal/pr-steward/workflows/authorization-handshake.md)',
+  );
+  expect(deliveryPipelineGraph).toContain(
+    '[Pull-request lifecycle](internal/pr-steward/workflows/pull-request-lifecycle.md)',
+  );
+  expect(deliveryPipelineGraph).not.toContain(
+    'internal/gizmo/AGENTS.md',
+  );
+  expect(deliveryPipelineGraph).not.toContain(
+    'internal/pr-steward/AGENTS.md',
+  );
 });
 
 test('stripDocumentNavigation strips relationships and document map', () => {
