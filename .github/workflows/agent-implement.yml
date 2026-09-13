@@ -1,9 +1,8 @@
 # Cursor SDK agent: claim an explicitly ready Markdown issue from
-# meta-secret/nook-workbench (or accept a manual prompt), implement it, and open
-# a Nook PR. The bounded worker publishes its interpreted task plan before
-# implementation, records its worklog afterward, and exits; a continuing
-# task-owning GitHub collaborator is assigned and notified to own validation
-# and merge.
+# meta-secret/nook-workbench (or accept a manual prompt), implement it, and
+# publish one exact feature branch. The bounded worker publishes its
+# interpreted task plan before implementation, records its worklog afterward,
+# and exits; the feature Gizmo owns remote compilation and local dev landing.
 
 name: Agent implement
 
@@ -18,12 +17,12 @@ on:
         description: Required unless issue_path is supplied
         required: false
         type: string
-      pr_title:
-        description: Required capability-oriented PR title when prompt is supplied
+      task_title:
+        description: Required capability-oriented task title when prompt is supplied
         required: false
         type: string
       continuing_owner:
-        description: Required GitHub login for the prompt-backed continuing owner
+        description: Required GitHub login for the prompt-backed feature owner
         required: false
         type: string
       major_change_authorized:
@@ -37,7 +36,7 @@ permissions:
 
 jobs:
   agent-implement:
-    name: Implement and open PR
+    name: Implement and publish feature branch
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 360
     env:
@@ -56,7 +55,7 @@ jobs:
           CONTINUING_OWNER: ${{ inputs.continuing_owner }}
           ISSUE_PATH: ${{ inputs.issue_path }}
           PROMPT: ${{ inputs.prompt }}
-          PR_TITLE: ${{ inputs.pr_title }}
+          TASK_TITLE: ${{ inputs.task_title }}
         run: |
           if { [ -z "$PROMPT" ] && [ -z "$ISSUE_PATH" ]; } || { [ -n "$PROMPT" ] && [ -n "$ISSUE_PATH" ]; }; then
             echo "::error::Supply exactly one of issue_path or prompt."
@@ -66,16 +65,16 @@ jobs:
             echo "::error::A prompt-backed run requires continuing_owner."
             exit 1
           fi
-          if [ -n "$PR_TITLE" ] && { printf '%s' "$PR_TITLE" | LC_ALL=C.UTF-8 grep -q '[[:cntrl:]]' || [[ "$PR_TITLE" == *$'\u2028'* || "$PR_TITLE" == *$'\u2029'* ]]; }; then
-            echo "::error::pr_title must be 3-120 characters on one line without control characters."
+          if [ -n "$TASK_TITLE" ] && { printf '%s' "$TASK_TITLE" | LC_ALL=C.UTF-8 grep -q '[[:cntrl:]]' || [[ "$TASK_TITLE" == *$'\u2028'* || "$TASK_TITLE" == *$'\u2029'* ]]; }; then
+            echo "::error::task_title must be 3-120 characters on one line without control characters."
             exit 1
           fi
-          normalized_title="$(printf '%s' "$PR_TITLE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          normalized_title="$(printf '%s' "$TASK_TITLE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
           if [ -n "$PROMPT" ] && { [ "${#normalized_title}" -lt 3 ] || [ "${#normalized_title}" -gt 120 ]; }; then
-            echo "::error::A prompt-backed run requires a 3-120 character pr_title."
+            echo "::error::A prompt-backed run requires a 3-120 character task_title."
             exit 1
           fi
-          printf 'MANUAL_PR_TITLE=%s\n' "$normalized_title" >> "$GITHUB_ENV"
+          printf 'MANUAL_TASK_TITLE=%s\n' "$normalized_title" >> "$GITHUB_ENV"
           if [ -n "$CONTINUING_OWNER" ] && ! printf '%s' "$CONTINUING_OWNER" | grep -Eq '^[a-z0-9][a-z0-9._-]*$'; then
             echo "::error::continuing_owner must be a lowercase GitHub login."
             exit 1
@@ -209,17 +208,13 @@ jobs:
           set -euo pipefail
           if [ -n "$DISPATCH_PROMPT" ]; then
             branch="agent/prompt-${RUN_ID}"
-            base_branch="main"
             checkout_ref="main"
-            target_kind="standalone"
-            title="$MANUAL_PR_TITLE"
+            title="$MANUAL_TASK_TITLE"
             task="$DISPATCH_PROMPT"
             continuing_owner="$MANUAL_CONTINUING_OWNER"
           else
             branch="agent/workbench-${WORKBENCH_SLUG}-${RUN_ID}"
-            base_branch="main"
             checkout_ref="main"
-            target_kind="standalone"
             title="$ISSUE_TITLE"
             task="$(printf 'Nook Workbench issue `%s`: %s\nURL: %s\n\n%s' "$ISSUE_PATH" "$ISSUE_TITLE" "$ISSUE_URL" "$ISSUE_BODY")"
             continuing_owner="$ISSUE_CONTINUING_OWNER"
@@ -229,27 +224,12 @@ jobs:
           plan_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           plan_timestamp="$(printf '%s' "$plan_started_at" | tr ':' '-')"
           plan_path="plans/${feature}/${plan_timestamp}-run-${RUN_ID}.md"
-          pr_body="$(
-            printf '%s\n' "## Summary"
-            if [ -n "$ISSUE_URL" ]; then
-              printf '%s\n' "Agent implementation for [\`${ISSUE_PATH}\`](${ISSUE_URL})."
-            else
-              printf '%s\n' "Agent implementation from a manual workflow prompt."
-            fi
-            printf '%s\n' "" "## Ownership" "Continuing agent: \`${continuing_owner}\`"
-            if [ -n "$ISSUE_URL" ]; then
-              printf '%s\n' "Owned scope: \`${ISSUE_PATH}\`"
-            else
-              printf '%s\n' "Owned scope: manual prompt run \`${RUN_ID}\`"
-            fi
-            printf '%s\n' "" "## Test plan" "- [ ] CI green on this PR"
-          )"
           while :; do
             random_suffix="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
             test "${#random_suffix}" -eq 64
             delim="AGENT_EOF_${random_suffix}"
             collision=false
-            for value in "$task" "$title" "$pr_body"; do
+            for value in "$task" "$title"; do
               if printf '%s\n' "$value" | grep -Fqx -- "$delim"; then
                 collision=true
                 break
@@ -263,10 +243,7 @@ jobs:
           {
             echo "AGENT_BRANCH=$branch"
             echo "FIX_BRANCH=$branch"
-            echo "AGENT_PR_BASE_BRANCH=$base_branch"
-            echo "AGENT_PR_TARGET_KIND=$target_kind"
             emit_multiline_env "AGENT_PROMPT" "$task"
-            emit_multiline_env "AGENT_PR_TITLE" "$title"
             emit_multiline_env "AGENT_COMMIT_MESSAGE" "$title"
             echo "TASK_FEATURE=$feature"
             echo "TASK_PLAN_PATH=$plan_path"
@@ -274,14 +251,13 @@ jobs:
             emit_multiline_env "TASK_TITLE" "$title"
             echo "CONTINUING_AGENT_OWNER=$continuing_owner"
             echo "MAJOR_CHANGE_AUTHORIZED=$MAJOR_CHANGE_AUTHORIZED"
-            emit_multiline_env "AGENT_PR_BODY" "$pr_body"
           } >> "$GITHUB_ENV"
           echo "ready=true" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve standalone prompt rerun
+      - name: Reject an existing agent branch on rerun
         id: rerun
-        if: steps.task.outputs.ready == 'true' && inputs.prompt != ''
+        if: steps.task.outputs.ready == 'true'
         uses: actions/github-script@v9
         env:
           AGENT_BRANCH: ${{ env.AGENT_BRANCH }}
@@ -289,45 +265,12 @@ jobs:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
           script: |
-            const pulls = await github.rest.pulls.list({
-              ...context.repo,
-              state: 'all',
-              head: `${context.repo.owner}:${process.env.AGENT_BRANCH}`,
-              per_page: 2,
-            })
-            if (pulls.data.length > 1) {
-              core.setFailed(`Multiple open PRs use standalone branch ${process.env.AGENT_BRANCH}`)
-              return
-            }
-            const candidate = pulls.data[0]
-            if (candidate && (candidate.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}` || candidate.base.ref !== 'main')) {
-              core.setFailed('Existing standalone implementation PR has an unexpected repository or base')
-              return
-            }
-            if (candidate) {
-              const { data: pull } = await github.rest.pulls.get({
-                ...context.repo,
-                pull_number: candidate.number,
-              })
-              if (pull.state === 'open') {
-                core.setOutput('terminal', 'true')
-                core.setOutput('terminal_reason', 'open')
-                return
-              }
-              if (pull.merged) {
-                core.setOutput('terminal', 'true')
-                core.setOutput('terminal_reason', 'merged')
-                return
-              }
-              core.setFailed(`Standalone implementation PR #${pull.number} was closed without merge; preserve it for explicit recovery`)
-              return
-            }
             try {
               await github.rest.repos.getBranch({
                 ...context.repo,
                 branch: process.env.AGENT_BRANCH,
               })
-              core.setFailed(`Standalone implementation branch ${process.env.AGENT_BRANCH} exists without a PR; preserve it for explicit recovery`)
+              core.setFailed(`Agent branch ${process.env.AGENT_BRANCH} already exists; preserve it for explicit recovery`)
               return
             } catch (error) {
               if (error.status !== 404) throw error
@@ -545,7 +488,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$IMPLEMENTATION_TERMINAL" = true ]; then
-            echo "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun."
+            echo "Agent branch delivery is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun."
             exit 0
           fi
           plan="$REPO_ROOT/$WORKBENCH_PLAN_FILE"
@@ -572,15 +515,13 @@ jobs:
           FORMAT_CHANGED_FILES="$changed_files" \
             task --taskfile "$GITHUB_WORKSPACE/Taskfile.yml" ci:format:implementation
 
-      - name: Prepare delivered PR metadata
+      - name: Validate implementation work summary
+        id: summary
         if: steps.agent_edit.outputs.changed == 'true' && steps.format.outcome == 'success' && steps.rerun.outputs.terminal != 'true'
         uses: actions/github-script@v9
         env:
           AGENT_PROMPT: ${{ env.AGENT_PROMPT }}
           IMPLEMENTATION_REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
-          ISSUE_URL: ${{ steps.workbench.outputs.url }}
-          PLAN_URL: ${{ steps.plan.outputs.url }}
-          TASK_TITLE: ${{ env.TASK_TITLE }}
           WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
           CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
         with:
@@ -624,7 +565,7 @@ jobs:
               title.length > 120 ||
               /[\p{Cc}\p{Zl}\p{Zp}]/u.test(title)
             ) {
-              core.setFailed('Delivered PR title must be 3–120 characters on one line with no control characters.')
+              core.setFailed('Delivered capability title must be 3–120 characters on one line with no control characters.')
               return
             }
             const words = (value) => value.toLocaleLowerCase('en-US').match(/[\p{L}\p{N}]+/gu) ?? []
@@ -642,24 +583,12 @@ jobs:
             const copiedPrompt = sourceWords.join(' ') === outcomeWords.join(' ') ||
               phrases(outcomeWords).some((phrase) => sourcePhrases.has(phrase))
             if (copiedPrompt) {
-              core.setFailed('Delivered PR metadata must not copy the source task.')
+              core.setFailed('Delivered capability metadata must not copy the source task.')
               return
             }
-            const issue = process.env.ISSUE_URL
-              || 'unavailable — manual workflow dispatch has no focused Workbench issue'
-            core.exportVariable('AGENT_PR_TITLE', title)
-            core.exportVariable('AGENT_PR_BODY', [
-              '## Summary', '', `- ${deliveredCapability}`, '',
-              '## Agent task provenance', '',
-              '- Harness: GitHub Actions workflow `agent-implement.yml`',
-              `- Task name: ${process.env.TASK_TITLE}`,
-              `- Task ID: [run ${context.runId}](${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`, '',
-              '## Nook Workbench', '', `- Focused issue: ${issue}`,
-              `- Immutable plan: ${process.env.PLAN_URL}`, '- Worklog: pending', '',
-              '## Validation', '', '- Trusted formatting and PR metadata validation: passed before publication',
-            ].join('\n'))
+            core.setOutput('capability', deliveredCapability)
 
-      - name: Validate, commit, and publish implementation
+      - name: Publish implementation branch
         id: implement
         if: steps.rerun.outputs.terminal == 'true' || (steps.agent_edit.outputs.changed == 'true' && steps.format.outcome == 'success')
         env:
@@ -669,7 +598,7 @@ jobs:
           REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
         run: |
           if [ "$IMPLEMENTATION_TERMINAL" = true ]; then
-            echo "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete."
+            echo "Agent branch delivery is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete."
             exit 0
           fi
           CI_AGENT_TOOLING_ROOT="$GITHUB_WORKSPACE" \
@@ -696,6 +625,8 @@ jobs:
           NOOK_SECRET: ${{ secrets.NOOK_GITHUB_PAT }}
           CONTINUING_AGENT_OWNER: ${{ env.CONTINUING_AGENT_OWNER }}
           IMPLEMENTATION_REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}
+          PUBLISHED_BRANCH: ${{ steps.implement.outputs.published_branch }}
+          PUBLISHED_HEAD_SHA: ${{ steps.implement.outputs.published_head_sha }}
         with:
           github-token: ${{ secrets.NOOK_GITHUB_PAT }}
           retries: 3
@@ -708,41 +639,14 @@ jobs:
             const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
             const timestamp = now.replaceAll('-', '').replaceAll(':', '')
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-            const pulls = await github.rest.pulls.list({
-              ...context.repo,
-              state: 'open',
-              head: `${context.repo.owner}:${process.env.AGENT_BRANCH}`,
-            })
             const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
               ...context.repo,
               run_id: context.runId,
             })
-            const pull = pulls.data[0]
-            const success = process.env.IMPLEMENT_OUTCOME === 'success' && Boolean(pull)
-            if (success) {
-              const continuingOwner = process.env.CONTINUING_AGENT_OWNER
-              await github.rest.issues.addAssignees({
-                ...context.repo,
-                issue_number: pull.number,
-                assignees: [continuingOwner],
-              })
-              const { data: assignedPull } = await github.rest.issues.get({
-                ...context.repo,
-                issue_number: pull.number,
-              })
-              const ownerWasAssigned = assignedPull.assignees?.some(
-                ({ login }) => login.toLowerCase() === continuingOwner.toLowerCase(),
-              ) ?? false
-              if (!ownerWasAssigned) {
-                core.setFailed(`Failed to assign PR #${pull.number} to ${continuingOwner}`)
-                return
-              }
-              await github.rest.issues.createComment({
-                ...context.repo,
-                issue_number: pull.number,
-                body: `@${continuingOwner} this workflow assigned you PR #${pull.number}. Continue only this PR's recorded scope through feature remote build:compile, local dev integration, exact-head validation, and dev-manager full PR promotion.`,
-              })
-            }
+            const publishedBranch = process.env.PUBLISHED_BRANCH.trim()
+            const publishedHead = process.env.PUBLISHED_HEAD_SHA.trim()
+            const success = process.env.IMPLEMENT_OUTCOME === 'success' &&
+              /^[0-9a-f]{40}$/.test(publishedHead) && Boolean(publishedBranch)
             const implementationSummaryPath = `${process.env.IMPLEMENTATION_REPO_ROOT}/${process.env.WORKBENCH_SUMMARY_FILE}`
             const planningSummaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
             const implementationSummaryExists = fs.existsSync(implementationSummaryPath)
@@ -761,7 +665,7 @@ jobs:
                   '',
                   '## Outcome',
                   '',
-                  success ? `Opened Nook PR [#${pull.number}](${pull.html_url}).` : 'The bounded implementation run did not open a pull request.',
+                  success ? `Published agent branch \`${publishedBranch}\` at \`${publishedHead}\`; the feature Gizmo owns remote compilation and local dev landing.` : 'The bounded implementation run did not publish an agent branch.',
                   '',
                   '## Progress',
                   '',
@@ -769,7 +673,7 @@ jobs:
                   '',
                   '## Implementation problems',
                   '',
-                  success ? '- No problem summary was emitted by the bounded worker.' : '- The workflow or agent stopped before a pull request was opened.',
+                  success ? '- No problem summary was emitted by the bounded worker.' : '- The workflow or agent stopped before publishing an agent branch.',
                   '',
                   '## Decisions',
                   '',
@@ -781,7 +685,7 @@ jobs:
                   '',
                   '## Remaining work',
                   '',
-                  success ? `- GitHub assigned and notified continuing owner \`${process.env.CONTINUING_AGENT_OWNER}\` for validation and merge of the Nook PR.` : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
+                  success ? `- Feature Gizmo must dispatch exact-head remote build-only compilation, then land \`${publishedBranch}\` into local dev.` : '- Inspect the workflow failure and return the issue to ready after correcting the blocker.',
                 ].join('\n')
             let summary = fallbackSummary
             if (fs.existsSync(summaryPath)) {
@@ -804,11 +708,11 @@ jobs:
                 '',
                 '## Outcome',
                 '',
-                `Blocked before publication: the trusted formatter measured ${budgetMatch[1]} authored changed lines, above the 2,000-line PR creation limit.`,
+                `Blocked before publication: the trusted formatter measured ${budgetMatch[1]} authored changed lines, above the 2,000-line branch publication limit.`,
                 '',
                 '## Progress',
                 '',
-                '- The bounded agent completed editing and trusted formatting, but no implementation branch or PR was published.',
+                '- The bounded agent completed editing and trusted formatting, but no implementation branch was published.',
                 '',
                 '## Implementation problems',
                 '',
@@ -816,7 +720,7 @@ jobs:
                 '',
                 '## Decisions',
                 '',
-                '- Delivery stopped at the trusted authored-line budget; no successor branch or PR was created before the current slice could be redesigned.',
+                '- Delivery stopped at the trusted authored-line budget; no successor branch was created before the current slice could be redesigned.',
                 '',
                 '## Validation',
                 '',
@@ -834,7 +738,8 @@ jobs:
               `feature: ${feature}`,
               `issue: ${issuePath || 'null'}`,
               `plan: ${process.env.PLAN_PATH || 'null'}`,
-              `nook_pr: ${pull?.html_url || 'null'}`,
+                  `published_branch: ${publishedBranch || 'null'}`,
+                  `published_head_sha: ${publishedHead || 'null'}`,
               `status: ${success ? 'in_progress' : 'blocked'}`,
               `started_at: ${workflowRun.created_at || now}`,
               `finished_at: ${now}`,
@@ -853,44 +758,6 @@ jobs:
               content: Buffer.from(worklog).toString('base64'),
             })
             const worklogUrl = `https://github.com/${owner}/${repo}/blob/${publishedWorklog.data.commit.sha}/${worklogPath}`
-            if (success) {
-              const currentPullBody = pull.body || ''
-              const workbenchHeading = '## Nook Workbench\n'
-              const workbenchSectionStart = currentPullBody.indexOf(workbenchHeading)
-              const workbenchSectionEnd = workbenchSectionStart < 0
-                ? -1
-                : currentPullBody.indexOf(
-                    '\n## ',
-                    workbenchSectionStart + workbenchHeading.length,
-                  )
-              const workbenchSection = workbenchSectionStart < 0
-                ? ''
-                : currentPullBody.slice(
-                    workbenchSectionStart,
-                    workbenchSectionEnd < 0 ? undefined : workbenchSectionEnd,
-                  )
-              const nextWorkbenchSection = workbenchSection.replace(
-                /^- Worklog: pending$/m,
-                `- Worklog: ${worklogUrl}`,
-              )
-              if (nextWorkbenchSection === workbenchSection) {
-                core.setFailed(`PR #${pull.number} is missing its pending Worklog field.`)
-                return
-              }
-              const nextPullBody = [
-                currentPullBody.slice(0, workbenchSectionStart),
-                nextWorkbenchSection,
-                currentPullBody.slice(
-                  workbenchSectionEnd < 0 ? currentPullBody.length : workbenchSectionEnd,
-                ),
-              ].join('')
-              await github.rest.pulls.update({
-                ...context.repo,
-                pull_number: pull.number,
-                body: nextPullBody,
-              })
-            }
-
             if (!issuePath) return
             const { data } = await github.rest.repos.getContent({ owner, repo, path: issuePath, ref: 'main' })
             if (Array.isArray(data) || data.type !== 'file') {
@@ -900,20 +767,9 @@ jobs:
             let body = Buffer.from(data.content, 'base64').toString('utf8')
               .replace(/^updated_at:\s*.+$/m, `updated_at: ${now}`)
             if (!success) body = body.replace(/^status:\s*in_progress$/m, 'status: blocked')
-            if (pull) {
-              body = body.replace(
-                /^related_prs:\s*\[(.*)\]$/m,
-                (_line, entries) => {
-                  const current = entries.trim()
-                  if (current.includes(pull.html_url)) return _line
-                  const separator = current ? ', ' : ''
-                  return `related_prs: [${current}${separator}${JSON.stringify(pull.html_url)}]`
-                },
-              )
-            }
             const progressOutcome = success
-              ? `opened [Nook PR #${pull.number}](${pull.html_url})`
-              : 'stopped before opening a PR'
+              ? `published agent branch \`${publishedBranch}\` at \`${publishedHead}\``
+              : 'stopped before publishing an agent branch'
             const progress = `- ${now}: [Agent run ${context.runId}](${runUrl}) ${progressOutcome}; [worklog](${worklogUrl}).`
             body = body.replace(/^## Progress\s*$/m, `## Progress\n\n${progress}`)
             await github.rest.repos.createOrUpdateFileContents({

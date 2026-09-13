@@ -21,5 +21,6 @@ Load only the authority required by the current pull-request operation.
 
 PR Steward returns evidence to the controller that issued the packet.
 Feature Gizmo controls feature compilation, review, and local landing requests.
-The dev manager controls dev PR creation/update, slow evidence, readiness,
-and promotion. Steward performs dev PR mechanics only under a manager packet.
+The dev manager controls dev PR creation/update through `dev:pr-manager`, plus
+slow evidence, readiness, and promotion. Steward observes the resulting PR and
+performs only manager-authorized review, check, and promotion mechanics.

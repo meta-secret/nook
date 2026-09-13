@@ -283,12 +283,12 @@ while the published `origin/dev` SHA remains frozen for its validation cycle.
 flowchart LR
     Dev["Local dev:<br/>new commits"]
     Select["Dev Manager:<br/>selects snapshot"]
-    Publish["PR Steward:<br/>publishes origin/dev"]
-    PR["PR Steward:<br/>creates dev to main PR"]
+    Publish["Dev Manager:<br/>invokes dev:publish"]
+    PR["Dev PR Manager:<br/>creates or updates dev to main PR"]
     Checks["GitHub:<br/>full slow checks"]
     Green{"Green?"}
     Fix["Dev Manager:<br/>starts repair Gizmo"]
-    Promote["PR Steward:<br/>runs dev:promote"]
+    Promote["Dev Manager:<br/>invokes dev:promote"]
     Main([Main updated])
 
     Dev --> Select --> Publish --> PR --> Checks --> Green
@@ -323,10 +323,9 @@ sequenceDiagram
     end
 
     Dev-->>Manager: Committed local dev snapshot available
-    Manager->>Steward: Authorize dev:publish for selected SHA
-    Steward->>OriginDev: Fast-forward origin/dev to selected SHA
-    Manager->>Steward: Authorize dev PR and slow validation
-    Steward->>PR: Create dev-to-main PR
+    Manager->>OriginDev: Invoke dev:publish for selected SHA
+    Manager->>PR: Invoke dev:pr-manager
+    PR->>PR: Create or update the single dev-to-main PR
     PR->>CI: Validate captured dev SHA
     CI-->>Steward: Exact-SHA check evidence
     Steward-->>Manager: Validation result
@@ -334,10 +333,9 @@ sequenceDiagram
     Manager->>Repair: On failure, repair current local dev
     Repair->>Dev: Land repair through Levels 1 through 4
 
-    Manager->>Steward: On success, authorize dev:promote
-    Steward->>Main: Fast-forward main to tested dev SHA
-    Main-->>Steward: Confirm remote main equality
-    Steward->>PR: Verify actual merged state
+    Manager->>Main: Invoke dev:promote after approval
+    Main-->>Manager: Confirm remote main equality
+    Manager->>PR: Verify actual merged state
 
     Note over Dev,OriginDev: Local dev may advance while origin/dev is frozen
     Note over OriginDev,Main: Squash, rebase, and promotion merge commits are prohibited
@@ -351,8 +349,11 @@ sequenceDiagram
   Dev Manager's dev-to-main PR.
 - Team Agents mutate isolated child worktrees and return committed iterations.
 - Feature Gizmos never publish `dev` or `main`.
+- Feature Gizmos and Team Agents never create or update pull requests.
 - `dev:land` serializes shared local-dev mutations and never creates a feature
   PR.
+- `dev:pr-manager` is the sole pull-request creation/update path and operates
+  only on the manager-selected `origin/dev` snapshot.
 - The Dev Manager freezes each published `origin/dev` SHA for its validation
   cycle while newer features may continue landing locally.
 - Promotion fast-forwards `main` to the exact fully validated dev SHA.

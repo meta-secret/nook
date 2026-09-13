@@ -42,8 +42,9 @@ ${RUST_DEPS_OUTDATED_REPORT}
    semantic team identity.
 6. Integrate each non-Git handoff: bounded diff, owned paths, focused summary.
 7. Finish the bounded working-tree edit without running validation or Git.
-8. Let the trusted host validate and publish before returning the exact head to
-   the normal Gizmo PR-delivery workflow.
+8. Let the trusted host validate and publish the exact fix branch before
+   returning its head to the normal Gizmo delivery workflow. Do not create a
+   pull request; the dev manager owns the later dev-to-main PR.
 
 Gizmo selects each team through the canonical mapping authority at
 `.cortex/gizmo/workflows/team-oriented-development.md`.

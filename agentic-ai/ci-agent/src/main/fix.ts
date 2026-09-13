@@ -10,9 +10,6 @@ export {
   RUST_DEPENDENCY_UPDATE_VALIDATION_COMMANDS,
   runValidationCommand,
 } from "./dependency-validation.js";
-import type { Octokit } from "@octokit/rest";
-import type { RepoRef } from "./github.js";
-import { GithubRequestFailure } from "./github-failure.js";
 import { CiWorkingDirectory } from "./process.js";
 import { err, ok, ResultAsync, type Result } from "neverthrow";
 import { CiFailureKind, type CiFailure } from "./failure.js";
@@ -45,7 +42,6 @@ import {
 import {
   GitHubClient,
   GitHubEnvironment,
-  OpenPrLookupKind,
   GitHubRepositoryName,
 } from "./github.js";
 import { CiRepository } from "./git.js";
@@ -80,14 +76,14 @@ export class CiFixCommand {
     const repositoryName = new GitHubRepositoryName(repository).parse();
     if (repositoryName.isErr()) return err(repositoryName.error);
     const repoRef = repositoryName.value;
-    const openPr = await new GitHubClient(octokit).findOpenPr({
+    const github = new GitHubClient(octokit);
+    const branchExists = await github.branchExistsOnOrigin({
       subject1: repoRef,
-      headBranch: fixBranch,
+      branch: fixBranch,
     });
-    if (openPr.isErr()) return err(openPr.error);
-    let prNumber: number;
-    if (openPr.value.kind === OpenPrLookupKind.Found) {
-      prNumber = openPr.value.number;
+    if (branchExists.isErr()) return err(branchExists.error);
+    let expectedHead: string;
+    if (branchExists.value) {
       if (profile.value === CiAgentFixProfile.RustDependencyUpdate) {
         const audited = await this.auditExistingDependencyBranch(
           repoRoot,
@@ -95,6 +91,12 @@ export class CiFixCommand {
         );
         if (audited.isErr()) return err(audited.error);
       }
+      const existingHead = await github.readBranchHeadOnOrigin({
+        subject1: repoRef,
+        branch: fixBranch,
+      });
+      if (existingHead.isErr()) return err(existingHead.error);
+      expectedHead = existingHead.value;
     } else {
       const loaded = new CiAgentEnvironment(process.env).loadConfig();
       if (loaded.kind === CiAgentConfigLoadKind.MissingApiKey) {
@@ -111,43 +113,32 @@ export class CiFixCommand {
         runId,
       });
       if (pushed.isErr()) return err(pushed.error);
-      const published = await new GitHubClient(octokit).findOpenPr({
-        subject1: repoRef,
-        headBranch: fixBranch,
-      });
-      if (published.isErr()) return err(published.error);
-      if (published.value.kind === OpenPrLookupKind.Found)
-        prNumber = published.value.number;
-      else {
-        const created = await new GitHubClient(octokit).createFixPr({
-          repoRef,
-          headBranch: fixBranch,
-          runId,
-          fixLabel: loaded.config.fixLabel,
-          baseBranch: "main",
-        });
-        if (created.isErr()) return err(created.error);
-        prNumber = created.value;
-      }
+      const head = await new CiRepository(repoRoot).revParse({ ref: "HEAD" });
+      if (head.isErr()) return err(head.error);
+      expectedHead = head.value;
     }
-    const head = await new CiRepository(repoRoot).revParse({ ref: "HEAD" });
-    if (head.isErr()) return err(head.error);
-    const published = await new DependencyFixVerifyLiveFixPublication({
-      expectedHeadSha: head.value,
-      fixBranch,
-      octokit,
-      prNumber,
-      repoRef,
+    const verifiedHead = await new DependencyFixVerifyPublishedFixBranch({
+      expectedBranch: fixBranch,
+      expectedHeadSha: expectedHead,
+      fetchRemoteHeadSha: () =>
+        github.readBranchHeadOnOrigin({
+          subject1: repoRef,
+          branch: fixBranch,
+        }),
     }).execute();
-    if (published.isErr()) return err(published.error);
+    if (verifiedHead.isErr()) return err(verifiedHead.error);
+    const published = {
+      headSha: verifiedHead.value,
+      kind: CiFixOutcomeKind.Published as const,
+    } satisfies PublishedCiFixOutcome;
     const fixLabel = this.environment.CI_FIX_LABEL?.trim() || "main CI";
     log.info(
-      `PR #${prNumber} exact head ${published.value.headSha} verified and handed to the continuing Gizmo owner`,
+      `Agent fix branch ${fixBranch} exact head ${published.headSha} was verified and handed to the continuing Gizmo owner`,
     );
     log.info(
-      `PR #${prNumber} is open without automatic merge; ${fixLabel} run ${runId} requires explicit merge authorization`,
+      `${fixLabel} run ${runId} requires the dev-manager delivery path; no pull request was created`,
     );
-    return published;
+    return ok(published);
   }
   private async auditExistingDependencyBranch(
     repoRoot: string,
@@ -635,21 +626,19 @@ export class DependencyFixIsolationForFixProfile {
   }
 }
 
-export class DependencyFixAssertPublishedFixIdentity {
-  constructor(private readonly request: PublishedFixIdentity) {}
+export class DependencyFixAssertPublishedFixBranchIdentity {
+  constructor(private readonly request: PublishedFixBranchIdentity) {}
   execute(): Result<string, CiFailure> {
     const identity = this.request;
 
     const mismatch = [
-      ["PR number", identity.actualPrNumber, identity.expectedPrNumber],
-      ["PR head ref", identity.actualHeadRef, identity.expectedHeadRef],
-      ["PR head SHA", identity.actualHeadSha, identity.expectedHeadSha],
+      ["branch", identity.actualBranch, identity.expectedBranch],
+      ["branch SHA", identity.actualHeadSha, identity.expectedHeadSha],
       [
         "remote branch SHA",
         identity.actualRemoteHeadSha,
         identity.expectedHeadSha,
       ],
-      ["PR base", identity.actualBaseRef, identity.expectedBaseRef],
     ].find(([, actual, expected]) => actual !== expected);
     if (mismatch)
       return err({
@@ -660,83 +649,26 @@ export class DependencyFixAssertPublishedFixIdentity {
   }
 }
 
-export class DependencyFixVerifyPublishedFix {
+export class DependencyFixVerifyPublishedFixBranch {
   constructor(
     private readonly request: {
-      expectedBaseRef: string;
-      expectedHeadRef: string;
+      expectedBranch: string;
       expectedHeadSha: string;
-      expectedPrNumber: number;
-      fetchPullRequest: () => Promise<Result<PublishedPullRequest, CiFailure>>;
       fetchRemoteHeadSha: () => Promise<Result<string, CiFailure>>;
     },
   ) {}
   async execute(): Promise<Result<string, CiFailure>> {
     const args = this.request;
 
-    const [pullRequest, remoteHeadSha] = await Promise.all([
-      args.fetchPullRequest(),
-      args.fetchRemoteHeadSha(),
-    ]);
-    if (pullRequest.isErr()) return err(pullRequest.error);
+    const remoteHeadSha = await args.fetchRemoteHeadSha();
     if (remoteHeadSha.isErr()) return err(remoteHeadSha.error);
-    return new DependencyFixAssertPublishedFixIdentity({
-      actualBaseRef: pullRequest.value.base.ref,
-      actualHeadRef: pullRequest.value.head.ref,
-      actualHeadSha: pullRequest.value.head.sha,
-      actualPrNumber: pullRequest.value.number,
+    return new DependencyFixAssertPublishedFixBranchIdentity({
+      actualBranch: args.expectedBranch,
+      actualHeadSha: args.expectedHeadSha,
       actualRemoteHeadSha: remoteHeadSha.value,
-      expectedBaseRef: args.expectedBaseRef,
-      expectedHeadRef: args.expectedHeadRef,
+      expectedBranch: args.expectedBranch,
       expectedHeadSha: args.expectedHeadSha,
-      expectedPrNumber: args.expectedPrNumber,
     }).execute();
-  }
-}
-
-class DependencyFixVerifyLiveFixPublication {
-  constructor(
-    private readonly request: {
-      expectedHeadSha: string;
-      fixBranch: string;
-      octokit: Octokit;
-      prNumber: number;
-      repoRef: RepoRef;
-    },
-  ) {}
-  async execute(): Promise<Result<PublishedCiFixOutcome, CiFailure>> {
-    const args = this.request;
-
-    const verified = await new DependencyFixVerifyPublishedFix({
-      expectedBaseRef: "main",
-      expectedHeadRef: args.fixBranch,
-      expectedHeadSha: args.expectedHeadSha,
-      expectedPrNumber: args.prNumber,
-      fetchPullRequest: async () => {
-        const response = await ResultAsync.fromPromise(
-          args.octokit.rest.pulls.get({
-            ...args.repoRef,
-            pull_number: args.prNumber,
-          }),
-          (cause) => new GithubRequestFailure(cause).outcome(),
-        );
-        return response.map(({ data }) => data);
-      },
-      fetchRemoteHeadSha: async () => {
-        const response = await ResultAsync.fromPromise(
-          args.octokit.rest.repos.getBranch({
-            ...args.repoRef,
-            branch: args.fixBranch,
-          }),
-          (cause) => new GithubRequestFailure(cause).outcome(),
-        );
-        return response.map(({ data }) => data.commit.sha);
-      },
-    }).execute();
-    return verified.map((headSha) => ({
-      headSha,
-      kind: CiFixOutcomeKind.Published as const,
-    }));
   }
 }
 
@@ -800,20 +732,10 @@ export class CiFixProfileName {
   }
 }
 
-type PublishedFixIdentity = {
-  actualBaseRef: string;
-  actualHeadRef: string;
+type PublishedFixBranchIdentity = {
+  actualBranch: string;
   actualHeadSha: string;
-  actualPrNumber: number;
   actualRemoteHeadSha: string;
-  expectedBaseRef: string;
-  expectedHeadRef: string;
+  expectedBranch: string;
   expectedHeadSha: string;
-  expectedPrNumber: number;
-};
-
-type PublishedPullRequest = {
-  base: { ref: string };
-  head: { ref: string; sha: string };
-  number: number;
 };

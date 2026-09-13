@@ -32,7 +32,8 @@ An agent owns only:
 
 - the direct user task assigned to it;
 - the Workbench feature and focused issues it explicitly claimed;
-- branches and pull requests created for that owned scope;
+- the feature branch published for that owned scope; feature pull requests are
+  not created by Gizmo or functional Team Agents;
 - artifacts explicitly handed to it by the user, task owner, or orchestrator.
 
 Treat every other active task as foreign work.
@@ -94,8 +95,8 @@ Does not apply to:
 
 - read-only inspection used to avoid overlap;
 - an explicit user, owner, or orchestrator handoff;
-- a bounded worker assigning its own PR to the continuing owner and posting a
-  direct mention;
+- a bounded worker handing its exact feature branch and evidence to the
+  continuing owner and posting a direct mention;
 - repository automation acting within its documented machine-owned scope.
 
 For a bounded worker:
@@ -104,9 +105,9 @@ For a bounded worker:
   issue;
 - a prompt-backed run requires the `continuing_owner` workflow input;
 - the continuing owner must be a Nook GitHub collaborator with write access;
-- the workflow assigns the PR to that owner;
+- the workflow records that owner against the exact branch and Workbench scope;
 - the workflow posts a direct mention before it exits;
-- the generated PR records that owner and the exact owned scope.
+- the manager-owned PR path later records aggregate delivery provenance.
 
 ## Examples
 

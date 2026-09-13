@@ -255,7 +255,7 @@ class PrAuditCreateMockOctokit {
           ...(options.agentHandoff === MockAgentHandoff.Included
             ? [
                 {
-                  body: "@octocat this workflow assigned you PR #410. Continue only this PR's recorded scope through review, exact-head validation, and squash merge.",
+                  body: `@octocat this workflow published agent branch agent/prompt-410 at ${headSha}. Continue only this branch's recorded scope through feature remote build-only compilation and local dev integration.`,
                 },
               ]
             : []),

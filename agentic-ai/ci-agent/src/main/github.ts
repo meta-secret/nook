@@ -59,12 +59,12 @@ export interface GitHubClientReadPullRequestRevisionRequest {
   readonly signal?: AbortSignal;
 }
 
-export interface GitHubClientFindOpenPrRequest {
+export interface GitHubClientBranchExistsOnOriginRequest {
   readonly subject1: RepoRef;
-  readonly headBranch: string;
+  readonly branch: string;
 }
 
-export interface GitHubClientBranchExistsOnOriginRequest {
+export interface GitHubClientReadBranchHeadRequest {
   readonly subject1: RepoRef;
   readonly branch: string;
 }
@@ -102,37 +102,6 @@ export class GitHubClient {
     });
   }
 
-  async findOpenPr(
-    request: GitHubClientFindOpenPrRequest,
-  ): Promise<Result<OpenPrLookup, CiFailure>> {
-    const octokit = this.value;
-    const { subject1, headBranch } = request;
-    const { owner, repo } = subject1;
-
-    const response2 = await ResultAsync.fromPromise(
-      octokit.rest.pulls.list({
-        owner,
-        repo,
-        state: "open",
-        head: `${owner}:${headBranch}`,
-        per_page: 1,
-      }),
-      (cause) => new GithubRequestFailure(cause).outcome(),
-    );
-    if (response2.isErr()) return err(response2.error);
-    const { data } = response2.value;
-    const match = data[0];
-    return ok(
-      match
-        ? {
-            kind: OpenPrLookupKind.Found,
-            number: match.number,
-            baseBranch: match.base.ref,
-          }
-        : { kind: OpenPrLookupKind.NotFound },
-    );
-  }
-
   async branchExistsOnOrigin(
     request: GitHubClientBranchExistsOnOriginRequest,
   ): Promise<Result<boolean, CiFailure>> {
@@ -149,6 +118,20 @@ export class GitHubClient {
       branchResult.error.code === 404
       ? ok(false)
       : err(branchResult.error);
+  }
+
+  async readBranchHeadOnOrigin(
+    request: GitHubClientReadBranchHeadRequest,
+  ): Promise<Result<string, CiFailure>> {
+    const branchResult = await ResultAsync.fromPromise(
+      this.value.rest.repos.getBranch({
+        ...request.subject1,
+        branch: request.branch,
+      }),
+      (cause) => new GithubRequestFailure(cause).outcome(),
+    );
+    if (branchResult.isErr()) return err(branchResult.error);
+    return ok(branchResult.value.data.commit.sha);
   }
 
   async inspectPrFeedback(
@@ -481,54 +464,6 @@ export class GitHubClient {
       unresolvedThreads,
     });
   }
-  async createFixPr(
-    request: FixPullRequestInput,
-  ): Promise<Result<number, CiFailure>> {
-    const octokit = this.value;
-    const {
-      repoRef,
-      headBranch,
-      runId,
-      fixLabel = "main CI",
-      baseBranch = "main",
-    } = request;
-    const { owner, repo } = repoRef;
-    const title =
-      process.env.AGENT_PR_TITLE?.trim() || `Fix ${fixLabel} (run ${runId})`;
-    const requestedBody =
-      process.env.AGENT_PR_BODY?.trim() ||
-      [
-        "## Summary",
-        `Auto-fix for failed ${fixLabel} run ${runId}.`,
-        "",
-        "## Test plan",
-        "- [ ] CI green on this PR",
-      ].join("\n");
-
-    const created = await ResultAsync.fromPromise(
-      octokit.rest.pulls.create({
-        owner,
-        repo,
-        title,
-        head: headBranch,
-        base: baseBranch,
-        body: requestedBody,
-      }),
-      (cause) => new GithubRequestFailure(cause).outcome(),
-    );
-    if (created.isOk()) return ok(created.value.data.number);
-    const existing = await this.findOpenPr({ subject1: repoRef, headBranch });
-    if (existing.isErr()) return err(existing.error);
-    if (existing.value.kind === OpenPrLookupKind.Found) {
-      if (existing.value.baseBranch !== baseBranch)
-        return err({
-          kind: CiFailureKind.Github,
-          message: `Open PR for ${headBranch} targets ${existing.value.baseBranch}, expected ${baseBranch}`,
-        });
-      return ok(existing.value.number);
-    }
-    return err(created.error);
-  }
 }
 
 export class PullRequestChangedPath {
@@ -813,15 +748,6 @@ export type PullRequestRevision = {
   headSha: string;
 };
 
-export enum OpenPrLookupKind {
-  Found = "found",
-  NotFound = "not-found",
-}
-
-export type OpenPrLookup =
-  | { kind: OpenPrLookupKind.Found; number: number; baseBranch: string }
-  | { kind: OpenPrLookupKind.NotFound };
-
 /** PAT preferred — PRs from GITHUB_TOKEN do not trigger pull_request workflows. */
 
 /** Product jobs must succeed even when automatic CI jobs already passed. */
@@ -960,12 +886,4 @@ type AutomatedFindingBatchRequest = {
 };
 
 const AGENT_IMPLEMENTATION_HANDOFF_COMMENT =
-  /^@[a-z0-9-]+ this workflow assigned you PR #\d+\. Continue only this PR's recorded scope through review, exact-head validation, and squash merge\.$/;
-
-export interface FixPullRequestInput {
-  readonly repoRef: RepoRef;
-  readonly headBranch: string;
-  readonly runId: string;
-  readonly fixLabel?: string;
-  readonly baseBranch?: string;
-}
+  /^@[a-z0-9-]+ this workflow published agent branch [^ ]+ at [0-9a-f]{40}\. Continue only this branch's recorded scope through feature remote build-only compilation and local dev integration\.$/;

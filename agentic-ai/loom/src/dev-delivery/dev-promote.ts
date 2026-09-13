@@ -29,11 +29,18 @@ export class DevPromoteCommand {
   ) {}
 
   execute(): Result<DevPromoteOutcome, DevFailure> {
-    const lease = this.request.workspace.publicationLock();
-    if (lease.isErr()) return err(lease.error);
+    const publicationLease = this.request.workspace.publicationLock();
+    if (publicationLease.isErr()) return err(publicationLease.error);
+    const localLease = this.request.workspace.localLock();
+    if (localLease.isErr()) {
+      const released = publicationLease.value.release();
+      return released.isErr() ? err(released.error) : err(localLease.error);
+    }
     const result = this.promoteInsideLock();
-    const released = lease.value.release();
-    if (released.isErr()) return err(released.error);
+    const localReleased = localLease.value.release();
+    if (localReleased.isErr()) return err(localReleased.error);
+    const publicationReleased = publicationLease.value.release();
+    if (publicationReleased.isErr()) return err(publicationReleased.error);
     return result;
   }
 
@@ -138,6 +145,14 @@ export class DevPromoteCommand {
       });
       if (pushed.isErr()) return err(pushed.error);
     }
+
+    const development = workspace.developmentWorktree();
+    if (development.isErr()) return err(development.error);
+    const localDev = workspace.git.fastForwardTo({
+      path: development.value.path,
+      target: this.request.expectedSha,
+    });
+    if (localDev.isErr()) return err(localDev.error);
 
     const after = this.remoteManagedBranches();
     if (after.isErr()) return err(after.error);

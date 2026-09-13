@@ -11,7 +11,8 @@ snapshot selection, concurrency, and evidence semantics.
 1. Confirm the prior published attempt has finished.
 2. Select a committed local dev snapshot and authorize Steward's snapshot publication.
 3. Record the published SHA and freeze remote dev.
-4. Authorize PR Steward to update the dev-to-main PR and run full slow checks.
+4. Invoke manager-only `dev:pr-manager` to create or update the dev-to-main
+   PR, then have PR Steward observe the exact PR and run full slow checks.
 5. On failure, send the evidence to a feature Gizmo for repair.
    - Require remote compilation and local integration for that repair.
    - Publish a new snapshot only after the prior attempt finishes.

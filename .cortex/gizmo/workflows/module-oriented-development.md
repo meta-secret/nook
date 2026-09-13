@@ -79,5 +79,6 @@ Verify:
 - Gizmo owns feature push sequencing, review, acceptance, and local landing
   requests. The manually operated dev manager owns dev publication, dev PR
   creation/update, slow evidence, readiness, and fast-forward promotion.
-  PR Steward performs dev PR and promotion mechanics only under the manager's
+  The manager invokes `dev:pr-manager`; PR Steward observes the resulting PR
+  and performs review, check, and promotion mechanics only under the manager's
   bounded packet, as defined by the [dev delivery contract](../architecture/dev-delivery.md).

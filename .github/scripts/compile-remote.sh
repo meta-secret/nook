@@ -14,6 +14,23 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "${script_dir}/../.." && pwd)"
 cd "$repo_root"
 
+compile_dockerfile="${repo_root}/nook-app/nook-platform/docker/rust/compile.Dockerfile"
+active_compile_dockerfile="$(sed -E '/^[[:space:]]*#/d; s/[[:space:]]+#.*$//' "$compile_dockerfile")"
+forbidden_compile_patterns=(
+  'cargo[[:space:]]+test'
+  'cargo[[:space:]]+clippy'
+  '(bun|npm|pnpm|yarn)[[:space:]]+(run[[:space:]]+)?test'
+  'coverage'
+  '(^|[^[:alnum:]_])e2e([^[:alnum:]_]|$)'
+  '(^|[^[:alnum:]_])preflight([^[:alnum:]_]|$)'
+)
+for forbidden_pattern in "${forbidden_compile_patterns[@]}"; do
+  if printf '%s\n' "$active_compile_dockerfile" | grep -Eiq -- "$forbidden_pattern"; then
+    echo "compile-only Dockerfile contains forbidden operation: ${forbidden_pattern}" >&2
+    exit 2
+  fi
+done
+
 docker_bin="${DOCKER:-docker}"
 registry_host="${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}"
 export NOOK_REGISTRY_CACHE_HOST="$registry_host"

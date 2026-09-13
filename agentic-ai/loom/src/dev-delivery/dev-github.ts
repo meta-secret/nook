@@ -292,6 +292,29 @@ export class DevGitHubGateway {
     readonly expectedSha: CommitSha;
     readonly workingDirectory: string;
   }): Result<DevelopmentPullRequest, DevFailure> {
+    const title = 'Promote development to main';
+    const body = [
+      '## Summary',
+      '',
+      '- Promote the selected origin/dev snapshot to main through guarded fast-forward publication.',
+      '',
+      '## Agent task provenance',
+      '',
+      '- Harness: manually started Dev Manager',
+      '- Task name: dev:pr-manager',
+      '- Task ID: unavailable — local manager operation',
+      '',
+      '## Nook Workbench',
+      '',
+      '- Focused issue: unavailable — aggregate development snapshot',
+      '- Immutable plan: unavailable — manager snapshot',
+      '- Worklog: unavailable — aggregate snapshot has constituent Workbench records',
+      '',
+      '## Validation',
+      '',
+      `- Selected origin/dev SHA: \`${request.expectedSha.value()}\``,
+      '- Full slow validation and final promotion are separate manager operations.',
+    ].join('\n');
     const selection = this.openPullRequests(request.workingDirectory);
     if (selection.isErr()) return err(selection.error);
     const existing = selection.value[0];
@@ -309,9 +332,9 @@ export class DevGitHubGateway {
           'edit',
           String(existing.number.value()),
           '--title',
-          'Promote development to main',
+          title,
           '--body',
-          'This pull request records the manager-controlled development promotion. The tested dev commit is promoted with an ordinary fast-forward push.',
+          body,
         ],
         workingDirectory: request.workingDirectory,
       });
@@ -326,9 +349,9 @@ export class DevGitHubGateway {
           '--head',
           'dev',
           '--title',
-          'Promote development to main',
+          title,
           '--body',
-          'This pull request records the manager-controlled development promotion. The tested dev commit is promoted with an ordinary fast-forward push.',
+          body,
         ],
         workingDirectory: request.workingDirectory,
       });

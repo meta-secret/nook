@@ -465,7 +465,8 @@ Use this workflow for quality, CI, and deployment changes.
     - It must run `task docker:ecosystem:fuzz FUZZ_SECONDS=20`.
     - It must run `task hive:verify`.
     - `task hive:verify` must compile, lint, and test Hive.
-    - The harness opens its PR only after those validations succeed.
+    - The harness publishes its exact fix branch only after those validations
+      succeed; the dev manager owns any later dev-to-main PR.
     - ARC runner Pods rely on Kubelet and persistent BuildKit garbage
       collection; no registered-host cleanup workflow is allowed.
 

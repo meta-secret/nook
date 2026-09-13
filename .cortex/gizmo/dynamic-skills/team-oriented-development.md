@@ -40,9 +40,11 @@ simple shared-branch delivery sequence.
 - Later iterations read the last one or two relevant commits and diffs.
 - Gizmo assigns one writer for shared files and shared command outputs.
 - Functional workers do not push, open pull requests, resolve review threads,
-  or merge. PR Steward performs those external mechanics only through an
-  explicit packet from the stage's controller. Dev PR creation/update, slow
-  evidence, readiness, and promotion require a dev-manager packet.
+  or merge. PR Steward observes and performs bounded review mechanics only
+  through an explicit packet from the stage's controller. Dev PR
+  creation/update belongs exclusively to the manager-only `dev:pr-manager`
+  command; slow evidence, readiness, and promotion require a dev-manager
+  packet.
 - Do not add a Team Agent lifecycle service, scheduler, or Git-state machinery.
 
 ## Validation

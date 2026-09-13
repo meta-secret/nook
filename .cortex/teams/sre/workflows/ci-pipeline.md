@@ -228,7 +228,8 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Audits every direct dependency in each Rust root.
 - The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
 - When an update exists, an AI agent updates all outdated Rust dependencies.
-- Runs the full deterministic suite and opens a PR for explicit review.
+- Runs the full deterministic suite and publishes an exact fix branch for the
+  manager-controlled delivery flow; the agent does not create a PR.
 
 **`agent-implement.yml`**
 
@@ -240,8 +241,9 @@ and manual ecosystem execution in one Actions run named `CI`.
 - Classifies and publishes the planning result before implementation.
 - An unauthorized major direction publishes a validated blocker and stops.
 - An authorized or ordinary bounded task continues through Cursor SDK
-  implementation → PR opened → owner assigned and mentioned → Workbench
-  progress/worklog published → workflow exits.
+  implementation → exact feature branch published → owner assigned and
+  mentioned → Workbench progress/worklog published → workflow exits. The
+  feature agent does not create a PR.
 
 **`ci-agent-smoke.yml`**
 
@@ -329,7 +331,7 @@ Cancellation is scoped to work that a newer run actually supersedes:
 - **Agent implement (`agent-implement.yml`)**
   - Scope: Issue number (manual runs are unique)
   - Cancel active run: No
-  - Reason: An active run may already have pushed a branch or opened a PR.
+  - Reason: An active run may already have pushed an exact feature branch.
 - **Production release (`release.yml`)**
   - Scope: Global production release group
   - Cancel active run: No
@@ -678,8 +680,9 @@ The trusted host fails closed unless:
   operations. Alternate Docker CLI forms are not the trusted validation path;
 - the three-hour `CI_AGENT_TIMEOUT_MS=10800000` leaves half of the six-hour job
   for validation/publication; and
-- exact branch/PR identity is unambiguous and the publisher returns its verified
-  remote head SHA to Gizmo after commit, push, and PR creation.
+- exact branch identity is unambiguous and the publisher returns its verified
+  remote head SHA to Gizmo after commit and push. No PR is created by this
+  workflow; the later dev manager flow owns the single dev-to-main PR.
 
 That handoff resumes the ordinary delivery boundary. Gizmo owns continuing
 hosted review, replacement exact-head validation, readiness, and merge. The

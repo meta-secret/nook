@@ -15,6 +15,11 @@ tasks:
     cmds:
       - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/dev-delivery/dev-publish-cli.ts"
 
+  pr-manager:
+    desc: Manager-only creation or update of the single dev-to-main pull request for origin/dev.
+    cmds:
+      - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/dev-delivery/dev-pr-manager-cli.ts"
+
   promote:
     desc: Manager-only guarded promotion of the exact tested origin/dev SHA to origin/main.
     requires:

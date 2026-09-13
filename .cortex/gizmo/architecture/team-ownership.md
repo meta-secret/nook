@@ -13,7 +13,8 @@ coordinates delivery but does not redefine a team's technical contract.
 - Each concurrent feature has a separate Gizmo and isolated Team Agent children.
 - The manually run dev manager owns dev publication and main promotion.
 - Every Team Agent task has exactly one team identity. PR Steward is a separate
-  operational Team Agent context for bounded pull-request mechanics.
+  operational Team Agent context for bounded pull-request observation and
+  review mechanics.
 - The functional owner defines behavior, contracts, tests, and acceptance.
 - File location is evidence of ownership, not an exception to semantic
   ownership.
@@ -29,7 +30,9 @@ coordinates delivery but does not redefine a team's technical contract.
   attributed to the proposed task.
 - Gizmo owns child-worktree allocation, write-wave coordination, parent
   integration, feature acceptance, and local landing authorization.
-- PR Steward performs only the explicitly authorized pull-request mechanics.
+- PR Steward performs only explicitly authorized pull-request observation,
+  review, and status mechanics; the manager-only `dev:pr-manager` command owns
+  PR creation and updates.
 
 ## Teams
 
@@ -46,10 +49,11 @@ Gizmo owns:
 - Workbench state; and
 - the feature delivery verdict.
 
-The dev manager controls dev PR creation/update, slow evidence, readiness,
-and promotion. Steward performs these mechanics only under a manager packet.
+The dev manager controls dev PR creation/update through `dev:pr-manager`, plus
+slow evidence, readiness, and promotion. Steward observes the PR and performs
+only these other mechanics under a manager packet.
 
-The separate PR Steward Team Agent performs pull-request metadata.
+The separate PR Steward Team Agent observes pull-request metadata.
 It observes reviews and checks.
 It retriggers exact-head validation.
 It collects readiness evidence.
@@ -163,7 +167,8 @@ Within its assigned scope, a team owns:
 - validation fixes caused by its change.
 
 Gizmo owns feature acceptance and the local landing request. The dev manager
-owns dev PR policy and promotion. PR Steward executes dev PR actions only
+owns dev PR policy, invokes `dev:pr-manager`, and owns promotion. PR Steward
+observes the PR and executes only review, check, status, and promotion actions
 after the manager's authorization.
 
 ## Validation

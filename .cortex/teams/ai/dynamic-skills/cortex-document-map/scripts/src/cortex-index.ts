@@ -300,6 +300,9 @@ Use this file only to select one owning context. Do not preload linked graphs.
 
 ## Owning contexts
 
+- [Multiagent delivery architecture](gizmo/architecture/multiagent-delivery-diagrams.md):
+  mandatory primary explanation for the complete feature, check, local-dev,
+  dev-validation, and promotion workflow.
 - [Dev manager](teams/dev-manager/knowledge-graph.md): manually operated dev
   publication, dev PR creation/update, slow evidence, readiness, repair
   delegation, and fast-forward promotion policy.
@@ -307,9 +310,9 @@ Use this file only to select one owning context. Do not preload linked graphs.
   feature compilation, local integration, and dev-to-main contract.
 - [Gizmo Prime](gizmo/knowledge-graph.md): planning, delegation, integration,
   feature review, feature acceptance, local landing requests, and Workbench.
-- [PR Steward](teams/pr-steward/knowledge-graph.md): authorized mechanical
-  pull-request operations, review and check observation, exact-head evidence,
-  and promotion mechanics under the dev manager's packet.
+- [PR Steward](teams/pr-steward/knowledge-graph.md): authorized review and
+  check observation, exact-head evidence, PR status verification, and promotion
+  mechanics under the dev manager's packet. It does not create pull requests.
   - [PR Steward contract](teams/pr-steward/AGENTS.md)
   - [Pull-request lifecycle](teams/pr-steward/workflows/pull-request-lifecycle.md)
   - [Authorization handshake](teams/pr-steward/workflows/authorization-handshake.md)

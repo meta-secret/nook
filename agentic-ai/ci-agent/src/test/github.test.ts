@@ -2,15 +2,10 @@ import { CiResultAssertions } from "./result-assertions.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { Octokit } from "@octokit/rest";
-
 import {
-  GitHubClient,
   PullRequestCheckSelection,
   PullRequestWorkflowSelection,
 } from "../main/github.js";
-
-const repoRef = { owner: "meta-secret", repo: "nook" };
 
 void test("requiredPrCheckNames maps changed paths to repository-owned gates", () => {
   assert.deepEqual(
@@ -102,47 +97,4 @@ void test("central CI combines product and research jobs without requiring produ
   assert.ok(
     mixed[0]?.requiredJobs?.includes("PR validation / Verify and preview"),
   );
-});
-
-void test("createFixPr leaves the PR body free of automatic merge control markers", async () => {
-  let createdBody = "";
-  let createdBase = "";
-  const octokit = Object.assign(new Octokit(), {
-    rest: {
-      pulls: {
-        create: async ({ base, body }: { base: string; body: string }) => {
-          createdBase = base;
-          createdBody = body;
-          return { data: { number: 347 } };
-        },
-      },
-    },
-  });
-
-  const priorBody = process.env.AGENT_PR_BODY;
-  process.env.AGENT_PR_BODY = "## Summary\n\nOpen this PR for review.";
-  try {
-    const prNumber = await new GitHubClient(octokit)
-      .createFixPr({
-        repoRef: repoRef,
-        headBranch: "agent/fix",
-        runId: "run-42",
-        fixLabel: "focused issue",
-        baseBranch: "codex/predecessor",
-      })
-      .then(CiResultAssertions.assertSuccess);
-    assert.equal(prNumber, 347);
-    assert.equal(createdBase, "codex/predecessor");
-    assert.equal(createdBody, "## Summary\n\nOpen this PR for review.");
-    assert.doesNotMatch(
-      createdBody,
-      /nook-agent-managed|nook-agent-monitor-wake/,
-    );
-  } finally {
-    if (!priorBody) {
-      delete process.env.AGENT_PR_BODY;
-    } else {
-      process.env.AGENT_PR_BODY = priorBody;
-    }
-  }
 });

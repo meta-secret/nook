@@ -27,7 +27,9 @@ Gizmo context to an implementation worker.
 5. Assign each implementation or fix to exactly one semantic team identity.
 6. Integrate only handoffs that include the required proof.
 7. Run the smallest applicable integrated validation.
-8. Return the branch to the normal Gizmo PR-delivery workflow.
+8. Return the exact published branch head to the normal Gizmo delivery
+   workflow. Do not create a pull request; the dev manager owns the later
+   dev-to-main PR.
 
 Gizmo selects each team through the canonical mapping authority at
 `.cortex/gizmo/workflows/team-oriented-development.md`.

@@ -122,6 +122,27 @@ export class DevLandCommand {
     }
     const developmentHead = this.workspace.git.headAt(development.value.path);
     if (developmentHead.isErr()) return err(developmentHead.error);
+    const main = this.workspace.git.remoteBranch(ManagedBranch.Main);
+    if (main.isErr()) return err(main.error);
+    if (main.value.presence !== RemoteBranchPresence.Present) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: 'origin/main must exist before landing a feature into dev',
+      });
+    }
+    const mainAncestry = this.workspace.git.ancestry({
+      ancestor: main.value.sha,
+      descendant: developmentHead.value,
+      workingDirectory: development.value.path,
+    });
+    if (mainAncestry.isErr()) return err(mainAncestry.error);
+    if (mainAncestry.value !== Ancestry.Ancestor) {
+      return err({
+        kind: DevFailureKind.Conflict,
+        message:
+          'origin/main is not an ancestor of local dev; reconcile main through the feature path before landing another feature',
+      });
+    }
     const ancestry = this.workspace.git.ancestry({
       ancestor: request.featureSha,
       descendant: developmentHead.value,

@@ -15,11 +15,10 @@ import {
 
 export interface DevPublishOutcome {
   readonly devSha: CommitSha;
-  readonly pullRequestUrl: string;
   readonly message: string;
 }
 
-/** Owns the manager-only local-dev snapshot, push, and PR publication. */
+/** Owns the manager-only local-dev snapshot and exact origin/dev publication. */
 export class DevPublishCommand {
   constructor(private readonly workspace: DevDeliveryWorkspace) {}
 
@@ -87,8 +86,31 @@ export class DevPublishCommand {
       });
     }
 
+    const refreshed = this.workspace.git.refreshManagedRefs();
+    if (refreshed.isErr()) return err(refreshed.error);
     const remote = this.workspace.git.remoteBranch(ManagedBranch.Dev);
     if (remote.isErr()) return err(remote.error);
+    const main = this.workspace.git.remoteBranch(ManagedBranch.Main);
+    if (main.isErr()) return err(main.error);
+    if (main.value.presence !== RemoteBranchPresence.Present) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: 'origin/main must exist before publishing origin/dev',
+      });
+    }
+    const mainAncestry = this.workspace.git.ancestry({
+      ancestor: main.value.sha,
+      descendant: request.devSha,
+      workingDirectory: request.devPath,
+    });
+    if (mainAncestry.isErr()) return err(mainAncestry.error);
+    if (mainAncestry.value !== Ancestry.Ancestor) {
+      return err({
+        kind: DevFailureKind.Conflict,
+        message:
+          'origin/main is not an ancestor of local dev; reconcile main through the feature path before publishing origin/dev',
+      });
+    }
     const priorPullRequest = this.workspace.github.findDevelopmentPullRequest({
       workingDirectory: this.workspace.root,
     });
@@ -150,15 +172,9 @@ export class DevPublishCommand {
         message: 'origin/dev did not finish at the exact manager snapshot',
       });
     }
-    const pullRequest = this.workspace.github.ensureDevelopmentPullRequest({
-      expectedSha: request.devSha,
-      workingDirectory: this.workspace.root,
-    });
-    if (pullRequest.isErr()) return err(pullRequest.error);
     return ok({
       devSha: request.devSha,
-      pullRequestUrl: pullRequest.value.url,
-      message: `Published local dev ${request.devSha.value()} to origin/dev and updated ${pullRequest.value.url}`,
+      message: `Published local dev ${request.devSha.value()} to origin/dev; run the manager-only dev:pr-manager task to create or update the dev-to-main pull request`,
     });
   }
 }

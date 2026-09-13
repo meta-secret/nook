@@ -100,7 +100,8 @@ Does not apply to:
 Before:
 
 - User explains in chat that secure notes must support search by custom tags.
-- Agent adds the tag search in code and tests, then opens a PR.
+- Agent adds the tag search in code and tests, then returns the exact feature
+  branch to Gizmo for remote compilation and local dev landing.
 - `.cortex/teams/dev-core/product-specs/secure-notes.md` is never updated and remains unaware of tag search.
 
 After:
@@ -108,7 +109,7 @@ After:
 - User explains tag search requirements for secure notes in chat.
 - Agent reads `.cortex/teams/dev-core/product-specs/secure-notes.md`.
 - Agent implements tag search in code and domain tests.
-- Agent updates `.cortex/teams/dev-core/product-specs/secure-notes.md` to document tag search behavior and rules in the same PR.
+- Agent updates `.cortex/teams/dev-core/product-specs/secure-notes.md` to document tag search behavior and rules in the same feature delivery.
 
 Before:
 

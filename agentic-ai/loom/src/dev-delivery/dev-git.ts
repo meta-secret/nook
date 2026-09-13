@@ -38,6 +38,11 @@ interface MergeRequest {
   readonly featureHead: CommitSha;
 }
 
+interface FastForwardRequest {
+  readonly path: string;
+  readonly target: CommitSha;
+}
+
 interface PushRequest {
   readonly target: ManagedBranch;
   readonly sha: CommitSha;
@@ -392,6 +397,61 @@ export class DevGitRepository {
       });
     }
     return this.headAt(request.devPath);
+  }
+
+  /** Fast-forwards local dev to a promoted snapshot without rewriting newer work. */
+  fastForwardTo(request: FastForwardRequest): Result<CommitSha, DevFailure> {
+    const current = this.headAt(request.path);
+    if (current.isErr()) return err(current.error);
+    const state = this.stateAt(request.path);
+    if (state.isErr()) return err(state.error);
+    if (state.value !== WorktreeState.Clean) {
+      return err({
+        kind: DevFailureKind.DirtyWorktree,
+        message: `Local dev is dirty; refusing to fast-forward it: ${request.path}`,
+      });
+    }
+    const currentIsAncestor = this.ancestry({
+      ancestor: current.value,
+      descendant: request.target,
+      workingDirectory: request.path,
+    });
+    if (currentIsAncestor.isErr()) return err(currentIsAncestor.error);
+    if (currentIsAncestor.value === Ancestry.NotAncestor) {
+      const targetIsAncestor = this.ancestry({
+        ancestor: request.target,
+        descendant: current.value,
+        workingDirectory: request.path,
+      });
+      if (targetIsAncestor.isErr()) return err(targetIsAncestor.error);
+      if (targetIsAncestor.value === Ancestry.Ancestor) return ok(current.value);
+      return err({
+        kind: DevFailureKind.Conflict,
+        message:
+          'Local dev diverged from the promoted snapshot; refusing to rewrite newer local work',
+      });
+    }
+    if (current.value.equals(request.target)) return ok(current.value);
+    const merged = this.execute({
+      args: ['merge', '--ff-only', request.target.value()],
+      workingDirectory: request.path,
+    });
+    if (merged.isErr()) return err(merged.error);
+    if (merged.value.exitCode !== 0) {
+      return err({
+        kind: DevFailureKind.Conflict,
+        message: `Local dev fast-forward failed: ${new CommandFailureMessage(merged.value).text()}`,
+      });
+    }
+    const after = this.headAt(request.path);
+    if (after.isErr()) return err(after.error);
+    if (!after.value.equals(request.target)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message: 'Local dev did not finish at the promoted snapshot',
+      });
+    }
+    return ok(after.value);
   }
 
   pushExact(request: PushRequest): Result<void, DevFailure> {

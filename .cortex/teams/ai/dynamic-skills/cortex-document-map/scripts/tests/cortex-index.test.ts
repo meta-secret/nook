@@ -80,7 +80,7 @@ test('renders the complete canonical Cortex context router', () => {
     'publication, dev PR creation/update, slow evidence, readiness, repair',
     'feature review, feature acceptance, local landing requests, and Workbench.',
     "and promotion mechanics under the dev manager's packet.",
-    '[PR Steward](teams/pr-steward/knowledge-graph.md): authorized mechanical',
+    '[PR Steward](teams/pr-steward/knowledge-graph.md): authorized review and',
     '[AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,',
     '[Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault',
     '[Security](teams/security/knowledge-graph.md): security architecture,',

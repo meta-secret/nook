@@ -34,7 +34,8 @@ manager owns publication, slow PR validation, and promotion.
    - Feature compilation uses remote build-only execution.
    - Local landing uses local integration with positive feature build evidence.
    - Manager publication uses snapshot publication.
-3. For the slow cycle, create or update one open dev-to-main PR.
+3. The dev manager invokes `dev:pr-manager` to create or update one open
+   dev-to-main PR. PR Steward only observes the resulting exact PR identity.
    - Use [PR metadata](../../../gizmo/workflows/pull-requests.md#pr-title-and-description).
    - A merged PR is never reused for a later cycle.
 4. Request the full existing slow PR checks under the manager packet.

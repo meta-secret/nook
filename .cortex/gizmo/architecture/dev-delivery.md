@@ -37,6 +37,11 @@ behind that architecture.
   - Publish the manually selected local dev snapshot to origin/dev.
   - Only the dev manager authorizes Steward's invocation.
   - Preserve newer local dev commits and freeze the published SHA for validation.
+- **`dev:pr-manager`**
+  - Create or update the single dev-to-main pull request from the exact
+    published origin/dev SHA.
+  - Only the dev manager invokes this manager operation. Feature Gizmos and
+    Team Agents never invoke it or create PRs.
 - **`dev:promote`**
   - Guarded ordinary fast-forward publication of the tested dev SHA to main.
   - Only the dev manager authorizes Steward's invocation.
@@ -74,7 +79,9 @@ behind that architecture.
   - A manually started [dev manager](../../teams/dev-manager/AGENTS.md) is the
     sole publisher of local dev to `origin/dev`.
   - The manager selects each snapshot and authorizes Steward's snapshot publication.
-  - PR Steward maintains one open `dev` to `main` PR per validation cycle.
+  - The dev manager owns one open `dev` to `main` PR per validation cycle;
+    `dev:pr-manager` creates or updates it. PR Steward observes and reports
+    the resulting state but does not create or update the PR.
   - After a merged cycle, create the next PR for a later published snapshot.
   - A merged PR is never reused. The dev branch itself remains permanent.
   - Run the full existing slow PR checks, including authored tests, coverage,
@@ -127,7 +134,8 @@ behind that architecture.
 1. Select a committed local dev snapshot and authorize Steward's snapshot publication.
    - Publish by ordinary fast-forward push to `origin/dev`.
    - Stop on an unexpected remote advance or ancestry mismatch.
-2. Have PR Steward update the dev-to-main PR and run the full slow checks.
+2. Invoke manager-only `dev:pr-manager` to create or update the dev-to-main PR,
+   then run the full slow checks.
    - Freeze the published SHA until this attempt has an outcome.
    - Keep review and security verdicts bound to that SHA.
 3. On failure, delegate the repair to a feature Gizmo.
@@ -169,6 +177,8 @@ behind that architecture.
   - Keep main push routing separate from the dev PR slow-stage contract.
 - **Integration and publication tooling**
   - Implement serialized local integration and manager-only snapshot publication.
+  - Implement the manager-only `dev:pr-manager` command for the single
+    dev-to-main PR.
   - Implement guarded fast-forward promotion with ordinary pushes and evidence checks.
   - Verify protection rules permit the authorized fast-forward publication.
   - The manually run manager may use the already authorized ADMIN identity

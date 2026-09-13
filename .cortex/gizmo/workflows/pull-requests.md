@@ -19,7 +19,9 @@ explicit handoff. Related scope does not transfer ownership. Follow
   - After promotion and confirmed merged status, create a new PR for a later cycle.
   - Keep the dev branch permanent.
   - The manager owns readiness and promotion verdicts.
-  - PR Steward executes GitHub operations only under explicit packets.
+  - The dev manager invokes the manager-only `dev:pr-manager` path for PR
+    creation/update. PR Steward executes only review, check, status, and
+    promotion mechanics under explicit packets.
 - **Evidence**
   - Run the full existing slow PR checks for each selected dev SHA.
   - Preserve applicable browser checks, security-required focused e2e, and opt-ins.

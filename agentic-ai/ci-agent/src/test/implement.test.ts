@@ -1,5 +1,5 @@
 import { CiResultAssertions } from "./result-assertions.js";
-import { ok, err, type Result } from "neverthrow";
+import { err, ok, type Result } from "neverthrow";
 import { CiFailureKind, type CiFailure } from "../main/failure.js";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -7,18 +7,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { describe, it } from "node:test";
 
-import { OpenPrLookupKind } from "../main/github.js";
 import {
-  CiEditOutcome,
-  CiChangeKind,
-  LegacyCiEdit,
-  CiImplementationMode,
-  ImplementPrTargetKind,
-  AgentImplementationPreserveImplementedBranchBeforePr as AgentImplementationPreserveImplementedBranchBeforePrPreserve,
+  AgentImplementationPublishBranch,
   AgentImplementationRecordTrustedBudgetBlocker,
+  AgentImplementationResolveDeliveryTarget,
   AgentImplementationRunCiImplementationPhases,
-  AgentImplementationResolveImplementPrTarget,
+  CiEditOutcome,
+  CiImplementationMode,
 } from "../main/implement.js";
+
+const EXPECTED_HEAD = "a".repeat(40);
 
 interface ImplementStepRequest<T> {
   readonly log: string[];
@@ -30,7 +28,6 @@ class ImplementStep<T> {
   constructor(private readonly request: ImplementStepRequest<T>) {}
   async execute(): Promise<Result<T, CiFailure>> {
     const { log, name, value } = this.request;
-
     log.push(name);
     return ok(value);
   }
@@ -38,34 +35,25 @@ class ImplementStep<T> {
 
 class ImplementDeliveryArgs {
   constructor(private readonly request: string[]) {}
-  execute(): ConstructorParameters<
-    typeof AgentImplementationPreserveImplementedBranchBeforePrPreserve
-  >[0] {
+  execute(): ConstructorParameters<typeof AgentImplementationPublishBranch>[0] {
     const log = this.request;
-
-    const mark = (name: string): void => {
-      log.push(name);
-    };
-    const notFound = { kind: OpenPrLookupKind.NotFound as const };
     return {
       agentBranch: "agent/test",
-      assertBudget: async () => ok(mark("budget")),
-      createPr: () =>
-        new ImplementStep({ log: log, name: "create-pr", value: 73 }).execute(),
-      findPr: () =>
+      expectedHead: EXPECTED_HEAD,
+      assertBudget: async () => {
+        log.push("budget");
+        return ok();
+      },
+      pushBranch: async () => {
+        log.push("push");
+        return ok();
+      },
+      readPublishedHead: () =>
         new ImplementStep({
-          log: log,
-          name: "find-pr",
-          value: notFound,
+          log,
+          name: "read-origin-head",
+          value: EXPECTED_HEAD,
         }).execute(),
-      pushBranch: async () => ok(mark("push")),
-      verifyBranch: () =>
-        new ImplementStep({
-          log: log,
-          name: "verify-origin",
-          value: true,
-        }).execute(),
-      verifyPublishedHead: async () => ok(mark("verify-head")),
     };
   }
 }
@@ -81,22 +69,19 @@ void test("trusted budget rejection is exported for blocked worklog publication"
     } satisfies CiFailure;
     CiResultAssertions.assertSuccess(
       new AgentImplementationRecordTrustedBudgetBlocker({
-        error: error,
+        error,
         outputPath: output,
       }).execute(),
     );
     const encoded = readFileSync(output, "utf8").trim().split("=").at(1);
     if (!encoded) throw new Error("Missing encoded budget failure");
-    assert.equal(
-      Buffer.from(encoded, "base64").toString("utf8"),
-      error.message,
-    );
+    assert.equal(Buffer.from(encoded, "base64").toString("utf8"), error.message);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-void test("oversized implementation is rejected before push", async () => {
+void test("oversized implementation is rejected before branch publication", async () => {
   const events: string[] = [];
   const args = new ImplementDeliveryArgs(events).execute();
   const budgetError = {
@@ -108,180 +93,102 @@ void test("oversized implementation is rejected before push", async () => {
     return err(budgetError);
   };
   await CiResultAssertions.assertAsyncFailure(
-    new AgentImplementationPreserveImplementedBranchBeforePrPreserve(
-      args,
-    ).execute(),
+    new AgentImplementationPublishBranch(args).execute(),
     (error) => error === budgetError,
   );
   assert.deepEqual(events, ["budget"]);
 });
 
-void test("budget measurement errors abort before branch preservation", async () => {
+void test("agent delivery publishes and verifies one exact branch head without creating a PR", async () => {
   const events: string[] = [];
-  const args = new ImplementDeliveryArgs(events).execute();
-  const measurementError: CiFailure = {
-    kind: CiFailureKind.Git,
-    message: "unmeasurable authored source",
-  };
-  args.assertBudget = async () => {
-    events.push("budget");
-    return err(measurementError);
-  };
+  const published = await new AgentImplementationPublishBranch(
+    new ImplementDeliveryArgs(events).execute(),
+  )
+    .execute()
+    .then(CiResultAssertions.assertSuccess);
+  assert.equal(published, EXPECTED_HEAD);
+  assert.deepEqual(events, ["budget", "push", "read-origin-head"]);
+});
+
+void test("agent delivery rejects a branch whose remote head changed during publication", async () => {
+  const args = new ImplementDeliveryArgs([]).execute();
+  args.readPublishedHead = async () => ok("b".repeat(40));
   await CiResultAssertions.assertAsyncFailure(
-    new AgentImplementationPreserveImplementedBranchBeforePrPreserve(
-      args,
-    ).execute(),
-    (error) => error === measurementError,
-  );
-  assert.deepEqual(events, ["budget"]);
-});
-
-void test("bounded implementation keeps the normal push, budget, and PR creation path", async () => {
-  const events: string[] = [];
-  assert.equal(
-    await new AgentImplementationPreserveImplementedBranchBeforePrPreserve(
-      new ImplementDeliveryArgs(events).execute(),
-    )
-      .execute()
-      .then(CiResultAssertions.assertSuccess),
-    73,
-  );
-
-  assert.equal(
-    events.join(),
-    "budget,push,verify-origin,verify-head,find-pr,create-pr",
+    new AgentImplementationPublishBranch(args).execute(),
+    /published at .* expected/u,
   );
 });
 
-void test("legacy implement short-circuits an existing PR and otherwise delivers once", async () => {
-  const existingEvents: string[] = [];
+void test("implementation phases edit once and publish only changed work", async () => {
+  const changedEvents: string[] = [];
   await new AgentImplementationRunCiImplementationPhases({
     deliver: async () => {
-      existingEvents.push("deliver");
-
+      changedEvents.push("deliver");
       return ok();
     },
     edit: async () => {
-      existingEvents.push("edit");
+      changedEvents.push("edit");
       return ok(CiEditOutcome.Changed);
     },
-    legacyPrExists: async () => {
-      existingEvents.push("find-pr");
-      return ok(true);
-    },
-    mode: CiImplementationMode.LegacyMonolithic,
+    mode: CiImplementationMode.PublishBranch,
   })
     .execute()
     .then(CiResultAssertions.assertSuccess);
-  assert.deepEqual(existingEvents, ["find-pr"]);
+  assert.deepEqual(changedEvents, ["edit", "deliver"]);
 
-  const legacyEvents: string[] = [];
+  const skippedEvents: string[] = [];
   await new AgentImplementationRunCiImplementationPhases({
     deliver: async () => {
-      legacyEvents.push("deliver");
-
+      skippedEvents.push("deliver");
       return ok();
     },
     edit: async () => {
-      legacyEvents.push("edit");
-      return ok(CiEditOutcome.Changed);
+      skippedEvents.push("edit");
+      return ok(CiEditOutcome.Skipped);
     },
-    legacyPrExists: async () => {
-      legacyEvents.push("find-pr");
-      return ok(false);
-    },
-    mode: CiImplementationMode.LegacyMonolithic,
+    mode: CiImplementationMode.PublishBranch,
   })
     .execute()
     .then(CiResultAssertions.assertSuccess);
-  assert.deepEqual(legacyEvents, ["find-pr", "edit", "deliver"]);
-
-  const editOnlyEvents: string[] = [];
-  await new AgentImplementationRunCiImplementationPhases({
-    edit: async () => {
-      editOnlyEvents.push("edit");
-      return ok(CiEditOutcome.Changed);
-    },
-    mode: CiImplementationMode.EditOnly,
-  })
-    .execute()
-    .then(CiResultAssertions.assertSuccess);
-  assert.deepEqual(editOnlyEvents, ["edit"]);
+  assert.deepEqual(skippedEvents, ["edit"]);
 });
 
-void describe("resolveImplementPrTarget", () => {
-  void it("keeps standalone work based on main", () => {
+void test("implementation phases are single-use", async () => {
+  let deliveries = 0;
+  const phases = new AgentImplementationRunCiImplementationPhases({
+    deliver: async () => {
+      deliveries += 1;
+      return ok();
+    },
+    edit: async () => ok(CiEditOutcome.Changed),
+    mode: CiImplementationMode.PublishBranch,
+  });
+  await phases.execute().then(CiResultAssertions.assertSuccess);
+  await CiResultAssertions.assertAsyncFailure(phases.execute(), /consumed/u);
+  assert.equal(deliveries, 1);
+});
+
+void describe("resolveDeliveryTarget", () => {
+  void it("keeps the budget baseline on origin/main", () => {
     assert.deepEqual(
       CiResultAssertions.assertSuccess(
-        new AgentImplementationResolveImplementPrTarget({
+        new AgentImplementationResolveDeliveryTarget({
           branch: "agent/workbench-feature-42",
-          baseBranch: "main",
-          kind: ImplementPrTargetKind.Standalone,
         }).execute(),
       ),
       {
-        kind: ImplementPrTargetKind.Standalone,
         branch: "agent/workbench-feature-42",
-        baseBranch: "main",
         budgetBaseRef: "origin/main",
       },
     );
   });
 
-  void it("rejects stacked and malformed targets", () => {
+  void it("rejects malformed branch metadata", () => {
     CiResultAssertions.assertFailure(
-      new AgentImplementationResolveImplementPrTarget({
-        branch: "codex/feature-successor",
-        baseBranch: "codex/feature-predecessor",
-        kind: "stacked",
+      new AgentImplementationResolveDeliveryTarget({
+        branch: "agent/feature successor",
       }).execute(),
-      /Only standalone implement PRs are supported/,
-    );
-    CiResultAssertions.assertFailure(
-      new AgentImplementationResolveImplementPrTarget({
-        branch: "codex/feature successor",
-        baseBranch: "main",
-        kind: ImplementPrTargetKind.Standalone,
-      }).execute(),
-      /./,
+      /malformed/u,
     );
   });
-});
-
-void test("a changed implementation consumes delivery before an asynchronous effect", async () => {
-  let deliveries = 0;
-  const result = await new LegacyCiEdit({
-    mode: CiImplementationMode.LegacyMonolithic,
-    legacyPrExists: async () => ok(false),
-    edit: async () => ok(CiEditOutcome.Changed),
-    deliver: async () => {
-      deliveries += 1;
-
-      return ok();
-    },
-  })
-    .execute()
-    .then(CiResultAssertions.assertSuccess);
-  assert.equal(result.kind, CiChangeKind.Deliverable);
-  if (result.kind !== CiChangeKind.Deliverable) return;
-  const alias = result.change;
-  await result.change.deliver().then(CiResultAssertions.assertSuccess);
-  await CiResultAssertions.assertAsyncFailure(alias.deliver(), /already been consumed/);
-  assert.equal(deliveries, 1);
-});
-void test("skipped edits never expose a delivery capability", async () => {
-  const result = await new LegacyCiEdit({
-    mode: CiImplementationMode.LegacyMonolithic,
-    legacyPrExists: async () => ok(false),
-    edit: async () => ok(CiEditOutcome.Skipped),
-    deliver: async () => {
-      return err({
-        kind: CiFailureKind.Github,
-        message: "skipped edit must not deliver",
-      });
-    },
-  })
-    .execute()
-    .then(CiResultAssertions.assertSuccess);
-  assert.deepEqual(result, { kind: CiChangeKind.Skipped });
 });

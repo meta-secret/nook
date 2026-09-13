@@ -546,7 +546,7 @@ tasks:
           CI_AGENT_CMD: agent
 
   ci-agent:fix:
-    desc: Run CI fix agent and open a PR for explicit review and merge authorization.
+    desc: Run CI fix agent and publish its exact fix branch for manager delivery.
     deps:
       - setup
     cmds:
@@ -555,7 +555,7 @@ tasks:
           CI_AGENT_CMD: fix
 
   ci-agent:implement:
-    desc: Implement issue/prompt and open a PR for explicit review and merge authorization.
+    desc: Implement issue/prompt and publish its exact feature branch for Gizmo delivery.
     deps:
       - setup
     cmds:

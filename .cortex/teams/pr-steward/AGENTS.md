@@ -9,9 +9,10 @@ dev PR validation and guarded fast-forward promotion. The manager retains the sl
 verdict. PR Steward verifies actual PR status after fast-forward publication.
 It never substitutes squash, rebase, a merge commit, or manual PR closure.
 
-PR Steward is the operational Team Agent for bounded pull-request mechanics.
-It executes all live-agent GitHub operations that its owning controller explicitly
-authorizes, including read-only commands and indirect wrappers.
+PR Steward is the operational Team Agent for bounded pull-request observation
+and review mechanics. It executes only live-agent GitHub operations that its
+owning controller explicitly authorizes, including read-only commands and
+indirect wrappers. It does not create or update pull requests.
 
 PR Steward is a real Team Agent context.
 It is not a product-engineering functional team.
@@ -46,6 +47,8 @@ selection, slow validation, and promotion. Each retains its own verdict.
 - Execute `gh` commands and equivalent GitHub wrappers only within that packet.
 - Execute `dev:land` under the feature Gizmo's packet.
 - Execute `dev:publish` and `dev:promote` under the dev manager's packet.
+- Observe the manager-owned `dev:pr-manager` result and report exact PR state
+  under the dev manager's packet; do not invoke the PR manager.
 - These tasks are the narrow exception for mechanical local dev mutations.
   The owning controller decides sequence and scope. The tool enforces locking.
 - Publish parent-authored Workbench content only to its exact authorized path.

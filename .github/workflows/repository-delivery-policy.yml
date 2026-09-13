@@ -1,0 +1,34 @@
+name: Verify GitHub delivery policy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify merge and branch protection settings
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout policy verifier
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          token: ${{ secrets.NOOK_GITHUB_PAT }}
+
+      - name: Require policy inspection credential
+        env:
+          GH_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::NOOK_GITHUB_PAT is required to inspect branch protection settings."
+            exit 1
+          fi
+
+      - name: Verify repository delivery policy
+        env:
+          GH_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: bash .github/scripts/verify-github-delivery-policy.sh

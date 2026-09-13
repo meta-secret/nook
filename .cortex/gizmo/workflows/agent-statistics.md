@@ -197,8 +197,10 @@ reruns, premature merge attempts, and unexpected `direct_compile` use.
 If waste is actionable, `waste_assessment.required_actions` must name the
 concrete change.
 
-Gizmo opens a separate normal PR for that change. It routes implementation to
-the responsible team.
+Gizmo records the actionable improvement and routes implementation to the
+responsible team. The resulting feature branch follows the normal remote
+compilation and manager-controlled dev delivery path; Gizmo does not open a
+pull request.
 
 ## Workbench publication contract
 

@@ -247,7 +247,7 @@ export class CiRepository {
       args: ["status", "--porcelain", "--", ".", ...AGENT_RUNTIME_EXCLUSIONS],
     }).map(({ stdout }) => stdout.trim().length > 0);
   }
-  private async pushAuthenticatedBranch(): Promise<void> {
+  private async pushAuthenticatedBranch(fixBranch: string): Promise<void> {
     const repoRoot = this.value;
 
     const token = process.env.NOOK_GITHUB_PAT?.trim();
@@ -261,7 +261,7 @@ export class CiRepository {
       : process.env;
     await execFileAsync(
       "git",
-      ["-C", repoRoot, "push", "-u", "origin", "HEAD"],
+      ["-C", repoRoot, "push", "-u", "origin", `HEAD:refs/heads/${fixBranch}`],
       {
         env: authEnv,
       },
@@ -301,7 +301,7 @@ export class CiRepository {
     });
     if (hooks.isErr()) return err(hooks.error);
     const pushed = await ResultAsync.fromPromise(
-      this.pushAuthenticatedBranch(),
+      this.pushAuthenticatedBranch(fixBranch),
       (cause): CiFailure => {
         const code =
           cause instanceof Error &&

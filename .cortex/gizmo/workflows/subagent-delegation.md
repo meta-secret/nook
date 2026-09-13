@@ -57,8 +57,10 @@ the active harness.
   worktree through the guarded module integrator.
 - Do not copy, replay, or synthesize a worker commit into an unrelated branch.
 - Gizmo owns feature sequencing, review, acceptance, and landing requests.
-  The dev manager controls dev PR creation/update, slow evidence, readiness,
-  and promotion. Steward performs dev PR mechanics only under manager packets.
+  The dev manager controls dev PR creation/update through `dev:pr-manager`,
+  slow evidence, readiness, and promotion. Steward observes the PR and
+  performs only review, check, status, and promotion mechanics under manager
+  packets.
   Follow the
   [PR Steward lifecycle](../../teams/pr-steward/workflows/pull-request-lifecycle.md).
 
@@ -70,7 +72,8 @@ the active harness.
    - Name every acceptance command's read, write, and output scopes.
    - Include the [GitHub execution boundary](../../AGENTS.md#github-execution-boundary)
      in every functional worker prompt.
-   - Tell the worker to request missing PR evidence from Gizmo.
+   - Tell the worker to request missing branch, run, or manager-owned PR
+     evidence from Gizmo.
    - Explicitly prohibit direct `gh` queries, equivalent GitHub access, and
      PR monitoring, including read-only `gh pr view`.
 4. Inspect the current dirty paths and diff hunks.
@@ -139,7 +142,7 @@ delivery sequence.
 
 ### PR information requests
 
-1. The worker reports the known PR or run target to Gizmo.
+1. The worker reports the known branch, run, or manager-owned PR target to Gizmo.
    It names the missing evidence and dependent work.
 2. Gizmo supplies an explicit operation packet to PR Steward.
    Only PR Steward queries GitHub or starts a monitoring subscription.

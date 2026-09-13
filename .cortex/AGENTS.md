@@ -45,8 +45,9 @@ detailed authorization, evidence, and failure rules.
   operational Team Agent context, not a functional engineering authority.
 - [Dev manager](teams/dev-manager/AGENTS.md) owns manually operated dev
   publication, dev PR creation/update, slow evidence, readiness, repair
-  delegation, and promotion. Steward executes dev PR mechanics only under
-  the manager's packet.
+  delegation, and promotion. The manager invokes `dev:pr-manager`; Steward
+  observes the PR and executes only review, check, status, and promotion
+  mechanics under the manager's packet.
 - [AI contract](teams/ai/AGENTS.md) and
   [graph](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, routing, and
   agent automation.
@@ -139,7 +140,7 @@ scope, ownership, or handoff rule.
     - repository discovery, authentication checks, and run-log queries;
     - exact parent-authored Workbench publication;
     - GitHub-backed Task, Loom, and script execution;
-    - pull-request creation and metadata updates;
+    - pull-request review, metadata observation, and status verification;
     - review and comment collection;
     - exact-head validation retriggers and bounded waits;
     - readiness evidence collection; and
@@ -149,8 +150,9 @@ scope, ownership, or handoff rule.
   - Team workers implement changes and author tests in an isolated child
     worktree created from the parent feature worktree's current commit.
   - Gizmo Prime controls child-worktree allocation, write waves, commit turns,
-    and parent integration. PR Steward may mutate external pull-request state
-    only within the named packet.
+    and parent integration. PR Steward may observe or perform only the named
+    review, check, status, and promotion mechanics; it never creates or updates
+    pull-request identity or metadata.
   - Write-capable Team Agents may run concurrently only when their explicit
     file scopes are disjoint and they have no unresolved dependency.
   - Tasks with overlapping scopes or provider-consumer dependencies run in
@@ -193,19 +195,22 @@ scope, ownership, or handoff rule.
   - See
     [agent feature ownership](gizmo/dynamic-skills/agent-feature-ownership.md).
 - **Trusted publishers**
-  - Exactly two trusted GitHub Actions publishers are narrow exceptions to the
-    committed worker-handoff path:
+  - Exactly two trusted GitHub Actions agent publishers are narrow exceptions
+    to the committed worker-handoff path:
     - `agent-implement.yml` uses trusted host tooling for publication.
       - The tooling formats the change.
-      - It validates change budget and PR identity.
+      - It validates change budget and exact feature-branch identity.
       - It publishes and returns the exact head.
     - `rust-dependency-updates.yml` may publish only through
       `task ci-agent:fix` with
       `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
       - It freezes HEAD and index.
       - It accepts only declared Rust dependency files.
-      - It verifies PR number, base, head ref, and remote SHA before
-        publication.
+      - It verifies the exact fix-branch ref and remote SHA before
+        publication; it does not create a pull request.
+  - The manager-only `dev:pr-manager` command/workflow is the sole path that
+    creates or updates the aggregate `dev` to `main` pull request. It is not
+    part of feature-agent publication and is not delegated to a Team Agent.
   - Gizmo owns feature review and acceptance for the returned head.
   - The dev manager owns subsequent dev PR readiness and promotion.
   - PR Steward performs only the owning controller's authorized mechanics.
