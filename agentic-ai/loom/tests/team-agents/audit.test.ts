@@ -234,6 +234,7 @@ describe('canonical Cortex team authority', () => {
           'required-import-miss',
           'generation-baseline-missing',
           'generation-baseline-invalid',
+          'effective-solve-input-mismatch',
           'recipe-or-dependency-generation-changed',
           'unexpected-read-only-write-or-export',
           'severe-cache-hit-regression',
@@ -248,6 +249,10 @@ describe('canonical Cortex team authority', () => {
         readOnlyPolicy: 'zero-cache-writes-and-zero-exports',
         timeoutDiagnosisPolicy:
           'diagnose-missing-or-invalid-generation-baseline-or-legitimate-generation-change-never-blindly-seed-head',
+        bakeInheritancePolicy:
+          'cli-set-overrides-do-not-retroactively-propagate-to-inheriting-targets',
+        effectiveSolveParityPolicy:
+          'mirror-seed-and-consumer-args-contexts-platforms-and-outputs-in-recipe-fingerprint-and-docker-proof',
       },
     });
   });
@@ -291,6 +296,15 @@ describe('canonical Cortex team authority', () => {
           activationContract: {
             ...dockerCacheSpecialist.activationContract,
             reasonCodes: [],
+          },
+        },
+      ],
+      [
+        {
+          ...dockerCacheSpecialist,
+          activationContract: {
+            ...dockerCacheSpecialist.activationContract,
+            bakeInheritancePolicy: 'inherit-cli-overrides',
           },
         },
       ],

@@ -187,6 +187,8 @@ export type TeamInternalAgentActivationContract = {
   readonly exactSourcePolicy: string;
   readonly readOnlyPolicy: string;
   readonly timeoutDiagnosisPolicy: string;
+  readonly bakeInheritancePolicy: string;
+  readonly effectiveSolveParityPolicy: string;
   readonly repairLoop: readonly string[];
 };
 
@@ -558,6 +560,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
           'required-import-miss',
           'generation-baseline-missing',
           'generation-baseline-invalid',
+          'effective-solve-input-mismatch',
           'recipe-or-dependency-generation-changed',
           'unexpected-read-only-write-or-export',
           'severe-cache-hit-regression',
@@ -573,6 +576,10 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         readOnlyPolicy: 'zero-cache-writes-and-zero-exports',
         timeoutDiagnosisPolicy:
           'diagnose-missing-or-invalid-generation-baseline-or-legitimate-generation-change-never-blindly-seed-head',
+        bakeInheritancePolicy:
+          'cli-set-overrides-do-not-retroactively-propagate-to-inheriting-targets',
+        effectiveSolveParityPolicy:
+          'mirror-seed-and-consumer-args-contexts-platforms-and-outputs-in-recipe-fingerprint-and-docker-proof',
         repairLoop: [
           'diagnose-telemetry-before-editing',
           'prove-with-docker-simulator-and-proof',

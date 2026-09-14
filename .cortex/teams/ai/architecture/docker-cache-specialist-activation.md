@@ -25,6 +25,9 @@ continues to own GitHub execution mechanics.
     the current recipe/dependency-fingerprint generation does not exist.
   - `generation-baseline-invalid` means the current generation manifest or
     baseline cannot be trusted or consumed.
+  - `effective-solve-input-mismatch` means the generation seed and ordinary
+    consumer resolved different effective Bake inputs even though the
+    generation manifest imported successfully.
   - `recipe-or-dependency-generation-changed` means a legitimate recipe or
     dependency-fingerprint change rotated the required baseline generation.
   - `unexpected-read-only-write-or-export` means a read-only consumer wrote
@@ -46,6 +49,18 @@ continues to own GitHub execution mechanics.
 - Require ordinary unseeded commits to import the generation baseline plus the
   dependency cache. Treat an exact-SHA `mode=min` cache only as optional
   same-head retry acceleration.
+- Treat Bake inheritance as declaration reuse, not late-bound CLI override
+  propagation. A CLI override such as `--set target.args.*` changes that target
+  only; a target that inherited from it earlier does not retroactively receive
+  the override.
+- Explicitly mirror every invocation-shaping argument, context, platform, and
+  output between the generation seed and ordinary consumer. Include those
+  effective solve inputs in the recipe fingerprint so a semantic solve change
+  rotates the generation instead of silently reusing an incompatible manifest.
+- Require the Docker cache simulator and proof to compare the effective seed
+  and consumer solves. A successfully imported generation manifest proves
+  availability, not cache-key compatibility: differing effective inputs can
+  still produce zero matching cache keys.
 - Require read-only consumers to perform zero writes and zero exports.
 - Require the canonical Docker cache simulator and proof for every repair.
 - Route workflow dispatch, status inspection, reruns, and other GitHub
@@ -64,6 +79,8 @@ continues to own GitHub execution mechanics.
 - Do not let an absent telemetry artifact silently pass the cache gate.
 - Do not blindly seed each branch head or commit after a timeout, required
   import miss, or missing exact-SHA cache.
+- Do not infer seed/consumer parity from Bake target inheritance or from a
+  successful manifest import.
 - Do not let the specialist execute GitHub, pull-request, publication,
   landing, or promotion mechanics.
 - Do not run local tests, Docker, preflight, or product compilation during the

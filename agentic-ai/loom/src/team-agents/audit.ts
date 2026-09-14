@@ -762,6 +762,7 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
           'required-import-miss',
           'generation-baseline-missing',
           'generation-baseline-invalid',
+          'effective-solve-input-mismatch',
           'recipe-or-dependency-generation-changed',
           'unexpected-read-only-write-or-export',
           'severe-cache-hit-regression',
@@ -777,6 +778,10 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
         readOnlyPolicy: 'zero-cache-writes-and-zero-exports',
         timeoutDiagnosisPolicy:
           'diagnose-missing-or-invalid-generation-baseline-or-legitimate-generation-change-never-blindly-seed-head',
+        bakeInheritancePolicy:
+          'cli-set-overrides-do-not-retroactively-propagate-to-inheriting-targets',
+        effectiveSolveParityPolicy:
+          'mirror-seed-and-consumer-args-contexts-platforms-and-outputs-in-recipe-fingerprint-and-docker-proof',
         repairLoop: [
           'diagnose-telemetry-before-editing',
           'prove-with-docker-simulator-and-proof',

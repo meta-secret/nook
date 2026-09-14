@@ -29,6 +29,14 @@ behavior for packets issued by SRE Team Gizmo.
 - Make ordinary unseeded commits import the immutable generation baseline and
   dependency cache. BuildKit input digests, not mutable branch names, decide
   which source vertices remain reusable.
+- Own effective Bake solve parity between generation seeds and ordinary
+  consumers. CLI `--set target.*` overrides apply only to the named target and
+  do not retroactively propagate to targets that inherit from it, so explicitly
+  mirror every invocation-shaping argument, context, platform, and output.
+- Include those effective seed/consumer inputs in the recipe fingerprint and
+  require the Docker simulator and proof to compare them. A successfully
+  imported generation manifest can still yield zero cache-key matches when the
+  effective solves differ.
 - Serialize generation seeding, probe before writing, and never overwrite an
   existing generation manifest. A legitimate recipe or dependency-fingerprint
   change rotates the generation scope and is the only reason to seed a new
@@ -71,6 +79,8 @@ behavior for packets issued by SRE Team Gizmo.
   reduce latency.
 - Do not treat a missing per-head exact cache as a reason to run maintenance
   seeding or publish a generation baseline.
+- Do not infer effective solve parity from Bake inheritance or successful
+  generation-manifest import.
 - Do not hide cold compilation, missing cache scopes, or cache transport
   failures behind successful status.
 - Do not dispatch other specialists or act as Team Gizmo or Gizmo Prime.
