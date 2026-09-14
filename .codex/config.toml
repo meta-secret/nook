@@ -9,10 +9,10 @@
 # session. Threads here mean agent task sessions, not OS threads. It is not a
 # Cortex architecture or product concurrency limit.
 [agents]
-max_concurrent_threads_per_session = 15
+max_concurrent_threads_per_session = 20
 
 [features.multi_agent_v2]
-max_concurrent_threads_per_session = 15
+max_concurrent_threads_per_session = 20
 
 [mcp_servers.playwright]
 command = "bash"
