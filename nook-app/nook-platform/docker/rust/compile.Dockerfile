@@ -243,21 +243,6 @@ RUN cd nook-app/nook-web/nook-web-research \
     && ../nook-web-app/node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json \
     && ../nook-web-app/node_modules/.bin/tsc --noEmit -p tsconfig.compile.json
 
-RUN cd nook-app/nook-web/nook-web-app \
-    && VITE_BASE="${VITE_BASE}" \
-       VITE_SITE_URL="${VITE_SITE_URL}" \
-       VITE_PUBLIC_APP_URL="${VITE_PUBLIC_APP_URL}" \
-       VITE_SIMPLE_APP_URL="${VITE_SIMPLE_APP_URL}" \
-       VITE_SENTINEL_APP_URL="${VITE_SENTINEL_APP_URL}" \
-       bun run build
-RUN cd nook-app/nook-web/nook-web-extension \
-    && NOOK_SIMPLE_VAULT_URL="${NOOK_SIMPLE_VAULT_URL}" \
-       NOOK_EXTENSION_CHANNEL="${NOOK_EXTENSION_CHANNEL}" \
-       NOOK_EXTENSION_VERSION="${NOOK_EXTENSION_VERSION}" \
-       NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}" \
-       NOOK_EXTENSION_SITE_URL="${NOOK_EXTENSION_SITE_URL}" \
-       bun run build
-RUN cd nook-app/nook-web/nook-web-research && bun run build
 RUN mkdir -p /opt/nook && touch /opt/nook/web-compile-passed
 
 FROM web-base AS compile-repository-tooling
