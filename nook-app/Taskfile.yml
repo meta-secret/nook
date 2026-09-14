@@ -172,10 +172,14 @@ tasks:
 
   format:
     desc: >-
-      Format all projects with one shared tool-only image. This task never
-      compiles products, runs tests, or reads or publishes registry caches.
+      Format all projects with one shared tool-only image. The optional
+      PINNED_LOCAL_DEV_SHA=<exact 40-character lowercase commit SHA> selects the formatting base; defaults to the current committed HEAD when omitted. This task never compiles products, runs tests, or reads or publishes registry caches.
     cmds:
-      - bash "{{.REPO_ROOT}}/.github/formatting/format-host-apply.sh"
+      - |
+        set -euo pipefail
+        pinned_local_dev_sha="${PINNED_LOCAL_DEV_SHA:-$(git -C "{{.REPO_ROOT}}" rev-parse --verify HEAD^{commit})}"
+        PINNED_LOCAL_DEV_SHA="$pinned_local_dev_sha" \
+          bash "{{.REPO_ROOT}}/.github/formatting/format-host-apply.sh"
 
   format:check:
     desc: Check formatting for all projects in Docker.

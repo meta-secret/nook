@@ -370,12 +370,18 @@ tasks:
         FORMAT_CHANGED_BASH
 
   hive:guest:format:
-    desc: Apply the canonical changed-file formatter inside a sealed Hive Kata guest.
+    desc: >-
+      Apply the canonical changed-file formatter inside a sealed Hive Kata
+      guest. The optional PINNED_LOCAL_DEV_SHA=<exact 40-character lowercase commit SHA> selects the formatting base; defaults to the current committed HEAD when omitted.
     preconditions:
       - sh: test "${HIVE_SEALED_GUEST:-}" = "1"
         msg: hive:guest:format is available only inside a sealed Hive guest
     cmds:
-      - bash .github/formatting/format-host-apply.sh
+      - |
+        set -euo pipefail
+        pinned_local_dev_sha="${PINNED_LOCAL_DEV_SHA:-$(git rev-parse --verify HEAD^{commit})}"
+        PINNED_LOCAL_DEV_SHA="$pinned_local_dev_sha" \
+          bash .github/formatting/format-host-apply.sh
 
   hive:guest:pr:ready:
     desc: Run the existing PR readiness audit natively inside a sealed Hive guest (PR=<number>).
