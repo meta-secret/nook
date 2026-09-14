@@ -1,7 +1,8 @@
 // Compile-only graph for the hosted `build:compile` task.
 //
-// This target intentionally uses the clean rust-base/web-base dependency stages
-// as named contexts. It does not inherit product builder-core-deps or
+// This target intentionally uses the clean rust-base/web-base toolchain stages
+// as named contexts. Its source-free dependency ancestry installs the package
+// graphs itself. It does not inherit product builder-core-deps or
 // builder-wasm, whose warm-up graphs include validation-only work.
 
 variable "GHA_RUST_COMPILE_DEPS_SCOPE" {
@@ -94,7 +95,6 @@ target "build-compile" {
     // complete compile scope below.
     rust-base = "target:rust-base"
     web-base  = "target:web-base"
-    web-deps  = "target:web-deps-compile"
   }
   args = {
     WASM_BUILD_MODE         = WASM_BUILD_MODE
@@ -124,9 +124,9 @@ target "build-compile-generation" {
 }
 
 // Provisioning invokes this target only after computing the exact dependency
-// fingerprint and setting GHA_RUST_COMPILE_DEPS_SCOPE. Its final stage has no
-// authored product source, so publishing it cannot contaminate the dependency
-// ref with a feature checkout.
+// fingerprint and setting GHA_RUST_COMPILE_DEPS_SCOPE. Its final stage is
+// rooted through the native/WASM/Minds/Hive-console/web dependency ancestry.
+// It cannot inherit or run an authored product-source stage.
 target "build-compile-dependencies" {
   context    = "."
   dockerfile = "nook-app/nook-platform/docker/rust/compile.Dockerfile"
@@ -135,24 +135,8 @@ target "build-compile-dependencies" {
   contexts = {
     rust-base = "target:rust-base"
     web-base  = "target:web-base"
-    web-deps  = "target:web-deps-compile"
   }
   cache-from = compile_deps_cache_from
   cache-to   = compile_deps_cache_to
   output     = ["type=cacheonly"]
-}
-
-// The normal web-deps target restores and publishes the independent Bun
-// component scopes. Keep this compile context bare so those refs cannot leak
-// into the build:compile solve; its complete graph is imported/exported through
-// compile_cache_ref instead.
-target "web-deps-compile" {
-  context    = "."
-  dockerfile = "nook-app/nook-web/docker/toolchain.Dockerfile"
-  target     = "web-deps"
-  platforms  = ["linux/amd64"]
-  contexts = {
-    web-base = "target:web-base"
-  }
-  output = ["type=cacheonly"]
 }

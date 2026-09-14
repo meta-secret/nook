@@ -13,23 +13,46 @@ FROM toolchain-base AS compile-toolchain
 ARG SIMULATED_BUILD_PROFILE=production
 RUN test "$SIMULATED_BUILD_PROFILE" = production
 
-FROM compile-toolchain AS compile-hive-dependencies
+# Every dependency compiler is a direct ancestor of the exported dependency
+# target. This models the production root contract instead of a scratch marker
+# join that can discard the reusable compiler records.
+FROM compile-toolchain AS compile-native-dependencies
+RUN cat /opt/compile-toolchain >/opt/compile-native-dependencies \
+  && sleep 1 \
+  && echo bake-sim-compile-native-dependencies
+
+FROM compile-native-dependencies AS compile-wasm-dependencies
+COPY inputs/compile-wasm-manifest.txt /tmp/wasm-manifest.txt
+RUN cat /tmp/wasm-manifest.txt >/opt/compile-wasm-dependencies \
+  && sleep 1 \
+  && echo bake-sim-compile-wasm-dependencies
+
+FROM compile-wasm-dependencies AS compile-hive-dependencies
 COPY inputs/compile-hive-lock.txt /tmp/hive-lock.txt
 RUN cat /tmp/hive-lock.txt >/opt/compile-hive-dependencies \
   && sleep 1 \
   && echo bake-sim-compile-hive-dependencies
+
+FROM compile-hive-dependencies AS compile-hive-console-dependencies
+RUN cat /opt/compile-hive-dependencies >/opt/compile-hive-console-dependencies \
+  && sleep 1 \
+  && echo bake-sim-compile-hive-console-dependencies
+
+FROM compile-hive-console-dependencies AS compile-web-app-dependencies
+RUN cat /opt/compile-hive-console-dependencies >/opt/compile-web-app-dependencies \
+  && sleep 1 \
+  && echo bake-sim-compile-web-app-dependencies
+
+FROM compile-web-app-dependencies AS compile-web-dependencies
+RUN cat /opt/compile-web-app-dependencies >/opt/compile-web-dependencies \
+  && sleep 1 \
+  && echo bake-sim-compile-web-dependencies
 
 FROM compile-hive-dependencies AS compile-hive-source
 COPY inputs/compile-hive-source.txt /tmp/hive-source.txt
 RUN cat /tmp/hive-source.txt >/opt/compile-hive-source \
   && sleep 1 \
   && echo bake-sim-compile-hive-source
-
-FROM compile-toolchain AS compile-wasm-dependencies
-COPY inputs/compile-wasm-manifest.txt /tmp/wasm-manifest.txt
-RUN cat /tmp/wasm-manifest.txt >/opt/compile-wasm-dependencies \
-  && sleep 1 \
-  && echo bake-sim-compile-wasm-dependencies
 
 FROM compile-wasm-dependencies AS compile-wasm-source-base
 COPY inputs/compile-wasm-shared.txt /tmp/wasm-shared.txt
@@ -65,7 +88,7 @@ RUN cat /opt/compile-nook-wasm-source >/opt/compile-nook-wasm-build \
 
 # Product web sources are a narrow input domain. An unrelated policy/catalog
 # file in this build context must not participate in this COPY digest.
-FROM compile-toolchain AS compile-web-source
+FROM compile-web-dependencies AS compile-web-source
 COPY inputs/compile-web-source.txt /tmp/web-source.txt
 COPY inputs/compile-web-legal.txt /tmp/web-legal.txt
 RUN cat /tmp/web-source.txt >/opt/compile-web-source \
@@ -84,9 +107,13 @@ RUN test -n "$SIMULATED_EXTENSION_COMMIT" \
   && sleep 1 \
   && echo bake-sim-compile-extension-package
 
-FROM scratch AS compile-dependencies
-COPY --from=compile-hive-dependencies /opt/compile-hive-dependencies /compile/hive
-COPY --from=compile-wasm-dependencies /opt/compile-wasm-dependencies /compile/wasm
+FROM compile-web-dependencies AS compile-dependencies
+RUN install -D /opt/compile-native-dependencies /compile/native \
+  && install -D /opt/compile-wasm-dependencies /compile/wasm \
+  && install -D /opt/compile-hive-dependencies /compile/hive \
+  && install -D /opt/compile-hive-console-dependencies /compile/hive-console \
+  && install -D /opt/compile-web-app-dependencies /compile/web-app \
+  && install -D /opt/compile-web-dependencies /compile/web
 
 FROM compile-nook-wasm-build AS compile
 COPY --from=compile-hive-source /opt/compile-hive-source /compile/hive

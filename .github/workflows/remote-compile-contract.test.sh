@@ -205,6 +205,29 @@ for forbidden in 'task build:compile' 'cargo test' 'preflight'; do
 done
 grep -Fq -- 'build-compile-dependencies' "$seed_script" \
   || { echo 'remote compile contract: seed boundary must target only source-free compile dependencies' >&2; exit 1; }
+for required in \
+  'FROM compile-native-dependencies AS compile-wasm-dependencies' \
+  'FROM compile-wasm-dependencies AS compile-minds-base' \
+  'FROM compile-minds-dependencies AS compile-node-dependency-toolchain' \
+  'FROM compile-node-dependency-toolchain AS compile-hive-console-dependencies' \
+  'FROM compile-hive-console-dependencies AS compile-web-app-dependencies' \
+  'FROM compile-web-app-dependencies AS compile-web-dependencies' \
+  'FROM compile-web-dependencies AS compile-dependencies'; do
+  grep -Fq -- "$required" "$compile_dockerfile" \
+    || { echo "remote compile contract: dependency export omits rooted compiler ancestry: $required" >&2; exit 1; }
+done
+dependency_target="$(sed -n '/^FROM compile-web-dependencies AS compile-dependencies$/,/^FROM compile-wasm-source AS compile$/p' "$compile_dockerfile")"
+for forbidden in \
+  'compile-native-source' \
+  'compile-wasm-source' \
+  'compile-minds-source' \
+  'compile-hive-console ' \
+  'compile-web '; do
+  if printf '%s\n' "$dependency_target" | sed '$d' | grep -Fq -- "$forbidden"; then
+    echo "remote compile contract: dependency export reaches a product source stage: $forbidden" >&2
+    exit 1
+  fi
+done
 grep -Fq -- 'GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE' "$seed_script" \
   || { echo 'remote compile contract: seed boundary must skip an existing immutable fingerprint' >&2; exit 1; }
 grep -Fq -- 'GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED=1' "$seed_script" \

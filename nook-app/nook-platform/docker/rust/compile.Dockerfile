@@ -1,7 +1,7 @@
 # syntax=registry.dev.nokey.sh/docker/dockerfile:1.27.0@sha256:bde3983e9c939224420ddaf6b784cc30e09b035a4dea01f581230c50809f372e
 
-# Compile-only product graph. The rust-base, web-base, and web-deps stages are
-# supplied as named contexts by compile.docker-bake.hcl. Do not change this
+# Compile-only product graph. The rust-base and web-base stages are supplied as
+# named contexts by compile.docker-bake.hcl. Do not change this
 # graph to inherit builder-core-deps or builder-wasm-deps: those stages compile
 # tests, Clippy, and coverage as part of their dependency warm-up.
 
@@ -64,7 +64,10 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-native-dependencies
 
-FROM compile-platform-manifests AS compile-wasm-dependencies
+# Keep the native and WASM dependency compilers in one source-free ancestry.
+# The dependency cache exporter is rooted below this stage, so both compiler
+# results remain addressable records instead of marker-only scratch inputs.
+FROM compile-native-dependencies AS compile-wasm-dependencies
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
@@ -210,7 +213,10 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && printf '%s\n' "$stamp_mode" > /opt/nook/wasm-handoff/nook-wasm/nook-wasm-build-mode \
     && touch /opt/nook/wasm-compile-passed
 
-FROM rust-base AS compile-minds-base
+# Continue the source-free Rust dependency ancestry through Minds. This is
+# deliberately before compile-minds-source: the maintenance dependency solve
+# can never reach authored Hive source.
+FROM compile-wasm-dependencies AS compile-minds-base
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git openssh-client \
@@ -233,6 +239,42 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-hive-dependencies
 
+# The maintenance dependency graph needs one manifest with every compiler root.
+# Copy only the Bun and Node runtimes from web-base into the source-free Rust
+# lineage; do not merge either product tree. Package manifests enter in the
+# sequential dependency stages below.
+FROM compile-minds-dependencies AS compile-node-dependency-toolchain
+
+ENV BUN_INSTALL=/usr/local/bun
+ENV PATH="${BUN_INSTALL}/bin:${PATH}"
+COPY --from=web-base /usr/local/bun /usr/local/bun
+COPY --from=web-base /usr/local/bin/node /usr/local/bin/node
+
+FROM compile-node-dependency-toolchain AS compile-hive-console-dependencies
+
+WORKDIR /meta-secret/nook/agentic-ai/minds/hive-console
+COPY agentic-ai/minds/hive-console/package.json agentic-ai/minds/hive-console/bun.lock ./
+RUN bun install --frozen-lockfile \
+    && mkdir -p /opt/nook \
+    && touch /opt/nook/compile-hive-console-dependencies
+
+FROM compile-hive-console-dependencies AS compile-web-app-dependencies
+
+WORKDIR /meta-secret/nook
+COPY nook-app/nook-web/nook-web-app/package.json nook-app/nook-web/nook-web-app/bun.lock ./nook-app/nook-web/nook-web-app/
+RUN cd nook-app/nook-web/nook-web-app \
+    && bun install --frozen-lockfile \
+    && mkdir -p /opt/nook \
+    && touch /opt/nook/compile-web-app-dependencies
+
+FROM compile-web-app-dependencies AS compile-web-dependencies
+
+COPY nook-app/nook-web/nook-web-research/package.json nook-app/nook-web/nook-web-research/bun.lock ./nook-app/nook-web/nook-web-research/
+RUN cd nook-app/nook-web/nook-web-research \
+    && bun install --frozen-lockfile \
+    && mkdir -p /opt/nook \
+    && touch /opt/nook/compile-web-dependencies
+
 FROM compile-minds-dependencies AS compile-minds-source
 
 COPY agentic-ai/minds/hive/src hive/src
@@ -245,14 +287,6 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && target/release/hive-export-observer-contract \
       --output /opt/nook/hive-observer-contract \
     && touch /opt/nook/hive-compile-passed
-
-FROM web-base AS compile-hive-console-dependencies
-
-WORKDIR /meta-secret/nook/agentic-ai/minds/hive-console
-COPY agentic-ai/minds/hive-console/package.json agentic-ai/minds/hive-console/bun.lock ./
-RUN bun install --frozen-lockfile \
-    && mkdir -p /opt/nook \
-    && touch /opt/nook/compile-hive-console-dependencies
 
 FROM compile-hive-console-dependencies AS compile-hive-console
 
@@ -279,9 +313,9 @@ RUN bun run contracts \
 FROM web-base AS compile-web
 
 WORKDIR /meta-secret/nook
-COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules \
+COPY --from=compile-web-dependencies /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules \
   /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
-COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules \
+COPY --from=compile-web-dependencies /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules \
   /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules
 RUN mkdir -p \
       /meta-secret/nook/nook-app/nook-web/nook-vault-simple \
@@ -417,14 +451,17 @@ RUN bun install --frozen-lockfile --ignore-scripts \
     && mkdir -p /opt/nook \
     && touch /opt/nook/loom-compile-passed
 
-FROM scratch AS compile-dependencies
+# Root the dependency export in the complete source-free compiler ancestry.
+# Native, WASM, Minds, Hive-console, and both web dependency installs are
+# parents of this target; there are no sibling marker/content joins.
+FROM compile-web-dependencies AS compile-dependencies
 
-COPY --from=compile-native-dependencies /opt/nook/compile-native-dependencies /compile/native
-COPY --from=compile-wasm-dependencies /opt/nook/compile-wasm-dependencies /compile/wasm
-COPY --from=compile-minds-dependencies /opt/nook/compile-hive-dependencies /compile/hive
-COPY --from=compile-hive-console-dependencies /opt/nook/compile-hive-console-dependencies /compile/hive-console
-COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules /compile/web-app-deps
-COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules /compile/web-research-deps
+RUN install -D /opt/nook/compile-native-dependencies /compile/native \
+    && install -D /opt/nook/compile-wasm-dependencies /compile/wasm \
+    && install -D /opt/nook/compile-hive-dependencies /compile/hive \
+    && install -D /opt/nook/compile-hive-console-dependencies /compile/hive-console \
+    && install -D /opt/nook/compile-web-app-dependencies /compile/web-app-deps \
+    && install -D /opt/nook/compile-web-dependencies /compile/web-research-deps
 
 # The exact source cache is deliberately exported with mode=min. Keep the
 # expensive, linear WASM compiler graph in the final target's ancestry so that

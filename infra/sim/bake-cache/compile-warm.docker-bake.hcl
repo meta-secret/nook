@@ -1,6 +1,7 @@
 // Production-shaped BuildKit cache proof. A separate seed boundary publishes
-// the source-free content-fingerprinted ref before the product build consumes
-// it; authored source remains isolated in exact-commit refs.
+// the source-free, compiler-rooted content-fingerprinted ref before the
+// product build consumes it; authored source remains isolated in generation
+// and exact-commit refs.
 
 variable "NOOK_REGISTRY_CACHE_HOST" {
   default = "registry.dev.nokey.sh:5000"

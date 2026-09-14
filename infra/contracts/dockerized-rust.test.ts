@@ -1030,6 +1030,38 @@ tasks:
       "FROM compile-wasm-source AS compile",
     );
     expect(productionDockerfile).toContain(
+      "FROM compile-native-dependencies AS compile-wasm-dependencies",
+    );
+    expect(productionDockerfile).toContain(
+      "FROM compile-wasm-dependencies AS compile-minds-base",
+    );
+    expect(productionDockerfile).toContain(
+      "FROM compile-minds-dependencies AS compile-node-dependency-toolchain",
+    );
+    for (const directDependencyEdge of [
+      "FROM compile-node-dependency-toolchain AS compile-hive-console-dependencies",
+      "FROM compile-hive-console-dependencies AS compile-web-app-dependencies",
+      "FROM compile-web-app-dependencies AS compile-web-dependencies",
+      "FROM compile-web-dependencies AS compile-dependencies",
+    ]) {
+      expect(productionDockerfile).toContain(directDependencyEdge);
+    }
+    const dependencyTarget = productionDockerfile.slice(
+      productionDockerfile.indexOf(
+        "FROM compile-web-dependencies AS compile-dependencies",
+      ),
+      productionDockerfile.indexOf("FROM compile-wasm-source AS compile"),
+    );
+    for (const sourceStage of [
+      "compile-native-source",
+      "compile-wasm-source",
+      "compile-minds-source",
+      "compile-hive-console ",
+      "compile-web ",
+    ]) {
+      expect(dependencyTarget).not.toContain(sourceStage);
+    }
+    expect(productionDockerfile).toContain(
       "COPY nook-app/nook-web nook-app/nook-web",
     );
     for (const legalDocument of [
@@ -1082,6 +1114,30 @@ tasks:
     expect(simulatorDockerfile).toContain(
       "FROM compile-nook-wasm-build AS compile",
     );
+    for (const dependencyRoot of [
+      "compile-native-dependencies",
+      "compile-wasm-dependencies",
+      "compile-hive-dependencies",
+      "compile-hive-console-dependencies",
+      "compile-web-app-dependencies",
+      "compile-web-dependencies",
+    ]) {
+      expect(simulatorDockerfile).toContain(dependencyRoot);
+      expect(proof).toContain(`bake-sim-${dependencyRoot}`);
+    }
+    expect(simulatorDockerfile).toContain(
+      "FROM compile-web-dependencies AS compile-dependencies",
+    );
+    for (const simulatorDependencyEdge of [
+      "FROM compile-toolchain AS compile-native-dependencies",
+      "FROM compile-native-dependencies AS compile-wasm-dependencies",
+      "FROM compile-wasm-dependencies AS compile-hive-dependencies",
+      "FROM compile-hive-dependencies AS compile-hive-console-dependencies",
+      "FROM compile-hive-console-dependencies AS compile-web-app-dependencies",
+      "FROM compile-web-app-dependencies AS compile-web-dependencies",
+    ]) {
+      expect(simulatorDockerfile).toContain(simulatorDependencyEdge);
+    }
     expect(simulatorDockerfile).toContain("inputs/compile-web-legal.txt");
     expect(simulatorDockerfile).toContain(
       "inputs/compile-extension-locales.txt",
@@ -1112,27 +1168,27 @@ tasks:
       "Policy-only commit: product compilers reuse the generation baseline",
     );
     expect(proof).toContain(
-      "compile policy-only: product_cached=10 product_uncached=0 packaging_uncached=1 writes=0",
+      "compile policy-only: product_cached=14 product_uncached=0 packaging_uncached=1 writes=0",
     );
     expect(proof).toContain(
       "Exact source replay: read-only warm solve stays below two minutes",
     );
     expect(proof).toContain("bake-sim-compile-hive-source");
-    expect(proof).toContain("compile source B: cached=8 uncached=3 writes=1");
-    expect(proof).toContain("compile source C: cached=9 uncached=2 writes=1");
+    expect(proof).toContain("compile source B: cached=12 uncached=3 writes=1");
+    expect(proof).toContain("compile source C: cached=13 uncached=2 writes=1");
     expect(proof).toContain(
       "Unseeded commit D: web edit invalidates only the web lineage",
     );
     expect(proof).toContain(
-      "compile source D: cached=9 uncached=2 writes=1 domain=web",
+      "compile source D: cached=13 uncached=2 writes=1 domain=web",
     );
     expect(proof).toContain(
-      "compile legal E: cached=9 uncached=2 writes=1 domain=web-legal",
+      "compile legal E: cached=13 uncached=2 writes=1 domain=web-legal",
     );
     expect(proof).toContain(
       "compile generation rotation: old_available=1 current_available=0 selected=0",
     );
-    expect(proof).toContain("compile warm: cached=11 uncached=0 writes=0");
+    expect(proof).toContain("compile warm: cached=15 uncached=0 writes=0");
     expect(proof).toContain(
       'bake_compile_source "$proof_log" "$compile_source_b" "1" ""',
     );

@@ -700,11 +700,10 @@ fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Resul
     assert!(
         build_compile.contains("rust-base = \"target:rust-base\"")
             && build_compile.contains("web-base  = \"target:web-base\"")
-            && build_compile.contains("web-deps  = \"target:web-deps-compile\""),
+            && !build_compile.contains("web-deps"),
         "build:compile must use bare context targets rather than component restore targets"
     );
     for (bake, target) in [
-        (&compile_bake, "web-deps-compile"),
         (&rust_bake, "rust-base"),
         (&web_bake, "web-base"),
     ] {
