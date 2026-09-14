@@ -76,7 +76,6 @@ void test("validation isolates secrets, preserves wrapper vars, and denies netwo
     CURSOR_API_KEY: "cursor",
     NOOK_GITHUB_PAT: "github",
     SCCACHE_S3_ACCESS_KEY_FILE: "/trusted/sccache-access",
-    NOOK_ARC_HIVE: "1",
     NOOK_BUILDKIT_REMOTE: "1",
     NOOK_PR_BUILDX_BUILDER: builder,
   };
@@ -92,7 +91,6 @@ void test("validation isolates secrets, preserves wrapper vars, and denies netwo
         ])
           assert.equal(secret in environment, false);
         assert.notEqual(environment.HOME, trustedHome);
-        assert.equal(environment.NOOK_ARC_HIVE, "1");
         assert.equal(environment.NOOK_BUILDKIT_REMOTE, "1");
         const isolatedHome = environment.HOME;
         assert.ok(isolatedHome);
@@ -142,7 +140,6 @@ void test("validation isolates secrets, preserves wrapper vars, and denies netwo
                 environment.NOOK_VALIDATION_DOCKER,
               );
               assert.equal(env.SCCACHE_OPTIONAL, "1");
-              assert.equal(env.NOOK_ARC_HIVE, "1");
               assert.equal(env.BUILDX_BUILDER, builder);
               return ok();
             },

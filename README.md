@@ -555,7 +555,7 @@ task pr:review:stabilize PR=410 # one bounded feedback snapshot after validation
 task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
-task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, ARC, and Neo4j
+task infra:deploy           # deploy Nook services plus the complete k0s/Kata platform
 task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2 # install/reconcile a declared OVH worker and join k0s/ARC
 task infra:ssh:home:configure # install and prove pinned browserless LAN SSH for the home worker
 task infra:ssh:home:status # verify the home worker remains reachable without interactive authentication
@@ -568,7 +568,6 @@ task infra:kubernetes:tools:status  # verify the remote operator console
 task infra:k0s:status       # inspect the remote k0s cluster and workloads
 task infra:k0s:diagnose     # bounded k0s, CNI, firewall, and control-plane evidence
 task infra:k0s:network:refresh # recreate egress-capable Pods after a CNI migration
-task infra:kata:verify      # prove a Pod is using the Kata guest kernel
 task infra:kata:diagnose    # bounded Kata installer and runtime evidence
 task infra:services:diagnose # bounded Docker and Compose network evidence
 task infra:services:repair-network # recover Docker 26 chains without daemon restart
@@ -599,11 +598,8 @@ generated and snapshot tests (Proptest and Insta),
 bounded concurrency exploration (Loom), parser fuzzing (`cargo-fuzz`), model
 checking (Kani), and repository-selected Rust lints (Dylint). Fast
 deterministic tests remain part of ordinary Rust testing. Fuzz, Loom, Kani, and
-compiler-coupled Dylint checks have bounded hosted jobs. Main also covers
-minds-only and mixed pushes while skipping product jobs for minds-only changes.
-Schedule, manual, and labeled minds-only PR entry points stay in thin
-`rust-ecosystem.yml`. The selection and configuration policy lives in
-[`.cortex/teams/sre/workflows/quality.md`](.cortex/teams/sre/workflows/quality.md).
+compiler-coupled Dylint checks have bounded hosted jobs. Main also runs the
+shared Rust ecosystem gates alongside the product pipeline.
 
 See [`infra/k0s/README.md`](infra/k0s/README.md) for the failed Main-repair
 inspection and recovery workflow.
