@@ -25,6 +25,10 @@ tasks:
 
   _ci:pr:rust:host:
     # Repository invariants must reject forbidden Dockerfile/cache changes before app setup begins.
+    vars:
+      # Hosted jobs provide runner.temp explicitly. Local verification shares the
+      # native coverage root so the final reporter export never falls through to /tools.
+      CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/rust" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
     cmds:
       - task: preflight
       - task: docker:ci:rust:export

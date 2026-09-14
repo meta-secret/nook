@@ -1,6 +1,21 @@
 use super::*;
 
 #[test]
+fn local_native_verification_exports_preflight_into_the_repository_artifact_root() {
+    let root = RepositoryFixture::repository_root();
+    let tasks = root.read("nook-app/ci/Taskfile.yml");
+    let rust_host = taskfile_task_body(&tasks, "_ci:pr:rust:host")
+        .expect("native Rust CI must retain a host orchestration task");
+
+    assert!(
+        rust_host.contains(
+            "CI_ARTIFACT_DIR: '{{default (printf \"%s/ci-artifacts/rust\" .REPO_ROOT) .CI_ARTIFACT_DIR}}'"
+        ) && rust_host.contains("PREFLIGHT_OUTPUT_DIR: '{{.CI_ARTIFACT_DIR}}/tools'"),
+        "local native verification must default the shared coverage and preflight export root to a writable repository-local directory"
+    );
+}
+
+#[test]
 fn local_web_verification_assembles_the_ci_wasm_handoff_with_bounded_offline_inputs() {
     let root = RepositoryFixture::repository_root();
     let tasks = root.read("nook-app/ci/Taskfile.yml");
