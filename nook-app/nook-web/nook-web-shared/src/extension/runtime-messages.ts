@@ -214,26 +214,6 @@ export class ExtensionStorageProviderPayloadAdmission {
   }
 }
 
-function isCompleteStorageProviderPayload(
-  value: unknown,
-): value is ExtensionPairingStorageProviderPayload {
-  if (!value || typeof value !== "object") return false;
-  if (
-    !("label" in value) ||
-    typeof value.label !== "string" ||
-    !("createdAt" in value) ||
-    typeof value.createdAt !== "string"
-  )
-    return false;
-  return [
-    "githubPat",
-    "githubRepo",
-    "oauthFile",
-    "localFolder",
-    "storeId",
-  ].every((key) => key in value);
-}
-
 /**
  * Pairing approvals carry sealed provider rows for the extension import.
  * Validate the wire shape here, then leave field-level admission (including
@@ -241,6 +221,25 @@ function isCompleteStorageProviderPayload(
  */
 export class ExtensionPairingStorageProviderPayloadAdmission {
   constructor(private readonly value: unknown) {}
+  private isComplete(
+    value: unknown,
+  ): value is ExtensionPairingStorageProviderPayload {
+    if (!value || typeof value !== "object") return false;
+    if (
+      !("label" in value) ||
+      typeof value.label !== "string" ||
+      !("createdAt" in value) ||
+      typeof value.createdAt !== "string"
+    )
+      return false;
+    return [
+      "githubPat",
+      "githubRepo",
+      "oauthFile",
+      "localFolder",
+      "storeId",
+    ].every((key) => key in value);
+  }
   parse(): Result<
     ExtensionPairingStorageProviderPayload,
     ExtensionStorageProviderIdentityFailure
@@ -269,7 +268,7 @@ export class ExtensionPairingStorageProviderPayloadAdmission {
       if (!(key in provider))
         return err(ExtensionStorageProviderIdentityFailure.Invalid);
     }
-    if (!isCompleteStorageProviderPayload(provider))
+    if (!this.isComplete(provider))
       return err(ExtensionStorageProviderIdentityFailure.Invalid);
     try {
       structuredClone(provider);

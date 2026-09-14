@@ -51,8 +51,9 @@ mod routing_admission_tests {
 
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_website_login_match_availability(
-    response: nook_companion_core::WebsiteLoginOptionsWireValue,
+    response: crate::WebsiteLoginOptionsAdmission,
 ) -> Result<nook_companion_core::WebsiteLoginMatchAvailability, JsError> {
+    let crate::WebsiteLoginOptionsAdmission(response) = response;
     WebsiteLoginOptions::from_wire(response)
         .and_then(WebsiteLoginOptions::into_match_availability)
         .map_err(|error| JsError::new(&error.to_string()))

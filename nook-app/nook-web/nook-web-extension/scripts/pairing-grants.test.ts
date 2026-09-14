@@ -4,7 +4,10 @@ import {
   decode_extension_grant_authority_response,
   type ExtensionGrantAuthority,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { ExtensionPairingApprovedMessageAdmissionFailure } from '../../nook-web-shared/src/extension/runtime-messages'
+import {
+  ExtensionPairingApprovedMessageAdmissionFailure,
+  ExtensionPairingStorageProviderPayloadAdmission,
+} from '../../nook-web-shared/src/extension/runtime-messages'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import {
@@ -48,6 +51,42 @@ const storedGrant: StoredExtensionPairingGrant = {
 }
 
 describe('extension pairing grant transport', () => {
+  test('admits only complete structured-cloneable provider payloads', () => {
+    const complete = {
+      id: 'github',
+      type: 'github',
+      label: 'Personal GitHub',
+      githubPat: { state: 'missing' },
+      githubRepo: { state: 'defaultRepository' },
+      oauthFile: { state: 'notApplicable' },
+      localFolder: { state: 'notApplicable' },
+      storeId: { state: 'unscoped' },
+      createdAt: '2026-08-10T00:00:00Z',
+    }
+
+    expect(
+      new ExtensionPairingStorageProviderPayloadAdmission(complete)
+        .parse()
+        .isOk(),
+    ).toBe(true)
+    expect(
+      new ExtensionPairingStorageProviderPayloadAdmission({
+        ...complete,
+        createdAt: undefined,
+      })
+        .parse()
+        .isErr(),
+    ).toBe(true)
+    expect(
+      new ExtensionPairingStorageProviderPayloadAdmission({
+        ...complete,
+        githubPat: () => 'not cloneable',
+      })
+        .parse()
+        .isErr(),
+    ).toBe(true)
+  })
+
   test('reports companion runtime startup failure before grant admission', async () => {
     const ingress = new ExtensionPairingIngress(
       Promise.reject(new Error('runtime unavailable')),
