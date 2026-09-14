@@ -138,8 +138,7 @@ and manual ecosystem execution in one Actions run named `CI`.
 **`rust-dependency-updates.yml`**
 
 - Audits every direct dependency in each Rust root.
-- The roots are `nook-app/nook-platform/`, its fuzz workspace,
-  `agentic-ai/minds/`, and `preflight/`.
+- The roots are `nook-app/nook-platform/`, its fuzz workspace, and `preflight/`.
 - When an update exists, an AI agent updates all outdated Rust dependencies.
 - Runs the full deterministic suite and opens a PR for explicit review.
 
@@ -180,7 +179,6 @@ flowchart LR
   main_yml --> cf_dev[Cloudflare Pages isolated dev]
   main_yml --> main_stats[Persist completed run metrics]
   main_stats --> workbench_stats[Commit metrics to Nook Workbench]
-  main_yml -->|any actionable failure| main_failure[Queue Workbench incident]
 
   release[Semver tag or manual version + ref] --> release_yml[release.yml]
   release_yml --> release_verify[Verify + build + e2e]

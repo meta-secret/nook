@@ -10,6 +10,8 @@ use anyhow::Context;
 
 #[path = "infra/kubernetes_cache_sim.rs"]
 mod kubernetes_cache_sim;
+#[path = "infra/migration_contracts.rs"]
+mod migration_contracts;
 #[path = "infra/remote_platform_contracts.rs"]
 mod remote_platform_contracts;
 

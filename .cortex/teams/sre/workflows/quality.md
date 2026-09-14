@@ -45,8 +45,7 @@ Use this workflow for quality, CI, and deployment changes.
    - Composites call those stages in order so a leaf miss cannot cold-rebuild apt.
    - Labeled product PRs call the shared jobs from `pr.yml` via `rust-ecosystem-checks.yml`.
    - `main.yml` owns all merged-head ecosystem execution.
-   - `ci.yml` owns schedule, manual, and labeled minds-only PR entry points.
-   - Main includes minds paths, then skips its product job chain when the push is minds-only.
+   - `ci.yml` owns scheduled, manual, and labeled PR entry points.
    - Do not duplicate those commands in bespoke preflight scanners, call Bake helpers directly from the workflow, or compile their CLIs on the GitHub-hosted runner host.
    - Kani pins its specialized model-checking toolchain in `product.Dockerfile`.
    - `task docker:ecosystem:kani` restores and publishes the complete
@@ -103,8 +102,7 @@ Use this workflow for quality, CI, and deployment changes.
      `task docker:ecosystem:dependency-policy` builds pinned `cargo-deny` and
      `cargo-audit` via `docker:ecosystem:policy-tools`, then runs each workspace
      task (`dylint:dependency-policy`, `rust:dependency-policy`,
-     `preflight:dependency-policy`, `fuzz:dependency-policy`,
-     `minds:dependency-policy`) through the cache-only
+     `preflight:dependency-policy`, `fuzz:dependency-policy`) through the cache-only
      `rust-ecosystem-dependency-policy` BuildKit target.
      Never aggregate multiple workspaces into one Dockerfile RUN.
      Never export or load the policy-tools image into a Docker daemon.
@@ -113,9 +111,6 @@ Use this workflow for quality, CI, and deployment changes.
      must name the RustSec IDs, identify the exact pinned upstream graph, and
      state the dependency upgrade that removes them in both `deny.toml` and
      the affected workspace's `.cargo/audit.toml`.
-     `agentic-ai/minds` has no active advisory exceptions. Its latest-derived
-     Codex source and Hickory compatibility source must resolve patched package
-     versions without hiding RustSec findings.
    - `PR / Rust ecosystem / Proptest, Insta, and Loom` —
      `task docker:ecosystem:deterministic` warms `docker:rust-base`, then Bakes
      `rust-ecosystem-deterministic` on `rust-platform` (platform sources over
@@ -445,7 +440,7 @@ Use this workflow for quality, CI, and deployment changes.
     #### Manual and scheduled jobs
     - Credentialed `sync-live` validation is manual through `e2e-pr.yml`.
     - Weekly: `rust-dependency-updates.yml` audits every direct dependency in each Rust root.
-    - The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
+    - The roots are `nook-app/nook-platform/`, its fuzz workspace, and `preflight/`.
     - A finding starts an isolated AI agent.
     - The agent updates all outdated Rust dependencies.
     - It must run `WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000`.
