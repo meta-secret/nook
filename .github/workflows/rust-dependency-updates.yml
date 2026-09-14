@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: rust-dependency-updates
-  # An agent may have already pushed a branch or opened a PR.
+  # Preserve the in-progress read-only audit and its artifact for manual triage.
   cancel-in-progress: false
 
 jobs:
