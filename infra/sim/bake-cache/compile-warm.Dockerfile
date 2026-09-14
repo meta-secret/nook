@@ -15,6 +15,7 @@ ARG SIMULATED_SCCACHE_CLIENT_SIDE=1
 ARG SIMULATED_SCCACHE_ERROR_LOG=
 ARG SIMULATED_SCCACHE_SANITIZES_ERROR_LOG=1
 ARG SIMULATED_SCCACHE_NEXT_HEAD_HITS=1
+ARG SIMULATED_SCCACHE_WRITE_AUTHORIZED=1
 ENV SCCACHE_S3_RW_MODE=READ_ONLY
 RUN test "$SIMULATED_BUILD_PROFILE" = production
 
@@ -24,6 +25,8 @@ RUN test "$SIMULATED_BUILD_PROFILE" = production
 FROM compile-toolchain AS compile-native-dependencies
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     test "$(cat /run/secrets/sccache_runtime_mode)" = READ_WRITE \
+  && { test "$SIMULATED_SCCACHE_WRITE_AUTHORIZED" = 1 \
+    || { echo 'NOOK_SCCACHE_PUBLICATION_FAILURE {"cache_errors":0,"cache_write_errors":275,"cache_misses":275,"cache_writes":0,"reason":"write_identity_denied"}' >&2; exit 1; }; } \
   && { test "$SIMULATED_SCCACHE_CLIENT_SIDE" = 1 \
     && { test -z "$SIMULATED_SCCACHE_ERROR_LOG" \
       || test "$SIMULATED_SCCACHE_SANITIZES_ERROR_LOG" = 1; } \

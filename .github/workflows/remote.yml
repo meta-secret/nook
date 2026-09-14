@@ -35,7 +35,7 @@ on:
         required: false
         type: string
       publish_compile_cache:
-        description: Publish the build:compile exact source cache (false performs read-only warm verification)
+        description: Publish build:compile caches (false performs read-only warm verification)
         required: false
         type: boolean
         default: true
@@ -161,7 +161,31 @@ jobs:
         run: |
           set -euo pipefail
           printf 'Remote task name: %s\n' "$REQUESTED_REMOTE_TASKS"
-      - uses: ./.github/actions/nook-docker-setup
+      # The ordinary compile publisher is the only feature-branch route that
+      # may receive the SeaweedFS build identity. Every other remote task,
+      # including read-only compile verification, retains the remote-reader
+      # identity whose policy deliberately rejects PutObject.
+      - name: Prepare publish build environment
+        if: (inputs.tasks || inputs.task) == 'build:compile' && inputs.publish_compile_cache == true
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-selection: compile
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+          sccache-capability-probe: write_capable
+          sccache-credential-class: write_capable
+          cache-write: "false"
+          main-cache-only: "true"
+          isolated-cache-write: "true"
+          publish-compile-cache: "true"
+      - name: Prepare read-only remote build environment
+        if: (inputs.tasks || inputs.task) != 'build:compile' || inputs.publish_compile_cache != true
+        uses: ./.github/actions/nook-docker-setup
         with:
           cache-selection: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 'compile' || (inputs.tasks || inputs.task) == 'loom:verify' && 'preflight' || 'general' }}
           registry-host: registry.dev.nokey.sh
@@ -171,6 +195,8 @@ jobs:
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
+          sccache-capability-probe: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 'read_only' || 'none' }}
+          sccache-credential-class: read_only
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}
@@ -184,7 +210,16 @@ jobs:
           : "${NOOK_REGISTRY_CACHE_HOST:?Registry cache environment was not prepared}"
           : "${GHA_CACHE_ENABLED:?Cache environment was not prepared}"
           : "${NOOK_COMPILE_CACHE_MODE:?Compile cache mode was not prepared}"
-          echo "Build-only route prepared Buildx=$NOOK_PR_BUILDX_BUILDER registry=$NOOK_REGISTRY_CACHE_HOST compile-cache=$NOOK_COMPILE_CACHE_MODE cache-write=${GHA_CACHE_WRITE_ENABLED:-disabled}"
+          : "${NOOK_SCCACHE_CREDENTIAL_CLASS:?Compiler-cache credential class was not prepared}"
+          expected_credential_class=read_only
+          if [ "$NOOK_COMPILE_CACHE_MODE" = publish ]; then
+            expected_credential_class=write_capable
+          fi
+          if [ "$NOOK_SCCACHE_CREDENTIAL_CLASS" != "$expected_credential_class" ]; then
+            echo "Compiler-cache credential class does not match the requested compile mode" >&2
+            exit 2
+          fi
+          echo "Build-only route prepared Buildx=$NOOK_PR_BUILDX_BUILDER registry=$NOOK_REGISTRY_CACHE_HOST compile-cache=$NOOK_COMPILE_CACHE_MODE credential_class=$NOOK_SCCACHE_CREDENTIAL_CLASS cache-write=${GHA_CACHE_WRITE_ENABLED:-disabled}"
       - name: Wait for private Neo4j sidecar
         if: ${{ env.REQUEST_INCLUDES_HIVE == 'true' }}
         run: .github/scripts/wait-hive-neo4j.sh

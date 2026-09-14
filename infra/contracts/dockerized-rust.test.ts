@@ -970,6 +970,12 @@ tasks:
     const cacheTelemetry = this.read(
       ".github/workflows/lib/cache-telemetry.mjs",
     );
+    const cacheConnect = this.read(
+      ".github/actions/nook-cache-connect/main.js",
+    );
+    const cacheTelemetryAction = this.read(
+      ".github/actions/nook-cache-telemetry/action.yml",
+    );
     const proof = this.read("infra/tasks/bake-cache.yml");
 
     expect(remoteWorkflow).toContain(
@@ -978,6 +984,46 @@ tasks:
     expect(remoteWorkflow).toContain(
       "(inputs.tasks || inputs.task) == 'build:compile' && inputs.publish_compile_cache && 'READ_WRITE' || 'READ_ONLY'",
     );
+    expect(remoteWorkflow).toContain(
+      "name: Prepare publish build environment",
+    );
+    expect(remoteWorkflow).toContain(
+      "if: (inputs.tasks || inputs.task) == 'build:compile' && inputs.publish_compile_cache == true",
+    );
+    expect(remoteWorkflow).toContain(
+      "sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}",
+    );
+    expect(remoteWorkflow).toContain(
+      "sccache-capability-probe: write_capable",
+    );
+    expect(remoteWorkflow).toContain(
+      "sccache-credential-class: write_capable",
+    );
+    expect(remoteWorkflow).toContain(
+      "if: (inputs.tasks || inputs.task) != 'build:compile' || inputs.publish_compile_cache != true",
+    );
+    expect(remoteWorkflow).toContain(
+      "sccache-capability-probe: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 'read_only' || 'none' }}",
+    );
+    expect(remoteWorkflow).toContain("sccache-credential-class: read_only");
+    expect(cacheConnect).toContain("class S3CacheCapabilityProbe");
+    expect(cacheConnect).toContain("AbortSignal.timeout(5000)");
+    expect(cacheConnect).toContain('"put_object"');
+    expect(cacheConnect).toContain('"get_object"');
+    expect(cacheConnect).toContain('"head_object"');
+    expect(cacheConnect).toContain('"delete_object"');
+    expect(cacheConnect).toContain('"put_object_denied"');
+    expect(cacheConnect).toContain("bytes=0-0");
+    expect(cacheConnect).toContain("empty_bucket");
+    expect(cacheConnect).toContain("NOOK_SCCACHE_CAPABILITY");
+    expect(cacheTelemetryAction).toContain("nook-sccache-capability.json");
+    expect(proof).toContain(
+      "Publication guard: read-only S3 identity cannot publish compiler objects",
+    );
+    expect(proof).toContain(
+      "cache_write_errors=275 cache_writes=0 status=failed",
+    );
+    expect(proof).toContain("write_identity_denied");
     expect(remoteWorkflow).not.toContain("build:compile-cache-seed");
     expect(compileScript).toContain(
       "publication requires READ_WRITE compiler-cache authority",
