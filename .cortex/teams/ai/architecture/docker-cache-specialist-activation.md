@@ -32,6 +32,19 @@ continues to own GitHub execution mechanics.
     because its build context, broad repository copy, or prematurely applied
     per-head input included a change outside that stage's semantic input
     domain.
+  - `sccache-read-only-startup-fallback` means optional read-only remote
+    `sccache` did not become ready within its two-second startup budget.
+  - `sccache-read-only-transport-fallback` means optional read-only remote
+    `sccache` encountered a DNS or object-read transport failure.
+  - `sccache-read-only-circuit-open` means the shared state for one Docker
+    `RUN` already disabled optional remote reads after an earlier failure.
+  - `sccache-compiler-failure` means the compiler itself failed. This failure
+    remains terminal in every cache mode.
+  - `sccache-read-write-transport-failure` means publication-mode startup,
+    credentials, reads, or writes failed. This failure remains terminal.
+  - `sccache-readiness-contract-violation` means one Docker `RUN` started or
+    probed remote `sccache` more than once, exceeded the startup budget, or
+    failed to share its readiness and circuit state.
   - `recipe-or-dependency-generation-changed` means a legitimate recipe or
     dependency-fingerprint change rotated the required baseline generation.
   - `unexpected-read-only-write-or-export` means a read-only consumer wrote
@@ -81,6 +94,35 @@ continues to own GitHub execution mechanics.
   addition to proving that a relevant-domain change invalidates the expected
   vertices.
 - Require read-only consumers to perform zero writes and zero exports.
+- Treat remote `sccache` in `READ_ONLY` mode as an optional accelerator.
+  - Bound startup to two seconds and one attempt for each Docker `RUN`.
+  - Share readiness and open-circuit state across every compiler invocation in
+    that `RUN`.
+  - On startup, DNS, or object-read failure, open the circuit and invoke the
+    compiler directly for the current and remaining invocations.
+  - Emit one structured `NOOK_SCCACHE_FALLBACK` JSON event for the transition.
+  - Include the activation reason code, cache mode, failure class, and fallback
+    compiler path without credentials or sensitive transport data.
+  - Keep read-only mode free of remote writes even before fallback.
+- Keep genuine compiler failures terminal after direct fallback. A cache
+  failure must not mask or reinterpret the compiler exit status.
+- Treat remote `sccache` in `READ_WRITE` mode as publication infrastructure.
+  Startup, credential, read, and write failures remain terminal and must not
+  degrade to direct compilation.
+- Require the simulator and Docker proof to exercise the complete remote
+  `sccache` fault matrix.
+  - **Startup failure:** one bounded startup attempt, one fallback event, and
+    direct compiler success in `READ_ONLY` mode.
+  - **DNS or read failure:** the first transport failure opens the shared
+    circuit and later invocations compile directly without another probe.
+  - **Open circuit:** all remaining invocations bypass remote `sccache` and
+    perform zero remote writes.
+  - **Genuine compiler failure:** direct compilation fails terminally with the
+    compiler's status.
+  - **Read-write failure:** startup, credential, read, or write failure is
+    terminal and emits no successful fallback verdict.
+  - **Healthy single start:** one successful startup serves every compiler
+    invocation in the `RUN` without repeated readiness probes.
 - Require the canonical Docker cache simulator and proof for every repair.
 - Route workflow dispatch, status inspection, reruns, and other GitHub
   mechanics through Delivery Pipeline.
@@ -107,6 +149,10 @@ continues to own GitHub execution mechanics.
   boundary or replace an explicit artifact handoff with a broad source copy.
 - Do not let the specialist execute GitHub, pull-request, publication,
   landing, or promotion mechanics.
+- Do not retry remote `sccache` after the per-`RUN` read-only circuit opens.
+- Do not emit credentials, endpoints containing secrets, or raw sensitive
+  transport payloads in `NOOK_SCCACHE_FALLBACK`.
+- Do not apply read-only fallback behavior to `READ_WRITE` publication mode.
 - Do not run local tests, Docker, preflight, or product compilation during the
   feature stage.
 

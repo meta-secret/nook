@@ -54,6 +54,21 @@ behavior for packets issued by SRE Team Gizmo.
 - Never maintenance-seed a source cache for each commit or branch head.
 - Preserve read-only cache state across GitHub Actions step boundaries.
 - Prove that read-only consumers perform zero cache writes and zero exports.
+- Treat remote `sccache` in `READ_ONLY` mode as an optional accelerator.
+  - Allow one startup attempt per Docker `RUN` with a two-second bound.
+  - Share readiness and open-circuit state across compiler invocations in the
+    same `RUN`.
+  - Fall back to the direct compiler after startup, DNS, or object-read
+    failure.
+  - Emit one structured `NOOK_SCCACHE_FALLBACK` JSON event when the circuit
+    opens.
+  - Keep the fallback event free of credentials and sensitive transport data.
+  - Perform zero remote writes before and after fallback.
+- Keep genuine compiler failures terminal. Preserve the compiler exit status
+  when direct fallback compilation fails.
+- Treat remote `sccache` in `READ_WRITE` mode as required publication
+  infrastructure. Startup, credential, read, and write failures remain
+  terminal.
 - Use `mode=min` for exact source-cache exports.
 - Bound cache exports and transport retries.
 - Preserve ordinary new-commit reuse when no optional exact source cache
@@ -70,6 +85,15 @@ behavior for packets issued by SRE Team Gizmo.
   Rust, WASM, Hive, or web input-domain change. Mutating an unrelated domain
   must leave the subject compiler domain cached, while a relevant-domain
   mutation invalidates only the expected vertices.
+- Extend the simulator and proof with the remote `sccache` fault matrix.
+  - Prove bounded fallback after read-only startup failure.
+  - Prove DNS or object-read failure opens one shared per-`RUN` circuit.
+  - Prove an open circuit bypasses all later remote probes and writes.
+  - Prove a genuine compiler failure remains terminal after fallback.
+  - Prove read-write startup, credential, read, and write failures remain
+    terminal.
+  - Prove the healthy path starts once and serves every compiler invocation in
+    the `RUN`.
 - Commit the complete bounded iteration.
 - Report the commit SHA, evidence, latency measurements, and blockers to SRE
   Team Gizmo.
@@ -100,6 +124,9 @@ behavior for packets issued by SRE Team Gizmo.
   consumer.
 - Do not hide cold compilation, missing cache scopes, or cache transport
   failures behind successful status.
+- Do not retry remote `sccache` after a read-only circuit opens in a Docker
+  `RUN`.
+- Do not degrade a `READ_WRITE` publication failure to direct compilation.
 - Do not dispatch other specialists or act as Team Gizmo or Gizmo Prime.
 - Do not execute GitHub, pull-request, publication, landing, or promotion
   mechanics.

@@ -236,6 +236,12 @@ describe('canonical Cortex team authority', () => {
           'generation-baseline-invalid',
           'effective-solve-input-mismatch',
           'unrelated-input-cache-invalidation',
+          'sccache-read-only-startup-fallback',
+          'sccache-read-only-transport-fallback',
+          'sccache-read-only-circuit-open',
+          'sccache-compiler-failure',
+          'sccache-read-write-transport-failure',
+          'sccache-readiness-contract-violation',
           'recipe-or-dependency-generation-changed',
           'unexpected-read-only-write-or-export',
           'severe-cache-hit-regression',
@@ -260,6 +266,12 @@ describe('canonical Cortex team authority', () => {
           'introduce-per-head-args-at-latest-semantic-consumer-and-preserve-explicit-narrow-wasm-handoffs',
         domainIsolationProofPolicy:
           'policy-and-domain-specific-simulator-proof-must-show-unrelated-compiler-domains-remain-cached',
+        sccacheReadOnlyPolicy:
+          'optional-accelerator-two-second-single-start-shared-run-circuit-structured-fallback-direct-compiler-zero-writes',
+        sccacheReadWritePolicy:
+          'publication-startup-credential-read-and-write-failures-remain-terminal',
+        sccacheFaultProofPolicy:
+          'simulator-and-proof-cover-startup-dns-read-open-circuit-compiler-read-write-and-healthy-single-start',
       },
     });
   });
@@ -348,6 +360,33 @@ describe('canonical Cortex team authority', () => {
           activationContract: {
             ...dockerCacheSpecialist.activationContract,
             domainIsolationProofPolicy: 'skip-unrelated-domain-proof',
+          },
+        },
+      ],
+      [
+        {
+          ...dockerCacheSpecialist,
+          activationContract: {
+            ...dockerCacheSpecialist.activationContract,
+            sccacheReadOnlyPolicy: 'retry-remote-cache-for-every-compiler',
+          },
+        },
+      ],
+      [
+        {
+          ...dockerCacheSpecialist,
+          activationContract: {
+            ...dockerCacheSpecialist.activationContract,
+            sccacheReadWritePolicy: 'fall-back-on-publication-failure',
+          },
+        },
+      ],
+      [
+        {
+          ...dockerCacheSpecialist,
+          activationContract: {
+            ...dockerCacheSpecialist.activationContract,
+            sccacheFaultProofPolicy: 'healthy-path-only',
           },
         },
       ],

@@ -192,6 +192,9 @@ export type TeamInternalAgentActivationContract = {
   readonly inputDomainIsolationPolicy: string;
   readonly perHeadBoundaryPolicy: string;
   readonly domainIsolationProofPolicy: string;
+  readonly sccacheReadOnlyPolicy: string;
+  readonly sccacheReadWritePolicy: string;
+  readonly sccacheFaultProofPolicy: string;
   readonly repairLoop: readonly string[];
 };
 
@@ -565,6 +568,12 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
           'generation-baseline-invalid',
           'effective-solve-input-mismatch',
           'unrelated-input-cache-invalidation',
+          'sccache-read-only-startup-fallback',
+          'sccache-read-only-transport-fallback',
+          'sccache-read-only-circuit-open',
+          'sccache-compiler-failure',
+          'sccache-read-write-transport-failure',
+          'sccache-readiness-contract-violation',
           'recipe-or-dependency-generation-changed',
           'unexpected-read-only-write-or-export',
           'severe-cache-hit-regression',
@@ -590,6 +599,12 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
           'introduce-per-head-args-at-latest-semantic-consumer-and-preserve-explicit-narrow-wasm-handoffs',
         domainIsolationProofPolicy:
           'policy-and-domain-specific-simulator-proof-must-show-unrelated-compiler-domains-remain-cached',
+        sccacheReadOnlyPolicy:
+          'optional-accelerator-two-second-single-start-shared-run-circuit-structured-fallback-direct-compiler-zero-writes',
+        sccacheReadWritePolicy:
+          'publication-startup-credential-read-and-write-failures-remain-terminal',
+        sccacheFaultProofPolicy:
+          'simulator-and-proof-cover-startup-dns-read-open-circuit-compiler-read-write-and-healthy-single-start',
         repairLoop: [
           'diagnose-telemetry-before-editing',
           'prove-with-docker-simulator-and-proof',
