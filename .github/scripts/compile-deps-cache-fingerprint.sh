@@ -34,14 +34,10 @@ paths="$({
     nook-app/nook-web/docker/web.Dockerfile \
     nook-app/nook-web/docker/web.docker-bake.hcl \
     nook-app/nook-web/nook-web-app/docker-bake.hcl \
-    agentic-ai/minds/Cargo.toml \
-    agentic-ai/minds/Cargo.lock \
     nook-app/nook-web/nook-web-app/package.json \
     nook-app/nook-web/nook-web-app/bun.lock \
     nook-app/nook-web/nook-web-research/package.json \
     nook-app/nook-web/nook-web-research/bun.lock
-  git ls-files --cached --others --exclude-standard -- \
-    'agentic-ai/minds/vendor/**'
 } | LC_ALL=C sort -u)"
 
 {
