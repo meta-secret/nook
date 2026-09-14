@@ -214,12 +214,25 @@ const ACTIVE_CHILD_FIXTURE: &str = r"CREATE (:HiveSchemaMigration {version: 8})
 
 pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow::Result<()> {
     verify_legacy_migration_blocker(store, graph).await?;
-    verify_schema_eleven_requires_canonical_branch(store, graph).await?;
-    verify_schema_eleven_backfill(store, graph).await?;
-    verify_schema_eleven_reconciles_existing_marker(store, graph).await?;
+    SchemaElevenMigrationScenario { store, graph }
+        .verify()
+        .await?;
     verify_schema_nine_migration(store, graph).await?;
     verify_artifact_lineage_migration(store, graph).await?;
     verify_active_child_transition(store, graph).await
+}
+
+struct SchemaElevenMigrationScenario<'a> {
+    store: &'a Neo4jTaskStore,
+    graph: &'a Graph,
+}
+
+impl SchemaElevenMigrationScenario<'_> {
+    async fn verify(&self) -> anyhow::Result<()> {
+        self.verify_requires_canonical_branch().await?;
+        self.verify_backfill().await?;
+        self.verify_reconciles_existing_marker().await
+    }
 }
 
 async fn verify_legacy_migration_blocker(
@@ -250,17 +263,15 @@ async fn verify_legacy_migration_blocker(
     Ok(())
 }
 
-async fn verify_schema_eleven_requires_canonical_branch(
-    store: &Neo4jTaskStore,
-    graph: &Graph,
-) -> anyhow::Result<()> {
-    graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await
-        .context("clean schema-10 migration fixture")?;
-    graph
-        .run(query(
-            "CREATE (:HiveSchemaMigration {version: 10})
+impl SchemaElevenMigrationScenario<'_> {
+    async fn verify_requires_canonical_branch(&self) -> anyhow::Result<()> {
+        self.graph
+            .run(query("MATCH (node) DETACH DELETE node"))
+            .await
+            .context("clean schema-10 migration fixture")?;
+        self.graph
+            .run(query(
+                "CREATE (:HiveSchemaMigration {version: 10})
              CREATE (:Task {
                id: 'schema-10-unmigratable-main-repair',
                kind: 'main-repair',
@@ -270,49 +281,46 @@ async fn verify_schema_eleven_requires_canonical_branch(
                pinned_local_dev_sha: '123456789abcdef0123456789abcdef012345678',
                feature_head_sha: '23456789abcdef0123456789abcdef0123456789'
              })",
-        ))
-        .await
-        .context("create schema-10 unmigratable fixture")?;
-    let migration_error = store
-        .migrate()
-        .await
-        .err()
-        .ok_or_else(|| anyhow::anyhow!("schema-10 task without branch must block schema 11"))?;
-    assert!(
-        migration_error
-            .to_string()
-            .contains("feature_head_sha cannot be reinterpreted as a branch")
-    );
-    let mut rows = graph
-        .execute(query(
-            "MATCH (task:Task {id: 'schema-10-unmigratable-main-repair'})
+            ))
+            .await
+            .context("create schema-10 unmigratable fixture")?;
+        let migration_error =
+            self.store.migrate().await.err().ok_or_else(|| {
+                anyhow::anyhow!("schema-10 task without branch must block schema 11")
+            })?;
+        assert!(
+            migration_error
+                .to_string()
+                .contains("feature_head_sha cannot be reinterpreted as a branch")
+        );
+        let mut rows = self
+            .graph
+            .execute(query(
+                "MATCH (task:Task {id: 'schema-10-unmigratable-main-repair'})
              OPTIONAL MATCH (migration:HiveSchemaMigration {version: 11})
              RETURN task.feature_branch IS NULL AS branch_untouched,
                     task.feature_head_sha IS NOT NULL AS legacy_head_untouched,
                     count(migration) AS schema_11_markers",
-        ))
-        .await?;
-    let unchanged = rows
-        .next()
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("schema-10 validation row was missing"))?;
-    assert!(unchanged.get::<bool>("branch_untouched")?);
-    assert!(unchanged.get::<bool>("legacy_head_untouched")?);
-    assert_eq!(unchanged.get::<i64>("schema_11_markers")?, 0);
-    Ok(())
-}
+            ))
+            .await?;
+        let unchanged = rows
+            .next()
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("schema-10 validation row was missing"))?;
+        assert!(unchanged.get::<bool>("branch_untouched")?);
+        assert!(unchanged.get::<bool>("legacy_head_untouched")?);
+        assert_eq!(unchanged.get::<i64>("schema_11_markers")?, 0);
+        Ok(())
+    }
 
-async fn verify_schema_eleven_backfill(
-    store: &Neo4jTaskStore,
-    graph: &Graph,
-) -> anyhow::Result<()> {
-    graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await
-        .context("clean schema-10 backfill fixture")?;
-    graph
-        .run(query(
-            "CREATE (:HiveSchemaMigration {version: 10})
+    async fn verify_backfill(&self) -> anyhow::Result<()> {
+        self.graph
+            .run(query("MATCH (node) DETACH DELETE node"))
+            .await
+            .context("clean schema-10 backfill fixture")?;
+        self.graph
+            .run(query(
+                "CREATE (:HiveSchemaMigration {version: 10})
              CREATE (:Task {
                id: 'schema-10-legacy-task',
                kind: 'blocker',
@@ -329,13 +337,14 @@ async fn verify_schema_eleven_backfill(
                feature_head_sha: '23456789abcdef0123456789abcdef0123456789',
                feature_branch: 'codex/repair-cache'
              })",
-        ))
-        .await
-        .context("create schema-10 backfill fixture")?;
-    store.migrate().await?;
-    let mut rows = graph
-        .execute(query(
-            "MATCH (legacy:Task {id: 'schema-10-legacy-task'})
+            ))
+            .await
+            .context("create schema-10 backfill fixture")?;
+        self.store.migrate().await?;
+        let mut rows = self
+            .graph
+            .execute(query(
+                "MATCH (legacy:Task {id: 'schema-10-legacy-task'})
              MATCH (repair:Task {id: 'schema-10-main-repair'})
              MATCH (schema_10:HiveSchemaMigration {version: 10})
              MATCH (migration:HiveSchemaMigration {version: 11})
@@ -344,34 +353,31 @@ async fn verify_schema_eleven_backfill(
                     repair.feature_head_sha IS NULL AS removed_legacy_head,
                     count(schema_10) AS schema_10_markers,
                     migration.version AS version",
-        ))
-        .await?;
-    let migrated = rows
-        .next()
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("schema-10 backfill row was missing"))?;
-    assert_eq!(migrated.get::<String>("legacy_branch")?, "");
-    assert_eq!(
-        migrated.get::<String>("repair_branch")?,
-        "codex/repair-cache"
-    );
-    assert!(migrated.get::<bool>("removed_legacy_head")?);
-    assert_eq!(migrated.get::<i64>("schema_10_markers")?, 1);
-    assert_eq!(migrated.get::<i64>("version")?, 11);
-    Ok(())
-}
+            ))
+            .await?;
+        let migrated = rows
+            .next()
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("schema-10 backfill row was missing"))?;
+        assert_eq!(migrated.get::<String>("legacy_branch")?, "");
+        assert_eq!(
+            migrated.get::<String>("repair_branch")?,
+            "codex/repair-cache"
+        );
+        assert!(migrated.get::<bool>("removed_legacy_head")?);
+        assert_eq!(migrated.get::<i64>("schema_10_markers")?, 1);
+        assert_eq!(migrated.get::<i64>("version")?, 11);
+        Ok(())
+    }
 
-async fn verify_schema_eleven_reconciles_existing_marker(
-    store: &Neo4jTaskStore,
-    graph: &Graph,
-) -> anyhow::Result<()> {
-    graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await
-        .context("clean schema-11 reconciliation fixture")?;
-    graph
-        .run(query(
-            "CREATE (:HiveSchemaMigration {version: 11})
+    async fn verify_reconciles_existing_marker(&self) -> anyhow::Result<()> {
+        self.graph
+            .run(query("MATCH (node) DETACH DELETE node"))
+            .await
+            .context("clean schema-11 reconciliation fixture")?;
+        self.graph
+            .run(query(
+                "CREATE (:HiveSchemaMigration {version: 11})
              CREATE (:Task {
                id: 'schema-11-stale-legacy-head',
                kind: 'main-repair',
@@ -382,27 +388,29 @@ async fn verify_schema_eleven_reconciles_existing_marker(
                feature_head_sha: '23456789abcdef0123456789abcdef0123456789',
                feature_branch: 'codex/repair-cache'
              })",
-        ))
-        .await
-        .context("create schema-11 reconciliation fixture")?;
-    store.migrate().await?;
-    let mut rows = graph
-        .execute(query(
-            "MATCH (task:Task {id: 'schema-11-stale-legacy-head'})
+            ))
+            .await
+            .context("create schema-11 reconciliation fixture")?;
+        self.store.migrate().await?;
+        let mut rows = self
+            .graph
+            .execute(query(
+                "MATCH (task:Task {id: 'schema-11-stale-legacy-head'})
              RETURN task.feature_branch AS feature_branch,
                     task.feature_head_sha IS NULL AS removed_legacy_head",
-        ))
-        .await?;
-    let reconciled = rows
-        .next()
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("schema-11 reconciliation row was missing"))?;
-    assert_eq!(
-        reconciled.get::<String>("feature_branch")?,
-        "codex/repair-cache"
-    );
-    assert!(reconciled.get::<bool>("removed_legacy_head")?);
-    Ok(())
+            ))
+            .await?;
+        let reconciled = rows
+            .next()
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("schema-11 reconciliation row was missing"))?;
+        assert_eq!(
+            reconciled.get::<String>("feature_branch")?,
+            "codex/repair-cache"
+        );
+        assert!(reconciled.get::<bool>("removed_legacy_head")?);
+        Ok(())
+    }
 }
 
 async fn verify_schema_nine_migration(store: &Neo4jTaskStore, graph: &Graph) -> anyhow::Result<()> {
