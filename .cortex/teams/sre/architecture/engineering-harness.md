@@ -331,6 +331,12 @@ legacy registered `nook` runner is not used.
 - WASM dependencies use fingerprinted `nook-rust-wasm-deps-v6` scopes.
 - Source-sensitive native coverage uses `nook-rust-native-source-v4`.
 - Source-sensitive WASM uses `nook-rust-wasm-source-v3`.
+- Remote compile exact-source caches use `nook-build-compile-v3`. This is a
+  compatibility boundary: earlier `v2` minimal exports may omit the final
+  compiler lineage and must never satisfy a warm-build probe. The dedicated
+  maintenance seed independently creates missing recipe-fingerprinted
+  dependencies and the current immutable `v3` source graph; ordinary compile
+  jobs remain bounded consumers and current-exact publishers.
 - Zot is reached only through Traefik HTTPS at `registry.dev.nokey.sh` with htpasswd auth.
 - Traefik allows 15 minutes to read an incoming registry request so one large
   BuildKit layer upload is not cut off by Traefik's 60-second default.

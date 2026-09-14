@@ -659,12 +659,16 @@ fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Resul
 
     let compile_from = assignment_body(&compile_bake, "compile_cache_from")?;
     let compile_to = assignment_body(&compile_bake, "compile_cache_to")?;
-    let compile_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache";
+    let compile_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache";
     let compile_ref_assignment = assignment_body(&compile_bake, "compile_source_cache_ref")?;
     assert_eq!(
         compile_ref_assignment,
         format!("\"{compile_ref}\""),
         "build:compile must name its stable remote registry scope explicitly"
+    );
+    assert!(
+        !compile_bake.contains("nook-build-compile-v2"),
+        "legacy shallow source manifests must not satisfy the compatible compile cache boundary"
     );
     assert!(
         app_bake.contains("variable \"NOOK_COMPILE_CACHE_MODE\"")

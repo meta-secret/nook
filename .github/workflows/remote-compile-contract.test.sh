@@ -37,7 +37,7 @@ printf '%s\n' "$batch_job" | grep -Fq -- "(inputs.tasks || inputs.task) != 'buil
 for required in \
   'git rev-list --first-parent --skip=1' \
   'GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX' \
-  'nook-build-compile-v2$ancestor_scope_suffix'; do
+  'nook-build-compile-v3$ancestor_scope_suffix'; do
   grep -Fq -- "$required" "$setup" \
     || { echo "remote compile contract: missing immutable first-parent cache fallback: $required" >&2; exit 1; }
 done
@@ -63,19 +63,19 @@ grep -Fq -- '^nook-rust-compile-deps-v3-' "$compile_script" \
 seed_job="$(sed -n '/^  compile-cache-seed:$/,/^  web-verify:$/p' "$remote")"
 for required in \
   "inputs.task == 'build:compile-cache-seed'" \
-  'timeout-minutes: 15' \
+  'timeout-minutes: 25' \
   'ref: ${{ inputs.source_sha }}' \
-  'timeout --kill-after=1m 12m bash .github/scripts/compile-deps-cache-seed.sh' \
-  'artifact-suffix: compile-deps-seed' \
-  'cache-selection: compile-deps' \
+  'timeout --kill-after=1m 22m bash .github/scripts/compile-deps-cache-seed.sh' \
+  'artifact-suffix: compile-cache-seed' \
+  'cache-selection: compile-seed' \
   'cache-write: "false"' \
   'main-cache-only: "true"' \
   'isolated-cache-write: "false"'; do
   printf '%s\n' "$seed_job" | grep -Fq -- "$required" \
-    || { echo "remote compile contract: missing isolated dependency seed boundary: $required" >&2; exit 1; }
+    || { echo "remote compile contract: missing isolated compile seed boundary: $required" >&2; exit 1; }
 done
 
-for forbidden in 'build-compile ' 'task build:compile' 'cargo test' 'preflight'; do
+for forbidden in 'task build:compile' 'cargo test' 'preflight'; do
   grep -Fq -- "$forbidden" "$seed_script" \
     && { echo "remote compile contract: seed boundary contains forbidden product work: $forbidden" >&2; exit 1; }
 done
@@ -85,6 +85,10 @@ grep -Fq -- 'GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE' "$seed_script" \
   || { echo 'remote compile contract: seed boundary must skip an existing immutable fingerprint' >&2; exit 1; }
 grep -Fq -- 'GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED=1' "$seed_script" \
   || { echo 'remote compile contract: seed boundary must narrowly authorize only the dependency export' >&2; exit 1; }
+grep -Fq -- 'GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED=1' "$seed_script" \
+  || { echo 'remote compile contract: seed boundary must narrowly authorize the compatible source export' >&2; exit 1; }
+grep -Fq -- 'GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE' "$seed_script" \
+  || { echo 'remote compile contract: seed boundary must independently skip an existing compatible source graph' >&2; exit 1; }
 if grep -Fq -- 'build-compile-dependencies' "$compile_script"; then
   echo 'remote compile contract: ordinary build:compile must consume dependency caches, not seed them' >&2
   exit 1
@@ -95,7 +99,11 @@ grep -Fq -- 'GHA_CACHE_WRITE_ENABLED=' "$seed_script" \
 grep -Fq -- 'timeout=8m' "$compile_bake" \
   || { echo 'remote compile contract: dependency cache export must remain bounded inside the seed job' >&2; exit 1; }
 
-grep -Fq -- '[ "$cache_selection" = "compile-deps" ]' "$setup" \
-  || { echo 'remote compile contract: dependency seed must probe the immutable remote-buildcache namespace' >&2; exit 1; }
+grep -Fq -- '[ "$cache_selection" = "compile-seed" ]' "$setup" \
+  || { echo 'remote compile contract: seed must probe the immutable remote-buildcache namespace' >&2; exit 1; }
+if grep -Fq -- 'nook-build-compile-v2$ancestor_scope_suffix' "$setup"; then
+  echo 'remote compile contract: incompatible legacy source manifests must not be probed' >&2
+  exit 1
+fi
 
 echo 'remote compile contract test: ok'

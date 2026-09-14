@@ -110,6 +110,11 @@ ARC cache rules:
 - Import an exact Zot ref alone when it exists.
 - Otherwise restore source-free dependencies and trusted Main.
 - Publish commit-scoped refs only under `nook/remote-buildcache/**`.
+- Treat `nook-build-compile-v3` as the minimum compatible exact-source
+  generation. Never probe or import legacy `v2` source manifests as warm-build
+  evidence. Use the isolated maintenance seed to bootstrap a missing current
+  `v3` graph from recipe-fingerprinted dependencies and, when available, a
+  compatible immutable first-parent `v3` source graph.
 - Publish shared Main refs only from trusted Main.
 - Keep Hive's exact-head lineage separate.
 - Never use GitHub Actions cache for BuildKit layers.

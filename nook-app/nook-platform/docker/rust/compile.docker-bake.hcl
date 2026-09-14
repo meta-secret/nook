@@ -24,12 +24,20 @@ variable "GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
+variable "GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED" {
+  default = ""
+}
+
 // The source-free dependency graph is fingerprinted independently. A feature
 // source graph is exact-commit-only and includes the required Hive compile
 // graph. There is deliberately no trusted Main source fallback.
 compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/${GHA_RUST_COMPILE_DEPS_SCOPE}:buildcache"
-compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
-compile_ancestor_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v2${GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX}:buildcache"
+// v3 is the first exact-source generation whose mode=min export is rooted at
+// the final compile target and therefore retains the expensive WASM compiler
+// lineage. Legacy v2 manifests are intentionally incompatible and untrusted
+// as warm-build evidence.
+compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
+compile_ancestor_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v3${GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX}:buildcache"
 
 compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE != "" && GHA_CACHE_SCOPE_SUFFIX != "" ? [
   "type=registry,ref=${compile_source_cache_ref}",
@@ -46,7 +54,7 @@ compile_fingerprint_cache_from = GHA_CACHE_ENABLED != "" && GHA_CACHE_EXACT_BUIL
 
 compile_effective_cache_from = concat(compile_cache_from, compile_fingerprint_cache_from)
 
-compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" && GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == "" ? [
+compile_cache_to = (GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" || GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED != "") && GHA_CACHE_SCOPE_SUFFIX != "" && GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE == "" ? [
   // The fingerprint ref owns the maximal dependency closure. Keep the exact
   // source handoff minimal so publication does not serialize that graph twice.
   // Leave one minute of the workflow's three-minute budget for cache import,

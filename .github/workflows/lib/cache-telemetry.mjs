@@ -18,11 +18,30 @@ export class CacheScopeTelemetry {
     return {
       scope: this.environment.GHA_RUST_COMPILE_DEPS_SCOPE || "",
       compile_dependencies: {
+        scope: this.environment.GHA_RUST_COMPILE_DEPS_SCOPE || "",
         available: Boolean(
           this.environment.GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE,
         ),
         write_enabled:
           this.environment.GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED === "1",
+        export_enabled:
+          this.environment.GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED === "1",
+      },
+      compile_source: {
+        scope: this.environment.GHA_CACHE_SCOPE_SUFFIX
+          ? `nook-build-compile-v3${this.environment.GHA_CACHE_SCOPE_SUFFIX}`
+          : "",
+        available: Boolean(
+          this.environment.GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE,
+        ),
+        write_enabled:
+          this.environment.GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED === "1" ||
+          (this.environment.GHA_CACHE_WRITE_ENABLED === "1" &&
+            this.environment.NOOK_COMPILE_CACHE_MODE === "publish"),
+        export_enabled:
+          this.environment.GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED === "1" ||
+          (this.environment.GHA_CACHE_WRITE_ENABLED === "1" &&
+            this.environment.NOOK_COMPILE_CACHE_MODE === "publish"),
       },
     };
   }
@@ -91,7 +110,7 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {1} schema_version
  * @property {{run_id: string, run_attempt: number, job: string}} github
  * @property {CacheBackend} cache_backend
- * @property {{scope: string, compile_dependencies: {available: boolean, write_enabled: boolean}}} cache_scope
+ * @property {{scope: string, compile_dependencies: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}, compile_source: {scope: string, available: boolean, write_enabled: boolean, export_enabled: boolean}}} cache_scope
  * @property {SccacheSummary} sccache
  * @property {BuildkitSummary} buildkit
  * @property {readonly BuildHistoryRecord[]} buildkit_records
@@ -689,7 +708,11 @@ export class CacheTelemetry {
         duration_ms: cacheExport.duration_ms,
         incomplete_failures: cacheExport.incomplete_failures,
       })) {
-        if (!Number.isInteger(value) || typeof value !== "number" || value < 0) {
+        if (
+          !Number.isInteger(value) ||
+          typeof value !== "number" ||
+          value < 0
+        ) {
           throw new Error(
             `telemetry buildkit.cache_export.${field} must be a non-negative integer`,
           );

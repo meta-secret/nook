@@ -26,9 +26,15 @@ variable "COMPILE_SOURCE_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
+variable "COMPILE_SOURCE_CACHE_GENERATION" {
+  default = "v3"
+}
+
 compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-deps-v3:fingerprint-lock-and-recipe-inputs"
-compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-v2-${COMPILE_SOURCE_SCOPE}:buildcache"
-compile_ancestor_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-v2-${COMPILE_ANCESTOR_SOURCE_SCOPE}:buildcache"
+// v3 models the production compatibility boundary: legacy v2 mode=min
+// manifests do not prove that the final compiler lineage was retained.
+compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-${COMPILE_SOURCE_CACHE_GENERATION}-${COMPILE_SOURCE_SCOPE}:buildcache"
+compile_ancestor_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-v3-${COMPILE_ANCESTOR_SOURCE_SCOPE}:buildcache"
 
 compile_cache_from = COMPILE_SOURCE_CACHE_AVAILABLE != "" ? [
   "type=registry,ref=${compile_source_cache_ref}",

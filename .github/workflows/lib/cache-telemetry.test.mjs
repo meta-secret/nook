@@ -13,10 +13,24 @@ void test("records the immutable compile dependency seed boundary", () => {
       GHA_RUST_COMPILE_DEPS_SCOPE: `nook-rust-compile-deps-v3-${"a".repeat(40)}`,
       GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE: "",
       GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED: "1",
+      GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE: "1",
+      GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED: "",
+      GHA_CACHE_SCOPE_SUFFIX: `-git-${"b".repeat(40)}`,
     }).record(),
     {
       scope: `nook-rust-compile-deps-v3-${"a".repeat(40)}`,
-      compile_dependencies: { available: false, write_enabled: true },
+      compile_dependencies: {
+        scope: `nook-rust-compile-deps-v3-${"a".repeat(40)}`,
+        available: false,
+        write_enabled: true,
+        export_enabled: true,
+      },
+      compile_source: {
+        scope: `nook-build-compile-v3-git-${"b".repeat(40)}`,
+        available: true,
+        write_enabled: false,
+        export_enabled: false,
+      },
     },
   );
 });

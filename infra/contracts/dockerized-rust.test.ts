@@ -326,10 +326,7 @@ class DockerizedRustContract {
         expect(values).toContain("GHA_CACHE_WRITE_ENABLED=\n");
         expect(values).not.toContain("HIVE_CACHE_TO=");
         const calls = readFileSync(probes, "utf8");
-        if (
-          profile === "web-research-deps" ||
-          profile === "web-research-image"
-        )
+        if (profile === "web-research-deps" || profile === "web-research-image")
           expect(calls).toContain("-git-");
         else expect(calls).not.toContain("-git-");
         if (profile === "connection-only" || profile === "hive")
@@ -686,11 +683,7 @@ class DockerizedRustContract {
     const groupedTask = webTasks.tasks["_web:test:e2e:run-groups"];
     const webOnlyTask = ciTasks.tasks["_ci:main:web:e2e-only"];
     const fullTask = ciTasks.tasks["_ci:main"];
-    if (
-      !groupedTask?.cmds ||
-      !webOnlyTask?.cmds ||
-      !fullTask?.cmds
-    ) {
+    if (!groupedTask?.cmds || !webOnlyTask?.cmds || !fullTask?.cmds) {
       throw new Error("E2E completion task definitions are missing");
     }
     const grouped = z.string().parse(groupedTask.cmds[0]);
@@ -910,9 +903,7 @@ tasks:
     const compileFingerprint = this.read(
       ".github/scripts/compile-deps-cache-fingerprint.sh",
     );
-    const compileSeed = this.read(
-      ".github/scripts/compile-deps-cache-seed.sh",
-    );
+    const compileSeed = this.read(".github/scripts/compile-deps-cache-seed.sh");
     const remoteWorkflow = this.read(".github/workflows/remote.yml");
     const cacheTelemetry = this.read(
       ".github/workflows/lib/cache-telemetry.mjs",
@@ -929,7 +920,7 @@ tasks:
       expect(source).toContain("mode=min,compression=zstd");
     }
     expect(production).toContain(
-      "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE != \"\"",
+      'GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE != ""',
     );
     expect(production).toContain(
       "GHA_CACHE_ANCESTOR_BUILD_COMPILE_SCOPE_SUFFIX",
@@ -944,13 +935,20 @@ tasks:
       "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
     );
     expect(compileSeed).toContain("build-compile-dependencies");
+    expect(compileSeed).toContain("build-compile");
     expect(compileSeed).toContain(
       "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE",
     );
     expect(compileSeed).toContain("GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED=1");
+    expect(compileSeed).toContain("GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED=1");
+    expect(compileSeed).toContain("GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE");
     expect(remoteWorkflow).toContain("compile-cache-seed:");
-    expect(remoteWorkflow).toContain("timeout-minutes: 15");
+    expect(remoteWorkflow).toContain("timeout-minutes: 25");
+    expect(production).toContain("nook-build-compile-v3");
+    expect(production).not.toContain("nook-build-compile-v2");
     expect(cacheTelemetry).toContain("compile_dependencies");
+    expect(cacheTelemetry).toContain("compile_source");
+    expect(cacheTelemetry).toContain("export_enabled");
     expect(cacheTelemetry).toContain(
       "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE",
     );
@@ -963,25 +961,33 @@ tasks:
     expect(simulatorDockerfile).toContain(
       "FROM compile-nook-wasm-build AS compile",
     );
-    expect(simulator).toContain("COMPILE_SOURCE_CACHE_AVAILABLE != \"\"");
+    expect(simulator).toContain('COMPILE_SOURCE_CACHE_AVAILABLE != ""');
     expect(simulator).toContain("COMPILE_SOURCE_SCOPE");
     expect(simulator).toContain("separate seed boundary");
     expect(proof).toContain(
       "Separate seed replay: existing immutable fingerprint skips solve and export",
     );
-    expect(proof).toContain("compile deps replay: available=1 solves=0 writes=0");
+    expect(proof).toContain(
+      "compile deps replay: available=1 solves=0 writes=0",
+    );
     expect(proof).toContain(
       "New exact source: mode=min retains the ancestor compiler lineage",
+    );
+    expect(proof).toContain(
+      "Legacy incompatible source: v2 manifest is ignored",
+    );
+    expect(proof).toContain(
+      "Compatible source seed replay: exact manifest skips solve and export",
     );
     expect(proof).toContain(
       "Exact source replay: read-only warm solve stays below two minutes",
     );
     expect(proof).toContain("bake-sim-compile-hive-source");
-    expect(proof).toContain(
-      "compile source B: cached=7 uncached=2 writes=1",
-    );
+    expect(proof).toContain("compile source B: cached=7 uncached=2 writes=1");
     expect(proof).toContain("compile warm: cached=9 uncached=0 writes=0");
-    expect(proof).toContain('bake_compile_source "$proof_log" "$compile_source_b" "1" ""');
+    expect(proof).toContain(
+      'bake_compile_source "$proof_log" "$compile_source_b" "1" ""',
+    );
     expect(proof).toContain('require_no_cache_write "$proof_log"');
   }
 

@@ -10,7 +10,8 @@ inputs:
       ecosystem-deterministic, and ecosystem-kani probe only their named lane;
       ecosystem-smoke probes deterministic, fuzz, and Kani together;
       wasm-proof computes its dependency fingerprint without probing;
-      compile-deps probes only the recipe-aware source-free compile graph;
+      compile-seed probes the recipe-aware source-free dependencies and the
+      compatible exact-source compile graph;
       web-research-deps probes only the research Bun dependency lineage;
       web-research-image probes the exact research browser graph; hive probes
       only the Hive lineage; connection-only performs no registry cache probes.
@@ -175,7 +176,7 @@ runs:
         git_ref="${{ github.ref }}"
         cache_selection="${{ inputs.cache-selection }}"
         case "$cache_selection" in
-          general|native|wasm|wasm-proof|compile-deps|preflight|web-e2e|web-research-deps|web-research-image|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
+          general|native|wasm|wasm-proof|compile-seed|preflight|web-e2e|web-research-deps|web-research-image|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
           *)
             echo "cache-selection is outside the closed consumer profile set (got: ${cache_selection:-empty})" >&2
             exit 1
@@ -206,11 +207,13 @@ runs:
         remote_compile_cache_write=""
         remote_compile_scope=""
         if [ "$event_name" = "workflow_dispatch" ] \
-          && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
+          && { [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ] \
+            || [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile-cache-seed" ]; }; then
           remote_compile_scope=1
           # Feature source output is exact-head scoped. Dependencies use their
           # content fingerprint below, and Hive retains its own lineage.
-          if [ "$publish_compile_cache" = "true" ]; then
+          if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ] \
+            && [ "$publish_compile_cache" = "true" ]; then
             remote_compile_cache_write=1
             echo "build:compile publication mode enables exact-head cache export"
           else
@@ -318,7 +321,7 @@ runs:
         # Probe each full-graph ref and use Main only while that exact ref is absent.
         registry_host="${{ inputs.registry-host }}"
         exact_repository="nook/buildcache"
-        if [ -n "$scope_suffix" ] || [ "$cache_selection" = "compile-deps" ]; then
+        if [ -n "$scope_suffix" ] || [ "$cache_selection" = "compile-seed" ]; then
           exact_repository="nook/remote-buildcache"
         fi
         cache_ref_status() {
@@ -371,7 +374,7 @@ runs:
           while IFS= read -r ancestor_sha; do
             [[ "$ancestor_sha" =~ ^[0-9a-f]{40}$ ]] || continue
             ancestor_scope_suffix="-git-$ancestor_sha"
-            ancestor_ref="$registry_host/nook/remote-buildcache/nook-build-compile-v2$ancestor_scope_suffix:buildcache"
+            ancestor_ref="$registry_host/nook/remote-buildcache/nook-build-compile-v3$ancestor_scope_suffix:buildcache"
             probe_output="$(mktemp)"
             probe_status=0
             timeout 5s docker buildx imagetools inspect "$ancestor_ref" \
@@ -417,7 +420,7 @@ runs:
         }
 
         case "$cache_selection" in
-          general|native|wasm|wasm-proof|compile-deps)
+          general|native|wasm|wasm-proof|compile-seed)
           # Preserve the shared Rust dependency identity for its existing
           # consumers. build:compile composes a distinct recipe-aware identity
           # below because an existing manifest must never suppress publication
@@ -449,9 +452,9 @@ runs:
           ;;
         esac
 
-        if [ "$cache_selection" = "compile-deps" ]; then
+        if [ "$cache_selection" = "compile-seed" ]; then
           if [ "$NOOK_REMOTE_TASK_SELECTION" != "build:compile-cache-seed" ]; then
-            echo "compile-deps cache selection requires the dedicated seed selector" >&2
+            echo "compile-seed cache selection requires the dedicated seed selector" >&2
             exit 1
           fi
           publish_exact_availability GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE "$compile_deps_scope"
@@ -459,6 +462,13 @@ runs:
             echo "GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED=1" >> "$GITHUB_ENV"
           else
             echo "GHA_COMPILE_DEPS_CACHE_WRITE_ENABLED=" >> "$GITHUB_ENV"
+          fi
+          publish_exact_availability GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE "nook-build-compile-v3$scope_suffix"
+          if [ -z "$last_exact_available" ]; then
+            echo "GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED=1" >> "$GITHUB_ENV"
+            publish_compile_ancestor_fallback
+          else
+            echo "GHA_COMPILE_SOURCE_CACHE_WRITE_ENABLED=" >> "$GITHUB_ENV"
           fi
         fi
 
@@ -468,7 +478,7 @@ runs:
           if [ "$cache_selection" = "general" ] \
             && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
             publish_exact_availability GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE "$compile_deps_scope"
-            publish_exact_availability GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE "nook-build-compile-v2$scope_suffix"
+            publish_exact_availability GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE "nook-build-compile-v3$scope_suffix"
             if [ -z "$last_exact_available" ]; then
               publish_compile_ancestor_fallback
             fi
@@ -537,7 +547,7 @@ runs:
           fi
         fi
         case "$cache_selection" in
-          general|native|wasm|compile-deps|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
+          general|native|wasm|compile-seed|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
           echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
           ;;
         esac

@@ -97,7 +97,8 @@ tasks:
         stable_manifest="${registry_ref}/v2/${stable_repository}/manifests/buildcache"
         compile_deps_repository="nook/remote-buildcache/nook-bake-sim-compile-deps-v3"
         compile_deps_manifest="${registry_ref}/v2/${compile_deps_repository}/manifests/fingerprint-lock-and-recipe-inputs"
-        compile_source_repository="nook/remote-buildcache/nook-bake-sim-compile-v2"
+        compile_source_repository="nook/remote-buildcache/nook-bake-sim-compile-v3"
+        legacy_compile_source_repository="nook/remote-buildcache/nook-bake-sim-compile-v2"
         compile_source_a="git-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         compile_source_b="git-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         suffix="$(date +%s)-$(od -An -N2 -tu2 /dev/urandom | tr -d ' ')"
@@ -229,12 +230,14 @@ tasks:
           local source_available="$3"
           local cache_write="$4"
           local ancestor_source_scope="${5:-}"
+          local source_generation="${6:-v3}"
           set +e
           env NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
             COMPILE_SOURCE_SCOPE="$source_scope" \
             COMPILE_SOURCE_CACHE_AVAILABLE="$source_available" \
             COMPILE_SOURCE_CACHE_WRITE_ENABLED="$cache_write" \
             COMPILE_ANCESTOR_SOURCE_SCOPE="$ancestor_source_scope" \
+            COMPILE_SOURCE_CACHE_GENERATION="$source_generation" \
             "$docker_cli" buildx bake \
             --progress=plain \
             -f "$sim_dir/compile-warm.docker-bake.hcl" \
@@ -365,7 +368,17 @@ tasks:
         require_no_cache_write "$proof_log"
         echo "compile deps replay: available=1 solves=0 writes=0"
 
-        echo "== First exact source: import dependencies and publish mode=min =="
+        legacy_source_a_manifest="${registry_ref}/v2/${legacy_compile_source_repository}-${compile_source_a}/manifests/buildcache"
+        echo "== Legacy incompatible source: v2 manifest is ignored =="
+        create_builder "nook-bake-sim-compile-legacy-source-a-${suffix}"
+        bake_compile_source "$proof_log" "$compile_source_a" "" "1" "" "v2"
+        require_cache_write "$proof_log"
+        test "$(compile_registry_ref_code "$legacy_source_a_manifest")" = 200
+        compatible_source_a_manifest="${registry_ref}/v2/${compile_source_repository}-${compile_source_a}/manifests/buildcache"
+        test "$(compile_registry_ref_code "$compatible_source_a_manifest")" = 404
+        echo "legacy compile source: compatible=0 selected=0 generation=v2"
+
+        echo "== Compatible source seed: import dependencies and publish exact v3 mode=min =="
         create_builder "nook-bake-sim-compile-source-a-${suffix}"
         bake_compile_source "$proof_log" "$compile_source_a" "" "1"
         for marker in \
@@ -387,6 +400,15 @@ tasks:
         compile_source_a_manifest="${registry_ref}/v2/${compile_source_repository}-${compile_source_a}/manifests/buildcache"
         test "$(compile_registry_ref_code "$compile_source_a_manifest")" = 200
         echo "compile source A: cached=3 uncached=6 writes=1 mode=min"
+
+        echo "== Compatible source seed replay: exact manifest skips solve and export =="
+        printf 'source-seed-manifest-present\n' >"$proof_log"
+        if [ "$(compile_registry_ref_code "$compile_source_a_manifest")" != 200 ]; then
+          bake_compile_source "$proof_log" "$compile_source_a" "" "1"
+        fi
+        grep -Fxq 'source-seed-manifest-present' "$proof_log"
+        require_no_cache_write "$proof_log"
+        echo "compile source seed replay: available=1 solves=0 writes=0"
 
         echo "== New exact source: mode=min retains the ancestor compiler lineage =="
         printf 'nook-wasm-source-only-edit\n' >"$compile_nook_input"
