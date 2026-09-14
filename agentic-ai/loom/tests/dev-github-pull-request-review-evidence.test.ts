@@ -421,7 +421,7 @@ test('does not require an aggregate approved review when feedback is clean', () 
   expect(result.isOk()).toBe(true);
 });
 
-test('ignores stale non-actionable reviews but blocks unresolved threads', () => {
+test('ignores stale non-actionable reviews and outdated threads but blocks current threads', () => {
   const stale = new ReviewEvidenceRunner({
     reviewPages: [
       ReviewEvidenceRunner.reviewPage({
@@ -461,10 +461,7 @@ test('ignores stale non-actionable reviews but blocks unresolved threads', () =>
       },
     ],
   }).reviewResult();
-  expect(outdated.result.isErr()).toBe(true);
-  if (outdated.result.isErr()) {
-    expect(outdated.result.error.kind).toBe(DevFailureKind.Reviews);
-  }
+  expect(outdated.result.isOk()).toBe(true);
 });
 
 test('reports a pull-request head race after collecting review evidence', () => {

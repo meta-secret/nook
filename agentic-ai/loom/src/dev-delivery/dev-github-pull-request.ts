@@ -421,7 +421,7 @@ export class DevelopmentPullRequestGateway {
       if (threadIdentity.isErr()) return err(threadIdentity.error);
       unresolvedCurrentThread ||=
         page.data.repository.pullRequest.reviewThreads.nodes.some(
-          (thread) => !thread.isResolved,
+          (thread) => !thread.isResolved && !thread.isOutdated,
         );
     }
 
