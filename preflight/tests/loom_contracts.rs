@@ -180,13 +180,16 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         format_contract
             .contains("bash \"{{.REPO_ROOT}}/.github/formatting/format-host-apply.test.sh\"")
             && format_contract.contains(
+                "bun install --cwd \"{{.REPO_ROOT}}\" --frozen-lockfile --ignore-scripts"
+            )
+            && format_contract.contains(
                 "bun install --cwd \"{{.REPO_ROOT}}/.github/formatting\" --frozen-lockfile --ignore-scripts"
             )
-            && format_contract.matches("bun install").count() == 1
+            && format_contract.matches("bun install").count() == 2
             && !format_contract.contains("deps:")
             && !format_contract.contains("||")
             && !format_contract.contains("loom:"),
-        "the formatter contract must use its detached pinned, frozen bootstrap without a fallback"
+        "the formatter contract must install its repository and detached formatter dependencies from pinned, frozen manifests without a fallback"
     );
 
     let skills_manifest =

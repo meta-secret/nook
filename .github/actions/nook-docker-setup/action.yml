@@ -272,7 +272,9 @@ runs:
           web-research-deps|web-research-image)
             # PR research jobs hand an exact source cache across ARC Pods.
             # Main publishes stable scopes and has no remote task selection.
-            arc_exact_scope_required="$NOOK_REMOTE_TASK_SELECTION"
+            if [ "$event_name" = "pull_request" ]; then
+              arc_exact_scope_required=1
+            fi
             ;;
         esac
         if [ "${NOOK_ARC_RUNNER:-}" = "1" ] \

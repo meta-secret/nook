@@ -73,6 +73,7 @@ tasks:
     dir: "{{.REPO_ROOT}}"
     cmds:
       - bash "{{.REPO_ROOT}}/.github/formatting/format-host-apply.test.sh"
+      - bun install --cwd "{{.REPO_ROOT}}" --frozen-lockfile --ignore-scripts
       - bun install --cwd "{{.REPO_ROOT}}/.github/formatting" --frozen-lockfile --ignore-scripts
       - bun test "{{.REPO_ROOT}}/infra/contracts/dockerized-rust.test.ts"
 
