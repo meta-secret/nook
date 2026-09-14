@@ -137,8 +137,10 @@ fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
         taskfile.matches(package_gate).count() == 3,
         "skills install, format, and verify must use canonical package discovery"
     );
-    let mut pending = vec![prompt_root.clone()];
-    pending.extend(application_roots);
+    let mut pending = application_roots;
+    if prompt_root.is_dir() {
+        pending.push(prompt_root.clone());
+    }
     while let Some(directory) = pending.pop() {
         for entry in fs::read_dir(directory)? {
             let entry = entry?;
