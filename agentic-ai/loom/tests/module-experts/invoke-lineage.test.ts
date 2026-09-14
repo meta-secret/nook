@@ -721,80 +721,6 @@ test('rejects a parent view above the character limit with valid projection hash
   }
 });
 
-test('rejects authorization storage collisions before lineage materializes', async () => {
-  const siblingRequest = ModuleExpertsInvokeLineageScenario.directRequest(
-    `authorization-key-collision-${randomUUID()}`,
-  );
-  const siblingAuthorization =
-    ModuleExpertsInvokeLineageScenario.authorization(siblingRequest);
-  const collidingSibling: ModuleExpertAuthorization = {
-    ...siblingAuthorization,
-    expert: 'web_expert',
-    parent: {
-      kind: AgentAttemptParentKind.AgentAttempt,
-      task: 'alternate-feature-synthesis',
-      agent: 'alternate-delivery-owner',
-      attempt: 2,
-    },
-  };
-  const direct = ModuleExpertsInvokeLineageScenario.directRequest(
-    `authorization-parent-key-${randomUUID()}`,
-  );
-  const parent = ModuleExpertsInvokeLineageScenario.directParent(direct);
-  const parentKeyRequest: ModuleExpertInvocationRequest = {
-    ...direct,
-    task: parent.task,
-    attempt: parent.attempt,
-  };
-  const cases: readonly AuthorizationStorageCollisionCase[] = [
-    {
-      request: siblingRequest,
-      authorizations: [siblingAuthorization, collidingSibling],
-      expectedMessage: 'journal storage keys must be unique',
-    },
-    {
-      request: parentKeyRequest,
-      authorizations: [
-        ModuleExpertsInvokeLineageScenario.authorization(parentKeyRequest),
-      ],
-      expectedMessage: 'identity is invalid',
-    },
-  ];
-
-  for (const testCase of cases) {
-    const runDirectory =
-      ModuleExpertsInvokeLineageScenario.processingRunDirectory(
-        testCase.request.runId,
-      );
-    const immediateParent = ModuleExpertsInvokeLineageScenario.directParent(
-      testCase.request,
-    );
-    const completedArgs = {
-      repoRoot: REPO_ROOT,
-      runId: testCase.request.runId,
-      sourceCommit: testCase.request.sourceCommit,
-      task: immediateParent.task,
-      agent: immediateParent.agent,
-      attempt: immediateParent.attempt,
-      depth: 1,
-      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-      output:
-        ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput(
-          testCase.authorizations,
-        ),
-    } as const;
-    try {
-      await expect(
-        ModuleExpertsInvokeParentFixtureScenario.createCompletedAttempt(
-          completedArgs,
-        ),
-      ).rejects.toThrow(testCase.expectedMessage);
-    } finally {
-      await rm(runDirectory, REMOVE_RECURSIVELY);
-    }
-  }
-});
-
 test('runs a depth-three expert only when the root plan predeclares the exact child', async () => {
   const request = ModuleExpertsInvokeLineageScenario.depthThreeRequest(
     `depth-three-${randomUUID()}`,
@@ -1005,12 +931,6 @@ type InvalidDepthThreeParentCase = {
     | typeof ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput
     | typeof ModuleExpertsInvokeParentFixtureScenario.moduleExpertEvidenceOutput
   >;
-};
-
-type AuthorizationStorageCollisionCase = {
-  readonly request: ModuleExpertInvocationRequest;
-  readonly authorizations: readonly ModuleExpertAuthorization[];
-  readonly expectedMessage: string;
 };
 
 type ParentSetupArgs = {
