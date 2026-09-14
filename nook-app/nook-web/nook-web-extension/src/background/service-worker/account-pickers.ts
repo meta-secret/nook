@@ -7,6 +7,7 @@ import {
 } from '../../lib/login-fill-messages'
 import {
   type WebsiteLoginMatchAvailability,
+  type WebsiteLoginOptionsAdmission,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   WebsiteAuthenticatorCanceledMessageType,
@@ -32,10 +33,7 @@ import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   extensionSessionLifecycle,
 } from './session-lifecycle'
-import {
-  websiteLoginOptionsWireAdapter,
-  type WebsiteLoginOptionsTransportValue,
-} from './website-login-options-wire-adapter'
+import { websiteLoginOptionsWireAdapter } from './website-login-options-wire-adapter'
 
 type PendingAuthenticatorPicker = {
   requestId: string
@@ -770,9 +768,7 @@ class AccountPickerSessions {
     sender,
     dependencies,
     openUnavailableCompanion,
-  }: WebsiteLoginOptionsResponseArgs): Promise<
-    WebsiteLoginOptionsTransportValue
-  > {
+  }: WebsiteLoginOptionsResponseArgs): Promise<WebsiteLoginOptionsAdmission> {
     const resolvedDependencies = ((v) =>
       v ? v : this.websiteLoginOptionsDependencies)(dependencies)
     const authorizationGeneration =
@@ -848,7 +844,7 @@ class AccountPickerSessions {
 
   async websiteLoginOptions(
     args: WebsiteLoginOptionsArgs,
-  ): Promise<WebsiteLoginOptionsTransportValue> {
+  ): Promise<WebsiteLoginOptionsAdmission> {
     const responseRequest: WebsiteLoginOptionsResponseArgs = {
       ...args,
       openUnavailableCompanion: true,
