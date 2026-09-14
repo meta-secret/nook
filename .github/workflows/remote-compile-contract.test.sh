@@ -166,6 +166,19 @@ for argument in \
     || { echo "remote compile contract: generation seed omits consumer argument: $argument" >&2; exit 1; }
 done
 
+grep -Fq -- "cache-selection: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 'compile'" "$remote" \
+  || { echo 'remote compile contract: build:compile must select its bounded cache probe profile' >&2; exit 1; }
+for required in \
+  'if [ "$cache_selection" = "compile" ]' \
+  '"deps|$compile_deps_scope"' \
+  '"exact|nook-build-compile-v3$scope_suffix"' \
+  '"generation|$compile_generation_scope"' \
+  '&& timeout 6s docker buildx imagetools inspect' \
+  'Compile cache probes complete: count=3 timeout_seconds=6 parallel=true'; do
+  grep -Fq -- "$required" "$setup" \
+    || { echo "remote compile contract: bounded compile probe contract is missing: $required" >&2; exit 1; }
+done
+
 grep -Fq -- 'nook-rust-compile-deps-v3-' "$setup" \
   || { echo 'remote compile contract: setup must use the recipe-aware compile dependency scope' >&2; exit 1; }
 grep -Fq -- '^nook-rust-compile-deps-v3-' "$compile_script" \

@@ -10,8 +10,10 @@ inputs:
       ecosystem-deterministic, and ecosystem-kani probe only their named lane;
       ecosystem-smoke probes deterministic, fuzz, and Kani together;
       wasm-proof computes its dependency fingerprint without probing;
-      compile-seed probes the recipe-aware source-free dependencies and the
-      immutable full-graph compile generation baseline;
+      compile probes only its exact head, recipe generation, and dependency
+      fingerprint in one bounded parallel batch; compile-seed probes the
+      recipe-aware source-free dependencies and the immutable full-graph
+      compile generation baseline;
       web-research-deps probes only the research Bun dependency lineage;
       web-research-image probes the exact research browser graph; hive probes
       only the Hive lineage; connection-only performs no registry cache probes.
@@ -176,7 +178,7 @@ runs:
         git_ref="${{ github.ref }}"
         cache_selection="${{ inputs.cache-selection }}"
         case "$cache_selection" in
-          general|native|wasm|wasm-proof|compile-seed|preflight|web-e2e|web-research-deps|web-research-image|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
+          general|native|wasm|wasm-proof|compile|compile-seed|preflight|web-e2e|web-research-deps|web-research-image|hive|connection-only|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke) ;;
           *)
             echo "cache-selection is outside the closed consumer profile set (got: ${cache_selection:-empty})" >&2
             exit 1
@@ -329,7 +331,10 @@ runs:
           local ref="$1"
           local probe_output
           probe_output="$(mktemp)"
-          if docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output"; then
+          if { [ "$cache_selection" = "compile" ] \
+            && timeout 6s docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output"; } \
+            || { [ "$cache_selection" != "compile" ] \
+              && docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output"; }; then
             rm -f "$probe_output"
             return 0
           fi
@@ -383,7 +388,7 @@ runs:
         }
 
         case "$cache_selection" in
-          general|native|wasm|wasm-proof|compile-seed)
+          general|native|wasm|wasm-proof|compile|compile-seed)
           # Preserve the shared Rust dependency identity for its existing
           # consumers. build:compile composes a distinct recipe-aware identity
           # below because an existing manifest must never suppress publication
@@ -416,6 +421,41 @@ runs:
           fi
           ;;
         esac
+
+        if [ "$cache_selection" = "compile" ]; then
+          if [ "$NOOK_REMOTE_TASK_SELECTION" != "build:compile" ]; then
+            echo "compile cache selection requires the build:compile selector" >&2
+            exit 1
+          fi
+          compile_probe_dir="$(mktemp -d)"
+          for compile_probe in \
+            "deps|$compile_deps_scope" \
+            "exact|nook-build-compile-v3$scope_suffix" \
+            "generation|$compile_generation_scope"; do
+            compile_probe_name="${compile_probe%%|*}"
+            compile_probe_scope="${compile_probe#*|}"
+            (
+              compile_probe_status=0
+              cache_ref_status "$registry_host/$exact_repository/$compile_probe_scope:buildcache" || compile_probe_status=$?
+              printf '%s\n' "$compile_probe_status" > "$compile_probe_dir/$compile_probe_name"
+            ) &
+          done
+          wait
+          for compile_probe_name in deps exact generation; do
+            compile_probe_status="$(cat "$compile_probe_dir/$compile_probe_name")"
+            case "$compile_probe_name|$compile_probe_status" in
+              deps\|0) echo "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE=1" >> "$GITHUB_ENV" ;;
+              deps\|1) echo "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE=" >> "$GITHUB_ENV" ;;
+              exact\|0) echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=1" >> "$GITHUB_ENV" ;;
+              exact\|1) echo "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE=" >> "$GITHUB_ENV" ;;
+              generation\|0) echo "GHA_CACHE_COMPILE_GENERATION_AVAILABLE=1" >> "$GITHUB_ENV" ;;
+              generation\|1) echo "GHA_CACHE_COMPILE_GENERATION_AVAILABLE=" >> "$GITHUB_ENV" ;;
+              *) rm -rf "$compile_probe_dir"; exit "$compile_probe_status" ;;
+            esac
+          done
+          rm -rf "$compile_probe_dir"
+          echo "Compile cache probes complete: count=3 timeout_seconds=6 parallel=true"
+        fi
 
         if [ "$cache_selection" = "compile-seed" ]; then
           if [ "$NOOK_REMOTE_TASK_SELECTION" != "build:compile-cache-seed" ]; then
@@ -511,7 +551,7 @@ runs:
           fi
         fi
         case "$cache_selection" in
-          general|native|wasm|compile-seed|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
+          general|native|wasm|compile|compile-seed|preflight|web-e2e|web-research-deps|web-research-image|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
           echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
           ;;
         esac

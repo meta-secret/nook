@@ -1006,6 +1006,18 @@ tasks:
     );
     expect(remoteWorkflow).toContain("compile-cache-seed:");
     expect(remoteWorkflow).toContain("timeout-minutes: 25");
+    expect(remoteWorkflow).toContain(
+      "== 'build:compile' && 'compile'",
+    );
+    const dockerSetup = this.read(
+      ".github/actions/nook-docker-setup/action.yml",
+    );
+    expect(dockerSetup).toContain(
+      "Compile cache probes complete: count=3 timeout_seconds=6 parallel=true",
+    );
+    expect(dockerSetup).toContain(
+      '&& timeout 6s docker buildx imagetools inspect',
+    );
     expect(production).toContain("nook-build-compile-v3");
     expect(production).not.toContain("nook-build-compile-v2");
     expect(cacheTelemetry).toContain("compile_dependencies");
