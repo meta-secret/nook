@@ -8,17 +8,40 @@ variable "NOOK_COMPILE_HIVE" {
   default = "0"
 }
 
-// The compile graph keeps manifest-only dependency RUNs before authored source
-// COPY/RUN steps. A single stable registry ref with mode=max retains those
-// native BuildKit vertices even when compiler sccache is unavailable.
-compile_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v1:buildcache"
+variable "GHA_RUST_COMPILE_DEPS_SCOPE" {
+  default = ""
+}
 
-compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
-  "type=registry,ref=${compile_cache_ref},ignore-error=true",
-]
+variable "GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE" {
+  default = ""
+}
 
-compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" ? [
-  "type=registry,ref=${compile_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m",
+variable "GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE" {
+  default = ""
+}
+
+// The source-free dependency graph is fingerprinted independently. A feature
+// source graph is exact-commit-only and embeds Hive when the request includes
+// it. There is deliberately no trusted Main source fallback.
+compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/${GHA_RUST_COMPILE_DEPS_SCOPE}:buildcache"
+compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache"
+
+compile_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE != "" && GHA_CACHE_SCOPE_SUFFIX != "" ? [
+  "type=registry,ref=${compile_source_cache_ref}",
+] : GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE != "" && GHA_RUST_COMPILE_DEPS_SCOPE != "" ? [
+  "type=registry,ref=${compile_deps_cache_ref}",
+] : []
+
+compile_cache_to = GHA_CACHE_WRITE_ENABLED != "" && NOOK_COMPILE_CACHE_MODE == "publish" && GHA_CACHE_SCOPE_SUFFIX != "" ? [
+  "type=registry,ref=${compile_source_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m",
+] : []
+
+compile_deps_cache_from = GHA_CACHE_ENABLED != "" && GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE != "" && GHA_RUST_COMPILE_DEPS_SCOPE != "" ? [
+  "type=registry,ref=${compile_deps_cache_ref}",
+] : []
+
+compile_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" && GHA_RUST_COMPILE_DEPS_SCOPE != "" ? [
+  "type=registry,ref=${compile_deps_cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m",
 ] : []
 
 target "build-compile" {
@@ -50,6 +73,28 @@ target "build-compile" {
   }
   cache-from = compile_cache_from
   cache-to   = compile_cache_to
+  output     = ["type=cacheonly"]
+}
+
+// Provisioning invokes this target only after computing the exact dependency
+// fingerprint and setting GHA_RUST_COMPILE_DEPS_SCOPE. Its final stage has no
+// authored product source, so publishing it cannot contaminate the dependency
+// ref with a feature checkout.
+target "build-compile-dependencies" {
+  context    = "."
+  dockerfile = "nook-app/nook-platform/docker/rust/compile.Dockerfile"
+  target     = "compile-dependencies"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    rust-base = "target:rust-base"
+    web-base  = "target:web-base"
+    web-deps  = "target:web-deps-compile"
+  }
+  args = {
+    NOOK_COMPILE_HIVE = NOOK_COMPILE_HIVE
+  }
+  cache-from = compile_deps_cache_from
+  cache-to   = compile_deps_cache_to
   output     = ["type=cacheonly"]
 }
 

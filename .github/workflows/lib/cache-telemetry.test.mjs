@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CacheTelemetry } from "./cache-telemetry.mjs";
+import {
+  BuildkitCacheExportTelemetry,
+  CacheTelemetry,
+} from "./cache-telemetry.mjs";
 
 void test("preserves a valid incomplete record when collection is unavailable", () => {
   const record = CacheTelemetry.buildUnavailableTelemetry({
@@ -22,6 +25,13 @@ void test("preserves a valid incomplete record when collection is unavailable", 
   assert.deepEqual(record.collection, {
     complete: false,
     warnings: ["collection_timeout:30s"],
+    failures: [
+      {
+        component: "collector",
+        reference: "cache-telemetry",
+        message: "collection_timeout:30s",
+      },
+    ],
   });
   assert.equal(record.github.job, "wasm-node-test");
   assert.equal(record.cache_backend.kind, "remote");
@@ -137,6 +147,13 @@ void test("normalizes Buildx history output and computes the target-step cache r
     completed_steps: 25,
     cached_steps: 17,
     cache_hit_rate_percent: 68,
+    cache_export: {
+      attempts: 0,
+      completed: 0,
+      bytes: 0,
+      duration_ms: 0,
+      incomplete_failures: 0,
+    },
     measurement: "buildx_target_record_steps",
   });
   const firstRecord = records.at(0);
@@ -145,6 +162,51 @@ void test("normalizes Buildx history output and computes the target-step cache r
   assert.ok(secondRecord);
   assert.equal(firstRecord.cache_hit_rate_percent, 75);
   assert.equal(secondRecord.status, "error");
+});
+
+void test("extracts structured registry cache bytes, timings, and incomplete failures", () => {
+  const summary = new BuildkitCacheExportTelemetry([
+    {
+      vertexes: [
+        {
+          digest: "sha256:complete",
+          name: "exporting cache to registry",
+          started: "2026-09-13T01:00:00Z",
+          completed: "2026-09-13T01:00:03.250Z",
+        },
+        {
+          digest: "sha256:failed",
+          name: "exporting cache to registry",
+          started: "2026-09-13T01:00:04Z",
+          error: "rpc error: code = Unavailable",
+        },
+      ],
+      statuses: [
+        {
+          vertex: "sha256:complete",
+          id: "push",
+          name: "pushing cache manifest",
+          current: 4096,
+          total: 4096,
+        },
+        {
+          vertex: "sha256:failed",
+          id: "push",
+          name: "pushing cache manifest",
+          current: 1024,
+          total: 8192,
+        },
+      ],
+    },
+  ]).summary();
+
+  assert.deepEqual(summary, {
+    attempts: 2,
+    completed: 1,
+    bytes: 5120,
+    duration_ms: 3250,
+    incomplete_failures: 1,
+  });
 });
 
 void test("accepts the documented Buildx JSON array and PascalCase fields", () => {
