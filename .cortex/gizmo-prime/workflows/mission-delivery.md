@@ -117,6 +117,11 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
      before pushing or dispatching. A branch advance follows the latest head
      and reruns compilation or review as needed.
    - Run only `task remote TASK_NAME=build:compile` for feature-stage remote execution.
+   - `task remote TASK_NAME=web:build` remains the branch-authorized focused
+     direct-Pod web-build selector, and `task remote TASK_NAME=web:e2e` remains
+     the separately authorized focused browser selector. Neither is the
+     feature-stage aggregate build-only path or replaces `build:compile` in
+     this stage.
    - Do not request tests, checks, coverage, e2e, or preflight in that stage.
    - Fast agents review code and required security boundaries.
    - Route fixes to the responsible team and repeat compilation after each push.
