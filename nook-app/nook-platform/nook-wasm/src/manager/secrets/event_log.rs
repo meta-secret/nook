@@ -183,19 +183,6 @@ mod wasm_tests {
             .ok_or_else(|| JsError::new("field is not a string"))
     }
 
-    fn get_bool(target: &js_sys::Object, field: &str) -> Result<bool, JsError> {
-        Reflect::get(target, &JsString::from(field))
-            .map_err(|_| JsError::new("failed to read reflected boolean field"))?
-            .as_bool()
-            .ok_or_else(|| JsError::new("field is not a boolean"))
-    }
-
-    fn get_array(target: &js_sys::Object, field: &str) -> Result<Array, JsError> {
-        Reflect::get(target, &JsString::from(field))
-            .map_err(|_| JsError::new("failed to read reflected array field"))
-            .map(|value| value.unchecked_into())
-    }
-
     fn event_fixture() -> Result<(nook_core::VaultEvent, String, String), JsError> {
         let (signing_identity, _) = nook_core::SigningIdentity::generate()
             .map_err(|error| JsError::new(&error.to_string()))?;
