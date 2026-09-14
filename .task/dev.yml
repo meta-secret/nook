@@ -11,8 +11,23 @@ tasks:
       vars: [FEATURE_BRANCH]
     env:
       FEATURE_BRANCH: '{{.FEATURE_BRANCH}}'
+      LOCAL_BUILD_EVIDENCE_PATH: '{{default "" .LOCAL_BUILD_EVIDENCE_PATH}}'
+      LOCAL_BUILD_EVIDENCE_AUTHORIZATION: '{{default "" .LOCAL_BUILD_EVIDENCE_AUTHORIZATION}}'
     cmds:
       - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/dev-delivery/dev-land-cli.ts"
+
+  local-build-evidence:
+    desc: Generate one short-lived local build proof for an explicit dev:land exception.
+    requires:
+      vars: [FEATURE_BRANCH]
+    env:
+      FEATURE_BRANCH: '{{.FEATURE_BRANCH}}'
+      LOCAL_BUILD_TASK: '{{default "app:build" .LOCAL_BUILD_TASK}}'
+      LOCAL_BUILD_TASK_ID: '{{default "" .LOCAL_BUILD_TASK_ID}}'
+      LOCAL_BUILD_ATTEMPT: '{{default "1" .LOCAL_BUILD_ATTEMPT}}'
+      LOCAL_BUILD_EVIDENCE_PATH: '{{default "" .LOCAL_BUILD_EVIDENCE_PATH}}'
+    cmds:
+      - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/dev-delivery/local-build-evidence-cli.ts"
 
   publish:
     desc: Manager-only snapshot and ordinary fast-forward publication of local dev to origin/dev.

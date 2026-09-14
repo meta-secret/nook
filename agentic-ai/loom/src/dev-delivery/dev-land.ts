@@ -8,13 +8,17 @@ import {
 import {
   Ancestry,
   BranchName,
+  DevLandBuildProofMode,
   DevFailureKind,
+  LocalBuildEvidenceAuthorization,
   ManagedBranch,
   RemoteBranchPresence,
   type CommitSha,
   type DevFailure,
+  type DevLandBuildProof,
   type DevLandRequest,
   WorktreeState,
+  type LocalBuildEvidenceRequest,
 } from './dev-types.ts';
 
 export { DevGitMergeBoundary } from './dev-git-merge.ts';
@@ -34,6 +38,7 @@ export interface DevLandOutcome {
 
 interface BranchAuthoritativeLandRequest {
   readonly featureBranch: BranchName;
+  readonly localBuildEvidence?: LocalBuildEvidenceRequest;
 }
 
 interface LandingDevelopment {
@@ -84,6 +89,7 @@ export class DevLandCommand {
     const proof = this.verifyBuildProof(
       request.featureBranch,
       featureHead.value,
+      this.buildProofSelection(request.localBuildEvidence),
     );
     if (proof.isErr()) return err(proof.error);
 
@@ -116,6 +122,7 @@ export class DevLandCommand {
       const landingProof = this.verifyBuildProof(
         request.featureBranch,
         landingFeatureHead.value,
+        this.buildProofSelection(request.localBuildEvidence),
       );
       if (landingProof.isErr()) return err(landingProof.error);
       featureHead = landingFeatureHead;
@@ -157,8 +164,30 @@ export class DevLandCommand {
   }
 
   private verifyBuildProof(
-    ...[branch, featureHead]: [branch: BranchName, featureHead: CommitSha]
+    ...[branch, featureHead, localBuildEvidence]: [
+      branch: BranchName,
+      featureHead: CommitSha,
+      localBuildEvidence: DevLandBuildProof,
+    ]
   ): Result<void, DevFailure> {
+    if (localBuildEvidence.mode === DevLandBuildProofMode.Local) {
+      if (
+        localBuildEvidence.evidence.authorization !==
+        LocalBuildEvidenceAuthorization.OneOffLocal
+      ) {
+        return err({
+          kind: DevFailureKind.Configuration,
+          message: 'Local build evidence requires one-off-local authorization',
+        });
+      }
+      const proof = this.workspace.localBuildEvidence.verify({
+        path: localBuildEvidence.evidence.path,
+        branch,
+        commit: featureHead,
+      });
+      if (proof.isErr()) return err(proof.error);
+      return ok();
+    }
     const proof = this.workspace.github.buildProof({
       branch,
       sha: featureHead,
@@ -172,6 +201,14 @@ export class DevLandCommand {
       });
     }
     return ok();
+  }
+
+  private buildProofSelection(
+    localBuildEvidence?: LocalBuildEvidenceRequest,
+  ): DevLandBuildProof {
+    return localBuildEvidence
+      ? { mode: DevLandBuildProofMode.Local, evidence: localBuildEvidence }
+      : { mode: DevLandBuildProofMode.Remote };
   }
 
   /** Resolves the live local refs and any existing checked-out dev worktree. */
@@ -392,8 +429,29 @@ export class DevLandCommand {
     if (parsedBranch.isErr()) return err(parsedBranch.error);
     const branchGuard = this.requireFeatureBranch(parsedBranch.value);
     if (branchGuard.isErr()) return err(branchGuard.error);
+    const hasLocalBuildEvidence = Object.prototype.hasOwnProperty.call(
+      request,
+      'localBuildEvidence',
+    );
+    const localBuildEvidence = request.localBuildEvidence;
+    if (hasLocalBuildEvidence) {
+      if (
+        !localBuildEvidence ||
+        typeof localBuildEvidence !== 'object' ||
+        typeof localBuildEvidence.path !== 'string' ||
+        localBuildEvidence.authorization !==
+          LocalBuildEvidenceAuthorization.OneOffLocal
+      ) {
+        return err({
+          kind: DevFailureKind.Configuration,
+          message:
+            'The landing packet local build evidence is missing one-off-local authorization or path',
+        });
+      }
+    }
     return ok({
       featureBranch: parsedBranch.value,
+      ...(localBuildEvidence ? { localBuildEvidence } : {}),
     });
   }
 }

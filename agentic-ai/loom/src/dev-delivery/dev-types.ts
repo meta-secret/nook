@@ -196,6 +196,28 @@ export interface BuildProofRequest {
   readonly sha: CommitSha;
 }
 
+export interface LocalBuildEvidenceRequest {
+  /** Explicitly authorized one-off local proof artifact. */
+  readonly path: string;
+  readonly authorization: LocalBuildEvidenceAuthorization.OneOffLocal;
+}
+
+export enum LocalBuildEvidenceAuthorization {
+  OneOffLocal = 'one-off-local',
+}
+
+export enum DevLandBuildProofMode {
+  Remote = 'remote',
+  Local = 'local',
+}
+
+export type DevLandBuildProof =
+  | { readonly mode: DevLandBuildProofMode.Remote }
+  | {
+      readonly mode: DevLandBuildProofMode.Local;
+      readonly evidence: LocalBuildEvidenceRequest;
+    };
+
 export interface DevelopmentCiObservationRequest {
   readonly sha: CommitSha;
   readonly workingDirectory: string;
@@ -310,6 +332,8 @@ export interface DevSnapshot {
 export interface DevLandRequest {
   /** Exact canonical feature branch authorized for local integration. */
   readonly featureBranch: BranchName;
+  /** Omitted by default; local proof is never selected implicitly. */
+  readonly localBuildEvidence?: LocalBuildEvidenceRequest;
 }
 
 export interface DevPublishRequest {

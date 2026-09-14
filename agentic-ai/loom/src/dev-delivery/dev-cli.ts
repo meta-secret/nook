@@ -6,10 +6,14 @@ import { DevDeliveryWorkspace } from './dev-workspace.ts';
 import {
   BranchName,
   CommitSha,
+  DevLandBuildProofMode,
   DevFailureKind,
+  type DevLandBuildProof,
   type DevFailure,
   type DevLandRequest,
+  type LocalBuildEvidenceRequest,
 } from './dev-types.ts';
+import { LOCAL_BUILD_EVIDENCE_AUTHORIZATION } from './local-build-evidence.ts';
 
 export interface DevCliMessage {
   readonly message: string;
@@ -23,6 +27,8 @@ export interface DevCliMessage {
 export interface DevLandProvenancePacket {
   /** Exact canonical feature branch authorized for local integration. */
   readonly featureBranch: BranchName;
+  /** Optional explicit one-off local proof; remote proof is the default. */
+  readonly localBuildEvidence?: LocalBuildEvidenceRequest;
 }
 
 /** Provides the manual task boundary and a single human-readable failure format. */
@@ -82,8 +88,13 @@ export class DevCli {
   static requiredDevLandPacket(): Result<DevLandProvenancePacket, DevFailure> {
     const featureBranch = DevCli.requiredFeatureBranch();
     if (featureBranch.isErr()) return err(featureBranch.error);
+    const localBuildEvidence = DevCli.optionalLocalBuildEvidence();
+    if (localBuildEvidence.isErr()) return err(localBuildEvidence.error);
     return ok({
       featureBranch: featureBranch.value,
+      ...(localBuildEvidence.value.mode === DevLandBuildProofMode.Local
+        ? { localBuildEvidence: localBuildEvidence.value.evidence }
+        : {}),
     });
   }
 
@@ -92,6 +103,33 @@ export class DevCli {
     return typeof raw === 'string'
       ? BranchName.parseFeature(raw)
       : DevCli.missingEnvironment('FEATURE_BRANCH');
+  }
+
+  static optionalLocalBuildEvidence(): Result<DevLandBuildProof, DevFailure> {
+    const path = process.env.LOCAL_BUILD_EVIDENCE_PATH;
+    const authorization = process.env.LOCAL_BUILD_EVIDENCE_AUTHORIZATION;
+    const noSelection =
+      (typeof path !== 'string' || path === '') &&
+      (typeof authorization !== 'string' || authorization === '');
+    if (noSelection) return ok({ mode: DevLandBuildProofMode.Remote });
+    if (authorization !== LOCAL_BUILD_EVIDENCE_AUTHORIZATION) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message:
+          'LOCAL_BUILD_EVIDENCE_AUTHORIZATION must be one-off-local when local proof is selected',
+      });
+    }
+    const evidencePath = DevCli.requiredAbsolutePath(
+      'LOCAL_BUILD_EVIDENCE_PATH',
+    );
+    if (evidencePath.isErr()) return err(evidencePath.error);
+    return ok({
+      mode: DevLandBuildProofMode.Local,
+      evidence: {
+        path: evidencePath.value,
+        authorization: LOCAL_BUILD_EVIDENCE_AUTHORIZATION,
+      },
+    });
   }
 
   /** Binds the serialized target to the feature worktree state observed locally. */

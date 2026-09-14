@@ -6,6 +6,7 @@ import { DevDeliveryWorkspace } from '../src/dev-delivery/dev-workspace.ts';
 import {
   BranchName,
   CommandExecutable,
+  LocalBuildEvidenceAuthorization,
   type CommandOutput,
   type CommandRequest,
   type CommandRunner,
@@ -156,6 +157,45 @@ test('does not require a caller-selected dev checkout path', () => {
     delete process.env.DEV_PATH;
     const packet = DevCli.requiredDevLandPacket();
     expect(packet.isOk()).toBe(true);
+  } finally {
+    for (const name of names) {
+      const value = previous[name];
+      if (typeof value === 'string') process.env[name] = value;
+      else delete process.env[name];
+    }
+  }
+});
+
+test('requires explicit one-off authorization before selecting local build evidence', () => {
+  const names = [
+    'FEATURE_BRANCH',
+    'LOCAL_BUILD_EVIDENCE_PATH',
+    'LOCAL_BUILD_EVIDENCE_AUTHORIZATION',
+  ] as const;
+  const previous = Object.fromEntries(
+    names.map((name) => [name, process.env[name]]),
+  );
+  Object.assign(process.env, {
+    FEATURE_BRANCH,
+    LOCAL_BUILD_EVIDENCE_PATH:
+      '/tmp/nook-dev-land/.nook/local-build-evidence/proof.json',
+  });
+  try {
+    const unauthorized = DevCli.requiredDevLandPacket();
+    expect(unauthorized.isErr()).toBe(true);
+    if (unauthorized.isErr())
+      expect(unauthorized.error.message).toContain('one-off-local');
+
+    process.env.LOCAL_BUILD_EVIDENCE_AUTHORIZATION =
+      LocalBuildEvidenceAuthorization.OneOffLocal;
+    const authorized = DevCli.requiredDevLandPacket();
+    expect(authorized.isOk()).toBe(true);
+    if (authorized.isOk()) {
+      expect(authorized.value.localBuildEvidence).toEqual({
+        path: '/tmp/nook-dev-land/.nook/local-build-evidence/proof.json',
+        authorization: LocalBuildEvidenceAuthorization.OneOffLocal,
+      });
+    }
   } finally {
     for (const name of names) {
       const value = previous[name];

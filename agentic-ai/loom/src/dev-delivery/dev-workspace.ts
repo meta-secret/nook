@@ -3,6 +3,7 @@ import { err, ok, type Result } from 'neverthrow';
 import { DevGitHubGateway } from './dev-github.ts';
 import { DevGitRepository, DevelopmentWorktreeSelection } from './dev-git.ts';
 import { DevLock, DevLockName, type DevLockLease } from './dev-lock.ts';
+import { LocalBuildEvidenceAdmission } from './local-build-evidence.ts';
 import {
   DevFailureKind,
   type CommandRunner,
@@ -16,6 +17,7 @@ export class DevDeliveryWorkspace {
   readonly root: string;
   readonly git: DevGitRepository;
   readonly github: DevGitHubGateway;
+  readonly localBuildEvidence: LocalBuildEvidenceAdmission;
 
   constructor(request: {
     readonly root: string;
@@ -29,6 +31,9 @@ export class DevDeliveryWorkspace {
     this.github = new DevGitHubGateway({
       runner: request.runner,
       workingDirectory: request.root,
+    });
+    this.localBuildEvidence = new LocalBuildEvidenceAdmission({
+      repositoryRoot: request.root,
     });
   }
 
