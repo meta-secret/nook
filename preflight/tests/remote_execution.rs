@@ -260,7 +260,10 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
             && workflow.contains("publish-compile-cache: ${{ inputs.publish_compile_cache }}")
             && workflow.contains("NOOK_COMPILE_CACHE_MODE")
             && workflow.contains("inputs.publish_compile_cache == false &&")
-            && workflow.matches("inputs.publish_compile_cache != false").count() >= 6,
+            && workflow
+                .matches("inputs.publish_compile_cache != false")
+                .count()
+                >= 6,
         "build:compile dispatch must explicitly select and report cache publication mode"
     );
     assert!(

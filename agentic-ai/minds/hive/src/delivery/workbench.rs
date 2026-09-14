@@ -121,7 +121,11 @@ impl WorkbenchCompletionCheck<'_> {
 
     fn parse_packet(&self, incident: &str) -> crate::HiveResult<()> {
         let origin_main_sha = Self::parse_sha_field(incident, "originMainSha")?;
-        self.require_packet_sha("originMainSha", &origin_main_sha, &self.evidence.origin_main_sha)?;
+        self.require_packet_sha(
+            "originMainSha",
+            &origin_main_sha,
+            &self.evidence.origin_main_sha,
+        )?;
         let pinned_local_dev_sha = Self::parse_sha_field(incident, "pinnedLocalDevSha")?;
         self.require_packet_sha(
             "pinnedLocalDevSha",
@@ -161,9 +165,7 @@ impl WorkbenchCompletionCheck<'_> {
 
     fn exact_field<'a>(incident: &'a str, field: &str) -> crate::HiveResult<&'a str> {
         let prefix = format!("{field}: ");
-        let mut matches = incident
-            .lines()
-            .filter(|line| line.starts_with(&prefix));
+        let mut matches = incident.lines().filter(|line| line.starts_with(&prefix));
         let value = matches.next().ok_or_else(|| {
             crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: Workbench is missing exact `{field}: ...` evidence"
@@ -174,7 +176,9 @@ impl WorkbenchCompletionCheck<'_> {
                 "Hive repair delivery is incomplete: Workbench has duplicate `{field}: ...` evidence"
             )));
         }
-        Ok(value.strip_prefix(&prefix).expect("prefix was checked above"))
+        Ok(value
+            .strip_prefix(&prefix)
+            .expect("prefix was checked above"))
     }
 
     fn exact_operation_line<'a>(incident: &'a str, field: &str) -> crate::HiveResult<&'a str> {

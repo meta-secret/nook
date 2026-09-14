@@ -175,8 +175,8 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             }
             let task_base = name.trim_end_matches(MAIN_FAILURE_SUFFIX);
             if body.contains(SUCCESSFUL_RERUN_RETIREMENT_MARKER) {
-                let bootstrap_evidence = (WorkbenchIncidentText { value: &body })
-                    .bootstrap_evidence()?;
+                let bootstrap_evidence =
+                    (WorkbenchIncidentText { value: &body }).bootstrap_evidence()?;
                 if let ActiveDelivery::Active(task_id) = store
                     .active_delivery(ActiveDeliveryQuery {
                         source_commit: &source_commit,
@@ -223,8 +223,8 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
                 reconciled_incidents.insert(name, body);
                 continue;
             }
-            let bootstrap_evidence = (WorkbenchIncidentText { value: &body })
-                .bootstrap_evidence()?;
+            let bootstrap_evidence =
+                (WorkbenchIncidentText { value: &body }).bootstrap_evidence()?;
             WorkbenchDispatcher::reconcile_delivery(
                 store,
                 &source_commit,
@@ -425,7 +425,10 @@ impl WorkbenchIncidentText<'_> {
         let parse = |field: &str| -> crate::HiveResult<GitSha> {
             let prefix = format!("{field}:");
             let mut values = self.value.lines().filter_map(|line| {
-                let line = line.trim().strip_prefix("- ").unwrap_or_else(|| line.trim());
+                let line = line
+                    .trim()
+                    .strip_prefix("- ")
+                    .unwrap_or_else(|| line.trim());
                 let value = line.strip_prefix(&prefix)?.trim().trim_matches('`');
                 (!value.is_empty()).then_some(value)
             });
@@ -449,7 +452,10 @@ impl WorkbenchIncidentText<'_> {
 
     fn feature_branch(&self) -> crate::HiveResult<FeatureBranch> {
         let mut values = self.value.lines().filter_map(|line| {
-            let line = line.trim().strip_prefix("- ").unwrap_or_else(|| line.trim());
+            let line = line
+                .trim()
+                .strip_prefix("- ")
+                .unwrap_or_else(|| line.trim());
             ["featureBranch:", "feature_branch:", "branch:"]
                 .into_iter()
                 .find_map(|prefix| line.strip_prefix(prefix).map(str::trim))
@@ -525,8 +531,8 @@ mod tests {
     use async_trait::async_trait;
 
     use crate::model::{
-        ActiveDelivery, ActiveDeliveryQuery, AgentId, CancellationTarget, ClaimOutcome,
-        BootstrapEvidence, ClaimedTask, Completion, EnqueueTask, FeatureBranch, GitSha, LeaseToken,
+        ActiveDelivery, ActiveDeliveryQuery, AgentId, BootstrapEvidence, CancellationTarget,
+        ClaimOutcome, ClaimedTask, Completion, EnqueueTask, FeatureBranch, GitSha, LeaseToken,
         TaskId,
     };
     use crate::store::TaskStore;
@@ -712,9 +718,11 @@ mod tests {
                      featureBranch: codex/repair-cache",
         };
         assert_eq!(evidence_text.bootstrap_evidence()?, bootstrap_evidence());
-        assert!(WorkbenchIncidentText { value: "issue" }
-            .bootstrap_evidence()
-            .is_err());
+        assert!(
+            WorkbenchIncidentText { value: "issue" }
+                .bootstrap_evidence()
+                .is_err()
+        );
         Ok(())
     }
 

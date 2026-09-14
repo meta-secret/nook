@@ -137,7 +137,6 @@ impl TaskWorkspace<'_> {
             observed_feature_head_sha,
         }))
     }
-
 }
 
 impl TaskWorkspace<'_> {

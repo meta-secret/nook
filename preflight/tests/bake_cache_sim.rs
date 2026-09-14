@@ -49,7 +49,10 @@ fn bake_cache_sim_proves_stable_rust_dependency_replay() {
         format!("{sim}/inputs/crate-b.txt"),
         format!("{sim}/inputs/leaf.txt"),
     ] {
-        assert!(fixture.join(&path).is_file(), "missing bake-cache fixture {path}");
+        assert!(
+            fixture.join(&path).is_file(),
+            "missing bake-cache fixture {path}"
+        );
     }
 
     let bake = fixture.read(&format!("{sim}/rust-deps-replay.docker-bake.hcl"));
@@ -64,7 +67,10 @@ fn bake_cache_sim_proves_stable_rust_dependency_replay() {
     assert!(
         bake.contains("target \"rust-deps-replay\"")
             && bake.contains("nook/buildcache/nook-bake-sim-rust-deps-v1:buildcache")
-            && bake.matches("type=registry,ref=${rust_deps_cache_ref}").count() == 2
+            && bake
+                .matches("type=registry,ref=${rust_deps_cache_ref}")
+                .count()
+                == 2
             && bake.contains("mode=max")
             && !bake.contains("branch")
             && !bake.contains("SHA")

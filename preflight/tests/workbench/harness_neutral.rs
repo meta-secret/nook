@@ -306,7 +306,8 @@ fn gizmo_dispatches_complete_harness_neutral_team_contracts() {
         RepositoryFixture::repository_root().read(".cortex/gizmo-prime/AGENTS.md"),
         RepositoryFixture::repository_root()
             .read(".cortex/gizmo-prime/workflows/team-oriented-development.md"),
-        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/subagent-delegation.md"),
+        RepositoryFixture::repository_root()
+            .read(".cortex/gizmo-prime/workflows/subagent-delegation.md"),
     ]
     .join("\n")
     .split_whitespace()

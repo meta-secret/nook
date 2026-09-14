@@ -70,10 +70,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         RepositoryFixture::repository_root().read(".github/scripts/workbench-records.cjs");
     let workbench_publisher = RepositoryFixture::repository_root()
         .read(".github/scripts/agent-implement-publish-workbench.cjs");
-    let normalized_workflow = workflow
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let normalized_workflow = workflow.split_whitespace().collect::<Vec<_>>().join(" ");
 
     for required in [
         "WORKBENCH_REPOSITORY: meta-secret/nook-workbench",
@@ -253,9 +250,8 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         !workflow.contains("feature_head_sha:")
             && !workflow.contains("inputs.feature_head_sha")
             && !workflow.contains("FEATURE_HEAD_SHA: ${{ inputs.feature_head_sha }}")
-            && !normalized_workflow.contains(
-                "if [ \"$feature_head_sha\" != \"$FEATURE_HEAD_SHA\" ]",
-            ),
+            && !normalized_workflow
+                .contains("if [ \"$feature_head_sha\" != \"$FEATURE_HEAD_SHA\" ]",),
         "feature_head_sha must be observed from the canonical branch at run start, not supplied by dispatch"
     );
     assert!(
@@ -419,8 +415,8 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
 #[test]
 fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> {
     let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
-    let coding_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/mission-delivery.md");
+    let coding_workflow = RepositoryFixture::repository_root()
+        .read(".cortex/gizmo-prime/workflows/mission-delivery.md");
     let issue_workflow =
         RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/issues.md");
     let pull_request_workflow =
@@ -459,11 +455,10 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
     }
 
     assert!(
-        pull_request_workflow.contains(
-            "The dev manager invokes the manager-only `dev:pr-manager` path for PR"
-        ) && pull_request_workflow.contains(
-            "Delivery Pipeline Team Gizmo routes PR Lifecycle Agent"
-        ),
+        pull_request_workflow
+            .contains("The dev manager invokes the manager-only `dev:pr-manager` path for PR")
+            && pull_request_workflow
+                .contains("Delivery Pipeline Team Gizmo routes PR Lifecycle Agent"),
         "delivery policy must preserve Team Gizmo routing, PR Lifecycle mechanics, and Dev Manager-only PR authority"
     );
 
@@ -497,8 +492,8 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 )]
 fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> anyhow::Result<()> {
     let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
-    let ownership =
-        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/architecture/team-ownership.md");
+    let ownership = RepositoryFixture::repository_root()
+        .read(".cortex/gizmo-prime/architecture/team-ownership.md");
     let document_map = RepositoryFixture::repository_root()
         .read(".cortex/teams/ai/dynamic-skills/cortex-document-map/SKILL.md");
     let workflow = RepositoryFixture::repository_root()
@@ -885,8 +880,8 @@ fn workbench_plans_preserve_assignment_and_pinned_local_dev_bootstrap() {
 fn cortex_promotions_use_optional_curated_session_memory() -> anyhow::Result<()> {
     let gitignore = RepositoryFixture::repository_root().read(".gitignore");
     let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
-    let coding_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/mission-delivery.md");
+    let coding_workflow = RepositoryFixture::repository_root()
+        .read(".cortex/gizmo-prime/workflows/mission-delivery.md");
     let pull_request_workflow =
         RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/pull-requests.md");
     let self_improvement = RepositoryFixture::repository_root()

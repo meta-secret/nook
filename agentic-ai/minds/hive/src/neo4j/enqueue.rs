@@ -69,10 +69,12 @@ impl Neo4jTaskStore {
         if !created {
             let existing_source_commit = row.get::<String>("existing_source_commit")?;
             let existing_bootstrap_evidence = Self::bootstrap_evidence(&row)?;
-            let evidence_matches = task.bootstrap_evidence.as_ref().map_or(
-                existing_bootstrap_evidence.is_none(),
-                |evidence| evidence.matches(existing_bootstrap_evidence.as_ref()),
-            );
+            let evidence_matches = task
+                .bootstrap_evidence
+                .as_ref()
+                .map_or(existing_bootstrap_evidence.is_none(), |evidence| {
+                    evidence.matches(existing_bootstrap_evidence.as_ref())
+                });
             transaction.rollback().await?;
             if existing_source_commit != task.source_commit || !evidence_matches {
                 return Err(crate::HiveError::message(format!(
@@ -145,8 +147,8 @@ impl Neo4jTaskStore {
             kind,
             bootstrap_evidence,
         } = request;
-        let (origin_main_sha, pinned_local_dev_sha, feature_branch) = bootstrap_evidence
-            .map_or(("", "", ""), |evidence| {
+        let (origin_main_sha, pinned_local_dev_sha, feature_branch) =
+            bootstrap_evidence.map_or(("", "", ""), |evidence| {
                 (
                     evidence.origin_main_sha.as_str(),
                     evidence.pinned_local_dev_sha.as_str(),

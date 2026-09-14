@@ -8,7 +8,9 @@ impl ClaimedTask {
         let feature_branch = task
             .bootstrap_evidence
             .as_ref()
-            .map_or("(not applicable)", |evidence| evidence.feature_branch.as_str());
+            .map_or("(not applicable)", |evidence| {
+                evidence.feature_branch.as_str()
+            });
         let owning_repairs = if task.owning_repairs.is_empty() {
             "No active owning Main repairs.".to_owned()
         } else {
@@ -17,8 +19,7 @@ impl ClaimedTask {
                 .map(|owner| {
                     format!(
                         "- {} (canonical delivery branch `{}`)",
-                        owner,
-                        feature_branch
+                        owner, feature_branch
                     )
                 })
                 .collect::<Vec<_>>()

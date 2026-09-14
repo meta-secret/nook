@@ -80,11 +80,8 @@ impl RemoteCompileEvidence<'_> {
                 ))
             })?;
         runs.sort_by(|left, right| right.created_at.cmp(&left.created_at));
-        let run = Self::latest_exact_compile_run(
-            &runs,
-            branch,
-            observed_feature_head_sha.as_str(),
-        )?;
+        let run =
+            Self::latest_exact_compile_run(&runs, branch, observed_feature_head_sha.as_str())?;
         if run.status != "completed" {
             return Err(crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: exact-head remote build:compile run {} is still {}",
@@ -142,22 +139,20 @@ mod tests {
             "2026-09-13T01:00:00Z",
         )];
 
-        let selected = super::RemoteCompileEvidence::latest_exact_compile_run(
-            &runs, branch, sha,
-        )?;
+        let selected = super::RemoteCompileEvidence::latest_exact_compile_run(&runs, branch, sha)?;
         assert_eq!(selected.database_id, 7);
-        assert!(super::RemoteCompileEvidence::latest_exact_compile_run(
-            &runs,
-            branch,
-            "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
-        )
-        .is_err());
-        assert!(super::RemoteCompileEvidence::latest_exact_compile_run(
-            &runs,
-            "codex/other",
-            sha,
-        )
-        .is_err());
+        assert!(
+            super::RemoteCompileEvidence::latest_exact_compile_run(
+                &runs,
+                branch,
+                "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            )
+            .is_err()
+        );
+        assert!(
+            super::RemoteCompileEvidence::latest_exact_compile_run(&runs, "codex/other", sha,)
+                .is_err()
+        );
         Ok(())
     }
 
@@ -186,9 +181,7 @@ mod tests {
                 "2026-09-13T02:00:00Z",
             ),
         ];
-        let selected = super::RemoteCompileEvidence::latest_exact_compile_run(
-            &runs, branch, sha,
-        )?;
+        let selected = super::RemoteCompileEvidence::latest_exact_compile_run(&runs, branch, sha)?;
         assert_eq!(selected.database_id, 9);
         assert_ne!(selected.status, "completed");
         Ok(())
@@ -207,10 +200,9 @@ mod tests {
             &format!("Remote / hive:verify @ {sha} / nonce"),
             "2026-09-13T01:00:00Z",
         )];
-        assert!(super::RemoteCompileEvidence::latest_exact_compile_run(
-            &runs, branch, sha,
-        )
-        .is_err());
+        assert!(
+            super::RemoteCompileEvidence::latest_exact_compile_run(&runs, branch, sha,).is_err()
+        );
         Ok(())
     }
 }

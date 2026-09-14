@@ -27,10 +27,7 @@ pub(crate) struct MainRepairDelivery<'a> {
 }
 
 impl MainRepairDelivery<'_> {
-    pub(crate) async fn verify_main_repair_delivery(
-        &self,
-        task_id: &str,
-    ) -> crate::HiveResult<()> {
+    pub(crate) async fn verify_main_repair_delivery(&self, task_id: &str) -> crate::HiveResult<()> {
         let feature_sha = self.observed_feature_head_sha;
         (RemoteCompileEvidence {
             repository: self.repository,

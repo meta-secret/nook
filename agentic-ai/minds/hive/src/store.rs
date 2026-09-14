@@ -152,9 +152,7 @@ pub(crate) mod tests {
             if let Some(existing) = tasks.get(task.id.as_str()) {
                 let evidence_matches = task.bootstrap_evidence.as_ref().map_or(
                     existing.definition.bootstrap_evidence.is_none(),
-                    |evidence| {
-                        evidence.matches(existing.definition.bootstrap_evidence.as_ref())
-                    },
+                    |evidence| evidence.matches(existing.definition.bootstrap_evidence.as_ref()),
                 );
                 if existing.definition.source_commit != task.source_commit || !evidence_matches {
                     return Err(crate::HiveError::message(format!(

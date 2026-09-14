@@ -706,9 +706,7 @@ fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Resul
     ] {
         let body = bake_target_body(bake, target);
         assert!(
-            !body.is_empty()
-                && !body.contains("cache-from")
-                && !body.contains("cache-to"),
+            !body.is_empty() && !body.contains("cache-from") && !body.contains("cache-to"),
             "build:compile context target {target} must not declare registry cache I/O"
         );
     }

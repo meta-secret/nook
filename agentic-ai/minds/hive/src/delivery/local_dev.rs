@@ -73,8 +73,8 @@ impl LocalDevEvidence<'_> {
 #[cfg(test)]
 mod tests {
     use super::LocalDevEvidence;
-    use crate::model::GitSha;
     use crate::HiveResult;
+    use crate::model::GitSha;
     use std::fs;
     use std::path::Path;
     use std::process::Command;
@@ -136,9 +136,7 @@ mod tests {
         fixture.git(&["commit", "--quiet", "-m", "repair"])?;
         let feature_sha = fixture.git(&["rev-parse", "HEAD"])?;
         fixture.git(&["checkout", "--quiet", "dev"])?;
-        fixture.git(
-            &["merge", "--quiet", "--ff-only", "codex/hive-repair"],
-        )?;
+        fixture.git(&["merge", "--quiet", "--ff-only", "codex/hive-repair"])?;
         let dev_sha = fixture.git(&["rev-parse", "dev"])?;
         let origin_main_sha = GitSha::try_from(base_sha.as_str())?;
         let pinned_local_dev_sha = GitSha::try_from(base_sha.as_str())?;
@@ -186,9 +184,7 @@ mod tests {
         .await
         .err()
         .ok_or_else(|| crate::HiveError::message("unlanded feature was accepted"))?;
-        assert!(error
-            .to_string()
-            .contains("serialized local-dev head"));
+        assert!(error.to_string().contains("serialized local-dev head"));
         Ok(())
     }
 
@@ -199,9 +195,7 @@ mod tests {
         fixture.git(&["add", "repair.txt"])?;
         fixture.git(&["commit", "--quiet", "-m", "base"])?;
         let feature_sha = fixture.git(&["rev-parse", "HEAD"])?;
-        let origin_main_sha = GitSha::try_from(
-            "ffffffffffffffffffffffffffffffffffffffff",
-        )?;
+        let origin_main_sha = GitSha::try_from("ffffffffffffffffffffffffffffffffffffffff")?;
         let pinned_local_dev_sha = GitSha::try_from(feature_sha.as_str())?;
         let feature_sha = GitSha::try_from(feature_sha.as_str())?;
         let local_dev_sha = GitSha::try_from(feature_sha.as_str())?;
@@ -217,7 +211,11 @@ mod tests {
         .await
         .err()
         .ok_or_else(|| crate::HiveError::message("missing local dev ref was accepted"))?;
-        assert!(error.to_string().contains("originMainSha is not an ancestor"));
+        assert!(
+            error
+                .to_string()
+                .contains("originMainSha is not an ancestor")
+        );
         Ok(())
     }
 }

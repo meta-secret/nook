@@ -212,24 +212,25 @@ impl TryFrom<String> for FeatureBranch {
                 Some(branch.split('/').collect::<Vec<_>>())
             }
         });
-        let valid = value.len() <= 120 && segments.is_some_and(|segments| {
-            match segments.as_slice() {
-                // Prime's published feature branch is the exact two-segment
-                // form. Child branches use the fully qualified form below.
-                [feature] => {
-                    Self::is_kebab_segment(feature, 10, 20)
-                        || Self::is_canonical_machine_branch(&segments)
+        let valid = value.len() <= 120
+            && segments.is_some_and(|segments| {
+                match segments.as_slice() {
+                    // Prime's published feature branch is the exact two-segment
+                    // form. Child branches use the fully qualified form below.
+                    [feature] => {
+                        Self::is_kebab_segment(feature, 10, 20)
+                            || Self::is_canonical_machine_branch(&segments)
+                    }
+                    [feature, team, role, work] => {
+                        Self::is_kebab_segment(feature, 10, 20)
+                            && Self::is_canonical_team(team)
+                            && Self::is_canonical_role(team, role)
+                            && Self::is_kebab_segment(work, 20, 50)
+                            && *work != "cleanup"
+                    }
+                    _ => Self::is_canonical_machine_branch(&segments),
                 }
-                [feature, team, role, work] => {
-                    Self::is_kebab_segment(feature, 10, 20)
-                        && Self::is_canonical_team(team)
-                        && Self::is_canonical_role(team, role)
-                        && Self::is_kebab_segment(work, 20, 50)
-                        && *work != "cleanup"
-                }
-                _ => Self::is_canonical_machine_branch(&segments),
-            }
-        });
+            });
         if !valid {
             return Err(ModelError::InvalidFeatureBranch);
         }
@@ -276,14 +277,20 @@ impl FeatureBranch {
         match team {
             "ai" => matches!(role, "gizmo" | "loom-specialist" | "cortex-specialist"),
             "dev-core" => {
-                matches!(role, "gizmo" | "rust-core-developer" | "rust-auth2-developer")
+                matches!(
+                    role,
+                    "gizmo" | "rust-core-developer" | "rust-auth2-developer"
+                )
             }
             "security" => matches!(
                 role,
                 "gizmo" | "cryptography-specialist" | "security-review-specialist"
             ),
             "sre" => matches!(role, "gizmo" | "provisioning" | "cloud-native"),
-            "web-dev" => matches!(role, "gizmo" | "typescript-specialist" | "svelte-specialist"),
+            "web-dev" => matches!(
+                role,
+                "gizmo" | "typescript-specialist" | "svelte-specialist"
+            ),
             "delivery-pipeline" => matches!(role, "gizmo" | "dev-manager" | "pr-lifecycle"),
             _ => false,
         }
@@ -343,7 +350,10 @@ mod tests {
         assert!(GitSha::try_from("not-a-sha").is_err());
         let sha = GitSha::try_from("ABCDEF0123456789ABCDEF0123456789ABCDEF01")?;
         assert_eq!(sha.as_str(), "abcdef0123456789abcdef0123456789abcdef01");
-        assert_eq!(String::from(sha), "abcdef0123456789abcdef0123456789abcdef01");
+        assert_eq!(
+            String::from(sha),
+            "abcdef0123456789abcdef0123456789abcdef01"
+        );
         Ok(())
     }
 

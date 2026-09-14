@@ -278,9 +278,11 @@ async fn verify_schema_eleven_requires_canonical_branch(
         .await
         .err()
         .ok_or_else(|| anyhow::anyhow!("schema-10 task without branch must block schema 11"))?;
-    assert!(migration_error
-        .to_string()
-        .contains("feature_head_sha cannot be reinterpreted as a branch"));
+    assert!(
+        migration_error
+            .to_string()
+            .contains("feature_head_sha cannot be reinterpreted as a branch")
+    );
     let mut rows = graph
         .execute(query(
             "MATCH (task:Task {id: 'schema-10-unmigratable-main-repair'})
@@ -349,7 +351,10 @@ async fn verify_schema_eleven_backfill(
         .await?
         .ok_or_else(|| anyhow::anyhow!("schema-10 backfill row was missing"))?;
     assert_eq!(migrated.get::<String>("legacy_branch")?, "");
-    assert_eq!(migrated.get::<String>("repair_branch")?, "codex/repair-cache");
+    assert_eq!(
+        migrated.get::<String>("repair_branch")?,
+        "codex/repair-cache"
+    );
     assert!(migrated.get::<bool>("removed_legacy_head")?);
     assert_eq!(migrated.get::<i64>("schema_10_markers")?, 1);
     assert_eq!(migrated.get::<i64>("version")?, 11);
@@ -392,7 +397,10 @@ async fn verify_schema_eleven_reconciles_existing_marker(
         .next()
         .await?
         .ok_or_else(|| anyhow::anyhow!("schema-11 reconciliation row was missing"))?;
-    assert_eq!(reconciled.get::<String>("feature_branch")?, "codex/repair-cache");
+    assert_eq!(
+        reconciled.get::<String>("feature_branch")?,
+        "codex/repair-cache"
+    );
     assert!(reconciled.get::<bool>("removed_legacy_head")?);
     Ok(())
 }

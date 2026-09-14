@@ -21,12 +21,13 @@ use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::delivery::MainRepairDelivery;
 use crate::model::{
     ActivityLease, AgentId, Artifact, BlockerRequest, BootstrapEvidence, ClaimedTask, Completion,
-    CompletionArtifact, CompletionRelevance, EnqueueTask, TaskActivity, TaskTrigger, TerminalResult,
+    CompletionArtifact, CompletionRelevance, EnqueueTask, TaskActivity, TaskTrigger,
+    TerminalResult,
 };
 use crate::store::TaskStore;
 
-mod lifecycle;
 mod heartbeat;
+mod lifecycle;
 mod task_prompt;
 mod workspace;
 use lifecycle::{ClaimStep, TaskClaim, WorkerCompletionMarker, WorkerShutdown, WorkerStartup};
@@ -383,7 +384,7 @@ impl<S: TaskStore> Worker<S> {
             task.bootstrap_evidence.as_ref(),
             prepared.observed_feature_head_sha(),
         )
-            .await?;
+        .await?;
         if task.kind.is_main_repair() {
             let bootstrap_evidence = task
                 .bootstrap_evidence
