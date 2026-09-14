@@ -68,9 +68,7 @@ export class CortexDocumentPath {
       this.filePath === '.cortex/knowledge-graph.md' ||
       this.filePath === '.cortex/k-graph.md' ||
       this.filePath === '.cortex/INDEX.md' ||
-      CORTEX_OWNER_GRAPH_PATHS.includes(
-        this.filePath as (typeof CORTEX_OWNER_GRAPH_PATHS)[number],
-      ) ||
+      CORTEX_OWNER_GRAPH_PATHS.some((path) => path === this.filePath) ||
       this.isChildGraphPath()
     );
   }

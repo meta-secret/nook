@@ -84,6 +84,8 @@ class DevManagerGizmoRunner implements CommandRunner {
   private git(request: CommandRequest): Result<CommandOutput, DevFailure> {
     const args = request.args;
     switch (args[0]) {
+      case undefined:
+        return ok(this.output());
       case 'fetch':
         this.fetchedOriginMainSha = this.originMainSha;
         return ok(this.output());

@@ -15,6 +15,8 @@ const basePlan = ModuleDeliveryPlanValidationScenario.plan({
   edgeContracts: [],
 });
 
+type NestedTransport = string | readonly NestedTransport[];
+
 const expectTransportLimit = (serialized: string): void => {
   const result =
     ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(serialized);
@@ -24,7 +26,7 @@ const expectTransportLimit = (serialized: string): void => {
 };
 
 test('rejects deeply nested module-plan transport before boundary conversion', () => {
-  let deeplyNested: unknown = 'safe';
+  let deeplyNested: NestedTransport = 'safe';
   for (let depth = 0; depth <= MAX_MODULE_DELIVERY_PLAN_DEPTH; depth += 1)
     deeplyNested = [deeplyNested];
   expectTransportLimit(
@@ -34,10 +36,10 @@ test('rejects deeply nested module-plan transport before boundary conversion', (
 
 test('rejects module-plan objects with too many keys before boundary conversion', () => {
   const oversizedObject = Object.fromEntries(
-    Array.from({ length: MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS + 1 }, (_, index) => [
-      `extra-${index}`,
-      true,
-    ]),
+    Array.from(
+      { length: MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS + 1 },
+      (...[, index]: [ignored: number, index: number]) => [`extra-${index}`, true],
+    ),
   );
   expectTransportLimit(
     JSON.stringify({ ...basePlan, parentJoin: oversizedObject }),

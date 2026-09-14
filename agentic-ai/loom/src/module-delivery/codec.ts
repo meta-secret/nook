@@ -168,7 +168,8 @@ export class ModuleDeliveryPlanSchema {
         continue;
       }
       if (typeof current.node !== 'object') continue;
-      const object = current.node as Record<string, unknown>;
+      if (!UntrustedYamlBoundary.isRecord(current.node)) continue;
+      const object = current.node;
       const keys = Object.keys(object);
       if (keys.length > MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS)
         ModuleDeliveryPlanSchema.throwTransportLimit({
@@ -212,8 +213,10 @@ export class ModuleDeliveryPlanSchema {
 
   /** Creates a branch-authoritative plan from a historical V4 value without mutating it. */
   static migrateModuleDeliveryPlan(
-    plan: ModuleDeliveryPlanV4,
-    featureBranch: string,
+    ...[plan, featureBranch]: [
+      plan: ModuleDeliveryPlanV4,
+      featureBranch: string,
+    ]
   ): ModuleDeliveryPlanV5 {
     if (plan.version !== 4)
       throw new Error('Only module delivery plan version 4 can be migrated.');
@@ -343,26 +346,27 @@ export class ModuleDeliveryPlanSchema {
         plan,
       };
     }
-    const plan: ModuleDeliveryPlanV4 = {
-      version: 4,
-      generation,
-      sourceCommit,
-      originMainSha: fields.string('originMainSha'),
-      pinnedLocalDevSha: fields.string('pinnedLocalDevSha'),
-      featureHeadSha: fields.string('featureHeadSha'),
-      maxAgentDepth,
-      maxAttempts,
-      parentOwnedResources,
-      parentJoin,
-      nodes,
-      edgeContracts,
-    };
-    if (version === 4)
+    if (version === 4) {
+      const plan: ModuleDeliveryPlanV4 = {
+        version: 4,
+        generation,
+        sourceCommit,
+        originMainSha: fields.string('originMainSha'),
+        pinnedLocalDevSha: fields.string('pinnedLocalDevSha'),
+        featureHeadSha: fields.string('featureHeadSha'),
+        maxAgentDepth,
+        maxAttempts,
+        parentOwnedResources,
+        parentJoin,
+        nodes,
+        edgeContracts,
+      };
       return {
         status: ModuleDeliveryCompatibilityStatus.Decoded,
         inputVersion: version,
         plan,
       };
+    }
     const currentPlan: ModuleDeliveryPlanV5 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
       generation,

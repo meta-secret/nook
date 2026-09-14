@@ -259,8 +259,10 @@ export class DevPublishCommand {
   }
 
   private sameRemote(
-    left: RemoteBranchSnapshot,
-    right: RemoteBranchSnapshot,
+    ...[left, right]: [
+      left: RemoteBranchSnapshot,
+      right: RemoteBranchSnapshot,
+    ]
   ): boolean {
     if (left.presence !== right.presence) return false;
     if (left.presence === RemoteBranchPresence.Absent) return true;
@@ -271,8 +273,10 @@ export class DevPublishCommand {
   }
 
   private samePullRequest(
-    left: DevelopmentPullRequestLookup,
-    right: DevelopmentPullRequestLookup,
+    ...[left, right]: [
+      left: DevelopmentPullRequestLookup,
+      right: DevelopmentPullRequestLookup,
+    ]
   ): boolean {
     if (left.kind !== right.kind) return false;
     if (left.kind === DevelopmentPullRequestLookupKind.Absent) return true;
@@ -281,8 +285,10 @@ export class DevPublishCommand {
   }
 
   private samePullRequestDetails(
-    left: DevelopmentPullRequest,
-    right: DevelopmentPullRequest,
+    ...[left, right]: [
+      left: DevelopmentPullRequest,
+      right: DevelopmentPullRequest,
+    ]
   ): boolean {
     return (
       left.number.value() === right.number.value() &&

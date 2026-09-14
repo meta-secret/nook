@@ -330,7 +330,7 @@ void test('workflow preserves the Main cache order and coalesces only pending ru
     ci,
     /github\.event_name == 'push' && 'main'/,
   )
-  assert.match(workflowConcurrency, /^  group: >-[\s\S]*^  cancel-in-progress: false$/m)
+  assert.match(workflowConcurrency, /^ {2}group: >-[\s\S]*^ {2}cancel-in-progress: false$/m)
   assert.match(
     ci,
     /dev-promotion-readiness:\n\s+name: Dev promotion readiness\n\s+concurrency:\n\s+group: dev-promotion-readiness\n\s+cancel-in-progress: false/,

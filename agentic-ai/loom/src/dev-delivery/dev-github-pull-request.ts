@@ -642,8 +642,10 @@ export class DevelopmentPullRequestGateway {
   }
 
   private samePullRequest(
-    left: AdmittedDevelopmentPullRequest,
-    right: AdmittedDevelopmentPullRequest,
+    ...[left, right]: [
+      left: AdmittedDevelopmentPullRequest,
+      right: AdmittedDevelopmentPullRequest,
+    ]
   ): boolean {
     return (
       left.number.value() === right.number.value() &&

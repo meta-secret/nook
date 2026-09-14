@@ -5,7 +5,9 @@ import { fileURLToPath } from 'node:url';
 
 import { ModuleIntegrationCapabilityRegistry } from '../../src/module-delivery/integration-capabilities.ts';
 
-import type { ModuleDeliveryGenerationAuthority } from '../../src/module-delivery/admission.ts';
+import { ModuleDeliveryEvidenceScenario } from './evidence-test-support.ts';
+import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-support.ts';
+
 import type { ModuleDeliveryIntegratedWriterFrontierCapability } from '../../src/module-delivery/integration-contracts.ts';
 
 const CAPABILITY_MODULE_PATH = fileURLToPath(
@@ -38,7 +40,7 @@ test('keeps capability provenance closure-private across the ESM cycle', () => {
     'ModuleAdmissionStateCapabilityAuthorities',
   );
   expect(admissionAuthoritySource).toContain(
-    "from './integration-capabilities.ts'",
+    "from './admission-state-capability-authorities.ts'",
   );
 });
 
@@ -113,52 +115,58 @@ test('keeps capability minting behind the coordinator boundary', async () => {
     headCommit: 'raw-head',
     integratedTaskIds: Object.freeze([]),
   };
-  const rawAuthority = {} as ModuleDeliveryGenerationAuthority;
-  expect(() =>
-    ModuleIntegrationCapabilityRegistry.assertModuleDeliveryIntegratedWriterFrontierCapability({
-      authority: rawAuthority,
-      capability: Object.freeze(rawCapability),
-      taskId: rawCapability.taskId,
-      attempt: rawCapability.attempt,
-      generation: rawCapability.generation,
-      planDigest: rawCapability.planDigest,
-      headCommit: rawCapability.headCommit,
-      integratedTaskIds: rawCapability.integratedTaskIds,
-    }),
-  ).toThrow('capability is invalid');
+  const fixture =
+    ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
+  try {
+    const authority = ModuleDeliveryEvidenceScenario.runtime(fixture).authority;
+    expect(() =>
+      ModuleIntegrationCapabilityRegistry.assertModuleDeliveryIntegratedWriterFrontierCapability({
+        authority,
+        capability: Object.freeze(rawCapability),
+        taskId: rawCapability.taskId,
+        attempt: rawCapability.attempt,
+        generation: rawCapability.generation,
+        planDigest: rawCapability.planDigest,
+        headCommit: rawCapability.headCommit,
+        integratedTaskIds: rawCapability.integratedTaskIds,
+      }),
+    ).toThrow('capability is invalid');
 
-  const reflectiveClone = Object.freeze({
-    ...rawCapability,
-    [Symbol('module-integration-capability-authority-proof')]: Object.freeze(
-      {},
-    ),
-  });
-  expect(() =>
-    ModuleIntegrationCapabilityRegistry.assertModuleDeliveryIntegratedWriterFrontierCapability({
-      authority: rawAuthority,
-      capability: reflectiveClone,
-      taskId: rawCapability.taskId,
-      attempt: rawCapability.attempt,
-      generation: rawCapability.generation,
-      planDigest: rawCapability.planDigest,
-      headCommit: rawCapability.headCommit,
-      integratedTaskIds: rawCapability.integratedTaskIds,
-    }),
-  ).toThrow('capability is invalid');
+    const reflectiveClone = Object.freeze({
+      ...rawCapability,
+      [Symbol('module-integration-capability-authority-proof')]: Object.freeze(
+        {},
+      ),
+    });
+    expect(() =>
+      ModuleIntegrationCapabilityRegistry.assertModuleDeliveryIntegratedWriterFrontierCapability({
+        authority,
+        capability: reflectiveClone,
+        taskId: rawCapability.taskId,
+        attempt: rawCapability.attempt,
+        generation: rawCapability.generation,
+        planDigest: rawCapability.planDigest,
+        headCommit: rawCapability.headCommit,
+        integratedTaskIds: rawCapability.integratedTaskIds,
+      }),
+    ).toThrow('capability is invalid');
 
-  expect(() =>
-    ModuleIntegrationCapabilityRegistry.assertModuleDeliveryCanonicalEvidenceTransition(
-      {
-        authority: rawAuthority,
-        transition: Object.freeze({
+    expect(() =>
+      ModuleIntegrationCapabilityRegistry.assertModuleDeliveryCanonicalEvidenceTransition(
+        {
+          authority,
+          transition: Object.freeze({
+            previousHeadCommit: 'raw-previous-head',
+            canonicalHeadCommit: 'raw-canonical-head',
+            integratedTaskIds: Object.freeze([]),
+          }),
           previousHeadCommit: 'raw-previous-head',
           canonicalHeadCommit: 'raw-canonical-head',
           integratedTaskIds: Object.freeze([]),
-        }),
-        previousHeadCommit: 'raw-previous-head',
-        canonicalHeadCommit: 'raw-canonical-head',
-        integratedTaskIds: Object.freeze([]),
-      },
-    ),
-  ).toThrow('transition is invalid');
+        },
+      ),
+    ).toThrow('transition is invalid');
+  } finally {
+    ModuleDeliveryWorktreeTestSupportScenario.disposeGitFixture(fixture);
+  }
 });

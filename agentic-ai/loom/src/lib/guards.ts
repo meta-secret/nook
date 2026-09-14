@@ -4,6 +4,10 @@ export class UntrustedYamlBoundary {
   static parseJson(serialized: string): UntrustedYamlNode {
     return UntrustedYamlBoundary.fromHost(JSON.parse(serialized));
   }
+  /** Reads JSON as a transport node without recursively adapting it first. */
+  static parseJsonNode(serialized: string): UntrustedYamlNode {
+    return UntrustedYamlBoundary.jsonNode(JSON.parse(serialized));
+  }
   static parseYaml(serialized: string): UntrustedYamlNode {
     return UntrustedYamlBoundary.fromHost(Bun.YAML.parse(serialized));
   }
@@ -36,15 +40,31 @@ export class UntrustedYamlBoundary {
     }
     throw new Error('Unsupported JSON syntax value.');
   }
-  static isRecord(value: UntrustedYamlNode): value is UntrustedYamlMap {
+  static isRecord(value: unknown): value is UntrustedYamlMap {
     return (
       typeof value === 'object' &&
       value instanceof Object &&
       !Array.isArray(value)
     );
   }
+  /** JSON.parse guarantees that every descendant is a JSON transport value. */
+  static isJsonValue(value: unknown): value is UntrustedYamlNode {
+    return (
+      value === null ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean' ||
+      Array.isArray(value) ||
+      UntrustedYamlBoundary.isRecord(value)
+    );
+  }
+  private static jsonNode(value: unknown): UntrustedYamlNode {
+    if (!UntrustedYamlBoundary.isJsonValue(value))
+      throw new Error('Unsupported JSON syntax value.');
+    return value;
+  }
   static isList(
-    value: UntrustedYamlNode,
+    value: unknown,
   ): value is readonly UntrustedYamlNode[] {
     return Array.isArray(value);
   }

@@ -15,8 +15,8 @@ import type {
   UntrustedYamlNode,
   UntrustedYamlPropertyArgs,
 } from '../lib/guards.ts';
-import type { TeamKey } from '../team-agents/catalog.ts';
-import type { ModuleDeliveryOwnerIdentity } from './domain.ts';
+import { TeamKey } from '../team-agents/catalog.ts';
+import { ModuleDeliveryOwner, type ModuleDeliveryOwnerIdentity } from './domain.ts';
 import {
   MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES,
   MAX_MODULE_DELIVERY_EVIDENCE_DEPTH,
@@ -251,7 +251,7 @@ export class ModuleDeliveryEvidenceSchema {
         serializedBytes,
         MAX_MODULE_DELIVERY_EVIDENCE_HANDOFF_BYTES,
       );
-    const parsed = JSON.parse(serialized) as unknown;
+    const parsed = UntrustedYamlBoundary.parseJsonNode(serialized);
     ModuleDeliveryEvidenceSchema.assertTransportWithinBounds(parsed);
     const transport = UntrustedYamlBoundary.fromJson(parsed);
     if (!UntrustedYamlBoundary.isRecord(transport))
@@ -277,13 +277,15 @@ export class ModuleDeliveryEvidenceSchema {
     const generation = reader.positiveInteger('generation');
     const planDigest = reader.sha256('planDigest');
     const sourceCommit = reader.commit('sourceCommit');
-    const producerTeam = reader.string('producerTeam') as TeamKey;
-    const functionalOwner = reader.string(
-      'functionalOwner',
-    ) as ModuleDeliveryOwnerIdentity;
-    const acceptanceOwner = reader.string(
-      'acceptanceOwner',
-    ) as ModuleDeliveryOwnerIdentity;
+    const producerTeam = ModuleDeliveryEvidenceSchema.teamKey(
+      reader.string('producerTeam'),
+    );
+    const functionalOwner = ModuleDeliveryEvidenceSchema.ownerIdentity(
+      reader.string('functionalOwner'),
+    );
+    const acceptanceOwner = ModuleDeliveryEvidenceSchema.ownerIdentity(
+      reader.string('acceptanceOwner'),
+    );
     const acceptanceRequirements = reader.stringList('acceptanceRequirements');
     const claimIdentities = reader
       .array('claimIdentities')
@@ -312,7 +314,7 @@ export class ModuleDeliveryEvidenceSchema {
         acceptanceRequirements,
         claimIdentities,
         acceptedProviderEvidence:
-          acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentityV1[],
+          ModuleDeliveryEvidenceSchema.legacyIdentities(acceptedProviderEvidence),
         artifactIdentity,
         artifactDigest,
         verdict,
@@ -336,7 +338,7 @@ export class ModuleDeliveryEvidenceSchema {
       acceptanceRequirements,
       claimIdentities,
       acceptedProviderEvidence:
-        acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
+        ModuleDeliveryEvidenceSchema.currentIdentities(acceptedProviderEvidence),
       artifactIdentity,
       artifactDigest,
       verdict,
@@ -485,9 +487,53 @@ export class ModuleDeliveryEvidenceSchema {
     };
   }
 
+  private static teamKey(value: string): TeamKey {
+    const team = Object.values(TeamKey).find((candidate) => candidate === value);
+    if (team === undefined) throw new Error('Evidence handoff team is invalid.');
+    return team;
+  }
+
+  private static ownerIdentity(value: string): ModuleDeliveryOwnerIdentity {
+    const owner = [...Object.values(TeamKey), ...Object.values(ModuleDeliveryOwner)].find(
+      (candidate) => candidate === value,
+    );
+    if (owner === undefined)
+      throw new Error('Evidence handoff owner is invalid.');
+    return owner;
+  }
+
+  private static legacyIdentities(
+    identities: readonly (
+      | ModuleDeliveryAcceptedProviderEvidenceIdentity
+      | ModuleDeliveryAcceptedProviderEvidenceIdentityV1
+    )[],
+  ): readonly ModuleDeliveryAcceptedProviderEvidenceIdentityV1[] {
+    const legacy: ModuleDeliveryAcceptedProviderEvidenceIdentityV1[] = [];
+    for (const identity of identities) {
+      if (identity.schemaVersion !== LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION)
+        throw new Error('Evidence handoff nested schema version is invalid.');
+      legacy.push(identity);
+    }
+    return legacy;
+  }
+
+  private static currentIdentities(
+    identities: readonly (
+      | ModuleDeliveryAcceptedProviderEvidenceIdentity
+      | ModuleDeliveryAcceptedProviderEvidenceIdentityV1
+    )[],
+  ): readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[] {
+    const current: ModuleDeliveryAcceptedProviderEvidenceIdentity[] = [];
+    for (const identity of identities) {
+      if (identity.schemaVersion !== MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION)
+        throw new Error('Evidence handoff nested schema version is invalid.');
+      current.push(identity);
+    }
+    return current;
+  }
+
   private static decodeIdentity(
-    node: UntrustedYamlNode,
-    legacy: boolean,
+    ...[node, legacy]: [node: UntrustedYamlNode, legacy: boolean]
   ):
     | ModuleDeliveryAcceptedProviderEvidenceIdentity
     | ModuleDeliveryAcceptedProviderEvidenceIdentityV1 {
@@ -503,13 +549,15 @@ export class ModuleDeliveryEvidenceSchema {
     const planDigest = reader.sha256('planDigest');
     const taskId = reader.string('taskId');
     const attempt = reader.positiveInteger('attempt');
-    const producerTeam = reader.string('producerTeam') as TeamKey;
-    const functionalOwner = reader.string(
-      'functionalOwner',
-    ) as ModuleDeliveryOwnerIdentity;
-    const acceptanceOwner = reader.string(
-      'acceptanceOwner',
-    ) as ModuleDeliveryOwnerIdentity;
+    const producerTeam = ModuleDeliveryEvidenceSchema.teamKey(
+      reader.string('producerTeam'),
+    );
+    const functionalOwner = ModuleDeliveryEvidenceSchema.ownerIdentity(
+      reader.string('functionalOwner'),
+    );
+    const acceptanceOwner = ModuleDeliveryEvidenceSchema.ownerIdentity(
+      reader.string('acceptanceOwner'),
+    );
     const sourceCommit = reader.commit('sourceCommit');
     const originMainSha = reader.commit('originMainSha');
     const pinnedLocalDevSha = reader.commit('pinnedLocalDevSha');
@@ -552,7 +600,7 @@ export class ModuleDeliveryEvidenceSchema {
         claimIdentities,
         acceptanceRequirements,
         acceptedProviderEvidence:
-          acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentityV1[],
+          ModuleDeliveryEvidenceSchema.legacyIdentities(acceptedProviderEvidence),
       };
     }
     return {
@@ -575,7 +623,7 @@ export class ModuleDeliveryEvidenceSchema {
       claimIdentities,
       acceptanceRequirements,
       acceptedProviderEvidence:
-        acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
+        ModuleDeliveryEvidenceSchema.currentIdentities(acceptedProviderEvidence),
     };
   }
 
@@ -593,8 +641,7 @@ export class ModuleDeliveryEvidenceSchema {
       artifactIdentity: request.artifactIdentity,
       evidence: request.evidence,
       acceptanceRequirements: request.acceptanceRequirements,
-      acceptedProviderEvidence:
-        request.acceptedProviderEvidence as readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
+      acceptedProviderEvidence: request.acceptedProviderEvidence,
     });
   }
 
@@ -604,7 +651,7 @@ export class ModuleDeliveryEvidenceSchema {
     return node;
   }
 
-  private static assertTransportWithinBounds(node: unknown): void {
+  private static assertTransportWithinBounds(node: UntrustedYamlNode): void {
     const pending: EvidenceTransportFrame[] = [
       {
         node,
@@ -656,7 +703,7 @@ export class ModuleDeliveryEvidenceSchema {
         typeof current.node === 'number'
       )
         continue;
-      if (Array.isArray(current.node)) {
+      if (UntrustedYamlBoundary.isList(current.node)) {
         if (current.node.length > MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES)
           ModuleDeliveryEvidenceSchema.throwDecodeLimit(
             ModuleDeliveryEvidenceDecodeErrorCode.ArraySizeLimit,
@@ -668,8 +715,10 @@ export class ModuleDeliveryEvidenceSchema {
           ? current.identityDepth + 1
           : current.identityDepth;
         for (let index = current.node.length - 1; index >= 0; index -= 1) {
+          const node = current.node[index];
+          if (node === undefined) continue;
           pending.push({
-            node: current.node[index],
+            node,
             depth: childDepth,
             identityDepth: childIdentityDepth,
             isIdentity: current.isIdentityArray,
@@ -679,7 +728,8 @@ export class ModuleDeliveryEvidenceSchema {
         continue;
       }
       if (typeof current.node !== 'object') continue;
-      const object = current.node as Record<string, unknown>;
+      if (!UntrustedYamlBoundary.isRecord(current.node)) continue;
+      const object = current.node;
       const keys = Object.keys(object);
       if (keys.length > MAX_MODULE_DELIVERY_EVIDENCE_OBJECT_KEYS)
         ModuleDeliveryEvidenceSchema.throwDecodeLimit(
@@ -697,8 +747,10 @@ export class ModuleDeliveryEvidenceSchema {
             key.length,
             MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS,
           );
+        const child = object[key];
+        if (child === undefined) continue;
         pending.push({
-          node: object[key],
+          node: child,
           depth: childDepth,
           identityDepth: current.identityDepth,
           isIdentity: false,
@@ -709,16 +761,18 @@ export class ModuleDeliveryEvidenceSchema {
   }
 
   private static throwDecodeLimit(
-    code: ModuleDeliveryEvidenceDecodeErrorCode,
-    observed: number,
-    limit: number,
+    ...[code, observed, limit]: [
+      code: ModuleDeliveryEvidenceDecodeErrorCode,
+      observed: number,
+      limit: number,
+    ]
   ): never {
     throw new ModuleDeliveryEvidenceDecodeError({ code, observed, limit });
   }
 }
 
 type EvidenceTransportFrame = {
-  readonly node: unknown;
+  readonly node: UntrustedYamlNode;
   readonly depth: number;
   readonly identityDepth: number;
   readonly isIdentity: boolean;
@@ -785,7 +839,13 @@ class EvidenceRecordReader {
       value.some((entry) => typeof entry !== 'string')
     )
       throw new Error(`Evidence handoff field must be a string list: ${key}`);
-    return value as readonly string[];
+    const strings: string[] = [];
+    for (const entry of value) {
+      if (typeof entry !== 'string')
+        throw new Error(`Evidence handoff field must be a string list: ${key}`);
+      strings.push(entry);
+    }
+    return strings;
   }
 
   array(key: string): readonly UntrustedYamlNode[] {

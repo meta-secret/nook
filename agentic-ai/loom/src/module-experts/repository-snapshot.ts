@@ -217,7 +217,7 @@ export class RepositorySnapshot {
     if (
       objectsPath.length === 0 ||
       !isAbsolute(objectsPath) ||
-      /[\u0000\r\n]/u.test(objectsPath)
+      objectsPath.includes('\u0000') || /[\r\n]/u.test(objectsPath)
     )
       return err({
         kind: ExpertIsolationFailureKind.Snapshot,
@@ -418,8 +418,7 @@ export class SnapshotContextFiles {
   }
 
   private safeTarget(
-    canonicalRoot: string,
-    path: string,
+    ...[canonicalRoot, path]: [canonicalRoot: string, path: string]
   ): Result<string, ExpertIsolationFailure> {
     const root = resolve(this.request.repositorySnapshot);
     const target = resolve(root, path);
@@ -479,9 +478,11 @@ export class SnapshotContextFiles {
   }
 
   private safeParent(
-    root: string,
-    canonicalRoot: string,
-    parent: string,
+    ...[root, canonicalRoot, parent]: [
+      root: string,
+      canonicalRoot: string,
+      parent: string,
+    ]
   ): Result<string, ExpertIsolationFailure> {
     const parentRelative = relative(root, parent);
     if (

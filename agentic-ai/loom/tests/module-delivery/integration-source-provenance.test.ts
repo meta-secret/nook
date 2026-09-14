@@ -4,7 +4,13 @@ import { chmodSync } from 'node:fs';
 
 import { join } from 'node:path';
 
-import { ModuleIntegrationProvenanceRegistry } from '../../src/module-delivery/integration-provenance.ts';
+import { ModuleDeliveryEvidenceScenario } from './evidence-test-support.ts';
+
+import {
+  ModuleIntegrationPhase,
+  ModuleIntegrationProvenanceRegistry,
+} from '../../src/module-delivery/integration-provenance.ts';
+import { ModuleWorktreeRole } from '../../src/module-delivery/workspace.ts';
 
 import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-support.ts';
 
@@ -12,14 +18,7 @@ import type { SourceSnapshotExpectation } from '../../src/module-delivery/integr
 
 import type { GitFixture } from './worktree-test-support.ts';
 
-import type {
-  ModuleDeliveryGenerationAuthority,
-} from '../../src/module-delivery/admission.ts';
-
-import type {
-  ModuleIntegrationSession,
-  ModuleIntegrationState,
-} from '../../src/module-delivery/integration-provenance.ts';
+import type { ModuleIntegrationState } from '../../src/module-delivery/integration-provenance.ts';
 
 export class ModuleDeliveryIntegrationSourceProvenanceScenario {
   private constructor(private readonly request: GitFixture) {}
@@ -82,14 +81,55 @@ describe('module delivery source provenance', () => {
       );
     const sourceSnapshot = { ...capturedSource };
     const workspaceSnapshot = { ...capturedWorkspace };
-    const state = {} as ModuleIntegrationState;
+    const runtime = ModuleDeliveryEvidenceScenario.runtime(fixture);
+    const workspace = Object.freeze({
+      role: ModuleWorktreeRole.IntegrationParent,
+      sourceRepositoryRoot: fixture.sourceRoot,
+      ownedWorkspaceRoot: fixture.workspaceRoot,
+      worktreePath: fixture.sourceRoot,
+      worktreeAdminDirectory: fixture.sourceRoot,
+      gitCommonDirectory: fixture.sourceRoot,
+      worktreeId: 'integration-parent',
+      branchName: 'codex/module-delivery-test',
+      planDigest: runtime.accepted.planDigest,
+      taskId: 'module-delivery-integration',
+      attempt: 1,
+      baselineCommit: fixture.sourceCommit,
+    });
+    const cleanupHandle = Object.freeze({
+      sessionId: 'source-provenance-test',
+    });
+    const state: ModuleIntegrationState = Object.freeze({
+      phase: ModuleIntegrationPhase.AcceptingProviders,
+      generation: runtime.accepted.plan.generation,
+      planDigest: runtime.accepted.planDigest,
+      sourceCommit: fixture.sourceCommit,
+      originMainSha: fixture.originMainSha,
+      pinnedLocalDevSha: fixture.pinnedLocalDevSha,
+      topologicalOrder: runtime.accepted.topologicalOrder,
+      waves: runtime.accepted.waves,
+      completedWaveCount: 0,
+      integratedTaskIds: [],
+      acceptedWrites: [],
+      acceptedEvidence: [],
+      headCommit: fixture.sourceCommit,
+      admissionState: runtime.state,
+      workspace,
+      cleanupHandle,
+    });
+    const session = ModuleIntegrationProvenanceRegistry.createIntegrationSession({
+      cleanupHandle,
+      workspace,
+      integrationRef: '',
+      currentHead: state.headCommit,
+    });
 
     ModuleIntegrationProvenanceRegistry.registerIntegrationState({
-      authority: {} as ModuleDeliveryGenerationAuthority,
+      authority: runtime.authority,
       state,
       sourceSnapshot,
       workspaceSnapshot,
-      session: {} as ModuleIntegrationSession,
+      session,
     });
 
     sourceSnapshot.refsDigest = 'f'.repeat(64);

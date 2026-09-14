@@ -99,8 +99,10 @@ export class DevCli {
 
   /** Binds the serialized target to the feature worktree state observed locally. */
   static observeDevLandRequest(
-    workspace: DevDeliveryWorkspace,
-    packet: DevLandProvenancePacket,
+    ...[workspace, packet]: [
+      workspace: DevDeliveryWorkspace,
+      packet: DevLandProvenancePacket,
+    ]
   ): Result<DevLandRequest, DevFailure> {
     const featureBranch = workspace.git.currentBranch();
     if (featureBranch.isErr()) return err(featureBranch.error);

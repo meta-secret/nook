@@ -208,18 +208,21 @@ export class ProcessCommandRunner implements CommandRunner {
   }
 
   private static gitArguments(
-    requestArgs: readonly string[],
-    remoteOperation: boolean,
+    ...[requestArgs, remoteOperation]: [
+      requestArgs: readonly string[],
+      remoteOperation: boolean,
+    ]
   ): Result<readonly string[], DevFailure> {
     if (!remoteOperation)
       return ok([...ProcessCommandRunner.gitOptions, ...requestArgs]);
     const args = [...requestArgs];
-    const remoteIndices = args.flatMap((argument, index) =>
-      index > 0 &&
-      (argument === 'origin' ||
-        argument === ProcessCommandRunner.canonicalRemoteUrl)
-        ? [index]
-        : [],
+    const remoteIndices = args.flatMap(
+      (...[argument, index]: [argument: string, index: number]) =>
+        index > 0 &&
+        (argument === 'origin' ||
+          argument === ProcessCommandRunner.canonicalRemoteUrl)
+          ? [index]
+          : [],
     );
     const remoteIndex = remoteIndices.at(0);
     if (remoteIndex === undefined || remoteIndices.length !== 1)
@@ -240,7 +243,7 @@ export class ProcessCommandRunner implements CommandRunner {
       args.splice(1, 0, '--no-verify');
     const credential = process.env.NOOK_GITHUB_PAT?.trim();
     const credentialOption =
-      credential && !/[\u0000\r\n]/u.test(credential)
+      credential && !credential.includes('\u0000') && !/[\r\n]/u.test(credential)
         ? ['--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER']
         : [];
     return ok([
@@ -251,9 +254,11 @@ export class ProcessCommandRunner implements CommandRunner {
   }
 
   private static gitEnvironment(
-    remoteOperation: boolean,
-    workingDirectory: string,
-    isolatedGitDirectory?: string,
+    ...[remoteOperation, workingDirectory, isolatedGitDirectory]: [
+      remoteOperation: boolean,
+      workingDirectory: string,
+      isolatedGitDirectory?: string,
+    ]
   ): NodeJS.ProcessEnv {
     const nullDevice = process.platform === 'win32' ? 'NUL' : '/dev/null';
     const environment: NodeJS.ProcessEnv = {
@@ -285,7 +290,7 @@ export class ProcessCommandRunner implements CommandRunner {
     }
     if (remoteOperation) {
       const credential = process.env.NOOK_GITHUB_PAT?.trim();
-      if (credential && !/[\u0000\r\n]/u.test(credential))
+      if (credential && !credential.includes('\u0000') && !/[\r\n]/u.test(credential))
         environment.NOOK_GIT_EXTRAHEADER = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${credential}`).toString('base64')}`;
     }
     return environment;
@@ -362,8 +367,10 @@ export class ProcessCommandRunner implements CommandRunner {
   }
 
   private static inspectRepository(
-    workingDirectory: string,
-    expectedRoot?: string,
+    ...[workingDirectory, expectedRoot]: [
+      workingDirectory: string,
+      expectedRoot?: string,
+    ]
   ): Result<RepositoryMetadata, DevFailure> {
     const canonicalWorkingDirectory = ProcessCommandRunner.canonicalPath(
       workingDirectory,
@@ -517,8 +524,7 @@ export class ProcessCommandRunner implements CommandRunner {
   }
 
   private static canonicalPath(
-    path: string,
-    label: string,
+    ...[path, label]: [path: string, label: string]
   ): Result<string, DevFailure> {
     if (!isAbsolute(path) || path.includes('\0'))
       return err({
@@ -647,7 +653,13 @@ export class ProcessCommandRunner implements CommandRunner {
     }
     const name = values.get('name');
     const email = values.get('email');
-    if (!name || !email || /[\u0000\r\n]/u.test(name + email)) return '';
+    if (
+      !name ||
+      !email ||
+      (name + email).includes('\u0000') ||
+      /[\r\n]/u.test(name + email)
+    )
+      return '';
     const quote = (value: string) =>
       `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
     return `[user]\n\tname = ${quote(name)}\n\temail = ${quote(email)}\n`;
@@ -665,9 +677,11 @@ export class ProcessCommandRunner implements CommandRunner {
   }
 
   private static createIsolatedGitDirectory(
-    metadata: RepositoryMetadata,
-    workingDirectory: string,
-    requireCanonicalIdentity = false,
+    ...[metadata, workingDirectory, requireCanonicalIdentity = false]: [
+      metadata: RepositoryMetadata,
+      workingDirectory: string,
+      requireCanonicalIdentity?: boolean,
+    ]
   ): Result<IsolatedGitDirectory, DevFailure> {
     const refreshed = ProcessCommandRunner.inspectRepository(workingDirectory);
     if (refreshed.isErr()) return err(refreshed.error);
@@ -732,9 +746,10 @@ export class ProcessCommandRunner implements CommandRunner {
         );
       }
       mkdirSync(join(path, 'hooks'));
+      const isolatedPath = path;
       return ok({
-        path,
-        cleanup: () => rmSync(path as string, { force: true, recursive: true }),
+        path: isolatedPath,
+        cleanup: () => rmSync(isolatedPath, { force: true, recursive: true }),
       });
     } catch {
       if (path) rmSync(path, { force: true, recursive: true });
@@ -746,10 +761,12 @@ export class ProcessCommandRunner implements CommandRunner {
   }
 
   private static linkMetadata(
-    destination: string,
-    source: string,
-    required: boolean,
-    createIfMissing = false,
+    ...[destination, source, required, createIfMissing = false]: [
+      destination: string,
+      source: string,
+      required: boolean,
+      createIfMissing?: boolean,
+    ]
   ): void {
     if (!existsSync(source)) {
       if (required) throw new Error(`Missing Git metadata: ${source}`);

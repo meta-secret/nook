@@ -21,15 +21,19 @@ export class ModuleIntegrationCapabilityProvenance {
   >();
 
   recordFrontier(
-    capability: ModuleDeliveryIntegratedWriterFrontierCapability,
-    provenance: IntegratedWriterFrontierProvenance,
+    ...[capability, provenance]: [
+      capability: ModuleDeliveryIntegratedWriterFrontierCapability,
+      provenance: IntegratedWriterFrontierProvenance,
+    ]
   ): void {
     this.#frontiers.set(capability, provenance);
   }
 
   recordTransition(
-    transition: ModuleDeliveryCanonicalEvidenceTransition,
-    provenance: CanonicalEvidenceTransitionProvenance,
+    ...[transition, provenance]: [
+      transition: ModuleDeliveryCanonicalEvidenceTransition,
+      provenance: CanonicalEvidenceTransitionProvenance,
+    ]
   ): void {
     this.#transitions.set(transition, provenance);
   }

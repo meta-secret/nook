@@ -19,7 +19,13 @@ class PinnedDevBaseEnvironmentFixture {
     return fixture;
   }
 
-  commit(path: string, content: string, message: string): string {
+  commit(
+    ...[path, content, message]: [
+      path: string,
+      content: string,
+      message: string,
+    ]
+  ): string {
     writeFileSync(join(this.root, path), content);
     this.git('add', '--', path);
     this.git('commit', '-qm', message);
@@ -31,9 +37,11 @@ class PinnedDevBaseEnvironmentFixture {
   }
 
   environmentFor(
-    originMainSha: string,
-    pinnedLocalDevSha: string,
-    featureHeadSha: string,
+    ...[originMainSha, pinnedLocalDevSha, featureHeadSha]: [
+      originMainSha: string,
+      pinnedLocalDevSha: string,
+      featureHeadSha: string,
+    ]
   ): NodeJS.ProcessEnv {
     return {
       ...process.env,

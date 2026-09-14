@@ -53,9 +53,18 @@ export class AgentAttemptTransport {
 
   static decodeEvent(serialized: string): AgentAttemptEvent {
     const event = AgentAttemptTransport.decodeCompatibleEvent(serialized);
-    if (event.workflowVersion !== CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION)
+    if (!AgentAttemptTransport.isCurrentEvent(event))
       throw new AgentAttemptDecodeError();
-    return event as AgentAttemptEvent;
+    return event;
+  }
+
+  private static isCurrentEvent(
+    event: AgentAttemptEvent | LegacyAgentAttemptEvent,
+  ): event is AgentAttemptEvent {
+    return (
+      event.workflowVersion === CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION &&
+      Object.hasOwn(event, 'featureHeadSha')
+    );
   }
 
   /** Decodes V4 and V5 events while preserving the V4 shape verbatim. */
@@ -214,8 +223,10 @@ export class AgentAttemptTransport {
 
   /** Copies a V4 event into the V5 wire shape with explicitly supplied evidence. */
   static migrateEvent(
-    event: LegacyAgentAttemptEvent,
-    featureHeadSha: string,
+    ...[event, featureHeadSha]: [
+      event: LegacyAgentAttemptEvent,
+      featureHeadSha: string,
+    ]
   ): AgentAttemptEvent {
     if (
       event.workflowVersion !== BASE_EVIDENCE_AGENT_ATTEMPT_WORKFLOW_VERSION
@@ -233,8 +244,10 @@ export class AgentAttemptTransport {
   }
 
   static migrateEvents(
-    events: readonly LegacyAgentAttemptEvent[],
-    featureHeadSha: string,
+    ...[events, featureHeadSha]: [
+      events: readonly LegacyAgentAttemptEvent[],
+      featureHeadSha: string,
+    ]
   ): readonly AgentAttemptEvent[] {
     return events.map((event) =>
       AgentAttemptTransport.migrateEvent(event, featureHeadSha),

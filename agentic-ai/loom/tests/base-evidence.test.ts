@@ -31,7 +31,7 @@ class BaseEvidenceGitFixture {
     }).trim();
   }
 
-  gitWithInput(input: string, ...args: string[]): string {
+  gitWithInput(...[input, ...args]: [input: string, ...args: string[]]): string {
     const environment = { ...process.env };
     delete environment.GIT_NO_REPLACE_OBJECTS;
     return execFileSync('git', ['-C', this.root, ...args], {
@@ -41,7 +41,7 @@ class BaseEvidenceGitFixture {
     }).trim();
   }
 
-  commit(message: string, parent?: string): string {
+  commit(...[message, parent]: [message: string, parent?: string]): string {
     const file = join(this.root, 'fixture.txt');
     writeFileSync(file, `${message}\n`);
     const blob = this.git('hash-object', '-w', file);
@@ -62,7 +62,7 @@ class BaseEvidenceGitFixture {
     return this.git(...commitArgs);
   }
 
-  replaceCommit(target: string, parent: string): void {
+  replaceCommit(...[target, parent]: [target: string, parent: string]): void {
     const replacement = this.commit('replacement', parent);
     this.git('replace', target, replacement);
   }
@@ -72,9 +72,11 @@ class BaseEvidenceGitFixture {
   }
 
   request(
-    originMainSha: string,
-    pinnedLocalDevSha: string,
-    sourceCommit: string,
+    ...[originMainSha, pinnedLocalDevSha, sourceCommit]: [
+      originMainSha: string,
+      pinnedLocalDevSha: string,
+      sourceCommit: string,
+    ]
   ): PinnedDevBaseAncestryRequest {
     return {
       originMainSha,

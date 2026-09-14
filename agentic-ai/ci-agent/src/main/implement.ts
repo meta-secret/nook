@@ -490,7 +490,10 @@ class AgentImplementationIsValidBranch {
   }
 
   private rolesForTeam(team: string): readonly string[] {
-    return CANONICAL_TEAM_ROLES[team as CanonicalTeam] || [];
+    const canonicalTeam = Object.keys(CANONICAL_TEAM_ROLES).find(
+      (candidate): candidate is CanonicalTeam => candidate === team,
+    );
+    return canonicalTeam === undefined ? [] : CANONICAL_TEAM_ROLES[canonicalTeam];
   }
 }
 
@@ -644,14 +647,18 @@ declare const PINNED_LOCAL_DEV_SHA: unique symbol;
 class PinnedLocalDevShaParser {
   constructor(private readonly value: string) {}
   parse(): Result<PinnedLocalDevSha, CiFailure> {
-    if (!/^[0-9a-f]{40}$/u.test(this.value)) {
+    if (!PinnedLocalDevShaParser.isValid(this.value)) {
       return err({
         kind: CiFailureKind.Configuration,
         message:
           "PINNED_LOCAL_DEV_SHA must be an exact lowercase 40-hex commit SHA",
       });
     }
-    return ok(this.value as PinnedLocalDevSha);
+    return ok(this.value);
+  }
+
+  private static isValid(value: string): value is PinnedLocalDevSha {
+    return /^[0-9a-f]{40}$/u.test(value);
   }
 }
 

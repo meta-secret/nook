@@ -216,8 +216,10 @@ export class DelegationJournalSchema {
 
   /** Creates a new current plan while leaving the historical value untouched. */
   static migrateDelegationPlan(
-    plan: DelegationPlanV1 | DelegationPlanV2,
-    featureBranch: string,
+    ...[plan, featureBranch]: [
+      plan: DelegationPlanV1 | DelegationPlanV2,
+      featureBranch: string,
+    ]
   ): DelegationPlan {
     if (
       plan.schemaVersion !== LEGACY_DELEGATION_PLAN_SCHEMA_VERSION &&

@@ -20,14 +20,26 @@ import { CommandExecutable } from '../src/dev-delivery/dev-types.ts';
 const SHA = '1111111111111111111111111111111111111111';
 
 class GitFixture {
-  static initialize(root: string, remote = 'https://github.com/meta-secret/nook.git'): void {
+  static initialize(
+    ...[root, remote = 'https://github.com/meta-secret/nook.git']: [
+      root: string,
+      remote?: string,
+    ]
+  ): void {
     execFileSync('git', ['-C', root, 'init', '-q']);
     execFileSync('git', ['-C', root, 'config', 'user.name', 'Nook Fixture']);
     execFileSync('git', ['-C', root, 'config', 'user.email', 'nook-fixture@example.test']);
     execFileSync('git', ['-C', root, 'config', 'remote.origin.url', remote]);
   }
 
-  static commit(root: string, path: string, content: string, message: string): string {
+  static commit(
+    ...[root, path, content, message]: [
+      root: string,
+      path: string,
+      content: string,
+      message: string,
+    ]
+  ): string {
     writeFileSync(join(root, path), content);
     execFileSync('git', ['-C', root, 'add', '--', path]);
     execFileSync('git', ['-C', root, 'commit', '-qm', message]);

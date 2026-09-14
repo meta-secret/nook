@@ -25,8 +25,7 @@ export interface BranchAdvancedFailure extends DevFailure {
 }
 
 export function branchAdvancedFailure(
-  branch: BranchName,
-  currentHead: CommitSha,
+  ...[branch, currentHead]: [branch: BranchName, currentHead: CommitSha]
 ): BranchAdvancedFailure {
   return {
     kind: DevFailureKind.Race,
@@ -247,9 +246,11 @@ export class DevGitMergeBoundary {
   }
 
   private fastForwardCheckedWorktree(
-    path: string,
-    expectedDevHead: CommitSha,
-    featureHead: CommitSha,
+    ...[path, expectedDevHead, featureHead]: [
+      path: string,
+      expectedDevHead: CommitSha,
+      featureHead: CommitSha,
+    ]
   ): Result<void, DevFailure> {
     const assigned = this.dependencies.repository.managedWorktreeAt(
       path,
@@ -300,9 +301,11 @@ export class DevGitMergeBoundary {
   }
 
   private updateLocalDevRef(
-    featureHead: CommitSha,
-    expectedDevHead: CommitSha,
-    devExists: boolean,
+    ...[featureHead, expectedDevHead, devExists]: [
+      featureHead: CommitSha,
+      expectedDevHead: CommitSha,
+      devExists: boolean,
+    ]
   ): Result<void, DevFailure> {
     const checkedOut =
       this.dependencies.repository.developmentWorktreeForLanding();
@@ -515,7 +518,9 @@ export class DevGitMergeBoundary {
     });
   }
 
-  private sameInputs(before: MergeInputs, after: MergeInputs): boolean {
+  private sameInputs(
+    ...[before, after]: [before: MergeInputs, after: MergeInputs]
+  ): boolean {
     return (
       before.devExists === after.devExists &&
       before.devHead.equals(after.devHead) &&

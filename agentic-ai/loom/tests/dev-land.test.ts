@@ -68,14 +68,16 @@ test('dev:land rejects a non-canonical feature branch before reading Git', () =>
   const runner = new DetachedMergeRunner(root);
   try {
     for (const branch of ['feature/foo', 'child/temp']) {
+      const validBranch = BranchName.parseFeature('codex/agent-branching');
+      expect(validBranch.isOk()).toBe(true);
+      if (validBranch.isErr()) return;
+      Object.defineProperty(validBranch.value, 'value', {
+        configurable: true,
+        value: () => branch,
+      });
       const result = new DevLandCommand(
         new DevDeliveryWorkspace({ root, runner }),
-      ).execute({
-        featureBranch: {
-          equals: () => true,
-          value: () => branch,
-        },
-      } as unknown as DevLandRequest);
+      ).execute({ featureBranch: validBranch.value });
 
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {

@@ -266,46 +266,24 @@ process.exit(result.status ?? 1);
         .then(CiResultAssertions.assertSuccess);
 
       await assert.rejects(access(marker), /ENOENT/);
-      const publication = JSON.parse(await readFile(pushLog, "utf8")) as {
-        args: string[];
-        allowProtocol: string;
-        configPath: string;
-        configCount?: string;
-        configGlobal: string;
-        configNoSystem: string;
-        extraHeaderConfigured: boolean;
-        noReplaceObjects: string;
-      };
-      assert.ok(publication.args.includes("--no-verify"));
-      assert.ok(
-        publication.args.includes("https://github.com/meta-secret/nook.git"),
-      );
-      assert.ok(
-        publication.args.includes(
-          "HEAD:refs/heads/fix/dependency-update",
-        ),
-      );
-      assert.ok(
-        publication.args.includes(
-          "--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER",
-        ),
-      );
-      assert.ok(
-        publication.args.every((argument) => !argument.startsWith("--force")),
-      );
-      assert.ok(
-        publication.args.every(
-          (argument) => !argument.includes("publication-secret"),
-        ),
-      );
-      assert.ok(!publication.args.includes("origin"));
-      assert.equal(publication.allowProtocol, "https");
-      assert.equal(publication.configPath, "/dev/null");
-      assert.equal(publication.configCount, undefined);
-      assert.equal(publication.configGlobal, "/dev/null");
-      assert.equal(publication.configNoSystem, "1");
-      assert.equal(publication.extraHeaderConfigured, true);
-      assert.equal(publication.noReplaceObjects, "1");
+      const publication = await readFile(pushLog, "utf8");
+      for (const argument of [
+        "--no-verify",
+        "https://github.com/meta-secret/nook.git",
+        "HEAD:refs/heads/fix/dependency-update",
+        "--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER",
+      ])
+        assert.match(publication, new RegExp(`\\"${argument}\\"`, "u"));
+      assert.doesNotMatch(publication, /"--force/u);
+      assert.doesNotMatch(publication, /publication-secret/u);
+      assert.doesNotMatch(publication, /"origin"/u);
+      assert.match(publication, /"allowProtocol":"https"/u);
+      assert.match(publication, /"configPath":"\/dev\/null"/u);
+      assert.doesNotMatch(publication, /"configCount"/u);
+      assert.match(publication, /"configGlobal":"\/dev\/null"/u);
+      assert.match(publication, /"configNoSystem":"1"/u);
+      assert.match(publication, /"extraHeaderConfigured":true/u);
+      assert.match(publication, /"noReplaceObjects":"1"/u);
       const { stdout } = await execFileAsync("git", [
         "--git-dir",
         remoteRoot,

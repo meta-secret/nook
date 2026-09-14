@@ -157,8 +157,7 @@ export class DevLandCommand {
   }
 
   private verifyBuildProof(
-    branch: BranchName,
-    featureHead: CommitSha,
+    ...[branch, featureHead]: [branch: BranchName, featureHead: CommitSha]
   ): Result<void, DevFailure> {
     const proof = this.workspace.github.buildProof({
       branch,
@@ -349,16 +348,12 @@ export class DevLandCommand {
     }
 
     // Validate the runtime boundary as well as the static request type.
-    const featureBranch = (
-      request as DevLandRequest & { readonly featureBranch?: unknown }
-    ).featureBranch;
+    const featureBranch = request.featureBranch;
     if (
       !featureBranch ||
       typeof featureBranch !== 'object' ||
-      typeof (featureBranch as { readonly equals?: unknown }).equals !==
-        'function' ||
-      typeof (featureBranch as { readonly value?: unknown }).value !==
-        'function'
+      typeof featureBranch.equals !== 'function' ||
+      typeof featureBranch.value !== 'function'
     ) {
       return err({
         kind: DevFailureKind.Configuration,
@@ -366,11 +361,9 @@ export class DevLandCommand {
           'The landing packet must include featureBranch',
       });
     }
-    let branchValue: unknown;
+    let branchValue: string;
     try {
-      branchValue = (
-        featureBranch as { readonly value: () => unknown }
-      ).value();
+      branchValue = featureBranch.value();
     } catch {
       return err({
         kind: DevFailureKind.Configuration,

@@ -174,11 +174,13 @@ export class TeamAgentContract {
   }
 
   private static auditContextPaths(
-    repoRoot: string,
-    contextPaths: readonly string[],
-    unsafeCode: string,
-    missingCode: string,
-    contextLabel: string,
+    ...[repoRoot, contextPaths, unsafeCode, missingCode, contextLabel]: [
+      repoRoot: string,
+      contextPaths: readonly string[],
+      unsafeCode: string,
+      missingCode: string,
+      contextLabel: string,
+    ]
   ): readonly TeamAuthorityAuditFinding[] {
     const findings: TeamAuthorityAuditFinding[] = [];
     for (const contextPath of contextPaths) {

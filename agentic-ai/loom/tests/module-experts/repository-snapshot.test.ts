@@ -20,7 +20,12 @@ import {
 } from '../../src/module-experts/repository-snapshot.ts';
 
 class RepositorySnapshotFixture {
-  static runGit(workingDirectory: string, args: readonly string[]): string {
+  static runGit(
+    ...[workingDirectory, args]: [
+      workingDirectory: string,
+      args: readonly string[],
+    ]
+  ): string {
     const environment: NodeJS.ProcessEnv = {
       ...process.env,
       GIT_CONFIG_GLOBAL: '/dev/null',
@@ -42,9 +47,11 @@ class RepositorySnapshotFixture {
   }
 
   static configureAttackSurface(
-    repository: string,
-    marker: string,
-    script: string,
+    ...[repository, marker, script]: [
+      repository: string,
+      marker: string,
+      script: string,
+    ]
   ): void {
     writeFileSync(script, `#!/bin/sh\nprintf touched > '${marker}'\n`, {
       encoding: 'utf8',

@@ -52,7 +52,7 @@ export type ModuleDeliveryEvidenceArtifactDigestRequest = {
   readonly artifactIdentity: string;
   readonly evidence: readonly string[];
   readonly acceptanceRequirements: readonly string[];
-  readonly acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+  readonly acceptedProviderEvidence: readonly ModuleDeliveryEvidenceIdentity[];
 };
 
 export type ModuleDeliveryAcceptedProviderEvidenceIdentity =
@@ -100,6 +100,10 @@ export type ModuleDeliveryAcceptedProviderEvidenceIdentityV1 = Readonly<{
   acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentityV1[];
 }>;
 
+type ModuleDeliveryEvidenceIdentity =
+  | ModuleDeliveryAcceptedProviderEvidenceIdentity
+  | ModuleDeliveryAcceptedProviderEvidenceIdentityV1;
+
 export type ModuleDeliveryEvidenceSubmissionVerification = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
@@ -130,7 +134,7 @@ type EvidenceArtifactDigestContent = Readonly<{
   artifactIdentity: string;
   evidence: readonly string[];
   acceptanceRequirements: readonly string[];
-  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+  acceptedProviderEvidence: readonly ModuleDeliveryEvidenceIdentity[];
 }>;
 type EvidenceSourceProvenanceContent = Readonly<{
   sourceCommit: string;

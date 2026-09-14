@@ -34,6 +34,7 @@ import type {
 
 import type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
+  ModuleDeliveryAcceptedProviderEvidenceIdentityV1,
   ModuleDeliveryEvidenceClaimIdentity,
 } from './evidence.ts';
 
@@ -186,12 +187,18 @@ export class ModuleSourceAuthority {
   }
 
   static assertEvidenceBound(
-    identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
+    identities: readonly (
+      | ModuleDeliveryAcceptedProviderEvidenceIdentity
+      | ModuleDeliveryAcceptedProviderEvidenceIdentityV1
+    )[],
   ): void {
     if (identities.length > MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES)
       throw new Error('Accepted provider evidence ancestry is too large.');
     const pending = [...identities];
-    const seen = new Set<ModuleDeliveryAcceptedProviderEvidenceIdentity>();
+    const seen = new Set<
+      | ModuleDeliveryAcceptedProviderEvidenceIdentity
+      | ModuleDeliveryAcceptedProviderEvidenceIdentityV1
+    >();
     for (const current of pending) {
       if (seen.has(current))
         throw new Error('Accepted provider evidence ancestry is cyclic.');

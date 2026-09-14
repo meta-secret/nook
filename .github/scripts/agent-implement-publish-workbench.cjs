@@ -1,7 +1,30 @@
 'use strict'
 
-const fs = require('node:fs')
-const { validateAgentRecord } = require('./workbench-records.cjs')
+/** @type {(moduleName: string) => unknown} */
+const loadBuiltin = /** @type {(moduleName: string) => unknown} */ (process.getBuiltinModule.bind(process))
+/** @type {typeof import('node:module')} */
+const moduleApi = /** @type {typeof import('node:module')} */ (loadBuiltin('node:module'))
+const moduleLoader = moduleApi.createRequire(__filename)
+
+/**
+ * @template T
+ * @param {string} modulePath
+ * @returns {T}
+ */
+function loadModule(modulePath) {
+  const loaded = /** @type {unknown} */ (moduleLoader(modulePath))
+  if (!loaded || typeof loaded !== 'object') {
+    throw new Error('module has an invalid contract')
+  }
+  return /** @type {T} */ (loaded)
+}
+
+/** @type {typeof import('node:fs')} */
+const fs = /** @type {typeof import('node:fs')} */ (loadBuiltin('node:fs'))
+/** @typedef {(candidate: string, kind: string, secrets?: string[], sourceTask?: string, metadata?: { assignedGizmoId?: string }) => string} ValidateAgentRecord */
+/** @type {{ validateAgentRecord: ValidateAgentRecord }} */
+const recordsModule = loadModule('./workbench-records.cjs')
+const { validateAgentRecord } = recordsModule
 
 /**
  * @typedef {{ created_at: string }} GithubWorkflowRun

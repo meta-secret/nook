@@ -27,6 +27,14 @@ export class CanonicalFeatureBranchContract {
 
   private execute(): CanonicalFeatureBranch {
     const branch = this.value;
+    if (!CanonicalFeatureBranchContract.isCanonicalFeatureBranch(branch))
+      throw new Error('Canonical feature branch is malformed.');
+    return branch;
+  }
+
+  private static isCanonicalFeatureBranch(
+    branch: string,
+  ): branch is CanonicalFeatureBranch {
     if (
       !branch ||
       branch.length > 120 ||
@@ -38,9 +46,22 @@ export class CanonicalFeatureBranchContract {
       branch.includes('..') ||
       branch.includes('//') ||
       branch.includes('@{') ||
-      /[\u0000-\u0020\u007f~^:?*\[\\]/u.test(branch)
+      branch.split('').some((character) => {
+        const code = character.charCodeAt(0);
+        return (
+          code <= 0x20 ||
+          code === 0x7f ||
+          character === '~' ||
+          character === '^' ||
+          character === ':' ||
+          character === '?' ||
+          character === '*' ||
+          character === '[' ||
+          character === '\\'
+        );
+      })
     )
-      throw new Error('Canonical feature branch is malformed.');
+      return false;
     const components = branch.split('/');
     if (
       components[0] !== 'codex' ||
@@ -62,15 +83,15 @@ export class CanonicalFeatureBranchContract {
         ) &&
         CanonicalFeatureBranchContract.isKebabSegment(segments[3], 20, 50) &&
         segments[3] !== 'cleanup');
-    if (!valid)
-      throw new Error('Canonical feature branch must be a codex branch.');
-    return branch as CanonicalFeatureBranch;
+    return valid;
   }
 
   private static isKebabSegment(
-    segment: string | undefined,
-    minimum: number,
-    maximum: number,
+    ...[segment, minimum, maximum]: [
+      segment: string | undefined,
+      minimum: number,
+      maximum: number,
+    ]
   ): boolean {
     return (
       segment !== undefined &&
@@ -92,8 +113,7 @@ export class CanonicalFeatureBranchContract {
   }
 
   private static isCanonicalRole(
-    team: string | undefined,
-    role: string | undefined,
+    ...[team, role]: [team: string | undefined, role: string | undefined]
   ): boolean {
     switch (team) {
       case 'ai':
@@ -128,6 +148,8 @@ export class CanonicalFeatureBranchContract {
         return (
           role === 'gizmo' || role === 'dev-manager' || role === 'pr-lifecycle'
         );
+      case undefined:
+        return false;
       default:
         return false;
     }
@@ -210,7 +232,9 @@ export class PinnedDevBaseEvidenceContract {
     }
   }
 
-  private static assertCommitShape(name: string, sha: GitCommit): void {
+  private static assertCommitShape(
+    ...[name, sha]: [name: string, sha: GitCommit]
+  ): void {
     if (!/^[0-9a-f]{40}$/u.test(sha)) {
       throw new Error(`${name} must be an exact lowercase 40-hex commit SHA.`);
     }

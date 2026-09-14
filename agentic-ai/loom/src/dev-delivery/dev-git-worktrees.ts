@@ -109,8 +109,10 @@ export class WorktreeInventoryDecoder {
 /** Selects exactly one usable managed worktree for a named branch. */
 export class ManagedWorktreeSelection {
   select(
-    records: readonly WorktreeRecord[],
-    branch: ManagedBranch,
+    ...[records, branch]: [
+      records: readonly WorktreeRecord[],
+      branch: ManagedBranch,
+    ]
   ): Result<WorktreeRecord, DevFailure> {
     const candidates = records.filter((record) =>
       !record.prunable &&

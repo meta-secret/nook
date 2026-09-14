@@ -129,8 +129,8 @@ export class ModuleGenerationAuthority {
     };
     const expectedLineage =
       ModuleSourceAuthority.expectedModuleDeliveryLineageMap(lineageRequest);
-    const value = { [AUTHORITY]: true };
-    const authority = Object.freeze(value) as ModuleDeliveryGenerationAuthority;
+    const value: ModuleDeliveryGenerationAuthority = { [AUTHORITY]: true };
+    const authority = Object.freeze(value);
     const authorityState: AuthorityState = {
       repositoryRoot,
       inputPlan: request.acceptedPlan,

@@ -57,6 +57,8 @@ class PublishRunner implements CommandRunner {
   private git(request: CommandRequest): Result<CommandOutput, never> {
     const args = request.args;
     switch (args[0]) {
+      case undefined:
+        return ok(this.output());
       case 'rev-parse':
         return ok(
           this.output({

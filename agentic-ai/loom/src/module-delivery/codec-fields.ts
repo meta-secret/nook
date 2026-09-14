@@ -173,8 +173,10 @@ export class ModulePlanFields {
   }
 
   nodeList(
-    key: string,
-    maximum = MAX_MODULE_DELIVERY_NODES,
+    ...[key, maximum = MAX_MODULE_DELIVERY_NODES]: [
+      key: string,
+      maximum?: number,
+    ]
   ): ModulePlanTransportList {
     const value = this.value(key);
     if (!UntrustedYamlBoundary.isList(value))
@@ -186,8 +188,10 @@ export class ModulePlanFields {
   }
 
   list(
-    key: string,
-    maximum = MAX_MODULE_DELIVERY_EDGE_CONTRACTS,
+    ...[key, maximum = MAX_MODULE_DELIVERY_EDGE_CONTRACTS]: [
+      key: string,
+      maximum?: number,
+    ]
   ): ModulePlanTransportList {
     const value = this.value(key);
     if (!UntrustedYamlBoundary.isList(value))

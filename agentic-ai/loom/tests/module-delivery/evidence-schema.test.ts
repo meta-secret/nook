@@ -112,7 +112,7 @@ test('migrates nested historical v1 evidence with supplied payload and fails clo
           evidence: current.evidence,
           acceptanceRequirements: current.acceptanceRequirements,
           acceptedProviderEvidence: [
-            historicalNested as unknown as ModuleDeliveryAcceptedProviderEvidenceIdentity,
+            historicalNested,
           ],
         }),
     };
@@ -212,7 +212,7 @@ test('migrates nested historical v1 evidence with supplied payload and fails clo
           evidence: historical.evidence,
           acceptanceRequirements: historical.acceptanceRequirements,
           acceptedProviderEvidence: [
-            tamperedNested as unknown as ModuleDeliveryAcceptedProviderEvidenceIdentity,
+            tamperedNested,
           ],
         }),
     };
@@ -293,7 +293,10 @@ test('rejects oversized and deeply nested evidence transports before decoding', 
           ...Object.fromEntries(
             Array.from(
               { length: MAX_MODULE_DELIVERY_EVIDENCE_OBJECT_KEYS },
-              (_, index) => [`extra-${index}`, true],
+              (...[, index]: [ignored: number, index: number]) => [
+                `extra-${index}`,
+                true,
+              ],
             ),
           ),
         }),
@@ -309,7 +312,8 @@ test('rejects oversized and deeply nested evidence transports before decoding', 
         }),
       ),
     ).toThrow(ModuleDeliveryEvidenceDecodeError);
-    let deeplyNested: unknown = 'safe';
+    type NestedTransport = string | readonly NestedTransport[];
+    let deeplyNested: NestedTransport = 'safe';
     for (let depth = 0; depth < MAX_MODULE_DELIVERY_EVIDENCE_DEPTH; depth += 1)
       deeplyNested = [deeplyNested];
     expect(() =>

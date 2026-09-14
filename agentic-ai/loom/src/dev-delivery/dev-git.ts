@@ -118,8 +118,7 @@ export class DevGitRepository {
    * method never discovers a replacement worktree.
    */
   managedWorktreeAt(
-    path: string,
-    branch: ManagedBranch,
+    ...[path, branch]: [path: string, branch: ManagedBranch]
   ): Result<WorktreeRecord, DevFailure> {
     const canonicalPath = this.canonicalWorktreePath(
       path,
@@ -631,9 +630,11 @@ export class DevGitRepository {
   }
 
   private canonicalWorktreePath(
-    path: string,
-    label: string,
-    requireCanonicalInput = false,
+    ...[path, label, requireCanonicalInput = false]: [
+      path: string,
+      label: string,
+      requireCanonicalInput?: boolean,
+    ]
   ): Result<string, DevFailure> {
     const normalized = resolve(path);
     if (requireCanonicalInput && path !== normalized) {

@@ -223,8 +223,10 @@ export class DelegationRunFinalization {
 
   /** Creates a current result from V1 evidence without rewriting the V1 value. */
   static migrateDelegationRunResult(
-    result: DelegationRunResultV1,
-    featureHeadSha: string,
+    ...[result, featureHeadSha]: [
+      result: DelegationRunResultV1,
+      featureHeadSha: string,
+    ]
   ): DelegationRunResult {
     if (
       result.schemaVersion !==
@@ -522,8 +524,10 @@ export class DelegationRunFinalization {
   }
 
   private static async verifyEveryAttempt(
-    loaded: LoadedDelegationRunState,
-    featureHeadSha: string,
+    ...[loaded, featureHeadSha]: [
+      loaded: LoadedDelegationRunState,
+      featureHeadSha: string,
+    ]
   ): Promise<ReadonlyMap<string, VerifiedPlannedAttempt>> {
     const attempts = new Map<string, VerifiedPlannedAttempt>();
     for (const declaration of loaded.plan.attempts) {
@@ -742,12 +746,14 @@ export class DelegationRunFinalization {
         'projection',
         'eventHighWaterMark',
       ]);
-      const authorKind = reader.string('authorKind');
-      if (!Object.values(MaterializedViewAuthorKind).includes(authorKind as MaterializedViewAuthorKind))
+      const authorKind = Object.values(MaterializedViewAuthorKind).find(
+        (candidate) => candidate === reader.string('authorKind'),
+      );
+      if (authorKind === undefined)
         throw new Error('Delegation materialized view author is invalid.');
       return {
         presence,
-        authorKind: authorKind as MaterializedViewAuthorKind,
+        authorKind,
         projection: DelegationRunFinalization.decodeProjection(
           reader.node('projection'),
         ),
