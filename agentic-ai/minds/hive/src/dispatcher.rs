@@ -176,12 +176,12 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             let task_base = name.trim_end_matches(MAIN_FAILURE_SUFFIX);
             if body.contains(SUCCESSFUL_RERUN_RETIREMENT_MARKER) {
                 let bootstrap_evidence =
-                    (WorkbenchIncidentText { value: &body }).bootstrap_evidence()?;
+                    (WorkbenchIncidentText { value: &body }).bootstrap_evidence_if_present()?;
                 if let ActiveDelivery::Active(task_id) = store
                     .active_delivery(ActiveDeliveryQuery {
                         source_commit: &source_commit,
                         kind: &TaskKind::from("main-repair"),
-                        bootstrap_evidence: Some(&bootstrap_evidence),
+                        bootstrap_evidence: bootstrap_evidence.as_ref(),
                     })
                     .await?
                 {
@@ -223,8 +223,15 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
                 reconciled_incidents.insert(name, body);
                 continue;
             }
-            let bootstrap_evidence =
-                (WorkbenchIncidentText { value: &body }).bootstrap_evidence()?;
+            let Some(bootstrap_evidence) =
+                (WorkbenchIncidentText { value: &body }).bootstrap_evidence_if_present()?
+            else {
+                eprintln!(
+                    "Hive Workbench incident {name} is awaiting complete bootstrap evidence; deferring repair reconciliation"
+                );
+                reconciled_incidents.insert(name, body);
+                continue;
+            };
             WorkbenchDispatcher::reconcile_delivery(
                 store,
                 &source_commit,
@@ -421,6 +428,29 @@ impl WorkbenchIncidentText<'_> {
 }
 
 impl WorkbenchIncidentText<'_> {
+    fn bootstrap_evidence_if_present(&self) -> crate::HiveResult<Option<BootstrapEvidence>> {
+        let has_field = self.value.lines().any(|line| {
+            let line = line
+                .trim()
+                .strip_prefix("- ")
+                .unwrap_or_else(|| line.trim());
+            [
+                "originMainSha:",
+                "pinnedLocalDevSha:",
+                "featureBranch:",
+                "feature_branch:",
+                "branch:",
+            ]
+            .into_iter()
+            .any(|prefix| line.starts_with(prefix))
+        });
+        if has_field {
+            self.bootstrap_evidence().map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
     fn bootstrap_evidence(&self) -> crate::HiveResult<BootstrapEvidence> {
         let parse = |field: &str| -> crate::HiveResult<GitSha> {
             let prefix = format!("{field}:");
@@ -526,6 +556,7 @@ impl WorkbenchIncidentText<'_> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::fs;
     use std::sync::{Arc, Mutex};
 
     use async_trait::async_trait;
@@ -724,6 +755,28 @@ mod tests {
     }
 
     #[test]
+    fn missing_bootstrap_evidence_is_deferred_without_forging_authority() -> crate::HiveResult<()> {
+        let incident = WorkbenchIncidentText {
+            value: "status: ready\nautomation: hive\n<!-- main-run:123:attempt:1 -->",
+        };
+        assert!(incident.bootstrap_evidence_if_present()?.is_none());
+
+        let partial = WorkbenchIncidentText {
+            value: "status: ready\nautomation: hive\noriginMainSha: 0123456789abcdef0123456789abcdef01234567",
+        };
+        let error = partial
+            .bootstrap_evidence_if_present()
+            .err()
+            .ok_or_else(|| crate::HiveError::message("partial bootstrap evidence was accepted"))?;
+        assert!(
+            error
+                .to_string()
+                .contains("incident is missing pinnedLocalDevSha")
+        );
+        Ok(())
+    }
+
+    #[test]
     fn changed_incident_body_is_reconciled_again() {
         let mut reconciled = HashMap::new();
         reconciled.insert(
@@ -832,6 +885,40 @@ mod tests {
             error
                 .to_string()
                 .contains("must exceed the worker heartbeat")
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn successful_tombstone_without_bootstrap_is_reconciled() -> crate::HiveResult<()> {
+        let checkout = tempfile::tempdir()?;
+        let incidents = checkout.path().join("issues/hive-isolated-agent-platform");
+        fs::create_dir_all(&incidents)?;
+        let source_commit = "abcdef0123456789abcdef0123456789abcdef01";
+        let task_id =
+            TaskId::main_failure_task_id(&format!("main-failure-{source_commit}"), 123, 1)?;
+        fs::write(
+            incidents.join(format!("main-failure-{source_commit}.md")),
+            "status: done\nautomation: hive\n<!-- hive-retired:successful-rerun -->\n",
+        )?;
+        let store = RecordingStore::default();
+        *store
+            .active
+            .lock()
+            .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))? =
+            ActiveDelivery::Active(task_id.clone());
+        let mut reconciled = HashMap::new();
+
+        WorkbenchDispatcher::dispatch_once(&store, checkout.path(), &mut reconciled).await?;
+
+        assert_eq!(reconciled.len(), 1);
+        assert_eq!(
+            store
+                .cancelled
+                .lock()
+                .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))?
+                .as_slice(),
+            &[task_id]
         );
         Ok(())
     }

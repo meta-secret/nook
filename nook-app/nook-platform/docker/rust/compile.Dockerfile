@@ -214,7 +214,6 @@ RUN apt-get update \
 
 FROM compile-minds-base AS compile-minds-dependencies
 
-ARG NOOK_COMPILE_HIVE=0
 WORKDIR /meta-secret/nook/agentic-ai/minds
 COPY agentic-ai/minds/Cargo.toml agentic-ai/minds/Cargo.lock ./
 COPY agentic-ai/minds/vendor vendor
@@ -224,38 +223,30 @@ RUN mkdir -p hive/src/bin \
 RUN --network=default cargo fetch --locked
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    if [ "${NOOK_COMPILE_HIVE}" = "1" ]; then \
-      cargo build --locked --release -p hive \
-        --features observer-contract-export --lib \
-      && nook-sccache-report compile-hive-dependencies; \
-    fi
+    cargo build --locked --release -p hive \
+      --features observer-contract-export --lib \
+    && nook-sccache-report compile-hive-dependencies
 
 FROM compile-minds-dependencies AS compile-minds-source
 
-ARG NOOK_COMPILE_HIVE=0
 COPY agentic-ai/minds/hive/src hive/src
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    if [ "${NOOK_COMPILE_HIVE}" = "1" ]; then \
-      find hive/src -type f -name '*.rs' -exec touch {} + \
-      && cargo build --locked --release -p hive \
-        --features observer-contract-export --bins \
-      && mkdir -p /opt/nook/hive-observer-contract \
-      && target/release/hive-export-observer-contract \
-        --output /opt/nook/hive-observer-contract; \
-    else \
-      mkdir -p /opt/nook/hive-observer-contract; \
-    fi \
+    find hive/src -type f -name '*.rs' -exec touch {} + \
+    && cargo build --locked --release -p hive \
+      --features observer-contract-export --bins \
+    && mkdir -p /opt/nook/hive-observer-contract \
+    && target/release/hive-export-observer-contract \
+      --output /opt/nook/hive-observer-contract \
     && touch /opt/nook/hive-compile-passed
 
 FROM web-base AS compile-hive-console
 
-ARG NOOK_COMPILE_HIVE=0
 WORKDIR /meta-secret/nook/agentic-ai/minds/hive-console
 COPY --from=compile-minds-source /opt/nook/hive-observer-contract /opt/nook/hive-observer-contract
 ENV HIVE_OBSERVER_CONTRACT_INPUT=/opt/nook/hive-observer-contract
 COPY agentic-ai/minds/hive-console/package.json agentic-ai/minds/hive-console/bun.lock ./
-RUN if [ "${NOOK_COMPILE_HIVE}" = "1" ]; then bun install --frozen-lockfile; fi
+RUN bun install --frozen-lockfile
 COPY agentic-ai/minds/hive-console/index.html \
      agentic-ai/minds/hive-console/svelte.config.js \
      agentic-ai/minds/hive-console/tsconfig.json \
@@ -267,12 +258,10 @@ COPY agentic-ai/minds/hive-console/locales locales
 COPY agentic-ai/minds/hive-console/scripts scripts
 COPY agentic-ai/minds/hive-console/.prettierignore ./
 COPY agentic-ai/minds/hive-console/tsconfig.compile.json ./
-RUN if [ "${NOOK_COMPILE_HIVE}" = "1" ]; then \
-      bun run contracts \
-      && node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json \
-      && node_modules/.bin/tsc --noEmit -p tsconfig.compile.json \
-      && node_modules/.bin/vite build; \
-    fi \
+RUN bun run contracts \
+    && node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json \
+    && node_modules/.bin/tsc --noEmit -p tsconfig.compile.json \
+    && node_modules/.bin/vite build \
     && mkdir -p /opt/nook \
     && touch /opt/nook/hive-console-compile-passed
 

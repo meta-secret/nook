@@ -161,7 +161,10 @@ pub(crate) mod tests {
                         task.id
                     )));
                 }
-                return Ok(());
+                return Err(crate::HiveError::message(format!(
+                    "task {} already exists",
+                    task.id
+                )));
             }
             for dependency in &task.dependencies {
                 if let Some(existing) = tasks.get(dependency.as_str())

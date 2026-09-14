@@ -82,7 +82,10 @@ impl Neo4jTaskStore {
                     task.id
                 )));
             }
-            return Ok(());
+            return Err(crate::HiveError::message(format!(
+                "task {} already exists",
+                task.id
+            )));
         }
 
         Self::link_enqueue_dependencies(&mut transaction, task).await?;

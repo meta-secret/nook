@@ -24,11 +24,10 @@ impl LocalDevEvidence<'_> {
         let pinned_local_dev_sha = pinned_local_dev_sha.as_str();
         let observed_feature_head_sha = observed_feature_head_sha.as_str();
         let local_dev_sha = local_dev_sha.as_str();
-        if DeliveryCommand::git_output(repository, &["cat-file", "-e", local_dev_sha])
-            .await
-            .is_err()
+        if let Err(initial_error) =
+            DeliveryCommand::git_output(repository, &["cat-file", "-e", local_dev_sha]).await
         {
-            DeliveryCommand::run_git_status(
+            let fetch_error = DeliveryCommand::run_git_status(
                 repository,
                 &[
                     "fetch",
@@ -38,15 +37,19 @@ impl LocalDevEvidence<'_> {
                 ],
                 "make the recorded local-dev commit available for ancestry checks",
             )
-            .await?;
-        }
-        DeliveryCommand::git_output(repository, &["cat-file", "-e", local_dev_sha])
             .await
-            .map_err(|error| {
-                crate::HiveError::message(format!(
-                    "Hive repair delivery cannot verify local-dev landing because recorded commit {local_dev_sha} is unavailable: {error}"
-                ))
-            })?;
+            .err();
+            if let Err(unavailable_error) =
+                DeliveryCommand::git_output(repository, &["cat-file", "-e", local_dev_sha]).await
+            {
+                let fetch_detail = fetch_error
+                    .as_ref()
+                    .map_or(String::new(), |error| format!("; fetch failed: {error}"));
+                return Err(crate::HiveError::message(format!(
+                    "Hive repair delivery cannot verify local-dev landing because recorded commit {local_dev_sha} is unavailable: {unavailable_error}; initial check: {initial_error}{fetch_detail}"
+                )));
+            }
+        }
         DeliveryCommand::run_git_status(
             repository,
             &["merge-base", "--is-ancestor", origin_main_sha, pinned_local_dev_sha],
@@ -238,6 +241,37 @@ mod tests {
             error
                 .to_string()
                 .contains("originMainSha is not an ancestor")
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn local_dev_reports_an_unavailable_recorded_commit_fail_closed() -> HiveResult<()> {
+        let fixture = LocalDevFixture::new()?;
+        fs::write(fixture.path().join("repair.txt"), "base\n")?;
+        fixture.git(&["add", "repair.txt"])?;
+        fixture.git(&["commit", "--quiet", "-m", "base"])?;
+        let base_sha = fixture.git(&["rev-parse", "HEAD"])?;
+        let unavailable_sha = GitSha::try_from("ffffffffffffffffffffffffffffffffffffffff")?;
+        let origin_main_sha = GitSha::try_from(base_sha.as_str())?;
+        let pinned_local_dev_sha = GitSha::try_from(base_sha.as_str())?;
+        let feature_sha = GitSha::try_from(base_sha.as_str())?;
+
+        let error = LocalDevEvidence {
+            repository: fixture.path(),
+            origin_main_sha: &origin_main_sha,
+            pinned_local_dev_sha: &pinned_local_dev_sha,
+            observed_feature_head_sha: &feature_sha,
+            local_dev_sha: &unavailable_sha,
+        }
+        .validate()
+        .await
+        .err()
+        .ok_or_else(|| crate::HiveError::message("missing local-dev commit was accepted"))?;
+        assert!(
+            error.to_string().contains(
+                "recorded commit ffffffffffffffffffffffffffffffffffffffff is unavailable"
+            )
         );
         Ok(())
     }

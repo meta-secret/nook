@@ -722,6 +722,43 @@ fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Resul
 }
 
 #[test]
+fn theorem_build_compile_always_compiles_hive_without_validation_work() -> anyhow::Result<()> {
+    let root = RepositoryFixture::repository_root();
+    let dockerfile = root.read("nook-app/nook-platform/docker/rust/compile.Dockerfile");
+    let dependencies = dockerfile
+        .split("FROM compile-minds-base AS compile-minds-dependencies")
+        .nth(1)
+        .and_then(|body| body.split("FROM compile-minds-dependencies AS compile-minds-source").next())
+        .ok_or_else(|| anyhow::anyhow!("compile.Dockerfile is missing Hive dependency stage"))?;
+    let source = dockerfile
+        .split("FROM compile-minds-dependencies AS compile-minds-source")
+        .nth(1)
+        .and_then(|body| body.split("FROM web-base AS compile-hive-console").next())
+        .ok_or_else(|| anyhow::anyhow!("compile.Dockerfile is missing Hive source stage"))?;
+    let console = dockerfile
+        .split("FROM web-base AS compile-hive-console")
+        .nth(1)
+        .and_then(|body| body.split("FROM web-base AS compile-web").next())
+        .ok_or_else(|| anyhow::anyhow!("compile.Dockerfile is missing Hive console stage"))?;
+    let active_instructions = dockerfile
+        .lines()
+        .filter(|line| !line.trim_start().starts_with('#'))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert!(!dockerfile.contains("NOOK_COMPILE_HIVE"));
+    assert!(dependencies.contains("cargo build --locked --release -p hive"));
+    assert!(source.contains("cargo build --locked --release -p hive"));
+    assert!(source.contains("hive-export-observer-contract"));
+    assert!(console.contains("bun install --frozen-lockfile"));
+    assert!(console.contains("node_modules/.bin/vite build"));
+    for forbidden in ["cargo test", "cargo clippy", "coverage", "e2e", "preflight", "--mount=type=cache"] {
+        assert!(!active_instructions.contains(forbidden), "build-only graph contains {forbidden}");
+    }
+    Ok(())
+}
+
+#[test]
 fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let setup = root.read(".github/actions/nook-docker-setup/action.yml");

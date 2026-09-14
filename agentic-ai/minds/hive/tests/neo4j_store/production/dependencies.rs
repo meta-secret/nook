@@ -59,6 +59,22 @@ async fn prepare_dependency(fixture: &StoreFixture<'_>) -> anyhow::Result<Depend
         fixture.store.enqueue(&dependency).await.is_err(),
         "duplicate enqueue must not reset task state"
     );
+    let mut dependency_rows = fixture
+        .graph
+        .execute(
+            query(
+                "MATCH (task:Task {id: $task_id})
+                 RETURN task.status AS status, task.attempt_count AS attempt_count",
+            )
+            .param("task_id", dependency.id.as_str()),
+        )
+        .await?;
+    let dependency_row = dependency_rows
+        .next()
+        .await?
+        .context("duplicate enqueue must preserve the dependency row")?;
+    assert_eq!(dependency_row.get::<String>("status")?, "READY");
+    assert_eq!(dependency_row.get::<i64>("attempt_count")?, 0);
     let dependency_claim =
         hive::model::ClaimedTask::try_from(fixture.store.claim(fixture.agent_a, 300).await?)?;
     assert_eq!(dependency_claim.id, dependency.id);
