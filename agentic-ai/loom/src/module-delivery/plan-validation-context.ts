@@ -7,12 +7,12 @@ import type {
   ModuleDeliveryEdgeContract,
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryExecutionPrecedence,
 } from './domain.ts';
 
 export type ValidationState = {
-  readonly plan: ModuleDeliveryPlanV2;
+  readonly plan: ModuleDeliveryPlanV5;
   readonly issues: ModuleDeliveryIssue[];
   readonly nodesById: Map<string, ModuleDeliveryNodeV2>;
 };

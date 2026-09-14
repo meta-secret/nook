@@ -9,7 +9,6 @@ import type {
   IntegrationStateUpdate,
   ModuleDeliveryIntegratedWriterFrontierCapability,
   AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
-  IntegratedWriterFrontierProvenance,
   MintIntegratedWriterFrontierRequest,
 } from './integration-contracts.ts';
 export type {
@@ -17,7 +16,6 @@ export type {
   AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
 } from './integration-contracts.ts';
 import { randomUUID } from 'node:crypto';
-
 import { ModuleRepositoryGit } from './git-command.ts';
 import { ModuleDeliveryTaskKind } from './domain.ts';
 import { ModuleCommitHandoff } from './handoff.ts';
@@ -29,6 +27,7 @@ import {
 } from './integration-provenance.ts';
 import { ModuleWaveTree } from './tree-integration.ts';
 import { ModuleWriterFrontierRegistry } from './integration-writer-frontiers.ts';
+import { ModuleIntegrationCapabilityProvenance } from './integration-capability-provenance.ts';
 import { CanonicalWriterClosure } from './integration-finalization.ts';
 import type { CanonicalModuleFinalizationInspection } from './integration-finalization.ts';
 import { ModuleGenerationAuthority } from './admission.ts';
@@ -54,7 +53,6 @@ import type {
 } from './integration-provenance.ts';
 import { ModuleWorktree } from './workspace.ts';
 import type { GitCommandRequest } from './git-command.ts';
-
 import type {
   ModuleCommitPathRequest,
   VerifyModuleCommitHandoffRequest,
@@ -93,118 +91,72 @@ const PROHIBITED_MATERIALIZATION_FILES = new Set([
   '.gitmodules',
   '.lfsconfig',
 ]);
-
+const capabilityProvenance = new ModuleIntegrationCapabilityProvenance();
+/** Frozen read-only boundary for capability verification across the ESM cycle. */
+export const ModuleIntegrationCapabilityAssertions = Object.freeze({
+  assertModuleDeliveryIntegratedWriterFrontierCapability:
+    capabilityProvenance.assertFrontier.bind(capabilityProvenance),
+  assertModuleDeliveryCanonicalEvidenceTransition:
+    capabilityProvenance.assertTransition.bind(capabilityProvenance),
+});
 enum IntegrationHeadCommitKind {
   Pending = 'pending',
   Applied = 'applied',
 }
-
 type IntegrationHeadCommit =
   | { readonly kind: IntegrationHeadCommitKind.Pending }
   | {
       readonly kind: IntegrationHeadCommitKind.Applied;
       readonly value: string;
     };
-
-/** Owns the module integration coordinator registry and its capability transitions. */
+/** Owns module integration lifecycle coordination and its public capability boundary. */
 export class ModuleIntegrationCoordinator {
-  private constructor() {}
-  private static readonly WRITER_FRONTIER_PROVENANCE = new WeakMap<
-    ModuleDeliveryIntegratedWriterFrontierCapability,
-    IntegratedWriterFrontierProvenance
-  >();
-
-  private static readonly CANONICAL_EVIDENCE_TRANSITIONS = new WeakMap<
-    ModuleDeliveryCanonicalEvidenceTransition,
-    CanonicalEvidenceTransitionProvenance
-  >();
-
-  private static mintIntegratedWriterFrontier(
+  private constructor() {
+    throw new Error('ModuleIntegrationCoordinator is not constructible.');
+  }
+  static #mintIntegratedWriterFrontier(
     request: MintIntegratedWriterFrontierRequest,
   ): ModuleDeliveryIntegratedWriterFrontierCapability {
     const integratedTaskIds = Object.freeze(request.integratedTaskIds.slice());
-    const capabilityValue: ModuleDeliveryIntegratedWriterFrontierCapability = {
+    const capability = Object.freeze({
       taskId: request.taskId,
       attempt: request.attempt,
       generation: request.generation,
       planDigest: request.planDigest,
       headCommit: request.headCommit,
       integratedTaskIds,
-    };
-    const capability = Object.freeze(capabilityValue);
-    const provenance: IntegratedWriterFrontierProvenance = Object.assign(
-      {},
-      request,
-      { integratedTaskIds },
-    );
-    ModuleIntegrationCoordinator.WRITER_FRONTIER_PROVENANCE.set(
+    });
+    capabilityProvenance.recordFrontier(
       capability,
-      Object.freeze(provenance),
+      Object.freeze({ ...request, integratedTaskIds }),
     );
     return capability;
   }
-
   static assertModuleDeliveryIntegratedWriterFrontierCapability(
     request: AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
   ): void {
-    const provenance =
-      ModuleIntegrationCoordinator.WRITER_FRONTIER_PROVENANCE.get(
-        request.capability,
-      );
-    if (
-      !provenance ||
-      provenance.authority !== request.authority ||
-      provenance.taskId !== request.taskId ||
-      provenance.attempt !== request.attempt ||
-      provenance.generation !== request.generation ||
-      provenance.planDigest !== request.planDigest ||
-      provenance.headCommit !== request.headCommit ||
-      JSON.stringify(provenance.integratedTaskIds) !==
-        JSON.stringify(request.integratedTaskIds)
-    )
-      throw new Error('Integrated writer frontier capability is invalid.');
+    capabilityProvenance.assertFrontier(request);
   }
-
   static assertModuleDeliveryCanonicalEvidenceTransition(
     request: AssertModuleDeliveryCanonicalEvidenceTransitionRequest,
   ): void {
-    const provenance =
-      ModuleIntegrationCoordinator.CANONICAL_EVIDENCE_TRANSITIONS.get(
-        request.transition,
-      );
-    if (
-      !provenance ||
-      provenance.authority !== request.authority ||
-      provenance.previousHeadCommit !== request.previousHeadCommit ||
-      provenance.canonicalHeadCommit !== request.canonicalHeadCommit ||
-      JSON.stringify(provenance.integratedTaskIds) !==
-        JSON.stringify(request.integratedTaskIds)
-    )
-      throw new Error('Canonical evidence transition is invalid.');
+    capabilityProvenance.assertTransition(request);
   }
-
-  private static canonicalEvidenceTransition(
+  static #canonicalEvidenceTransition(
     request: CanonicalEvidenceTransitionProvenance,
   ): ModuleDeliveryCanonicalEvidenceTransition {
     const integratedTaskIds = Object.freeze(request.integratedTaskIds.slice());
-    const transitionValue: ModuleDeliveryCanonicalEvidenceTransition = {
+    const transition = Object.freeze({
       previousHeadCommit: request.previousHeadCommit,
       canonicalHeadCommit: request.canonicalHeadCommit,
       integratedTaskIds,
-    };
-    const transition = Object.freeze(transitionValue);
-    const provenance: CanonicalEvidenceTransitionProvenance = Object.assign(
-      {},
-      request,
-      { integratedTaskIds },
-    );
-    ModuleIntegrationCoordinator.CANONICAL_EVIDENCE_TRANSITIONS.set(
+    });
+    capabilityProvenance.recordTransition(
       transition,
-      Object.freeze(provenance),
+      Object.freeze({ ...request, integratedTaskIds }),
     );
     return transition;
   }
-
   private static gitRequest(
     invocation: ModuleGitInvocation,
   ): GitCommandRequest {
@@ -217,7 +169,6 @@ export class ModuleIntegrationCoordinator {
     }
     return { cwd: invocation.cwd, args: invocation.args };
   }
-
   private static gitInvocation(invocation: ModuleGitInvocation): string {
     return ModuleRepositoryGit.gitText(
       ModuleRepositoryGit.runModuleDeliveryGit(
@@ -225,7 +176,6 @@ export class ModuleIntegrationCoordinator {
       ),
     );
   }
-
   private static verifyExpectedHandoff(
     verification: ExpectedHandoffVerification,
   ): void {
@@ -279,7 +229,6 @@ export class ModuleIntegrationCoordinator {
       );
     }
   }
-
   private static applyAndValidateWave(
     application: ValidatedWaveApplication,
   ): string {
@@ -300,7 +249,6 @@ export class ModuleIntegrationCoordinator {
     };
     return ModuleWaveTree.apply(applyRequest);
   }
-
   private static advancedIntegrationState(
     request: AdvancedIntegrationStateRequest,
   ): ModuleIntegrationState {
@@ -313,7 +261,10 @@ export class ModuleIntegrationCoordinator {
       authority: request.provenance.authority,
       state: immutable,
       sourceSnapshot: request.provenance.sourceSnapshot,
-      workspaceSnapshot: request.provenance.workspaceSnapshot,
+      workspaceSnapshot:
+        ModuleIntegrationProvenanceRegistry.captureSourceSnapshot(
+          immutable.workspace.worktreePath,
+        ),
       session: request.provenance.session,
     };
     ModuleIntegrationProvenanceRegistry.registerIntegrationState(registration);
@@ -326,7 +277,6 @@ export class ModuleIntegrationCoordinator {
     );
     return immutable;
   }
-
   private static authoritativeProviderLease(
     inspection: ProviderLeaseInspection,
   ): ModuleDeliveryAttemptLease {
@@ -342,6 +292,14 @@ export class ModuleIntegrationCoordinator {
       inspection.lease.planDigest !== inspection.acceptedPlan.planDigest
     ) {
       throw new Error('Provider lease belongs to an obsolete plan.');
+    }
+    if (
+      inspection.submission.kind === ModuleDeliveryProviderSubmissionKind.Write &&
+      (inspection.submission.originMainSha !== inspection.lease.originMainSha ||
+        inspection.submission.pinnedLocalDevSha !==
+          inspection.lease.pinnedLocalDevSha)
+    ) {
+      throw new Error('Provider write base evidence is invalid.');
     }
     const taskId =
       inspection.submission.kind === ModuleDeliveryProviderSubmissionKind.Write
@@ -361,7 +319,6 @@ export class ModuleIntegrationCoordinator {
     }
     return inspection.lease;
   }
-
   private static refreshedWriterFrontiers(
     request: RefreshedWriterFrontiersRequest,
   ): readonly ModuleDeliveryIntegratedWriterFrontierCapability[] {
@@ -377,20 +334,18 @@ export class ModuleIntegrationCoordinator {
           headCommit: state.headCommit,
           integratedTaskIds: state.integratedTaskIds,
         };
-        return ModuleIntegrationCoordinator.mintIntegratedWriterFrontier(
+        return ModuleIntegrationCoordinator.#mintIntegratedWriterFrontier(
           request,
         );
       }),
     );
   }
-
   private static updatedIntegrationState([
     state,
     updates,
   ]: IntegrationStateUpdate): ModuleIntegrationState {
     return Object.assign({}, state, updates);
   }
-
   static prepareModuleIntegration(
     request: PrepareModuleIntegrationRequest,
   ): ModuleIntegrationState {
@@ -452,6 +407,8 @@ export class ModuleIntegrationCoordinator {
         generation: request.acceptedPlan.plan.generation,
         planDigest: request.acceptedPlan.planDigest,
         sourceCommit: request.acceptedPlan.plan.sourceCommit,
+        originMainSha: request.acceptedPlan.plan.originMainSha,
+        pinnedLocalDevSha: request.acceptedPlan.plan.pinnedLocalDevSha,
         topologicalOrder: request.acceptedPlan.topologicalOrder,
         waves: request.acceptedPlan.waves,
         completedWaveCount: 0,
@@ -504,7 +461,6 @@ export class ModuleIntegrationCoordinator {
       );
     }
   }
-
   static integrateVerifiedModuleDeliveryTask(
     request: IntegrateVerifiedModuleDeliveryTaskRequest,
   ): ModuleIntegrationState {
@@ -634,6 +590,9 @@ export class ModuleIntegrationCoordinator {
         expectedHandoffs: [expected],
         provenance,
       };
+      ModuleIntegrationProvenanceRegistry.assertFreshModuleIntegrationState(
+        freshInspection,
+      );
       let headCommit: IntegrationHeadCommit = {
         kind: IntegrationHeadCommitKind.Pending,
       };
@@ -660,6 +619,8 @@ export class ModuleIntegrationCoordinator {
                 generation: request.submission.generation,
                 planDigest: request.submission.handoff.planDigest,
                 startingFrontier: lease.startingFrontier,
+                originMainSha: lease.originMainSha,
+                pinnedLocalDevSha: lease.pinnedLocalDevSha,
                 integrationCommit: appliedHeadCommit,
                 acceptedByTeam: request.submission.acceptedByTeam,
                 handoff: request.submission.handoff,
@@ -813,6 +774,10 @@ export class ModuleIntegrationCoordinator {
       provenance,
       writerFrontiers: capabilities,
     };
+    ModuleIntegrationProvenanceRegistry.assertFreshModuleIntegrationState({
+      state: request.state,
+      provenance,
+    });
     const integrated =
       ModuleIntegrationCoordinator.advancedIntegrationState(advance);
     const disposition: RecordIntegratedLeaseAcceptanceRequest = {
@@ -825,7 +790,6 @@ export class ModuleIntegrationCoordinator {
     );
     return integrated;
   }
-
   static finalizeModuleDeliveryIntegration(
     request: FinalizeModuleDeliveryIntegrationRequest,
   ): ModuleIntegrationState {
@@ -926,7 +890,7 @@ export class ModuleIntegrationCoordinator {
       integratedTaskIds: writerTaskIds,
     };
     const canonicalTransition =
-      ModuleIntegrationCoordinator.canonicalEvidenceTransition(
+      ModuleIntegrationCoordinator.#canonicalEvidenceTransition(
         transitionRequest,
       );
     const stateRequest: PrepareFinalModuleDeliveryAdmissionStateRequest = {
@@ -989,7 +953,6 @@ export class ModuleIntegrationCoordinator {
       throw new Error('Final module join failed and was fully rolled back.');
     }
   }
-
   static cleanupModuleIntegration(
     request: CleanupModuleIntegrationRequest,
   ): CleanupModuleIntegrationResult {

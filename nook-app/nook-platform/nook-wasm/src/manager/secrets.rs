@@ -624,16 +624,9 @@ mod wasm_tests {
                 Err(rejected.cause)
             }
         }?;
-        match device_b.union_remote(&a_events) {
-            Ok(outcome) => {
-                device_b = outcome;
-                Ok(())
-            }
-            Err(rejected) => {
-                device_b = rejected.session;
-                Err(rejected.cause)
-            }
-        }?;
+        device_b
+            .union_remote(&a_events)
+            .map_err(|rejected| rejected.cause)?;
 
         let graph = device_a.store.load_graph(device_a.store_id.as_str())?;
         let projection = device_a.project()?;

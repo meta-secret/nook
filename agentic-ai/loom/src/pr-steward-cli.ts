@@ -113,7 +113,7 @@ export class PrStewardEventCli {
       if (draining !== false) await draining;
       if (terminal.result !== false && process.exitCode !== 1)
         process.stderr.write(
-          `PR Steward finished: ${terminal.result.state} ${terminal.result.url.value} head=${terminal.result.headSha} checks=${terminal.result.totalChecks} failed-checks=${terminal.result.failedChecks} unknown-conclusions=${terminal.result.unknownConclusions}\n`,
+          `PR Lifecycle Agent finished: ${terminal.result.state} ${terminal.result.url.value} head=${terminal.result.headSha} checks=${terminal.result.totalChecks} failed-checks=${terminal.result.failedChecks} unknown-conclusions=${terminal.result.unknownConclusions}\n`,
         );
     } finally {
       completion.stop();

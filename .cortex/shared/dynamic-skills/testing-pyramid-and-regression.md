@@ -71,7 +71,7 @@ through architectural ownership and risk.
 
 Every executable bug fix starts with a meaningful set of unit tests before
 the implementation changes. Finding the root cause alone is not completion.
-Test execution follows [dev delivery](../../gizmo/architecture/dev-delivery.md).
+Test execution follows [dev delivery](../../gizmo-prime/architecture/dev-delivery.md).
 
 **Required actions**
 
@@ -196,7 +196,7 @@ Does not apply to:
 
 ## Validation
 
-Follow [dev delivery](../../gizmo/architecture/dev-delivery.md) for execution
+Follow [dev delivery](../../gizmo-prime/architecture/dev-delivery.md) for execution
 authority. Feature workers author tests and review their behavior coverage.
 Remote feature compilation is build-only. Tests, coverage, and browser gates
 execute through the dev manager's slow PR validation path.

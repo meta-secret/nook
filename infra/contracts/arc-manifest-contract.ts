@@ -541,7 +541,7 @@ class ArcManifestContract {
       "uses: ./.github/workflows/repository-policy.yml",
       "uses: ./.github/workflows/web-research.yml",
       "github.event_name == 'push' && 'main'",
-      "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+      "cancel-in-progress: false",
       "needs.scope.outputs.validation-requested == 'true'",
       "persist-credentials: false",
     ]);

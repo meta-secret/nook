@@ -11,7 +11,6 @@ import {
   assertNoVaultError,
   triggerVaultSyncRefresh,
   type GithubE2eTarget,
-  waitForGithubVaultProjectionState,
   waitForGithubVaultState,
 } from './github-sync'
 import {
@@ -105,9 +104,10 @@ export async function addSecret(
           tx.oncomplete = () => db.close()
         }
       })
+      const storageMode: unknown = vault?.storageMode
       return {
         secrets: vault?.secrets?.length,
-        storageMode: vault?.storageMode,
+        storageMode: typeof storageMode === 'string' ? storageMode : undefined,
         localVaultPresent: vault?.localVaultPresent,
         syncProviders: vault?.syncProviders?.length,
         isSaving: vault?.isSaving,
@@ -200,9 +200,8 @@ export async function deleteSecret(
   await waitForSecretOnDevice(page, key, github)
   const beforeCount = github
     ? (
-        await waitForGithubVaultProjectionState(
-          github.pat,
-          github.repoName,
+        await waitForGithubVaultState(
+          github,
           (yaml) => yaml.secretIds.length > 0,
         )
       ).secretIds.length

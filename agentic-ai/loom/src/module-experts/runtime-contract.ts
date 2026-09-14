@@ -24,6 +24,7 @@ import {
   ModuleExpertRepositoryContext,
 } from './read-context-mcp.ts';
 import type { ModuleExpertReadContextServer } from './read-context-mcp.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 
 /** Owns the module expert isolation registry and its capability transitions. */
 export class ModuleExpertIsolation {
@@ -66,6 +67,9 @@ export class ModuleExpertIsolation {
         contextFiles: [],
       },
       sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       workingDirectory: request.workingDirectory,
       ...(request.temporaryRoot
         ? { temporaryRoot: request.temporaryRoot }
@@ -88,6 +92,10 @@ export class ModuleExpertIsolation {
   static async createReadOnlyExpertRuntimeIsolation(
     request: ReadOnlyExpertRuntimeIsolationRequest,
   ): Promise<Result<ReadOnlyExpertRuntimeIsolation, ExpertIsolationFailure>> {
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
+    });
     const source = ModuleExpertIsolation.assertSourceCommit(
       request.sourceCommit,
     );
@@ -617,6 +625,9 @@ export type ModuleExpertRuntimeIsolationRequest = {
   readonly expertName: string;
   readonly parentEnvironment: NodeJS.ProcessEnv;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly selectedContextPaths: readonly string[];
   readonly temporaryRoot?: string;
   readonly workingDirectory: string;
@@ -639,6 +650,9 @@ export type ReadOnlyExpertRuntimeIsolationRequest = {
   readonly parentEnvironment: NodeJS.ProcessEnv;
   readonly snapshot: ReadOnlyExpertSnapshot;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly temporaryRoot?: string;
   readonly workingDirectory: string;
 };

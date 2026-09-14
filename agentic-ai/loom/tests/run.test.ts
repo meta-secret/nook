@@ -6,6 +6,7 @@ import {
   RepositoryCommand,
   RepositoryCommandExecutable,
   RepositoryBunScript,
+  RepositoryGitSecurityPolicy,
 } from '../src/lib/run.ts';
 
 const LARGE_OUTPUT_BYTES = 2 * 1024 * 1024;
@@ -71,4 +72,61 @@ describe('run command', () => {
     assert(launch.isErr());
     expect(launch.error.message).toContain('outside repository root');
   });
+
+  test('accepts the current immutable read command vocabulary', () => {
+    const immutableReads = [
+      ['rev-parse', 'HEAD'],
+      ['rev-parse', '--verify', 'HEAD^{commit}'],
+      [
+        'merge-base',
+        '--is-ancestor',
+        'HEAD',
+        'HEAD',
+      ],
+      ['status', '--porcelain', '--untracked-files=normal'],
+    ];
+    for (const args of immutableReads) {
+      const launch = new RepositoryCommand({
+        command: RepositoryCommandExecutable.Git,
+        args,
+        gitSecurity: RepositoryGitSecurityPolicy.ImmutableObjects,
+        rootDirectory: REPOSITORY_ROOT,
+        workingDirectory: REPOSITORY_ROOT,
+      }).execute();
+
+      assert(launch.isOk());
+      expect(launch.value.exitCode).toBe(0);
+    }
+  });
+
+  test(
+    'rejects caller config, write, and network arguments for immutable Git',
+    () => {
+      const hostileArguments = [
+        ['rev-parse', 'HEAD', '-c', 'protocol.https.allow=always'],
+        [
+          'status',
+          '--porcelain',
+          '--untracked-files=normal',
+          '-c',
+          'core.pager=cat',
+        ],
+        ['commit', '-m', 'hostile write'],
+        ['fetch', 'origin'],
+        ['push', 'origin', 'HEAD'],
+      ];
+      for (const args of hostileArguments) {
+        const launch = new RepositoryCommand({
+          command: RepositoryCommandExecutable.Git,
+          args,
+          gitSecurity: RepositoryGitSecurityPolicy.ImmutableObjects,
+          rootDirectory: REPOSITORY_ROOT,
+          workingDirectory: REPOSITORY_ROOT,
+        }).execute();
+
+        assert(launch.isErr());
+        expect(launch.error.message).toContain('Immutable Git policy');
+      }
+    },
+  );
 });

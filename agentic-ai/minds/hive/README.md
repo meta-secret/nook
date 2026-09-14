@@ -2,8 +2,9 @@
 
 Hive is Nook's single-task, Kata-isolated AI worker. Kubernetes maintains a
 warm pool of four workers; each worker claims one runnable Neo4j task, runs one
-embedded Codex thread, and owns Main-repair delivery through a green merged
-revision. It commits the terminal result using its lease token and exits. The
+embedded Codex thread, and owns Main-repair delivery through a reviewed,
+exact-SHA feature build and serialized local-dev landing. It commits the
+terminal result using its lease token and exits. The
 Deployment then creates a clean microVM-backed replacement.
 
 Nested subagents are disabled inside that thread.
@@ -74,28 +75,36 @@ work. It requires the referenced Actions run to be the exact
 `meta-secret/nook` Main push on `main` at that SHA before enqueueing, so a
 successful rerun makes a stale incident a no-op. A repository-scoped
 GitHub credential is exposed directly to the trusted Main-repair Codex agent as
-`GH_TOKEN`. The runtime includes the standard `gh` CLI, and Codex uses ordinary
-`git`, `gh`, and repository Taskfile commands for deterministic branch
-publication, PR inspection, review replies and resolution, exact-head
-squash merge, resulting Main verification, and Workbench completion. Review,
-comment, repair-PR, and check histories must be traversed completely. Hive does
-not add a custom publication broker, mailbox, signing protocol, or private
-checkout to hide this credential from the agent.
+`GH_TOKEN`. The runtime includes the standard `gh` CLI. Codex uses ordinary
+`git`, `gh`, and repository Taskfile commands for deterministic feature
+publication, exact-head remote compilation, review resolution, serialized
+local-dev landing, and Workbench completion. It does not create or merge a
+feature pull request. The Dev Manager separately owns the validated dev
+snapshot and guarded fast-forward promotion to Main. Hive observes exact
+remote refs, lifecycle state, and the exact-SHA Main run only when retiring an
+obsolete blocker. Hive does not add a custom publication broker, mailbox,
+signing protocol, or private checkout to hide this credential from the agent.
 
 If Codex discovers blocking work, its structured result names the blocker.
 Hive atomically creates a higher-priority task, adds a `DEPENDS_ON` edge, and
 releases the original attempt without consuming its retry budget. Completing
 the blocker promotes the original task back to `READY`.
 
-The prototype fetches the task's full pinned Git object ID over HTTPS into a
-disposable `emptyDir`; every task in one dependency DAG must target that same
-revision. Before marking an implementation task complete, Hive collects a
+The prototype fetches the task's typed `originMainSha` and `pinnedLocalDevSha`
+plus the canonical `featureBranch` over HTTPS into a disposable `emptyDir`;
+every task in one dependency DAG must target that same creation evidence.
+At the start of each task attempt Hive resolves the latest committed head of
+that branch and records it as the observed run head for exact checkout and
+build-only evidence. A rerun therefore follows an advanced canonical branch
+instead of rejecting the earlier observed head. Before marking an
+implementation task complete, Hive collects a
 bounded binary Git patch, stores its digest and content as an `Artifact` node
 linked to the attempt, and commits that artifact in the same Neo4j transaction
 as the terminal result. Main-repair agents do not return their completed result
-until they have squash-merged the PR and verified the resulting Main workflow.
-Deterministic branches and GitHub inspection let replacement Pods resume an
-existing delivery instead of creating duplicates.
+until the exact feature head has reviewed remote compile evidence and exact
+serialized local-dev landing evidence. Deterministic branches and GitHub
+inspection let replacement Pods resume an existing delivery instead of
+creating duplicates.
 
 The complete Main-repair lifecycle has a six-hour execution bound. Embedded
 Codex validation commands append typed, secret-sanitized local execution events
@@ -136,14 +145,16 @@ view, while `task infra:hive:diagnose` includes bounded observer logs.
 
 ## Graph schema
 
-Hive graph schema version `9` retains unique constraints for `Task`, `Agent`,
+Hive graph schema version `11` retains unique constraints for `Task`, `Agent`,
 `Attempt`, and `Artifact`, adds `TaskActivity` identity and timeline indexes,
 and retains the task-claim index. Migration records are
 stored as `(:HiveSchemaMigration {version, applied_at})`. A worker refuses to
 run when the stored version is newer than the binary supports. Because Neo4j
 does not allow schema and data writes in one transaction, Hive applies the
 idempotent `IF NOT EXISTS` schema statements first and records the version only
-after every statement succeeds.
+after every statement succeeds. Every migration marker must contain a
+non-negative integer version; a malformed marker fails migration closed rather
+than being treated as schema version zero.
 
 Version 2 adds the pinned `source_commit` task property. Version 3 initializes
 the original one-time retry marker. Version 4 replaces that marker with
@@ -162,6 +173,37 @@ policy prevents retained chains from growing while they drain. Claims traverse
 the non-scheduling lineage in depth order so child artifacts apply before parent
 artifacts, including when a completed blocker is reused by a future consumer.
 Scheduling and rearm traversal ignore the lineage.
+
+Version 10 adds the task properties `origin_main_sha`,
+`pinned_local_dev_sha`, and the legacy `feature_head_sha` field. Version 11
+replaces that caller-supplied head with the canonical `feature_branch` identity.
+The 10-to-11 migration preserves an already-persisted branch and initializes
+an empty branch only for tasks with no bootstrap evidence. It fails before any
+v11 data write when a main-repair or any task carrying legacy bootstrap
+evidence has no canonical branch; a commit SHA, prompt text, or legacy
+`feature_head_sha` is never reinterpreted as a branch. After that check passes,
+the migration removes `feature_head_sha` from every `Task` and records the
+version-11 marker only after the cleanup and schema statements succeed. New
+main-repair enqueue and claim paths require both creation-base SHAs and a
+canonical feature branch; active-delivery lookup and duplicate enqueue
+reconciliation include that branch identity as part of task identity. The
+feature branch's current head is observed per worker run and is not caller
+evidence.
+
+To roll version 11 back to a version-10 binary, first stop every Hive worker,
+coordinator, observer, and dispatcher and restore the pre-version-11 Neo4j
+data-volume backup. The v11 migration removes `feature_head_sha`, and the old
+head cannot be reconstructed from `feature_branch`; deleting only the v11
+marker or trying to synthesize a replacement head is unsafe. If a compatible
+pre-version-11 backup is unavailable, remain on schema 11 and do not start a
+version-10 binary.
+
+To roll version 10 back to a version-9 binary, first stop every Hive worker,
+coordinator, observer, and dispatcher and back up the Neo4j data volume. Delete
+only the version-10 `HiveSchemaMigration` marker and remove the three
+bootstrap-evidence properties from `Task` nodes, then retain the version-9
+marker. Do not perform this rollback while a main-repair task is relying on the
+properties; restore from a compatible pre-version-10 backup instead.
 
 To roll version 9 back to a version-8 binary, first stop every Hive worker,
 coordinator, observer, and dispatcher. Restore the pre-version-9 Neo4j data

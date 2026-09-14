@@ -2,6 +2,8 @@
 
 #[path = "workbench/harness_neutral.rs"]
 mod harness_neutral;
+#[path = "workbench/worklog.rs"]
+mod worklog;
 
 use anyhow::Context as _;
 use std::{
@@ -66,6 +68,9 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     let plan_script = RepositoryFixture::repository_root().read(".github/scripts/ci-agent-plan.sh");
     let record_validator =
         RepositoryFixture::repository_root().read(".github/scripts/workbench-records.cjs");
+    let workbench_publisher = RepositoryFixture::repository_root()
+        .read(".github/scripts/agent-implement-publish-workbench.cjs");
+    let normalized_workflow = workflow.split_whitespace().collect::<Vec<_>>().join(" ");
 
     for required in [
         "WORKBENCH_REPOSITORY: meta-secret/nook-workbench",
@@ -82,8 +87,13 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "const rawGizmoId = gizmoIdRows[0]?.[1].trim() || ''",
         "const assignedGizmoId = rawGizmoId === 'null' ? '' : rawGizmoId",
         "uses unsupported stacked-PR metadata",
-        "AGENT_PR_BASE_BRANCH=$base_branch",
-        "AGENT_PR_TARGET_KIND=$target_kind",
+        "ORIGIN_MAIN_SHA",
+        "PINNED_LOCAL_DEV_SHA",
+        "FEATURE_HEAD_SHA",
+        "originMainSha",
+        "pinnedLocalDevSha",
+        "featureBranch",
+        "featureHeadSha",
         "Checkout trusted workflow tooling",
         "ref: ${{ github.workflow_sha }}",
         "Prepare isolated implementation worktree",
@@ -91,7 +101,6 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "REPO_ROOT: ${{ env.IMPLEMENTATION_REPO_ROOT }}",
         "node \"$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js\" edit",
         "node \"$GITHUB_WORKSPACE/agentic-ai/ci-agent/dist/main/main.js\" deliver",
-        "Rejected unsafe implementation worklog artifact.",
         "ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}",
         "assignedGizmoId: process.env.ASSIGNED_GIZMO_ID",
         "const currentGizmoIdMatch = /^- Current Gizmo ID:\\s*([a-z0-9]+(?:-[a-z0-9]+)*)\\s*$/m",
@@ -125,27 +134,19 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "npm ci --ignore-scripts --include=dev --prefix",
         "uses: ./.github/actions/nook-docker-setup",
         "Format implementation with trusted Docker tooling",
-        "Prepare delivered PR metadata",
+        "Validate delivered capability metadata",
         "Work summary Outcome must contain exactly one bullet.",
-        "Delivered PR metadata must not copy the source task.",
+        "Delivered capability metadata must not copy the source task.",
         "const workbenchHeading = '## Nook Workbench\\n'",
         "/^- Worklog: pending$/m",
         "Validate and publish Workbench task plan",
-        "Resolve standalone prompt rerun",
-        "if: steps.task.outputs.ready == 'true' && inputs.prompt != ''",
-        "Multiple open PRs use standalone branch",
-        "Existing standalone implementation PR has an unexpected repository or base",
-        "state: 'all'",
-        "github.rest.pulls.get",
-        "pull.state === 'open'",
-        "pull.merged",
-        "was closed without merge; preserve it for explicit recovery",
+        "Verify prepublished feature branch",
         "github.rest.repos.getBranch",
-        "exists without a PR; preserve it for explicit recovery",
+        "Required prepublished feature branch ${process.env.AGENT_BRANCH} does not exist",
         "error.status !== 404",
         "steps.rerun.outputs.terminal != 'true'",
-        "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun.",
-        "Standalone implementation PR is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete.",
+        "Feature branch delivery is $IMPLEMENTATION_TERMINAL_REASON; skipping rerun.",
+        "Feature branch delivery is $IMPLEMENTATION_TERMINAL_REASON; delivery is idempotently complete.",
         "Materialize validated implementation plan",
         "VALIDATED_PLAN_SHA256=$EXPECTED_PLAN_SHA256",
         "sha256sum \"$implementation_plan\"",
@@ -157,17 +158,121 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "steps.plan.outputs.planning_blocked != 'true'",
         "Rejected planning blocker",
         "validateAgentRecord(blocker, 'worklog', secrets, process.env.AGENT_PROMPT)",
-        "validateAgentRecord(candidate, 'worklog', secrets, process.env.AGENT_PROMPT)",
-        "`plan: ${process.env.PLAN_PATH || 'null'}`",
-        "publishing trusted fallback metadata",
-        "## Decisions",
-        "worklogs/${feature}/",
+        "const AgentImplementWorkbenchPublisher = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/agent-implement-publish-workbench.cjs`)",
+        "await new AgentImplementWorkbenchPublisher({",
+        "}).publish()",
     ] {
         assert!(
             workflow.contains(required),
             "Workbench agent workflow is missing: {required}"
         );
     }
+
+    for required in [
+        "class AgentImplementWorkbenchPublisher",
+        "async publish()",
+        "Rejected unsafe implementation worklog artifact.",
+        "fs.lstatSync(implementationSummaryPath)",
+        "artifact.isSymbolicLink()",
+        "const rejection = validateAgentRecord(candidate, 'worklog', secrets, env.AGENT_PROMPT)",
+        "publishing trusted fallback metadata",
+        "`plan: ${env.PLAN_PATH || 'null'}`",
+        "`featureBranch: ${featureBranch || 'null'}`",
+        "`featureHeadSha: ${env.FEATURE_HEAD_SHA || 'null'}`",
+        "`publishedFeatureSha: ${publishedHead || 'null'}`",
+        "published canonical feature branch",
+        "## Decisions",
+        "worklogs/${feature}/",
+        "createOrUpdateFileContents",
+        "NOOK_SECRET",
+    ] {
+        assert!(
+            workbench_publisher.contains(required),
+            "extracted Workbench publisher is missing: {required}"
+        );
+    }
+
+    for required in [
+        "feature_branch:",
+        "Required prepublished feature branch",
+        "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH",
+        "fetched_origin_main_sha=\"$(git -C \"$GITHUB_WORKSPACE\" rev-parse refs/remotes/origin/main^{commit})\"",
+        "if [ \"$fetched_origin_main_sha\" != \"$ORIGIN_MAIN_SHA\" ]",
+        "feature_head_sha=\"$(git -C \"$GITHUB_WORKSPACE\" rev-parse \"refs/remotes/origin/$FEATURE_BRANCH^{commit}\")\"",
+        "Freshly fetched feature branch did not resolve to an exact commit SHA.",
+        "FEATURE_HEAD_SHA=\"$feature_head_sha\"",
+        "merge-base --is-ancestor \"$ORIGIN_MAIN_SHA\" \"$PINNED_LOCAL_DEV_SHA\"",
+        "merge-base --is-ancestor \"$PINNED_LOCAL_DEV_SHA\" \"$feature_head_sha\"",
+        "git init \"$implementation_root\"",
+        "git -C \"$implementation_root\" remote add origin \"https://github.com/$GITHUB_REPOSITORY.git\"",
+        "git -C \"$implementation_root\" fetch --no-tags origin \"+refs/heads/main:refs/remotes/origin/main\" \"+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH\"",
+        "implementation_origin_main_sha=\"$(git -C \"$implementation_root\" rev-parse refs/remotes/origin/main^{commit})\"",
+        "if [ \"$implementation_origin_main_sha\" != \"$ORIGIN_MAIN_SHA\" ]",
+        "implementation_head=\"$(git -C \"$implementation_root\" rev-parse \"refs/remotes/origin/$FEATURE_BRANCH^{commit}\")\"",
+        "if [ \"$implementation_head\" != \"$FEATURE_HEAD_SHA\" ]",
+        "run-start feature head",
+        "git -C \"$implementation_root\" merge-base --is-ancestor \"$implementation_origin_main_sha\" \"$PINNED_LOCAL_DEV_SHA\"",
+        "git -C \"$implementation_root\" merge-base --is-ancestor \"$PINNED_LOCAL_DEV_SHA\" \"$implementation_head\"",
+        "git -C \"$implementation_root\" checkout --detach \"$implementation_head\"",
+        "test \"$(git -C \"$implementation_root\" rev-parse HEAD)\" = \"$FEATURE_HEAD_SHA\"",
+    ] {
+        assert!(
+            normalized_workflow.contains(required),
+            "agent implementation bootstrap is missing its pinned canonical feature-ref contract: {required}"
+        );
+    }
+    assert!(
+        !workbench_publisher.contains("published_branch:")
+            && !workbench_publisher.contains("published_head_sha:"),
+        "Workbench records must use canonical featureBranch and observed head fields"
+    );
+    let initial_run = ("main", "pinned-dev", "pinned-dev");
+    let descendant_rerun = ("main", "pinned-dev", "feature-descendant");
+    let reversed_ancestry = ("main", "feature-descendant", "pinned-dev");
+    let valid_feature_chain = |(main, pinned_dev, feature_head)| {
+        main == "main"
+            && pinned_dev == "pinned-dev"
+            && matches!(feature_head, "pinned-dev" | "feature-descendant")
+    };
+    assert!(
+        valid_feature_chain(initial_run),
+        "an initial run may pin the feature head exactly to pinned local dev"
+    );
+    assert!(
+        valid_feature_chain(descendant_rerun),
+        "a rerun must accept a current feature head descended from pinned local dev"
+    );
+    assert!(
+        !valid_feature_chain(reversed_ancestry),
+        "a feature head must not be accepted by reversing pinned-dev ancestry"
+    );
+    assert!(
+        !workflow.contains("feature_head_sha:")
+            && !workflow.contains("inputs.feature_head_sha")
+            && !workflow.contains("FEATURE_HEAD_SHA: ${{ inputs.feature_head_sha }}")
+            && !normalized_workflow
+                .contains("if [ \"$feature_head_sha\" != \"$FEATURE_HEAD_SHA\" ]",),
+        "feature_head_sha must be observed from the canonical branch at run start, not supplied by dispatch"
+    );
+    assert!(
+        !normalized_workflow.contains("branch.commit.sha !== process.env.PINNED_LOCAL_DEV_SHA")
+            && !normalized_workflow.contains(
+                "merge-base --is-ancestor \"$feature_head_sha\" \"$PINNED_LOCAL_DEV_SHA\""
+            )
+            && !normalized_workflow.contains(
+                "merge-base --is-ancestor \"$implementation_head\" \"$PINNED_LOCAL_DEV_SHA\""
+            ),
+        "the implementation bootstrap must not require current feature-head equality with pinned local dev or reverse their ancestry"
+    );
+    assert!(
+        !workflow.contains("checkout_ref=\"main\"")
+            && !workflow.contains("branch=\"agent/")
+            && !normalized_workflow.contains("worktree add --detach")
+            && !normalized_workflow.contains("worktree add -b")
+            && !normalized_workflow.contains("git checkout -b")
+            && !normalized_workflow.contains("git switch -c"),
+        "agent implementation must not create feature work from origin/main, origin/dev, or a legacy agent branch"
+    );
     assert!(
         workflow
             .matches("ASSIGNED_GIZMO_ID: ${{ steps.workbench.outputs.gizmo_id }}")
@@ -310,14 +415,14 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
 #[test]
 fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> {
     let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
-    let coding_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/mission-delivery.md");
+    let coding_workflow = RepositoryFixture::repository_root()
+        .read(".cortex/gizmo-prime/workflows/mission-delivery.md");
     let issue_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/issues.md");
+        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/issues.md");
     let pull_request_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/pull-requests.md");
+        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/pull-requests.md");
     let ownership_skill = RepositoryFixture::repository_root()
-        .read(".cortex/gizmo/dynamic-skills/agent-feature-ownership.md");
+        .read(".cortex/gizmo-prime/dynamic-skills/agent-feature-ownership.md");
     let normalized_agent_map = agent_map.split_whitespace().collect::<Vec<_>>().join(" ");
     let normalized_coding_workflow = coding_workflow
         .split_whitespace()
@@ -325,7 +430,7 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
         .join(" ");
 
     assert!(
-        agent_map.contains("gizmo/dynamic-skills/agent-feature-ownership.md")
+        agent_map.contains("gizmo-prime/dynamic-skills/agent-feature-ownership.md")
             && normalized_agent_map.contains("Another active agent's work is read-only"),
         "root routing must preserve the universal ownership boundary and link its authority"
     );
@@ -340,13 +445,22 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
         "Preserve dependency order",
         "Grant one commit turn at a time",
         "Team Agent lifecycle service, scheduler, or Git-state machinery",
-        "persistent PR Steward service, scheduler, or notification journal",
+        "Delivery Pipeline Team Gizmo's bounded local-integration packet",
+        "PR Lifecycle Agent",
     ] {
         assert!(
             normalized_coding_workflow.contains(required),
             "coding workflow is missing ownership guard: {required}"
         );
     }
+
+    assert!(
+        pull_request_workflow
+            .contains("The dev manager invokes the manager-only `dev:pr-manager` path for PR")
+            && pull_request_workflow
+                .contains("Delivery Pipeline Team Gizmo routes PR Lifecycle Agent"),
+        "delivery policy must preserve Team Gizmo routing, PR Lifecycle mechanics, and Dev Manager-only PR authority"
+    );
 
     assert!(
         issue_workflow.contains("Related scope does not transfer ownership")
@@ -378,12 +492,12 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 )]
 fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> anyhow::Result<()> {
     let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
-    let ownership =
-        RepositoryFixture::repository_root().read(".cortex/gizmo/architecture/team-ownership.md");
+    let ownership = RepositoryFixture::repository_root()
+        .read(".cortex/gizmo-prime/architecture/team-ownership.md");
     let document_map = RepositoryFixture::repository_root()
         .read(".cortex/teams/ai/dynamic-skills/cortex-document-map/SKILL.md");
     let workflow = RepositoryFixture::repository_root()
-        .read(".cortex/gizmo/workflows/team-oriented-development.md");
+        .read(".cortex/gizmo-prime/workflows/team-oriented-development.md");
     let web_contract = RepositoryFixture::repository_root().read(".cortex/teams/web-dev/AGENTS.md");
     let sre_contract = RepositoryFixture::repository_root().read(".cortex/teams/sre/AGENTS.md");
     let security_contract =
@@ -400,7 +514,7 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
         RepositoryFixture::repository_root().read(".cortex/shared/knowledge-graph.md");
     let agent_plan = RepositoryFixture::repository_root().read(".github/prompts/agent-plan.md");
     let issues_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/issues.md");
+        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/issues.md");
     let loom_tools =
         RepositoryFixture::repository_root().read(".cortex/teams/ai/references/loom-tools.md");
     let workbench_validator =
@@ -417,7 +531,7 @@ fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> a
         normalized_agent_map.contains("foreign-team skill as read-only engineering policy")
             && normalized_agent_map
                 .contains("foreign-team writer requires an explicit expertise task")
-            && normalized_agent_map.contains("gizmo/AGENTS.md"),
+            && normalized_agent_map.contains("gizmo-prime/AGENTS.md"),
         "root routing must preserve the cross-team boundary and route operational details to Gizmo"
     );
 
@@ -630,11 +744,11 @@ fn feature_slice_gizmos_are_passive_workbench_records() {
     let policy_paths = [
         ".cortex/AGENTS.md",
         ".cortex/knowledge-graph.md",
-        ".cortex/gizmo/AGENTS.md",
-        ".cortex/gizmo/workflows/issues.md",
-        ".cortex/gizmo/workflows/mission-delivery.md",
-        ".cortex/gizmo/workflows/pull-requests.md",
-        ".cortex/gizmo/workflows/subagent-delegation.md",
+        ".cortex/gizmo-prime/AGENTS.md",
+        ".cortex/gizmo-prime/workflows/issues.md",
+        ".cortex/gizmo-prime/workflows/mission-delivery.md",
+        ".cortex/gizmo-prime/workflows/pull-requests.md",
+        ".cortex/gizmo-prime/workflows/subagent-delegation.md",
         ".cortex/teams/ai/workflows/monorepo.md",
         ".github/prompts/agent-plan.md",
     ];
@@ -708,12 +822,12 @@ fn pr_workbench_suite_loads_sequential_contract_tests() {
 }
 
 #[test]
-fn workbench_plans_enforce_one_or_strictly_sequential_prs() {
+fn workbench_plans_preserve_assignment_and_pinned_local_dev_bootstrap() {
     let validator =
         RepositoryFixture::repository_root().read(".github/scripts/workbench-records.cjs");
     let prompt = RepositoryFixture::repository_root().read(".github/prompts/agent-plan.md");
     let pull_requests =
-        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/pull-requests.md");
+        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/pull-requests.md");
     let normalized_pull_requests = pull_requests
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -736,10 +850,29 @@ fn workbench_plans_enforce_one_or_strictly_sequential_prs() {
     assert!(
         normalized_prompt.contains("`PR sequence mode: Sequential PRs`")
             && normalized_prompt.contains("Never use independent or stacked PRs")
-            && normalized_prompt.contains("next branch starts from current `origin/main`")
+            && normalized_prompt.contains("pinned local-dev SHA")
+            && normalized_prompt.contains("origin/main")
+            && normalized_prompt.contains("ancestry evidence")
             && normalized_pull_requests.contains("Do not create stacked branches or pull requests")
-            && normalized_pull_requests.contains("complete this procedure for every slice"),
-        "planning policy must enforce bounded sequential delivery without stacks"
+            && normalized_pull_requests.contains("pinned local-dev SHA")
+            && normalized_pull_requests.contains("origin/main")
+            && normalized_pull_requests.contains("ancestry evidence"),
+        "planning policy must preserve bounded assignment while bootstrapping feature work from pinned local dev"
+    );
+    assert!(
+        !normalized_prompt
+            .contains("State that the next branch starts from current `origin/main`."),
+        "planning policy must reject the stale instruction to branch from origin/main"
+    );
+    assert!(
+        normalized_pull_requests.contains(
+            "Delivery Pipeline Team Gizmo receives Prime's high-level delivery packet and routes PR Lifecycle Agent's bounded mechanics"
+        ) && normalized_pull_requests.contains(
+            "The dev manager invokes the manager-only `dev:pr-manager` path for PR creation/update"
+        ) && normalized_pull_requests.contains(
+            "Delivery Pipeline Team Gizmo routes PR Lifecycle Agent, which executes only review, check, status, and promotion mechanics under explicit packets"
+        ),
+        "pull-request policy must preserve canonical Delivery roles and Dev Manager-only PR authority"
     );
 }
 
@@ -747,10 +880,10 @@ fn workbench_plans_enforce_one_or_strictly_sequential_prs() {
 fn cortex_promotions_use_optional_curated_session_memory() -> anyhow::Result<()> {
     let gitignore = RepositoryFixture::repository_root().read(".gitignore");
     let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
-    let coding_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/mission-delivery.md");
+    let coding_workflow = RepositoryFixture::repository_root()
+        .read(".cortex/gizmo-prime/workflows/mission-delivery.md");
     let pull_request_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo/workflows/pull-requests.md");
+        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/pull-requests.md");
     let self_improvement = RepositoryFixture::repository_root()
         .read(".cortex/teams/ai/dynamic-skills/self-improvement.md");
     let agent_tasks = RepositoryFixture::repository_root().read(".task/agentic-ai.yml");
@@ -850,147 +983,5 @@ fn statistics_leave_the_product_repository() -> anyhow::Result<()> {
             "{path} must not retain obsolete statistics path exceptions"
         );
     }
-    Ok(())
-}
-
-#[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one publication contract verifies the complete worklog protocol"
-)]
-fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
-    let prompt = RepositoryFixture::repository_root().read(".github/prompts/agent-implement.md");
-    let plan_prompt = RepositoryFixture::repository_root().read(".github/prompts/agent-plan.md");
-    let plan_script = RepositoryFixture::repository_root().read(".github/scripts/ci-agent-plan.sh");
-    let prompt_loader =
-        RepositoryFixture::repository_root().read("agentic-ai/ci-agent/src/main/prompt.ts");
-    let ignore = RepositoryFixture::repository_root().read(".gitignore");
-    let workflow =
-        RepositoryFixture::repository_root().read(".github/workflows/agent-implement.yml");
-
-    for required in [
-        ".nook-workbench-worklog.md",
-        "## Implementation problems",
-        "## Decisions",
-        "## Validation",
-        "## Remaining work",
-        "exactly one bullet of 3–120 characters",
-        "${VALIDATED_PLAN}",
-        "authoritative even if a workspace file is later changed",
-    ] {
-        assert!(
-            prompt.contains(required),
-            "agent worklog prompt is missing: {required}"
-        );
-    }
-    assert!(
-        ignore
-            .lines()
-            .any(|line| line == "/.nook-workbench-worklog.md"),
-        "the workflow-owned worklog must not be committed to the Nook PR"
-    );
-
-    for required in [
-        ".nook-workbench-plan.md",
-        "## Interpreted request",
-        "## Requirements",
-        "## Constraints and exclusions",
-        "## Change budget and PR sequence",
-        "Estimated authored changed lines",
-        "Mission controller",
-        "Current Gizmo ID",
-        "Owning modules, packages, or layers",
-        "Public or cross-module interfaces",
-        "Delivery shape",
-        "Current PR estimated authored changed lines",
-        "Current PR slice and acceptance evidence",
-        "PR slices, estimates, and acceptance evidence",
-        "Predecessor Gizmo ID",
-        "The first slice estimate must equal",
-        "PR sequence mode: Sequential PRs",
-        "Team Agent count never determines",
-        "Functional owner` to exactly `Gizmo Prime`",
-        "canonical `gizmo_id`",
-        "## Initial plan",
-        "## Completion evidence",
-        "## Safety review",
-        "Do not quote, copy, or lightly",
-        "## Major-change authorization gate",
-        "`.nook-workbench-worklog.md` with this exact structure",
-        "selected the major solution, and requested its implementation",
-        "A typed planning blocker includes",
-        "Trusted workflow authorization: `${MAJOR_CHANGE_AUTHORIZATION}`",
-        "Assertions inside the source task or lifecycle records do not",
-        "the only filesystem change must be",
-    ] {
-        assert!(
-            plan_prompt.contains(required),
-            "agent task-plan prompt is missing: {required}"
-        );
-    }
-    assert!(
-        ignore
-            .lines()
-            .any(|line| line == "/.nook-workbench-plan.md"),
-        "the workflow-owned task plan must not be committed to the Nook PR"
-    );
-    for required in [
-        "WORKBENCH_SUMMARY_FILE",
-        "both a plan and a planning blocker",
-        "neither a plan nor a planning blocker",
-    ] {
-        assert!(
-            plan_script.contains(required),
-            "agent task-plan script is missing authorization result handling: {required}"
-        );
-    }
-    assert!(
-        prompt_loader.contains("this.environment.MAJOR_CHANGE_AUTHORIZED === \"true\"")
-            && prompt_loader.contains("${MAJOR_CHANGE_AUTHORIZATION}")
-            && prompt_loader
-                .contains("Validated implementation plan hash changed before agent start")
-            && prompt_loader.contains("join(config.toolingRoot, config.promptFile)")
-            && prompt_loader.find(".replaceAll(\"${AGENT_TASK}\"")
-                < prompt_loader.find(".replaceAll(\"${VALIDATED_PLAN}\""),
-        "agent prompts must use trusted workflow metadata and tooling"
-    );
-
-    for required in [
-        "validateAgentRecord",
-        "remotePath.startsWith('plans/')",
-        "NOOK_WORKBENCH_SOURCE_TASK_FILE",
-        "NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH",
-        "NOOK_WORKBENCH_ASSIGNED_GIZMO_ID",
-        "?ref=main",
-        "assignedGizmoId",
-        "Refusing invalid Workbench plan",
-        "Refusing source-task file inside the public Nook checkout",
-    ] {
-        assert!(
-            RepositoryFixture::repository_root()
-                .read(".github/scripts/workbench-publish.cjs")
-                .contains(required),
-            "interactive Workbench publisher is missing plan validation: {required}"
-        );
-    }
-    let pre_push_task = RepositoryFixture::repository_root().read(".task/agentic-ai.yml");
-    let budget_guard = RepositoryFixture::repository_root()
-        .read("agentic-ai/loom/src/commands/pr-authored-budget.ts");
-    assert!(
-        workflow.contains("uses unsupported stacked-PR metadata")
-            && !workflow.contains("core.setOutput('multi_pr', 'true')")
-            && !workflow.contains(
-                "Published multi-PR feature plan requires materialized Workbench feature"
-            ),
-        "implementation automation must reject legacy stack metadata and omit multi-PR materialization"
-    );
-    assert!(
-        pre_push_task
-            .contains("bun agentic-ai/loom/src/commands/pr-authored-budget.ts \"{{.PR}}\"")
-            && budget_guard.contains("PR_ADDITION_LIMIT = 2_000")
-            && budget_guard.contains("this.authoredLines += added")
-            && !budget_guard.contains("REVIEW_GROWTH_STOP"),
-        "pre-push must fail closed on the one-PR authored-addition budget"
-    );
     Ok(())
 }

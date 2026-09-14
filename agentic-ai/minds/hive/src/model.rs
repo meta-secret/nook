@@ -13,6 +13,12 @@ pub enum ModelError {
     EmptyTaskPrompt,
     #[error("source_commit must be a full 40-character Git object id")]
     InvalidSourceCommit,
+    #[error("Git bootstrap evidence must use full 40-character hexadecimal object ids")]
+    InvalidGitSha,
+    #[error("feature branch must be a canonical codex ref")]
+    InvalidFeatureBranch,
+    #[error("main-repair tasks require originMainSha, pinnedLocalDevSha, and featureBranch")]
+    MissingBootstrapEvidence,
     #[error("max_attempts must be at least one")]
     InvalidMaxAttempts,
     #[error("a task cannot depend on itself")]
@@ -44,7 +50,7 @@ pub enum ModelError {
 }
 
 mod identity;
-pub use identity::{AgentId, AttemptId, LeaseToken, TaskId};
+pub use identity::{AgentId, AttemptId, FeatureBranch, GitSha, LeaseToken, TaskId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -105,11 +111,28 @@ pub enum CompletionArtifact {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BootstrapEvidence {
+    pub origin_main_sha: GitSha,
+    pub pinned_local_dev_sha: GitSha,
+    pub feature_branch: FeatureBranch,
+}
+
+impl BootstrapEvidence {
+    #[must_use]
+    pub fn matches(&self, other: Option<&Self>) -> bool {
+        other == Some(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClaimedTask {
     pub id: TaskId,
     pub kind: TaskKind,
     pub prompt: String,
     pub source_commit: String,
+    #[serde(default, rename = "bootstrapEvidence")]
+    pub bootstrap_evidence: Option<BootstrapEvidence>,
     pub attempt_id: AttemptId,
     pub attempt_number: i64,
     pub lease_token: LeaseToken,
@@ -192,6 +215,8 @@ pub struct EnqueueTask {
     pub trigger: TaskTrigger,
     pub prompt: String,
     pub source_commit: String,
+    #[serde(default, rename = "bootstrapEvidence")]
+    pub bootstrap_evidence: Option<BootstrapEvidence>,
     pub priority: i64,
     pub max_attempts: i64,
     pub dependencies: Vec<TaskId>,
@@ -217,6 +242,9 @@ impl EnqueueTask {
                 .all(|byte| byte.is_ascii_hexdigit())
         {
             return Err(ModelError::InvalidSourceCommit);
+        }
+        if self.kind.is_main_repair() && self.bootstrap_evidence.is_none() {
+            return Err(ModelError::MissingBootstrapEvidence);
         }
         if self.max_attempts < 1 {
             return Err(ModelError::InvalidMaxAttempts);
@@ -394,8 +422,9 @@ impl TerminalResult {
 #[cfg(test)]
 mod tests {
     use super::{
-        ActivityKind, AgentId, AttemptId, ClaimOutcome, ClaimedTask, CompletionRelevance,
-        EnqueueTask, LeaseToken, ModelError, TaskId, TaskTrigger, TerminalResult,
+        ActivityKind, AgentId, AttemptId, BootstrapEvidence, ClaimOutcome, ClaimedTask,
+        CompletionRelevance, EnqueueTask, GitSha, LeaseToken, ModelError, TaskId, TaskTrigger,
+        TerminalResult,
     };
 
     #[test]
@@ -407,6 +436,7 @@ mod tests {
             trigger: TaskTrigger::ManualCli,
             prompt: "Implement it".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             priority: 1,
             max_attempts: 2,
             dependencies: vec![task_id],
@@ -424,12 +454,32 @@ mod tests {
             trigger: TaskTrigger::ManualCli,
             prompt: "Resolve the prerequisite".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             priority: 200,
             max_attempts: 3,
             dependencies: vec![TaskId::try_from("blocker-1")?],
         };
 
         assert_eq!(task.validate(), Err(ModelError::BlockerWithDependencies));
+        Ok(())
+    }
+
+    #[test]
+    fn bootstrap_evidence_uses_canonical_camel_case_wire_names() -> crate::HiveResult<()> {
+        let evidence = BootstrapEvidence {
+            origin_main_sha: GitSha::try_from("0123456789abcdef0123456789abcdef01234567")?,
+            pinned_local_dev_sha: GitSha::try_from("123456789abcdef0123456789abcdef012345678")?,
+            feature_branch: super::FeatureBranch::try_from("codex/repair-cache")?,
+        };
+        let wire = serde_json::to_value(evidence)?;
+        assert_eq!(
+            wire,
+            serde_json::json!({
+                "originMainSha": "0123456789abcdef0123456789abcdef01234567",
+                "pinnedLocalDevSha": "123456789abcdef0123456789abcdef012345678",
+                "featureBranch": "codex/repair-cache"
+            })
+        );
         Ok(())
     }
 
@@ -605,11 +655,18 @@ mod tests {
             trigger: TaskTrigger::ManualCli,
             prompt: "Implement behavior".into(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".into(),
+            bootstrap_evidence: None,
             priority: 0,
             max_attempts: 1,
             dependencies: Vec::new(),
         };
         assert!(valid.validate().is_ok());
+        let mut main_repair = valid.clone();
+        main_repair.kind = "main-repair".into();
+        assert_eq!(
+            main_repair.validate(),
+            Err(ModelError::MissingBootstrapEvidence)
+        );
         for (task, expected) in [
             (
                 {
@@ -765,6 +822,7 @@ pub use task_kind::TaskKind;
 pub struct ActiveDeliveryQuery<'a> {
     pub source_commit: &'a str,
     pub kind: &'a TaskKind,
+    pub bootstrap_evidence: Option<&'a BootstrapEvidence>,
 }
 
 enum AbsentBlockerContext {

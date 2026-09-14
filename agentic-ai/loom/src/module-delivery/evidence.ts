@@ -28,6 +28,10 @@ import type {
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
 import type { GitCommandRequest } from './git-command.ts';
+import {
+  PinnedDevBaseEvidenceContract,
+  type PinnedDevBaseEvidence,
+} from '../lib/base-evidence.ts';
 import type {
   AcceptedModuleDeliveryEvidence,
   ModuleDeliveryReadOnlyEvidenceSubmission,
@@ -48,11 +52,34 @@ export type ModuleDeliveryEvidenceArtifactDigestRequest = {
   readonly artifactIdentity: string;
   readonly evidence: readonly string[];
   readonly acceptanceRequirements: readonly string[];
-  readonly acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+  readonly acceptedProviderEvidence: readonly ModuleDeliveryEvidenceIdentity[];
 };
 
-export type ModuleDeliveryAcceptedProviderEvidenceIdentity = Readonly<{
-  schemaVersion: typeof MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION;
+export type ModuleDeliveryAcceptedProviderEvidenceIdentity =
+  PinnedDevBaseEvidence &
+  Readonly<{
+    schemaVersion: typeof MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION;
+    generation: number;
+    planDigest: string;
+    taskId: string;
+    attempt: number;
+    producerTeam: TeamKey;
+    functionalOwner: ModuleDeliveryOwnerIdentity;
+    acceptanceOwner: ModuleDeliveryOwnerIdentity;
+    sourceCommit: string;
+    verifiedHeadCommit: string;
+    artifactIdentity: string;
+    artifactDigest: string;
+    sourceProvenanceDigest: string;
+    verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess;
+    claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
+    acceptanceRequirements: readonly string[];
+    acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+  }>;
+
+/** Historical V1 evidence identity; it intentionally has no feature head. */
+export type ModuleDeliveryAcceptedProviderEvidenceIdentityV1 = Readonly<{
+  schemaVersion: 1;
   generation: number;
   planDigest: string;
   taskId: string;
@@ -61,6 +88,8 @@ export type ModuleDeliveryAcceptedProviderEvidenceIdentity = Readonly<{
   functionalOwner: ModuleDeliveryOwnerIdentity;
   acceptanceOwner: ModuleDeliveryOwnerIdentity;
   sourceCommit: string;
+  originMainSha: string;
+  pinnedLocalDevSha: string;
   verifiedHeadCommit: string;
   artifactIdentity: string;
   artifactDigest: string;
@@ -68,8 +97,12 @@ export type ModuleDeliveryAcceptedProviderEvidenceIdentity = Readonly<{
   verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess;
   claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
   acceptanceRequirements: readonly string[];
-  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentityV1[];
 }>;
+
+type ModuleDeliveryEvidenceIdentity =
+  | ModuleDeliveryAcceptedProviderEvidenceIdentity
+  | ModuleDeliveryAcceptedProviderEvidenceIdentityV1;
 
 export type ModuleDeliveryEvidenceSubmissionVerification = {
   readonly authority: ModuleDeliveryGenerationAuthority;
@@ -101,10 +134,12 @@ type EvidenceArtifactDigestContent = Readonly<{
   artifactIdentity: string;
   evidence: readonly string[];
   acceptanceRequirements: readonly string[];
-  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+  acceptedProviderEvidence: readonly ModuleDeliveryEvidenceIdentity[];
 }>;
 type EvidenceSourceProvenanceContent = Readonly<{
   sourceCommit: string;
+  originMainSha: string;
+  pinnedLocalDevSha: string;
   generation: number;
   planDigest: string;
   taskId: string;
@@ -272,6 +307,10 @@ export class ModuleEvidenceBoundary {
     const submission = request.verification.submission;
     const lease = request.verification.lease;
     const node = request.node;
+    PinnedDevBaseEvidenceContract.assertShape({
+      originMainSha: submission.originMainSha,
+      pinnedLocalDevSha: submission.pinnedLocalDevSha,
+    });
     if (
       node.kind === ModuleDeliveryTaskKind.Write ||
       submission.kind !==
@@ -285,6 +324,8 @@ export class ModuleEvidenceBoundary {
       submission.planDigest !== lease.planDigest ||
       submission.planDigest !== request.acceptedPlan.planDigest ||
       submission.sourceCommit !== lease.startingFrontier ||
+      submission.originMainSha !== lease.originMainSha ||
+      submission.pinnedLocalDevSha !== lease.pinnedLocalDevSha ||
       submission.producerTeam !== lease.team ||
       submission.functionalOwner !== lease.functionalOwner ||
       submission.acceptanceOwner !== lease.acceptanceOwner ||
@@ -399,6 +440,8 @@ export class ModuleEvidenceBoundary {
         functionalOwner: receipt.functionalOwner,
         acceptanceOwner: receipt.acceptanceOwner,
         sourceCommit: receipt.sourceCommit,
+        originMainSha: receipt.originMainSha,
+        pinnedLocalDevSha: receipt.pinnedLocalDevSha,
         verifiedHeadCommit: receipt.verifiedHeadCommit,
         artifactIdentity: receipt.artifactIdentity,
         artifactDigest: receipt.artifactDigest,
@@ -422,15 +465,20 @@ export class ModuleEvidenceBoundary {
       receipt.functionalOwner !== request.lease.functionalOwner ||
       receipt.acceptanceOwner !== request.lease.acceptanceOwner ||
       receipt.sourceCommit !== request.lease.startingFrontier ||
+      receipt.originMainSha !== request.lease.originMainSha ||
+      receipt.pinnedLocalDevSha !== request.lease.pinnedLocalDevSha ||
       receipt.verifiedHeadCommit !== request.state.headCommit ||
       !ModuleEvidenceBoundary.validIdentity(receipt.artifactIdentity) ||
       !ModuleEvidenceBoundary.DIGEST.test(receipt.artifactDigest) ||
       !ModuleEvidenceBoundary.DIGEST.test(receipt.sourceProvenanceDigest) ||
       receipt.verdict !== ModuleDeliveryEvidenceVerdict.TerminalSuccess ||
-      JSON.stringify(receipt.claimIdentities.map(({ claim }) => claim)) !==
-        JSON.stringify(expectedClaims) ||
+      JSON.stringify(
+        receipt.claimIdentities.map(
+          ({ claim }: ModuleDeliveryEvidenceClaimIdentity) => claim,
+        ),
+      ) !== JSON.stringify(expectedClaims) ||
       receipt.claimIdentities.some(
-        ({ contentDigest }) =>
+        ({ contentDigest }: ModuleDeliveryEvidenceClaimIdentity) =>
           !ModuleEvidenceBoundary.DIGEST.test(contentDigest),
       ) ||
       JSON.stringify(receipt.acceptanceRequirements) !==
@@ -464,6 +512,8 @@ export class ModuleEvidenceBoundary {
   ): string {
     const content: EvidenceSourceProvenanceContent = {
       sourceCommit: submission.sourceCommit,
+      originMainSha: submission.originMainSha,
+      pinnedLocalDevSha: submission.pinnedLocalDevSha,
       generation: submission.generation,
       planDigest: submission.planDigest,
       taskId: submission.taskId,

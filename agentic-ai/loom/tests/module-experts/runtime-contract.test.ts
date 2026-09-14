@@ -82,6 +82,9 @@ describe('module expert runtime isolation', () => {
         parentEnvironment,
         selectedContextPaths: [],
         sourceCommit: repository.sourceCommit,
+        originMainSha: repository.sourceCommit,
+        pinnedLocalDevSha: repository.sourceCommit,
+        featureHeadSha: repository.sourceCommit,
         temporaryRoot: isolationRoot,
         workingDirectory: repository.root,
       };

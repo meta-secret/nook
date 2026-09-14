@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -15,11 +16,22 @@ import {
   type RemoteBranchSnapshot,
   RemoteBranchPresence,
   WorktreeBranchKind,
-  type WorktreeBranch,
   WorktreeRecord,
   WorktreeState,
 } from './dev-types.ts';
 import { CommitSha as CommitShaValue } from './dev-types.ts';
+import {
+  ManagedWorktreeSelection,
+  WorktreeInventoryDecoder,
+} from './dev-git-worktrees.ts';
+import { DevGitMergeBoundary } from './dev-git-merge.ts';
+
+export {
+  DevelopmentWorktreeSelection,
+  MainWorktreeSelection,
+  ManagedWorktreeSelection,
+  WorktreeInventoryDecoder,
+} from './dev-git-worktrees.ts';
 
 interface GitInvocation {
   readonly args: readonly string[];
@@ -33,9 +45,13 @@ interface AncestryRequest {
 }
 
 interface MergeRequest {
-  readonly devPath: string;
-  readonly expectedDevHead: CommitSha;
   readonly featureHead: CommitSha;
+  readonly featureBranch: BranchName;
+}
+
+interface FastForwardRequest {
+  readonly path: string;
+  readonly target: CommitSha;
 }
 
 interface PushRequest {
@@ -44,131 +60,35 @@ interface PushRequest {
   readonly workingDirectory: string;
 }
 
-interface MutableWorktreeBlock {
-  path: string;
-  head: string;
-  branch: string;
-  detached: boolean;
-  prunable: boolean;
+export interface DevGitBootstrapRequest {
+  /** Require clean-start local dev to finish exactly at origin/main. */
+  readonly requireDevEquality?: boolean;
+  /** Canonical worktree paths; omitted paths are discovered from Git. */
+  readonly mainPath?: string;
+  readonly devPath?: string;
 }
 
-enum WorktreeBlockKind {
-  Empty = 'empty',
-  Active = 'active',
+/** Exact refs selected by the delivery bootstrap for subsequent feature work. */
+export interface DevGitBootstrapEvidence {
+  readonly originMainSha: CommitSha;
+  readonly pinnedLocalDevSha: CommitSha;
+  readonly localMainSha: CommitSha;
+  readonly mainPath: string;
+  readonly devPath: string;
 }
 
-type WorktreeBlock =
-  | { readonly kind: WorktreeBlockKind.Empty }
-  | {
-      readonly kind: WorktreeBlockKind.Active;
-      readonly value: MutableWorktreeBlock;
-    };
-
-/** Decodes Git's porcelain worktree inventory without selecting a worktree. */
-export class WorktreeInventoryDecoder {
-  decode(source: string): Result<readonly WorktreeRecord[], DevFailure> {
-    const records: WorktreeRecord[] = [];
-    let block: WorktreeBlock = { kind: WorktreeBlockKind.Empty };
-    for (const line of source.split(/\r?\n/u)) {
-      if (line.startsWith('worktree ')) {
-        if (block.kind === WorktreeBlockKind.Active) {
-          const completed = this.complete(block.value);
-          if (completed.isErr()) return err(completed.error);
-          records.push(completed.value);
-        }
-        block = {
-          kind: WorktreeBlockKind.Active,
-          value: {
-            path: line.slice('worktree '.length),
-            head: '',
-            branch: '',
-            detached: false,
-            prunable: false,
-          },
-        };
-        continue;
-      }
-      if (block.kind === WorktreeBlockKind.Empty) continue;
-      if (line.startsWith('HEAD '))
-        block.value.head = line.slice('HEAD '.length);
-      if (line.startsWith('branch '))
-        block.value.branch = line.slice('branch '.length);
-      if (line === 'detached') block.value.detached = true;
-      if (line.startsWith('prunable')) block.value.prunable = true;
-    }
-    if (block.kind === WorktreeBlockKind.Active) {
-      const completed = this.complete(block.value);
-      if (completed.isErr()) return err(completed.error);
-      records.push(completed.value);
-    }
-    return ok(records);
-  }
-
-  private complete(
-    block: MutableWorktreeBlock,
-  ): Result<WorktreeRecord, DevFailure> {
-    if (!block.path || !block.head) {
-      return err({
-        kind: DevFailureKind.Git,
-        message: 'Git returned an incomplete worktree record',
-      });
-    }
-    const head = CommitShaValue.parse(block.head);
-    if (head.isErr()) return err(head.error);
-    let branch: WorktreeBranch;
-    if (block.branch.startsWith('refs/heads/')) {
-      const name = BranchName.parse(block.branch.slice('refs/heads/'.length));
-      if (name.isErr()) return err(name.error);
-      branch = { kind: WorktreeBranchKind.Branch, name: name.value };
-    } else if (block.detached) {
-      branch = { kind: WorktreeBranchKind.Detached };
-    } else {
-      return err({
-        kind: DevFailureKind.Git,
-        message: `Git returned a worktree without a branch or detached marker: ${block.path}`,
-      });
-    }
-    return ok(
-      new WorktreeRecord({
-        path: resolve(block.path),
-        head: head.value,
-        branch,
-        prunable: block.prunable,
-      }),
-    );
-  }
+interface SynchronizeWorktreeRequest {
+  readonly path: string;
+  readonly target: CommitSha;
+  readonly branch: ManagedBranch;
+  readonly requireEquality: boolean;
 }
 
-/** Selects exactly one usable local development worktree. */
-export class DevelopmentWorktreeSelection {
-  select(
-    records: readonly WorktreeRecord[],
-  ): Result<WorktreeRecord, DevFailure> {
-    const candidates = records.filter((record) =>
-      record.isManagedDevelopmentWorktree(),
-    );
-    if (candidates.length === 0) {
-      return err({
-        kind: DevFailureKind.Configuration,
-        message:
-          'No usable local dev worktree was found; create one explicitly before landing',
-      });
-    }
-    if (candidates.length > 1) {
-      return err({
-        kind: DevFailureKind.Configuration,
-        message: `Multiple local dev worktrees were found (${candidates.map((candidate) => candidate.path).join(', ')}); refusing to choose one`,
-      });
-    }
-    const candidate = candidates[0];
-    if (!candidate) {
-      return err({
-        kind: DevFailureKind.Configuration,
-        message: 'Local dev worktree selection was empty',
-      });
-    }
-    return ok(candidate);
-  }
+interface BootstrapWorktreePathRequest {
+  readonly branch: ManagedBranch;
+  readonly requestedPath: string | undefined;
+  readonly records: readonly WorktreeRecord[];
+  readonly repositoryIdentity: string;
 }
 
 /** Owns read-only Git observations and the narrowly authorized local effects. */
@@ -189,19 +109,64 @@ export class DevGitRepository {
   }
 
   commonDirectory(): Result<string, DevFailure> {
-    const output = this.successful({
-      args: ['rev-parse', '--git-common-dir'],
-      workingDirectory: this.request.root,
-    });
-    if (output.isErr()) return err(output.error);
-    const common = output.value.stdout.trim();
-    if (!common) {
+    return this.commonDirectoryAt(this.request.root);
+  }
+
+  /**
+   * Requires an exact, canonical worktree registered in this repository for a
+   * managed branch. The caller must provide the packet-assigned path; this
+   * method never discovers a replacement worktree.
+   */
+  managedWorktreeAt(
+    ...[path, branch]: [path: string, branch: ManagedBranch]
+  ): Result<WorktreeRecord, DevFailure> {
+    const canonicalPath = this.canonicalWorktreePath(
+      path,
+      `Canonical ${branch} worktree path`,
+      true,
+    );
+    if (canonicalPath.isErr()) return err(canonicalPath.error);
+
+    const repository = this.repositoryIdentityAt(canonicalPath.value);
+    if (repository.isErr()) return err(repository.error);
+    const featureRepository = this.repositoryIdentityAt(this.request.root);
+    if (featureRepository.isErr()) return err(featureRepository.error);
+    if (repository.value !== featureRepository.value) {
       return err({
-        kind: DevFailureKind.Git,
-        message: 'Git did not return a common directory',
+        kind: DevFailureKind.Configuration,
+        message: `Assigned ${branch} worktree belongs to a different repository: ${path}`,
       });
     }
-    return ok(resolve(this.request.root, common));
+
+    const records = this.worktrees();
+    if (records.isErr()) return err(records.error);
+    const matches = records.value.filter(
+      (record) => record.path === canonicalPath.value,
+    );
+    if (matches.length !== 1) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Assigned ${branch} worktree is not uniquely registered at its canonical path: ${path}`,
+      });
+    }
+    const record = matches[0];
+    if (!record) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Assigned ${branch} worktree selection was empty: ${path}`,
+      });
+    }
+    if (
+      record.prunable ||
+      record.branch.kind !== WorktreeBranchKind.Branch ||
+      record.branch.name.value() !== branch
+    ) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Assigned worktree is not a usable ${branch} worktree: ${path}`,
+      });
+    }
+    return ok(record);
   }
 
   worktrees(): Result<readonly WorktreeRecord[], DevFailure> {
@@ -211,6 +176,22 @@ export class DevGitRepository {
     });
     if (output.isErr()) return err(output.error);
     return new WorktreeInventoryDecoder().decode(output.value.stdout);
+  }
+
+  /** Resolves an existing checked-out dev worktree without creating one. */
+  developmentWorktreeForLanding(): Result<WorktreeRecord | undefined, DevFailure> {
+    const records = this.worktrees();
+    if (records.isErr()) return err(records.error);
+    const candidates = records.value.filter((record) =>
+      record.isManagedDevelopmentWorktree(),
+    );
+    if (candidates.length > 1) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Multiple local dev worktrees were found (${candidates.map((candidate) => candidate.path).join(', ')}); refusing to choose one`,
+      });
+    }
+    return ok(candidates[0]);
   }
 
   stateAt(path: string): Result<WorktreeState, DevFailure> {
@@ -287,7 +268,26 @@ export class DevGitRepository {
     });
   }
 
-  refreshManagedRefs(): Result<void, DevFailure> {
+  /** Resolves the latest committed head of an authorized remote feature ref. */
+  resolveFeatureBranchHead(
+    branch: BranchName,
+  ): Result<CommitSha, DevFailure> {
+    const snapshot = this.remoteBranch(branch);
+    if (snapshot.isErr()) return err(snapshot.error);
+    if (snapshot.value.presence !== RemoteBranchPresence.Present) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `origin/${branch.value()} must exist before landing a feature into dev`,
+      });
+    }
+    return ok(snapshot.value.sha);
+  }
+
+  /** Refreshes the delivery refs, optionally pruning stale origin refs. */
+  refreshManagedRefs(
+    request: { readonly prune?: boolean } = {},
+  ): Result<void, DevFailure> {
+    if (request.prune) return this.fetchOrigin({ prune: true });
     const output = this.execute({
       args: [
         'fetch',
@@ -307,6 +307,104 @@ export class DevGitRepository {
       });
     }
     return ok();
+  }
+
+  /**
+   * Refreshes all origin refs for a fresh bootstrap. Pruning is explicit so a
+   * caller cannot accidentally normalize a repository while doing an ordinary
+   * manager observation.
+   */
+  fetchOrigin(
+    request: { readonly prune?: boolean } = {},
+  ): Result<void, DevFailure> {
+    const args = ['fetch'];
+    if (request.prune) args.push('--prune');
+    args.push('origin');
+    const output = this.execute({
+      args,
+      workingDirectory: this.request.root,
+    });
+    if (output.isErr()) return err(output.error);
+    if (output.value.exitCode !== 0) {
+      return err({
+        kind: DevFailureKind.Git,
+        message: `Unable to fetch origin refs${request.prune ? ' with pruning' : ''}: ${new CommandFailureMessage(output.value).text()}`,
+      });
+    }
+    return ok();
+  }
+
+  /** Resolves the exact locally fetched origin/main commit. */
+  originMainSha(): Result<CommitSha, DevFailure> {
+    return this.trackingHead(ManagedBranch.Main);
+  }
+
+  /**
+   * Bootstraps canonical main and dev without rewriting unexpected work.
+   *
+   * The only permitted normalization is an ordinary fast-forward on a clean
+   * named worktree. An ahead, divergent, detached, dirty, or racing checkout
+   * is returned as a blocker; no reset, clean, force update, or worktree
+   * issuance is attempted.
+   */
+  bootstrap(
+    request: DevGitBootstrapRequest = {},
+  ): Result<DevGitBootstrapEvidence, DevFailure> {
+    const refreshed = this.refreshManagedRefs({ prune: true });
+    if (refreshed.isErr()) return err(refreshed.error);
+
+    const originMain = this.originMainSha();
+    if (originMain.isErr()) return err(originMain.error);
+    const records = this.worktrees();
+    if (records.isErr()) return err(records.error);
+    const repositoryIdentity = this.repositoryIdentityAt(this.request.root);
+    if (repositoryIdentity.isErr()) return err(repositoryIdentity.error);
+    const mainPath = this.bootstrapWorktreePath({
+      branch: ManagedBranch.Main,
+      requestedPath: request.mainPath,
+      records: records.value,
+      repositoryIdentity: repositoryIdentity.value,
+    });
+    if (mainPath.isErr()) return err(mainPath.error);
+    const devPath = this.bootstrapWorktreePath({
+      branch: ManagedBranch.Dev,
+      requestedPath: request.devPath,
+      records: records.value,
+      repositoryIdentity: repositoryIdentity.value,
+    });
+    if (devPath.isErr()) return err(devPath.error);
+
+    const main = this.synchronizeWorktree({
+      path: mainPath.value,
+      target: originMain.value,
+      branch: ManagedBranch.Main,
+      requireEquality: true,
+    });
+    if (main.isErr()) return err(main.error);
+    const dev = this.synchronizeWorktree({
+      path: devPath.value,
+      target: originMain.value,
+      branch: ManagedBranch.Dev,
+      requireEquality: request.requireDevEquality ?? true,
+    });
+    if (dev.isErr()) return err(dev.error);
+
+    const finalOriginMain = this.originMainSha();
+    if (finalOriginMain.isErr()) return err(finalOriginMain.error);
+    if (!finalOriginMain.value.equals(originMain.value)) {
+      return err({
+        kind: DevFailureKind.Race,
+        message:
+          'origin/main changed while the canonical main and dev worktrees were being synchronized',
+      });
+    }
+    return ok({
+      originMainSha: originMain.value,
+      pinnedLocalDevSha: dev.value,
+      localMainSha: main.value,
+      mainPath: mainPath.value,
+      devPath: devPath.value,
+    });
   }
 
   ancestry(request: AncestryRequest): Result<Ancestry, DevFailure> {
@@ -329,69 +427,87 @@ export class DevGitRepository {
   }
 
   mergeInto(request: MergeRequest): Result<CommitSha, DevFailure> {
-    const current = this.headAt(request.devPath);
-    if (current.isErr()) return err(current.error);
-    if (!current.value.equals(request.expectedDevHead)) {
+    return new DevGitMergeBoundary({
+      repository: this,
+      featurePath: this.request.root,
+      execute: (invocation) => this.execute(invocation),
+    }).mergeInto(request);
+  }
+
+  /** Resolves a local branch ref, returning undefined when it does not exist. */
+  localBranchHead(
+    branch: ManagedBranch,
+  ): Result<CommitSha | undefined, DevFailure> {
+    const output = this.execute({
+      args: ['rev-parse', '--verify', `refs/heads/${branch}^{commit}`],
+      workingDirectory: this.request.root,
+    });
+    if (output.isErr()) return err(output.error);
+    if (output.value.exitCode === 1) return ok(undefined);
+    if (output.value.exitCode !== 0) {
       return err({
-        kind: DevFailureKind.Race,
-        message: 'Local dev changed while landing was being prepared',
+        kind: DevFailureKind.Git,
+        message: `Unable to resolve local refs/heads/${branch}: ${new CommandFailureMessage(output.value).text()}`,
       });
     }
-    const state = this.stateAt(request.devPath);
+    const sha = CommitShaValue.parse(output.value.stdout.trim());
+    if (sha.isErr()) return err(sha.error);
+    return ok(sha.value);
+  }
+
+  /** Fast-forwards local dev to a promoted snapshot without rewriting newer work. */
+  fastForwardTo(request: FastForwardRequest): Result<CommitSha, DevFailure> {
+    const current = this.headAt(request.path);
+    if (current.isErr()) return err(current.error);
+    const state = this.stateAt(request.path);
     if (state.isErr()) return err(state.error);
     if (state.value !== WorktreeState.Clean) {
       return err({
         kind: DevFailureKind.DirtyWorktree,
-        message: `Local dev is dirty; refusing to alter it: ${request.devPath}`,
+        message: `Local dev is dirty; refusing to fast-forward it: ${request.path}`,
       });
     }
-    const preview = this.execute({
-      args: [
-        'merge-tree',
-        '--write-tree',
-        request.expectedDevHead.value(),
-        request.featureHead.value(),
-      ],
-      workingDirectory: request.devPath,
+    const currentIsAncestor = this.ancestry({
+      ancestor: current.value,
+      descendant: request.target,
+      workingDirectory: request.path,
     });
-    if (preview.isErr()) return err(preview.error);
-    if (preview.value.exitCode !== 0) {
+    if (currentIsAncestor.isErr()) return err(currentIsAncestor.error);
+    if (currentIsAncestor.value === Ancestry.NotAncestor) {
+      const targetIsAncestor = this.ancestry({
+        ancestor: request.target,
+        descendant: current.value,
+        workingDirectory: request.path,
+      });
+      if (targetIsAncestor.isErr()) return err(targetIsAncestor.error);
+      if (targetIsAncestor.value === Ancestry.Ancestor) return ok(current.value);
       return err({
         kind: DevFailureKind.Conflict,
         message:
-          'Feature cannot merge cleanly into local dev; merge latest local dev into FEATURE, rebuild it remotely, and retry',
+          'Local dev diverged from the promoted snapshot; refusing to rewrite newer local work',
       });
     }
-
-    const merge = this.execute({
-      args: ['merge', '--no-edit', request.featureHead.value()],
-      workingDirectory: request.devPath,
+    if (current.value.equals(request.target)) return ok(current.value);
+    const merged = this.execute({
+      args: ['merge', '--ff-only', request.target.value()],
+      workingDirectory: request.path,
     });
-    if (merge.isErr()) return err(merge.error);
-    if (merge.value.exitCode !== 0) {
-      const abort = this.execute({
-        args: ['merge', '--abort'],
-        workingDirectory: request.devPath,
-      });
-      const abortMessage =
-        abort.isErr() || abort.value.exitCode !== 0
-          ? ' Git merge abort also failed; inspect the shared dev worktree without discarding changes.'
-          : '';
+    if (merged.isErr()) return err(merged.error);
+    if (merged.value.exitCode !== 0) {
       return err({
         kind: DevFailureKind.Conflict,
-        message: `Feature merge into local dev failed: ${new CommandFailureMessage(merge.value).text()}.${abortMessage}`,
+        message: `Local dev fast-forward failed: ${new CommandFailureMessage(merged.value).text()}`,
       });
     }
-    const after = this.stateAt(request.devPath);
+    const after = this.headAt(request.path);
     if (after.isErr()) return err(after.error);
-    if (after.value !== WorktreeState.Clean) {
+    if (!after.value.equals(request.target)) {
       return err({
-        kind: DevFailureKind.DirtyWorktree,
-        message:
-          'The local merge left dev dirty; no cleanup was attempted so foreign changes remain intact',
+        kind: DevFailureKind.Race,
+        message: 'Local dev did not finish at the promoted snapshot',
       });
     }
-    return this.headAt(request.devPath);
+    return ok(after.value);
   }
 
   pushExact(request: PushRequest): Result<void, DevFailure> {
@@ -410,11 +526,252 @@ export class DevGitRepository {
     return ok();
   }
 
+  private trackingHead(branch: ManagedBranch): Result<CommitSha, DevFailure> {
+    const output = this.successful({
+      args: ['rev-parse', '--verify', `refs/remotes/origin/${branch}^{commit}`],
+      workingDirectory: this.request.root,
+    });
+    if (output.isErr()) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `origin/${branch} must exist as a fetched remote-tracking ref`,
+      });
+    }
+    const sha = CommitShaValue.parse(output.value.stdout.trim());
+    if (sha.isErr()) return err(sha.error);
+    return ok(sha.value);
+  }
+
+  private bootstrapWorktreePath(
+    request: BootstrapWorktreePathRequest,
+  ): Result<string, DevFailure> {
+    const candidates = request.records.filter(
+      (record) =>
+        !record.prunable &&
+        record.branch.kind === WorktreeBranchKind.Branch &&
+        record.branch.name.value() === request.branch,
+    );
+    let path: string;
+    if (request.requestedPath !== undefined) {
+      const requestedPath = this.canonicalWorktreePath(
+        request.requestedPath,
+        `Canonical ${request.branch} worktree path`,
+        true,
+      );
+      if (requestedPath.isErr()) return err(requestedPath.error);
+      const matching = [] as string[];
+      for (const candidate of candidates) {
+        const candidatePath = this.canonicalWorktreePath(
+          candidate.path,
+          `Git ${request.branch} worktree path`,
+        );
+        if (candidatePath.isErr()) return err(candidatePath.error);
+        if (candidatePath.value === requestedPath.value)
+          matching.push(candidatePath.value);
+      }
+      if (matching.length !== 1) {
+        return err({
+          kind: DevFailureKind.Configuration,
+          message: `Requested ${request.branch} worktree is not a unique managed worktree in this repository: ${request.requestedPath}`,
+        });
+      }
+      const selectedPath = matching[0];
+      if (!selectedPath) {
+        return err({
+          kind: DevFailureKind.Configuration,
+          message: `Requested ${request.branch} worktree selection was empty`,
+        });
+      }
+      path = selectedPath;
+    } else {
+      const selected = new ManagedWorktreeSelection().select(
+        request.records,
+        request.branch,
+      );
+      if (selected.isErr()) return err(selected.error);
+      const selectedPath = this.canonicalWorktreePath(
+        selected.value.path,
+        `Git ${request.branch} worktree path`,
+      );
+      if (selectedPath.isErr()) return err(selectedPath.error);
+      path = selectedPath.value;
+    }
+    const identity = this.repositoryIdentityAt(path);
+    if (identity.isErr()) return err(identity.error);
+    if (identity.value !== request.repositoryIdentity) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Requested ${request.branch} worktree belongs to a different repository: ${path}`,
+      });
+    }
+    return ok(path);
+  }
+
+  private commonDirectoryAt(path: string): Result<string, DevFailure> {
+    const output = this.successful({
+      args: ['rev-parse', '--git-common-dir'],
+      workingDirectory: path,
+    });
+    if (output.isErr()) return err(output.error);
+    const common = output.value.stdout.trim();
+    if (!common) {
+      return err({
+        kind: DevFailureKind.Git,
+        message: 'Git did not return a common directory',
+      });
+    }
+    return ok(resolve(path, common));
+  }
+
+  private repositoryIdentityAt(path: string): Result<string, DevFailure> {
+    const common = this.commonDirectoryAt(path);
+    if (common.isErr()) return err(common.error);
+    return this.canonicalWorktreePath(common.value, 'Git common directory');
+  }
+
+  private canonicalWorktreePath(
+    ...[path, label, requireCanonicalInput = false]: [
+      path: string,
+      label: string,
+      requireCanonicalInput?: boolean,
+    ]
+  ): Result<string, DevFailure> {
+    const normalized = resolve(path);
+    if (requireCanonicalInput && path !== normalized) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `${label} must already be normalized and absolute: ${path}`,
+      });
+    }
+    let real: string;
+    try {
+      real = realpathSync(normalized);
+    } catch {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `${label} must resolve to an existing canonical path: ${path}`,
+      });
+    }
+    if (real !== normalized) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `${label} must not be a symlink or path alias: ${path}`,
+      });
+    }
+    return ok(real);
+  }
+
+  private synchronizeWorktree(
+    request: SynchronizeWorktreeRequest,
+  ): Result<CommitSha, DevFailure> {
+    const branch = this.branchAt(request.path);
+    if (branch.isErr()) return err(branch.error);
+    if (branch.value.value() !== request.branch) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `Canonical ${request.branch} worktree is not on ${request.branch}: ${request.path}`,
+      });
+    }
+    const state = this.stateAt(request.path);
+    if (state.isErr()) return err(state.error);
+    if (state.value !== WorktreeState.Clean) {
+      return err({
+        kind: DevFailureKind.DirtyWorktree,
+        message: `Canonical ${request.branch} worktree is dirty; refusing to normalize it: ${request.path}`,
+      });
+    }
+    const current = this.headAt(request.path);
+    if (current.isErr()) return err(current.error);
+    if (current.value.equals(request.target)) return ok(current.value);
+
+    const currentIsAncestor = this.ancestry({
+      ancestor: current.value,
+      descendant: request.target,
+      workingDirectory: request.path,
+    });
+    if (currentIsAncestor.isErr()) return err(currentIsAncestor.error);
+    if (currentIsAncestor.value === Ancestry.Ancestor) {
+      const beforeMergeBranch = this.branchAt(request.path);
+      if (beforeMergeBranch.isErr()) return err(beforeMergeBranch.error);
+      if (beforeMergeBranch.value.value() !== request.branch) {
+        return err({
+          kind: DevFailureKind.Race,
+          message: `Canonical ${request.branch} worktree branch changed before synchronization: ${request.path}`,
+        });
+      }
+      const beforeMergeState = this.stateAt(request.path);
+      if (beforeMergeState.isErr()) return err(beforeMergeState.error);
+      if (beforeMergeState.value !== WorktreeState.Clean) {
+        return err({
+          kind: DevFailureKind.DirtyWorktree,
+          message: `Canonical ${request.branch} worktree became dirty before synchronization; no cleanup was attempted: ${request.path}`,
+        });
+      }
+      const beforeMergeHead = this.headAt(request.path);
+      if (beforeMergeHead.isErr()) return err(beforeMergeHead.error);
+      if (!beforeMergeHead.value.equals(current.value)) {
+        return err({
+          kind: DevFailureKind.Race,
+          message: `Canonical ${request.branch} worktree changed before synchronization: expected ${current.value.value()}, found ${beforeMergeHead.value.value()}`,
+        });
+      }
+      const merged = this.execute({
+        args: ['merge', '--ff-only', request.target.value()],
+        workingDirectory: request.path,
+      });
+      if (merged.isErr()) return err(merged.error);
+      if (merged.value.exitCode !== 0) {
+        return err({
+          kind: DevFailureKind.Conflict,
+          message: `Canonical ${request.branch} worktree fast-forward failed: ${new CommandFailureMessage(merged.value).text()}`,
+        });
+      }
+      const after = this.headAt(request.path);
+      if (after.isErr()) return err(after.error);
+      if (!after.value.equals(request.target)) {
+        return err({
+          kind: DevFailureKind.Race,
+          message: `Canonical ${request.branch} worktree did not finish at the required baseline`,
+        });
+      }
+      const afterState = this.stateAt(request.path);
+      if (afterState.isErr()) return err(afterState.error);
+      if (afterState.value !== WorktreeState.Clean) {
+        return err({
+          kind: DevFailureKind.DirtyWorktree,
+          message: `Canonical ${request.branch} fast-forward left the worktree dirty; no cleanup was attempted: ${request.path}`,
+        });
+      }
+      return ok(after.value);
+    }
+
+    const targetIsAncestor = this.ancestry({
+      ancestor: request.target,
+      descendant: current.value,
+      workingDirectory: request.path,
+    });
+    if (targetIsAncestor.isErr()) return err(targetIsAncestor.error);
+    if (targetIsAncestor.value === Ancestry.Ancestor) {
+      if (request.requireEquality) {
+        return err({
+          kind: DevFailureKind.Conflict,
+          message: `Canonical ${request.branch} worktree is ahead of the required baseline; refusing to discard its commits: ${request.path}`,
+        });
+      }
+      return ok(current.value);
+    }
+    return err({
+      kind: DevFailureKind.Conflict,
+      message: `Canonical ${request.branch} worktree diverged from the required baseline; refusing to rewrite it: ${request.path}`,
+    });
+  }
+
   private execute(request: GitInvocation): Result<CommandOutput, DevFailure> {
     return this.request.runner.run({
       executable: CommandExecutable.Git,
       args: request.args,
       workingDirectory: request.workingDirectory,
+      repositoryRoot: this.request.root,
     });
   }
 

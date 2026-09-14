@@ -73,37 +73,52 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 
 # Copy in dependency order so an edit in a leaf package reuses earlier native
 # compile layers on the persistent ARC BuildKit worker.
+# The manifest stages create placeholder sources. Docker normalizes COPY mtimes,
+# so refresh real sources before each build or Cargo can reuse a placeholder
+# artifact instead of compiling the checked-out implementation.
 FROM compile-native-dependencies AS compile-native-source
 
 COPY nook-app/nook-platform/nook-app-common nook-app-common
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-app-common -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked -p nook-app-common
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked -p nook-authenticator-domain -p nook-auth2
 
 COPY nook-app/nook-platform/nook-replication nook-replication
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-replication -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked -p nook-replication
 
 COPY nook-app/nook-platform/nook-event-log nook-event-log
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-event-log -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked -p nook-event-log
 
 COPY nook-app/nook-platform/nook-companion-core nook-companion-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-companion-core -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked -p nook-companion-core
 
 COPY nook-app/nook-platform/nook-core nook-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-core -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked -p nook-core \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-native-passed
@@ -115,6 +130,8 @@ ARG WASM_BUILD_MODE=dev
 COPY nook-app/nook-platform/nook-app-common nook-app-common
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-app-common -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
@@ -122,48 +139,62 @@ COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-authenticator-domain nook-auth2 -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-replication nook-replication
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-replication -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-event-log nook-event-log
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-event-log -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-companion-core nook-companion-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-companion-core -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-core nook-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-core -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-companion-wasm -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-wasm nook-wasm
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    find nook-wasm -type f -name '*.rs' -exec touch {} + \
+    && \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm \
     && mkdir -p /opt/nook/wasm-handoff \
     && case "${WASM_BUILD_MODE}" in \
-         prod) wasm_opt_flag="" ;; \
-         dev) wasm_opt_flag="--no-opt" ;; \
+         prod) wasm_opt_flag=""; stamp_mode="optimized" ;; \
+         dev) wasm_opt_flag="--no-opt"; stamp_mode="no-opt" ;; \
          *) echo "Unsupported WASM_BUILD_MODE=${WASM_BUILD_MODE}" >&2; exit 2 ;; \
        esac \
     && wasm-pack build nook-wasm --target web \
@@ -172,6 +203,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && wasm-pack build nook-companion-wasm --target web \
          --out-dir /opt/nook/wasm-handoff/nook-companion-wasm \
          --out-name nook_companion_wasm $wasm_opt_flag \
+    && printf '%s\n' "$stamp_mode" > /opt/nook/wasm-handoff/nook-wasm/nook-wasm-build-mode \
     && touch /opt/nook/wasm-compile-passed
 
 FROM rust-base AS compile-minds-base
@@ -182,6 +214,7 @@ RUN apt-get update \
 
 FROM compile-minds-base AS compile-minds-dependencies
 
+ARG NOOK_COMPILE_HIVE=0
 WORKDIR /meta-secret/nook/agentic-ai/minds
 COPY agentic-ai/minds/Cargo.toml agentic-ai/minds/Cargo.lock ./
 COPY agentic-ai/minds/vendor vendor
@@ -191,29 +224,38 @@ RUN mkdir -p hive/src/bin \
 RUN --network=default cargo fetch --locked
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked --release -p hive \
-      --features observer-contract-export --bins \
-    && nook-sccache-report compile-hive-dependencies
+    if [ "${NOOK_COMPILE_HIVE}" = "1" ]; then \
+      cargo build --locked --release -p hive \
+        --features observer-contract-export --lib \
+      && nook-sccache-report compile-hive-dependencies; \
+    fi
 
 FROM compile-minds-dependencies AS compile-minds-source
 
+ARG NOOK_COMPILE_HIVE=0
 COPY agentic-ai/minds/hive/src hive/src
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked --release -p hive \
-      --features observer-contract-export --bins \
-    && mkdir -p /opt/nook/hive-observer-contract \
-    && target/release/hive-export-observer-contract \
-      --output /opt/nook/hive-observer-contract \
+    if [ "${NOOK_COMPILE_HIVE}" = "1" ]; then \
+      find hive/src -type f -name '*.rs' -exec touch {} + \
+      && cargo build --locked --release -p hive \
+        --features observer-contract-export --bins \
+      && mkdir -p /opt/nook/hive-observer-contract \
+      && target/release/hive-export-observer-contract \
+        --output /opt/nook/hive-observer-contract; \
+    else \
+      mkdir -p /opt/nook/hive-observer-contract; \
+    fi \
     && touch /opt/nook/hive-compile-passed
 
 FROM web-base AS compile-hive-console
 
+ARG NOOK_COMPILE_HIVE=0
 WORKDIR /meta-secret/nook/agentic-ai/minds/hive-console
 COPY --from=compile-minds-source /opt/nook/hive-observer-contract /opt/nook/hive-observer-contract
 ENV HIVE_OBSERVER_CONTRACT_INPUT=/opt/nook/hive-observer-contract
 COPY agentic-ai/minds/hive-console/package.json agentic-ai/minds/hive-console/bun.lock ./
-RUN bun install --frozen-lockfile
+RUN if [ "${NOOK_COMPILE_HIVE}" = "1" ]; then bun install --frozen-lockfile; fi
 COPY agentic-ai/minds/hive-console/index.html \
      agentic-ai/minds/hive-console/svelte.config.js \
      agentic-ai/minds/hive-console/tsconfig.json \
@@ -225,10 +267,12 @@ COPY agentic-ai/minds/hive-console/locales locales
 COPY agentic-ai/minds/hive-console/scripts scripts
 COPY agentic-ai/minds/hive-console/.prettierignore ./
 COPY agentic-ai/minds/hive-console/tsconfig.compile.json ./
-RUN bun run contracts \
-    && node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json \
-    && node_modules/.bin/tsc --noEmit -p tsconfig.compile.json \
-    && bun run build \
+RUN if [ "${NOOK_COMPILE_HIVE}" = "1" ]; then \
+      bun run contracts \
+      && node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json \
+      && node_modules/.bin/tsc --noEmit -p tsconfig.compile.json \
+      && node_modules/.bin/vite build; \
+    fi \
     && mkdir -p /opt/nook \
     && touch /opt/nook/hive-console-compile-passed
 
@@ -250,7 +294,11 @@ COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modul
   /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
 COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules \
   /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules
-RUN ln -s nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/node_modules \
+RUN mkdir -p \
+      /meta-secret/nook/nook-app/nook-web/nook-vault-simple \
+      /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel \
+      /meta-secret/nook/nook-app/nook-web/nook-web-extension \
+    && ln -s nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/node_modules \
     && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-vault-simple/node_modules \
     && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/node_modules \
     && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules
@@ -259,8 +307,8 @@ COPY --from=compile-wasm-source /opt/nook/wasm-handoff /tmp/nook-wasm-handoff
 RUN mkdir -p \
       nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
       nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm \
-    && find /tmp/nook-wasm-handoff -mindepth 1 -maxdepth 1 ! -name nook-companion-wasm \
-      -exec cp -a {} nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/ \; \
+    && cp -a /tmp/nook-wasm-handoff/nook-wasm/. \
+      nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/ \
     && cp -a /tmp/nook-wasm-handoff/nook-companion-wasm/. \
       nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/ \
     && rm -rf /tmp/nook-wasm-handoff
@@ -287,15 +335,31 @@ RUN cd nook-app/nook-web/nook-web-app \
        VITE_PUBLIC_APP_URL="${VITE_PUBLIC_APP_URL}" \
        VITE_SIMPLE_APP_URL="${VITE_SIMPLE_APP_URL}" \
        VITE_SENTINEL_APP_URL="${VITE_SENTINEL_APP_URL}" \
-       bun run build
+       node_modules/.bin/vite build --mode unified \
+    && VITE_BASE="${VITE_BASE}" \
+       VITE_SITE_URL="${VITE_SITE_URL}" \
+       VITE_PUBLIC_APP_URL="${VITE_PUBLIC_APP_URL}" \
+       VITE_SIMPLE_APP_URL="${VITE_SIMPLE_APP_URL}" \
+       VITE_SENTINEL_APP_URL="${VITE_SENTINEL_APP_URL}" \
+       node_modules/.bin/vite build --mode site
+RUN cd nook-app/nook-web/nook-vault-simple \
+    && VITE_SITE_URL="${VITE_SITE_URL}" \
+       VITE_SIMPLE_APP_URL="${VITE_SIMPLE_APP_URL}" \
+       ../nook-web-app/node_modules/.bin/vite build
+RUN cd nook-app/nook-web/nook-vault-sentinel \
+    && VITE_SIMPLE_APP_URL="${VITE_SIMPLE_APP_URL}" \
+       VITE_SENTINEL_APP_URL="${VITE_SENTINEL_APP_URL}" \
+       ../nook-web-app/node_modules/.bin/vite build
+RUN cd nook-app/nook-web/nook-web-app \
+    && bun scripts/assemble-preview.ts
 RUN cd nook-app/nook-web/nook-web-extension \
     && NOOK_SIMPLE_VAULT_URL="${NOOK_SIMPLE_VAULT_URL}" \
        NOOK_EXTENSION_CHANNEL="${NOOK_EXTENSION_CHANNEL}" \
        NOOK_EXTENSION_VERSION="${NOOK_EXTENSION_VERSION}" \
        NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}" \
        NOOK_EXTENSION_SITE_URL="${NOOK_EXTENSION_SITE_URL}" \
-       bun run build
-RUN cd nook-app/nook-web/nook-web-research && bun run build
+       bun scripts/build.ts
+RUN cd nook-app/nook-web/nook-web-research && node_modules/.bin/vite build
 RUN mkdir -p /opt/nook && touch /opt/nook/web-compile-passed
 
 FROM registry.dev.nokey.sh/library/node:24-trixie-slim@sha256:0711b541c1c33a8a530ac4f0d391baa9a15b3d804695b1b24a47daa5fb60e74d AS compile-ci-agent
@@ -305,7 +369,7 @@ COPY agentic-ai/ci-agent/package.json agentic-ai/ci-agent/package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY agentic-ai/ci-agent/tsconfig.json ./
 COPY agentic-ai/ci-agent/src/main src/main
-RUN npm run build \
+RUN node_modules/.bin/tsc \
     && mkdir -p /opt/nook \
     && touch /opt/nook/ci-agent-compile-passed
 
@@ -326,7 +390,15 @@ FROM web-base AS compile-loom
 WORKDIR /meta-secret/nook/agentic-ai/loom
 COPY agentic-ai/loom/package.json agentic-ai/loom/bun.lock agentic-ai/loom/tsconfig.json agentic-ai/loom/tsconfig.compile.json ./
 COPY agentic-ai/loom/src src
+# Loom's production modules import the tracked Cortex implementation contracts.
+# Keep those sources in the compile-only container without copying any nested
+# skill dependencies or running their test/verification scripts.
+COPY .cortex /meta-secret/nook/.cortex
 RUN bun install --frozen-lockfile --ignore-scripts \
+    && ln -s /meta-secret/nook/agentic-ai/loom/node_modules \
+      /meta-secret/nook/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/node_modules \
+    && ln -s /meta-secret/nook/agentic-ai/loom/node_modules \
+      /meta-secret/nook/.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/node_modules \
     && node_modules/.bin/tsc --noEmit -p tsconfig.compile.json \
     && mkdir -p /opt/nook \
     && touch /opt/nook/loom-compile-passed

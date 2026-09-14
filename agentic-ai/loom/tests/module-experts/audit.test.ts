@@ -416,20 +416,20 @@ describe('module expert audit', () => {
       '.cortex/teams/dev-core/AGENTS.md',
       '.cortex/teams/dev-core/knowledge-graph.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
-      '.cortex/gizmo/workflows/module-oriented-development.md',
+      '.cortex/gizmo-prime/workflows/module-oriented-development.md',
     ]);
     expect(INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
       '.cortex/teams/ai/AGENTS.md',
       '.cortex/teams/ai/knowledge-graph.md',
       '.cortex/teams/ai/dynamic-skills/internal-api-expert.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
-      '.cortex/gizmo/workflows/module-oriented-development.md',
+      '.cortex/gizmo-prime/workflows/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
       '.cortex/teams/web-dev/AGENTS.md',
       '.cortex/teams/web-dev/knowledge-graph.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
-      '.cortex/gizmo/workflows/module-oriented-development.md',
+      '.cortex/gizmo-prime/workflows/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_SKILL_PATHS).toEqual([
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
@@ -440,7 +440,7 @@ describe('module expert audit', () => {
       '.cortex/teams/web-dev/AGENTS.md',
       '.cortex/teams/ai/architecture/module-experts.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
-      '.cortex/gizmo/workflows/module-oriented-development.md',
+      '.cortex/gizmo-prime/workflows/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_AUTHORITY_PATHS).toEqual([
       '.cortex/shared/architecture/packages.md',

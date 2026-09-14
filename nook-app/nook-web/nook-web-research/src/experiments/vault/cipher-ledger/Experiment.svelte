@@ -42,7 +42,9 @@
   }
 
   function changeTotal(event: Event) {
-    total = Number((event.currentTarget as HTMLInputElement).value)
+    const target = event.currentTarget
+    if (!(target instanceof HTMLInputElement)) return
+    total = Number(target.value)
     threshold = Math.min(threshold, total)
     participants = []
     finalized = false

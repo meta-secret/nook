@@ -218,18 +218,18 @@ Leaf-tool entrypoints:
 
 ```bash
 loom <request.yaml>
-loom --default prePush
+loom --default toolsList
 ```
 
 Each request is a **domain-tagged object**. Exactly one root key selects the
 request family. Nested operation keys group same-prefix requests (`agentStats`,
 `prLand`). There is no generic `name` / `arguments` envelope.
 
-```yaml
-prePush:
-  stageHostUpdates: true
-  fetchOriginMain: true
-```
+The historical `prePush` request identifier is decoded only to provide a
+controlled retirement response for older callers. It never runs host
+formatting, audits, staging, or other commands. Feature compilation uses the
+remote build-only `build:compile` task; full validation is owned by the Dev
+Manager's later CI cycle.
 
 ```yaml
 agentStats:
@@ -242,15 +242,7 @@ agentStats:
 
 Stdout is YAML only.
 
-Success:
-
-```yaml
-ok: true
-family: prePush
-result: { ... }
-```
-
-Nested family success:
+Success for a nested family:
 
 ```yaml
 ok: true
@@ -266,8 +258,8 @@ ok: false
 isError: true
 phase: decode
 errors:
-  - path: prePush.stageHostUpdates
-    message: expected boolean
+  - path: toolsList
+    message: expected object
 recover:
   toolsListRequest: task loom:tools-list
   hint: run task loom:tools-list, then retry with a valid domain request object
@@ -335,7 +327,6 @@ package so agents can compare the closest blueprint with the received YAML.
 ## Agent entrypoints
 
 ```bash
-task loom:pre-push
 task loom:tools-list
 task loom:cortex-audit
 task loom:cortex-session-clean
@@ -351,7 +342,7 @@ Loom package cwd.
 Direct Bun surface for a defaultable family:
 
 ```bash
-bun run --cwd agentic-ai/loom loom -- --default prePush
+bun run --cwd agentic-ai/loom loom -- --default toolsList
 ```
 
 Typed example documents in Loom generate discovery YAML and decode blueprints.
@@ -363,7 +354,6 @@ There is no checked-in sample-file catalog.
 | ----------------------- | ------------------------------------------------- |
 | `tools-list`            | Discovery                                         |
 | `tools-call`            | Nested call helper                                |
-| `pre-push`              | Host `task format` + UI demo contract             |
 | `cortex-audit`          | Cortex structure, links, and policy contracts     |
 | `cortex-session-clean`  | Temporary Cortex session readiness assertion      |
 | `skill-scaffold`        | Create a dynamic-skill card                       |

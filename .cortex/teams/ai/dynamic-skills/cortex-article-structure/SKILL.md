@@ -206,7 +206,7 @@ also exposes its validated audit action through strict YAML.
 3. Return the scoped documentation commit to the feature Gizmo.
 4. Execute Loom structure, link, and provider checks in the manager's slow PR stage.
 
-Follow [dev delivery](../../../../gizmo/architecture/dev-delivery.md).
+Follow [dev delivery](../../../../gizmo-prime/architecture/dev-delivery.md).
 Do not run local audits, tests, or preflight. A semantic reading is not
 mechanical validation. The reader must understand each article without
 reconstructing its structure from dense prose.

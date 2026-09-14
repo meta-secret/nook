@@ -40,7 +40,8 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
 use crate::model::{
-    ActiveDelivery, ActiveDeliveryQuery, EnqueueTask, TaskId, TaskKind, TaskTrigger,
+    ActiveDelivery, ActiveDeliveryQuery, BootstrapEvidence, EnqueueTask, FeatureBranch, GitSha,
+    TaskId, TaskKind, TaskTrigger,
 };
 use crate::store::TaskStore;
 
@@ -174,10 +175,13 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             }
             let task_base = name.trim_end_matches(MAIN_FAILURE_SUFFIX);
             if body.contains(SUCCESSFUL_RERUN_RETIREMENT_MARKER) {
+                let bootstrap_evidence =
+                    (WorkbenchIncidentText { value: &body }).bootstrap_evidence()?;
                 if let ActiveDelivery::Active(task_id) = store
                     .active_delivery(ActiveDeliveryQuery {
                         source_commit: &source_commit,
                         kind: &TaskKind::from("main-repair"),
+                        bootstrap_evidence: Some(&bootstrap_evidence),
                     })
                     .await?
                 {
@@ -219,6 +223,8 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
                 reconciled_incidents.insert(name, body);
                 continue;
             }
+            let bootstrap_evidence =
+                (WorkbenchIncidentText { value: &body }).bootstrap_evidence()?;
             WorkbenchDispatcher::reconcile_delivery(
                 store,
                 &source_commit,
@@ -226,6 +232,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
                 &body,
                 run_id,
                 run_attempt,
+                &bootstrap_evidence,
             )
             .await?;
             reconciled_incidents.insert(name, body);
@@ -242,12 +249,14 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
         body: &str,
         run_id: u64,
         run_attempt: u64,
+        bootstrap_evidence: &BootstrapEvidence,
     ) -> crate::HiveResult<()> {
         let task_id = TaskId::main_failure_task_id(task_base, run_id, run_attempt)?;
         if let ActiveDelivery::Active(active_id) = store
             .active_delivery(ActiveDeliveryQuery {
                 source_commit,
                 kind: &TaskKind::from("main-repair"),
+                bootstrap_evidence: Some(bootstrap_evidence),
             })
             .await?
         {
@@ -272,15 +281,15 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             trigger: TaskTrigger::GitHubMainFailure,
             prompt: body.to_owned(),
             source_commit: source_commit.to_owned(),
+            bootstrap_evidence: Some(bootstrap_evidence.clone()),
             priority: 100,
             max_attempts: 3,
             dependencies: Vec::new(),
         };
-        if let Err(error) = store.enqueue(&task).await
-            && !format!("{error:#}").contains("already exists")
-        {
-            return Err(error).with_hive_context(|| format!("enqueue {}", task.id));
-        }
+        store
+            .enqueue(&task)
+            .await
+            .with_hive_context(|| format!("enqueue {}", task.id))?;
         Ok(())
     }
 }
@@ -412,6 +421,59 @@ impl WorkbenchIncidentText<'_> {
 }
 
 impl WorkbenchIncidentText<'_> {
+    fn bootstrap_evidence(&self) -> crate::HiveResult<BootstrapEvidence> {
+        let parse = |field: &str| -> crate::HiveResult<GitSha> {
+            let prefix = format!("{field}:");
+            let mut values = self.value.lines().filter_map(|line| {
+                let line = line
+                    .trim()
+                    .strip_prefix("- ")
+                    .unwrap_or_else(|| line.trim());
+                let value = line.strip_prefix(&prefix)?.trim().trim_matches('`');
+                (!value.is_empty()).then_some(value)
+            });
+            let value = values
+                .next()
+                .ok_or_else(|| crate::HiveError::message(format!("incident is missing {field}")))?;
+            if values.next().is_some() {
+                return Err(crate::HiveError::message(format!(
+                    "incident declares {field} more than once"
+                )));
+            }
+            Ok(GitSha::try_from(value)?)
+        };
+
+        Ok(BootstrapEvidence {
+            origin_main_sha: parse("originMainSha")?,
+            pinned_local_dev_sha: parse("pinnedLocalDevSha")?,
+            feature_branch: self.feature_branch()?,
+        })
+    }
+
+    fn feature_branch(&self) -> crate::HiveResult<FeatureBranch> {
+        let mut values = self.value.lines().filter_map(|line| {
+            let line = line
+                .trim()
+                .strip_prefix("- ")
+                .unwrap_or_else(|| line.trim());
+            ["featureBranch:", "feature_branch:", "branch:"]
+                .into_iter()
+                .find_map(|prefix| line.strip_prefix(prefix).map(str::trim))
+                .filter(|value| !value.is_empty())
+        });
+        let value = values
+            .next()
+            .ok_or_else(|| crate::HiveError::message("incident is missing featureBranch"))?;
+        if values.next().is_some() {
+            return Err(crate::HiveError::message(
+                "incident declares featureBranch more than once",
+            ));
+        }
+        Ok(FeatureBranch::try_from(value)?)
+    }
+}
+
+impl WorkbenchIncidentText<'_> {
     fn main_failure_runs(&self) -> Vec<(u64, u64)> {
         let body = self.value;
         body.split("<!-- main-run:")
@@ -469,8 +531,9 @@ mod tests {
     use async_trait::async_trait;
 
     use crate::model::{
-        ActiveDelivery, ActiveDeliveryQuery, AgentId, CancellationTarget, ClaimOutcome,
-        ClaimedTask, Completion, EnqueueTask, LeaseToken, TaskId,
+        ActiveDelivery, ActiveDeliveryQuery, AgentId, BootstrapEvidence, CancellationTarget,
+        ClaimOutcome, ClaimedTask, Completion, EnqueueTask, FeatureBranch, GitSha, LeaseToken,
+        TaskId,
     };
     use crate::store::TaskStore;
 
@@ -478,6 +541,17 @@ mod tests {
         DEFERRED_E2E_RETIREMENT_MARKER, IncidentHistory, IncidentRevision, WorkbenchDispatcher,
         WorkbenchIncidentText,
     };
+
+    fn bootstrap_evidence() -> BootstrapEvidence {
+        BootstrapEvidence {
+            origin_main_sha: GitSha::try_from("0123456789abcdef0123456789abcdef01234567")
+                .expect("fixture SHA is valid"),
+            pinned_local_dev_sha: GitSha::try_from("123456789abcdef0123456789abcdef012345678")
+                .expect("fixture SHA is valid"),
+            feature_branch: FeatureBranch::try_from("codex/repair-cache")
+                .expect("fixture branch is valid"),
+        }
+    }
 
     #[derive(Clone, Default)]
     struct RecordingStore {
@@ -508,6 +582,7 @@ mod tests {
             let ActiveDeliveryQuery {
                 source_commit: _,
                 kind: _,
+                bootstrap_evidence: _,
             } = request;
             Ok(self
                 .active
@@ -637,6 +712,17 @@ mod tests {
             TaskId::main_failure_task_id("main-failure-abcdef", 123_456, 2)?.as_str(),
             "main-failure-abcdef-run-123456-attempt-2"
         );
+        let evidence_text = WorkbenchIncidentText {
+            value: "originMainSha: 0123456789abcdef0123456789abcdef01234567\n\
+                     pinnedLocalDevSha: 123456789abcdef0123456789abcdef012345678\n\
+                     featureBranch: codex/repair-cache",
+        };
+        assert_eq!(evidence_text.bootstrap_evidence()?, bootstrap_evidence());
+        assert!(
+            WorkbenchIncidentText { value: "issue" }
+                .bootstrap_evidence()
+                .is_err()
+        );
         Ok(())
     }
 
@@ -709,6 +795,7 @@ mod tests {
             "issue",
             123,
             2,
+            &bootstrap_evidence(),
         )
         .await?;
 
@@ -769,7 +856,8 @@ mod tests {
                 "main-failure-abcdef",
                 "issue",
                 123,
-                2
+                2,
+                &bootstrap_evidence(),
             )
             .await
             .is_err()
@@ -802,6 +890,7 @@ mod tests {
             "issue",
             123,
             2,
+            &bootstrap_evidence(),
         )
         .await?;
         assert_eq!(

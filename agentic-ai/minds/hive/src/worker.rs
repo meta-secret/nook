@@ -20,11 +20,13 @@ use crate::auth::{AuthBroker, BrokerExternalAuth};
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::delivery::MainRepairDelivery;
 use crate::model::{
-    ActivityLease, AgentId, Artifact, BlockerRequest, ClaimedTask, Completion, CompletionArtifact,
-    CompletionRelevance, EnqueueTask, TaskActivity, TaskTrigger, TerminalResult,
+    ActivityLease, AgentId, Artifact, BlockerRequest, BootstrapEvidence, ClaimedTask, Completion,
+    CompletionArtifact, CompletionRelevance, EnqueueTask, TaskActivity, TaskTrigger,
+    TerminalResult,
 };
 use crate::store::TaskStore;
 
+mod heartbeat;
 mod lifecycle;
 mod task_prompt;
 mod workspace;
@@ -205,14 +207,17 @@ impl<S: TaskStore> Worker<S> {
         shutdown: watch::Receiver<bool>,
     ) -> crate::HiveResult<()> {
         let (stop_tx, stop_rx) = watch::channel(false);
-        let mut heartbeat = tokio::spawn(TaskWorkspace::heartbeat_loop(
-            self.store.clone(),
-            self.config.agent_id.clone(),
-            task.clone(),
-            self.config.lease_seconds,
-            self.config.heartbeat_seconds,
-            stop_rx,
-        ));
+        let mut heartbeat = tokio::spawn(
+            heartbeat::LeaseHeartbeat::new(
+                self.store.clone(),
+                self.config.agent_id.clone(),
+                task.clone(),
+                self.config.lease_seconds,
+                self.config.heartbeat_seconds,
+                stop_rx,
+            )
+            .run(),
+        );
 
         let execution = async_time::timeout(
             Duration::from_secs(self.config.task_timeout_seconds),
@@ -293,9 +298,18 @@ impl<S: TaskStore> Worker<S> {
         external_auth: sync::Arc<BrokerExternalAuth>,
         activity_tx: mpsc::UnboundedSender<TaskActivity>,
     ) -> crate::HiveResult<TaskDisposition> {
-        let repair_branch = task.id.repair_branch_name();
+        if task.kind.is_main_repair() && task.bootstrap_evidence.is_none() {
+            return Err(crate::HiveError::message(
+                "main-repair execution requires complete bootstrap evidence",
+            ));
+        }
+        let repair_branch = task
+            .bootstrap_evidence
+            .as_ref()
+            .map(|evidence| evidence.feature_branch.as_str())
+            .unwrap_or("");
         let origin = if task.kind.is_main_repair() {
-            workspace::WorkspaceOrigin::ResumeBranch(&repair_branch)
+            workspace::WorkspaceOrigin::ResumeBranch(repair_branch)
         } else {
             workspace::WorkspaceOrigin::Fresh
         };
@@ -303,6 +317,7 @@ impl<S: TaskStore> Worker<S> {
             workspace: &self.config.workspace,
             repository_url: &self.config.repository_url,
             source_commit: &task.source_commit,
+            bootstrap_evidence: task.bootstrap_evidence.as_ref(),
             resume_branch: origin,
             dependency_artifacts: &task.dependency_artifacts,
         })
@@ -364,11 +379,25 @@ impl<S: TaskStore> Worker<S> {
             result: &result,
         }
         .admit()?;
-        plan.verify_owner_deliveries(&repository).await?;
+        plan.verify_owner_deliveries(
+            &repository,
+            task.bootstrap_evidence.as_ref(),
+            prepared.observed_feature_head_sha(),
+        )
+        .await?;
         if task.kind.is_main_repair() {
+            let bootstrap_evidence = task
+                .bootstrap_evidence
+                .as_ref()
+                .ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
+            let observed_feature_head_sha = prepared
+                .observed_feature_head_sha()
+                .ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
             (MainRepairDelivery {
                 repository: &repository,
-                branch: &task.id.repair_branch_name(),
+                branch: bootstrap_evidence.feature_branch.as_str(),
+                evidence: bootstrap_evidence,
+                observed_feature_head_sha,
             })
             .verify_main_repair_delivery(task.id.as_str())
             .await?;
@@ -547,6 +576,7 @@ impl TaskDisposition {
                 trigger: TaskTrigger::AgentDependency,
                 prompt: format!("{}\n\n{}", blocker.title, blocker.prompt),
                 source_commit: task.source_commit.clone(),
+                bootstrap_evidence: task.bootstrap_evidence.clone(),
                 priority: task.kind.prerequisite_priority(),
                 max_attempts: 3,
                 dependencies: Vec::new(),
@@ -645,6 +675,7 @@ mod tests {
             kind: "main-repair".into(),
             prompt: "verify the delivered repair".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::try_from("lease-1")?,
@@ -680,6 +711,7 @@ mod tests {
             kind: "main-repair".into(),
             prompt: "Wait for the exact-head workflow".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::try_from("lease-1")?,
@@ -707,6 +739,7 @@ mod tests {
             kind: "blocker".into(),
             prompt: "Resolve failed workflow 42".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::try_from("lease-1")?,
@@ -736,6 +769,7 @@ mod tests {
             kind: "main-repair".into(),
             prompt: "restore Main".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::try_from("lease-1")?,
@@ -760,12 +794,13 @@ mod tests {
     }
 
     #[test]
-    fn blocker_prompt_requires_active_pr_ownership() -> anyhow::Result<()> {
+    fn blocker_prompt_routes_active_repairs_through_the_feature_owner() -> anyhow::Result<()> {
         let task = ClaimedTask {
             id: TaskId::try_from("github-actions-pr-42")?,
             kind: "blocker".into(),
             prompt: "Resolve failed workflow 42".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::try_from("lease-1")?,
@@ -776,7 +811,9 @@ mod tests {
 
         let prompt = task.task_prompt();
         assert!(prompt.contains("prerequisite-ownership task"));
-        assert!(prompt.contains("check out that existing PR branch"));
+        assert!(prompt.contains("route the correction through the owning feature Gizmo"));
+        assert!(prompt.contains("canonical local-dev delivery path"));
+        assert!(prompt.contains("Never create or update a pull request"));
         assert!(prompt.contains("This task is a dependency leaf"));
         assert!(prompt.contains("this prerequisite obsolete"));
         assert!(prompt.contains("Never request another blocker"));
@@ -811,6 +848,7 @@ mod tests {
             kind: "main-repair".into(),
             prompt: "restore Main".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-recovery")?,
             attempt_number: 2,
             lease_token: LeaseToken::try_from("lease-recovery")?,
@@ -821,16 +859,22 @@ mod tests {
         let prompt = task.task_prompt();
 
         assert!(prompt.contains("GH_TOKEN"));
-        assert!(prompt.contains("codex/hive-main-failure-recovery"));
         assert!(prompt.contains("replacement Pod"));
         assert!(prompt.contains("Main verification"));
-        assert!(prompt.contains("[Hive]"));
-        assert!(prompt.contains("`hive`"));
-        assert!(prompt.contains("ci:full-e2e"));
-        assert!(prompt.contains("task hive:guest:pr:ready PR=<number>"));
-        assert!(prompt.contains("unresolved actionable review"));
-        assert!(prompt.contains("next `-gN` delivery branch"));
-        assert!(prompt.contains("Do not repeatedly audit an immutable merged branch"));
+        assert!(prompt.contains("`originMainSha`"));
+        assert!(prompt.contains("`pinnedLocalDevSha`"));
+        assert!(prompt.contains("`featureBranch`"));
+        assert!(prompt.contains("(not applicable)"));
+        assert!(prompt.contains("observed run head"));
+        assert!(prompt.contains("strictly from the exact `pinnedLocalDevSha`"));
+        assert!(prompt.contains("`origin/main` is ancestry evidence only"));
+        assert!(prompt.contains("Gizmo Prime authorize `dev:land`"));
+        assert!(prompt.contains("Dev Manager alone"));
+        assert!(prompt.contains("invokes `dev:pr-manager`"));
+        assert!(prompt.contains("Do not create or update a pull request"));
+        assert!(prompt.contains("guarded fast-forward promotion"));
+        assert!(!prompt.contains("squash-merge"));
+        assert!(!prompt.contains("branch from current `origin/main`"));
         assert!(prompt.contains("Never return the failed status"));
         assert!(prompt.contains("exactly one prerequisite request"));
         Ok(())

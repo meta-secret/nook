@@ -1,6 +1,9 @@
 import { err, ok, ResultAsync, type Result } from "neverthrow";
 import { CiFailureKind, type CiFailure } from "./failure.js";
-import { CiProcess } from "./process.js";
+import {
+  CiProcess,
+  CiProcessGitSecurityPolicy,
+} from "./process.js";
 import { access } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
@@ -138,6 +141,10 @@ export interface CiRepositoryTrustedGitRequest {
   readonly args: readonly string[];
 }
 
+export interface CiRepositoryImmutableGitRequest {
+  readonly args: readonly string[];
+}
+
 export interface CiRepositoryConfigureGitForCiRequest {
   readonly octokit?: Octokit;
 }
@@ -145,6 +152,12 @@ export interface CiRepositoryConfigureGitForCiRequest {
 export interface CiRepositoryPushFixBranchRequest {
   readonly fixBranch: string;
   readonly runId: string;
+  /**
+   * Optional caller-supplied values are checked against the canonical
+   * workflow target before they can reach Git. They are not remote aliases.
+   */
+  readonly remoteRef?: string;
+  readonly remoteUrl?: string;
 }
 
 export interface CiRepositoryRevParseRequest {
@@ -158,6 +171,11 @@ export class CiRepository {
   }
   trustedGit({ args }: CiRepositoryTrustedGitRequest) {
     return new CiProcess(this.trustedGitArgs({ args })).execute();
+  }
+  immutableGit({ args }: CiRepositoryImmutableGitRequest) {
+    return new CiProcess(this.trustedGitArgs({ args }), {
+      gitSecurity: CiProcessGitSecurityPolicy.ImmutableObjects,
+    }).execute();
   }
   excludeAgentRuntimeArtifacts() {
     return this.trustedGit({
@@ -191,7 +209,7 @@ export class CiRepository {
       }),
     );
     if (present.isErr()) return err(present.error);
-    return this.trustedGit({ args: ["rev-parse", "--git-dir"] }).map(
+    return this.immutableGit({ args: ["rev-parse", "--git-dir"] }).map(
       () => {},
     );
   }
@@ -247,21 +265,116 @@ export class CiRepository {
       args: ["status", "--porcelain", "--", ".", ...AGENT_RUNTIME_EXCLUSIONS],
     }).map(({ stdout }) => stdout.trim().length > 0);
   }
-  private async pushAuthenticatedBranch(): Promise<void> {
+  private async pushAuthenticatedBranch(
+    target: CiRepositoryPushTarget,
+  ): Promise<void> {
     const repoRoot = this.value;
 
     const token = process.env.NOOK_GITHUB_PAT?.trim();
-    const authEnv = token
-      ? {
-          ...process.env,
-          GIT_CONFIG_COUNT: "1",
-          GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
-          GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
-        }
-      : process.env;
+    const authEnv = { ...process.env };
+    for (const name of Object.keys(authEnv)) {
+      if (
+        name === "GIT_CONFIG" ||
+        name === "GIT_CONFIG_COUNT" ||
+        name === "GIT_CONFIG_PARAMETERS" ||
+        /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/u.test(name) ||
+        name === "GIT_DIR" ||
+        name === "GIT_WORK_TREE" ||
+        name === "GIT_COMMON_DIR" ||
+        name === "GIT_INDEX_FILE" ||
+        name === "GIT_OBJECT_DIRECTORY" ||
+        name === "GIT_ALTERNATE_OBJECT_DIRECTORIES" ||
+        name === "GIT_NAMESPACE" ||
+        name === "GIT_REPLACE_REF_BASE" ||
+        name === "GIT_SSH" ||
+        name === "GIT_SSH_COMMAND" ||
+        name === "GIT_PROXY_COMMAND" ||
+        name === "GIT_ASKPASS" ||
+        name === "SSH_ASKPASS" ||
+        /^(?:ALL|HTTP|HTTPS|NO)_PROXY$/u.test(name) ||
+        /^(?:all|http|https|no)_proxy$/u.test(name) ||
+        /^GIT_TRACE(?:2(?:_|$)|_|$)/u.test(name)
+      ) {
+        delete authEnv[name];
+      }
+    }
+    delete authEnv.NOOK_GITHUB_PAT;
+    delete authEnv.NOOK_GIT_EXTRAHEADER;
+    authEnv.GIT_CONFIG_GLOBAL = "/dev/null";
+    authEnv.GIT_CONFIG_SYSTEM = "/dev/null";
+    authEnv.GIT_CONFIG_NOSYSTEM = "1";
+    authEnv.GIT_NO_REPLACE_OBJECTS = "1";
+    authEnv.GIT_TERMINAL_PROMPT = "0";
+    authEnv.GIT_ALLOW_PROTOCOL = "https";
+
+    let localConfig: { stdout: string };
+    try {
+      localConfig = await execFileAsync(
+        "git",
+        [
+          "-C",
+          repoRoot,
+          ...TRUSTED_PUBLICATION_GIT_OPTIONS,
+          "config",
+          "--local",
+          "--no-includes",
+          "--name-only",
+          "--get-regexp",
+          ".*",
+        ],
+        { env: authEnv },
+      );
+    } catch (cause) {
+      const code =
+        cause instanceof Error &&
+        "code" in cause &&
+        (typeof cause.code === "number" || typeof cause.code === "string")
+          ? cause.code
+          : false;
+      if (code !== 1) throw cause;
+      localConfig = { stdout: "" };
+    }
+    const unsafeKeys = localConfig.stdout
+      .split("\n")
+      .map((key) => key.trim().toLowerCase())
+      .filter(
+        (key) =>
+          /^include(?:if\..+)?\.path$/u.test(key) ||
+          /^url\..+\.(?:insteadof|pushinsteadof)$/u.test(key) ||
+          /^url\..+\.instead-of$/u.test(key) ||
+          /^http\..*(?:proxy|extraheader)$/u.test(key) ||
+          /^credential\..*helper$/u.test(key) ||
+          /^core\.(?:gitproxy|sshcommand)$/u.test(key) ||
+          /^protocol\..+$/u.test(key) ||
+          /^remote\..+\.pushurl$/u.test(key),
+      );
+    if (unsafeKeys.length > 0) {
+      throw new Error(
+        "Refusing Git publication because local includes or unsafe publication configuration is present",
+      );
+    }
+    authEnv.GIT_CONFIG = "/dev/null";
+    const publicationGitOptions = token
+      ? [
+          ...TRUSTED_PUBLICATION_GIT_OPTIONS,
+          "--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER",
+        ]
+      : TRUSTED_PUBLICATION_GIT_OPTIONS;
+    if (token) {
+      authEnv.NOOK_GIT_EXTRAHEADER = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`;
+    }
     await execFileAsync(
       "git",
-      ["-C", repoRoot, "push", "-u", "origin", "HEAD"],
+      [
+        "-C",
+        repoRoot,
+        ...publicationGitOptions,
+        "push",
+        "--no-verify",
+        "-u",
+        target.remoteUrl,
+        `HEAD:${target.remoteRef}`,
+      ],
       {
         env: authEnv,
       },
@@ -270,8 +383,16 @@ export class CiRepository {
   async pushFixBranch({
     fixBranch,
     runId,
-  }: CiRepositoryPushFixBranchRequest): Promise<Result<void, CiFailure>> {
+    remoteRef,
+    remoteUrl,
+  }: CiRepositoryPushFixBranchRequest): Promise<Result<string, CiFailure>> {
     log.info(`Pushing fix branch ${fixBranch}`);
+    const target = this.resolvePushTarget({
+      fixBranch,
+      ...(remoteRef === undefined ? {} : { remoteRef }),
+      ...(remoteUrl === undefined ? {} : { remoteUrl }),
+    });
+    if (target.isErr()) return err(target.error);
     const checkout = await this.trustedGit({
       args: ["checkout", "-B", fixBranch],
     });
@@ -300,8 +421,10 @@ export class CiRepository {
       args: ["config", "core.hooksPath", "/dev/null"],
     });
     if (hooks.isErr()) return err(hooks.error);
+    const committedHead = await this.revParseImmutable({ ref: "HEAD" });
+    if (committedHead.isErr()) return err(committedHead.error);
     const pushed = await ResultAsync.fromPromise(
-      this.pushAuthenticatedBranch(),
+      this.pushAuthenticatedBranch(target.value),
       (cause): CiFailure => {
         const code =
           cause instanceof Error &&
@@ -318,11 +441,69 @@ export class CiRepository {
     );
     if (pushed.isErr()) return err(pushed.error);
     log.info(`Pushed ${fixBranch}`);
-    return ok();
+    return ok(committedHead.value);
+  }
+  private resolvePushTarget({
+    fixBranch,
+    remoteRef,
+    remoteUrl,
+  }: Pick<
+    CiRepositoryPushFixBranchRequest,
+    "fixBranch" | "remoteRef" | "remoteUrl"
+  >): Result<CiRepositoryPushTarget, CiFailure> {
+    if (!CANONICAL_PUSH_BRANCH.test(fixBranch))
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: "Fix branch is not a canonical publication branch",
+      });
+    const serverUrl = process.env.GITHUB_SERVER_URL?.trim();
+    if (serverUrl !== "https://github.com")
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: "GITHUB_SERVER_URL must be the canonical GitHub HTTPS origin",
+      });
+    const repository = process.env.GITHUB_REPOSITORY?.trim();
+    if (!repository || !CANONICAL_GITHUB_REPOSITORY.test(repository))
+      return err({
+        kind: CiFailureKind.Configuration,
+        message: "GITHUB_REPOSITORY must be an owner/repository pair",
+      });
+    const expectedRemoteUrl = `https://github.com/${repository}.git`;
+    const expectedRemoteRef = `refs/heads/${fixBranch}`;
+    if (
+      (remoteUrl !== undefined && remoteUrl.trim() !== expectedRemoteUrl) ||
+      (remoteRef !== undefined && remoteRef.trim() !== expectedRemoteRef)
+    )
+      return err({
+        kind: CiFailureKind.Configuration,
+        message:
+          "Git publication target does not match the canonical workflow target",
+      });
+    return ok({
+      remoteUrl: expectedRemoteUrl,
+      remoteRef: expectedRemoteRef,
+    });
   }
   revParse({ ref }: CiRepositoryRevParseRequest) {
     return this.trustedGit({ args: ["rev-parse", ref] }).map(({ stdout }) =>
       stdout.trim(),
+    );
+  }
+  revParseImmutable({
+    ref,
+  }: CiRepositoryRevParseRequest): ResultAsync<string, CiFailure> {
+    return this.immutableGit({
+      args: ["rev-parse", "--verify", `${ref}^{commit}`],
+    }).andThen(
+      ({ stdout }) => {
+        const commit = stdout.trim();
+        return FULL_COMMIT_SHA.test(commit)
+          ? ok<string, CiFailure>(commit)
+          : err<string, CiFailure>({
+              kind: CiFailureKind.Git,
+              message: "git returned a non-canonical commit identity",
+            } satisfies CiFailure);
+      },
     );
   }
   async hasStagedChanges(): Promise<Result<boolean, CiFailure>> {
@@ -465,6 +646,7 @@ export class AuthoredChangeBudget {
 
 const log = new Logger("git");
 const PR_ADDITION_WARNING = 1_500;
+const FULL_COMMIT_SHA = /^[0-9a-f]{40}$/u;
 
 const ACTIONS_BOT = {
   email: "41898282+github-actions[bot]@users.noreply.github.com",
@@ -499,6 +681,46 @@ const TRUSTED_GIT_OPTIONS = [
   "-c",
   "core.hooksPath=/dev/null",
 ] as const;
+
+const TRUSTED_PUBLICATION_GIT_OPTIONS = [
+  ...TRUSTED_GIT_OPTIONS,
+  "-c",
+  "credential.helper=",
+  "-c",
+  "core.gitProxy=none",
+  "-c",
+  "http.proxy=",
+  "-c",
+  "https.proxy=",
+  "-c",
+  "protocol.allow=never",
+  "-c",
+  "protocol.https.allow=always",
+  "-c",
+  "protocol.http.allow=never",
+  "-c",
+  "protocol.file.allow=never",
+  "-c",
+  "protocol.ext.allow=never",
+  "-c",
+  "protocol.ssh.allow=never",
+  "-c",
+  "protocol.git.allow=never",
+  "-c",
+  "protocol.ftp.allow=never",
+  "-c",
+  "protocol.ftps.allow=never",
+] as const;
+
+const CANONICAL_GITHUB_REPOSITORY =
+  /^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_.-]*$/u;
+const CANONICAL_PUSH_BRANCH =
+  /^(?:codex|fix)\/[a-z0-9]+(?:[-/.][a-z0-9]+)*$/u;
+
+type CiRepositoryPushTarget = {
+  readonly remoteRef: string;
+  readonly remoteUrl: string;
+};
 
 const AUTHORED_TEXT_EXTENSIONS = new Set([
   ".bash",

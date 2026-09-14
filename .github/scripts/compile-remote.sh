@@ -14,11 +14,37 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "${script_dir}/../.." && pwd)"
 cd "$repo_root"
 
+compile_dockerfile="${repo_root}/nook-app/nook-platform/docker/rust/compile.Dockerfile"
+active_compile_dockerfile="$(sed -E '/^[[:space:]]*#/d; s/[[:space:]]+#.*$//' "$compile_dockerfile")"
+forbidden_compile_patterns=(
+  'cargo[[:space:]]+test'
+  'cargo[[:space:]]+clippy'
+  '(bun|npm|pnpm|yarn)[[:space:]]+(run[[:space:]]+)?(test|check|lint|verify|audit|coverage|e2e|preflight)([^[:alnum:]_]|$)'
+  '(bun|npm|pnpm|yarn)[[:space:]]+run[[:space:]]+build([^[:alnum:]_]|$)'
+  'coverage'
+  '(^|[^[:alnum:]_])e2e([^[:alnum:]_]|$)'
+  '(^|[^[:alnum:]_])preflight([^[:alnum:]_]|$)'
+)
+for forbidden_pattern in "${forbidden_compile_patterns[@]}"; do
+  if printf '%s\n' "$active_compile_dockerfile" | grep -Eiq -- "$forbidden_pattern"; then
+    echo "compile-only Dockerfile contains forbidden operation: ${forbidden_pattern}" >&2
+    exit 2
+  fi
+done
+
 docker_bin="${DOCKER:-docker}"
 registry_host="${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}"
 export NOOK_REGISTRY_CACHE_HOST="$registry_host"
 wasm_build_mode="${WASM_BUILD_MODE:-dev}"
 extension_commit="${NOOK_EXTENSION_COMMIT:-${GIT_COMMIT_ID:-${GITHUB_SHA:-}}}"
+case "${REQUEST_INCLUDES_HIVE:-false}" in
+  true|1) compile_hive=1 ;;
+  false|0|"") compile_hive=0 ;;
+  *)
+    echo "build:compile received an invalid REQUEST_INCLUDES_HIVE value" >&2
+    exit 2
+    ;;
+esac
 
 bake_args=(
   --allow="fs.read=${repo_root}"
@@ -31,6 +57,7 @@ bake_args=(
   -f "${repo_root}/nook-app/nook-web/nook-web-app/docker-bake.hcl"
   -f "${repo_root}/nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"
   --set "*.context=${repo_root}"
+  --set "build-compile.args.NOOK_COMPILE_HIVE=${compile_hive}"
   --set "build-compile.args.SCCACHE_S3_MODE=${SCCACHE_S3_MODE:-external}"
   --set "build-compile.args.SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
   --set "build-compile.args.SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"

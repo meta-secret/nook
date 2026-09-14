@@ -4,6 +4,16 @@
 # browser profile or persist its session after the MCP process exits.
 # Allowed origins are listed in .github/scripts/ai-debug/allowed-origins.json
 # and checked by `task ai-debug:check`.
+
+# This deployment allocation is consumed by the active harness for one Codex
+# session. Threads here mean agent task sessions, not OS threads. It is not a
+# Cortex architecture or product concurrency limit.
+[agents]
+max_concurrent_threads_per_session = 15
+
+[features.multi_agent_v2]
+max_concurrent_threads_per_session = 15
+
 [mcp_servers.playwright]
 command = "bash"
 args = [

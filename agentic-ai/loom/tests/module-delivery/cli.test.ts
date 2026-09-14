@@ -19,7 +19,7 @@ import {
 
 import type {
   LegacyModuleDeliveryPlan,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV5,
 } from '../../src/module-delivery/index.ts';
 
 import { TeamKey } from '../../src/team-agents/catalog.ts';
@@ -27,12 +27,14 @@ import { TeamKey } from '../../src/team-agents/catalog.ts';
 export class ModuleDeliveryCliScenario {
   private constructor(private readonly request: string) {}
 
-  static cliPlan(): ModuleDeliveryPlanV2 {
+  static cliPlan(): ModuleDeliveryPlanV5 {
     return {
-      version: 2,
+      version: 5,
+      featureBranch: 'codex/module-delivery-test',
       generation: 1,
       sourceCommit: SOURCE_COMMIT,
-      maxConcurrency: 1,
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],
@@ -55,7 +57,7 @@ export class ModuleDeliveryCliScenario {
             'The delivery owner receives reviewed core evidence.',
           baseline: {
             kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit: SOURCE_COMMIT,
+            sourceCommit: PINNED_LOCAL_DEV_SHA,
           },
           agentDepthLimit: 2,
           dependencies: [],
@@ -79,7 +81,6 @@ export class ModuleDeliveryCliScenario {
     return {
       version: 1,
       sourceCommit: SOURCE_COMMIT,
-      maxConcurrency: 1,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],
@@ -128,7 +129,11 @@ export class ModuleDeliveryCliScenario {
 
 const REPOSITORY_ROOT = resolve(import.meta.dir, '../../../..');
 
-const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+const SOURCE_COMMIT = '3'.repeat(40);
+
+const ORIGIN_MAIN_SHA = '1'.repeat(40);
+
+const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 
@@ -174,7 +179,7 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
     );
     expect(firstResult).toBe(secondResult);
     expect(firstResult).toContain('"status":"accepted"');
-    expect(firstResult).toContain('"inputVersion":2');
+    expect(firstResult).toContain('"inputVersion":4');
     expect(firstResult).toMatch(/"planDigest":"[0-9a-f]{64}"/u);
 
     const legacyCommand = [
@@ -193,7 +198,7 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
     expect(legacy.exitCode).not.toBe(0);
     expect(
       ModuleDeliveryCliScenario.resultLine(legacy.stdout.toString()),
-    ).toContain('Canonical CLI admission requires plan version 2.');
+    ).toContain('Canonical CLI admission requires plan version 4.');
 
     const rejectedCommand = [
       'task',

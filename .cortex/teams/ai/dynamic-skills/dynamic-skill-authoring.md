@@ -6,6 +6,14 @@ Capture a user's concrete code feedback as durable project knowledge in the
 canonical team-owned dynamic-skill registry, then make that knowledge reusable
 for future refactors.
 
+The AI team owns dynamic-skill meaning, card authoring, and registry
+maintenance. Gizmo owns feature delivery state when a card is applied. Route
+feature, remote validation, review, Workbench, and promotion mechanics through
+Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent. Team
+Gizmo and PR Lifecycle Agent perform only packetized mechanics. They never
+create or update PRs or decide policy. The Dev Manager remains the policy owner
+and sole invoker of `dev:pr-manager`.
+
 ## Problem Pattern
 
 The user has to repeatedly explain the same architectural or logic mistake in
@@ -18,7 +26,7 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
 
 1. Inspect the referenced code.
 2. Select the responsible team through
-   [Engineering team ownership](../../../gizmo/architecture/team-ownership.md).
+   [Engineering team ownership](../../../gizmo-prime/architecture/team-ownership.md).
 3. Convert the explanation into a concise card in the owner's
    `dynamic-skills/` directory.
    - Use Gizmo for delivery-control knowledge.
@@ -33,7 +41,8 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
 4. Update `.cortex/teams/ai/dynamic-skills/index.md`.
 5. Keep harness-specific profile directories outside the tracked repository.
    Do not duplicate semantic guidance under `.agents`, `.cursor`, or `.claude`.
-6. Apply the skill to code when the user asks for capture plus refactor.
+6. Apply the skill to code through the owning Feature Gizmo's feature path when
+   the user asks for capture plus refactor.
 
 ## Scope
 
@@ -83,10 +92,9 @@ Does not apply to:
 
 For documentation-only captures, run `task loom:cortex-audit`.
 
-For code refactors using a dynamic skill, run the focused worker proof and
-required formatters. Commit every resulting mutation in the allowed paths and
-return the exact direct commit to Gizmo. If pre-push hygiene mutates
-AI-owned content, the AI team returns a fresh formatted commit. Gizmo then
-continues from it, reruns hygiene, and pushes. Gizmo authorizes PR Steward to
-dispatch hosted validation. Use focused remote evidence until the head is ready.
-Dispatch complete exact-head validation immediately when it is ready.
+For code refactors using a dynamic skill, apply only the permitted scoped
+formatters or inexpensive diagnostics. Commit every resulting mutation in the
+allowed paths and return the exact scoped commit to Gizmo. Do not run a local
+pre-push or broad validation gate. Gizmo routes the hosted build-only packet
+through Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent.
+The Dev Manager owns later CI validation.

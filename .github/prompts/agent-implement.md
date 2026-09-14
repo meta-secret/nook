@@ -15,7 +15,24 @@ ${VALIDATED_PLAN}
 
 - Repository: ${GITHUB_REPOSITORY}
 - Workflow run id: ${GITHUB_RUN_ID}
-- Implementation branch (harness commits here — do not git): `${AGENT_BRANCH}`
+- Existing canonical feature branch (harness commits here — do not git): `${AGENT_BRANCH}`
+- Fetched main evidence (`originMainSha`): `${ORIGIN_MAIN_SHA}`
+- Prime-pinned local development base (`pinnedLocalDevSha`): `${PINNED_LOCAL_DEV_SHA}`
+- Exact canonical feature frontier (`featureHeadSha`): `${FEATURE_HEAD_SHA}`
+
+The three recorded commit SHAs above are mandatory bootstrap evidence. Delivery
+and the Dev Manager fetched `origin/main`, synchronized canonical local `main`,
+and brought canonical local `dev` onto or including that main before this
+worktree was issued. Prime creates every feature branch and worktree strictly
+from the exact `${PINNED_LOCAL_DEV_SHA}`; no alternate base is permitted. An
+existing feature frontier may add only descendants
+of that commit. The validated chain is `originMainSha` ancestor of
+`pinnedLocalDevSha` ancestor of `featureHeadSha`; the canonical remote feature
+ref and detached implementation HEAD must equal `featureHeadSha` exactly.
+`originMainSha` proves fetched-main ancestry only; it is never a feature base.
+The initial frontier may equal the pinned base, and later reruns may use a
+descendant frontier. Stop closed if any value is missing, mismatched, stale, or
+the chain cannot be proven.
 - The planning phase has already published the task-start record and left its
   validated body in `.nook-workbench-plan.md`.
 
@@ -26,13 +43,13 @@ give that worker only the explicit expertise contract, its own team graph, and
 the named consumer interfaces. Do not preload the functional owner's graph or
 transfer capability semantics and consumer-team Cortex ownership. The delivery
 owner follows
-`.cortex/gizmo/workflows/mission-delivery.md` without passing unrelated Gizmo context
+`.cortex/gizmo-prime/workflows/mission-delivery.md` without passing unrelated Gizmo context
 to a team worker.
 
 The validated plan selects one semantic team identity. Apply the root
 `.cortex/AGENTS.md` team worker contract and
-`.cortex/gizmo/workflows/subagent-delegation.md`. Use
-`.cortex/gizmo/workflows/team-oriented-development.md` for team-specific
+`.cortex/gizmo-prime/workflows/subagent-delegation.md`. Use
+`.cortex/gizmo-prime/workflows/team-oriented-development.md` for team-specific
 routing.
 
 When a selected team authority links a foreign-team skill as required
@@ -45,28 +62,25 @@ The bounded editor has no repository credentials, network access, container
 runtime, or Task runner. This is the trusted `agent-implement.yml` publication
 exception to ordinary worker commit handoffs. Only after the sandboxed editor
 exits, trusted host tooling formats the isolated implementation, validates its
-change budget and branch or PR identity, commits it, and publishes the branch
-and PR.
+change budget and branch identity, commits it, and publishes the branch.
 
 **Product validation runs on configured GitHub Actions workers after the harness
-opens the PR. Trusted Rust gates may use ARC; runtime-dependent gates stay
+publishes the branch. Trusted Rust gates may use ARC; runtime-dependent gates stay
 hosted.** Do not run `task check` / `task ci:pr` before finishing. The trusted
-publisher verifies the exact published head and returns the PR to Gizmo with a
-direct mention. Gizmo does not run advisory local review after handoff. If the
-head is not validation-ready, Gizmo immediately dispatches at least one
-relevant focused `task remote` job. If it is validation-ready, Gizmo immediately
-runs `task pr:validate`, which dispatches GitHub Actions before requesting one
-non-waiting exact-head Codex review. Gizmo collects that review during the
-hosted validation window and batches review findings with failed checks. Hosted
-Repository policy and PR verification enforce the UI-demo and other product or
-publication contracts. Gizmo never
+publisher verifies the exact published head and returns the branch to Gizmo with a
+direct mention. Gizmo does not run advisory local review after handoff. Gizmo
+immediately requests the focused `task remote TASK_NAME=build:compile` job for
+the exact branch head, then collects the separate exact-head review and build
+evidence. Full PR validation belongs only to the manager-owned dev-to-main
+cycle; Repository policy and PR verification enforce the UI-demo and other
+product or publication contracts there. Gizmo never
 activates another review provider. This bounded worker must not invoke Task or
 a container runtime.
 
 ## Steps
 
-1. Read `.nook-workbench-plan.md` first. Implement only its `Current PR slice
-   and acceptance evidence` scope. Treat the remaining PR sequence as feature
+1. Read `.nook-workbench-plan.md` first. Implement only its `Current feature
+   slice and acceptance evidence` scope. Treat the remaining feature sequence as feature
    context, not as authorization to implement later slices. Prefer the
    Workbench issue scope. Do not expand into unrelated refactors.
 2. Implement the change end-to-end in the working tree. Match the selected
@@ -76,12 +90,12 @@ a container runtime.
 3. Do not run formatting, Task commands, full suites, builds, or e2e in this
    bounded worker. The trusted harness applies the deterministic repository
    formatter after the editor exits. It then validates the change budget and
-   branch or PR identity. It then commits and publishes the isolated implementation.
+   branch identity. It then commits and publishes the isolated implementation branch.
    Gizmo owns focused and complete hosted execution from that exact head, where
    Repository policy and PR verification enforce the UI-demo and other product
    or publication contracts.
 5. If part of the request is too large, risky, blocked, or out of scope, follow
-   `.cortex/gizmo/workflows/issues.md` (update/create Workbench Markdown records)
+   `.cortex/gizmo-prime/workflows/issues.md` (update/create Workbench Markdown records)
    rather than silently dropping work. Stop and record the blocker, its cause,
    and all incomplete scope in the worklog. Do not create or propose a successor
    issue, branch, pull request, stack, or rebuilt delivery.
@@ -92,7 +106,7 @@ a container runtime.
    workflow adds it when publishing and links it to the task-start plan. Under
    `## Outcome`, write exactly one bullet of 3–120 characters naming the
    observable capability present in the final diff. The trusted publisher uses
-   that post-implementation sentence for the PR title and Summary. Never
+   that post-implementation sentence for the branch title and Summary. Never
    include prompts, chat transcripts, secrets, credentials, vault data, private
    user information, or raw logs.
 
@@ -100,22 +114,25 @@ a container runtime.
 
 - Do **not** run any `git` commands — the harness commits and pushes `${AGENT_BRANCH}` after you finish.
 - Do **not** create, monitor, or merge a PR from this bounded worker. The harness
-  opens the PR after you finish and returns its exact published head to Gizmo.
+  publishes the branch after you finish and returns its exact published head to Gizmo.
   Gizmo stabilizes one exact-head Codex review through complete validation. For
   failures, comments, or conflicts,
   Gizmo dispatches scoped fixes to the responsible team agents and integrates
-  their verified handoffs. Gizmo runs exact-head readiness, then has PR Steward
-  authorize the manager-controlled `dev:land`, `dev:publish`, and `dev:promote`
-  flow. Promotion uses an ordinary non-forced fast-forward of the exact tested
-  commit; it does not rewrite history.
+  their verified handoffs. Gizmo runs exact-head readiness, then has Delivery
+  Pipeline Team Gizmo route feature/Gizmo Prime-authorized `dev:land` to PR
+  Lifecycle for execution, which performs only controller-authorized mechanics.
+  Only the Dev Manager authorizes `dev:publish` and `dev:promote` for PR
+  Lifecycle execution and invokes `dev:pr-manager`; Gizmos and leaves never
+  create or update PRs. Promotion uses an ordinary non-forced fast-forward of
+  the exact tested commit; it does not rewrite history.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the requested task.
 - Stay in the harness-provided isolated workspace. Return the work to the
   parent through the harness commit handoff.
-- Follow `.cortex/gizmo/workflows/pull-requests.md` for current review and
+- Follow `.cortex/gizmo-prime/workflows/pull-requests.md` for current review and
   authorization policy, and use the dev-manager flow for feature-to-local-dev-
-  to-origin/dev-to-origin/main delivery. Do not merge a feature directly to
-  main or rewrite history. Also follow
+  through the manager-owned local-dev publication and promotion path. Do not
+  merge a feature directly to main or rewrite history. Also follow
   `.cortex/teams/sre/workflows/ci-operations.md` (this Kubernetes-native worker
   must not invoke a container runtime).
 - Follow `.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md`:

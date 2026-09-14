@@ -504,18 +504,21 @@ A later failed rerun:
   - Use bounded timeouts for Kubernetes Pod API calls.
 
 One logical Hive task tracks the repair incident. Delivery controllers retain
-the responsibilities in [dev delivery](../../../gizmo/architecture/dev-delivery.md).
+the responsibilities in [dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
 
 1. Diagnose from retained workflow evidence.
 2. Route implementation and authored tests through the feature Gizmo's teams.
 3. Obtain remote build-only evidence and required feature review.
-4. Have Gizmo authorize Steward's serialized local dev landing.
-5. Have the manually run dev manager select and publish a dev snapshot.
+4. Have Gizmo Prime authorize `dev:land`; Delivery Pipeline Team Gizmo routes
+   the bounded serialized local-dev landing mechanics to the PR Lifecycle Agent.
+5. Have the manually run Dev Manager select and publish a dev snapshot; only
+   the Dev Manager invokes `dev:pr-manager`.
 6. Have the manager authorize slow dev PR checks and review collection.
    - Preserve existing e2e opt-ins and security-required focused checks.
    - Route accepted fixes through the same feature path.
 7. Require origin/dev to equal the frozen tested SHA and main to be its ancestor.
-8. Have the manager authorize Steward's guarded fast-forward promotion.
+8. Have the Dev Manager authorize `dev:promote`; Delivery Pipeline Team Gizmo
+   routes the bounded guarded fast-forward mechanics to the PR Lifecycle Agent.
 9. Verify remote main equality, actual PR state, and required Main-run evidence.
 10. Complete the Workbench incident, linked plan, and worklog.
 
@@ -555,12 +558,14 @@ That command:
 
 ### GitHub delivery recovery
 
-- **Branch generations:** Use deterministic base branch
-  `codex/hive-<task-id>`.
-  - If a repair PR is closed or merged while durable work remains, create
-    `-g2`, `-g3`, and later generations instead of reusing a closed PR.
-  - Replacement Pods inspect GitHub for the latest generation and merged commit,
-    then resume Main verification without a duplicate PR.
+- **Canonical feature branch:** Consume the exact canonical `codex/...`
+  feature branch selected by Gizmo Prime. The branch name is authoritative.
+  - Each replacement Pod fetches the branch and records its latest committed
+    head as observational evidence for that attempt.
+  - If the branch advances, the next attempt follows the new head. Hive does
+    not create numbered generations or a repair pull request.
+  - Replacement Pods resume durable delivery state on the same canonical
+    branch without creating a temporary publication branch.
 - **GitHub authorization:** Mount the GitHub token into the Main-repair worker
   and expose it through `GH_TOKEN`.
   - A shared repository-scoped token is acceptable.
@@ -569,7 +574,7 @@ That command:
   - Repository permissions remain the authorization boundary.
 - **Publication tools:** Feature Gizmo owns feature publication and landing requests.
   The dev manager owns dev PR creation/update, slow evidence, and promotion.
-  PR Steward performs GitHub mechanics only under the owning controller's packet.
+  PR Lifecycle Agent performs GitHub mechanics only under the owning controller's packet.
   - Traverse every relevant check, review, comment, and thread page.
   - Follow the repository's normal readiness rules.
   - Guest readiness tooling does not authorize independent publication.
@@ -975,6 +980,6 @@ and exclusive intent creation prevents retries from refreshing its deadline.
   [`.github/workflows/hive.yml`](../../../../.github/workflows/hive.yml)
 - **Main coalescing and delivery:**
   [`.github/workflows/main.yml`](../../../../.github/workflows/main.yml)
-- **Workbench issue contract:** [issues](../../../gizmo/workflows/issues.md)
+- **Workbench issue contract:** [issues](../../../gizmo-prime/workflows/issues.md)
 - **Pull-request ownership contract:**
-  [pull requests](../../../gizmo/workflows/pull-requests.md)
+  [pull requests](../../../gizmo-prime/workflows/pull-requests.md)

@@ -12,8 +12,8 @@ Load only:
 
 - `.cortex/AGENTS.md`;
 - `.cortex/knowledge-graph.md`;
-- `.cortex/gizmo/AGENTS.md`; and
-- `.cortex/gizmo/knowledge-graph.md`.
+- `.cortex/gizmo-prime/AGENTS.md`; and
+- `.cortex/gizmo-prime/knowledge-graph.md`.
 
 Do not load implementation-team graphs into Gizmo's context. Do not pass Gizmo
 context to implementation workers.
@@ -42,11 +42,12 @@ ${RUST_DEPS_OUTDATED_REPORT}
    semantic team identity.
 6. Integrate each non-Git handoff: bounded diff, owned paths, focused summary.
 7. Finish the bounded working-tree edit without running validation or Git.
-8. Let the trusted host validate and publish before returning the exact head to
-   the normal Gizmo PR-delivery workflow.
+8. Let the trusted host validate and publish the exact fix branch before
+   returning its head to the normal Gizmo delivery workflow. Do not create a
+   pull request; the dev manager owns the later dev-to-main PR.
 
 Gizmo selects each team through the canonical mapping authority at
-`.cortex/gizmo/workflows/team-oriented-development.md`.
+`.cortex/gizmo-prime/workflows/team-oriented-development.md`.
 
 The mission covers all outdated direct Rust dependencies in every listed root.
 Do not stop after updating the package reported first.
@@ -58,7 +59,7 @@ path-bounded expertise contract with named consumer interfaces.
 ## Writer task contract
 
 Every writer follows the root `.cortex/AGENTS.md` team worker contract and
-`.cortex/gizmo/workflows/subagent-delegation.md`.
+`.cortex/gizmo-prime/workflows/subagent-delegation.md`.
 
 The dependency-specific contract also names:
 

@@ -1,12 +1,28 @@
-import { resolve } from 'node:path';
-import { err, type Result } from 'neverthrow';
+import { isAbsolute, resolve } from 'node:path';
+import { err, ok, type Result } from 'neverthrow';
 
 import { ProcessCommandRunner } from './dev-command.ts';
 import { DevDeliveryWorkspace } from './dev-workspace.ts';
-import { DevFailureKind, type DevFailure } from './dev-types.ts';
+import {
+  BranchName,
+  CommitSha,
+  DevFailureKind,
+  type DevFailure,
+  type DevLandRequest,
+} from './dev-types.ts';
 
 export interface DevCliMessage {
   readonly message: string;
+}
+
+/**
+ * Prime-issued target and provenance carried by the serialized dev:land task.
+ * The feature worktree HEAD is intentionally absent: the CLI observes it
+ * after validating the authorized branch identity.
+ */
+export interface DevLandProvenancePacket {
+  /** Exact canonical feature branch authorized for local integration. */
+  readonly featureBranch: BranchName;
 }
 
 /** Provides the manual task boundary and a single human-readable failure format. */
@@ -21,7 +37,9 @@ export class DevCli {
   static workspace(): DevDeliveryWorkspace {
     return new DevDeliveryWorkspace({
       root: DevCli.repositoryRoot(),
-      runner: new ProcessCommandRunner(),
+      runner: new ProcessCommandRunner({
+        repositoryRoot: DevCli.repositoryRoot(),
+      }),
     });
   }
 
@@ -39,5 +57,62 @@ export class DevCli {
       kind: DevFailureKind.Configuration,
       message: `${name} is required for this manual dev-manager task`,
     });
+  }
+
+  static requiredCommitSha(name: string): Result<CommitSha, DevFailure> {
+    const raw = process.env[name];
+    return typeof raw === 'string'
+      ? CommitSha.parse(raw)
+      : DevCli.missingEnvironment(name);
+  }
+
+  static requiredAbsolutePath(name: string): Result<string, DevFailure> {
+    const raw = process.env[name];
+    if (typeof raw !== 'string') return DevCli.missingEnvironment(name);
+    if (raw.length === 0 || raw.includes('\u0000') || !isAbsolute(raw)) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message: `${name} must be a non-empty absolute path for this manual dev-manager task`,
+      });
+    }
+    return ok(raw);
+  }
+
+  /** Resolves the target identities required by the dev:land packet. */
+  static requiredDevLandPacket(): Result<
+    DevLandProvenancePacket,
+    DevFailure
+  > {
+    const featureBranch = DevCli.requiredFeatureBranch();
+    if (featureBranch.isErr()) return err(featureBranch.error);
+    return ok({
+      featureBranch: featureBranch.value,
+    });
+  }
+
+  static requiredFeatureBranch(): Result<BranchName, DevFailure> {
+    const raw = process.env.FEATURE_BRANCH;
+    return typeof raw === 'string'
+      ? BranchName.parseFeature(raw)
+      : DevCli.missingEnvironment('FEATURE_BRANCH');
+  }
+
+  /** Binds the serialized target to the feature worktree state observed locally. */
+  static observeDevLandRequest(
+    ...[workspace, packet]: [
+      workspace: DevDeliveryWorkspace,
+      packet: DevLandProvenancePacket,
+    ]
+  ): Result<DevLandRequest, DevFailure> {
+    const featureBranch = workspace.git.currentBranch();
+    if (featureBranch.isErr()) return err(featureBranch.error);
+    if (!featureBranch.value.equals(packet.featureBranch)) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message:
+          `The feature worktree branch ${featureBranch.value.value()} does not match the authorized FEATURE_BRANCH ${packet.featureBranch.value()}`,
+      });
+    }
+    return ok(packet);
   }
 }

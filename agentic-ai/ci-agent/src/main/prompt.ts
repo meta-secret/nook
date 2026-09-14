@@ -24,6 +24,25 @@ export class AgentPromptEnvironment {
       ? "authorized"
       : "not-authorized";
   }
+
+  resolveBootstrapEvidence(): Result<AgentBootstrapEvidence, CiFailure> {
+    const originMainSha = this.environment.ORIGIN_MAIN_SHA?.trim() || "";
+    const pinnedLocalDevSha =
+      this.environment.PINNED_LOCAL_DEV_SHA?.trim() || "";
+    const featureHeadSha = this.environment.FEATURE_HEAD_SHA?.trim() || "";
+    if (
+      !FULL_COMMIT_SHA.test(originMainSha) ||
+      !FULL_COMMIT_SHA.test(pinnedLocalDevSha) ||
+      !FULL_COMMIT_SHA.test(featureHeadSha)
+    ) {
+      return err({
+        kind: CiFailureKind.Configuration,
+        message:
+          "Recorded bootstrap evidence requires ORIGIN_MAIN_SHA, PINNED_LOCAL_DEV_SHA, and FEATURE_HEAD_SHA",
+      });
+    }
+    return ok({ originMainSha, pinnedLocalDevSha, featureHeadSha });
+  }
 }
 
 export class AgentPrompt {
@@ -44,6 +63,16 @@ export class AgentPrompt {
     const majorChangeAuthorization = new AgentPromptEnvironment(
       process.env,
     ).resolveMajorChangeAuthorization();
+    const bootstrapEvidence = new AgentPromptEnvironment(
+      process.env,
+    ).resolveBootstrapEvidence();
+    if (
+      template.includes("${ORIGIN_MAIN_SHA}") ||
+      template.includes("${PINNED_LOCAL_DEV_SHA}") ||
+      template.includes("${FEATURE_HEAD_SHA}")
+    ) {
+      if (bootstrapEvidence.isErr()) return err(bootstrapEvidence.error);
+    }
     let validatedPlan = "";
     if (template.includes("${VALIDATED_PLAN}")) {
       const [expectedHash = ""] = [process.env.VALIDATED_PLAN_SHA256?.trim()];
@@ -110,6 +139,22 @@ export class AgentPrompt {
         .replaceAll("${GITHUB_RUN_ID}", config.githubRunId)
         .replaceAll("${FIX_BRANCH}", config.fixBranch)
         .replaceAll("${AGENT_BRANCH}", agentBranch)
+        .replaceAll(
+          "${ORIGIN_MAIN_SHA}",
+          bootstrapEvidence.isOk() ? bootstrapEvidence.value.originMainSha : "",
+        )
+        .replaceAll(
+          "${PINNED_LOCAL_DEV_SHA}",
+          bootstrapEvidence.isOk()
+            ? bootstrapEvidence.value.pinnedLocalDevSha
+            : "",
+        )
+        .replaceAll(
+          "${FEATURE_HEAD_SHA}",
+          bootstrapEvidence.isOk()
+            ? bootstrapEvidence.value.featureHeadSha
+            : "",
+        )
         .replaceAll("${MAJOR_CHANGE_AUTHORIZATION}", majorChangeAuthorization)
         .replaceAll("${AGENT_TASK}", agentTask.value)
         .replaceAll("${RUST_DEPS_OUTDATED_REPORT}", outdatedReport)
@@ -119,6 +164,14 @@ export class AgentPrompt {
     );
   }
 }
+
+export interface AgentBootstrapEvidence {
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
+}
+
+const FULL_COMMIT_SHA = /^[0-9a-f]{40}$/u;
 
 /** Build the task body from the explicit workflow prompt. */
 

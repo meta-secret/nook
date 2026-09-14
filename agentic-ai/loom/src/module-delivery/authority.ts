@@ -34,6 +34,7 @@ import type {
 
 import type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
+  ModuleDeliveryAcceptedProviderEvidenceIdentityV1,
   ModuleDeliveryEvidenceClaimIdentity,
 } from './evidence.ts';
 
@@ -186,12 +187,18 @@ export class ModuleSourceAuthority {
   }
 
   static assertEvidenceBound(
-    identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
+    identities: readonly (
+      | ModuleDeliveryAcceptedProviderEvidenceIdentity
+      | ModuleDeliveryAcceptedProviderEvidenceIdentityV1
+    )[],
   ): void {
     if (identities.length > MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES)
       throw new Error('Accepted provider evidence ancestry is too large.');
     const pending = [...identities];
-    const seen = new Set<ModuleDeliveryAcceptedProviderEvidenceIdentity>();
+    const seen = new Set<
+      | ModuleDeliveryAcceptedProviderEvidenceIdentity
+      | ModuleDeliveryAcceptedProviderEvidenceIdentityV1
+    >();
     for (const current of pending) {
       if (seen.has(current))
         throw new Error('Accepted provider evidence ancestry is cyclic.');
@@ -280,22 +287,26 @@ export class ModuleSourceAuthority {
         ({ taskId }) => !closure.includes(taskId),
       );
       const claims: ResourceClaimPair = {
-        first: request.identity.claimIdentities.map(({ claim }) => claim),
+        first: request.identity.claimIdentities.map(
+          ({ claim }: ModuleDeliveryEvidenceClaimIdentity) => claim,
+        ),
         second: laterWrites.flatMap(({ claims }) => claims),
       };
       return (
         (request.identity.verifiedHeadCommit === request.headCommit ||
           (laterWrites.length > 0 &&
             !ModuleSourceAuthority.claimsOverlap(claims))) &&
-        request.identity.acceptedProviderEvidence.every((identity) => {
-          const nestedRequest: EvidenceFreshnessRequest = {
-            authority: request.authority,
-            identity,
-            headCommit: request.headCommit,
-            integratedWrites: request.integratedWrites,
-          };
-          return evidenceFreshAtHead(nestedRequest);
-        })
+        request.identity.acceptedProviderEvidence.every(
+          (identity: ModuleDeliveryAcceptedProviderEvidenceIdentity) => {
+            const nestedRequest: EvidenceFreshnessRequest = {
+              authority: request.authority,
+              identity,
+              headCommit: request.headCommit,
+              integratedWrites: request.integratedWrites,
+            };
+            return evidenceFreshAtHead(nestedRequest);
+          },
+        )
       );
     };
     const assert = (
@@ -321,6 +332,8 @@ export class ModuleSourceAuthority {
         functionalOwner: evidence.functionalOwner,
         acceptanceOwner: evidence.acceptanceOwner,
         sourceCommit: evidence.sourceCommit,
+        originMainSha: evidence.originMainSha,
+        pinnedLocalDevSha: evidence.pinnedLocalDevSha,
         verifiedHeadCommit: evidence.verifiedHeadCommit,
         artifactIdentity: evidence.artifactIdentity,
         artifactDigest: evidence.artifactDigest,

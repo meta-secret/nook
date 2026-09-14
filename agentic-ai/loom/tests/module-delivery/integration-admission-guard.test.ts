@@ -24,7 +24,7 @@ import type {
   LegacyModuleDeliveryPlan,
   ModuleDeliveryEdgeContract,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
@@ -38,7 +38,7 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
     return dependencies.length === 0
       ? {
           kind: ModuleDeliveryBaselineKind.SourceCommit as const,
-          sourceCommit: SOURCE_COMMIT,
+          sourceCommit: PINNED_LOCAL_DEV_SHA,
         }
       : {
           kind: ModuleDeliveryBaselineKind.IntegratedDependencies as const,
@@ -123,19 +123,21 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
     return value;
   }
 
-  static plan(fixture: PlanFixture): ModuleDeliveryPlanV2 {
+  static plan(fixture: PlanFixture): ModuleDeliveryPlanV5 {
     return new ModuleDeliveryIntegrationAdmissionGuardScenario(
       fixture,
     ).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV2 {
+  private execute(): ModuleDeliveryPlanV5 {
     const fixture = this.request;
     return {
-      version: 2,
+      version: 5,
+      featureBranch: 'codex/module-delivery-test',
       generation: 1,
       sourceCommit: fixture.sourceCommit,
-      maxConcurrency: 3,
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -149,11 +151,11 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
     };
   }
 
-  static validate(value: ModuleDeliveryPlanV2): ModuleDeliveryPlanValidation {
+  static validate(value: ModuleDeliveryPlanV5): ModuleDeliveryPlanValidation {
     return ModuleDeliveryPlanDecoder.decodeAndValidate(JSON.stringify(value));
   }
 
-  static validated(value: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
+  static validated(value: ModuleDeliveryPlanV5): ValidatedModuleDeliveryPlan {
     const result =
       ModuleDeliveryIntegrationAdmissionGuardScenario.validate(value);
     if (result.status !== ModuleDeliveryValidationStatus.Accepted) {
@@ -174,7 +176,6 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
     return {
       version: 1,
       sourceCommit: SOURCE_COMMIT,
-      maxConcurrency: 1,
       maxAgentDepth: 2,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -209,7 +210,11 @@ export class ModuleDeliveryIntegrationAdmissionGuardScenario {
   }
 }
 
-const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+const SOURCE_COMMIT = '3'.repeat(40);
+
+const ORIGIN_MAIN_SHA = '1'.repeat(40);
+
+const PINNED_LOCAL_DEV_SHA = '2'.repeat(40);
 
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 

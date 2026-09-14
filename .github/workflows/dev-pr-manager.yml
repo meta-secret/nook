@@ -1,0 +1,122 @@
+name: Dev PR manager
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: dev-pr-manager
+  cancel-in-progress: false
+
+jobs:
+  manage:
+    name: Create or update dev-to-main PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}
+    steps:
+      - name: Checkout trusted manager tooling
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.workflow_sha }}
+          token: ${{ secrets.NOOK_GITHUB_PAT }}
+
+      - name: Require manager GitHub credential
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::NOOK_GITHUB_PAT is required so manager-created PRs trigger normal pull_request workflows."
+            exit 1
+          fi
+
+      - name: Verify current dev snapshot
+        id: snapshot
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            refs/heads/main:refs/remotes/origin/main \
+            refs/heads/dev:refs/remotes/origin/dev
+          main_sha="$(git rev-parse refs/remotes/origin/main)"
+          dev_sha="$(git rev-parse refs/remotes/origin/dev)"
+          if ! git merge-base --is-ancestor "$main_sha" "$dev_sha"; then
+            echo "::error::origin/main is not an ancestor of origin/dev; reconcile dev before creating its PR."
+            exit 1
+          fi
+          {
+            echo "main_sha=$main_sha"
+            echo "dev_sha=$dev_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create or update the single dev-to-main PR
+        id: pull-request
+        env:
+          MAIN_SHA: ${{ steps.snapshot.outputs.main_sha }}
+          DEV_SHA: ${{ steps.snapshot.outputs.dev_sha }}
+        run: |
+          set -euo pipefail
+          body="$(cat <<EOF
+          ## Summary
+
+          - Promote the selected origin/dev snapshot to main through guarded fast-forward publication.
+
+          ## Agent task provenance
+
+          - Harness: manually started Dev Manager
+          - Task name: dev:pr-manager
+          - Task ID: unavailable — manager workflow dispatch
+
+          ## Nook Workbench
+
+          - Focused issue: unavailable — aggregate development snapshot
+          - Immutable plan: unavailable — manager snapshot
+          - Worklog: unavailable — aggregate snapshot has constituent Workbench records
+
+          ## Validation
+
+          - Selected origin/dev SHA: $DEV_SHA
+          - origin/main ancestor checked: $MAIN_SHA
+          - Full slow validation and final promotion are separate manager operations.
+          EOF
+          )"
+          pulls="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --head dev --json number,headRefOid,baseRefOid,url)"
+          count="$(jq 'length' <<<"$pulls")"
+          if [ "$count" -gt 1 ]; then
+            echo "::error::More than one open dev-to-main PR exists."
+            exit 1
+          fi
+          if [ "$count" -eq 1 ]; then
+            number="$(jq -r '.[0].number' <<<"$pulls")"
+            head="$(jq -r '.[0].headRefOid' <<<"$pulls")"
+            base="$(jq -r '.[0].baseRefOid' <<<"$pulls")"
+            if [ "$head" != "$DEV_SHA" ] || [ "$base" != "$MAIN_SHA" ]; then
+              echo "::error::The existing dev-to-main PR does not describe the current origin/dev and origin/main snapshots."
+              exit 1
+            fi
+            gh pr edit "$number" --repo "$GITHUB_REPOSITORY" \
+              --title "Promote development to main" --body "$body"
+            url="$(jq -r '.[0].url' <<<"$pulls")"
+          else
+            url="$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head dev \
+              --title "Promote development to main" --body "$body")"
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify PR identity
+        env:
+          PR_URL: ${{ steps.pull-request.outputs.url }}
+          DEV_SHA: ${{ steps.snapshot.outputs.dev_sha }}
+          MAIN_SHA: ${{ steps.snapshot.outputs.main_sha }}
+        run: |
+          set -euo pipefail
+          actual="$(gh pr view "$PR_URL" --repo "$GITHUB_REPOSITORY" --json baseRefName,headRefName,baseRefOid,headRefOid,state)"
+          jq -e \
+            --arg main "$MAIN_SHA" \
+            --arg dev "$DEV_SHA" \
+            '.state == "OPEN" and .baseRefName == "main" and .headRefName == "dev" and .baseRefOid == $main and .headRefOid == $dev' \
+            <<<"$actual" >/dev/null
+          echo "Managed dev-to-main PR: $PR_URL"

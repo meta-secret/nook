@@ -649,6 +649,79 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
 }
 
 #[test]
+fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Result<()> {
+    let root = RepositoryFixture::repository_root();
+    let app_bake = root.read("nook-app/docker-bake.hcl");
+    let compile_bake = root.read("nook-app/nook-platform/docker/rust/compile.docker-bake.hcl");
+    let rust_bake = root.read("nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let web_bake = root.read("nook-app/nook-web/docker/web.docker-bake.hcl");
+    let web_toolchain = root.read("nook-app/nook-web/docker/toolchain.docker-bake.hcl");
+
+    let compile_from = assignment_body(&compile_bake, "compile_cache_from")?;
+    let compile_to = assignment_body(&compile_bake, "compile_cache_to")?;
+    let compile_ref =
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v1:buildcache";
+    let compile_ref_assignment = assignment_body(&compile_bake, "compile_cache_ref")?;
+    assert_eq!(
+        compile_ref_assignment,
+        format!("\"{compile_ref}\""),
+        "build:compile must name its stable remote registry scope explicitly"
+    );
+    assert!(
+        app_bake.contains("variable \"NOOK_COMPILE_CACHE_MODE\"")
+            && compile_bake.contains("NOOK_COMPILE_CACHE_MODE == \"publish\"")
+            && app_bake.contains("default = \"publish\""),
+        "build:compile must expose an explicit publication/read-only cache mode"
+    );
+    assert_eq!(
+        compile_from.matches("type=registry,ref=").count(),
+        1,
+        "build:compile must import one registry cache"
+    );
+    assert_eq!(
+        compile_to.matches("type=registry,ref=").count(),
+        1,
+        "build:compile must export one registry cache"
+    );
+    assert!(
+        compile_from.contains("${compile_cache_ref}")
+            && compile_to.contains("${compile_cache_ref}")
+            && !compile_bake.contains("write_cache_repository")
+            && compile_bake.contains("remote-buildcache")
+            && !compile_bake.contains("GHA_CACHE_SCOPE_SUFFIX"),
+        "build:compile must use only its stable remote registry scope"
+    );
+
+    let build_compile = bake_target_body(&compile_bake, "build-compile");
+    assert!(
+        build_compile.contains("rust-base = \"target:rust-base\"")
+            && build_compile.contains("web-base  = \"target:web-base\"")
+            && build_compile.contains("web-deps  = \"target:web-deps-compile\""),
+        "build:compile must use bare context targets rather than component restore targets"
+    );
+    for (bake, target) in [
+        (&compile_bake, "web-deps-compile"),
+        (&rust_bake, "rust-base"),
+        (&web_bake, "web-base"),
+    ] {
+        let body = bake_target_body(bake, target);
+        assert!(
+            !body.is_empty() && !body.contains("cache-from") && !body.contains("cache-to"),
+            "build:compile context target {target} must not declare registry cache I/O"
+        );
+    }
+
+    assert!(
+        bake_target_body(&rust_bake, "rust-base-restore").contains("cache-from")
+            && bake_target_body(&web_toolchain, "web-deps").contains("cache-from")
+            && bake_target_body(&web_toolchain, "web-deps-publish")
+                .contains("cache-to   = web_deps_cache_to"),
+        "component restore/publish targets must retain their independent cache behavior"
+    );
+    Ok(())
+}
+
+#[test]
 fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()> {
     let root = RepositoryFixture::repository_root();
     let setup = root.read(".github/actions/nook-docker-setup/action.yml");

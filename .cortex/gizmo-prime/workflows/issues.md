@@ -1,0 +1,340 @@
+# Workbench Issue Management
+
+## Overview
+
+Use this workflow whenever a task reveals missing functionality that is too
+large, risky, blocked, or outside the current PR's safe scope. Agents must not
+hide unfinished work in chat history or PR summaries.
+
+Nook development issues live as versioned Markdown in
+[`meta-secret/nook-workbench`](https://github.com/meta-secret/nook-workbench),
+not in GitHub Issues. GitHub Issues are historical input only.
+
+Every task-owning agent publishes two linked lifecycle records:
+
+1. a structured task plan before implementation begins; and
+2. a completion or blocked worklog when the task ends.
+
+The task plan is an LLM-authored interpretation of the important request, not a
+copy, transcript, or sentence-by-sentence paraphrase of the user's prompt.
+
+## Repository boundary
+
+The Nook product repository owns source code, architecture, tests, CI, and the
+rules under `.cortex`. Nook Workbench owns:
+
+```text
+issues/<feature>/README.md
+issues/<feature>/<focused-deliverable>.md
+plans/<feature>/<timestamp>-<task>.md
+worklogs/<feature>/<timestamp>-<issue-or-pr>.md
+stats/ai-agent/<nook-pr>.yaml
+stats/main-build/<run-id>-attempt-<attempt>.yaml
+```
+
+A feature directory replaces a GitHub milestone and aggregate issue. Its
+`README.md` owns the overall goal, shared decisions, current status, and issue
+index. Focused Markdown files replace sub-issues.
+
+## Feature scope
+
+Each concurrent feature has its own Gizmo and focused Workbench records.
+An immutable plan records scope. Follow [dev delivery](../architecture/dev-delivery.md)
+for local feature completion and the manager's separate slow PR cycle.
+
+The feature `README.md` must record:
+
+- the complete user-visible or operational outcome;
+- the focused issue index;
+- dependencies between capabilities;
+- stable public or cross-module interfaces;
+- feature-level acceptance criteria;
+- current completion status.
+
+Features may proceed concurrently when their scopes and dependencies allow it.
+The manager's dev PR aggregates selected complete features. Keep estimates as
+reviewability evidence rather than numeric delivery gates.
+
+## Trigger
+
+Before an agent says any of the following, it must apply this workflow:
+
+- "too big for this PR"
+- "too risky to implement now"
+- "out of scope"
+- "follow-up"
+- "not implemented"
+- "future work"
+- "blocked by ..."
+
+The workflow also applies when tests, review comments, or implementation work
+discover missing functionality that the current PR will not finish.
+
+## Delivery and GitHub execution ownership
+
+Gizmo authors Workbench content and decides its lifecycle state. Delivery
+Pipeline Team Gizmo routes every Workbench search, publisher, branch, review,
+and status packet through the active harness to PR Lifecycle Agent.
+PR Lifecycle Agent executes only the packetized mechanics. Team Gizmo and
+PR Lifecycle Agent never create or update PRs or decide policy. Publication
+does not transfer authorship or lifecycle decisions to either actor.
+
+The Dev Manager remains the policy owner and sole invoker of `dev:pr-manager`.
+Any dev PR review, check, status, or promotion mechanics use the same Delivery
+Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent route.
+
+## Search first
+
+Have Delivery Pipeline Team Gizmo route a search packet through the active
+harness to PR Lifecycle Agent. PR Lifecycle Agent clones or updates the
+Workbench outside the Nook working tree. Then search feature
+summaries, issues, plans, and worklogs with both product language and code
+terms:
+
+```bash
+workbench_dir="$(mktemp -d)"
+gh repo clone meta-secret/nook-workbench "$workbench_dir"
+rg -n -i "<user words>|<code terms>" \
+  "$workbench_dir/issues" "$workbench_dir/plans" "$workbench_dir/worklogs"
+```
+
+Do not infer current state from a historical Nook GitHub issue alone. Imported
+records link their original issue bodies and comments, but the Workbench file is
+now the mutable execution record.
+
+## Required issue shape
+
+Every focused issue follows
+`issues/_templates/issue.md` and includes:
+
+- YAML frontmatter with title, lifecycle status, priority, automation mode,
+  owner, timestamps, source issues, related PRs, and dependencies;
+- a canonical lowercase-hyphenated `gizmo_id` in every focused issue
+  assigned by the current plan;
+- context and an observable outcome;
+- explicit included and excluded scope;
+- testable acceptance criteria and required coverage;
+- append-only progress, findings, and durable decisions;
+- links to relevant Nook code, PRs, and historical discussions.
+
+Valid statuses are `proposed`, `ready`, `in_progress`, `blocked`, `done`, and
+`cancelled`. `automation` is `manual`, `agent`, or `hive`. The `hive` mode is
+reserved for trusted Main-failure incidents consumed by the isolated k0s Hive
+dispatcher. The bounded implementation workflow must not claim those records.
+
+This combination makes a record eligible for explicit dispatch to the bounded
+Nook implementation worker:
+
+```yaml
+status: ready
+automation: agent
+owner: <nook-github-collaborator>
+```
+
+Legacy standalone focused issues may omit `gizmo_id`. When the field is
+present, dispatch treats it as canonical trusted routing metadata. Its syntax
+must be valid. It must never be changed to create a fresh identity. The
+published plan must use it as `Current Gizmo ID` and the first slice Gizmo ID.
+At least one ownership unit must use that ID.
+
+- The owner must be an assignable Nook GitHub collaborator with write access.
+- The dispatch must provide exactly one of `issue_path` or `prompt`.
+- An issue dispatch resolves only the exact requested path.
+- A missing or unassigned owner fails without implementation.
+- Each explicit dispatch creates its own workflow run.
+- The Workbench blob SHA rejects concurrent claims of the same issue.
+- Creating or editing any other record must not start implementation.
+- The worker claims an eligible record by committing `status: in_progress`
+  before it runs.
+- Main-failure handoff records use `status: ready` with `automation: hive`.
+
+Existing Hive metadata belongs to its separately documented paused platform.
+It does not start a dev manager or authorize automatic repair work.
+The manually run manager routes slow-stage failures through feature Gizmos.
+
+## Choose update versus create
+
+Update an existing file when it already owns the broad problem or focused
+deliverable. Preserve prior progress, findings, decisions, links, and acceptance
+criteria. Add a dated progress entry instead of erasing history.
+
+Create a new feature directory only when no existing feature owns the work.
+Create its `README.md` first, then add focused issue files and link them from the
+feature index. Do not put unrelated work into a flat `backlog` directory merely
+to avoid naming the feature; `backlog` is primarily the historical import area.
+
+## Publishing changes
+
+Workbench records are content, not Nook product changes. The owning Gizmo
+authors the record and its lifecycle state. Route a single-record publication
+packet through Delivery Pipeline Team Gizmo -> active harness -> PR Lifecycle
+Agent, which executes the checked-in helper. For an existing issue, first
+read the file and retain the blob SHA that the local edit is based on, then pass
+that exact SHA as `NOOK_WORKBENCH_EXPECTED_SHA`:
+
+```bash
+export NOOK_WORKBENCH_EXPECTED_SHA="$(
+  gh api repos/meta-secret/nook-workbench/contents/issues/<feature>/<issue>.md \
+    --jq .sha
+)"
+node .github/scripts/workbench-publish.cjs \
+  /absolute/path/to/local-record.md \
+  issues/<feature>/<issue>.md \
+  "issues: update <feature>/<issue>"
+```
+
+The helper rejects an existing mutable record when the expected SHA is absent
+or no longer current. Refetch and merge concurrent progress instead of
+overwriting it. New plans, worklogs, and statistics use unique paths and do not
+need an expected SHA; existing statistics are immutable and cannot be replaced.
+
+For coordinated multi-file restructuring, use a focused Workbench branch and
+delivery record. Route its packetized branch, review, and status mechanics through Delivery
+Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent. Never mix
+Workbench files into a Nook feature delivery.
+
+## Team safety
+
+Before editing a record, inspect its status, owner, updated timestamp,
+dependencies, related PRs, and recent worklogs.
+
+Agents must not:
+
+- claim or reassign another active owner's `in_progress` work;
+- mutate another active task's branch;
+- mutate another active task's pull request;
+- reply to or resolve another active task's reviews;
+- trigger another active task's checks;
+- change another active task's merge state;
+- mark acceptance criteria done without validation evidence;
+- delete prior findings, failed approaches, blockers, or decisions;
+- switch `automation: agent` or `status: ready` merely to organize a draft;
+- copy or lightly reformat prompts or chats into the Workbench;
+- store credentials, secrets, vault data, private user information, environment
+  values, or raw logs in any record.
+
+When overlap involves another active owner, report the finding without changing
+their record.
+
+When no active owner exists, add the finding to the likely issue. Leave a new
+record `proposed` rather than creating competing execution state.
+
+Related scope does not transfer ownership. An explicit user, owner, or
+orchestrator handoff is required before another agent may mutate the feature or
+its focused issues. See
+[agent-feature-ownership.md](../dynamic-skills/agent-feature-ownership.md).
+
+## Task-start plan requirement
+
+Before implementation edits, every task-owning agent must author one plan from
+`plans/_templates/plan.md`, including for a user request with no issue.
+Use `plans/<feature>/<timestamp>-<task>.md`; use the closest feature or
+`unplanned` when no feature record exists.
+
+The task plan is an LLM-authored interpretation of the important request. It is
+not a copy, transcript, or sentence-by-sentence paraphrase of the user's prompt.
+
+The plan must contain:
+
+- the owning feature Gizmo or dev manager;
+- the canonical focused-issue Gizmo ID when one exists;
+- the requested outcome, scope, exclusions, and material assumptions;
+- the functional owners, allowed files, and forbidden files;
+- actual provider dependencies and public interfaces;
+- a concise procedure and expected acceptance evidence;
+- authored-test obligations and the delivery stage that executes them;
+- feature branch and integration provenance where applicable; and
+- a safety review excluding raw prompts, secrets, private data, and raw logs.
+
+Each ownership unit uses the exact field order from
+`.github/prompts/agent-plan.md`. It names one functional owner and capability
+acceptance contract. When an expertise provider will change files, it also
+enumerates exact repository-relative code, test, and forbidden paths,
+consumer interfaces, and provider-owned evidence. Otherwise every expertise
+field is `None`.
+
+The plan contract uses these validator-recognized labels:
+
+```text
+- Mission controller:
+- Current Gizmo ID:
+- Estimated authored changed lines:
+- Owning modules, packages, or layers:
+- Ownership units:
+- Public or cross-module interfaces:
+- Delivery shape:
+- PR sequence mode:
+- Current PR estimated authored changed lines:
+- Current PR slice and acceptance evidence:
+- PR slices, estimates, and acceptance evidence:
+```
+
+Each numbered ownership-unit row also uses the labels `Capability:`, `Gizmo ID:`,
+`Functional owner:`, `Expertise provider:`, `Expertise allowed code paths:`,
+`Expertise allowed test paths:`, `Expertise forbidden paths:`,
+`Expertise consumer interfaces:`, `Expertise acceptance evidence:`, and
+`Capability acceptance evidence:`. The checked-in Workbench validator remains
+the executable authority for these labels and their allowed role vocabularies.
+
+### Publish the plan
+
+Plans are immutable start snapshots.
+
+Publish a superseding plan when the request, design, scope, or estimate changes
+materially.
+
+Do not rewrite the earlier plan.
+The owning Gizmo authors the plan. Route its publication packet through Delivery
+Pipeline Team Gizmo -> active harness -> PR Lifecycle Agent, which executes the
+checked-in publisher for interactive work:
+
+```bash
+NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \
+NOOK_WORKBENCH_ASSIGNED_ISSUE_PATH=issues/<feature>/<issue>.md \
+NOOK_WORKBENCH_ASSIGNED_GIZMO_ID=<focused-issue-gizmo-id> \
+  node .github/scripts/workbench-publish.cjs \
+  /absolute/path/to/local-plan.md \
+  plans/<feature>/<timestamp>-<task>.md \
+  "plan: start <task>"
+```
+
+- Keep the source-task file outside the checkout.
+  - It lets the publisher reject copied prompt text.
+  - Do not publish it.
+- Set the assigned issue path and `NOOK_WORKBENCH_ASSIGNED_GIZMO_ID` from the
+  trusted focused-issue dispatch when publishing its plan. For legacy issues,
+  set only the issue path; omit both fields for standalone plans without an
+  assigned issue.
+- The bounded worker:
+  1. uses a dedicated planning LLM turn;
+  2. validates and publishes the plan; and
+  3. begins implementation only after publication.
+- A missing or rejected plan blocks implementation.
+## Worklog requirement
+
+Every task-owning agent must author one worklog before reporting completion or a
+blocker, even when the task began without a Workbench issue.
+Use `worklogs/_templates/worklog.md`, set its `plan` field to the corresponding
+task plan, and include:
+
+- outcome and material progress;
+- implementation problems and root causes;
+- durable decisions and tradeoffs;
+- validation and linked Nook PR;
+- remaining work or `None`.
+
+The owning Gizmo decides the associated issue status and `related_prs`. Route
+the Workbench update through Delivery Pipeline Team Gizmo -> active harness ->
+PR Lifecycle Agent in the same completion boundary. Feature completion records
+local dev integration. Manager completion records promotion and actual PR
+status. A concrete external blocker moves the owning record to `blocked`.
+
+## Required handoff
+
+Link one canonical completion record from the final handoff. That record links
+the feature, focused issue, task-start plan, worklog, and feature delivery.
+State what remains only when work is incomplete.
+
+Route the readback through Delivery Pipeline Team Gizmo -> active harness ->
+PR Lifecycle Agent. Re-open the published files before handoff and verify the
+links and state are visible on Workbench `main`.

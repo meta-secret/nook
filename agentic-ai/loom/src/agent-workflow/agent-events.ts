@@ -25,6 +25,9 @@ export type AgentAttemptEventMetadata = {
   readonly workflow: AgentProcessingWorkflowName;
   readonly workflowVersion: WorkflowVersion;
   readonly sourceCommit: GitCommit;
+  readonly originMainSha: GitCommit;
+  readonly pinnedLocalDevSha: GitCommit;
+  readonly featureHeadSha: GitCommit;
   readonly task: string;
   readonly agent: string;
   readonly attempt: WorkflowAttemptNumber;
@@ -34,6 +37,12 @@ export type AgentAttemptEventMetadata = {
   readonly actionId: string;
   readonly occurredAt: IsoTimestamp;
 };
+
+/** Version 4 persisted the fetched-main and pinned-dev evidence only. */
+export type LegacyAgentAttemptEventMetadata = Omit<
+  AgentAttemptEventMetadata,
+  'featureHeadSha'
+>;
 
 export type AgentAttemptStartedEvent = AgentAttemptEventMetadata & {
   readonly kind: AgentAttemptEventKind.AttemptStarted;
@@ -62,6 +71,12 @@ export type AgentAttemptEvent =
   | AgentResultProjectedEvent
   | AgentViewProjectedEvent
   | AgentAttemptTerminalRecordedEvent;
+
+export type LegacyAgentAttemptEvent =
+  | Omit<AgentAttemptStartedEvent, 'featureHeadSha'>
+  | Omit<AgentResultProjectedEvent, 'featureHeadSha'>
+  | Omit<AgentViewProjectedEvent, 'featureHeadSha'>
+  | Omit<AgentAttemptTerminalRecordedEvent, 'featureHeadSha'>;
 
 export type AgentAttemptEventWithoutMetadata =
   | Omit<AgentAttemptStartedEvent, keyof AgentAttemptEventMetadata>

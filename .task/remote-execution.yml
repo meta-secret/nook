@@ -2,9 +2,10 @@ version: '3'
 
 tasks:
   remote:
-    desc: Run named tasks in one configured remote job (TASK_NAMES=<a,b> or TASK_NAME=<a>).
+    desc: Run named tasks in one configured remote job (TASK_NAMES=<a,b> or TASK_NAME=<a>; PUBLISH_COMPILE_CACHE=false for read-only build:compile warm verification).
     env:
       REQUESTED_REMOTE_TASKS: '{{.TASK_NAMES | default .TASK_NAME}}'
+      REQUESTED_PUBLISH_COMPILE_CACHE: '{{.PUBLISH_COMPILE_CACHE}}'
       REQUESTED_E2E_PROJECT: '{{.E2E_PROJECT}}'
       REQUESTED_E2E_SPECS: '{{.E2E_SPECS}}'
       REQUESTED_E2E_GREP: '{{.E2E_GREP}}'
@@ -33,6 +34,17 @@ tasks:
             echo "build:compile is a feature-branch route and cannot run on dev." >&2
             exit 2
           fi
+          publish_compile_cache="${REQUESTED_PUBLISH_COMPILE_CACHE:-true}"
+          case "$publish_compile_cache" in
+            true|false) ;;
+            *)
+              echo "PUBLISH_COMPILE_CACHE must be true or false." >&2
+              exit 2
+              ;;
+          esac
+        elif [ -n "${REQUESTED_PUBLISH_COMPILE_CACHE:-}" ]; then
+          echo "PUBLISH_COMPILE_CACHE is valid only with TASK_NAME=build:compile." >&2
+          exit 2
         fi
         if [ -n "$(git status --porcelain)" ]; then
           echo "Remote execution requires a clean worktree; commit the exact experiment first." >&2
@@ -62,6 +74,9 @@ tasks:
           --raw-field "tasks=$requested_tasks"
           --raw-field "source_sha=$local_sha"
         )
+        if [ "$requested_tasks" = "build:compile" ]; then
+          workflow_args+=(--raw-field "publish_compile_cache=$publish_compile_cache")
+        fi
         if [ "$requested_tasks" = "web:e2e:debug" ]; then
           workflow_args+=(
             --raw-field "e2e_project=$REQUESTED_E2E_PROJECT"

@@ -610,6 +610,8 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("task: docker:ci:cache:publish:rust-base")
             && docker_tasks.contains("rust-base-publish")
             && !docker_tasks.contains("builder-core-deps-publish")
+            && docker_tasks.contains("web-app-deps-publish")
+            && docker_tasks.contains("web-research-deps-publish")
             && docker_tasks.contains("web-deps-publish")
             && docker_tasks.contains("nook-web-e2e-publish")
             && docker_tasks.contains("preflight-test")

@@ -9,7 +9,7 @@ import {
   ModuleDeliveryTaskKind,
 } from './domain.ts';
 
-import type { ModuleDeliveryNodeV2, ModuleDeliveryPlanV2 } from './domain.ts';
+import type { ModuleDeliveryNodeV2, ModuleDeliveryPlanV5 } from './domain.ts';
 
 export class CortexAuthoringPolicy {
   private constructor(
@@ -152,7 +152,7 @@ export class CortexAuthoringPolicy {
       sharedWriteClaims.length === node.resources.write.length &&
       node.resources.write.every(
         (claim) =>
-          claim.startsWith('.cortex/gizmo/') &&
+          claim.startsWith('.cortex/gizmo-prime/') &&
           !claim.includes('*') &&
           CortexAuthoringPolicy.isMarkdownFileClaim(claim) &&
           sharedWriteClaims.includes(claim),
@@ -180,7 +180,7 @@ export class CortexAuthoringPolicy {
     return (
       CortexAuthoringPolicy.isMarkdownFileClaim(claim) &&
       (claim.startsWith('.cortex/shared/') ||
-        (claim.startsWith('.cortex/gizmo/') &&
+        (claim.startsWith('.cortex/gizmo-prime/') &&
           node.team === TeamKey.Ai &&
           node.functionalOwner === ModuleDeliveryOwner.GizmoPrime &&
           node.acceptanceOwner === ModuleDeliveryOwner.GizmoPrime))
@@ -222,6 +222,6 @@ export type CortexWriteAuthorizationRequest = {
 };
 
 export type ParentOwnedExclusionsRequest = {
-  readonly plan: ModuleDeliveryPlanV2;
+  readonly plan: ModuleDeliveryPlanV5;
   readonly node: ModuleDeliveryNodeV2;
 };

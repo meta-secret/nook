@@ -320,7 +320,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
   <GraphSwitch
     {graph}
     light
-    onGraph={(next) => {
+    onGraph={(next: GraphId) => {
       graphId = next
       selected = new KeyGraphView(KeyGraphView.graphById(next)).defaultNode()
     }}

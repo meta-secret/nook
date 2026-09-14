@@ -1,5 +1,7 @@
 import { err, ok, type Result } from 'neverthrow';
 
+import { CanonicalFeatureBranchContract } from '../lib/base-evidence.ts';
+
 export enum DevFailureKind {
   Configuration = 'configuration',
   Command = 'command',
@@ -57,6 +59,21 @@ export class BranchName {
       return err({
         kind: DevFailureKind.Configuration,
         message: `Invalid Git branch name: ${input}`,
+      });
+    }
+    return ok(new BranchName(input));
+  }
+
+  static parseFeature(input: string): Result<BranchName, DevFailure> {
+    try {
+      CanonicalFeatureBranchContract.parse(input);
+    } catch (error) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message:
+          error instanceof Error
+            ? error.message
+            : `Invalid canonical feature branch: ${input}`,
       });
     }
     return ok(new BranchName(input));
@@ -150,6 +167,8 @@ export interface CommandRequest {
   readonly executable: CommandExecutable;
   readonly args: readonly string[];
   readonly workingDirectory: string;
+  /** The canonical repository root that owns a Git operation, when known. */
+  readonly repositoryRoot?: string;
 }
 
 export interface CommandOutput {
@@ -288,9 +307,13 @@ export interface DevSnapshot {
   readonly devSha: CommitSha;
 }
 
+export interface DevLandRequest {
+  /** Exact canonical feature branch authorized for local integration. */
+  readonly featureBranch: BranchName;
+}
+
 export interface DevPublishRequest {
-  readonly devPath: string;
-  readonly devSha: CommitSha;
+  readonly expectedSha: CommitSha;
 }
 
 export interface ManagedRemoteSnapshot {

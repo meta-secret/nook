@@ -1,6 +1,10 @@
 export { ModuleDeliveryPlanDecoder } from './validation.ts';
 export { ModuleDeliveryPlanSchema } from './codec.ts';
 export {
+  ModuleDeliveryPlanTransportLimit,
+  ModuleDeliveryPlanTransportLimitCode,
+} from './codec-fields.ts';
+export {
   ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryGenerationFenceKind,
@@ -22,20 +26,44 @@ export { TeamKey } from '../team-agents/catalog.ts';
 export { ModuleEvidenceBoundary } from './evidence.ts';
 export type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
+  ModuleDeliveryAcceptedProviderEvidenceIdentityV1,
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryEvidenceDigestRequest,
 } from './evidence.ts';
 export {
+  LEGACY_MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+  ModuleDeliveryEvidenceDecodeError,
+  ModuleDeliveryEvidenceDecodeErrorCode,
+  MigrationEvidenceRequired,
   ModuleDeliveryEvidenceVerdict,
+  ModuleDeliveryEvidenceSchema,
   ModuleDeliveryProviderSubmissionKind,
   ModuleIntegrationPhase,
 } from './integration-provenance.ts';
+export {
+  MAX_MODULE_DELIVERY_PLAN_AGGREGATE_NODES,
+  MAX_MODULE_DELIVERY_PLAN_AGGREGATE_STRING_CODE_UNITS,
+  MAX_MODULE_DELIVERY_PLAN_ARRAY_ENTRIES,
+  MAX_MODULE_DELIVERY_PLAN_DEPTH,
+  MAX_MODULE_DELIVERY_PLAN_HANDOFF_BYTES,
+  MAX_MODULE_DELIVERY_PLAN_OBJECT_KEYS,
+  MAX_MODULE_DELIVERY_EVIDENCE_ARRAY_ENTRIES,
+  MAX_MODULE_DELIVERY_EVIDENCE_DEPTH,
+  MAX_MODULE_DELIVERY_EVIDENCE_HANDOFF_BYTES,
+  MAX_MODULE_DELIVERY_EVIDENCE_IDENTITIES,
+  MAX_MODULE_DELIVERY_EVIDENCE_OBJECT_KEYS,
+  MAX_MODULE_DELIVERY_EVIDENCE_STRING_CODE_UNITS,
+} from './evidence-limits.ts';
 export type {
   AcceptedModuleDeliveryEvidence,
   AcceptedModuleDeliveryWrite,
   ModuleDeliveryProviderSubmission,
   ModuleDeliveryReadOnlyEvidenceSubmission,
+  ModuleDeliveryReadOnlyEvidenceSubmissionV1,
+  ModuleDeliveryEvidenceMigrationPayload,
+  ModuleDeliveryEvidenceMigrationRequest,
+  MigrationEvidenceRequiredRequest,
   ModuleDeliveryWriteProviderSubmission,
 } from './integration-provenance.ts';
 export { ModuleWorktree } from './workspace.ts';

@@ -39,6 +39,22 @@ class RecordingRunner implements CommandRunner {
   }
 }
 
+class FastForwardRunner implements CommandRunner {
+  readonly requests: CommandRequest[] = [];
+  private head = SHA_A;
+
+  run(request: CommandRequest): Result<CommandOutput, never> {
+    this.requests.push(request);
+    const { args } = request;
+    if (args[0] === 'rev-parse')
+      return ok({ exitCode: 0, stdout: `${this.head}\n`, stderr: '' });
+    if (args[0] === 'merge-base')
+      return ok({ exitCode: 0, stdout: '', stderr: '' });
+    if (args[0] === 'merge' && args[1] === '--ff-only') this.head = SHA_B;
+    return ok({ exitCode: 0, stdout: '', stderr: '' });
+  }
+}
+
 test('worktree decoding excludes prunable development worktrees', () => {
   const source = [
     `worktree /tmp/dev\nHEAD ${SHA_A}\nbranch refs/heads/dev\n`,
@@ -108,6 +124,25 @@ test('exact push uses an ordinary refspec without force or merge policy flags', 
   expect(request?.args).toEqual(['push', 'origin', `${SHA_A}:refs/heads/dev`]);
 });
 
+test('promotion fast-forwards a behind local dev without rewriting it', () => {
+  const runner = new FastForwardRunner();
+  const root = '/tmp/nook-dev-repository';
+  const repository = new DevGitRepository({ root, runner });
+  const target = CommitSha.parse(SHA_B);
+  expect(target.isOk()).toBe(true);
+  if (target.isErr()) return;
+  const result = repository.fastForwardTo({ path: root, target: target.value });
+  expect(result.isOk()).toBe(true);
+  if (result.isErr()) return;
+  expect(result.value.value()).toBe(SHA_B);
+  expect(
+    runner.requests.some(
+      ({ args }) =>
+        args[0] === 'merge' && args[1] === '--ff-only' && args[2] === SHA_B,
+    ),
+  ).toBe(true);
+});
+
 test('commit parser rejects arbitrary build-proof text', () => {
   expect(CommitSha.parse('build succeeded').isErr()).toBe(true);
 });
@@ -153,4 +188,24 @@ test('promotion contract keeps the stable aggregate readiness gate', () => {
   expect(DevDeliveryContract.promotion.requiredJobs).toEqual([
     'Dev promotion readiness',
   ]);
+});
+
+test('remote build title fixture accepts both canonical cache modes', () => {
+  const titlePattern = DevDeliveryContract.remoteBuild.titlePattern;
+  for (const mode of ['publish', 'read-only']) {
+    const title = `Remote / build:compile @ ${SHA_A} / compile-cache=${mode} / manual`;
+    expect(titlePattern.exec(title)?.[1]).toBe(SHA_A);
+  }
+});
+
+test('remote build title fixture rejects unrelated run-name modes', () => {
+  const titlePattern = DevDeliveryContract.remoteBuild.titlePattern;
+  expect(
+    titlePattern.test(
+      `Remote / build:compile @ ${SHA_A} / compile-cache=disabled / manual`,
+    ),
+  ).toBe(false);
+  expect(
+    titlePattern.test(`Remote / hive:verify @ ${SHA_A} / manual`),
+  ).toBe(false);
 });

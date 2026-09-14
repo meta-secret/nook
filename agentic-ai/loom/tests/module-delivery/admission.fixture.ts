@@ -15,6 +15,7 @@ import {
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
   ModuleDeliveryProviderSubmissionKind,
+  MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   ModuleGenerationAuthority,
   ModuleDeliveryPlanDecoder,
   ModuleEvidenceBoundary,
@@ -30,7 +31,7 @@ import type {
   ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryWriteNodeV2,
   RecordModuleDeliveryAttemptDispositionRequest,
@@ -63,7 +64,7 @@ export class ModuleDeliveryAdmissionScenario {
         dependencies.length === 0
           ? {
               kind: ModuleDeliveryBaselineKind.SourceCommit,
-              sourceCommit: SOURCE,
+              sourceCommit: PINNED_LOCAL_DEV_SHA,
             }
           : {
               kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
@@ -88,22 +89,27 @@ export class ModuleDeliveryAdmissionScenario {
     };
   }
 
-  static planAt(sourceCommit: string): ModuleDeliveryPlanV2 {
+  static planAt(sourceCommit: string): ModuleDeliveryPlanV5 {
     return new ModuleDeliveryAdmissionScenario(sourceCommit).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV2 {
+  private execute(): ModuleDeliveryPlanV5 {
     const sourceCommit = this.request;
     const plan = structuredClone(PLAN);
-    const source = { sourceCommit };
-    Object.assign(plan, source);
+    Object.assign(plan, {
+      sourceCommit,
+      originMainSha: ORIGIN_MAIN_SHA,
+      pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+    });
     for (const node of plan.nodes)
       if (node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit)
-        Object.assign(node.baseline, source);
+        Object.assign(node.baseline, {
+          sourceCommit: PINNED_LOCAL_DEV_SHA,
+        });
     return plan;
   }
 
-  static generationPlan(request: GenerationPlanRequest): ModuleDeliveryPlanV2 {
+  static generationPlan(request: GenerationPlanRequest): ModuleDeliveryPlanV5 {
     const plan = structuredClone(
       ModuleDeliveryAdmissionScenario.planAt(request.sourceCommit),
     );
@@ -118,7 +124,7 @@ export class ModuleDeliveryAdmissionScenario {
     return plan;
   }
 
-  static validate(plan: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
+  static validate(plan: ModuleDeliveryPlanV5): ValidatedModuleDeliveryPlan {
     const result = ModuleDeliveryPlanDecoder.decodeAndValidate(
       JSON.stringify(plan),
     );
@@ -154,7 +160,7 @@ export class ModuleDeliveryAdmissionScenario {
     const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority,
       acceptedPlan: plan,
-      headCommit: SOURCE,
+      headCommit: plan.plan.sourceCommit,
       integratedWriterFrontiers: [],
       acceptedEvidence: [],
     };
@@ -253,12 +259,14 @@ export class ModuleDeliveryAdmissionScenario {
     };
     return {
       kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
-      schemaVersion: 1,
+      schemaVersion: MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
       taskId: node.taskId,
       attempt: request.lease.attempt,
       generation: request.lease.generation,
       planDigest: request.lease.planDigest,
       sourceCommit: request.lease.startingFrontier,
+      originMainSha: request.lease.originMainSha,
+      pinnedLocalDevSha: request.lease.pinnedLocalDevSha,
       producerTeam: request.lease.team,
       functionalOwner: request.lease.functionalOwner,
       acceptanceOwner: request.lease.acceptanceOwner,
@@ -323,7 +331,11 @@ export class ModuleDeliveryAdmissionScenario {
 export const fixture =
   ModuleDeliveryWorktreeTestSupportScenario.createGitFixture();
 
-export const SOURCE = fixture.baselineCommit;
+export const ORIGIN_MAIN_SHA = fixture.originMainSha;
+
+export const PINNED_LOCAL_DEV_SHA = fixture.pinnedLocalDevSha;
+
+export const SOURCE = fixture.sourceCommit;
 
 export const ROOT = 'nook-app/nook-platform/nook-core';
 
@@ -362,7 +374,7 @@ export type GenerationRestartRequest = {
 
 export type GenerationPlanUpdate = {
   readonly generation: number;
-  readonly nodes: ModuleDeliveryPlanV2['nodes'];
+  readonly nodes: ModuleDeliveryPlanV5['nodes'];
 };
 
 export type EvidenceSubmissionRequest = {
@@ -421,11 +433,13 @@ export const edge: ModuleDeliveryEdgeContract = {
   owningTests: ['alpha contract test'],
 };
 
-export const PLAN: ModuleDeliveryPlanV2 = {
-  version: 2,
+export const PLAN: ModuleDeliveryPlanV5 = {
+  version: 5,
+  featureBranch: 'codex/module-delivery-test',
   generation: 1,
   sourceCommit: SOURCE,
-  maxConcurrency: 2,
+  originMainSha: ORIGIN_MAIN_SHA,
+  pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
   maxAgentDepth: 3,
   maxAttempts: 2,
   parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,

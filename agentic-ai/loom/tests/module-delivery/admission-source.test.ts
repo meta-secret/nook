@@ -21,7 +21,7 @@ import { ModuleAdmissionSource } from '../../src/module-delivery/admission-sourc
 import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-support.ts';
 
 import type {
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryWriteNodeV2,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
@@ -30,6 +30,8 @@ export class ModuleDeliveryAdmissionSourceScenario {
   private constructor(
     private readonly request: {
       readonly sourceCommit: string;
+      readonly originMainSha: string;
+      readonly pinnedLocalDevSha: string;
       readonly generation: number;
       readonly moduleRoot: string;
       readonly write: string;
@@ -38,6 +40,8 @@ export class ModuleDeliveryAdmissionSourceScenario {
 
   static acceptedPlan(request: {
     readonly sourceCommit: string;
+    readonly originMainSha: string;
+    readonly pinnedLocalDevSha: string;
     readonly generation: number;
     readonly moduleRoot: string;
     readonly write: string;
@@ -59,7 +63,7 @@ export class ModuleDeliveryAdmissionSourceScenario {
       consumerOutcome: 'The exact SRE-owned path is updated.',
       baseline: {
         kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: request.sourceCommit,
+        sourceCommit: request.pinnedLocalDevSha,
       },
       agentDepthLimit: 1,
       dependencies: [],
@@ -71,11 +75,13 @@ export class ModuleDeliveryAdmissionSourceScenario {
         expectedCommitHandoff: true,
       },
     };
-    const plan: ModuleDeliveryPlanV2 = {
+    const plan: ModuleDeliveryPlanV5 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
+      featureBranch: 'codex/module-delivery-test',
       generation: request.generation,
       sourceCommit: request.sourceCommit,
-      maxConcurrency: 1,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
       maxAgentDepth: 1,
       maxAttempts: 1,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -120,6 +126,8 @@ test('classifies exact writes against the frozen source tree', () => {
     )(['rev-parse', 'HEAD']);
     const acceptedFile = ModuleDeliveryAdmissionSourceScenario.acceptedPlan({
       sourceCommit,
+      originMainSha: fixture.originMainSha,
+      pinnedLocalDevSha: fixture.pinnedLocalDevSha,
       generation: 1,
       moduleRoot: 'infra/k0s/scripts',
       write: exactPath,
@@ -134,6 +142,8 @@ test('classifies exact writes against the frozen source tree', () => {
     const acceptedDirectory =
       ModuleDeliveryAdmissionSourceScenario.acceptedPlan({
         sourceCommit,
+        originMainSha: fixture.originMainSha,
+        pinnedLocalDevSha: fixture.pinnedLocalDevSha,
         generation: 2,
         moduleRoot: 'infra/k0s',
         write: 'infra/k0s/scripts',
@@ -148,6 +158,8 @@ test('classifies exact writes against the frozen source tree', () => {
     const acceptedBelowFile =
       ModuleDeliveryAdmissionSourceScenario.acceptedPlan({
         sourceCommit,
+        originMainSha: fixture.originMainSha,
+        pinnedLocalDevSha: fixture.pinnedLocalDevSha,
         generation: 3,
         moduleRoot: 'infra/k0s/scripts',
         write: `${exactPath}/child.md`,

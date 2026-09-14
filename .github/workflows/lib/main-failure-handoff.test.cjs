@@ -325,11 +325,16 @@ void test('workflow preserves the Main cache order and coalesces only pending ru
   const wasmJob = sectionBefore(sectionAfter(main, '\n  wasm:\n'), '\n  wasm-cache-publish:\n')
   const wasmCacheGate = sectionBefore(sectionAfter(main, '\n  wasm-cache-publish:\n'), '\n  wasm-cache-proof:\n')
   const webJob = sectionBefore(sectionAfter(main, '\n  web:\n'), '\n  web-e2e:\n')
+  const workflowConcurrency = sectionBefore(sectionAfter(ci, '\nconcurrency:\n'), '\njobs:\n')
   assert.match(
     ci,
     /github\.event_name == 'push' && 'main'/,
   )
-  assert.match(ci, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/)
+  assert.match(workflowConcurrency, /^ {2}group: >-[\s\S]*^ {2}cancel-in-progress: false$/m)
+  assert.match(
+    ci,
+    /dev-promotion-readiness:\n\s+name: Dev promotion readiness\n\s+concurrency:\n\s+group: dev-promotion-readiness\n\s+cancel-in-progress: false/,
+  )
   assert.doesNotMatch(ci, /^\s+queue:/m)
   assert.match(main, /wasm:\n\s+name: WASM verification and artifact[\s\S]*needs: \[rust, preflight\]/)
   assert.match(

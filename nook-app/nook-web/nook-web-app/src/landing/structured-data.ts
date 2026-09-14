@@ -11,9 +11,7 @@ interface LandingJsonObject {
 
 function isLandingJsonObject(value: unknown): value is LandingJsonObject {
   return (
-    value instanceof Object &&
-    !Array.isArray(value) &&
-    'description' in value
+    value instanceof Object && !Array.isArray(value) && 'description' in value
   )
 }
 

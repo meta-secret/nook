@@ -36,14 +36,30 @@ printf '%s\n' "$script" | grep -q 'docker run' \
 printf '%s\n' "$script" | grep -q '/tmp/nook-format-files:ro' \
   || { echo 'format-host-apply test: expected bounded changed-file input' >&2; exit 1; }
 for required in \
-  'git diff --name-only --diff-filter=ACMR -z "$base_ref"' \
-  'git ls-files --others --exclude-standard -z' \
+  '[[ ! "${PINNED_LOCAL_DEV_SHA:-}" =~ ^[0-9a-f]{40}$ ]]' \
+  'GIT_CONFIG_NOSYSTEM=1' \
+  'GIT_CONFIG_GLOBAL=/dev/null' \
+  'GIT_NO_REPLACE_OBJECTS=1' \
+  '-c core.fsmonitor=false' \
+  '-c core.hooksPath=/dev/null' \
+  '-c core.excludesFile=/dev/null' \
+  '-c diff.external=' \
+  'rev-parse --verify "${PINNED_LOCAL_DEV_SHA}^{commit}"' \
+  '[[ "$resolved_base_sha" != "$PINNED_LOCAL_DEV_SHA" ]]' \
+  'diff --no-ext-diff --name-only --diff-filter=ACMR -z "$PINNED_LOCAL_DEV_SHA"' \
+  'ls-files --others --exclude-per-directory=.gitignore -z' \
   'FORMAT_CHANGED_FILES="$changed_files" task hive:guest:format:changed'; do
   printf '%s\n' "$script" | grep -Fq "$required" \
     || { echo "format-host-apply test: canonical changed-file selection misses $required" >&2; exit 1; }
 done
+printf '%s\n' "$script" | grep -Fq -- '--exclude-standard' \
+  && { echo 'format-host-apply test: untracked selection must not read info or global excludes' >&2; exit 1; }
 printf '%s\n' "$script" | grep -q 'task hive:guest:format:changed' \
   || { echo 'format-host-apply test: expected changed-only native Hive guest formatter' >&2; exit 1; }
+for forbidden_base in 'merge-base HEAD origin/main' 'git rev-parse HEAD'; do
+  printf '%s\n' "$script" | grep -Fq "$forbidden_base" \
+    && { echo "format-host-apply test: forbidden formatter base fallback: $forbidden_base" >&2; exit 1; }
+done
 
 for forbidden in buildx registry-cache format:diff setup:rust cargo\ fmt bun\ install; do
   printf '%s\n' "$script" | grep -Fq "$forbidden" \
@@ -79,7 +95,7 @@ for required in \
     || { echo "format-host-apply test: missing shared TypeScript formatter contract: $required" >&2; exit 1; }
 done
 for required in \
-  '.cortex/gizmo/dynamic-skills/*/scripts/*' \
+  '.cortex/gizmo-prime/dynamic-skills/*/scripts/*' \
   '.cortex/shared/dynamic-skills/*/scripts/*' \
   '.cortex/teams/*/dynamic-skills/*/scripts/*' \
   '^(\.cortex/(gizmo|shared|teams/[^/]+)/dynamic-skills/[^/]+/scripts)/(.+)$' \
@@ -222,9 +238,22 @@ printf 'baseline\n' >"$fixture_root/README.md"
   git config user.name formatter-contract
   git add -A
   git commit -qm baseline
-  git update-ref refs/remotes/origin/main HEAD
+  pinned_local_dev_sha="$(git rev-parse HEAD)"
   printf 'unrelated\n' >README.md
   printf 'const loom = true;\n' >agentic-ai/loom/src/loom.ts
+  printf 'const coreExcludes = true;\n' >agentic-ai/loom/src/core-excludes.ts
+  printf 'const infoExclude = true;\n' >agentic-ai/loom/src/info-exclude.ts
+  cat >bin/reject-agent-git-hook <<'EOF'
+#!/usr/bin/env bash
+exit 97
+EOF
+  chmod +x bin/reject-agent-git-hook
+  printf 'agentic-ai/loom/src/core-excludes.ts\n' >agent-core-excludes
+  printf 'agentic-ai/loom/src/info-exclude.ts\n' >.git/info/exclude
+  git config core.fsmonitor "$fixture_root/bin/reject-agent-git-hook"
+  git config core.hooksPath "$fixture_root/bin"
+  git config diff.external "$fixture_root/bin/reject-agent-git-hook"
+  git config core.excludesFile "$fixture_root/agent-core-excludes"
   printf 'const application = true;\n' >.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/demo/src/application.ts
   printf 'const helper = true;\n' >.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/scripts/helper.ts
   printf 'const scriptsSlug = true;\n' >.cortex/teams/ai/dynamic-skills/scripts/scripts/demo/src/scripts-slug.ts
@@ -245,10 +274,17 @@ printf 'baseline\n' >"$fixture_root/README.md"
   FORMAT_TEST_NESTED_SCRIPTS_ROOT="$fixture_root/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts" \
   HIVE_SEALED_GUEST=1 \
   NOOK_FORMATTER_ROOT="$fixture_root/.github/formatting" \
+  PINNED_LOCAL_DEV_SHA="$pinned_local_dev_sha" \
   REPO_ROOT="$fixture_root" \
   PATH="$fixture_root/bin:$PATH" \
     bash .github/formatting/format-host-apply.sh >/dev/null
   test "$(git hash-object nook-app/nook-platform/src/child.rs)" = "$(git rev-parse HEAD:nook-app/nook-platform/src/child.rs)"
+  git config --unset core.fsmonitor
+  git config --unset core.hooksPath
+  git config --unset diff.external
+  git config --unset core.excludesFile
+  : >.git/info/exclude
+  rm -f agent-core-excludes bin/reject-agent-git-hook
 )
 printf '%s\n' \
   '../nook-vault-sentinel/src/sentinel.svelte' \
@@ -256,6 +292,8 @@ printf '%s\n' \
   '../nook-web-shared/src/vault-app/shared.ts' \
   'src/extension.ts' \
   'src/hive-console.ts' \
+  'src/core-excludes.ts' \
+  'src/info-exclude.ts' \
   'src/loom.ts' \
   'demo/src/application.ts' \
   'demo/src/scripts-slug.ts' \
@@ -279,7 +317,7 @@ cmp -s "$fixture_root/expected-rust.log" "$fixture_root/actual-rust.log" \
   rm -f format.log expected.log actual.log rust.log expected-rust.log actual-rust.log
   git add -A
   git commit -qm formatted-state
-  git update-ref refs/remotes/origin/main HEAD
+  pinned_local_dev_sha="$(git rev-parse HEAD)"
   FORMAT_TEST_LOG="$fixture_root/format.log" \
   FORMAT_TEST_RUST_LOG="$fixture_root/rust.log" \
   FORMAT_TEST_REAL_TASK="$(command -v task)" \
@@ -287,6 +325,7 @@ cmp -s "$fixture_root/expected-rust.log" "$fixture_root/actual-rust.log" \
   FORMAT_TEST_NESTED_SCRIPTS_ROOT="$fixture_root/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts" \
   HIVE_SEALED_GUEST=1 \
   NOOK_FORMATTER_ROOT="$fixture_root/.github/formatting" \
+  PINNED_LOCAL_DEV_SHA="$pinned_local_dev_sha" \
   REPO_ROOT="$fixture_root" \
   PATH="$fixture_root/bin:$PATH" \
     bash .github/formatting/format-host-apply.sh >/dev/null
@@ -295,5 +334,27 @@ test ! -e "$fixture_root/format.log" \
   || { echo 'format-host-apply test: sealed guest no-op invoked Prettier' >&2; exit 1; }
 test ! -e "$fixture_root/rust.log" \
   || { echo 'format-host-apply test: sealed guest no-op invoked rustfmt' >&2; exit 1; }
+
+(
+  cd "$fixture_root"
+  if HIVE_SEALED_GUEST=1 bash .github/formatting/format-host-apply.sh >/dev/null 2>&1; then
+    echo 'format-host-apply test: missing pinned local-dev SHA must fail closed' >&2
+    exit 1
+  fi
+  if PINNED_LOCAL_DEV_SHA=not-a-sha \
+    HIVE_SEALED_GUEST=1 \
+    bash .github/formatting/format-host-apply.sh >/dev/null 2>&1; then
+    echo 'format-host-apply test: malformed pinned local-dev SHA must fail closed' >&2
+    exit 1
+  fi
+  git tag -a formatter-base-tag -m formatter-base-tag HEAD
+  mismatched_tag_sha="$(git rev-parse formatter-base-tag)"
+  if PINNED_LOCAL_DEV_SHA="$mismatched_tag_sha" \
+    HIVE_SEALED_GUEST=1 \
+    bash .github/formatting/format-host-apply.sh >/dev/null 2>&1; then
+    echo 'format-host-apply test: mismatched resolved commit must fail closed' >&2
+    exit 1
+  fi
+)
 
 echo 'format-host-apply test: ok'

@@ -112,6 +112,9 @@ test('Sentinel creation invites participants instead of standalone join', async 
     await expect(page.getByTestId('sentinel-genesis-progress')).toContainText(
       '2 / 3',
     )
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-name'),
+    ).toHaveValue('')
     await expect(page.getByTestId('sentinel-genesis-finalize')).toBeDisabled()
     await demoBeat(page)
 

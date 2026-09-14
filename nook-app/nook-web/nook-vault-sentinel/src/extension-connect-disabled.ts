@@ -14,6 +14,7 @@ import type {
   ExtensionConnectRequestFor,
   PairedExtensionIdentityDiscoveryFor,
 } from "$web-shared/extension/extension-connect-types";
+import type { ExtensionConnectScope as ProtocolExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import { ExtensionIdentityRequestSource } from "$web-shared/extension/extension-connect-types";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
 
@@ -32,7 +33,7 @@ export enum ExtensionConnectScope {
 }
 
 export type ExtensionConnectRequest =
-  ExtensionConnectRequestFor<ExtensionConnectScope>;
+  ExtensionConnectRequestFor<ProtocolExtensionConnectScope>;
 export type PairedExtensionIdentityDiscovery =
   PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>;
 

@@ -25,10 +25,19 @@ inputs:
     description: >-
       Allow hosted runners to publish only an isolated remote-buildcache ref keyed by
       git commit SHA (-git-<sha>) while using Main when that exact ref is absent. ARC
-      keeps large graphs in its node-local persistent shard. Never writes Main's
-      nook/buildcache refs.
+      keeps ordinary large graphs in its node-local persistent shard; only the
+      authorized remote build:compile publication handoff may publish its stable cache
+      ref. A read-only build:compile verification never exports a registry cache.
+      Other jobs never write Main's protected refs.
     required: false
     default: "false"
+  publish-compile-cache:
+    description: >-
+      Build-only compile cache contract: true publishes the stable mode=max cache;
+      false imports that cache without exporting it. This input is valid only for
+      the remote build:compile task.
+    required: false
+    default: "true"
   require-e2e-cache:
     description: Require the browser-image cache lineage for this job.
     required: false
@@ -181,6 +190,35 @@ runs:
           fi
         fi
         isolated_cache_write="${{ inputs.isolated-cache-write }}"
+        publish_compile_cache="${{ inputs.publish-compile-cache }}"
+        case "$publish_compile_cache" in
+          true|false) ;;
+          *)
+            echo "publish-compile-cache must be true or false (got: ${publish_compile_cache:-empty})" >&2
+            exit 1
+            ;;
+        esac
+        remote_compile_cache_write=""
+        if [ "$event_name" = "workflow_dispatch" ] \
+          && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
+          # The feature build has one stable BuildKit cache ref. Do not derive
+          # another key from its source branch or commit SHA.
+          isolated_cache_write=false
+          if [ "$publish_compile_cache" = "true" ]; then
+            remote_compile_cache_write=1
+            echo "build:compile publication mode enables the stable mode=max cache export"
+          else
+            echo "build:compile read-only verification imports the stable cache without registry export"
+          fi
+        elif [ "$publish_compile_cache" != "true" ]; then
+          echo "publish-compile-cache=false requires the remote build:compile task" >&2
+          exit 1
+        fi
+        if [ "$publish_compile_cache" = "true" ]; then
+          echo "NOOK_COMPILE_CACHE_MODE=publish" >> "$GITHUB_ENV"
+        else
+          echo "NOOK_COMPILE_CACHE_MODE=read-only" >> "$GITHUB_ENV"
+        fi
         if [ "$isolated_cache_write" = "true" ]; then
           if [ "${{ inputs.main-cache-only }}" != "true" ] \
             || [ "${{ inputs.cache-write }}" != "false" ]; then
@@ -216,10 +254,12 @@ runs:
           read_only=1
         fi
 
-        # ARC retains its solved graph in the persistent shard and does not publish
-        # exact-SHA caches. Do not probe refs this execution path never writes.
-        if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+        # ARC retains its solved graph in the persistent shard for ordinary PR and
+        # validation jobs. Keep that node-local behavior everywhere except the
+        # explicitly authorized remote build:compile handoff above.
+        if [ "${NOOK_ARC_RUNNER:-}" = "1" ] && [ -z "$remote_compile_cache_write" ]; then
           isolated_cache_write=false
+          echo "ARC skips general exact-SHA registry export; Main and sccache remain reusable"
         fi
 
         scope_suffix=""
@@ -381,6 +421,15 @@ runs:
         fi
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ]; then
           publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
+          # web-deps is an aggregate of independent app/research lockfile stages. Probe the
+          # child scopes so their standalone targets can restore exact-or-Main without merging
+          # both generations into one importer set.
+          publish_exact_availability GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1$scope_suffix"
+          if [ -n "$scope_suffix" ]; then
+            publish_main_availability GHA_CACHE_MAIN_WEB_APP_DEPS_AVAILABLE "nook-web-app-deps-v1"
+            publish_main_availability GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE "nook-web-research-deps-v1"
+          fi
         fi
         case "$cache_selection" in
           general|native|wasm|preflight|web-e2e|ecosystem-dylint|ecosystem-fuzz|ecosystem-policy-tools|ecosystem-deterministic|ecosystem-kani|ecosystem-smoke)
@@ -416,18 +465,19 @@ runs:
           echo "HIVE_CACHE_TO=$hive_remote_ref,mode=$hive_export_mode,timeout=15m" >> "$GITHUB_ENV"
         fi
         cache_write_enabled=""
-        if [ "$isolated_cache_write" = "true" ]; then
-          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            # Even mode=min includes the final result layer. Rust dependency
-            # targets can exceed 15 GiB, so parallel PR uploads overload Zot's
-            # HDD and turn a successful verification into a cache failure.
-            # ARC keeps this node-local and reads Main plus sccache instead.
-            echo "ARC skips general exact-SHA registry export; Main and sccache remain reusable"
-          else
-            cache_write_enabled=1
-          fi
+        if [ -n "$remote_compile_cache_write" ]; then
+          cache_write_enabled=1
+        elif [ "$isolated_cache_write" = "true" ]; then
+          cache_write_enabled=1
         elif [ -z "$read_only" ] && [ "${{ inputs.cache-write }}" = "true" ]; then
           cache_write_enabled=1
+        fi
+        # The Delivery-owned read-only compile handoff is an explicit no-op for
+        # registry publication. Keep this guard next to the generic cache flag
+        # so a future cache-write path cannot accidentally re-enable export.
+        if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ] \
+          && [ "$publish_compile_cache" = "false" ]; then
+          cache_write_enabled=""
         fi
         echo "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled" >> "$GITHUB_ENV"
 

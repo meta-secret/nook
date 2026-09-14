@@ -9,6 +9,10 @@ import { fromMarkdown } from 'mdast-util-from-markdown';
 import type { Heading, Link, Parent, Root, RootContent } from 'mdast';
 
 import {
+  CORTEX_OWNER_GRAPH_PATHS,
+  CortexChildGraphPathCollection,
+  CortexChildGraphReference,
+  CortexDocumentPath,
   CortexStructureFindingCode,
   type CortexStructureFinding,
 } from './cortex-document-structure.ts';
@@ -131,7 +135,11 @@ export class CortexDocumentMapVerifier {
       this.deriveGraphFindings({ ...args, catalog, root });
     }
     for (const document of args.documents) {
-      if (!this.isGraph(this.normalize(document.relativePath))) {
+      if (
+        !new CortexDocumentPath(
+          this.normalize(document.relativePath),
+        ).isKnowledgeGraphPath()
+      ) {
         this.deriveDocumentFindings({
           document,
           findings: args.findings,
@@ -153,6 +161,12 @@ export class CortexDocumentMapVerifier {
     const graphDocuments = new Map<string, EvidenceDocument>();
     const rootPath = this.normalize(args.root.relativePath);
     graphDocuments.set(rootPath, args.root);
+    for (const graphPath of new CortexChildGraphPathCollection(
+      args.catalog.keys(),
+    ).execute()) {
+      const [graph = false] = [args.catalog.get(graphPath)];
+      if (graph !== false) graphDocuments.set(graphPath, graph);
+    }
     if (distributed) {
       for (const graphPath of OWNER_GRAPHS) {
         const [graph = false] = [args.catalog.get(graphPath)];
@@ -178,10 +192,36 @@ export class CortexDocumentMapVerifier {
       });
       indexedByGraph.set(graphPath, indexed);
     }
+    const indexedDocumentGraphs = new Map<string, string[]>();
+    for (const [graphPath, indexedPaths] of indexedByGraph) {
+      for (const indexedPath of indexedPaths) {
+        if (
+          new CortexDocumentPath(indexedPath).isKnowledgeGraphPath() ||
+          new CortexChildGraphReference({ graphPath, indexedPath }).isReadOnly()
+        ) {
+          continue;
+        }
+        const graphPaths = indexedDocumentGraphs.get(indexedPath) ?? [];
+        graphPaths.push(graphPath);
+        indexedDocumentGraphs.set(indexedPath, graphPaths);
+      }
+    }
+    for (const [indexedPath, graphPaths] of indexedDocumentGraphs) {
+      for (const graphPath of graphPaths.slice(1)) {
+        this.add(args.findings)({
+          code: CortexStructureFindingCode.InvalidIndexEntry,
+          file: graphPath,
+          line: 1,
+          message: `Knowledge graphs must index each non-graph document once: ${indexedPath}`,
+        });
+      }
+    }
     for (const document of args.documents) {
       const documentPath = this.normalize(document.relativePath);
-      if (this.isGraph(documentPath)) continue;
-      const ownerGraph = this.owningGraph(documentPath);
+      if (new CortexDocumentPath(documentPath).isKnowledgeGraphPath()) continue;
+      const ownerGraph = new CortexDocumentPath(
+        documentPath,
+      ).owningKnowledgeGraphPath();
       const graphPath =
         ownerGraph === '.cortex/knowledge-graph.md' ? rootPath : ownerGraph;
       if (indexedByGraph.get(graphPath)?.has(documentPath)) continue;
@@ -206,8 +246,9 @@ export class CortexDocumentMapVerifier {
     for (const graphPath of OWNER_GRAPHS) {
       const [indexedPaths = []] = [indexedByGraph.get(graphPath)];
       for (const indexedPath of indexedPaths) {
-        const indexedOwner = this.owner(indexedPath);
-        if (indexedOwner === false || indexedOwner === this.owner(graphPath))
+        const indexedOwner = new CortexDocumentPath(indexedPath).graphOwner();
+        const graphOwner = new CortexDocumentPath(graphPath).graphOwner();
+        if (indexedOwner === false || indexedOwner === graphOwner)
           continue;
         this.add(args.findings)({
           code: CortexStructureFindingCode.InvalidIndexEntry,
@@ -271,6 +312,18 @@ export class CortexDocumentMapVerifier {
           message: `Index link points to non-existent document: ${resolved.target}`,
         });
         continue;
+      }
+      const reference = new CortexChildGraphReference({
+        graphPath: args.graph.relativePath,
+        indexedPath: resolved.target,
+      });
+      if (!reference.isAllowed()) {
+        this.add(args.findings)({
+          code: CortexStructureFindingCode.InvalidIndexEntry,
+          file: args.graph.relativePath,
+          line: this.line(link),
+          message: `Child knowledge graph may link only its own directory or explicit read-only authorities: ${resolved.target}`,
+        });
       }
       args.indexed.add(resolved.target);
       const [count = 0] = [counts.get(resolved.target)];
@@ -360,35 +413,6 @@ export class CortexDocumentMapVerifier {
     return `.cortex/${normalized}`;
   }
 
-  private isGraph(value: string): boolean {
-    return (
-      /^(?:\.cortex\/)?(?:knowledge-graph|k-graph|INDEX)\.md$/u.test(value) ||
-      /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|dev-manager|security|sre|web-dev)|shared)\/knowledge-graph\.md$/u.test(
-        value,
-      )
-    );
-  }
-
-  private owningGraph(value: string): string {
-    const match =
-      /^(\.cortex\/(?:gizmo|shared|teams\/(?:ai|dev-core|dev-manager|security|sre|web-dev)))\//u.exec(
-        value,
-      );
-    return match
-      ? `${match[1]}/knowledge-graph.md`
-      : '.cortex/knowledge-graph.md';
-  }
-
-  private owner(value: string): string | false {
-    const match =
-      /^\.cortex\/(gizmo|shared|teams\/(?:ai|dev-core|dev-manager|security|sre|web-dev))\//u.exec(
-        value,
-      );
-    if (!match) return false;
-    const [, context = false] = match;
-    return context;
-  }
-
   private links(root: Root): Link[] {
     const found: Link[] = [];
     this.walk({
@@ -457,15 +481,6 @@ type ResolvedLink = {
   readonly fragment: string | false;
 };
 
-const OWNER_GRAPHS = [
-  '.cortex/gizmo/knowledge-graph.md',
-  '.cortex/teams/ai/knowledge-graph.md',
-  '.cortex/teams/dev-core/knowledge-graph.md',
-  '.cortex/teams/dev-manager/knowledge-graph.md',
-  '.cortex/teams/security/knowledge-graph.md',
-  '.cortex/teams/sre/knowledge-graph.md',
-  '.cortex/teams/web-dev/knowledge-graph.md',
-  '.cortex/shared/knowledge-graph.md',
-] as const;
+const OWNER_GRAPHS = CORTEX_OWNER_GRAPH_PATHS;
 
 const FAILURE = 'Cortex document-map verification failed.';

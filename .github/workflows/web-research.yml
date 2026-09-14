@@ -64,6 +64,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          # The image/cache graph must build the exact authorized PR head;
+          # Main keeps its canonical workflow SHA.
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Connect private ARC BuildKit
@@ -71,14 +75,34 @@ jobs:
         with:
           cache-selection: web-e2e
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          cache-write: "false"
-          main-cache-only: "true"
+          # Main is the only trusted writer for stable buildcache refs. Hosted
+          # same-repository PRs retain the remote identity and write only their
+          # PR-head-SHA isolated scope; forks and Dependabot never enter this job.
+          registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
+          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
           isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
 
       - name: Publish exact-source research browser image
         run: task web:e2e:kubernetes-image
+
+      - name: Publish verified research web dependency cache
+        if: >-
+          success() &&
+          ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]'))
+        run: |
+          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+            echo "ARC keeps the verified research web graph local; Main and sccache remain reusable"
+            exit 0
+          fi
+          task ci:main:publish-web-cache
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
 
   deploy:
     name: Build and deploy research catalog

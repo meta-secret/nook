@@ -3,7 +3,16 @@ import { type Result } from 'neverthrow';
 import { type AgentExecutionFailure } from '../../src/agent-workflow/runtime.ts';
 import { randomUUID } from 'node:crypto';
 
-import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
+
+import { existsSync } from 'node:fs';
 
 import type { RmOptions } from 'node:fs';
 
@@ -11,14 +20,20 @@ import { tmpdir } from 'node:os';
 
 import { join, resolve } from 'node:path';
 
-import type { McpToolCallItem, ThreadEvent } from '@openai/codex-sdk';
+import type {
+  CodexOptions,
+  McpToolCallItem,
+  ThreadEvent,
+} from '@openai/codex-sdk';
 
 import { describe, expect, test } from 'bun:test';
 
 import {
+  AgentCodexOptions,
   AgentSourceStabilityPhase,
   AgentSourceSnapshot,
   CodexTurn,
+  TeamAgentRuntimeProfile,
 } from '../../src/agent-workflow/codex-runtime.ts';
 
 import type {
@@ -33,10 +48,19 @@ import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts
 
 import {
   AgentAttemptParentKind,
+  AgentReasoningEffort,
+  AgentServiceTier,
+  AgentWorkspacePolicy,
   DelegatedAgentWorkflowName,
   TaskTerminalKind,
   WorkflowResultKind,
 } from '../../src/agent-workflow/domain.ts';
+import {
+  TEAM_GIZMO_CATALOG,
+  TeamGizmoKey,
+  TeamInternalAgentKey,
+  TeamKey,
+} from '../../src/team-agents/catalog.ts';
 
 import type { WorkflowTaskOutput } from '../../src/agent-workflow/domain.ts';
 
@@ -184,6 +208,9 @@ export class AgentWorkflowCodexRuntimeScenario {
       expert: 'core_expert',
       selectedContextPaths: [],
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       task: 'inspect-stream-failure',
       attempt: 1,
       depth: 2,
@@ -222,6 +249,135 @@ const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
 const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
+
+describe('Team Agent Codex settings', () => {
+  test('maps the profile service tier through the SDK config boundary', () => {
+    const codexOptions: CodexOptions = {
+      config: { existing_override: true },
+    };
+    const agentProfile = TeamAgentRuntimeProfile.resolve({
+      agent: TeamGizmoKey.Ai,
+      instructionPrefix: 'Inspect only.',
+    });
+    const configured = AgentCodexOptions.forProfile({
+      codexOptions,
+      agentProfile,
+    });
+
+    expect(configured.config?.service_tier).toBe('fast');
+    expect(codexOptions.config?.service_tier).toBeUndefined();
+  });
+
+  test('resolves canonical Team Gizmo and leaf runtime profiles', () => {
+    const profiles = [
+      TeamAgentRuntimeProfile.resolve({
+        agent: TeamKey.Ai,
+        instructionPrefix: 'Coordinate only.',
+      }),
+      TeamAgentRuntimeProfile.resolve({
+        agent: TeamInternalAgentKey.LoomSpecialist,
+        instructionPrefix: 'Inspect only.',
+      }),
+    ];
+
+    expect(profiles).toMatchObject([
+      {
+        name: TeamGizmoKey.Ai,
+        model: 'gpt-5.6-sol',
+        reasoningEffort: AgentReasoningEffort.Low,
+        serviceTier: AgentServiceTier.Fast,
+        workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+      },
+      {
+        name: TeamInternalAgentKey.LoomSpecialist,
+        model: 'gpt-5.6-luna',
+        reasoningEffort: AgentReasoningEffort.XHigh,
+        serviceTier: AgentServiceTier.Fast,
+        workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+      },
+    ]);
+  });
+
+  test('resolves catalog profiles at the runtime invocation boundary', () => {
+    const codexOptions: CodexOptions = {
+      config: { existing_override: true },
+    };
+    const configured = AgentCodexOptions.forInvocation({
+      codexOptions,
+      agentProfile: {
+        name: TeamInternalAgentKey.LoomSpecialist,
+        instructionPrefix: 'Inspect only.',
+        workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+        reasoningEffort: AgentReasoningEffort.XHigh,
+      },
+    });
+
+    expect(configured.agentProfile).toMatchObject({
+      name: TeamInternalAgentKey.LoomSpecialist,
+      model: 'gpt-5.6-luna',
+      reasoningEffort: AgentReasoningEffort.XHigh,
+      serviceTier: AgentServiceTier.Fast,
+    });
+    expect(configured.codexOptions.config?.service_tier).toBe('fast');
+    expect(codexOptions.config?.service_tier).toBeUndefined();
+  });
+
+  test('rejects drifted canonical runtime profiles', () => {
+    expect(() =>
+      AgentCodexOptions.forInvocation({
+        codexOptions: {},
+        agentProfile: {
+          name: TeamGizmoKey.Ai,
+          instructionPrefix: 'Coordinate only.',
+          workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+          reasoningEffort: AgentReasoningEffort.High,
+          model: 'gpt-5.6-sol',
+          serviceTier: AgentServiceTier.Fast,
+        },
+      }),
+    ).toThrow('Team Agent runtime profile drifted');
+  });
+
+  test('maps every catalog Team Gizmo service tier through the SDK config boundary', () => {
+    for (const teamGizmo of TEAM_GIZMO_CATALOG) {
+      const configured = AgentCodexOptions.forProfile({
+        codexOptions: { config: { existing_override: true } },
+        agentProfile: TeamAgentRuntimeProfile.resolve({
+          agent: teamGizmo.key,
+          instructionPrefix: 'Coordinate only.',
+        }),
+      });
+
+      expect(configured.config?.service_tier).toBe('fast');
+      expect(configured.config?.existing_override).toBe(true);
+    }
+  });
+
+  test('requires canonical model and Fast tier for direct runtime options', () => {
+    expect(() =>
+      AgentCodexOptions.forProfile({
+        codexOptions: {},
+        agentProfile: {
+          name: TeamGizmoKey.Ai,
+          instructionPrefix: 'Coordinate only.',
+          workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+          reasoningEffort: AgentReasoningEffort.Low,
+          model: '',
+          serviceTier: AgentServiceTier.Fast,
+        },
+      }),
+    ).toThrow('Team Agent runtime profile drifted');
+  });
+
+  test('leaves module expert options unchanged at the expert boundary', () => {
+    const codexOptions: CodexOptions = {
+      config: { existing_override: true },
+    };
+    const configured = AgentCodexOptions.forExpertProfile({ codexOptions });
+
+    expect(configured).toEqual(codexOptions);
+  });
+});
 
 describe('Codex agent source stability', () => {
   test('fails closed for commit or worktree drift', async () => {
@@ -281,6 +437,9 @@ describe('Codex agent source stability', () => {
       const stableCheck: AgentSourceStabilityCheck = {
         workingDirectory,
         sourceCommit,
+        originMainSha: sourceCommit,
+        pinnedLocalDevSha: sourceCommit,
+        featureHeadSha: sourceCommit,
         phase: AgentSourceStabilityPhase.BeforeAttempt,
       };
       const runtimeFailure1 = new AgentSourceSnapshot(
@@ -325,6 +484,85 @@ describe('Codex agent source stability', () => {
       );
     } finally {
       await rm(workingDirectory, removeOptions);
+    }
+  });
+
+  test('ignores executable fsmonitor and ambient Git config', async () => {
+    const fixtureRoot = await mkdtemp(
+      join(tmpdir(), 'loom-agent-git-isolation-'),
+    );
+    const workingDirectory = join(fixtureRoot, 'repository');
+    const marker = join(fixtureRoot, 'fsmonitor-ran');
+    const monitor = join(fixtureRoot, 'fsmonitor.sh');
+    const globalConfig = join(fixtureRoot, 'global.gitconfig');
+    const systemConfig = join(fixtureRoot, 'system.gitconfig');
+    const configNames = [
+      'GIT_CONFIG_GLOBAL',
+      'GIT_CONFIG_SYSTEM',
+      'GIT_CONFIG_COUNT',
+      'GIT_CONFIG_KEY_0',
+      'GIT_CONFIG_VALUE_0',
+    ] as const;
+    const previousEnvironment = new Map(
+      configNames.map((name) => [name, process.env[name]]),
+    );
+    await mkdir(workingDirectory);
+    try {
+      const command = (args: readonly string[]): string =>
+        AgentWorkflowCodexRuntimeScenario.runGit({
+          command: RepositoryCommandExecutable.Git,
+          args,
+          rootDirectory: workingDirectory,
+          workingDirectory,
+        });
+      command(['init']);
+      await writeFile(join(workingDirectory, 'tracked.txt'), 'stable\n');
+      command(['add', 'tracked.txt']);
+      command([
+        '-c',
+        'user.name=Loom Test',
+        '-c',
+        'user.email=loom@example.test',
+        'commit',
+        '-m',
+        'fixture',
+      ]);
+      const sourceCommit = command(['rev-parse', 'HEAD']);
+      command(['update-ref', 'refs/remotes/origin/main', sourceCommit]);
+      await writeFile(
+        monitor,
+        `#!/bin/sh\nprintf touched > '${marker}'\nexit 1\n`,
+        { mode: 0o700 },
+      );
+      command(['config', '--local', 'core.fsmonitor', monitor]);
+      await writeFile(globalConfig, `[core]\nfsmonitor = ${monitor}\n`);
+      await writeFile(systemConfig, `[core]\nfsmonitor = ${monitor}\n`);
+      await rm(marker, { force: true });
+      process.env.GIT_CONFIG_GLOBAL = globalConfig;
+      process.env.GIT_CONFIG_SYSTEM = systemConfig;
+      process.env.GIT_CONFIG_COUNT = '1';
+      process.env.GIT_CONFIG_KEY_0 = 'core.fsmonitor';
+      process.env.GIT_CONFIG_VALUE_0 = monitor;
+      try {
+        const result = new AgentSourceSnapshot({
+          workingDirectory,
+          sourceCommit,
+          originMainSha: sourceCommit,
+          pinnedLocalDevSha: sourceCommit,
+          featureHeadSha: sourceCommit,
+          phase: AgentSourceStabilityPhase.BeforeAttempt,
+        }).assertStable();
+        assert(result.isOk());
+      } finally {
+        for (const name of configNames) {
+          const value = previousEnvironment.get(name);
+          if (value === undefined) delete process.env[name];
+          else process.env[name] = value;
+        }
+      }
+      expect(existsSync(marker)).toBe(false);
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
     }
   });
 });

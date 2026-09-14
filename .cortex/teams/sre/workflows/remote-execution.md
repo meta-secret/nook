@@ -24,8 +24,11 @@ machines use only the lightweight feedback allowed by the dev contract.
 
 ## Feature compilation
 
-Gizmo publishes its feature branch and authorizes PR Steward to dispatch
-the required remote build-only capability for that exact SHA.
+The owning Feature Gizmo publishes its canonical feature branch. Gizmo Prime
+authorizes the branch delivery packet, and Delivery Pipeline Team Gizmo
+dispatches PR Lifecycle Agent through the active harness to run the required
+remote build-only capability. Each stage re-fetches and resolves the latest
+committed branch head; the returned exact SHA is observational evidence only.
 
 - Compile and type-check without tests, coverage, e2e, or preflight.
 - Preserve that boundary through every transitive Task and Docker stage.
@@ -34,9 +37,15 @@ the required remote build-only capability for that exact SHA.
 
 ## Slow dev PR validation
 
-The manually started dev manager authorizes Steward to publish the selected
-snapshot and run the full existing PR checks. Follow
-[dev delivery](../../../gizmo/architecture/dev-delivery.md).
+The manually started dev manager authorizes publication of the selected
+snapshot and the full existing PR checks. Delivery Pipeline Team Gizmo routes
+that manager-authorized packet through the active harness to PR Lifecycle Agent
+for snapshot publication and bounded check execution. The dev manager
+retains policy authority, and manager-only `dev:pr-manager` remains the sole
+path for pull-request creation/update. Team Gizmo and PR Lifecycle Agent do
+not create or update pull requests or decide policy, readiness, or promotion
+verdicts. Follow
+[dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
 
 - Freeze origin/dev during validation and promotion.
 - Check out the captured dev SHA in every job.
@@ -52,6 +61,18 @@ The testing selectors below belong to slow validation or separately authorized
 operations. Their existence never permits feature-stage test execution.
 
 Routing rules:
+
+All remote task and PR-check invocations below are routed through Delivery
+Pipeline Team Gizmo. For feature build-only work, the owning Feature Gizmo
+submits the canonical feature branch and Gizmo Prime authorizes the packet.
+PR Lifecycle Agent re-fetches and resolves that branch's latest committed head
+before each stage and returns the exact SHA as observational evidence only. A
+stale caller-provided feature SHA does not reject branch-authorized execution.
+For manager-stage publication, slow checks, and promotion, the dev manager
+authorizes the packet. Delivery Pipeline Team Gizmo dispatches PR Lifecycle
+Agent through the active harness. Neither Team Gizmo nor PR Lifecycle Agent may
+create or update pull requests or decide policy, readiness, promotion, or
+Workbench state.
 
 - Invoke Rust validation remotely with `task remote TASK_NAME=rust:ci`.
 - Invoke Loom verification remotely with `task remote TASK_NAME=loom:verify`.

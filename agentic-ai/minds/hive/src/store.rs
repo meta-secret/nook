@@ -149,7 +149,28 @@ pub(crate) mod tests {
                 .tasks
                 .lock()
                 .map_err(|_| crate::HiveError::message("shared test state mutex was poisoned"))?;
+            if let Some(existing) = tasks.get(task.id.as_str()) {
+                let evidence_matches = task.bootstrap_evidence.as_ref().map_or(
+                    existing.definition.bootstrap_evidence.is_none(),
+                    |evidence| evidence.matches(existing.definition.bootstrap_evidence.as_ref()),
+                );
+                if existing.definition.source_commit != task.source_commit || !evidence_matches {
+                    return Err(crate::HiveError::message(format!(
+                        "task {} already exists with different source commit or bootstrap evidence",
+                        task.id
+                    )));
+                }
+                return Ok(());
+            }
             for dependency in &task.dependencies {
+                if let Some(existing) = tasks.get(dependency.as_str())
+                    && (existing.definition.source_commit != task.source_commit
+                        || existing.definition.bootstrap_evidence != task.bootstrap_evidence)
+                {
+                    return Err(crate::HiveError::message(format!(
+                        "dependency {dependency} does not match the task's pinned revision"
+                    )));
+                }
                 Self::rearm_obsolete(&mut tasks, dependency)?;
             }
             let failed = task.dependencies.iter().any(|dependency| {
@@ -188,6 +209,7 @@ pub(crate) mod tests {
             let ActiveDeliveryQuery {
                 source_commit,
                 kind,
+                bootstrap_evidence,
             } = request;
             Ok(self
                 .tasks
@@ -197,6 +219,12 @@ pub(crate) mod tests {
                 .find(|task| {
                     task.definition.source_commit == source_commit
                         && &task.definition.kind == kind
+                        && bootstrap_evidence.map_or(
+                            task.definition.bootstrap_evidence.is_none(),
+                            |evidence| {
+                                evidence.matches(task.definition.bootstrap_evidence.as_ref())
+                            },
+                        )
                         && matches!(task.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
                 })
                 .map_or(ActiveDelivery::Idle, |task| {
@@ -367,6 +395,7 @@ pub(crate) mod tests {
                 kind: task.definition.kind.clone(),
                 prompt: task.definition.prompt.clone(),
                 source_commit: task.definition.source_commit.clone(),
+                bootstrap_evidence: task.definition.bootstrap_evidence.clone(),
                 attempt_id: AttemptId::try_from(Uuid::new_v4().to_string())?,
                 attempt_number: task.attempt_count,
                 lease_token,
@@ -593,6 +622,7 @@ pub(crate) mod tests {
             trigger: TaskTrigger::ManualCli,
             prompt: "Implement it".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             priority: 0,
             max_attempts: 3,
             dependencies,
@@ -793,7 +823,8 @@ pub(crate) mod tests {
             store
                 .active_delivery(ActiveDeliveryQuery {
                     source_commit: "0123456789abcdef0123456789abcdef01234567",
-                    kind: &TaskKind::from("code")
+                    kind: &TaskKind::from("code"),
+                    bootstrap_evidence: None,
                 })
                 .await?,
             ActiveDelivery::Active(definition.id.clone())
@@ -803,7 +834,8 @@ pub(crate) mod tests {
             store
                 .active_delivery(ActiveDeliveryQuery {
                     source_commit: "0123456789abcdef0123456789abcdef01234567",
-                    kind: &TaskKind::from("code")
+                    kind: &TaskKind::from("code"),
+                    bootstrap_evidence: None,
                 })
                 .await?,
             ActiveDelivery::Idle
@@ -911,7 +943,8 @@ pub(crate) mod tests {
             store
                 .active_delivery(ActiveDeliveryQuery {
                     source_commit: &active.source_commit,
-                    kind: &active.kind
+                    kind: &active.kind,
+                    bootstrap_evidence: active.bootstrap_evidence.as_ref(),
                 })
                 .await?,
             ActiveDelivery::Active(active.id)

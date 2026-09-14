@@ -9,6 +9,16 @@ use super::Neo4jTaskStore;
 impl Neo4jTaskStore {
     pub(super) async fn enqueue_task(&self, task: &EnqueueTask) -> crate::HiveResult<()> {
         task.validate()?;
+        let (origin_main_sha, pinned_local_dev_sha, feature_branch) = task
+            .bootstrap_evidence
+            .as_ref()
+            .map_or(("", "", ""), |evidence| {
+                (
+                    evidence.origin_main_sha.as_str(),
+                    evidence.pinned_local_dev_sha.as_str(),
+                    evidence.feature_branch.as_str(),
+                )
+            });
         let mut transaction = self.graph.start_txn().await?;
         let enqueue_token = Uuid::new_v4().to_string();
         let mut rows = transaction
@@ -25,11 +35,18 @@ impl Neo4jTaskStore {
                                    task.trigger_kind = $trigger_kind,
                                    task.prompt = $prompt,
                                    task.source_commit = $source_commit,
+                                   task.origin_main_sha = $origin_main_sha,
+                                   task.pinned_local_dev_sha = $pinned_local_dev_sha,
+                                   task.feature_branch = $feature_branch,
                                    task.priority = $priority,
                                    task.max_attempts = $max_attempts,
                                    task.status = 'BLOCKED',
                                    task.updated_at = timestamp()
-                     RETURN task.enqueue_token = $enqueue_token AS created",
+                     RETURN task.enqueue_token = $enqueue_token AS created,
+                            task.source_commit AS existing_source_commit,
+                            coalesce(task.origin_main_sha, '') AS origin_main_sha,
+                            coalesce(task.pinned_local_dev_sha, '') AS pinned_local_dev_sha,
+                            coalesce(task.feature_branch, '') AS feature_branch",
                 )
                 .param("id", task.id.as_str())
                 .param("enqueue_token", enqueue_token.as_str())
@@ -37,20 +54,35 @@ impl Neo4jTaskStore {
                 .param("trigger_kind", task.trigger.as_str())
                 .param("prompt", task.prompt.as_str())
                 .param("source_commit", task.source_commit.as_str())
+                .param("origin_main_sha", origin_main_sha)
+                .param("pinned_local_dev_sha", pinned_local_dev_sha)
+                .param("feature_branch", feature_branch)
                 .param("priority", task.priority)
                 .param("max_attempts", task.max_attempts),
             )
             .await?;
-        let created = rows
+        let row = rows
             .next(transaction.handle())
             .await?
-            .is_some_and(|row| row.get::<bool>("created").unwrap_or(false));
+            .ok_or_else(|| crate::HiveError::message("task enqueue returned no row"))?;
+        let created = row.get::<bool>("created")?;
         if !created {
+            let existing_source_commit = row.get::<String>("existing_source_commit")?;
+            let existing_bootstrap_evidence = Self::bootstrap_evidence(&row)?;
+            let evidence_matches = task
+                .bootstrap_evidence
+                .as_ref()
+                .map_or(existing_bootstrap_evidence.is_none(), |evidence| {
+                    evidence.matches(existing_bootstrap_evidence.as_ref())
+                });
             transaction.rollback().await?;
-            return Err(crate::HiveError::message(format!(
-                "task {} already exists",
-                task.id
-            )));
+            if existing_source_commit != task.source_commit || !evidence_matches {
+                return Err(crate::HiveError::message(format!(
+                    "task {} already exists with different source commit or bootstrap evidence",
+                    task.id
+                )));
+            }
+            return Ok(());
         }
 
         for dependency in &task.dependencies {
@@ -59,6 +91,9 @@ impl Neo4jTaskStore {
                     query(
                         "MATCH (task:Task {id: $id}), (dependency:Task {id: $dependency})
                          WHERE dependency.source_commit = task.source_commit
+                           AND coalesce(dependency.origin_main_sha, '') = task.origin_main_sha
+                           AND coalesce(dependency.pinned_local_dev_sha, '') = task.pinned_local_dev_sha
+                           AND coalesce(dependency.feature_branch, '') = task.feature_branch
                          MERGE (task)-[:DEPENDS_ON]->(dependency)
                          SET dependency.version = coalesce(dependency.version, 0) + 1
                          RETURN dependency.id AS id",
@@ -110,23 +145,40 @@ impl Neo4jTaskStore {
         let ActiveDeliveryQuery {
             source_commit,
             kind,
+            bootstrap_evidence,
         } = request;
+        let (origin_main_sha, pinned_local_dev_sha, feature_branch) =
+            bootstrap_evidence.map_or(("", "", ""), |evidence| {
+                (
+                    evidence.origin_main_sha.as_str(),
+                    evidence.pinned_local_dev_sha.as_str(),
+                    evidence.feature_branch.as_str(),
+                )
+            });
         let mut rows = self
             .graph
             .execute(
                 query(
                     "MATCH (root:Task {source_commit: $source_commit, kind: $kind})
-                     WHERE root.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
-                        OR EXISTS {
-                          MATCH (root)-[:DEPENDS_ON*1..]->(descendant:Task)
-                          WHERE descendant.status = 'CANCELLING'
-                        }
+                     WHERE coalesce(root.origin_main_sha, '') = $origin_main_sha
+                       AND coalesce(root.pinned_local_dev_sha, '') = $pinned_local_dev_sha
+                       AND coalesce(root.feature_branch, '') = $feature_branch
+                       AND (
+                         root.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
+                         OR EXISTS {
+                           MATCH (root)-[:DEPENDS_ON*1..]->(descendant:Task)
+                           WHERE descendant.status = 'CANCELLING'
+                         }
+                       )
                      RETURN root.id AS id
                      ORDER BY root.created_at
                      LIMIT 1",
                 )
                 .param("source_commit", source_commit)
-                .param("kind", kind.as_str()),
+                .param("kind", kind.as_str())
+                .param("origin_main_sha", origin_main_sha)
+                .param("pinned_local_dev_sha", pinned_local_dev_sha)
+                .param("feature_branch", feature_branch),
             )
             .await?;
         match rows.next().await? {

@@ -35,6 +35,10 @@ import { DelegationRunFinalization } from './delegation-aggregation.ts';
 import type { FinalizeDelegationRunInput } from './delegation-aggregation.ts';
 import { DelegationPlanTree } from './delegation-plan-tree.ts';
 import {
+  CanonicalFeatureBranchContract,
+  type CanonicalFeatureBranch,
+} from '../lib/base-evidence.ts';
+import {
   UntrustedYamlBoundary,
   type UntrustedYamlMap,
   type UntrustedYamlNode,
@@ -105,6 +109,10 @@ type DelegationStartResponse = {
 type DelegationRecordRequest = {
   readonly runId: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly featureBranch: CanonicalFeatureBranch;
+  readonly featureHeadSha: string;
   readonly task: string;
   readonly agent: string;
   readonly attempt: WorkflowAttemptNumber;
@@ -116,6 +124,10 @@ type DelegationRecordRequest = {
 enum DelegationRecordRequestField {
   RunId = 'runId',
   SourceCommit = 'sourceCommit',
+  OriginMainSha = 'originMainSha',
+  PinnedLocalDevSha = 'pinnedLocalDevSha',
+  FeatureBranch = 'featureBranch',
+  FeatureHeadSha = 'featureHeadSha',
   Task = 'task',
   Agent = 'agent',
   Attempt = 'attempt',
@@ -177,6 +189,9 @@ export class DelegationJournalCli {
     const rootAdmissionRequestInput: AdmissionRequestForDeclarationInput = {
       runId: plan.runId,
       sourceCommit: plan.sourceCommit,
+      originMainSha: plan.originMainSha,
+      pinnedLocalDevSha: plan.pinnedLocalDevSha,
+      featureBranch: plan.featureBranch,
       declaration: root,
     };
     const admissionInput: AdmitDelegationAttemptInput = {
@@ -243,6 +258,9 @@ export class DelegationJournalCli {
     const admissionRequest: DelegationAdmissionRequest = {
       runId: request.runId,
       sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureBranch: request.featureBranch,
       identity: {
         task: request.task,
         agent: request.agent,
@@ -267,6 +285,9 @@ export class DelegationJournalCli {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       task: request.task,
       agent: request.agent,
       attempt: request.attempt,
@@ -284,6 +305,9 @@ export class DelegationJournalCli {
       runId: request.runId,
       workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       identity: {
         task: request.task,
         agent: request.agent,
@@ -305,6 +329,9 @@ export class DelegationJournalCli {
     return {
       runId: input.runId,
       sourceCommit: input.sourceCommit,
+      originMainSha: input.originMainSha,
+      pinnedLocalDevSha: input.pinnedLocalDevSha,
+      featureBranch: input.featureBranch,
       identity: input.declaration.identity,
       depth: input.declaration.depth,
       parent: input.declaration.parent,
@@ -386,6 +413,10 @@ export class DelegationJournalCli {
       Object.keys(value).some((key) => !RECORD_REQUEST_KEYS.has(key)) ||
       typeof value.runId !== 'string' ||
       typeof value.sourceCommit !== 'string' ||
+      typeof value.originMainSha !== 'string' ||
+      typeof value.pinnedLocalDevSha !== 'string' ||
+      typeof value.featureBranch !== 'string' ||
+      typeof value.featureHeadSha !== 'string' ||
       typeof value.task !== 'string' ||
       typeof value.agent !== 'string' ||
       typeof value.attempt !== 'number' ||
@@ -399,6 +430,10 @@ export class DelegationJournalCli {
     return {
       runId: value.runId,
       sourceCommit: value.sourceCommit,
+      originMainSha: value.originMainSha,
+      pinnedLocalDevSha: value.pinnedLocalDevSha,
+      featureBranch: CanonicalFeatureBranchContract.parse(value.featureBranch),
+      featureHeadSha: value.featureHeadSha,
       task: value.task,
       agent: value.agent,
       attempt: value.attempt,
@@ -426,6 +461,9 @@ export class DelegationJournalCli {
       typeof request.runId !== 'string' ||
       !DelegationJournalCli.safeFilesystemIdentifier(request.runId) ||
       !/^[0-9a-f]{40}$/.test(request.sourceCommit) ||
+      !/^[0-9a-f]{40}$/.test(request.originMainSha) ||
+      !/^[0-9a-f]{40}$/.test(request.pinnedLocalDevSha) ||
+      !/^[0-9a-f]{40}$/.test(request.featureHeadSha) ||
       !request.terminal ||
       !TERMINAL_KINDS.has(request.terminal.kind) ||
       request.terminal.task !== request.task ||
@@ -517,6 +555,9 @@ export class DelegationJournalCli {
 type AdmissionRequestForDeclarationInput = {
   readonly runId: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly featureBranch: CanonicalFeatureBranch;
   readonly declaration: DelegationAttemptDeclaration;
 };
 

@@ -424,7 +424,7 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 
 Delivery uses one Gizmo context and five Cortex engineering team domains:
 
-- [Gizmo](.cortex/gizmo/knowledge-graph.md) owns coordination, integration,
+- [Gizmo Prime](.cortex/gizmo-prime/knowledge-graph.md) owns coordination, integration,
   lifecycle state, and the final integrated PR verdict.
 
 - [AI](.cortex/teams/ai/knowledge-graph.md) owns Cortex, Loom, agent skills,
@@ -450,15 +450,12 @@ is loaded only for a named cross-team dependency. It is not an implementation
 team.
 
 Ordinary implementation agents return verified committed handoffs to Gizmo.
-Gizmo integrates them, runs **`task loom:pre-push`**, and pushes the exact
-branch head. Gizmo then runs focused builds/tests with
-**`task remote TASK_NAME=<name>`**, including **`task remote TASK_NAME=web:build`**
-and **`task remote TASK_NAME=web:e2e`**. Single `preflight`, `rust:ci`, and
-`arc:runtime` selections use disposable ARC runner Pods in k0s. Browser
-selectors execute separately in exact-image Kubernetes Pods; compatible
-build-only selectors may share one ARC batch. When the head is ready, Gizmo
-explicitly starts complete PR validation with
-**`task pr:validate PR=<number>`**. Ordinary PR pushes do not start the complete
+Gizmo integrates them, pushes the exact branch head, and requests the hosted
+**`build:compile`** task through **`task remote TASK_NAME=build:compile`**.
+Feature-stage execution is build-only. Full tests, coverage, preflight, e2e,
+and complete PR validation belong to the Dev Manager's later dev-to-main CI
+cycle. That cycle explicitly starts **`task pr:validate PR=<number>`** for the
+selected published snapshot. Ordinary PR pushes do not start the complete
 pipeline. Ordinary validation does not contact Codex. Set `CODEX_REVIEW=1` only
 for the final coherent head. Validation dispatches hosted checks before the
 opted-in exact-head review. Use review stabilization only after dispatch while
@@ -514,7 +511,6 @@ or synthesis barrier; every role remains nondelegating and read-only. See the
 and [workflow](.cortex/teams/ai/workflows/structural-refactoring.md).
 
 ```sh
-task loom:pre-push         # required Gizmo-owned integrated pre-push hygiene
 task loom:cortex-session-clean # assert temporary agent memory is removed
 task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
 task loom:module-experts:validate # named read-only expert and production-module routing audit

@@ -190,6 +190,7 @@ impl TaskStore for CoordinatorTaskStore {
         let ActiveDeliveryQuery {
             source_commit: _source_commit,
             kind: _kind,
+            bootstrap_evidence: _bootstrap_evidence,
         } = request;
         return Err(crate::HiveError::message(
             "workers are not authorized to inspect delivery tasks",
@@ -616,6 +617,7 @@ mod tests {
                 .active_delivery(ActiveDeliveryQuery {
                     source_commit: "head",
                     kind: &TaskKind::from("main-repair"),
+                    bootstrap_evidence: None,
                 })
                 .await
                 .map(drop),

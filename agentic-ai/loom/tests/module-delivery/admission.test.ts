@@ -1,6 +1,8 @@
 import {
   ModuleDeliveryAdmissionScenario,
   ROOT,
+  ORIGIN_MAIN_SHA,
+  PINNED_LOCAL_DEV_SHA,
   SOURCE,
   PLAN,
   gamma,
@@ -42,7 +44,7 @@ import type {
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
   ModuleDeliveryAdmissionState,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryReadOnlyNodeV2,
   RecordModuleDeliveryAttemptDispositionRequest,
   RecordModuleDeliveryAttemptLeasesRequest,
@@ -101,16 +103,100 @@ const FOREIGN_SOURCE = ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(
   foreignFixture,
 )(['rev-parse', 'HEAD']);
 
-type PlanConcurrencyUpdate = { readonly maxConcurrency: number };
-
 describe('module delivery admission authority', () => {
-  test('serializes writers and rejects unproven writer frontiers', () => {
+  test('records the branch authority and rejects reversed ancestry', () => {
+    expect(new Set([ORIGIN_MAIN_SHA, PINNED_LOCAL_DEV_SHA, SOURCE]).size).toBe(
+      3,
+    );
+    expect(PLAN.originMainSha).toBe(ORIGIN_MAIN_SHA);
+    expect(PLAN.pinnedLocalDevSha).toBe(PINNED_LOCAL_DEV_SHA);
+    expect(PLAN.featureBranch).toBe('codex/module-delivery-test');
+    expect(PLAN.sourceCommit).toBe(SOURCE);
+    expect(
+      PLAN.nodes
+        .filter(
+          (node) =>
+            node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit,
+        )
+        .map((node) =>
+          node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit
+            ? node.baseline.sourceCommit
+            : '',
+        ),
+    ).toEqual([
+      PINNED_LOCAL_DEV_SHA,
+      PINNED_LOCAL_DEV_SHA,
+      PINNED_LOCAL_DEV_SHA,
+    ]);
+    const git = ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(fixture);
+    expect(() =>
+      git([
+        'merge-base',
+        '--is-ancestor',
+        ORIGIN_MAIN_SHA,
+        PINNED_LOCAL_DEV_SHA,
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      git(['merge-base', '--is-ancestor', PINNED_LOCAL_DEV_SHA, SOURCE]),
+    ).not.toThrow();
+
+    const reversedBase = ModuleDeliveryAdmissionScenario.validate({
+      ...PLAN,
+      originMainSha: PINNED_LOCAL_DEV_SHA,
+      pinnedLocalDevSha: ORIGIN_MAIN_SHA,
+      nodes: PLAN.nodes.map((node) =>
+        node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit
+          ? {
+              ...node,
+              baseline: {
+                kind: ModuleDeliveryBaselineKind.SourceCommit,
+                sourceCommit: ORIGIN_MAIN_SHA,
+              },
+            }
+          : node,
+      ),
+    });
+    expect(() =>
+      ModuleGenerationAuthority.createModuleDeliveryGenerationAuthority(
+        ModuleDeliveryAdmissionScenario.authorityRequest(reversedBase),
+      ),
+    ).toThrow('pinnedLocalDevSha must include the fetched origin/main commit');
+
+    const reversedSource = ModuleDeliveryAdmissionScenario.validate({
+      ...PLAN,
+      pinnedLocalDevSha: SOURCE,
+      sourceCommit: PINNED_LOCAL_DEV_SHA,
+      nodes: PLAN.nodes.map((node) =>
+        node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit
+          ? {
+              ...node,
+              baseline: {
+                kind: ModuleDeliveryBaselineKind.SourceCommit,
+                sourceCommit: SOURCE,
+              },
+            }
+          : node,
+      ),
+    });
+    expect(() =>
+      ModuleGenerationAuthority.createModuleDeliveryGenerationAuthority(
+        ModuleDeliveryAdmissionScenario.authorityRequest(reversedSource),
+      ),
+    ).toThrow('sourceCommit must be descended from the feature head');
+  });
+
+  test('admits disjoint writers and rejects unproven writer frontiers', () => {
     const active = ModuleDeliveryAdmissionScenario.runtime(
       ModuleDeliveryAdmissionScenario.validate(PLAN),
     );
     const first = ModuleDeliveryAdmissionScenario.select(active);
-    expect(first.admissions.map(({ taskId }) => taskId)).toEqual(['alpha']);
-    expect(first.pendingTaskIds).toContain('beta');
+    expect(first.admissions.map(({ taskId }) => taskId)).toEqual([
+      'alpha',
+      'beta',
+      'gamma',
+    ]);
+    expect(first.pendingTaskIds).toEqual([]);
     const forgedFrontier: CreateModuleDeliveryAdmissionStateRequest['integratedWriterFrontiers'][number] =
       {
         taskId: 'alpha',
@@ -284,10 +370,7 @@ describe('module delivery admission authority', () => {
   });
 
   test('retains lease history through disposition and reports exhausted closure', () => {
-    const exhaustionPlan: ModuleDeliveryPlanV2 = {
-      ...PLAN,
-      maxConcurrency: 1,
-    };
+    const exhaustionPlan: ModuleDeliveryPlanV5 = { ...PLAN };
     const active = ModuleDeliveryAdmissionScenario.runtime(
       ModuleDeliveryAdmissionScenario.validate(exhaustionPlan),
     );
@@ -336,6 +419,10 @@ describe('module delivery admission authority', () => {
     const selected = ModuleDeliveryAdmissionSelectionStatus.Selected;
     expect(exhaustedSelection.status).toBe(selected);
     expect(exhaustedSelection.blockedTaskIds).toEqual(['alpha', 'consumer']);
+    expect(exhaustedSelection.admissions.map(({ taskId }) => taskId)).toEqual([
+      'beta',
+      'gamma',
+    ]);
     const betaLeaseRequest: LeaseRequest = {
       runtime: exhaustedRuntime,
       taskId: 'beta',
@@ -344,8 +431,10 @@ describe('module delivery admission authority', () => {
     const ongoingSelection =
       ModuleDeliveryAdmissionScenario.select(exhaustedRuntime);
     expect(ongoingSelection.status).toBe(selected);
-    expect(ongoingSelection.admissions).toEqual([]);
-    expect(ongoingSelection.pendingTaskIds).toEqual(['gamma']);
+    expect(ongoingSelection.admissions.map(({ taskId }) => taskId)).toEqual([
+      'gamma',
+    ]);
+    expect(ongoingSelection.pendingTaskIds).toEqual([]);
   });
 
   test('rejects replacement failures transactionally and keeps the prior generation usable', () => {
@@ -510,7 +599,6 @@ describe('module delivery admission authority', () => {
     const replacementPlan = ModuleDeliveryAdmissionScenario.generationPlan(
       replacementPlanRequest,
     );
-    Object.assign(replacementPlan, { maxConcurrency: 3 });
     const raisedAttemptLimit = ModuleDeliveryAdmissionScenario.validate({
       ...replacementPlan,
       maxAttempts: 3,
@@ -535,6 +623,8 @@ describe('module delivery admission authority', () => {
       generation: 2,
       planDigest: replacement.planDigest,
       headCommit: REPLACEMENT_SOURCE,
+      originMainSha: replacement.plan.originMainSha,
+      pinnedLocalDevSha: replacement.plan.pinnedLocalDevSha,
       integratedWriterFrontiers: [],
       acceptedProviderEvidence: [],
     };
@@ -590,7 +680,7 @@ describe('module delivery admission authority', () => {
       consumerOutcome: 'AI receives accepted provider evidence.',
       baseline: {
         kind: ModuleDeliveryBaselineKind.SourceCommit,
-        sourceCommit: SOURCE,
+        sourceCommit: PINNED_LOCAL_DEV_SHA,
       },
       agentDepthLimit: 2,
       dependencies: [],
@@ -602,7 +692,7 @@ describe('module delivery admission authority', () => {
       parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
       acceptance: alpha.acceptance,
     };
-    const firstPlan: ModuleDeliveryPlanV2 = {
+    const firstPlan: ModuleDeliveryPlanV5 = {
       ...PLAN,
       nodes: [provider],
       edgeContracts: [],
@@ -721,8 +811,6 @@ describe('module delivery admission authority', () => {
     };
     const firstPlan =
       ModuleDeliveryAdmissionScenario.generationPlan(firstPlanRequest);
-    const concurrencyUpdate: PlanConcurrencyUpdate = { maxConcurrency: 1 };
-    Object.assign(firstPlan, concurrencyUpdate);
     const active = ModuleDeliveryAdmissionScenario.runtime(
       ModuleDeliveryAdmissionScenario.validate(firstPlan),
     );
@@ -772,8 +860,11 @@ describe('module delivery admission authority', () => {
         taskId,
         attempt,
       })),
-    ).toEqual([{ taskId: beta.taskId, attempt: 1 }]);
-    expect(selection.pendingTaskIds).toContain(gamma.taskId);
+    ).toEqual([
+      { taskId: beta.taskId, attempt: 1 },
+      { taskId: gamma.taskId, attempt: 1 },
+    ]);
+    expect(selection.pendingTaskIds).toEqual([]);
   });
 });
 

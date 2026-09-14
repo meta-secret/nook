@@ -477,7 +477,7 @@ it connects to.
   <ExperimentBack {navigate} />
   <GraphSwitch
     {graph}
-    onGraph={(next) => {
+    onGraph={(next: GraphId) => {
       graphId = next
       selected = new KeyGraphView(KeyGraphView.graphById(next)).defaultNode()
     }}

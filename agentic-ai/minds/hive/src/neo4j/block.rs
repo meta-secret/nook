@@ -13,6 +13,16 @@ impl Neo4jTaskStore {
         reason: &str,
     ) -> crate::HiveResult<bool> {
         let mut transaction = self.graph.start_txn().await?;
+        let (origin_main_sha, pinned_local_dev_sha, feature_branch) = blocker
+            .bootstrap_evidence
+            .as_ref()
+            .map_or(("", "", ""), |evidence| {
+                (
+                    evidence.origin_main_sha.as_str(),
+                    evidence.pinned_local_dev_sha.as_str(),
+                    evidence.feature_branch.as_str(),
+                )
+            });
         let mut edge_rows = transaction
             .execute(
                 query(
@@ -31,6 +41,9 @@ impl Neo4jTaskStore {
                                    blocker.trigger_kind = $blocker_trigger_kind,
                                    blocker.prompt = $blocker_prompt,
                                    blocker.source_commit = $source_commit,
+                                   blocker.origin_main_sha = $origin_main_sha,
+                                   blocker.pinned_local_dev_sha = $pinned_local_dev_sha,
+                                   blocker.feature_branch = $feature_branch,
                                    blocker.priority = $blocker_priority,
                                    blocker.max_attempts = $blocker_max_attempts,
                                    blocker.status = 'READY',
@@ -38,6 +51,9 @@ impl Neo4jTaskStore {
                                    blocker.updated_at = timestamp()
                      WITH task, blocker
                      WHERE blocker.source_commit = $source_commit
+                       AND coalesce(blocker.origin_main_sha, '') = $origin_main_sha
+                       AND coalesce(blocker.pinned_local_dev_sha, '') = $pinned_local_dev_sha
+                       AND coalesce(blocker.feature_branch, '') = $feature_branch
                        AND blocker.id <> task.id
                        AND NOT EXISTS {
                          MATCH (blocker)-[:DEPENDS_ON*1..]->(task)
@@ -55,6 +71,9 @@ impl Neo4jTaskStore {
                 .param("blocker_trigger_kind", blocker.trigger.as_str())
                 .param("blocker_prompt", blocker.prompt.as_str())
                 .param("source_commit", blocker.source_commit.as_str())
+                .param("origin_main_sha", origin_main_sha)
+                .param("pinned_local_dev_sha", pinned_local_dev_sha)
+                .param("feature_branch", feature_branch)
                 .param("blocker_priority", blocker.priority)
                 .param("blocker_max_attempts", blocker.max_attempts),
             )

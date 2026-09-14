@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -10,7 +12,28 @@ import {
   AuthoredAdditionBudget,
   AuthoredBudgetMode,
   AuthoredBudgetFailureKind,
+  AuthoredBudgetWorkspace,
 } from '../src/commands/pr-authored-budget.ts';
+
+class AuthoredBudgetRepositoryFixture {
+  private constructor(readonly root: string) {}
+
+  static create(): AuthoredBudgetRepositoryFixture {
+    return new AuthoredBudgetRepositoryFixture(
+      mkdtempSync(join(tmpdir(), 'nook-budget-pinned-base-')),
+    );
+  }
+
+  git(...args: string[]): string {
+    return execFileSync('git', ['-C', this.root, ...args], {
+      encoding: 'utf8',
+    }).trim();
+  }
+
+  dispose(): void {
+    rmSync(this.root, { recursive: true, force: true });
+  }
+}
 
 void test('keeps delivery at or below 2,000 authored additions', () => {
   const admitted = new AuthoredAdditionBudget(2_000).evaluate();
@@ -90,5 +113,59 @@ void test('counts an untracked symlink blob without following its target', () =>
     assert.equal(summary.authoredLines, 1);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('measures authored additions from the pinned local-dev commit', () => {
+  const fixture = AuthoredBudgetRepositoryFixture.create();
+  try {
+    fixture.git('init', '-q');
+    fixture.git('config', 'user.name', 'Loom Fixture');
+    fixture.git('config', 'user.email', 'loom-fixture@example.test');
+    writeFileSync(join(fixture.root, 'history.txt'), 'main\n');
+    fixture.git('add', '--', 'history.txt');
+    fixture.git('commit', '-qm', 'main');
+    const originMainSha = fixture.git('rev-parse', 'HEAD');
+    fixture.git('update-ref', 'refs/remotes/origin/main', originMainSha);
+
+    writeFileSync(join(fixture.root, 'prior-dev.ts'), 'x\n'.repeat(2_001));
+    fixture.git('add', '--', 'prior-dev.ts');
+    fixture.git('commit', '-qm', 'prior dev');
+    const pinnedLocalDevSha = fixture.git('rev-parse', 'HEAD');
+
+    writeFileSync(
+      join(fixture.root, 'feature.ts'),
+      'const feature = true;\n',
+    );
+    fixture.git('add', '--', 'feature.ts');
+    fixture.git('commit', '-qm', 'feature');
+    const featureHeadSha = fixture.git('rev-parse', 'HEAD');
+
+    const result = new AuthoredBudgetWorkspace({
+      environment: {
+        ...process.env,
+        ORIGIN_MAIN_SHA: originMainSha,
+        PINNED_LOCAL_DEV_SHA: pinnedLocalDevSha,
+        FEATURE_HEAD_SHA: featureHeadSha,
+      },
+      repoRoot: fixture.root,
+    }).main();
+    assert(result.isOk());
+  } finally {
+    fixture.dispose();
+  }
+});
+
+void test('fails closed when authored-budget bootstrap evidence is stale', () => {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'nook-budget-stale-base-'));
+  try {
+    const result = new AuthoredBudgetWorkspace({
+      environment: { ...process.env },
+      repoRoot,
+    }).main();
+    assert(result.isErr());
+    assert.equal(result.error.kind, AuthoredBudgetFailureKind.BaseEvidence);
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
   }
 });

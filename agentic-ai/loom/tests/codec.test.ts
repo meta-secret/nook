@@ -135,7 +135,7 @@ describe('loom dispatch protocol', () => {
       const result = requests.map(discoverableRequestView);
       expect(
         result.some((entry) => entry.family === RequestFamily.PrePush),
-      ).toBe(true);
+      ).toBe(false);
       expect(
         result.some((entry) => entry.family === RequestFamily.ToolsCall),
       ).toBe(false);
@@ -190,6 +190,20 @@ describe('loom dispatch protocol', () => {
           (entry) => entry.path === 'prePush.fetchOriginMain',
         ),
       ).toBe(true);
+    }
+  });
+
+  test('retired prePush requests fail without executing a host command', async () => {
+    const outcome = await LoomRequestDispatch.dispatchValue({
+      prePush: { stageHostUpdates: true, fetchOriginMain: true },
+    });
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.body.ok).toBe(false);
+    if (!outcome.body.ok) {
+      expect(outcome.body.phase).toBe(ResponsePhase.Execute);
+      expect(outcome.body.errors[0]?.detail).toMatchObject({
+        kind: 'text',
+      });
     }
   });
 });

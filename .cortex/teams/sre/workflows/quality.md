@@ -2,7 +2,7 @@
 
 ## Agent delivery applicability
 
-Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
+Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
 feature-stage slow checks. Paused Hive remains outside the manual manager
@@ -162,7 +162,7 @@ Use this workflow for quality, CI, and deployment changes.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
 10. **CI policy** — see subsections below. Gizmo follows
-    [the pull request pipeline](../../../gizmo/workflows/pull-requests.md).
+    [the pull request pipeline](../../../gizmo-prime/workflows/pull-requests.md).
 
     #### Workflows and runners
     - Trusted native Rust and Rust ecosystem PR jobs and Main build producers
@@ -320,44 +320,16 @@ Use this workflow for quality, CI, and deployment changes.
     verify its size and SHA-256. Static preflight contracts require all three
     expensive dependency vertices in the published target. The separate
     Bake+Zot simulation owns clean-builder import proof.
-    Runtime Bake+Zot parent/leaf proof is `task infra:bake-cache:prove`.
-    That sim complements the static `bake_cache_proofs.rs` theorems.
-    It reproduces the rejected three-linked-target nightly miss.
-    It then proves one-Dockerfile tool and leaf stages on a fresh builder.
-    It also proves Main vs parallel PR git-scope isolation on ephemeral Zot:
-    PR writes stay under `nook/remote-buildcache/**-git-<sha>`, do not overlap,
-    and do not replace Main `nook/buildcache/**`.
-    Scenario P proves a hosted-verified local candidate and a fresh PR runner
-    share the same source-free dependency graph without sharing a commit SHA.
-    Scenario Q proves a generic standalone exact-scope verification restores
-    Main, publishes only its isolated PR leaf, and replays that leaf on a fresh
-    runner. General trusted ARC verification reuses its private local BuildKit
-    state and publishes only a minimal per-PR retry handoff. Hive ARC keeps its
-    separate exact-head registry contract.
-    Scenario R proves exact-only selection replays the leaf across both a bare
-    Bake-linked parent and the production internal-stage architecture on fresh
-    builders.
-    Scenario S applies the same cold-Main then exact-replay contract to the
-    full-graph Kani model, where compiler-object sccache is unavailable.
-    Scenario T proves an unverified local candidate is invisible to PR restore.
-    Scenario V proves a changed PR source restores a cfg-specific dependency
-    stage from Main and then replays its exact source leaf on a fresh builder.
-    Scenario W proves the separate WASM Node consumer owns a non-overlapping
-    full-graph scope. Main seeds it, a changed PR publishes only its exact-head
-    scope after tests pass, and a fresh retry restores every stage as CACHED.
-    Scenario X proves sequential crate COPY+RUN layers.
-    Main seeds crate-a and crate-b in one Dockerfile leaf.
-    A PR that edits only crate-b restores crate-a as CACHED.
-    It compiles crate-b and the leaf, then replays the exact graph.
-    Scenario Y mirrors Hive's Cargo dependency graph.
-    Main publishes the manifest, vendor, fetch, test-dependency, and
-    Clippy-dependency lineage to Zot.
-    Two concurrent PR sources restore those source-free stages on independent
-    ARC-shaped builders and publish separate exact-head v2 graphs.
-    Fresh builders replay each PR graph without executing the cargo-fetch
-    analogue, and neither PR can consume or overwrite the other's source graph.
-    Scenario Z keeps one ARC-shaped BuildKit container and local state across a
-    daemon restart. The exact parent and leaf steps remain CACHED afterward.
+    Runtime plain BuildKit+Zot proof is `task infra:bake-cache:prove`.
+    It runs the existing Hive-shaped Rust simulator against one stable
+    `nook/buildcache/nook-bake-sim-rust-deps-v1:buildcache` ref with `mode=max`.
+    The cold builder executes six vertices: the toolchain, Cargo fetch,
+    test/clippy dependency branches, and two source vertices. A fresh builder
+    after changing only `inputs/leaf.txt` reuses the four toolchain/dependency
+    vertices and executes only the two source vertices. A third fresh builder
+    with no further input change reuses all six. The proof relies on native
+    BuildKit instruction and input digests, with no manually generated cache
+    key or source-scope matrix.
 
     `task infra:kubernetes-cache:prove` is the Kubernetes integration proof.
     It derives an ephemeral three-agent k3d cluster from the production Zot,
@@ -465,7 +437,8 @@ Use this workflow for quality, CI, and deployment changes.
     - It must run `task docker:ecosystem:fuzz FUZZ_SECONDS=20`.
     - It must run `task hive:verify`.
     - `task hive:verify` must compile, lint, and test Hive.
-    - The harness opens its PR only after those validations succeed.
+    - The harness publishes its exact fix branch only after those validations
+      succeed; the dev manager owns any later dev-to-main PR.
     - ARC runner Pods rely on Kubelet and persistent BuildKit garbage
       collection; no registered-host cleanup workflow is allowed.
 
@@ -493,7 +466,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Missing capability is a blocker, not permission for slow feature checks.
     - The manually run dev manager owns the full slow dev-to-main PR cycle.
     - Local tests, Docker work, compilation, and broad pre-push are prohibited.
-    - See [dev delivery](../../../gizmo/architecture/dev-delivery.md).
+    - See [dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
 12. After a slow-stage failure, delegate repair through the normal feature path.
     Select a replacement snapshot only after the prior slow attempt finishes.
 13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
@@ -598,4 +571,4 @@ Threshold or ignore edits belong only in an explicit gate-maintenance change,
 with the rationale in the PR. Default agent behavior is: read the failure → fix
 the code → re-run the same gate until green. See
 [AGENTS.md — Fix every failing check finding](../../../../AGENTS.md#non-negotiable-fix-every-failing-check-finding)
-and [mission delivery](../../../gizmo/workflows/mission-delivery.md).
+and [mission delivery](../../../gizmo-prime/workflows/mission-delivery.md).

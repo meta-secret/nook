@@ -23,7 +23,7 @@ import type {
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
   ModuleDeliveryExpectedLineage,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV5,
   RecordModuleDeliveryAttemptLeasesRequest,
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
@@ -38,7 +38,7 @@ import { ModuleDeliveryWorktreeTestSupportScenario } from './worktree-test-suppo
 import type { FixtureFileWrite, GitFixture } from './worktree-test-support.ts';
 
 export class ModuleDeliveryCortexAdmissionScenario {
-  private constructor(private readonly request: string) {}
+  private constructor(private readonly request: BootstrapCommitFixture) {}
 
   static write(request: CortexFixtureFileWriteRequest): void {
     const { fixture, relativePath } = request;
@@ -50,17 +50,19 @@ export class ModuleDeliveryCortexAdmissionScenario {
     ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile(fileWrite);
   }
 
-  static plan(sourceCommit: string): ModuleDeliveryPlanV2 {
-    return new ModuleDeliveryCortexAdmissionScenario(sourceCommit).execute();
+  static plan(request: BootstrapCommitFixture): ModuleDeliveryPlanV5 {
+    return new ModuleDeliveryCortexAdmissionScenario(request).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV2 {
-    const sourceCommit = this.request;
+  private execute(): ModuleDeliveryPlanV5 {
+    const request = this.request;
     return {
-      version: 2,
+      version: 5,
+      featureBranch: 'codex/module-delivery-test',
       generation: 7,
-      sourceCommit,
-      maxConcurrency: 1,
+      sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
       maxAgentDepth: 3,
       maxAttempts: 2,
       parentOwnedResources: REQUIRED_PARENT_OWNED_RESOURCES,
@@ -82,19 +84,19 @@ export class ModuleDeliveryCortexAdmissionScenario {
           consumerOutcome: 'SRE guidance and its shared index are current.',
           baseline: {
             kind: ModuleDeliveryBaselineKind.SourceCommit,
-            sourceCommit,
+            sourceCommit: request.pinnedLocalDevSha,
           },
           agentDepthLimit: 3,
           dependencies: [],
           resources: {
             read: [SRE_SKILL],
-            write: ['.cortex/gizmo/workflows/subagent-delegation.md'],
+            write: ['.cortex/gizmo-prime/workflows/subagent-delegation.md'],
             evidenceSurface: [],
           },
           cortexAuthoring: {
             selectedSkillPaths: [SRE_SKILL],
             sharedWriteClaims: [
-              '.cortex/gizmo/workflows/subagent-delegation.md',
+              '.cortex/gizmo-prime/workflows/subagent-delegation.md',
             ],
           },
           parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES.filter(
@@ -114,7 +116,7 @@ export class ModuleDeliveryCortexAdmissionScenario {
     };
   }
 
-  static validate(value: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
+  static validate(value: ModuleDeliveryPlanV5): ValidatedModuleDeliveryPlan {
     const result = ModuleDeliveryPlanDecoder.decodeAndValidate(
       JSON.stringify(value),
     );
@@ -145,6 +147,12 @@ interface CortexFixtureFileWriteRequest {
   readonly fixture: GitFixture;
   readonly relativePath: string;
 }
+
+type BootstrapCommitFixture = Readonly<{
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly sourceCommit: string;
+}>;
 
 describe('Cortex module-delivery admission', () => {
   test('freezes context reads, accepts regular blob modes, and records the lease', () => {
@@ -180,7 +188,11 @@ describe('Cortex module-delivery admission', () => {
         fixture,
       )(['rev-parse', 'HEAD']);
       const accepted = ModuleDeliveryCortexAdmissionScenario.validate(
-        ModuleDeliveryCortexAdmissionScenario.plan(sourceCommit),
+        ModuleDeliveryCortexAdmissionScenario.plan({
+          originMainSha: fixture.originMainSha,
+          pinnedLocalDevSha: fixture.pinnedLocalDevSha,
+          sourceCommit,
+        }),
       );
       const generationRequest: CreateModuleDeliveryGenerationAuthorityRequest =
         {
@@ -246,7 +258,7 @@ describe('Cortex module-delivery admission', () => {
       expect(admission?.resources.read).toEqual(expectedContext);
       expect(admission?.functionalOwner).toBe(ModuleDeliveryOwner.GizmoPrime);
       expect(admission?.resources.write).toEqual([
-        '.cortex/gizmo/workflows/subagent-delegation.md',
+        '.cortex/gizmo-prime/workflows/subagent-delegation.md',
       ]);
       const leaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
         authority,

@@ -1,6 +1,6 @@
 # Weekly direct Rust dependency audit. When Cargo manifests are behind crates.io,
-# the existing CI agent updates them in a PR and validates the full deterministic
-# test suite before opening a PR for explicit review and merge authorization.
+# the existing CI agent updates them on an exact fix branch and validates the
+# full deterministic suite. The later dev manager flow owns pull requests.
 name: Rust dependency updates
 
 on:
@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: rust-dependency-updates
-  # An agent may have already pushed a branch or opened a PR.
+  # An agent may have already pushed the exact fix branch.
   cancel-in-progress: false
 
 jobs:
@@ -50,14 +50,13 @@ jobs:
           path: ${{ runner.temp }}/rust-deps-outdated.txt
 
   update:
-    name: AI update, full test, and PR
+    name: AI update, full validation, and branch publication
     needs: audit
     if: needs.audit.outputs.outdated == 'true'
     runs-on: ${{ vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive' }}
     timeout-minutes: 360
     permissions:
       contents: write
-      pull-requests: write
       checks: read
     env:
       FIX_BRANCH: fix/rust-dependencies-${{ github.run_id }}
@@ -67,27 +66,6 @@ jobs:
       CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md
       CI_FIX_LABEL: Rust dependency update
       CI_AGENT_TIMEOUT_MS: "10800000"
-      AGENT_PR_TITLE: "chore(rust): update direct dependencies"
-      AGENT_PR_BODY: |
-        ## Summary
-
-        - Update the audited direct Rust dependencies included in this PR.
-
-        ## Agent task provenance
-
-        - Harness: GitHub Actions workflow `rust-dependency-updates.yml`
-        - Task name: Weekly direct Rust dependency update
-        - Task ID: [run ${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
-        ## Nook Workbench
-
-        - Focused issue: unavailable — scheduled maintenance has no focused Workbench issue
-        - Immutable plan: unavailable — this fixed-scope workflow does not publish a Workbench plan
-        - Worklog: unavailable — the workflow run records the result
-
-        ## Validation
-
-        - Repository dependency-update validation: passed before publication
     steps:
       - name: Checkout
         uses: actions/checkout@v7

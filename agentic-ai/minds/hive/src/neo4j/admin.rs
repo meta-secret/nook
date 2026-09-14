@@ -1,5 +1,7 @@
 use neo4rs::Txn;
 
+use crate::model::{BootstrapEvidence, GitSha, TaskKind};
+
 use super::{
     Artifact, AttemptId, ClaimedTask, ConfigBuilder, DependencyResult, Graph, HIVE_TLS_PROVIDER,
     HiveContext, LeaseToken, Neo4jTaskStore, QueueTaskStatus, Row, TaskId, query,
@@ -278,11 +280,20 @@ impl Neo4jTaskStore {
             })
             .collect();
 
+        let kind = TaskKind::from(row.get::<String>("kind")?);
+        let bootstrap_evidence = Self::bootstrap_evidence(row)?;
+        if kind.is_main_repair() && bootstrap_evidence.is_none() {
+            return Err(crate::HiveError::message(
+                "main-repair claim is missing complete bootstrap evidence",
+            ));
+        }
+
         Ok(ClaimedTask {
             id: TaskId::try_from(row.get::<String>("id")?)?,
-            kind: row.get::<String>("kind")?.into(),
+            kind,
             prompt: row.get("prompt")?,
             source_commit: row.get("source_commit")?,
+            bootstrap_evidence,
             attempt_number: row.get("attempt_number")?,
             attempt_id,
             lease_token,
@@ -290,5 +301,33 @@ impl Neo4jTaskStore {
             dependency_context,
             dependency_artifacts,
         })
+    }
+
+    pub(super) fn bootstrap_evidence(row: &Row) -> crate::HiveResult<Option<BootstrapEvidence>> {
+        // Schema 11 deliberately accepts only creation-base SHAs plus the
+        // canonical branch. The retired feature_head_sha is never a fallback;
+        // migration must remove it or fail closed before a task is claimed.
+        let origin_main_sha = row.get::<String>("origin_main_sha")?;
+        let pinned_local_dev_sha = row.get::<String>("pinned_local_dev_sha")?;
+        let feature_branch = row.get::<String>("feature_branch")?;
+        if origin_main_sha.is_empty()
+            && pinned_local_dev_sha.is_empty()
+            && feature_branch.is_empty()
+        {
+            return Ok(None);
+        }
+        if origin_main_sha.is_empty()
+            || pinned_local_dev_sha.is_empty()
+            || feature_branch.is_empty()
+        {
+            return Err(crate::HiveError::message(
+                "task has incomplete bootstrap evidence",
+            ));
+        }
+        Ok(Some(BootstrapEvidence {
+            origin_main_sha: GitSha::try_from(origin_main_sha)?,
+            pinned_local_dev_sha: GitSha::try_from(pinned_local_dev_sha)?,
+            feature_branch: crate::model::FeatureBranch::try_from(feature_branch)?,
+        }))
     }
 }

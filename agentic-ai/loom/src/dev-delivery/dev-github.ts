@@ -2,6 +2,13 @@ import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 
 import { CommandFailureMessage } from './dev-command.ts';
+import { GitHubJsonDocument } from './dev-github-json.ts';
+import {
+  DevelopmentPullRequestGateway,
+  type AdmittedDevelopmentPullRequest,
+  type DevelopmentPullRequestLookup,
+  type DevelopmentPullRequestMutationRequest,
+} from './dev-github-pull-request.ts';
 import {
   CommandExecutable,
   type CommandOutput,
@@ -16,12 +23,19 @@ import {
   type DevelopmentCiAttemptPolicyRequest,
   type DevelopmentPullRequest,
   PullRequestNumber,
-  PullRequestReviewDecision,
-  PullRequestState,
   type PullRequestStatus,
   RepositorySlug,
   WorkflowRunId,
 } from './dev-types.ts';
+
+export { GitHubJsonDocument } from './dev-github-json.ts';
+export {
+  DevelopmentPullRequestLookupKind,
+  type AdmittedDevelopmentPullRequest,
+  type DevelopmentPullRequestLookup,
+  type DevelopmentPullRequestMutationRequest,
+  type PullRequestReviewEvidenceRequest,
+} from './dev-github-pull-request.ts';
 
 export const DevDeliveryContract = {
   remoteBuild: {
@@ -29,7 +43,7 @@ export const DevDeliveryContract = {
     taskName: 'build:compile',
     jobName: 'Remote / build:compile',
     titlePattern:
-      /^Remote \/ build:compile @ ([0-9a-f]{40}) \/ [A-Za-z0-9._-]+$/u,
+      /^Remote \/ build:compile @ ([0-9a-f]{40}) \/ compile-cache=(?:publish|read-only) \/ [A-Za-z0-9._-]+$/u,
   },
   promotion: {
     workflowName: 'CI',
@@ -85,39 +99,6 @@ const runJobSchema = z.object({
 const runJobsSchema = z.object({ jobs: z.array(runJobSchema) });
 type RunJobRecord = z.infer<typeof runJobSchema>;
 
-const pullRequestListEntrySchema = z.object({
-  number: z.number().int().positive(),
-  headRefName: z.string(),
-  baseRefName: z.string(),
-  headRefOid: z.string(),
-  baseRefOid: z.string(),
-  url: z.string(),
-  isDraft: z.boolean(),
-});
-const pullRequestListSchema = z.array(pullRequestListEntrySchema);
-type PullRequestListEntry = z.infer<typeof pullRequestListEntrySchema>;
-
-const repositoryReferenceSchema = z.object({ nameWithOwner: z.string() });
-const pullRequestViewSchema = z.object({
-  number: z.number().int().positive(),
-  headRefName: z.string(),
-  baseRefName: z.string(),
-  headRefOid: z.string(),
-  baseRefOid: z.string(),
-  url: z.string(),
-  isDraft: z.boolean(),
-  state: z.string(),
-  headRepository: repositoryReferenceSchema,
-  baseRepository: repositoryReferenceSchema,
-  reviewDecision: z.string().nullable(),
-});
-type PullRequestView = z.infer<typeof pullRequestViewSchema>;
-
-const pullRequestStatusSchema = z.object({
-  state: z.string(),
-  mergedAt: z.string().nullable(),
-});
-
 const ciRunSchema = z.object({
   databaseId: z.number().int().positive(),
   headBranch: z.string(),
@@ -129,20 +110,6 @@ const ciRunSchema = z.object({
 });
 const ciRunListSchema = z.array(ciRunSchema);
 type CiRunRecord = z.infer<typeof ciRunSchema>;
-
-const reviewThreadsSchema = z.object({
-  data: z.object({
-    repository: z.object({
-      pullRequest: z.object({
-        reviewThreads: z.object({
-          nodes: z.array(
-            z.object({ isResolved: z.boolean(), isOutdated: z.boolean() }),
-          ),
-        }),
-      }),
-    }),
-  }),
-});
 
 const deploymentSchema = z.object({
   id: z.number().int().positive(),
@@ -165,97 +132,29 @@ interface GitHubInvocation {
   readonly workingDirectory: string;
 }
 
-interface PullRequestSelection {
-  readonly number: PullRequestNumber;
-  readonly raw: PullRequestListEntry;
-}
-
-interface PullRequestReadRequest {
-  readonly number: PullRequestNumber;
-  readonly workingDirectory: string;
-}
-
-export enum DevelopmentPullRequestLookupKind {
-  Found = 'found',
-  Absent = 'absent',
-}
-
-export type DevelopmentPullRequestLookup =
-  | {
-      readonly kind: DevelopmentPullRequestLookupKind.Found;
-      readonly pullRequest: DevelopmentPullRequest;
-    }
-  | { readonly kind: DevelopmentPullRequestLookupKind.Absent };
-
 interface PromotionEvidenceRequest {
   readonly sha: CommitSha;
-  readonly pullRequest: DevelopmentPullRequest;
+  readonly pullRequest: AdmittedDevelopmentPullRequest;
   readonly workingDirectory: string;
 }
-
-type GitHubJsonValue =
-  | string
-  | number
-  | boolean
-  | GitHubJsonTransportNull
-  | GitHubJsonValue[]
-  | { readonly [key: string]: GitHubJsonValue };
-
-type GitHubJsonTransportNull = Exclude<
-  ReturnType<URLSearchParams['get']>,
-  string
->;
-
-enum GitHubReviewDecisionInputPresence {
-  Present = 'present',
-  Absent = 'absent',
-}
-
-type GitHubReviewDecisionInput =
-  | {
-      readonly presence: GitHubReviewDecisionInputPresence.Present;
-      readonly value: string;
-    }
-  | { readonly presence: GitHubReviewDecisionInputPresence.Absent };
-
-const parseGitHubJson = JSON.parse as (source: string) => GitHubJsonValue;
 
 type DatabaseIdRecord = { readonly databaseId: number };
 type DeploymentDateRecord = { readonly created_at: string };
 
-/** Decodes JSON only at the GitHub CLI transport boundary. */
-export class GitHubJsonDocument {
-  constructor(private readonly source: string) {}
-
-  decode<T>(schema: z.ZodType<T>): Result<T, DevFailure> {
-    let value: GitHubJsonValue;
-    try {
-      value = parseGitHubJson(this.source);
-    } catch {
-      return err({
-        kind: DevFailureKind.GitHub,
-        message: 'GitHub returned invalid JSON',
-      });
-    }
-    const parsed = schema.safeParse(value);
-    if (!parsed.success) {
-      return err({
-        kind: DevFailureKind.GitHub,
-        message: 'GitHub returned an unexpected response shape',
-      });
-    }
-    return ok(parsed.data);
-  }
-}
-
 /** Owns GitHub observations and the two explicitly authorized PR mutations. */
 export class DevGitHubGateway {
+  private readonly pullRequests: DevelopmentPullRequestGateway;
+
   constructor(
     private readonly request: {
       readonly runner: CommandRunner;
       readonly workingDirectory: string;
     },
-  ) {}
+  ) {
+    this.pullRequests = new DevelopmentPullRequestGateway({
+      runner: request.runner,
+    });
+  }
 
   buildProof(request: BuildProofRequest): Result<BuildProof, DevFailure> {
     const output = this.successful({
@@ -321,159 +220,31 @@ export class DevGitHubGateway {
     return ok({ sha: request.sha, runId: runId.value });
   }
 
-  ensureDevelopmentPullRequest(request: {
-    readonly expectedSha: CommitSha;
-    readonly workingDirectory: string;
-  }): Result<DevelopmentPullRequest, DevFailure> {
-    const selection = this.openPullRequests(request.workingDirectory);
-    if (selection.isErr()) return err(selection.error);
-    const existing = selection.value[0];
-    if (selection.value.length > 1) {
-      return err({
-        kind: DevFailureKind.GitHub,
-        message:
-          'More than one open dev-to-main pull request exists; refusing to choose one',
-      });
-    }
-    if (existing) {
-      const edited = this.successful({
-        args: [
-          'pr',
-          'edit',
-          String(existing.number.value()),
-          '--title',
-          'Promote development to main',
-          '--body',
-          'This pull request records the manager-controlled development promotion. The tested dev commit is promoted with an ordinary fast-forward push.',
-        ],
-        workingDirectory: request.workingDirectory,
-      });
-      if (edited.isErr()) return err(edited.error);
-    } else {
-      const created = this.successful({
-        args: [
-          'pr',
-          'create',
-          '--base',
-          'main',
-          '--head',
-          'dev',
-          '--title',
-          'Promote development to main',
-          '--body',
-          'This pull request records the manager-controlled development promotion. The tested dev commit is promoted with an ordinary fast-forward push.',
-        ],
-        workingDirectory: request.workingDirectory,
-      });
-      if (created.isErr()) return err(created.error);
-    }
-    const live = this.readDevelopmentPullRequest({
-      workingDirectory: request.workingDirectory,
-    });
-    if (live.isErr()) return err(live.error);
-    if (!live.value.headSha.equals(request.expectedSha)) {
-      return err({
-        kind: DevFailureKind.Race,
-        message:
-          'The dev-to-main pull request head changed while it was being published',
-      });
-    }
-    return ok(live.value);
+  ensureDevelopmentPullRequest(
+    request: DevelopmentPullRequestMutationRequest,
+  ): Result<DevelopmentPullRequest, DevFailure> {
+    return this.pullRequests.ensureDevelopmentPullRequest(request);
   }
 
   readDevelopmentPullRequest(request: {
     readonly workingDirectory: string;
-  }): Result<DevelopmentPullRequest, DevFailure> {
-    const selection = this.openPullRequests(request.workingDirectory);
-    if (selection.isErr()) return err(selection.error);
-    const selected = selection.value[0];
-    if (selection.value.length > 1) {
-      return err({
-        kind: DevFailureKind.GitHub,
-        message:
-          'More than one open dev-to-main pull request exists; refusing to choose one',
-      });
-    }
-    if (!selected) {
-      return err({
-        kind: DevFailureKind.GitHub,
-        message: 'No open same-repository dev-to-main pull request exists',
-      });
-    }
-    return this.readPullRequest({
-      number: selected.number,
-      workingDirectory: request.workingDirectory,
-    });
+  }): Result<AdmittedDevelopmentPullRequest, DevFailure> {
+    return this.pullRequests.readDevelopmentPullRequest(request);
   }
 
   findDevelopmentPullRequest(request: {
     readonly workingDirectory: string;
   }): Result<DevelopmentPullRequestLookup, DevFailure> {
-    const selection = this.openPullRequests(request.workingDirectory);
-    if (selection.isErr()) return err(selection.error);
-    if (selection.value.length > 1) {
-      return err({
-        kind: DevFailureKind.GitHub,
-        message:
-          'More than one open dev-to-main pull request exists; refusing to choose one',
-      });
-    }
-    const selected = selection.value.at(0);
-    if (!selected) {
-      return ok({ kind: DevelopmentPullRequestLookupKind.Absent });
-    }
-    const pullRequest = this.readPullRequest({
-      number: selected.number,
-      workingDirectory: request.workingDirectory,
-    });
-    if (pullRequest.isErr()) return err(pullRequest.error);
-    return ok({
-      kind: DevelopmentPullRequestLookupKind.Found,
-      pullRequest: pullRequest.value,
-    });
+    return this.pullRequests.findDevelopmentPullRequest(request);
   }
 
   readPullRequestStatus(
-    request: PullRequestReadRequest,
+    request: {
+      readonly number: PullRequestNumber;
+      readonly workingDirectory: string;
+    },
   ): Result<PullRequestStatus, DevFailure> {
-    const output = this.successful({
-      args: [
-        'pr',
-        'view',
-        String(request.number.value()),
-        '--json',
-        'state,mergedAt',
-      ],
-      workingDirectory: request.workingDirectory,
-    });
-    if (output.isErr()) return err(output.error);
-    const decoded = new GitHubJsonDocument(output.value.stdout).decode(
-      pullRequestStatusSchema,
-    );
-    if (decoded.isErr()) return err(decoded.error);
-    let state: PullRequestState;
-    switch (decoded.value.state) {
-      case PullRequestState.Open:
-        state = PullRequestState.Open;
-        break;
-      case PullRequestState.Closed:
-        state = PullRequestState.Closed;
-        break;
-      case PullRequestState.Merged:
-        state = PullRequestState.Merged;
-        break;
-      default:
-        return err({
-          kind: DevFailureKind.GitHub,
-          message: `GitHub returned an unsupported pull-request state: ${decoded.value.state}`,
-        });
-    }
-    return ok({
-      state,
-      merged:
-        state === PullRequestState.Merged &&
-        typeof decoded.value.mergedAt === 'string',
-    });
+    return this.pullRequests.readPullRequestStatus(request);
   }
 
   requireDevelopmentCiTerminal(
@@ -521,7 +292,10 @@ export class DevGitHubGateway {
   ): Result<void, DevFailure> {
     const slowCi = this.requireSlowCi(request);
     if (slowCi.isErr()) return err(slowCi.error);
-    const reviews = this.requireCleanReviews(request);
+    const reviews = this.pullRequests.requireCleanReviews({
+      pullRequest: request.pullRequest,
+      workingDirectory: request.workingDirectory,
+    });
     if (reviews.isErr()) return err(reviews.error);
     return this.requirePagesDeployment(request);
   }
@@ -559,102 +333,6 @@ export class DevGitHubGateway {
     );
     if (decoded.isErr()) return err(decoded.error);
     return ok(decoded.value.jobs);
-  }
-
-  private openPullRequests(
-    workingDirectory: string,
-  ): Result<readonly PullRequestSelection[], DevFailure> {
-    const output = this.successful({
-      args: [
-        'pr',
-        'list',
-        '--state',
-        'open',
-        '--head',
-        'dev',
-        '--base',
-        'main',
-        '--limit',
-        '10',
-        '--json',
-        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft',
-      ],
-      workingDirectory,
-    });
-    if (output.isErr()) return err(output.error);
-    const decoded = new GitHubJsonDocument(output.value.stdout).decode(
-      pullRequestListSchema,
-    );
-    if (decoded.isErr()) return err(decoded.error);
-    const selections: PullRequestSelection[] = [];
-    for (const raw of decoded.value) {
-      const number = PullRequestNumber.parse(raw.number);
-      if (number.isErr()) return err(number.error);
-      selections.push({ number: number.value, raw });
-    }
-    return ok(selections);
-  }
-
-  private readPullRequest(
-    request: PullRequestReadRequest,
-  ): Result<DevelopmentPullRequest, DevFailure> {
-    const output = this.successful({
-      args: [
-        'pr',
-        'view',
-        String(request.number.value()),
-        '--json',
-        'number,headRefName,baseRefName,headRefOid,baseRefOid,url,isDraft,state,headRepository,baseRepository,reviewDecision',
-      ],
-      workingDirectory: request.workingDirectory,
-    });
-    if (output.isErr()) return err(output.error);
-    const decoded = new GitHubJsonDocument(output.value.stdout).decode(
-      pullRequestViewSchema,
-    );
-    if (decoded.isErr()) return err(decoded.error);
-    return this.admitDevelopmentPullRequest({
-      view: decoded.value,
-      workingDirectory: request.workingDirectory,
-    });
-  }
-
-  private admitDevelopmentPullRequest(request: {
-    readonly view: PullRequestView;
-    readonly workingDirectory: string;
-  }): Result<DevelopmentPullRequest, DevFailure> {
-    const { view } = request;
-    const repository = this.repository(request.workingDirectory);
-    if (repository.isErr()) return err(repository.error);
-    if (
-      view.state !== PullRequestState.Open ||
-      view.headRefName !== 'dev' ||
-      view.baseRefName !== 'main' ||
-      view.headRepository.nameWithOwner !== repository.value.value() ||
-      view.baseRepository.nameWithOwner !== repository.value.value()
-    ) {
-      return err({
-        kind: DevFailureKind.GitHub,
-        message:
-          'The live pull request is not a same-repository open dev-to-main pull request',
-      });
-    }
-    const headSha = CommitSha.parse(view.headRefOid);
-    if (headSha.isErr()) return err(headSha.error);
-    const baseSha = CommitSha.parse(view.baseRefOid);
-    if (baseSha.isErr()) return err(baseSha.error);
-    const number = PullRequestNumber.parse(view.number);
-    if (number.isErr()) return err(number.error);
-    return ok({
-      number: number.value,
-      headSha: headSha.value,
-      baseSha: baseSha.value,
-      url: view.url,
-      isDraft: view.isDraft,
-      reviewDecision: DevGitHubGateway.reviewDecision(
-        DevGitHubGateway.reviewDecisionInput(view.reviewDecision),
-      ),
-    });
   }
 
   private requireSlowCi(
@@ -737,76 +415,6 @@ export class DevGitHubGateway {
       run.headBranch === 'dev' &&
       run.headSha === sha.value()
     );
-  }
-
-  private requireCleanReviews(
-    request: PromotionEvidenceRequest,
-  ): Result<void, DevFailure> {
-    const output = this.successful({
-      args: [
-        'pr',
-        'view',
-        String(request.pullRequest.number.value()),
-        '--json',
-        'reviewDecision',
-      ],
-      workingDirectory: request.workingDirectory,
-    });
-    if (output.isErr()) return err(output.error);
-    const decoded = new GitHubJsonDocument(output.value.stdout).decode(
-      z.object({ reviewDecision: z.string().nullable() }),
-    );
-    if (decoded.isErr()) return err(decoded.error);
-    const reviewDecision = DevGitHubGateway.reviewDecision(
-      DevGitHubGateway.reviewDecisionInput(decoded.value.reviewDecision),
-    );
-    if (reviewDecision !== PullRequestReviewDecision.Approved) {
-      return err({
-        kind: DevFailureKind.Reviews,
-        message: `The current dev-to-main review decision is ${reviewDecision}; promotion requires APPROVED`,
-      });
-    }
-
-    const repository = this.repository(request.workingDirectory);
-    if (repository.isErr()) return err(repository.error);
-    const query = [
-      'query($owner:String!,$repo:String!,$number:Int!){',
-      'repository(owner:$owner,name:$repo){',
-      'pullRequest(number:$number){',
-      'reviewThreads(first:100){nodes{isResolved isOutdated}}',
-      '}}}}',
-    ].join('');
-    const threads = this.successful({
-      args: [
-        'api',
-        'graphql',
-        '-f',
-        `query=${query}`,
-        '-F',
-        `owner=${repository.value.owner}`,
-        '-F',
-        `repo=${repository.value.repository}`,
-        '-F',
-        `number=${request.pullRequest.number.value()}`,
-      ],
-      workingDirectory: request.workingDirectory,
-    });
-    if (threads.isErr()) return err(threads.error);
-    const decodedThreads = new GitHubJsonDocument(threads.value.stdout).decode(
-      reviewThreadsSchema,
-    );
-    if (decodedThreads.isErr()) return err(decodedThreads.error);
-    if (
-      decodedThreads.value.data.repository.pullRequest.reviewThreads.nodes.some(
-        (thread) => !thread.isResolved,
-      )
-    ) {
-      return err({
-        kind: DevFailureKind.Reviews,
-        message: 'The dev-to-main pull request has an unresolved review thread',
-      });
-    }
-    return ok();
   }
 
   private requirePagesDeployment(
@@ -892,37 +500,6 @@ export class DevGitHubGateway {
     });
     if (output.isErr()) return err(output.error);
     return RepositorySlug.parse(output.value.stdout.trim());
-  }
-
-  private static reviewDecision(
-    input: GitHubReviewDecisionInput,
-  ): PullRequestReviewDecision {
-    if (input.presence === GitHubReviewDecisionInputPresence.Absent) {
-      return PullRequestReviewDecision.Empty;
-    }
-    switch (input.value) {
-      case PullRequestReviewDecision.Approved:
-        return PullRequestReviewDecision.Approved;
-      case PullRequestReviewDecision.ChangesRequested:
-        return PullRequestReviewDecision.ChangesRequested;
-      case PullRequestReviewDecision.ReviewRequired:
-        return PullRequestReviewDecision.ReviewRequired;
-      case PullRequestReviewDecision.Empty:
-        return PullRequestReviewDecision.Empty;
-      default:
-        return PullRequestReviewDecision.Unknown;
-    }
-  }
-
-  private static reviewDecisionInput(
-    input: string | GitHubJsonTransportNull,
-  ): GitHubReviewDecisionInput {
-    return typeof input === 'string'
-      ? {
-          presence: GitHubReviewDecisionInputPresence.Present,
-          value: input,
-        }
-      : { presence: GitHubReviewDecisionInputPresence.Absent };
   }
 
   private static compareDatabaseIds(

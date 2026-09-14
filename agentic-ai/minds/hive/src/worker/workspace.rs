@@ -1,18 +1,17 @@
-#[derive(Debug)]
-pub(super) enum WorkspaceOrigin<'a> {
-    Fresh,
-    ResumeBranch(&'a str),
-}
+mod bootstrap;
+pub(super) use bootstrap::WorkspaceOrigin;
+
 pub struct TaskWorkspace<'scan> {
     pub workspace: &'scan Path,
     pub repository_url: &'scan str,
     pub source_commit: &'scan str,
+    pub bootstrap_evidence: Option<&'scan BootstrapEvidence>,
     pub resume_branch: WorkspaceOrigin<'scan>,
     pub dependency_artifacts: &'scan [Artifact],
 }
 use super::*;
+use crate::model::GitSha;
 use tokio::fs as async_fs;
-use tokio::time as async_time;
 
 const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
 
@@ -32,69 +31,45 @@ fn append_hex_byte(encoded: &mut String, byte: u8) {
 }
 
 impl TaskWorkspace<'_> {
-    pub(super) async fn heartbeat_loop<S: TaskStore>(
-        store: S,
-        agent_id: AgentId,
-        task: ClaimedTask,
-        lease_seconds: i64,
-        heartbeat_seconds: u64,
-        mut stop: watch::Receiver<bool>,
-    ) -> crate::HiveResult<()> {
-        let mut interval = async_time::interval(Duration::from_secs(heartbeat_seconds));
-        let mut renewal = 0_u64;
-        interval.tick().await;
-        loop {
-            tokio::select! {
-                changed = stop.changed() => {
-                    if changed.is_err() || *stop.borrow() {
-                        return Ok(());
-                    }
-                }
-                _ = interval.tick() => {
-                    let accepted = store
-                        .heartbeat(
-                            &task.id,
-                            &agent_id,
-                            &task.lease_token,
-                            lease_seconds,
-                        )
-                        .await?;
-                    if !accepted {
-                        return Err(WorkerCancellationRequested.into());
-                    }
-                    renewal += 1;
-                    eprintln!(
-                        "Hive lease heartbeat accepted task={} renewal={renewal}",
-                        task.id
-                    );
-                }
-            }
-        }
-    }
-}
-
-impl TaskWorkspace<'_> {
     pub async fn prepare_workspace(self) -> crate::HiveResult<WorkspacePreparation> {
         let Self {
             workspace,
             repository_url,
             source_commit,
+            bootstrap_evidence,
             resume_branch,
             dependency_artifacts,
         } = self;
         async_fs::create_dir_all(workspace.join("task")).await?;
         async_fs::create_dir_all(workspace.join("output")).await?;
         async_fs::create_dir_all(workspace.join("temporary")).await?;
-        let (repository, did_resume) =
-            Self::prepare_repository(workspace, repository_url, source_commit, &resume_branch)
-                .await?;
+        let (repository, did_resume, observed_feature_head_sha) = match bootstrap_evidence {
+            Some(evidence) => {
+                TaskWorkspace::prepare_pinned_repository(
+                    workspace,
+                    repository_url,
+                    evidence,
+                    &resume_branch,
+                )
+                .await?
+            }
+            None => {
+                TaskWorkspace::prepare_repository(
+                    workspace,
+                    repository_url,
+                    source_commit,
+                    &resume_branch,
+                )
+                .await?
+            }
+        };
         TaskWorkspace::validate_dependency_artifacts(dependency_artifacts)?;
         let mut applied_dependency = false;
         for (index, artifact) in dependency_artifacts.iter().enumerate() {
             if did_resume && TaskWorkspace::patch_is_already_applied(&repository, artifact).await? {
                 continue;
             }
-            let mut child = Command::new("git")
+            let mut child = TaskWorkspace::git_command()
                 .args(["apply", "--3way", "--index", "--binary", "-"])
                 .current_dir(&repository)
                 .stdin(Stdio::piped())
@@ -140,6 +115,7 @@ impl TaskWorkspace<'_> {
                 return Ok(WorkspacePreparation::Conflicted(ConflictedWorkspace {
                     repository,
                     resumed: did_resume,
+                    observed_feature_head_sha,
                 }));
             }
             applied_dependency = true;
@@ -150,6 +126,7 @@ impl TaskWorkspace<'_> {
                 repository,
                 baseline,
                 resumed: did_resume,
+                observed_feature_head_sha,
             }));
         }
         let baseline = TaskWorkspace::git_output(&repository, &["rev-parse", "HEAD"]).await?;
@@ -157,93 +134,28 @@ impl TaskWorkspace<'_> {
             repository,
             baseline,
             resumed: did_resume,
+            observed_feature_head_sha,
         }))
-    }
-
-    async fn prepare_repository(
-        workspace: &Path,
-        repository_url: &str,
-        source_commit: &str,
-        resume_branch: &WorkspaceOrigin<'_>,
-    ) -> crate::HiveResult<(PathBuf, bool)> {
-        let repository = workspace.join("repository");
-        if repository.join(".git").is_dir() {
-            return Err(crate::HiveError::message(
-                "refusing to reuse a repository left by an earlier worker process",
-            ));
-        }
-        async_fs::create_dir_all(&repository).await?;
-        let status = Command::new("git")
-            .arg("init")
-            .arg("--quiet")
-            .arg(&repository)
-            .stdin(Stdio::null())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-            .await
-            .hive_context("failed to initialize the task repository")?;
-        if !status.success() {
-            return Err(crate::HiveError::message(format!(
-                "git init failed with status {status}"
-            )));
-        }
-        TaskWorkspace::run_git_status(
-            &repository,
-            &["remote", "add", "origin", repository_url],
-            "configure the task repository remote",
-        )
-        .await?;
-        TaskWorkspace::run_git_status(
-            &repository,
-            &["fetch", "--depth=1", "origin", source_commit],
-            "fetch the pinned task revision",
-        )
-        .await?;
-        let mut did_resume = false;
-        if let WorkspaceOrigin::ResumeBranch(branch) = resume_branch {
-            let resumed = Command::new("git")
-                .args([
-                    "fetch",
-                    "--depth=100",
-                    "origin",
-                    &format!("refs/heads/{branch}"),
-                ])
-                .current_dir(&repository)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .await?;
-            if resumed.success() {
-                TaskWorkspace::run_git_status(
-                    &repository,
-                    &["checkout", "--quiet", "-B", branch, "FETCH_HEAD"],
-                    "resume the durable Hive repair branch",
-                )
-                .await?;
-                TaskWorkspace::run_git_status(
-                    &repository,
-                    &["merge-base", "--is-ancestor", source_commit, "HEAD"],
-                    "verify the repair branch descends from its pinned revision",
-                )
-                .await?;
-                did_resume = true;
-            }
-        }
-        if !did_resume {
-            TaskWorkspace::run_git_status(
-                &repository,
-                &["checkout", "--quiet", "--detach", source_commit],
-                "check out the pinned task revision",
-            )
-            .await?;
-        }
-        Ok((repository, did_resume))
     }
 }
 
 impl TaskWorkspace<'_> {
+    fn git_command() -> Command {
+        let mut command = Command::new("git");
+        command
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_NO_REPLACE_OBJECTS", "1")
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_CONFIG_COUNT", "2")
+            .env("GIT_CONFIG_KEY_0", "core.hooksPath")
+            .env("GIT_CONFIG_VALUE_0", "/dev/null")
+            .env("GIT_CONFIG_KEY_1", "protocol.ext.allow")
+            .env("GIT_CONFIG_VALUE_1", "never");
+        command
+    }
+
     pub(super) fn validate_dependency_artifacts(
         dependency_artifacts: &[Artifact],
     ) -> crate::HiveResult<()> {
@@ -281,7 +193,7 @@ impl TaskWorkspace<'_> {
         repository: &Path,
         artifact: &Artifact,
     ) -> crate::HiveResult<bool> {
-        let mut child = Command::new("git")
+        let mut child = TaskWorkspace::git_command()
             .args(["apply", "--reverse", "--check", "--binary", "-"])
             .current_dir(repository)
             .stdin(Stdio::piped())
@@ -317,6 +229,7 @@ pub(super) enum WorkspacePreparation {
 pub(super) struct ConflictedWorkspace {
     repository: PathBuf,
     resumed: bool,
+    observed_feature_head_sha: Option<GitSha>,
 }
 
 /// A checkout whose dependency baseline was established by preparation.
@@ -326,6 +239,7 @@ pub(super) struct PreparedWorkspace {
     repository: PathBuf,
     baseline: String,
     resumed: bool,
+    observed_feature_head_sha: Option<GitSha>,
 }
 
 impl ConflictedWorkspace {
@@ -336,6 +250,7 @@ impl ConflictedWorkspace {
             repository: self.repository,
             baseline,
             resumed: self.resumed,
+            observed_feature_head_sha: self.observed_feature_head_sha,
         })
     }
 }
@@ -343,6 +258,10 @@ impl ConflictedWorkspace {
 impl PreparedWorkspace {
     pub(super) fn repository(&self) -> &Path {
         &self.repository
+    }
+
+    pub(super) fn observed_feature_head_sha(&self) -> Option<&GitSha> {
+        self.observed_feature_head_sha.as_ref()
     }
 }
 
@@ -397,7 +316,7 @@ impl TaskWorkspace<'_> {
         repository: &Path,
         arguments: &[&str],
     ) -> crate::HiveResult<String> {
-        let output = Command::new("git")
+        let output = TaskWorkspace::git_command()
             .args(arguments)
             .current_dir(repository)
             .stdin(Stdio::null())
@@ -422,7 +341,7 @@ impl TaskWorkspace<'_> {
         arguments: &[&str],
         operation: &str,
     ) -> crate::HiveResult<()> {
-        let status = Command::new("git")
+        let status = TaskWorkspace::git_command()
             .args(arguments)
             .current_dir(repository)
             .stdin(Stdio::null())
@@ -450,10 +369,11 @@ impl PreparedWorkspace {
             repository,
             baseline,
             resumed,
+            ..
         } = self;
         let repository = repository.as_path();
         let baseline = baseline.as_str();
-        let add_status = Command::new("git")
+        let add_status = TaskWorkspace::git_command()
             .args(["add", "--intent-to-add", "--", "."])
             .current_dir(repository)
             .stdin(Stdio::null())
@@ -468,7 +388,7 @@ impl PreparedWorkspace {
             )));
         }
 
-        let output = Command::new("git")
+        let output = TaskWorkspace::git_command()
             .args(["diff", "--binary", "--no-ext-diff", baseline, "--", "."])
             .current_dir(repository)
             .stdin(Stdio::null())
@@ -701,6 +621,7 @@ mod tests {
             kind: "code".into(),
             prompt: "change files".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::try_from("lease-1")?,
@@ -719,6 +640,7 @@ mod tests {
             repository: repository.path().to_owned(),
             baseline: baseline.to_owned(),
             resumed: false,
+            observed_feature_head_sha: None,
         }
         .persistable_patch(&task, &result)
         .await?;
@@ -750,6 +672,7 @@ mod tests {
                 .to_str()
                 .ok_or_else(|| io::Error::other("source path must be UTF-8"))?,
             source_commit: &source_commit,
+            bootstrap_evidence: None,
             resume_branch: super::WorkspaceOrigin::Fresh,
             dependency_artifacts: slice::from_ref(&dependency),
         })
@@ -773,6 +696,7 @@ mod tests {
                 .to_str()
                 .ok_or_else(|| io::Error::other("source path must be UTF-8"))?,
             source_commit: &source_commit,
+            bootstrap_evidence: None,
             resume_branch: super::WorkspaceOrigin::ResumeBranch(resume_branch),
             dependency_artifacts: slice::from_ref(&dependency),
         })
@@ -797,6 +721,7 @@ mod tests {
             kind: "code".into(),
             prompt: "build on dependency".to_owned(),
             source_commit,
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("attempt-2")?,
             attempt_number: 1,
             lease_token: LeaseToken::try_from("lease-2")?,
@@ -854,6 +779,7 @@ mod tests {
             kind: "main-repair".into(),
             prompt: "finish delivery".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            bootstrap_evidence: None,
             attempt_id: AttemptId::try_from("resumed-attempt")?,
             attempt_number: 1,
             lease_token: LeaseToken::try_from("resumed-lease")?,
@@ -872,7 +798,8 @@ mod tests {
             PreparedWorkspace {
                 repository: repository.path().to_owned(),
                 baseline: baseline.trim().to_owned(),
-                resumed: true
+                resumed: true,
+                observed_feature_head_sha: None,
             }
             .persistable_patch(&task, &result)
             .await?,
@@ -896,6 +823,7 @@ mod tests {
         let conflicted = ConflictedWorkspace {
             repository: repository.path().to_owned(),
             resumed: false,
+            observed_feature_head_sha: None,
         };
         let error = conflicted
             .finish_dependency_resolution()

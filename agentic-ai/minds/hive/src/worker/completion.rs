@@ -1,4 +1,7 @@
-use crate::model::{ClaimedTask, CompletionArtifact, CompletionRelevance, TaskId, TerminalResult};
+use crate::model::{
+    BootstrapEvidence, ClaimedTask, CompletionArtifact, CompletionRelevance, GitSha, TaskId,
+    TerminalResult,
+};
 use std::path::Path;
 
 pub(super) struct TaskCompletionProposal<'a> {
@@ -65,12 +68,29 @@ impl CompletionPlan<'_> {
 }
 
 impl CompletionPlan<'_> {
-    pub(super) async fn verify_owner_deliveries(&self, repository: &Path) -> crate::HiveResult<()> {
+    pub(super) async fn verify_owner_deliveries(
+        &self,
+        repository: &Path,
+        evidence: Option<&BootstrapEvidence>,
+        observed_feature_head_sha: Option<&GitSha>,
+    ) -> crate::HiveResult<()> {
         use crate::HiveContext;
         if let Self::ObsoleteRetirement { owning_repairs } = self {
+            let evidence = evidence.ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
+            let observed_feature_head_sha = observed_feature_head_sha
+                .ok_or(crate::model::ModelError::MissingBootstrapEvidence)?;
             for owner in *owning_repairs {
-                crate::delivery::MainRepairDelivery { repository, branch: &owner.repair_branch_name() }
- .verify_main_repair_merge_and_main().await.hive_context(format!("obsolete blocker retirement requires a merged repair and green Main for owner {owner}"))?;
+                crate::delivery::MainRepairDelivery {
+                    repository,
+                    branch: evidence.feature_branch.as_str(),
+                    evidence,
+                    observed_feature_head_sha,
+                }
+                .verify_main_repair_promotion_and_main(owner.as_str())
+                .await
+                .hive_context(format!(
+                    "obsolete blocker retirement requires exact-SHA local-dev promotion and green Main evidence for owner {owner}"
+                ))?;
             }
         }
         Ok(())

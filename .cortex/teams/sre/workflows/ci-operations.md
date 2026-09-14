@@ -2,7 +2,7 @@
 
 ## Agent delivery applicability
 
-Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
+Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
 feature-stage slow checks. Paused Hive remains outside the manual manager
@@ -53,8 +53,8 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
 Full reference: [logging.md § Debugging, troubleshooting, and CI verification](../../../shared/references/logging.md#debugging-troubleshooting-and-ci-verification).
 
 Local `task ci:pr` remains available as an optional warm-cache debug mirror.
-See [pull request validation](../../../gizmo/workflows/pull-requests.md)
-and [mission delivery](../../../gizmo/workflows/mission-delivery.md).
+See [pull request validation](../../../gizmo-prime/workflows/pull-requests.md)
+and [mission delivery](../../../gizmo-prime/workflows/mission-delivery.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
 
@@ -140,9 +140,12 @@ It does not establish deliberate ISP throttling or a defective MTU.
 ## Secrets and env
 
 - **`NOOK_GITHUB_PAT`**
-  - Used by: `sync-live` e2e; `agent-implement` PR/push
-  - Scope: Classic with `repo` scope or fine-grained with contents and pull requests write on this repository.
-  - Requirement: PR creation must act as a user so normal workflows fire.
+  - Used by: `sync-live` e2e; trusted agent branch publication; manager-owned
+    dev PR management
+  - Scope: Classic with `repo` scope or fine-grained with contents and pull
+    requests write on this repository.
+  - Requirement: branch publication is exact-head and non-forced; only the
+    manager-owned dev PR operation may create or update a pull request.
 - **`NOOK_GITHUB_E2E_REPO`**
   - Used by: CI sets per run for live suites (one repo per container)
 - **`CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID`**
@@ -271,12 +274,12 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 - `CI_AGENT_TIMEOUT_MS=18000000` for a five-hour agent run.
 
 - The remaining hour covers setup and result publication.
-- The job exits after opening the PR and publishing its bounded handoff.
+  - The job exits after publishing the exact branch and its bounded handoff.
 - `task pr:preflight` and `task pr:ready` are read-only audits.
   - No hosted continuation or CLI command merges from their result.
 - The ci-agent entrypoint calls `process.exit` after `runCiFix()` completes.
   - Without it, Cursor SDK child processes and open handles can retain the Node
-    event loop after PR creation.
+    event loop after branch publication.
 - [CI agent smoke](../../../../.github/workflows/ci-agent-smoke.yml) runs unit tests
   and an `exitCiAgent` open-handle check on `ubuntu-latest` through
   `workflow_dispatch`.
@@ -350,13 +353,13 @@ The gate enforces these rules:
   blocked for a later user decision.
 
 The workflow publishes a Workbench progress update and worklog whether
-implementation opens a PR or blocks. Drafts, manually owned issues, and
+implementation publishes its exact branch or blocks. Drafts, manually owned issues, and
 historical imports cannot trigger it.
 
 Loop: claim Workbench record → strict isolated planning → classify and publish
 the planning result → either publish an authorization blocker or run strict
 isolated editing → trusted direct-host formatting → trusted budget, commit,
-push, and PR publication → assign and directly mention the continuing owner →
+push, and exact branch publication → assign and directly mention the continuing owner →
 publish Workbench progress/worklog → exit. `CURSOR_API_KEY` is supplied only to
 the strict planner/editor SDK control plane and trusted plan/worklog secret
 validators; it is removed from the editor subprocess environment.
@@ -382,7 +385,7 @@ publication steps. Registry credentials are not used. Prompt:
 3. **Do** return a formatted Team Agent commit for Gizmo to integrate, push,
    and validate; never run heavy product work locally.
 4. **Do** update this doc and
-   [pull requests](../../../gizmo/workflows/pull-requests.md) when workflow
+   [pull requests](../../../gizmo-prime/workflows/pull-requests.md) when workflow
    behavior changes.
 5. Explicitly labeled PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds.
    - UI-changing PRs must still add or update their focused headless demo specs.
@@ -399,4 +402,4 @@ publication steps. Registry credentials are not used. Prompt:
    - Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 
-See also: [ARCHITECTURE.md §7](../../../shared/architecture/system.md#7-the-engineering-harness), [pull requests](../../../gizmo/workflows/pull-requests.md).
+See also: [ARCHITECTURE.md §7](../../../shared/architecture/system.md#7-the-engineering-harness), [pull requests](../../../gizmo-prime/workflows/pull-requests.md).

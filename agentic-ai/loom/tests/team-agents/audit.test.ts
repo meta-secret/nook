@@ -23,14 +23,20 @@ import type {
 } from '../../src/team-agents/audit.ts';
 
 import {
-  GIZMO_OWNED_AGENT_CATALOG,
-  GizmoOwnedAgentKey,
   TEAM_AUTHORITY_CATALOG,
+  TEAM_GIZMO_CATALOG,
+  TEAM_INTERNAL_AGENT_CATALOG,
+  TeamGizmoKey,
+  TeamInternalAgentKey,
   TeamKey,
   TeamAuthorityCatalog,
 } from '../../src/team-agents/catalog.ts';
 
-import type { TeamAuthority } from '../../src/team-agents/catalog.ts';
+import type {
+  TeamAuthority,
+  TeamGizmoProfile,
+  TeamInternalAgentProfile,
+} from '../../src/team-agents/catalog.ts';
 
 export class TeamAgentsAuditScenario {
   private constructor(private readonly request: string) {}
@@ -52,11 +58,11 @@ export class TeamAgentsAuditScenario {
       join(tmpdir(), 'loom-team-authority-drift-'),
     );
     const cortexRoot = join(fixtureRoot, '.cortex');
-    await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
+    await mkdir(join(cortexRoot, 'gizmo-prime'), CREATE_RECURSIVELY);
     await symlink(join(REPO_ROOT, '.cortex/teams'), join(cortexRoot, 'teams'));
     await writeFile(join(cortexRoot, 'AGENTS.md'), 'routing only\n', 'utf8');
     await writeFile(
-      join(cortexRoot, 'gizmo/AGENTS.md'),
+      join(cortexRoot, 'gizmo-prime/AGENTS.md'),
       'delivery only\n',
       'utf8',
     );
@@ -73,7 +79,10 @@ export class TeamAgentsAuditScenario {
     const cortexRoot = join(fixtureRoot, '.cortex');
     await mkdir(cortexRoot, CREATE_RECURSIVELY);
     await symlink(join(REPO_ROOT, '.cortex/teams'), join(cortexRoot, 'teams'));
-    await symlink(join(REPO_ROOT, '.cortex/gizmo'), join(cortexRoot, 'gizmo'));
+    await symlink(
+      join(REPO_ROOT, '.cortex/gizmo-prime'),
+      join(cortexRoot, 'gizmo-prime'),
+    );
     const authority = await readFile(
       join(REPO_ROOT, '.cortex/AGENTS.md'),
       'utf8',
@@ -94,18 +103,29 @@ const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
 const CREATE_RECURSIVELY: MakeDirectoryOptions = { recursive: true };
 
 describe('canonical Cortex team authority', () => {
-  test('defines five stable keys and human-readable identities', () => {
+  test('defines six stable keys and human-readable identities', () => {
     expect(TEAM_AUTHORITY_CATALOG.map((authority) => authority.key)).toEqual([
       TeamKey.Ai,
       TeamKey.DevelopmentCore,
       TeamKey.Security,
       TeamKey.Sre,
       TeamKey.WebDevelopment,
+      TeamKey.DeliveryPipeline,
     ]);
     expect(
       TEAM_AUTHORITY_CATALOG.map((authority) => authority.identity),
-    ).toEqual(['AI', 'Development core', 'Security', 'SRE', 'Web development']);
+    ).toEqual([
+      'AI',
+      'Development core',
+      'Security',
+      'SRE',
+      'Web development',
+      'Delivery Pipeline',
+    ]);
     expect(TeamAuthorityCatalog.teamAuthority(TeamKey.Ai)).not.toBe(false);
+    expect(TeamAuthorityCatalog.teamCortexRoot(TeamKey.DeliveryPipeline)).toBe(
+      '.cortex/teams/delivery-pipeline',
+    );
   });
 
   test('audits canonical Cortex paths and capability boundaries', () => {
@@ -113,33 +133,251 @@ describe('canonical Cortex team authority', () => {
     const report = TeamAgentContract.auditTeamAgents(auditRequest);
 
     expect(report.findings).toEqual([]);
-    expect(report.authorityCount).toBe(5);
+    expect(report.authorityCount).toBe(6);
+    expect(report.teamGizmoCount).toBe(6);
+    expect(report.teamInternalAgentCount).toBe(12);
     expect(report.auditOk).toBe(true);
   });
 
-  test('keeps PR Steward outside the five functional authorities', () => {
-    expect(TEAM_AUTHORITY_CATALOG).toHaveLength(5);
-    expect(GIZMO_OWNED_AGENT_CATALOG).toEqual([
-      {
-        key: GizmoOwnedAgentKey.PrSteward,
-        identity: 'PR Steward',
-        description:
-          'Executes explicitly authorized pull-request metadata, review, validation, readiness-evidence, merge, and merge-verification operations for Gizmo Prime.',
-        model: 'gpt-5.6-luna',
-        reasoningEffort: 'xhigh',
-        contextPaths: [
-          '.cortex/teams/pr-steward/AGENTS.md',
-          '.cortex/teams/pr-steward/knowledge-graph.md',
-        ],
-        capabilityBoundary:
-          'PR Steward never edits functional code, adjudicates technical findings, sequences shared-branch writers, owns Workbench outcomes, or issues the final delivery verdict.',
-      },
-    ]);
-    const firstAgent = GIZMO_OWNED_AGENT_CATALOG[0];
-    if (!firstAgent) throw new Error('Gizmo agent catalog is empty.');
+  test('models every Team Gizmo and internal-agent hierarchy', () => {
+    expect(TEAM_AUTHORITY_CATALOG).toHaveLength(6);
+    expect(TEAM_GIZMO_CATALOG).toHaveLength(6);
+    expect(TEAM_INTERNAL_AGENT_CATALOG).toHaveLength(12);
+
+    for (const gizmo of TEAM_GIZMO_CATALOG) {
+      expect(gizmo.model).toBe('gpt-5.6-sol');
+      expect(gizmo.reasoningEffort).toBe('low');
+      expect(gizmo.serviceTier).toBe('fast');
+      expect(gizmo.parent).toBe('Gizmo Prime');
+    }
+    const teamGizmoByTeam = new Map(
+      TEAM_GIZMO_CATALOG.map((gizmo) => [gizmo.team, gizmo.key]),
+    );
+    for (const agent of TEAM_INTERNAL_AGENT_CATALOG) {
+      expect(agent.model).toBe('gpt-5.6-luna');
+      expect(agent.reasoningEffort).toBe('xhigh');
+      expect(agent.serviceTier).toBe('fast');
+      expect(teamGizmoByTeam.get(agent.team)).toBe(agent.parent);
+    }
+
+    const teamGizmo = TEAM_GIZMO_CATALOG.find(
+      (candidate) => candidate.key === TeamGizmoKey.DeliveryPipeline,
+    );
+    const internalAgent = TEAM_INTERNAL_AGENT_CATALOG.find(
+      (candidate) => candidate.key === TeamInternalAgentKey.PrLifecycle,
+    );
+    const deliveryPipelineAuthority = TEAM_AUTHORITY_CATALOG[5];
+    if (!teamGizmo || !internalAgent)
+      throw new Error('Delivery Pipeline profiles are incomplete.');
+    if (!deliveryPipelineAuthority)
+      throw new Error('Delivery Pipeline authority is incomplete.');
+
+    expect(teamGizmo).toMatchObject({
+      key: TeamGizmoKey.DeliveryPipeline,
+      team: TeamKey.DeliveryPipeline,
+      identity: 'Delivery Pipeline Team Gizmo',
+      parent: 'Gizmo Prime',
+      contextPaths: [
+        '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md',
+        '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md',
+      ],
+    });
+    expect(internalAgent).toMatchObject({
+      key: TeamInternalAgentKey.PrLifecycle,
+      team: TeamKey.DeliveryPipeline,
+      identity: 'PR Lifecycle',
+      parent: TeamGizmoKey.DeliveryPipeline,
+      contextPaths: [
+        '.cortex/teams/delivery-pipeline/pr-lifecycle/AGENTS.md',
+        '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
+      ],
+    });
     expect(
-      TeamAuthorityCatalog.gizmoOwnedAgentProfile(GizmoOwnedAgentKey.PrSteward),
-    ).toEqual(firstAgent);
+      TeamAuthorityCatalog.teamGizmoProfile(TeamGizmoKey.DeliveryPipeline),
+    ).toEqual(teamGizmo);
+    expect(
+      TeamAuthorityCatalog.teamInternalAgentProfile(
+        TeamInternalAgentKey.PrLifecycle,
+      ),
+    ).toEqual(internalAgent);
+    expect(
+      TeamAuthorityCatalog.teamAgentProfile(TeamKey.DeliveryPipeline),
+    ).toEqual(deliveryPipelineAuthority);
+    expect(
+      TeamAuthorityCatalog.teamAgentProfile(TeamGizmoKey.DeliveryPipeline),
+    ).toEqual(teamGizmo);
+    expect(
+      TeamAuthorityCatalog.teamAgentProfile(TeamInternalAgentKey.PrLifecycle),
+    ).toEqual(internalAgent);
+  });
+
+  test('rejects Team Gizmo and internal-agent contract, hierarchy, count, and path drift', () => {
+    const teamGizmo = TEAM_GIZMO_CATALOG[0];
+    const internalAgent = TEAM_INTERNAL_AGENT_CATALOG[0];
+    if (!teamGizmo || !internalAgent)
+      throw new Error('Delivery Pipeline profiles are incomplete.');
+
+    const driftedGizmos: readonly TeamGizmoProfile[][] = [
+      [],
+      [{ ...teamGizmo, reportingBoundary: '' }],
+      [{ ...teamGizmo, contextPaths: ['../outside/AGENTS.md'] }],
+      [teamGizmo, teamGizmo],
+    ];
+    for (const gizmos of driftedGizmos) {
+      expect(
+        TeamAgentContract.auditTeamGizmos({
+          repoRoot: REPO_ROOT,
+          gizmos,
+        }).auditOk,
+      ).toBe(false);
+    }
+
+    const driftedAgents: readonly TeamInternalAgentProfile[][] = [
+      [],
+      [{ ...internalAgent, team: TeamKey.Ai }],
+      [{ ...internalAgent, capabilityBoundary: '' }],
+      [internalAgent, internalAgent],
+    ];
+    for (const agents of driftedAgents) {
+      expect(
+        TeamAgentContract.auditTeamInternalAgents({
+          repoRoot: REPO_ROOT,
+          agents,
+        }).auditOk,
+      ).toBe(false);
+    }
+
+    const unsafeAgentReport = TeamAgentContract.auditTeamInternalAgents({
+      repoRoot: REPO_ROOT,
+      agents: [
+        { ...internalAgent, contextPaths: ['.cortex/../outside/AGENTS.md'] },
+      ],
+    });
+    expect(unsafeAgentReport.findings.map((finding) => finding.code)).toContain(
+      'unsafe-team-internal-agent-context-path',
+    );
+  });
+
+  test('rejects production catalog model drift against independent expectations', () => {
+    const teamGizmo = TEAM_GIZMO_CATALOG[0];
+    if (!teamGizmo) throw new Error('AI Team Gizmo profile is incomplete.');
+    const originalModel = teamGizmo.model;
+    Object.defineProperty(teamGizmo, 'model', {
+      configurable: true,
+      value: 'gpt-5.5',
+    });
+    try {
+      const report = TeamAgentContract.auditTeamGizmos({
+        repoRoot: REPO_ROOT,
+        gizmos: TEAM_GIZMO_CATALOG,
+      });
+      expect(report.auditOk).toBe(false);
+      expect(report.findings.map((finding) => finding.code)).toContain(
+        'invalid-team-gizmo-contract',
+      );
+    } finally {
+      Object.defineProperty(teamGizmo, 'model', {
+        configurable: true,
+        value: originalModel,
+      });
+    }
+  });
+
+  test('rejects directories and symlinks as Team Gizmo context paths', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-context-node-'));
+    const contextFile = join(fixtureRoot, 'context.md');
+    const contextDirectory = join(fixtureRoot, 'context-directory');
+    const contextSymlink = join(fixtureRoot, 'context-symlink.md');
+    const teamGizmo = TEAM_GIZMO_CATALOG[0];
+    if (!teamGizmo)
+      throw new Error('Delivery Pipeline Team Gizmo profile is incomplete.');
+
+    try {
+      await writeFile(contextFile, 'context\n', 'utf8');
+      await mkdir(contextDirectory);
+      await symlink(contextFile, contextSymlink);
+
+      for (const contextPath of ['context-directory', 'context-symlink.md']) {
+        const report = TeamAgentContract.auditTeamGizmos({
+          repoRoot: fixtureRoot,
+          gizmos: [{ ...teamGizmo, contextPaths: [contextPath] }],
+        });
+
+        expect(report.auditOk).toBe(false);
+        expect(report.findings).toContainEqual({
+          code: 'missing-team-gizmo-context-path',
+          path: contextPath,
+          message: `Team Gizmo context is missing: ${contextPath}`,
+        });
+      }
+    } finally {
+      await rm(fixtureRoot, REMOVE_RECURSIVELY);
+    }
+  });
+
+  test('rejects directories and symlinks as canonical Team Authority context paths', async () => {
+    for (const contextNode of ['directory', 'symlink'] as const) {
+      const fixtureRoot = await mkdtemp(
+        join(tmpdir(), `loom-authority-${contextNode}-`),
+      );
+      const cortexRoot = join(fixtureRoot, '.cortex');
+      const teamsRoot = join(cortexRoot, 'teams');
+      const aiRoot = join(teamsRoot, 'ai');
+      const aiAgentsPath = join(aiRoot, 'AGENTS.md');
+
+      try {
+        await mkdir(teamsRoot, CREATE_RECURSIVELY);
+        await symlink(
+          join(REPO_ROOT, '.cortex/AGENTS.md'),
+          join(cortexRoot, 'AGENTS.md'),
+        );
+        await symlink(
+          join(REPO_ROOT, '.cortex/gizmo-prime'),
+          join(cortexRoot, 'gizmo-prime'),
+        );
+        for (const teamDirectory of [
+          'dev-core',
+          'security',
+          'sre',
+          'web-dev',
+          'delivery-pipeline',
+        ]) {
+          await symlink(
+            join(REPO_ROOT, '.cortex/teams', teamDirectory),
+            join(teamsRoot, teamDirectory),
+          );
+        }
+        await mkdir(aiRoot, CREATE_RECURSIVELY);
+        await symlink(
+          join(REPO_ROOT, '.cortex/teams/ai/dynamic-skills'),
+          join(aiRoot, 'dynamic-skills'),
+        );
+        await writeFile(join(aiRoot, 'knowledge-graph.md'), 'knowledge\n');
+        if (contextNode === 'directory') {
+          await mkdir(aiAgentsPath);
+        } else {
+          await symlink(
+            join(REPO_ROOT, '.cortex/teams/ai/AGENTS.md'),
+            aiAgentsPath,
+          );
+        }
+
+        const report = TeamAgentContract.auditTeamAuthorities({
+          repoRoot: fixtureRoot,
+          authorities: TEAM_AUTHORITY_CATALOG,
+        });
+
+        expect(report.auditOk).toBe(false);
+        expect(report.findings).toContainEqual({
+          code: 'missing-team-context-path',
+          path: '.cortex/teams/ai/AGENTS.md',
+          message:
+            'Canonical Cortex team context is missing: .cortex/teams/ai/AGENTS.md',
+        });
+      } finally {
+        await rm(fixtureRoot, REMOVE_RECURSIVELY);
+      }
+    }
   });
 
   test('rejects stable-key, identity, context, and capability drift', () => {
@@ -231,7 +469,7 @@ describe('canonical Cortex team authority', () => {
       const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-gizmo-grant-'));
       const cortexRoot = join(fixtureRoot, '.cortex');
       try {
-        await mkdir(join(cortexRoot, 'gizmo'), CREATE_RECURSIVELY);
+        await mkdir(join(cortexRoot, 'gizmo-prime'), CREATE_RECURSIVELY);
         await symlink(
           join(REPO_ROOT, '.cortex/teams'),
           join(cortexRoot, 'teams'),
@@ -242,12 +480,12 @@ describe('canonical Cortex team authority', () => {
           'utf8',
         );
         const gizmoAuthority = await readFile(
-          join(REPO_ROOT, '.cortex/gizmo/AGENTS.md'),
+          join(REPO_ROOT, '.cortex/gizmo-prime/AGENTS.md'),
           'utf8',
         );
         expect(gizmoAuthority).toContain(drift.current);
         await writeFile(
-          join(cortexRoot, 'gizmo/AGENTS.md'),
+          join(cortexRoot, 'gizmo-prime/AGENTS.md'),
           gizmoAuthority.replace(drift.current, drift.replacement),
           'utf8',
         );
@@ -257,7 +495,7 @@ describe('canonical Cortex team authority', () => {
         });
         expect(report.findings).toContainEqual({
           code: 'invalid-cortex-gizmo-authority',
-          path: '.cortex/gizmo/AGENTS.md',
+          path: '.cortex/gizmo-prime/AGENTS.md',
           message: `Canonical Gizmo authority is missing marker: ${drift.current}`,
         });
       } finally {

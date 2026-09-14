@@ -34,7 +34,7 @@ export class LoomCommandLine {
       return {
         kind: CliInvocationKind.UsageError,
         message:
-          'expected loom --default <prePush|toolsList|cortexAudit|cortexSessionClean|dependencyPopularity>',
+          'expected loom --default <toolsList|cortexAudit|cortexSessionClean|dependencyPopularity>',
       };
     }
     const family = argv[1];
@@ -42,7 +42,7 @@ export class LoomCommandLine {
       return {
         kind: CliInvocationKind.UsageError,
         message:
-          'expected loom --default <prePush|toolsList|cortexAudit|cortexSessionClean|dependencyPopularity>',
+          'expected loom --default <toolsList|cortexAudit|cortexSessionClean|dependencyPopularity>',
       };
     }
     const lookupDefaultableExampleArgs: LookupDefaultableExampleArgs = {
@@ -57,7 +57,7 @@ export class LoomCommandLine {
     return {
       kind: CliInvocationKind.UsageError,
       message:
-        'expected loom --default <prePush|toolsList|cortexAudit|cortexSessionClean|dependencyPopularity>',
+        'expected loom --default <toolsList|cortexAudit|cortexSessionClean|dependencyPopularity>',
     };
   }
 }

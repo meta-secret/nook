@@ -18,13 +18,11 @@ const HELP = `Loom — mechanical cortex rites (domain YAML protocol)
 
 Usage:
   loom <request.yaml>
-  loom --default <prePush|toolsList|cortexAudit|cortexSessionClean|dependencyPopularity>
+  loom --default <toolsList|cortexAudit|cortexSessionClean|dependencyPopularity>
   loom help
 
 Domain request example:
-  prePush:
-    stageHostUpdates: true
-    fetchOriginMain: true
+  toolsList: {}
 
 Discover request kinds:
   task loom:tools-list

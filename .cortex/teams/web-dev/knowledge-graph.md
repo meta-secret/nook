@@ -39,3 +39,9 @@ when the selected authority links them as read-only engineering policy.
 
 - [Playwright MCP annotation and debugging](references/ai-debugging.md)
 - [Svelte, Vite, and Bun](references/bun-svelte.md)
+
+## Team topology
+
+- [Web Development Team Gizmo](gizmo/knowledge-graph.md) coordinates bounded Web Development mechanics.
+- [TypeScript specialist](typescript-specialist/knowledge-graph.md) handles packeted TypeScript implementation work.
+- [Svelte specialist](svelte-specialist/knowledge-graph.md) handles packeted Svelte presentation and interaction work.

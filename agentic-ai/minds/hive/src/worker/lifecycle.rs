@@ -325,6 +325,7 @@ mod tests {
                     kind: "main-repair".into(),
                     prompt: "repair Main".to_owned(),
                     source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+                    bootstrap_evidence: None,
                     attempt_id: AttemptId::try_from("attempt-a")?,
                     attempt_number: 1,
                     lease_token: LeaseToken::try_from("lease-a")?,
@@ -366,6 +367,7 @@ mod tests {
             let ActiveDeliveryQuery {
                 source_commit: _source_commit,
                 kind: _kind,
+                bootstrap_evidence: _bootstrap_evidence,
             } = request;
             unreachable!("not used by claim lifecycle test")
         }

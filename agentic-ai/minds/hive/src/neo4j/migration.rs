@@ -1,4 +1,5 @@
 use crate::HiveContext;
+use crate::model::FeatureBranch;
 use crate::neo4j::Neo4jTaskStore;
 use neo4rs::query;
 
@@ -11,7 +12,7 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
     "CREATE INDEX hive_activity_timeline IF NOT EXISTS FOR (node:TaskActivity) ON (node.created_at)",
 ];
-const LATEST_SCHEMA_VERSION: i64 = 9;
+const LATEST_SCHEMA_VERSION: i64 = 11;
 
 impl Neo4jTaskStore {
     pub(super) async fn migrate_schema(&self) -> crate::HiveResult<()> {
@@ -19,14 +20,23 @@ impl Neo4jTaskStore {
         let mut rows = graph
             .execute(query(
                 "MATCH (migration:HiveSchemaMigration)
-                 RETURN max(migration.version) AS version",
+                 RETURN migration.version AS version",
             ))
             .await?;
-        let installed_version = rows
-            .next()
-            .await?
-            .and_then(|row| row.get::<i64>("version").ok())
-            .unwrap_or(0);
+        let mut installed_version = 0_i64;
+        while let Some(row) = rows.next().await? {
+            let version = row.get::<i64>("version").map_err(|error| {
+                crate::HiveError::message(format!(
+                    "Hive schema migration marker has a malformed version: {error}"
+                ))
+            })?;
+            if version < 0 {
+                return Err(crate::HiveError::message(format!(
+                    "Hive schema migration marker has an invalid negative version {version}"
+                )));
+            }
+            installed_version = installed_version.max(version);
+        }
         if installed_version > LATEST_SCHEMA_VERSION {
             return Err(crate::HiveError::message(format!(
                 "Hive graph schema {installed_version} is newer than supported version {LATEST_SCHEMA_VERSION}"
@@ -89,6 +99,42 @@ impl Neo4jTaskStore {
         if installed_version < 9 {
             Self::migrate_blocker_dependencies(graph).await?;
         }
+        if installed_version < 10 {
+            graph
+                .run(query(
+                    "MATCH (task:Task)
+                     SET task.origin_main_sha = coalesce(task.origin_main_sha, ''),
+                         task.pinned_local_dev_sha = coalesce(task.pinned_local_dev_sha, ''),
+                         task.feature_head_sha = coalesce(task.feature_head_sha, '')",
+                ))
+                .await
+                .hive_context("failed to initialize schema-10 bootstrap evidence")?;
+        }
+        if installed_version < 11 {
+            Self::validate_schema_eleven_tasks(graph).await?;
+            graph
+                .run(query(
+                    "MATCH (task:Task)
+                     SET task.feature_branch = coalesce(task.feature_branch, '')
+                     REMOVE task.feature_head_sha",
+                ))
+                .await
+                .hive_context("failed to initialize schema-11 canonical feature branches")?;
+        } else {
+            // A previous v11 attempt may have persisted the marker before this
+            // cleanup was added. Reconcile that graph before allowing any
+            // worker to use the v11 marker, while retaining the same
+            // fail-closed evidence checks as the initial migration.
+            Self::validate_schema_eleven_tasks(graph).await?;
+            graph
+                .run(query(
+                    "MATCH (task:Task)
+                     SET task.feature_branch = coalesce(task.feature_branch, '')
+                     REMOVE task.feature_head_sha",
+                ))
+                .await
+                .hive_context("failed to reconcile schema-11 canonical feature branches")?;
+        }
         for statement in CONSTRAINTS {
             graph
                 .run(query(statement))
@@ -124,6 +170,54 @@ impl Neo4jTaskStore {
             return Err(crate::HiveError::message(format!(
                 "Hive schema 1 contains {legacy_tasks} task(s) without source_commit; \
                  drain or remove those legacy tasks before upgrading to schema 2"
+            )));
+        }
+        Ok(())
+    }
+
+    async fn validate_schema_eleven_tasks(graph: &neo4rs::Graph) -> crate::HiveResult<()> {
+        let mut rows = graph
+            .execute(query(
+                "MATCH (task:Task)
+                 WITH task,
+                      coalesce(task.origin_main_sha, '') AS origin_main_sha,
+                      coalesce(task.pinned_local_dev_sha, '') AS pinned_local_dev_sha,
+                      coalesce(task.feature_head_sha, '') AS feature_head_sha,
+                      coalesce(task.feature_branch, '') AS feature_branch
+                 RETURN count(CASE
+                                WHEN (task.kind = 'main-repair'
+                                      OR origin_main_sha <> ''
+                                      OR pinned_local_dev_sha <> ''
+                                      OR feature_head_sha <> '')
+                                     AND feature_branch = ''
+                                THEN 1
+                              END) AS missing_feature_branch,
+                        count(CASE
+                                WHEN feature_branch <> ''
+                                     AND (origin_main_sha = '' OR pinned_local_dev_sha = '')
+                                THEN 1
+                              END) AS incomplete_bootstrap_evidence,
+                        collect(CASE
+                                  WHEN feature_branch <> '' THEN feature_branch
+                                END) AS feature_branches",
+            ))
+            .await?;
+        let row = rows.next().await?.ok_or_else(|| {
+            crate::HiveError::message("schema-11 migration validation returned no row")
+        })?;
+        let missing_feature_branch = row.get::<i64>("missing_feature_branch")?;
+        let incomplete_bootstrap_evidence = row.get::<i64>("incomplete_bootstrap_evidence")?;
+        let feature_branches = row.get::<Vec<String>>("feature_branches")?;
+        let invalid_feature_branch = feature_branches
+            .iter()
+            .filter(|branch| FeatureBranch::try_from(branch.as_str()).is_err())
+            .count();
+        if missing_feature_branch > 0
+            || incomplete_bootstrap_evidence > 0
+            || invalid_feature_branch > 0
+        {
+            return Err(crate::HiveError::message(format!(
+                "schema-11 migration requires an existing canonical feature_branch for every task with bootstrap evidence; found {missing_feature_branch} task(s) without a derivable branch, {incomplete_bootstrap_evidence} task(s) with incomplete bootstrap evidence, and {invalid_feature_branch} task(s) with an invalid branch; feature_head_sha cannot be reinterpreted as a branch"
             )));
         }
         Ok(())

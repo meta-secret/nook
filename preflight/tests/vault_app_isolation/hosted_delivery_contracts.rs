@@ -353,7 +353,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
                 "github.event.action == 'labeled' && github.event.label.name == 'ci:full-e2e'"
             )
             && ci.contains("'dev-pr'")
-            && ci.contains("cancel-in-progress: >-"),
+            && ci.contains("cancel-in-progress: false"),
         "dev promotion must expose one stable exact-head gate with serialized native concurrency"
     );
     assert!(

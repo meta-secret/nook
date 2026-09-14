@@ -20,6 +20,28 @@ The root [team worker contract](../../AGENTS.md#team-worker-contract) supplies
 universal requirements. This entry point adds only AI ownership and context
 selection.
 
+AI dispatch follows active-harness admission. Immediately attempt every
+dependency-ready specialist with a disjoint scope and use the actual admission
+result concurrently. Queue temporary refusals for retry when capacity releases. A host or
+session allocation is current availability, not an architecture or product
+limit. Do not pre-check or budget a wave against a numeric limit. Cortex and
+Loom never encode, infer, or repeat a fixed numeric agent or subagent
+concurrency cap.
+
+AI Team Gizmo and its leaves consume the canonical feature branch name and the
+bootstrap evidence issued by Gizmo Prime. Prime's fresh-base bootstrap runs
+before planning, delegation, worktree creation, or edits. It records
+`originMainSha` for the exact freshly fetched `origin/main` and
+`pinnedLocalDevSha` after canonical local `main` and `dev` are synchronized;
+`originMainSha` must be an ancestor of `pinnedLocalDevSha`. Prime creates the
+feature branch and worktree from that current committed local-dev feature base
+and preserves it. The branch name is the workflow authority. Before each
+stage, delivery resolves the latest committed branch head. A branch advance
+follows the latest head and reruns affected evidence. SHAs observed during the
+run are evidence, not cross-stage authority. The AI team fails closed on
+missing or unprovable bootstrap/branch evidence and never resolves or guesses
+a base independently.
+
 An exact AI authority may require a foreign-team engineering skill. Load that
 skill read-only. An expertise provider is required only when the foreign team
 will implement named files.
@@ -63,7 +85,7 @@ Gizmo.
 
 ## Validation
 
-Apply the [dev delivery stages](../../gizmo/architecture/dev-delivery.md).
+Apply the [dev delivery stages](../../gizmo-prime/architecture/dev-delivery.md).
 Author meaningful tests in feature work, but execute them only in the manager's
 slow PR stage. Feature validation is remote build-only execution only. Local
 feedback is limited to scoped rustfmt and bounded inexpensive TS diagnostics

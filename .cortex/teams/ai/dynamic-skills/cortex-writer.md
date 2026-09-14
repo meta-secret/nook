@@ -55,6 +55,15 @@ This card is the single canonical generic Cortex writing policy.
 - A separate AI task is required only when AI-owned routing, tooling, or Cortex
   governance must change.
 
+Capacity language follows the active harness.
+
+- Never encode, infer, or repeat a fixed numeric agent or subagent concurrency
+  cap in Cortex authoring.
+- Refer to capacity reported by the active harness.
+- Do not pre-check or budget a dispatch wave against a numeric limit.
+- Treat host or session allocation as current availability, not an architecture
+  or product limit.
+
 ## Problem Pattern
 
 A writer packs many constraints, identities, failure modes, and commands into
@@ -155,7 +164,15 @@ The changed-file density gate has bounded scope. Its implementation semantics
 are described below. Execute documentation audits in the manager's slow PR
 stage; this description grants no local pre-push permission.
 
-- It compares the working branch with its merge base against `origin/main`.
+- It compares the working branch with the merge base of the canonical feature
+  branch resolved at audit time. The packet may carry `originMainSha` and
+  `pinnedLocalDevSha` as bootstrap evidence; require the former to be an
+  ancestor of the latter. Prime creates every feature branch and worktree from
+  the current committed local-dev feature base and preserves it. The branch
+  name is the workflow authority. Resolve its latest committed head before the
+  audit. If the branch advances, follow the latest head and rerun the audit.
+  Missing or unprovable bootstrap/branch evidence fails closed; observed SHAs
+  remain run evidence only.
 - A pure rename within persistent Cortex keeps its source ancestry.
 - A rename from outside persistent Cortex checks the full destination.
 - A Git type change into regular Cortex Markdown checks the full file.
@@ -260,7 +277,7 @@ Full rewritten example:
 2. Commit the complete scoped authoring iteration.
 3. Return evidence and unresolved dependencies to the feature Gizmo.
 4. Execute mechanical link, structure, and consistency checks in the manager's
-   slow PR stage under [dev delivery](../../../gizmo/architecture/dev-delivery.md).
+   slow PR stage under [dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
 
 Do not run local Loom tests, audits, broad formatting, or pre-push checks.
 Feature compilation does not establish successful documentation audit results.

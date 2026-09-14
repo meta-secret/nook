@@ -72,12 +72,12 @@ const validFinding = {
   message: 'Centralized Cortex knowledge graph is missing.',
 };
 
-test('acceptance verifies dev-manager graph ownership and rejects omitted evidence', () => {
+test('acceptance verifies direct child graph ownership and rejects omitted evidence', () => {
   const contexts = [
-    'gizmo',
+    'gizmo-prime',
     'teams/ai',
     'teams/dev-core',
-    'teams/dev-manager',
+    'teams/delivery-pipeline',
     'teams/security',
     'teams/sre',
     'teams/web-dev',
@@ -96,8 +96,22 @@ test('acceptance verifies dev-manager graph ownership and rejects omitted eviden
         content: '# Owner Graph\n',
       })),
       {
-        relativePath: '.cortex/teams/dev-manager/policy.md',
+        relativePath:
+          '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md',
+        content: '# Dev Manager Knowledge Graph\n',
+      },
+      {
+        relativePath:
+          '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
+        content: '# PR Lifecycle Knowledge Graph\n',
+      },
+      {
+        relativePath: '.cortex/teams/delivery-pipeline/dev-manager/policy.md',
         content: '# Dev Publication Policy\n',
+      },
+      {
+        relativePath: '.cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',
+        content: '# PR Lifecycle Policy\n',
       },
     ],
   };
@@ -106,10 +120,19 @@ test('acceptance verifies dev-manager graph ownership and rejects omitted eviden
     findings: [
       {
         code: CortexStructureFindingCode.MissingFromIndex,
-        file: '.cortex/teams/dev-manager/knowledge-graph.md',
+        file:
+          '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md',
         line: 1,
         message:
-          'Document is not indexed in its owning knowledge graph .cortex/teams/dev-manager/knowledge-graph.md: .cortex/teams/dev-manager/policy.md',
+          'Document is not indexed in its owning knowledge graph .cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md: .cortex/teams/delivery-pipeline/dev-manager/policy.md',
+      },
+      {
+        code: CortexStructureFindingCode.MissingFromIndex,
+        file:
+          '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
+        line: 1,
+        message:
+          'Document is not indexed in its owning knowledge graph .cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md: .cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',
       },
     ],
   } as const;
@@ -130,8 +153,15 @@ test('acceptance verifies dev-manager graph ownership and rejects omitted eviden
   const indexedRequest: AuditCortexDocumentMapRequest = {
     ...auditRequest,
     documents: auditRequest.documents.map((document) =>
-      document.relativePath === '.cortex/teams/dev-manager/knowledge-graph.md'
+      document.relativePath ===
+        '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md'
         ? { ...document, content: '# Owner Graph\n\n- [Policy](policy.md)\n' }
+        : document.relativePath ===
+            '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md'
+          ? {
+              ...document,
+              content: '# Owner Graph\n\n- [Policy](policy.md)\n',
+            }
         : document,
     ),
   };

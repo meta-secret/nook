@@ -19,14 +19,14 @@ import { promisify } from "node:util";
 import {
   DependencyFixAssertGitMetadataBaselineUnchanged,
   GitConfiguration,
-  DependencyFixAssertPublishedFixIdentity,
+  DependencyFixAssertPublishedFixBranchIdentity,
   DependencyFixAssertRepositoryBaselineUnchanged,
   DependencyFixRepository,
   CI_FIX_SKIPPED,
   CiFixOutcomeKind,
   DependencyFixIsolationForFixProfile,
   CiFixProfileName,
-  DependencyFixVerifyPublishedFix,
+  DependencyFixVerifyPublishedFixBranch,
   DependencyFixWithValidationEnvironment,
 } from "../main/fix.js";
 import type { CiFixOutcome } from "../main/fix.js";
@@ -363,18 +363,14 @@ void test("persisted Git authentication config fails without exposing values", (
 });
 
 const PUBLISHED_IDENTITY = {
-  actualBaseRef: "main",
-  actualHeadRef: "fix/rust-dependencies-42",
+  actualBranch: "fix/rust-dependencies-42",
   actualHeadSha: SHA,
-  actualPrNumber: 1208,
   actualRemoteHeadSha: SHA,
-  expectedBaseRef: "main",
-  expectedHeadRef: "fix/rust-dependencies-42",
+  expectedBranch: "fix/rust-dependencies-42",
   expectedHeadSha: SHA,
-  expectedPrNumber: 1208,
 };
 
-void test("publication outcomes and exact identity fail closed", async () => {
+void test("publication outcomes and exact branch identity fail closed", async () => {
   const published: CiFixOutcome = {
     headSha: SHA,
     kind: CiFixOutcomeKind.Published,
@@ -385,40 +381,30 @@ void test("publication outcomes and exact identity fail closed", async () => {
   );
   assert.equal(
     CiResultAssertions.assertSuccess(
-      new DependencyFixAssertPublishedFixIdentity(PUBLISHED_IDENTITY).execute(),
+      new DependencyFixAssertPublishedFixBranchIdentity(PUBLISHED_IDENTITY).execute(),
     ),
     SHA,
   );
   const mismatches = [
-    { actualPrNumber: 1209 },
-    { actualHeadRef: "fix/other" },
+    { actualBranch: "fix/other" },
     { actualHeadSha: OTHER_SHA },
     { actualRemoteHeadSha: OTHER_SHA },
-    { actualBaseRef: "release" },
   ] as const;
   for (const mismatch of mismatches)
     CiResultAssertions.assertFailure(
-      new DependencyFixAssertPublishedFixIdentity({
+      new DependencyFixAssertPublishedFixBranchIdentity({
         ...PUBLISHED_IDENTITY,
         ...mismatch,
       }).execute(),
-      /Published (?:PR|remote branch)/,
+      /Published (?:branch|branch SHA|remote branch)/,
     );
   const verify = (remoteHeadSha: string, expectedHeadSha = SHA) =>
-    new DependencyFixVerifyPublishedFix({
-      expectedBaseRef: "main",
-      expectedHeadRef: "fix/rust-dependencies-42",
+    new DependencyFixVerifyPublishedFixBranch({
+      expectedBranch: "fix/rust-dependencies-42",
       expectedHeadSha,
-      expectedPrNumber: 1208,
-      fetchPullRequest: async () =>
-        ok({
-          base: { ref: "main" },
-          head: { ref: "fix/rust-dependencies-42", sha: SHA },
-          number: 1208,
-        }),
       fetchRemoteHeadSha: async () => ok(remoteHeadSha),
     }).execute();
   assert.equal(CiResultAssertions.assertSuccess(await verify(SHA)), SHA);
   await CiResultAssertions.assertAsyncFailure(verify(OTHER_SHA), /remote branch SHA/);
-  await CiResultAssertions.assertAsyncFailure(verify(SHA, OTHER_SHA), /PR head SHA/);
+  await CiResultAssertions.assertAsyncFailure(verify(SHA, OTHER_SHA), /branch SHA/);
 });
