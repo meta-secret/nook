@@ -10,6 +10,17 @@ fallback_marker="${NOOK_SCCACHE_FALLBACK_MARKER:-/dev/shm/nook-sccache-remote-di
 ready_marker="${NOOK_SCCACHE_READY_MARKER:-/dev/shm/nook-sccache-remote-ready}"
 startup_lock="${NOOK_SCCACHE_START_LOCK:-/dev/shm/nook-sccache-start-lock}"
 
+# sccache 0.17 ignores client-side mode whenever SCCACHE_ERROR_LOG is present.
+# Runner or parent-image diagnostics must therefore never reach the sccache
+# process. The wrapper already captures stderr in a private temporary file and
+# emits only stable, credential-free fallback events, preserving useful error
+# telemetry without selecting sccache's incompatible error-log path.
+unset SCCACHE_ERROR_LOG
+if [ -n "${SCCACHE_ERROR_LOG:-}" ]; then
+  printf '%s\n' 'NOOK_SCCACHE_CONFIGURATION_FAILURE {"reason":"error_log_conflicts_with_client_side"}' >&2
+  exit 2
+fi
+
 # sccache 0.17's client-side architecture keeps each compiler invocation alive
 # until its cache service has returned final statistics to the daemon. Without
 # it, a fast Rust compile can finish while every remote upload is still queued,

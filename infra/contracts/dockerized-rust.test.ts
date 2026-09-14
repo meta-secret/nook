@@ -260,6 +260,10 @@ class DockerizedRustContract {
     const proof = this.read("infra/tasks/bake-cache.yml");
     expect(wrapper).toContain('${AWS_MAX_ATTEMPTS:=1}');
     expect(wrapper).toContain('${NOOK_SCCACHE_START_TIMEOUT:-2s}');
+    expect(wrapper).toContain("unset SCCACHE_ERROR_LOG");
+    expect(wrapper).toContain(
+      'NOOK_SCCACHE_CONFIGURATION_FAILURE {"reason":"error_log_conflicts_with_client_side"}',
+    );
     expect(wrapper).toContain(
       "${NOOK_SCCACHE_READY_MARKER:-/dev/shm/nook-sccache-remote-ready}",
     );
@@ -274,6 +278,10 @@ class DockerizedRustContract {
     expect(fallbackContract).toContain("FAKE_SCCACHE_RESULT=transport");
     expect(fallbackContract).toContain("FAKE_SCCACHE_RESULT=compiler");
     expect(fallbackContract).toContain(
+      "SCCACHE_ERROR_LOG=/tmp/inherited-sccache-error.log",
+    );
+    expect(fallbackContract).toContain('test -z "${SCCACHE_ERROR_LOG:-}"');
+    expect(fallbackContract).toContain(
       "SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport",
     );
     expect(fallbackContract).toContain(
@@ -283,6 +291,10 @@ class DockerizedRustContract {
     expect(proof).toContain(
       'bash "$repo_root/infra/contracts/sccache-wrapper-fallback.test.sh"',
     );
+    expect(proof).toContain(
+      "inherited SCCACHE_ERROR_LOG disables unsanitized client-side completion",
+    );
+    expect(proof).toContain("bake-sim-sccache-error-log-sanitized");
     expect(proof).toContain(
       "Sccache best-effort proof: inject startup, DNS/read, circuit, compiler, and publication faults",
     );

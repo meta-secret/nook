@@ -73,7 +73,7 @@ if grep -Fq -- 'id=sccache_runtime_mode,required=false' "$compile_dockerfile"; t
   echo 'compile vertex permits missing runtime authority secret' >&2
   exit 1
 fi
-for required in 'AWS_MAX_ATTEMPTS:=1' 'NOOK_SCCACHE_START_TIMEOUT:-2s' 'SCCACHE_CLIENT_SIDE:=1' '[ "${SCCACHE_S3_RW_MODE:-READ_WRITE}" = READ_ONLY ]' '"remote_writes":0' 'cache_transport_unavailable' 'cache_circuit_open'; do
+for required in 'unset SCCACHE_ERROR_LOG' 'NOOK_SCCACHE_CONFIGURATION_FAILURE {"reason":"error_log_conflicts_with_client_side"}' 'AWS_MAX_ATTEMPTS:=1' 'NOOK_SCCACHE_START_TIMEOUT:-2s' 'SCCACHE_CLIENT_SIDE:=1' '[ "${SCCACHE_S3_RW_MODE:-READ_WRITE}" = READ_ONLY ]' '"remote_writes":0' 'cache_transport_unavailable' 'cache_circuit_open'; do
   grep -Fq -- "$required" "$sccache_wrapper"
 done
 for required in 'compile_requests":339' 'cache_misses":{"counts":{"Rust":275' '"cache_errors":0' '"cache_writes":0' '"cache_writes":275' '"baked_runtime_mode":"READ_ONLY"' '"runtime_mode":"READ_WRITE"' '"runtime_mode":"READ_ONLY"' '"runtime_mode_source":"runtime_secret"' 'NOOK_SCCACHE_PUBLICATION_FAILURE'; do
@@ -82,10 +82,10 @@ done
 grep -Fq -- 'SCCACHE_S3_RW_MODE=READ_ONLY FAKE_SCCACHE_RESULT=success' "$sccache_fallback_contract"
 grep -Fq -- 'effective sccache mode: READ_WRITE' "$sccache_fallback_contract"
 for required in cache_hits cache_misses cache_writes NOOK_SCCACHE_PUBLICATION_FAILURE NOOK_SCCACHE_READ_ONLY_WRITE_FAILURE; do grep -Fq -- "$required" "$sccache_report"; done
-for required in 'SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport' 'READ_WRITE failure silently lost publication authority' 'test "$compiler_status" -eq 7' 'two compiler invocations performed one startup probe'; do
+for required in 'SCCACHE_ERROR_LOG=/tmp/inherited-sccache-error.log' 'test -z "${SCCACHE_ERROR_LOG:-}"' 'SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport' 'READ_WRITE failure silently lost publication authority' 'test "$compiler_status" -eq 7' 'two compiler invocations performed one startup probe'; do
   grep -Fq -- "$required" "$sccache_fallback_contract"
 done
-for required in 'Publication guard: zero errors plus zero writes remains terminal' 'cache_errors=0 cache_misses=1 cache_writes=0 status=failed' 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_ONLY runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' 'Target-specific authority: a sibling without its secret fails distinctly' 'dependency-cache sibling status=failed reason=missing-runtime-authority' 'Cold normal publish: no seed prerequisite, sccache READ_WRITE' 'compile_targets=(compile-dependency-cache compile-warm)' 'Next unseeded head: dependency reuse plus cross-commit sccache hits' 'bake-sim-sccache-hit' 'Read-only replay: exact BuildKit reuse and zero writes' 'cache_writes=0 registry_exports=0' 'elapsed=${compile_elapsed}s limit=300s'; do
+for required in 'Publication guard: zero errors plus zero writes remains terminal' 'cache_errors=0 cache_misses=1 cache_writes=0 status=failed' 'inherited SCCACHE_ERROR_LOG disables unsanitized client-side completion' 'compile publication error-log conflict: cache_errors=0 cache_misses=1 cache_writes=0 status=failed' 'bake-sim-sccache-error-log-sanitized' 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_ONLY runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' 'Target-specific authority: a sibling without its secret fails distinctly' 'dependency-cache sibling status=failed reason=missing-runtime-authority' 'Cold normal publish: no seed prerequisite, sccache READ_WRITE' 'compile_targets=(compile-dependency-cache compile-warm)' 'Next unseeded head: dependency reuse plus cross-commit sccache hits' 'bake-sim-sccache-hit' 'Read-only replay: exact BuildKit reuse and zero writes' 'cache_writes=0 registry_exports=0' 'elapsed=${compile_elapsed}s limit=300s'; do
   grep -Fq -- "$required" "$proof"
 done
 cache_telemetry="$workflows_dir/lib/cache-telemetry.mjs"

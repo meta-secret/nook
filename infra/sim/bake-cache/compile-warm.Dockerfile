@@ -12,6 +12,8 @@ FROM toolchain-base AS compile-toolchain
 
 ARG SIMULATED_BUILD_PROFILE=production
 ARG SIMULATED_SCCACHE_CLIENT_SIDE=1
+ARG SIMULATED_SCCACHE_ERROR_LOG=
+ARG SIMULATED_SCCACHE_SANITIZES_ERROR_LOG=1
 ENV SCCACHE_S3_RW_MODE=READ_ONLY
 RUN test "$SIMULATED_BUILD_PROFILE" = production
 
@@ -22,7 +24,11 @@ FROM compile-toolchain AS compile-native-dependencies
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     test "$(cat /run/secrets/sccache_runtime_mode)" = READ_WRITE \
   && { test "$SIMULATED_SCCACHE_CLIENT_SIDE" = 1 \
+    && { test -z "$SIMULATED_SCCACHE_ERROR_LOG" \
+      || test "$SIMULATED_SCCACHE_SANITIZES_ERROR_LOG" = 1; } \
     || { echo 'NOOK_SCCACHE_PUBLICATION_FAILURE {"cache_errors":0,"cache_misses":1,"cache_writes":0}' >&2; exit 1; }; } \
+  && { test -z "$SIMULATED_SCCACHE_ERROR_LOG" \
+    || echo bake-sim-sccache-error-log-sanitized; } \
   && echo bake-sim-sccache-write \
   && echo 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_ONLY runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' \
   && cat /opt/compile-toolchain >/opt/compile-native-dependencies \

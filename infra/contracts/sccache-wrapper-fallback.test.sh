@@ -23,6 +23,7 @@ fi
 case "${FAKE_SCCACHE_RESULT:-success}" in
   success)
     test "${SCCACHE_CLIENT_SIDE:-}" = 1
+    test -z "${SCCACHE_ERROR_LOG:-}"
     printf 'effective sccache mode: %s\n' "${SCCACHE_S3_RW_MODE:-unset}" >&2
     exec "$@"
     ;;
@@ -46,10 +47,11 @@ NOOK_SCCACHE_RUNTIME_AUTHORITY=secret \
 NOOK_SCCACHE_RUNTIME_MODE_FILE="$runtime_publish_mode" \
 NOOK_SCCACHE_S3_MODE=external \
 AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
-SCCACHE_S3_RW_MODE=READ_ONLY FAKE_SCCACHE_RESULT=success \
+SCCACHE_S3_RW_MODE=READ_ONLY SCCACHE_ERROR_LOG=/tmp/inherited-sccache-error.log \
+FAKE_SCCACHE_RESULT=success \
   "$wrapper" "$fixture_dir/compiler" 2>"$authority_log"
 grep -Fq 'effective sccache mode: READ_WRITE' "$authority_log"
-echo 'Sccache runtime authority: publish secret overrides the neutral baked value'
+echo 'Sccache runtime authority: publish secret overrides the neutral baked value and incompatible error logging is removed'
 
 fallback_log="$fixture_dir/fallback.log"
 fallback_marker="$fixture_dir/remote-disabled"

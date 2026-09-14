@@ -244,6 +244,8 @@ tasks:
           local extension_commit="${7:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
           local dependency_available="${8:-}"
           local client_side="${9:-1}"
+          local error_log="${10:-}"
+          local sanitizes_error_log="${11:-1}"
           local -a compile_targets=(compile-warm)
           if [ -n "$cache_write" ] && [ -z "$dependency_available" ]; then
             compile_targets=(compile-dependency-cache compile-warm)
@@ -256,6 +258,8 @@ tasks:
             COMPILE_SOURCE_CACHE_VERSION="$source_version" \
             SIMULATED_EXTENSION_COMMIT="$extension_commit" \
             SIMULATED_SCCACHE_CLIENT_SIDE="$client_side" \
+            SIMULATED_SCCACHE_ERROR_LOG="$error_log" \
+            SIMULATED_SCCACHE_SANITIZES_ERROR_LOG="$sanitizes_error_log" \
             "$docker_cli" buildx bake \
             --progress=plain \
             -f "$sim_dir/compile-warm.docker-bake.hcl" \
@@ -263,6 +267,8 @@ tasks:
             --set "compile-warm.args.SIMULATED_BUILD_PROFILE=production" \
             --set "compile-warm.args.SIMULATED_EXTENSION_COMMIT=$extension_commit" \
             --set "*.args.SIMULATED_SCCACHE_CLIENT_SIDE=$client_side" \
+            --set "*.args.SIMULATED_SCCACHE_ERROR_LOG=$error_log" \
+            --set "*.args.SIMULATED_SCCACHE_SANITIZES_ERROR_LOG=$sanitizes_error_log" \
             --set "compile-warm.secrets=id=sccache_runtime_mode,src=$runtime_mode" \
             --set "compile-dependency-cache.secrets=id=sccache_runtime_mode,src=$runtime_mode" \
             "${compile_targets[@]}" >"$log_file" 2>&1
@@ -398,6 +404,16 @@ tasks:
         grep -Fq -- 'NOOK_SCCACHE_PUBLICATION_FAILURE {"cache_errors":0,"cache_misses":1,"cache_writes":0}' "$proof_log"
         echo "compile publication fault: cache_errors=0 cache_misses=1 cache_writes=0 status=failed"
 
+        echo "== Publication guard: inherited SCCACHE_ERROR_LOG disables unsanitized client-side completion =="
+        create_builder "nook-bake-sim-compile-error-log-conflict-${suffix}"
+        if bake_compile_source "$proof_log" "$compile_source_c" "" "1" "$sccache_publish_mode" "v3" \
+          "cccccccccccccccccccccccccccccccccccccccc" "" "1" "/tmp/inherited-sccache-error.log" "0"; then
+          echo "unsanitized SCCACHE_ERROR_LOG publication fault unexpectedly succeeded" >&2
+          exit 1
+        fi
+        grep -Fq -- 'NOOK_SCCACHE_PUBLICATION_FAILURE {"cache_errors":0,"cache_misses":1,"cache_writes":0}' "$proof_log"
+        echo "compile publication error-log conflict: cache_errors=0 cache_misses=1 cache_writes=0 status=failed"
+
         echo "== Cold normal publish: no seed prerequisite, sccache READ_WRITE =="
         echo "== Target-specific authority: a sibling without its secret fails distinctly =="
         create_builder "nook-bake-sim-compile-missing-sibling-secret-${suffix}"
@@ -411,9 +427,10 @@ tasks:
         create_builder "nook-bake-sim-compile-source-a-${suffix}"
         compile_started="$(date +%s)"
         bake_compile_source "$proof_log" "$compile_source_a" "" "1" "$sccache_publish_mode" "v3" \
-          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" "" "1" "/tmp/inherited-sccache-error.log" "1"
         compile_elapsed=$(( $(date +%s) - compile_started ))
         grep -Fq -- 'bake-sim-sccache-write' "$proof_log"
+        grep -Fq -- 'bake-sim-sccache-error-log-sanitized' "$proof_log"
         require_cache_write "$proof_log"
         test "$compile_elapsed" -lt 300
         test "$(compile_registry_ref_code "$compile_deps_manifest")" = 200
