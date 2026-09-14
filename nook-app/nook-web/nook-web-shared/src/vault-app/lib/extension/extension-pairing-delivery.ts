@@ -1,4 +1,4 @@
-import { ExtensionPairingApprovedMessageAdmissionFailure } from "$web-shared/extension/runtime-messages";
+import { ExtensionPairingApprovedMessageAdmissionFailure } from "$web-shared/extension/extension-pairing-admission-failure";
 
 export enum ExtensionPairingDeliveryKind {
   Delivered = "delivered",
