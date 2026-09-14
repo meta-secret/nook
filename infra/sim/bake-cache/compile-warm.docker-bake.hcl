@@ -25,7 +25,7 @@ variable "COMPILE_SOURCE_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
-compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-deps-v2:fingerprint-lock-inputs"
+compile_deps_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-deps-v3:fingerprint-lock-and-recipe-inputs"
 compile_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-v2-${COMPILE_SOURCE_SCOPE}:buildcache"
 compile_ancestor_source_cache_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-bake-sim-compile-v2-${COMPILE_ANCESTOR_SOURCE_SCOPE}:buildcache"
 

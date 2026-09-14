@@ -45,7 +45,7 @@ if [[ ! "$compile_scope_suffix" =~ ^-git-[0-9a-f]{40}$ ]]; then
   echo "build:compile requires an exact-commit BuildKit source scope" >&2
   exit 2
 fi
-if [[ ! "$compile_deps_scope" =~ ^nook-rust-compile-deps-v2-[0-9a-f]{40}$ ]]; then
+if [[ ! "$compile_deps_scope" =~ ^nook-rust-compile-deps-v3-[0-9a-f]{40}$ ]]; then
   echo "build:compile requires the fingerprinted Rust dependency scope" >&2
   exit 2
 fi

@@ -412,10 +412,15 @@ COPY --from=compile-hive-console-dependencies /opt/nook/compile-hive-console-dep
 COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules /compile/web-app-deps
 COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-research/node_modules /compile/web-research-deps
 
-FROM scratch AS compile
+# The exact source cache is deliberately exported with mode=min. Keep the
+# expensive, linear WASM compiler graph in the final target's ancestry so that
+# minimal export retains its source/compiler records for the next immutable
+# commit. A scratch join makes the copied marker reachable but discards those
+# intermediate cache records, forcing every new head to compile WASM again.
+FROM compile-wasm-source AS compile
 
 COPY --from=compile-native-source /opt/nook/compile-native-passed /compile/native
-COPY --from=compile-wasm-source /opt/nook/wasm-compile-passed /compile/wasm
+RUN install -D /opt/nook/wasm-compile-passed /compile/wasm
 COPY --from=compile-web /opt/nook/web-compile-passed /compile/web
 COPY --from=compile-minds-source /opt/nook/hive-compile-passed /compile/hive
 COPY --from=compile-hive-console /opt/nook/hive-console-compile-passed /compile/hive-console

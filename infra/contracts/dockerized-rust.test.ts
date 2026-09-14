@@ -904,6 +904,15 @@ tasks:
     const simulator = this.read(
       "infra/sim/bake-cache/compile-warm.docker-bake.hcl",
     );
+    const productionDockerfile = this.read(
+      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
+    );
+    const compileFingerprint = this.read(
+      ".github/scripts/compile-deps-cache-fingerprint.sh",
+    );
+    const simulatorDockerfile = this.read(
+      "infra/sim/bake-cache/compile-warm.Dockerfile",
+    );
     const proof = this.read("infra/tasks/bake-cache.yml");
 
     for (const source of [production, simulator]) {
@@ -920,10 +929,26 @@ tasks:
     );
     expect(production).toContain("compile_ancestor_source_cache_ref");
     expect(production).toContain("timeout=2m");
+    expect(compileFingerprint).toContain("nook-rust-compile-deps-input-v3");
+    expect(compileFingerprint).toContain(
+      "nook-app/nook-platform/docker/rust/compile.Dockerfile",
+    );
+    expect(compileFingerprint).toContain(
+      "nook-app/nook-platform/docker/rust/compile.docker-bake.hcl",
+    );
+    expect(productionDockerfile).toContain(
+      "FROM compile-wasm-source AS compile",
+    );
+    expect(simulatorDockerfile).toContain(
+      "FROM compile-companion-wasm-build AS compile-nook-wasm-source",
+    );
+    expect(simulatorDockerfile).toContain(
+      "FROM compile-nook-wasm-build AS compile",
+    );
     expect(simulator).toContain("COMPILE_SOURCE_CACHE_AVAILABLE != \"\"");
     expect(simulator).toContain("COMPILE_SOURCE_SCOPE");
     expect(proof).toContain(
-      "New exact source: reuse unchanged layers from its immutable ancestor",
+      "New exact source: mode=min retains the ancestor compiler lineage",
     );
     expect(proof).toContain(
       "Exact source replay: read-only warm solve stays below two minutes",

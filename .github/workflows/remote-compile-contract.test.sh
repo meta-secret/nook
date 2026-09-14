@@ -6,6 +6,7 @@ workflows_dir="$(cd "$(dirname "$0")" && pwd)"
 remote="$workflows_dir/remote.yml"
 setup="$workflows_dir/../actions/nook-docker-setup/action.yml"
 compile_script="$workflows_dir/../scripts/compile-remote.sh"
+compile_fingerprint="$workflows_dir/../scripts/compile-deps-cache-fingerprint.sh"
 compile_bake="$workflows_dir/../../nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"
 batch_job="$(sed -n '/^  batch:$/,/^  web-verify:$/p' "$remote")"
 compile_timeout="    timeout-minutes: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 3 || 360 }}"
@@ -41,5 +42,18 @@ grep -Fq -- 'git merge-base --is-ancestor "$ancestor_scope_sha" HEAD' "$compile_
   || { echo 'remote compile contract: ancestor cache input must be revalidated at the build boundary' >&2; exit 1; }
 grep -Fq -- 'compile_ancestor_source_cache_ref' "$compile_bake" \
   || { echo 'remote compile contract: Bake must import the selected immutable ancestor source graph' >&2; exit 1; }
+
+for required in \
+  'nook-rust-compile-deps-input-v3' \
+  'nook-app/nook-platform/docker/rust/compile.Dockerfile' \
+  'nook-app/nook-platform/docker/rust/compile.docker-bake.hcl'; do
+  grep -Fq -- "$required" "$compile_fingerprint" \
+    || { echo "remote compile contract: compile dependency fingerprint omits recipe input: $required" >&2; exit 1; }
+done
+
+grep -Fq -- 'nook-rust-compile-deps-v3-' "$setup" \
+  || { echo 'remote compile contract: setup must use the recipe-aware compile dependency scope' >&2; exit 1; }
+grep -Fq -- '^nook-rust-compile-deps-v3-' "$compile_script" \
+  || { echo 'remote compile contract: compile boundary must require the recipe-aware scope' >&2; exit 1; }
 
 echo 'remote compile contract test: ok'

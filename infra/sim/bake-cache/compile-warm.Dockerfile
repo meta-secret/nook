@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Compile-shaped graph used by the warm-cache acceptance proof. Dependency
-# inputs stay before package source inputs; the two package leaves are siblings
-# and the final scratch target joins their already-built handoff markers.
+# inputs stay before package source inputs. The expensive WASM compiler leaves
+# form the exported target's ancestry so mode=min retains their cache records.
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS compile-toolchain
 COPY inputs/compile-base.txt /tmp/toolchain.txt
 RUN cat /tmp/toolchain.txt >/opt/compile-toolchain \
@@ -32,33 +32,37 @@ RUN cat /tmp/wasm-shared.txt >/opt/compile-wasm-source-base \
   && sleep 1 \
   && echo bake-sim-compile-wasm-source-base
 
-FROM compile-wasm-source-base AS compile-nook-wasm-source
-COPY inputs/compile-nook-wasm.txt /tmp/nook-wasm-source.txt
-RUN cat /tmp/nook-wasm-source.txt >/opt/compile-nook-wasm-source \
-  && sleep 1 \
-  && echo bake-sim-compile-nook-wasm-source
-
 FROM compile-wasm-source-base AS compile-companion-wasm-source
 COPY inputs/compile-companion-wasm.txt /tmp/companion-wasm-source.txt
 RUN cat /tmp/companion-wasm-source.txt >/opt/compile-companion-wasm-source \
   && sleep 1 \
   && echo bake-sim-compile-companion-wasm-source
 
-FROM compile-nook-wasm-source AS compile-nook-wasm-build
-RUN cat /opt/compile-nook-wasm-source >/opt/compile-nook-wasm-build \
-  && sleep 1 \
-  && echo bake-sim-compile-nook-wasm-build
-
 FROM compile-companion-wasm-source AS compile-companion-wasm-build
 RUN cat /opt/compile-companion-wasm-source >/opt/compile-companion-wasm-build \
   && sleep 1 \
   && echo bake-sim-compile-companion-wasm-build
 
+# Exact source publication is mode=min, so the reusable compiler vertices must
+# be ancestors of the exported target. A scratch join of sibling leaves only
+# preserves the joined marker layers and reproduces the production miss where
+# unchanged WASM compilers rerun on every new commit.
+FROM compile-companion-wasm-build AS compile-nook-wasm-source
+COPY inputs/compile-nook-wasm.txt /tmp/nook-wasm-source.txt
+RUN cat /tmp/nook-wasm-source.txt >/opt/compile-nook-wasm-source \
+  && sleep 1 \
+  && echo bake-sim-compile-nook-wasm-source
+
+FROM compile-nook-wasm-source AS compile-nook-wasm-build
+RUN cat /opt/compile-nook-wasm-source >/opt/compile-nook-wasm-build \
+  && sleep 1 \
+  && echo bake-sim-compile-nook-wasm-build
+
 FROM scratch AS compile-dependencies
 COPY --from=compile-hive-dependencies /opt/compile-hive-dependencies /compile/hive
 COPY --from=compile-wasm-dependencies /opt/compile-wasm-dependencies /compile/wasm
 
-FROM scratch AS compile
+FROM compile-nook-wasm-build AS compile
 COPY --from=compile-hive-source /opt/compile-hive-source /compile/hive
-COPY --from=compile-nook-wasm-build /opt/compile-nook-wasm-build /compile/nook-wasm
-COPY --from=compile-companion-wasm-build /opt/compile-companion-wasm-build /compile/companion-wasm
+RUN install -D /opt/compile-nook-wasm-build /compile/nook-wasm \
+  && install -D /opt/compile-companion-wasm-build /compile/companion-wasm

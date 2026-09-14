@@ -95,8 +95,8 @@ tasks:
         registry_ref="${registry_host}:5000"
         stable_repository="nook/buildcache/nook-bake-sim-rust-deps-v1"
         stable_manifest="${registry_ref}/v2/${stable_repository}/manifests/buildcache"
-        compile_deps_repository="nook/remote-buildcache/nook-bake-sim-compile-deps-v2"
-        compile_deps_manifest="${registry_ref}/v2/${compile_deps_repository}/manifests/fingerprint-lock-inputs"
+        compile_deps_repository="nook/remote-buildcache/nook-bake-sim-compile-deps-v3"
+        compile_deps_manifest="${registry_ref}/v2/${compile_deps_repository}/manifests/fingerprint-lock-and-recipe-inputs"
         compile_source_repository="nook/remote-buildcache/nook-bake-sim-compile-v2"
         compile_source_a="git-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         compile_source_b="git-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -354,7 +354,7 @@ tasks:
         done
         require_cache_write "$proof_log"
         test "$(compile_registry_ref_code "$compile_deps_manifest")" = 200
-        echo "compile deps cold: cached=0 uncached=3 writes=1 ref=${compile_deps_repository}:fingerprint-lock-inputs"
+        echo "compile deps cold: cached=0 uncached=3 writes=1 ref=${compile_deps_repository}:fingerprint-lock-and-recipe-inputs"
 
         echo "== First exact source: import dependencies and publish mode=min =="
         create_builder "nook-bake-sim-compile-source-a-${suffix}"
@@ -379,7 +379,7 @@ tasks:
         test "$(compile_registry_ref_code "$compile_source_a_manifest")" = 200
         echo "compile source A: cached=3 uncached=6 writes=1 mode=min"
 
-        echo "== New exact source: reuse unchanged layers from its immutable ancestor =="
+        echo "== New exact source: mode=min retains the ancestor compiler lineage =="
         printf 'nook-wasm-source-only-edit\n' >"$compile_nook_input"
         create_builder "nook-bake-sim-compile-source-b-${suffix}"
         compile_started="$(date +%s)"
