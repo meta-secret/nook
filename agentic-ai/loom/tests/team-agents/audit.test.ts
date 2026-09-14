@@ -232,8 +232,6 @@ describe('canonical Cortex team authority', () => {
           'job-timeout',
           'cache-health-gate-failed',
           'required-import-miss',
-          'generation-baseline-missing',
-          'generation-baseline-invalid',
           'effective-solve-input-mismatch',
           'unreachable-cache-root',
           'unrelated-input-cache-invalidation',
@@ -243,24 +241,20 @@ describe('canonical Cortex team authority', () => {
           'sccache-compiler-failure',
           'sccache-read-write-transport-failure',
           'sccache-readiness-contract-violation',
-          'recipe-or-dependency-generation-changed',
           'unexpected-read-only-write-or-export',
           'severe-cache-hit-regression',
         ]),
         greenPath: 'no-specialist-dispatch',
-        generationBaselinePolicy:
-          'seed-exactly-one-immutable-mode-max-compiler-baseline-per-recipe-and-dependency-fingerprint-generation',
-        ordinaryCommitPolicy:
-          'import-generation-baseline-plus-dependency-cache',
-        exactSourcePolicy:
-          'optional-mode-min-same-head-retry-only-never-maintenance-seed-per-head',
+        ordinaryBuildPolicy:
+          'ordinary-build-uses-stable-docker-layers-and-remote-sccache-with-five-minute-hard-limit',
+        publishingBuildPolicy:
+          'publishing-build-uses-read-write-sccache-as-primary-cross-commit-compiler-cache',
+        exactSourcePolicy: 'optional-mode-min-same-head-retry-acceleration',
         readOnlyPolicy: 'zero-cache-writes-and-zero-exports',
         timeoutDiagnosisPolicy:
-          'diagnose-missing-or-invalid-generation-baseline-or-legitimate-generation-change-never-blindly-seed-head',
-        bakeInheritancePolicy:
-          'cli-set-overrides-do-not-retroactively-propagate-to-inheriting-targets',
-        effectiveSolveParityPolicy:
-          'mirror-seed-and-consumer-args-contexts-platforms-and-outputs-in-recipe-fingerprint-and-docker-proof',
+          'timeout-or-cache-health-failure-activates-specialist-from-canonical-json',
+        bakeSolveParityPolicy:
+          'compare-effective-args-contexts-platforms-and-outputs-for-cache-sharing-builds',
         inputDomainIsolationPolicy:
           'rust-wasm-hive-and-web-compiler-stages-copy-only-semantic-domain-inputs-never-repository-root',
         perHeadBoundaryPolicy:
@@ -269,10 +263,12 @@ describe('canonical Cortex team authority', () => {
           'policy-and-domain-specific-simulator-proof-must-show-unrelated-compiler-domains-remain-cached',
         cacheRootReachabilityPolicy:
           'cache-to-root-retains-reusable-dependency-and-compiler-ancestry-never-scratch-marker-or-orphaning-join',
-        dependencySeedRootPolicy:
-          'source-free-seed-explicitly-roots-native-wasm-minds-hive-node-and-web-dependency-stages',
         cacheRootProofPolicy:
-          'simulator-and-proof-require-compile-wasm-dependencies-cached-and-zero-source-stages-during-dependency-seed',
+          'simulator-and-proof-require-reusable-dependency-and-compiler-ancestry-on-replay',
+        crossCommitProofPolicy:
+          'two-ordinary-unseeded-heads-prove-first-publish-populates-next-head-sccache-hits-under-five-minutes-and-read-only-zero-writes',
+        cacheKeyNeutralModePolicy:
+          'stable-id-runtime-secret-carries-read-write-authority-with-identical-publish-and-read-only-buildkit-keys',
         sccacheReadOnlyPolicy:
           'optional-accelerator-two-second-single-start-shared-run-circuit-structured-fallback-direct-compiler-zero-writes',
         sccacheReadWritePolicy:
@@ -342,7 +338,7 @@ describe('canonical Cortex team authority', () => {
           ...dockerCacheSpecialist,
           activationContract: {
             ...dockerCacheSpecialist.activationContract,
-            bakeInheritancePolicy: 'inherit-cli-overrides',
+            bakeSolveParityPolicy: 'ignore-effective-solve-differences',
           },
         },
       ],
@@ -351,7 +347,7 @@ describe('canonical Cortex team authority', () => {
           ...dockerCacheSpecialist,
           activationContract: {
             ...dockerCacheSpecialist.activationContract,
-            generationBaselinePolicy: 'seed-every-head',
+            ordinaryBuildPolicy: 'allow-unbounded-ordinary-builds',
           },
         },
       ],
@@ -396,7 +392,7 @@ describe('canonical Cortex team authority', () => {
           ...dockerCacheSpecialist,
           activationContract: {
             ...dockerCacheSpecialist.activationContract,
-            dependencySeedRootPolicy: 'marker-only-join',
+            publishingBuildPolicy: 'disable-cross-commit-sccache-writes',
           },
         },
       ],
@@ -406,6 +402,24 @@ describe('canonical Cortex team authority', () => {
           activationContract: {
             ...dockerCacheSpecialist.activationContract,
             cacheRootProofPolicy: 'skip-root-replay-proof',
+          },
+        },
+      ],
+      [
+        {
+          ...dockerCacheSpecialist,
+          activationContract: {
+            ...dockerCacheSpecialist.activationContract,
+            crossCommitProofPolicy: 'same-head-only',
+          },
+        },
+      ],
+      [
+        {
+          ...dockerCacheSpecialist,
+          activationContract: {
+            ...dockerCacheSpecialist.activationContract,
+            cacheKeyNeutralModePolicy: 'cache-mode-build-arg',
           },
         },
       ],

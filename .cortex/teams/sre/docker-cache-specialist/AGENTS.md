@@ -27,9 +27,9 @@ behavior for packets issued by SRE Team Gizmo.
 - Make sccache the primary cross-commit compiler cache. Ordinary authorized
   publish builds use `READ_WRITE`, while read-only verification uses
   `READ_ONLY` and performs zero writes.
-- Do not require a maintenance seed before an ordinary compile. The first cold
-  publish is allowed to miss and must populate compiler objects for the next
-  committed head.
+- Do not require a separate cache-population workflow or prerequisite before an
+  ordinary compile. The first cold publish is allowed to miss and must populate
+  compiler objects for the next committed head.
 - Require cache-root reachability in addition to manifest existence and import
   success. The target exported through `cache_to` must retain the reusable
   dependency and compiler ancestry consumed by ordinary builds.
@@ -47,7 +47,7 @@ behavior for packets issued by SRE Team Gizmo.
 - Preserve explicit, narrow cross-domain artifact handoffs. Generated WASM
   packages cross into web builds through the declared handoff; Rust or WASM
   repository roots do not become web compiler inputs.
-- Never add a compiler-cache seed task or generation-baseline prerequisite.
+- Never add a separate preparatory cache task or baseline prerequisite.
 - Preserve read-only cache state across GitHub Actions step boundaries.
 - Prove that read-only consumers perform zero cache writes and zero exports.
 - Treat remote `sccache` in `READ_ONLY` mode as an optional accelerator.
@@ -119,13 +119,13 @@ behavior for packets issued by SRE Team Gizmo.
 - Do not create or select a replacement worktree.
 - Do not weaken exact-head, credential, isolation, or zero-write boundaries to
   reduce latency.
-- Do not treat a missing per-head exact cache as a reason to run maintenance
-  seeding or publish a generation baseline.
+- Do not treat a missing per-head exact cache as a reason to run preparatory
+  cache work or publish a required baseline.
 - Do not equate manifest existence or import success with reachable reusable
   ancestry, or export a scratch/marker join that can orphan intermediate cache
   records.
-- Do not omit native, WASM, Minds, Hive, Node, or web dependency roots from the
-  dependency seed, and do not execute source stages while seeding dependencies.
+- Do not omit native, WASM, Minds, Hive, Node, or web dependency roots from
+  stable Docker layers, and do not run a separate source-free population job.
 - Do not use repository-root `COPY` in a compiler stage, leak one compiler
   domain into another, or apply a per-head argument before its latest semantic
   consumer.

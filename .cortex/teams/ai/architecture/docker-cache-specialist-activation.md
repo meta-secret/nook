@@ -9,189 +9,95 @@ continues to own GitHub execution mechanics.
 ## Required actions
 
 - Cover every Docker or BuildKit-bearing job in `.github/workflows/pr.yml`.
+- Enforce a five-minute hard timeout for ordinary `build:compile` executions.
 - Produce canonical JSON and human-readable Markdown from the same telemetry
-  model.
-- Save both outputs as workflow evidence.
-- Use the JSON verdict and reason codes for deterministic routing.
-- Use Markdown only as human-readable diagnostic context.
-- Activate the specialist when JSON reports one or more of these conditions:
-  - `job-timeout` means a GitHub job timed out.
-  - `job-cancelled` means a GitHub job was cancelled.
-  - `cache-health-gate-failed` means the deterministic gate failed.
-  - `telemetry-missing-or-incomplete` means required BuildKit telemetry is not
-    usable.
-  - `required-import-miss` means a required cache import missed.
-  - `generation-baseline-missing` means the immutable compiler baseline for
-    the current recipe/dependency-fingerprint generation does not exist.
-  - `generation-baseline-invalid` means the current generation manifest or
-    baseline cannot be trusted or consumed.
-  - `effective-solve-input-mismatch` means the generation seed and ordinary
-    consumer resolved different effective Bake inputs even though the
-    generation manifest imported successfully.
-  - `unreachable-cache-root` means a cache manifest exists or imports, but its
-    exported `cache_to` root does not retain reusable dependency or compiler
-    ancestry required by the consumer.
-  - `unrelated-input-cache-invalidation` means a compiler stage invalidated
-    because its build context, broad repository copy, or prematurely applied
-    per-head input included a change outside that stage's semantic input
-    domain.
-  - `sccache-read-only-startup-fallback` means optional read-only remote
-    `sccache` did not become ready within its two-second startup budget.
-  - `sccache-read-only-transport-fallback` means optional read-only remote
-    `sccache` encountered a DNS or object-read transport failure.
-  - `sccache-read-only-circuit-open` means the shared state for one Docker
-    `RUN` already disabled optional remote reads after an earlier failure.
-  - `sccache-compiler-failure` means the compiler itself failed. This failure
-    remains terminal in every cache mode.
-  - `sccache-read-write-transport-failure` means publication-mode startup,
-    credentials, reads, or writes failed. This failure remains terminal.
-  - `sccache-readiness-contract-violation` means one Docker `RUN` started or
-    probed remote `sccache` more than once, exceeded the startup budget, or
-    failed to share its readiness and circuit state.
-  - `recipe-or-dependency-generation-changed` means a legitimate recipe or
-    dependency-fingerprint change rotated the required baseline generation.
-  - `unexpected-read-only-write-or-export` means a read-only consumer wrote
-    cache data or exported a cache.
-  - `severe-cache-hit-regression` means the hit rate crossed the configured
-    severe-regression threshold.
-  - `diagnostic-flag` means the shared telemetry model emitted a diagnostic
-    flag that also appears in the Markdown statistics.
-- Give the specialist the canonical JSON, Markdown report, BuildKit logs, job
-  identity, run identity, and captured source commit.
-- Require diagnosis before implementation changes.
-- Diagnose whether a timeout or cache failure is caused by a missing or invalid
-  generation baseline, a legitimate recipe/dependency generation change, or
-  another cache defect. A missing optional exact-SHA cache is not by itself a
-  maintenance-seed condition.
-- Permit maintenance to seed exactly one immutable `mode=max` compiler
-  baseline for each recipe/dependency-fingerprint generation. Prohibit
-  per-head maintenance source seeding.
-- Require ordinary unseeded commits to import the generation baseline plus the
-  dependency cache. Treat an exact-SHA `mode=min` cache only as optional
-  same-head retry acceleration.
-- Treat Bake inheritance as declaration reuse, not late-bound CLI override
-  propagation. A CLI override such as `--set target.args.*` changes that target
-  only; a target that inherited from it earlier does not retroactively receive
-  the override.
-- Explicitly mirror every invocation-shaping argument, context, platform, and
-  output between the generation seed and ordinary consumer. Include those
-  effective solve inputs in the recipe fingerprint so a semantic solve change
-  rotates the generation instead of silently reusing an incompatible manifest.
-- Require the Docker cache simulator and proof to compare the effective seed
-  and consumer solves. A successfully imported generation manifest proves
-  availability, not cache-key compatibility: differing effective inputs can
-  still produce zero matching cache keys.
-- Treat cache-root reachability as separate from manifest availability and
-  effective-solve parity. The target exported through `cache_to` must retain
-  the dependency and compiler vertices that ordinary consumers need; an
-  imported manifest is insufficient evidence when those records are not
-  reachable from its exported root.
-- Prohibit scratch, marker-only, and synthetic join targets whose result can be
-  exported while orphaning the intermediate dependency or compiler records
-  they claim to seed.
-- Require a dependency seed to be provably source-free and to enumerate rooted
-  native, WASM, Minds, Hive, Node, and web dependency stages explicitly. The
-  generation cache must retain the compiler roots used by ordinary commits.
-- Require the Docker cache simulator and proof to show that
-  `compile-wasm-dependencies` is cached on replay and that no source stage runs
-  during dependency seeding. A source-stage execution in the dependency seed
-  or an uncached required rooted stage fails the proof.
-- Isolate compiler-stage inputs by semantic domain. Rust, WASM, Hive, and web
-  stages must each copy only the source, lockfiles, manifests, generated
-  inputs, and configuration that can affect that domain; a compiler stage must
-  never broadly copy the repository root.
-- Introduce per-head arguments at the latest consumer boundary that actually
-  needs them. Do not attach commit identity or another source-varying value to
-  dependency or generation-baseline vertices.
-- Keep cross-domain artifact handoffs explicit and narrow. In particular,
-  transfer generated WASM packages through the declared handoff rather than
-  making a web stage consume the Rust or WASM repository domain.
-- Require simulator and proof coverage for policy-only cache changes and for
-  each Rust, WASM, Hive, or web input-domain change. Each case must mutate an
-  unrelated compiler domain and prove the subject domain remains cached, in
-  addition to proving that a relevant-domain change invalidates the expected
-  vertices.
-- Require read-only consumers to perform zero writes and zero exports.
-- Treat remote `sccache` in `READ_ONLY` mode as an optional accelerator.
-  - Bound startup to two seconds and one attempt for each Docker `RUN`.
-  - Share readiness and open-circuit state across every compiler invocation in
-    that `RUN`.
-  - On startup, DNS, or object-read failure, open the circuit and invoke the
-    compiler directly for the current and remaining invocations.
-  - Emit one structured `NOOK_SCCACHE_FALLBACK` JSON event for the transition.
-  - Include the activation reason code, cache mode, failure class, and fallback
-    compiler path without credentials or sensitive transport data.
-  - Keep read-only mode free of remote writes even before fallback.
-- Keep genuine compiler failures terminal after direct fallback. A cache
-  failure must not mask or reinterpret the compiler exit status.
-- Treat remote `sccache` in `READ_WRITE` mode as publication infrastructure.
-  Startup, credential, read, and write failures remain terminal and must not
-  degrade to direct compilation.
-- Require the simulator and Docker proof to exercise the complete remote
-  `sccache` fault matrix.
-  - **Startup failure:** one bounded startup attempt, one fallback event, and
-    direct compiler success in `READ_ONLY` mode.
-  - **DNS or read failure:** the first transport failure opens the shared
-    circuit and later invocations compile directly without another probe.
-  - **Open circuit:** all remaining invocations bypass remote `sccache` and
-    perform zero remote writes.
-  - **Genuine compiler failure:** direct compilation fails terminally with the
-    compiler's status.
-  - **Read-write failure:** startup, credential, read, or write failure is
-    terminal and emits no successful fallback verdict.
-  - **Healthy single start:** one successful startup serves every compiler
-    invocation in the `RUN` without repeated readiness probes.
-- Require the canonical Docker cache simulator and proof for every repair.
-- Route workflow dispatch, status inspection, reruns, and other GitHub
-  mechanics through Delivery Pipeline.
+  model. Save both as evidence, route only from JSON reason codes, and use
+  Markdown only as human diagnostic context.
+- Activate the specialist when JSON reports:
+  - `job-timeout`, `job-cancelled`, `cache-health-gate-failed`,
+    `telemetry-missing-or-incomplete`, or `required-import-miss`;
+  - `effective-solve-input-mismatch` when cache-sharing builds resolve
+    different Bake inputs;
+  - `unreachable-cache-root` when an imported manifest does not retain needed
+    reusable dependency or compiler ancestry;
+  - `unrelated-input-cache-invalidation` when a compiler stage includes a
+    change outside its semantic input domain;
+  - `sccache-read-only-startup-fallback`,
+    `sccache-read-only-transport-fallback`, or
+    `sccache-read-only-circuit-open` for bounded optional-reader fallback;
+  - `sccache-compiler-failure` for a terminal compiler failure;
+  - `sccache-read-write-transport-failure` for terminal publication-mode
+    startup, credential, read, or write failure;
+  - `sccache-readiness-contract-violation` when a Docker `RUN` repeats startup,
+    exceeds the startup budget, or does not share circuit state;
+  - `unexpected-read-only-write-or-export`, `severe-cache-hit-regression`, or
+    `diagnostic-flag`.
+- Give the specialist canonical JSON, the Markdown report, BuildKit logs, job
+  and run identity, and the captured source commit. Diagnose before editing.
+- Use ordinary stable Docker layers for reusable dependency and toolchain
+  ancestry. Publishing builds use remote sccache `READ_WRITE` as the primary
+  cross-commit compiler cache. Read-only builds use `READ_ONLY`, perform zero
+  writes and exports, and retain bounded direct-compiler fallback.
+- Carry sccache read/write authority through a stable-ID runtime secret, or an
+  equivalently cache-key-neutral runtime input, mounted identically by publish
+  and read-only compiler vertices. Never encode cache mode in an argument,
+  environment variable, context, platform, output, or command shape that
+  divides their BuildKit keys.
+- Treat exact-SHA `mode=min` cache as optional same-head retry acceleration,
+  never as a prerequisite for an ordinary changed-head build.
+- Compare every effective invocation-shaping argument, context, platform, and
+  output for builds expected to share cache. Bake inheritance is declaration
+  reuse; a CLI override on one target does not retroactively alter another.
+- Require exported cache roots to retain reusable dependency and compiler
+  vertices. Reject scratch, marker-only, and synthetic joins that orphan them.
+- Isolate Rust, WASM, Hive, and web compiler inputs by semantic domain. Never
+  broadly copy the repository root. Introduce per-head arguments at the latest
+  consumer boundary and keep cross-domain artifact handoffs narrow.
+- Require simulator and proof coverage for cache-policy and compiler-domain
+  changes. Unrelated-domain mutations remain cached; relevant-domain mutations
+  invalidate only expected vertices.
+- Prove two ordinary unseeded heads: the first publishing head populates remote
+  compiler entries; a subsequent changed head obtains sccache hits and finishes
+  within five minutes; an appropriate same-head or read-only replay performs
+  zero writes and exports.
+- In `READ_ONLY`, allow one two-second startup attempt per Docker `RUN`, share
+  readiness and circuit state, fall back after startup/DNS/object-read failure,
+  emit one sanitized `NOOK_SCCACHE_FALLBACK` JSON event, and never write.
+- Keep compiler failures terminal after fallback. Keep all `READ_WRITE`
+  startup, credential, read, and write failures terminal.
+- Preserve simulator/proof coverage for startup failure, DNS/read failure,
+  shared open circuit, compiler failure, read-write failure, and healthy single
+  startup.
+- Require the canonical Docker simulator and proof for every repair. Route all
+  workflow dispatch, status, rerun, and GitHub mechanics through Delivery.
 - Repeat the bounded diagnosis, repair, and evidence loop for the latest
-  canonical feature-branch head until the cache gate is green or a concrete
-  blocker is reported.
-- Keep each repair in the specialist's issued worktree and branch.
-- During feature work, use only static syntax, formatting, and diff inspection.
+  canonical feature head until green or concretely blocked.
+- Work only in the issued branch/worktree. During feature work use static
+  syntax, formatting, and diff inspection only.
 
 ## Prohibited actions
 
-- Do not dispatch the specialist for a green cache verdict.
-- Do not parse Markdown to make an activation decision.
-- Do not run specialist analysis as an unconditional job on every workflow.
-- Do not let an absent telemetry artifact silently pass the cache gate.
-- Do not blindly seed each branch head or commit after a timeout, required
-  import miss, or missing exact-SHA cache.
-- Do not infer seed/consumer parity from Bake target inheritance or from a
-  successful manifest import.
-- Do not treat manifest existence, import success, a marker artifact, or a
-  scratch/join target as proof that reusable cache records are reachable.
-- Do not seed dependencies through a target that can omit native, WASM, Minds,
-  Hive, Node, or web dependency roots, and do not let a dependency seed execute
-  any source stage.
-- Do not use a repository-root `COPY` as a compiler-stage input or let an
-  unrelated Rust, WASM, Hive, or web change invalidate another compiler
-  domain.
-- Do not place per-head arguments above their latest semantic consumer
-  boundary or replace an explicit artifact handoff with a broad source copy.
-- Do not let the specialist execute GitHub, pull-request, publication,
-  landing, or promotion mechanics.
-- Do not retry remote `sccache` after the per-`RUN` read-only circuit opens.
-- Do not emit credentials, endpoints containing secrets, or raw sensitive
-  transport payloads in `NOOK_SCCACHE_FALLBACK`.
-- Do not apply read-only fallback behavior to `READ_WRITE` publication mode.
+- Do not dispatch for a green verdict, parse Markdown for routing, run analysis
+  unconditionally, or silently pass absent telemetry.
+- Do not add a separate cache-population workflow or require preparatory work
+  before an ordinary build can populate and consume compiler cache entries.
+- Do not infer solve parity from Bake inheritance or manifest import, or treat
+  a marker/scratch/join result as proof of reachable cache ancestry.
+- Do not use repository-root compiler copies, leak compiler domains, or apply
+  per-head arguments above their latest semantic consumer.
+- Do not execute GitHub, PR, publication, landing, or promotion mechanics.
+- Do not retry sccache after the read-only circuit opens, expose sensitive
+  transport data, or apply read-only fallback to `READ_WRITE` mode.
 - Do not run local tests, Docker, preflight, or product compilation during the
   feature stage.
 
 ## Fast path
 
-The deterministic cache-health job is the normal fast path. A green verdict
-ends cache analysis without specialist dispatch. This keeps ordinary builds
-bounded while preserving machine-enforced cache correctness.
+A green deterministic cache-health verdict ends analysis without specialist
+dispatch.
 
 ## Repair evidence
 
-A completed repair reports:
-
-- the reason codes that caused activation;
-- the diagnosed cache defect;
-- simulator and proof expectations;
-- the current committed feature head;
-- the remote latency and cache-health verdict; and
-- any unresolved blocker.
+Report activation reasons, the diagnosed defect, simulator/proof expectations,
+the current committed feature head, remote latency and cache-health verdict,
+and unresolved blockers.
