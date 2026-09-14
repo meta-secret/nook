@@ -134,7 +134,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let skills_workspace = root.read(".cortex/package.json");
     for required in [
         "@nook/executable-skills-workspace",
-        "gizmo/dynamic-skills/*/scripts",
+        "gizmo-prime/dynamic-skills/*/scripts",
         "shared/dynamic-skills/*/scripts",
         "teams/*/dynamic-skills/*/scripts",
     ] {
