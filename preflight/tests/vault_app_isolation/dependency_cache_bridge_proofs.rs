@@ -343,8 +343,14 @@ fn theorem_compile_dependency_fingerprint_covers_every_source_free_graph() -> an
             )
             && setup.contains(
                 "compile_deps_scope=\"nook-rust-compile-deps-v2-$compile_deps_fingerprint\"",
+            )
+            && setup.contains(
+                "publish_exact_availability GHA_CACHE_EXACT_RUST_COMPILE_DEPS_AVAILABLE \"$compile_deps_scope\"",
+            )
+            && setup.contains(
+                "publish_exact_availability GHA_CACHE_EXACT_BUILD_COMPILE_AVAILABLE \"nook-build-compile-v2$scope_suffix\"",
             ),
-        "compile dependency scope must use the complete graph fingerprint"
+        "compile dependency and source scopes must use immutable fingerprints and publish exact availability"
     );
     assert!(
         !script.contains("nook-app/nook-web/nook-web-app/src")
