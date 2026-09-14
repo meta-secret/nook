@@ -20,6 +20,8 @@ It receives a high-level SRE packet and coordinates only SRE-team mechanics.
 - Accept high-level packets from Gizmo Prime through the active harness.
 - Preserve the packet's controller, bounded scope, branch, source state, and acceptance evidence.
 - Dispatch each specialist through the active harness.
+- Route Docker cache correctness, cache proof, and remote-build latency work to
+  `docker-cache-specialist`.
 - Give each specialist a separate issued child worktree.
 - Run disjoint specialists in parallel when they have no unresolved dependency.
 - Run overlapping or dependent specialists in the required order.
@@ -35,3 +37,5 @@ It receives a high-level SRE packet and coordinates only SRE-team mechanics.
 - Team Gizmo never creates or updates pull requests.
 - Team Gizmo never decides readiness, promotion, or final delivery.
 - Do not conceal specialist blockers or convert them into a delivery verdict.
+- Do not route Docker cache or fast-build ownership to provisioning or
+  cloud-native specialists.

@@ -27,7 +27,7 @@ const CORTEX_TEAM_CHILDREN = new Map<string, readonly string[]>([
     'security',
     ['gizmo', 'cryptography-specialist', 'security-review-specialist'],
   ],
-  ['sre', ['gizmo', 'provisioning', 'cloud-native']],
+  ['sre', ['gizmo', 'provisioning', 'cloud-native', 'docker-cache-specialist']],
   ['web-dev', ['gizmo', 'typescript-specialist', 'svelte-specialist']],
   ['delivery-pipeline', ['gizmo', 'dev-manager', 'pr-lifecycle']],
 ]);

@@ -130,6 +130,7 @@ export enum TeamInternalAgentKey {
   SecurityReviewSpecialist = 'security-review-specialist',
   Provisioning = 'provisioning',
   CloudNative = 'cloud-native',
+  DockerCacheSpecialist = 'docker-cache-specialist',
   TypeScriptSpecialist = 'typescript-specialist',
   SvelteSpecialist = 'svelte-specialist',
   DevManager = 'dev-manager',
@@ -498,7 +499,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       team: TeamKey.Sre,
       identity: 'Cloud-native specialist',
       description:
-        'Maintains bounded cloud-native deployment, container, cluster, and runner mechanics under SRE ownership.',
+        'Maintains bounded cloud-native deployment, cluster, and runner mechanics under SRE ownership.',
       model: 'gpt-5.6-luna',
       reasoningEffort: 'xhigh',
       serviceTier: 'fast',
@@ -509,6 +510,24 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       parent: TeamGizmoKey.Sre,
       reportingBoundary:
         'Reports bounded cloud-native evidence and blockers to SRE Team Gizmo.',
+      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+    },
+    {
+      key: TeamInternalAgentKey.DockerCacheSpecialist,
+      team: TeamKey.Sre,
+      identity: 'Docker cache specialist',
+      description:
+        'Owns Docker and BuildKit cache correctness, cache proofs, telemetry, and remote-build latency under SRE ownership.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
+      contextPaths: [
+        '.cortex/teams/sre/docker-cache-specialist/AGENTS.md',
+        '.cortex/teams/sre/docker-cache-specialist/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.Sre,
+      reportingBoundary:
+        'Reports bounded Docker cache correctness, warm-build latency evidence, and blockers to SRE Team Gizmo.',
       capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
     },
     {

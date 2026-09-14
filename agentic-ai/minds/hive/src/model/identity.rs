@@ -286,7 +286,10 @@ impl FeatureBranch {
                 role,
                 "gizmo" | "cryptography-specialist" | "security-review-specialist"
             ),
-            "sre" => matches!(role, "gizmo" | "provisioning" | "cloud-native"),
+            "sre" => matches!(
+                role,
+                "gizmo" | "provisioning" | "cloud-native" | "docker-cache-specialist"
+            ),
             "web-dev" => matches!(
                 role,
                 "gizmo" | "typescript-specialist" | "svelte-specialist"
@@ -370,6 +373,13 @@ mod tests {
         assert_eq!(
             child.as_str(),
             "codex/agent-branching/sre/provisioning/fix-hive-branch-compile"
+        );
+        let cache_child = FeatureBranch::try_from(
+            "codex/agent-branching/sre/docker-cache-specialist/prove-fast-cache-replay",
+        )?;
+        assert_eq!(
+            cache_child.as_str(),
+            "codex/agent-branching/sre/docker-cache-specialist/prove-fast-cache-replay"
         );
         let machine = FeatureBranch::try_from("codex/hive-main-failure-abc-run-42-attempt-1")?;
         assert_eq!(

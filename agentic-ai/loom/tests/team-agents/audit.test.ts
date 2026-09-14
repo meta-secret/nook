@@ -135,14 +135,14 @@ describe('canonical Cortex team authority', () => {
     expect(report.findings).toEqual([]);
     expect(report.authorityCount).toBe(6);
     expect(report.teamGizmoCount).toBe(6);
-    expect(report.teamInternalAgentCount).toBe(12);
+    expect(report.teamInternalAgentCount).toBe(13);
     expect(report.auditOk).toBe(true);
   });
 
   test('models every Team Gizmo and internal-agent hierarchy', () => {
     expect(TEAM_AUTHORITY_CATALOG).toHaveLength(6);
     expect(TEAM_GIZMO_CATALOG).toHaveLength(6);
-    expect(TEAM_INTERNAL_AGENT_CATALOG).toHaveLength(12);
+    expect(TEAM_INTERNAL_AGENT_CATALOG).toHaveLength(13);
 
     for (const gizmo of TEAM_GIZMO_CATALOG) {
       expect(gizmo.model).toBe('gpt-5.6-sol');
@@ -209,6 +209,20 @@ describe('canonical Cortex team authority', () => {
     expect(
       TeamAuthorityCatalog.teamAgentProfile(TeamInternalAgentKey.PrLifecycle),
     ).toEqual(internalAgent);
+
+    const dockerCacheSpecialist = TEAM_INTERNAL_AGENT_CATALOG.find(
+      (candidate) =>
+        candidate.key === TeamInternalAgentKey.DockerCacheSpecialist,
+    );
+    expect(dockerCacheSpecialist).toMatchObject({
+      team: TeamKey.Sre,
+      identity: 'Docker cache specialist',
+      parent: TeamGizmoKey.Sre,
+      contextPaths: [
+        '.cortex/teams/sre/docker-cache-specialist/AGENTS.md',
+        '.cortex/teams/sre/docker-cache-specialist/knowledge-graph.md',
+      ],
+    });
   });
 
   test('rejects Team Gizmo and internal-agent contract, hierarchy, count, and path drift', () => {

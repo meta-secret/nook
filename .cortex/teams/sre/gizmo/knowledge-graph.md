@@ -14,6 +14,7 @@ Load only the authority needed to orchestrate the current SRE packet.
 
 - [Provisioning specialist knowledge graph](../provisioning/knowledge-graph.md)
 - [Cloud-native specialist knowledge graph](../cloud-native/knowledge-graph.md)
+- [Docker cache specialist knowledge graph](../docker-cache-specialist/knowledge-graph.md)
 
 ## Delivery authority
 

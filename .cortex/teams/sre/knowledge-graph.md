@@ -46,3 +46,5 @@ remote-execution action being performed.
 - [SRE Team Gizmo](gizmo/knowledge-graph.md) coordinates bounded SRE-team mechanics.
 - [Provisioning specialist](provisioning/knowledge-graph.md) handles packeted provisioning work.
 - [Cloud-native specialist](cloud-native/knowledge-graph.md) handles packeted cloud-native work.
+- [Docker cache specialist](docker-cache-specialist/knowledge-graph.md) handles
+  Docker cache and fast-build packets.

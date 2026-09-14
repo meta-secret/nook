@@ -515,7 +515,12 @@ const CANONICAL_TEAM_ROLES: Readonly<Record<CanonicalTeam, readonly string[]>> =
       "cryptography-specialist",
       "security-review-specialist",
     ],
-    [CanonicalTeam.Sre]: ["gizmo", "provisioning", "cloud-native"],
+    [CanonicalTeam.Sre]: [
+      "gizmo",
+      "provisioning",
+      "cloud-native",
+      "docker-cache-specialist",
+    ],
     [CanonicalTeam.WebDev]: ["gizmo", "typescript-specialist", "svelte-specialist"],
     [CanonicalTeam.DeliveryPipeline]: ["gizmo", "dev-manager", "pr-lifecycle"],
   };

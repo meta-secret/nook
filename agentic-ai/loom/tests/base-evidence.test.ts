@@ -160,6 +160,7 @@ describe('canonical feature branch identity', () => {
       'codex/abcdefghij',
       'codex/agentic-pipeline-delivery',
       'codex/agent-branching/sre/provisioning/fix-hive-branch-compile',
+      'codex/agent-branching/sre/docker-cache-specialist/prove-fast-cache-replay',
       'codex/hive-main-failure-abc-run-42-attempt-1',
     ];
 

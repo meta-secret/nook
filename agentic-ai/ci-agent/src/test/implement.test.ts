@@ -365,6 +365,28 @@ void describe("resolveDeliveryTarget", () => {
     );
   });
 
+  void it("accepts the permanent Docker cache specialist role", () => {
+    const branch =
+      "codex/agent-branching/sre/docker-cache-specialist/prove-fast-cache-replay";
+    assert.deepEqual(
+      CiResultAssertions.assertSuccess(
+        new AgentImplementationResolveDeliveryTarget({
+          branch,
+          originMainSha: ORIGIN_MAIN_SHA,
+          pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+          featureHeadSha: FEATURE_HEAD_SHA,
+        }).execute(),
+      ),
+      {
+        branch,
+        originMainSha: ORIGIN_MAIN_SHA,
+        pinnedLocalDevSha: PINNED_LOCAL_DEV_SHA,
+        featureHeadSha: FEATURE_HEAD_SHA,
+        budgetBaseRef: FEATURE_HEAD_SHA,
+      },
+    );
+  });
+
   void it("rejects legacy feature branches", () => {
     CiResultAssertions.assertFailure(
       new AgentImplementationResolveDeliveryTarget({

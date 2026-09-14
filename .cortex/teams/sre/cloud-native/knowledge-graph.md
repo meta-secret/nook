@@ -13,7 +13,9 @@ Load only the authority needed for the assigned cloud-native packet.
 ## Specialist focus
 
 - Cloud-native work is limited to the exact files and evidence named by the packet.
-- The specialist follows SRE-owned cluster, container, deployment, and operations authorities.
+- The specialist follows SRE-owned cluster, deployment, and operations authorities.
+- Docker cache and fast-build work returns to SRE Team Gizmo for routing to the
+  Docker Cache Specialist.
 - Functional product, security, web, and AI decisions return to the owning team.
 
 ## Delivery authority

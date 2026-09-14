@@ -24,8 +24,8 @@ worktree. Team Gizmo integrates those specialist commits into its feature
 branch and reports the resulting branch state to Prime. Any commit SHA is
 observational evidence, not workflow authority.
 
-The current specialist paths are SRE
-(`teams/sre/provisioning/`, `teams/sre/cloud-native/`), Development Core
+The current specialist paths are SRE (`teams/sre/provisioning/`,
+`teams/sre/cloud-native/`, `teams/sre/docker-cache-specialist/`), Development Core
 (`teams/dev-core/rust-core-developer/`, `teams/dev-core/rust-auth2-developer/`),
 and Delivery Pipeline (`teams/delivery-pipeline/gizmo/`,
 `teams/delivery-pipeline/dev-manager/`, `teams/delivery-pipeline/pr-lifecycle/`).

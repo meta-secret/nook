@@ -129,7 +129,7 @@ The canonical teams and internal agents are:
   - Team Agents: `cryptography-specialist`, `security-review-specialist`
 - **SRE**
   - Team Gizmo: `teams/sre/gizmo/`
-  - Team Agents: `provisioning`, `cloud-native`
+  - Team Agents: `provisioning`, `cloud-native`, `docker-cache-specialist`
 - **Web Development**
   - Team Gizmo: `teams/web-dev/gizmo/`
   - Team Agents: `typescript-specialist`, `svelte-specialist`

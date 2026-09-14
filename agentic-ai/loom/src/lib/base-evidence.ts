@@ -157,7 +157,10 @@ export class CanonicalFeatureBranchContract {
         );
       case 'sre':
         return (
-          role === 'gizmo' || role === 'provisioning' || role === 'cloud-native'
+          role === 'gizmo' ||
+          role === 'provisioning' ||
+          role === 'cloud-native' ||
+          role === 'docker-cache-specialist'
         );
       case 'web-dev':
         return (
