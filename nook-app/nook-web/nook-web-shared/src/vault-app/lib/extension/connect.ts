@@ -407,11 +407,12 @@ class ExtensionConnectionBrowser {
         reason: admittedReason,
       };
     }
-    return {
-      kind: migrationRequired
-        ? ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired
-        : ExtensionPairingDeliveryKind.Rejected,
-    };
+    if (migrationRequired) {
+      return {
+        kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
+      };
+    }
+    return { kind: ExtensionPairingDeliveryKind.Rejected };
   }
 
   async deliverExtensionPairingApproval({
