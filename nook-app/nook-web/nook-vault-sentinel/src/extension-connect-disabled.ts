@@ -15,21 +15,10 @@ import type {
   PairedExtensionIdentityDiscoveryFor,
 } from "$web-shared/extension/extension-connect-types";
 import { ExtensionIdentityRequestSource } from "$web-shared/extension/extension-connect-types";
+import { ExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
 
-export { ExtensionIdentityRequestSource };
-
-/**
- * Compile-time compatibility for shared presentation that is unreachable in
- * Sentinel. Values deliberately describe the disabled boundary and cannot be
- * mistaken for extension protocol capabilities.
- */
-export enum ExtensionConnectScope {
-  VaultAccess = "sentinel-extension-vault-access-disabled",
-  PasswordFilling = "sentinel-extension-password-filling-disabled",
-  PasskeyManagement = "sentinel-extension-passkey-management-disabled",
-  SyncProviderCredentials = "sentinel-extension-provider-secret-sharing-disabled",
-}
+export { ExtensionConnectScope, ExtensionIdentityRequestSource };
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ExtensionConnectScope>;
@@ -63,6 +52,25 @@ export type InstalledExtensionRuntime =
   | {
       kind: InstalledExtensionRuntimeKind.Installed;
       extensionRuntimeId: string;
+    };
+
+export enum ExtensionPairingDeliveryKind {
+  Delivered = "delivered",
+  MessagingUnavailable = "messaging-unavailable",
+  PlaintextProviderMigrationRequired = "plaintext-provider-migration-required",
+  Rejected = "rejected",
+}
+
+export type ExtensionPairingDelivery =
+  | {
+      readonly kind: Exclude<
+        ExtensionPairingDeliveryKind,
+        ExtensionPairingDeliveryKind.Rejected
+      >;
+    }
+  | {
+      readonly kind: ExtensionPairingDeliveryKind.Rejected;
+      readonly reason?: string;
     };
 
 export const isExtensionConnectPath: (pathname: string) => boolean = () =>
@@ -120,7 +128,9 @@ export const extensionConnectionBrowser = {
   requestPairedExtensionUnlock,
   adoptExtensionIdentity,
   // eslint-disable-next-line @typescript-eslint/no-restricted-types -- Foreign host data is narrowed at this boundary.
-  async deliverExtensionPairingApproval(_request: unknown): Promise<never> {
+  async deliverExtensionPairingApproval(
+    _request: unknown,
+  ): Promise<ExtensionPairingDelivery> {
     void _request;
     throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
   },
