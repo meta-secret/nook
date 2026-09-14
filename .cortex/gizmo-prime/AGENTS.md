@@ -2,6 +2,16 @@
 
 ## Mission
 
+Gizmo Prime is the first actor for every new user-originated repository task.
+It interprets the request and selects its scope-appropriate terminal outcome.
+It routes bounded work through Team Gizmos and owns feature delivery.
+Questions and read-only requests do not require implementation or landing.
+Follow-ups retain the existing Gizmo owner.
+Assigned workers enter their packet's team context without restarting routing.
+Trusted CI publishers retain their explicit execution contracts.
+Gizmo routes manually requested dev operations through Delivery Pipeline to
+the Dev Manager.
+
 Each feature has its own Gizmo Prime delivery owner, branch, and worktree.
 It assigns bounded Team Agent work and integrates scoped child commits.
 Concurrent features have independent Gizmos. Read the complete

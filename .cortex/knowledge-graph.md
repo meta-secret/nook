@@ -6,6 +6,10 @@ Use this file only to select one owning context. Do not preload linked graphs.
 
 - [Agent routing contract](AGENTS.md) defines universal loading, ownership,
   authoring, and delivery boundaries.
+- [Gizmo Prime](gizmo-prime/AGENTS.md) is the first actor for each new user-originated
+  repository task. Follow-ups retain their current Gizmo owner.
+- Assigned workers use the owning team context in their bounded packet.
+- Gizmo routes manually requested dev operations to the dev manager.
 
 ## Canonical tree
 
@@ -17,9 +21,10 @@ Each Team Gizmo requests Fast mode with `service_tier: fast`, which resolves as
 `priority`. Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning. It
 requests Fast mode with `service_tier: fast`, which resolves as `priority`. Each
 leaf receives a separate issued child worktree. Each Team Gizmo owns one team
-worktree. Prime reuses a compatible existing Team Agent before spawning.
-Otherwise it issues separate child worktrees for required specialists. Team
-Gizmo integrates specialist commits into its feature branch.
+worktree. Prime reuses or creates a compatible Team Gizmo before dispatch. That
+Team Gizmo reuses or dispatches bounded internal leaf Team Agents, each in an
+issued child worktree, and integrates specialist commits into its feature
+branch.
 
 Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
 `git fetch --prune origin`; a fetch failure fails closed. Delivery/Dev Manager

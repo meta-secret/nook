@@ -17,12 +17,12 @@ Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning.
 It requests Fast mode with `service_tier: fast`, which resolves as `priority`.
 Each leaf receives a separate issued child worktree.
 
-Each Team Gizmo owns one team worktree for its packet. Gizmo Prime first
-reuses an existing compatible Team Agent; only when no compatible agent exists
-does it issue separate child worktrees for the required specialists. Team
-Gizmo integrates those specialist commits into its feature branch and reports
-the resulting branch state to Prime. Any commit SHA is observational evidence,
-not workflow authority.
+Each Team Gizmo owns one team worktree for its packet. Gizmo Prime reuses or
+creates a compatible Team Gizmo for the packet. That Team Gizmo reuses or
+dispatches bounded internal leaf Team Agents, each in an issued child
+worktree. Team Gizmo integrates those specialist commits into its feature
+branch and reports the resulting branch state to Prime. Any commit SHA is
+observational evidence, not workflow authority.
 
 The current specialist paths are SRE
 (`teams/sre/provisioning/`, `teams/sre/cloud-native/`), Development Core
@@ -77,10 +77,18 @@ for the run. Every team has a Team Gizmo that reports upward to Gizmo Prime.
 ## Mandatory context selection
 
 1. Read the [root context router](knowledge-graph.md).
-2. Classify the work as feature Gizmo control, Delivery Pipeline operations,
-   dev-manager control, AI, development core, security, SRE, web development,
-   or shared ownership.
-3. Load exactly one owning `AGENTS.md` and knowledge graph.
+2. Route every new user-originated repository task through
+   [Gizmo Prime](gizmo-prime/AGENTS.md) first.
+   - Follow-ups remain with the existing Gizmo owner.
+   - Gizmo Prime interprets scope and routes bounded work through the owning
+     Team Gizmo.
+   - Gizmo routes manually requested dev operations through Delivery Pipeline
+     to the Dev Manager.
+   - The manager retains publication, slow-validation, and promotion authority.
+3. Load exactly one owning `AGENTS.md` and knowledge graph for the current actor.
+   - Assigned Team Agents load their packet's team context directly.
+   - Workers do not recursively become Gizmo or restart user-task routing.
+   - Trusted CI publishers retain their explicit execution contracts.
 4. Open only the documents and headings needed for the assigned work.
 5. Stop loading Cortex when the task can be executed safely.
 
@@ -88,6 +96,10 @@ Do not preload all graphs, a whole team corpus, or foreign-team material for
 background context. A selected team authority may link a task-relevant
 foreign-team skill as read-only engineering policy. A foreign-team writer
 requires an explicit expertise task from Gizmo Prime.
+
+Functional team entry points serve assigned work, not direct user-task routing.
+Gizmo selects the terminal outcome appropriate to the request. A question or
+read-only task does not authorize implementation or require feature landing.
 
 ## Mandatory delivery architecture
 
@@ -137,6 +149,13 @@ detailed authorization, evidence, and failure rules.
 - [Web development contract](teams/web-dev/AGENTS.md) and
   [graph](teams/web-dev/knowledge-graph.md): TypeScript, Svelte, browser
   behavior, and extension interaction.
+
+## Bug fixes
+
+Every bug fix follows the unit-test-first procedure in
+[testing and regression coverage](shared/dynamic-skills/testing-pyramid-and-regression.md#mandatory-regression-coverage-for-bug-fixes).
+That authority owns test authoring order, regression scope, and execution
+evidence within the authorized delivery stage.
 
 ## Primary code-structure rule
 
@@ -625,6 +644,13 @@ temporary notes optional and requires cleanup before readiness.
 - Report the exact missing authority, decision, or external state to Gizmo.
 
 ## Delivery and validation
+
+The delivery workflow is mandatory. Follow
+[mission delivery](gizmo-prime/workflows/mission-delivery.md) through feature landing
+and the manager handoff. A worker commit is not feature completion.
+Before declaring a capability unavailable, follow that workflow's bounded
+blocker-verification procedure. A missing tool name alone is not evidence
+that the canonical operation is unavailable.
 
 An implementation request defaults to complete delivery. Complete delivery
 passes through reviewed, remotely compiled changes merging into local dev,

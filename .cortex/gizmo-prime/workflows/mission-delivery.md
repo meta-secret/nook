@@ -37,6 +37,9 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 - Keep every writer within its issued child worktree and explicit file scope.
 - Author meaningful behavior tests for the slow stage.
 - Keep Workbench plans, feature handoffs, and completion evidence attributable.
+- Complete every feature stage through local dev landing and manager handoff.
+- Stop at an intermediate stage only when the user explicitly requests it.
+- Report a genuine blocker through the failure procedure below.
 - Apply [self-improvement](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review)
   only when a durable lesson qualifies.
 
@@ -51,6 +54,8 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 - Do not introduce a persistent Delivery Pipeline or PR Lifecycle Agent
   service, scheduler, or notification journal.
 - Do not rebase, squash, force-push, or discard another feature's work.
+- Do not treat a worker commit or parent integration as completed feature delivery.
+- Do not skip a required stage because a separately named tool was not found.
 
 ## Procedure
 
@@ -88,7 +93,9 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 5. **Integrate child results.**
    - Verify each committed handoff before parent integration.
    - Serialize mutations of the parent feature index.
-   - Preserve every accepted child commit.
+   - Preserve every accepted child change through the ordinary Git integration
+     rules in [team delegation](subagent-delegation.md).
+   - Parent feature integration is distinct from shared local dev landing.
    - Require handoffs listing each iteration SHA, outcome, evidence, and blockers.
    - Have later iterations inspect the last one or two relevant commits and diffs.
 6. **Compile and review.**
@@ -105,16 +112,39 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
    - Require positive compilation evidence for the current branch head.
    - Require resolved review findings and required security acceptance.
    - Authorize Delivery Pipeline Team Gizmo's bounded local-integration packet
-     to PR Lifecycle Agent.
+     to PR Lifecycle Agent for `dev:land`.
    - Tooling serializes the shared local dev checkout and verifies build evidence.
    - Record observed feature and resulting local dev SHAs.
 8. **Hand off to the manager.**
+   - Name the canonical branch and observed feature and local dev SHAs.
+   - Identify the manager-owned stages that remain.
    - The manager selects publication through Delivery Pipeline Team Gizmo's
      packet to PR Lifecycle Agent for snapshot publication.
    - The manager runs the full slow PR cycle.
    - Failure returns to a feature Gizmo through this same procedure.
    - Successful promotion uses the Dev Manager's packet to Delivery Pipeline
      Team Gizmo and PR Lifecycle Agent's guarded fast-forward mechanics.
+
+## Failure handling
+
+Before reporting that a required capability is unavailable:
+
+1. Identify the incomplete stage, owning actor, and required operation.
+2. Read the relevant canonical delivery authority and its named runtime entrypoint.
+   - Inspect bounded Task definitions or implementation evidence as needed.
+   - Route restricted evidence collection through its authorized owner.
+   - An absent tool name or empty search result does not establish absence.
+3. Use the existing authorized canonical path when it provides the operation.
+   - Ordinary parent Git integration does not require a separate module tool.
+   - Preserve ownership, security boundaries, and required checks.
+4. Report a concrete blocker when capability remains unavailable or execution fails.
+   - Name the observed failure and the evidence examined.
+   - Identify the last completed stage and the next incomplete stage.
+   - State the missing authority, capability, or external condition.
+   - Do not invent a fallback or bypass the required operation.
+
+A blocked feature remains incomplete. Its final report must state that outcome
+rather than present authored or committed changes as successful delivery.
 
 ## Fix ownership
 
@@ -140,3 +170,5 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 - Tests were authored for execution in the manager's slow stage.
 - The accepted feature is present in local dev.
 - The handoff names all commits and any remaining blocker.
+- The final report names the actual last completed stage and remaining stages.
+- A blocked report includes the concrete observed blocker and supporting evidence.

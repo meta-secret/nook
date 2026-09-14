@@ -28,7 +28,10 @@ ownership, readiness, promotion, or final delivery.
 - Every writer commits its complete scoped iteration during a serialized commit
   turn.
 - Gizmo verifies those commits and integrates them into the parent feature
-  worktree through the guarded module integrator.
+  worktree through ordinary Git under the
+  [child integration rules](subagent-delegation.md).
+  Gizmo serializes mutations of the parent index.
+  Shared local dev landing remains the separate authorized `dev:land` operation.
 - Read-only experts return evidence only. They do not mutate Git or delivery
   state.
 - Shared files receive one explicitly assigned writer.

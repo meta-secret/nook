@@ -111,7 +111,9 @@ Prime-to-Team-Gizmo dispatch chain.
 - Team Gizmo verifies that each child delta is non-empty before integration.
 - A no-op child returns evidence and is cleaned up without a commit.
 - Gizmo verifies each child commit and integrates it into the parent feature
-  worktree through the guarded module integrator.
+  worktree through ordinary Git under the integration rules below.
+  Gizmo serializes mutations of the parent index.
+  Shared local dev landing remains the separate authorized `dev:land` operation.
 - Prefer `git merge --ff-only` when the feature frontier has not moved.
 - Otherwise cherry-pick only non-empty leaf commits without merge commits.
 - After verified integration, remove the child worktree and delete its local
