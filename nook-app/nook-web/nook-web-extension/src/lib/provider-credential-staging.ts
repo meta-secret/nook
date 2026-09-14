@@ -147,9 +147,9 @@ export class ProviderCredentialBuffer {
     } catch {
       return err(ProviderCredentialFailure.InvalidTransport)
     }
-    if (!isStorageProviderList(staged))
-      return err(ProviderCredentialFailure.InvalidTransport)
     try {
+      if (!isStorageProviderList(staged))
+        return err(ProviderCredentialFailure.InvalidTransport)
       const admitted = await args.decode(staged)
       return ok(admitted)
     } catch {
