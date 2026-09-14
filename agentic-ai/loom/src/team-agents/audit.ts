@@ -760,11 +760,23 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
           'cache-health-gate-failed',
           'telemetry-missing-or-incomplete',
           'required-import-miss',
+          'generation-baseline-missing',
+          'generation-baseline-invalid',
+          'recipe-or-dependency-generation-changed',
           'unexpected-read-only-write-or-export',
           'severe-cache-hit-regression',
           'diagnostic-flag',
         ],
         greenPath: 'no-specialist-dispatch',
+        generationBaselinePolicy:
+          'seed-exactly-one-immutable-mode-max-compiler-baseline-per-recipe-and-dependency-fingerprint-generation',
+        ordinaryCommitPolicy:
+          'import-generation-baseline-plus-dependency-cache',
+        exactSourcePolicy:
+          'optional-mode-min-same-head-retry-only-never-maintenance-seed-per-head',
+        readOnlyPolicy: 'zero-cache-writes-and-zero-exports',
+        timeoutDiagnosisPolicy:
+          'diagnose-missing-or-invalid-generation-baseline-or-legitimate-generation-change-never-blindly-seed-head',
         repairLoop: [
           'diagnose-telemetry-before-editing',
           'prove-with-docker-simulator-and-proof',

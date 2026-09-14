@@ -21,18 +21,25 @@ behavior for packets issued by SRE Team Gizmo.
 - Enforce a three-minute remote-build latency SLO and workflow timeout.
 - Diagnose cache telemetry before changing cache topology.
 - Preserve separate cache identities:
-  - exact-commit scopes own source reuse;
-  - dependency-fingerprint scopes own dependency reuse.
-  - immutable recipe-generation scopes own one maintenance-seeded, mode-max
-    compiler baseline for ordinary unseeded heads. BuildKit input digests, not
-    mutable branch names, decide which source vertices remain reusable.
+  - immutable recipe/dependency-fingerprint generation scopes own exactly one
+    maintenance-seeded, `mode=max` compiler baseline per generation;
+  - dependency-fingerprint scopes own dependency reuse; and
+  - optional exact-commit scopes own only `mode=min` same-head retry
+    acceleration.
+- Make ordinary unseeded commits import the immutable generation baseline and
+  dependency cache. BuildKit input digests, not mutable branch names, decide
+  which source vertices remain reusable.
 - Serialize generation seeding, probe before writing, and never overwrite an
-  existing generation manifest. Recipe changes rotate the generation scope.
+  existing generation manifest. A legitimate recipe or dependency-fingerprint
+  change rotates the generation scope and is the only reason to seed a new
+  compiler baseline.
+- Never maintenance-seed a source cache for each commit or branch head.
 - Preserve read-only cache state across GitHub Actions step boundaries.
 - Prove that read-only consumers perform zero cache writes and zero exports.
 - Use `mode=min` for exact source-cache exports.
 - Bound cache exports and transport retries.
-- Preserve a cold new-commit fallback when no exact source cache exists.
+- Preserve ordinary new-commit reuse when no optional exact source cache
+  exists by importing the generation baseline and dependency cache.
 - Validate cache publication with a warm replay at the same committed head.
 - Maintain the canonical simulator and proof surfaces:
   - `infra/sim/bake-cache/compile-warm.docker-bake.hcl`;
@@ -62,6 +69,8 @@ behavior for packets issued by SRE Team Gizmo.
 - Do not create or select a replacement worktree.
 - Do not weaken exact-head, credential, isolation, or zero-write boundaries to
   reduce latency.
+- Do not treat a missing per-head exact cache as a reason to run maintenance
+  seeding or publish a generation baseline.
 - Do not hide cold compilation, missing cache scopes, or cache transport
   failures behind successful status.
 - Do not dispatch other specialists or act as Team Gizmo or Gizmo Prime.

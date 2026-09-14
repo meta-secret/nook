@@ -21,6 +21,12 @@ continues to own GitHub execution mechanics.
   - `telemetry-missing-or-incomplete` means required BuildKit telemetry is not
     usable.
   - `required-import-miss` means a required cache import missed.
+  - `generation-baseline-missing` means the immutable compiler baseline for
+    the current recipe/dependency-fingerprint generation does not exist.
+  - `generation-baseline-invalid` means the current generation manifest or
+    baseline cannot be trusted or consumed.
+  - `recipe-or-dependency-generation-changed` means a legitimate recipe or
+    dependency-fingerprint change rotated the required baseline generation.
   - `unexpected-read-only-write-or-export` means a read-only consumer wrote
     cache data or exported a cache.
   - `severe-cache-hit-regression` means the hit rate crossed the configured
@@ -30,6 +36,17 @@ continues to own GitHub execution mechanics.
 - Give the specialist the canonical JSON, Markdown report, BuildKit logs, job
   identity, run identity, and captured source commit.
 - Require diagnosis before implementation changes.
+- Diagnose whether a timeout or cache failure is caused by a missing or invalid
+  generation baseline, a legitimate recipe/dependency generation change, or
+  another cache defect. A missing optional exact-SHA cache is not by itself a
+  maintenance-seed condition.
+- Permit maintenance to seed exactly one immutable `mode=max` compiler
+  baseline for each recipe/dependency-fingerprint generation. Prohibit
+  per-head maintenance source seeding.
+- Require ordinary unseeded commits to import the generation baseline plus the
+  dependency cache. Treat an exact-SHA `mode=min` cache only as optional
+  same-head retry acceleration.
+- Require read-only consumers to perform zero writes and zero exports.
 - Require the canonical Docker cache simulator and proof for every repair.
 - Route workflow dispatch, status inspection, reruns, and other GitHub
   mechanics through Delivery Pipeline.
@@ -45,6 +62,8 @@ continues to own GitHub execution mechanics.
 - Do not parse Markdown to make an activation decision.
 - Do not run specialist analysis as an unconditional job on every workflow.
 - Do not let an absent telemetry artifact silently pass the cache gate.
+- Do not blindly seed each branch head or commit after a timeout, required
+  import miss, or missing exact-SHA cache.
 - Do not let the specialist execute GitHub, pull-request, publication,
   landing, or promotion mechanics.
 - Do not run local tests, Docker, preflight, or product compilation during the

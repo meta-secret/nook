@@ -232,10 +232,22 @@ describe('canonical Cortex team authority', () => {
           'job-timeout',
           'cache-health-gate-failed',
           'required-import-miss',
+          'generation-baseline-missing',
+          'generation-baseline-invalid',
+          'recipe-or-dependency-generation-changed',
           'unexpected-read-only-write-or-export',
           'severe-cache-hit-regression',
         ]),
         greenPath: 'no-specialist-dispatch',
+        generationBaselinePolicy:
+          'seed-exactly-one-immutable-mode-max-compiler-baseline-per-recipe-and-dependency-fingerprint-generation',
+        ordinaryCommitPolicy:
+          'import-generation-baseline-plus-dependency-cache',
+        exactSourcePolicy:
+          'optional-mode-min-same-head-retry-only-never-maintenance-seed-per-head',
+        readOnlyPolicy: 'zero-cache-writes-and-zero-exports',
+        timeoutDiagnosisPolicy:
+          'diagnose-missing-or-invalid-generation-baseline-or-legitimate-generation-change-never-blindly-seed-head',
       },
     });
   });
@@ -279,6 +291,15 @@ describe('canonical Cortex team authority', () => {
           activationContract: {
             ...dockerCacheSpecialist.activationContract,
             reasonCodes: [],
+          },
+        },
+      ],
+      [
+        {
+          ...dockerCacheSpecialist,
+          activationContract: {
+            ...dockerCacheSpecialist.activationContract,
+            generationBaselinePolicy: 'seed-every-head',
           },
         },
       ],
