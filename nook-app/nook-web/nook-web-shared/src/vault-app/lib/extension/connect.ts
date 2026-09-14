@@ -49,26 +49,6 @@ type ChromeRuntimeAvailability =
       readonly runtime: ChromeRuntimeHost;
     };
 
-function isChromeRuntimeHost(value: unknown): value is ChromeRuntimeHost {
-  return (
-    typeof value === "object" &&
-    !!value &&
-    "sendMessage" in value &&
-    typeof value.sendMessage === "function"
-  );
-}
-
-function chromeRuntimeLastError(runtime: ChromeRuntimeHost): boolean {
-  if (!("lastError" in runtime)) return false;
-  const error = runtime.lastError;
-  return (
-    typeof error === "object" &&
-    !!error &&
-    "message" in error &&
-    typeof error.message === "string" &&
-    error.message.length > 0
-  );
-}
 import { ApplicationPath } from "$lib/runtime/routes";
 import {
   admit_companion_handoff_response,
@@ -311,6 +291,27 @@ class PendingExtensionResponse {
 class ExtensionConnectionBrowser {
   constructor(private readonly browser: ExtensionBrowserHost) {}
 
+  private isChromeRuntimeHost(value: unknown): value is ChromeRuntimeHost {
+    return (
+      typeof value === "object" &&
+      !!value &&
+      "sendMessage" in value &&
+      typeof value.sendMessage === "function"
+    );
+  }
+
+  private chromeRuntimeLastError(runtime: ChromeRuntimeHost): boolean {
+    if (!("lastError" in runtime)) return false;
+    const error = runtime.lastError;
+    return (
+      typeof error === "object" &&
+      !!error &&
+      "message" in error &&
+      typeof error.message === "string" &&
+      error.message.length > 0
+    );
+  }
+
   private chromeRuntime(): ChromeRuntimeAvailability {
     if (!("chrome" in this.browser)) {
       return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
@@ -323,7 +324,7 @@ class ExtensionConnectionBrowser {
     ) {
       return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
     }
-    return isChromeRuntimeHost(chromeHost.runtime)
+    return this.isChromeRuntimeHost(chromeHost.runtime)
       ? {
           kind: ChromeRuntimeAvailabilityKind.Available,
           runtime: chromeHost.runtime,
@@ -442,10 +443,10 @@ class ExtensionConnectionBrowser {
         wait: responseWait,
         resolve,
       });
-      function receiveExtensionResponse(
+      const receiveExtensionResponse = (
         ...responses: ChromeRuntimeResponseArguments
-      ): void {
-        if (chromeRuntimeLastError(runtime)) {
+      ): void => {
+        if (this.chromeRuntimeLastError(runtime)) {
           pending.unavailable();
           return;
         }
@@ -455,7 +456,7 @@ class ExtensionConnectionBrowser {
         }
         const [response] = responses;
         pending.receive(response);
-      }
+      };
       sendMessage(extensionId, message, receiveExtensionResponse);
     });
   }
@@ -753,7 +754,7 @@ class ExtensionConnectionBrowser {
     return new Promise((resolve) => {
       try {
         runtime.sendMessage(request.extensionRuntimeId, message, (response) => {
-          if (chromeRuntimeLastError(runtime)) {
+          if (this.chromeRuntimeLastError(runtime)) {
             resolve(
               err(
                 new VaultStorageFailure(
