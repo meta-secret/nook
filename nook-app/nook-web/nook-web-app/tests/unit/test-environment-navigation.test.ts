@@ -7,6 +7,10 @@ import {
   PasswordFormQueryKind,
   passwordFormInteraction,
 } from '../../../nook-web-shared/src/extension/password-forms'
+import {
+  ExtensionInstallSource,
+  extensionInstallationBrowser,
+} from '$lib/extension/install'
 
 declare global {
   interface Window {
@@ -70,6 +74,15 @@ describe('happy-dom unit-test navigation boundary', () => {
     await window.happyDOM.waitUntilComplete()
 
     expect(submission).toBe(FormSubmissionResult.Submitted)
+    expect(simulation.requestProbe.requestCount).toBe(0)
+  })
+
+  test('resolves extension metadata fallback without issuing a network request', async () => {
+    const simulation = new DomNavigationSimulation(window)
+
+    const target = await extensionInstallationBrowser.loadExtensionInstallTarget()
+
+    expect(target.source).toBe(ExtensionInstallSource.Fallback)
     expect(simulation.requestProbe.requestCount).toBe(0)
   })
 })
