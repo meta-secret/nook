@@ -278,17 +278,6 @@ RUN bun run contracts \
 
 FROM web-base AS compile-web
 
-ARG VITE_BASE=/
-ARG VITE_SITE_URL=
-ARG VITE_PUBLIC_APP_URL=
-ARG VITE_SIMPLE_APP_URL=
-ARG VITE_SENTINEL_APP_URL=
-ARG NOOK_SIMPLE_VAULT_URL=https://simple.nokey.sh/
-ARG NOOK_EXTENSION_CHANNEL=production
-ARG NOOK_EXTENSION_VERSION=1.0.0
-ARG NOOK_EXTENSION_COMMIT=
-ARG NOOK_EXTENSION_SITE_URL=https://nokey.sh/
-
 WORKDIR /meta-secret/nook
 COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules \
   /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
@@ -302,7 +291,10 @@ RUN mkdir -p \
     && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-vault-simple/node_modules \
     && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/node_modules \
     && ln -s ../nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-extension/node_modules
-COPY . .
+# Keep policy, workflow, Cortex, and unrelated product changes out of every web
+# compiler key. The complete web workspace is the only repository source this
+# stage consumes; generated WASM crosses through the explicit handoff below.
+COPY nook-app/nook-web nook-app/nook-web
 COPY --from=compile-wasm-source /opt/nook/wasm-handoff /tmp/nook-wasm-handoff
 RUN mkdir -p \
       nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
@@ -329,6 +321,11 @@ RUN cd nook-app/nook-web/nook-web-research \
     && ../nook-web-app/node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json \
     && ../nook-web-app/node_modules/.bin/tsc --noEmit -p tsconfig.compile.json
 
+ARG VITE_BASE=/
+ARG VITE_SITE_URL=
+ARG VITE_PUBLIC_APP_URL=
+ARG VITE_SIMPLE_APP_URL=
+ARG VITE_SENTINEL_APP_URL=
 RUN cd nook-app/nook-web/nook-web-app \
     && VITE_BASE="${VITE_BASE}" \
        VITE_SITE_URL="${VITE_SITE_URL}" \
@@ -352,6 +349,16 @@ RUN cd nook-app/nook-web/nook-vault-sentinel \
        ../nook-web-app/node_modules/.bin/vite build
 RUN cd nook-app/nook-web/nook-web-app \
     && bun scripts/assemble-preview.ts
+RUN cd nook-app/nook-web/nook-web-research && node_modules/.bin/vite build
+
+# The commit is deliberately introduced at the narrow extension packaging
+# boundary. It varies for every head and must not invalidate type checks or the
+# preceding site/application builds when product sources are unchanged.
+ARG NOOK_SIMPLE_VAULT_URL=https://simple.nokey.sh/
+ARG NOOK_EXTENSION_CHANNEL=production
+ARG NOOK_EXTENSION_VERSION=1.0.0
+ARG NOOK_EXTENSION_COMMIT=
+ARG NOOK_EXTENSION_SITE_URL=https://nokey.sh/
 RUN cd nook-app/nook-web/nook-web-extension \
     && NOOK_SIMPLE_VAULT_URL="${NOOK_SIMPLE_VAULT_URL}" \
        NOOK_EXTENSION_CHANNEL="${NOOK_EXTENSION_CHANNEL}" \
@@ -359,7 +366,6 @@ RUN cd nook-app/nook-web/nook-web-extension \
        NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}" \
        NOOK_EXTENSION_SITE_URL="${NOOK_EXTENSION_SITE_URL}" \
        bun scripts/build.ts
-RUN cd nook-app/nook-web/nook-web-research && node_modules/.bin/vite build
 RUN mkdir -p /opt/nook && touch /opt/nook/web-compile-passed
 
 FROM registry.dev.nokey.sh/library/node:24-trixie-slim@sha256:0711b541c1c33a8a530ac4f0d391baa9a15b3d804695b1b24a47daa5fb60e74d AS compile-ci-agent

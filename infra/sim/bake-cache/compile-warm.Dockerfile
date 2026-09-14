@@ -63,11 +63,30 @@ RUN cat /opt/compile-nook-wasm-source >/opt/compile-nook-wasm-build \
   && sleep 1 \
   && echo bake-sim-compile-nook-wasm-build
 
+# Product web sources are a narrow input domain. An unrelated policy/catalog
+# file in this build context must not participate in this COPY digest.
+FROM compile-toolchain AS compile-web-source
+COPY inputs/compile-web-source.txt /tmp/web-source.txt
+RUN cat /tmp/web-source.txt >/opt/compile-web-source \
+  && sleep 1 \
+  && echo bake-sim-compile-web-source
+
+# The real commit identity belongs only to extension packaging. Declaring the
+# ARG earlier would make every preceding web RUN vary for each repository head.
+FROM compile-web-source AS compile-extension-package
+ARG SIMULATED_EXTENSION_COMMIT=
+RUN test -n "$SIMULATED_EXTENSION_COMMIT" \
+  && printf '%s\n' "$SIMULATED_EXTENSION_COMMIT" >/opt/compile-extension-package \
+  && sleep 1 \
+  && echo bake-sim-compile-extension-package
+
 FROM scratch AS compile-dependencies
 COPY --from=compile-hive-dependencies /opt/compile-hive-dependencies /compile/hive
 COPY --from=compile-wasm-dependencies /opt/compile-wasm-dependencies /compile/wasm
 
 FROM compile-nook-wasm-build AS compile
 COPY --from=compile-hive-source /opt/compile-hive-source /compile/hive
+COPY --from=compile-web-source /opt/compile-web-source /compile/web
+COPY --from=compile-extension-package /opt/compile-extension-package /compile/extension
 RUN install -D /opt/compile-nook-wasm-build /compile/nook-wasm \
   && install -D /opt/compile-companion-wasm-build /compile/companion-wasm

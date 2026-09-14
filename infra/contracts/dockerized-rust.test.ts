@@ -967,6 +967,21 @@ tasks:
     expect(productionDockerfile).toContain(
       "FROM compile-wasm-source AS compile",
     );
+    expect(productionDockerfile).toContain(
+      "COPY nook-app/nook-web nook-app/nook-web",
+    );
+    expect(productionDockerfile).not.toMatch(/^COPY \. \.$/m);
+    const extensionCommitArgument = productionDockerfile.indexOf(
+      "ARG NOOK_EXTENSION_COMMIT=",
+    );
+    const extensionPackage = productionDockerfile.indexOf(
+      'NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}"',
+    );
+    const webTypeCheck = productionDockerfile.indexOf(
+      "node_modules/.bin/svelte-check --tsconfig tsconfig.compile.json",
+    );
+    expect(extensionCommitArgument).toBeGreaterThan(webTypeCheck);
+    expect(extensionPackage).toBeGreaterThan(extensionCommitArgument);
     expect(simulatorDockerfile).toContain(
       "FROM compile-companion-wasm-build AS compile-nook-wasm-source",
     );
@@ -996,15 +1011,27 @@ tasks:
       "Generation seed replay: immutable manifest skips solve and export",
     );
     expect(proof).toContain(
+      "Policy-only commit: product compilers reuse the generation baseline",
+    );
+    expect(proof).toContain(
+      "compile policy-only: product_cached=10 product_uncached=0 packaging_uncached=1 writes=0",
+    );
+    expect(proof).toContain(
       "Exact source replay: read-only warm solve stays below two minutes",
     );
     expect(proof).toContain("bake-sim-compile-hive-source");
-    expect(proof).toContain("compile source B: cached=7 uncached=2 writes=1");
-    expect(proof).toContain("compile source C: cached=8 uncached=1 writes=1");
+    expect(proof).toContain("compile source B: cached=8 uncached=3 writes=1");
+    expect(proof).toContain("compile source C: cached=9 uncached=2 writes=1");
+    expect(proof).toContain(
+      "Unseeded commit D: web edit invalidates only the web lineage",
+    );
+    expect(proof).toContain(
+      "compile source D: cached=9 uncached=2 writes=1 domain=web",
+    );
     expect(proof).toContain(
       "compile generation rotation: old_available=1 current_available=0 selected=0",
     );
-    expect(proof).toContain("compile warm: cached=9 uncached=0 writes=0");
+    expect(proof).toContain("compile warm: cached=11 uncached=0 writes=0");
     expect(proof).toContain(
       'bake_compile_source "$proof_log" "$compile_source_b" "1" ""',
     );

@@ -9,6 +9,7 @@ compile_script="$workflows_dir/../scripts/compile-remote.sh"
 seed_script="$workflows_dir/../scripts/compile-deps-cache-seed.sh"
 compile_fingerprint="$workflows_dir/../scripts/compile-deps-cache-fingerprint.sh"
 compile_bake="$workflows_dir/../../nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"
+compile_dockerfile="$workflows_dir/../../nook-app/nook-platform/docker/rust/compile.Dockerfile"
 batch_job="$(sed -n '/^  batch:$/,/^  web-verify:$/p' "$remote")"
 compile_timeout="    timeout-minutes: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 3 || 360 }}"
 
@@ -49,6 +50,23 @@ grep -Fq -- '^nook-build-compile-generation-v1-[0-9a-f]{40}$' "$compile_script" 
   || { echo 'remote compile contract: generation baseline identity must be revalidated at the build boundary' >&2; exit 1; }
 grep -Fq -- 'compile_generation_cache_ref' "$compile_bake" \
   || { echo 'remote compile contract: Bake must import the immutable generation baseline' >&2; exit 1; }
+
+# A repository-wide COPY makes Cortex, workflow, and catalog edits invalidate
+# every web compiler vertex. Keep the product source boundary at nook-web, and
+# introduce the per-head extension identity only at its packaging command so a
+# new commit cannot poison preceding type-check and web-build cache keys.
+if grep -Eq -- '^[[:space:]]*COPY[[:space:]]+\.[[:space:]]+\.' "$compile_dockerfile"; then
+  echo 'remote compile contract: product compiler must not copy the repository root' >&2
+  exit 1
+fi
+grep -Fq -- 'COPY nook-app/nook-web nook-app/nook-web' "$compile_dockerfile" \
+  || { echo 'remote compile contract: web compiler must copy only its product domain' >&2; exit 1; }
+extension_arg_line="$(grep -nFx 'ARG NOOK_EXTENSION_COMMIT=' "$compile_dockerfile" | cut -d: -f1)"
+extension_build_line="$(grep -nF 'NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}"' "$compile_dockerfile" | cut -d: -f1)"
+test -n "$extension_arg_line" && test -n "$extension_build_line" \
+  && test "$extension_arg_line" -lt "$extension_build_line" \
+  && test $((extension_build_line - extension_arg_line)) -le 8 \
+  || { echo 'remote compile contract: per-head extension commit must be declared only at the extension packaging boundary' >&2; exit 1; }
 
 for required in \
   'nook-rust-compile-deps-input-v3' \
