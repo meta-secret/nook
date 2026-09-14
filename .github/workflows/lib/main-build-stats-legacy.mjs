@@ -136,8 +136,7 @@ export class LegacyMainBuildRecord {
             total.completed + (job.buildkit?.cache_export?.completed || 0),
           bytes: total.bytes + (job.buildkit?.cache_export?.bytes || 0),
           duration_ms:
-            total.duration_ms +
-            (job.buildkit?.cache_export?.duration_ms || 0),
+            total.duration_ms + (job.buildkit?.cache_export?.duration_ms || 0),
           incomplete_failures:
             total.incomplete_failures +
             (job.buildkit?.cache_export?.incomplete_failures || 0),
