@@ -7,6 +7,7 @@ import {
 } from '../../lib/login-fill-messages'
 import {
   decode_website_login_match_availability,
+  unavailable_website_login_match_availability,
   type WebsiteLoginMatchAvailability,
   type WebsiteLoginOptionsWireValue,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -906,7 +907,7 @@ class AccountPickerSessions {
     if (dependencies) responseRequest.dependencies = dependencies
     const response = await this.websiteLoginOptionsResponse(responseRequest)
     if (!isWebsiteLoginOptionsWireValue(response)) {
-      return { kind: 'unavailable' }
+      return unavailable_website_login_match_availability()
     }
     return decode_website_login_match_availability(response)
   }
