@@ -66,6 +66,18 @@ export class CortexDocumentPath {
       : false;
   }
 
+  childTeam(): string | false {
+    const child = this.canonicalChildDirectory();
+    return child ? child.team : false;
+  }
+
+  isChildAuthorityPath(): boolean {
+    return (
+      this.filePath.endsWith('/AGENTS.md') &&
+      this.canonicalChildDirectory() !== false
+    );
+  }
+
   isKnowledgeGraphPath(): boolean {
     return (
       this.filePath === '.cortex/knowledge-graph.md' ||
@@ -165,6 +177,15 @@ export class CortexChildGraphReference {
       parentTeamPath !== false &&
       indexedPath ===
         parentTeamPath.replace('/knowledge-graph.md', '/AGENTS.md')
+    ) {
+      return true;
+    }
+    const graphTeam = this.graphPath.childGraphTeam();
+    const indexedTeam = this.indexedPath.childTeam();
+    if (
+      graphTeam !== false &&
+      indexedTeam === graphTeam &&
+      this.indexedPath.isChildAuthorityPath()
     ) {
       return true;
     }

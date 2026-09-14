@@ -500,6 +500,37 @@ test('rejects sibling same-team child authority from a child graph', () => {
   ).toBe(true);
 });
 
+test('admits a same-team sibling AGENTS authority as read-only', () => {
+  const managerGraphPath =
+    '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md';
+  const siblingAuthorityPath =
+    '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md';
+  const documents = [
+    ...CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments().map(
+      (document) =>
+        document.relativePath === managerGraphPath
+          ? {
+              ...document,
+              content: `${document.content}- [Sibling authority](../gizmo/AGENTS.md)\n`,
+            }
+          : document,
+    ),
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+      path: siblingAuthorityPath,
+      content: '# Delivery Pipeline Team Gizmo\n',
+    }),
+  ];
+  const findings =
+    CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(findings, {
+      code: CortexStructureFindingCode.InvalidIndexEntry,
+      file: managerGraphPath,
+      message: `Child knowledge graph may link only its own directory or explicit read-only authorities: ${siblingAuthorityPath}`,
+    }),
+  ).toBe(false);
+});
+
 test('rejects duplicate direct-child document indexing but allows external authorities', () => {
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
