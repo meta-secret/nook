@@ -251,7 +251,10 @@ export class ProcessCommandRunner implements CommandRunner {
         ? [
             '--config-env=http.https://github.com/.extraheader=NOOK_GIT_EXTRAHEADER',
           ]
-        : [];
+        : [
+            '-c',
+            'credential.https://github.com.helper=!gh auth git-credential',
+          ];
     return ok([
       ...ProcessCommandRunner.remoteGitOptions,
       ...credentialOption,
