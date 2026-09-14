@@ -68,6 +68,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     kind: DurableTaskLookupKind.NotFound,
   });
   let nowMs = $state(Date.now());
+  const loadingRows = Array.from({ length: 7 }, (_, index) => index);
 
   const copy = $derived(
     snapshotState.kind === ObserverFeedKind.Loaded
@@ -443,7 +444,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     <div class="loading-grid">
       <div class="skeleton loading-rail"></div>
       <div class="loading-list">
-        {#each Array(7) as index (index)}
+        {#each loadingRows as index (index)}
           <div class="skeleton loading-row"></div>
         {/each}
       </div>

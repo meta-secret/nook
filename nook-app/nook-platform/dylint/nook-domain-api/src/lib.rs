@@ -126,7 +126,8 @@ pub fn register_lints(session: &Session, lint_store: &mut LintStore) {
         trusted_value_declarations::SECRET_PLAINTEXT_FORMATTING,
         trusted_value_declarations::PUBLIC_UNCHECKED_SECRET_CONSTRUCTOR,
     ]);
-    lint_store.register_late_pass(|_| Box::new(trusted_value_declarations::TrustedValueDeclarations));
+    lint_store
+        .register_late_pass(|_| Box::new(trusted_value_declarations::TrustedValueDeclarations));
 }
 
 impl<'tcx> LateLintPass<'tcx> for DomainApi {

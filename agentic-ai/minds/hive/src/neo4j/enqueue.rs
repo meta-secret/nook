@@ -1,5 +1,5 @@
 use crate::HiveContext;
-use neo4rs::query;
+use neo4rs::{Txn, query};
 use uuid::Uuid;
 
 use crate::model::{ActiveDelivery, ActiveDeliveryQuery, EnqueueTask, TaskId};
@@ -85,6 +85,16 @@ impl Neo4jTaskStore {
             return Ok(());
         }
 
+        Self::link_enqueue_dependencies(&mut transaction, task).await?;
+        Self::finalize_enqueue(&mut transaction, task).await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    async fn link_enqueue_dependencies(
+        transaction: &mut Txn,
+        task: &EnqueueTask,
+    ) -> crate::HiveResult<()> {
         for dependency in &task.dependencies {
             let mut rows = transaction
                 .execute(
@@ -104,15 +114,17 @@ impl Neo4jTaskStore {
                 .await
                 .with_hive_context(|| format!("dependency {dependency} does not exist"))?;
             if rows.next(transaction.handle()).await?.is_none() {
-                transaction.rollback().await?;
                 return Err(crate::HiveError::message(format!(
                     "dependency {dependency} does not exist or targets a different source commit"
                 )));
             }
             drop(rows);
-            Self::rearm_obsolete_subtree(&mut transaction, dependency).await?;
+            Self::rearm_obsolete_subtree(transaction, dependency).await?;
         }
+        Ok(())
+    }
 
+    async fn finalize_enqueue(transaction: &mut Txn, task: &EnqueueTask) -> crate::HiveResult<()> {
         transaction
             .run(
                 query(
@@ -134,7 +146,6 @@ impl Neo4jTaskStore {
                 .param("id", task.id.as_str()),
             )
             .await?;
-        transaction.commit().await?;
         Ok(())
     }
 
@@ -145,25 +156,14 @@ impl Neo4jTaskStore {
         let ActiveDeliveryQuery {
             source_commit,
             kind,
-            bootstrap_evidence,
+            bootstrap_evidence: _,
         } = request;
-        let (origin_main_sha, pinned_local_dev_sha, feature_branch) =
-            bootstrap_evidence.map_or(("", "", ""), |evidence| {
-                (
-                    evidence.origin_main_sha.as_str(),
-                    evidence.pinned_local_dev_sha.as_str(),
-                    evidence.feature_branch.as_str(),
-                )
-            });
         let mut rows = self
             .graph
             .execute(
                 query(
                     "MATCH (root:Task {source_commit: $source_commit, kind: $kind})
-                     WHERE coalesce(root.origin_main_sha, '') = $origin_main_sha
-                       AND coalesce(root.pinned_local_dev_sha, '') = $pinned_local_dev_sha
-                       AND coalesce(root.feature_branch, '') = $feature_branch
-                       AND (
+                     WHERE (
                          root.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
                          OR EXISTS {
                            MATCH (root)-[:DEPENDS_ON*1..]->(descendant:Task)
@@ -175,10 +175,7 @@ impl Neo4jTaskStore {
                      LIMIT 1",
                 )
                 .param("source_commit", source_commit)
-                .param("kind", kind.as_str())
-                .param("origin_main_sha", origin_main_sha)
-                .param("pinned_local_dev_sha", pinned_local_dev_sha)
-                .param("feature_branch", feature_branch),
+                .param("kind", kind.as_str()),
             )
             .await?;
         match rows.next().await? {

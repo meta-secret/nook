@@ -39,7 +39,16 @@ wasm_build_mode="${WASM_BUILD_MODE:-dev}"
 extension_commit="${NOOK_EXTENSION_COMMIT:-${GIT_COMMIT_ID:-${GITHUB_SHA:-}}}"
 case "${REQUEST_INCLUDES_HIVE:-false}" in
   true|1) compile_hive=1 ;;
-  false|0|"") compile_hive=0 ;;
+  false|0|"")
+    # Every feature build must compile Hive and its console. The remote
+    # workflow intentionally dispatches build:compile as a single task, so
+    # this route cannot rely on the optional hive:verify task selector.
+    if [ "${REQUESTED_REMOTE_TASKS:-}" = "build:compile" ]; then
+      compile_hive=1
+    else
+      compile_hive=0
+    fi
+    ;;
   *)
     echo "build:compile received an invalid REQUEST_INCLUDES_HIVE value" >&2
     exit 2

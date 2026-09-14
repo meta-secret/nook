@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use super::command::DeliveryCommand;
-use crate::model::{BootstrapEvidence, GitSha};
+use crate::model::{BootstrapEvidence, FeatureBranch, GitSha};
 
 /// The exact structured lines written to a Workbench incident are the only
 /// accepted completion evidence. Human prose and substring markers are not
@@ -102,11 +102,6 @@ impl WorkbenchCompletionCheck<'_> {
                 "Hive repair delivery is incomplete: dev:promote testedDevSha {tested_dev_sha} does not equal dev:land localDevSha {local_dev_sha}"
             )));
         }
-        if main_sha != tested_dev_sha {
-            return Err(crate::HiveError::message(format!(
-                "Hive repair delivery is incomplete: promoted mainSha {main_sha} does not equal exact testedDevSha {tested_dev_sha}"
-            )));
-        }
         let successful_main_sha = Self::parse_main_success_line(incident)?;
         if successful_main_sha != main_sha {
             return Err(crate::HiveError::message(format!(
@@ -121,13 +116,13 @@ impl WorkbenchCompletionCheck<'_> {
 
     fn parse_packet(&self, incident: &str) -> crate::HiveResult<()> {
         let origin_main_sha = Self::parse_sha_field(incident, "originMainSha")?;
-        self.require_packet_sha(
+        Self::require_packet_sha(
             "originMainSha",
             &origin_main_sha,
             &self.evidence.origin_main_sha,
         )?;
         let pinned_local_dev_sha = Self::parse_sha_field(incident, "pinnedLocalDevSha")?;
-        self.require_packet_sha(
+        Self::require_packet_sha(
             "pinnedLocalDevSha",
             &pinned_local_dev_sha,
             &self.evidence.pinned_local_dev_sha,
@@ -137,7 +132,6 @@ impl WorkbenchCompletionCheck<'_> {
     }
 
     fn require_packet_sha(
-        &self,
         field: &str,
         actual: &GitSha,
         expected: &GitSha,
@@ -153,7 +147,7 @@ impl WorkbenchCompletionCheck<'_> {
     fn require_feature_branch(
         &self,
         evidence: &str,
-        actual: &crate::model::FeatureBranch,
+        actual: &FeatureBranch,
     ) -> crate::HiveResult<()> {
         if actual != &self.evidence.feature_branch {
             return Err(crate::HiveError::message(format!(
@@ -176,9 +170,11 @@ impl WorkbenchCompletionCheck<'_> {
                 "Hive repair delivery is incomplete: Workbench has duplicate `{field}: ...` evidence"
             )));
         }
-        Ok(value
-            .strip_prefix(&prefix)
-            .expect("prefix was checked above"))
+        value.strip_prefix(&prefix).ok_or_else(|| {
+            crate::HiveError::message(format!(
+                "Hive repair delivery is incomplete: Workbench exact `{field}: ...` evidence is malformed"
+            ))
+        })
     }
 
     fn exact_operation_line<'a>(incident: &'a str, field: &str) -> crate::HiveResult<&'a str> {
@@ -215,49 +211,44 @@ impl WorkbenchCompletionCheck<'_> {
         Self::parse_sha(value, field)
     }
 
-    fn parse_branch_field(
-        incident: &str,
-        field: &str,
-    ) -> crate::HiveResult<crate::model::FeatureBranch> {
+    fn parse_branch_field(incident: &str, field: &str) -> crate::HiveResult<FeatureBranch> {
         let value = Self::exact_field(incident, field)?;
-        crate::model::FeatureBranch::try_from(value).map_err(|error| {
+        FeatureBranch::try_from(value).map_err(|error| {
             crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: Workbench {field} is not a canonical feature branch: {error}"
             ))
         })
     }
 
-    fn parse_review_line(incident: &str) -> crate::HiveResult<crate::model::FeatureBranch> {
+    fn parse_review_line(incident: &str) -> crate::HiveResult<FeatureBranch> {
         let line = Self::exact_operation_line(incident, "review:")?;
         let value = line.strip_prefix("review: approved featureBranch=").ok_or_else(|| {
             crate::HiveError::message(
                 "Hive repair delivery is incomplete: Workbench review evidence must be exactly `review: approved featureBranch=<branch>`",
             )
         })?;
-        crate::model::FeatureBranch::try_from(value).map_err(|error| {
+        FeatureBranch::try_from(value).map_err(|error| {
             crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: Workbench review featureBranch is invalid: {error}"
             ))
         })
     }
 
-    fn parse_worklog_line(incident: &str) -> crate::HiveResult<crate::model::FeatureBranch> {
+    fn parse_worklog_line(incident: &str) -> crate::HiveResult<FeatureBranch> {
         let line = Self::exact_operation_line(incident, "worklog:")?;
         let value = line.strip_prefix("worklog: linked featureBranch=").ok_or_else(|| {
             crate::HiveError::message(
                 "Hive repair delivery is incomplete: Workbench worklog evidence must be exactly `worklog: linked featureBranch=<branch>`",
             )
         })?;
-        crate::model::FeatureBranch::try_from(value).map_err(|error| {
+        FeatureBranch::try_from(value).map_err(|error| {
             crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: Workbench worklog featureBranch is invalid: {error}"
             ))
         })
     }
 
-    fn parse_dev_land_line(
-        incident: &str,
-    ) -> crate::HiveResult<(crate::model::FeatureBranch, GitSha)> {
+    fn parse_dev_land_line(incident: &str) -> crate::HiveResult<(FeatureBranch, GitSha)> {
         let line = Self::exact_operation_line(incident, "dev:land:")?;
         let value = line.strip_prefix("dev:land: ").ok_or_else(|| {
             crate::HiveError::message(
@@ -280,7 +271,7 @@ impl WorkbenchCompletionCheck<'_> {
             )
         })?;
         Ok((
-            crate::model::FeatureBranch::try_from(feature_branch).map_err(|error| {
+            FeatureBranch::try_from(feature_branch).map_err(|error| {
                 crate::HiveError::message(format!(
                     "Hive repair delivery is incomplete: Workbench dev:land featureBranch is invalid: {error}"
                 ))
@@ -321,7 +312,7 @@ impl WorkbenchCompletionCheck<'_> {
 #[cfg(test)]
 mod tests {
     use super::{WorkbenchCompletionCheck, WorkbenchMainPromotionEvidence};
-    use crate::model::{BootstrapEvidence, GitSha};
+    use crate::model::{BootstrapEvidence, FeatureBranch, GitSha};
     use std::path::Path;
 
     const ORIGIN: &str = "0000000000000000000000000000000000000001";
@@ -334,7 +325,7 @@ mod tests {
         let evidence = Box::leak(Box::new(BootstrapEvidence {
             origin_main_sha: GitSha::try_from(ORIGIN)?,
             pinned_local_dev_sha: GitSha::try_from(PINNED)?,
-            feature_branch: crate::model::FeatureBranch::try_from(FEATURE_BRANCH)?,
+            feature_branch: FeatureBranch::try_from(FEATURE_BRANCH)?,
         }));
         Ok(WorkbenchCompletionCheck {
             repository: Path::new("."),
@@ -371,7 +362,7 @@ mod tests {
             ),
             complete_incident().replace(
                 &format!("worklog: linked featureBranch={FEATURE_BRANCH}"),
-                &format!("worklog: linked featureBranch=codex/other-branch"),
+                "worklog: linked featureBranch=codex/other-branch",
             ),
             complete_incident().replace("status: done", "status: done-ish"),
         ] {
@@ -398,12 +389,24 @@ mod tests {
     }
 
     #[test]
-    fn promotion_rejects_a_different_tested_or_main_sha() -> crate::HiveResult<()> {
+    fn promotion_rejects_a_different_tested_sha() -> crate::HiveResult<()> {
         let check = check()?;
         let incident = format!(
             "originMainSha: {ORIGIN}\npinnedLocalDevSha: {PINNED}\nfeatureBranch: {FEATURE_BRANCH}\ndev:land: landed featureBranch={FEATURE_BRANCH} localDevSha={LOCAL_DEV}\ndev:promote: fast-forward testedDevSha={MAIN} mainSha={MAIN}\nmain: success headSha={MAIN}\n"
         );
         assert!(check.parse_main_promotion_incident(&incident).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn promotion_accepts_a_later_successful_main_descendant() -> crate::HiveResult<()> {
+        let check = check()?;
+        let incident = format!(
+            "originMainSha: {ORIGIN}\npinnedLocalDevSha: {PINNED}\nfeatureBranch: {FEATURE_BRANCH}\ndev:land: already-present featureBranch={FEATURE_BRANCH} localDevSha={LOCAL_DEV}\ndev:promote: fast-forward testedDevSha={LOCAL_DEV} mainSha={MAIN}\nmain: success headSha={MAIN}\n"
+        );
+        let evidence = check.parse_main_promotion_incident(&incident)?;
+        assert_eq!(evidence.local_dev_sha.as_str(), LOCAL_DEV);
+        assert_eq!(evidence.main_sha.as_str(), MAIN);
         Ok(())
     }
 }

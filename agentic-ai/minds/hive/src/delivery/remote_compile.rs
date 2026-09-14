@@ -105,12 +105,15 @@ impl RemoteCompileEvidence<'_> {
         feature_sha: &str,
     ) -> crate::HiveResult<&'a RemoteCompileRun> {
         let expected_title = format!("Remote / build:compile @ {feature_sha}");
-        let run = runs.iter().find(|run| {
-            run.head_sha == feature_sha
-                && run.head_branch == branch
-                && run.event == "workflow_dispatch"
-                && run.display_title.starts_with(&expected_title)
-        });
+        let run = runs
+            .iter()
+            .filter(|run| {
+                run.head_sha == feature_sha
+                    && run.head_branch == branch
+                    && run.event == "workflow_dispatch"
+                    && run.display_title.starts_with(&expected_title)
+            })
+            .max_by(|left, right| left.created_at.cmp(&right.created_at));
         run.ok_or_else(|| {
             crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: no exact-head remote build:compile evidence for {feature_sha}"
@@ -188,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn non_compile_remote_tasks_are_not_compile_evidence() -> HiveResult<()> {
+    fn non_compile_remote_tasks_are_not_compile_evidence() {
         let sha = "0123456789012345678901234567890123456789";
         let branch = "codex/hive-main-failure-42";
         let runs = vec![RemoteCompileRun::new(
@@ -203,6 +206,5 @@ mod tests {
         assert!(
             super::RemoteCompileEvidence::latest_exact_compile_run(&runs, branch, sha,).is_err()
         );
-        Ok(())
     }
 }

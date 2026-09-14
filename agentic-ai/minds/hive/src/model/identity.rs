@@ -300,7 +300,10 @@ impl FeatureBranch {
         if segments.len() != 1 {
             return false;
         }
-        let Some(suffix) = segments[0].strip_prefix("hive-") else {
+        let Some(suffix) = segments
+            .first()
+            .and_then(|segment| segment.strip_prefix("hive-"))
+        else {
             return false;
         };
         !suffix.is_empty()

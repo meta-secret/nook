@@ -1,5 +1,11 @@
-use super::*;
+use std::time::Duration;
+
 use tokio::time as async_time;
+
+use super::WorkerCancellationRequested;
+use crate::model::{AgentId, ClaimedTask};
+use crate::store::TaskStore;
+use tokio::sync::watch;
 
 pub(super) struct LeaseHeartbeat<S> {
     store: S,

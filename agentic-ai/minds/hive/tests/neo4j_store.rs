@@ -4,7 +4,8 @@
 )]
 
 use hive::model::{
-    AgentId, BootstrapEvidence, CompletionArtifact, EnqueueTask, GitSha, TaskId, TaskTrigger,
+    AgentId, BootstrapEvidence, CompletionArtifact, EnqueueTask, FeatureBranch, GitSha, TaskId,
+    TaskTrigger,
 };
 use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{Graph, query};
@@ -28,7 +29,7 @@ fn task(id: String, dependencies: Vec<TaskId>) -> anyhow::Result<EnqueueTask> {
         bootstrap_evidence: Some(BootstrapEvidence {
             origin_main_sha: GitSha::try_from("0123456789abcdef0123456789abcdef01234567")?,
             pinned_local_dev_sha: GitSha::try_from("123456789abcdef0123456789abcdef012345678")?,
-            feature_branch: crate::model::FeatureBranch::try_from("codex/repair-cache")?,
+            feature_branch: FeatureBranch::try_from("codex/repair-cache")?,
         }),
         priority: 0,
         max_attempts: 3,

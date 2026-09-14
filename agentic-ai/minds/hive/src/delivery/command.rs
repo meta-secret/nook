@@ -75,6 +75,31 @@ impl DeliveryCommand<'_> {
 }
 
 impl DeliveryCommand<'_> {
+    pub(super) async fn is_ancestor(
+        repository: &Path,
+        ancestor: &str,
+        descendant: &str,
+        operation: &str,
+    ) -> crate::HiveResult<bool> {
+        let status = Self::isolated_git(
+            repository,
+            &["merge-base", "--is-ancestor", ancestor, descendant],
+        )
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .with_hive_context(|| format!("failed to {operation}"))?;
+        match status.code() {
+            Some(0) => Ok(true),
+            Some(1) => Ok(false),
+            _ => Err(crate::HiveError::message(format!(
+                "{operation} failed with status {status}"
+            ))),
+        }
+    }
+
     pub(super) async fn run_git_status(
         repository: &Path,
         arguments: &[&str],

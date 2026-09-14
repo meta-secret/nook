@@ -818,7 +818,9 @@ pub struct Completion<'a> {
 mod task_kind;
 pub use task_kind::TaskKind;
 
-/// Select an active delivery by revision and typed task classification.
+/// Select an active delivery by immutable failed revision and typed task
+/// classification. Bootstrap evidence is a mutable Workbench packet revision
+/// and must not participate in repair identity.
 pub struct ActiveDeliveryQuery<'a> {
     pub source_commit: &'a str,
     pub kind: &'a TaskKind,
