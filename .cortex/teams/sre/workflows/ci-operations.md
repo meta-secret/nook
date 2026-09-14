@@ -4,14 +4,14 @@
 
 Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
-Runtime workflow details below do not grant permission to run local tests or
-lifecycle and must not be reactivated by this delivery change.
+Runtime workflow details below document current CI operations; they do not
+grant permission to run local tests or restore superseded delivery stages.
 
 ## Overview
 
 This authority owns CI storage reclamation, application-log inspection, secrets,
-provider operations, and automated implementation-agent behavior. The core
-workflow graph and runner placement remain in [CI / GitHub Actions Pipeline](ci-pipeline.md).
+and provider operations. The core workflow graph and runner placement remain in
+[CI / GitHub Actions Pipeline](ci-pipeline.md).
 
 ## Storage reclamation
 
@@ -194,7 +194,7 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
    - New UI-demo artifacts are not published while execution is disabled.
    - Main-fix validation uses `task pr:validate PR=<number> FULL_E2E=1` and runs the Main-equivalent deterministic browser suites before merge.
    - Main runs the same local-provider and extension **e2e**.
-   - Every actionable unsuccessful Main run is reconciled through one
+   - Reconcile every actionable unsuccessful Main run through the feature path.
      - Browser E2E failures are included.
      - The repair follows the feature path into local dev.
      - The dev manager controls slow checks and fast-forward promotion.

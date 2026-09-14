@@ -449,19 +449,16 @@ and the explicit expertise contract. [Shared knowledge](.cortex/shared/knowledge
 is loaded only for a named cross-team dependency. It is not an implementation
 team.
 
-Ordinary implementation agents return verified committed handoffs to Gizmo.
-Gizmo integrates them, runs **`task loom:pre-push`**, and pushes the exact
-branch head. Gizmo then runs focused builds/tests with
-**`task remote TASK_NAME=<name>`**, including **`task remote TASK_NAME=web:build`**
-and **`task remote TASK_NAME=web:e2e`**. Single `preflight`, `rust:ci`, and
-`arc:runtime` selections use disposable ARC runner Pods in k0s. Browser
-selectors execute separately in exact-image Kubernetes Pods; compatible
-build-only selectors may share one ARC batch. Gizmo explicitly starts complete
-PR validation with
-**`task pr:validate PR=<number>`**. Ordinary PR pushes do not start the complete
-pipeline. Validation dispatches hosted checks. Local Task mirrors below remain
-available for humans. Main-fix PRs use `FULL_E2E=1` to request the
-Main-equivalent browser suites.
+Feature Team Agents return committed handoffs to their Feature Gizmo. The
+Gizmo integrates and reviews those commits, pushes the exact feature SHA, and
+requests only the remote build-only **`build:compile`** check. After required
+review findings are resolved and compilation passes for that exact SHA, the
+Gizmo authorizes PR Steward to land it on local `dev` through the serialized
+**`dev:land`** task. Feature delivery does not run pre-push, tests, browser
+suites, preflight, or full PR validation. The manually started Dev Manager
+alone selects and publishes a local `dev` snapshot, owns the full slow
+dev-to-main PR validation cycle, and authorizes PR Steward to fast-forward the
+validated published `dev` SHA to `main`.
 
 Project-scoped module experts use stable semantic role names defined by the
 [Cortex registry](.cortex/teams/ai/architecture/module-experts.md). Universal
@@ -511,20 +508,21 @@ or synthesis barrier; every role remains nondelegating and read-only. See the
 and [workflow](.cortex/teams/ai/workflows/structural-refactoring.md).
 
 ```sh
-task loom:pre-push         # required Gizmo-owned integrated pre-push hygiene
+task loom:pre-push         # legacy/manual hygiene; prohibited in feature delivery
 task loom:cortex-session-clean # assert temporary agent memory is removed
 task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
 task loom:module-experts:validate # named read-only expert and production-module routing audit
 task loom:module-experts:invoke REQUEST=<request.json> # invoke one isolated named expert
 task loom:structural-experts:validate # exact structural role and bounded-scope audit
 task loom:structural-experts:invoke REQUEST=<request.json> # invoke one authorized refactoring role
+task remote TASK_NAME=build:compile # sole remote feature-stage build check
 task remote TASK_NAME=rust:ci # BuildKit-native Rust lane on ARC when enabled
 task remote TASK_NAME=preflight # repository invariant checks on exact pushed HEAD
 task remote TASK_NAME=web:build # direct-Pod web build
 task remote TASK_NAME=web:e2e # direct-Pod browser proof
 task remote TASK_NAME=extension:e2e # direct-Pod extension browser proof
-task pr:validate PR=410    # complete exact-head validation
-task pr:validate PR=410 FULL_E2E=1 # final Main-fix validation gate
+task pr:validate PR=410    # Dev Manager's complete dev-to-main validation
+task pr:validate PR=410 FULL_E2E=1 # Dev Manager's Main-equivalent browser gate
 task check                 # format, lint, tests, coverage floor, builds (optional local / CI mirror)
 task preflight             # fast Rust checks for whole-repository invariants
 task build                 # Rust, WASM, web, and extension production build
