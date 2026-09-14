@@ -259,8 +259,15 @@ FROM web-base AS compile-loom
 
 WORKDIR /meta-secret/nook/agentic-ai/loom
 COPY agentic-ai/loom/package.json agentic-ai/loom/bun.lock agentic-ai/loom/tsconfig.json agentic-ai/loom/tsconfig.compile.json ./
+RUN bun install --frozen-lockfile --ignore-scripts
+COPY .cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src \
+  /meta-secret/nook/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src
+COPY .cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src \
+  /meta-secret/nook/.cortex/teams/ai/dynamic-skills/cortex-consistency/scripts/src
+COPY .cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src \
+  /meta-secret/nook/.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src
 COPY agentic-ai/loom/src src
-RUN bun install --frozen-lockfile --ignore-scripts \
+RUN ln -s agentic-ai/loom/node_modules /meta-secret/nook/node_modules \
     && node_modules/.bin/tsc --noEmit -p tsconfig.compile.json \
     && mkdir -p /opt/nook \
     && touch /opt/nook/loom-compile-passed

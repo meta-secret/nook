@@ -57,3 +57,59 @@ fn compile_web_creates_package_directories_before_dependency_symlinks() -> anyho
     );
     Ok(())
 }
+
+#[test]
+fn compile_loom_copies_imported_cortex_sources_after_installing_dependencies() -> anyhow::Result<()>
+{
+    let repository_root = env::var_os("NOOK_REPO_ROOT").map_or_else(
+        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+        PathBuf::from,
+    );
+    let dockerfile = std::fs::read_to_string(
+        repository_root.join("nook-app/nook-platform/docker/rust/compile.Dockerfile"),
+    )?;
+    let loom_stage = dockerfile
+        .find("FROM web-base AS compile-loom")
+        .expect("compile Dockerfile must retain the Loom stage");
+    let dependency_install = dockerfile[loom_stage..]
+        .find("RUN bun install --frozen-lockfile --ignore-scripts")
+        .map(|offset| loom_stage + offset)
+        .expect("compile-loom must install its locked dependencies");
+    let loom_source = dockerfile[loom_stage..]
+        .find("COPY agentic-ai/loom/src src")
+        .map(|offset| loom_stage + offset)
+        .expect("compile-loom must copy Loom source");
+    let compilation = dockerfile[loom_stage..]
+        .find("node_modules/.bin/tsc --noEmit -p tsconfig.compile.json")
+        .map(|offset| loom_stage + offset)
+        .expect("compile-loom must type-check Loom");
+
+    for skill in [
+        "cortex-article-structure",
+        "cortex-consistency",
+        "cortex-document-map",
+    ] {
+        let source_copy = format!(
+            "COPY .cortex/teams/ai/dynamic-skills/{skill}/scripts/src \\\n  /meta-secret/nook/.cortex/teams/ai/dynamic-skills/{skill}/scripts/src"
+        );
+        let source_copy = dockerfile[loom_stage..]
+            .find(&source_copy)
+            .map(|offset| loom_stage + offset)
+            .unwrap_or_else(|| panic!("compile-loom must copy {skill} source"));
+
+        assert!(
+            dependency_install < source_copy && source_copy < compilation,
+            "compile-loom must copy {skill} after dependency installation and before compilation"
+        );
+    }
+    assert!(
+        dependency_install < loom_source && loom_source < compilation,
+        "compile-loom must install dependencies before source copies and compile afterward"
+    );
+    assert!(
+        dockerfile[loom_stage..compilation]
+            .contains("ln -s agentic-ai/loom/node_modules /meta-secret/nook/node_modules"),
+        "compile-loom must expose Loom dependencies to imported Cortex sources"
+    );
+    Ok(())
+}
