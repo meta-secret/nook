@@ -60,7 +60,9 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -p nook-event-log \
       -p nook-companion-core \
       -p nook-core \
-    && nook-sccache-report compile-native-dependencies
+    && nook-sccache-report compile-native-dependencies \
+    && mkdir -p /opt/nook \
+    && touch /opt/nook/compile-native-dependencies
 
 FROM compile-platform-manifests AS compile-wasm-dependencies
 
@@ -69,7 +71,17 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm \
       -p nook-companion-wasm \
-    && nook-sccache-report compile-wasm-dependencies
+    && nook-sccache-report compile-wasm-dependencies \
+    && mkdir -p /opt/nook \
+    && touch /opt/nook/compile-wasm-dependencies
+
+# Source-free aggregate for the fingerprinted compile dependency cache. The
+# web-deps base retains both Bun install graphs; the marker copies retain both
+# Rust dependency siblings without admitting authored product source.
+FROM web-deps AS compile-dependencies
+
+COPY --from=compile-native-dependencies /opt/nook/compile-native-dependencies /compile/native
+COPY --from=compile-wasm-dependencies /opt/nook/compile-wasm-dependencies /compile/wasm
 
 # Copy in dependency order so an edit in a leaf package reuses earlier native
 # compile layers on the persistent ARC BuildKit worker.
