@@ -7,9 +7,16 @@ rules belong to Gizmo's linked authorities.
 ## Mandatory context selection
 
 1. Read the [root context router](knowledge-graph.md).
-2. Classify the work as feature Gizmo control, dev-manager control, PR Steward operations, AI,
-   development core, security, SRE, web development, or shared ownership.
-3. Load exactly one owning `AGENTS.md` and knowledge graph.
+2. Route every new user-originated repository task through
+   [Gizmo Prime](gizmo/AGENTS.md) first.
+   - Follow-ups remain with the existing Gizmo owner.
+   - Gizmo interprets scope and delegates bounded work to the owning team.
+   - Gizmo routes manually requested dev operations to the dev manager.
+   - The manager retains publication, slow-validation, and promotion authority.
+3. Load exactly one owning `AGENTS.md` and knowledge graph for the current actor.
+   - Assigned Team Agents load their packet's team context directly.
+   - Workers do not recursively become Gizmo or restart user-task routing.
+   - Trusted CI publishers retain their explicit execution contracts.
 4. Open only the documents and headings needed for the assigned work.
 5. Stop loading Cortex when the task can be executed safely.
 
@@ -17,6 +24,10 @@ Do not preload all graphs, a whole team corpus, or foreign-team material for
 background context. A selected team authority may link a task-relevant
 foreign-team skill as read-only engineering policy. A foreign-team writer
 requires an explicit expertise task from Gizmo Prime.
+
+Functional team entry points serve assigned work, not direct user-task routing.
+Gizmo selects the terminal outcome appropriate to the request. A question or
+read-only task does not authorize implementation or require feature landing.
 
 ## Mandatory delivery architecture
 
@@ -490,6 +501,13 @@ temporary notes optional and requires cleanup before readiness.
 - Report the exact missing authority, decision, or external state to Gizmo.
 
 ## Delivery and validation
+
+The delivery workflow is mandatory. Follow
+[mission delivery](gizmo/workflows/mission-delivery.md) through feature landing
+and the manager handoff. A worker commit is not feature completion.
+Before declaring a capability unavailable, follow that workflow's bounded
+blocker-verification procedure. A missing tool name alone is not evidence
+that the canonical operation is unavailable.
 
 An implementation request defaults to complete delivery. Complete delivery
 passes through reviewed, remotely compiled changes merging into local dev,

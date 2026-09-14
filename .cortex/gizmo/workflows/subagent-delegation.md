@@ -54,7 +54,9 @@ the active harness.
 - Every writer commits its complete scoped iteration during its Gizmo-granted
   commit turn.
 - Gizmo verifies each child commit and integrates it into the parent feature
-  worktree through the guarded module integrator.
+  worktree through ordinary Git while preserving the accepted child commits.
+  Gizmo serializes mutations of the parent index.
+  Shared local dev landing remains the separate authorized `dev:land` operation.
 - Do not copy, replay, or synthesize a worker commit into an unrelated branch.
 - Gizmo owns feature sequencing, review, acceptance, and landing requests.
   The dev manager controls dev PR creation/update, slow evidence, readiness,

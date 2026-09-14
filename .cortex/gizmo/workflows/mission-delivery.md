@@ -17,6 +17,9 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 - Keep every writer within its issued child worktree and explicit file scope.
 - Author meaningful behavior tests for the slow stage.
 - Keep Workbench plans, feature handoffs, and completion evidence attributable.
+- Complete every feature stage through local dev landing and manager handoff.
+- Stop at an intermediate stage only when the user explicitly requests it.
+- Report a genuine blocker through the failure procedure below.
 - Apply [self-improvement](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review)
   only when a durable lesson qualifies.
 
@@ -30,6 +33,8 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 - Do not introduce a Team Agent lifecycle service, scheduler, or Git-state machinery.
 - Do not introduce a persistent PR Steward service, scheduler, or notification journal.
 - Do not rebase, squash, force-push, or discard another feature's work.
+- Do not treat a worker commit or parent integration as completed feature delivery.
+- Do not skip a required stage because a separately named tool was not found.
 
 ## Procedure
 
@@ -37,6 +42,7 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
    - Identify functional owners and required acceptance evidence.
    - Treat every other active task as read-only.
    - Record the explicit parent feature/integration worktree.
+   - Establish its feature branch before creating Team Agent children.
    - Give every child a bounded task/attempt identity.
 2. **Prepare the write wave.**
    - Inventory dirty paths and hunks and attribute each to its owner.
@@ -54,27 +60,50 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 4. **Integrate child results.**
    - Verify each committed handoff before parent integration.
    - Serialize mutations of the parent feature index.
-   - Preserve every accepted child commit.
+   - Integrate through ordinary Git while preserving every accepted child commit.
+   - Parent feature integration is distinct from shared local dev landing.
    - Require handoffs listing each iteration SHA, outcome, evidence, and blockers.
    - Have later iterations inspect the last one or two relevant commits and diffs.
 5. **Compile and review.**
    - Push the coherent feature branch.
    - Authorize PR Steward to run remote build-only execution for that SHA.
-   - For web changes, use `task remote TASK_NAME=web:build` and
-     `task remote TASK_NAME=web:e2e` as applicable.
+   - Use the canonical `build:compile` task without tests, e2e, or preflight.
    - Fast agents review code and required security boundaries.
    - Route fixes to the responsible team and repeat compilation after each push.
 6. **Land the completed feature.**
    - Require positive compilation evidence for the final feature SHA.
    - Require resolved review findings and required security acceptance.
-   - Authorize Steward's bounded local integration.
+   - Authorize Steward's bounded `dev:land` operation.
    - Tooling serializes the shared local dev checkout and verifies build evidence.
    - Record feature and resulting local dev SHAs.
 7. **Hand off to the manager.**
+   - Report the completed feature SHA and resulting local dev SHA.
+   - Identify the manager-owned stages that remain.
    - The manager selects publication through Steward's snapshot publication.
    - The manager runs the full slow PR cycle.
    - Failure returns to a feature Gizmo through this same procedure.
    - Successful promotion uses Steward's guarded fast-forward promotion.
+
+## Failure handling
+
+Before reporting that a required capability is unavailable:
+
+1. Identify the incomplete stage, owning actor, and required operation.
+2. Read the relevant canonical delivery authority and its named runtime entrypoint.
+   - Inspect bounded Task definitions or implementation evidence as needed.
+   - Route restricted evidence collection through its authorized owner.
+   - An absent tool name or empty search result does not establish absence.
+3. Use the existing authorized canonical path when it provides the operation.
+   - Ordinary parent Git integration does not require a separate module tool.
+   - Preserve ownership, security boundaries, and required checks.
+4. Report a concrete blocker when capability remains unavailable or execution fails.
+   - Name the observed failure and the evidence examined.
+   - Identify the last completed stage and the next incomplete stage.
+   - State the missing authority, capability, or external condition.
+   - Do not invent a fallback or bypass the required operation.
+
+A blocked feature remains incomplete. Its final report must state that outcome
+rather than present authored or committed changes as successful delivery.
 
 ## Fix ownership
 
@@ -96,3 +125,5 @@ contract and [team delegation](subagent-delegation.md) for worker ownership.
 - Tests were authored for execution in the manager's slow stage.
 - The accepted feature is present in local dev.
 - The handoff names all commits and any remaining blocker.
+- The final report names the actual last completed stage and remaining stages.
+- A blocked report includes the concrete observed blocker and supporting evidence.

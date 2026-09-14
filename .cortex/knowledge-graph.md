@@ -6,6 +6,10 @@ Use this file only to select one owning context. Do not preload linked graphs.
 
 - [Agent routing contract](AGENTS.md) defines universal loading, ownership,
   authoring, and delivery boundaries.
+- [Gizmo Prime](gizmo/AGENTS.md) is the first actor for each new user-originated
+  repository task. Follow-ups retain their current Gizmo owner.
+- Assigned workers use the owning team context in their bounded packet.
+- Gizmo routes manually requested dev operations to the dev manager.
 
 ## Owning contexts
 

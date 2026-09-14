@@ -23,7 +23,9 @@ creating a separate Git integration system.
 - Every writer commits its complete scoped iteration during a serialized commit
   turn.
 - Gizmo verifies those commits and integrates them into the parent feature
-  worktree through the guarded module integrator.
+  worktree through ordinary Git while preserving the accepted child commits.
+  Gizmo serializes mutations of the parent index.
+  Shared local dev landing remains the separate authorized `dev:land` operation.
 - Read-only experts return evidence only. They do not mutate Git or delivery
   state.
 - Shared files receive one explicitly assigned writer.
