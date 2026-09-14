@@ -89,6 +89,9 @@ tasks:
         fi
 
         repo_root="$(git rev-parse --show-toplevel)"
+        echo 'Sccache best-effort proof: inject startup, DNS/read, circuit, compiler, and publication faults'
+        bash "$repo_root/infra/contracts/sccache-wrapper-fallback.test.sh"
+        echo 'Sccache best-effort proof: complete'
         sim_dir="$repo_root/infra/sim/bake-cache"
         zot_image="{{.BAKE_CACHE_ZOT_IMAGE}}"
         registry_host="registry.dev.nokey.sh"

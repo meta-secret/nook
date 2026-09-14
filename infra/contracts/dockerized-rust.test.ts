@@ -250,6 +250,56 @@ class DockerizedRustContract {
     expect(dockerignore).toContain("**/node_modules");
   }
 
+  sccacheTransportFallback(): void {
+    const wrapper = this.read(
+      "nook-app/nook-platform/docker/sccache-wrapper.sh",
+    );
+    const fallbackContract = this.read(
+      "infra/contracts/sccache-wrapper-fallback.test.sh",
+    );
+    const proof = this.read("infra/tasks/bake-cache.yml");
+    expect(wrapper).toContain('${AWS_MAX_ATTEMPTS:=1}');
+    expect(wrapper).toContain('${NOOK_SCCACHE_START_TIMEOUT:-2s}');
+    expect(wrapper).toContain(
+      "${NOOK_SCCACHE_READY_MARKER:-/dev/shm/nook-sccache-remote-ready}",
+    );
+    expect(wrapper).toContain('mkdir "$startup_lock"');
+    expect(wrapper).toContain("startup_coordination_timeout");
+    expect(wrapper).toContain(
+      '[ "${SCCACHE_S3_RW_MODE:-READ_WRITE}" = READ_ONLY ]',
+    );
+    expect(wrapper).toContain('"remote_writes":0');
+    expect(wrapper).toContain("failed to execute compile|failed to start server");
+    expect(wrapper).toContain("cache_circuit_open");
+    expect(fallbackContract).toContain("FAKE_SCCACHE_RESULT=transport");
+    expect(fallbackContract).toContain("FAKE_SCCACHE_RESULT=compiler");
+    expect(fallbackContract).toContain(
+      "SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport",
+    );
+    expect(fallbackContract).toContain(
+      "READ_WRITE failure silently lost publication authority",
+    );
+    expect(fallbackContract).toContain('test "$compiler_status" -eq 7');
+    expect(proof).toContain(
+      'bash "$repo_root/infra/contracts/sccache-wrapper-fallback.test.sh"',
+    );
+    expect(proof).toContain(
+      "Sccache best-effort proof: inject startup, DNS/read, circuit, compiler, and publication faults",
+    );
+    expect(fallbackContract).toContain(
+      "Sccache read/DNS fault: read-only consumer compiled directly with zero remote writes",
+    );
+    expect(fallbackContract).toContain(
+      "Sccache startup fault: bounded read-only fallback compiled directly",
+    );
+    expect(fallbackContract).toContain(
+      "Sccache compiler fault: genuine compiler failure remained terminal",
+    );
+    expect(fallbackContract).toContain(
+      "Sccache healthy startup: two compiler invocations performed one startup probe",
+    );
+  }
+
   arcCacheSelection(): void {
     const action = actionSchema.parse(
       Bun.YAML.parse(this.read(".github/actions/nook-docker-setup/action.yml")),
@@ -1108,6 +1158,10 @@ test(
 test(
   "workflow Rust tools are Docker owned and dependency audits stay live",
   contract.workflowTooling.bind(contract),
+);
+test(
+  "remote sccache transport fails open without hiding compiler failures",
+  contract.sccacheTransportFallback.bind(contract),
 );
 test(
   "ARC probes only consumed Main caches and never exports unused exact refs",

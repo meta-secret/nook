@@ -10,8 +10,40 @@ seed_script="$workflows_dir/../scripts/compile-deps-cache-seed.sh"
 compile_fingerprint="$workflows_dir/../scripts/compile-deps-cache-fingerprint.sh"
 compile_bake="$workflows_dir/../../nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"
 compile_dockerfile="$workflows_dir/../../nook-app/nook-platform/docker/rust/compile.Dockerfile"
+sccache_wrapper="$workflows_dir/../../nook-app/nook-platform/docker/sccache-wrapper.sh"
+sccache_fallback_contract="$workflows_dir/../../infra/contracts/sccache-wrapper-fallback.test.sh"
 batch_job="$(sed -n '/^  batch:$/,/^  web-verify:$/p' "$remote")"
 compile_timeout="    timeout-minutes: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 3 || 360 }}"
+
+for required in \
+  'AWS_MAX_ATTEMPTS:=1' \
+  'NOOK_SCCACHE_START_TIMEOUT:-2s' \
+  'NOOK_SCCACHE_READY_MARKER:-/dev/shm/nook-sccache-remote-ready' \
+  'mkdir "$startup_lock"' \
+  'startup_coordination_timeout' \
+  '[ "${SCCACHE_S3_RW_MODE:-READ_WRITE}" = READ_ONLY ]' \
+  '"remote_writes":0' \
+  'cache_transport_unavailable' \
+  'cache_circuit_open' \
+  'server_start_unavailable'; do
+  grep -Fq -- "$required" "$sccache_wrapper" \
+    || { echo "remote compile contract: sccache fallback omits bounded behavior: $required" >&2; exit 1; }
+done
+for required in \
+  'FAKE_SCCACHE_RESULT=transport' \
+  'FAKE_SCCACHE_RESULT=compiler' \
+  'test "$compiler_status" -eq 7' \
+  'SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport' \
+  'READ_WRITE failure silently lost publication authority' \
+  'two compiler invocations performed one startup probe' \
+  "compiler failure was incorrectly retried directly"; do
+  grep -Fq -- "$required" "$sccache_fallback_contract" \
+    || { echo "remote compile contract: sccache fault proof omits outcome: $required" >&2; exit 1; }
+done
+grep -Fq -- 'infra/contracts/sccache-wrapper-fallback.test.sh' "$workflows_dir/../../infra/tasks/bake-cache.yml" \
+  || { echo 'remote compile contract: Docker cache proof must exercise sccache transport fallback' >&2; exit 1; }
+grep -Fq -- 'Sccache best-effort proof: inject startup, DNS/read, circuit, compiler, and publication faults' "$workflows_dir/../../infra/tasks/bake-cache.yml" \
+  || { echo 'remote compile contract: Docker cache proof must expose the complete sccache fault sequence' >&2; exit 1; }
 
 grep -Fq -- "'remote-build-compile-generation-seed'" "$remote" \
   || { echo 'remote compile contract: generation seed writes must be globally serialized' >&2; exit 1; }
