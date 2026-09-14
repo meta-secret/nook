@@ -108,9 +108,6 @@ export class MainBuildStatsCodec {
     if (typeof collection.complete !== "boolean") {
       throw new Error("cache collection complete must be boolean");
     }
-    const cacheExport = this.isJsonRecord(buildkit.cache_export)
-      ? buildkit.cache_export
-      : undefined;
     const failures = Array.isArray(collection.failures)
       ? collection.failures.map((candidate, index) => {
           const failure = this.requireRecord(
@@ -189,27 +186,27 @@ export class MainBuildStatsCodec {
         ...(Number.isFinite(buildkit.cache_hit_rate_percent)
           ? { cache_hit_rate_percent: Number(buildkit.cache_hit_rate_percent) }
           : {}),
-        ...(cacheExport
+        ...(this.isJsonRecord(buildkit.cache_export)
           ? {
               cache_export: {
                 attempts: this.requireInteger(
-                  cacheExport.attempts,
+                  buildkit.cache_export.attempts,
                   "cache export attempts",
                 ),
                 completed: this.requireInteger(
-                  cacheExport.completed,
+                  buildkit.cache_export.completed,
                   "cache export completed",
                 ),
                 bytes: this.requireInteger(
-                  cacheExport.bytes,
+                  buildkit.cache_export.bytes,
                   "cache export bytes",
                 ),
                 duration_ms: this.requireInteger(
-                  cacheExport.duration_ms,
+                  buildkit.cache_export.duration_ms,
                   "cache export duration",
                 ),
                 incomplete_failures: this.requireInteger(
-                  cacheExport.incomplete_failures,
+                  buildkit.cache_export.incomplete_failures,
                   "cache export incomplete failures",
                 ),
               },

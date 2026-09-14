@@ -659,9 +659,8 @@ fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Resul
 
     let compile_from = assignment_body(&compile_bake, "compile_cache_from")?;
     let compile_to = assignment_body(&compile_bake, "compile_cache_to")?;
-    let compile_ref =
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v1:buildcache";
-    let compile_ref_assignment = assignment_body(&compile_bake, "compile_cache_ref")?;
+    let compile_ref = "${NOOK_REGISTRY_CACHE_HOST}/nook/remote-buildcache/nook-build-compile-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache";
+    let compile_ref_assignment = assignment_body(&compile_bake, "compile_source_cache_ref")?;
     assert_eq!(
         compile_ref_assignment,
         format!("\"{compile_ref}\""),
@@ -675,8 +674,8 @@ fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Resul
     );
     assert_eq!(
         compile_from.matches("type=registry,ref=").count(),
-        1,
-        "build:compile must import one registry cache"
+        2,
+        "build:compile must import either its exact source graph or its fingerprinted dependency graph"
     );
     assert_eq!(
         compile_to.matches("type=registry,ref=").count(),
@@ -684,12 +683,13 @@ fn theorem_build_compile_isolated_from_component_cache_scopes() -> anyhow::Resul
         "build:compile must export one registry cache"
     );
     assert!(
-        compile_from.contains("${compile_cache_ref}")
-            && compile_to.contains("${compile_cache_ref}")
+        compile_from.contains("${compile_source_cache_ref}")
+            && compile_from.contains("${compile_deps_cache_ref}")
+            && compile_to.contains("${compile_source_cache_ref}")
             && !compile_bake.contains("write_cache_repository")
             && compile_bake.contains("remote-buildcache")
-            && !compile_bake.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "build:compile must use only its stable remote registry scope"
+            && compile_bake.contains("GHA_CACHE_SCOPE_SUFFIX"),
+        "build:compile must keep exact-source publication separate from fingerprinted dependency restoration"
     );
 
     let build_compile = bake_target_body(&compile_bake, "build-compile");

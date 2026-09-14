@@ -472,7 +472,7 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
     let telemetry_action = RepositoryFixture::repository_root()
         .read(".github/actions/nook-cache-telemetry/action.yml");
     for required in [
-        "cache-telemetry.mjs collect",
+        "cache-telemetry.mjs\" collect",
         "cache-telemetry-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}",
         "actions/upload-artifact@v7",
     ] {

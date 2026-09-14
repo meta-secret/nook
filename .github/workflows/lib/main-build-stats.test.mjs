@@ -221,14 +221,17 @@ void test("records persistent compiler and BuildKit cache telemetry from Main ar
       },
     },
   ];
+  const firstTelemetry = MainBuildStatsFixture.first(input.cacheTelemetry);
+  assert.ok(typeof firstTelemetry.github === "object");
+  assert.ok(typeof firstTelemetry.buildkit === "object");
   input.cacheTelemetry.push({
-    ...structuredClone(MainBuildStatsFixture.first(input.cacheTelemetry)),
+    ...structuredClone(firstTelemetry),
     github: {
-      ...MainBuildStatsFixture.first(input.cacheTelemetry).github,
+      ...firstTelemetry.github,
       job: "cache-publish",
     },
     buildkit: {
-      ...MainBuildStatsFixture.first(input.cacheTelemetry).buildkit,
+      ...firstTelemetry.buildkit,
       cache_export: {
         attempts: 3,
         completed: 3,
@@ -358,9 +361,9 @@ void test("normalizes legacy schema-2 direct-compile telemetry", () => {
 void test("normalizes omitted cache collection failures without retaining undefined entries", () => {
   const record = MainBuildStats.build(MainBuildStatsFixture.create());
   record.schema_version = 2;
-  delete record.cache_telemetry.collection.failures;
+  Reflect.deleteProperty(record.cache_telemetry.collection, "failures");
   for (const job of record.cache_telemetry.jobs) {
-    delete job.collection.failures;
+    Reflect.deleteProperty(job.collection, "failures");
   }
 
   const normalized = MainBuildStats.normalizeLegacy(record);
@@ -376,7 +379,9 @@ void test("normalizes omitted cache collection failures without retaining undefi
 
 void test("rejects malformed cache collection failure entries", () => {
   const record = MainBuildStats.build(MainBuildStatsFixture.create());
-  record.cache_telemetry.collection.failures = [undefined];
+  Reflect.set(record.cache_telemetry.collection, "failures", [
+    Symbol("malformed-cache-collection-failure"),
+  ]);
 
   assert.throws(
     () => MainBuildStats.validate(record),
