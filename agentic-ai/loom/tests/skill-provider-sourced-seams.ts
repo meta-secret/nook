@@ -181,10 +181,6 @@ const AUDITED_RUNTIME_SOURCES = new Map([
     'c0619a1141f15ad1d83e13e4d96f87651732908f19663ac0c8287a4316dbabd7',
   ],
   [
-    '.github/formatting/format-host-apply.test.sh',
-    '073947efded4373ef02d7ca9d017ea9d82cad28b4329cf664acaca7ca723e2b2',
-  ],
-  [
     '.github/scripts/with-healthy-buildkit.sh',
     'c2d9895d55a3039a55f0ebe79932278879237a7638778b41f706fa653cdcf360',
   ],
