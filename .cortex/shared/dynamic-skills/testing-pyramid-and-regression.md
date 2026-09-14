@@ -69,12 +69,50 @@ through architectural ownership and risk.
 
 ### Mandatory regression coverage for bug fixes
 
-Finding a root cause is not completion. Every bug fix must include behavior-focused regression coverage that would have failed before the fix:
+Every executable bug fix starts with a meaningful set of unit tests before
+the implementation changes. Finding the root cause alone is not completion.
+Test execution follows [dev delivery](../../gizmo/architecture/dev-delivery.md).
 
-- **Domain logic (`nook-platform/` crates):** Add a unit, property, or integration test at the owning boundary.
-- **Typed Rust/WASM boundary:** If reproducible without a browser, add a narrow Rust/WASM test first.
-- **Web UI or browser extension:** Add a Playwright e2e test reproducing the exact user sequence.
-- **Cross-layer bugs:** Cover both the narrow Rust/WASM policy boundary and the visible website/extension flow.
+**Required actions**
+
+1. Understand the reported failure before changing implementation.
+   - Identify the trigger, root cause, expected behavior, and owning boundary.
+2. Author the unit regression set before implementing the fix.
+   - Reproduce the original defect with an assertion on expected behavior.
+   - Cover the relevant success, rejection, and edge cases around that defect.
+   - Choose cases for distinct behavior and risk, not an arbitrary test count.
+   - Exercise production contracts rather than copying implementation logic.
+3. Keep coverage at the owning layer.
+   - For portable domain bugs, write colocated Rust unit tests.
+   - Add property or integration tests when invariants or orchestration need
+     further coverage.
+   - For typed Rust/WASM bugs, test the narrow owning boundary.
+   - For browser-only bugs, cover the closest deterministic unit contract.
+   - Retain a Playwright regression for the actual browser or extension flow.
+   - For cross-layer bugs, cover the affected Rust/WASM contract and user flow.
+4. Make the smallest correction in the implementation owner.
+   - Retain the regression set in its existing automated test gate.
+5. Hand off the regression cases and before/after verification requirements.
+   - Identify the buggy revision, fixed revision, and focused test selection.
+   - Review why the original-failure assertion detects the defect.
+   - Record execution evidence as pending until authorized runs establish it.
+6. In the dev manager's authorized slow PR stage, verify regression sensitivity.
+   - Verify the original-failure test fails without the fix for the expected
+     behavioral reason.
+   - Verify the regression set and applicable suite pass with the fix.
+   - Record the tested revisions, run references, and observed results.
+   - Report unavailable before/after execution capability to the manager.
+   - Keep missing evidence explicit rather than claiming verified protection.
+
+**Prohibited actions**
+
+- Do not implement the fix first and add its unit tests afterward.
+- Do not replace domain unit tests with integration or e2e coverage alone.
+- Do not weaken assertions or accept unrelated failures as reproduction.
+- Do not claim test authorship, semantic review, or compilation proves a pass.
+- Do not run local tests or feature-stage remote tests to obtain evidence.
+- Do not create a new execution route to bypass delivery-stage restrictions.
+- Do not require slow-stage results before normal feature landing into local dev.
 
 ### Unit-first browser failure loop
 
@@ -97,30 +135,19 @@ Use this procedure for a failing web or extension e2e scenario.
      in
      [`companion-protocol-composition.test.ts`](../../../nook-app/nook-web/nook-web-extension/scripts/companion-protocol-composition.test.ts).
    - Use only the frameworks that exercise the failing ownership boundary.
-3. Before fixing the defect, add multiple behavior-focused regressions at that
-   boundary.
-   - Cover the ordinary success path and the relevant rejection or edge path.
+3. Apply the mandatory regression procedure above before fixing the defect.
    - Exercise actual transport contracts such as typed `Result` values.
    - Do not use permissive mocks that return a shape production cannot return.
-   - Demonstrate that the regression fails against the old behavior when
-     feasible and passes with the fix.
-4. Make the smallest owning correction and run the focused unit and type
-   checks before another e2e run.
-   - When generated WASM is unavailable locally, use the existing hosted
-     `web:verify` route.
+4. Make the smallest owning correction and hand off the authored regressions.
+   - Feature-stage remote execution remains build-only.
    - Do not bypass the generated boundary with a local build override.
-5. Keep the browser assertion and rerun the applicable e2e gate remotely.
+5. Keep the browser assertion for the manager's slow PR validation stage.
    - For a browser-only defect, cover the closest deterministic unit contract
      and retain the browser-level regression.
    - Unit evidence narrows the repair loop. It does not replace e2e acceptance.
-   - After unit and type checks pass, dispatch the existing Remote workflow
-     once with `TASK_NAME=ci:pr:e2e`.
-   - That task builds one shared image and runs the stable, unstable, isolation,
-     and extension suites as separate parallel jobs.
-   - The matrix keeps fail-fast disabled and aggregates every suite result.
-   - Collect every failing job's saved evidence before the next repair.
-   - Add the applicable unit regressions before dispatching the next parallel
-     e2e run.
+   - The dev manager requests applicable browser gates through the dev PR.
+   - Diagnose returned failing-job evidence before the next repair.
+   - Author the applicable unit regressions before changing that repair's code.
 
 **Prohibited actions**
 
@@ -147,19 +174,20 @@ The portable Rust crates (`nook-app-common`, `nook-authenticator-domain`,
 Applies to:
 
 - All domain logic, cryptographic operations, sync mechanisms, and state machines.
-- All bug fixes across Rust, WASM, Svelte, and browser extensions.
-- CI and local test execution.
+- All executable bug fixes, including Rust, WASM, web, extensions, and tooling.
+- Test authoring and authorized CI execution.
 
 Does not apply to:
 
-- Purely visual design tweaks with no business logic.
+- Purely visual design tweaks with no behavioral defect.
+- Instruction-only documentation edits without executable behavior changes.
 
 ## Application Checklist
 
 1. [ ] Domain logic changes have colocated Rust unit or property tests.
-2. [ ] Bug fixes include a test that reproduces the defect.
-3. [ ] `task rust:test` passes with all tests green.
-4. [ ] Rust line coverage remains at or above 90% (`task rust:coverage:check`).
+2. [ ] Bug fixes have meaningful unit regression sets authored before the fix.
+3. [ ] Before/after verification has evidence or an explicit pending status.
+4. [ ] Rust test and coverage results are recorded in the authorized slow stage.
 5. [ ] App logs (`nook-app-logs.json`, `/logs`) are consulted when debugging test failures.
 6. [ ] Durable Cortex scenarios have evidence at the authoritative boundary.
 7. [ ] Durable behavior discovered in tests is reflected in the owning Cortex
@@ -168,6 +196,13 @@ Does not apply to:
 
 ## Validation
 
-- Run unit & domain tests: `task rust:test`
-- Verify coverage floor: `task rust:coverage:check`
-- Run web e2e smoke tests: `task web:test:e2e`
+Follow [dev delivery](../../gizmo/architecture/dev-delivery.md) for execution
+authority. Feature workers author tests and review their behavior coverage.
+Remote feature compilation is build-only. Tests, coverage, and browser gates
+execute through the dev manager's slow PR validation path.
+
+- Record failing-without-fix evidence for the original regression assertion.
+- Record passing-with-fix evidence for the regression set and applicable suite.
+- Record the combined Rust coverage result against the 90% floor.
+- Record applicable browser regression results for changed user flows.
+- Preserve pending or unavailable evidence explicitly in the handoff.

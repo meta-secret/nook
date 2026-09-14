@@ -63,6 +63,13 @@ detailed authorization, evidence, and failure rules.
   [graph](teams/web-dev/knowledge-graph.md): TypeScript, Svelte, browser
   behavior, and extension interaction.
 
+## Bug fixes
+
+Every bug fix follows the unit-test-first procedure in
+[testing and regression coverage](shared/dynamic-skills/testing-pyramid-and-regression.md#mandatory-regression-coverage-for-bug-fixes).
+That authority owns test authoring order, regression scope, and execution
+evidence within the authorized delivery stage.
+
 ## Primary code-structure rule
 
 Every authored function in every implementation language belongs to a
