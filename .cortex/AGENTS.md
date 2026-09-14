@@ -17,12 +17,12 @@ Each leaf Team Agent uses `gpt-5.6-luna` with `xhigh` reasoning.
 It requests Fast mode with `service_tier: fast`, which resolves as `priority`.
 Each leaf receives a separate issued child worktree.
 
-Each Team Gizmo owns one team worktree for its packet. Gizmo Prime first
-reuses an existing compatible Team Agent; only when no compatible agent exists
-does it issue separate child worktrees for the required specialists. Team
-Gizmo integrates those specialist commits into its feature branch and reports
-the resulting branch state to Prime. Any commit SHA is observational evidence,
-not workflow authority.
+Each Team Gizmo owns one team worktree for its packet. Gizmo Prime reuses or
+creates a compatible Team Gizmo for the packet. That Team Gizmo reuses or
+dispatches bounded internal leaf Team Agents, each in an issued child
+worktree. Team Gizmo integrates those specialist commits into its feature
+branch and reports the resulting branch state to Prime. Any commit SHA is
+observational evidence, not workflow authority.
 
 The current specialist paths are SRE
 (`teams/sre/provisioning/`, `teams/sre/cloud-native/`), Development Core
