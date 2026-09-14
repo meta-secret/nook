@@ -78,33 +78,39 @@ FROM compile-native-dependencies AS compile-native-source
 COPY nook-app/nook-platform/nook-app-common nook-app-common
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked -p nook-app-common
+    touch nook-app-common/src/lib.rs \
+    && cargo build --locked -p nook-app-common
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked -p nook-authenticator-domain -p nook-auth2
+    touch nook-authenticator-domain/src/lib.rs nook-auth2/src/lib.rs \
+    && cargo build --locked -p nook-authenticator-domain -p nook-auth2
 
 COPY nook-app/nook-platform/nook-replication nook-replication
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked -p nook-replication
+    touch nook-replication/src/lib.rs \
+    && cargo build --locked -p nook-replication
 
 COPY nook-app/nook-platform/nook-event-log nook-event-log
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked -p nook-event-log
+    touch nook-event-log/src/lib.rs \
+    && cargo build --locked -p nook-event-log
 
 COPY nook-app/nook-platform/nook-companion-core nook-companion-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked -p nook-companion-core
+    touch nook-companion-core/src/lib.rs \
+    && cargo build --locked -p nook-companion-core
 
 COPY nook-app/nook-platform/nook-core nook-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked -p nook-core \
+    touch nook-core/src/lib.rs \
+    && cargo build --locked -p nook-core \
     && mkdir -p /opt/nook \
     && touch /opt/nook/compile-native-passed
 
@@ -115,50 +121,58 @@ ARG WASM_BUILD_MODE=dev
 COPY nook-app/nook-platform/nook-app-common nook-app-common
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
+    touch nook-app-common/src/lib.rs \
+    && cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-authenticator-domain nook-authenticator-domain
 COPY nook-app/nook-platform/nook-auth2 nook-auth2
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
+    touch nook-authenticator-domain/src/lib.rs nook-auth2/src/lib.rs \
+    && cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-replication nook-replication
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
+    touch nook-replication/src/lib.rs \
+    && cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-event-log nook-event-log
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
+    touch nook-event-log/src/lib.rs \
+    && cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-companion-core nook-companion-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
+    touch nook-companion-core/src/lib.rs \
+    && cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-core nook-core
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
+    touch nook-core/src/lib.rs \
+    && cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
+    touch nook-companion-wasm/src/lib.rs \
+    && cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm
 
 COPY nook-app/nook-platform/nook-wasm nook-wasm
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo build --locked --release --target wasm32-unknown-unknown --lib \
+    touch nook-wasm/src/lib.rs \
+    && cargo build --locked --release --target wasm32-unknown-unknown --lib \
       -p nook-wasm -p nook-companion-wasm \
     && mkdir -p /opt/nook/wasm-handoff \
     && case "${WASM_BUILD_MODE}" in \

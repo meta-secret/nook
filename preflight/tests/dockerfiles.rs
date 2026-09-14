@@ -113,3 +113,98 @@ fn compile_loom_copies_imported_cortex_sources_after_installing_dependencies() -
     );
     Ok(())
 }
+
+#[test]
+fn compile_rust_source_stages_invalidate_stub_artifacts_after_every_crate_copy(
+) -> anyhow::Result<()> {
+    let repository_root = env::var_os("NOOK_REPO_ROOT").map_or_else(
+        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+        PathBuf::from,
+    );
+    let dockerfile = std::fs::read_to_string(
+        repository_root.join("nook-app/nook-platform/docker/rust/compile.Dockerfile"),
+    )?;
+    let native_start = dockerfile
+        .find("FROM compile-native-dependencies AS compile-native-source")
+        .expect("compile Dockerfile must retain the native source stage");
+    let wasm_start = dockerfile
+        .find("FROM compile-wasm-dependencies AS compile-wasm-source")
+        .expect("compile Dockerfile must retain the WASM source stage");
+    let web_start = dockerfile
+        .find("FROM web-base AS compile-web")
+        .expect("compile Dockerfile must retain the web stage");
+    let native_stage = &dockerfile[native_start..wasm_start];
+    let wasm_stage = &dockerfile[wasm_start..web_start];
+
+    for (stage_name, stage, crate_groups) in [
+        (
+            "native",
+            native_stage,
+            &[
+                &["nook-app-common"][..],
+                &["nook-authenticator-domain", "nook-auth2"],
+                &["nook-replication"],
+                &["nook-event-log"],
+                &["nook-companion-core"],
+                &["nook-core"],
+            ][..],
+        ),
+        (
+            "WASM",
+            wasm_stage,
+            &[
+                &["nook-app-common"][..],
+                &["nook-authenticator-domain", "nook-auth2"],
+                &["nook-replication"],
+                &["nook-event-log"],
+                &["nook-companion-core"],
+                &["nook-core"],
+                &["nook-companion-wasm"],
+                &["nook-wasm"],
+            ][..],
+        ),
+    ] {
+        let expected_copy_count = crate_groups
+            .iter()
+            .map(|crates| crates.len())
+            .sum::<usize>();
+        let actual_copy_count = stage
+            .lines()
+            .filter(|line| line.starts_with("COPY nook-app/nook-platform/nook-"))
+            .count();
+        assert_eq!(
+            actual_copy_count, expected_copy_count,
+            "{stage_name} stage crate COPY inventory must stay covered by the freshness contract"
+        );
+
+        let mut prior_build = 0;
+        for crates in crate_groups {
+            let last_copy = crates
+                .iter()
+                .map(|crate_name| {
+                    stage[prior_build..]
+                        .find(&format!(
+                            "COPY nook-app/nook-platform/{crate_name} {crate_name}"
+                        ))
+                        .map(|offset| prior_build + offset)
+                        .unwrap_or_else(|| panic!("{stage_name} stage must copy {crate_name}"))
+                })
+                .max()
+                .expect("each build step must copy at least one crate");
+            let build = stage[last_copy..]
+                .find("cargo build --locked")
+                .map(|offset| last_copy + offset)
+                .unwrap_or_else(|| panic!("{stage_name} stage must build after its crate copies"));
+            let invalidation = &stage[last_copy..build];
+
+            for crate_name in *crates {
+                assert!(
+                    invalidation.contains(&format!("{crate_name}/src/lib.rs")),
+                    "{stage_name} stage must touch {crate_name}/src/lib.rs after copying real sources and before building"
+                );
+            }
+            prior_build = build + "cargo build --locked".len();
+        }
+    }
+    Ok(())
+}
