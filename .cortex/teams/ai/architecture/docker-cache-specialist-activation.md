@@ -22,25 +22,22 @@ continues to own GitHub execution mechanics.
     reusable dependency or compiler ancestry;
   - `unrelated-input-cache-invalidation` when a compiler stage includes a
     change outside its semantic input domain;
-  - `sccache-read-only-startup-fallback`,
-    `sccache-read-only-transport-fallback`, or
-    `sccache-read-only-circuit-open` for bounded optional-reader fallback;
   - `sccache-compiler-failure` for a terminal compiler failure;
-  - `sccache-read-write-transport-failure` for terminal publication-mode
-    startup, credential, read, or write failure;
+  - `sccache-transport-fallback` for startup, credential, read, or write
+    failure that opens the direct-compiler circuit and requires telemetry;
   - `sccache-readiness-contract-violation` when a Docker `RUN` repeats startup,
     exceeds the startup budget, or does not share circuit state;
-  - `unexpected-read-only-write-or-export`, `severe-cache-hit-regression`, or
+  - `unexpected-buildkit-export`, `severe-cache-hit-regression`, or
     `diagnostic-flag`.
 - Give the specialist canonical JSON, the Markdown report, BuildKit logs, job
   and run identity, and the captured source commit. Diagnose before editing.
 - Use ordinary stable Docker layers for reusable dependency and toolchain
-  ancestry. Publishing builds use remote sccache `READ_WRITE` as the primary
-  cross-commit compiler cache. Read-only builds use `READ_ONLY`, perform zero
-  writes and exports, and retain bounded direct-compiler fallback.
-- Carry sccache read/write authority through a stable-ID runtime secret, or an
-  equivalently cache-key-neutral runtime input, mounted identically by publish
-  and read-only compiler vertices. Never encode cache mode in an argument,
+  ancestry. Secret availability is the sole remote-cache boundary: a job with
+  the shared cache credential pair uses remote sccache `READ_WRITE`; a job
+  without it performs direct compilation and has no remote-cache access.
+- Carry stable sccache authority through a stable-ID runtime secret, or an
+  equivalently cache-key-neutral runtime input, mounted identically by all
+  compiler vertices. Never encode cache availability in an argument,
   environment variable, context, platform, output, or command shape that
   divides their BuildKit keys.
 - Treat exact-SHA `mode=min` cache as optional same-head retry acceleration,
@@ -58,16 +55,15 @@ continues to own GitHub execution mechanics.
   invalidate only expected vertices.
 - Prove two ordinary unseeded heads: the first publishing head populates remote
   compiler entries; a subsequent changed head obtains sccache hits and finishes
-  within five minutes; an appropriate same-head or read-only replay performs
-  zero writes and exports.
-- In `READ_ONLY`, allow one two-second startup attempt per Docker `RUN`, share
-  readiness and circuit state, fall back after startup/DNS/object-read failure,
-  emit one sanitized `NOOK_SCCACHE_FALLBACK` JSON event, and never write.
-- Keep compiler failures terminal after fallback. Keep all `READ_WRITE`
-  startup, credential, read, and write failures terminal.
-- Preserve simulator/proof coverage for startup failure, DNS/read failure,
-  shared open circuit, compiler failure, read-write failure, and healthy single
-  startup.
+  within five minutes; an appropriate same-head no-BuildKit-export replay
+  performs zero registry exports while retaining sccache access.
+- Allow one two-second startup attempt per Docker `RUN`, share readiness and
+  circuit state, and fall back after missing credentials, startup, DNS,
+  object-read, or write failure. Emit sanitized `NOOK_SCCACHE_FALLBACK` and
+  health telemetry without exposing transport or credential details.
+- Keep genuine compiler failures terminal after fallback.
+- Preserve simulator/proof coverage for startup failure, DNS/read/write
+  failure, shared open circuit, compiler failure, and healthy single startup.
 - Require the canonical Docker simulator and proof for every repair. Route all
   workflow dispatch, status, rerun, and GitHub mechanics through Delivery.
 - Repeat the bounded diagnosis, repair, and evidence loop for the latest
@@ -86,8 +82,8 @@ continues to own GitHub execution mechanics.
 - Do not use repository-root compiler copies, leak compiler domains, or apply
   per-head arguments above their latest semantic consumer.
 - Do not execute GitHub, PR, publication, landing, or promotion mechanics.
-- Do not retry sccache after the read-only circuit opens, expose sensitive
-  transport data, or apply read-only fallback to `READ_WRITE` mode.
+- Do not retry sccache after its circuit opens or expose sensitive transport
+  or credential data.
 - Do not run local tests, Docker, preflight, or product compilation during the
   feature stage.
 

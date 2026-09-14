@@ -47,11 +47,20 @@ NOOK_SCCACHE_RUNTIME_AUTHORITY=secret \
 NOOK_SCCACHE_RUNTIME_MODE_FILE="$runtime_publish_mode" \
 NOOK_SCCACHE_S3_MODE=external \
 AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
-SCCACHE_S3_RW_MODE=READ_ONLY SCCACHE_ERROR_LOG=/tmp/inherited-sccache-error.log \
+SCCACHE_S3_RW_MODE=READ_WRITE SCCACHE_ERROR_LOG=/tmp/inherited-sccache-error.log \
 FAKE_SCCACHE_RESULT=success \
   "$wrapper" "$fixture_dir/compiler" 2>"$authority_log"
 grep -Fq 'effective sccache mode: READ_WRITE' "$authority_log"
 echo 'Sccache runtime authority: publish secret overrides the neutral baked value and incompatible error logging is removed'
+
+no_secret_log="$fixture_dir/no-secret.log"
+NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
+NOOK_SCCACHE_S3_MODE=external \
+SCCACHE_S3_RW_MODE=READ_WRITE \
+  "$wrapper" "$fixture_dir/compiler" 2>"$no_secret_log"
+grep -Fq 'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"credentials_unavailable","remote_writes":0}' "$no_secret_log"
+grep -Fq 'direct compiler invoked' "$no_secret_log"
+echo 'Sccache no-secret route: compiler ran directly without remote access'
 
 fallback_log="$fixture_dir/fallback.log"
 fallback_marker="$fixture_dir/remote-disabled"
@@ -63,11 +72,11 @@ NOOK_SCCACHE_READY_MARKER="$ready_marker" \
 NOOK_SCCACHE_START_LOCK="$startup_lock" \
 NOOK_SCCACHE_S3_MODE=external \
 AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
-SCCACHE_S3_RW_MODE=READ_ONLY FAKE_SCCACHE_RESULT=transport \
+SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport \
   "$wrapper" "$fixture_dir/compiler" 2>"$fallback_log"
 grep -Fq 'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_transport_unavailable","remote_writes":0}' "$fallback_log"
 grep -Fq 'direct compiler invoked' "$fallback_log"
-echo 'Sccache read/DNS fault: read-only consumer compiled directly with zero remote writes'
+echo 'Sccache read/DNS fault: trusted cache user compiled directly after the circuit opened'
 
 circuit_log="$fixture_dir/circuit.log"
 NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
@@ -76,7 +85,7 @@ NOOK_SCCACHE_READY_MARKER="$ready_marker" \
 NOOK_SCCACHE_START_LOCK="$startup_lock" \
 NOOK_SCCACHE_S3_MODE=external \
 AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
-SCCACHE_S3_RW_MODE=READ_ONLY FAKE_SCCACHE_RESULT=compiler \
+SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=compiler \
   "$wrapper" "$fixture_dir/compiler" 2>"$circuit_log"
 grep -Fq '"reason":"cache_circuit_open"' "$circuit_log"
 grep -Fq 'direct compiler invoked' "$circuit_log"
@@ -90,11 +99,11 @@ NOOK_SCCACHE_READY_MARKER="$ready_marker" \
 NOOK_SCCACHE_START_LOCK="$startup_lock" \
 NOOK_SCCACHE_S3_MODE=external \
 AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
-SCCACHE_S3_RW_MODE=READ_ONLY FAKE_START_STATUS=9 \
+SCCACHE_S3_RW_MODE=READ_WRITE FAKE_START_STATUS=9 \
   "$wrapper" "$fixture_dir/compiler" 2>"$startup_log"
 grep -Fq '"reason":"server_start_unavailable"' "$startup_log"
 grep -Fq 'direct compiler invoked' "$startup_log"
-echo 'Sccache startup fault: bounded read-only fallback compiled directly'
+echo 'Sccache startup fault: bounded fallback compiled directly'
 
 compiler_log="$fixture_dir/compiler-failure.log"
 rm -f "$fallback_marker" "$ready_marker"
@@ -105,7 +114,7 @@ NOOK_SCCACHE_READY_MARKER="$ready_marker" \
 NOOK_SCCACHE_START_LOCK="$startup_lock" \
 NOOK_SCCACHE_S3_MODE=external \
 AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
-SCCACHE_S3_RW_MODE=READ_ONLY FAKE_SCCACHE_RESULT=compiler \
+SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=compiler \
   "$wrapper" "$fixture_dir/compiler" 2>"$compiler_log"
 compiler_status=$?
 set -e
@@ -117,23 +126,19 @@ if grep -Fq 'NOOK_SCCACHE_FALLBACK' "$compiler_log"; then
 fi
 echo 'Sccache compiler fault: genuine compiler failure remained terminal'
 
-read_write_log="$fixture_dir/read-write-failure.log"
-set +e
+read_write_log="$fixture_dir/read-write-fallback.log"
+rm -f "$fallback_marker" "$ready_marker"
 NOOK_SCCACHE_BINARY="$fixture_dir/sccache" \
 NOOK_SCCACHE_FALLBACK_MARKER="$fallback_marker" \
+NOOK_SCCACHE_READY_MARKER="$ready_marker" \
+NOOK_SCCACHE_START_LOCK="$startup_lock" \
 NOOK_SCCACHE_S3_MODE=external \
 AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
 SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport \
   "$wrapper" "$fixture_dir/compiler" 2>"$read_write_log"
-read_write_status=$?
-set -e
-test "$read_write_status" -eq 2
-grep -Fq 'error sending request: dns lookup timed out' "$read_write_log"
-if grep -Eq 'NOOK_SCCACHE_FALLBACK|direct compiler invoked' "$read_write_log"; then
-  echo 'sccache wrapper contract: READ_WRITE failure silently lost publication authority' >&2
-  exit 1
-fi
-echo 'Sccache publication fault: read-write cache failure remained terminal'
+grep -Fq 'NOOK_SCCACHE_FALLBACK' "$read_write_log"
+grep -Fq 'direct compiler invoked' "$read_write_log"
+echo 'Sccache write-path transport fault: product compilation remained available'
 
 healthy_start_count="$fixture_dir/healthy-start-count"
 healthy_log="$fixture_dir/healthy.log"
@@ -145,7 +150,7 @@ for invocation in 1 2; do
   NOOK_SCCACHE_START_LOCK="$startup_lock" \
   NOOK_SCCACHE_S3_MODE=external \
   AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake \
-  SCCACHE_S3_RW_MODE=READ_ONLY FAKE_SCCACHE_RESULT=success \
+  SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=success \
   FAKE_START_COUNT_FILE="$healthy_start_count" \
     "$wrapper" "$fixture_dir/compiler" 2>>"$healthy_log"
 done

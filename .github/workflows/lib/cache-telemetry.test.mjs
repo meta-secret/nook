@@ -290,7 +290,7 @@ void test("accepts the documented Buildx JSON array and PascalCase fields", () =
 void test("aggregates publish reports with effective READ_WRITE authority", () => {
   const first = {
     stage: "native-clippy",
-    baked_runtime_mode: "READ_ONLY",
+    baked_runtime_mode: "READ_WRITE",
     runtime_mode: "READ_WRITE",
     runtime_mode_source: "runtime_secret",
     client_side: true,
@@ -306,7 +306,7 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
   };
   const second = {
     stage: "wasm-build",
-    baked_runtime_mode: "READ_ONLY",
+    baked_runtime_mode: "READ_WRITE",
     runtime_mode: "READ_WRITE",
     runtime_mode_source: "runtime_secret",
     client_side: true,
@@ -337,7 +337,7 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
   assert.equal(reports.length, 2);
   assert.deepEqual(CacheTelemetry.summarizeSccache(reports), {
     report_count: 2,
-    baked_runtime_mode: "READ_ONLY",
+    baked_runtime_mode: "READ_WRITE",
     runtime_mode: "READ_WRITE",
     runtime_mode_source: "runtime_secret",
     client_side: true,
@@ -354,47 +354,10 @@ void test("aggregates publish reports with effective READ_WRITE authority", () =
   });
 });
 
-void test("retains read-only runtime-secret authority in sccache telemetry", () => {
-  const report = CacheTelemetry.normalizeSccacheReport({
-    stage: "compile-native",
-    baked_runtime_mode: "READ_ONLY",
-    runtime_mode: "READ_ONLY",
-    runtime_mode_source: "runtime_secret",
-    client_side: true,
-    counter_reliability: "backend_incomplete",
-    publication_status: "counters_observed",
-    compile_requests: 4,
-    requests_executed: 4,
-    cache_hits: 4,
-    cache_misses: 0,
-    cache_errors: 0,
-    cache_write_errors: 0,
-    cache_writes: 0,
-  });
-
-  assert.deepEqual(CacheTelemetry.summarizeSccache([report]), {
-    report_count: 1,
-    baked_runtime_mode: "READ_ONLY",
-    runtime_mode: "READ_ONLY",
-    runtime_mode_source: "runtime_secret",
-    client_side: true,
-    counter_reliability: "backend_incomplete",
-    publication_status: "not_applicable",
-    compile_requests: 4,
-    requests_executed: 4,
-    cache_hits: 4,
-    cache_misses: 0,
-    cache_errors: 0,
-    cache_write_errors: 0,
-    cache_writes: 0,
-    hit_rate_percent: 100,
-  });
-});
-
 void test("marks client-side zero-write publication counters pending verification", () => {
   const report = CacheTelemetry.normalizeSccacheReport({
     stage: "compile-native",
-    baked_runtime_mode: "READ_ONLY",
+    baked_runtime_mode: "READ_WRITE",
     runtime_mode: "READ_WRITE",
     runtime_mode_source: "runtime_secret",
     client_side: true,
@@ -415,49 +378,17 @@ void test("marks client-side zero-write publication counters pending verificatio
   assert.equal(summary.requests_executed, 279);
 });
 
-void test("rejects mixed effective sccache authority across reports", () => {
-  const base = {
-    stage: "compile-native",
-    baked_runtime_mode: "READ_ONLY",
-    runtime_mode_source: "runtime_secret",
-    client_side: true,
-    counter_reliability: "backend_incomplete",
-    publication_status: "not_applicable",
-    compile_requests: 1,
-    requests_executed: 1,
-    cache_hits: 0,
-    cache_misses: 1,
-    cache_errors: 0,
-    cache_write_errors: 0,
-    cache_writes: 1,
-  };
-  const publish = CacheTelemetry.normalizeSccacheReport({
-    ...base,
-    runtime_mode: "READ_WRITE",
-  });
-  const readOnly = CacheTelemetry.normalizeSccacheReport({
-    ...base,
-    stage: "compile-wasm",
-    runtime_mode: "READ_ONLY",
-  });
-
-  assert.throws(
-    () => CacheTelemetry.summarizeSccache([publish, readOnly]),
-    /inconsistent sccache runtime_mode: READ_WRITE != READ_ONLY/,
-  );
-});
-
-void test("reports the selected persistent or fallback Redis backend without credentials", () => {
+void test("reports the selected persistent or no-secret fallback backend", () => {
   assert.deepEqual(
     CacheTelemetry.cacheBackendFromEnvironment({
       NOOK_SCCACHE_BACKEND: "remote",
       NOOK_SCCACHE_BACKEND_REASON: "persistent_service",
-      SCCACHE_S3_RW_MODE: "READ_ONLY",
+      SCCACHE_S3_RW_MODE: "READ_WRITE",
     }),
     {
       kind: "remote",
       persistent: true,
-      reason: "persistent_service_read_only",
+      reason: "persistent_service",
     },
   );
   assert.deepEqual(CacheTelemetry.cacheBackendFromEnvironment({}), {

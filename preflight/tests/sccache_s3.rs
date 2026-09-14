@@ -392,9 +392,9 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         ("browser image", "\n  web-e2e-image:\n", "\n  web-e2e:\n"),
     ];
     let remote_compiler_credentials = [
-        "NOOK_SCCACHE_REMOTE_ACCESS_KEY",
-        "NOOK_SCCACHE_REMOTE_SECRET_KEY",
-        "NOOK_SCCACHE_REMOTE_BUCKET",
+        "NOOK_SCCACHE_ACCESS_KEY",
+        "NOOK_SCCACHE_SECRET_KEY",
+        "NOOK_SCCACHE_BUCKET",
         "NOOK_SCCACHE_ENDPOINT",
     ];
     assert!(remote.contains("on:\n  workflow_dispatch:") && !remote.contains("pull_request:"));

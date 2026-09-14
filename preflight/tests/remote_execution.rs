@@ -479,11 +479,11 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
         workflow.contains("registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}")
             && workflow.contains("registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}")
             && workflow
-                .contains("sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}")
+                .contains("sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}")
             && workflow
-                .contains("sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}")
+                .contains("sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}")
             && workflow.contains("sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}")
-            && workflow.contains("sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}"),
+            && workflow.contains("sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}"),
         "remote jobs must authenticate to Zot layers and SeaweedFS compiler objects"
     );
     let secret_refs = workflow.matches("${{ secrets.").count();
@@ -496,16 +496,16 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
                 .matches("secrets.NOOK_REGISTRY_REMOTE_PASSWORD")
                 .count()
             + workflow
-                .matches("secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY")
+                .matches("secrets.NOOK_SCCACHE_ACCESS_KEY")
                 .count()
             + workflow
-                .matches("secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY")
+                .matches("secrets.NOOK_SCCACHE_SECRET_KEY")
                 .count()
             + workflow.matches("secrets.NOOK_SCCACHE_ENDPOINT").count()
             + workflow
-                .matches("secrets.NOOK_SCCACHE_REMOTE_BUCKET")
+                .matches("secrets.NOOK_SCCACHE_BUCKET")
                 .count(),
-        "remote workflow may only use the Zot and scoped SeaweedFS cache credentials"
+        "remote workflow may only use the Zot and shared SeaweedFS cache credentials"
     );
     assert!(!workflow.contains("${{ inputs.command }}"));
     assert!(

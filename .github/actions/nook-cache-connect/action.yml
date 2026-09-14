@@ -18,14 +18,6 @@ inputs:
     description: S3 bucket name used by sccache.
     required: false
     default: "nook-sccache"
-  sccache-capability-probe:
-    description: Verify the selected S3 compiler-cache capability before compilation (none, write_capable, or read_only).
-    required: false
-    default: "none"
-  sccache-credential-class:
-    description: Sanitized identity classification for cache telemetry.
-    required: false
-    default: "unspecified"
 runs:
   using: node24
   main: main.js

@@ -42,13 +42,10 @@ if [ -r "$runtime_mode_file" ]; then
   SCCACHE_S3_RW_MODE="$(cat "$runtime_mode_file")"
   export SCCACHE_S3_RW_MODE
 fi
-case "${SCCACHE_S3_RW_MODE:-}" in
-  READ_ONLY|READ_WRITE) ;;
-  *)
-    echo "unsupported SCCACHE_S3_RW_MODE: ${SCCACHE_S3_RW_MODE:-unset}" >&2
-    exit 2
-    ;;
-esac
+if [ "${SCCACHE_S3_RW_MODE:-}" != READ_WRITE ]; then
+  echo "unsupported SCCACHE_S3_RW_MODE: ${SCCACHE_S3_RW_MODE:-unset}" >&2
+  exit 2
+fi
 
 # Runtime commands and cache-missed BuildKit compiler vertices mount the same
 # stable secret IDs. BuildKit excludes secret contents from cache checksums; the
@@ -56,12 +53,8 @@ esac
 if [ "${NOOK_SCCACHE_S3_MODE:-local}" = external ] \
   && [ -z "${AWS_ACCESS_KEY_ID:-}" ] \
   && [ ! -r "$access_file" ]; then
-  if [ "${SCCACHE_S3_RW_MODE:-READ_WRITE}" = READ_ONLY ]; then
-    printf '%s\n' 'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"credentials_unavailable","remote_writes":0}' >&2
-    exec "$@"
-  fi
-  echo 'nook-sccache: READ_WRITE credentials unavailable' >&2
-  exit 2
+  printf '%s\n' 'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"credentials_unavailable","remote_writes":0}' >&2
+  exec "$@"
 fi
 
 if [ -z "${AWS_ACCESS_KEY_ID:-}" ] && [ -r "$access_file" ]; then
@@ -89,8 +82,7 @@ if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   unset SCCACHE_S3_ENABLE_VIRTUAL_HOST_STYLE || true
 fi
 
-if [ "${NOOK_SCCACHE_S3_MODE:-local}" = external ] \
-  && [ "${SCCACHE_S3_RW_MODE:-READ_WRITE}" = READ_ONLY ]; then
+if [ "${NOOK_SCCACHE_S3_MODE:-local}" = external ]; then
   if [ -e "$fallback_marker" ]; then
     printf '%s\n' 'NOOK_SCCACHE_FALLBACK {"backend":"direct_compile","reason":"cache_circuit_open","remote_writes":0}' >&2
     exec "$@"
@@ -144,7 +136,6 @@ if [ "$sccache_status" -eq 0 ]; then
   exit 0
 fi
 if [ "${NOOK_SCCACHE_S3_MODE:-local}" = external ] \
-  && [ "${SCCACHE_S3_RW_MODE:-READ_WRITE}" = READ_ONLY ] \
   && grep -Eiq \
     'failed to execute compile|failed to start server|server startup failed|server connection unexpectedly closed' \
     "$compile_diagnostics" \

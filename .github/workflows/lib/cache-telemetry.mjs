@@ -87,12 +87,12 @@ const HistoryLogCollectionKind = Object.freeze({
 /**
  * @typedef {object} SccacheReport
  * @property {string} stage
- * @property {'READ_ONLY' | 'READ_WRITE'} baked_runtime_mode
- * @property {'READ_ONLY' | 'READ_WRITE'} runtime_mode
+ * @property {'READ_WRITE'} baked_runtime_mode
+ * @property {'READ_WRITE'} runtime_mode
  * @property {'environment' | 'runtime_secret'} runtime_mode_source
  * @property {boolean} client_side
  * @property {'authoritative' | 'backend_incomplete'} counter_reliability
- * @property {'not_applicable' | 'pending_verification' | 'counters_observed'} publication_status
+ * @property {'pending_verification' | 'counters_observed'} publication_status
  * @property {number} compile_requests
  * @property {number} requests_executed
  * @property {number} cache_hits
@@ -104,12 +104,12 @@ const HistoryLogCollectionKind = Object.freeze({
 /**
  * @typedef {object} SccacheSummary
  * @property {number} report_count
- * @property {'READ_ONLY' | 'READ_WRITE' | 'UNAVAILABLE'} baked_runtime_mode
- * @property {'READ_ONLY' | 'READ_WRITE' | 'UNAVAILABLE'} runtime_mode
+ * @property {'READ_WRITE' | 'UNAVAILABLE'} baked_runtime_mode
+ * @property {'READ_WRITE' | 'UNAVAILABLE'} runtime_mode
  * @property {'environment' | 'runtime_secret' | 'unavailable'} runtime_mode_source
  * @property {boolean} client_side
  * @property {'authoritative' | 'backend_incomplete' | 'unavailable'} counter_reliability
- * @property {'not_applicable' | 'pending_verification' | 'counters_observed' | 'unavailable'} publication_status
+ * @property {'pending_verification' | 'counters_observed' | 'unavailable'} publication_status
  * @property {number} compile_requests
  * @property {number} requests_executed
  * @property {number} cache_hits
@@ -411,18 +411,12 @@ export class CacheTelemetry {
     const normalizedRuntimeModeSource = String(runtimeModeSource);
     if (!normalizedStage)
       throw new Error("sccache report is missing its stage");
-    if (
-      normalizedBakedRuntimeMode !== "READ_ONLY" &&
-      normalizedBakedRuntimeMode !== "READ_WRITE"
-    ) {
+    if (normalizedBakedRuntimeMode !== "READ_WRITE") {
       throw new Error(
         `sccache report has invalid baked_runtime_mode: ${normalizedBakedRuntimeMode}`,
       );
     }
-    if (
-      normalizedRuntimeMode !== "READ_ONLY" &&
-      normalizedRuntimeMode !== "READ_WRITE"
-    ) {
+    if (normalizedRuntimeMode !== "READ_WRITE") {
       throw new Error(
         `sccache report has invalid runtime_mode: ${normalizedRuntimeMode}`,
       );
@@ -445,7 +439,6 @@ export class CacheTelemetry {
       throw new Error("sccache report has invalid counter_reliability");
     }
     if (
-      report.publication_status !== "not_applicable" &&
       report.publication_status !== "pending_verification" &&
       report.publication_status !== "counters_observed"
     ) {
@@ -527,11 +520,9 @@ export class CacheTelemetry {
       summary.cache_writes += report.cache_writes;
     }
     if (reports.length > 0) {
-      summary.publication_status = summary.runtime_mode === "READ_ONLY"
-        ? "not_applicable"
-        : summary.client_side && summary.cache_errors === 0 && summary.cache_write_errors === 0 && summary.cache_writes === 0
-          ? "pending_verification"
-          : "counters_observed";
+      summary.publication_status = summary.client_side && summary.cache_errors === 0 && summary.cache_write_errors === 0 && summary.cache_writes === 0
+        ? "pending_verification"
+        : "counters_observed";
     }
     return {
       ...summary,
@@ -712,14 +703,10 @@ export class CacheTelemetry {
     const configuredReason =
       environment.NOOK_SCCACHE_BACKEND_REASON ||
       (kind === "remote" ? "persistent_service" : "credentials_unavailable");
-    const reason =
-      kind === "remote" && environment.SCCACHE_S3_RW_MODE === "READ_ONLY"
-        ? `${configuredReason}_read_only`
-        : configuredReason;
     return {
       kind,
       persistent: kind === "remote",
-      reason,
+      reason: configuredReason,
     };
   }
 
@@ -787,9 +774,7 @@ export class CacheTelemetry {
     }
     const availableAuthority =
       typeof sccache.report_count === "number" && sccache.report_count > 0;
-    const allowedRuntimeModes = availableAuthority
-      ? ["READ_ONLY", "READ_WRITE"]
-      : ["UNAVAILABLE"];
+    const allowedRuntimeModes = availableAuthority ? ["READ_WRITE"] : ["UNAVAILABLE"];
     for (const field of ["baked_runtime_mode", "runtime_mode"]) {
       const value = sccache[field];
       if (
@@ -821,7 +806,7 @@ export class CacheTelemetry {
       throw new Error("telemetry sccache.counter_reliability is invalid");
     }
     const allowedPublicationStatus = availableAuthority
-      ? ["not_applicable", "pending_verification", "counters_observed"]
+      ? ["pending_verification", "counters_observed"]
       : ["unavailable"];
     if (
       typeof sccache.publication_status !== "string" ||

@@ -89,8 +89,6 @@ export class PrCacheHealth {
         reasons.push(`${job.id}:cache_export_incomplete`);
       if (job.readOnly && record.buildkit.cache_export.attempts > 0)
         reasons.push(`${job.id}:unexpected_read_only_export`);
-      if (job.readOnly && record.sccache.cache_writes > 0)
-        reasons.push(`${job.id}:unexpected_read_only_sccache_writes`);
       if (job.buildExpected && record.buildkit.build_record_count === 0)
         reasons.push(`${job.id}:buildkit_telemetry_missing`);
       if (!job.buildExpected) warnings.push(`${job.id}:build_not_expected`);
@@ -104,7 +102,6 @@ export class PrCacheHealth {
       );
       if (
         job.buildExpected &&
-        !job.readOnly &&
         record.sccache.publication_status === "pending_verification"
       ) {
         if (hasAvailableImport && record.sccache.cache_hits === 0) {

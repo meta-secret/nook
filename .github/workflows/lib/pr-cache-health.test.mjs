@@ -6,17 +6,18 @@ import test from "node:test";
 
 import { PrCacheHealth } from "./pr-cache-health.mjs";
 
+/** @param {string} job @param {Record<string, any>} [overrides] */
 const telemetry = (job, overrides = {}) => ({
   schema_version: 1,
   github: { run_id: "42", run_attempt: 1, job },
-  cache_backend: { kind: "remote", persistent: true, reason: "persistent_service_read_only" },
+  cache_backend: { kind: "remote", persistent: true, reason: "persistent_s3_service" },
   cache_scope: {
     scope: "main",
     compile_dependencies: { scope: "deps", available: true, write_enabled: false, export_enabled: false },
     compile_source: { scope: "source", available: true, write_enabled: false, export_enabled: false },
     imports: { probes_complete: true, availability: [{ name: "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE", available: true }] },
   },
-  sccache: { report_count: 1, baked_runtime_mode: "READ_ONLY", runtime_mode: "READ_ONLY", runtime_mode_source: "runtime_secret", client_side: true, counter_reliability: "backend_incomplete", publication_status: "not_applicable", compile_requests: 10, requests_executed: 10, cache_hits: 8, cache_misses: 2, cache_errors: 0, cache_write_errors: 0, cache_writes: 0, hit_rate_percent: 80 },
+  sccache: { report_count: 1, baked_runtime_mode: "READ_WRITE", runtime_mode: "READ_WRITE", runtime_mode_source: "runtime_secret", client_side: true, counter_reliability: "backend_incomplete", publication_status: "counters_observed", compile_requests: 10, requests_executed: 10, cache_hits: 8, cache_misses: 2, cache_errors: 0, cache_write_errors: 0, cache_writes: 2, hit_rate_percent: 80 },
   buildkit: {
     build_record_count: 1,
     completed_steps: 100,
@@ -30,7 +31,7 @@ const telemetry = (job, overrides = {}) => ({
   ...overrides,
 });
 
-void test("passes warm read-only Docker jobs without rerunning builds", () => {
+void test("passes warm no-export Docker jobs while sccache remains writable", () => {
   const model = new PrCacheHealth({ minimumBuildkitHitRate: 20 }).evaluate({
     jobs: [{ id: "verify", result: "success", buildExpected: true, readOnly: true }],
     telemetry: [telemetry("verify")],

@@ -34,17 +34,9 @@ done
 
 docker_bin="${DOCKER:-docker}"
 runtime_mode_file="${RUNNER_TEMP:-/tmp}/nook-sccache-runtime-mode-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}"
-runtime_mode="${SCCACHE_S3_RW_MODE:-READ_ONLY}"
-case "$runtime_mode" in
-  READ_ONLY|READ_WRITE) ;;
-  *) echo "build:compile received unsupported sccache mode: $runtime_mode" >&2; exit 2 ;;
-esac
-if [ "${NOOK_COMPILE_CACHE_MODE:-read-only}" = publish ] && [ "$runtime_mode" != READ_WRITE ]; then
-  echo "build:compile publication requires READ_WRITE compiler-cache authority" >&2
-  exit 2
-fi
-if [ "${NOOK_COMPILE_CACHE_MODE:-read-only}" = read-only ] && [ "$runtime_mode" != READ_ONLY ]; then
-  echo "build:compile verification requires READ_ONLY compiler-cache authority" >&2
+runtime_mode="${SCCACHE_S3_RW_MODE:-READ_WRITE}"
+if [ "$runtime_mode" != READ_WRITE ]; then
+  echo "trusted build:compile requires the shared READ_WRITE compiler cache mode" >&2
   exit 2
 fi
 printf '%s\n' "$runtime_mode" >"$runtime_mode_file"
@@ -78,9 +70,9 @@ bake_args=(
   -f "${repo_root}/nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"
   --set "*.context=${repo_root}"
   --set "build-compile.args.SCCACHE_S3_MODE=${SCCACHE_S3_MODE:-external}"
-  # Stable neutral value only: compile.Dockerfile requires the runtime secret
-  # and the wrapper replaces this before any sccache daemon/client command.
-  --set "rust-base.args.SCCACHE_S3_RW_MODE=READ_ONLY"
+  # Stable value only: secret availability controls remote access and the
+  # runtime secret preserves an identical compiler-vertex command shape.
+  --set "rust-base.args.SCCACHE_S3_RW_MODE=READ_WRITE"
   --set "build-compile.args.SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
   --set "build-compile.args.SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
   --set "build-compile.args.WASM_BUILD_MODE=${wasm_build_mode}"
@@ -140,7 +132,7 @@ elif [ "${SCCACHE_OPTIONAL:-}" != "1" ]; then
 fi
 
 compile_targets=(build-compile)
-if [ "$runtime_mode" = READ_WRITE ] && [ -z "$compile_deps_available" ]; then
+if [ "${NOOK_COMPILE_CACHE_MODE:-read-only}" = publish ] && [ -z "$compile_deps_available" ]; then
   compile_targets=(build-compile-dependency-cache build-compile)
   echo "Dependency cache is absent; publishing its source-free graph in the ordinary compile session"
 fi

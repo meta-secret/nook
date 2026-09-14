@@ -326,8 +326,6 @@ fn assert_sccache_credential_contract() {
         "home_cache=\"${HOME}/.nook/cache\"",
         "sccache-access-key",
         "sccache-secret-key",
-        "sccache-remote-access-key",
-        "sccache-remote-secret-key",
         "sccache-admin-access-key",
         "sccache-admin-secret-key",
         "install -d -m 0750 -o 1000 -g 1000 \"$data_dir\"",
@@ -336,13 +334,10 @@ fn assert_sccache_credential_contract() {
         r#"\"Write:$bucket\""#,
         r#"\"List:$bucket\""#,
         r#"\"Tagging:$bucket\""#,
-        r#"\"name\": \"nook-sccache-remote-reader\""#,
         r#"\"name\": \"nook-sccache-admin\""#,
         "gh secret set NOOK_SCCACHE_ACCESS_KEY",
         "gh secret set NOOK_SCCACHE_SECRET_KEY",
-        "gh secret set NOOK_SCCACHE_REMOTE_ACCESS_KEY",
-        "gh secret set NOOK_SCCACHE_REMOTE_SECRET_KEY",
-        "gh secret set NOOK_SCCACHE_REMOTE_BUCKET",
+        "gh secret set NOOK_SCCACHE_BUCKET",
         "NOOK_SCCACHE_ENDPOINT",
         "sccache.dev.nokey.sh",
         "nook-sccache",
@@ -351,8 +346,7 @@ fn assert_sccache_credential_contract() {
         "s3api put-object",
         "s3api head-object",
         "s3api delete-object",
-        "Main read/write and Remote read-only S3 checks passed",
-        "Remote compiler identity must not write Main's bucket",
+        "shared read/write S3 checks passed",
     ] {
         assert!(
             sccache.contains(required),
@@ -371,12 +365,9 @@ fn assert_sccache_credential_contract() {
         "SeaweedFS administrative credentials must remain server-side"
     );
     assert!(
-        sccache.contains(
-            "\\\"name\\\": \\\"nook-sccache-remote-reader\\\",\n              \\\"credentials\\\""
-        ) && sccache.contains(
-            "\\\"actions\\\": [\n                \\\"Read:$bucket\\\",\n                \\\"List:$bucket\\\"\n              ]"
-        ),
-        "Remote compiler identity must be read/list-only on Main's bucket"
+        !sccache.contains("nook-sccache-remote-reader")
+            && !sccache.contains("NOOK_SCCACHE_REMOTE_"),
+        "SeaweedFS must expose only the shared build identity to GitHub Actions"
     );
     let bucket_ensure = sccache
         .split("\n  sccache:bucket:ensure:\n")

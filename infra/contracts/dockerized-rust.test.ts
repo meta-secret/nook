@@ -269,14 +269,14 @@ class DockerizedRustContract {
     );
     expect(wrapper).toContain('mkdir "$startup_lock"');
     expect(wrapper).toContain("startup_coordination_timeout");
-    expect(wrapper).toContain(
-      '[ "${SCCACHE_S3_RW_MODE:-READ_WRITE}" = READ_ONLY ]',
-    );
     expect(wrapper).toContain('"remote_writes":0');
     expect(wrapper).toContain("failed to execute compile|failed to start server");
     expect(wrapper).toContain("cache_circuit_open");
     expect(fallbackContract).toContain("FAKE_SCCACHE_RESULT=transport");
     expect(fallbackContract).toContain("FAKE_SCCACHE_RESULT=compiler");
+    expect(fallbackContract).toContain(
+      "Sccache no-secret route: compiler ran directly without remote access",
+    );
     expect(fallbackContract).toContain(
       "SCCACHE_ERROR_LOG=/tmp/inherited-sccache-error.log",
     );
@@ -284,9 +284,7 @@ class DockerizedRustContract {
     expect(fallbackContract).toContain(
       "SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport",
     );
-    expect(fallbackContract).toContain(
-      "READ_WRITE failure silently lost publication authority",
-    );
+    expect(fallbackContract).toContain("product compilation remained available");
     expect(fallbackContract).toContain('test "$compiler_status" -eq 7');
     expect(proof).toContain(
       'bash "$repo_root/infra/contracts/sccache-wrapper-fallback.test.sh"',
@@ -299,10 +297,10 @@ class DockerizedRustContract {
       "Sccache best-effort proof: inject startup, DNS/read, circuit, compiler, and publication faults",
     );
     expect(fallbackContract).toContain(
-      "Sccache read/DNS fault: read-only consumer compiled directly with zero remote writes",
+      "Sccache read/DNS fault: trusted cache user compiled directly after the circuit opened",
     );
     expect(fallbackContract).toContain(
-      "Sccache startup fault: bounded read-only fallback compiled directly",
+      "Sccache startup fault: bounded fallback compiled directly",
     );
     expect(fallbackContract).toContain(
       "Sccache compiler fault: genuine compiler failure remained terminal",
@@ -970,66 +968,15 @@ tasks:
     const cacheTelemetry = this.read(
       ".github/workflows/lib/cache-telemetry.mjs",
     );
-    const cacheConnect = this.read(
-      ".github/actions/nook-cache-connect/main.js",
-    );
-    const cacheTelemetryAction = this.read(
-      ".github/actions/nook-cache-telemetry/action.yml",
-    );
     const proof = this.read("infra/tasks/bake-cache.yml");
 
     expect(remoteWorkflow).toContain(
       "== 'build:compile' && 5 || 360",
     );
-    expect(remoteWorkflow).toContain(
-      "(inputs.tasks || inputs.task) == 'build:compile' && inputs.publish_compile_cache && 'READ_WRITE' || 'READ_ONLY'",
-    );
-    expect(remoteWorkflow).toContain(
-      "name: Prepare publish build environment",
-    );
-    expect(remoteWorkflow).toContain(
-      "if: (inputs.tasks || inputs.task) == 'build:compile' && inputs.publish_compile_cache == true",
-    );
-    expect(remoteWorkflow).toContain(
-      "sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}",
-    );
-    expect(remoteWorkflow).toContain(
-      "sccache-capability-probe: write_capable",
-    );
-    expect(remoteWorkflow).toContain(
-      "sccache-credential-class: write_capable",
-    );
-    expect(remoteWorkflow).toContain(
-      "if: (inputs.tasks || inputs.task) != 'build:compile' || inputs.publish_compile_cache != true",
-    );
-    expect(remoteWorkflow).toContain(
-      "sccache-capability-probe: ${{ (inputs.tasks || inputs.task) == 'build:compile' && 'read_only' || 'none' }}",
-    );
-    expect(remoteWorkflow).toContain("sccache-credential-class: read_only");
-    expect(cacheConnect).toContain("class S3CacheCapabilityProbe");
-    expect(cacheConnect).toContain("AbortSignal.timeout(5000)");
-    expect(cacheConnect).toContain('"put_object"');
-    expect(cacheConnect).toContain('"get_object"');
-    expect(cacheConnect).toContain('"head_object"');
-    expect(cacheConnect).toContain('"delete_object"');
-    expect(cacheConnect).toContain('"put_object_denied"');
-    expect(cacheConnect).toContain("bytes=0-0");
-    expect(cacheConnect).toContain("empty_bucket");
-    expect(cacheConnect).toContain("NOOK_SCCACHE_CAPABILITY");
-    expect(cacheTelemetryAction).toContain("nook-sccache-capability.json");
-    expect(proof).toContain(
-      "Publication guard: read-only S3 identity cannot publish compiler objects",
-    );
-    expect(proof).toContain(
-      "cache_write_errors=275 cache_writes=0 status=failed",
-    );
-    expect(proof).toContain("write_identity_denied");
+    expect(remoteWorkflow).toContain("SCCACHE_S3_RW_MODE: READ_WRITE");
     expect(remoteWorkflow).not.toContain("build:compile-cache-seed");
     expect(compileScript).toContain(
-      "publication requires READ_WRITE compiler-cache authority",
-    );
-    expect(compileScript).toContain(
-      "verification requires READ_ONLY compiler-cache authority",
+      "trusted build:compile requires the shared READ_WRITE compiler cache mode",
     );
     expect(compileScript).toContain(
       "No remote BuildKit cache is available; performing a cold solve with sccache",
@@ -1078,7 +1025,7 @@ tasks:
     expect(cacheTelemetry).toContain("sccache authority: baked=");
     expect(
       this.read("nook-app/nook-platform/docker/sccache-report.sh"),
-    ).toContain("NOOK_SCCACHE_READ_ONLY_WRITE_FAILURE");
+    ).toContain("NOOK_SCCACHE_HEALTH_WARNING");
     expect(
       this.read("nook-app/nook-platform/docker/sccache-wrapper.sh"),
     ).toContain("SCCACHE_CLIENT_SIDE:=1");
@@ -1102,10 +1049,9 @@ tasks:
     expect(publicationContract).toContain('"cache_writes":0');
     expect(publicationContract).toContain('"cache_writes":275');
     expect(publicationContract).toContain(
-      '"baked_runtime_mode":"READ_ONLY"',
+      '"baked_runtime_mode":"READ_WRITE"',
     );
     expect(publicationContract).toContain('"runtime_mode":"READ_WRITE"');
-    expect(publicationContract).toContain('"runtime_mode":"READ_ONLY"');
     expect(publicationContract).toContain(
       '"runtime_mode_source":"runtime_secret"',
     );

@@ -129,9 +129,7 @@ tasks:
         compile_policy_input="$sim_dir/inputs/compile-policy-catalog.txt"
         compile_policy_input_orig="$(cat "$compile_policy_input")"
         sccache_publish_mode="$(mktemp)"
-        sccache_consumer_mode="$(mktemp)"
         printf '%s\n' READ_WRITE >"$sccache_publish_mode"
-        printf '%s\n' READ_ONLY >"$sccache_consumer_mode"
 
         cleanup() {
           set +e
@@ -152,7 +150,7 @@ tasks:
           if [ -n "$proof_log" ]; then
             rm -f "$proof_log"
           fi
-          rm -f "$sccache_publish_mode" "$sccache_consumer_mode"
+          rm -f "$sccache_publish_mode"
           rm -rf -- "$trusted_docker_config"
         }
         trap cleanup EXIT
@@ -198,9 +196,9 @@ tasks:
           grep -Eq 'exporting cache to registry|writing cache manifest' "$1"
         }
 
-        require_no_cache_write() {
+        require_no_registry_export() {
           if grep -Eq 'exporting cache to registry|writing cache manifest' "$1"; then
-            echo "read-only warm solve unexpectedly exported a registry cache" >&2
+            echo "no-export solve unexpectedly exported a registry cache" >&2
             return 1
           fi
         }
@@ -239,7 +237,7 @@ tasks:
           local source_scope="$2"
           local source_available="$3"
           local cache_write="$4"
-          local runtime_mode="${5:-$sccache_consumer_mode}"
+          local runtime_mode="${5:-$sccache_publish_mode}"
           local source_version="${6:-v3}"
           local extension_commit="${7:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
           local dependency_available="${8:-}"
@@ -247,7 +245,6 @@ tasks:
           local error_log="${10:-}"
           local sanitizes_error_log="${11:-1}"
           local next_head_hits="${12:-1}"
-          local write_authorized="${13:-1}"
           local -a compile_targets=(compile-warm)
           if [ -n "$cache_write" ] && [ -z "$dependency_available" ]; then
             compile_targets=(compile-dependency-cache compile-warm)
@@ -263,7 +260,6 @@ tasks:
             SIMULATED_SCCACHE_ERROR_LOG="$error_log" \
             SIMULATED_SCCACHE_SANITIZES_ERROR_LOG="$sanitizes_error_log" \
             SIMULATED_SCCACHE_NEXT_HEAD_HITS="$next_head_hits" \
-            SIMULATED_SCCACHE_WRITE_AUTHORIZED="$write_authorized" \
             "$docker_cli" buildx bake \
             --progress=plain \
             -f "$sim_dir/compile-warm.docker-bake.hcl" \
@@ -274,7 +270,6 @@ tasks:
             --set "*.args.SIMULATED_SCCACHE_ERROR_LOG=$error_log" \
             --set "*.args.SIMULATED_SCCACHE_SANITIZES_ERROR_LOG=$sanitizes_error_log" \
             --set "*.args.SIMULATED_SCCACHE_NEXT_HEAD_HITS=$next_head_hits" \
-            --set "*.args.SIMULATED_SCCACHE_WRITE_AUTHORIZED=$write_authorized" \
             --set "compile-warm.secrets=id=sccache_runtime_mode,src=$runtime_mode" \
             --set "compile-dependency-cache.secrets=id=sccache_runtime_mode,src=$runtime_mode" \
             "${compile_targets[@]}" >"$log_file" 2>&1
@@ -417,16 +412,6 @@ tasks:
         grep -Fq -- 'NOOK_SCCACHE_PUBLICATION_FAILURE {"cache_errors":0,"cache_misses":1,"cache_writes":0}' "$proof_log"
         echo "compile publication error-log conflict: cache_errors=0 cache_misses=1 cache_writes=0 status=failed"
 
-        echo "== Publication guard: read-only S3 identity cannot publish compiler objects =="
-        create_builder "nook-bake-sim-compile-write-identity-denied-${suffix}"
-        if bake_compile_source "$proof_log" "$compile_source_c" "" "1" "$sccache_publish_mode" "v3" \
-          "cccccccccccccccccccccccccccccccccccccccc" "" "1" "" "1" "1" "0"; then
-          echo "read-only S3 identity unexpectedly published compiler objects" >&2
-          exit 1
-        fi
-        grep -Fq -- 'NOOK_SCCACHE_PUBLICATION_FAILURE {"cache_errors":0,"cache_write_errors":275,"cache_misses":275,"cache_writes":0,"reason":"write_identity_denied"}' "$proof_log"
-        echo "compile publication identity: cache_write_errors=275 cache_writes=0 status=failed"
-
         echo "== Cold normal publish: no seed prerequisite, sccache READ_WRITE =="
         echo "== Target-specific authority: a sibling without its secret fails distinctly =="
         create_builder "nook-bake-sim-compile-missing-sibling-secret-${suffix}"
@@ -486,15 +471,15 @@ tasks:
         grep -Fq -- 'NOOK_SCCACHE_PUBLICATION_VERIFICATION_FAILURE {"cache_hits":0,"reason":"next_head_zero_hits"}' "$proof_log"
         echo "compile next-head verification: cache_hits=0 status=failed"
 
-        echo "== Read-only replay: exact BuildKit reuse and zero writes =="
-        create_builder "nook-bake-sim-compile-source-b-read-only-${suffix}"
+        echo "== No-BuildKit-export replay: exact reuse with trusted sccache access =="
+        create_builder "nook-bake-sim-compile-source-b-no-export-${suffix}"
         compile_started="$(date +%s)"
-        bake_compile_source "$proof_log" "$compile_source_b" "1" "" "$sccache_consumer_mode" "v3" \
+        bake_compile_source "$proof_log" "$compile_source_b" "1" "" "$sccache_publish_mode" "v3" \
           "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         compile_elapsed=$(( $(date +%s) - compile_started ))
-        require_no_cache_write "$proof_log"
+        require_no_registry_export "$proof_log"
         test "$compile_elapsed" -lt 300
-        echo "compile read-only: sccache_mode=READ_ONLY cache_writes=0 registry_exports=0 elapsed=${compile_elapsed}s limit=300s"
+        echo "compile no-export: sccache_mode=READ_WRITE registry_exports=0 elapsed=${compile_elapsed}s limit=300s"
 
         echo "== Legal document edit: invalidate only the web lineage =="
         printf 'legal-document-source-only-edit\n' >"$compile_web_legal_input"

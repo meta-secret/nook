@@ -15,8 +15,7 @@ ARG SIMULATED_SCCACHE_CLIENT_SIDE=1
 ARG SIMULATED_SCCACHE_ERROR_LOG=
 ARG SIMULATED_SCCACHE_SANITIZES_ERROR_LOG=1
 ARG SIMULATED_SCCACHE_NEXT_HEAD_HITS=1
-ARG SIMULATED_SCCACHE_WRITE_AUTHORIZED=1
-ENV SCCACHE_S3_RW_MODE=READ_ONLY
+ENV SCCACHE_S3_RW_MODE=READ_WRITE
 RUN test "$SIMULATED_BUILD_PROFILE" = production
 
 # Every dependency compiler is a direct ancestor of the exported dependency
@@ -25,8 +24,6 @@ RUN test "$SIMULATED_BUILD_PROFILE" = production
 FROM compile-toolchain AS compile-native-dependencies
 RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
     test "$(cat /run/secrets/sccache_runtime_mode)" = READ_WRITE \
-  && { test "$SIMULATED_SCCACHE_WRITE_AUTHORIZED" = 1 \
-    || { echo 'NOOK_SCCACHE_PUBLICATION_FAILURE {"cache_errors":0,"cache_write_errors":275,"cache_misses":275,"cache_writes":0,"reason":"write_identity_denied"}' >&2; exit 1; }; } \
   && { test "$SIMULATED_SCCACHE_CLIENT_SIDE" = 1 \
     && { test -z "$SIMULATED_SCCACHE_ERROR_LOG" \
       || test "$SIMULATED_SCCACHE_SANITIZES_ERROR_LOG" = 1; } \
@@ -36,7 +33,7 @@ RUN --mount=type=secret,id=sccache_runtime_mode,required=true \
   && { test "$SIMULATED_SCCACHE_CLIENT_SIDE" != 1 \
     || echo 'NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION {"client_side":true,"counter_reliability":"backend_incomplete","cache_errors":0,"cache_writes":0}'; } \
   && echo bake-sim-sccache-write \
-  && echo 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_ONLY runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' \
+  && echo 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_WRITE runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' \
   && cat /opt/compile-toolchain >/opt/compile-native-dependencies \
   && sleep 1 \
   && echo bake-sim-compile-native-dependencies

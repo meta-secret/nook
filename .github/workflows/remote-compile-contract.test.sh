@@ -3,9 +3,6 @@ set -euo pipefail
 workflows_dir="$(cd "$(dirname "$0")" && pwd)"
 remote="$workflows_dir/remote.yml"
 setup="$workflows_dir/../actions/nook-docker-setup/action.yml"
-cache_connect="$workflows_dir/../actions/nook-cache-connect/action.yml"
-cache_connect_runtime="$workflows_dir/../actions/nook-cache-connect/main.js"
-cache_telemetry_action="$workflows_dir/../actions/nook-cache-telemetry/action.yml"
 compile_script="$workflows_dir/../scripts/compile-remote.sh"
 compile_bake="$workflows_dir/../../nook-app/nook-platform/docker/rust/compile.docker-bake.hcl"
 compile_dockerfile="$workflows_dir/../../nook-app/nook-platform/docker/rust/compile.Dockerfile"
@@ -20,43 +17,11 @@ batch_job="$(sed -n '/^  batch:$/,/^  web-verify:$/p' "$remote")"
 compile_timeout="    timeout-minutes: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 5 || 360 }}"
 printf '%s\n' "$batch_job" | grep -Fqx -- "$compile_timeout"
 grep -Fq -- 'build:compile) echo 5 ;;' "$workflows_dir/../scripts/remote-task-batch.sh"
-grep -Fq -- "SCCACHE_S3_RW_MODE: \${{ (inputs.tasks || inputs.task) == 'build:compile' && inputs.publish_compile_cache && 'READ_WRITE' || 'READ_ONLY' }}" "$remote"
-publish_setup="$(sed -n '/name: Prepare publish build environment/,/name: Prepare read-only remote build environment/p' <<<"$batch_job")"
-read_only_setup="$(sed -n '/name: Prepare read-only remote build environment/,/name: Confirm prepared build-only environment/p' <<<"$batch_job")"
-grep -Fq -- "if: (inputs.tasks || inputs.task) == 'build:compile' && inputs.publish_compile_cache == true" <<<"$publish_setup"
-grep -Fq -- 'sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}' <<<"$publish_setup"
-grep -Fq -- 'sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}' <<<"$publish_setup"
-grep -Fq -- 'publish-compile-cache: "true"' <<<"$publish_setup"
-grep -Fq -- 'sccache-capability-probe: write_capable' <<<"$publish_setup"
-grep -Fq -- 'sccache-credential-class: write_capable' <<<"$publish_setup"
-if grep -Fq -- 'NOOK_SCCACHE_REMOTE_' <<<"$publish_setup"; then
-  echo 'compile publisher received the read-only SeaweedFS identity' >&2
-  exit 1
-fi
-grep -Fq -- "if: (inputs.tasks || inputs.task) != 'build:compile' || inputs.publish_compile_cache != true" <<<"$read_only_setup"
-grep -Fq -- 'sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}' <<<"$read_only_setup"
-grep -Fq -- 'sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}' <<<"$read_only_setup"
-grep -Fq -- "sccache-capability-probe: \${{ (inputs.tasks || inputs.task) == 'build:compile' && 'read_only' || 'none' }}" <<<"$read_only_setup"
-grep -Fq -- 'sccache-credential-class: read_only' <<<"$read_only_setup"
-if grep -Fq -- 'secrets.NOOK_SCCACHE_ACCESS_KEY' <<<"$read_only_setup" \
-  || grep -Fq -- 'secrets.NOOK_SCCACHE_SECRET_KEY' <<<"$read_only_setup"; then
-  echo 'read-only remote route received the SeaweedFS write identity' >&2
-  exit 1
-fi
-test "$(grep -Fc -- 'sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}' "$remote")" -eq 1
-test "$(grep -Fc -- 'sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}' "$remote")" -eq 1
-for required in sccache-capability-probe sccache-credential-class; do
-  grep -Fq -- "$required" "$cache_connect"
-  grep -Fq -- "$required" "$setup"
-done
-for required in 'class S3CacheCapabilityProbe' 'AbortSignal.timeout(5000)' 'boundedBody' '"head_bucket"' '"list_object"' '"put_object"' '"get_object"' '"head_object"' '"delete_object"' '"put_object_denied"' 'bytes=0-0' 'empty_bucket' 'NOOK_SCCACHE_CAPABILITY' 'credential_class' 'sccache capability verification failed'; do
-  grep -Fq -- "$required" "$cache_connect_runtime"
-done
-grep -Fq -- '${{ runner.temp }}/nook-sccache-capability.json' "$cache_telemetry_action"
-grep -Fq -- 'if [ "$NOOK_SCCACHE_CREDENTIAL_CLASS" != "$expected_credential_class" ]' <<<"$batch_job"
-grep -Fq -- 'credential_class=$NOOK_SCCACHE_CREDENTIAL_CLASS' <<<"$batch_job"
-if grep -Eq -- 'console\.(log|error).*endpoint|process\.(stdout|stderr)\.write.*endpoint' "$cache_connect_runtime"; then
-  echo 'sccache capability diagnostics expose endpoint details' >&2
+grep -Fq -- 'SCCACHE_S3_RW_MODE: READ_WRITE' "$remote"
+test "$(grep -Fc -- 'sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}' "$remote")" -eq 3
+test "$(grep -Fc -- 'sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}' "$remote")" -eq 3
+if rg -n --fixed-strings 'NOOK_SCCACHE_REMOTE_' "$remote" "$workflows_dir/../../infra/tasks/sccache.yml"; then
+  echo 'retired secondary sccache identity remains' >&2
   exit 1
 fi
 for forbidden in build:compile-cache-seed compile-generation COMPILE_GENERATION GHA_RUST_COMPILE_GENERATION; do
@@ -67,9 +32,12 @@ for forbidden in build:compile-cache-seed compile-generation COMPILE_GENERATION 
 done
 test ! -e "$workflows_dir/../scripts/compile-deps-cache-seed.sh"
 grep -Fq -- 'workflow_args+=(--raw-field "tasks=$requested_tasks")' "$remote_taskfile"
-for required in 'publication requires READ_WRITE compiler-cache authority' 'verification requires READ_ONLY compiler-cache authority' 'id=sccache_runtime_mode' 'No remote BuildKit cache is available; performing a cold solve with sccache'; do
+for required in 'trusted build:compile requires the shared READ_WRITE compiler cache mode' 'id=sccache_runtime_mode' 'No remote BuildKit cache is available; performing a cold solve with sccache'; do
   grep -Fq -- "$required" "$compile_script"
 done
+grep -Fq -- 'SCCACHE_OPTIONAL=1' "$workflows_dir/../actions/nook-cache-connect/main.js"
+grep -Fq -- '"reason":"credentials_unavailable"' "$sccache_fallback_contract"
+grep -Fq -- 'Sccache no-secret route: compiler ran directly without remote access' "$sccache_fallback_contract"
 runtime_secret_line="$(grep -nF -- '--set=build-compile.secrets=id=sccache_runtime_mode,src=${runtime_mode_file}' "$compile_script" | cut -d: -f1)"
 credential_branch_line="$(grep -nF -- 'if [ -n "$access_key_file" ]' "$compile_script" | cut -d: -f1)"
 test -n "$runtime_secret_line"
@@ -114,22 +82,27 @@ if grep -Fq -- 'id=sccache_runtime_mode,required=false' "$compile_dockerfile"; t
   echo 'compile vertex permits missing runtime authority secret' >&2
   exit 1
 fi
-for required in 'unset SCCACHE_ERROR_LOG' 'NOOK_SCCACHE_CONFIGURATION_FAILURE {"reason":"error_log_conflicts_with_client_side"}' 'AWS_MAX_ATTEMPTS:=1' 'NOOK_SCCACHE_START_TIMEOUT:-2s' 'SCCACHE_CLIENT_SIDE:=1' '[ "${SCCACHE_S3_RW_MODE:-READ_WRITE}" = READ_ONLY ]' '"remote_writes":0' 'cache_transport_unavailable' 'cache_circuit_open'; do
+for required in 'unset SCCACHE_ERROR_LOG' 'NOOK_SCCACHE_CONFIGURATION_FAILURE {"reason":"error_log_conflicts_with_client_side"}' 'AWS_MAX_ATTEMPTS:=1' 'NOOK_SCCACHE_START_TIMEOUT:-2s' 'SCCACHE_CLIENT_SIDE:=1' '"remote_writes":0' 'cache_transport_unavailable' 'cache_circuit_open'; do
   grep -Fq -- "$required" "$sccache_wrapper"
 done
-for required in 'compile_requests":339' 'cache_misses":{"counts":{"Rust":275' '"cache_errors":0' '"cache_write_errors":0' '"cache_write_errors":1' '"cache_writes":0' '"cache_writes":275' '"baked_runtime_mode":"READ_ONLY"' '"runtime_mode":"READ_WRITE"' '"runtime_mode":"READ_ONLY"' '"runtime_mode_source":"runtime_secret"' '"counter_reliability":"backend_incomplete"' 'NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION' 'NOOK_SCCACHE_PUBLICATION_FAILURE'; do
+for required in 'compile_requests":339' 'cache_misses":{"counts":{"Rust":275' '"cache_errors":0' '"cache_write_errors":0' '"cache_write_errors":1' '"cache_writes":0' '"cache_writes":275' '"baked_runtime_mode":"READ_WRITE"' '"runtime_mode":"READ_WRITE"' '"runtime_mode_source":"runtime_secret"' '"counter_reliability":"backend_incomplete"' 'NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION' 'NOOK_SCCACHE_HEALTH_WARNING'; do
   grep -Fq -- "$required" "$sccache_publication_contract"
 done
-grep -Fq -- 'SCCACHE_S3_RW_MODE=READ_ONLY FAKE_SCCACHE_RESULT=success' "$sccache_fallback_contract"
+grep -Fq -- 'SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=success' "$sccache_fallback_contract"
 grep -Fq -- 'effective sccache mode: READ_WRITE' "$sccache_fallback_contract"
-for required in cache_hits cache_misses cache_write_errors cache_writes counter_reliability publication_status NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION NOOK_SCCACHE_PUBLICATION_FAILURE NOOK_SCCACHE_READ_ONLY_WRITE_FAILURE; do grep -Fq -- "$required" "$sccache_report"; done
-for required in 'SCCACHE_ERROR_LOG=/tmp/inherited-sccache-error.log' 'test -z "${SCCACHE_ERROR_LOG:-}"' 'SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport' 'READ_WRITE failure silently lost publication authority' 'test "$compiler_status" -eq 7' 'two compiler invocations performed one startup probe'; do
+for required in cache_hits cache_misses cache_write_errors cache_writes counter_reliability publication_status NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION NOOK_SCCACHE_HEALTH_WARNING; do grep -Fq -- "$required" "$sccache_report"; done
+for required in 'SCCACHE_ERROR_LOG=/tmp/inherited-sccache-error.log' 'test -z "${SCCACHE_ERROR_LOG:-}"' 'SCCACHE_S3_RW_MODE=READ_WRITE FAKE_SCCACHE_RESULT=transport' 'product compilation remained available' 'test "$compiler_status" -eq 7' 'two compiler invocations performed one startup probe'; do
   grep -Fq -- "$required" "$sccache_fallback_contract"
 done
-for required in 'Client-side cold publication: zero errors plus zero writes is pending verification' 'status=publication_pending_verification' 'inherited SCCACHE_ERROR_LOG disables unsanitized client-side completion' 'compile publication error-log conflict: cache_errors=0 cache_misses=1 cache_writes=0 status=failed' 'Publication guard: read-only S3 identity cannot publish compiler objects' 'cache_write_errors=275 cache_writes=0 status=failed' 'write_identity_denied' 'bake-sim-sccache-error-log-sanitized' 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_ONLY runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' 'Target-specific authority: a sibling without its secret fails distinctly' 'dependency-cache sibling status=failed reason=missing-runtime-authority' 'Cold normal publish: no seed prerequisite, sccache READ_WRITE' 'compile_targets=(compile-dependency-cache compile-warm)' 'Next unseeded head: dependency reuse plus cross-commit sccache hits' 'Repeated next-head zero hits: publication verification fails' 'next_head_zero_hits' 'bake-sim-sccache-hit' 'Read-only replay: exact BuildKit reuse and zero writes' 'cache_writes=0 registry_exports=0' 'elapsed=${compile_elapsed}s limit=300s'; do
+for required in 'Client-side cold publication: zero errors plus zero writes is pending verification' 'status=publication_pending_verification' 'inherited SCCACHE_ERROR_LOG disables unsanitized client-side completion' 'compile publication error-log conflict: cache_errors=0 cache_misses=1 cache_writes=0 status=failed' 'bake-sim-sccache-error-log-sanitized' 'NOOK_SCCACHE_AUTHORITY baked_runtime_mode=READ_WRITE runtime_mode=READ_WRITE runtime_mode_source=runtime_secret' 'Target-specific authority: a sibling without its secret fails distinctly' 'dependency-cache sibling status=failed reason=missing-runtime-authority' 'Cold normal publish: no seed prerequisite, sccache READ_WRITE' 'compile_targets=(compile-dependency-cache compile-warm)' 'Next unseeded head: dependency reuse plus cross-commit sccache hits' 'Repeated next-head zero hits: publication verification fails' 'next_head_zero_hits' 'bake-sim-sccache-hit' 'No-BuildKit-export replay: exact reuse with trusted sccache access' 'sccache_mode=READ_WRITE registry_exports=0' 'elapsed=${compile_elapsed}s limit=300s'; do
   grep -Fq -- "$required" "$proof"
 done
 cache_telemetry="$workflows_dir/lib/cache-telemetry.mjs"
+pr_cache_health="$workflows_dir/lib/pr-cache-health.mjs"
+if grep -Fq -- 'unexpected_read_only_sccache_writes' "$pr_cache_health"; then
+  echo 'BuildKit no-export state incorrectly disables trusted sccache writes' >&2
+  exit 1
+fi
 for required in 'baked_runtime_mode' 'runtime_mode_source' 'counter_reliability' 'publication_status' 'cache_write_errors' 'inconsistent sccache ${field}' 'sccache authority: baked=' 'sccache counters:' 'sccache publication:' 'GHA_CACHE_EXACT_PROBE_FAILURE_CLASS' 'failure_class'; do
   grep -Fq -- "$required" "$cache_telemetry"
 done

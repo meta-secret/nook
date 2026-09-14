@@ -77,14 +77,6 @@ inputs:
     description: SeaweedFS S3 bucket used by this trust domain.
     required: false
     default: "nook-sccache"
-  sccache-capability-probe:
-    description: Verify the selected S3 compiler-cache capability before compilation.
-    required: false
-    default: "none"
-  sccache-credential-class:
-    description: Sanitized compiler-cache identity classification.
-    required: false
-    default: "unspecified"
 
 runs:
   using: composite
@@ -170,8 +162,6 @@ runs:
         sccache-secret-key: ${{ inputs.sccache-secret-key }}
         sccache-endpoint: ${{ inputs.sccache-endpoint }}
         sccache-bucket: ${{ inputs.sccache-bucket }}
-        sccache-capability-probe: ${{ inputs.sccache-capability-probe }}
-        sccache-credential-class: ${{ inputs.sccache-credential-class }}
 
     - name: Select hosted BuildKit cache
       shell: bash

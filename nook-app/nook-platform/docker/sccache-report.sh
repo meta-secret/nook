@@ -24,13 +24,10 @@ if [ -r "$runtime_mode_file" ]; then
   runtime_mode="$(cat "$runtime_mode_file")"
   runtime_mode_source=runtime_secret
 fi
-case "$runtime_mode" in
-  READ_ONLY|READ_WRITE) ;;
-  *)
-    printf 'nook-sccache-report: unsupported effective runtime mode: %s\n' "$runtime_mode" >&2
-    exit 2
-    ;;
-esac
+if [ "$runtime_mode" != READ_WRITE ]; then
+  printf 'nook-sccache-report: unsupported effective runtime mode: %s\n' "$runtime_mode" >&2
+  exit 2
+fi
 if stats_json="$("$sccache_binary" --show-stats --stats-format=json 2>/dev/null)"; then
   report="$(
     jq -c \
@@ -47,7 +44,7 @@ if stats_json="$("$sccache_binary" --show-stats --stats-format=json 2>/dev/null)
         runtime_mode_source: $runtime_mode_source,
         client_side: ($client_side == "1"),
         counter_reliability: (if $client_side == "1" then "backend_incomplete" else "authoritative" end),
-        publication_status: (if $runtime_mode == "READ_ONLY" then "not_applicable" elif $client_side == "1" and (.stats.cache_writes // 0) == 0 then "pending_verification" else "counters_observed" end),
+        publication_status: (if $client_side == "1" and (.stats.cache_writes // 0) == 0 then "pending_verification" else "counters_observed" end),
         compile_requests: (.stats.compile_requests // 0),
         requests_executed: (.stats.requests_executed // 0),
         cache_hits: (.stats.cache_hits | count_values),
@@ -60,21 +57,14 @@ if stats_json="$("$sccache_binary" --show-stats --stats-format=json 2>/dev/null)
   )" || report=""
   if [ -n "$report" ]; then
     printf 'NOOK_SCCACHE_STATS %s\n' "$report"
-    if [ "$runtime_mode" = READ_WRITE ] \
-      && jq -e '.cache_errors > 0 or .cache_write_errors > 0 or (.client_side == false and .cache_misses > 0 and .cache_writes == 0)' \
-        >/dev/null 2>&1 <<<"$report"; then
-      printf 'NOOK_SCCACHE_PUBLICATION_FAILURE %s\n' "$report" >&2
-      exit 1
+    if jq -e '.cache_errors > 0 or .cache_write_errors > 0' \
+      >/dev/null 2>&1 <<<"$report"; then
+      printf 'NOOK_SCCACHE_HEALTH_WARNING %s\n' "$report" >&2
     fi
     if [ "$runtime_mode" = READ_WRITE ] \
       && jq -e '.client_side == true and .cache_errors == 0 and .cache_write_errors == 0 and .cache_writes == 0' \
         >/dev/null 2>&1 <<<"$report"; then
       printf 'NOOK_SCCACHE_PUBLICATION_PENDING_VERIFICATION %s\n' "$report" >&2
-    fi
-    if [ "$runtime_mode" = READ_ONLY ] \
-      && jq -e '.cache_writes > 0' >/dev/null 2>&1 <<<"$report"; then
-      printf 'NOOK_SCCACHE_READ_ONLY_WRITE_FAILURE %s\n' "$report" >&2
-      exit 1
     fi
     exit 0
   fi

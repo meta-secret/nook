@@ -52,9 +52,7 @@ runs:
       uses: actions/upload-artifact@v7
       with:
         name: cache-telemetry-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}${{ inputs.artifact-suffix && format('-{0}', inputs.artifact-suffix) || '' }}
-        path: |
-          ${{ runner.temp }}/nook-cache-telemetry/${{ github.job }}${{ inputs.artifact-suffix && format('-{0}', inputs.artifact-suffix) || '' }}.json
-          ${{ runner.temp }}/nook-sccache-capability.json
+        path: ${{ runner.temp }}/nook-cache-telemetry/${{ github.job }}${{ inputs.artifact-suffix && format('-{0}', inputs.artifact-suffix) || '' }}.json
         retention-days: 30
         if-no-files-found: error
         overwrite: true

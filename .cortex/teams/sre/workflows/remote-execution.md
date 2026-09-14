@@ -112,9 +112,8 @@ ARC cache rules:
 - Publish commit-scoped refs only under `nook/remote-buildcache/**`.
 - Treat `nook-build-compile-v3` as the minimum compatible exact-source
   generation. Never probe or import legacy `v2` source manifests as warm-build
-  evidence. Use the isolated maintenance seed to bootstrap a missing current
-  `v3` graph from recipe-fingerprinted dependencies and, when available, a
-  compatible immutable first-parent `v3` source graph.
+  evidence. An ordinary compile populates missing dependency and exact-source
+  state without a preparatory task.
 - Publish shared Main refs only from trusted Main.
 - Keep Hive's exact-head lineage separate.
 - Never use GitHub Actions cache for BuildKit layers.
@@ -132,8 +131,10 @@ Security rules:
 - Prohibit `docker run`, `docker create`, `docker start`, `docker exec`, and equivalent container runtime lifecycle commands inside cluster Pods.
 - Run Playwright directly in a purpose-built browser Pod image. Installing Playwright directly in an Actions Pod is the slower fallback; never launch a browser container from another Pod.
 - Treat BuildKit as a build-only service. A produced image executes later as an ordinary Kubernetes Pod or Job.
-- Give Remote read-only access to Main cache refs.
-- Give Remote write access only to commit-scoped refs.
+- Use the single GitHub sccache credential pair in `READ_WRITE` mode whenever
+  the pair is available. Secret absence is the complete remote-cache boundary
+  and falls back safely without classifying the triggering event.
+- Keep BuildKit registry export authority task-controlled and scoped.
 - Mount SeaweedFS credentials only as fixed BuildKit secrets.
 - Never place credential bytes in build arguments, layers, or cache checksums.
 
