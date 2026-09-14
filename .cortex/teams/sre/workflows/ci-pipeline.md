@@ -2,7 +2,7 @@
 
 ## Agent delivery applicability
 
-Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
+Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
 Runtime workflow details below do not grant permission to run local tests or
 feature-stage slow checks.
@@ -13,8 +13,8 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 
 Agent worklogs and statistics live in `meta-secret/nook-workbench`, so they do
 not create Nook branches, PRs, product validation, or recursive Main builds.
-See [issues](../../../gizmo/workflows/issues.md),
-[agent statistics](../../../gizmo/workflows/agent-statistics.md), and
+See [issues](../../../gizmo-prime/workflows/issues.md),
+[agent statistics](../../../gizmo-prime/workflows/agent-statistics.md), and
 [main-build-statistics.md](main-build-statistics.md).
 
 ## Central CI entrypoint
@@ -187,6 +187,33 @@ Cancellation is scoped to work that a newer run actually supersedes:
 - Main is serialized: an active run completes to protect its cache writers, while the single pending slot coalesces bursts to the newest merged revision.
 
 ### Concurrency scopes
+
+- **Central CI (`ci.yml`)**
+  - Scope: `main`, `dev-pr`, `pr-<number>`, or an event-specific run group.
+  - Cancel active run: No; `cancel-in-progress: false` preserves every active
+    validation run and its evidence.
+  - Reason: Validation and cache-publication evidence remains available even
+    when a newer event targets the same logical source.
+- **Remote task (`remote.yml`)**
+  - Scope: ref, selected task, and dispatch nonce.
+  - Cancel active run: No.
+  - Reason: Selected task batches complete sequentially without interrupting
+    their prepared BuildKit state.
+- **Manual PR e2e (`e2e-pr.yml`)**
+  - Scope: PR number and suite.
+  - Cancel active run: Yes.
+  - Reason: A repeated run of the same explicitly selected suite supersedes its
+    older debug build.
+- **Web research (`web-research.yml`)**
+  - Scope: workflow-triggered preview or branch execution.
+  - Cancel active run: Workflow-owned; untrusted validation remains isolated
+    from trusted ARC work.
+- **Stateful publishers (`dev-pr-manager.yml`, `release.yml`, and
+  `pr-validation-handoff.yml`)**
+  - Scope: publisher-specific group or source run identity.
+  - Cancel active run: No.
+  - Reason: Do not interrupt PR promotion, release deployment, or evidence
+    handoff state.
 
 ## Production release strategy
 

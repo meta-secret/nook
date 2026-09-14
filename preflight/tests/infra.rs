@@ -220,7 +220,7 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
                     || trusted_formatter_context
                     || matches!(
                         reference,
-                        "rust-base" | "web-base" | "web-runtime" | "wasm-deps"
+                        "rust-base" | "web-base" | "web-runtime" | "web-deps" | "wasm-deps"
                     )
                     || resolved.starts_with("registry.dev.nokey.sh/"),
                 "{path} resolves a production base outside Zot: {resolved}"

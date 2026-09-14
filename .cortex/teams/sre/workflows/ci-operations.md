@@ -2,7 +2,7 @@
 
 ## Agent delivery applicability
 
-Follow the [dev delivery contract](../../../gizmo/architecture/dev-delivery.md) for
+Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
 feature compilation and the manually run dev manager's slow PR cycle.
 Runtime workflow details below document current CI operations; they do not
 grant permission to run local tests or restore superseded delivery stages.
@@ -52,8 +52,8 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
 Full reference: [logging.md § Debugging, troubleshooting, and CI verification](../../../shared/references/logging.md#debugging-troubleshooting-and-ci-verification).
 
 Local `task ci:pr` remains available as an optional warm-cache debug mirror.
-See [pull request validation](../../../gizmo/workflows/pull-requests.md)
-and [mission delivery](../../../gizmo/workflows/mission-delivery.md).
+See [pull request validation](../../../gizmo-prime/workflows/pull-requests.md)
+and [mission delivery](../../../gizmo-prime/workflows/mission-delivery.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
 
@@ -186,7 +186,7 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 3. **Do** return a formatted Team Agent commit for Gizmo to integrate, push,
    and validate; never run heavy product work locally.
 4. **Do** update this doc and
-   [pull requests](../../../gizmo/workflows/pull-requests.md) when workflow
+   [pull requests](../../../gizmo-prime/workflows/pull-requests.md) when workflow
    behavior changes.
 5. Explicitly labeled PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds.
    - UI-changing PRs must still add or update their focused headless demo specs.
@@ -202,4 +202,4 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
    - Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 
-See also: [ARCHITECTURE.md §7](../../../shared/architecture/system.md#7-the-engineering-harness), [pull requests](../../../gizmo/workflows/pull-requests.md).
+See also: [ARCHITECTURE.md §7](../../../shared/architecture/system.md#7-the-engineering-harness), [pull requests](../../../gizmo-prime/workflows/pull-requests.md).

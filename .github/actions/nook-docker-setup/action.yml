@@ -29,6 +29,13 @@ inputs:
       nook/buildcache refs.
     required: false
     default: "false"
+  publish-compile-cache:
+    description: >-
+      Build-only compile cache contract: true publishes the exact-head source cache;
+      false imports caches without exporting them. This input is valid only for
+      the remote build:compile task.
+    required: false
+    default: "true"
   require-e2e-cache:
     description: Require the browser-image cache lineage for this job.
     required: false
@@ -181,6 +188,34 @@ runs:
           fi
         fi
         isolated_cache_write="${{ inputs.isolated-cache-write }}"
+        publish_compile_cache="${{ inputs.publish-compile-cache }}"
+        case "$publish_compile_cache" in
+          true|false) ;;
+          *)
+            echo "publish-compile-cache must be true or false (got: ${publish_compile_cache:-empty})" >&2
+            exit 1
+            ;;
+        esac
+        remote_compile_cache_write=""
+        if [ "$event_name" = "workflow_dispatch" ] \
+          && [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ]; then
+          # Feature source output is exact-head scoped. Dependencies use their
+          # content fingerprint below.
+          if [ "$publish_compile_cache" = "true" ]; then
+            remote_compile_cache_write=1
+            echo "build:compile publication mode enables exact-head cache export"
+          else
+            echo "build:compile read-only verification imports caches without registry export"
+          fi
+        elif [ "$publish_compile_cache" != "true" ]; then
+          echo "publish-compile-cache=false requires the remote build:compile task" >&2
+          exit 1
+        fi
+        if [ "$publish_compile_cache" = "true" ]; then
+          echo "NOOK_COMPILE_CACHE_MODE=publish" >> "$GITHUB_ENV"
+        else
+          echo "NOOK_COMPILE_CACHE_MODE=read-only" >> "$GITHUB_ENV"
+        fi
         if [ "$isolated_cache_write" = "true" ]; then
           if [ "${{ inputs.main-cache-only }}" != "true" ] \
             || [ "${{ inputs.cache-write }}" != "false" ]; then
@@ -224,10 +259,7 @@ runs:
             # Key by PR head SHA (not the merge GITHUB_SHA) so local HEAD publish matches.
             scope_sha="${{ github.event.pull_request.head.sha }}"
           else
-            if [ -z "$NOOK_REMOTE_TASK_SELECTION" ]; then
-              echo "isolated-cache-write requires a dispatched task selection" >&2
-              exit 1
-            fi
+            : "${NOOK_REMOTE_TASK_SELECTION:?isolated-cache-write requires a dispatched task selection}"
             scope_sha="$(git rev-parse HEAD)"
           fi
           if [[ ! "$scope_sha" =~ ^[0-9a-f]{40}$ ]]; then
@@ -395,7 +427,9 @@ runs:
         esac
 
         cache_write_enabled=""
-        if [ "$isolated_cache_write" = "true" ]; then
+        if [ -n "$remote_compile_cache_write" ]; then
+          cache_write_enabled=1
+        elif [ "$isolated_cache_write" = "true" ]; then
           if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
             # Even mode=min includes the final result layer. Rust dependency
             # targets can exceed 15 GiB, so parallel PR uploads overload Zot's
@@ -407,6 +441,13 @@ runs:
           fi
         elif [ -z "$read_only" ] && [ "${{ inputs.cache-write }}" = "true" ]; then
           cache_write_enabled=1
+        fi
+        # The Delivery-owned read-only compile handoff is an explicit no-op for
+        # registry publication. Keep this guard next to the generic cache flag
+        # so a future cache-write path cannot accidentally re-enable export.
+        if [ "$NOOK_REMOTE_TASK_SELECTION" = "build:compile" ] \
+          && [ "$publish_compile_cache" = "false" ]; then
+          cache_write_enabled=""
         fi
         echo "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled" >> "$GITHUB_ENV"
 

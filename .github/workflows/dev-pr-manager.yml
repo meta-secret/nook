@@ -23,7 +23,7 @@ concurrency:
 jobs:
   manage:
     name: Create or update dev-to-main PR
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}

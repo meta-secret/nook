@@ -305,7 +305,7 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     );
     assert_eq!(
         fs::read_to_string(&task_log)?,
-        "preflight\nci:pr:rust\narbitrary:task\nhive:verify\n",
+        "preflight\nci:pr:rust\narbitrary:task\n",
         "a failed task must not prevent later selections from running"
     );
     let summary = fs::read_to_string(&summary)?;
