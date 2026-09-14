@@ -32,7 +32,10 @@ import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   extensionSessionLifecycle,
 } from './session-lifecycle'
-import { websiteLoginOptionsWireAdapter } from './website-login-options-wire-adapter'
+import {
+  websiteLoginOptionsWireAdapter,
+  type WebsiteLoginOptionsTransportValue,
+} from './website-login-options-wire-adapter'
 
 type PendingAuthenticatorPicker = {
   requestId: string
@@ -767,7 +770,9 @@ class AccountPickerSessions {
     sender,
     dependencies,
     openUnavailableCompanion,
-  }: WebsiteLoginOptionsResponseArgs): Promise<unknown> {
+  }: WebsiteLoginOptionsResponseArgs): Promise<
+    WebsiteLoginOptionsTransportValue
+  > {
     const resolvedDependencies = ((v) =>
       v ? v : this.websiteLoginOptionsDependencies)(dependencies)
     const authorizationGeneration =
@@ -841,7 +846,9 @@ class AccountPickerSessions {
     return { ok: true, status: 'ready', authorizationGeneration, accounts }
   }
 
-  async websiteLoginOptions(args: WebsiteLoginOptionsArgs): Promise<unknown> {
+  async websiteLoginOptions(
+    args: WebsiteLoginOptionsArgs,
+  ): Promise<WebsiteLoginOptionsTransportValue> {
     const responseRequest: WebsiteLoginOptionsResponseArgs = {
       ...args,
       openUnavailableCompanion: true,

@@ -5,6 +5,12 @@ import {
   type WebsiteLoginOptionsWireValue,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
+export type WebsiteLoginOptionsTransportValue =
+  | WebsiteLoginWireObject
+  | WebsiteLoginWireObject[]
+  | string
+  | boolean
+
 type WebsiteLoginWireObject = {
   [key: string]:
     string | boolean | WebsiteLoginWireObject | WebsiteLoginWireObject[]
@@ -12,14 +18,18 @@ type WebsiteLoginWireObject = {
 
 /** Owns admission of the Rust/WASM website-login options wire projection. */
 class WebsiteLoginOptionsWireAdapter {
-  decode(value: unknown): WebsiteLoginMatchAvailability {
+  decode(
+    value: WebsiteLoginOptionsTransportValue,
+  ): WebsiteLoginMatchAvailability {
     if (!this.isOptions(value)) {
       return unavailable_website_login_match_availability()
     }
     return decode_website_login_match_availability(value)
   }
 
-  private isOptions(value: unknown): value is WebsiteLoginOptionsWireValue {
+  private isOptions(
+    value: WebsiteLoginOptionsTransportValue,
+  ): value is WebsiteLoginOptionsWireValue {
     if (!this.isObject(value)) return false
     if (typeof value.ok !== 'boolean') return false
     if (!value.ok) return typeof value.reason === 'string'
@@ -36,11 +46,13 @@ class WebsiteLoginOptionsWireAdapter {
     return value.accounts.every((account) => this.isAccount(account))
   }
 
-  private isObject(value: unknown): value is WebsiteLoginWireObject {
+  private isObject(
+    value: WebsiteLoginOptionsTransportValue,
+  ): value is WebsiteLoginWireObject {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
   }
 
-  private isAccount(value: unknown): boolean {
+  private isAccount(value: WebsiteLoginOptionsTransportValue): boolean {
     if (!this.isObject(value)) return false
     return (
       typeof value.vaultStoreId === 'string' &&
