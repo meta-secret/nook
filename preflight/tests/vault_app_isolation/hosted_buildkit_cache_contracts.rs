@@ -803,9 +803,16 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
 fn assert_release_wasm_cache_contract(root: &Path) {
     let wasm_dockerfile = (root).read("nook-app/nook-platform/docker/rust/product.Dockerfile");
     assert!(
-        wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm-source")
+        wasm_dockerfile.contains("FROM builder-wasm-deps AS builder-wasm-source-base")
+            && wasm_dockerfile.contains("FROM builder-wasm-source-base AS builder-wasm-source")
+            && wasm_dockerfile.contains("FROM builder-wasm-source-base AS builder-nook-wasm-source")
+            && wasm_dockerfile
+                .contains("FROM builder-wasm-source-base AS builder-companion-wasm-source")
             && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-clippy")
-            && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-build")
+            && wasm_dockerfile.contains("FROM builder-nook-wasm-source AS builder-nook-wasm-build")
+            && wasm_dockerfile
+                .contains("FROM builder-companion-wasm-source AS builder-companion-wasm-build")
+            && wasm_dockerfile.contains("FROM builder-nook-wasm-build AS builder-wasm-build")
             && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-tests")
             && wasm_dockerfile
                 .contains("FROM wasm-coverage-toolchain AS builder-wasm-node-deps")
@@ -814,9 +821,8 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile.contains(
                 "COPY --from=builder-wasm-tests /meta-secret/nook/nook-app/nook-platform/",
             )
-            && wasm_dockerfile.contains("wasm-source-app-common")
-            && wasm_dockerfile.contains("wasm-source-core")
-            && wasm_dockerfile.contains("wasm-source-wasm")
+            && wasm_dockerfile.contains("wasm-source-nook-wasm")
+            && wasm_dockerfile.contains("wasm-source-companion-wasm")
             && wasm_dockerfile
                 .contains("COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed")
             && wasm_dockerfile.contains(
@@ -849,6 +855,55 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             .read("nook-app/nook-platform/nook-wasm/Taskfile.yml")
             .contains("wasm-pack test --node --release nook-wasm"),
         "the documented manual WASM test task must use the same release profile as hosted CI"
+    );
+}
+
+#[test]
+fn wasm_compiler_cache_graphs_are_package_specific() {
+    let root = RepositoryFixture::repository_root();
+    let dockerfile = root.read("nook-app/nook-platform/docker/rust/product.Dockerfile");
+
+    assert!(
+        dockerfile.contains("FROM builder-wasm-deps AS builder-wasm-source-base")
+            && dockerfile.contains("FROM builder-wasm-source-base AS builder-wasm-source")
+            && dockerfile.contains("FROM builder-wasm-source-base AS builder-nook-wasm-source")
+            && dockerfile
+                .contains("FROM builder-wasm-source-base AS builder-companion-wasm-source")
+            && dockerfile.contains("FROM builder-nook-wasm-source AS builder-nook-wasm-build")
+            && dockerfile
+                .contains("FROM builder-companion-wasm-source AS builder-companion-wasm-build"),
+        "the two WASM packages must have sibling source and package-build stages"
+    );
+
+    let nook_source = dockerfile
+        .split_once("FROM builder-wasm-source-base AS builder-nook-wasm-source")
+        .and_then(|(_, rest)| rest.split_once("\nFROM ").map(|(stage, _)| stage))
+        .expect("nook-wasm source stage must be delimited by the next Docker stage");
+    assert!(
+        nook_source.contains("COPY nook-app/nook-platform/nook-wasm nook-wasm")
+            && nook_source.contains(
+                "cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm"
+            )
+            && nook_source.contains("nook-wasm/.wasm-source-sha256")
+            && !nook_source.contains("nook-companion-wasm/.wasm-source-sha256")
+            && !nook_source.contains("-p nook-companion-wasm"),
+        "nook-wasm source compilation must not share a Cargo invocation with the companion"
+    );
+
+    let companion_source = dockerfile
+        .split_once("FROM builder-wasm-source-base AS builder-companion-wasm-source")
+        .and_then(|(_, rest)| rest.split_once("\nFROM ").map(|(stage, _)| stage))
+        .expect("companion WASM source stage must be delimited by the next Docker stage");
+    assert!(
+        companion_source
+            .contains("COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm")
+            && companion_source.contains(
+                "cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm"
+            )
+            && companion_source.contains("nook-companion-wasm/.wasm-source-sha256")
+            && !companion_source.contains("nook-wasm/.wasm-source-sha256")
+            && !companion_source.contains("-p nook-wasm"),
+        "companion WASM source compilation must not share a Cargo invocation with nook-wasm"
     );
 }
 
