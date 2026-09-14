@@ -45,7 +45,7 @@ type AssertContainedModuleSpecifierRequest = {
 };
 
 const EXECUTABLE_SKILL_SOURCE_PATH =
-  /^(\.cortex\/(?:gizmo|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/dynamic-skills\/[a-z0-9]+(?:-[a-z0-9]+)*\/scripts)\/(src|tests)\/.+\.ts$/u;
+  /^(\.cortex\/(?:gizmo-prime|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/dynamic-skills\/[a-z0-9]+(?:-[a-z0-9]+)*\/scripts)\/(src|tests)\/.+\.ts$/u;
 
 type AssertNoForbiddenCapabilityRequest = {
   readonly checker: ts.TypeChecker;

@@ -139,6 +139,9 @@ export class StructuralExpertsInvokeScenario {
       runId: `${prefix}-${randomUUID()}`,
       expert: 'code_refactoring_expert',
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       task: 'inspect-code',
       attempt: 1,
       depth: 2,
@@ -375,6 +378,9 @@ test('out-of-snapshot evidence becomes a replayable sanitized failed terminal', 
   const request: StructuralEvidenceInvocationRequest = {
     ...base,
     sourceCommit: TRACKED_SOURCE_COMMIT,
+    originMainSha: TRACKED_SOURCE_COMMIT,
+    pinnedLocalDevSha: TRACKED_SOURCE_COMMIT,
+    featureHeadSha: TRACKED_SOURCE_COMMIT,
     evidencePaths: ['Taskfile.yml'],
   };
   const runDirectory = StructuralExpertsInvokeScenario.processingRunDirectory(

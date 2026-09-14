@@ -1,6 +1,9 @@
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import { beforeAll, describe, expect, test } from 'bun:test'
-import type { AuthenticationPasskeyControlObservation } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  AuthenticationObservationBindingToken,
+  AuthenticationPasskeyControlObservation,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   AuthenticationWorkflowApproval as AuthenticationWorkflowApprovalSchema,
   AuthenticationWorkflowApprovalDisposition,
@@ -99,13 +102,7 @@ function approvalMatcherDependencies(): NonNullable<
       approvedFacts: ApprovedFacts,
     ) => {
       approvedFactsJson = JSON.stringify(approvedFacts)
-      return {} as ReturnType<
-        NonNullable<
-          Parameters<
-            typeof AuthenticationWorkflowApprovalSchema.compare
-          >[0]['matcherDependencies']
-        >['bind_authentication_page_observation_facts']
-      >
+      return '' satisfies AuthenticationObservationBindingToken
     },
     authentication_page_observation_facts_match_binding: (
       _binding: FactsBinding,

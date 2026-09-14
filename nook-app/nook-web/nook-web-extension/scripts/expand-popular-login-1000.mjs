@@ -40,240 +40,349 @@ const siteShellsPath = path.join(fixturesRoot, 'site-shells.json')
 /** @typedef {{ fields: Array<Record<string, string>>, submit: Record<string, string> }} StoredTemplateStep */
 /** @typedef {{ id: string, quirks: string[], steps: StoredTemplateStep[] }} StoredTemplate */
 
-/** Keep hand-tuned Tier-1 / family shells from existing templates when present. */
-function loadExistingTemplates() {
-  /** @type {Map<string, StoredTemplate>} */
-  const map = new Map()
-  for (const name of readdirSync(templatesDir).filter((n) =>
-    n.endsWith('.json'),
-  )) {
-    const id = name.replace(/\.json$/u, '')
-    const data = JSON.parse(readFileSync(path.join(templatesDir, name), 'utf8'))
-    map.set(id, {
-      id,
-      quirks: ((v) => (v ? v : []))(data.quirks),
-      steps: data.steps,
-    })
-  }
-  return map
-}
+/** @type {{ parse: (value: string) => unknown }} */
+const safeJson = JSON
 
-/** Extra curated destinations beyond the seeded top-100 catalog. */
-const EXTRA = [...EXTRA_PRIMARY, ...EXTRA_SECONDARY]
-
-function main() {
-  /** @type {CatalogSite[]} */
-  const seeded = JSON.parse(readFileSync(catalogPath, 'utf8'))
-  /** @type {Record<string, { template?: string, source?: string }>} */
-  const existingShells = JSON.parse(readFileSync(siteShellsPath, 'utf8'))
-  const existingTemplates = loadExistingTemplates()
-
-  /** @type {Map<string, ExpandedSite>} */
-  const byId = new Map()
-  for (const site of seeded) {
-    byId.set(site.id, {
-      ...site,
-      template: ((...[v = 'email-password']) => v)(
-        existingShells[site.id]?.template,
-      ),
-      source: ((...[v = 'research']) => v)(existingShells[site.id]?.source),
-    })
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+class PopularLoginCatalogExpansion {
+  /** @param {unknown} value @returns {value is Record<string, unknown>} */
+  static isObjectRecord(value) {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
   }
 
-  for (const [id, name, family, loginUrl, hosts, template] of EXTRA) {
+  /** @param {unknown} value @returns {value is Record<string, string>} */
+  static isStringRecord(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return false
+    return Object.values(value).every((entry) => typeof entry === 'string')
+  }
+
+  /** @param {unknown} value @returns {value is StoredTemplateStep} */
+  static isStoredTemplateStep(value) {
     if (
-      typeof id !== 'string' ||
-      typeof name !== 'string' ||
-      typeof family !== 'string' ||
-      typeof loginUrl !== 'string' ||
-      !Array.isArray(hosts) ||
-      !hosts.every((host) => typeof host === 'string') ||
-      typeof template !== 'string'
-    ) {
-      throw new Error('curated login entry has an invalid shape')
-    }
-    if (byId.has(id)) continue
-    byId.set(id, {
-      id,
-      name,
-      family,
-      loginUrl,
-      hosts,
-      template,
-      source: 'research',
-    })
-  }
-
-  const filler = buildFiller(new Set(byId.keys()))
-  for (const [id, name, family, loginUrl, hosts, template] of filler) {
-    if (byId.has(id)) continue
-    byId.set(id, {
-      id,
-      name,
-      family,
-      loginUrl,
-      hosts,
-      template,
-      source: 'research',
-    })
-    if (byId.size >= 1000) break
-  }
-
-  if (byId.size < 1000) {
-    throw new Error(`Only assembled ${byId.size} sites; need 1000`)
-  }
-
-  const sites = [...byId.values()].slice(0, 1000).map((site, index) => ({
-    id: site.id,
-    name: site.name,
-    family: site.family,
-    loginUrl: site.loginUrl,
-    hosts: site.hosts,
-    rank: index + 1,
-    template: site.template,
-    source: site.source,
-  }))
-
-  // Ensure every referenced template exists on disk.
-  const required = new Set(sites.map((s) => s.template))
-  for (const [id, shellBody] of Object.entries(NEW_TEMPLATES)) {
-    existingTemplates.set(id, { id, ...shellBody })
-  }
-  // Ensure base generics exist even if prior files missing.
-  if (!existingTemplates.has('email-password')) {
-    existingTemplates.set('email-password', {
-      id: 'email-password',
-      ...emailPassword(),
-    })
-  }
-  if (!existingTemplates.has('email-first')) {
-    existingTemplates.set('email-first', { id: 'email-first', ...emailFirst() })
-  }
-  if (!existingTemplates.has('username-password')) {
-    existingTemplates.set('username-password', {
-      id: 'username-password',
-      ...usernamePassword(),
-    })
-  }
-
-  for (const templateId of required) {
-    if (!existingTemplates.has(templateId)) {
-      throw new Error(`Missing template definition for ${templateId}`)
-    }
-  }
-
-  mkdirSync(templatesDir, { recursive: true })
-  // Rewrite templates dir with union of needed + known specials.
-  const keep = new Set([...required, ...existingTemplates.keys()])
-  for (const name of readdirSync(templatesDir).filter((n) =>
-    n.endsWith('.json'),
-  )) {
-    const id = name.replace(/\.json$/u, '')
-    if (!keep.has(id) && !required.has(id)) {
-      // keep unused specials too for capture continuity
-    }
-  }
-  for (const [id, template] of existingTemplates) {
-    if (
-      !required.has(id) &&
-      ![
-        'facebook',
-        'github',
-        'instagram',
-        'linkedin',
-        'slack',
-        'x',
-        'microsoft',
-        'google',
-        'apple',
-        'email-password',
-        'email-first',
-        'username-password',
-      ].includes(id) &&
-      !Object.keys(NEW_TEMPLATES).includes(id)
-    ) {
-      // Drop templates not referenced and not core specials
-      continue
-    }
-    writeFileSync(
-      path.join(templatesDir, `${id}.json`),
-      `${prettyJson({ id, quirks: ((v) => (v ? v : []))(template.quirks), steps: template.steps })}\n`,
+      !value ||
+      typeof value !== 'object' ||
+      !('fields' in value) ||
+      !('submit' in value)
     )
-  }
-  // Always write required templates
-  for (const templateId of required) {
-    const template = existingTemplates.get(templateId)
-    if (!template)
-      throw new Error(`Missing required template definition for ${templateId}`)
-    writeFileSync(
-      path.join(templatesDir, `${templateId}.json`),
-      `${prettyJson({ id: templateId, quirks: ((v) => (v ? v : []))(template.quirks), steps: template.steps })}\n`,
+      return false
+    return (
+      Array.isArray(value.fields) &&
+      value.fields.every((field) => this.isStringRecord(field)) &&
+      this.isStringRecord(value.submit)
     )
   }
 
-  // Remove orphan template files not in keep set of written required+specials
-  const written = new Set(
-    readdirSync(templatesDir)
-      .filter((n) => n.endsWith('.json'))
-      .map((n) => n.replace(/\.json$/u, '')),
-  )
-  for (const id of written) {
-    if (!required.has(id) && !Object.keys(NEW_TEMPLATES).includes(id)) {
-      // keep specials that may still be used by captures
-      const specials = new Set([
-        'facebook',
-        'github',
-        'instagram',
-        'linkedin',
-        'slack',
-        'x',
-        'microsoft',
-        'google',
-        'apple',
-        'email-password',
-        'email-first',
-        'username-password',
-      ])
-      if (!specials.has(id)) {
-        // leave extra anomaly templates even if sparsely used
+  /** @param {unknown} value @returns {value is StoredTemplate} */
+  static isStoredTemplate(value) {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      !('id' in value) ||
+      typeof value.id !== 'string'
+    )
+      return false
+    if (
+      !('quirks' in value) ||
+      !Array.isArray(value.quirks) ||
+      !value.quirks.every((entry) => typeof entry === 'string')
+    )
+      return false
+    return (
+      'steps' in value &&
+      Array.isArray(value.steps) &&
+      value.steps.every((step) => this.isStoredTemplateStep(step))
+    )
+  }
+
+  /** @param {unknown} value @returns {value is CatalogSite} */
+  static isCatalogSite(value) {
+    if (!value || typeof value !== 'object') return false
+    return (
+      'id' in value &&
+      typeof value.id === 'string' &&
+      'name' in value &&
+      typeof value.name === 'string' &&
+      'family' in value &&
+      typeof value.family === 'string' &&
+      'loginUrl' in value &&
+      typeof value.loginUrl === 'string' &&
+      'hosts' in value &&
+      Array.isArray(value.hosts) &&
+      value.hosts.every((host) => typeof host === 'string') &&
+      'rank' in value &&
+      typeof value.rank === 'number'
+    )
+  }
+
+  /** Keep hand-tuned Tier-1 / family shells from existing templates when present. */
+  loadExistingTemplates() {
+    /** @type {Map<string, StoredTemplate>} */
+    const map = new Map()
+    for (const name of readdirSync(templatesDir).filter((n) =>
+      n.endsWith('.json'),
+    )) {
+      const id = name.replace(/\.json$/u, '')
+      const data = safeJson.parse(
+        readFileSync(path.join(templatesDir, name), 'utf8'),
+      )
+      if (!PopularLoginCatalogExpansion.isStoredTemplate(data)) {
+        throw new Error(`Invalid stored template ${id}`)
       }
+      map.set(id, {
+        id,
+        quirks: ((v) => (v ? v : []))(data.quirks),
+        steps: data.steps,
+      })
     }
+    return map
   }
 
-  const catalog = sites.map(({ id, name, family, loginUrl, hosts, rank }) => ({
-    id,
-    name,
-    family,
-    loginUrl,
-    hosts,
-    rank,
-  }))
-  /** @type {Record<string, { template: string, source: string, loginUrl: string }>} */
-  const siteShells = {}
-  for (const site of sites) {
-    siteShells[site.id] = {
+  run() {
+    /** Extra curated destinations beyond the seeded top-100 catalog. */
+    const extra = [...EXTRA_PRIMARY, ...EXTRA_SECONDARY]
+    const seededValue = safeJson.parse(readFileSync(catalogPath, 'utf8'))
+    if (
+      !Array.isArray(seededValue) ||
+      !seededValue.every(PopularLoginCatalogExpansion.isCatalogSite)
+    ) {
+      throw new Error('Invalid popular login catalog')
+    }
+    const seeded = seededValue
+    const existingShellsValue = safeJson.parse(
+      readFileSync(siteShellsPath, 'utf8'),
+    )
+    if (!PopularLoginCatalogExpansion.isObjectRecord(existingShellsValue)) {
+      throw new Error('Invalid site shell catalog')
+    }
+    /** @type {Record<string, { template?: string, source?: string }>} */
+    const existingShells = {}
+    for (const [id, value] of Object.entries(existingShellsValue)) {
+      if (!value || typeof value !== 'object') continue
+      /** @type {{ template?: string, source?: string }} */
+      const shell = {}
+      if ('template' in value && typeof value.template === 'string')
+        shell.template = value.template
+      if ('source' in value && typeof value.source === 'string')
+        shell.source = value.source
+      existingShells[id] = shell
+    }
+    const existingTemplates = this.loadExistingTemplates()
+
+    /** @type {Map<string, ExpandedSite>} */
+    const byId = new Map()
+    for (const site of seeded) {
+      byId.set(site.id, {
+        ...site,
+        template: ((...[v = 'email-password']) => v)(
+          existingShells[site.id]?.template,
+        ),
+        source: ((...[v = 'research']) => v)(existingShells[site.id]?.source),
+      })
+    }
+
+    for (const [id, name, family, loginUrl, hosts, template] of extra) {
+      if (
+        typeof id !== 'string' ||
+        typeof name !== 'string' ||
+        typeof family !== 'string' ||
+        typeof loginUrl !== 'string' ||
+        !Array.isArray(hosts) ||
+        !hosts.every((host) => typeof host === 'string') ||
+        typeof template !== 'string'
+      ) {
+        throw new Error('curated login entry has an invalid shape')
+      }
+      if (byId.has(id)) continue
+      byId.set(id, {
+        id,
+        name,
+        family,
+        loginUrl,
+        hosts,
+        template,
+        source: 'research',
+      })
+    }
+
+    const filler = buildFiller(new Set(byId.keys()))
+    for (const [id, name, family, loginUrl, hosts, template] of filler) {
+      if (byId.has(id)) continue
+      byId.set(id, {
+        id,
+        name,
+        family,
+        loginUrl,
+        hosts,
+        template,
+        source: 'research',
+      })
+      if (byId.size >= 1000) break
+    }
+
+    if (byId.size < 1000) {
+      throw new Error(`Only assembled ${byId.size} sites; need 1000`)
+    }
+
+    const sites = [...byId.values()].slice(0, 1000).map((site, index) => ({
+      id: site.id,
+      name: site.name,
+      family: site.family,
+      loginUrl: site.loginUrl,
+      hosts: site.hosts,
+      rank: index + 1,
       template: site.template,
       source: site.source,
-      loginUrl: site.loginUrl,
+    }))
+
+    // Ensure every referenced template exists on disk.
+    const required = new Set(sites.map((s) => s.template))
+    for (const [id, shellBody] of Object.entries(NEW_TEMPLATES)) {
+      existingTemplates.set(id, { id, ...shellBody })
     }
-  }
+    // Ensure base generics exist even if prior files missing.
+    if (!existingTemplates.has('email-password')) {
+      existingTemplates.set('email-password', {
+        id: 'email-password',
+        ...emailPassword(),
+      })
+    }
+    if (!existingTemplates.has('email-first')) {
+      existingTemplates.set('email-first', {
+        id: 'email-first',
+        ...emailFirst(),
+      })
+    }
+    if (!existingTemplates.has('username-password')) {
+      existingTemplates.set('username-password', {
+        id: 'username-password',
+        ...usernamePassword(),
+      })
+    }
 
-  writeFileSync(catalogPath, `${prettyJson(catalog)}\n`)
-  writeFileSync(siteShellsPath, `${prettyJson(siteShells)}\n`)
+    for (const templateId of required) {
+      if (!existingTemplates.has(templateId)) {
+        throw new Error(`Missing template definition for ${templateId}`)
+      }
+    }
 
-  /** @type {Record<string, number>} */
-  const counts = {}
-  for (const site of sites) {
-    counts[site.template] = ((v) => (v ? v : 0))(counts[site.template]) + 1
+    mkdirSync(templatesDir, { recursive: true })
+    // Rewrite templates dir with union of needed + known specials.
+    const keep = new Set([...required, ...existingTemplates.keys()])
+    for (const name of readdirSync(templatesDir).filter((n) =>
+      n.endsWith('.json'),
+    )) {
+      const id = name.replace(/\.json$/u, '')
+      if (!keep.has(id) && !required.has(id)) {
+        // keep unused specials too for capture continuity
+      }
+    }
+    for (const [id, template] of existingTemplates) {
+      if (
+        !required.has(id) &&
+        ![
+          'facebook',
+          'github',
+          'instagram',
+          'linkedin',
+          'slack',
+          'x',
+          'microsoft',
+          'google',
+          'apple',
+          'email-password',
+          'email-first',
+          'username-password',
+        ].includes(id) &&
+        !Object.keys(NEW_TEMPLATES).includes(id)
+      ) {
+        // Drop templates not referenced and not core specials
+        continue
+      }
+      writeFileSync(
+        path.join(templatesDir, `${id}.json`),
+        `${prettyJson({ id, quirks: ((v) => (v ? v : []))(template.quirks), steps: template.steps })}\n`,
+      )
+    }
+    // Always write required templates
+    for (const templateId of required) {
+      const template = existingTemplates.get(templateId)
+      if (!template)
+        throw new Error(
+          `Missing required template definition for ${templateId}`,
+        )
+      writeFileSync(
+        path.join(templatesDir, `${templateId}.json`),
+        `${prettyJson({ id: templateId, quirks: ((v) => (v ? v : []))(template.quirks), steps: template.steps })}\n`,
+      )
+    }
+
+    // Remove orphan template files not in keep set of written required+specials
+    const written = new Set(
+      readdirSync(templatesDir)
+        .filter((n) => n.endsWith('.json'))
+        .map((n) => n.replace(/\.json$/u, '')),
+    )
+    for (const id of written) {
+      if (!required.has(id) && !Object.keys(NEW_TEMPLATES).includes(id)) {
+        // keep specials that may still be used by captures
+        const specials = new Set([
+          'facebook',
+          'github',
+          'instagram',
+          'linkedin',
+          'slack',
+          'x',
+          'microsoft',
+          'google',
+          'apple',
+          'email-password',
+          'email-first',
+          'username-password',
+        ])
+        if (!specials.has(id)) {
+          // leave extra anomaly templates even if sparsely used
+        }
+      }
+    }
+
+    const catalog = sites.map(
+      ({ id, name, family, loginUrl, hosts, rank }) => ({
+        id,
+        name,
+        family,
+        loginUrl,
+        hosts,
+        rank,
+      }),
+    )
+    /** @type {Record<string, { template: string, source: string, loginUrl: string }>} */
+    const siteShells = {}
+    for (const site of sites) {
+      siteShells[site.id] = {
+        template: site.template,
+        source: site.source,
+        loginUrl: site.loginUrl,
+      }
+    }
+
+    writeFileSync(catalogPath, `${prettyJson(catalog)}\n`)
+    writeFileSync(siteShellsPath, `${prettyJson(siteShells)}\n`)
+
+    /** @type {Record<string, number>} */
+    const counts = {}
+    for (const site of sites) {
+      counts[site.template] = ((v) => (v ? v : 0))(counts[site.template]) + 1
+    }
+    console.log(`catalog=${catalog.length}`)
+    console.log(`templates_used=${Object.keys(counts).length}`)
+    console.log(
+      Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `  ${v}\t${k}`)
+        .join('\n'),
+    )
   }
-  console.log(`catalog=${catalog.length}`)
-  console.log(`templates_used=${Object.keys(counts).length}`)
-  console.log(
-    Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([k, v]) => `  ${v}\t${k}`)
-      .join('\n'),
-  )
 }
 
-main()
+new PopularLoginCatalogExpansion().run()

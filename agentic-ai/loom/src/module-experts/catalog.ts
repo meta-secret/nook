@@ -57,7 +57,7 @@ const REPLICATION_ROOT = 'nook-app/nook-platform/nook-replication';
 
 const MODULE_EXPERT_SHARED_CONTEXT_PATHS = [
   '.cortex/teams/ai/dynamic-skills/module-expert.md',
-  '.cortex/gizmo/workflows/module-oriented-development.md',
+  '.cortex/gizmo-prime/workflows/module-oriented-development.md',
 ] as const;
 
 export const MODULE_EXPERT_CANONICAL_CONTEXT_PATHS = [
@@ -162,11 +162,13 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-extension/src/background/service-worker/authentication-workflow-routing.ts',
   'nook-app/nook-web/nook-web-extension/src/background/service-worker/authenticator-session-adapter.ts',
   'nook-app/nook-web/nook-web-extension/src/background/service-worker/extension-lifecycle-routing.ts',
+  'nook-app/nook-web/nook-web-extension/src/background/service-worker/login-operations.ts',
   'nook-app/nook-web/nook-web-extension/src/background/service-worker/login-session-response-adapter.ts',
   'nook-app/nook-web/nook-web-extension/src/background/service-worker/pairing-identity.ts',
   'nook-app/nook-web/nook-web-extension/src/background/service-worker/pairing-import.ts',
   'nook-app/nook-web/nook-web-extension/src/background/service-worker/passkey-session-adapter.ts',
   'nook-app/nook-web/nook-web-extension/src/background/service-worker/session-lifecycle.ts',
+  'nook-app/nook-web/nook-web-extension/src/background/service-worker/website-login-options-wire-adapter.ts',
   'nook-app/nook-web/nook-web-extension/src/background/vault-runtime.ts',
   'nook-app/nook-web/nook-web-extension/src/content/autofill.ts',
   'nook-app/nook-web/nook-web-extension/src/content/autofill/authenticator-actions.ts',

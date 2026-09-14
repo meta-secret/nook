@@ -2,7 +2,7 @@
 
 ## Mission
 
-Apply the [dev delivery stages](../../gizmo/architecture/dev-delivery.md).
+Apply the [dev delivery stages](../../gizmo-prime/architecture/dev-delivery.md).
 Author meaningful tests in feature work, but execute them only in the manager's
 slow PR stage. Feature validation is remote build-only execution only. Local
 feedback is limited to scoped rustfmt and bounded inexpensive TS diagnostics

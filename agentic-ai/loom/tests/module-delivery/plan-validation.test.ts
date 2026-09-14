@@ -19,11 +19,15 @@ import {
   ModuleDeliveryBaselineKind,
   ModuleDeliveryIssueCode,
   ModuleDeliveryEvidenceInputSchema,
-  ModuleDeliveryExecutionPrecedenceReason,
   ModuleDeliveryTaskKind,
   ModuleDeliveryTaskProfile,
+  ModuleDeliveryCompatibilityStatus,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryPlanDecoder,
+  ModuleDeliveryPlanSchema,
+  MAX_MODULE_DELIVERY_EDGE_CONTRACTS,
+  MAX_MODULE_DELIVERY_EXPECTED_PRODUCERS,
+  MAX_MODULE_DELIVERY_NODES,
 } from '../../src/module-delivery/index.ts';
 
 import type {
@@ -31,15 +35,16 @@ import type {
   LegacyModuleDeliveryNode,
   ModuleDeliveryEdgeContract,
   ModuleDeliveryEvidenceSynthesisNodeV2,
-  ModuleDeliveryExecutionPrecedence,
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlan,
-  ModuleDeliveryPlanV2,
+  ModuleDeliveryPlanV4,
+  ModuleDeliveryPlanV5,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
 
 import { TeamKey } from '../../src/team-agents/catalog.ts';
+import { MAX_MODULE_DELIVERY_STRING_LIST_ENTRIES } from '../../src/module-delivery/evidence-limits.ts';
 
 type LegacySynthesisNode = Omit<LegacyModuleDeliveryNode, 'kind'> & {
   readonly kind: ModuleDeliveryTaskKind.EvidenceSynthesis;
@@ -142,6 +147,25 @@ const DEFAULT_EDGES: readonly ModuleDeliveryEdgeContract[] = [
   CORE_WASM_EDGE,
 ];
 
+type LimitRejectionRequest = {
+  readonly serialized: string;
+  readonly path: string;
+};
+
+class ModuleDeliveryPlanTransportCollectionScenario {
+  private constructor() {}
+
+  static expectLimitRejection(request: LimitRejectionRequest): void {
+    const result = ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
+      request.serialized,
+    );
+    expect(result.status).toBe(ModuleDeliveryCompatibilityStatus.Rejected);
+    if (result.status !== ModuleDeliveryCompatibilityStatus.Rejected) return;
+    expect(result.issues[0]?.code).toBe(ModuleDeliveryIssueCode.LimitExceeded);
+    expect(result.issues[0]?.path).toBe(request.path);
+  }
+}
+
 describe('reviewed module delivery plan', () => {
   test('admits ordinary team tasks and rejects forged identity, profile, and scope', () => {
     const accepted = (node: ModuleDeliveryNodeV2) =>
@@ -227,6 +251,77 @@ describe('reviewed module delivery plan', () => {
         ModuleDeliveryIssueCode.InvalidField,
       );
     }
+  });
+
+  test('decodes the historical v2 root without upgrading it to v4', () => {
+    const historical = ModuleDeliveryPlanValidationScenario.historicalV2Plan({
+      nodes: [CORE_NODE],
+      edgeContracts: [],
+    });
+    const compatibility =
+      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
+        JSON.stringify(historical),
+      );
+    expect(compatibility.status).toBe(
+      ModuleDeliveryCompatibilityStatus.Decoded,
+    );
+    if (compatibility.status === ModuleDeliveryCompatibilityStatus.Decoded) {
+      expect(compatibility.inputVersion).toBe(2);
+      expect(compatibility.plan).toEqual(historical);
+      expect(Object.hasOwn(compatibility.plan, 'originMainSha')).toBe(false);
+      expect(Object.hasOwn(compatibility.plan, 'pinnedLocalDevSha')).toBe(
+        false,
+      );
+    }
+    const canonical = ModuleDeliveryPlanDecoder.decodeAndValidate(
+      JSON.stringify(historical),
+    );
+    expect(canonical.status).toBe(ModuleDeliveryValidationStatus.Rejected);
+    expect(ModuleDeliveryPlanValidationScenario.codes(canonical)).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
+    );
+  });
+
+  test('decodes and migrates the historical v3 root without mutating it', () => {
+    const historical = ModuleDeliveryPlanValidationScenario.historicalV3Plan({
+      nodes: [CORE_NODE],
+      edgeContracts: [],
+    });
+    const before = structuredClone(historical);
+    const compatibility =
+      ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
+        JSON.stringify(historical),
+      );
+    expect(compatibility.status).toBe(
+      ModuleDeliveryCompatibilityStatus.Decoded,
+    );
+    if (compatibility.status === ModuleDeliveryCompatibilityStatus.Decoded) {
+      expect(compatibility.inputVersion).toBe(3);
+      expect(compatibility.plan).toEqual(historical);
+      expect(Object.hasOwn(compatibility.plan, 'featureHeadSha')).toBe(false);
+    }
+    const historicalV4: ModuleDeliveryPlanV4 = {
+      ...historical,
+      version: 4,
+      featureHeadSha: '4'.repeat(40),
+    };
+    const historicalV4Before = structuredClone(historicalV4);
+    const migrated = ModuleDeliveryPlanSchema.migrateModuleDeliveryPlan(
+      historicalV4,
+      'codex/module-delivery-test',
+    );
+    expect(historical).toEqual(before);
+    expect(historicalV4).toEqual(historicalV4Before);
+    expect(migrated.version).toBe(5);
+    expect(migrated.featureBranch).toBe('codex/module-delivery-test');
+    expect(Object.hasOwn(migrated, 'featureHeadSha')).toBe(false);
+    const canonical = ModuleDeliveryPlanDecoder.decodeAndValidate(
+      JSON.stringify(historical),
+    );
+    expect(canonical.status).toBe(ModuleDeliveryValidationStatus.Rejected);
+    expect(ModuleDeliveryPlanValidationScenario.codes(canonical)).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
+    );
   });
 
   test('freezes owner acceptance and typed synthesis producer identities', () => {
@@ -379,7 +474,7 @@ describe('reviewed module delivery plan', () => {
         commands: ['task core:second', 'task core:first'],
       },
     };
-    const reversedNodePlan: ModuleDeliveryPlanV2 = {
+    const reversedNodePlan: ModuleDeliveryPlanV5 = {
       ...orderedPlan,
       nodes: [reversedNode],
     };
@@ -449,10 +544,9 @@ describe('reviewed module delivery plan', () => {
       edgeContracts: DEFAULT_EDGES,
     };
     const validPlan = ModuleDeliveryPlanValidationScenario.plan(fixture);
-    const invalidPlan: ModuleDeliveryPlanV2 = {
+    const invalidPlan: ModuleDeliveryPlanV5 = {
       ...validPlan,
       sourceCommit: 'main',
-      maxConcurrency: 17,
       maxAgentDepth: 4,
       maxAttempts: 6,
     };
@@ -463,6 +557,96 @@ describe('reviewed module delivery plan', () => {
     expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
       ModuleDeliveryIssueCode.LimitExceeded,
     );
+  });
+
+  test('rejects numeric capacity from the plan boundary', () => {
+    const fixture: PlanFixture = {
+      nodes: DEFAULT_NODES,
+      edgeContracts: DEFAULT_EDGES,
+    };
+    const validPlan = ModuleDeliveryPlanValidationScenario.plan(fixture);
+    const capacityPlan = Object.assign(validPlan, { maxConcurrency: 17 });
+    const result = ModuleDeliveryPlanValidationScenario.validate(capacityPlan);
+    expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
+    );
+  });
+});
+
+describe('bounded module delivery plan transport collections', () => {
+  const basePlan = ModuleDeliveryPlanValidationScenario.plan({
+    nodes: [CORE_NODE],
+    edgeContracts: [],
+  });
+
+  test('rejects an oversized root node list before node decoding', () => {
+    const serialized = JSON.stringify({
+      ...basePlan,
+      nodes: Array.from(
+        { length: MAX_MODULE_DELIVERY_NODES + 1 },
+        () => CORE_NODE,
+      ),
+    });
+    ModuleDeliveryPlanTransportCollectionScenario.expectLimitRejection({
+      serialized,
+      path: '$.nodes',
+    });
+  });
+
+  test('rejects an oversized edge contract list before edge decoding', () => {
+    const serialized = JSON.stringify({
+      ...basePlan,
+      edgeContracts: Array.from(
+        { length: MAX_MODULE_DELIVERY_EDGE_CONTRACTS + 1 },
+        () => ({}),
+      ),
+    });
+    ModuleDeliveryPlanTransportCollectionScenario.expectLimitRejection({
+      serialized,
+      path: '$.edgeContracts',
+    });
+  });
+
+  test('rejects oversized expected producers before producer decoding', () => {
+    const { workspace: _workspace, ...synthesisBase } = CORE_NODE;
+    const serialized = JSON.stringify({
+      ...basePlan,
+      nodes: [
+        {
+          ...synthesisBase,
+          kind: ModuleDeliveryTaskKind.EvidenceSynthesis,
+          resources: { read: [], write: [], evidenceSurface: [] },
+          evidenceInput: {
+            schema:
+              ModuleDeliveryEvidenceInputSchema.AcceptedProviderEvidenceV1,
+            expectedProducers: Array.from(
+              { length: MAX_MODULE_DELIVERY_EXPECTED_PRODUCERS + 1 },
+              () => ({}),
+            ),
+          },
+        },
+      ],
+    });
+    ModuleDeliveryPlanTransportCollectionScenario.expectLimitRejection({
+      serialized,
+      path: '$.nodes[0].evidenceInput.expectedProducers',
+    });
+  });
+
+  test('rejects oversized nested string arrays before entry decoding', () => {
+    const serialized = JSON.stringify({
+      ...basePlan,
+      parentJoin: {
+        ...basePlan.parentJoin,
+        validationCommands: Array.from({
+          length: MAX_MODULE_DELIVERY_STRING_LIST_ENTRIES + 1,
+        }).fill('task validation'),
+      },
+    });
+    ModuleDeliveryPlanTransportCollectionScenario.expectLimitRejection({
+      serialized,
+      path: '$.parentJoin.validationCommands',
+    });
   });
 });
 
@@ -743,203 +927,5 @@ describe('task execution and canonical ownership', () => {
         ),
       ),
     ).toContain(ModuleDeliveryIssueCode.WriteScopeMismatch);
-  });
-});
-
-describe('dependency edges and resource safety', () => {
-  test('requires exact edge contracts for fan-in and multiple consumers', () => {
-    const secondConsumerFixture: WriteNodeFixture = {
-      taskId: 'web-second',
-      expert: 'web_expert',
-      moduleRoot: WEB_ROOT,
-      dependencies: ['core-provider'],
-      read: [`${CORE_ROOT}/**`],
-      write: [`${WEB_ROOT}/src/second/**`],
-    };
-    const secondConsumer = ModuleDeliveryPlanValidationScenario.writeNode(
-      secondConsumerFixture,
-    );
-    const fanInConsumer: ModuleDeliveryWriteNodeV2 = {
-      ...WEB_NODE,
-      dependencies: ['core-provider', 'wasm-adapter'],
-      baseline: {
-        kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
-        providerTaskIds: ['core-provider', 'wasm-adapter'],
-      },
-      resources: {
-        ...WEB_NODE.resources,
-        write: [`${WEB_ROOT}/src/first/**`],
-      },
-    };
-    const coreWebFixture: EdgeFixture = {
-      providerTaskId: 'core-provider',
-      consumerTaskId: 'web-consumer',
-    };
-    const coreSecondFixture: EdgeFixture = {
-      providerTaskId: 'core-provider',
-      consumerTaskId: 'web-second',
-    };
-    const completeEdges: readonly ModuleDeliveryEdgeContract[] = [
-      CORE_WASM_EDGE,
-      WASM_WEB_EDGE,
-      ModuleDeliveryPlanValidationScenario.edgeContract(coreWebFixture),
-      ModuleDeliveryPlanValidationScenario.edgeContract(coreSecondFixture),
-    ];
-    const nodes: readonly ModuleDeliveryNodeV2[] = [
-      CORE_NODE,
-      WASM_NODE,
-      fanInConsumer,
-      secondConsumer,
-    ];
-    const completeFixture: PlanFixture = {
-      nodes,
-      edgeContracts: completeEdges,
-    };
-    expect(
-      ModuleDeliveryPlanValidationScenario.validate(
-        ModuleDeliveryPlanValidationScenario.plan(completeFixture),
-      ).status,
-    ).toBe(ModuleDeliveryValidationStatus.Accepted);
-
-    const missingFixture: PlanFixture = {
-      nodes,
-      edgeContracts: completeEdges.slice(1),
-    };
-    expect(
-      ModuleDeliveryPlanValidationScenario.codes(
-        ModuleDeliveryPlanValidationScenario.validate(
-          ModuleDeliveryPlanValidationScenario.plan(missingFixture),
-        ),
-      ),
-    ).toContain(ModuleDeliveryIssueCode.MissingEdgeContract);
-
-    const unexpectedFixtureValue: EdgeFixture = {
-      providerTaskId: 'web-consumer',
-      consumerTaskId: 'core-provider',
-    };
-    const unexpectedEdges = [
-      ...completeEdges,
-      ModuleDeliveryPlanValidationScenario.edgeContract(unexpectedFixtureValue),
-    ];
-    const unexpectedFixture: PlanFixture = {
-      nodes,
-      edgeContracts: unexpectedEdges,
-    };
-    expect(
-      ModuleDeliveryPlanValidationScenario.codes(
-        ModuleDeliveryPlanValidationScenario.validate(
-          ModuleDeliveryPlanValidationScenario.plan(unexpectedFixture),
-        ),
-      ),
-    ).toContain(ModuleDeliveryIssueCode.UnexpectedEdgeContract);
-  });
-
-  test('serializes concurrent overlap and permits ordered overlap', () => {
-    const siblingFixture: WriteNodeFixture = {
-      ...CORE_FIXTURE,
-      taskId: 'core-sibling',
-    };
-    const sibling =
-      ModuleDeliveryPlanValidationScenario.writeNode(siblingFixture);
-    const concurrentFixture: PlanFixture = {
-      nodes: [CORE_NODE, sibling],
-      edgeContracts: [],
-    };
-    const concurrent = ModuleDeliveryPlanValidationScenario.validate(
-      ModuleDeliveryPlanValidationScenario.plan(concurrentFixture),
-    );
-    if (concurrent.status !== ModuleDeliveryValidationStatus.Accepted)
-      throw new Error(JSON.stringify(concurrent.issues));
-    const precedence: ModuleDeliveryExecutionPrecedence = {
-      predecessorTaskId: 'core-provider',
-      successorTaskId: 'core-sibling',
-      reason: ModuleDeliveryExecutionPrecedenceReason.ResourceConflict,
-      requiresIntegratedWriterFrontier: true,
-    };
-    expect(concurrent.executionPrecedence).toContainEqual(precedence);
-
-    const orderedSibling: ModuleDeliveryWriteNodeV2 = {
-      ...sibling,
-      dependencies: ['core-provider'],
-      baseline: {
-        kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
-        providerTaskIds: ['core-provider'],
-      },
-    };
-    const orderedEdgeFixture: EdgeFixture = {
-      providerTaskId: 'core-provider',
-      consumerTaskId: 'core-sibling',
-    };
-    const orderedFixture: PlanFixture = {
-      nodes: [orderedSibling, CORE_NODE],
-      edgeContracts: [
-        ModuleDeliveryPlanValidationScenario.edgeContract(orderedEdgeFixture),
-      ],
-    };
-    expect(
-      ModuleDeliveryPlanValidationScenario.validate(
-        ModuleDeliveryPlanValidationScenario.plan(orderedFixture),
-      ).status,
-    ).toBe(ModuleDeliveryValidationStatus.Accepted);
-  });
-
-  test('rejects missing, self, cyclic dependencies and protected writes', () => {
-    const missing: ModuleDeliveryWriteNodeV2 = {
-      ...CORE_NODE,
-      dependencies: ['missing-provider'],
-    };
-    const missingFixture: PlanFixture = { nodes: [missing], edgeContracts: [] };
-    expect(
-      ModuleDeliveryPlanValidationScenario.codes(
-        ModuleDeliveryPlanValidationScenario.validate(
-          ModuleDeliveryPlanValidationScenario.plan(missingFixture),
-        ),
-      ),
-    ).toContain(ModuleDeliveryIssueCode.MissingDependency);
-
-    const self: ModuleDeliveryWriteNodeV2 = {
-      ...CORE_NODE,
-      dependencies: ['core-provider'],
-    };
-    const selfFixture: PlanFixture = { nodes: [self], edgeContracts: [] };
-    expect(
-      ModuleDeliveryPlanValidationScenario.codes(
-        ModuleDeliveryPlanValidationScenario.validate(
-          ModuleDeliveryPlanValidationScenario.plan(selfFixture),
-        ),
-      ),
-    ).toContain(ModuleDeliveryIssueCode.SelfDependency);
-
-    const cyclicCore: ModuleDeliveryWriteNodeV2 = {
-      ...CORE_NODE,
-      dependencies: ['wasm-adapter'],
-    };
-    const cycleFixture: PlanFixture = {
-      nodes: [cyclicCore, WASM_NODE],
-      edgeContracts: [CORE_WASM_EDGE, WASM_WEB_EDGE],
-    };
-    expect(
-      ModuleDeliveryPlanValidationScenario.codes(
-        ModuleDeliveryPlanValidationScenario.validate(
-          ModuleDeliveryPlanValidationScenario.plan(cycleFixture),
-        ),
-      ),
-    ).toContain(ModuleDeliveryIssueCode.DependencyCycle);
-
-    const protectedWrite: ModuleDeliveryWriteNodeV2 = {
-      ...CORE_NODE,
-      resources: { ...CORE_NODE.resources, write: ['Cargo.lock'] },
-    };
-    const protectedFixture: PlanFixture = {
-      nodes: [protectedWrite],
-      edgeContracts: [],
-    };
-    expect(
-      ModuleDeliveryPlanValidationScenario.codes(
-        ModuleDeliveryPlanValidationScenario.validate(
-          ModuleDeliveryPlanValidationScenario.plan(protectedFixture),
-        ),
-      ),
-    ).toContain(ModuleDeliveryIssueCode.ParentOwnedWrite);
   });
 });

@@ -16,6 +16,7 @@ type AuthenticationSurfaceNotification = {
 }
 
 type AuthenticationSurfaceRefreshSuccess = { ok: true }
+type AuthenticationSurfaceRefreshResponse = { ok?: boolean }
 
 type AuthenticationSurfaceDeliveryRequest = {
   tabId: number
@@ -96,7 +97,13 @@ export class ExtensionSessionLifecycle {
     tabId,
     message,
   }: AuthenticationSurfaceDeliveryRequest): Promise<void> {
-    const response = await chrome.tabs.sendMessage(tabId, message)
+    const sendTabMessage = ({
+      tabId: targetTabId,
+      message: targetMessage,
+    }: AuthenticationSurfaceDeliveryRequest): Promise<AuthenticationSurfaceRefreshResponse> =>
+      chrome.tabs.sendMessage(targetTabId, targetMessage)
+    const request: AuthenticationSurfaceDeliveryRequest = { tabId, message }
+    const response = await sendTabMessage(request)
     if (!this.authenticationSurfaceRefreshSucceeded(response)) {
       throw new Error('authentication surface refresh rejected')
     }

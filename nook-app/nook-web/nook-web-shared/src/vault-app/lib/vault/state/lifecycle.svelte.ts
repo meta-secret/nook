@@ -63,8 +63,8 @@ type LifecycleSyncSchedule = {
 
 export class VaultLifecycleState extends VaultStateSlices {
   private static initialBrowserLocale(): NookBrowserLocale {
-    return "window" in globalThis
-      ? new NookBrowserLocale()
+    return "navigator" in globalThis
+      ? NookBrowserLocale.from_tags([...globalThis.navigator.languages])
       : NookBrowserLocale.from_tags([]);
   }
 

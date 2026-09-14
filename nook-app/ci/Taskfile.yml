@@ -25,6 +25,10 @@ tasks:
 
   _ci:pr:rust:host:
     # Repository invariants must reject forbidden Dockerfile/cache changes before app setup begins.
+    vars:
+      # Hosted jobs provide runner.temp explicitly. Local verification shares the
+      # native coverage root so the final reporter export never falls through to /tools.
+      CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/rust" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
     cmds:
       - task: preflight
       - task: docker:ci:rust:export
@@ -64,9 +68,29 @@ tasks:
 
   ci:pr:web:
     desc: Build and verify web/extension code from downloaded split-CI artifacts.
+    env:
+      CI_ARTIFACT_DIR: '{{.CI_ARTIFACT_DIR}}'
     cmds:
-      - task: _buildx:healthy
-        vars: { BUILD_TASK: _ci:pr:web:host }
+      - |
+        artifacts="${CI_ARTIFACT_DIR:-}"
+        case "$artifacts" in
+          /*) ;;
+          *) artifacts="{{.REPO_ROOT}}/$artifacts" ;;
+        esac
+        if [ -z "${GITHUB_ACTIONS:-}" ] && {
+          [ -z "${CI_ARTIFACT_DIR:-}" ] ||
+          ! test -s "$artifacts/nook-wasm/nook_wasm.js" ||
+          ! test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
+        }; then
+          task --dir "{{.REPO_ROOT}}" ci:pr:web:local
+        else
+          task --dir "{{.REPO_ROOT}}" _buildx:healthy BUILD_TASK=_ci:pr:web:host
+        fi
+
+  ci:pr:web:local:
+    desc: Bounded local PR web verification; assemble the split WASM handoff without registry caches.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/ci-pr-web-local.sh"
 
   _ci:pr:web:host:
     cmds:

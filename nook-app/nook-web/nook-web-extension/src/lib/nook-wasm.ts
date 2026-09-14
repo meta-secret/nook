@@ -138,11 +138,7 @@ type ExtensionSessionRequest =
 type ExtensionRuntimeRequest =
   { type: ExtensionRuntimeRequestType.EnsureRuntime } | ExtensionSessionRequest
 
-type PublicKeyCredentialWithPrf = PublicKeyCredential & {
-  getClientExtensionResults(): AuthenticationExtensionsClientOutputs & {
-    prf?: { enabled?: boolean; results?: { first?: ArrayBuffer } }
-  }
-}
+type PublicKeyCredentialWithPrf = PublicKeyCredential
 
 export enum ExtensionSessionDeviceStateKind {
   Locked = 'locked',
@@ -273,7 +269,12 @@ class ExtensionWasmRuntime {
   }
 
   private assertionUserHandle(credential: PublicKeyCredential): number[] {
-    const response = credential.response as AuthenticatorAssertionResponse
+    const response = credential.response
+    if (!(response instanceof AuthenticatorAssertionResponse)) {
+      throw new Error(
+        'Passkey assertion did not include an assertion response.',
+      )
+    }
     if (!response.userHandle) {
       throw new Error('Passkey assertion did not include its user handle.')
     }
@@ -281,9 +282,7 @@ class ExtensionWasmRuntime {
   }
 
   private prfOutput(credential: PublicKeyCredential): number[] {
-    const prf = (
-      credential as PublicKeyCredentialWithPrf
-    ).getClientExtensionResults().prf
+    const prf = credential.getClientExtensionResults().prf
     // `enabled` reports registration support; assertion results are authoritative
     // when the browser returns the requested PRF output.
     if (!prf?.results?.first) {
@@ -311,7 +310,7 @@ class ExtensionWasmRuntime {
       if (!(credential instanceof PublicKeyCredential)) {
         throw new Error('Passkey get ceremony was cancelled.')
       }
-      return credential as PublicKeyCredentialWithPrf
+      return credential
     } catch (error) {
       const args: ConstructorParameters<typeof PasskeyCeremonyFailure>[0] = {
         error,
@@ -338,7 +337,7 @@ class ExtensionWasmRuntime {
       if (!(credential instanceof PublicKeyCredential)) {
         throw new Error('Passkey create ceremony was cancelled.')
       }
-      return credential as PublicKeyCredentialWithPrf
+      return credential
     } catch (error) {
       const args: ConstructorParameters<typeof PasskeyCeremonyFailure>[0] = {
         error,

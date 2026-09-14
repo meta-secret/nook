@@ -81,6 +81,31 @@ export class SkillProviderSourcedSeamsScenario {
       throw new Error(`Audited runtime source has drifted: ${request.path}`);
     return true;
   }
+
+  static isAuditedDynamicExecutable(request: {
+    readonly executable: string;
+    readonly sourcePath: string | false;
+  }): boolean {
+    if (request.sourcePath === false) return false;
+    const expected = AUDITED_DYNAMIC_EXECUTABLES.get(
+      `${request.sourcePath}:${request.executable}`,
+    );
+    if (typeof expected !== 'string') return false;
+    const source = readFileSync(
+      resolve(import.meta.dir, '../../..', request.sourcePath),
+    );
+    return createHash('sha256').update(source).digest('hex') === expected;
+  }
+
+  static isAuditedCommandExecutingFind(sourcePath: string | false): boolean {
+    if (sourcePath === false) return false;
+    const expected = AUDITED_COMMAND_EXECUTING_FIND.get(sourcePath);
+    if (typeof expected !== 'string') return false;
+    const source = readFileSync(
+      resolve(import.meta.dir, '../../..', sourcePath),
+    );
+    return createHash('sha256').update(source).digest('hex') === expected;
+  }
 }
 export type AuditedSourceSeam = {
   readonly digest: string | false;
@@ -101,6 +126,15 @@ export type AuditedRuntimeSourceRequest = {
   readonly source: string;
 };
 
+const AUDITED_DYNAMIC_EXECUTABLES = new Map([
+  [
+    '.github/scripts/verify-github-delivery-policy.sh:$gh_bin',
+    'f1f5ccdf4018460774b17dc012b4e7fb197bcaf578be2834fd44ca30f1786151',
+  ],
+]);
+
+const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
+
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
     '.github/actions/nook-cache-connect/main.js',
@@ -116,11 +150,27 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'agentic-ai/loom/src/dev-delivery/dev-command.ts',
-    '220e7aa593817fbc849cee1025b2d05ae608f9cfd2735d3f499e4cc020898324',
+    '8d1efad4ca6c65086dc46c925f67af431cdce6093b3d9ac40a35b3253232abf7',
+  ],
+  [
+    'agentic-ai/loom/src/lib/run.ts',
+    '8bee6ac341fecf756a0323ecaa509bf82617cc9b4a51f9999ec3a5709a4c25f3',
+  ],
+  [
+    'agentic-ai/loom/src/module-experts/repository-snapshot.ts',
+    'c4414d19cc693f76f5d282109af62b24336052a34780476fd13d7671a7b9117d',
+  ],
+  [
+    'agentic-ai/loom/src/agent-workflow/delegation-aggregation.ts',
+    'd91c6bda5de0c6285849d09868467b8520b4bf55f8587d9afe9ea411791e6311',
+  ],
+  [
+    'agentic-ai/loom/src/commands/pr-authored-budget.ts',
+    'c72e41342aa7fe2ae312e90a9f28e3baad62600c24d8744ac6b26962b1d55376',
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    '694df9d56073e6a1b76593f7a9657905fc9a0f9b85789fcb5f0255fe38a74d80',
+    '2b93470a397275447a8cdf13dc9dfec1fe9ebe2caf78900561e0723a0b4c2b40',
   ],
   [
     'agentic-ai/loom/tests/repository-command.fixture.cjs',
@@ -129,6 +179,10 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   [
     'infra/sim/kubernetes-cache/contracts.ts',
     'c0619a1141f15ad1d83e13e4d96f87651732908f19663ac0c8287a4316dbabd7',
+  ],
+  [
+    '.github/formatting/format-host-apply.test.sh',
+    '073947efded4373ef02d7ca9d017ea9d82cad28b4329cf664acaca7ca723e2b2',
   ],
   [
     '.github/scripts/with-healthy-buildkit.sh',
@@ -172,7 +226,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.mjs',
-    '733ddc1c96230b73e248c8117d0315e47d6f6e5c851cf02c0c05c3e70b633e43',
+    '2fefe136040aaa20f96fa95a0712539b240195d31f4ef20f30935bf237a8743c',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/setup-brave-vault.sh',

@@ -6,9 +6,8 @@ import {
   type WebsiteLoginAccountOption,
 } from '../../lib/login-fill-messages'
 import {
-  decode_website_login_match_availability,
   type WebsiteLoginMatchAvailability,
-  type WebsiteLoginOptionsWireValue,
+  type WebsiteLoginOptionsAdmission,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   WebsiteAuthenticatorCanceledMessageType,
@@ -34,6 +33,7 @@ import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   extensionSessionLifecycle,
 } from './session-lifecycle'
+import { websiteLoginOptionsWireAdapter } from './website-login-options-wire-adapter'
 
 type PendingAuthenticatorPicker = {
   requestId: string
@@ -768,7 +768,7 @@ class AccountPickerSessions {
     sender,
     dependencies,
     openUnavailableCompanion,
-  }: WebsiteLoginOptionsResponseArgs): Promise<unknown> {
+  }: WebsiteLoginOptionsResponseArgs): Promise<WebsiteLoginOptionsAdmission> {
     const resolvedDependencies = ((v) =>
       v ? v : this.websiteLoginOptionsDependencies)(dependencies)
     const authorizationGeneration =
@@ -842,7 +842,9 @@ class AccountPickerSessions {
     return { ok: true, status: 'ready', authorizationGeneration, accounts }
   }
 
-  async websiteLoginOptions(args: WebsiteLoginOptionsArgs): Promise<unknown> {
+  async websiteLoginOptions(
+    args: WebsiteLoginOptionsArgs,
+  ): Promise<WebsiteLoginOptionsAdmission> {
     const responseRequest: WebsiteLoginOptionsResponseArgs = {
       ...args,
       openUnavailableCompanion: true,
@@ -865,9 +867,7 @@ class AccountPickerSessions {
     }
     if (dependencies) responseRequest.dependencies = dependencies
     const response = await this.websiteLoginOptionsResponse(responseRequest)
-    return decode_website_login_match_availability(
-      response as WebsiteLoginOptionsWireValue,
-    )
+    return websiteLoginOptionsWireAdapter.decode(response)
   }
 
   private loginPickerStorageKey(requestId: string): string {

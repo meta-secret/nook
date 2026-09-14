@@ -10,6 +10,29 @@ export type PullRequestExtensionChannel = `pr-${number}`
 export type ExtensionChannel =
   ExtensionReleaseChannel | PullRequestExtensionChannel
 
+class ExtensionChannelAdmission {
+  static parse(value: string): ExtensionChannel {
+    const channel = value.trim().toLowerCase()
+    if (
+      channel === ExtensionReleaseChannel.Production ||
+      channel === ExtensionReleaseChannel.Development ||
+      channel === ExtensionReleaseChannel.Local
+    ) {
+      return channel
+    }
+    if (this.isPullRequest(channel)) return channel
+    throw new Error(
+      'NOOK_EXTENSION_CHANNEL must be production, development, local, or pr-<number>.',
+    )
+  }
+
+  private static isPullRequest(
+    value: string,
+  ): value is PullRequestExtensionChannel {
+    return /^pr-[1-9][0-9]*$/.test(value)
+  }
+}
+
 export type ExtensionChannelIdentity = {
   channel: ExtensionChannel
   extensionId: string
@@ -25,20 +48,7 @@ const ED25519_PKCS8_SEED_PREFIX = Buffer.from(
 const EXTENSION_ID_ALPHABET = 'abcdefghijklmnop'
 
 export function parseExtensionChannel(value: string): ExtensionChannel {
-  const channel = value.trim().toLowerCase()
-  if (
-    channel === ExtensionReleaseChannel.Production ||
-    channel === ExtensionReleaseChannel.Development ||
-    channel === ExtensionReleaseChannel.Local
-  ) {
-    return channel
-  }
-  if (/^pr-[1-9][0-9]*$/.test(channel)) {
-    return channel as PullRequestExtensionChannel
-  }
-  throw new Error(
-    'NOOK_EXTENSION_CHANNEL must be production, development, local, or pr-<number>.',
-  )
+  return ExtensionChannelAdmission.parse(value)
 }
 
 function manifestKeyForChannel(channel: ExtensionChannel): Buffer {

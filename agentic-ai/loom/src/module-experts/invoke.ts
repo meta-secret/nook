@@ -35,8 +35,6 @@ import { WorkflowRuntimeActivityKind } from '../agent-workflow/events.ts';
 import type { RuntimeActivityObservation } from '../agent-workflow/events.ts';
 import type { AgentExecutionCompletion } from '../agent-workflow/runtime.ts';
 import { WorkflowResultSchema } from '../agent-workflow/structured-result-codec.ts';
-import { ModuleExpertContract } from './audit.ts';
-import type { AuditModuleExpertsArgs } from './audit.ts';
 import { MODULE_EXPERT_CATALOG } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
 import { ModuleExpertParentAuthorization } from './parent-authorization.ts';
@@ -72,11 +70,6 @@ export class ModuleExpertInvocation {
     if (!profile) {
       throw new Error('Requested module expert is not registered.');
     }
-    const auditArgs: AuditModuleExpertsArgs = { repoRoot };
-    const audit = ModuleExpertContract.auditModuleExperts(auditArgs);
-    if (!audit.auditOk) {
-      throw new Error('Module expert catalog validation failed.');
-    }
     const runDirectory = join(
       repoRoot,
       'workflow',
@@ -87,9 +80,14 @@ export class ModuleExpertInvocation {
     if (request.parent.kind !== AgentAttemptParentKind.AgentAttempt) {
       ModuleExpertInvocation.invalidRequest();
     }
+    // The runtime session performs the final catalog audit before consuming
+    // this capability; reject malformed lineage at its own boundary first.
     const childRequest: ModuleExpertChildRequest = {
       runId: request.runId,
       sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       task: request.task,
       expert: request.expert,
       attempt: request.attempt,
@@ -112,6 +110,9 @@ export class ModuleExpertInvocation {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: MODULE_EXPERT_WORKFLOW_VERSION,
       sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       task: request.task,
       agent: profile.name,
       attempt: request.attempt,
@@ -253,6 +254,9 @@ export class ModuleExpertInvocation {
       expert: context.profile.name,
       selectedContextPaths: context.request.selectedContextPaths,
       sourceCommit: context.request.sourceCommit,
+      originMainSha: context.request.originMainSha,
+      pinnedLocalDevSha: context.request.pinnedLocalDevSha,
+      featureHeadSha: context.request.featureHeadSha,
       task: context.request.task,
       attempt: context.request.attempt,
       depth: context.request.depth,
@@ -418,6 +422,9 @@ export class ModuleExpertInvocation {
       firstEvent.workflow !== DelegatedAgentWorkflowName.AgentWork ||
       firstEvent.workflowVersion !== MODULE_EXPERT_WORKFLOW_VERSION ||
       firstEvent.sourceCommit !== result.sourceCommit ||
+      firstEvent.originMainSha !== result.originMainSha ||
+      firstEvent.pinnedLocalDevSha !== result.pinnedLocalDevSha ||
+      firstEvent.featureHeadSha !== result.featureHeadSha ||
       firstEvent.task !== result.task ||
       firstEvent.agent !== result.expert ||
       firstEvent.attempt !== result.attempt ||
@@ -499,6 +506,9 @@ export type ModuleExpertInvocationResult = {
   readonly expert: string;
   readonly selectedContextPaths: readonly string[];
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly task: string;
   readonly attempt: number;
   readonly depth: number;

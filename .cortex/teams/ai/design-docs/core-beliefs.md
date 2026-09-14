@@ -48,7 +48,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Use remote build-only execution for feature feedback.
 - Author behavior tests and execute them in the manager's slow PR stage.
 - Local feedback permits scoped rustfmt and bounded inexpensive TS diagnostics.
-- Follow the [dev contract](../../../gizmo/architecture/dev-delivery.md).
+- Follow the [dev contract](../../../gizmo-prime/architecture/dev-delivery.md).
 
 ## 5. Pay Down Tech Debt Continuously
 
@@ -68,15 +68,15 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 
 - Report the outcome once with essential evidence and unresolved blockers.
 - Keep elapsed time in required delivery records unless the user requests it.
-- See [pull request task completion](../../../gizmo/workflows/pull-requests.md#promotion-and-completion-procedure).
+- See [pull request task completion](../../../gizmo-prime/workflows/pull-requests.md#promotion-and-completion-procedure).
 
 ## 8. Deliver Through Dev
 
-- Each feature Gizmo follows [mission delivery](../../../gizmo/workflows/mission-delivery.md).
+- Each feature Gizmo follows [mission delivery](../../../gizmo-prime/workflows/mission-delivery.md).
 - Team Agents own scoped implementation and authored tests.
 - Gizmo owns feature compilation, review, and local dev integration decisions.
 - A manually run dev manager owns publication, slow PR validation, and promotion.
-- PR Steward executes bounded operations under the owning controller's packets.
+- PR Lifecycle Agent executes bounded operations under the owning controller's packets.
 - Promotion fast-forwards main to the tested dev SHA.
 - Preserve dev and all feature history.
 - Do not rebase, squash, or create a promotion merge commit.

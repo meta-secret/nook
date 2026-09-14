@@ -10,6 +10,11 @@ import {
   MAX_MODULE_DELIVERY_STRING_CODE_UNITS,
   MAX_MODULE_DELIVERY_STRING_LIST_ENTRIES,
 } from './evidence-limits.ts';
+import {
+  MAX_MODULE_DELIVERY_EDGE_CONTRACTS,
+  MAX_MODULE_DELIVERY_NODES,
+  ModuleDeliveryIssueCode,
+} from './domain.ts';
 import type {
   UntrustedYamlMap,
   UntrustedYamlNode,
@@ -23,7 +28,62 @@ export type ModulePlanObjectDecodeRequest = {
 
 export type ModulePlanTransportList = readonly UntrustedYamlNode[];
 
-export class ModulePlanDecodeFailure extends Error {}
+type ModulePlanDecodeFailureRequest = Readonly<{
+  readonly message: string;
+  readonly code?: ModuleDeliveryIssueCode;
+  readonly path?: string;
+}>;
+
+export class ModulePlanDecodeFailure extends Error {
+  readonly code: ModuleDeliveryIssueCode;
+  readonly path: string;
+
+  constructor(request: ModulePlanDecodeFailureRequest) {
+    super(request.message);
+    this.name = 'ModulePlanDecodeFailure';
+    this.code = request.code || ModuleDeliveryIssueCode.InvalidField;
+    this.path = request.path || '$';
+  }
+}
+
+export enum ModuleDeliveryPlanTransportLimitCode {
+  SerializedByteLimit = 'serialized-byte-limit',
+  DepthLimit = 'depth-limit',
+  ObjectKeyLimit = 'object-key-limit',
+  ArrayEntryLimit = 'array-entry-limit',
+  AggregateNodeLimit = 'aggregate-node-limit',
+  AggregateStringLimit = 'aggregate-string-limit',
+}
+
+export class ModuleDeliveryPlanTransportLimit extends ModulePlanDecodeFailure {
+  readonly limitCode: ModuleDeliveryPlanTransportLimitCode;
+  readonly observed: number;
+  readonly limit: number;
+
+  constructor(request: {
+    readonly code: ModuleDeliveryPlanTransportLimitCode;
+    readonly observed: number;
+    readonly limit: number;
+    readonly path?: string;
+  }) {
+    super(
+      !request.path
+        ? {
+            code: ModuleDeliveryIssueCode.LimitExceeded,
+            message: `Plan transport ${request.code} exceeded its bound (${request.observed} > ${request.limit}).`,
+          }
+        : {
+            code: ModuleDeliveryIssueCode.LimitExceeded,
+            path: request.path,
+            message: `Plan transport ${request.code} exceeded its bound (${request.observed} > ${request.limit}).`,
+          },
+    );
+    this.name = 'ModuleDeliveryPlanTransportLimit';
+    this.limitCode = request.code;
+    this.observed = request.observed;
+    this.limit = request.limit;
+  }
+}
 
 export class ModulePlanFields {
   readonly record: UntrustedYamlMap;
@@ -83,11 +143,14 @@ export class ModulePlanFields {
 
   stringList(key: string): readonly string[] {
     const value = this.value(key);
-    if (
-      !UntrustedYamlBoundary.isList(value) ||
-      value.length > MAX_MODULE_DELIVERY_STRING_LIST_ENTRIES
-    )
+    if (!UntrustedYamlBoundary.isList(value))
       this.fail(`.${key}: expected a bounded string array.`);
+    if (value.length > MAX_MODULE_DELIVERY_STRING_LIST_ENTRIES)
+      this.failLimit({
+        key,
+        observed: value.length,
+        maximum: MAX_MODULE_DELIVERY_STRING_LIST_ENTRIES,
+      });
     const strings: string[] = [];
     for (const entry of value) {
       if (
@@ -109,17 +172,32 @@ export class ModulePlanFields {
     return value;
   }
 
-  nodeList(key: string): ModulePlanTransportList {
+  nodeList(
+    ...[key, maximum = MAX_MODULE_DELIVERY_NODES]: [
+      key: string,
+      maximum?: number,
+    ]
+  ): ModulePlanTransportList {
     const value = this.value(key);
-    if (!UntrustedYamlBoundary.isList(value) || value.length === 0)
+    if (!UntrustedYamlBoundary.isList(value))
       this.fail(`.${key}: expected a non-empty array.`);
+    if (value.length === 0) this.fail(`.${key}: expected a non-empty array.`);
+    if (value.length > maximum)
+      this.failLimit({ key, observed: value.length, maximum });
     return value;
   }
 
-  list(key: string): ModulePlanTransportList {
+  list(
+    ...[key, maximum = MAX_MODULE_DELIVERY_EDGE_CONTRACTS]: [
+      key: string,
+      maximum?: number,
+    ]
+  ): ModulePlanTransportList {
     const value = this.value(key);
     if (!UntrustedYamlBoundary.isList(value))
       this.fail(`.${key}: expected an array.`);
+    if (value.length > maximum)
+      this.failLimit({ key, observed: value.length, maximum });
     return value;
   }
 
@@ -135,7 +213,19 @@ export class ModulePlanFields {
   }
 
   private fail(message: string): never {
-    throw new ModulePlanDecodeFailure(`${this.path}${message}`);
+    throw new ModulePlanDecodeFailure({ message: `${this.path}${message}` });
+  }
+
+  private failLimit(request: {
+    readonly key: string;
+    readonly observed: number;
+    readonly maximum: number;
+  }): never {
+    throw new ModulePlanDecodeFailure({
+      message: `${this.path}.${request.key}: array contains ${request.observed} entries; maximum is ${request.maximum}.`,
+      code: ModuleDeliveryIssueCode.LimitExceeded,
+      path: `${this.path}.${request.key}`,
+    });
   }
 
   private static hasControlCharacter(value: string): boolean {

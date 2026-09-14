@@ -290,7 +290,8 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         await socialProviderControls.evaluateAll((buttons) =>
           buttons.every(
             (button) =>
-              (button as HTMLButtonElement).form?.id === 'openai-social-form',
+              button instanceof HTMLButtonElement &&
+              button.form?.id === 'openai-social-form',
           ),
         ),
       ).toBe(true)
@@ -359,7 +360,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         await form.evaluate((element) => ({
           actionAttributePresent: element.hasAttribute('action'),
           methodAttributePresent: element.hasAttribute('method'),
-          method: (element as HTMLFormElement).method,
+          method: element instanceof HTMLFormElement ? element.method : '',
         })),
       ).toEqual({
         actionAttributePresent: false,

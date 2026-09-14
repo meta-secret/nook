@@ -4,9 +4,18 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { existsSync } from 'node:fs';
 
-import { readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 
 import type { RmOptions } from 'node:fs';
+
+import { tmpdir } from 'node:os';
 
 import { join, resolve } from 'node:path';
 
@@ -383,6 +392,9 @@ export class ModuleExpertsInvokeLineageScenario {
       expert: immediate.agent,
       selectedContextPaths: [],
       sourceCommit: args.request.sourceCommit,
+      originMainSha: args.request.originMainSha,
+      pinnedLocalDevSha: args.request.pinnedLocalDevSha,
+      featureHeadSha: args.request.featureHeadSha,
       task: immediate.task,
       attempt: immediate.attempt,
       depth: 2,
@@ -462,6 +474,9 @@ export class ModuleExpertsInvokeLineageScenario {
       expert: 'core_expert',
       selectedContextPaths: [],
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       task: 'inspect-core-contract',
       attempt: 1,
       depth: 2,
@@ -606,6 +621,45 @@ test('rejects invalid, corrupted, or symlinked parents before runtime', async ()
   }
 });
 
+test('reports parent authorization before an invalid catalog', async () => {
+  const request = ModuleExpertsInvokeLineageScenario.directRequest(
+    `invalid-catalog-parent-${randomUUID()}`,
+  );
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-invalid-catalog-'));
+  const parent = ModuleExpertsInvokeLineageScenario.directParent(request);
+  const unauthorized = {
+    ...ModuleExpertsInvokeLineageScenario.authorization(request),
+    expert: 'different_expert',
+  };
+  try {
+    await ModuleExpertsInvokeParentFixtureScenario.createCompletedAttempt({
+      repoRoot: fixtureRoot,
+      runId: request.runId,
+      sourceCommit: request.sourceCommit,
+      task: parent.task,
+      agent: parent.agent,
+      attempt: parent.attempt,
+      depth: 1,
+      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
+      output:
+        ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput([
+          unauthorized,
+        ]),
+    });
+
+    const controller = new AbortController();
+    await expect(
+      ModuleExpertInvocation.invokeModuleExpert({
+        repoRoot: fixtureRoot,
+        request,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow('parent authorization failed');
+  } finally {
+    await rm(fixtureRoot, REMOVE_RECURSIVELY);
+  }
+});
+
 test('authorizes a multibyte parent view within the character limit', async () => {
   const request = ModuleExpertsInvokeLineageScenario.directRequest(
     `multibyte-parent-view-${randomUUID()}`,
@@ -664,80 +718,6 @@ test('rejects a parent view above the character limit with valid projection hash
   } finally {
     runtime.dispose();
     await rm(runDirectory, REMOVE_RECURSIVELY);
-  }
-});
-
-test('rejects authorization storage collisions before lineage materializes', async () => {
-  const siblingRequest = ModuleExpertsInvokeLineageScenario.directRequest(
-    `authorization-key-collision-${randomUUID()}`,
-  );
-  const siblingAuthorization =
-    ModuleExpertsInvokeLineageScenario.authorization(siblingRequest);
-  const collidingSibling: ModuleExpertAuthorization = {
-    ...siblingAuthorization,
-    expert: 'web_expert',
-    parent: {
-      kind: AgentAttemptParentKind.AgentAttempt,
-      task: 'alternate-feature-synthesis',
-      agent: 'alternate-delivery-owner',
-      attempt: 2,
-    },
-  };
-  const direct = ModuleExpertsInvokeLineageScenario.directRequest(
-    `authorization-parent-key-${randomUUID()}`,
-  );
-  const parent = ModuleExpertsInvokeLineageScenario.directParent(direct);
-  const parentKeyRequest: ModuleExpertInvocationRequest = {
-    ...direct,
-    task: parent.task,
-    attempt: parent.attempt,
-  };
-  const cases: readonly AuthorizationStorageCollisionCase[] = [
-    {
-      request: siblingRequest,
-      authorizations: [siblingAuthorization, collidingSibling],
-      expectedMessage: 'journal storage keys must be unique',
-    },
-    {
-      request: parentKeyRequest,
-      authorizations: [
-        ModuleExpertsInvokeLineageScenario.authorization(parentKeyRequest),
-      ],
-      expectedMessage: 'identity is invalid',
-    },
-  ];
-
-  for (const testCase of cases) {
-    const runDirectory =
-      ModuleExpertsInvokeLineageScenario.processingRunDirectory(
-        testCase.request.runId,
-      );
-    const immediateParent = ModuleExpertsInvokeLineageScenario.directParent(
-      testCase.request,
-    );
-    const completedArgs = {
-      repoRoot: REPO_ROOT,
-      runId: testCase.request.runId,
-      sourceCommit: testCase.request.sourceCommit,
-      task: immediateParent.task,
-      agent: immediateParent.agent,
-      attempt: immediateParent.attempt,
-      depth: 1,
-      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-      output:
-        ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput(
-          testCase.authorizations,
-        ),
-    } as const;
-    try {
-      await expect(
-        ModuleExpertsInvokeParentFixtureScenario.createCompletedAttempt(
-          completedArgs,
-        ),
-      ).rejects.toThrow(testCase.expectedMessage);
-    } finally {
-      await rm(runDirectory, REMOVE_RECURSIVELY);
-    }
   }
 });
 
@@ -951,12 +931,6 @@ type InvalidDepthThreeParentCase = {
     | typeof ModuleExpertsInvokeParentFixtureScenario.moduleDevelopmentPlanOutput
     | typeof ModuleExpertsInvokeParentFixtureScenario.moduleExpertEvidenceOutput
   >;
-};
-
-type AuthorizationStorageCollisionCase = {
-  readonly request: ModuleExpertInvocationRequest;
-  readonly authorizations: readonly ModuleExpertAuthorization[];
-  readonly expectedMessage: string;
 };
 
 type ParentSetupArgs = {

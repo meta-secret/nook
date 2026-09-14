@@ -45,3 +45,9 @@ Open the narrow design authority for the affected Rust or WASM contract.
 ## Reference
 
 - [Rust and WebAssembly](references/rust-wasm.md)
+
+## Team topology
+
+- [Development Core Team Gizmo](gizmo/knowledge-graph.md) coordinates bounded Development Core mechanics.
+- [Rust Core Developer](rust-core-developer/knowledge-graph.md) handles packeted portable Rust core work.
+- [Rust Auth2 Developer](rust-auth2-developer/knowledge-graph.md) handles packeted portable Rust Auth2 work.

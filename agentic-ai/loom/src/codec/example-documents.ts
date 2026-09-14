@@ -114,6 +114,7 @@ export enum DefaultableExamplePresence {
 export type ExampleOperation =
   AgentStatsOperation | PrLandOperation | ExampleOperationMarker.FamilyRoot;
 
+/** @deprecated Retained only to decode old request documents. */
 export type PrePushExampleDocument = {
   readonly prePush: PrePushRequest;
 };
@@ -174,7 +175,7 @@ export type PrLandValidateExampleDocument = {
 };
 
 export type ToolsCallExampleDocument = {
-  readonly toolsCall: PrePushExampleDocument;
+  readonly toolsCall: ToolsListExampleDocument;
 };
 
 export type ExampleDocument =
@@ -198,11 +199,13 @@ export type ExampleCatalogEntry = {
   readonly dispatch: ExampleDispatchKind;
 };
 
+/** @deprecated Retained only to decode old request documents. */
 export const PRE_PUSH_EXAMPLE: PrePushRequest = {
   stageHostUpdates: true,
   fetchOriginMain: true,
 };
 
+/** @deprecated Retained only to decode old request documents. */
 export const PRE_PUSH_EXAMPLE_DOCUMENT: PrePushExampleDocument = {
   prePush: PRE_PUSH_EXAMPLE,
 };
@@ -295,16 +298,10 @@ export const PR_LAND_VALIDATE_EXAMPLE_DOCUMENT: PrLandValidateExampleDocument =
   };
 
 export const TOOLS_CALL_EXAMPLE_DOCUMENT: ToolsCallExampleDocument = {
-  toolsCall: PRE_PUSH_EXAMPLE_DOCUMENT,
+  toolsCall: TOOLS_LIST_EXAMPLE_DOCUMENT,
 };
 
 export const EXAMPLE_CATALOG: readonly ExampleCatalogEntry[] = [
-  {
-    family: RequestFamily.PrePush,
-    operation: ExampleOperationMarker.FamilyRoot,
-    document: PRE_PUSH_EXAMPLE_DOCUMENT,
-    dispatch: ExampleDispatchKind.Defaultable,
-  },
   {
     family: RequestFamily.ToolsList,
     operation: ExampleOperationMarker.FamilyRoot,

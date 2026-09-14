@@ -254,7 +254,7 @@ describe('authentication fact rescans', () => {
         <label id="email-label">Email</label>
         <input id="contact" type="text" />
         <input type="password" autocomplete="current-password" />
-        <iframe id="gate" title="Verification"></iframe>
+        <iframe id="gate" title="Verification" src="about:blank"></iframe>
         <button type="submit">Sign in</button>
       </form>
     `
@@ -266,7 +266,7 @@ describe('authentication fact rescans', () => {
     expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(1)
     document
       .querySelector('#gate')
-      ?.setAttribute('src', 'https://hcaptcha.test')
+      ?.setAttribute('src', 'about:blank#https://hcaptcha.test')
     expect(
       observedAuthenticationWorkflow().summary.manualCheckpointPresent,
     ).toBe(true)

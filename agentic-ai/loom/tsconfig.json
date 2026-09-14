@@ -3,6 +3,13 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "paths": {
+      "neverthrow": ["./node_modules/neverthrow"],
+      "zod": ["./node_modules/zod"],
+      "github-slugger": ["./node_modules/github-slugger"],
+      "mdast-util-from-markdown": ["./node_modules/mdast-util-from-markdown"],
+      "mdast": ["./node_modules/@types/mdast/index.d.ts"]
+    },
     "lib": ["ES2022"],
     "types": ["bun"],
     "strict": true,

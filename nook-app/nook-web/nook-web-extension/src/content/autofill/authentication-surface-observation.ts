@@ -440,16 +440,19 @@ class AuthenticationSurfaceObservation {
       }
       return this.mutationTouchesAuthenticationWorkflow(workflowRequest)
     })
+    const shouldRemountRenderedWorkflow = (() => {
+      const workflow = renderedWorkflow
+      if (!workflow) return false
+      return relevantMutations.some((record) => {
+        const workflowRequest: AuthenticationWorkflowMutationRequest = {
+          record,
+          workflow,
+        }
+        return this.mutationTouchesAuthenticationWorkflow(workflowRequest)
+      })
+    })()
     return {
-      shouldRemountRenderedWorkflow:
-        Boolean(renderedWorkflow) &&
-        relevantMutations.some((record) => {
-          const workflowRequest: AuthenticationWorkflowMutationRequest = {
-            record,
-            workflow: renderedWorkflow as PasswordFormObservation,
-          }
-          return this.mutationTouchesAuthenticationWorkflow(workflowRequest)
-        }),
+      shouldRemountRenderedWorkflow,
       shouldScheduleScan: relevantMutations.length > 0,
     }
   }

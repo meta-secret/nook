@@ -26,6 +26,7 @@ import {
   YamlObjectField,
 } from '../object.ts';
 
+/** @deprecated Decode compatibility for the retired prePush request family. */
 export class PrePushRequestDecoder {
   private constructor(private readonly request: UntrustedYamlNode) {}
   static decode(value: UntrustedYamlNode): DecodeOutcome<PrePushRequest> {

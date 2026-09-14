@@ -85,18 +85,9 @@ export class SkillProviderTypeContextScenario {
   static productionSourceContext(
     inspection: SkillProviderSourceInspection,
   ): SkillProviderTypeContext {
-    if (productionBoundaryProgram === false) {
-      const rootNames = ts.sys.readDirectory(
-        join(LOOM_ROOT, 'src'),
-        PRODUCTION_SOURCE_EXTENSIONS,
-        PRODUCTION_SOURCE_EXCLUDES,
-        PRODUCTION_SOURCE_INCLUDES,
-      );
-      productionBoundaryProgram = ts.createProgram(
-        rootNames,
-        BOUNDARY_COMPILER_OPTIONS,
-      );
-    }
+    SkillProviderTypeContextScenario.warmProductionBoundaryProgram();
+    if (productionBoundaryProgram === false)
+      throw new Error('Production boundary program was not initialized.');
     const absolutePath = join(REPOSITORY_ROOT, inspection.filePath);
     const sourceFile = productionBoundaryProgram.getSourceFile(absolutePath);
     const programSource = sourceFile
@@ -115,6 +106,20 @@ export class SkillProviderTypeContextScenario {
       checker: productionBoundaryProgram.getTypeChecker(),
       sourceFile,
     };
+  }
+
+  static warmProductionBoundaryProgram(): void {
+    if (productionBoundaryProgram !== false) return;
+    const rootNames = ts.sys.readDirectory(
+      join(LOOM_ROOT, 'src'),
+      PRODUCTION_SOURCE_EXTENSIONS,
+      PRODUCTION_SOURCE_EXCLUDES,
+      PRODUCTION_SOURCE_INCLUDES,
+    );
+    productionBoundaryProgram = ts.createProgram(
+      rootNames,
+      BOUNDARY_COMPILER_OPTIONS,
+    );
   }
 }
 

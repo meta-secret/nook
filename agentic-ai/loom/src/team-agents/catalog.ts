@@ -7,35 +7,82 @@ export class TeamAuthorityCatalog {
 
   private execute(): TeamAuthority | false {
     const teamKey = this.request;
-    const [defaulted1 = false] = [
-      TEAM_AUTHORITY_CATALOG.find((authority) => authority.key === teamKey),
+    const [authority = false] = [
+      TEAM_AUTHORITY_CATALOG.find((candidate) => candidate.key === teamKey),
     ];
-    return defaulted1;
+    return authority;
   }
 
-  static gizmoOwnedAgentProfile(
-    agentKey: GizmoOwnedAgentKey,
-  ): GizmoOwnedAgentProfile | false {
-    const [defaulted1 = false] = [
-      GIZMO_OWNED_AGENT_CATALOG.find((agent) => agent.key === agentKey),
+  static teamGizmoProfile(gizmoKey: TeamGizmoKey): TeamGizmoProfile | false {
+    const [profile = false] = [
+      TEAM_GIZMO_CATALOG.find((candidate) => candidate.key === gizmoKey),
     ];
-    return defaulted1;
+    return profile;
+  }
+
+  static teamInternalAgentProfile(
+    agentKey: TeamInternalAgentKey,
+  ): TeamInternalAgentProfile | false {
+    const [profile = false] = [
+      TEAM_INTERNAL_AGENT_CATALOG.find(
+        (candidate) => candidate.key === agentKey,
+      ),
+    ];
+    return profile;
+  }
+
+  static teamRuntimeProfile(
+    agentKey: TeamAgentKey,
+  ): TeamRuntimeProfile | false {
+    const directProfile = TEAM_GIZMO_CATALOG.find(
+      (candidate) => candidate.key === agentKey,
+    );
+    const internalProfile = TEAM_INTERNAL_AGENT_CATALOG.find(
+      (candidate) => candidate.key === agentKey,
+    );
+    const selectedProfile = directProfile || internalProfile;
+    if (selectedProfile) return selectedProfile;
+    const teamAuthority = TEAM_AUTHORITY_CATALOG.find(
+      (candidate) => candidate.key === agentKey,
+    );
+    if (!teamAuthority) return false;
+    const [teamGizmo = false] = [
+      TEAM_GIZMO_CATALOG.find(
+        (candidate) => candidate.team === teamAuthority.key,
+      ),
+    ];
+    return teamGizmo;
+  }
+
+  static teamRuntimeProfileByName(
+    agentName: string,
+  ): TeamRuntimeProfile | false {
+    const gizmo = TEAM_GIZMO_CATALOG.find(
+      (candidate) => candidate.key === agentName,
+    );
+    const internalAgent = TEAM_INTERNAL_AGENT_CATALOG.find(
+      (candidate) => candidate.key === agentName,
+    );
+    return gizmo || internalAgent || false;
   }
 
   static teamAgentProfile(
     agentKey: TeamAgentKey,
-  ): TeamAuthority | GizmoOwnedAgentProfile | false {
-    if (Object.values(TeamKey).some((key) => key === agentKey)) {
-      const teamKey = Object.values(TeamKey).find((key) => key === agentKey);
-      if (!teamKey) return false;
-      return TeamAuthorityCatalog.teamAuthority(teamKey);
-    }
-    const gizmoKey = Object.values(GizmoOwnedAgentKey).find(
-      (key) => key === agentKey,
+  ): TeamAuthority | TeamGizmoProfile | TeamInternalAgentProfile | false {
+    const authority = TEAM_AUTHORITY_CATALOG.find(
+      (candidate) => candidate.key === agentKey,
     );
-    return gizmoKey
-      ? TeamAuthorityCatalog.gizmoOwnedAgentProfile(gizmoKey)
-      : false;
+    if (authority) return authority;
+
+    const gizmo = TEAM_GIZMO_CATALOG.find(
+      (candidate) => candidate.key === agentKey,
+    );
+    if (gizmo) return gizmo;
+
+    const internalAgent = TEAM_INTERNAL_AGENT_CATALOG.find(
+      (candidate) => candidate.key === agentKey,
+    );
+    return internalAgent || false;
   }
 
   static teamCortexRoot(teamKey: TeamKey): string {
@@ -50,22 +97,46 @@ export class TeamAuthorityCatalog {
         return '.cortex/teams/sre';
       case TeamKey.WebDevelopment:
         return '.cortex/teams/web-dev';
+      case TeamKey.DeliveryPipeline:
+        return '.cortex/teams/delivery-pipeline';
     }
   }
 }
+
 export enum TeamKey {
   Ai = 'ai',
   DevelopmentCore = 'development-core',
   Security = 'security',
   Sre = 'sre',
   WebDevelopment = 'web-development',
+  DeliveryPipeline = 'delivery-pipeline',
 }
 
-export enum GizmoOwnedAgentKey {
-  PrSteward = 'pr-steward',
+export enum TeamGizmoKey {
+  Ai = 'ai-gizmo',
+  DevelopmentCore = 'development-core-gizmo',
+  Security = 'security-gizmo',
+  Sre = 'sre-gizmo',
+  WebDevelopment = 'web-development-gizmo',
+  DeliveryPipeline = 'delivery-pipeline-gizmo',
 }
 
-export type TeamAgentKey = TeamKey | GizmoOwnedAgentKey;
+export enum TeamInternalAgentKey {
+  LoomSpecialist = 'loom-specialist',
+  CortexSpecialist = 'cortex-specialist',
+  RustCoreDeveloper = 'rust-core-developer',
+  RustAuth2Developer = 'rust-auth2-developer',
+  CryptographySpecialist = 'cryptography-specialist',
+  SecurityReviewSpecialist = 'security-review-specialist',
+  Provisioning = 'provisioning',
+  CloudNative = 'cloud-native',
+  TypeScriptSpecialist = 'typescript-specialist',
+  SvelteSpecialist = 'svelte-specialist',
+  DevManager = 'dev-manager',
+  PrLifecycle = 'pr-lifecycle',
+}
+
+export type TeamAgentKey = TeamKey | TeamGizmoKey | TeamInternalAgentKey;
 
 export type TeamAuthority = {
   readonly key: TeamKey;
@@ -75,18 +146,44 @@ export type TeamAuthority = {
   readonly capabilityBoundary: string;
 };
 
-export type GizmoOwnedAgentProfile = {
-  readonly key: GizmoOwnedAgentKey;
+export type TeamGizmoProfile = {
+  readonly key: TeamGizmoKey;
+  readonly team: TeamKey;
+  readonly identity: string;
+  readonly description: string;
+  readonly model: 'gpt-5.6-sol';
+  readonly reasoningEffort: 'low';
+  readonly serviceTier: 'fast';
+  readonly contextPaths: readonly string[];
+  readonly parent: 'Gizmo Prime';
+  readonly reportingBoundary: string;
+  readonly capabilityBoundary: string;
+};
+
+export type TeamInternalAgentProfile = {
+  readonly key: TeamInternalAgentKey;
+  readonly team: TeamKey;
   readonly identity: string;
   readonly description: string;
   readonly model: 'gpt-5.6-luna';
   readonly reasoningEffort: 'xhigh';
+  readonly serviceTier: 'fast';
   readonly contextPaths: readonly string[];
+  readonly parent: TeamGizmoKey;
+  readonly reportingBoundary: string;
   readonly capabilityBoundary: string;
 };
 
+export type TeamRuntimeProfile = TeamGizmoProfile | TeamInternalAgentProfile;
+
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
+
+const TEAM_GIZMO_CAPABILITY_BOUNDARY =
+  'Team Gizmo coordinates only its team mechanics. It does not implement product code, choose functional ownership, decide readiness or promotion, or issue the final delivery verdict. It never creates or updates pull requests and never performs squash, rebase, or force-push operations.';
+
+const INTERNAL_AGENT_CAPABILITY_BOUNDARY =
+  'Internal Team Agent operates only within its bounded team expertise. It never creates or updates pull requests, performs squash, rebase, or force-push operations, changes parent ownership, or issues the final delivery verdict.';
 
 export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
   {
@@ -144,21 +241,346 @@ export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
     ],
     capabilityBoundary: `Web development may implement bounded TypeScript expertise without taking consumer capability semantics or Cortex authority. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
   },
-] as const;
-
-export const GIZMO_OWNED_AGENT_CATALOG: readonly GizmoOwnedAgentProfile[] = [
   {
-    key: GizmoOwnedAgentKey.PrSteward,
-    identity: 'PR Steward',
+    key: TeamKey.DeliveryPipeline,
+    identity: 'Delivery Pipeline',
     description:
-      'Executes explicitly authorized pull-request metadata, review, validation, readiness-evidence, merge, and merge-verification operations for Gizmo Prime.',
-    model: 'gpt-5.6-luna',
-    reasoningEffort: 'xhigh',
+      'Owns delivery mechanics across CI, pull-request lifecycle, development-branch publication, workflow execution, validation evidence, local landing, and guarded promotion.',
     contextPaths: [
-      '.cortex/teams/pr-steward/AGENTS.md',
-      '.cortex/teams/pr-steward/knowledge-graph.md',
+      '.cortex/teams/delivery-pipeline/AGENTS.md',
+      '.cortex/teams/delivery-pipeline/knowledge-graph.md',
     ],
-    capabilityBoundary:
-      'PR Steward never edits functional code, adjudicates technical findings, sequences shared-branch writers, owns Workbench outcomes, or issues the final delivery verdict.',
+    capabilityBoundary: `Delivery Pipeline executes authorized delivery mechanics without owning functional product implementation or policy verdicts. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
   },
 ] as const;
+
+export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
+  {
+    key: TeamGizmoKey.Ai,
+    team: TeamKey.Ai,
+    identity: 'AI Team Gizmo',
+    description:
+      'High-level internal orchestrator for AI packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
+    model: 'gpt-5.6-sol',
+    reasoningEffort: 'low',
+    serviceTier: 'fast',
+    contextPaths: [
+      '.cortex/teams/ai/gizmo/AGENTS.md',
+      '.cortex/teams/ai/gizmo/knowledge-graph.md',
+    ],
+    parent: 'Gizmo Prime',
+    reportingBoundary:
+      "Reports high-level AI summaries and blockers to Gizmo Prime; it preserves Prime's controller and exact-SHA target without becoming a second root delivery owner.",
+    capabilityBoundary: TEAM_GIZMO_CAPABILITY_BOUNDARY,
+  },
+  {
+    key: TeamGizmoKey.DevelopmentCore,
+    team: TeamKey.DevelopmentCore,
+    identity: 'Development Core Team Gizmo',
+    description:
+      'High-level internal orchestrator for Development Core packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
+    model: 'gpt-5.6-sol',
+    reasoningEffort: 'low',
+    serviceTier: 'fast',
+    contextPaths: [
+      '.cortex/teams/dev-core/gizmo/AGENTS.md',
+      '.cortex/teams/dev-core/gizmo/knowledge-graph.md',
+    ],
+    parent: 'Gizmo Prime',
+    reportingBoundary:
+      "Reports high-level Development Core summaries and blockers to Gizmo Prime; it preserves Prime's controller and exact-SHA target without becoming a second root delivery owner.",
+    capabilityBoundary: TEAM_GIZMO_CAPABILITY_BOUNDARY,
+  },
+  {
+    key: TeamGizmoKey.Security,
+    team: TeamKey.Security,
+    identity: 'Security Team Gizmo',
+    description:
+      'High-level internal orchestrator for Security packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
+    model: 'gpt-5.6-sol',
+    reasoningEffort: 'low',
+    serviceTier: 'fast',
+    contextPaths: [
+      '.cortex/teams/security/gizmo/AGENTS.md',
+      '.cortex/teams/security/gizmo/knowledge-graph.md',
+    ],
+    parent: 'Gizmo Prime',
+    reportingBoundary:
+      "Reports high-level Security summaries and blockers to Gizmo Prime; it preserves Prime's controller and exact-SHA target without becoming a second root delivery owner.",
+    capabilityBoundary: TEAM_GIZMO_CAPABILITY_BOUNDARY,
+  },
+  {
+    key: TeamGizmoKey.Sre,
+    team: TeamKey.Sre,
+    identity: 'SRE Team Gizmo',
+    description:
+      'High-level internal orchestrator for SRE packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
+    model: 'gpt-5.6-sol',
+    reasoningEffort: 'low',
+    serviceTier: 'fast',
+    contextPaths: [
+      '.cortex/teams/sre/gizmo/AGENTS.md',
+      '.cortex/teams/sre/gizmo/knowledge-graph.md',
+    ],
+    parent: 'Gizmo Prime',
+    reportingBoundary:
+      "Reports high-level SRE summaries and blockers to Gizmo Prime; it preserves Prime's controller and exact-SHA target without becoming a second root delivery owner.",
+    capabilityBoundary: TEAM_GIZMO_CAPABILITY_BOUNDARY,
+  },
+  {
+    key: TeamGizmoKey.WebDevelopment,
+    team: TeamKey.WebDevelopment,
+    identity: 'Web Development Team Gizmo',
+    description:
+      'High-level internal orchestrator for Web Development packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
+    model: 'gpt-5.6-sol',
+    reasoningEffort: 'low',
+    serviceTier: 'fast',
+    contextPaths: [
+      '.cortex/teams/web-dev/gizmo/AGENTS.md',
+      '.cortex/teams/web-dev/gizmo/knowledge-graph.md',
+    ],
+    parent: 'Gizmo Prime',
+    reportingBoundary:
+      "Reports high-level Web Development summaries and blockers to Gizmo Prime; it preserves Prime's controller and exact-SHA target without becoming a second root delivery owner.",
+    capabilityBoundary: TEAM_GIZMO_CAPABILITY_BOUNDARY,
+  },
+  {
+    key: TeamGizmoKey.DeliveryPipeline,
+    team: TeamKey.DeliveryPipeline,
+    identity: 'Delivery Pipeline Team Gizmo',
+    description:
+      'High-level internal orchestrator for Delivery Pipeline packets, bounded mechanics, internal dispatch, evidence synthesis, and reporting to Gizmo Prime.',
+    model: 'gpt-5.6-sol',
+    reasoningEffort: 'low',
+    serviceTier: 'fast',
+    contextPaths: [
+      '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md',
+      '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md',
+    ],
+    parent: 'Gizmo Prime',
+    reportingBoundary:
+      'Reports high-level delivery-pipeline summaries and blockers to Gizmo Prime; it does not replace Prime or create a second root delivery owner.',
+    capabilityBoundary: TEAM_GIZMO_CAPABILITY_BOUNDARY,
+  },
+] as const;
+
+export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
+  [
+    {
+      key: TeamInternalAgentKey.LoomSpecialist,
+      team: TeamKey.Ai,
+      identity: 'Loom specialist',
+      description:
+        'Maintains Loom typed workflows, team-agent catalogs, context resolution, and deterministic AI tooling.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
+      contextPaths: [
+        '.cortex/teams/ai/loom-specialist/AGENTS.md',
+        '.cortex/teams/ai/loom-specialist/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.Ai,
+      reportingBoundary:
+        'Reports bounded Loom evidence and blockers to AI Team Gizmo for synthesis and handoff to Gizmo Prime.',
+      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+    },
+    {
+      key: TeamInternalAgentKey.CortexSpecialist,
+      team: TeamKey.Ai,
+      identity: 'Cortex specialist',
+      description:
+        'Maintains Cortex routing, knowledge-graph consistency, context contracts, and agent-authority semantics.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
+      contextPaths: [
+        '.cortex/teams/ai/cortex-specialist/AGENTS.md',
+        '.cortex/teams/ai/cortex-specialist/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.Ai,
+      reportingBoundary:
+        'Reports bounded Cortex evidence and blockers to AI Team Gizmo for synthesis and handoff to Gizmo Prime.',
+      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+    },
+    {
+      key: TeamInternalAgentKey.RustCoreDeveloper,
+      team: TeamKey.DevelopmentCore,
+      identity: 'Rust core developer',
+      description:
+        'Implements bounded portable Rust core behavior and its behavior-focused tests under Development Core ownership.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
+      contextPaths: [
+        '.cortex/teams/dev-core/rust-core-developer/AGENTS.md',
+        '.cortex/teams/dev-core/rust-core-developer/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.DevelopmentCore,
+      reportingBoundary:
+        'Reports the committed Rust core SHA, evidence, and blockers to Development Core Team Gizmo.',
+      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+    },
+    {
+      key: TeamInternalAgentKey.RustAuth2Developer,
+      team: TeamKey.DevelopmentCore,
+      identity: 'Rust auth2 developer',
+      description:
+        'Implements bounded Rust auth2 behavior and its behavior-focused tests under Development Core ownership.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
+      contextPaths: [
+        '.cortex/teams/dev-core/rust-auth2-developer/AGENTS.md',
+        '.cortex/teams/dev-core/rust-auth2-developer/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.DevelopmentCore,
+      reportingBoundary:
+        'Reports the committed Rust auth2 SHA, evidence, and blockers to Development Core Team Gizmo.',
+      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+    },
+    {
+      key: TeamInternalAgentKey.CryptographySpecialist,
+      team: TeamKey.Security,
+      identity: 'Cryptography specialist',
+      description:
+        'Reviews cryptographic invariants, secret-handling boundaries, and security evidence within the assigned scope.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
+      contextPaths: [
+        '.cortex/teams/security/cryptography-specialist/AGENTS.md',
+        '.cortex/teams/security/cryptography-specialist/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.Security,
+      reportingBoundary:
+        'Reports bounded cryptographic findings, evidence, and blockers to Security Team Gizmo.',
+      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+    },
+    {
+      key: TeamInternalAgentKey.SecurityReviewSpecialist,
+      team: TeamKey.Security,
+      identity: 'Security review specialist',
+      description:
+        'Performs bounded security review of trust boundaries, authorization, and release-impacting changes.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
+      contextPaths: [
+        '.cortex/teams/security/security-review-specialist/AGENTS.md',
+        '.cortex/teams/security/security-review-specialist/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.Security,
+      reportingBoundary:
+        'Reports bounded security findings, evidence, and blockers to Security Team Gizmo.',
+      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+    },
+    {
+      key: TeamInternalAgentKey.Provisioning,
+      team: TeamKey.Sre,
+      identity: 'Provisioning specialist',
+      description:
+        'Maintains bounded infrastructure provisioning mechanics, manifests, and operational evidence under SRE ownership.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
+      contextPaths: [
+        '.cortex/teams/sre/provisioning/AGENTS.md',
+        '.cortex/teams/sre/provisioning/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.Sre,
+      reportingBoundary:
+        'Reports bounded provisioning evidence and blockers to SRE Team Gizmo.',
+      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+    },
+    {
+      key: TeamInternalAgentKey.CloudNative,
+      team: TeamKey.Sre,
+      identity: 'Cloud-native specialist',
+      description:
+        'Maintains bounded cloud-native deployment, container, cluster, and runner mechanics under SRE ownership.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
+      contextPaths: [
+        '.cortex/teams/sre/cloud-native/AGENTS.md',
+        '.cortex/teams/sre/cloud-native/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.Sre,
+      reportingBoundary:
+        'Reports bounded cloud-native evidence and blockers to SRE Team Gizmo.',
+      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+    },
+    {
+      key: TeamInternalAgentKey.TypeScriptSpecialist,
+      team: TeamKey.WebDevelopment,
+      identity: 'TypeScript specialist',
+      description:
+        'Implements bounded TypeScript state, typed projections, and focused web behavior under Web Development ownership.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
+      contextPaths: [
+        '.cortex/teams/web-dev/typescript-specialist/AGENTS.md',
+        '.cortex/teams/web-dev/typescript-specialist/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.WebDevelopment,
+      reportingBoundary:
+        'Reports the committed TypeScript SHA, evidence, and blockers to Web Development Team Gizmo.',
+      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+    },
+    {
+      key: TeamInternalAgentKey.SvelteSpecialist,
+      team: TeamKey.WebDevelopment,
+      identity: 'Svelte specialist',
+      description:
+        'Implements bounded Svelte presentation, browser interaction, and focused web-flow tests under Web Development ownership.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
+      contextPaths: [
+        '.cortex/teams/web-dev/svelte-specialist/AGENTS.md',
+        '.cortex/teams/web-dev/svelte-specialist/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.WebDevelopment,
+      reportingBoundary:
+        'Reports the committed Svelte SHA, evidence, and blockers to Web Development Team Gizmo.',
+      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+    },
+    {
+      key: TeamInternalAgentKey.DevManager,
+      team: TeamKey.DeliveryPipeline,
+      identity: 'Dev Manager',
+      description:
+        'Executes bounded development-manager snapshot, validation-evidence, readiness, and promotion mechanics under Delivery Pipeline ownership.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
+      contextPaths: [
+        '.cortex/teams/delivery-pipeline/dev-manager/AGENTS.md',
+        '.cortex/teams/delivery-pipeline/dev-manager/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.DeliveryPipeline,
+      reportingBoundary:
+        'Reports bounded manager-cycle evidence and blockers to Delivery Pipeline Team Gizmo.',
+      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+    },
+    {
+      key: TeamInternalAgentKey.PrLifecycle,
+      team: TeamKey.DeliveryPipeline,
+      identity: 'PR Lifecycle',
+      description:
+        'Executes explicitly authorized pull-request observation, check, review, status, publication, promotion, and bounded local-dev mechanics for Delivery Pipeline.',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'xhigh',
+      serviceTier: 'fast',
+      contextPaths: [
+        '.cortex/teams/delivery-pipeline/pr-lifecycle/AGENTS.md',
+        '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
+      ],
+      parent: TeamGizmoKey.DeliveryPipeline,
+      reportingBoundary:
+        'Reports bounded PR lifecycle evidence and blockers to Delivery Pipeline Team Gizmo, which forwards policy-owned evidence to the issuing controller.',
+      capabilityBoundary: INTERNAL_AGENT_CAPABILITY_BOUNDARY,
+    },
+  ] as const;

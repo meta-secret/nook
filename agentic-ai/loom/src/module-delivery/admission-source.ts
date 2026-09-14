@@ -3,6 +3,7 @@ import { ModuleSourceAuthority } from './authority.ts';
 import { ModuleDeliveryTaskKind } from './domain.ts';
 
 import { ModuleRepositoryGit } from './git-command.ts';
+import { PinnedDevBaseEvidenceContract } from '../lib/base-evidence.ts';
 
 import type { ValidatedModuleDeliveryPlan } from './domain.ts';
 
@@ -26,6 +27,12 @@ export class ModuleAdmissionSource {
         repositoryRoot: request.repositoryRoot,
         sourceCommit: acceptedPlan.plan.sourceCommit,
       });
+    PinnedDevBaseEvidenceContract.assertAncestry({
+      originMainSha: acceptedPlan.plan.originMainSha,
+      pinnedLocalDevSha: acceptedPlan.plan.pinnedLocalDevSha,
+      sourceCommit: acceptedPlan.plan.sourceCommit,
+      workingDirectory: repositoryRoot,
+    });
     this.assertExactWritesAreNotSourceDirectories({
       acceptedPlan,
       repositoryRoot,

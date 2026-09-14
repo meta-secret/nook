@@ -297,25 +297,78 @@ Use this file only to select one owning context. Do not preload linked graphs.
 
 - [Agent routing contract](AGENTS.md) defines universal loading, ownership,
   authoring, and delivery boundaries.
+- [Gizmo Prime](gizmo-prime/AGENTS.md) is the first actor for each new user-originated
+  repository task. Follow-ups retain their current Gizmo owner.
+- Assigned workers use the owning team context in their bounded packet.
+- Gizmo routes manually requested dev operations to the dev manager.
+
+## Canonical tree
+
+Gizmo Prime lives at \`gizmo-prime/\`. Its six and only six top-level teams are
+\`teams/ai/\`, \`teams/dev-core/\`, \`teams/security/\`, \`teams/sre/\`,
+\`teams/web-dev/\`, and \`teams/delivery-pipeline/\`. Each team has one \`gizmo/\`
+that reports to Prime. Every Team Gizmo uses \`gpt-5.6-sol\` with \`low\` reasoning.
+Each Team Gizmo requests Fast mode with \`service_tier: fast\`, which resolves as
+\`priority\`. Each leaf Team Agent uses \`gpt-5.6-luna\` with \`xhigh\` reasoning. It
+requests Fast mode with \`service_tier: fast\`, which resolves as \`priority\`. Each
+leaf receives a separate issued child worktree. Each Team Gizmo owns one team
+worktree. Prime reuses or creates a compatible Team Gizmo before dispatch. That
+Team Gizmo reuses or dispatches bounded internal leaf Team Agents, each in an
+issued child worktree, and integrates specialist commits into its feature
+branch.
+
+Before planning, delegation, worktree creation, or edits, Gizmo Prime runs
+\`git fetch --prune origin\`; a fetch failure fails closed. Delivery/Dev Manager
+then synchronizes canonical local \`main\` to the fetched \`origin/main\` and
+brings canonical local \`dev\` onto or including that main baseline under the
+dev-delivery workflow. If either synchronization cannot be proved, the run
+fails closed. Only after both synchronizations, Prime resolves the latest
+committed \`refs/heads/dev^{commit}\`. It records that exact
+post-synchronization commit as \`pinnedLocalDevSha\` for bootstrap evidence.
+Every new feature mission, feature branch, and worktree must use that exact
+latest committed canonical local \`dev\` commit as its base. A previously pinned
+or otherwise older local-dev SHA, \`origin/dev\`, \`origin/main\`, or another
+alternate base is invalid. If equality between \`pinnedLocalDevSha\` and the
+post-synchronization \`refs/heads/dev\` cannot be proved, the run fails closed.
+The base is preserved after feature creation. Prime authorizes the canonical
+feature branch name, which is the workflow authority. Observed base and head
+SHAs are evidence only, not required packet fields. Delivery re-fetches and
+resolves the latest committed branch head before each remote dispatch, review,
+or landing operation. If the branch advances, follow the latest head and rerun
+affected evidence. Team Gizmos and leaves keep temporary branches private.
+
+Active harness admission is dynamic. Gizmo immediately attempts every
+dependency-ready Team Gizmo with a disjoint scope concurrently and uses the
+actual admission result. A temporary admission refusal queues work for retry when capacity
+releases. A host or session allocation is current availability, not an
+architecture or product limit. A dispatch wave is not pre-checked or budgeted
+against a numeric limit. Cortex and Loom never encode, infer, or repeat a fixed
+numeric agent or subagent concurrency cap.
+
+Current specialist routing includes SRE (\`teams/sre/provisioning/\` and
+\`teams/sre/cloud-native/\`), Development Core
+(\`teams/dev-core/rust-core-developer/\` and
+\`teams/dev-core/rust-auth2-developer/\`), and Delivery Pipeline
+(\`teams/delivery-pipeline/gizmo/\`, \`teams/delivery-pipeline/dev-manager/\`, and
+\`teams/delivery-pipeline/pr-lifecycle/\`).
 
 ## Owning contexts
 
-- [Multiagent delivery architecture](gizmo/architecture/multiagent-delivery-diagrams.md):
+- [Multiagent delivery architecture](gizmo-prime/architecture/multiagent-delivery-diagrams.md):
   mandatory primary explanation for the complete feature, check, local-dev,
   dev-validation, and promotion workflow.
-- [Dev manager](teams/dev-manager/knowledge-graph.md): manually operated dev
-  publication, dev PR creation/update, slow evidence, readiness, repair
-  delegation, and fast-forward promotion policy.
-- [Dev delivery architecture](gizmo/architecture/dev-delivery.md): canonical
+- [Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md): operational
+  delivery mechanics. Its Team Gizmo is
+  [here](teams/delivery-pipeline/gizmo/knowledge-graph.md); the
+  [Dev Manager](teams/delivery-pipeline/dev-manager/knowledge-graph.md) alone
+  invokes \`dev:pr-manager\`, and the
+  [PR Lifecycle Agent](teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md)
+  performs only authorized mechanics.
+- [Dev delivery architecture](gizmo-prime/architecture/dev-delivery.md): canonical
   feature compilation, local integration, and dev-to-main contract.
-- [Gizmo Prime](gizmo/knowledge-graph.md): planning, delegation, integration,
+- [Gizmo Prime](gizmo-prime/knowledge-graph.md): planning, delegation, integration,
   feature review, feature acceptance, local landing requests, and Workbench.
-- [PR Steward](teams/pr-steward/knowledge-graph.md): authorized mechanical
-  pull-request operations, review and check observation, exact-head evidence,
-  and promotion mechanics under the dev manager's packet.
-  - [PR Steward contract](teams/pr-steward/AGENTS.md)
-  - [Pull-request lifecycle](teams/pr-steward/workflows/pull-request-lifecycle.md)
-  - [Authorization handshake](teams/pr-steward/workflows/authorization-handshake.md)
+  New feature and child branches follow the [branch naming contract](gizmo-prime/dynamic-skills/branch-naming.md).
 - [AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,
   routing, and AI automation.
 - [Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault

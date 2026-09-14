@@ -20,6 +20,7 @@ import { LocalEventLogUpdateFailure } from './pairing-import'
 import type * as PairingStateQuery from './pairing-state-query'
 import type * as SessionLifecycle from './session-lifecycle'
 import type * as SessionRuntimeMessages from './session-runtime-messages'
+import type { ExtensionSessionRuntimeMessageValue } from './session-runtime-messages'
 import type * as AccountPickers from './account-pickers'
 import { AccountPickerCleanupMarkerStatus } from './account-pickers'
 import type * as AuthenticatorOperations from './authenticator-operations'
@@ -31,7 +32,7 @@ type ChromeMessageListener = Parameters<
 
 type ExtensionLifecycleRoutingArgs = {
   dependencies: ExtensionLifecycleRoutingDependencies
-  message: Parameters<ChromeMessageListener>[0]
+  message: ExtensionSessionRuntimeMessageValue
   sender: chrome.runtime.MessageSender
   sendResponse: Parameters<ChromeMessageListener>[2]
 }

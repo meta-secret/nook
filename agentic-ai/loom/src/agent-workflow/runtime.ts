@@ -34,6 +34,9 @@ type WorkflowTaskInvocationBase<TTask extends string> = {
   readonly task: TTask;
   readonly attempt: WorkflowAttemptNumber;
   readonly sourceCommit: GitCommit;
+  readonly originMainSha: GitCommit;
+  readonly pinnedLocalDevSha: GitCommit;
+  readonly featureHeadSha: GitCommit;
   readonly runId: WorkflowRunId;
   readonly workingDirectory: string;
   readonly upstreamOutputs: readonly WorkflowDependencyOutput<TTask>[];

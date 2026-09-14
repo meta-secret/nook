@@ -31,6 +31,7 @@ class AuthenticationIdentityWords {
     const words = this.words;
     for (let index = 0; index < words.length; index += 1) {
       const word = words[index];
+      if (!word) continue;
       switch (word) {
         case AuthenticationContainerIdentityWord.Login:
         case AuthenticationContainerIdentityWord.Reset:

@@ -87,6 +87,9 @@ export class StructuralExpertParentAuthorization {
       runId: input.request.runId,
       workflowVersion: STRUCTURAL_EXPERT_WORKFLOW_VERSION,
       sourceCommit: input.request.sourceCommit,
+      originMainSha: input.request.originMainSha,
+      pinnedLocalDevSha: input.request.pinnedLocalDevSha,
+      featureHeadSha: input.request.featureHeadSha,
       identity: {
         task: input.request.parent.task,
         agent: input.request.parent.agent,
@@ -208,6 +211,9 @@ export class StructuralExpertParentAuthorization {
           runId: input.request.runId,
           workflowVersion: STRUCTURAL_EXPERT_WORKFLOW_VERSION,
           sourceCommit: input.request.sourceCommit,
+          originMainSha: input.request.originMainSha,
+          pinnedLocalDevSha: input.request.pinnedLocalDevSha,
+          featureHeadSha: input.request.featureHeadSha,
           identity: {
             task: projection.task,
             agent: projection.expert,

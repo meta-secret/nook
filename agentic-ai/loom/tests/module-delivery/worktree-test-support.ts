@@ -66,6 +66,8 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
       generation: input.lease.generation,
       planDigest: input.lease.planDigest,
       sourceCommit: input.state.headCommit,
+      originMainSha: input.lease.originMainSha,
+      pinnedLocalDevSha: input.lease.pinnedLocalDevSha,
       producerTeam: input.node.team,
       functionalOwner: input.node.functionalOwner,
       acceptanceOwner: input.node.acceptanceOwner,
@@ -139,6 +141,9 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
       sourceRoot,
       workspaceRoot,
       baselineCommit: '',
+      originMainSha: '',
+      pinnedLocalDevSha: '',
+      sourceCommit: '',
     };
     const git =
       ModuleDeliveryWorktreeTestSupportScenario.fixtureGit(provisional);
@@ -153,8 +158,33 @@ export class ModuleDeliveryWorktreeTestSupportScenario {
     ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile(initialWrite);
     git(['add', '--all']);
     git(['commit', '--quiet', '-m', 'baseline']);
-    const baselineCommit = git(['rev-parse', 'HEAD']);
-    return { root, sourceRoot, workspaceRoot, baselineCommit };
+    const originMainSha = git(['rev-parse', 'HEAD']);
+    git(['update-ref', 'refs/remotes/origin/main', originMainSha]);
+    ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile({
+      fixture: provisional,
+      relativePath: '.nook-test/bootstrap/pinned-local-dev.txt',
+      contents: 'pinned local dev\n',
+    });
+    git(['add', '--all']);
+    git(['commit', '--quiet', '-m', 'pinned local dev']);
+    const pinnedLocalDevSha = git(['rev-parse', 'HEAD']);
+    ModuleDeliveryWorktreeTestSupportScenario.writeFixtureFile({
+      fixture: provisional,
+      relativePath: '.nook-test/bootstrap/source.txt',
+      contents: 'source commit\n',
+    });
+    git(['add', '--all']);
+    git(['commit', '--quiet', '-m', 'source']);
+    const sourceCommit = git(['rev-parse', 'HEAD']);
+    return {
+      root,
+      sourceRoot,
+      workspaceRoot,
+      baselineCommit: sourceCommit,
+      originMainSha,
+      pinnedLocalDevSha,
+      sourceCommit,
+    };
   }
 
   static disposeGitFixture(fixture: GitFixture): void {
@@ -253,6 +283,9 @@ export type GitFixture = {
   readonly sourceRoot: string;
   readonly workspaceRoot: string;
   readonly baselineCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly sourceCommit: string;
 };
 
 type GitExecution = {

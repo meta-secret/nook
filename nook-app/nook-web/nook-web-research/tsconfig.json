@@ -1,8 +1,5 @@
 {
-  "extends": [
-    "@tsconfig/svelte/tsconfig.json",
-    "../tsconfig.safety.json"
-  ],
+  "extends": ["@tsconfig/svelte/tsconfig.json", "../tsconfig.safety.json"],
   "compilerOptions": {
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
@@ -10,19 +7,13 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "paths": {
-      "$lib": [
-        "./src/lib"
-      ],
-      "$lib/*": [
-        "./src/lib/*"
-      ]
+      "$lib": ["./src/lib"],
+      "$lib/*": ["./src/lib/*"]
     },
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "target": "ES2022",
-    "types": [
-      "vite/client"
-    ]
+    "types": ["vite/client"]
   },
   "include": [
     "e2e/**/*.ts",

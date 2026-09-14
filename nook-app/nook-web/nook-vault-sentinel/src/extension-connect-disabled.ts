@@ -14,8 +14,8 @@ import type {
   ExtensionConnectRequestFor,
   PairedExtensionIdentityDiscoveryFor,
 } from "$web-shared/extension/extension-connect-types";
+import type { ExtensionConnectScope as ProtocolExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import { ExtensionIdentityRequestSource } from "$web-shared/extension/extension-connect-types";
-import type { ExtensionConnectScope as SharedExtensionConnectScope } from "$web-shared/extension/extension-connect-scope";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
 import type { ExtensionPairingDelivery } from "$lib/extension/extension-pairing-delivery";
 
@@ -26,7 +26,7 @@ export {
   type ExtensionPairingDelivery,
 } from "$lib/extension/extension-pairing-delivery";
 
-export type ExtensionConnectScope = SharedExtensionConnectScope;
+export type ExtensionConnectScope = ProtocolExtensionConnectScope;
 
 /** Owns Sentinel's fail-closed facade for unreachable extension scope access. */
 class SentinelExtensionConnectScopeCatalog {
@@ -39,7 +39,7 @@ export const ExtensionConnectScope =
   new SentinelExtensionConnectScopeCatalog();
 
 export type ExtensionConnectRequest =
-  ExtensionConnectRequestFor<ExtensionConnectScope>;
+  ExtensionConnectRequestFor<ProtocolExtensionConnectScope>;
 export type PairedExtensionIdentityDiscovery =
   PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>;
 

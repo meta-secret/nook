@@ -24,7 +24,7 @@ const EXECUTABLE_SKILL_WORKSPACE_FILES = [
   'package.json',
 ] as const;
 const EXECUTABLE_SKILL_WORKSPACES = [
-  'gizmo/dynamic-skills/*/scripts',
+  'gizmo-prime/dynamic-skills/*/scripts',
   'shared/dynamic-skills/*/scripts',
   'teams/*/dynamic-skills/*/scripts',
 ] as const;
@@ -32,7 +32,7 @@ const EXECUTABLE_SKILL_WORKSPACE_NAME = '@nook/executable-skills-workspace';
 const EXECUTABLE_SKILL_BUNFIG = '[install]\nlinker = "hoisted"\n';
 const SKILL_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const OWNER_ROOT =
-  '\\.cortex/(?:gizmo|shared|teams/(?:ai|dev-core|security|sre|web-dev))/dynamic-skills';
+  '\\.cortex/(?:gizmo-prime|shared|teams/(?:ai|dev-core|security|sre|web-dev))/dynamic-skills';
 const EXECUTABLE_PACKAGE_PATH = new RegExp(
   '^(\\.cortex/(?:[^/]+|teams/[^/]+)/dynamic-skills/([^/]+))(?:/SKILL\\.md|/scripts(?:/|$))',
   'u',

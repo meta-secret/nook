@@ -240,7 +240,7 @@ export class CortexAuditCommand {
     const aiSkillsDir = path.join(cortexRoot, 'teams', 'ai', 'dynamic-skills');
     const skillDirectories = [
       aiSkillsDir,
-      path.join(cortexRoot, 'gizmo', 'dynamic-skills'),
+      path.join(cortexRoot, 'gizmo-prime', 'dynamic-skills'),
       path.join(cortexRoot, 'shared', 'dynamic-skills'),
       path.join(cortexRoot, 'teams', 'dev-core', 'dynamic-skills'),
       path.join(cortexRoot, 'teams', 'security', 'dynamic-skills'),

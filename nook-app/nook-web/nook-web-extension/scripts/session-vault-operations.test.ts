@@ -52,6 +52,14 @@ type ImportManagerState = {
   savedSnapshot: AuthProvidersSnapshot
 }
 
+class EventLogRecordsFixture {
+  free(): void {}
+
+  [Symbol.dispose](): void {
+    this.free()
+  }
+}
+
 function githubProvider(): StorageProvider {
   return {
     id: 'github',
@@ -87,7 +95,7 @@ function importRequest(
 function importDependencies(
   provider: StorageProvider,
 ): ImportExtensionVaultDependencies {
-  const records = {} as NookExternalEventLogRecords
+  const records: NookExternalEventLogRecords = new EventLogRecordsFixture()
   return {
     decodeProviders: () => [provider],
     createRecords: () => records,

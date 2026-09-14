@@ -138,6 +138,9 @@ export class StructuralExpertIsolationReceipts {
       task: invocation.task,
       attempt: invocation.attempt,
       sourceCommit: invocation.sourceCommit,
+      originMainSha: invocation.originMainSha,
+      pinnedLocalDevSha: invocation.pinnedLocalDevSha,
+      featureHeadSha: invocation.featureHeadSha,
       runId: invocation.runId,
       workingDirectory: invocation.workingDirectory,
       upstreamOutputs: invocation.upstreamOutputs,
@@ -153,6 +156,9 @@ export class StructuralExpertIsolationReceipts {
     const identity = {
       expertName: request.expertName,
       sourceCommit: request.sourceCommit,
+      originMainSha: request.originMainSha,
+      pinnedLocalDevSha: request.pinnedLocalDevSha,
+      featureHeadSha: request.featureHeadSha,
       workingDirectory: request.workingDirectory,
       snapshot: request.snapshot,
     };

@@ -48,14 +48,18 @@
   }
 
   function changeTotal(event: Event) {
-    total = Number((event.currentTarget as HTMLSelectElement).value)
+    const target = event.currentTarget
+    if (!(target instanceof HTMLSelectElement)) return
+    total = Number(target.value)
     threshold = Math.min(threshold, total)
     rootGenerated = false
     peers = buildPeers(total)
   }
 
   function changeThreshold(event: Event) {
-    threshold = Number((event.currentTarget as HTMLSelectElement).value)
+    const target = event.currentTarget
+    if (!(target instanceof HTMLSelectElement)) return
+    threshold = Number(target.value)
   }
 
   function pairPeer(id: number) {

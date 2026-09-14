@@ -263,7 +263,7 @@ export class PrStewardDecodeError extends Error {
     readonly cause: Error | false;
   }) {
     super(
-      `PR Steward decode failed: ${request.code}`,
+      `PR Lifecycle Agent decode failed: ${request.code}`,
       request.cause === false ? {} : { cause: request.cause },
     );
     this.name = 'PrStewardDecodeError';

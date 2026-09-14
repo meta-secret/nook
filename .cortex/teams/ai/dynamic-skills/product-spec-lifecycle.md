@@ -45,7 +45,7 @@ Integrate product specifications into every phase of agent work.
 Before planning or editing code for any product feature:
 
 1. Select the responsible team through
-   [Engineering team ownership](../../../gizmo/architecture/team-ownership.md).
+   [Engineering team ownership](../../../gizmo-prime/architecture/team-ownership.md).
 2. Search that team's knowledge graph and the global [product catalog](../../../shared/product-specs/index.md).
 3. Read the owning specification for the feature, item type, or workflow.
 4. Understand existing invariants, user flows, and acceptance criteria.
@@ -100,7 +100,8 @@ Does not apply to:
 Before:
 
 - User explains in chat that secure notes must support search by custom tags.
-- Agent adds the tag search in code and tests, then opens a PR.
+- Agent adds the tag search in code and tests, then returns the exact feature
+  branch to Gizmo for remote compilation and local dev landing.
 - `.cortex/teams/dev-core/product-specs/secure-notes.md` is never updated and remains unaware of tag search.
 
 After:
@@ -108,7 +109,7 @@ After:
 - User explains tag search requirements for secure notes in chat.
 - Agent reads `.cortex/teams/dev-core/product-specs/secure-notes.md`.
 - Agent implements tag search in code and domain tests.
-- Agent updates `.cortex/teams/dev-core/product-specs/secure-notes.md` to document tag search behavior and rules in the same PR.
+- Agent updates `.cortex/teams/dev-core/product-specs/secure-notes.md` to document tag search behavior and rules in the same feature delivery.
 
 Before:
 
@@ -136,10 +137,10 @@ After:
 
 - Review the docs diff to verify that product specifications accurately describe current product behavior.
 - Run `task loom:cortex-audit` to verify links, index entries, and structure.
-- For implementation tasks, run the focused worker proof and commit the
-  coherent formatted handoff. Include every formatter mutation in allowed
-  source or Cortex paths. Return the exact commit and evidence to Gizmo. If
-  integrated pre-push hygiene mutates team-owned content, that team returns a
-  fresh formatted commit before Gizmo continues and pushes. Gizmo
-  immediately dispatches a relevant focused remote task when the pushed head is
-  not validation-ready, or complete exact-head validation when it is ready.
+- For implementation tasks, apply only permitted scoped formatting or
+  inexpensive diagnostics and commit the coherent handoff. Include every
+  formatter mutation in allowed source or Cortex paths. Return the exact commit
+  and evidence to Gizmo. Do not run a local pre-push or broad validation gate.
+  Gizmo immediately dispatches the relevant remote build-only task through
+  Delivery Pipeline Team Gizmo and PR Lifecycle Agent. The Dev Manager owns
+  complete exact-head CI validation when the snapshot is ready.

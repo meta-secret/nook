@@ -270,8 +270,6 @@ jobs:
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
-          # ARC publishes source state from the verified job-scoped graph. The
-          # portable dependency ref is owned by the later writer/proof job.
           WASM_BUILD_MODE: dev
 
       - name: Preserve cache telemetry
@@ -328,6 +326,10 @@ jobs:
           NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"
           NOOK_REGISTRY_USERNAME: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           NOOK_REGISTRY_PASSWORD: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   web:
     name: Verify web build
@@ -403,10 +405,6 @@ jobs:
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
       - name: Publish verified web BuildKit cache
         if: success()
         run: task ci:main:publish-web-cache
@@ -414,6 +412,10 @@ jobs:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   web-e2e:
     name: Web e2e

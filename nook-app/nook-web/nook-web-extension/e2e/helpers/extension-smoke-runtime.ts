@@ -138,7 +138,7 @@ export async function registerWebsitePasskeyThroughExtension(
 ): Promise<string> {
   await page.bringToFront()
   const ceremony = page.evaluate(async () => {
-    const credential = (await navigator.credentials.create({
+    const credential = await navigator.credentials.create({
       publicKey: {
         challenge: new Uint8Array(32).fill(7),
         rp: { id: 'localhost', name: 'Nook extension e2e' },
@@ -154,7 +154,10 @@ export async function registerWebsitePasskeyThroughExtension(
         },
         timeout: 15_000,
       },
-    })) as PublicKeyCredential
+    })
+    if (!(credential instanceof PublicKeyCredential)) {
+      throw new Error('Website passkey creation did not return a public key')
+    }
     return credential.id
   })
   await expect(page.locator('aside[aria-label="Nook passkey"]')).toBeVisible()
@@ -172,7 +175,14 @@ export async function assertWebsitePasskeyThroughExtension({
   credentialId,
 }: WebsitePasskeyAssertionBrowserFlow): Promise<void> {
   await page.bringToFront()
-  const ceremony = page.evaluate(async (id) => {
+  const ceremony = page.evaluate<
+    {
+      id: string
+      authenticatorDataLength: number
+      signatureLength: number
+    },
+    string
+  >(async (id) => {
     const rawId = Uint8Array.from(
       atob(
         id.replaceAll('-', '+').replaceAll('_', '/') +
@@ -180,7 +190,7 @@ export async function assertWebsitePasskeyThroughExtension({
       ),
       (character) => character.charCodeAt(0),
     )
-    const credential = (await navigator.credentials.get({
+    const credential = await navigator.credentials.get({
       publicKey: {
         challenge: new Uint8Array(32).fill(9),
         rpId: 'localhost',
@@ -188,8 +198,14 @@ export async function assertWebsitePasskeyThroughExtension({
         userVerification: 'required',
         timeout: 15_000,
       },
-    })) as PublicKeyCredential
-    const response = credential.response as AuthenticatorAssertionResponse
+    })
+    if (!(credential instanceof PublicKeyCredential)) {
+      throw new Error('Website passkey assertion did not return a public key')
+    }
+    const response = credential.response
+    if (!(response instanceof AuthenticatorAssertionResponse)) {
+      throw new Error('Website passkey assertion has no assertion response')
+    }
     return {
       id: credential.id,
       authenticatorDataLength: response.authenticatorData.byteLength,
@@ -283,26 +299,9 @@ export async function sendExternalMessage(
   return page.evaluate(
     ({ runtimeId, runtimeMessage }) =>
       new Promise<unknown>((resolve, reject) => {
-        const browserGlobal = globalThis as typeof globalThis & {
-          chrome?: {
-            runtime?: {
-              lastError?: { message?: string }
-              sendMessage(
-                extensionId: string,
-                message: unknown,
-                callback: (response?: unknown) => void,
-              ): void
-            }
-          }
-        }
-        const runtime = browserGlobal.chrome?.runtime
-        if (!runtime) {
-          reject(new Error('Extension messaging is unavailable.'))
-          return
-        }
-        runtime.sendMessage(runtimeId, runtimeMessage, (response) => {
-          if (runtime.lastError?.message) {
-            reject(new Error(runtime.lastError.message))
+        chrome.runtime.sendMessage(runtimeId, runtimeMessage, (response) => {
+          if (chrome.runtime.lastError?.message) {
+            reject(new Error(chrome.runtime.lastError.message))
             return
           }
           resolve(response)

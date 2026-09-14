@@ -90,7 +90,7 @@ export class CortexMarkdownInventory {
     if (path.basename(ownerRoot) !== 'dynamic-skills') return false;
     const relativeOwner = path.relative(args.cortexRoot, ownerRoot);
     const canonicalOwner =
-      relativeOwner === path.join('gizmo', 'dynamic-skills') ||
+      relativeOwner === path.join('gizmo-prime', 'dynamic-skills') ||
       relativeOwner === path.join('shared', 'dynamic-skills') ||
       ['ai', 'dev-core', 'security', 'sre', 'web-dev'].some(
         (team) => relativeOwner === path.join('teams', team, 'dynamic-skills'),

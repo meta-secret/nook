@@ -18,6 +18,9 @@ import {
 export type ModuleExpertChildRequest = {
   readonly runId: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly task: string;
   readonly expert: string;
   readonly attempt: number;
@@ -80,6 +83,9 @@ export class ModuleExpertParentAuthorization {
       runId: args.request.runId,
       workflowVersion: args.workflowVersion,
       sourceCommit: args.request.sourceCommit,
+      originMainSha: args.request.originMainSha,
+      pinnedLocalDevSha: args.request.pinnedLocalDevSha,
+      featureHeadSha: args.request.featureHeadSha,
       identity: immediateIdentity,
     };
     const immediate =
@@ -170,6 +176,9 @@ export class ModuleExpertParentAuthorization {
       runId: input.args.request.runId,
       workflowVersion: input.args.workflowVersion,
       sourceCommit: input.args.request.sourceCommit,
+      originMainSha: input.args.request.originMainSha,
+      pinnedLocalDevSha: input.args.request.pinnedLocalDevSha,
+      featureHeadSha: input.args.request.featureHeadSha,
       identity: authorityIdentity,
     };
     return VerifiedAttemptArtifacts.readVerifiedParentAttempt(authorityRead);

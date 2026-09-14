@@ -117,7 +117,10 @@ export type CompanionVaultDiscoveryArgs = {
 }
 
 export type PasskeyEventProviderFlushRequest = {
-  activeManager: NookVaultManager
+  activeManager: Pick<
+    NookVaultManager,
+    'load_auth_providers_snapshot' | 'flush_event_outbox_for_provider'
+  >
   vaultStoreId: string
 }
 

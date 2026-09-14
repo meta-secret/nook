@@ -34,7 +34,9 @@ test('keeps the shared submit bridge safe across classic bundle injections', asy
     const browserWorld = createContext({})
 
     runInContext(source, browserWorld)
-    expect(() => runInContext(source, browserWorld)).not.toThrow()
+    expect(() => {
+      runInContext(source, browserWorld)
+    }).not.toThrow()
   } finally {
     await rm(fixtureRoot, { recursive: true, force: true })
   }

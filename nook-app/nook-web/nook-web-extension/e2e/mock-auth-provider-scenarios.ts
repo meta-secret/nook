@@ -131,7 +131,8 @@ export class MockAuthProviderScenarios {
             forms.every(
               (form) =>
                 form.getAttribute('action') === 'get' &&
-                (form as HTMLFormElement).elements.length === 0,
+                form instanceof HTMLFormElement &&
+                form.elements.length === 0,
             ),
           ),
         ).toBe(true)
@@ -264,7 +265,9 @@ export class MockAuthProviderScenarios {
           await duplicate
             .locator('input')
             .evaluateAll((fields) =>
-              fields.map((field) => (field as HTMLInputElement).value),
+              fields.map((field) =>
+                field instanceof HTMLInputElement ? field.value : '',
+              ),
             ),
         ).toEqual(['', ''])
 
@@ -341,7 +344,8 @@ export class MockAuthProviderScenarios {
           await form.evaluate((element) => ({
             actionAttributePresent: element.hasAttribute('action'),
             methodAttribute: element.getAttribute('method'),
-            resolvedAction: (element as HTMLFormElement).action,
+            resolvedAction:
+              element instanceof HTMLFormElement ? element.action : '',
           })),
         ).toEqual({
           actionAttributePresent: false,
@@ -456,7 +460,9 @@ export class MockAuthProviderScenarios {
         await expect(form).not.toHaveAttribute('action')
         await expect(form).toHaveAttribute('method', 'post')
         expect(
-          await form.evaluate((element) => (element as HTMLFormElement).action),
+          await form.evaluate((element) =>
+            element instanceof HTMLFormElement ? element.action : '',
+          ),
         ).toBe('https://claude.ai/login')
         const email = form.getByLabel('Email')
         await expect(form.locator('input')).toHaveCount(1)
@@ -474,12 +480,14 @@ export class MockAuthProviderScenarios {
         await expect(google).toHaveAttribute('type', 'button')
         await expect(sso).toHaveAttribute('type', 'button')
         expect(
-          await google.evaluate(
-            (button) => !(button as HTMLButtonElement).form,
+          await google.evaluate((button) =>
+            button instanceof HTMLButtonElement ? !button.form : false,
           ),
         ).toBe(true)
         expect(
-          await sso.evaluate((button) => !(button as HTMLButtonElement).form),
+          await sso.evaluate((button) =>
+            button instanceof HTMLButtonElement ? !button.form : false,
+          ),
         ).toBe(true)
         await expect(page.getByText('or', { exact: true })).toBeVisible()
         await expect(page.getByTestId('claude-disclosure')).toBeVisible()
@@ -627,12 +635,9 @@ export class MockAuthProviderScenarios {
               SubmissionEvidencePollRequest
             >(
               ({ key, absentKind, presentKind }) => {
-                for (const [entryKey, value] of Object.entries(
-                  sessionStorage,
-                )) {
-                  if (entryKey === key) {
-                    return { kind: presentKind, value }
-                  }
+                const value = sessionStorage.getItem(key)
+                if (typeof value === 'string') {
+                  return { kind: presentKind, value }
                 }
                 return { kind: absentKind }
               },
@@ -762,12 +767,9 @@ export class MockAuthProviderScenarios {
               SubmissionEvidencePollRequest
             >(
               ({ key, absentKind, presentKind }) => {
-                for (const [entryKey, value] of Object.entries(
-                  sessionStorage,
-                )) {
-                  if (entryKey === key) {
-                    return { kind: presentKind, value }
-                  }
+                const value = sessionStorage.getItem(key)
+                if (typeof value === 'string') {
+                  return { kind: presentKind, value }
                 }
                 return { kind: absentKind }
               },
@@ -863,8 +865,8 @@ export class MockAuthProviderScenarios {
           const alternative = page.getByRole('button', { name })
           await expect(alternative).toHaveAttribute('type', 'button')
           expect(
-            await alternative.evaluate(
-              (button) => !(button as HTMLButtonElement).form,
+            await alternative.evaluate((button) =>
+              button instanceof HTMLButtonElement ? !button.form : false,
             ),
           ).toBe(true)
         }
@@ -885,10 +887,9 @@ export class MockAuthProviderScenarios {
               SubmissionEvidencePollRequest
             >(
               ({ key, absentKind, presentKind }) => {
-                for (const [entryKey, value] of Object.entries(
-                  sessionStorage,
-                )) {
-                  if (entryKey === key) return { kind: presentKind, value }
+                const value = sessionStorage.getItem(key)
+                if (typeof value === 'string') {
+                  return { kind: presentKind, value }
                 }
                 return { kind: absentKind }
               },

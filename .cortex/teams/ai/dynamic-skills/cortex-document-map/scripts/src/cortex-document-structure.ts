@@ -7,6 +7,200 @@ import { fromMarkdown } from 'mdast-util-from-markdown';
 
 import type { Heading, Link, Parent, Root, RootContent } from 'mdast';
 
+export const CORTEX_OWNER_GRAPH_PATHS = [
+  '.cortex/gizmo-prime/knowledge-graph.md',
+  '.cortex/teams/ai/knowledge-graph.md',
+  '.cortex/teams/dev-core/knowledge-graph.md',
+  '.cortex/teams/security/knowledge-graph.md',
+  '.cortex/teams/sre/knowledge-graph.md',
+  '.cortex/teams/web-dev/knowledge-graph.md',
+  '.cortex/teams/delivery-pipeline/knowledge-graph.md',
+  '.cortex/shared/knowledge-graph.md',
+] as const;
+
+const CORTEX_TEAM_PATTERN =
+  /^(?:ai|dev-core|security|sre|web-dev|delivery-pipeline)$/u;
+const CORTEX_TEAM_CHILDREN = new Map<string, readonly string[]>([
+  ['ai', ['gizmo', 'loom-specialist', 'cortex-specialist']],
+  ['dev-core', ['gizmo', 'rust-core-developer', 'rust-auth2-developer']],
+  [
+    'security',
+    ['gizmo', 'cryptography-specialist', 'security-review-specialist'],
+  ],
+  ['sre', ['gizmo', 'provisioning', 'cloud-native']],
+  ['web-dev', ['gizmo', 'typescript-specialist', 'svelte-specialist']],
+  ['delivery-pipeline', ['gizmo', 'dev-manager', 'pr-lifecycle']],
+]);
+const CORTEX_CHILD_DIRECTORY_PATTERN =
+  /^\.cortex\/teams\/([^/]+)\/([^/]+)(?:\/|$)/u;
+
+type CortexChildDirectory = {
+  readonly team: string;
+  readonly child: string;
+};
+
+/** Owns the meaning and ownership decisions for one Cortex document path. */
+export class CortexDocumentPath {
+  constructor(private readonly filePath: string) {}
+
+  value(): string {
+    return this.filePath;
+  }
+
+  isChildGraphPath(): boolean {
+    return (
+      this.filePath.endsWith('/knowledge-graph.md') &&
+      this.canonicalChildDirectory() !== false
+    );
+  }
+
+  childGraphParentPath(): string | false {
+    const child = this.canonicalChildDirectory();
+    return child ? `.cortex/teams/${child.team}/knowledge-graph.md` : false;
+  }
+
+  childGraphTeam(): string | false {
+    const child = this.canonicalChildDirectory();
+    return child && this.filePath.endsWith('/knowledge-graph.md')
+      ? child.team
+      : false;
+  }
+
+  childTeam(): string | false {
+    const child = this.canonicalChildDirectory();
+    return child ? child.team : false;
+  }
+
+  isChildAuthorityPath(): boolean {
+    return (
+      this.filePath.endsWith('/AGENTS.md') &&
+      this.canonicalChildDirectory() !== false
+    );
+  }
+
+  isKnowledgeGraphPath(): boolean {
+    return (
+      this.filePath === '.cortex/knowledge-graph.md' ||
+      this.filePath === '.cortex/k-graph.md' ||
+      this.filePath === '.cortex/INDEX.md' ||
+      CORTEX_OWNER_GRAPH_PATHS.some((path) => path === this.filePath) ||
+      this.isChildGraphPath()
+    );
+  }
+
+  owningKnowledgeGraphPath(): string {
+    const childDirectory = this.childDirectoryPath();
+    if (childDirectory !== false) return `${childDirectory}/knowledge-graph.md`;
+    if (this.filePath.startsWith('.cortex/gizmo-prime/')) {
+      return '.cortex/gizmo-prime/knowledge-graph.md';
+    }
+    if (this.filePath.startsWith('.cortex/shared/')) {
+      return '.cortex/shared/knowledge-graph.md';
+    }
+    const teamMatch = /^\.cortex\/teams\/([^/]+)\//u.exec(this.filePath);
+    const team = teamMatch?.[1];
+    if (team && CORTEX_TEAM_PATTERN.test(team)) {
+      return `.cortex/teams/${team}/knowledge-graph.md`;
+    }
+    return '.cortex/knowledge-graph.md';
+  }
+
+  graphOwner(): string | false {
+    if (this.filePath.startsWith('.cortex/gizmo-prime/')) return 'gizmo-prime';
+    if (this.filePath.startsWith('.cortex/shared/')) return 'shared';
+    const childTeam = this.childGraphTeam();
+    if (childTeam !== false) return childTeam;
+    const teamMatch = /^\.cortex\/teams\/([^/]+)\//u.exec(this.filePath);
+    const team = teamMatch?.[1];
+    return team && CORTEX_TEAM_PATTERN.test(team) ? team : false;
+  }
+
+  ownsChildGraphPath(indexedPath: string): boolean {
+    const graphDirectory = path.posix.dirname(this.filePath);
+    return indexedPath.startsWith(`${graphDirectory}/`);
+  }
+
+  private childDirectoryPath(): string | false {
+    const child = this.canonicalChildDirectory();
+    return child ? `.cortex/teams/${child.team}/${child.child}` : false;
+  }
+
+  private canonicalChildDirectory(): CortexChildDirectory | false {
+    const match = CORTEX_CHILD_DIRECTORY_PATTERN.exec(this.filePath);
+    const team = match?.[1];
+    const child = match?.[2];
+    if (!team || !child || !CORTEX_TEAM_PATTERN.test(team)) return false;
+    if (!CORTEX_TEAM_CHILDREN.get(team)?.includes(child)) return false;
+    return { team, child };
+  }
+}
+
+/** Owns discovery of canonical child knowledge graphs in a path catalog. */
+export class CortexChildGraphPathCollection {
+  constructor(private readonly paths: Iterable<string>) {}
+
+  execute(): string[] {
+    return [...this.paths]
+      .filter((filePath) => new CortexDocumentPath(filePath).isChildGraphPath())
+      .sort();
+  }
+}
+
+/** Owns the allowed and read-only reference relation between child graphs. */
+export class CortexChildGraphReference {
+  private readonly graphPath: CortexDocumentPath;
+  private readonly indexedPath: CortexDocumentPath;
+
+  constructor(request: {
+    readonly graphPath: string;
+    readonly indexedPath: string;
+  }) {
+    this.graphPath = new CortexDocumentPath(request.graphPath);
+    this.indexedPath = new CortexDocumentPath(request.indexedPath);
+  }
+
+  isAllowed(): boolean {
+    if (!this.graphPath.isChildGraphPath()) return true;
+    if (this.graphPath.ownsChildGraphPath(this.indexedPath.value())) {
+      return true;
+    }
+    const indexedPath = this.indexedPath.value();
+    if (
+      indexedPath.startsWith('.cortex/gizmo-prime/') ||
+      indexedPath.startsWith('.cortex/shared/')
+    ) {
+      return true;
+    }
+    if (indexedPath === this.graphPath.childGraphParentPath()) return true;
+    const parentTeamPath = this.graphPath.childGraphParentPath();
+    if (
+      parentTeamPath !== false &&
+      indexedPath ===
+        parentTeamPath.replace('/knowledge-graph.md', '/AGENTS.md')
+    ) {
+      return true;
+    }
+    const graphTeam = this.graphPath.childGraphTeam();
+    const indexedTeam = this.indexedPath.childTeam();
+    if (
+      graphTeam !== false &&
+      indexedTeam === graphTeam &&
+      this.indexedPath.isChildAuthorityPath()
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  isReadOnly(): boolean {
+    if (!this.graphPath.isChildGraphPath()) return false;
+    if (this.graphPath.ownsChildGraphPath(this.indexedPath.value())) {
+      return false;
+    }
+    return this.isAllowed();
+  }
+}
+
 export class CortexDocumentStructure {
   private constructor(
     private readonly request: AuditCortexDocumentStructureArgs,
@@ -53,16 +247,7 @@ export class CortexDocumentStructure {
       };
       this.addFinding(findingArgs);
     } else {
-      const ownerGraphPaths = [
-        '.cortex/gizmo/knowledge-graph.md',
-        '.cortex/teams/ai/knowledge-graph.md',
-        '.cortex/teams/dev-core/knowledge-graph.md',
-        '.cortex/teams/dev-manager/knowledge-graph.md',
-        '.cortex/teams/security/knowledge-graph.md',
-        '.cortex/teams/sre/knowledge-graph.md',
-        '.cortex/teams/web-dev/knowledge-graph.md',
-        '.cortex/shared/knowledge-graph.md',
-      ] as const;
+      const ownerGraphPaths = CORTEX_OWNER_GRAPH_PATHS;
       const distributedTopology = ownerGraphPaths.some((graphPath) =>
         catalog.has(graphPath),
       );
@@ -71,6 +256,12 @@ export class CortexDocumentStructure {
         rootIndexDoc.relativePath,
       );
       graphDocuments.set(rootGraphPath, rootIndexDoc);
+      for (const graphPath of new CortexChildGraphPathCollection(
+        catalog.keys(),
+      ).execute()) {
+        const graphDocument = catalog.get(graphPath);
+        if (graphDocument) graphDocuments.set(graphPath, graphDocument);
+      }
       if (distributedTopology) {
         for (const graphPath of ownerGraphPaths) {
           const graphDocument = catalog.get(graphPath);
@@ -104,9 +295,45 @@ export class CortexDocumentStructure {
         indexedByGraph.set(graphPath, indexedFiles);
       }
 
+      const indexedDocumentGraphs = new Map<string, string[]>();
+      for (const [graphPath, indexedFiles] of indexedByGraph) {
+        for (const indexedPath of indexedFiles) {
+          if (
+            new CortexDocumentPath(indexedPath).isKnowledgeGraphPath() ||
+            new CortexChildGraphReference({
+              graphPath,
+              indexedPath,
+            }).isReadOnly()
+          ) {
+            continue;
+          }
+          const graphPaths = indexedDocumentGraphs.get(indexedPath);
+          if (graphPaths) {
+            graphPaths.push(graphPath);
+            continue;
+          }
+          const firstGraphPaths = [graphPath];
+          indexedDocumentGraphs.set(indexedPath, firstGraphPaths);
+        }
+      }
+      for (const [indexedPath, graphPaths] of indexedDocumentGraphs) {
+        for (const graphPath of graphPaths.slice(1)) {
+          const findingArgs: AddFindingArgs = {
+            findings,
+            code: CortexStructureFindingCode.InvalidIndexEntry,
+            file: graphPath,
+            line: 1,
+            message: `Knowledge graphs must index each non-graph document once: ${indexedPath}`,
+          };
+          this.addFinding(findingArgs);
+        }
+      }
+
       for (const [normPath] of catalog) {
-        if (this.isKnowledgeGraphPath(normPath)) continue;
-        const canonicalOwnerGraphPath = this.owningKnowledgeGraphPath(normPath);
+        if (new CortexDocumentPath(normPath).isKnowledgeGraphPath()) continue;
+        const canonicalOwnerGraphPath = new CortexDocumentPath(
+          normPath,
+        ).owningKnowledgeGraphPath();
         const ownerGraphPath =
           canonicalOwnerGraphPath === '.cortex/knowledge-graph.md'
             ? rootGraphPath
@@ -140,12 +367,16 @@ export class CortexDocumentStructure {
           }
         }
         for (const ownerGraphPath of ownerGraphPaths) {
-          const graphOwner = this.cortexGraphOwner(ownerGraphPath);
+          const graphOwner = new CortexDocumentPath(
+            ownerGraphPath,
+          ).graphOwner();
           const [ownerIndexedFiles = new Set<string>()] = [
             indexedByGraph.get(ownerGraphPath),
           ];
           for (const indexedPath of ownerIndexedFiles) {
-            const indexedOwner = this.cortexGraphOwner(indexedPath);
+            const indexedOwner = new CortexDocumentPath(
+              indexedPath,
+            ).graphOwner();
             if (indexedOwner === false || indexedOwner === graphOwner) continue;
             const findingArgs: AddFindingArgs = {
               findings,
@@ -181,7 +412,7 @@ export class CortexDocumentStructure {
 
     for (const document of parsedDocuments) {
       const normPath = this.normalizeCortexRelativePath(document.relativePath);
-      if (this.isKnowledgeGraphPath(normPath)) continue;
+      if (new CortexDocumentPath(normPath).isKnowledgeGraphPath()) continue;
       const validateArgs: ValidateDocumentArgs = {
         document,
         findings,
@@ -266,6 +497,20 @@ export class CortexDocumentStructure {
       }
 
       const targetDoc = args.catalog.get(resolved.targetRelativePath);
+      const reference = new CortexChildGraphReference({
+        graphPath: args.indexDocument.relativePath,
+        indexedPath: resolved.targetRelativePath,
+      });
+      if (!reference.isAllowed()) {
+        const findingArgs: AddFindingArgs = {
+          findings: args.findings,
+          code: CortexStructureFindingCode.InvalidIndexEntry,
+          file: args.indexDocument.relativePath,
+          line: new CortexMarkdownNode(link).line(),
+          message: `Child knowledge graph may link only its own directory or explicit read-only authorities: ${resolved.targetRelativePath}`,
+        };
+        this.addFinding(findingArgs);
+      }
       if (!targetDoc) {
         const findingArgs: AddFindingArgs = {
           findings: args.findings,
@@ -355,63 +600,6 @@ export class CortexDocumentStructure {
     };
   }
 
-  private isKnowledgeGraphPath(filePath: string): boolean {
-    return (
-      filePath === '.cortex/knowledge-graph.md' ||
-      filePath === 'knowledge-graph.md' ||
-      filePath === '.cortex/k-graph.md' ||
-      filePath === 'k-graph.md' ||
-      filePath === '.cortex/INDEX.md' ||
-      filePath === 'INDEX.md' ||
-      /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|dev-manager|security|sre|web-dev)|shared)\/knowledge-graph\.md$/.test(
-        filePath,
-      )
-    );
-  }
-
-  private owningKnowledgeGraphPath(filePath: string): string {
-    if (filePath.startsWith('.cortex/gizmo/')) {
-      return '.cortex/gizmo/knowledge-graph.md';
-    }
-    for (const team of [
-      CortexGraphOwner.Ai,
-      CortexGraphOwner.DevCore,
-      CortexGraphOwner.DevManager,
-      CortexGraphOwner.Security,
-      CortexGraphOwner.Sre,
-      CortexGraphOwner.WebDev,
-    ] as const) {
-      if (filePath.startsWith(`.cortex/teams/${team}/`)) {
-        return `.cortex/teams/${team}/knowledge-graph.md`;
-      }
-    }
-    if (filePath.startsWith('.cortex/shared/')) {
-      return '.cortex/shared/knowledge-graph.md';
-    }
-    return '.cortex/knowledge-graph.md';
-  }
-
-  private cortexGraphOwner(filePath: string): CortexGraphOwner | false {
-    if (filePath.startsWith('.cortex/gizmo/')) return CortexGraphOwner.Gizmo;
-    if (filePath.startsWith('.cortex/shared/')) return CortexGraphOwner.Shared;
-    const match =
-      /^\.cortex\/teams\/(ai|dev-core|dev-manager|security|sre|web-dev)\//.exec(
-        filePath,
-      );
-    const owner = match?.[1];
-    if (
-      owner === CortexGraphOwner.Ai ||
-      owner === CortexGraphOwner.DevCore ||
-      owner === CortexGraphOwner.DevManager ||
-      owner === CortexGraphOwner.Security ||
-      owner === CortexGraphOwner.Sre ||
-      owner === CortexGraphOwner.WebDev
-    ) {
-      return owner;
-    }
-    return false;
-  }
-
   private collectAllLinks(root: Root): Link[] {
     const links: Link[] = [];
 
@@ -464,17 +652,6 @@ export enum CortexStructureFindingCode {
   MissingDocumentMap = 'missing-document-map',
   InvalidRelationship = 'invalid-relationship',
   InvalidMapEntry = 'invalid-map-entry',
-}
-
-enum CortexGraphOwner {
-  Ai = 'ai',
-  DevCore = 'dev-core',
-  DevManager = 'dev-manager',
-  Gizmo = 'gizmo',
-  Security = 'security',
-  Sre = 'sre',
-  WebDev = 'web-dev',
-  Shared = 'shared',
 }
 
 export type CortexStructureFinding = {

@@ -23,7 +23,21 @@ const catalogPath = path.resolve(
 
 type CatalogEntry = { id: string }
 
-const catalog = JSON.parse(readFileSync(catalogPath, 'utf8')) as CatalogEntry[]
+function isCatalogEntry(value: unknown): value is CatalogEntry {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'id' in value &&
+    typeof value.id === 'string'
+  )
+}
+
+const safeJson: { parse: (value: string) => unknown } = JSON
+const parsedCatalog = safeJson.parse(readFileSync(catalogPath, 'utf8'))
+if (!Array.isArray(parsedCatalog) || !parsedCatalog.every(isCatalogEntry)) {
+  throw new Error('popular login catalog has an invalid shape')
+}
+const catalog = parsedCatalog.filter(isCatalogEntry)
 const templateIds = listShellTemplateIds()
 
 function requiredShellTemplate(templateId: string) {

@@ -35,14 +35,14 @@ explicit filesystem group with `OnRootMismatch` ownership handling.
 ## Consumption model
 
 JetStream persistence is platform retention for ingress durability and final
-reconciliation. Mission-scoped PR Steward agents use Core NATS live fan-out on
+reconciliation. Mission-scoped PR Lifecycle Agents use Core NATS live fan-out on
 `default.github-webhook.pr-lifecycle`; they do not bind a durable consumer.
 The bounded subscription routes individual `workflow_job` lifecycle events on
 the same subject.
 Missing an event while disconnected is acceptable because Gizmo reconciles the
 final GitHub state before acting.
 
-## PR Steward identity
+## PR Lifecycle Agent identity
 
 The infrastructure host owns the credential at
 `$INFRA_REMOTE_DIR/secrets/jetstream/pr-steward-client.yaml` with mode `0600`;
@@ -67,12 +67,12 @@ unrelated subscriptions are denied. The broad Argo client remains a separate
 internal credential.
 
 Rotate with `task infra:webhook-ingress:jetstream:pr-steward:rotate`. Rotation
-replaces only the PR Steward password, republishes the Kubernetes Secret, and
+replaces only the PR Lifecycle Agent password, republishes the Kubernetes Secret, and
 rolls the repository-owned StatefulSet so new connections require the new
 credential. Rerun the sync task after rotation; consumers must then reload the
 local handoff file.
 
 Removal is a coordinated SRE change: remove the public Traefik router and PR
-Steward user, republish the server Secret, roll the StatefulSet, and delete both
+Lifecycle Agent user, republish the server Secret, roll the StatefulSet, and delete both
 credential handoffs. It must not delete the JetStream cluster, stream data,
 PVCs, PVs, Argo credential, or TLS material.

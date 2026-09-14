@@ -94,7 +94,7 @@ export class CortexKnowledgeGraphPath {
     ) {
       return CortexMarkdownRole.KnowledgeGraph;
     }
-    return /^(?:gizmo|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/knowledge-graph\.md$/u.test(
+    return /^(?:gizmo-prime|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/knowledge-graph\.md$/u.test(
       relativePath,
     )
       ? CortexMarkdownRole.KnowledgeGraph

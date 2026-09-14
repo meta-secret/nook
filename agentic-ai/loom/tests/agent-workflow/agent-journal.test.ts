@@ -68,6 +68,9 @@ export class AgentWorkflowAgentJournalScenario {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       task: 'inspect',
       agent: 'auditor',
       attempt: 1,
@@ -411,6 +414,9 @@ describe('agent attempt journal', () => {
         workflow: configured.workflow,
         workflowVersion: configured.workflowVersion,
         sourceCommit: configured.sourceCommit,
+        originMainSha: configured.originMainSha,
+        pinnedLocalDevSha: configured.pinnedLocalDevSha,
+        featureHeadSha: configured.pinnedLocalDevSha,
         task: configured.task,
         agent: configured.agent,
         attempt: configured.attempt,
@@ -538,6 +544,9 @@ describe('agent attempt journal', () => {
       workflow: DelegatedAgentWorkflowName.AgentWork,
       workflowVersion: LEGACY_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sourceCommit: SOURCE_COMMIT,
+      originMainSha: SOURCE_COMMIT,
+      pinnedLocalDevSha: SOURCE_COMMIT,
+      featureHeadSha: SOURCE_COMMIT,
       task: 'inspect',
       agent: 'auditor',
       attempt: 1,
@@ -563,7 +572,7 @@ describe('agent attempt journal', () => {
 
     const unsupportedVersion = {
       ...legacyWithoutAdapter,
-      workflowVersion: '5.0.0',
+      workflowVersion: '6.0.0',
     };
     const unsupportedReplayRequest = { events: [unsupportedVersion] };
     expect(() => AgentAttemptReplay.replay(unsupportedReplayRequest)).toThrow(

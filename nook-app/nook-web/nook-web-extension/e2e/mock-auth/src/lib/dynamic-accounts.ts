@@ -26,13 +26,15 @@ function readAccounts(): DynamicMockAuthAccount[] {
     if (!raw) return []
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(
-      (value): value is DynamicMockAuthAccount =>
-        Boolean(value) &&
-        typeof value === 'object' &&
-        typeof (value as DynamicMockAuthAccount).username === 'string' &&
-        typeof (value as DynamicMockAuthAccount).password === 'string',
-    )
+    return parsed.filter((value: unknown): value is DynamicMockAuthAccount => {
+      if (typeof value !== 'object' || !value) return false
+      return (
+        'username' in value &&
+        typeof value.username === 'string' &&
+        'password' in value &&
+        typeof value.password === 'string'
+      )
+    })
   } catch {
     return []
   }

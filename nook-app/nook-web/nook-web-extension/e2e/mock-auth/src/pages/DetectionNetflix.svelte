@@ -10,8 +10,7 @@
   import { navigate } from '../lib/navigation'
 
   const EVIDENCE_KEY = 'netflix-submission-evidence'
-  const PASSWORD_AUTOCOMPLETE =
-    'password' as HTMLInputAttributes['autocomplete']
+  const PASSWORD_AUTOCOMPLETE: HTMLInputAttributes['autocomplete'] = 'password'
   let username = $state('')
   let password = $state('')
   let auxiliaryActivationCount = $state(0)

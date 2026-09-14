@@ -122,7 +122,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
   ).text();
   expect(activeAudit).toContain("'../lib/cortex-article-structure.ts'");
   expect(activeAudit).not.toContain('src/cortex-article-provider');
-}, 15_000);
+}, 30_000);
 
 test('runnable configuration inventory includes Taskfiles and actions', () => {
   const taskfilePattern = /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u;

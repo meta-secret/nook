@@ -5,7 +5,7 @@
 //   nook-app/nook-web/docker/web.docker-bake.hcl       -> web/e2e bases + final-image cache scopes
 //   nook-app/nook-platform/nook-core/docker-bake.hcl   -> builder-core-deps, focused rust leaves
 //   nook-app/nook-platform/nook-wasm/docker-bake.hcl   -> builder-wasm, web-artifacts, nook-rust*
-//   nook-app/nook-web/docker/toolchain.docker-bake.hcl -> web-deps + web-deps cache scope
+//   nook-app/nook-web/docker/toolchain.docker-bake.hcl -> web-deps + independent Bun dependency scopes
 //   nook-app/nook-web/nook-web-app/docker-bake.hcl     -> loadable nook-web* images
 //   preflight/docker-bake.hcl                         -> preflight targets + cache scopes
 // Callers pass all files via NOOK_BAKE_FILES / PREFLIGHT_BAKE_FILES (bake has no `include`).
@@ -22,6 +22,10 @@ variable "SCCACHE_S3_MODE" {
   default = "external"
 }
 
+variable "SCCACHE_S3_RW_MODE" {
+  default = "READ_WRITE"
+}
+
 // Empty by default in HCL. Local Task Bake sets this from root Taskfile env when
 // remote registry credentials exist. CI sets it from nook-docker-setup after
 // registry login. Separate refs keep sibling BuildKit lineages from overwriting
@@ -35,6 +39,14 @@ variable "GHA_CACHE_ENABLED" {
 // default branch. They may restore shared layers, but must not overwrite main's cache refs.
 variable "GHA_CACHE_WRITE_ENABLED" {
   default = ""
+}
+
+// The remote build:compile handoff defaults to publication so ordinary feature
+// invocations retain their existing semantics. Delivery may explicitly select
+// read-only for a warm verification; that mode must not create any registry
+// exporter, regardless of the generic cache-write flag.
+variable "NOOK_COMPILE_CACHE_MODE" {
+  default = "publish"
 }
 
 // Main and hosted publishers retain complete mode=max graphs. ARC jobs already
@@ -123,6 +135,24 @@ variable "GHA_CACHE_EXACT_WEB_E2E_AVAILABLE" {
   default = ""
 }
 
+// Hosted setup probes the two independent Bun dependency scopes used by the web-deps aggregate.
+// A present exact scope is imported alone; Main is considered only after an exact miss.
+variable "GHA_CACHE_EXACT_WEB_APP_DEPS_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_MAIN_WEB_APP_DEPS_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_EXACT_WEB_RESEARCH_DEPS_AVAILABLE" {
+  default = ""
+}
+
+variable "GHA_CACHE_MAIN_WEB_RESEARCH_DEPS_AVAILABLE" {
+  default = ""
+}
+
 // Retained for local/manual compatibility with explicitly suffixed cache experiments.
 variable "GHA_CACHE_SEED_SCOPE_SUFFIX" {
   default = ""
@@ -140,6 +170,7 @@ write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != "" ? "nook/remote-buildcache"
 target "_sccache" {
   args = {
     SCCACHE_S3_MODE  = SCCACHE_S3_MODE
+    SCCACHE_S3_RW_MODE = SCCACHE_S3_RW_MODE
     SCCACHE_ENDPOINT = SCCACHE_ENDPOINT
     SCCACHE_BUCKET   = SCCACHE_BUCKET
   }

@@ -201,7 +201,7 @@ vaults they touch.
   <ExperimentBack {navigate} />
   <GraphSwitch
     {graph}
-    onGraph={(next) => {
+    onGraph={(next: GraphId) => {
       graphId = next
       history = []
       historyIndex = 0

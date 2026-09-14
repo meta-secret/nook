@@ -82,6 +82,9 @@ describe('module expert runtime isolation', () => {
         parentEnvironment,
         selectedContextPaths: [],
         sourceCommit: repository.sourceCommit,
+        originMainSha: repository.sourceCommit,
+        pinnedLocalDevSha: repository.sourceCommit,
+        featureHeadSha: repository.sourceCommit,
         temporaryRoot: isolationRoot,
         workingDirectory: repository.root,
       };
@@ -834,10 +837,11 @@ function capturedCodexTurnMetadataFromHost(
     )
       throw new Error('Expected Codex tool names.');
     const name: { name: string; namespace?: string } = { name: entry.name };
-    if ('namespace' in entry && entry.namespace !== null) {
-      if (typeof entry.namespace !== 'string')
+    if ('namespace' in entry) {
+      const namespace = entry.namespace;
+      if (typeof namespace === 'string') name.namespace = namespace;
+      else if (!(typeof namespace === 'object' && !namespace))
         throw new Error('Expected Codex tool namespace.');
-      name.namespace = entry.namespace;
     }
     names[key] = name;
   }

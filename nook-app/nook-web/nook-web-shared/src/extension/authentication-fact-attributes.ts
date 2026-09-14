@@ -73,9 +73,25 @@ type LabelledAuthenticationControlDependency = {
 export const AUTHENTICATION_SUBMIT_VALUE_SOURCE =
   "nook-authentication-submit-value-v1";
 
+export type AuthenticationSourceMessage = { source?: string };
+type InputValueGetter = () => string;
+type InputValueSetter = (value: string) => void;
+
 /** Owns this browser host’s resources and interaction lifecycle. */
 class AuthenticationFactObserver {
   constructor(private readonly browser: typeof globalThis) {}
+
+  private isInputValueGetter(
+    value: PropertyDescriptor["get"],
+  ): value is InputValueGetter {
+    return typeof value === "function";
+  }
+
+  private isInputValueSetter(
+    value: PropertyDescriptor["set"],
+  ): value is InputValueSetter {
+    return typeof value === "function";
+  }
 
   private elementLabelsAuthenticationControl({
     element,
@@ -200,7 +216,9 @@ class AuthenticationFactObserver {
     this.browser.window.postMessage(message, targetOrigin);
   }
 
-  isAuthenticationSubmitValueMessage(event: MessageEvent): boolean {
+  isAuthenticationSubmitValueMessage(
+    event: MessageEvent<AuthenticationSourceMessage>,
+  ): boolean {
     if (
       this.browser.location.origin === "null" ||
       event.origin === "null" ||
@@ -210,10 +228,9 @@ class AuthenticationFactObserver {
       return false;
     }
     const data = event.data;
+    if (!data || typeof data !== "object") return false;
     return (
-      typeof data === "object" &&
-      Boolean(data) &&
-      data.source === AUTHENTICATION_SUBMIT_VALUE_SOURCE
+      "source" in data && data.source === AUTHENTICATION_SUBMIT_VALUE_SOURCE
     );
   }
 
@@ -227,22 +244,23 @@ class AuthenticationFactObserver {
     if (!descriptor || !descriptor.get || !descriptor.set) {
       return () => {};
     }
+    if (!this.isInputValueGetter(descriptor.get)) return () => {};
+    if (!this.isInputValueSetter(descriptor.set)) return () => {};
     const originalGet = descriptor.get;
     const originalSet = descriptor.set;
-    const valueProperty: PropertyDescriptor = {
+    const valueProperty: PropertyDescriptor & ThisType<HTMLInputElement> = {
       configurable: true,
-      get() {
+      get(): string {
         return originalGet.call(this);
       },
-      set(next: string) {
-        const input = this as HTMLInputElement;
-        const previous = originalGet.call(input);
-        originalSet.call(input, next);
+      set(next: string): void {
+        const previous = originalGet.call(this);
+        originalSet.call(this, next);
         if (
           previous !== next &&
-          (input.type === "submit" ||
-            input.type === "image" ||
-            input.type === "button")
+          (this.type === "submit" ||
+            this.type === "image" ||
+            this.type === "button")
         ) {
           onChange();
         }

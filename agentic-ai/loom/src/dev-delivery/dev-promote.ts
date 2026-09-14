@@ -29,11 +29,18 @@ export class DevPromoteCommand {
   ) {}
 
   execute(): Result<DevPromoteOutcome, DevFailure> {
-    const lease = this.request.workspace.publicationLock();
-    if (lease.isErr()) return err(lease.error);
+    const publicationLease = this.request.workspace.publicationLock();
+    if (publicationLease.isErr()) return err(publicationLease.error);
+    const localLease = this.request.workspace.localLock();
+    if (localLease.isErr()) {
+      const released = publicationLease.value.release();
+      return released.isErr() ? err(released.error) : err(localLease.error);
+    }
     const result = this.promoteInsideLock();
-    const released = lease.value.release();
-    if (released.isErr()) return err(released.error);
+    const localReleased = localLease.value.release();
+    const publicationReleased = publicationLease.value.release();
+    if (localReleased.isErr()) return err(localReleased.error);
+    if (publicationReleased.isErr()) return err(publicationReleased.error);
     return result;
   }
 
@@ -131,8 +138,7 @@ export class DevPromoteCommand {
             'origin/main changed to a non-ancestor; refusing to rewrite it',
         });
       }
-      const pushed = workspace.git.pushExact({
-        target: ManagedBranch.Main,
+      const pushed = workspace.git.promoteExact({
         sha: this.request.expectedSha,
         workingDirectory: workspace.root,
       });

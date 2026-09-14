@@ -1,4 +1,4 @@
-import { err, ok } from 'neverthrow'
+import { err, ok, type Result } from 'neverthrow'
 import * as wasmModule from '$app-wasm'
 import {
   NookVaultManager,
@@ -24,7 +24,7 @@ import {
   ProviderSyncActions,
   ProviderSyncOutcome,
 } from '$lib/vault/provider-sync.svelte'
-import { VaultState } from '$lib/vault.svelte'
+import type { VaultState } from '$lib/vault.svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { VaultAccessStatus } from '$lib/nook'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -79,11 +79,16 @@ function providerSyncScenario(authenticated: boolean): ProviderSyncScenario {
   state.openManager(manager)
   state.providers = [githubProvider()]
   state.isAuthenticated = authenticated
-  state.enqueueStorage = vi.fn(async (operation) => operation())
-  state.applyVaultSyncResult = vi.fn((result) => {
-    result.free()
-    return ok()
-  })
+  const immediateStorage = async <Value, Failure = VaultStorageFailure>(
+    operation: () => Result<Value, Failure> | Promise<Result<Value, Failure>>,
+  ): Promise<Result<Value, Failure>> => operation()
+  state.enqueueStorage = immediateStorage
+  state.applyVaultSyncResult = vi.fn<VaultState['applyVaultSyncResult']>(
+    (result) => {
+      result.free()
+      return ok()
+    },
+  )
   state.refreshSecretsFromSession = secretRefresh
   state.refreshReplacementConflicts = vi.fn(async () => ok())
   state.updateProviderSyncMetadata = vi.fn(async () => ok())

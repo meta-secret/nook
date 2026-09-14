@@ -14,7 +14,7 @@ import type { AcceptedModuleDeliveryEvidence } from './integration-provenance.ts
 import type {
   AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
   ModuleDeliveryIntegratedWriterFrontierCapability,
-} from './integration.ts';
+} from './integration-contracts.ts';
 import type { AssertModuleDeliveryCanonicalEvidenceTransitionRequest } from './integration-provenance.ts';
 import type { ValidatedModuleDeliveryPlan } from './domain.ts';
 
@@ -281,6 +281,8 @@ export class ModuleAdmissionStateRegistry {
       generation: acceptedPlan.plan.generation,
       planDigest: acceptedPlan.planDigest,
       headCommit: request.headCommit,
+      originMainSha: acceptedPlan.plan.originMainSha,
+      pinnedLocalDevSha: acceptedPlan.plan.pinnedLocalDevSha,
       integratedWriterFrontiers: frontiers,
       acceptedProviderEvidence: evidence.identities,
     };

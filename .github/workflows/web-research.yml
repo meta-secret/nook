@@ -49,14 +49,50 @@ jobs:
       - name: Verify research source without deployment credentials
         run: task web:research:verify
 
-  image:
-    name: Build research browser image
+  dependencies:
+    name: Prepare research dependency cache
     if: >-
       github.event_name != 'pull_request' ||
       (github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]')
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Connect private ARC BuildKit
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-selection: web-research-deps
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
+          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
+          isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+
+      - name: Publish exact research dependency cache
+        run: task docker:ci:cache:publish:web-research
+        env:
+          GHA_CACHE_WRITE_ENABLED: "1"
+
+  image:
+    name: Build research browser image
+    needs: dependencies
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]')
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    # The exact-source build can spend close to ten minutes restoring the
+    # trusted browser graph before the final registry push. Keep the job
+    # bounded while leaving enough room for that required image publication.
+    timeout-minutes: 20
     env:
       DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-research:run-${{ github.run_id }}-${{ github.run_attempt }}
       DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-research:run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -64,17 +100,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          # The image/cache graph must build the exact authorized PR head;
+          # Main keeps its canonical workflow SHA.
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Connect private ARC BuildKit
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-selection: web-e2e
+          cache-selection: web-research-image
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          cache-write: "false"
-          main-cache-only: "true"
+          # Main is the only trusted writer for stable buildcache refs. Hosted
+          # same-repository PRs retain the remote identity and write only their
+          # PR-head-SHA isolated scope; forks and Dependabot never enter this job.
+          registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
+          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
           isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
 
       - name: Publish exact-source research browser image

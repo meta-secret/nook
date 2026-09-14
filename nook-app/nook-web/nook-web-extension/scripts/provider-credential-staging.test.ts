@@ -91,6 +91,131 @@ describe('provider credential staging', () => {
     })
   })
 
+  test('scrubs a cloned credential copy when structural admission rejects it', async () => {
+    const source = providerStagingFixture.github()
+    Object.assign(source.oauthFile, {
+      accessToken: 'oauth_access_secret',
+      refreshToken: 'oauth_refresh_secret',
+    })
+    Reflect.deleteProperty(source, 'label')
+
+    const nativeStructuredClone = globalThis.structuredClone
+    let cloned: unknown
+    globalThis.structuredClone = <T>(value: T): T => {
+      const copy = nativeStructuredClone(value)
+      cloned = copy
+      return copy
+    }
+    try {
+      const result = await new ProviderCredentialBuffer([source]).stage({
+        decode: async () => {
+          throw new Error('structural admission should happen first')
+        },
+      })
+      expect(result).toEqual(err(ProviderCredentialFailure.InvalidTransport))
+      expect(cloned).toEqual([
+        {
+          ...source,
+          githubPat: { state: 'missing' },
+          oauthFile: { state: 'notApplicable', accessToken: '' },
+        },
+      ])
+      expect(source.githubPat).toEqual({
+        state: 'token',
+        value: 'github_pat_secret',
+      })
+    } finally {
+      globalThis.structuredClone = nativeStructuredClone
+    }
+  })
+
+  test('scrubs nested OAuth credentials in a structurally incomplete clone', async () => {
+    const source = providerStagingFixture.github()
+    Object.assign(source.oauthFile, {
+      config: {
+        accessToken: 'nested_oauth_access_secret',
+        refreshToken: 'nested_oauth_refresh_secret',
+      },
+    })
+    Reflect.deleteProperty(source, 'label')
+
+    const nativeStructuredClone = globalThis.structuredClone
+    let cloned: unknown
+    globalThis.structuredClone = <T>(value: T): T => {
+      const copy = nativeStructuredClone(value)
+      cloned = copy
+      return copy
+    }
+    try {
+      const result = await new ProviderCredentialBuffer([source]).stage({
+        decode: async () => {
+          throw new Error('structural admission should happen first')
+        },
+      })
+      expect(result).toEqual(err(ProviderCredentialFailure.InvalidTransport))
+      expect(cloned).toEqual([
+        {
+          ...source,
+          githubPat: { state: 'missing' },
+          oauthFile: {
+            state: 'notApplicable',
+            config: {
+              accessToken: { state: 'signedOut' },
+              refreshToken: { state: 'notIssued' },
+            },
+          },
+        },
+      ])
+    } finally {
+      globalThis.structuredClone = nativeStructuredClone
+    }
+  })
+
+  test('scrubs every provider when a later clone fails structural admission', async () => {
+    const first = providerStagingFixture.github()
+    const second = providerStagingFixture.github()
+    Object.assign(second.oauthFile, {
+      config: {
+        accessToken: 'later_nested_oauth_access_secret',
+        refreshToken: 'later_nested_oauth_refresh_secret',
+      },
+    })
+    Reflect.deleteProperty(second, 'label')
+    const source = [first, second]
+
+    const nativeStructuredClone = globalThis.structuredClone
+    let cloned: unknown
+    globalThis.structuredClone = <T>(value: T): T => {
+      const copy = nativeStructuredClone(value)
+      cloned = copy
+      return copy
+    }
+    try {
+      const result = await new ProviderCredentialBuffer(source).stage({
+        decode: async () => {
+          throw new Error('structural admission should happen first')
+        },
+      })
+      expect(result).toEqual(err(ProviderCredentialFailure.InvalidTransport))
+      expect(cloned).toEqual([
+        { ...first, githubPat: { state: 'missing' } },
+        {
+          ...second,
+          githubPat: { state: 'missing' },
+          oauthFile: {
+            state: 'notApplicable',
+            config: {
+              accessToken: { state: 'signedOut' },
+              refreshToken: { state: 'notIssued' },
+            },
+          },
+        },
+      ])
+    } finally {
+      globalThis.structuredClone = nativeStructuredClone
+    }
+  })
+
   test('copies complete providers through canonical admission', async () => {
     const source = [providerStagingFixture.github()]
     const staging = await providerStagingFixture.stage(source)

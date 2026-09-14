@@ -228,13 +228,14 @@ export class CortexConsistencyContract {
       };
     }
     const owners: readonly (readonly [string, CortexContractTeam])[] = [
-      ['.cortex/gizmo/', CortexContractTeam.GizmoPrime],
+      ['.cortex/gizmo-prime/', CortexContractTeam.GizmoPrime],
       ['.cortex/shared/', CortexContractTeam.Shared],
       ['.cortex/teams/ai/', CortexContractTeam.Ai],
       ['.cortex/teams/dev-core/', CortexContractTeam.DevelopmentCore],
       ['.cortex/teams/security/', CortexContractTeam.Security],
       ['.cortex/teams/sre/', CortexContractTeam.Sre],
       ['.cortex/teams/web-dev/', CortexContractTeam.WebDevelopment],
+      ['.cortex/teams/delivery-pipeline/', CortexContractTeam.DeliveryPipeline],
     ];
     for (const [prefix, owner] of owners) {
       if (documentPath.startsWith(prefix)) {
@@ -446,6 +447,7 @@ export class CortexConsistencyContract {
 
 enum CortexContractTeam {
   Ai = 'ai',
+  DeliveryPipeline = 'delivery-pipeline',
   DevelopmentCore = 'development-core',
   GizmoPrime = 'gizmo-prime',
   Security = 'security',

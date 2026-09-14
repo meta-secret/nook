@@ -9,12 +9,20 @@ import { extensionSessionProbeDeadline } from '../src/offscreen/session-request-
 
 function grant(vaultStoreId: string): StoredExtensionPairingGrant {
   return {
+    vaultType: 'simple',
     vaultStoreId,
     vaultName: vaultStoreId,
     deviceId: `${vaultStoreId}-device`,
     devicePublicKey: `${vaultStoreId}-public`,
     deviceSigningPublicKey: `${vaultStoreId}-signing`,
-  } as StoredExtensionPairingGrant
+    deviceLabel: `${vaultStoreId}-device`,
+    approvedAt: '2026-08-10T00:00:00Z',
+    scopes: [],
+    syncProviderCount: 0,
+    eventCount: 0,
+    eventLogHeads: [],
+    lastLocalSyncAt: '',
+  }
 }
 
 describe('login account listing failure handling', () => {

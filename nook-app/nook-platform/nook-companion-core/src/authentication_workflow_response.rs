@@ -572,6 +572,19 @@ mod tests {
     }
 
     #[test]
+    fn unavailable_login_match_constructor_preserves_the_generated_contract() -> anyhow::Result<()>
+    {
+        let availability = WebsiteLoginMatchAvailability::unavailable();
+
+        assert_eq!(availability, WebsiteLoginMatchAvailability::Unavailable);
+        assert_eq!(
+            serde_json::to_string(&availability)?,
+            r#"{"kind":"unavailable"}"#
+        );
+        Ok(())
+    }
+
+    #[test]
     fn rejects_authorizing_login_matches_without_a_saved_login_capability() -> anyhow::Result<()> {
         for contradictory in [
             r#"{"workflow":{"ok":true},"loginMatches":{"kind":"ready","count":1}}"#,
@@ -629,6 +642,11 @@ impl TryFrom<WebsiteLoginMatchAvailabilityWire> for WebsiteLoginMatchAvailabilit
     }
 }
 impl WebsiteLoginMatchAvailability {
+    #[must_use]
+    pub const fn unavailable() -> Self {
+        Self::Unavailable
+    }
+
     #[must_use]
     pub fn supports_alternative_saved_login(self, action: AuthenticationWorkflowAction) -> bool {
         matches!(

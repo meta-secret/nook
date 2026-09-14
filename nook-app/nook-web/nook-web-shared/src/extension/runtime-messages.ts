@@ -203,6 +203,25 @@ export class ExtensionStorageProviderPayloadAdmission {
  */
 export class ExtensionPairingStorageProviderPayloadAdmission {
   constructor(private readonly value: unknown) {}
+  private isComplete(
+    value: unknown,
+  ): value is ExtensionPairingStorageProviderPayload {
+    if (!value || typeof value !== "object") return false;
+    if (
+      !("label" in value) ||
+      typeof value.label !== "string" ||
+      !("createdAt" in value) ||
+      typeof value.createdAt !== "string"
+    )
+      return false;
+    return [
+      "githubPat",
+      "githubRepo",
+      "oauthFile",
+      "localFolder",
+      "storeId",
+    ].every((key) => key in value);
+  }
   parse(): Result<
     ExtensionPairingStorageProviderPayload,
     ExtensionStorageProviderIdentityFailure
@@ -231,12 +250,14 @@ export class ExtensionPairingStorageProviderPayloadAdmission {
       if (!(key in provider))
         return err(ExtensionStorageProviderIdentityFailure.Invalid);
     }
+    if (!this.isComplete(provider))
+      return err(ExtensionStorageProviderIdentityFailure.Invalid);
     try {
       structuredClone(provider);
     } catch {
       return err(ExtensionStorageProviderIdentityFailure.Invalid);
     }
-    return ok(provider as ExtensionPairingStorageProviderPayload);
+    return ok(provider);
   }
 }
 

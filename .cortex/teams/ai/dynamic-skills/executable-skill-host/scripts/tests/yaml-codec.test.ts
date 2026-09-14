@@ -269,7 +269,7 @@ test('preserves YAML prototype keys without mutating the result prototype', () =
   if (outcome.isErr()) return;
   if (
     typeof outcome.value !== 'object' ||
-    outcome.value === null ||
+    (typeof outcome.value === 'object' && !outcome.value) ||
     Array.isArray(outcome.value)
   )
     return;

@@ -86,6 +86,9 @@ export class DelegationRunJournal {
       kind: DelegationRunEventKind.PlanDeclared,
       runId: input.plan.runId,
       sourceCommit: input.plan.sourceCommit,
+      originMainSha: input.plan.originMainSha,
+      pinnedLocalDevSha: input.plan.pinnedLocalDevSha,
+      featureBranch: input.plan.featureBranch,
       planSha256,
       sequence: 1,
       occurredAt: new Date().toISOString(),
@@ -234,6 +237,10 @@ export class DelegationRunJournal {
       declaration,
       runId: loaded.plan.runId,
       sourceCommit: loaded.plan.sourceCommit,
+      originMainSha: loaded.plan.originMainSha,
+      pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
+      featureBranch: loaded.plan.featureBranch,
+      featureHeadSha: input.request.featureHeadSha,
     };
     DelegationRunJournal.assertAdmissionRequest(admissionBinding);
     const identityKey = DelegationPlanContract.delegationAttemptIdentityKey(
@@ -275,6 +282,10 @@ export class DelegationRunJournal {
       declaration,
       runId: loaded.plan.runId,
       sourceCommit: loaded.plan.sourceCommit,
+      originMainSha: loaded.plan.originMainSha,
+      pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
+      featureBranch: loaded.plan.featureBranch,
+      featureHeadSha: input.request.featureHeadSha,
     };
     DelegationRunJournal.assertAdmissionRequest(admissionBinding);
     const admitted = DelegationRunJournal.admittedIdentityKeys(events);
@@ -315,6 +326,9 @@ export class DelegationRunJournal {
         runId: loaded.plan.runId,
         workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
         sourceCommit: loaded.plan.sourceCommit,
+        originMainSha: loaded.plan.originMainSha,
+        pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
+        featureHeadSha: input.request.featureHeadSha,
         identity: {
           task: declaration.parent.task,
           agent: declaration.parent.agent,
@@ -331,6 +345,9 @@ export class DelegationRunJournal {
       kind: DelegationRunEventKind.AttemptAdmitted,
       runId: loaded.plan.runId,
       sourceCommit: loaded.plan.sourceCommit,
+      originMainSha: loaded.plan.originMainSha,
+      pinnedLocalDevSha: loaded.plan.pinnedLocalDevSha,
+      featureBranch: loaded.plan.featureBranch,
       planSha256: loaded.planSha256,
       sequence: events.length + 1,
       occurredAt: new Date().toISOString(),
@@ -423,6 +440,10 @@ export class DelegationRunJournal {
       !DelegationPlanContract.delegationAttemptIdentitiesEqual(identityPair) ||
       binding.request.runId !== binding.runId ||
       binding.request.sourceCommit !== binding.sourceCommit ||
+      binding.request.originMainSha !== binding.originMainSha ||
+      binding.request.pinnedLocalDevSha !== binding.pinnedLocalDevSha ||
+      binding.request.featureBranch !== binding.featureBranch ||
+      !/^[0-9a-f]{40}$/.test(binding.request.featureHeadSha) ||
       binding.request.depth !== binding.declaration.depth ||
       JSON.stringify(binding.request.parent) !==
         JSON.stringify(binding.declaration.parent)
@@ -501,6 +522,9 @@ export class DelegationRunJournal {
     if (
       input.event.runId !== input.plan.runId ||
       input.event.sourceCommit !== input.plan.sourceCommit ||
+      input.event.originMainSha !== input.plan.originMainSha ||
+      input.event.pinnedLocalDevSha !== input.plan.pinnedLocalDevSha ||
+      input.event.featureBranch !== input.plan.featureBranch ||
       input.event.planSha256 !== input.planSha256 ||
       input.event.sequence !== input.expectedSequence ||
       !/^[0-9a-f]{64}$/.test(input.event.planSha256) ||
@@ -707,6 +731,10 @@ type AdmissionRequestBinding = {
   readonly declaration: DelegationAttemptDeclaration;
   readonly runId: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly featureBranch: DelegationPlan['featureBranch'];
+  readonly featureHeadSha: string;
 };
 
 type DelegationRunDirectoryInput = {

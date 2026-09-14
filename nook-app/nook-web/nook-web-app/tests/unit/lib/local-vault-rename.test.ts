@@ -16,7 +16,8 @@ const unlockPresentationRefresh = vi.hoisted(() =>
   vi.fn<() => Promise<Result<void, never>>>(),
 )
 
-vi.mock('$app-wasm', () => ({
+vi.mock('$app-wasm', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$app-wasm')>()),
   get_active_vault_selection: wasmMocks.getActiveVaultSelection,
   has_active_local_vault: wasmMocks.hasActiveLocalVault,
   list_local_vaults: wasmMocks.listLocalVaults,
@@ -47,7 +48,8 @@ vi.mock('$lib/vault/login-unlock-capabilities', () => ({
   },
 }))
 
-vi.mock('$lib/auth/providers', () => ({
+vi.mock('$lib/auth/providers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/auth/providers')>()),
   activeVaultScope: vi.fn(),
   AuthProviderPersistence: class {
     async save() {
@@ -86,8 +88,10 @@ describe('renameLocalVaultLabel', () => {
       },
     ]
     const manager = new NookVaultManager()
-    manager.set_vault_name = setVaultName
+    vi.spyOn(manager, 'set_vault_name').mockImplementation(setVaultName)
     state.openManager(manager)
+    state.admitManager = vi.fn(() => ok(manager))
+    VaultStateTestFixture.runStorageImmediately(state)
     state.dismissSuccess = vi.fn()
     state.showSuccess = vi.fn()
     state.t = (request: Parameters<VaultState['t']>[0]) =>
@@ -130,7 +134,8 @@ describe('selectVaultForUnlock', () => {
     state.localLoginPreparation = LocalLoginPreparationState.Idle
     state.localVaultPresent = true
     state.dismissSuccess = vi.fn()
-    state.openActiveVault = vi.fn()
+    const openActiveVault = vi.fn()
+    state.openActiveVault = openActiveVault
     state.refreshPasswordEntriesList = vi.fn(async () => ok())
     state.syncActiveVaultStoreIdToAuth = syncActiveVaultStoreIdToAuth
     state.reloadProvidersForActiveVault = reloadProvidersForActiveVault
@@ -141,7 +146,7 @@ describe('selectVaultForUnlock', () => {
 
     expect(selected.isOk()).toBe(true)
     expect(wasmMocks.setActiveVault).toHaveBeenCalledWith('store-2')
-    expect(state.openActiveVault).toHaveBeenCalledWith('store-2')
+    expect(openActiveVault).toHaveBeenCalledWith('store-2')
     expect(syncActiveVaultStoreIdToAuth).not.toHaveBeenCalled()
     expect(reloadProvidersForActiveVault).not.toHaveBeenCalled()
     expect(unlockPresentationRefresh).not.toHaveBeenCalled()

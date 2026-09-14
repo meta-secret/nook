@@ -32,7 +32,11 @@ function writeRegisteredRepos(repos: string[]) {
   }
   fs.writeFileSync(
     REGISTRY_PATH,
-    `${JSON.stringify(unique, (_key, value) => value, 2)}\n`,
+    `${JSON.stringify(
+      unique,
+      (_key: string, value: string[] | string): string[] | string => value,
+      2,
+    )}\n`,
   )
 }
 

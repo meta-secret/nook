@@ -1,5 +1,7 @@
 import { err, ok, type Result } from 'neverthrow';
 
+import { CanonicalFeatureBranchContract } from '../lib/base-evidence.ts';
+
 export enum DevFailureKind {
   Configuration = 'configuration',
   Command = 'command',
@@ -57,6 +59,21 @@ export class BranchName {
       return err({
         kind: DevFailureKind.Configuration,
         message: `Invalid Git branch name: ${input}`,
+      });
+    }
+    return ok(new BranchName(input));
+  }
+
+  static parseFeature(input: string): Result<BranchName, DevFailure> {
+    try {
+      CanonicalFeatureBranchContract.parse(input);
+    } catch (error) {
+      return err({
+        kind: DevFailureKind.Configuration,
+        message:
+          error instanceof Error
+            ? error.message
+            : `Invalid canonical feature branch: ${input}`,
       });
     }
     return ok(new BranchName(input));
@@ -150,6 +167,8 @@ export interface CommandRequest {
   readonly executable: CommandExecutable;
   readonly args: readonly string[];
   readonly workingDirectory: string;
+  /** The canonical repository root that owns a Git operation, when known. */
+  readonly repositoryRoot?: string;
 }
 
 export interface CommandOutput {
@@ -176,6 +195,28 @@ export interface BuildProofRequest {
   readonly branch: BranchName;
   readonly sha: CommitSha;
 }
+
+export interface LocalBuildEvidenceRequest {
+  /** Explicitly authorized one-off local proof artifact. */
+  readonly path: string;
+  readonly authorization: LocalBuildEvidenceAuthorization.OneOffLocal;
+}
+
+export enum LocalBuildEvidenceAuthorization {
+  OneOffLocal = 'one-off-local',
+}
+
+export enum DevLandBuildProofMode {
+  Remote = 'remote',
+  Local = 'local',
+}
+
+export type DevLandBuildProof =
+  | { readonly mode: DevLandBuildProofMode.Remote }
+  | {
+      readonly mode: DevLandBuildProofMode.Local;
+      readonly evidence: LocalBuildEvidenceRequest;
+    };
 
 export interface DevelopmentCiObservationRequest {
   readonly sha: CommitSha;
@@ -288,9 +329,15 @@ export interface DevSnapshot {
   readonly devSha: CommitSha;
 }
 
+export interface DevLandRequest {
+  /** Exact canonical feature branch authorized for local integration. */
+  readonly featureBranch: BranchName;
+  /** Omitted by default; local proof is never selected implicitly. */
+  readonly localBuildEvidence?: LocalBuildEvidenceRequest;
+}
+
 export interface DevPublishRequest {
-  readonly devPath: string;
-  readonly devSha: CommitSha;
+  readonly expectedSha: CommitSha;
 }
 
 export interface ManagedRemoteSnapshot {

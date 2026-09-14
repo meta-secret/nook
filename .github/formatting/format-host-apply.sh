@@ -4,19 +4,73 @@
 # The image is shared by every worktree and contains only pinned Rustfmt,
 # Prettier, and their plugins. It never contains project source, compiles a
 # product, or reads or publishes a remote build cache.
+# Required input: PINNED_LOCAL_DEV_SHA is the exact local-dev commit used as the formatting base.
 set -euo pipefail
 
 scripts_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$scripts_dir/../.." && pwd)"
 cd "$repo_root"
 
+if [[ ! "${PINNED_LOCAL_DEV_SHA:-}" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "PINNED_LOCAL_DEV_SHA must be an exact 40-character lowercase commit SHA" >&2
+  exit 1
+fi
+
+resolved_base_sha="$({
+  GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_NO_REPLACE_OBJECTS=1 \
+    git \
+      -c core.fsmonitor=false \
+      -c core.hooksPath=/dev/null \
+      -c core.excludesFile=/dev/null \
+      -c diff.external= \
+      rev-parse --verify "${PINNED_LOCAL_DEV_SHA}^{commit}"
+} 2>/dev/null)" || {
+  echo "PINNED_LOCAL_DEV_SHA does not resolve to a commit" >&2
+  exit 1
+}
+if [[ "$resolved_base_sha" != "$PINNED_LOCAL_DEV_SHA" ]]; then
+  echo "PINNED_LOCAL_DEV_SHA did not resolve to the exact supplied commit" >&2
+  exit 1
+fi
+
 changed_files="$(mktemp)"
 trap 'rm -f "$changed_files"' EXIT
-base_ref="$(git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD)"
 {
-  git diff --name-only --diff-filter=ACMR -z "$base_ref"
-  git ls-files --others --exclude-standard -z
+  GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_NO_REPLACE_OBJECTS=1 \
+    git \
+      -c core.fsmonitor=false \
+      -c core.hooksPath=/dev/null \
+      -c core.excludesFile=/dev/null \
+      -c diff.external= \
+      diff --no-ext-diff --name-only --diff-filter=ACMR -z "$PINNED_LOCAL_DEV_SHA"
+  GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_NO_REPLACE_OBJECTS=1 \
+    git \
+      -c core.fsmonitor=false \
+      -c core.hooksPath=/dev/null \
+      -c core.excludesFile=/dev/null \
+      -c diff.external= \
+      ls-files --others --exclude-per-directory=.gitignore -z
 } >"$changed_files"
+
+if [[ "${HIVE_SEALED_GUEST:-}" == "1" ]]; then
+  PINNED_LOCAL_DEV_SHA="$PINNED_LOCAL_DEV_SHA" FORMAT_CHANGED_FILES="$changed_files" task hive:guest:format:changed
+  GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_NO_REPLACE_OBJECTS=1 \
+    git \
+      -c core.fsmonitor=false \
+      -c core.hooksPath=/dev/null \
+      -c core.excludesFile=/dev/null \
+      -c diff.external= \
+      status --short --untracked-files=no
+  exit 0
+fi
 
 formatter_dir="$repo_root/.github/formatting"
 formatter_hash="$(
@@ -66,4 +120,12 @@ docker run \
   --volume "$repo_root:/workspace" \
   --volume "$changed_files:/tmp/nook-format-files:ro" \
   "$formatter_image"
-git status --short --untracked-files=no
+GIT_CONFIG_NOSYSTEM=1 \
+  GIT_CONFIG_GLOBAL=/dev/null \
+  GIT_NO_REPLACE_OBJECTS=1 \
+  git \
+    -c core.fsmonitor=false \
+    -c core.hooksPath=/dev/null \
+    -c core.excludesFile=/dev/null \
+    -c diff.external= \
+    status --short --untracked-files=no

@@ -218,6 +218,19 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
     assert!(workflow.contains("name: Validate exact remote source"));
     assert!(workflow.contains("name: Confirm prepared build-only environment"));
     assert!(
+        workflow.contains("publish_compile_cache")
+            && workflow.contains("type: boolean")
+            && workflow.contains("default: true")
+            && workflow.contains("publish-compile-cache: ${{ inputs.publish_compile_cache }}")
+            && workflow.contains("NOOK_COMPILE_CACHE_MODE")
+            && workflow.contains("inputs.publish_compile_cache == false &&")
+            && workflow
+                .matches("inputs.publish_compile_cache != false")
+                .count()
+                >= 6,
+        "build:compile dispatch must explicitly select and report cache publication mode"
+    );
+    assert!(
         workflow
             .contains("build:compile is allowed only from a feature branch, never main or dev.")
     );
@@ -488,7 +501,9 @@ fn arc_workflow_runs_named_task_targets() -> Result<()> {
     assert!(docker_setup.contains(
         "NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}"
     ));
-    assert!(docker_setup.contains("if [ -z \"$NOOK_REMOTE_TASK_SELECTION\" ]"));
+    assert!(docker_setup.contains(
+        ": \"${NOOK_REMOTE_TASK_SELECTION:?isolated-cache-write requires a dispatched task selection}\""
+    ));
     assert!(workflow.contains("cache-write: \"false\""));
     assert!(workflow.contains("main-cache-only: \"true\""));
     assert!(workflow.contains("isolated-cache-write: \"true\""));

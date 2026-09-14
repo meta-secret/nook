@@ -37,7 +37,7 @@ const routing = (fields: UntrustedYamlMap = {}) => ({
 const envelope = (record: UntrustedYamlMap) =>
   JSON.stringify({ schemaVersion: Version.V2, record });
 
-describe('closed PR Steward NDJSON codec', () => {
+describe('closed PR Lifecycle Agent NDJSON codec', () => {
   test('round trips every supported source-discriminated routing state', () => {
     const variants: [Source, UntrustedYamlMap][] = [
       [Source.PullRequest, {}],

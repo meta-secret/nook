@@ -24,21 +24,31 @@ type IdentityEnvelopeRequest = {
   readonly message: ExtensionIdentityHandoffRequestMessage;
 };
 
+type ChromeRuntimeResponseArguments = unknown[];
+
 type ChromeRuntimeHost = {
   // eslint-disable-next-line max-params -- Chrome owns this positional API.
-  sendMessage?: (
+  sendMessage: (
     extensionId: string,
     message: unknown,
-    callback: (response?: unknown) => void,
+    callback: (...responses: ChromeRuntimeResponseArguments) => void,
   ) => void;
 };
 
-type ExtensionBrowserHost = {
-  readonly crypto: typeof globalThis.crypto;
-  readonly document: typeof globalThis.document;
-  readonly window: typeof globalThis.window;
-  chrome?: { runtime?: ChromeRuntimeHost };
-};
+type ExtensionBrowserHost = typeof globalThis;
+
+enum ChromeRuntimeAvailabilityKind {
+  Unavailable = "unavailable",
+  Available = "available",
+}
+
+type ChromeRuntimeAvailability =
+  | { readonly kind: ChromeRuntimeAvailabilityKind.Unavailable }
+  | {
+      readonly kind: ChromeRuntimeAvailabilityKind.Available;
+      readonly runtime: ChromeRuntimeHost;
+    };
+
 import { ApplicationPath } from "$lib/runtime/routes";
 import {
   admit_companion_handoff_response,
@@ -196,7 +206,7 @@ class PendingExtensionResponse {
   constructor(
     // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     private readonly request: {
-      browser: ExtensionBrowserHost;
+      browser: typeof globalThis;
       wait: ExtensionMessageResponseWait;
       resolve: (delivery: ExtensionMessageDelivery) => void;
     },
@@ -236,16 +246,45 @@ class PendingExtensionResponse {
 class ExtensionConnectionBrowser {
   constructor(private readonly browser: ExtensionBrowserHost) {}
 
-  private runtimeReportedMessageFailure(runtime: ChromeRuntimeHost): boolean {
-    if (!("lastError" in runtime)) return false;
-    const lastError = runtime.lastError;
+  private isChromeRuntimeHost(value: unknown): value is ChromeRuntimeHost {
     return (
-      !!lastError &&
-      typeof lastError === "object" &&
-      "message" in lastError &&
-      typeof lastError.message === "string" &&
-      !!lastError.message
+      typeof value === "object" &&
+      !!value &&
+      "sendMessage" in value &&
+      typeof value.sendMessage === "function"
     );
+  }
+
+  private chromeRuntimeLastError(runtime: ChromeRuntimeHost): boolean {
+    if (!("lastError" in runtime)) return false;
+    const error = runtime.lastError;
+    return (
+      typeof error === "object" &&
+      !!error &&
+      "message" in error &&
+      typeof error.message === "string" &&
+      error.message.length > 0
+    );
+  }
+
+  private chromeRuntime(): ChromeRuntimeAvailability {
+    if (!("chrome" in this.browser)) {
+      return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
+    }
+    const chromeHost = this.browser.chrome;
+    if (
+      typeof chromeHost !== "object" ||
+      !chromeHost ||
+      !("runtime" in chromeHost)
+    ) {
+      return { kind: ChromeRuntimeAvailabilityKind.Unavailable };
+    }
+    return this.isChromeRuntimeHost(chromeHost.runtime)
+      ? {
+          kind: ChromeRuntimeAvailabilityKind.Available,
+          runtime: chromeHost.runtime,
+        }
+      : { kind: ChromeRuntimeAvailabilityKind.Unavailable };
   }
 
   isExtensionConnectPath(pathname: string): boolean {
@@ -341,34 +380,38 @@ class ExtensionConnectionBrowser {
     responseWait,
   }: ExtensionMessageRequest): Promise<ExtensionMessageDelivery> {
     return new Promise((resolve) => {
-      const runtime = this.browser.chrome?.runtime;
-      if (!runtime?.sendMessage) {
+      const runtimeAvailability = this.chromeRuntime();
+      if (
+        runtimeAvailability.kind === ChromeRuntimeAvailabilityKind.Unavailable
+      ) {
         const resolveArgs: Parameters<typeof resolve>[0] = {
           kind: ExtensionMessageDeliveryKind.Unavailable,
         };
         resolve(resolveArgs);
         return;
       }
+      const { runtime } = runtimeAvailability;
       const sendMessage = runtime.sendMessage.bind(runtime);
-      const messageRuntime = runtime;
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
       const pending = new PendingExtensionResponse({
         browser: this.browser,
         wait: responseWait,
         resolve,
       });
-      const browserConnection = this;
-      function receiveExtensionResponse(response?: unknown): void {
-        if (browserConnection.runtimeReportedMessageFailure(messageRuntime)) {
+      const receiveExtensionResponse = (
+        ...responses: ChromeRuntimeResponseArguments
+      ): void => {
+        if (this.chromeRuntimeLastError(runtime)) {
           pending.unavailable();
           return;
         }
-        if (arguments.length === 0) {
+        if (responses.length === 0) {
           pending.unavailable();
           return;
         }
+        const [response] = responses;
         pending.receive(response);
-      }
+      };
       sendMessage(extensionId, message, receiveExtensionResponse);
     });
   }
@@ -654,8 +697,8 @@ class ExtensionConnectionBrowser {
   }: IdentityEnvelopeRequest): Promise<
     Result<{ envelope: string; nextNonce: string }, VaultStorageFailure>
   > {
-    const runtime = this.browser.chrome?.runtime;
-    if (!runtime?.sendMessage)
+    const runtimeAvailability = this.chromeRuntime();
+    if (runtimeAvailability.kind === ChromeRuntimeAvailabilityKind.Unavailable)
       return Promise.resolve(
         err(
           new VaultStorageFailure(
@@ -663,34 +706,11 @@ class ExtensionConnectionBrowser {
           ),
         ),
       );
-    const sendMessage = runtime.sendMessage.bind(runtime);
-    const messageRuntime = runtime;
+    const { runtime } = runtimeAvailability;
     return new Promise((resolve) => {
       try {
-        sendMessage(
-          request.extensionRuntimeId,
-          message,
-          (response) => {
-            if (this.runtimeReportedMessageFailure(messageRuntime)) {
-              resolve(
-                err(
-                  new VaultStorageFailure(
-                    VaultStorageFailureKind.IdentityHandoffRejected,
-                  ),
-                ),
-              );
-              return;
-            }
-            if (isAcceptedIdentityHandoffResponse(response)) {
-              resolve(
-                // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-                ok({
-                  envelope: response.envelope,
-                  nextNonce: response.nextNonce,
-                }),
-              );
-              return;
-            }
+        runtime.sendMessage(request.extensionRuntimeId, message, (response) => {
+          if (this.chromeRuntimeLastError(runtime)) {
             resolve(
               err(
                 new VaultStorageFailure(
@@ -698,8 +718,26 @@ class ExtensionConnectionBrowser {
                 ),
               ),
             );
-          },
-        );
+            return;
+          }
+          if (isAcceptedIdentityHandoffResponse(response)) {
+            resolve(
+              // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+              ok({
+                envelope: response.envelope,
+                nextNonce: response.nextNonce,
+              }),
+            );
+            return;
+          }
+          resolve(
+            err(
+              new VaultStorageFailure(
+                VaultStorageFailureKind.IdentityHandoffRejected,
+              ),
+            ),
+          );
+        });
       } catch {
         resolve(
           err(

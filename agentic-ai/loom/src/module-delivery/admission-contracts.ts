@@ -19,6 +19,7 @@ import type { ModuleDeliveryIntegratedWriterFrontierCapability } from './integra
 import type { ModuleDeliveryCanonicalEvidenceTransition } from './integration-provenance.ts';
 
 import type { ModuleDeliveryGenerationAuthority } from './admission.ts';
+import type { PinnedDevBaseEvidence } from '../lib/base-evidence.ts';
 
 export enum ModuleDeliveryAdmissionSelectionStatus {
   Selected = 'selected',
@@ -88,17 +89,18 @@ export type AttemptIdentity = Readonly<{
   planDigest: string;
 }>;
 
-export type ModuleDeliveryAdmission = AttemptIdentity & {
-  readonly startingFrontier: string;
-  readonly resources: ModuleDeliveryResourceClaims;
-  readonly context?: TeamTaskContext;
-  readonly team: TeamKey;
-  readonly functionalOwner: ModuleDeliveryOwnerIdentity;
-  readonly acceptanceOwner: ModuleDeliveryOwnerIdentity;
-  readonly parentLineage: AgentAttemptParent;
-  readonly acceptanceRequirements: readonly string[];
-  readonly authorizedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
-};
+export type ModuleDeliveryAdmission = AttemptIdentity &
+  PinnedDevBaseEvidence & {
+    readonly startingFrontier: string;
+    readonly resources: ModuleDeliveryResourceClaims;
+    readonly context?: TeamTaskContext;
+    readonly team: TeamKey;
+    readonly functionalOwner: ModuleDeliveryOwnerIdentity;
+    readonly acceptanceOwner: ModuleDeliveryOwnerIdentity;
+    readonly parentLineage: AgentAttemptParent;
+    readonly acceptanceRequirements: readonly string[];
+    readonly authorizedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+  };
 
 export type ModuleDeliveryAttemptLease = ModuleDeliveryAdmission;
 
@@ -107,13 +109,14 @@ export type ModuleDeliveryAttemptDisposition = AttemptIdentity & {
   readonly conclusion: ModuleDeliveryGenerationFenceKind;
 };
 
-export type ModuleDeliveryAdmissionState = Readonly<{
-  generation: number;
-  planDigest: string;
-  headCommit: string;
-  integratedWriterFrontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
-  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
-}>;
+export type ModuleDeliveryAdmissionState = PinnedDevBaseEvidence &
+  Readonly<{
+    generation: number;
+    planDigest: string;
+    headCommit: string;
+    integratedWriterFrontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
+    acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+  }>;
 
 export type SelectModuleDeliveryAdmissionsRequest = {
   readonly authority: ModuleDeliveryGenerationAuthority;

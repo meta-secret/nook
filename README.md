@@ -424,7 +424,7 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 
 Delivery uses one Gizmo context and five Cortex engineering team domains:
 
-- [Gizmo](.cortex/gizmo/knowledge-graph.md) owns coordination, integration,
+- [Gizmo Prime](.cortex/gizmo-prime/knowledge-graph.md) owns coordination, integration,
   lifecycle state, and the final integrated PR verdict.
 
 - [AI](.cortex/teams/ai/knowledge-graph.md) owns Cortex, Loom, agent skills,
@@ -449,16 +449,19 @@ and the explicit expertise contract. [Shared knowledge](.cortex/shared/knowledge
 is loaded only for a named cross-team dependency. It is not an implementation
 team.
 
-Feature Team Agents return committed handoffs to their Feature Gizmo. The
-Gizmo integrates and reviews those commits, pushes the exact feature SHA, and
-requests only the remote build-only **`build:compile`** check. After required
-review findings are resolved and compilation passes for that exact SHA, the
-Gizmo authorizes PR Steward to land it on local `dev` through the serialized
-**`dev:land`** task. Feature delivery does not run pre-push, tests, browser
-suites, preflight, or full PR validation. The manually started Dev Manager
-alone selects and publishes a local `dev` snapshot, owns the full slow
-dev-to-main PR validation cycle, and authorizes PR Steward to fast-forward the
-validated published `dev` SHA to `main`.
+Ordinary implementation agents return verified committed handoffs to Gizmo.
+Gizmo integrates them, pushes the exact branch head, and requests the hosted
+**`build:compile`** task through **`task remote TASK_NAME=build:compile`**.
+Feature-stage execution is build-only. Full tests, coverage, preflight, e2e,
+and complete PR validation belong to the Dev Manager's later dev-to-main CI
+cycle. That cycle explicitly starts **`task pr:validate PR=<number>`** for the
+selected published snapshot. Ordinary PR pushes do not start the complete
+pipeline. Ordinary validation does not contact Codex. Set `CODEX_REVIEW=1` only
+for the final coherent head. Validation dispatches hosted checks before the
+opted-in exact-head review. Use review stabilization only after dispatch while
+those checks run. Its default performs one bounded feedback snapshot. Local
+Task mirrors below remain available for humans. Main-fix PRs use `FULL_E2E=1`
+to request the Main-equivalent browser suites.
 
 Project-scoped module experts use stable semantic role names defined by the
 [Cortex registry](.cortex/teams/ai/architecture/module-experts.md). Universal
@@ -508,21 +511,20 @@ or synthesis barrier; every role remains nondelegating and read-only. See the
 and [workflow](.cortex/teams/ai/workflows/structural-refactoring.md).
 
 ```sh
-task loom:pre-push         # legacy/manual hygiene; prohibited in feature delivery
 task loom:cortex-session-clean # assert temporary agent memory is removed
 task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
 task loom:module-experts:validate # named read-only expert and production-module routing audit
 task loom:module-experts:invoke REQUEST=<request.json> # invoke one isolated named expert
 task loom:structural-experts:validate # exact structural role and bounded-scope audit
 task loom:structural-experts:invoke REQUEST=<request.json> # invoke one authorized refactoring role
-task remote TASK_NAME=build:compile # sole remote feature-stage build check
 task remote TASK_NAME=rust:ci # BuildKit-native Rust lane on ARC when enabled
 task remote TASK_NAME=preflight # repository invariant checks on exact pushed HEAD
 task remote TASK_NAME=web:build # direct-Pod web build
 task remote TASK_NAME=web:e2e # direct-Pod browser proof
 task remote TASK_NAME=extension:e2e # direct-Pod extension browser proof
-task pr:validate PR=410    # Dev Manager's complete dev-to-main validation
-task pr:validate PR=410 FULL_E2E=1 # Dev Manager's Main-equivalent browser gate
+task pr:validate PR=410    # complete exact-head validation without Codex review
+task pr:validate PR=410 CODEX_REVIEW=1 # final coherent head plus Codex review
+task pr:validate PR=410 FULL_E2E=1 CODEX_REVIEW=1 # final Main-fix gate and review
 task check                 # format, lint, tests, coverage floor, builds (optional local / CI mirror)
 task preflight             # fast Rust checks for whole-repository invariants
 task build                 # Rust, WASM, web, and extension production build
@@ -543,9 +545,13 @@ task extension:run:chrome CHANNEL=dev # Chrome for Testing auto-loads; branded C
 task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Brave profile (no vault setup)
 task ci:pr                 # optional local mirror of the non-browser PR gate (daemon BuildKit; never shared nook-pr)
 task ci:pr:e2e             # explicit full web + extension e2e validation (optional)
+task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
+task pr:review PR=410      # optional circuit-guarded exact-head Codex review request
+task pr:review:stabilize PR=410 # one bounded feedback snapshot after validation dispatch
+task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
-task infra:deploy           # deploy Nook services plus the complete k0s/Kata platform
+task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, and ARC
 task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2 # install/reconcile a declared OVH worker and join k0s/ARC
 task infra:ssh:home:configure # install and prove pinned browserless LAN SSH for the home worker
 task infra:ssh:home:status # verify the home worker remains reachable without interactive authentication
@@ -555,9 +561,10 @@ task infra:arc:fallback     # route opted-in Rust and remote jobs to GitHub-host
 task infra:kubernetes-cache:prove # prove production-derived Zot and BuildKit behavior on ephemeral k3d
 task infra:kubernetes:console:install # install kubectl, Helm, k9s, and SSH-user access
 task infra:kubernetes:tools:status  # verify the remote operator console
-task infra:k0s:status       # inspect the remote k0s cluster and workloads
+task infra:k0s:status       # inspect the remote cluster and workloads
 task infra:k0s:diagnose     # bounded k0s, CNI, firewall, and control-plane evidence
 task infra:k0s:network:refresh # recreate egress-capable Pods after a CNI migration
+task infra:kata:verify      # prove a Pod is using the Kata guest kernel
 task infra:kata:diagnose    # bounded Kata installer and runtime evidence
 task infra:services:diagnose # bounded Docker and Compose network evidence
 task infra:services:repair-network # recover Docker 26 chains without daemon restart
@@ -571,8 +578,9 @@ when the branch is behind. Merge the reported `origin/<base>` into the delivery
 branch before spending hosted validation.
 
 After successful exact-head PR checks, a later advance of `main` does not by
-itself require a rebase or another expensive validation cycle. A later push
-still invalidates the prior checks.
+itself require a rebase or another expensive validation cycle. Re-run
+`task pr:ready PR=<number>` and merge when the PR remains conflict-free and has
+no unhandled review feedback. A later push still invalidates the prior checks.
 
 Labeled PR validation and merged-head verification run the shared **Rust
 ecosystem** gates through `pr.yml` and `main.yml`. Each lifecycle therefore
@@ -587,8 +595,11 @@ generated and snapshot tests (Proptest and Insta),
 bounded concurrency exploration (Loom), parser fuzzing (`cargo-fuzz`), model
 checking (Kani), and repository-selected Rust lints (Dylint). Fast
 deterministic tests remain part of ordinary Rust testing. Fuzz, Loom, Kani, and
-compiler-coupled Dylint checks have bounded hosted jobs. Main also runs the
-shared Rust ecosystem gates alongside the product pipeline.
+compiler-coupled Dylint checks have bounded hosted jobs. Main also covers
+minds-only and mixed pushes while skipping product jobs for minds-only changes.
+Schedule, manual, and labeled minds-only PR entry points stay in thin
+`rust-ecosystem.yml`. The selection and configuration policy lives in
+[`.cortex/teams/sre/workflows/quality.md`](.cortex/teams/sre/workflows/quality.md).
 
 See [`infra/k0s/README.md`](infra/k0s/README.md) for the failed Main-repair
 inspection and recovery workflow.
@@ -640,8 +651,8 @@ new ARC scheduling while it converges host prerequisites. It persists
 verifies every host before reactivating any node. Operators need passwordless
 sudo for `sysctl`, `install`, and the existing k0s administration commands.
 
-Fork PRs, Dependabot PRs, releases, and unsupported runtime lanes remain on
-fresh GitHub-hosted VMs. Main publishes shared Zot refs.
+Fork PRs, Dependabot PRs, releases, and unsupported
+runtime lanes remain on fresh GitHub-hosted VMs. Main publishes shared Zot refs.
 Pull requests use exact-SHA refs under `nook/remote-buildcache`.
 Same-repository PR jobs may publish only exact-SHA generations under
 `nook/remote-buildcache`; fork jobs remain secret-free. The hosted WASM writer
@@ -693,9 +704,11 @@ runs concurrently and waits only at the first WASM-consuming step. A successful
 run is promoted only after the whole workflow succeeds.
 Measure that budget from the first required job start through the last required
 job completion, with GitHub-hosted runner queue time reported separately.
-ARC jobs connect to the persistent rootless BuildKit shard on the same k0s node,
-so warm solves avoid an external data path while retaining the public TLS
-registry identity for portable cache fallback. Details:
+The authenticated Zot registry in [`infra/`](infra/) publishes BuildKit cache
+manifests. ARC jobs connect to the persistent
+rootless BuildKit shard on the same k0s node, so warm solves avoid an external
+data path while retaining the public TLS registry identity for portable cache
+fallback. Details:
 [`.cortex/shared/architecture/system.md`](.cortex/shared/architecture/system.md) §7.
 
 After changing Rust dependencies, commit the updated lockfile:

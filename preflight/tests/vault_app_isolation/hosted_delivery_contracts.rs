@@ -19,6 +19,46 @@ fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::
     Ok(())
 }
 
+#[test]
+fn repository_delivery_policy_executes_only_the_trusted_default_branch_verifier() {
+    let root = RepositoryFixture::repository_root();
+    let workflow = root.read(".github/workflows/repository-delivery-policy.yml");
+    let checkout = section(
+        &workflow,
+        "      - name: Checkout policy verifier\n",
+        "      - name: Require policy inspection credential\n",
+    );
+
+    assert!(
+        workflow.contains(
+            "if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+        ),
+        "manual policy verification must reject dispatches outside the trusted default branch"
+    );
+    assert!(
+        checkout.contains("ref: ${{ github.event.repository.default_branch }}")
+            && checkout.contains("persist-credentials: false"),
+        "manual policy verification must check out verifier code from the trusted default branch"
+    );
+    assert!(
+        !checkout.contains("NOOK_GITHUB_PAT") && !checkout.contains("token:"),
+        "the admin-capable policy credential must not be exposed to checkout"
+    );
+    assert_eq!(
+        workflow
+            .matches("GH_TOKEN: ${{ secrets.NOOK_GITHUB_PAT }}")
+            .count(),
+        2,
+        "the policy credential must be scoped only to the credential check and trusted verifier"
+    );
+    assert!(
+        !workflow.contains("ref: ${{ github.ref }}")
+            && !workflow.contains("ref: ${{ inputs.")
+            && workflow.contains("run: bash .github/scripts/verify-github-delivery-policy.sh"),
+        "a dispatched ref must not select executable verifier code, while trusted manual verification remains available"
+    );
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one setup contract verifies the complete hosted Docker boundary"
@@ -26,6 +66,10 @@ fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::
 fn assert_docker_setup_contract(root: &Path) {
     let setup = (root).read(".github/actions/nook-docker-setup/action.yml");
     let pr = (root).read(".github/workflows/pr.yml");
+    let native = section(&pr, "\n  rust:\n", "\n  wasm:\n");
+    let wasm = section(&pr, "\n  wasm:\n", "\n  wasm-node-test:\n");
+    let wasm_node = section(&pr, "\n  wasm-node-test:\n", "\n  verify:\n");
+    let web = section(&pr, "\n  verify:\n", "\n  ui-demo:\n");
     let arc_values = (root).read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
     let container_values =
         (root).read("infra/k0s/manifests/arc/container-runner-scale-set-values.yaml");
@@ -63,6 +107,19 @@ fn assert_docker_setup_contract(root: &Path) {
             "GitHub-hosted Docker setup is missing: {required}"
         );
     }
+    assert!(
+        native.contains("cache-selection: native")
+            && wasm.contains("cache-selection: wasm")
+            && wasm_node.contains("cache-selection: wasm")
+            && web.contains("cache-selection: web-e2e"),
+        "PR Docker consumers must select only the cache graph they execute"
+    );
+    assert!(
+        setup.contains("web-research-deps|web-research-image)")
+            && setup.contains("arc_exact_scope_required=1")
+            && setup.contains("|| [ -n \"$arc_exact_scope_required\" ]"),
+        "ARC research producers and consumers must preserve PR exact-head cache scopes without forcing Main's stable research cache through the remote-task path"
+    );
     assert!(
         container_values.contains("name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER")
             && container_values.contains("value: \"true\"")
@@ -353,7 +410,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
                 "github.event.action == 'labeled' && github.event.label.name == 'ci:full-e2e'"
             )
             && ci.contains("'dev-pr'")
-            && ci.contains("cancel-in-progress: >-"),
+            && ci.contains("cancel-in-progress: false"),
         "dev promotion must expose one stable exact-head gate with serialized native concurrency"
     );
     assert!(

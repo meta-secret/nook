@@ -1,37 +1,10 @@
 #!/usr/bin/env node
-import { createRequire } from 'node:module'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { chromium } from 'playwright'
 
 /** @typedef {import('playwright').BrowserContext} BrowserContext */
 /** @typedef {import('playwright').Page} Page */
 /** @typedef {{ status?: string, pairedVaults?: string[], selectedVaultName?: string }} StoredExtensionSetup */
 /** @typedef {StoredExtensionSetup | string | number | boolean | string[]} ExtensionStorageValue */
-
-const require = createRequire(import.meta.url)
-const extensionRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-)
-const appModules = path.join(extensionRoot, 'node_modules')
-const playwrightPath = [
-  path.join(appModules, 'playwright'),
-  path.join(extensionRoot, '../nook-web-app/node_modules/playwright'),
-].find((candidate) => {
-  try {
-    require.resolve(candidate)
-    return true
-  } catch {
-    return false
-  }
-})
-if (!playwrightPath) {
-  throw new Error(
-    'Playwright is missing. Run `cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile` first.',
-  )
-}
-
-const { chromium } = require(playwrightPath)
 
 const SETUP_STORAGE_KEY = 'nook:extension-setup'
 const TIMEOUT_MS = 45_000
@@ -46,6 +19,7 @@ if (!cdpUrl || !extensionId || !simpleVaultUrl) {
     'NOOK_EXTENSION_SETUP_CDP_URL, NOOK_EXTENSION_SETUP_EXTENSION_ID, and NOOK_SIMPLE_VAULT_URL are required',
   )
 }
+const requiredCdpUrl = cdpUrl
 const requiredSimpleVaultUrl = simpleVaultUrl
 
 /** @param {string} baseUrl @param {string} candidateUrl */
@@ -209,7 +183,7 @@ async function createAndApproveVault(context, popupPage) {
 }
 
 async function main() {
-  const browser = await chromium.connectOverCDP(cdpUrl)
+  const browser = await chromium.connectOverCDP(requiredCdpUrl)
   const context = browser.contexts()[0]
   if (!context) {
     throw new Error('Brave CDP connection did not expose a browser context')

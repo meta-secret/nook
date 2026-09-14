@@ -59,6 +59,21 @@ export type SessionMessageDispatchContext<SessionResponse> = {
   decodeProviders: (providers: StorageProvider[]) => Promise<StorageProvider[]>
 }
 
+type SessionRuntimeMessageObject = {
+  [key: string]:
+    | string
+    | number
+    | boolean
+    | SessionRuntimeMessageObject
+    | SessionRuntimeMessageObject[]
+}
+type SessionRuntimeMessageInput =
+  | SessionRuntimeMessageObject
+  | SessionRuntimeMessageObject[]
+  | string
+  | number
+  | boolean
+
 function sessionMessagePriority(
   type: ExtensionSessionMessageType,
 ): SessionOperationPriority {
@@ -434,7 +449,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
 
   listener(): Parameters<typeof chrome.runtime.onMessage.addListener>[0] {
     // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
-    return (message, sender, sendResponse) => {
+    return (message: SessionRuntimeMessageInput, sender, sendResponse) => {
       if (sender.id !== chrome.runtime.id) return false
       if (
         !message ||

@@ -25,12 +25,19 @@ export function readPendingTotpSession(): PendingTotpSessionLookup {
   const raw = sessionStorage.getItem(PENDING_KEY)
   if (!raw) return { kind: PendingTotpSessionLookupKind.Missing }
   try {
-    const parsed = JSON.parse(raw) as PendingTotpSession
+    const parsed: unknown = JSON.parse(raw)
     if (
-      typeof parsed?.username === 'string' &&
-      typeof parsed?.totpSecret === 'string'
+      typeof parsed === 'object' &&
+      parsed &&
+      'username' in parsed &&
+      typeof parsed.username === 'string' &&
+      'totpSecret' in parsed &&
+      typeof parsed.totpSecret === 'string'
     ) {
-      return { kind: PendingTotpSessionLookupKind.Found, session: parsed }
+      return {
+        kind: PendingTotpSessionLookupKind.Found,
+        session: { username: parsed.username, totpSecret: parsed.totpSecret },
+      }
     }
   } catch {
     // ignore corrupt session

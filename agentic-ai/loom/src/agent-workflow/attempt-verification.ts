@@ -139,6 +139,9 @@ export class VerifiedAttemptArtifacts {
       firstEvent.workflow !== DelegatedAgentWorkflowName.AgentWork ||
       firstEvent.workflowVersion !== args.workflowVersion ||
       firstEvent.sourceCommit !== args.sourceCommit ||
+      firstEvent.originMainSha !== args.originMainSha ||
+      firstEvent.pinnedLocalDevSha !== args.pinnedLocalDevSha ||
+      firstEvent.featureHeadSha !== args.featureHeadSha ||
       firstEvent.task !== args.identity.task ||
       firstEvent.agent !== args.identity.agent ||
       firstEvent.attempt !== args.identity.attempt ||
@@ -362,6 +365,9 @@ export type ReadParentAttemptArgs = {
   readonly runId: string;
   readonly workflowVersion: string;
   readonly sourceCommit: string;
+  readonly originMainSha: string;
+  readonly pinnedLocalDevSha: string;
+  readonly featureHeadSha: string;
   readonly identity: ParentAttemptIdentity;
 };
 

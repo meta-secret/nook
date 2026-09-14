@@ -198,6 +198,9 @@ export class ShellRuntimeInvocation {
       posix.basename(request.runtime) === 'find' &&
       request.words.some((word) =>
         ['-exec', '-execdir', '-ok', '-okdir'].includes(word.value),
+      ) &&
+      !SkillProviderSourcedSeamsScenario.isAuditedCommandExecutingFind(
+        request.state.sourcePath,
       )
     )
       throw new Error('Find command-executing predicate is forbidden.');

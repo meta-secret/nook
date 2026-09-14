@@ -91,6 +91,7 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
+          cache-selection: native
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
@@ -233,6 +234,7 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
+          cache-selection: wasm
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
@@ -383,6 +385,7 @@ jobs:
         if: needs.wasm.outputs.run-node-tests == 'true'
         uses: ./.github/actions/nook-docker-setup
         with:
+          cache-selection: wasm
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
@@ -499,6 +502,7 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
+          cache-selection: web-e2e
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}

@@ -3,6 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { BuildkitCacheExportTelemetry } from "./buildkit-cache-export-telemetry.mjs";
+import { OrderedConcurrentMapper } from "./ordered-concurrent-mapper.mjs";
+
+export { BuildkitCacheExportTelemetry };
+
 const SCCACHE_MARKER = "NOOK_SCCACHE_STATS ";
 const HISTORY_LOG_CONCURRENCY = 8;
 const HISTORY_LOG_TIMEOUT_MS = 4_000;
@@ -52,6 +57,7 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {number} completed_steps
  * @property {number} cached_steps
  * @property {number} [cache_hit_rate_percent]
+ * @property {{attempts: number, completed: number, bytes: number, duration_ms: number, incomplete_failures: number}} cache_export
  * @property {'buildx_target_record_steps'} measurement
  */
 /**
@@ -68,7 +74,13 @@ const HistoryLogCollectionKind = Object.freeze({
  * @property {SccacheSummary} sccache
  * @property {BuildkitSummary} buildkit
  * @property {readonly BuildHistoryRecord[]} buildkit_records
- * @property {{complete: boolean, warnings: readonly string[]}} collection
+ * @property {{complete: boolean, warnings: readonly string[], failures: readonly CollectionFailure[]}} collection
+ */
+/**
+ * @typedef {object} CollectionFailure
+ * @property {'buildx_history' | 'buildx_logs' | 'buildkit_cache_export' | 'collector'} component
+ * @property {string} reference
+ * @property {string} message
  */
 /**
  * @typedef {object} RawJsonProgress
@@ -313,17 +325,7 @@ export class CacheTelemetry {
    * @returns {Promise<Output[]>}
    */
   static async mapWithConcurrency(items, concurrency, mapper) {
-    /** @type {Output[]} */
-    const results = new Array(items.length);
-    const entries = items.entries();
-    async function worker() {
-      for (const [index, item] of entries) {
-        results[index] = await mapper(item, index);
-      }
-    }
-    const workerCount = Math.min(concurrency, items.length);
-    await Promise.all(Array.from({ length: workerCount }, () => worker()));
-    return results;
+    return new OrderedConcurrentMapper(concurrency).map(items, mapper);
   }
 
   /** @param {JsonRecord} report @returns {SccacheReport} */
@@ -376,8 +378,12 @@ export class CacheTelemetry {
     };
   }
 
-  /** @param {readonly BuildHistoryRecord[]} records @returns {BuildkitSummary} */
-  static summarizeBuildkit(records) {
+  /**
+   * @param {readonly BuildHistoryRecord[]} records
+   * @param {readonly JsonRecord[]} [events]
+   * @returns {BuildkitSummary}
+   */
+  static summarizeBuildkit(records, events = []) {
     const completedSteps = records.reduce(
       (total, record) => total + record.completed_steps,
       0,
@@ -395,6 +401,7 @@ export class CacheTelemetry {
         cachedSteps,
         completedSteps,
       ),
+      cache_export: new BuildkitCacheExportTelemetry(events).summary(),
       measurement: "buildx_target_record_steps",
     };
   }
@@ -537,12 +544,17 @@ export class CacheTelemetry {
       environment.NOOK_SCCACHE_BACKEND === "remote"
         ? "remote"
         : "direct_compile";
+    const configuredReason =
+      environment.NOOK_SCCACHE_BACKEND_REASON ||
+      (kind === "remote" ? "persistent_service" : "credentials_unavailable");
+    const reason =
+      kind === "remote" && environment.SCCACHE_S3_RW_MODE === "READ_ONLY"
+        ? `${configuredReason}_read_only`
+        : configuredReason;
     return {
       kind,
       persistent: kind === "remote",
-      reason:
-        environment.NOOK_SCCACHE_BACKEND_REASON ||
-        (kind === "remote" ? "persistent_service" : "credentials_unavailable"),
+      reason,
     };
   }
 
@@ -644,6 +656,25 @@ export class CacheTelemetry {
       "cache_hit_rate_percent",
       "buildkit",
     );
+    const cacheExport = buildkit.cache_export;
+    if ("cache_export" in buildkit) {
+      if (!CacheTelemetry.isJsonRecord(cacheExport)) {
+        throw new Error("telemetry buildkit.cache_export must be an object");
+      }
+      for (const [field, value] of Object.entries({
+        attempts: cacheExport.attempts,
+        completed: cacheExport.completed,
+        bytes: cacheExport.bytes,
+        duration_ms: cacheExport.duration_ms,
+        incomplete_failures: cacheExport.incomplete_failures,
+      })) {
+        if (!Number.isInteger(value) || typeof value !== "number" || value < 0) {
+          throw new Error(
+            `telemetry buildkit.cache_export.${field} must be a non-negative integer`,
+          );
+        }
+      }
+    }
     const collection = record.collection;
     if (
       !CacheTelemetry.isJsonRecord(collection) ||
@@ -656,6 +687,19 @@ export class CacheTelemetry {
       !collection.warnings.every((warning) => typeof warning === "string")
     ) {
       throw new Error("telemetry collection.warnings must be an array");
+    }
+    if (
+      "failures" in collection &&
+      (!Array.isArray(collection.failures) ||
+        !collection.failures.every(
+          (failure) =>
+            CacheTelemetry.isJsonRecord(failure) &&
+            typeof failure.component === "string" &&
+            typeof failure.reference === "string" &&
+            typeof failure.message === "string",
+        ))
+    ) {
+      throw new Error("telemetry collection.failures must be an array");
     }
     return record;
   }
@@ -691,6 +735,12 @@ export class CacheTelemetry {
     environment = process.env,
   }) {
     const warnings = [...baselineWarnings];
+    /** @type {CollectionFailure[]} */
+    const failures = baselineWarnings.map((warning) => ({
+      component: "buildx_history",
+      reference: "baseline",
+      message: warning,
+    }));
     /** @type {BuildHistoryRecord[]} */
     let records = [];
     try {
@@ -702,13 +752,19 @@ export class CacheTelemetry {
       records = selection.records;
       warnings.push(...selection.warnings);
     } catch (error) {
-      warnings.push(
-        `buildx_history_unavailable: ${CacheTelemetry.errorMessage(error)}`,
-      );
+      const message = CacheTelemetry.errorMessage(error);
+      warnings.push(`buildx_history_unavailable: ${message}`);
+      failures.push({
+        component: "buildx_history",
+        reference: "current",
+        message,
+      });
     }
 
     /** @type {SccacheReport[]} */
     const reports = [];
+    /** @type {JsonRecord[]} */
+    const historyEvents = [];
     const seenReports = new Set();
     const logResults = await CacheTelemetry.mapWithConcurrency(
       records,
@@ -735,13 +791,36 @@ export class CacheTelemetry {
           warnings.push(
             `buildx_logs_unavailable:${result.record.ref}: ${result.message}`,
           );
+          failures.push({
+            component: "buildx_logs",
+            reference: result.record.ref,
+            message: result.message,
+          });
           break;
         case HistoryLogCollectionKind.Collected:
+          historyEvents.push(
+            ...result.events.map((event) => ({
+              ...event,
+              nook_history_ref: result.record.ref,
+            })),
+          );
           reports.push(
             ...CacheTelemetry.extractSccacheReports(result.events, seenReports),
           );
           break;
       }
+    }
+
+    const buildkit = CacheTelemetry.summarizeBuildkit(records, historyEvents);
+    if (buildkit.cache_export.incomplete_failures > 0) {
+      warnings.push(
+        `buildkit_cache_export_incomplete:${buildkit.cache_export.incomplete_failures}`,
+      );
+      failures.push({
+        component: "buildkit_cache_export",
+        reference: "registry",
+        message: `${buildkit.cache_export.incomplete_failures} cache export attempts did not complete`,
+      });
     }
 
     return {
@@ -753,11 +832,12 @@ export class CacheTelemetry {
       },
       cache_backend: CacheTelemetry.cacheBackendFromEnvironment(environment),
       sccache: CacheTelemetry.summarizeSccache(reports),
-      buildkit: CacheTelemetry.summarizeBuildkit(records),
+      buildkit,
       buildkit_records: records,
       collection: {
         complete: warnings.length === 0,
         warnings,
+        failures,
       },
     };
   }
@@ -787,6 +867,13 @@ export class CacheTelemetry {
       collection: {
         complete: false,
         warnings: [String(warning)],
+        failures: [
+          {
+            component: "collector",
+            reference: "cache-telemetry",
+            message: String(warning),
+          },
+        ],
       },
     };
   }
@@ -823,6 +910,7 @@ export class CacheTelemetry {
         `- sccache backend: \`${record.cache_backend.kind}\` (${record.cache_backend.reason})`,
         `- sccache hit rate: ${compilerRate} (${record.sccache.cache_hits} hits / ${record.sccache.cache_hits + record.sccache.cache_misses} lookups)`,
         `- BuildKit target-step cache rate: ${buildkitRate} (${record.buildkit.cached_steps} cached / ${record.buildkit.completed_steps} completed)`,
+        `- BuildKit registry cache export: ${record.buildkit.cache_export.bytes} bytes across ${record.buildkit.cache_export.completed}/${record.buildkit.cache_export.attempts} completed attempts in ${record.buildkit.cache_export.duration_ms} ms (${record.buildkit.cache_export.incomplete_failures} incomplete failures)`,
         "",
       ].join("\n"),
     );

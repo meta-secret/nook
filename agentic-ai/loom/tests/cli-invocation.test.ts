@@ -1,7 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import { CliInvocationKind, LoomCommandLine } from '../src/cli-invocation.ts';
-import { RequestFamily } from '../src/codec/enums.ts';
-import { ExampleDispatchKind } from '../src/codec/example-documents.ts';
 
 import type { ParseCliInvocationArgs } from '../src/cli-invocation.ts';
 
@@ -17,16 +15,14 @@ describe('parseCliInvocation', () => {
     }
   });
 
-  test('accepts a defaultable family', () => {
+  test('rejects the retired prePush default', () => {
     const parseCliInvocationArgs: ParseCliInvocationArgs = {
       argv: ['--default', 'prePush'],
     };
     const invocation = LoomCommandLine.parse(parseCliInvocationArgs);
-    expect(invocation.kind).toBe(CliInvocationKind.DefaultFamily);
-    if (invocation.kind === CliInvocationKind.DefaultFamily) {
-      expect(invocation.entry.family).toBe(RequestFamily.PrePush);
-      expect(invocation.entry.dispatch).toBe(ExampleDispatchKind.Defaultable);
-    }
+    expect(invocation.kind).toBe(CliInvocationKind.UsageError);
+    if (invocation.kind === CliInvocationKind.UsageError)
+      expect(invocation.message).toContain('toolsList');
   });
 
   test('rejects a parameterized family as a default', () => {

@@ -249,6 +249,18 @@ const sensitiveSessionFields: Readonly<
   [ExtensionSessionMessageType.Lock]: [],
 }
 
+const safeReflect: {
+  get(
+    target: ExtensionSessionNonImportRequest['payload'],
+    propertyKey: PropertyKey,
+  ): unknown
+  set(
+    target: ExtensionSessionNonImportRequest['payload'],
+    propertyKey: PropertyKey,
+    value: unknown,
+  ): boolean
+} = Reflect
+
 function clearSensitiveFieldValue(value: unknown): void {
   if (Array.isArray(value)) value.fill(0)
 }
@@ -264,7 +276,7 @@ type SetExtensionSessionSensitiveValueArgs = {
 function setExtensionSessionSensitiveValue(
   args: SetExtensionSessionSensitiveValueArgs,
 ): void {
-  Reflect.set(args.payload, args.field, args.value)
+  safeReflect.set(args.payload, args.field, args.value)
 }
 
 enum ExtensionSessionSensitiveValueCopyKind {
@@ -307,9 +319,9 @@ export function clearExtensionSessionSensitiveRequest(
   request: ExtensionSessionNonImportRequest,
 ): void {
   for (const field of sensitiveSessionFields[request.type]) {
-    const value = Reflect.get(request.payload, field)
+    const value = safeReflect.get(request.payload, field)
     clearSensitiveFieldValue(value)
-    Reflect.set(request.payload, field, typeof value === 'string' ? '' : [])
+    safeReflect.set(request.payload, field, typeof value === 'string' ? '' : [])
   }
 }
 
@@ -322,7 +334,7 @@ export function stageExtensionSessionSensitiveRequest(
   }
   const stagedPayload = { ...request.payload } as typeof request.payload
   for (const field of fields) {
-    const value = Reflect.get(request.payload, field)
+    const value = safeReflect.get(request.payload, field)
     const copiedValue = copyExtensionSessionSensitiveValue(value)
     if (copiedValue.kind === ExtensionSessionSensitiveValueCopyKind.Invalid) {
       clearExtensionSessionSensitiveRequest(request)
@@ -363,83 +375,95 @@ export function stageExtensionSessionSensitiveRequest(
   }
 }
 
-function isExtensionSessionMessageType(
-  value: string,
-): value is ExtensionSessionMessageType {
-  return Object.prototype.hasOwnProperty.call(sensitiveSessionFields, value)
-}
-
 type ExtensionSessionQueueEnvelope = {
   kind: string
 }
 
-function isExtensionSessionQueueEnvelope(
-  value: unknown,
-): value is ExtensionSessionQueueEnvelope {
-  if (!value || typeof value !== 'object') return false
-  return 'kind' in value && typeof value.kind === 'string'
-}
+class ExtensionSessionIngressAdmission {
+  constructor(private readonly value: unknown) {}
 
-function hasExtensionSessionQueue(payload: unknown): boolean {
-  if (!payload || typeof payload !== 'object') return false
-  return 'queue' in payload && isExtensionSessionQueueEnvelope(payload.queue)
-}
-
-function stageExtensionSessionIngressRequest(
-  value: unknown,
-): ExtensionSessionIngressStage {
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    !('type' in value) ||
-    typeof value.type !== 'string' ||
-    !isExtensionSessionMessageType(value.type) ||
-    !('payload' in value) ||
-    !value.payload ||
-    typeof value.payload !== 'object'
-  ) {
-    return { kind: ExtensionSessionIngressStageKind.Invalid }
+  private isExtensionSessionMessageType(
+    value: string,
+  ): value is ExtensionSessionMessageType {
+    return Object.prototype.hasOwnProperty.call(sensitiveSessionFields, value)
   }
 
-  const request = value as ParsedExtensionSessionTransportRequest
-  if (!hasExtensionSessionQueue(request.payload)) {
-    clearExtensionSessionIngressRequest(request)
-    return { kind: ExtensionSessionIngressStageKind.Invalid }
+  private isExtensionSessionQueueEnvelope(
+    value: unknown,
+  ): value is ExtensionSessionQueueEnvelope {
+    if (!value || typeof value !== 'object') return false
+    return 'kind' in value && typeof value.kind === 'string'
   }
-  if (request.type === ExtensionSessionMessageType.ImportVault) {
-    const providers = request.payload.providers
-    if (!Array.isArray(providers)) {
-      request.payload.providers = []
+
+  private hasExtensionSessionQueue(payload: unknown): boolean {
+    if (!payload || typeof payload !== 'object') return false
+    return (
+      'queue' in payload && this.isExtensionSessionQueueEnvelope(payload.queue)
+    )
+  }
+
+  private isParsedRequest(
+    value: unknown,
+  ): value is ParsedExtensionSessionTransportRequest {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      !('type' in value) ||
+      typeof value.type !== 'string' ||
+      !this.isExtensionSessionMessageType(value.type) ||
+      !('payload' in value) ||
+      !value.payload ||
+      typeof value.payload !== 'object'
+    ) {
+      return false
+    }
+    return true
+  }
+
+  stage(): ExtensionSessionIngressStage {
+    if (!this.isParsedRequest(this.value)) {
       return { kind: ExtensionSessionIngressStageKind.Invalid }
     }
-    try {
-      const stagedProviders = structuredClone(providers)
-      new ProviderCredentialBuffer(providers).clear()
-      request.payload.providers = []
-      return {
-        kind: ExtensionSessionIngressStageKind.Staged,
-        request: {
-          ...request,
-          payload: { ...request.payload, providers: stagedProviders },
-        },
+    const request = this.value
+    if (!this.hasExtensionSessionQueue(request.payload)) {
+      clearExtensionSessionIngressRequest(request)
+      return { kind: ExtensionSessionIngressStageKind.Invalid }
+    }
+    if (request.type === ExtensionSessionMessageType.ImportVault) {
+      const providers = request.payload.providers
+      if (!Array.isArray(providers)) {
+        request.payload.providers = []
+        return { kind: ExtensionSessionIngressStageKind.Invalid }
       }
-    } catch {
-      new ProviderCredentialBuffer(providers).clear()
-      request.payload.providers = []
+      try {
+        const stagedProviders = structuredClone(providers)
+        new ProviderCredentialBuffer(providers).clear()
+        request.payload.providers = []
+        return {
+          kind: ExtensionSessionIngressStageKind.Staged,
+          request: {
+            ...request,
+            payload: { ...request.payload, providers: stagedProviders },
+          },
+        }
+      } catch {
+        new ProviderCredentialBuffer(providers).clear()
+        request.payload.providers = []
+        return { kind: ExtensionSessionIngressStageKind.Invalid }
+      }
+    }
+
+    const sensitiveStage = stageExtensionSessionSensitiveRequest(request)
+    if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Invalid) {
       return { kind: ExtensionSessionIngressStageKind.Invalid }
     }
-  }
-
-  const sensitiveStage = stageExtensionSessionSensitiveRequest(request)
-  if (sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Invalid) {
-    return { kind: ExtensionSessionIngressStageKind.Invalid }
-  }
-  return {
-    kind: ExtensionSessionIngressStageKind.Staged,
-    request:
-      sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged
-        ? sensitiveStage.request
-        : request,
+    return {
+      kind: ExtensionSessionIngressStageKind.Staged,
+      request:
+        sensitiveStage.kind === ExtensionSessionSensitiveStageKind.Staged
+          ? sensitiveStage.request
+          : request,
+    }
   }
 }
 
@@ -457,7 +481,7 @@ function clearExtensionSessionIngressRequest(
 export async function parseExtensionSessionRequest(
   value: unknown,
 ): Promise<ExtensionSessionRequestParse> {
-  const ingressStage = stageExtensionSessionIngressRequest(value)
+  const ingressStage = new ExtensionSessionIngressAdmission(value).stage()
   if (ingressStage.kind === ExtensionSessionIngressStageKind.Invalid) {
     return { kind: ExtensionSessionRequestParseKind.Invalid }
   }
@@ -512,8 +536,10 @@ export async function parseExtensionSessionRequest(
     } else {
       validationRequest = request
     }
+    const validationRequestArgs: GeneratedExtensionSessionRequest =
+      validationRequest
     if (
-      validate_extension_session_request(validationRequest) !==
+      validate_extension_session_request(validationRequestArgs) !==
       ExtensionSessionRequestValidation.Accepted
     ) {
       clearExtensionSessionIngressRequest(request)
