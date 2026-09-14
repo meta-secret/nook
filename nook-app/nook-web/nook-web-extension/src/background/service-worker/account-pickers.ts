@@ -6,10 +6,7 @@ import {
   type WebsiteLoginAccountOption,
 } from '../../lib/login-fill-messages'
 import {
-  decode_website_login_match_availability,
-  unavailable_website_login_match_availability,
   type WebsiteLoginMatchAvailability,
-  type WebsiteLoginOptionsWireValue,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   WebsiteAuthenticatorCanceledMessageType,
@@ -35,6 +32,7 @@ import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   extensionSessionLifecycle,
 } from './session-lifecycle'
+import { websiteLoginOptionsWireAdapter } from './website-login-options-wire-adapter'
 
 type PendingAuthenticatorPicker = {
   requestId: string
@@ -190,46 +188,6 @@ type WebsiteLoginMatchAvailabilityArgs = {
   origin: string
   sender: chrome.runtime.MessageSender
   dependencies?: WebsiteLoginOptionsDependencies
-}
-
-function isWebsiteLoginOptionsWireValue(
-  value: unknown,
-): value is WebsiteLoginOptionsWireValue {
-  if (!isWebsiteLoginWireObject(value)) return false
-  if (typeof value.ok !== 'boolean') return false
-  if (!value.ok) return typeof value.reason === 'string'
-  if (typeof value.status !== 'string') return false
-  if (value.status !== 'ready')
-    return value.status === 'locked' || value.status === 'unavailable'
-  if (
-    typeof value.authorizationGeneration !== 'string' ||
-    !Array.isArray(value.accounts)
-  )
-    return false
-  return value.accounts.every(isWebsiteLoginAccountWire)
-}
-
-type WebsiteLoginWireObject = {
-  [key: string]:
-    string | boolean | WebsiteLoginWireObject | WebsiteLoginWireObject[]
-}
-
-function isWebsiteLoginWireObject(
-  value: unknown,
-): value is WebsiteLoginWireObject {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-function isWebsiteLoginAccountWire(value: unknown): boolean {
-  if (!isWebsiteLoginWireObject(value)) return false
-  return (
-    typeof value.vaultStoreId === 'string' &&
-    typeof value.vaultName === 'string' &&
-    typeof value.secretId === 'string' &&
-    typeof value.username === 'string' &&
-    typeof value.websiteUrl === 'string' &&
-    typeof value.websiteHost === 'string'
-  )
 }
 
 type StoreLoginPickerArgs = {
@@ -906,10 +864,7 @@ class AccountPickerSessions {
     }
     if (dependencies) responseRequest.dependencies = dependencies
     const response = await this.websiteLoginOptionsResponse(responseRequest)
-    if (!isWebsiteLoginOptionsWireValue(response)) {
-      return unavailable_website_login_match_availability()
-    }
-    return decode_website_login_match_availability(response)
+    return websiteLoginOptionsWireAdapter.decode(response)
   }
 
   private loginPickerStorageKey(requestId: string): string {
