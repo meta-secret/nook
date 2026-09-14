@@ -49,63 +49,63 @@ type DelegationCliResult = {
   readonly stderr: string;
 };
 
-const runDelegationCli = async (
-  ...arguments_: readonly string[]
-): Promise<DelegationCliResult> => {
-  const stdout: string[] = [];
-  const stderr: string[] = [];
-  const originalConsoleLog = console.log;
-  const originalConsoleError = console.error;
-  const originalStdoutWrite = process.stdout.write;
-  const originalStderrWrite = process.stderr.write;
-  const captureStdout = (chunk: string | Uint8Array): boolean => {
-    stdout.push(
-      typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk),
-    );
-    return true;
-  };
-  const captureStderr = (chunk: string | Uint8Array): boolean => {
-    stderr.push(
-      typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk),
-    );
-    return true;
-  };
-  console.log = (...values: readonly string[]) => {
-    stdout.push(`${values.join(' ')}\n`);
-  };
-  console.error = (...values: readonly string[]) => {
-    stderr.push(`${values.join(' ')}\n`);
-  };
-  process.stdout.write = ((chunk: string | Uint8Array) =>
-    captureStdout(chunk)) as typeof originalStdoutWrite;
-  process.stderr.write = ((chunk: string | Uint8Array) =>
-    captureStderr(chunk)) as typeof originalStderrWrite;
-  try {
-    return {
-      exitCode: await DelegationJournalCli.main([
-        process.execPath,
-        'loom-agent-delegation',
-        ...arguments_,
-      ]),
-      stdout: stdout.join(''),
-      stderr: stderr.join(''),
-    };
-  } catch {
-    return {
-      exitCode: 1,
-      stdout: stdout.join(''),
-      stderr: stderr.join(''),
-    };
-  } finally {
-    console.log = originalConsoleLog;
-    console.error = originalConsoleError;
-    process.stdout.write = originalStdoutWrite;
-    process.stderr.write = originalStderrWrite;
-  }
-};
-
 export class AgentWorkflowDelegationCliScenario {
   private constructor(private readonly request: string) {}
+
+  static async runDelegationCli(
+    ...arguments_: readonly string[]
+  ): Promise<DelegationCliResult> {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
+    const originalStdoutWrite = process.stdout.write;
+    const originalStderrWrite = process.stderr.write;
+    const captureStdout = (chunk: string | Uint8Array): boolean => {
+      stdout.push(
+        typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk),
+      );
+      return true;
+    };
+    const captureStderr = (chunk: string | Uint8Array): boolean => {
+      stderr.push(
+        typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk),
+      );
+      return true;
+    };
+    console.log = (...values: readonly string[]) => {
+      stdout.push(`${values.join(' ')}\n`);
+    };
+    console.error = (...values: readonly string[]) => {
+      stderr.push(`${values.join(' ')}\n`);
+    };
+    process.stdout.write = ((chunk: string | Uint8Array) =>
+      captureStdout(chunk)) as typeof originalStdoutWrite;
+    process.stderr.write = ((chunk: string | Uint8Array) =>
+      captureStderr(chunk)) as typeof originalStderrWrite;
+    try {
+      return {
+        exitCode: await DelegationJournalCli.main([
+          process.execPath,
+          'loom-agent-delegation',
+          ...arguments_,
+        ]),
+        stdout: stdout.join(''),
+        stderr: stderr.join(''),
+      };
+    } catch {
+      return {
+        exitCode: 1,
+        stdout: stdout.join(''),
+        stderr: stderr.join(''),
+      };
+    } finally {
+      console.log = originalConsoleLog;
+      console.error = originalConsoleError;
+      process.stdout.write = originalStdoutWrite;
+      process.stderr.write = originalStderrWrite;
+    }
+  }
 
   static commitFixture(workingDirectory: string): string {
     return new AgentWorkflowDelegationCliScenario(workingDirectory).execute();
@@ -228,13 +228,14 @@ describe('delegated agent journal CLI', () => {
         ],
       };
       await writeFile(planPath, JSON.stringify(plan), 'utf8');
-      const startResult = await runDelegationCli(
-        'start',
-        '--plan',
-        planPath,
-        '--working-directory',
-        workingDirectory,
-      );
+      const startResult =
+        await AgentWorkflowDelegationCliScenario.runDelegationCli(
+          'start',
+          '--plan',
+          planPath,
+          '--working-directory',
+          workingDirectory,
+        );
       expect(startResult.exitCode, startResult.stderr).toBe(0);
       const startStdout = startResult.stdout;
       const startStderr = startResult.stderr;
@@ -264,16 +265,17 @@ describe('delegated agent journal CLI', () => {
         parent: request.parent,
       };
       await writeFile(admissionPath, JSON.stringify(admissionRequest), 'utf8');
-      const admissionResult = await runDelegationCli(
-        'admit',
-        '--request',
-        admissionPath,
-        '--working-directory',
-        workingDirectory,
-      );
+      const admissionResult =
+        await AgentWorkflowDelegationCliScenario.runDelegationCli(
+          'admit',
+          '--request',
+          admissionPath,
+          '--working-directory',
+          workingDirectory,
+        );
       expect(admissionResult.exitCode, admissionResult.stderr).toBe(0);
       const runRecord = () =>
-        runDelegationCli(
+        AgentWorkflowDelegationCliScenario.runDelegationCli(
           'record',
           '--request',
           requestPath,
@@ -392,13 +394,14 @@ describe('delegated agent journal CLI', () => {
         JSON.stringify(finalizationRequest),
         'utf8',
       );
-      const finalizeResult = await runDelegationCli(
-        'finalize',
-        '--request',
-        finalizationPath,
-        '--working-directory',
-        workingDirectory,
-      );
+      const finalizeResult =
+        await AgentWorkflowDelegationCliScenario.runDelegationCli(
+          'finalize',
+          '--request',
+          finalizationPath,
+          '--working-directory',
+          workingDirectory,
+        );
       expect(finalizeResult.exitCode, finalizeResult.stderr).toBe(0);
       const runDirectory = join(
         workingDirectory,
@@ -572,13 +575,14 @@ describe('delegated agent journal CLI', () => {
         };
         const planPath = join(workingDirectory, `${runId}-plan.json`);
         await writeFile(planPath, JSON.stringify(plan), 'utf8');
-        const startResult = await runDelegationCli(
-          'start',
-          '--plan',
-          planPath,
-          '--working-directory',
-          workingDirectory,
-        );
+        const startResult =
+          await AgentWorkflowDelegationCliScenario.runDelegationCli(
+            'start',
+            '--plan',
+            planPath,
+            '--working-directory',
+            workingDirectory,
+          );
         expect(startResult.exitCode, startResult.stderr).toBe(0);
 
         const requestPath = join(workingDirectory, `${runId}-request.json`);
@@ -600,13 +604,14 @@ describe('delegated agent journal CLI', () => {
           },
         };
         await writeFile(requestPath, JSON.stringify(request), 'utf8');
-        const recordResult = await runDelegationCli(
-          'record',
-          '--request',
-          requestPath,
-          '--working-directory',
-          workingDirectory,
-        );
+        const recordResult =
+          await AgentWorkflowDelegationCliScenario.runDelegationCli(
+            'record',
+            '--request',
+            requestPath,
+            '--working-directory',
+            workingDirectory,
+          );
         expect(recordResult.exitCode, recordResult.stderr).toBe(0);
         const viewPath = join(
           workingDirectory,
